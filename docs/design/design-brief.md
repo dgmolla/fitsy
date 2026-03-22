@@ -68,7 +68,7 @@ flowchart TD
 ### 4.3 Meal Detail with Macros
 - Full macro breakdown: protein, carbs, fat (grams and percentage of target)
 - Visual macro ring or bar chart
-- Confidence tier badge with explanation tooltip ("Verified data" / "Photo-estimated" / "Description-estimated")
+- Confidence tier badge with explanation tooltip ("Verified data" / "AI-estimated with photo" / "AI-estimated from description")
 - Ingredient list (when available from parsing)
 - "Fits your target" summary — shows how this meal fits into remaining daily macros
 - Option to adjust portion size and see recalculated macros
@@ -91,7 +91,7 @@ flowchart TD
 - **Consistency**: Same visual language for macros everywhere — never switch between representations without clear context change
 
 ### 5.2 Confidence Indicators
-- Three-tier system: high (verified), medium (photo-estimated), low (description-estimated)
+- Three confidence levels: high (Tier 1 — verified restaurant data), medium (Tier 2 — LLM estimated with photo), low (Tier 2 — LLM estimated without photo)
 - **Visual treatment**: Icon + color badge; always visible, never hidden
 - **Disclosure**: Tapping the badge explains the data source and what the tier means
 - **Design constraint**: Never present low-confidence data with the same visual weight as verified data — reduce precision display (e.g., round to nearest 5g for low-confidence)

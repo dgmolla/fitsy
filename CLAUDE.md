@@ -59,21 +59,18 @@ fitsy/
 
 ### Key Architecture Decisions
 
-**Tiered Macro Estimation Pipeline:**
+**Two-Tier Macro Estimation Pipeline:**
 
 Each menu item goes through the highest-confidence tier available:
 
-1. **Tier 1 — Verified data**: Check if macros are already publicly
-   available (Nutritionix chain DB, restaurant website, etc.)
+1. **Tier 1 — Verified data**: Restaurant's own published nutrition
+   data (website pages, PDFs). Scrape/extract → direct macros.
    Confidence: high.
-2. **Tier 2 — Photo estimation**: If menu item has photos, use
-   vision model to identify ingredients and estimate portions.
-   Confidence: medium.
-3. **Tier 3 — LLM description parsing**: No photos available — LLM
-   estimates ingredients and portions from menu item name/description.
-   Confidence: low.
-4. **Nutritionix lookup**: Map identified ingredients + portions →
-   per-ingredient macros via Nutritionix API. Sum for total.
+2. **Tier 2 — LLM estimation**: Claude infers ingredients and
+   portions from menu item name + description + optional photo
+   (photo improves accuracy but isn't required). Ingredient list
+   → USDA FoodData Central lookup → summed macros.
+   Confidence: medium (with photo) / low (without).
 
 Results are persisted per menu item (see Macro Cache below) so we
 only estimate once per item. Show confidence tier to users —
@@ -93,9 +90,9 @@ Details in system design doc (`docs/engineering/backend/`).
 
 ### External Services
 
-- **Google Places API** — restaurant discovery, menus
-- **Nutritionix API** — verified nutrition data (chains)
-- **Claude API** — menu item parsing, ingredient identification
+- **Google Places API** — restaurant discovery, menus, photos
+- **USDA FoodData Central** — ingredient → macro lookup (free)
+- **Claude API** — menu/nutrition page extraction, ingredient estimation
 - **Yelp Fusion API** — supplementary restaurant data (optional)
 
 ---
@@ -127,8 +124,7 @@ npx prisma db seed      # Seed data
 |----------|---------|-------|
 | `DATABASE_URL` | Database connection | Backend |
 | `GOOGLE_PLACES_API_KEY` | Restaurant discovery | Backend |
-| `NUTRITIONIX_APP_ID` | Nutrition data | Backend |
-| `NUTRITIONIX_API_KEY` | Nutrition data | Backend |
+| `USDA_API_KEY` | USDA FoodData Central (free) | Backend |
 | `ANTHROPIC_API_KEY` | Menu parsing LLM | Backend |
 | `JWT_SECRET` | Auth token signing | Backend |
 

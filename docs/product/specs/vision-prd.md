@@ -75,10 +75,9 @@ restaurant, not just chains.
 2. **Restaurant discovery** — Location-based search returning nearby
    restaurants with menu items that match or are close to targets.
 3. **Tiered macro estimation pipeline:**
-   - Tier 1: Verified data (Nutritionix chain DB, published info).
-   - Tier 2: Photo-based estimation (vision model).
-   - Tier 3: LLM description parsing (name/description only).
-   - Nutritionix ingredient-level lookup to sum macros.
+   - Tier 1: Verified data (restaurant-published nutrition pages/PDFs).
+   - Tier 2: LLM estimation (name + description + optional photo) →
+     ingredients → USDA FoodData Central lookup.
 4. **Match scoring** — Each menu item gets a match score against the
    user's targets. Restaurants are ranked by their best-matching items.
 5. **Confidence display** — Every estimate shows its tier and
@@ -118,12 +117,10 @@ flowchart TD
 
     K --> M{Which Confidence Tier?}
     M -->|Tier 1| N["Show Macros + ✅ Verified Data badge"]
-    M -->|Tier 2| O["Show Macros + 📷 Photo Estimate badge"]
-    M -->|Tier 3| P["Show Macros + 🤖 AI Estimate badge + wider range"]
+    M -->|Tier 2| O["Show Macros + 🤖 AI Estimate badge + wider range"]
 
     N --> Q[View Full Breakdown]
     O --> Q
-    P --> Q
 
     Q --> R{Decision}
     R -->|Visit| S[Navigate to Restaurant]
@@ -166,7 +163,7 @@ quadrantChart
 5. User's macro targets are unrealistic (e.g., 200g protein in a
    single meal under 300 cal) — show closest matches with delta, do
    not silently return zero results.
-6. Conflicting data sources — Nutritionix and restaurant website
+6. Conflicting data sources — USDA and restaurant website
    disagree. Define precedence rules.
 
 ---
@@ -189,18 +186,17 @@ quadrantChart
 ### Phased Rollout
 
 - **Phase 0 (current):** Scaffolding, architecture, spec alignment.
-- **Phase 1 (MVP):** Macro pipeline (Tier 1 + Tier 3), restaurant
+- **Phase 1 (MVP):** Macro pipeline (Tier 1 + Tier 2), restaurant
   discovery (Google Places), basic search UI, match scoring.
-- **Phase 2:** Tier 2 (photo estimation), user accounts, saved
-  targets, meal history.
+- **Phase 2:** User accounts, saved targets, meal history.
 - **Phase 3:** Filtering expansion (allergens, dietary labels),
   community-submitted corrections, restaurant partnerships.
 
 ### Technical Approach (summary)
 
 - React Native (Expo) mobile client + Next.js API backend, TypeScript strict, Prisma + Postgres. Monorepo with apps/mobile/ and apps/api/.
-- Service wrappers for all external APIs (Google Places, Nutritionix,
-  Claude API).
+- Service wrappers for all external APIs (Google Places, USDA FoodData
+  Central, Claude API).
 - Macro cache: per-menu-item estimates stored with tier, timestamp,
   source. Re-estimated on configurable cadence.
 - Full details in `docs/engineering/`.
@@ -231,15 +227,15 @@ quadrantChart
 ## Constraints
 
 - **Data accuracy:** LLM-estimated macros are approximate. Must always
-  display confidence tier and range. Never present Tier 3 estimates
+  display confidence tier and range. Never present Tier 2 estimates
   as precise values.
-- **API rate limits:** Google Places, Nutritionix, and Claude all have
-  rate limits. Must cache aggressively and queue estimation work.
+- **API rate limits:** Google Places, USDA FoodData Central, and Claude
+  all have rate limits. Must cache aggressively and queue estimation work.
 - **Latency:** First search should return results in under 3 seconds.
   Macro estimation for uncached items may be async (show placeholder,
   backfill).
-- **Cost:** Claude API and Nutritionix calls have per-request costs.
-  Caching and batching are mandatory to keep unit economics viable.
+- **Cost:** Claude API and USDA FoodData Central calls have per-request
+  costs. Caching and batching are mandatory to keep unit economics viable.
 - **Legal/liability:** Nutrition estimates are not medical advice. App
   must display disclaimers. Especially important for Tier 2/3 data.
 
@@ -259,7 +255,7 @@ quadrantChart
 
 - [ ] User can enter a location and macro targets and receive a ranked
       list of nearby restaurants with matching menu items.
-- [ ] At least Tier 1 and Tier 3 estimation pipelines are operational.
+- [ ] Both Tier 1 and Tier 2 estimation pipelines are operational.
 - [ ] Every macro estimate displays its confidence tier.
 - [ ] Search results return in under 3 seconds for cached restaurants.
 - [ ] Structural tests, type checks, and unit tests pass in CI.

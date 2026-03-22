@@ -21,18 +21,17 @@ graph TD
         API["API Routes"]
     end
 
-    subgraph "Service Layer (src/services/)"
+    subgraph "Service Layer (apps/api/services/)"
         RS["RestaurantService"]
         MS["MacroEstimationService"]
-        NS["NutritionixService"]
+        US["UsdaService"]
         CS["ClaudeService"]
     end
 
     subgraph "External APIs"
         GP["Google Places API"]
-        NX["Nutritionix API"]
+        USDA["USDA FoodData Central (free)"]
         CL["Claude API"]
-        YP["Yelp Fusion API"]
     end
 
     subgraph "Data Layer"
@@ -46,11 +45,10 @@ graph TD
     API --> MS
 
     RS --> GP
-    RS --> YP
-    MS --> NS
+    MS --> US
     MS --> CS
 
-    NS --> NX
+    US --> USDA
     CS --> CL
 
     MS -- "cache read (check existing)" --> Prisma
@@ -58,8 +56,6 @@ graph TD
     RS --> Prisma
     Prisma --> PG
     Prisma --> MC
-
-    MC -. "stale? re-estimate" .-> MS
 ```
 - Deployment topology (to be determined)
 
@@ -68,91 +64,71 @@ graph TD
 ## 2. Tiered Macro Estimation Pipeline
 
 ### 2.1 Pipeline Overview
-- Every menu item is resolved through the highest-confidence tier available
-- Pipeline short-circuits: if Tier 1 returns data, skip Tier 2 and 3
-- Each tier produces a normalized intermediate format: list of `{ ingredient, quantity, unit }`
-- Final step (Nutritionix lookup) converts ingredients to macros and sums totals
+- Two-tier pipeline: verified data (Tier 1) or LLM estimation (Tier 2)
+- Pipeline short-circuits: if Tier 1 returns data, skip Tier 2
+- Tier 2 produces a normalized ingredient list: `{ ingredient, quantity, unit }[]`
+- USDA FoodData Central converts ingredients to macros (free API, no paid nutrition service needed)
 - Confidence tier is stored alongside results and exposed to the user
 
-### 2.2 Tier 1 — Verified Data
-- Two-step lookup (both are high-confidence since the source is the restaurant or a verified DB):
-  1. **Nutritionix Branded/Common Foods DB**: API lookup by restaurant chain + menu item name. Fast, structured, covers major chains.
-  2. **Restaurant website fallback**: If Nutritionix misses, check the restaurant's own nutrition page/PDF.
-     - Structured HTML tables → simple scraper, no LLM needed
-     - Nutrition PDFs (common for chains) → PDF table extraction library; LLM fallback for messy layouts
-     - Note: LLM here is an *extraction* tool, not an estimation source — confidence stays high
+### 2.2 Tier 1 — Verified Data (Restaurant Website)
+- Source: restaurant's own published nutrition data (website pages, PDFs)
+- Parsing strategy by format:
+  - Structured HTML tables → simple scraper, no LLM needed
+  - Nutrition PDFs (common for chains) → PDF table extraction library; LLM fallback for messy layouts
+  - Note: LLM here is an *extraction* tool, not an estimation source — confidence stays high
 - Maintain a per-restaurant registry of known nutrition URL/PDF locations (cached)
 - When matched: return macros directly (skip ingredient decomposition)
 - Confidence: high
 - Edge cases: menu item name mismatches, regional menu variations, PDF format changes
+- Why not Nutritionix for Tier 1: chains in Nutritionix almost always publish on their own site too. Scraping is free; Nutritionix is a paid middleman. Can add later as a fast-path if scraping proves unreliable at scale.
 
-### 2.3 Tier 2 — Photo Estimation
-- Source: menu item photos (from Google Places, restaurant sites, or user uploads)
-- Claude vision model identifies visible ingredients, estimates portions
+### 2.3 Tier 2 — LLM Estimation
+- Source: menu item name + description + **photo if available** (from Google Places or restaurant site — no user uploads)
+- Photo is an optional input that improves portion size and ingredient accuracy, not a separate tier
+- Claude model (vision when photo available, text-only otherwise) infers ingredients and estimates portions
 - Output: ingredient list with estimated quantities
-- Confidence: medium
-- Edge cases: obscured ingredients, garnishes vs. core components, portion distortion
+- Confidence: medium (with photo) or low (without photo)
+- Edge cases: vague descriptions ("chef's special"), culturally specific dishes, obscured ingredients in photos, portion distortion
 
-### 2.4 Tier 3 — LLM Description Parsing
-- Source: menu item name and text description only (no photo available)
-- Claude text model infers likely ingredients and portions
-- Output: ingredient list with estimated quantities
-- Confidence: low
-- Edge cases: vague descriptions ("chef's special"), culturally specific dishes
-
-### 2.5 Nutritionix Lookup (Shared Final Step)
-- Receives ingredient list from Tier 2 or Tier 3
-- Maps each ingredient + quantity to Nutritionix common foods API
+### 2.4 USDA Lookup (Tier 2 Final Step)
+- Receives ingredient list from Tier 2 LLM estimation
+- Maps each ingredient + quantity to **USDA FoodData Central** API (free, ~380k foods)
+- Databases used: SR Legacy (raw ingredients), FNDDS (prepared foods)
 - Sums per-ingredient macros (calories, protein, carbs, fat) for menu item total
 - Handles partial matches (best-effort ingredient mapping)
 - Returns structured macro result with per-ingredient breakdown
+- Why USDA over Nutritionix: USDA is free, comprehensive for common ingredients, and we're already decomposing into ingredients. Nutritionix Common Foods does the same thing but costs per call.
 
-### 2.6 Pipeline Data Flow Diagram
+### 2.5 Pipeline Data Flow Diagram
 
 ```mermaid
 flowchart TD
     Start["Menu Item Received"] --> CacheCheck{"Cached estimate\nexists & fresh?"}
 
     CacheCheck -- "Yes" --> ReturnCached["Return cached macros"]
-    CacheCheck -- "No" --> T1NX{"Tier 1:\nNutritionix\nBranded DB lookup"}
+    CacheCheck -- "No" --> T1{"Tier 1:\nRestaurant website\nnutrition page/PDF"}
 
-    T1NX -- "Hit" --> StoreT1A["Store estimate\n(tier: 1, confidence: high)"]
-    StoreT1A --> Return1["Return macros"]
+    T1 -- "Hit" --> StoreT1["Store estimate\n(tier: 1, confidence: high)"]
+    StoreT1 --> Return1["Return macros"]
 
-    T1NX -- "Miss" --> T1Web{"Tier 1:\nRestaurant website\nnutrition page/PDF"}
+    T1 -- "Miss / Error" --> PhotoCheck{"Photo available?\n(Google Places / restaurant site)"}
 
-    T1Web -- "Hit" --> StoreT1B["Store estimate\n(tier: 1, confidence: high)"]
-    StoreT1B --> Return2["Return macros"]
+    PhotoCheck -- "Yes" --> T2Photo["Tier 2: Claude Vision + Text\nphoto + name/description\n→ identify ingredients\n→ estimate portions"]
+    PhotoCheck -- "No" --> T2Text["Tier 2: Claude Text Only\nname/description\n→ infer ingredients\n→ estimate portions"]
 
-    T1Web -- "Miss" --> PhotoCheck{"Photo available?"}
-    T1Web -- "Error (scrape/parse fail)" --> PhotoCheck
+    T2Photo --> T2OK{"LLM\nsucceeded?"}
+    T2Text --> T2OK
 
-    PhotoCheck -- "Yes" --> T2["Tier 2: Claude Vision\nidentify ingredients\n& estimate portions"]
-    PhotoCheck -- "No" --> T3["Tier 3: Claude Text\nparse name/description\n& infer ingredients"]
+    T2OK -- "Yes" --> USDA["USDA FoodData Central:\nmap ingredients → macros\nsum totals"]
+    T2OK -- "No (LLM error)" --> Unavailable["Return 'estimation unavailable'\nflag for retry"]
 
-    T2 --> T2OK{"Vision\nsucceeded?"}
-    T2OK -- "Yes" --> NXLookup2["Nutritionix Lookup:\nmap ingredients → macros\nsum totals"]
-    T2OK -- "No (model error)" --> T3
+    USDA --> USDAOK{"Lookup\nsucceeded?"}
+    USDAOK -- "Full match" --> StoreT2["Store estimate\n(tier: 2, confidence: medium/low)"]
+    USDAOK -- "Partial match" --> StoreT2Warn["Store partial estimate\nwith warning"]
+    USDAOK -- "Failure" --> Unavailable
 
-    T3 --> T3OK{"LLM parse\nsucceeded?"}
-    T3OK -- "Yes" --> NXLookup3["Nutritionix Lookup:\nmap ingredients → macros\nsum totals"]
-    T3OK -- "No (LLM error)" --> Unavailable["Return 'estimation unavailable'\nflag for retry"]
-
-    NXLookup2 --> NX2OK{"Lookup\nsucceeded?"}
-    NX2OK -- "Full match" --> StoreT2["Store estimate\n(tier: 2, confidence: medium)"]
-    NX2OK -- "Partial match" --> StoreT2Warn["Store partial estimate\n(tier: 2, confidence: medium)\nwith warning"]
-    NX2OK -- "Failure" --> T3
-
-    StoreT2 --> Return3["Return macros"]
-    StoreT2Warn --> Return3
-
-    NXLookup3 --> NX3OK{"Lookup\nsucceeded?"}
-    NX3OK -- "Full match" --> StoreT3["Store estimate\n(tier: 3, confidence: low)"]
-    NX3OK -- "Partial match" --> StoreT3Warn["Store partial estimate\n(tier: 3, confidence: low)\nwith warning"]
-    NX3OK -- "Failure" --> Unavailable
-
-    StoreT3 --> Return4["Return macros"]
-    StoreT3Warn --> Return4
+    StoreT2 --> Return2["Return macros"]
+    StoreT2Warn --> Return2
 ```
 
 ---
@@ -187,7 +163,7 @@ The Next.js backend is API-only — no server-rendered pages. All endpoints serv
 ## 4. External Service Integration
 
 ### 4.1 Integration Principles
-- All external calls go through service wrappers in `src/services/`
+- All external calls go through service wrappers in `apps/api/services/`
 - Each wrapper handles: auth, request formatting, response normalization, error mapping
 - No raw external API types leak into business logic
 
@@ -197,15 +173,20 @@ The Next.js backend is API-only — no server-rendered pages. All endpoints serv
 - Rate limits and quota management
 - Response mapping to internal Restaurant model
 
-### 4.3 Nutritionix API
-- Purpose: verified nutrition data (Tier 1), ingredient-to-macro lookup (Tier 2/3 final step)
-- Endpoints used: Search Instant (branded), Natural Nutrients (common foods)
-- Auth: app ID + API key header
-- Rate limits and fallback behavior
+### 4.3 USDA FoodData Central API
+- Purpose: ingredient-to-macro lookup (Tier 2 final step)
+- Free API, no paid tier needed. Key: api.nal.usda.gov (free registration)
+- Databases: SR Legacy (raw ingredients), FNDDS (prepared foods)
+- Endpoints used: Food Search, Food Details
+- Good coverage for common ingredients (chicken, rice, vegetables, oils, etc.)
+- Edge cases: regional/ethnic ingredients may have limited coverage — LLM can suggest closest USDA match
+- Cache ingredient→macro mappings locally (long TTL, ingredients don't change)
 
 ### 4.4 Claude API
-- Purpose: Tier 2 photo estimation (vision), Tier 3 description parsing (text)
+- Purpose: Tier 1 nutrition page/PDF extraction, Tier 2 estimation (vision + text)
 - Prompt design: structured output format (ingredient list with quantities)
+- Vision mode: when photo available, analyze photo + text for better portion estimates
+- Text mode: infer ingredients and portions from name/description only
 - Model selection and cost considerations
 - Token budget per request, timeout handling
 - Prompt versioning strategy
@@ -224,7 +205,7 @@ The Next.js backend is API-only — no server-rendered pages. All endpoints serv
 - **MacroTarget**: userId (FK), calories, proteinG, carbsG, fatG, goal type
 - **Restaurant**: id, externalPlaceId, name, address, lat, lng, cuisine tags, chain flag, source, created/updated
 - **MenuItem**: id, restaurantId (FK), name, description, photoUrl, category, price, created/updated
-- **MacroEstimate** (cache): id, menuItemId (FK), tier (1/2/3), calories, proteinG, carbsG, fatG, confidence, source, ingredientBreakdown (JSON), estimatedAt, expiresAt
+- **MacroEstimate** (cache): id, menuItemId (FK), tier (1/2), calories, proteinG, carbsG, fatG, confidence (high/medium/low), hadPhoto (bool), source, ingredientBreakdown (JSON), estimatedAt, expiresAt
 - **SavedItem**: userId (FK), restaurantId or menuItemId (FK), type, created
 
 ### 5.2 Entity Relationship Diagram
@@ -284,6 +265,7 @@ erDiagram
         float carbsG
         float fatG
         string confidence
+        boolean hadPhoto
         string source
         json ingredientBreakdown
         datetime estimatedAt
@@ -327,9 +309,8 @@ erDiagram
 - Subsequent requests: serve from cache if not stale
 - Staleness thresholds by tier:
   - Tier 1: 30 days (verified data changes infrequently)
-  - Tier 2: 14 days (photos may be updated)
-  - Tier 3: 7 days (LLM estimates may improve with model updates)
-- Re-estimation: background job or on-demand when stale record is accessed
+  - Tier 2: 14 days (LLM estimates may improve with model updates)
+- Re-estimation: **on-demand only** — when a stale record is accessed, re-estimate inline. No background jobs at MVP scale.
 
 ### 6.2 Cache Invalidation
 - Explicit: admin or user flags an estimate as wrong
@@ -337,8 +318,9 @@ erDiagram
 - Source change: if restaurant menu is updated (detected via Place Details)
 
 ### 6.3 Application-Level Caching
-- Restaurant search results: short-lived in-memory or Redis cache (TBD)
-- Nutritionix common food lookups: cache ingredient -> macro mappings (long TTL)
+- Start with **in-memory LRU cache** (no Redis at MVP). Monitor memory utilization and cache hit rate to know when to migrate.
+- Restaurant search results: short-lived in-memory cache (~5 min TTL)
+- USDA ingredient→macro mappings: in-memory cache with long TTL (ingredients don't change)
 - Rate limit budgets tracked per service per time window
 
 ---
@@ -358,11 +340,10 @@ erDiagram
 - Alert on sustained high usage
 
 ### 7.3 Pipeline Failure Modes
-- Tier 1 miss: normal, proceed to Tier 2/3
-- Tier 2 failure (vision model error): fall through to Tier 3
-- Tier 3 failure (LLM error): return "estimation unavailable" with reason
-- Nutritionix lookup partial failure: return partial macros with warning
-- All tiers fail: return restaurant/menu item without macro data, flag for retry
+- Tier 1 miss: normal, proceed to Tier 2
+- Tier 2 LLM failure: return "estimation unavailable" with reason, flag for retry
+- USDA lookup partial failure: return partial macros with warning
+- Both tiers fail: return restaurant/menu item without macro data, flag for retry
 
 ### 7.4 User-Facing Error Responses
 - Consistent `{ "error": "message" }` format
@@ -374,10 +355,9 @@ erDiagram
 ## 8. Performance Considerations
 
 - Pipeline latency budget: target < 2s for cached, < 8s for uncached estimation
-- Parallel external API calls where independent (e.g., restaurant fetch + Nutritionix Tier 1 check)
+- Parallel external API calls where independent (e.g., restaurant fetch + cache check)
 - Database query optimization: lean selects, avoid N+1 on menu item lists
-- Batch Nutritionix lookups: group ingredients into single API call where possible
-- Background estimation: pre-compute macros for popular restaurants on a schedule
+- Batch USDA lookups: group ingredients into single API call where possible
 - Connection pooling for database and HTTP clients
 - Response payload size: paginate menu items, lazy-load macro details
 
@@ -397,11 +377,17 @@ erDiagram
 
 ---
 
+## Resolved Questions
+
+- **Database hosting**: Managed Postgres (Neon or Supabase) — free tier for MVP, PostGIS support for geospatial queries
+- **Application caching**: In-memory LRU to start. Monitor utilization; migrate to Redis when needed.
+- **Background jobs**: None at MVP. Re-estimation is on-demand only.
+- **Photo sourcing**: Google Places and restaurant websites only. No user uploads.
+- **Nutrition data source**: USDA FoodData Central (free) for ingredient→macro lookup. No Nutritionix at MVP — can add later as Tier 1 fast-path if website scraping proves unreliable.
+- **Tier 2/3 merge**: Collapsed into single Tier 2 (LLM estimation). Photo is an optional input that improves accuracy, not a separate tier.
+
 ## Open Questions
 
-- [ ] PostgreSQL vs. managed alternative (e.g., PlanetScale, Supabase) — decide before schema migration
-- [ ] Redis for application caching or start with in-memory and add later?
-- [ ] Background job runner: cron, BullMQ, or Vercel Cron?
-- [ ] Photo sourcing: rely solely on Google Places photos or allow user uploads?
-- [ ] Nutritionix plan tier — which API quota level do we need at launch?
-- [ ] Should Tier 2 and Tier 3 run in parallel with a preference for Tier 2 results?
+- [ ] Neon vs. Supabase — both work, pick before first migration
+- [ ] USDA coverage gaps for ethnic/regional ingredients — fallback strategy?
+- [ ] Claude model selection for Tier 2: Haiku (fast/cheap) vs. Sonnet (better accuracy) — benchmark needed
