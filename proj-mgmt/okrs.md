@@ -18,26 +18,27 @@ reflect whichever phase you're in.
 
 ---
 
-## Phase 1: Foundation / Q2 2026
+## Phase 1: Foundation
 
-### O1: Ship MVP to first 10 users
-Getting real users testing Fitsy validates whether macro-aware restaurant
-discovery solves a real problem.
-
-| # | Key Result | Status | Notes |
-|---|------------|--------|-------|
-| KR1 | Core macro-matching engine working with 2+ restaurant data sources | Not started | Google Places + Nutritionix + LLM pipeline |
-| KR2 | Location-based restaurant discovery with menu-level nutrition estimates | Not started | |
-| KR3 | 10 users testing and giving feedback | Not started | |
-
-### O2: Establish a reliable, well-tested foundation
-A strong foundation lets agents ship autonomously with confidence.
+### O1: Establish the project foundation
+We can't build what we haven't defined. Foundation docs become
+the context that makes every agent task better.
 
 | # | Key Result | Status | Notes |
 |---|------------|--------|-------|
-| KR1 | CI pipeline green with structural tests, type checking, and unit tests | Not started | |
-| KR2 | Harness first-run pass rate >90% | Not started | |
-| KR3 | System design and architecture documented and validated | Not started | |
+| KR1 | Vision PRD, System Design, and Design Brief complete and approved | Not started | |
+| KR2 | Business Model and GTM Strategy drafted | Not started | |
+| KR3 | CI/CD pipeline operational with structural tests | Not started | |
+| KR4 | CLAUDE.md fully populated with architecture and conventions | Not started | |
+
+### O2: Validate the tiered macro estimation approach
+The pipeline is the core differentiator — nail the design before building.
+
+| # | Key Result | Status | Notes |
+|---|------------|--------|-------|
+| KR1 | System design documents all 3 tiers with data flow and caching strategy | Not started | |
+| KR2 | Data model for macro cache designed and reviewed | Not started | |
+| KR3 | Testing strategy covers accuracy validation for each tier | Not started | |
 
 ---
 
@@ -46,13 +47,14 @@ A strong foundation lets agents ship autonomously with confidence.
 Uncomment when you move to Phase 2.
 
 ### O1: Core product works end to end
-Fitsy's macro pipeline, restaurant discovery, and UI all work together.
+Fitsy's tiered macro pipeline, restaurant discovery, and UI all work together.
 
 | # | Key Result | Status | Notes |
 |---|------------|--------|-------|
-| KR1 | Macro estimation pipeline returns results for 3+ restaurant types | Not started | |
-| KR2 | Location-based search returns filtered restaurants with macro data | Not started | |
-| KR3 | Test coverage on danger zones (auth, nutrition accuracy) >90% | Not started | |
+| KR1 | All 3 estimation tiers working with macro cache persistence | Not started | |
+| KR2 | Location-based restaurant discovery returns filtered results with macro data | Not started | |
+| KR3 | Filtering by cuisine, chain/mom-and-pop working | Not started | |
+| KR4 | Test coverage on danger zones (auth, nutrition accuracy) >90% | Not started | |
 
 ## Phase 3: Roll Out
 
@@ -61,13 +63,13 @@ Production deployment with monitoring, ready for real users.
 
 | # | Key Result | Status | Notes |
 |---|------------|--------|-------|
-| KR1 | Deployed to production | Not started | |
-| KR2 | GTM materials complete | Not started | |
-| KR3 | Monitoring and alerting operational | Not started | |
+| KR1 | Deployed to production with auth and data pipeline operational | Not started | |
+| KR2 | GTM materials complete (landing page, social, launch plan) | Not started | |
+| KR3 | Monitoring and alerting operational (API costs, rate limits, accuracy) | Not started | |
 
 ## Phase 4: Get Users
 
-### O1: First users onboarded and learning
+### O1: Ship MVP to first 10 users
 Real users validate whether macro-aware restaurant discovery solves a real problem.
 
 | # | Key Result | Status | Notes |
