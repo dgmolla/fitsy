@@ -71,16 +71,12 @@ graph TD
 - Confidence tier is stored alongside results and exposed to the user
 
 ### 2.2 Tier 1 — Verified Data (Restaurant Website)
-- Source: restaurant's own published nutrition data (website pages, PDFs)
-- Parsing strategy by format:
-  - Structured HTML tables → simple scraper, no LLM needed
-  - Nutrition PDFs (common for chains) → PDF table extraction library; LLM fallback for messy layouts
-  - Note: LLM here is an *extraction* tool, not an estimation source — confidence stays high
-- Maintain a per-restaurant registry of known nutrition URL/PDF locations (cached)
+- Source: restaurant's own published nutrition data
+- **MVP**: Structured HTML tables only → simple scraper, no LLM needed
+- **Follow-up**: PDF table extraction (common for chains), LLM fallback for messy layouts
 - When matched: return macros directly (skip ingredient decomposition)
 - Confidence: high
-- Edge cases: menu item name mismatches, regional menu variations, PDF format changes
-- Why not Nutritionix for Tier 1: chains in Nutritionix almost always publish on their own site too. Scraping is free; Nutritionix is a paid middleman. Can add later as a fast-path if scraping proves unreliable at scale.
+- Edge cases: menu item name mismatches, regional menu variations
 
 ### 2.3 Tier 2 — LLM Estimation
 - Source: menu item name + description + **photo if available** (from Google Places or restaurant site — no user uploads)
@@ -99,53 +95,52 @@ graph TD
 - Returns structured macro result with per-ingredient breakdown
 - Why USDA over Nutritionix: USDA is free, comprehensive for common ingredients, and we're already decomposing into ingredients. Nutritionix Common Foods does the same thing but costs per call.
 
-### 2.5 Restaurant Data Retrieval Flow
+### 2.5 Restaurant Data Retrieval Flow (MVP)
 
 ```mermaid
 flowchart TD
     Search["User searches by location + macro targets"]
     Search --> GP["Google Places API:<br/>Nearby Search"]
-    GP --> Restaurants["List of nearby restaurants<br/>(name, address, placeId, photos)"]
+    GP --> Restaurants["Nearby restaurants<br/>(name, address, placeId, photos)"]
     Restaurants --> Details["Google Places API:<br/>Place Details per restaurant"]
     Details --> HasWebsite{"Has website link?"}
 
     HasWebsite -- "Yes" --> Scrape["Scrape restaurant website<br/>for menu items"]
-    HasWebsite -- "No" --> WebSearch["Web search:<br/>'Restaurant Name menu'"]
+    HasWebsite -- "No" --> Skip["Exclude from results"]
 
-    WebSearch --> WebFound{"Menu page found?"}
-    WebFound -- "Yes" --> Scrape
-    WebFound -- "No" --> GPData{"Any menu item names<br/>from Google Places?<br/>(reviews, photos, listing)"}
+    Scrape --> Items["Menu items:<br/>name, description, category, price"]
+    Items --> NutritionCheck{"Nutrition data on site?<br/>(HTML table)"}
 
-    GPData -- "Yes" --> PartialItems["Partial menu items<br/>(names only, no descriptions)"]
-    GPData -- "No" --> Skip["Exclude from results"]
+    NutritionCheck -- "Yes" --> Tier1["Tier 1: Scrape macros"]
+    NutritionCheck -- "No" --> Tier2["Tier 2: LLM estimation"]
 
-    Scrape --> Items["Full menu items:<br/>name, description, category, price"]
-    Items --> NutritionCheck{"Restaurant publishes<br/>nutrition data?"}
-
-    NutritionCheck -- "Yes" --> Tier1["Tier 1: Extract macros<br/>from nutrition page/PDF"]
-    NutritionCheck -- "No" --> Tier2["Tier 2: LLM estimation<br/>per menu item"]
-
-    PartialItems --> Tier2
-
-    Tier1 --> Ranked["Rank items by<br/>macro target match"]
+    Tier1 --> Ranked["Rank by macro target match"]
     Tier2 --> Ranked
     Ranked --> Results["Return matched<br/>restaurants + meals"]
 ```
 
-### 2.6 Macro Estimation Pipeline
+### 2.6 Follow-Up: Extended Retrieval (Post-MVP)
+
+These flows expand coverage to restaurants without websites:
+
+1. **Web search fallback**: No website link → search `"Restaurant Name menu"` → scrape found page
+2. **Partial menu from Google Places**: Extract menu item names from reviews, photos, or listing data → Tier 2 with names only (lower confidence)
+3. **PDF nutrition extraction**: Many chains publish nutrition as PDFs → PDF table extraction library, LLM fallback for messy layouts
+4. **Nutrition page registry**: Cache known nutrition URL/PDF locations per restaurant to skip re-discovery
+
+### 2.7 Macro Estimation Pipeline
+
+### 2.8 Macro Estimation Pipeline
 
 ```mermaid
 flowchart TD
     Start["Menu item needs macros"] --> CacheCheck{"Cached estimate<br/>exists and fresh?"}
 
     CacheCheck -- "Yes" --> ReturnCached["Return cached macros"]
-    CacheCheck -- "No" --> T1{"Tier 1:<br/>Restaurant nutrition<br/>page or PDF?"}
+    CacheCheck -- "No" --> T1{"Tier 1:<br/>Nutrition HTML table<br/>on restaurant site?"}
 
-    T1 -- "Found" --> Parse{"Format?"}
-    Parse -- "HTML table" --> HTMLScrape["Scrape structured data"]
-    Parse -- "PDF" --> PDFExtract["PDF table extraction<br/>LLM fallback for messy layouts"]
+    T1 -- "Found" --> HTMLScrape["Scrape structured<br/>nutrition data"]
     HTMLScrape --> StoreT1["Store estimate<br/>tier: 1, confidence: high"]
-    PDFExtract --> StoreT1
     StoreT1 --> Return1["Return macros"]
 
     T1 -- "Not found" --> T2Inputs["Gather Tier 2 inputs:<br/>name + description"]
