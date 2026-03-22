@@ -51,8 +51,8 @@ graph TD
     US --> USDA
     CS --> CL
 
-    MS -- "cache read (check existing)" --> Prisma
-    MS -- "cache write (persist estimate)" --> Prisma
+    MS -- "cache read" --> Prisma
+    MS -- "cache write" --> Prisma
     RS --> Prisma
     Prisma --> PG
     Prisma --> MC
@@ -99,32 +99,61 @@ graph TD
 - Returns structured macro result with per-ingredient breakdown
 - Why USDA over Nutritionix: USDA is free, comprehensive for common ingredients, and we're already decomposing into ingredients. Nutritionix Common Foods does the same thing but costs per call.
 
-### 2.5 Pipeline Data Flow Diagram
+### 2.5 Restaurant Data Retrieval Flow
 
 ```mermaid
 flowchart TD
-    Start["Menu Item Received"] --> CacheCheck{"Cached estimate\nexists & fresh?"}
+    Search["User searches by location + macro targets"]
+    Search --> GP["Google Places API:<br/>Nearby Search"]
+    GP --> Restaurants["List of nearby restaurants<br/>(name, address, placeId, photos)"]
+    Restaurants --> Details["Google Places API:<br/>Place Details per restaurant"]
+    Details --> Menu{"Menu data<br/>available?"}
+
+    Menu -- "Yes (website link)" --> Scrape["Scrape restaurant website<br/>for menu items"]
+    Menu -- "No menu found" --> Skip["Show restaurant without<br/>macro data"]
+
+    Scrape --> Items["Menu items stored:<br/>name, description, category, price"]
+    Items --> NutritionCheck{"Restaurant publishes<br/>nutrition data?"}
+
+    NutritionCheck -- "Yes" --> Tier1["Tier 1: Extract macros<br/>from nutrition page/PDF"]
+    NutritionCheck -- "No" --> Tier2["Tier 2: LLM estimation<br/>per menu item"]
+
+    Tier1 --> Ranked["Rank items by<br/>macro target match"]
+    Tier2 --> Ranked
+    Ranked --> Results["Return matched<br/>restaurants + meals"]
+```
+
+### 2.6 Macro Estimation Pipeline
+
+```mermaid
+flowchart TD
+    Start["Menu item needs macros"] --> CacheCheck{"Cached estimate<br/>exists and fresh?"}
 
     CacheCheck -- "Yes" --> ReturnCached["Return cached macros"]
-    CacheCheck -- "No" --> T1{"Tier 1:\nRestaurant website\nnutrition page/PDF"}
+    CacheCheck -- "No" --> T1{"Tier 1:<br/>Restaurant nutrition<br/>page or PDF?"}
 
-    T1 -- "Hit" --> StoreT1["Store estimate\n(tier: 1, confidence: high)"]
+    T1 -- "Found" --> Parse{"Format?"}
+    Parse -- "HTML table" --> HTMLScrape["Scrape structured data"]
+    Parse -- "PDF" --> PDFExtract["PDF table extraction<br/>LLM fallback for messy layouts"]
+    HTMLScrape --> StoreT1["Store estimate<br/>tier: 1, confidence: high"]
+    PDFExtract --> StoreT1
     StoreT1 --> Return1["Return macros"]
 
-    T1 -- "Miss / Error" --> PhotoCheck{"Photo available?\n(Google Places / restaurant site)"}
+    T1 -- "Not found" --> T2Inputs["Gather Tier 2 inputs:<br/>name + description"]
+    T2Inputs --> PhotoCheck{"Photo available?<br/>Google Places /<br/>restaurant site"}
 
-    PhotoCheck -- "Yes" --> T2Photo["Tier 2: Claude Vision + Text\nphoto + name/description\n→ identify ingredients\n→ estimate portions"]
-    PhotoCheck -- "No" --> T2Text["Tier 2: Claude Text Only\nname/description\n→ infer ingredients\n→ estimate portions"]
+    PhotoCheck -- "Yes" --> T2Photo["Claude Vision + Text:<br/>analyze photo and description<br/>to identify ingredients<br/>and estimate portions"]
+    PhotoCheck -- "No" --> T2Text["Claude Text Only:<br/>infer ingredients and<br/>estimate portions from<br/>name and description"]
 
-    T2Photo --> T2OK{"LLM\nsucceeded?"}
+    T2Photo --> T2OK{"LLM succeeded?"}
     T2Text --> T2OK
 
-    T2OK -- "Yes" --> USDA["USDA FoodData Central:\nmap ingredients → macros\nsum totals"]
-    T2OK -- "No (LLM error)" --> Unavailable["Return 'estimation unavailable'\nflag for retry"]
+    T2OK -- "Yes" --> USDA["USDA FoodData Central:<br/>map each ingredient to macros,<br/>sum totals"]
+    T2OK -- "No" --> Unavailable["Estimation unavailable<br/>flag for retry"]
 
-    USDA --> USDAOK{"Lookup\nsucceeded?"}
-    USDAOK -- "Full match" --> StoreT2["Store estimate\n(tier: 2, confidence: medium/low)"]
-    USDAOK -- "Partial match" --> StoreT2Warn["Store partial estimate\nwith warning"]
+    USDA --> USDAOK{"Lookup result?"}
+    USDAOK -- "Full match" --> StoreT2["Store estimate<br/>tier: 2, confidence: medium/low"]
+    USDAOK -- "Partial" --> StoreT2Warn["Store partial estimate<br/>with warning"]
     USDAOK -- "Failure" --> Unavailable
 
     StoreT2 --> Return2["Return macros"]

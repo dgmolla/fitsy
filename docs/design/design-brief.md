@@ -42,11 +42,16 @@ These are native screens managed by Expo Router. Top-level tabs use a bottom tab
 
 ```mermaid
 flowchart TD
-    A["Search / Discovery\n(Tab — Bottom Tab Bar)\n― Set macro targets\n― Filter by cuisine, distance\n― Browse matched restaurants"] -->|"Stack push"| B["Restaurant Detail\n(Stack Screen)\n― View menu items\n― See match scores\n― Filter by macro fit"]
-    B -->|"Stack push"| C["Meal Detail\n(Stack Screen)\n― Full macro breakdown\n― Confidence tier info\n― Adjust portion / Save"]
-    A -->|"Tab switch"| D["User Profile / Targets\n(Tab — Bottom Tab Bar)\n― Set daily P/C/F goals\n― Manage preferences\n― View saved meals"]
-    B --> D
-    C --> D
+    A["Search / Discovery<br/>(Tab — Bottom Tab Bar)<br/>― Set macro targets<br/>― Filter by cuisine, distance<br/>― Browse matched restaurants"]
+    B["Restaurant Detail<br/>(Stack Screen)<br/>― View menu items<br/>― See match scores<br/>― Filter by macro fit"]
+    C["Meal Detail<br/>(Stack Screen)<br/>― Full macro breakdown<br/>― Confidence tier info<br/>― Adjust portion / Save"]
+    D["User Profile / Targets<br/>(Tab — Bottom Tab Bar)<br/>― Set daily P/C/F goals<br/>― Manage preferences<br/>― View saved meals"]
+
+    A -->|"Stack push"| B
+    B -->|"Stack push"| C
+    A -->|"Tab switch"| D
+    B -->|"Tab switch"| D
+    C -->|"Tab switch"| D
     C -->|"Stack pop"| B
     B -->|"Stack pop"| A
 ```
@@ -114,11 +119,11 @@ Define what users see first, second, third on each surface:
 
 ```mermaid
 flowchart TD
-    A["Match Score\n(primary — largest, boldest element)"]
+    A["Match Score<br/>(primary — largest, boldest element)"]
     B["Restaurant Name"]
     C["Distance / Cuisine"]
     D["Macro Preview — P / C / F grams"]
-    E["Confidence Badge\n(high · medium · low)"]
+    E["Confidence Badge<br/>(high · medium · low)"]
 
     A --> B --> C --> D --> E
 
