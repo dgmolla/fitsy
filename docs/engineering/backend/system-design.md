@@ -107,16 +107,25 @@ flowchart TD
     Search --> GP["Google Places API:<br/>Nearby Search"]
     GP --> Restaurants["List of nearby restaurants<br/>(name, address, placeId, photos)"]
     Restaurants --> Details["Google Places API:<br/>Place Details per restaurant"]
-    Details --> Menu{"Menu data<br/>available?"}
+    Details --> HasWebsite{"Has website link?"}
 
-    Menu -- "Yes (website link)" --> Scrape["Scrape restaurant website<br/>for menu items"]
-    Menu -- "No menu found" --> Skip["Exclude from results"]
+    HasWebsite -- "Yes" --> Scrape["Scrape restaurant website<br/>for menu items"]
+    HasWebsite -- "No" --> WebSearch["Web search:<br/>'Restaurant Name menu'"]
 
-    Scrape --> Items["Menu items stored:<br/>name, description, category, price"]
+    WebSearch --> WebFound{"Menu page found?"}
+    WebFound -- "Yes" --> Scrape
+    WebFound -- "No" --> GPData{"Any menu item names<br/>from Google Places?<br/>(reviews, photos, listing)"}
+
+    GPData -- "Yes" --> PartialItems["Partial menu items<br/>(names only, no descriptions)"]
+    GPData -- "No" --> Skip["Exclude from results"]
+
+    Scrape --> Items["Full menu items:<br/>name, description, category, price"]
     Items --> NutritionCheck{"Restaurant publishes<br/>nutrition data?"}
 
     NutritionCheck -- "Yes" --> Tier1["Tier 1: Extract macros<br/>from nutrition page/PDF"]
     NutritionCheck -- "No" --> Tier2["Tier 2: LLM estimation<br/>per menu item"]
+
+    PartialItems --> Tier2
 
     Tier1 --> Ranked["Rank items by<br/>macro target match"]
     Tier2 --> Ranked
