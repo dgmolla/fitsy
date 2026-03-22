@@ -110,7 +110,7 @@ flowchart TD
     Details --> Menu{"Menu data<br/>available?"}
 
     Menu -- "Yes (website link)" --> Scrape["Scrape restaurant website<br/>for menu items"]
-    Menu -- "No menu found" --> Skip["Show restaurant without<br/>macro data"]
+    Menu -- "No menu found" --> Skip["Show restaurant without<br/>macro data (sorted to bottom)"]
 
     Scrape --> Items["Menu items stored:<br/>name, description, category, price"]
     Items --> NutritionCheck{"Restaurant publishes<br/>nutrition data?"}
