@@ -11,11 +11,60 @@
 - High-level description of Fitsy: macro-aware restaurant discovery
 - Architecture style: Next.js App Router monolith (server components + API routes), Prisma ORM, PostgreSQL
 - Key data flow summary: User query -> restaurant discovery -> menu retrieval -> tiered macro estimation -> ranked results
-- Architecture diagram description (request lifecycle):
-  - Client -> Next.js server components / API routes
-  - API routes -> service layer (src/services/) -> external APIs
-  - Service layer -> Prisma -> PostgreSQL
-  - Macro cache read/write at the service layer
+- Architecture diagram:
+
+```mermaid
+graph TD
+    Client["Client (Browser)"]
+
+    subgraph "Next.js Server"
+        SC["Server Components"]
+        API["API Routes"]
+    end
+
+    subgraph "Service Layer (src/services/)"
+        RS["RestaurantService"]
+        MS["MacroEstimationService"]
+        NS["NutritionixService"]
+        CS["ClaudeService"]
+    end
+
+    subgraph "External APIs"
+        GP["Google Places API"]
+        NX["Nutritionix API"]
+        CL["Claude API"]
+        YP["Yelp Fusion API"]
+    end
+
+    subgraph "Data Layer"
+        Prisma["Prisma ORM"]
+        PG["PostgreSQL"]
+        MC["MacroEstimate Cache"]
+    end
+
+    Client --> SC
+    Client --> API
+    SC --> RS
+    SC --> MS
+    API --> RS
+    API --> MS
+
+    RS --> GP
+    RS --> YP
+    MS --> NS
+    MS --> CS
+
+    NS --> NX
+    CS --> CL
+
+    MS -- "cache read (check existing)" --> Prisma
+    MS -- "cache write (persist estimate)" --> Prisma
+    RS --> Prisma
+    Prisma --> PG
+    Prisma --> MC
+
+    MC -. "stale? re-estimate" .-> MS
+```
 - Deployment topology (to be determined)
 
 ---
@@ -62,9 +111,53 @@
 - Handles partial matches (best-effort ingredient mapping)
 - Returns structured macro result with per-ingredient breakdown
 
-### 2.6 Pipeline Data Flow Diagram Description
-- Flowchart: menu item -> Tier 1 check -> (hit? return) -> photo available? -> Tier 2 -> Nutritionix -> return | Tier 3 -> Nutritionix -> return
-- Error/fallback paths at each stage
+### 2.6 Pipeline Data Flow Diagram
+
+```mermaid
+flowchart TD
+    Start["Menu Item Received"] --> CacheCheck{"Cached estimate\nexists & fresh?"}
+
+    CacheCheck -- "Yes" --> ReturnCached["Return cached macros"]
+    CacheCheck -- "No" --> T1NX{"Tier 1:\nNutritionix\nBranded DB lookup"}
+
+    T1NX -- "Hit" --> StoreT1A["Store estimate\n(tier: 1, confidence: high)"]
+    StoreT1A --> Return1["Return macros"]
+
+    T1NX -- "Miss" --> T1Web{"Tier 1:\nRestaurant website\nnutrition page/PDF"}
+
+    T1Web -- "Hit" --> StoreT1B["Store estimate\n(tier: 1, confidence: high)"]
+    StoreT1B --> Return2["Return macros"]
+
+    T1Web -- "Miss" --> PhotoCheck{"Photo available?"}
+    T1Web -- "Error (scrape/parse fail)" --> PhotoCheck
+
+    PhotoCheck -- "Yes" --> T2["Tier 2: Claude Vision\nidentify ingredients\n& estimate portions"]
+    PhotoCheck -- "No" --> T3["Tier 3: Claude Text\nparse name/description\n& infer ingredients"]
+
+    T2 --> T2OK{"Vision\nsucceeded?"}
+    T2OK -- "Yes" --> NXLookup2["Nutritionix Lookup:\nmap ingredients → macros\nsum totals"]
+    T2OK -- "No (model error)" --> T3
+
+    T3 --> T3OK{"LLM parse\nsucceeded?"}
+    T3OK -- "Yes" --> NXLookup3["Nutritionix Lookup:\nmap ingredients → macros\nsum totals"]
+    T3OK -- "No (LLM error)" --> Unavailable["Return 'estimation unavailable'\nflag for retry"]
+
+    NXLookup2 --> NX2OK{"Lookup\nsucceeded?"}
+    NX2OK -- "Full match" --> StoreT2["Store estimate\n(tier: 2, confidence: medium)"]
+    NX2OK -- "Partial match" --> StoreT2Warn["Store partial estimate\n(tier: 2, confidence: medium)\nwith warning"]
+    NX2OK -- "Failure" --> T3
+
+    StoreT2 --> Return3["Return macros"]
+    StoreT2Warn --> Return3
+
+    NXLookup3 --> NX3OK{"Lookup\nsucceeded?"}
+    NX3OK -- "Full match" --> StoreT3["Store estimate\n(tier: 3, confidence: low)"]
+    NX3OK -- "Partial match" --> StoreT3Warn["Store partial estimate\n(tier: 3, confidence: low)\nwith warning"]
+    NX3OK -- "Failure" --> Unavailable
+
+    StoreT3 --> Return4["Return macros"]
+    StoreT3Warn --> Return4
+```
 
 ---
 
@@ -136,13 +229,93 @@
 - **MacroEstimate** (cache): id, menuItemId (FK), tier (1/2/3), calories, proteinG, carbsG, fatG, confidence, source, ingredientBreakdown (JSON), estimatedAt, expiresAt
 - **SavedItem**: userId (FK), restaurantId or menuItemId (FK), type, created
 
-### 5.2 Key Relationships
+### 5.2 Entity Relationship Diagram
+
+```mermaid
+erDiagram
+    User {
+        string id PK
+        string email UK
+        string name
+        datetime createdAt
+        datetime updatedAt
+    }
+
+    MacroTarget {
+        string id PK
+        string userId FK
+        int calories
+        float proteinG
+        float carbsG
+        float fatG
+        string goalType
+    }
+
+    Restaurant {
+        string id PK
+        string externalPlaceId UK
+        string name
+        string address
+        float lat
+        float lng
+        string cuisineTags
+        boolean chainFlag
+        string source
+        datetime createdAt
+        datetime updatedAt
+    }
+
+    MenuItem {
+        string id PK
+        string restaurantId FK
+        string name
+        string description
+        string photoUrl
+        string category
+        float price
+        datetime createdAt
+        datetime updatedAt
+    }
+
+    MacroEstimate {
+        string id PK
+        string menuItemId FK
+        int tier
+        int calories
+        float proteinG
+        float carbsG
+        float fatG
+        string confidence
+        string source
+        json ingredientBreakdown
+        datetime estimatedAt
+        datetime expiresAt
+    }
+
+    SavedItem {
+        string id PK
+        string userId FK
+        string restaurantId FK "nullable"
+        string menuItemId FK "nullable"
+        string type
+        datetime createdAt
+    }
+
+    User ||--o| MacroTarget : "has"
+    User ||--o{ SavedItem : "saves"
+    Restaurant ||--o{ MenuItem : "has"
+    MenuItem ||--o{ MacroEstimate : "estimated by"
+    Restaurant ||--o{ SavedItem : "saved in"
+    MenuItem ||--o{ SavedItem : "saved in"
+```
+
+### 5.3 Key Relationships
 - User 1:1 MacroTarget
 - User 1:N SavedItem
 - Restaurant 1:N MenuItem
 - MenuItem 1:N MacroEstimate (history; latest = active)
 
-### 5.3 Indexes
+### 5.4 Indexes
 - Restaurant: geospatial index on (lat, lng), index on externalPlaceId
 - MenuItem: index on restaurantId, composite index on (restaurantId, name)
 - MacroEstimate: index on menuItemId, index on expiresAt (for staleness queries)

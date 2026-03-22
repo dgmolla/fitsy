@@ -33,6 +33,17 @@
 
 ## 4. Core Screen Flows
 
+```mermaid
+flowchart TD
+    A["Search / Discovery\n― Set macro targets\n― Filter by cuisine, distance\n― Browse matched restaurants"] --> B["Restaurant Detail\n― View menu items\n― See match scores\n― Filter by macro fit"]
+    B --> C["Meal Detail\n― Full macro breakdown\n― Confidence tier info\n― Adjust portion / Save"]
+    A --> D["User Profile / Targets\n― Set daily P/C/F goals\n― Manage preferences\n― View saved meals"]
+    B --> D
+    C --> D
+    C --> B
+    B --> A
+```
+
 ### 4.1 Search and Discovery
 - Map view vs. list view toggle for nearby restaurants
 - Prominent macro-target bar showing current targets at the top
@@ -93,6 +104,23 @@ Define what users see first, second, third on each surface:
 2. **Restaurant detail**: Matched meals (highlighted) > full menu > restaurant info
 3. **Meal detail**: Macro breakdown > confidence tier > ingredient detail > portion adjustment
 4. **General rule**: Actionable nutrition info is always the primary content; restaurant metadata is secondary context
+
+```mermaid
+flowchart TD
+    A["Match Score\n(primary — largest, boldest element)"]
+    B["Restaurant Name"]
+    C["Distance / Cuisine"]
+    D["Macro Preview — P / C / F grams"]
+    E["Confidence Badge\n(high · medium · low)"]
+
+    A --> B --> C --> D --> E
+
+    style A fill:#2d7d46,color:#fff,stroke:none
+    style B fill:#3a9e5c,color:#fff,stroke:none
+    style C fill:#5bb87a,color:#fff,stroke:none
+    style D fill:#8fd4a4,color:#000,stroke:none
+    style E fill:#c6ecd2,color:#000,stroke:none
+```
 
 ## 7. Accessibility Considerations
 

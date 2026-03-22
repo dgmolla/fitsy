@@ -90,6 +90,69 @@ restaurant, not just chains.
 
 ---
 
+## Diagrams
+
+### User Journey Flow
+
+```mermaid
+flowchart TD
+    A[Open Fitsy] --> B[Set Macro Targets]
+    B --> B1{Preset or Custom?}
+    B1 -->|Preset| B2[Select: Cutting / Bulking / Maintenance]
+    B1 -->|Custom| B3[Enter Protein, Carbs, Fat targets]
+    B2 --> C[Search by Location]
+    B3 --> C
+
+    C --> D[Fetch Nearby Restaurants]
+    D --> E[Score Menu Items Against Targets]
+    E --> F[Display Ranked Restaurant List]
+
+    F --> G[Browse Matched Restaurants]
+    G --> H[View Restaurant Detail]
+    H --> I[Select Menu Item]
+
+    I --> J{Macro Estimate Available?}
+    J -->|Yes| K[Display Meal Macros]
+    J -->|No| L[Trigger Estimation Pipeline]
+    L --> K
+
+    K --> M{Which Confidence Tier?}
+    M -->|Tier 1| N["Show Macros + ✅ Verified Data badge"]
+    M -->|Tier 2| O["Show Macros + 📷 Photo Estimate badge"]
+    M -->|Tier 3| P["Show Macros + 🤖 AI Estimate badge + wider range"]
+
+    N --> Q[View Full Breakdown]
+    O --> Q
+    P --> Q
+
+    Q --> R{Decision}
+    R -->|Visit| S[Navigate to Restaurant]
+    R -->|Keep Browsing| G
+    R -->|Adjust Targets| B
+```
+
+### Competitive Landscape Map
+
+```mermaid
+quadrantChart
+    title Competitive Landscape: Nutrition Awareness vs Restaurant Discovery
+    x-axis Low Restaurant Discovery --> High Restaurant Discovery
+    y-axis Low Nutrition/Macro Awareness --> High Nutrition/Macro Awareness
+    quadrant-1 "The Goal: Both"
+    quadrant-2 "Nutrition Tools"
+    quadrant-3 "Neither"
+    quadrant-4 "Discovery Tools"
+    MyFitnessPal: [0.20, 0.80]
+    Cronometer: [0.10, 0.85]
+    Noom: [0.15, 0.60]
+    Google Maps: [0.90, 0.05]
+    Yelp: [0.85, 0.10]
+    HealthyOut (defunct): [0.55, 0.50]
+    Fitsy: [0.78, 0.82]
+```
+
+---
+
 ## Edge Cases
 
 1. Restaurant has no online menu and no photos — fallback to "no data

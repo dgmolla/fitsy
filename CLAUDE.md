@@ -129,6 +129,7 @@ npx prisma db seed      # Seed data
 - **Tests**: Write tests for new endpoints. Mock only external services, never your own code.
 - **API calls**: All external API calls go through service wrappers in `src/services/`
 - **Docs structure**: `docs/` children are domains (product, engineering, design, gtm). Domain-specific subdirs are grandchildren. No domain-specific dirs directly under `docs/`.
+- **Diagrams**: Every spec and design doc must include at least one Mermaid diagram (```mermaid code block) illustrating the primary data/control flow or architecture. Use Mermaid in markdown — GitHub and Obsidian render it natively.
 
 ---
 

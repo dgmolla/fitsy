@@ -158,6 +158,32 @@ else
   echo "PASS"
 fi
 
+echo -n "10. Specs and design docs contain Mermaid diagrams... "
+MISSING_MERMAID=""
+SPEC_DESIGN_DIRS=(
+  "$REPO_ROOT/docs/product/specs"
+  "$REPO_ROOT/docs/engineering"
+  "$REPO_ROOT/docs/design"
+)
+for dir in "${SPEC_DESIGN_DIRS[@]}"; do
+  while IFS= read -r file; do
+    basename=$(basename "$file")
+    if [ "$basename" = "TEMPLATE.md" ]; then continue; fi
+    if ! grep -q '```mermaid' "$file"; then
+      relpath="${file#$REPO_ROOT/}"
+      MISSING_MERMAID="$MISSING_MERMAID\n  $relpath"
+    fi
+  done < <(find "$dir" -name "*.md" -type f 2>/dev/null)
+done
+if [ -n "$MISSING_MERMAID" ]; then
+  echo "FAIL"
+  echo "  Spec/design docs missing Mermaid diagrams. Every spec must have at least one."
+  echo -e "$MISSING_MERMAID"
+  ERRORS=$((ERRORS + 1))
+else
+  echo "PASS"
+fi
+
 echo ""
 echo "=== Results ==="
 if [ $ERRORS -gt 0 ]; then
