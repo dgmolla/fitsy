@@ -15,10 +15,10 @@
 
 ```mermaid
 graph TD
-    Client["Mobile App (React Native/Expo)"]
+    Client["Mobile App<br/>(React Native/Expo)"]
 
     subgraph "Next.js API Server"
-        API["API Routes"]
+        API["API Routes<br/>(orchestration layer)"]
     end
 
     subgraph "Service Layer (apps/api/services/)"
@@ -30,19 +30,18 @@ graph TD
 
     subgraph "External APIs"
         GP["Google Places API"]
-        USDA["USDA FoodData Central (free)"]
+        USDA["USDA FoodData Central"]
         CL["Claude API"]
     end
 
     subgraph "Data Layer"
         Prisma["Prisma ORM"]
         PG["PostgreSQL"]
-        MC["MacroEstimate Cache"]
     end
 
     Client --> API
-    API --> RS
-    API --> MS
+    API -- "1. get restaurants + menu items" --> RS
+    API -- "2. estimate macros<br/>(pass websiteUrl, photoUrl)" --> MS
 
     RS --> GP
     MS --> US
@@ -51,12 +50,12 @@ graph TD
     US --> USDA
     CS --> CL
 
-    MS -- "cache read" --> Prisma
-    MS -- "cache write" --> Prisma
+    MS -- "cache read/write" --> Prisma
     RS --> Prisma
     Prisma --> PG
-    Prisma --> MC
 ```
+- **Orchestration pattern**: API routes coordinate between services. Services never call each other — MacroEstimationService receives restaurant data (websiteUrl, photoUrl) as input from the route, not by calling RestaurantService. This keeps services independently testable.
+- Deployment topology (to be determined)
 - Deployment topology (to be determined)
 
 ---
