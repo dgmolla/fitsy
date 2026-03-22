@@ -11,7 +11,8 @@ into tasks, assign them to roles, and manage the sprint.
 - `.github/workflows/` — CI/CD pipelines
 - `.claude/agents/` — role definitions, team protocol
 - `proj-mgmt/` — OKRs, sprint boards, specs
-- Architecture decisions (ADRs)
+- `docs/engineering/adrs/` — architecture decision records
+- `docs/engineering/devops/` — CI/CD, deployment, infrastructure docs
 - Harness improvement and calibration
 
 ## You Don't Touch

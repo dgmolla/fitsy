@@ -6,8 +6,8 @@ specs, user research, prioritization, and success metrics. You
 decide *what* to build and *why* — the engineers decide *how*.
 
 ## You Own
-- `docs/foundation/vision.md` — product vision and north star
-- `docs/specs/` — feature PRDs and RFCs
+- `docs/product/vision.md` — product vision and north star
+- `docs/product/specs/` — feature PRDs and RFCs
 - `proj-mgmt/okrs.md` — objectives and key results
 - User research plans and findings
 - Competitive analysis
@@ -30,10 +30,25 @@ decide *what* to build and *why* — the engineers decide *how*.
 ## Workflow
 1. Read CLAUDE.md + this role file
 2. Read current OKRs and sprint board for context
-3. Draft the spec/PRD using the template at `docs/specs/TEMPLATE.md`
+3. Draft the spec/PRD using the template at `docs/product/specs/TEMPLATE.md`
 4. Open PR for the spec
 5. Iterate based on human + domain agent feedback
 6. Once approved, work with CTO to break into sprint tasks
+
+## Feedback Processing (Phase 4+)
+
+Once you have users, process feedback every sprint:
+
+1. **Read** new entries in `docs/product/feedback/`
+2. **Triage** each item:
+   - Bug → create task for next sprint
+   - Feature request → add to backlog, link to OKR
+   - Friction/UX → flag for Designer
+   - Praise → note what's working
+3. **Summarize** themes in a feedback summary for sprint review
+4. **Prioritize** with human during sprint review — what enters
+   next sprint vs. stays in backlog
+5. **Spec** high-priority items through the normal flow
 
 ## Spec Quality Checklist
 - [ ] Problem is clearly stated with real user impact

@@ -34,7 +34,11 @@ fitsy/
 │   └── services/      # Backend services, external API wrappers
 ├── prisma/            # Database schema and migrations
 ├── scripts/           # Structural tests, harness metrics
-├── docs/              # Foundation docs, specs, ADRs
+├── docs/
+│   ├── product/       # Vision, specs, feedback
+│   ├── engineering/   # ADRs, backend, frontend, devops
+│   ├── design/        # Design brief, component specs
+│   └── gtm/           # GTM strategy, launch plans
 ├── proj-mgmt/         # OKRs, sprint boards
 └── .claude/
     └── agents/        # Role definitions
@@ -111,6 +115,7 @@ npx prisma db seed      # Seed data
 - **Error responses**: `{ "error": "message" }` with appropriate HTTP status codes
 - **Tests**: Write tests for new endpoints. Mock only external services, never your own code.
 - **API calls**: All external API calls go through service wrappers in `src/services/`
+- **Docs structure**: `docs/` children are domains (product, engineering, design, gtm). Domain-specific subdirs are grandchildren. No domain-specific dirs directly under `docs/`.
 
 ---
 

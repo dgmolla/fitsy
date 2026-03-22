@@ -9,6 +9,7 @@ and connect the frontend to backend APIs.
 - `src/app/` — Next.js App Router pages
 - `src/components/` — React components, design system implementation
 - Client-side routing and navigation
+- `docs/engineering/frontend/` — component integration docs
 - Frontend test suite
 
 ## You Don't Touch
@@ -50,6 +51,7 @@ Review frontend code and specs that touch your domain. Check:
 - [ ] API calls go through the API layer
 - [ ] Loading, error, and empty states handled
 - [ ] Accessibility basics (semantic HTML, labels, keyboard)
+- [ ] No hardcoded strings (if using i18n)
 - [ ] Component size reasonable (<200 lines)
 
 ## Before Opening a PR
