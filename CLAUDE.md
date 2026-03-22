@@ -34,7 +34,11 @@ fitsy/
 │   └── services/      # Backend services, external API wrappers
 ├── prisma/            # Database schema and migrations
 ├── scripts/           # Structural tests, harness metrics
-├── docs/              # Foundation docs, specs, ADRs
+├── docs/
+│   ├── product/       # Vision, specs, feedback
+│   ├── engineering/   # ADRs, backend, frontend, devops
+│   ├── design/        # Design brief, component specs
+│   └── gtm/           # GTM strategy, launch plans
 ├── proj-mgmt/         # OKRs, sprint boards
 └── .claude/
     └── agents/        # Role definitions
@@ -42,16 +46,29 @@ fitsy/
 
 ### Key Architecture Decisions
 
-**Macro Estimation Pipeline:**
-1. Get restaurant menus (Google Places / Yelp / scraping)
-2. LLM parses menu items → identifies ingredients and portions
-3. Nutritionix API maps ingredients → per-ingredient macros
-4. Sum → estimated macros per meal
-5. For chain restaurants in Nutritionix: use verified data directly
+**Tiered Macro Estimation Pipeline:**
 
-**Important:** Macro estimates from LLM parsing are approximate.
-Show confidence ranges (e.g., "~45-55g protein"), not false precision.
-Cache aggressively — menus don't change daily.
+Each menu item goes through the highest-confidence tier available:
+
+1. **Tier 1 — Verified data**: Check if macros are already publicly
+   available (Nutritionix chain DB, restaurant website, etc.)
+   Confidence: high.
+2. **Tier 2 — Photo estimation**: If menu item has photos, use
+   vision model to identify ingredients and estimate portions.
+   Confidence: medium.
+3. **Tier 3 — LLM description parsing**: No photos available — LLM
+   estimates ingredients and portions from menu item name/description.
+   Confidence: low.
+4. **Nutritionix lookup**: Map identified ingredients + portions →
+   per-ingredient macros via Nutritionix API. Sum for total.
+
+Results are persisted per menu item (see Macro Cache below) so we
+only estimate once per item. Show confidence tier to users —
+never false precision on lower tiers.
+
+**Macro Cache:** Estimated macros are stored per menu item with
+tier, timestamp, and source. Stale data is re-estimated periodically.
+Details in system design doc (`docs/engineering/backend/`).
 
 ### Database Schema
 
@@ -111,6 +128,7 @@ npx prisma db seed      # Seed data
 - **Error responses**: `{ "error": "message" }` with appropriate HTTP status codes
 - **Tests**: Write tests for new endpoints. Mock only external services, never your own code.
 - **API calls**: All external API calls go through service wrappers in `src/services/`
+- **Docs structure**: `docs/` children are domains (product, engineering, design, gtm). Domain-specific subdirs are grandchildren. No domain-specific dirs directly under `docs/`.
 
 ---
 

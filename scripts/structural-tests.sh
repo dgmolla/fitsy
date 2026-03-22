@@ -128,6 +128,36 @@ else
   echo "PASS"
 fi
 
+ALLOWED_DOCS_DOMAINS="product engineering design gtm"
+
+echo -n "9. Docs directory structure (domain/subdomain)... "
+BAD_DOCS=""
+if [ -d "$REPO_ROOT/docs" ]; then
+  for entry in "$REPO_ROOT/docs"/*/; do
+    [ ! -d "$entry" ] && continue
+    dirname=$(basename "$entry")
+    allowed=false
+    for domain in $ALLOWED_DOCS_DOMAINS; do
+      if [ "$dirname" = "$domain" ]; then allowed=true; break; fi
+    done
+    if ! $allowed; then
+      BAD_DOCS="$BAD_DOCS\n  docs/$dirname/ is not an allowed domain (allowed: $ALLOWED_DOCS_DOMAINS)"
+    fi
+  done
+  # Check no files directly in docs/ (only dirs)
+  for entry in "$REPO_ROOT/docs"/*; do
+    [ -f "$entry" ] && BAD_DOCS="$BAD_DOCS\n  $(basename "$entry") is a file directly in docs/ — move it under a domain"
+  done
+fi
+if [ -n "$BAD_DOCS" ]; then
+  echo "FAIL"
+  echo "  docs/ children must be domain dirs: $ALLOWED_DOCS_DOMAINS"
+  echo -e "$BAD_DOCS"
+  ERRORS=$((ERRORS + 1))
+else
+  echo "PASS"
+fi
+
 echo ""
 echo "=== Results ==="
 if [ $ERRORS -gt 0 ]; then

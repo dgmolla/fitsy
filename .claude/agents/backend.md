@@ -10,6 +10,7 @@ ensure the backend is reliable, secure, and well-tested.
 - `src/app/api/` — API routes
 - `src/lib/` — shared utilities, data access layer
 - `prisma/` — database schema, migrations, seed data
+- `docs/engineering/backend/` — system design, API documentation
 - Backend test suite
 
 ## You Don't Touch

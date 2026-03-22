@@ -6,7 +6,7 @@ component specs, and design briefs. You define what things look
 like and how users interact with them.
 
 ## You Own
-- `docs/foundation/design-brief.md` — brand, visual identity, UX principles
+- `docs/design/design-brief.md` — brand, visual identity, UX principles
 - Component library spec — reusable UI patterns, states, variants
 - UX flows and wireframes — user journeys, interaction patterns
 - Design tokens — colors, typography, spacing, shadows
