@@ -1,0 +1,115 @@
+name: Automated Review
+
+on:
+  pull_request:
+    types: [labeled, opened, synchronize]
+
+concurrency:
+  group: review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    name: Automated Code Review
+    runs-on: ubuntu-latest
+    if: contains(github.event.pull_request.labels.*.name, 'review')
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Get PR context
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr diff ${{ github.event.pull_request.number }} > /tmp/pr_diff.txt
+          gh pr view ${{ github.event.pull_request.number }} --json title,body,files > /tmp/pr_info.json
+          gh pr checks ${{ github.event.pull_request.number }} > /tmp/pr_checks.txt 2>&1 || true
+
+      - name: Build project context
+        run: |
+          PROJECT_CONTEXT=""
+          if [ -f CLAUDE.md ]; then
+            PROJECT_CONTEXT="## Project Context (CLAUDE.md)\n\n$(cat CLAUDE.md)"
+          fi
+          echo "$PROJECT_CONTEXT" > /tmp/project_context.txt
+
+      - name: Run review
+        id: review
+        run: |
+          REVIEWER_PROMPT=$(cat .claude/agents/reviewer.md)
+          PROJECT_CONTEXT=$(head -c 50000 /tmp/project_context.txt)
+          DIFF=$(head -c 100000 /tmp/pr_diff.txt)
+          PR_INFO=$(cat /tmp/pr_info.json)
+          CI_STATUS=$(cat /tmp/pr_checks.txt)
+
+          REQUEST_BODY=$(jq -n \
+            --arg system "$REVIEWER_PROMPT" \
+            --arg context "$PROJECT_CONTEXT" \
+            --arg diff "$DIFF" \
+            --arg pr_info "$PR_INFO" \
+            --arg ci_status "$CI_STATUS" \
+            '{
+              model: "claude-sonnet-4-20250514",
+              max_tokens: 4096,
+              system: $system,
+              messages: [{
+                role: "user",
+                content: ("Review this PR. You have full project context below.\n\n" + $context + "\n\n---\n\n## PR Info\n" + $pr_info + "\n\n## CI Status\n" + $ci_status + "\n\n## Diff\n```\n" + $diff + "\n```\n\nReview against your checklist. Be specific with file paths and line references.\n\nEnd with EXACTLY one of:\nVERDICT: APPROVE\nVERDICT: CHANGES REQUESTED\nVERDICT: BLOCK")
+              }]
+            }')
+
+          MAX_RETRIES=4
+          for attempt in $(seq 1 $MAX_RETRIES); do
+            curl -s -o /tmp/api_response.json -w '%{http_code}' \
+              https://api.anthropic.com/v1/messages \
+              -H "Content-Type: application/json" \
+              -H "x-api-key: ${{ secrets.ANTHROPIC_API_KEY }}" \
+              -H "anthropic-version: 2023-06-01" \
+              -d "$REQUEST_BODY" > /tmp/http_code.txt
+            HTTP_CODE=$(cat /tmp/http_code.txt)
+            if [ "$HTTP_CODE" = "200" ]; then break
+            elif [ "$HTTP_CODE" = "429" ] || [ "$HTTP_CODE" = "529" ]; then
+              [ "$attempt" -eq "$MAX_RETRIES" ] && exit 1
+              sleep $((60 * (2 ** (attempt - 1))))
+            else
+              cat /tmp/api_response.json; exit 1
+            fi
+          done
+
+          REVIEW=$(jq -r '.content[0].text // empty' /tmp/api_response.json)
+          [ -z "$REVIEW" ] && exit 1
+          echo "$REVIEW" > /tmp/review.txt
+
+          VERDICT=$(echo "$REVIEW" | sed 's/\*//g' | grep -oP '^\s*VERDICT:\s*\K\w+.*' | tail -1 | xargs)
+          if [ -z "$VERDICT" ]; then echo "decision=unknown" >> $GITHUB_OUTPUT
+          elif echo "$VERDICT" | grep -qi "APPROVE"; then echo "decision=approve" >> $GITHUB_OUTPUT
+          elif echo "$VERDICT" | grep -qi "BLOCK"; then echo "decision=block" >> $GITHUB_OUTPUT
+          else echo "decision=changes_requested" >> $GITHUB_OUTPUT; fi
+
+      - name: Post review and handle verdict
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DECISION="${{ steps.review.outputs.decision }}"
+          printf '## Automated Review\n\n%s' "$(cat /tmp/review.txt)" > /tmp/review_body.md
+          NEEDS_HUMAN=$(gh pr view ${{ github.event.pull_request.number }} --json labels \
+            --jq '.labels | map(.name) | if any(. == "human-review") then "true" else "false" end')
+
+          if [ "$DECISION" = "approve" ]; then
+            gh pr review ${{ github.event.pull_request.number }} --approve --body-file /tmp/review_body.md
+            if [ "$NEEDS_HUMAN" = "true" ]; then
+              gh pr comment ${{ github.event.pull_request.number }} --body "Automated review approved. Waiting for human review."
+            else
+              for i in $(seq 1 30); do
+                STATUS=$(gh pr checks ${{ github.event.pull_request.number }} --json name,state \
+                  --jq '[.[] | select(.name != "Automated Code Review") | .state] | if length == 0 then "pass" elif all(. == "SUCCESS") then "pass" elif any(. == "FAILURE") then "fail" else "pending" end' 2>/dev/null || echo "pending")
+                if [ "$STATUS" = "pass" ]; then gh pr merge ${{ github.event.pull_request.number }} --squash --delete-branch; break
+                elif [ "$STATUS" = "fail" ]; then gh pr comment ${{ github.event.pull_request.number }} --body "Review approved but CI failing."; break; fi
+                sleep 10
+              done
+            fi
+          else
+            gh pr review ${{ github.event.pull_request.number }} --comment --body-file /tmp/review_body.md
+          fi

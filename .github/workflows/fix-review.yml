@@ -1,0 +1,101 @@
+name: Fix Review Comments
+
+on:
+  pull_request_review:
+    types: [submitted]
+
+concurrency:
+  group: fix-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  fix:
+    name: Auto-fix Review Comments
+    runs-on: ubuntu-latest
+    if: >-
+      github.event.review.state == 'commented' &&
+      contains(github.event.review.body, 'VERDICT: CHANGES REQUESTED')
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract review and generate fixes
+        run: |
+          gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews/${{ github.event.review.id }} \
+            --jq '.body' > /tmp/review_comments.txt
+          git diff origin/main...HEAD > /tmp/current_diff.txt
+
+          REVIEW_COMMENTS=$(cat /tmp/review_comments.txt)
+          CURRENT_DIFF=$(head -c 50000 /tmp/current_diff.txt)
+          CHANGED_FILES=$(git diff --name-only origin/main...HEAD | tr '\n' ', ')
+
+          REQUEST_BODY=$(jq -n \
+            --arg review "$REVIEW_COMMENTS" \
+            --arg diff "$CURRENT_DIFF" \
+            --arg files "$CHANGED_FILES" \
+            '{
+              model: "claude-sonnet-4-20250514",
+              max_tokens: 8192,
+              system: "You fix review comments. Output ONLY a JSON array of edits: [{\"file\": \"path\", \"search\": \"exact string\", \"replace\": \"replacement\"}]. No explanation. Empty array [] if no changes needed.",
+              messages: [{
+                role: "user",
+                content: ("Review feedback:\n\n" + $review + "\n\nDiff:\n```\n" + $diff + "\n```\n\nChanged files: " + $files + "\n\nOutput JSON edits. Only fix flagged issues.")
+              }]
+            }')
+
+          MAX_RETRIES=4
+          for attempt in $(seq 1 $MAX_RETRIES); do
+            curl -s -o /tmp/api_response.json -w '%{http_code}' \
+              https://api.anthropic.com/v1/messages \
+              -H "Content-Type: application/json" \
+              -H "x-api-key: ${{ secrets.ANTHROPIC_API_KEY }}" \
+              -H "anthropic-version: 2023-06-01" \
+              -d "$REQUEST_BODY" > /tmp/http_code.txt
+            HTTP_CODE=$(cat /tmp/http_code.txt)
+            if [ "$HTTP_CODE" = "200" ]; then break
+            elif [ "$HTTP_CODE" = "429" ] || [ "$HTTP_CODE" = "529" ]; then
+              [ "$attempt" -eq "$MAX_RETRIES" ] && exit 1
+              sleep $((60 * (2 ** (attempt - 1))))
+            else exit 1; fi
+          done
+
+          jq -r '.content[0].text // empty' /tmp/api_response.json > /tmp/edits.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Apply edits
+        run: |
+          python3 -c "
+          import json, sys
+          raw = open('/tmp/edits.json').read().strip()
+          if raw.startswith('\`\`\`'):
+              lines = raw.split('\n')[1:]
+              if lines and lines[-1].strip() == '\`\`\`': lines = lines[:-1]
+              raw = '\n'.join(lines)
+          edits = json.loads(raw)
+          if not edits: print('No edits'); sys.exit(0)
+          applied = 0
+          for e in edits:
+              try:
+                  c = open(e['file']).read()
+                  if e['search'] in c:
+                      open(e['file'],'w').write(c.replace(e['search'],e['replace'],1))
+                      print(f'Applied: {e[\"file\"]}'); applied += 1
+                  else: print(f'Not found: {e[\"file\"]}')
+              except FileNotFoundError: print(f'Missing: {e[\"file\"]}')
+          print(f'{applied}/{len(edits)} applied')
+          if applied == 0: sys.exit(1)
+          "
+
+      - name: Commit and push
+        run: |
+          git config user.name "harness-bot"
+          git config user.email "bot@harness.dev"
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "[Bot] Fix review comments"
+            git push
+          fi
