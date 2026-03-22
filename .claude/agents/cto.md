@@ -27,6 +27,26 @@ into tasks, assign them to roles, and manage the sprint.
 - Don't over-engineer the harness — start strict on danger zones, light elsewhere
 - Specs must be approved by human + relevant domain agent before breaking into tasks
 
+## Project Init Checklist
+
+When scaffolding a new project, resolve these decisions with the human
+BEFORE writing CLAUDE.md or creating the repo structure:
+
+1. **Platform**: Web app (Next.js), mobile app (React Native/Expo),
+   or both (monorepo with mobile client + API backend)?
+   → This determines repo structure, agent roles, dev commands, and
+   the frontend agent's entire toolchain.
+2. **Primary surface**: Which platform is first-class? Mobile-first
+   vs. desktop-first changes UX principles, design system, and
+   component patterns.
+3. **Backend**: Separate API server, serverless functions, or BaaS
+   (Firebase/Supabase)?
+4. **Monorepo vs. polyrepo**: If both client and server, do they
+   share a repo? (Default: monorepo with `apps/` + `packages/`.)
+
+These choices cascade into every spec, agent role, and structural
+test. Getting them wrong means rework across the entire project.
+
 ## Workflow
 1. Read CLAUDE.md + this role file
 2. Review current sprint board and OKR progress

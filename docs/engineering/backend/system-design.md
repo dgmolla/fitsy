@@ -9,16 +9,15 @@
 ## 1. System Overview
 
 - High-level description of Fitsy: macro-aware restaurant discovery
-- Architecture style: Next.js App Router monolith (server components + API routes), Prisma ORM, PostgreSQL
+- Architecture style: React Native (Expo) mobile client + Next.js API backend (monorepo), Prisma ORM, PostgreSQL
 - Key data flow summary: User query -> restaurant discovery -> menu retrieval -> tiered macro estimation -> ranked results
 - Architecture diagram:
 
 ```mermaid
 graph TD
-    Client["Client (Browser)"]
+    Client["Mobile App (React Native/Expo)"]
 
-    subgraph "Next.js Server"
-        SC["Server Components"]
+    subgraph "Next.js API Server"
         API["API Routes"]
     end
 
@@ -42,10 +41,7 @@ graph TD
         MC["MacroEstimate Cache"]
     end
 
-    Client --> SC
     Client --> API
-    SC --> RS
-    SC --> MS
     API --> RS
     API --> MS
 
@@ -162,6 +158,8 @@ flowchart TD
 ---
 
 ## 3. API Architecture
+
+The Next.js backend is API-only — no server-rendered pages. All endpoints serve JSON and are consumed by the React Native (Expo) mobile client.
 
 ### 3.1 Endpoint Inventory
 - `GET /api/restaurants` — discover nearby restaurants (lat/lng, radius, filters)
@@ -387,14 +385,15 @@ erDiagram
 
 ## 9. Security Considerations
 
-- API keys stored in environment variables, never in code or client bundles
-- All external service calls server-side only (no client-side API key exposure)
+- API keys stored in environment variables, never in code or the mobile app bundle
+- All external service calls server-side only (no API key exposure to the mobile client)
+- Secure token storage on device via `expo-secure-store` for auth tokens
 - User input sanitization on search queries and filter parameters
 - Rate limiting on public API routes to prevent abuse
 - Authentication required for user-specific endpoints (targets, saved items)
 - Macro estimates include confidence disclaimers — never present estimates as medical/dietary advice
 - Audit logging for macro estimate corrections and cache invalidations
-- HTTPS only; secure headers (CORS, CSP, etc.)
+- HTTPS only; CORS configured to allow requests from the mobile client
 
 ---
 

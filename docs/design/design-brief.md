@@ -22,26 +22,33 @@
 - **Typography direction**: Sans-serif family; one typeface for headings (bold, modern), one for body (high readability at small sizes on mobile); numeric-friendly for macro values (tabular figures)
 - **Type scale**: Define a constrained modular scale (likely 1.2 ratio) to keep hierarchy tight on small screens
 
-## 3. Mobile-First UX Principles
+## 3. Native Mobile UX Principles
 
-- **Thumb-zone design**: Primary actions reachable with one hand; bottom-anchored navigation
+Fitsy is a native mobile app built with React Native and Expo — not a responsive web app.
+
+- **Thumb-zone design**: Primary actions reachable with one hand; bottom tab bar navigation
+- **Native navigation patterns**: Stack navigation for drill-down flows, native modals and bottom sheets for contextual actions, platform-specific back gestures (swipe-back on iOS)
 - **Progressive disclosure**: Show macro summary first, expand to full breakdown on tap
+- **Haptic feedback**: Use light haptics for confirmations (saving a meal, hitting a macro target), reinforcing interactions without visual noise
 - **Speed over chrome**: Prioritize content loading and perceived performance; skeleton screens for async data
+- **Platform-specific gestures**: Support native gestures — swipe-to-dismiss, long-press context menus, pull-to-refresh
 - **Contextual defaults**: Pre-fill location, remember last macro targets, surface relevant filters based on time of day
-- **Offline tolerance**: Graceful degradation when connectivity is poor; cache recent searches and favorites
+- **Offline tolerance**: Graceful degradation when connectivity is poor; cache recent searches and favorites with local storage
 - **Minimal input**: Reduce typing — use sliders for macro targets, chips for filters, location auto-detect
 
 ## 4. Core Screen Flows
 
+These are native screens managed by Expo Router. Top-level tabs use a bottom tab bar; drill-down flows use stack navigation with native transitions. Contextual actions (filters, portion adjustments) use native modals and bottom sheets.
+
 ```mermaid
 flowchart TD
-    A["Search / Discovery\n― Set macro targets\n― Filter by cuisine, distance\n― Browse matched restaurants"] --> B["Restaurant Detail\n― View menu items\n― See match scores\n― Filter by macro fit"]
-    B --> C["Meal Detail\n― Full macro breakdown\n― Confidence tier info\n― Adjust portion / Save"]
-    A --> D["User Profile / Targets\n― Set daily P/C/F goals\n― Manage preferences\n― View saved meals"]
+    A["Search / Discovery\n(Tab — Bottom Tab Bar)\n― Set macro targets\n― Filter by cuisine, distance\n― Browse matched restaurants"] -->|"Stack push"| B["Restaurant Detail\n(Stack Screen)\n― View menu items\n― See match scores\n― Filter by macro fit"]
+    B -->|"Stack push"| C["Meal Detail\n(Stack Screen)\n― Full macro breakdown\n― Confidence tier info\n― Adjust portion / Save"]
+    A -->|"Tab switch"| D["User Profile / Targets\n(Tab — Bottom Tab Bar)\n― Set daily P/C/F goals\n― Manage preferences\n― View saved meals"]
     B --> D
     C --> D
-    C --> B
-    B --> A
+    C -->|"Stack pop"| B
+    B -->|"Stack pop"| A
 ```
 
 ### 4.1 Search and Discovery
@@ -127,23 +134,26 @@ flowchart TD
 - **Color independence**: Confidence tiers and macro categories must be distinguishable without color (use icons, patterns, labels)
 - **Contrast ratios**: WCAG AA minimum (4.5:1 for body text, 3:1 for large text) in both light and dark modes
 - **Touch targets**: Minimum 44x44pt tap targets; generous spacing between interactive elements
-- **Screen reader support**: Semantic HTML; macro values announced with units ("32 grams protein"); confidence tiers announced descriptively
-- **Reduced motion**: Respect prefers-reduced-motion; provide static alternatives for animated charts
-- **Text scaling**: Layouts must accommodate up to 200% text scaling without breaking
+- **Screen reader support**: Use React Native accessibility props (`accessibilityLabel`, `accessibilityRole`, `accessibilityHint`, `accessibilityState`); macro values announced with units ("32 grams protein"); confidence tiers announced descriptively via `accessibilityLabel`
+- **Reduced motion**: Respect `AccessibilityInfo.isReduceMotionEnabled()` (iOS) and equivalent on Android; provide static alternatives for animated charts
+- **Text scaling**: Layouts must accommodate Dynamic Type (iOS) and font scale settings (Android) up to 200% without breaking; use `allowFontScaling` and test at large sizes
 - **Cognitive load**: Avoid jargon; provide onboarding tooltips for macro and confidence concepts
 
 ## 8. Design System Foundation
 
-### 8.1 Spacing and Grid
+### 8.1 Spacing and Layout
 - 4px base unit; spacing scale: 4, 8, 12, 16, 24, 32, 48, 64
-- Mobile grid: 16px margins, 8px gutters, fluid columns
-- Tablet/desktop: 12-column grid with max-width container
+- Layout engine: Flexbox (React Native's default) — no CSS grid
+- Screen margins: 16px horizontal padding; use `SafeAreaView` to respect device insets (notch, home indicator)
+- Use `Dimensions` API and `useWindowDimensions` hook for responsive sizing across device sizes
 - Consistent vertical rhythm tied to the type scale
 
 ### 8.2 Component Philosophy
+- **React Native primitives**: All components built on `View`, `Text`, `Pressable`, `ScrollView`, `FlatList`, etc. — no HTML elements (`div`, `span`, `button`)
 - **Composition over customization**: Small, composable primitives (MacroPill, ConfidenceBadge, FilterChip) assembled into larger patterns
 - **State-complete**: Every component designed for all states — loading (skeleton), empty, error, populated, disabled
-- **Token-driven**: All visual properties (color, spacing, radius, shadow) reference design tokens, not raw values
+- **Token-driven**: All visual properties (color, spacing, radius, shadow) reference design tokens via `StyleSheet.create` — not inline raw values
+- **Platform adaptation**: Use `Platform.select` or platform-specific file extensions (`.ios.tsx` / `.android.tsx`) where native behavior diverges
 - **Documentation**: Each component spec includes: anatomy, variants, states, usage guidelines, do/don't examples
 
 ### 8.3 Foundational Components (to spec first)

@@ -198,7 +198,7 @@ quadrantChart
 
 ### Technical Approach (summary)
 
-- Next.js App Router, TypeScript strict, Prisma + Postgres.
+- React Native (Expo) mobile client + Next.js API backend, TypeScript strict, Prisma + Postgres. Monorepo with apps/mobile/ and apps/api/.
 - Service wrappers for all external APIs (Google Places, Nutritionix,
   Claude API).
 - Macro cache: per-menu-item estimates stored with tier, timestamp,
@@ -211,13 +211,13 @@ quadrantChart
 
 ### Primary Surfaces
 
-- **Search / Home** — Location input (or auto-detect), macro targets
+- **Search / Home Screen** — Location input (or auto-detect), macro targets
   displayed, restaurant results list ranked by match quality.
-- **Restaurant Detail** — Menu items with macro breakdowns, match
+- **Restaurant Detail Screen** — Menu items with macro breakdowns, match
   scores, confidence tiers.
-- **Meal Detail** — Full ingredient-level breakdown, estimation
+- **Meal Detail Screen** — Full ingredient-level breakdown, estimation
   source, confidence range.
-- **Target Setup** — Set or adjust macro targets (per-meal or daily).
+- **Target Setup Screen** — Set or adjust macro targets (per-meal or daily).
 
 ### API Surface
 
