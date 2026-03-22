@@ -30,11 +30,16 @@
 - Confidence tier is stored alongside results and exposed to the user
 
 ### 2.2 Tier 1 — Verified Data
-- Source: Nutritionix Branded/Common Foods DB, restaurant-published nutrition pages
-- Lookup by restaurant chain + menu item name
+- Two-step lookup (both are high-confidence since the source is the restaurant or a verified DB):
+  1. **Nutritionix Branded/Common Foods DB**: API lookup by restaurant chain + menu item name. Fast, structured, covers major chains.
+  2. **Restaurant website fallback**: If Nutritionix misses, check the restaurant's own nutrition page/PDF.
+     - Structured HTML tables → simple scraper, no LLM needed
+     - Nutrition PDFs (common for chains) → PDF table extraction library; LLM fallback for messy layouts
+     - Note: LLM here is an *extraction* tool, not an estimation source — confidence stays high
+- Maintain a per-restaurant registry of known nutrition URL/PDF locations (cached)
 - When matched: return macros directly (skip ingredient decomposition)
 - Confidence: high
-- Edge cases: menu item name mismatches, regional menu variations
+- Edge cases: menu item name mismatches, regional menu variations, PDF format changes
 
 ### 2.3 Tier 2 — Photo Estimation
 - Source: menu item photos (from Google Places, restaurant sites, or user uploads)
