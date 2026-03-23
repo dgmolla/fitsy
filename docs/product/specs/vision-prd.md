@@ -75,6 +75,13 @@ restaurant, not just chains.
    on whichever fields the user fills in.
 2. **Restaurant discovery** — Location-based search returning nearby
    restaurants with menu items that match or are close to targets.
+   - **Ranked by match quality**: restaurants sorted by how closely their
+     best menu items match the user's macro targets (not by distance or
+     rating). A restaurant 2 miles away with a perfect macro match ranks
+     above one 0.5 miles away with a poor match.
+   - **Configurable distance limit**: user sets max distance (e.g., 1mi,
+     3mi, 5mi, 10mi). Default: 3mi. Only restaurants within the limit
+     are returned. Distance is a filter, not a ranking signal.
 3. **LLM macro estimation pipeline:**
    - Single Claude API call per menu item: name + description +
      optional photo → returns total macros + ingredient breakdown.
