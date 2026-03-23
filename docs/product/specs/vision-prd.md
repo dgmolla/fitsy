@@ -131,21 +131,28 @@ flowchart TD
 ### Competitive Landscape Map
 
 ```mermaid
-quadrantChart
-    title Competitive Landscape: Nutrition Awareness vs Restaurant Discovery
-    x-axis Low Restaurant Discovery --> High Restaurant Discovery
-    y-axis Low Nutrition/Macro Awareness --> High Nutrition/Macro Awareness
-    quadrant-1 "The Goal: Both"
-    quadrant-2 "Nutrition Tools"
-    quadrant-3 "Neither"
-    quadrant-4 "Discovery Tools"
-    MyFitnessPal: [0.20, 0.80]
-    Cronometer: [0.10, 0.85]
-    Noom: [0.15, 0.60]
-    Google Maps: [0.90, 0.05]
-    Yelp: [0.85, 0.10]
-    HealthyOut (defunct): [0.55, 0.50]
-    Fitsy: [0.78, 0.82]
+graph LR
+    subgraph "Nutrition Tools<br/>(no discovery)"
+        MFP["MyFitnessPal<br/>Cronometer"]
+        Noom["Noom<br/>MacroFactor"]
+    end
+
+    subgraph "Discovery Tools<br/>(no nutrition)"
+        Yelp["Yelp"]
+        GMaps["Google Maps"]
+    end
+
+    subgraph "Attempted Both"
+        HO["HealthyOut ☠️<br/>(defunct — didn't scale)"]
+    end
+
+    subgraph "The Gap"
+        Fitsy["🎯 Fitsy<br/>Discovery + Macros"]
+    end
+
+    MFP -. "no restaurant discovery" .-> Fitsy
+    GMaps -. "no nutrition data" .-> Fitsy
+    HO -. "manual partnerships<br/>didn't scale" .-> Fitsy
 ```
 
 ---
