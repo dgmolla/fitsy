@@ -17,21 +17,34 @@ and more.
 2. Restaurant discovery (location-based, Google Places / Yelp)
 3. User accounts and saved macro targets
 4. Filtering system (cuisine, chain/independent, etc.)
-5. Frontend UI
+5. Mobile UI (React Native / Expo)
 
 ---
 
 ## Architecture
 
+### Platform
+
+**React Native (Expo) mobile client + Next.js API backend** (monorepo).
+Mobile is the first-class experience — restaurant discovery is an
+on-the-go use case. The backend handles all business logic, external
+API keys, macro pipeline, and caching server-side.
+
 ### Repository Structure
 ```
 fitsy/
 ├── CLAUDE.md
-├── src/
-│   ├── app/           # Next.js App Router pages
-│   ├── components/    # React components
-│   ├── lib/           # Shared utilities, API layer
-│   └── services/      # Backend services, external API wrappers
+├── apps/
+│   ├── mobile/        # React Native (Expo) — iOS/Android client
+│   │   ├── app/       # Expo Router screens
+│   │   ├── components/# React Native components
+│   │   └── lib/       # Client utilities, API client layer
+│   └── api/           # Next.js API backend
+│       ├── app/api/   # API routes
+│       ├── lib/       # Server utilities, data access layer
+│       └── services/  # External API wrappers
+├── packages/
+│   └── shared/        # Shared types, constants, validation
 ├── prisma/            # Database schema and migrations
 ├── scripts/           # Structural tests, harness metrics
 ├── docs/
@@ -46,21 +59,17 @@ fitsy/
 
 ### Key Architecture Decisions
 
-**Tiered Macro Estimation Pipeline:**
+**Data Pipeline (MVP):**
 
-Each menu item goes through the highest-confidence tier available:
+Three-stage pipeline: discover → scrape → estimate.
 
-1. **Tier 1 — Verified data**: Check if macros are already publicly
-   available (Nutritionix chain DB, restaurant website, etc.)
-   Confidence: high.
-2. **Tier 2 — Photo estimation**: If menu item has photos, use
-   vision model to identify ingredients and estimate portions.
-   Confidence: medium.
-3. **Tier 3 — LLM description parsing**: No photos available — LLM
-   estimates ingredients and portions from menu item name/description.
-   Confidence: low.
-4. **Nutritionix lookup**: Map identified ingredients + portions →
-   per-ingredient macros via Nutritionix API. Sum for total.
+1. **Google Places** Nearby Search → restaurants with `websiteUri`
+2. **Firecrawl** → scrape website, return clean Markdown
+3. **Claude Haiku** → estimate macros for all menu items (batch)
+
+Two-phase estimation: macros-only for batch preload (cheap),
+ingredient breakdown on-demand when user taps a meal.
+MVP scope: Los Angeles only. Preload cost: ~$72.
 
 Results are persisted per menu item (see Macro Cache below) so we
 only estimate once per item. Show confidence tier to users —
@@ -76,14 +85,14 @@ Details in system design doc (`docs/engineering/backend/`).
 
 ### Authentication
 
-<!-- NextAuth.js or similar — define in system design -->
+<!-- Define in system design — likely token-based (JWT) for mobile client -->
 
 ### External Services
 
-- **Google Places API** — restaurant discovery, menus
-- **Nutritionix API** — verified nutrition data (chains)
-- **Claude API** — menu item parsing, ingredient identification
-- **Yelp Fusion API** — supplementary restaurant data (optional)
+- **Google Places API** — restaurant discovery, `websiteUri`, photos
+- **Firecrawl** — website scraping, JS rendering, Markdown conversion
+- **Claude API (Haiku)** — macro estimation, menu extraction
+- **Yelp Fusion API** — supplementary restaurant data (optional, post-MVP)
 
 ---
 
@@ -91,9 +100,10 @@ Details in system design doc (`docs/engineering/backend/`).
 
 ### Build & Run
 ```bash
-npm run dev            # Dev server
-npm run build          # Production build
-npm start              # Production start
+npm run dev:api        # API dev server
+npm run dev:mobile     # Expo dev client
+npm run build:api      # Production API build
+npm run start:api      # Production API start
 ```
 
 ### Tests
@@ -113,22 +123,22 @@ npx prisma db seed      # Seed data
 |----------|---------|-------|
 | `DATABASE_URL` | Database connection | Backend |
 | `GOOGLE_PLACES_API_KEY` | Restaurant discovery | Backend |
-| `NUTRITIONIX_APP_ID` | Nutrition data | Backend |
-| `NUTRITIONIX_API_KEY` | Nutrition data | Backend |
 | `ANTHROPIC_API_KEY` | Menu parsing LLM | Backend |
-| `NEXTAUTH_SECRET` | Auth sessions | Backend |
+| `JWT_SECRET` | Auth token signing | Backend |
 
 ---
 
 ## Code Conventions
 
 - **Language**: TypeScript strict mode
-- **Style**: Next.js App Router patterns, server components by default
+- **Mobile client**: React Native (Expo), Expo Router for navigation
+- **API backend**: Next.js API routes (server-only, no pages)
 - **Database**: Prisma, always use transactions for multi-record mutations
 - **Error responses**: `{ "error": "message" }` with appropriate HTTP status codes
 - **Tests**: Write tests for new endpoints. Mock only external services, never your own code.
-- **API calls**: All external API calls go through service wrappers in `src/services/`
+- **API calls**: All external API calls go through service wrappers in `apps/api/services/`
 - **Docs structure**: `docs/` children are domains (product, engineering, design, gtm). Domain-specific subdirs are grandchildren. No domain-specific dirs directly under `docs/`.
+- **Diagrams**: Every spec and design doc must include at least one Mermaid diagram (```mermaid code block) illustrating the primary data/control flow or architecture. Use Mermaid in markdown — GitHub and Obsidian render it natively.
 
 ---
 

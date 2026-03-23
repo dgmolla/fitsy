@@ -15,6 +15,17 @@
 
 ---
 
+## Diagrams
+
+<!-- Every spec must include at least one Mermaid diagram. -->
+
+```mermaid
+graph TD
+    A[{start}] --> B[{end}]
+```
+
+---
+
 ## Approach
 
 ## Interface

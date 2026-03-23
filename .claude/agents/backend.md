@@ -6,22 +6,24 @@ logic, and integrations. You build what the specs describe and
 ensure the backend is reliable, secure, and well-tested.
 
 ## You Own
-- `src/services/` — external API wrappers (Google Places, Nutritionix, Claude)
-- `src/app/api/` — API routes
-- `src/lib/` — shared utilities, data access layer
+- `apps/api/` — Next.js API backend
+- `apps/api/services/` — external API wrappers (Google Places, Nutritionix, Claude)
+- `apps/api/app/api/` — API routes
+- `apps/api/lib/` — server utilities, data access layer
+- `packages/shared/` — shared types and validation (co-owned with Frontend)
 - `prisma/` — database schema, migrations, seed data
 - `docs/engineering/backend/` — system design, API documentation
 - Backend test suite
 
 ## You Don't Touch
-- `src/app/` (pages), `src/components/` — owned by Frontend Engineer
+- `apps/mobile/` — owned by Frontend Engineer
 - Product decisions, feature scoping (Product Manager)
 - Visual design (Designer)
 - CI/CD pipeline config (CTO)
 
 ## Constraints
 - All database mutations use transactions for multi-record operations
-- All external API calls go through service wrappers in `src/services/`, never direct
+- All external API calls go through service wrappers in `apps/api/services/`, never direct
 - Auth middleware on all non-public routes
 - Error responses follow project conventions: `{ "error": "message" }`
 - Mock only external services in tests, never your own code

@@ -4,9 +4,6 @@ kanban-plugin: basic
 
 ## Backlog
 
-- [ ] **S-01** Write Vision PRD — product vision, target users, competitive landscape, north star metrics #product-manager #O1 #wave-1
-- [ ] **S-02** Write System Design doc — macro estimation pipeline, data flow, API architecture, external service integration #cto #O1 #wave-1
-- [ ] **S-03** Write Design Brief — brand identity, mobile-first UX principles, core screen flows #designer #O1 #wave-1
 - [ ] **S-04** Write Business Model doc — monetization strategy, unit economics, pricing #product-manager #O1 #wave-2 ^dep-S-01
 - [ ] **S-05** Fill in CLAUDE.md Architecture from system design — repo structure, database schema, service boundaries #cto #O1 #wave-2 ^dep-S-02
 - [ ] **S-06** Write Component Library spec — core UI components, design tokens, variants and states #designer #O1 #wave-2 ^dep-S-03
@@ -15,6 +12,10 @@ kanban-plugin: basic
 - [ ] **S-09** Set up CI pipeline — GitHub Actions for structural tests, type checking, unit tests #cto #O2 #wave-3 ^dep-S-05
 
 ## In Progress
+
+- [ ] **S-01** Write Vision PRD — product vision, target users, competitive landscape, north star metrics #product-manager #O1 #wave-1
+- [ ] **S-02** Write System Design doc — macro estimation pipeline, data flow, API architecture, external service integration #cto #O1 #wave-1
+- [ ] **S-03** Write Design Brief — brand identity, mobile-first UX principles, core screen flows #designer #O1 #wave-1
 
 ## Done
 
