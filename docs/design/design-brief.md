@@ -81,7 +81,7 @@ flowchart TD
 - **"Get directions" button**
 
 ### 4.4 User Profile and Targets
-- Macro target setup: manual input of per-meal calories and protein, carbs, fat (grams)
+- Macro target setup: calories and/or protein, carbs, fat (grams) — all fields optional, match on whichever the user fills in
 - **Post-MVP**: preset templates (cutting, bulking, maintenance) with height/weight/age/activity calculator
 - Dietary preferences and restrictions (vegetarian, gluten-free, etc.)
 - Saved restaurants and meals
