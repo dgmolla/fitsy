@@ -111,11 +111,10 @@ flowchart TD
 
 ### 2.4 Scraping Design (High-Level)
 
-_Full scraping spec to be written during implementation sprint._
+_Full scraping spec required during implementation sprint. Multi-page menu navigation is the hardest problem — most restaurant sites require hopping from homepage → menu page → subpages (lunch/dinner/drinks). The dedicated spec must define the crawling strategy, credit budget per restaurant, and failure handling._
 
 **Constraints:**
 - MVP scope: **Los Angeles only** (~25k restaurants)
-- Preload budget: **$72** for all of LA (Google Places $40 + Firecrawl $21 + Haiku $11)
 - Respect robots.txt on all sites
 - Rate limit: max 2 requests/second per domain
 - No scraping behind logins, paywalls, or CAPTCHAs
@@ -123,10 +122,17 @@ _Full scraping spec to be written during implementation sprint._
 
 **Scraping pipeline:**
 1. Google Places Nearby Search → restaurant list with `websiteUri`
-2. Firecrawl API → fetch page, handle JS rendering, return clean Markdown
+2. Firecrawl API → fetch + crawl pages, handle JS rendering, return clean Markdown
 3. Claude Haiku → extract menu items from Markdown (or use schema.org `Menu` structured data when available — some sites embed this, e.g., Los Tacos No.1)
 
-**HTML preprocessing:** Firecrawl returns clean Markdown, which reduces token consumption by 20-30% vs raw HTML and removes nav/ads/boilerplate. This is the industry standard for LLM ingestion.
+**Multi-page navigation (to be detailed in scraping spec):**
+- Most restaurants require 2-3 page fetches (homepage → menu → subpages)
+- Firecrawl has crawl mode (`/v2/crawl`) that follows links — burns more credits
+- Budget: ~2-3 credits per restaurant, not 1
+- Firecrawl pricing: $19/mo for 3k credits, $83/mo for 100k credits
+- LA preload at 3 credits/restaurant: ~75k credits → Standard plan ($83) covers it
+
+**HTML preprocessing:** Firecrawl returns clean Markdown, which reduces token consumption by 20-30% vs raw HTML and removes nav/ads/boilerplate. Industry standard for LLM ingestion.
 
 **Exit criteria before launch:**
 - Menu extraction rate: >60% of Google Places restaurants have parseable menus
@@ -147,18 +153,18 @@ _Full scraping spec to be written during implementation sprint._
 | Component | Cost |
 |---|---|
 | Google Places Nearby Search (1,250 searches) | $40 |
-| Firecrawl (25k pages) | $21 |
+| Firecrawl (~75k pages at ~3/restaurant) | $63 |
 | Claude Haiku (25k restaurants, macros-only) | $11 |
-| **Total** | **~$72** |
+| **Total** | **~$114** |
 
 **USA scale (one-time, ~750k restaurants):**
 
 | Component | Cost |
 |---|---|
 | Google Places Nearby Search | $1,200 |
-| Firecrawl (750k pages) | $623 |
+| Firecrawl (~2.25M pages at ~3/restaurant) | $1,868 |
 | Claude Haiku (750k restaurants) | $340 |
-| **Total** | **~$2,163** |
+| **Total** | **~$3,408** |
 
 **Ongoing costs at MVP:**
 - Serving from cache: ~$0
