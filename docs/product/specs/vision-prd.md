@@ -70,8 +70,8 @@ restaurant, not just chains.
 
 ### Key Features (MVP Scope)
 
-1. **Macro target setup** — User sets daily/per-meal protein, carb,
-   fat targets (or picks a preset: cutting, bulking, maintenance).
+1. **Macro target setup** — User manually enters per-meal protein,
+   carb, fat targets in grams.
 2. **Restaurant discovery** — Location-based search returning nearby
    restaurants with menu items that match or are close to targets.
 3. **LLM macro estimation pipeline:**
@@ -96,13 +96,10 @@ restaurant, not just chains.
 ```mermaid
 flowchart TD
     A[Open Fitsy] --> B[Set Macro Targets]
-    B --> B1{Preset or Custom?}
-    B1 -->|Preset| B2[Select: Cutting / Bulking / Maintenance]
-    B1 -->|Custom| B3[Enter P / C / F targets in grams]
-    B2 --> C[Search by Location]
-    B3 --> C
+    B --> C[Enter P / C / F targets in grams]
+    C --> D[Search by Location]
 
-    C --> Loading["⏳ Backend works:<br/>1. Discover nearby restaurants<br/>2. Scrape menus<br/>3. Estimate macros (LLM)<br/>4. Rank by target match"]
+    D --> Loading["⏳ Backend works:<br/>1. Discover nearby restaurants<br/>2. Scrape menus<br/>3. Estimate macros (LLM)<br/>4. Rank by target match"]
 
     Loading --> List["Restaurant List<br/>(ranked by best-matching meals)<br/>Each card: name, cuisine, distance,<br/>best match preview, # of fitting meals"]
 
@@ -168,6 +165,8 @@ graph LR
 
 ## Out of Scope (MVP)
 
+- Preset macro templates (cutting, bulking, maintenance) — requires
+  height/weight/age/activity input flow to calculate targets. Post-MVP.
 - User accounts and saved history (post-MVP).
 - Social features (sharing meals, reviews).
 - Ordering or reservation integration.

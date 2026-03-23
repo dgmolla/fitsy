@@ -81,8 +81,8 @@ flowchart TD
 - **"Get directions" button**
 
 ### 4.4 User Profile and Targets
-- Macro target setup: daily protein, carbs, fat goals (grams) with preset templates (e.g., high-protein, keto, balanced)
-- Meal-level vs. daily-level target toggle
+- Macro target setup: manual input of per-meal protein, carbs, fat goals (grams)
+- **Post-MVP**: preset templates (cutting, bulking, maintenance) with height/weight/age/activity calculator
 - Dietary preferences and restrictions (vegetarian, gluten-free, etc.)
 - Saved restaurants and meals
 - Search history
