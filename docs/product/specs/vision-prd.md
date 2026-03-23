@@ -98,34 +98,25 @@ flowchart TD
     A[Open Fitsy] --> B[Set Macro Targets]
     B --> B1{Preset or Custom?}
     B1 -->|Preset| B2[Select: Cutting / Bulking / Maintenance]
-    B1 -->|Custom| B3[Enter Protein, Carbs, Fat targets]
+    B1 -->|Custom| B3[Enter P / C / F targets in grams]
     B2 --> C[Search by Location]
     B3 --> C
 
-    C --> D[Fetch Nearby Restaurants]
-    D --> E[Score Menu Items Against Targets]
-    E --> F[Display Ranked Restaurant List]
+    C --> Loading["⏳ Backend works:<br/>1. Discover nearby restaurants<br/>2. Scrape menus<br/>3. Estimate macros (LLM)<br/>4. Rank by target match"]
 
-    F --> G[Browse Matched Restaurants]
-    G --> H[View Restaurant Detail]
-    H --> I[Select Menu Item]
+    Loading --> List["Restaurant List<br/>(ranked by best-matching meals)<br/>Each card: name, cuisine, distance,<br/>best match preview, # of fitting meals"]
 
-    I --> J{Macro Estimate Available?}
-    J -->|Yes| K[Display Meal Macros]
-    J -->|No| L[Trigger Estimation Pipeline]
-    L --> K
+    List --> Restaurant["Tap Restaurant →<br/>See matching meals sorted by fit<br/>Each meal: name, P/C/F, confidence"]
 
-    K --> M{"Photo available?"}
-    M -->|Yes| N["Show Macros + ingredient breakdown<br/>(medium confidence)"]
-    M -->|No| O["Show Macros + ingredient breakdown<br/>(low confidence, wider range)"]
+    Restaurant --> Meal["Tap Meal →<br/>Full macro breakdown<br/>+ ingredient reasoning<br/>+ confidence badge"]
 
-    N --> Q[View Full Breakdown]
-    O --> Q
+    Meal --> R{What next?}
+    R -->|"Get directions"| Maps["Open in Maps / Google Maps"]
+    R -->|"Back to meals"| Restaurant
+    R -->|"Back to list"| List
+    R -->|"Adjust targets"| B
 
-    Q --> R{Decision}
-    R -->|Visit| S[Navigate to Restaurant]
-    R -->|Keep Browsing| G
-    R -->|Adjust Targets| B
+    Restaurant -->|"Get directions"| Maps
 ```
 
 ### Competitive Landscape Map

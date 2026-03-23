@@ -56,28 +56,29 @@ flowchart TD
     B -->|"Stack pop"| A
 ```
 
-### 4.1 Search and Discovery
-- Map view vs. list view toggle for nearby restaurants
+### 4.1 Search and Discovery (Restaurant List)
+- User sets macro targets + location → loading state while backend discovers, scrapes, estimates, and ranks
+- Results are a **list of restaurants** (not meals), ranked by how well their menu fits the user's targets
+- Restaurant cards showing: name, cuisine, distance, # of fitting meals, best-match meal preview (P/C/F)
 - Prominent macro-target bar showing current targets at the top
-- Restaurant cards showing: name, distance, cuisine, number of macro-matched meals, best-match preview
-- Quick filters: cuisine type, chain vs. independent, distance radius, confidence tier minimum
+- Quick filters: cuisine type, chain vs. independent, distance radius
 - Sort options: distance, number of matches, best single-meal match
 
-### 4.2 Restaurant Detail
+### 4.2 Restaurant Detail (Matching Meals)
 - Restaurant header: name, cuisine, distance, rating, hours, photos
-- Menu section organized by meal category (appetizers, mains, etc.)
-- Each menu item shows: name, macro summary (P/C/F in grams), calorie total, confidence badge
-- Highlight items that match the user's active macro targets
-- "Match score" indicator showing how close each item is to targets
+- **"Get directions" button** — opens in Apple Maps / Google Maps
+- Matching meals sorted by how close they are to targets (best fit first)
+- Non-matching meals shown below, collapsed
+- Each meal row: name, macro summary (P/C/F in grams), calorie total, confidence badge, match score
 
-### 4.3 Meal Detail with Macros
+### 4.3 Meal Detail
 - Full macro breakdown: protein, carbs, fat (grams and percentage of target)
 - Visual macro ring or bar chart
-- Confidence badge with explanation tooltip ("AI-estimated with photo" / "AI-estimated from description") + ingredient breakdown link
-- Ingredient list (when available from parsing)
+- Confidence badge with explanation tooltip ("AI-estimated with photo" / "AI-estimated from description")
+- **Ingredient breakdown** — the LLM's reasoning: list of estimated ingredients with per-ingredient macros
 - "Fits your target" summary — shows how this meal fits into remaining daily macros
-- Option to adjust portion size and see recalculated macros
 - Save / favorite action
+- **"Get directions" button**
 
 ### 4.4 User Profile and Targets
 - Macro target setup: daily protein, carbs, fat goals (grams) with preset templates (e.g., high-protein, keto, balanced)
