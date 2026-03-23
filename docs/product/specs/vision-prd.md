@@ -70,8 +70,8 @@ restaurant, not just chains.
 
 ### Key Features (MVP Scope)
 
-1. **Macro target setup** — User manually enters per-meal protein,
-   carb, fat targets in grams.
+1. **Macro target setup** — User manually enters per-meal targets:
+   protein, carbs, fat (grams) and calories.
 2. **Restaurant discovery** — Location-based search returning nearby
    restaurants with menu items that match or are close to targets.
 3. **LLM macro estimation pipeline:**
@@ -96,7 +96,7 @@ restaurant, not just chains.
 ```mermaid
 flowchart TD
     A[Open Fitsy] --> B[Set Macro Targets]
-    B --> C[Enter P / C / F targets in grams]
+    B --> C[Enter calories + P / C / F targets]
     C --> D[Search by Location]
 
     D --> Loading["⏳ Backend works:<br/>1. Discover nearby restaurants<br/>2. Scrape menus<br/>3. Estimate macros (LLM)<br/>4. Rank by target match"]
