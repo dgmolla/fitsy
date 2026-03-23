@@ -59,18 +59,15 @@ fitsy/
 
 ### Key Architecture Decisions
 
-**Two-Tier Macro Estimation Pipeline:**
+**LLM Macro Estimation Pipeline (MVP):**
 
-Each menu item goes through the highest-confidence tier available:
+Single pipeline — every menu item goes through one Claude API call:
 
-1. **Tier 1 — Verified data**: Restaurant's own published nutrition
-   data (website pages, PDFs). Scrape/extract → direct macros.
-   Confidence: high.
-2. **Tier 2 — LLM estimation**: Claude infers ingredients and
-   portions from menu item name + description + optional photo
-   (photo improves accuracy but isn't required). Ingredient list
-   → USDA FoodData Central lookup → summed macros.
-   Confidence: medium (with photo) / low (without).
+- **Input**: menu item name + description + optional photo
+- **Output**: total macros (P/C/F/cal) + ingredient breakdown + confidence
+- **Confidence**: medium (with photo) / low (without photo)
+- Ingredient breakdown shown to users for transparency
+- No verified data tier at MVP — post-MVP accuracy upgrade
 
 Results are persisted per menu item (see Macro Cache below) so we
 only estimate once per item. Show confidence tier to users —
@@ -91,8 +88,7 @@ Details in system design doc (`docs/engineering/backend/`).
 ### External Services
 
 - **Google Places API** — restaurant discovery, menus, photos
-- **USDA FoodData Central** — ingredient → macro lookup (free)
-- **Claude API** — menu/nutrition page extraction, ingredient estimation
+- **Claude API** — macro estimation (returns macros + ingredient breakdown)
 - **Yelp Fusion API** — supplementary restaurant data (optional)
 
 ---
@@ -124,7 +120,6 @@ npx prisma db seed      # Seed data
 |----------|---------|-------|
 | `DATABASE_URL` | Database connection | Backend |
 | `GOOGLE_PLACES_API_KEY` | Restaurant discovery | Backend |
-| `USDA_API_KEY` | USDA FoodData Central (free) | Backend |
 | `ANTHROPIC_API_KEY` | Menu parsing LLM | Backend |
 | `JWT_SECRET` | Auth token signing | Backend |
 

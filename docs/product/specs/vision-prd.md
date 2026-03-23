@@ -65,8 +65,8 @@ restaurant, not just chains.
 - Search by location, get restaurants ranked/filtered by how well
   their menu items match your macro targets.
 - Works for chains (verified data) and independents (AI-estimated).
-- Transparent confidence tiers — users always know how reliable the
-  estimate is.
+- Transparent confidence levels — users always know how reliable the
+  estimate is and can see the ingredient reasoning.
 
 ### Key Features (MVP Scope)
 
@@ -74,14 +74,14 @@ restaurant, not just chains.
    fat targets (or picks a preset: cutting, bulking, maintenance).
 2. **Restaurant discovery** — Location-based search returning nearby
    restaurants with menu items that match or are close to targets.
-3. **Tiered macro estimation pipeline:**
-   - Tier 1: Verified data (restaurant-published nutrition pages/PDFs).
-   - Tier 2: LLM estimation (name + description + optional photo) →
-     ingredients → USDA FoodData Central lookup.
+3. **LLM macro estimation pipeline:**
+   - Single Claude API call per menu item: name + description +
+     optional photo → returns total macros + ingredient breakdown.
+   - Ingredient breakdown shown to users for transparency.
 4. **Match scoring** — Each menu item gets a match score against the
    user's targets. Restaurants are ranked by their best-matching items.
-5. **Confidence display** — Every estimate shows its tier and
-   confidence range. No false precision.
+5. **Confidence display** — Every estimate shows its confidence
+   level and ingredient reasoning. No false precision.
 6. **Basic filtering** — Cuisine type, chain vs. independent,
    distance radius.
 7. **Meal detail view** — Per-item macro breakdown, ingredients,
@@ -115,9 +115,9 @@ flowchart TD
     J -->|No| L[Trigger Estimation Pipeline]
     L --> K
 
-    K --> M{Which Confidence Tier?}
-    M -->|Tier 1| N["Show Macros + ✅ Verified Data badge"]
-    M -->|Tier 2| O["Show Macros + 🤖 AI Estimate badge + wider range"]
+    K --> M{"Photo available?"}
+    M -->|Yes| N["Show Macros + ingredient breakdown<br/>(medium confidence)"]
+    M -->|No| O["Show Macros + ingredient breakdown<br/>(low confidence, wider range)"]
 
     N --> Q[View Full Breakdown]
     O --> Q
@@ -163,8 +163,8 @@ quadrantChart
 5. User's macro targets are unrealistic (e.g., 200g protein in a
    single meal under 300 cal) — show closest matches with delta, do
    not silently return zero results.
-6. Conflicting data sources — USDA and restaurant website
-   disagree. Define precedence rules.
+6. LLM ingredient breakdown doesn't sum to stated totals —
+   accept LLM totals, flag breakdown as approximate.
 
 ---
 
@@ -186,7 +186,7 @@ quadrantChart
 ### Phased Rollout
 
 - **Phase 0 (current):** Scaffolding, architecture, spec alignment.
-- **Phase 1 (MVP):** Macro pipeline (Tier 1 + Tier 2), restaurant
+- **Phase 1 (MVP):** LLM macro pipeline, restaurant
   discovery (Google Places), basic search UI, match scoring.
 - **Phase 2:** User accounts, saved targets, meal history.
 - **Phase 3:** Filtering expansion (allergens, dietary labels),
@@ -195,10 +195,9 @@ quadrantChart
 ### Technical Approach (summary)
 
 - React Native (Expo) mobile client + Next.js API backend, TypeScript strict, Prisma + Postgres. Monorepo with apps/mobile/ and apps/api/.
-- Service wrappers for all external APIs (Google Places, USDA FoodData
-  Central, Claude API).
-- Macro cache: per-menu-item estimates stored with tier, timestamp,
-  source. Re-estimated on configurable cadence.
+- Service wrappers for all external APIs (Google Places, Claude API).
+- Macro cache: per-menu-item estimates stored with confidence,
+  ingredient breakdown, timestamp. Re-estimated on-demand when stale.
 - Full details in `docs/engineering/`.
 
 ---
@@ -227,17 +226,17 @@ quadrantChart
 ## Constraints
 
 - **Data accuracy:** LLM-estimated macros are approximate. Must always
-  display confidence tier and range. Never present Tier 2 estimates
-  as precise values.
-- **API rate limits:** Google Places, USDA FoodData Central, and Claude
+  display confidence level and range. Never present low-confidence
+  estimates as precise values.
+- **API rate limits:** Google Places and Claude
   all have rate limits. Must cache aggressively and queue estimation work.
 - **Latency:** First search should return results in under 3 seconds.
   Macro estimation for uncached items may be async (show placeholder,
   backfill).
-- **Cost:** Claude API and USDA FoodData Central calls have per-request
-  costs. Caching and batching are mandatory to keep unit economics viable.
+- **Cost:** Claude API calls have per-request costs. Caching and
+  batching are mandatory to keep unit economics viable.
 - **Legal/liability:** Nutrition estimates are not medical advice. App
-  must display disclaimers. Especially important for Tier 2/3 data.
+  must display disclaimers. All estimates are LLM-generated.
 
 ---
 
@@ -247,7 +246,7 @@ quadrantChart
   targets set) — measures core loop engagement.
 - **Secondary:**
   - Menu items with cached macro estimates (pipeline coverage).
-  - Tier 1 coverage rate (% of served estimates from verified data).
+  - Photo availability rate (% of estimates that had photo input).
   - Match-to-visit rate (user taps a restaurant after seeing macro
     match — proxy for trust and utility).
 
@@ -255,7 +254,7 @@ quadrantChart
 
 - [ ] User can enter a location and macro targets and receive a ranked
       list of nearby restaurants with matching menu items.
-- [ ] Both Tier 1 and Tier 2 estimation pipelines are operational.
+- [ ] LLM estimation pipeline operational (returns macros + ingredient breakdown).
 - [ ] Every macro estimate displays its confidence tier.
 - [ ] Search results return in under 3 seconds for cached restaurants.
 - [ ] Structural tests, type checks, and unit tests pass in CI.
