@@ -71,28 +71,44 @@ Three-stage pipeline: discover restaurants → scrape menus → estimate macros.
 - **Model**: Claude Haiku 4.5 — tested at ~$0.0005/restaurant, ~1.7s latency, accurate within ±20% for common items.
 - All results cached in PostgreSQL. Once estimated, cost drops to $0.
 
-### 2.2 Restaurant Data Retrieval
+### 2.2 MVP-0: Preload Only (No Live Scraping)
+
+The app serves entirely from a pre-populated database. No live scraping, no real-time estimation, no progressive loading. Every search is a database query — instant.
+
+**Preload script (run once, offline):**
 
 ```mermaid
 flowchart TD
-    Search["User searches by location"]
-    Search --> Cache{"Restaurants cached<br/>for this area?"}
-
-    Cache -- "Yes" --> Serve["Serve from cache<br/>(&lt;1s)"]
-    Cache -- "No" --> GP["Google Places Nearby Search<br/>(returns name, address, websiteUri, photos)"]
+    Start["Run preload script for target area"]
+    Start --> GP["Google Places Nearby Search<br/>(returns name, address, websiteUri, photos)"]
 
     GP --> HasWebsite{"Has websiteUri?"}
-    HasWebsite -- "Yes" --> Scrape["Firecrawl: fetch + convert<br/>to clean Markdown"]
-    HasWebsite -- "No" --> Skip["Exclude from results"]
+    HasWebsite -- "Yes" --> Scrape["Firecrawl: fetch + crawl<br/>menu pages → clean Markdown"]
+    HasWebsite -- "No" --> Skip["Skip restaurant"]
 
-    Scrape --> Parse["Extract menu items from Markdown<br/>(name, description, price)"]
+    Scrape --> Parse["Claude Haiku: extract menu items<br/>from Markdown"]
     Parse --> Estimate["Claude Haiku: estimate macros<br/>for all items (batch, macros-only)"]
 
-    Estimate --> Store["Cache restaurants +<br/>menu items + macros"]
-    Store --> Serve
-    Serve --> Rank["Rank by user's macro targets"]
-    Rank --> Results["Return matched restaurants"]
+    Estimate --> Store["Store to PostgreSQL:<br/>restaurants + menu items + macros"]
+    Store --> QA["Manual QA: spot-check estimates,<br/>fix obvious errors"]
 ```
+
+**User search flow (production):**
+
+```mermaid
+flowchart TD
+    Search["User searches by location + targets"]
+    Search --> DB["Query PostgreSQL:<br/>nearby restaurants with macro data"]
+    DB --> Rank["Rank by macro target match"]
+    Rank --> Results["Return matched restaurants<br/>(&lt;1s)"]
+```
+
+**MVP-0 scope:**
+- Target area: a few zip codes in LA (e.g., DTLA / Little Tokyo / Arts District)
+- ~200-500 restaurants preloaded
+- Cost: ~$2-5 total
+- Manual QA before users see data
+- Preload is a script, not a production service
 
 ### 2.3 Two-Phase Macro Estimation
 
@@ -137,20 +153,22 @@ _Full scraping spec required during implementation sprint. Multi-page menu navig
 **HTML preprocessing:** Firecrawl returns clean Markdown, which reduces token consumption by 20-30% vs raw HTML and removes nav/ads/boilerplate. Industry standard for LLM ingestion.
 
 **Exit criteria before launch:**
-- Menu extraction rate: >60% of Google Places restaurants have parseable menus
+- Menu extraction rate: >60% of restaurants in target area have parseable menus
 - Macro accuracy: spot-check 50 chain items against published nutrition, within ±20% on calories
-- Latency: cached results <1s, uncached restaurant <5s
-
-**Progressive loading (uncached areas):**
-1. User searches → Google Places returns restaurants (1s)
-2. Show restaurant list immediately (name, cuisine, distance — no macros)
-3. Scrape + estimate in background per restaurant (~3-4s each, parallelized)
-4. As macros arrive, update list with match scores — restaurants reorder
-5. Everything cached for next search in same area
+- All results served from cache in <1s
 
 ### 2.5 Cost Model
 
-**LA preload (one-time):**
+**MVP-0 preload (few zip codes in LA, ~200-500 restaurants):**
+
+| Component | Cost |
+|---|---|
+| Google Places Nearby Search | $1-2 |
+| Firecrawl (~1,500 pages) | $1-2 |
+| Claude Haiku | $0.25 |
+| **Total** | **~$2-5** |
+
+**Full LA preload (~25k restaurants):**
 
 | Component | Cost |
 |---|---|
@@ -159,32 +177,44 @@ _Full scraping spec required during implementation sprint. Multi-page menu navig
 | Claude Haiku (25k restaurants, macros-only) | $11 |
 | **Total** | **~$114** |
 
-**USA scale (one-time, ~750k restaurants):**
+**USA scale (~750k restaurants):**
 
 | Component | Cost |
 |---|---|
 | Google Places Nearby Search | $1,200 |
-| Firecrawl (~2.25M pages at ~3/restaurant) | $1,868 |
+| Firecrawl (~2.25M pages, or Crawl4AI at ~$50-100) | $100-1,868 |
 | Claude Haiku (750k restaurants) | $340 |
-| **Total** | **~$3,408** |
+| **Total** | **~$1,640-3,408** |
 
-**Ongoing costs at MVP:**
-- Serving from cache: ~$0
-- On-demand ingredient breakdown: <$0.001/call (negligible)
-- Cache refresh: none at MVP (follow-up, low priority — menus rarely change)
+**Ongoing costs:** ~$0. Serving from cache only. Cache refresh and on-demand ingredient breakdown are post-MVP.
 
-### 2.6 Post-MVP Upgrades
+### 2.6 Scaling Strategy (Post-MVP)
+
+**Expand preload coverage:**
+- MVP-0: few zip codes in LA (~500 restaurants, ~$5)
+- MVP-1: all of LA (~25k restaurants, ~$114)
+- Scale: all of USA (~750k restaurants, ~$1,640-3,408 one-time)
+- Preloading all of USA is feasible and avoids building a live pipeline entirely. At ~$1,640 with Crawl4AI, it's cheaper than a month of live scraping infrastructure.
+
+**Live scraping pipeline (consider if needed):**
+- Only needed if we can't preload fast enough for demand (e.g., expanding to new cities faster than preload can run)
+- Adds significant complexity: real-time Firecrawl orchestration, error handling, latency management
+- If built: show restaurant list immediately, macros fill in as estimation completes (~3-4s/restaurant)
+- Recommendation: preload aggressively, avoid live pipeline as long as possible
+
+### 2.7 Post-MVP Accuracy Upgrades
 
 In priority order:
 
-1. **USDA cross-validation**: Run ingredient breakdown through USDA FoodData Central in background. If USDA sum diverges >15% from LLM's stated macros, flag lower confidence.
-2. **Verified data layer**: Search for restaurant-published nutrition data. When found, use instead of LLM — highest confidence.
-3. **Prompt calibration loop**: Log LLM estimates vs verified data for chains. Use divergence patterns to improve prompts.
-4. **User corrections**: Let users flag "this doesn't look right" — feeds into prompt tuning.
-5. **Confidence scoring model**: Score based on: known chain? description detail? photo available? common ingredients?
-6. **Extended retrieval**: Web search fallback for restaurants without websites. Google Places photo menu extraction via Claude vision.
-7. **Cache refresh**: Periodic re-estimation on a schedule. Low priority — menus rarely change.
-8. **Fine-tuned model**: Once we have enough estimates + user corrections as training data, fine-tune a small model for near-zero inference cost.
+1. **On-demand ingredient breakdown**: Separate Haiku call when user taps a meal — shows reasoning behind the estimate.
+2. **USDA cross-validation**: Run ingredient breakdown through USDA FoodData Central in background. Flag discrepancies >15%.
+3. **Verified data layer**: Search for restaurant-published nutrition data. When found, use instead of LLM.
+4. **Prompt calibration loop**: Log LLM estimates vs verified data for chains. Use divergence patterns to improve prompts.
+5. **User corrections**: Let users flag "this doesn't look right" — feeds into prompt tuning.
+6. **Confidence scoring model**: Score based on: known chain? description detail? photo available? common ingredients?
+7. **Extended retrieval**: Web search fallback for restaurants without websites. Google Places photo menu extraction via Claude vision.
+8. **Cache refresh**: Periodic re-estimation on a schedule. Low priority — menus rarely change.
+9. **Fine-tuned model**: Once we have enough estimates + user corrections as training data, fine-tune a small model for near-zero inference cost.
 
 ---
 
@@ -400,11 +430,10 @@ erDiagram
 
 ## 8. Performance Considerations
 
-- Pipeline latency budget: target < 2s for cached, < 8s for uncached estimation
-- Parallel external API calls where independent (e.g., restaurant fetch + cache check)
+- All searches served from preloaded cache — target <1s response time
 - Database query optimization: lean selects, avoid N+1 on menu item lists
-- Batch LLM calls: estimate multiple menu items per request where possible
-- Connection pooling for database and HTTP clients
+- Geospatial index on restaurant (lat, lng) for fast nearby queries
+- Connection pooling for database clients
 - Response payload size: paginate menu items, lazy-load macro details
 
 ---
