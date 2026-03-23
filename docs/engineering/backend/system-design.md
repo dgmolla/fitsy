@@ -127,10 +127,12 @@ _Full scraping spec required during implementation sprint. Multi-page menu navig
 
 **Multi-page navigation (to be detailed in scraping spec):**
 - Most restaurants require 2-3 page fetches (homepage → menu → subpages)
-- Firecrawl has crawl mode (`/v2/crawl`) that follows links — burns more credits
-- Budget: ~2-3 credits per restaurant, not 1
-- Firecrawl pricing: $19/mo for 3k credits, $83/mo for 100k credits
-- LA preload at 3 credits/restaurant: ~75k credits → Standard plan ($83) covers it
+- Budget: ~2-3 pages per restaurant
+
+**Scraping tool:**
+- MVP: **Firecrawl** (managed, no infra — $83/mo for 100k credits)
+- Post-MVP: swap to **Crawl4AI** (open source, self-hosted via Docker, $0 software cost) or DIY Playwright + Turndown. Saves ~$1,800 at USA scale.
+- Scraping service must be behind an interface so the provider is swappable without changing business logic.
 
 **HTML preprocessing:** Firecrawl returns clean Markdown, which reduces token consumption by 20-30% vs raw HTML and removes nav/ads/boilerplate. Industry standard for LLM ingestion.
 
