@@ -1,8 +1,8 @@
 # OKRs
 
 **Cadence**: Review after every sprint.
-**Last reviewed**: 2026-03-22
-**Current phase**: Foundation
+**Last reviewed**: 2026-03-23
+**Current phase**: Implement (transitioned after Sprint 1)
 
 ---
 
@@ -11,14 +11,14 @@
 Every project progresses through these phases. Your OKRs should
 reflect whichever phase you're in.
 
-1. **Foundation** — Vision, architecture, brand identity, devops
-2. **Implement** — Build the product based on the foundation
+1. **Foundation** — Vision, architecture, brand identity, devops ✅
+2. **Implement** — Build the product based on the foundation ← current
 3. **Roll Out** — Deployment, GTM strategy, launch prep
 4. **Get Users** — Launch, grow, iterate
 
 ---
 
-## Phase 1: Foundation
+## Phase 1: Foundation ✅ Complete
 
 ### O1: Establish the project foundation
 We can't build what we haven't defined. Foundation docs become
@@ -26,36 +26,37 @@ the context that makes every agent task better.
 
 | # | Key Result | Status | Notes |
 |---|------------|--------|-------|
-| KR1 | Vision PRD, System Design, and Design Brief complete and approved | Not started | |
-| KR2 | Business Model and GTM Strategy drafted | Not started | |
-| KR3 | CI/CD pipeline operational with structural tests | Not started | |
-| KR4 | CLAUDE.md fully populated with architecture and conventions | Not started | |
+| KR1 | Vision PRD, System Design, and Design Brief complete and approved | **Done** | Merged in PR #2 |
+| KR2 | Business Model and GTM Strategy drafted | **Done** | Merged in Sprint 1 Wave 2+3 |
+| KR3 | CI/CD pipeline operational with structural tests | **Done** | Structural + security running; typecheck/test/build activate when code exists |
+| KR4 | CLAUDE.md fully populated with architecture and conventions | **Done** | Two-system architecture, DB schema, service boundaries, deployment |
 
 ### O2: Validate the tiered macro estimation approach
 The pipeline is the core differentiator — nail the design before building.
 
 | # | Key Result | Status | Notes |
 |---|------------|--------|-------|
-| KR1 | System design documents all 3 tiers with data flow and caching strategy | Not started | |
-| KR2 | Data model for macro cache designed and reviewed | Not started | |
-| KR3 | Testing strategy covers accuracy validation for each tier | Not started | |
+| KR1 | System design documents pipeline with data flow and caching strategy | **Done** | Simplified to single LLM pipeline (no tiers); scraping spike validated v3 approach at ~85-90% hit rate |
+| KR2 | Data model for macro cache designed and reviewed | **Done** | 6 entities in system design ERD; MacroEstimate entity covers caching |
+| KR3 | Testing strategy covers accuracy validation | **Done** | Separate accuracy validation process + chain dataset defined |
+
+---
+
+## Phase 2: Implement
+
+### O1: Core product works end to end
+Fitsy's macro pipeline, restaurant discovery, and UI all work together.
+
+| # | Key Result | Status | Notes |
+|---|------------|--------|-------|
+| KR1 | Preload pipeline runs for LA (90029 zip code) and persists results | Not started | Scripts/preload-pipeline — Sprint 2 target |
+| KR2 | API returns restaurants ranked by macro match from preloaded data | Not started | Sprint 2 target |
+| KR3 | Mobile app shows search results with macro breakdowns | Not started | Sprint 3 target |
+| KR4 | Test coverage on macro scoring and API contracts ≥80% | Not started | Sprint 2 target |
 
 ---
 
 <!--
-## Phase 2: Implement
-Uncomment when you move to Phase 2.
-
-### O1: Core product works end to end
-Fitsy's tiered macro pipeline, restaurant discovery, and UI all work together.
-
-| # | Key Result | Status | Notes |
-|---|------------|--------|-------|
-| KR1 | All 3 estimation tiers working with macro cache persistence | Not started | |
-| KR2 | Location-based restaurant discovery returns filtered results with macro data | Not started | |
-| KR3 | Filtering by cuisine, chain/mom-and-pop working | Not started | |
-| KR4 | Test coverage on danger zones (auth, nutrition accuracy) >90% | Not started | |
-
 ## Phase 3: Roll Out
 
 ### O1: Ready to launch
