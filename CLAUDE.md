@@ -59,15 +59,17 @@ fitsy/
 
 ### Key Architecture Decisions
 
-**LLM Macro Estimation Pipeline (MVP):**
+**Data Pipeline (MVP):**
 
-Single pipeline — every menu item goes through one Claude API call:
+Three-stage pipeline: discover → scrape → estimate.
 
-- **Input**: menu item name + description + optional photo
-- **Output**: total macros (P/C/F/cal) + ingredient breakdown + confidence
-- **Confidence**: medium (with photo) / low (without photo)
-- Ingredient breakdown shown to users for transparency
-- No verified data tier at MVP — post-MVP accuracy upgrade
+1. **Google Places** Nearby Search → restaurants with `websiteUri`
+2. **Firecrawl** → scrape website, return clean Markdown
+3. **Claude Haiku** → estimate macros for all menu items (batch)
+
+Two-phase estimation: macros-only for batch preload (cheap),
+ingredient breakdown on-demand when user taps a meal.
+MVP scope: Los Angeles only. Preload cost: ~$72.
 
 Results are persisted per menu item (see Macro Cache below) so we
 only estimate once per item. Show confidence tier to users —
@@ -87,9 +89,10 @@ Details in system design doc (`docs/engineering/backend/`).
 
 ### External Services
 
-- **Google Places API** — restaurant discovery, menus, photos
-- **Claude API** — macro estimation (returns macros + ingredient breakdown)
-- **Yelp Fusion API** — supplementary restaurant data (optional)
+- **Google Places API** — restaurant discovery, `websiteUri`, photos
+- **Firecrawl** — website scraping, JS rendering, Markdown conversion
+- **Claude API (Haiku)** — macro estimation, menu extraction
+- **Yelp Fusion API** — supplementary restaurant data (optional, post-MVP)
 
 ---
 

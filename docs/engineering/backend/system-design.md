@@ -23,13 +23,15 @@ graph TD
 
     subgraph "Service Layer (apps/api/services/)"
         RS["RestaurantService"]
+        SS["ScrapingService"]
         MS["MacroEstimationService"]
         CS["ClaudeService"]
     end
 
     subgraph "External APIs"
         GP["Google Places API"]
-        CL["Claude API"]
+        FC["Firecrawl (scrape + markdown)"]
+        CL["Claude API (Haiku)"]
     end
 
     subgraph "Data Layer"
@@ -38,10 +40,12 @@ graph TD
     end
 
     Client --> API
-    API -- "1. get restaurants + menu items" --> RS
-    API -- "2. estimate macros<br/>(pass menuItem, photoUrl)" --> MS
+    API -- "1. discover restaurants" --> RS
+    API -- "2. scrape menus" --> SS
+    API -- "3. estimate macros" --> MS
 
     RS --> GP
+    SS --> FC
     MS --> CS
     CS --> CL
 
@@ -49,85 +53,130 @@ graph TD
     RS --> Prisma
     Prisma --> PG
 ```
-- **Orchestration pattern**: API routes coordinate between services. Services never call each other — MacroEstimationService receives menu item data (name, description, photoUrl) as input from the route, not by calling RestaurantService. This keeps services independently testable.
-- **Single external dependency for estimation**: Claude API only. No USDA at MVP — LLM returns macros + ingredient breakdown in one call.
+- **Orchestration pattern**: API routes coordinate between services. Services never call each other — each receives data as input from the route. Independently testable.
+- **Three external dependencies**: Google Places (discovery), Firecrawl (scraping + markdown), Claude Haiku (macro estimation)
 - Deployment topology (to be determined)
 
 ---
 
-## 2. Macro Estimation Pipeline
+## 2. Data Pipeline
 
 ### 2.1 Pipeline Overview (MVP)
-- **Single pipeline**: Every menu item goes through one Claude API call
-- LLM returns **both** total macros AND ingredient breakdown in one response
-- Ingredient breakdown gives users transparency into the estimate ("where did 42g protein come from?")
-- Photo (when available from Google Places) is an optional input that improves accuracy
-- Confidence: medium (with photo) or low (without photo)
-- Results cached per menu item; on-demand re-estimation when stale
-- Single external dependency for estimation: Claude API only
+Three-stage pipeline: discover restaurants → scrape menus → estimate macros.
 
-### 2.2 How It Works
-- Input: menu item name + description + optional photo
-- Claude prompt returns structured JSON:
-  - `macros`: `{ calories, proteinG, carbsG, fatG }`
-  - `ingredients`: `[{ name, quantity, unit, calories, proteinG, carbsG, fatG }]`
-  - `confidence`: `"medium"` or `"low"`
-  - `reasoning`: short explanation of estimation approach
-- Ingredients should approximately sum to total macros (allows sanity checking)
-- Edge cases: vague descriptions ("chef's special"), culturally specific dishes, obscured ingredients in photos, portion distortion
+- **Discovery**: Google Places Nearby Search returns restaurants with `websiteUri` included (no Place Details call needed)
+- **Menu scraping**: Firecrawl fetches restaurant websites and returns clean Markdown. Handles JS-rendered sites, anti-bot, proxies.
+- **Macro estimation**: Claude Haiku estimates macros for all menu items in a single call per restaurant. Returns structured JSON with macros per item.
+- **Two-phase estimation**: Batch preload returns macros only (cheap). Ingredient breakdown loaded on-demand when user taps a meal (separate Haiku call).
+- **Model**: Claude Haiku 4.5 — tested at ~$0.0005/restaurant, ~1.7s latency, accurate within ±20% for common items.
+- All results cached in PostgreSQL. Once estimated, cost drops to $0.
 
-### 2.3 Restaurant Data Retrieval Flow (MVP)
+### 2.2 Restaurant Data Retrieval
 
 ```mermaid
 flowchart TD
-    Search["User searches by location + macro targets"]
-    Search --> GP["Google Places API:<br/>Nearby Search"]
-    GP --> Restaurants["Nearby restaurants<br/>(name, address, placeId, photos)"]
-    Restaurants --> Details["Google Places API:<br/>Place Details per restaurant"]
-    Details --> HasWebsite{"Has website link?"}
+    Search["User searches by location"]
+    Search --> Cache{"Restaurants cached<br/>for this area?"}
 
-    HasWebsite -- "Yes" --> Scrape["Scrape restaurant website<br/>for menu items"]
+    Cache -- "Yes" --> Serve["Serve from cache<br/>(&lt;1s)"]
+    Cache -- "No" --> GP["Google Places Nearby Search<br/>(returns name, address, websiteUri, photos)"]
+
+    GP --> HasWebsite{"Has websiteUri?"}
+    HasWebsite -- "Yes" --> Scrape["Firecrawl: fetch + convert<br/>to clean Markdown"]
     HasWebsite -- "No" --> Skip["Exclude from results"]
 
-    Scrape --> Items["Menu items:<br/>name, description, category, price"]
-    Items --> Estimate["LLM estimation per menu item<br/>(name + description + optional photo)"]
+    Scrape --> Parse["Extract menu items from Markdown<br/>(name, description, price)"]
+    Parse --> Estimate["Claude Haiku: estimate macros<br/>for all items (batch, macros-only)"]
 
-    Estimate --> Ranked["Rank by macro target match"]
-    Ranked --> Results["Return matched<br/>restaurants + meals"]
+    Estimate --> Store["Cache restaurants +<br/>menu items + macros"]
+    Store --> Serve
+    Serve --> Rank["Rank by user's macro targets"]
+    Rank --> Results["Return matched restaurants"]
 ```
 
-### 2.4 Macro Estimation Pipeline
+### 2.3 Two-Phase Macro Estimation
 
-```mermaid
-flowchart TD
-    Start["Menu item needs macros"] --> CacheCheck{"Cached estimate<br/>exists and fresh?"}
+**Phase 1 — Batch macros (preload or first search):**
+- Input: all menu items for a restaurant (names + descriptions)
+- Claude Haiku returns compact JSON: `[{n, cal, p, c, f}]`
+- ~240 input tokens, ~320 output tokens per restaurant
+- Cost: ~$0.0005/restaurant
+- Used for ranking and display in restaurant list
 
-    CacheCheck -- "Yes" --> ReturnCached["Return cached macros"]
-    CacheCheck -- "No" --> PhotoCheck{"Photo available?<br/>(Google Places)"}
+**Phase 2 — Ingredient breakdown (on-demand):**
+- Triggered when user taps into a specific meal
+- Separate Haiku call for that one item with full ingredient breakdown
+- Cost: ~$0.001/call
+- Most users view 2-3 meals per session → pay for ~5% of items
 
-    PhotoCheck -- "Yes" --> WithPhoto["Claude Vision + Text:<br/>name + description + photo"]
-    PhotoCheck -- "No" --> TextOnly["Claude Text Only:<br/>name + description"]
+### 2.4 Scraping Design (High-Level)
 
-    WithPhoto --> LLM["Claude returns:<br/>- total macros (P/C/F/cal)<br/>- ingredient breakdown<br/>- confidence level<br/>- reasoning"]
-    TextOnly --> LLM
+_Full scraping spec to be written during implementation sprint._
 
-    LLM --> OK{"Succeeded?"}
-    OK -- "Yes" --> Store["Cache estimate<br/>(confidence: medium or low)"]
-    OK -- "No" --> Unavailable["Estimation unavailable<br/>flag for retry"]
+**Constraints:**
+- MVP scope: **Los Angeles only** (~25k restaurants)
+- Preload budget: **$72** for all of LA (Google Places $40 + Firecrawl $21 + Haiku $11)
+- Respect robots.txt on all sites
+- Rate limit: max 2 requests/second per domain
+- No scraping behind logins, paywalls, or CAPTCHAs
+- Store menu data only (name, description, price) — no personal data
 
-    Store --> Return["Return macros +<br/>ingredient breakdown"]
-```
+**Scraping pipeline:**
+1. Google Places Nearby Search → restaurant list with `websiteUri`
+2. Firecrawl API → fetch page, handle JS rendering, return clean Markdown
+3. Claude Haiku → extract menu items from Markdown (or use schema.org `Menu` structured data when available — some sites embed this, e.g., Los Tacos No.1)
 
-### 2.5 Post-MVP Accuracy Upgrades
+**HTML preprocessing:** Firecrawl returns clean Markdown, which reduces token consumption by 20-30% vs raw HTML and removes nav/ads/boilerplate. This is the industry standard for LLM ingestion.
+
+**Exit criteria before launch:**
+- Menu extraction rate: >60% of Google Places restaurants have parseable menus
+- Macro accuracy: spot-check 50 chain items against published nutrition, within ±20% on calories
+- Latency: cached results <1s, uncached restaurant <5s
+
+**Progressive loading (uncached areas):**
+1. User searches → Google Places returns restaurants (1s)
+2. Show restaurant list immediately (name, cuisine, distance — no macros)
+3. Scrape + estimate in background per restaurant (~3-4s each, parallelized)
+4. As macros arrive, update list with match scores — restaurants reorder
+5. Everything cached for next search in same area
+
+### 2.5 Cost Model
+
+**LA preload (one-time):**
+
+| Component | Cost |
+|---|---|
+| Google Places Nearby Search (1,250 searches) | $40 |
+| Firecrawl (25k pages) | $21 |
+| Claude Haiku (25k restaurants, macros-only) | $11 |
+| **Total** | **~$72** |
+
+**USA scale (one-time, ~750k restaurants):**
+
+| Component | Cost |
+|---|---|
+| Google Places Nearby Search | $1,200 |
+| Firecrawl (750k pages) | $623 |
+| Claude Haiku (750k restaurants) | $340 |
+| **Total** | **~$2,163** |
+
+**Ongoing costs at MVP:**
+- Serving from cache: ~$0
+- On-demand ingredient breakdown: <$0.001/call (negligible)
+- Cache refresh: none at MVP (follow-up, low priority — menus rarely change)
+
+### 2.6 Post-MVP Upgrades
 
 In priority order:
 
-1. **USDA cross-validation**: Run ingredient breakdown through USDA FoodData Central in background. If USDA sum diverges >15% from LLM's stated macros, flag lower confidence and surface the discrepancy.
-2. **Verified data layer**: Search `"{restaurant_name} nutrition information"` for restaurant-published nutrition data. When found, use it instead of LLM — highest confidence, no estimation needed.
-3. **Prompt calibration loop**: Log LLM estimates vs verified data for chains where we have both. Use divergence patterns to improve prompts over time.
-4. **User corrections**: Let users flag "this doesn't look right" — feeds back into prompt tuning and identifies systematic errors.
-5. **Confidence scoring model**: Instead of just medium/low, score based on: known chain? how detailed was the description? photo available? how common are the ingredients?
-6. **Extended retrieval**: Web search fallback for restaurants without website links. Partial menu extraction from Google Places reviews/photos/listings.
+1. **USDA cross-validation**: Run ingredient breakdown through USDA FoodData Central in background. If USDA sum diverges >15% from LLM's stated macros, flag lower confidence.
+2. **Verified data layer**: Search for restaurant-published nutrition data. When found, use instead of LLM — highest confidence.
+3. **Prompt calibration loop**: Log LLM estimates vs verified data for chains. Use divergence patterns to improve prompts.
+4. **User corrections**: Let users flag "this doesn't look right" — feeds into prompt tuning.
+5. **Confidence scoring model**: Score based on: known chain? description detail? photo available? common ingredients?
+6. **Extended retrieval**: Web search fallback for restaurants without websites. Google Places photo menu extraction via Claude vision.
+7. **Cache refresh**: Periodic re-estimation on a schedule. Low priority — menus rarely change.
+8. **Fine-tuned model**: Once we have enough estimates + user corrections as training data, fine-tune a small model for near-zero inference cost.
 
 ---
 
@@ -165,25 +214,30 @@ The Next.js backend is API-only — no server-rendered pages. All endpoints serv
 - Each wrapper handles: auth, request formatting, response normalization, error mapping
 - No raw external API types leak into business logic
 
-### 4.2 Google Places API
-- Purpose: restaurant discovery by location, basic restaurant metadata, photos
-- Endpoints used: Nearby Search, Place Details, Place Photos
-- Rate limits and quota management
+### 4.2 Google Places API (New)
+- Purpose: restaurant discovery by location, metadata, `websiteUri`
+- Endpoints used: Nearby Search (returns websiteUri — no Place Details needed)
+- Cost: $0.032 per Nearby Search call (returns up to 20 results)
 - Response mapping to internal Restaurant model
 
-### 4.3 Claude API
+### 4.3 Firecrawl API
+- Purpose: scrape restaurant websites, handle JS rendering, return clean Markdown
+- Handles: JavaScript-rendered sites, anti-bot, proxies, CAPTCHA
+- Returns: clean Markdown (20-30% fewer tokens than raw HTML)
+- Cost: $0.00083/page (Standard plan, 100k credits/$83)
+- Also detects schema.org structured data (some sites embed `Menu` schemas)
+
+### 4.4 Claude API (Haiku 4.5)
 - Purpose: macro estimation — the core of the pipeline
-- Single call per menu item returns macros + ingredient breakdown as structured JSON
-- Vision mode: when photo available, analyze photo + text for better accuracy
-- Text mode: infer from name/description only
-- Model selection and cost considerations
-- Token budget per request, timeout handling
+- **Phase 1 (batch)**: Macros-only per restaurant, compact JSON output
+- **Phase 2 (on-demand)**: Full ingredient breakdown for a single item
+- Cost: ~$0.0005/restaurant (batch), ~$0.001/item (breakdown)
+- Latency: ~1.7s per call
 - Prompt versioning strategy (prompts are a core asset — version and track changes)
 
-### 4.5 Yelp Fusion API (Optional)
+### 4.5 Yelp Fusion API (Optional, post-MVP)
 - Purpose: supplementary restaurant data, reviews, photos
 - When to use: fallback if Google Places data is insufficient
-- Endpoints used: Business Search, Business Details
 
 ---
 
@@ -327,7 +381,7 @@ erDiagram
 ### 7.3 Pipeline Failure Modes
 - LLM failure (timeout, error, malformed response): return "estimation unavailable", flag for retry
 - LLM returns inconsistent data (ingredients don't sum to totals): accept LLM totals, flag ingredient breakdown as approximate
-- Menu scraping failure: exclude restaurant from results
+- Menu retrieval failure (website unreachable, no parseable menu): exclude restaurant from results
 
 ### 7.4 User-Facing Error Responses
 - Consistent `{ "error": "message" }` format
@@ -365,13 +419,17 @@ erDiagram
 
 - **Database hosting**: Managed Postgres (Neon or Supabase) — free tier for MVP, PostGIS support for geospatial queries
 - **Application caching**: In-memory LRU to start. Monitor utilization; migrate to Redis when needed.
-- **Background jobs**: None at MVP. Re-estimation is on-demand only.
+- **Background jobs**: None at MVP. Cache refresh is a low-priority follow-up.
 - **Photo sourcing**: Google Places only. No user uploads.
-- **Pipeline approach**: Single LLM call returns macros + ingredient breakdown. No separate tiers, no USDA dependency at MVP. Verified data layer and USDA cross-validation are post-MVP accuracy upgrades.
-- **Estimation model**: LLM returns both totals and ingredient reasoning in one call. Ingredient breakdown builds user trust and enables future validation.
+- **Pipeline approach**: Three-stage (discover → scrape → estimate). Single LLM call per restaurant for batch macros. Ingredient breakdown on-demand.
+- **Estimation model**: Claude Haiku 4.5. Tested: accurate within ±20% for common items, ~1.7s latency, ~$0.0005/restaurant. Gemini Flash-Lite tested but less reliable (outlier estimates).
+- **Scraping approach**: Firecrawl API for all page fetching. Handles JS rendering, anti-bot, returns clean Markdown. No self-hosted headless browsers at MVP.
+- **MVP geography**: Los Angeles only. Total preload cost: ~$72.
+- **Place Details not needed**: `websiteUri` is available directly from Nearby Search, saving $0.017/restaurant.
+- **Two-phase estimation**: Macros-only for batch (cheap), ingredient breakdown on-demand (pay for ~5% of items).
 
 ## Open Questions
 
 - [ ] Neon vs. Supabase — both work, pick before first migration
-- [ ] Claude model selection: Haiku (fast/cheap) vs. Sonnet (better accuracy) — benchmark needed
 - [ ] Prompt structure: how many menu items can we batch per call while maintaining accuracy?
+- [ ] Menu extraction rate in practice — need to test against 100+ LA restaurants to validate >60% target
