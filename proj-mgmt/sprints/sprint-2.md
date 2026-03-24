@@ -4,12 +4,11 @@ kanban-plugin: basic
 
 ## Backlog
 
-- [ ] **S-16** Scaffold mobile app: Expo Router, bottom tab nav, Search screen shell #frontend #O1 #wave-3 ^dep-S-10b ^dep-S-11
-
 ## In Progress
 
 ## Done
 
+- [x] **S-16** Scaffold mobile app: Expo Router, bottom tab nav, Search screen shell #frontend #O1 #wave-3 @completed(2026-03-24)
 - [x] **S-14** Write unit tests: macro match scoring + confidence rounding #backend #O1 #wave-2 @completed(2026-03-24)
 - [x] **S-13** Implement `GET /api/restaurants/[id]/menu` endpoint — menu items with cached macros #backend #O1 #wave-2 @completed(2026-03-24)
 - [x] **S-12** Implement `GET /api/restaurants` endpoint — query + macro filter + rank #backend #O1 #wave-2 @completed(2026-03-24)
