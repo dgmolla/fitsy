@@ -123,7 +123,7 @@ for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
 
   build_fix_prompt "$attempt" | claude -p \
     --model sonnet \
-    --allowedTools "Read,Glob,Grep,Edit,Write,Bash(npx tsc *),Bash(npm test *),Bash(npm run build *),Bash(bash scripts/structural-tests.sh),Bash(git diff *)"
+    --allowedTools "Read,Glob,Grep,Edit,Write,Bash(git diff *),Bash(git log *)"
 
   echo "=== Running pre-PR gates ==="
   run_gates
