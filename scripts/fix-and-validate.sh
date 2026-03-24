@@ -135,9 +135,18 @@ for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
 
   echo "Gates failed on attempt $attempt"
 
-  # Comment on PR about retry
+  # Comment on PR about retry — include truncated gate errors
   if [ "$attempt" -lt "$MAX_ATTEMPTS" ] && command -v gh &>/dev/null; then
-    gh pr comment "$PR_NUM" --body "**harness-bot** (${AGENT}): Fix attempt ${attempt} failed gates — retrying (attempt $((attempt + 1))/${MAX_ATTEMPTS})..." || true
+    TRUNCATED_ERRORS=$(echo "$GATE_ERRORS" | head -30)
+    gh pr comment "$PR_NUM" --body "**harness-bot** (${AGENT}): Fix attempt ${attempt} failed gates — retrying (attempt $((attempt + 1))/${MAX_ATTEMPTS})...
+
+<details><summary>Gate errors</summary>
+
+\`\`\`
+${TRUNCATED_ERRORS}
+\`\`\`
+
+</details>" || true
   fi
 
   # Detect if we're stuck on the same error
