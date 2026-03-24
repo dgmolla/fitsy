@@ -12,35 +12,48 @@ jobs:
   e2e:
     name: Maestro E2E
     runs-on: macos-latest
-    # Only run when e2e flows and mobile app exist
-    if: hashFiles('e2e/flows/*.yaml') != '' && hashFiles('apps/mobile/package.json') != ''
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check if E2E flows and mobile app exist
+        id: check
+        run: |
+          if ls e2e/flows/*.yaml 1>/dev/null 2>&1 && [ -f apps/mobile/package.json ]; then
+            echo "should_run=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_run=false" >> $GITHUB_OUTPUT
+            echo "No E2E flows or mobile app yet — skipping"
+          fi
+
       - uses: actions/setup-node@v4
+        if: steps.check.outputs.should_run == 'true'
         with:
           node-version: 20
           cache: npm
 
       - run: npm ci
+        if: steps.check.outputs.should_run == 'true'
 
       - name: Install Maestro
+        if: steps.check.outputs.should_run == 'true'
         run: |
           curl -Ls "https://get.maestro.mobile.dev" | bash
           echo "$HOME/.maestro/bin" >> $GITHUB_PATH
 
       - name: Build Expo preview
+        if: steps.check.outputs.should_run == 'true'
         run: cd apps/mobile && npx expo prebuild --platform ios --no-install
         env:
           API_URL: ${{ secrets.STAGING_API_URL }}
 
       - name: Run Maestro flows
+        if: steps.check.outputs.should_run == 'true'
         run: maestro test e2e/flows/
         env:
           MAESTRO_APP_ID: com.fitsy.app
 
       - name: Upload test artifacts on failure
-        if: failure()
+        if: failure() && steps.check.outputs.should_run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: maestro-screenshots

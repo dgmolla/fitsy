@@ -53,32 +53,37 @@ jobs:
   typecheck:
     name: Type Check
     runs-on: ubuntu-latest
-    # Only run once TypeScript workspaces exist
-    if: |
-      hashFiles('apps/api/package.json') != '' ||
-      hashFiles('apps/mobile/package.json') != '' ||
-      hashFiles('packages/shared/package.json') != ''
     steps:
       - uses: actions/checkout@v4
+      - name: Check if TypeScript workspaces exist
+        id: check
+        run: |
+          if [ -f apps/api/package.json ] || [ -f apps/mobile/package.json ] || [ -f packages/shared/package.json ]; then
+            echo "has_ts=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_ts=false" >> $GITHUB_OUTPUT
+            echo "No TypeScript workspaces yet — skipping"
+          fi
       - uses: actions/setup-node@v4
+        if: steps.check.outputs.has_ts == 'true'
         with:
           node-version: 20
           cache: npm
       - run: npm ci
+        if: steps.check.outputs.has_ts == 'true'
       - name: Type check — API
-        if: hashFiles('apps/api/tsconfig.json') != ''
-        run: cd apps/api && npx tsc --noEmit
+        if: steps.check.outputs.has_ts == 'true'
+        run: "[ -f apps/api/tsconfig.json ] && cd apps/api && npx tsc --noEmit || true"
       - name: Type check — Mobile
-        if: hashFiles('apps/mobile/tsconfig.json') != ''
-        run: cd apps/mobile && npx tsc --noEmit
+        if: steps.check.outputs.has_ts == 'true'
+        run: "[ -f apps/mobile/tsconfig.json ] && cd apps/mobile && npx tsc --noEmit || true"
       - name: Type check — Shared
-        if: hashFiles('packages/shared/tsconfig.json') != ''
-        run: cd packages/shared && npx tsc --noEmit
+        if: steps.check.outputs.has_ts == 'true'
+        run: "[ -f packages/shared/tsconfig.json ] && cd packages/shared && npx tsc --noEmit || true"
 
   test:
     name: Tests
     runs-on: ubuntu-latest
-    if: hashFiles('package.json') != ''
     needs: [typecheck]
     services:
       postgres:
@@ -114,7 +119,6 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    if: hashFiles('package.json') != ''
     needs: [test]
     steps:
       - uses: actions/checkout@v4
