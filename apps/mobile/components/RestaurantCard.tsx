@@ -1,37 +1,11 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { ConfidenceLevel, RestaurantResult } from '@fitsy/shared';
+import { RestaurantResult } from '@fitsy/shared';
+import { ConfidenceBadge } from './ConfidenceBadge';
 
 interface Props {
   item: RestaurantResult;
   onPress?: () => void;
-}
-
-const CONFIDENCE_COLORS: Record<ConfidenceLevel, string> = {
-  HIGH: '#2D7D46',
-  MEDIUM: '#D97706',
-  LOW: '#6B7280',
-};
-
-const CONFIDENCE_BG: Record<ConfidenceLevel, string> = {
-  HIGH: '#DCFCE7',
-  MEDIUM: '#FEF3C7',
-  LOW: '#F3F4F6',
-};
-
-function ConfidenceBadge({ level }: { level: ConfidenceLevel }) {
-  return (
-    <View
-      style={[
-        styles.badge,
-        { backgroundColor: CONFIDENCE_BG[level] },
-      ]}
-    >
-      <Text style={[styles.badgeText, { color: CONFIDENCE_COLORS[level] }]}>
-        {level}
-      </Text>
-    </View>
-  );
 }
 
 export function RestaurantCard({ item, onPress }: Props) {
@@ -63,7 +37,7 @@ export function RestaurantCard({ item, onPress }: Props) {
             <Text style={styles.bestMatchName} numberOfLines={1}>
               {item.bestMatch.name}
             </Text>
-            <ConfidenceBadge level={item.bestMatch.confidence} />
+            <ConfidenceBadge confidence={item.bestMatch.confidence} />
           </View>
           <Text style={styles.macros}>
             {`${item.bestMatch.proteinG}g P · ${item.bestMatch.carbsG}g C · ${item.bestMatch.fatG}g F · ${item.bestMatch.calories} kcal`}
@@ -147,15 +121,5 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#D1D5DB',
     paddingTop: 8,
-  },
-  badge: {
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.3,
   },
 });
