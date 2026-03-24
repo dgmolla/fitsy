@@ -16,6 +16,7 @@ Multiple agents may review the same PR if it crosses domains.
 | `docs/design/` | **designer** |
 | `docs/product/`, `proj-mgmt/okrs*` | **product-manager** |
 | `docs/gtm/` | **gtm** |
+| `docs/engineering/backend/` | **backend** |
 | `.github/`, `.claude/`, `scripts/`, `CLAUDE.md`, `docs/engineering/adrs/`, `docs/engineering/devops/` | **cto** |
 | No match / fallback | **cto** |
 
