@@ -23,12 +23,12 @@ if echo "$CHANGED" | grep -qE '^prisma/'; then
 fi
 
 # BEGIN ROUTING TABLE
-# All of apps/api/ → backend (source code, config, tests, etc.)
+# All of apps/api/                                                            -> backend
 if echo "$CHANGED" | grep -qE '^apps/api/'; then
   AGENTS="$AGENTS backend"
 fi
 
-# All of apps/mobile/ → frontend
+# All of apps/mobile/                                                         -> frontend
 if echo "$CHANGED" | grep -qE '^apps/mobile/'; then
   AGENTS="$AGENTS frontend"
 fi
