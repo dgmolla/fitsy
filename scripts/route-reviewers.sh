@@ -62,13 +62,8 @@ if echo "$CHANGED" | grep -qE '^docs/gtm/'; then
   AGENTS="$AGENTS gtm"
 fi
 
-# docs/engineering/backend/ is backend-owned spec territory                  -> backend
-if echo "$CHANGED" | grep -qE '^docs/engineering/backend/'; then
-  AGENTS="$AGENTS backend"
-fi
-
-# .github/ .claude/ scripts/ CLAUDE.md docs/engineering/ (excl. backend/)   -> cto
-if echo "$CHANGED" | grep -qE '^(\.github/|\.claude/|scripts/|CLAUDE\.md|docs/engineering/(adrs|devops)/)'; then
+# .github/ .claude/ scripts/ CLAUDE.md docs/engineering/                     -> cto
+if echo "$CHANGED" | grep -qE '^(\.github/|\.claude/|scripts/|CLAUDE\.md|docs/engineering/)'; then
   AGENTS="$AGENTS cto"
 fi
 # END ROUTING TABLE
