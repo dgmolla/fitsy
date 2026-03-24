@@ -120,12 +120,18 @@ What happens *after* the summary depends on the `human-review-gate` knob.
    - Repeat until approved — do not proceed with a backlog the
      human hasn't signed off on
 
-5. After approval (or immediately in `yolo`):
+5. After approval or in `yolo`:
    - Archive the sprint in `proj-mgmt/sprint.md`
    - Create the next sprint board with approved backlog
-   - Tell the user:
-     > Sprint {N} complete. Sprint {N+1} is ready.
-     > Run `/next-sprint` when you're ready to begin.
+
+   **In `yolo` mode:** immediately begin executing the next sprint.
+
+   **All other modes:** stop and tell the user:
+   > Sprint {N} complete. Sprint {N+1} is ready.
+   > Run `/next-sprint` when you're ready to begin.
+
+   The human always controls when the next sprint starts. Never
+   auto-start a sprint unless in `yolo` mode.
 
 **If tasks are in In Progress:**
 
