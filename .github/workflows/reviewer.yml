@@ -4,6 +4,10 @@ on:
   pull_request:
     types: [opened, synchronize]
 
+permissions:
+  contents: read
+  pull-requests: write
+
 concurrency:
   group: review-${{ github.event.pull_request.number }}
   cancel-in-progress: true
@@ -64,8 +68,8 @@ jobs:
             AGENTS="cto"
           fi
 
-          # Deduplicate and format as JSON array
-          AGENTS_JSON=$(echo "$AGENTS" | tr ' ' '\n' | sort -u | jq -R . | jq -sc .)
+          # Deduplicate, remove empty strings, format as JSON array
+          AGENTS_JSON=$(echo "$AGENTS" | tr ' ' '\n' | sed '/^$/d' | sort -u | jq -R . | jq -sc .)
           echo "agents=$AGENTS_JSON" >> $GITHUB_OUTPUT
           echo "Routed to: $AGENTS_JSON"
 
