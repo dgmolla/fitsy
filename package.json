@@ -13,7 +13,14 @@
     "build": "npm run build -w apps/api",
     "start:api": "npm run start -w apps/api",
     "test": "npm run test --workspaces --if-present",
-    "test:coverage": "npm run test:coverage --workspaces --if-present"
+    "test:coverage": "npm run test:coverage --workspaces --if-present",
+    "preload": "npx tsx scripts/preload.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.36.3"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0"
   },
   "engines": {
     "node": ">=20"
