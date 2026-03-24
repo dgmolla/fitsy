@@ -128,8 +128,8 @@ jobs:
   route-fixes:
     name: Route Fixes
     runs-on: ubuntu-latest
-    needs: [route, review]
-    if: ${{ always() && needs.route.result == 'success' }}
+    needs: [review]
+    if: ${{ always() }}
     outputs:
       agents: ${{ steps.route.outputs.agents }}
     steps:
@@ -157,7 +157,7 @@ jobs:
     name: "Fix (${{ matrix.agent }})"
     runs-on: ubuntu-latest
     needs: [route-fixes]
-    if: ${{ needs.route-fixes.outputs.agents != '[]' && needs.route-fixes.outputs.agents != '' }}
+    if: ${{ always() && needs.route-fixes.result == 'success' && needs.route-fixes.outputs.agents != '[]' && needs.route-fixes.outputs.agents != '' }}
     strategy:
       matrix:
         agent: ${{ fromJson(needs.route-fixes.outputs.agents) }}
