@@ -155,6 +155,8 @@ meal rows, and any surface where a quick macro summary is needed.
 | `loaded` | Values in semantic macro colors |
 | `loading` | Skeleton shimmer on value placeholders |
 | `unavailable` | Gray text: "No data" |
+| `disabled` | All values in `colors.neutral.300`; non-interactive; used when parent item is unavailable or out of stock |
+| `error` | Values replaced with `—`; text in `colors.semantic.error`; used when macro fetch fails |
 
 **Props:**
 ```typescript
@@ -163,17 +165,26 @@ interface MacroPillProps {
   carbs?: number;          // grams
   fat?: number;            // grams
   calories?: number;       // kcal
+  confidence?: 'high' | 'medium' | 'low';  // drives rounding: low → round to nearest 5g
   variant?: 'full' | 'compact' | 'single';
   loading?: boolean;
+  disabled?: boolean;
   size?: 'sm' | 'md';
 }
 ```
+
+**Accessibility:**
+- `accessibilityRole="text"` (not interactive on its own)
+- `accessibilityLabel` format: `"Macros: {protein}g protein, {carbs}g carbs, {fat}g fat"` (include calories when `variant="full"`: append `, {calories} calories`)
+- When `loading`: `accessibilityLabel="Macro data loading"`
+- When `unavailable` or `error`: `accessibilityLabel="Macro data unavailable"`
 
 **Usage guidelines:**
 - Always use semantic macro colors — never arbitrary colors for P/C/F
 - Protein is always first (P · C · F · Cal order)
 - Use tabular figures so values align when stacked in lists
 - Minimum touch target: not interactive on its own; parent must be touchable
+- Pass `confidence` prop so MacroPill can apply 5g rounding for `low` confidence values internally
 
 ---
 
@@ -198,6 +209,8 @@ user's targets.
 | `loading` | Skeleton ring or bar |
 | `no-target` | Chart without target overlay |
 | `with-target` | Chart with target comparison overlay |
+| `disabled` | All segments in `colors.neutral.300`; animation suppressed; used when meal is unavailable |
+| `error` | Empty ring/bar with `colors.semantic.error` stroke; centered error icon; used when macro data fails to load |
 
 **Ring variant anatomy:**
 ```
@@ -224,6 +237,13 @@ interface MacroChartProps {
   animated?: boolean;    // default true; respects ReduceMotion
 }
 ```
+
+**Accessibility:**
+- `accessibilityRole="image"` (non-interactive visualization)
+- `accessibilityLabel` format: `"Macro breakdown: {protein}g protein ({protein_pct}%), {carbs}g carbs ({carbs_pct}%), {fat}g fat ({fat_pct}%), {calories} calories total"`. When targets set, append: `"Target: {targetCalories} calories."`
+- When `loading`: `accessibilityLabel="Macro chart loading"`
+- When `error`: `accessibilityLabel="Macro chart unavailable"`
+- Respect `AccessibilityInfo.isReduceMotionEnabled()` — provide static version when enabled.
 
 **Do:** Respect `AccessibilityInfo.isReduceMotionEnabled()` — provide static
 version when enabled.
@@ -304,6 +324,7 @@ The primary content unit on the Search / Discovery screen.
 | `loading` | Skeleton: photo placeholder + text shimmer |
 | `no-menu-data` | Dimmed card; "No macro data available" instead of macros |
 | `pressed` | Platform-appropriate press highlight |
+| `error` | Card renders with broken-image placeholder (gray rectangle + icon) for photo fail; "Could not load restaurant" message with retry affordance for network fail; card remains tappable to retry |
 
 **Props:**
 ```typescript
@@ -327,6 +348,12 @@ interface RestaurantCardProps {
   onPress: (id: string) => void;
 }
 ```
+
+**Accessibility:**
+- `accessibilityRole="button"` (card is the primary tap target for navigation)
+- `accessibilityLabel` format: `"{name}, {cuisine}, {distanceMi} miles away. {matchCount} matching meals. Best match: {bestMatch.name}, {matchScore}% macro match."`
+- When `loading`: `accessibilityLabel="Restaurant loading"`
+- When `error`: `accessibilityLabel="Restaurant unavailable. Double tap to retry."`
 
 **Do:** Show `matchCount` prominently — it differentiates Fitsy from generic
 restaurant discovery.
@@ -362,6 +389,8 @@ Restaurant Detail screen's matching meals list.
 | `loaded` | Full row with macros |
 | `loading` | Skeleton shimmer |
 | `selected/pressed` | Platform highlight |
+| `disabled` | All text in `colors.neutral.500`; background `colors.neutral.100`; non-interactive; used when meal is marked unavailable |
+| `error` | Macro values replaced with `—`; subtle `colors.semantic.error` left border; row remains tappable |
 
 **Props:**
 ```typescript
@@ -375,9 +404,16 @@ interface MealRowProps {
   confidence: 'high' | 'medium' | 'low';
   matchScore?: number;         // 0–100; undefined if user has no targets set
   variant?: 'matching' | 'non-matching';
+  disabled?: boolean;
   onPress: (id: string) => void;
 }
 ```
+
+**Accessibility:**
+- `accessibilityRole="button"`
+- `accessibilityLabel` format: `"{name}, {calories} calories. Protein {protein}g, carbs {carbs}g, fat {fat}g."` Append `"Match: {matchScore}%."` when `matchScore` is defined.
+- `accessibilityState={{ disabled: true }}` when `disabled`
+- When `loading`: `accessibilityLabel="{name}, loading"`
 
 ---
 
@@ -423,7 +459,14 @@ interface FilterChipProps {
 |-------|-----------|
 | `inactive` | Unselected; muted/neutral style |
 | `active` | Selected; accent color background with × remove button |
+| `loading` | Skeleton shimmer pill; used while result count for that filter is being fetched |
 | `disabled` | Grayed out (`colors.neutral.300` background, `colors.neutral.500` text); non-interactive; used when no results exist for that filter |
+
+**FilterChip accessibility:**
+- `accessibilityRole="button"`
+- `accessibilityState={{ selected: active, disabled: disabled }}`
+- `accessibilityLabel` format: `"{label}"` when inactive; `"{label}, selected"` when active; `"{label}, remove filter"` for the × remove target
+- When `loading`: `accessibilityLabel="{label}, loading"`
 
 **FilterSheet states:**
 
@@ -493,6 +536,8 @@ Match: ████████░░  82%
 | `loaded` | Bar/badge filled to score value with appropriate match color |
 | `loading` | Skeleton shimmer bar or circle |
 | `no-target` | Score is meaningless without user targets; display `—` and hide the fill bar |
+| `disabled` | Bar/badge in `colors.neutral.300`; percentage hidden; used when parent item is unavailable |
+| `error` | Bar/badge empty with `colors.semantic.error` border; display `—` in place of percentage |
 
 **Color mapping:**
 
