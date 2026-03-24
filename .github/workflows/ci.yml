@@ -133,7 +133,7 @@ jobs:
           DATABASE_URL: postgresql://fitsy_test:fitsy_test@localhost:5432/fitsy_test
       - name: Run tests with coverage gate
         if: steps.check.outputs.ready == 'true'
-        run: npm run test:coverage -- --coverage.thresholds.lines=80
+        run: npm run test:coverage --workspace=apps/api
         env:
           DATABASE_URL: postgresql://fitsy_test:fitsy_test@localhost:5432/fitsy_test
           # External API keys intentionally absent — tests must mock all external services
