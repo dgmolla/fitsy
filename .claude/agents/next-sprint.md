@@ -63,14 +63,14 @@ This is a fresh sprint. Begin execution:
 
 **If all tasks are in Done:**
 
-The sprint is complete. Run the sprint review, then **stop and wait
-for human sign-off** before creating the next sprint.
+The sprint is complete. Always run the review and generate the summary.
+What happens *after* the summary depends on the `human-review-gate` knob.
 
 1. Run the sprint review process:
    - CTO: `bash scripts/harness-metrics.sh`, gap evaluation, CLAUDE.md update
    - PM: update OKR progress in `proj-mgmt/okrs.md`
 
-2. Generate the **Sprint Summary** and present it to the human:
+2. Generate the **Sprint Summary**:
 
    > ## Sprint {N} Summary
    >
@@ -96,18 +96,31 @@ for human sign-off** before creating the next sprint.
    > | Task | Role | Why |
    > |------|------|-----|
    > | S-XX: {description} | {role} | {ties to which OKR/gap} |
-   >
-   > ---
+
+3. **Sprint boundary behavior by mode:**
+
+   | human-review-gate | Sprint summary | Human gate | Auto-advance |
+   |---|---|---|---|
+   | `yolo` | Generated, posted as PR/comment | No — proceed immediately | Yes |
+   | `cruise` | Presented to human | **Yes — wait for sign-off** | No |
+   | `specs-only` | Presented to human | **Yes — wait for sign-off** | No |
+   | `specs-and-prs` | Presented to human | **Yes — wait for sign-off** | No |
+
+   In all modes except `yolo`, present the summary with:
    > **Please review and let me know:**
    > 1. Any course corrections?
    > 2. Approve the next sprint backlog, or reprioritize?
    > 3. Anything to add/remove/change?
 
-3. **Wait for human response.** Do not proceed until the human
-   reviews and approves. This is a hard gate — never skip it
-   regardless of knob settings.
+   In `yolo`, post the summary for the record but continue immediately.
 
-4. After human approves:
+4. **If human rejects or reprioritizes the proposed backlog:**
+   - Revise the next sprint board per their feedback
+   - Present the updated backlog for confirmation
+   - Repeat until approved — do not proceed with a backlog the
+     human hasn't signed off on
+
+5. After approval (or immediately in `yolo`):
    - Archive the sprint in `proj-mgmt/sprint.md`
    - Create the next sprint board with approved backlog
    - Tell the user:
@@ -127,10 +140,14 @@ Resume the sprint. Pick up where things left off:
 Read `Shipyard Settings` from CLAUDE.md and follow them:
 
 - **human-review-gate**: Determines when to wait for human review
-  - `yolo`: No human review at all. Fully autonomous.
-  - `cruise`: Don't wait for human intra-sprint. Human reviews at sprint end.
-  - `specs-only`: Wait for human to approve specs before implementing
-  - `specs-and-prs`: Wait for human on specs AND implementation PRs
+  - `yolo`: Fully autonomous. No human gates intra-sprint or at sprint
+    boundary. Summary still generated for the record.
+  - `cruise`: No human gates intra-sprint. Human reviews at sprint end
+    via sprint summary — must approve before next sprint begins.
+  - `specs-only`: Human approves specs before implementation. Human
+    reviews sprint summary at sprint end.
+  - `specs-and-prs`: Human approves specs AND implementation PRs.
+    Human reviews sprint summary at sprint end.
 
 - **spec-requirement**: Determines when to write specs
   - `always`: Write a spec for every task
@@ -142,9 +159,12 @@ Read `Shipyard Settings` from CLAUDE.md and follow them:
   - `human-gate`: Wait for human to merge
   - `danger-zone-gate`: Auto-merge normal, human-gate for danger zones
 
-- **wave-progression**: Determines wave advancement
+- **wave-progression**: Determines wave advancement (intra-sprint)
   - `auto`: Start next wave when current wave is done
   - `human-gate`: Wait for human approval between waves
+  - Note: wave gates are lightweight ("Wave 2 ready, proceed?").
+    The sprint summary is the deeper review at sprint boundaries —
+    they serve different purposes and don't replace each other.
 
 ### 4. Move cards
 
