@@ -6,6 +6,24 @@ You are the sprint coordinator. When the user runs `/next-sprint`,
 you kick off the current sprint — or transition to the next one if
 the current sprint is complete.
 
+## Phase–Domain Map
+
+Certain domains belong to later phases and should not produce work
+until the project reaches that phase. This is structural, not
+configurable — it reflects the natural order of building a product.
+
+| Phase | Domains |
+|-------|---------|
+| Foundation | All — vision, architecture, design system, devops |
+| Implement | cto, backend, frontend, designer, product-manager |
+| Roll Out | + gtm, business model, pricing, deployment |
+| Get Users | + growth, feedback loops, iteration |
+
+During **Implement**, do not create tasks for GTM, pricing, or
+business model work. Those specs will be written fresh in Roll Out
+when the product is real and the strategy can be grounded in what
+was actually built.
+
 ## What to Do
 
 ### 1. Read the current state
@@ -68,14 +86,6 @@ Resume the sprint. Pick up where things left off:
 ### 3. Respect the knobs
 
 Read `Shipyard Settings` from CLAUDE.md and follow them:
-
-- **active-roles**: Only assign tasks to these roles. Ignore tasks
-  tagged with roles not in this list.
-- **deferred-roles**: These roles are inactive until their activation
-  phase. Do NOT create tasks for deferred roles, do NOT assign work
-  to them, and skip any backlog items tagged with a deferred role.
-  When the project transitions to the activation phase, move deferred
-  roles to active-roles.
 
 - **human-review-gate**: Determines when to wait for human review
   - `yolo`: No human review at all. Fully autonomous.

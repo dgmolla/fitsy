@@ -13,10 +13,7 @@ reflect whichever phase you're in.
 
 1. **Foundation** — Vision, architecture, brand identity, devops ✅
 2. **Implement** — Build the product based on the foundation ← current
-   - GTM and pricing/business-model work is **deferred** to Phase 3
-   - Active roles: cto, backend, frontend, designer, product-manager
-3. **Roll Out** — Deployment, GTM strategy, pricing, launch prep
-   - Activate GTM role; finalize business model and pricing
+3. **Roll Out** — Deployment, GTM strategy, business model, pricing, launch prep
 4. **Get Users** — Launch, grow, iterate
 
 ---
@@ -30,9 +27,8 @@ the context that makes every agent task better.
 | # | Key Result | Status | Notes |
 |---|------------|--------|-------|
 | KR1 | Vision PRD, System Design, and Design Brief complete and approved | **Done** | Merged in PR #2 |
-| KR2 | Business Model and GTM Strategy drafted | **Done** | Merged in Sprint 1 Wave 2+3 |
+| KR2 | Business Model and GTM Strategy drafted | Not started | Moved to Phase 3 — redo after MVP is built |
 | KR3 | CI/CD pipeline operational with structural tests | **Done** | Structural + security running; typecheck/test/build activate when code exists |
-| KR4 | CLAUDE.md fully populated with architecture and conventions | **Done** | Two-system architecture, DB schema, service boundaries, deployment |
 
 ### O2: Validate the tiered macro estimation approach
 The pipeline is the core differentiator — nail the design before building.
@@ -68,8 +64,9 @@ Production deployment with monitoring, ready for real users.
 | # | Key Result | Status | Notes |
 |---|------------|--------|-------|
 | KR1 | Deployed to production with auth and data pipeline operational | Not started | |
-| KR2 | GTM materials complete (landing page, social, launch plan) | Not started | |
-| KR3 | Monitoring and alerting operational (API costs, rate limits, accuracy) | Not started | |
+| KR2 | Business Model and pricing strategy finalized | Not started | |
+| KR3 | GTM materials complete (landing page, social, launch plan) | Not started | |
+| KR4 | Monitoring and alerting operational (API costs, rate limits, accuracy) | Not started | |
 
 ## Phase 4: Get Users
 

@@ -15,7 +15,7 @@ Multiple agents may review the same PR if it crosses domains.
 | `apps/mobile/` | **frontend** |
 | `docs/design/` | **designer** |
 | `docs/product/`, `proj-mgmt/okrs*` | **product-manager** |
-| `docs/gtm/` | **gtm** *(deferred until Phase 3)* |
+| `docs/gtm/` | **gtm** |
 | `.github/`, `.claude/`, `scripts/`, `CLAUDE.md`, `docs/engineering/adrs/`, `docs/engineering/devops/` | **cto** |
 | No match / fallback | **cto** |
 
