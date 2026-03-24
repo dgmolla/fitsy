@@ -22,32 +22,23 @@ if echo "$CHANGED" | grep -qE '^prisma/'; then
   AGENTS="$AGENTS cto"
 fi
 
-# Per-package config files for API and shared workspace packages → CTO infrastructure
 # BEGIN ROUTING TABLE
-if echo "$CHANGED" | grep -qE '^(apps/api|packages/shared)/(package\.json|tsconfig\.json|next\.config\..*)$'; then
+# All of apps/api/                                                            -> backend
+if echo "$CHANGED" | grep -qE '^apps/api/'; then
+  AGENTS="$AGENTS backend"
+fi
+
+# All of apps/mobile/                                                         -> frontend
+if echo "$CHANGED" | grep -qE '^apps/mobile/'; then
+  AGENTS="$AGENTS frontend"
+fi
+
+# packages/shared/ — workspace config → cto; src/ → backend
+if echo "$CHANGED" | grep -qE '^packages/shared/(package\.json|tsconfig\.json)$'; then
   AGENTS="$AGENTS cto"
 fi
-
-# Mobile app config files (package.json, tsconfig.json, app.config.ts) → frontend
-# app.config.ts is Expo-specific and owned by the frontend team
-if echo "$CHANGED" | grep -qE '^apps/mobile/(package\.json|tsconfig\.json|app\.config\..*)$'; then
-  AGENTS="$AGENTS frontend"
-fi
-
-# Backend: actual source code in api source directories                      -> backend
-if echo "$CHANGED" | grep -qE '^apps/api/(app|lib|services)/'; then
-  AGENTS="$AGENTS backend"
-fi
-
-# Shared package src — co-owned by backend and frontend; route to backend    -> backend
-# (frontend becomes co-owner once mobile source code exists)
 if echo "$CHANGED" | grep -qE '^packages/shared/src/'; then
   AGENTS="$AGENTS backend"
-fi
-
-# Frontend: actual source code in mobile source directories                  -> frontend
-if echo "$CHANGED" | grep -qE '^apps/mobile/(app|components|lib)/'; then
-  AGENTS="$AGENTS frontend"
 fi
 
 # docs/design/                                                                -> designer
@@ -70,7 +61,7 @@ if echo "$CHANGED" | grep -qE '^docs/engineering/backend/'; then
   AGENTS="$AGENTS backend"
 fi
 
-# .github/ .claude/ scripts/ CLAUDE.md docs/engineering/ (excl. backend/)   -> cto
+# .github/ .claude/ scripts/ CLAUDE.md docs/engineering/adrs/ devops/       -> cto
 if echo "$CHANGED" | grep -qE '^(\.github/|\.claude/|scripts/|CLAUDE\.md|docs/engineering/(adrs|devops)/)'; then
   AGENTS="$AGENTS cto"
 fi
