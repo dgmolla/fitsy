@@ -184,20 +184,17 @@ git diff --cached --name-only | grep -E '\.(js|js\.map)$' # should be empty
 | wave-progression | auto |
 
 See `docs/tuning-guide.md` for what each knob does and when to change it.
-
 ---
 
 ## Deployment
 
 - **API**: Vercel or Railway (Next.js). Free tier for MVP.
-- **Database**: Neon or Supabase managed PostgreSQL with PostGIS. Free tier for MVP.
-- **Mobile**: Expo EAS Build for iOS/Android distribution. TestFlight for beta.
-- **Preload script**: Run locally or on a CI runner — not a production service.
-- Decision: Neon vs. Supabase — open question, pick before first migration.
+- **Database**: Neon or Supabase managed PostgreSQL with PostGIS (pick before first migration).
+- **Mobile**: Expo EAS Build. TestFlight for beta.
+- **Preload script**: Run locally or on CI runner — not a production service.
 
 ---
 
 ## Project Management
 
-- **OKR board**: `proj-mgmt/okrs.md`
-- **Sprint board**: See `proj-mgmt/sprint.md`
+- **OKR board**: `proj-mgmt/okrs.md` | **Sprint board**: `proj-mgmt/sprint.md`

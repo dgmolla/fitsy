@@ -73,13 +73,22 @@ jobs:
         if: steps.check.outputs.has_ts == 'true'
       - name: Type check — API
         if: steps.check.outputs.has_ts == 'true'
-        run: "[ -f apps/api/tsconfig.json ] && cd apps/api && npx tsc --noEmit || true"
+        run: |
+          if [ -f apps/api/tsconfig.json ]; then
+            cd apps/api && npx tsc --noEmit
+          fi
       - name: Type check — Mobile
         if: steps.check.outputs.has_ts == 'true'
-        run: "[ -f apps/mobile/tsconfig.json ] && cd apps/mobile && npx tsc --noEmit || true"
+        run: |
+          if [ -f apps/mobile/tsconfig.json ]; then
+            cd apps/mobile && npx tsc --noEmit
+          fi
       - name: Type check — Shared
         if: steps.check.outputs.has_ts == 'true'
-        run: "[ -f packages/shared/tsconfig.json ] && cd packages/shared && npx tsc --noEmit || true"
+        run: |
+          if [ -f packages/shared/tsconfig.json ]; then
+            cd packages/shared && npx tsc --noEmit
+          fi
 
   test:
     name: Tests
