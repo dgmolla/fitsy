@@ -1,9 +1,10 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { ConfidenceLevel, RestaurantResult } from '@fitsy/shared';
 
 interface Props {
   item: RestaurantResult;
+  onPress?: () => void;
 }
 
 const CONFIDENCE_COLORS: Record<ConfidenceLevel, string> = {
@@ -33,10 +34,17 @@ function ConfidenceBadge({ level }: { level: ConfidenceLevel }) {
   );
 }
 
-export function RestaurantCard({ item }: Props) {
+export function RestaurantCard({ item, onPress }: Props) {
   const distanceLabel = `${item.distanceMiles.toFixed(1)} mi`;
 
   return (
+    <TouchableOpacity
+      style={styles.cardWrapper}
+      onPress={onPress}
+      activeOpacity={onPress ? 0.7 : 1}
+      accessibilityRole="button"
+      accessibilityLabel={`View menu for ${item.name}`}
+    >
     <View style={styles.card}>
       <View style={styles.header}>
         <Text style={styles.name} numberOfLines={1}>
@@ -65,10 +73,14 @@ export function RestaurantCard({ item }: Props) {
         <Text style={styles.noMacro}>No macro data</Text>
       )}
     </View>
+    </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
+  cardWrapper: {
+    // no extra styling needed; card handles its own margins
+  },
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 10,

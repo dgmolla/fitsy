@@ -1,4 +1,4 @@
-import { RestaurantResult, RestaurantsApiResponse } from '@fitsy/shared';
+import { MenuApiResponse, MenuResponse, RestaurantResult, RestaurantsApiResponse } from '@fitsy/shared';
 import { api } from './api';
 
 // Hardcoded to Silver Lake, LA (90029) — real location added in a later sprint.
@@ -41,5 +41,21 @@ export async function fetchRestaurants(
     return response.data;
   } catch {
     return [];
+  }
+}
+
+export async function fetchMenu(restaurantId: string): Promise<MenuResponse | null> {
+  try {
+    const response = await api.get<MenuApiResponse>(
+      `/api/restaurants/${restaurantId}/menu`
+    );
+
+    if ('error' in response) {
+      return null;
+    }
+
+    return response.data;
+  } catch {
+    return null;
   }
 }

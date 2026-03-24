@@ -10,6 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { router } from 'expo-router';
 import { RestaurantResult } from '@fitsy/shared';
 import { RestaurantCard } from '@/components';
 import { fetchRestaurants } from '@/lib/apiClient';
@@ -187,7 +188,12 @@ export default function SearchScreen() {
           <FlatList
             data={results}
             keyExtractor={(item) => item.id}
-            renderItem={({ item }) => <RestaurantCard item={item} />}
+            renderItem={({ item }) => (
+              <RestaurantCard
+                item={item}
+                onPress={() => router.push(`/restaurant/${item.id}`)}
+              />
+            )}
             ListEmptyComponent={<EmptyState hasInputs={hasInputs} />}
             contentContainerStyle={styles.listContent}
             keyboardShouldPersistTaps="handled"
