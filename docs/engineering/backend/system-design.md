@@ -8,54 +8,96 @@
 
 ## 1. System Overview
 
-- High-level description of Fitsy: macro-aware restaurant discovery
-- Architecture style: React Native (Expo) mobile client + Next.js API backend (monorepo), Prisma ORM, PostgreSQL
-- Key data flow summary: User query → restaurant discovery → menu retrieval → LLM macro estimation → ranked results
-- Architecture diagram:
+Fitsy is a macro-aware restaurant discovery app. Users search by location and
+macronutrient targets; the app returns nearby restaurants with meals matching
+their goals.
+
+**Architecture:** React Native (Expo) mobile client + Next.js API backend
+(monorepo), Prisma ORM, PostgreSQL.
+
+**Key insight: the API backend does not scrape or estimate macros at runtime.**
+All restaurant and macro data is preloaded offline by a batch script. The API
+backend is a read-only query layer over a pre-populated database.
+
+### 1.1 Two Separate Systems
 
 ```mermaid
 graph TD
-    Client["Mobile App<br/>(React Native/Expo)"]
-
-    subgraph "Next.js API Server"
-        API["API Routes<br/>(orchestration layer)"]
+    subgraph offline["Offline: Preload Pipeline - scripts/"]
+        PS["Preload Script"]
+        FC["Firecrawl<br/>search + scrape + map"]
+        CL["Claude Haiku<br/>macro estimation"]
+        GP_off["Google Places API<br/>discovery"]
+        PG_off["PostgreSQL"]
+        PS -- discover --> GP_off
+        PS -- search and scrape menus --> FC
+        PS -- estimate macros --> CL
+        PS -- write --> PG_off
     end
 
-    subgraph "Service Layer (apps/api/services/)"
-        RS["RestaurantService"]
-        SS["ScrapingService"]
-        MS["MacroEstimationService"]
-        CS["ClaudeService"]
-    end
-
-    subgraph "External APIs"
-        GP["Google Places API"]
-        FC["Firecrawl (scrape + markdown)"]
-        CL["Claude API (Haiku)"]
-    end
-
-    subgraph "Data Layer"
+    subgraph online["Online: API Backend - apps/api/"]
+        Client["Mobile App<br/>React Native / Expo"]
+        API["API Routes"]
+        RS["RestaurantService<br/>query + filter"]
         Prisma["Prisma ORM"]
-        PG["PostgreSQL"]
+        PG_on["PostgreSQL<br/>preloaded data"]
+        Client --> API
+        API --> RS
+        RS --> Prisma
+        Prisma --> PG_on
     end
-
-    Client --> API
-    API -- "1. discover restaurants" --> RS
-    API -- "2. scrape menus" --> SS
-    API -- "3. estimate macros" --> MS
-
-    RS --> GP
-    SS --> FC
-    MS --> CS
-    CS --> CL
-
-    MS -- "cache read/write" --> Prisma
-    RS --> Prisma
-    Prisma --> PG
 ```
-- **Orchestration pattern**: API routes coordinate between services. Services never call each other — each receives data as input from the route. Independently testable.
-- **Three external dependencies**: Google Places (discovery), Firecrawl (scraping + markdown), Claude Haiku (macro estimation)
-- Deployment topology (to be determined)
+
+### 1.2 Preload Pipeline (Offline)
+
+Runs as a script (`scripts/`), not as a production service. Calls external APIs
+directly — no service wrappers needed. Writes results to the database.
+
+| Component | Purpose | Used at runtime? |
+|-----------|---------|-----------------|
+| Google Places API | Discover restaurants by location | No — preload only |
+| Firecrawl (search) | Find menu URLs on third-party sites | No — preload only |
+| Firecrawl (scrape/map) | Fetch menu page content as Markdown | No — preload only |
+| Claude Haiku | Estimate macros from menu text | No — preload only |
+
+**Pipeline flow (validated in scraping spike, see `docs/engineering/backend/scraping-spike.md`):**
+
+1. **firecrawl_search** — search "{name} {city} menu" with `scrapeOptions` → returns URLs + pre-scraped markdown from aggregators (Grubhub, Yelp, zmenu, etc.)
+2. **Claude Haiku** — extract menu items and estimate macros from markdown
+3. **Fallback: firecrawl_map** — if search fails and restaurant has a website, discover menu pages on the site
+4. **Fallback: firecrawl_scrape** — scrape the restaurant homepage directly
+5. **Fallback: screenshot + Claude Vision** — for image-based menus (BentoBox, etc.)
+6. **Skip + flag** — ~5-10% of restaurants have no extractable menu
+
+### 1.3 API Backend (Online)
+
+The Next.js backend is a **read-only query layer**. No external API calls at
+request time. No scraping, no LLM calls, no macro estimation.
+
+| Component | Purpose |
+|-----------|---------|
+| `RestaurantService` | Query restaurants by location, filter by macros/cuisine/chain |
+| Prisma ORM | Database access |
+| PostgreSQL | Preloaded restaurant + menu + macro data |
+
+**Service wrappers in `apps/api/services/`:**
+- `restaurant.ts` — query, filter, rank restaurants and menu items
+- No scraping service, no Claude service, no macro estimation service at runtime
+
+**Future (post-MVP):** On-demand ingredient breakdown may add a Claude service
+wrapper for Phase 2 estimation (when user taps a specific meal). This is not
+needed for MVP-0.
+
+### 1.4 External Dependencies Summary
+
+| Service | Used by | When |
+|---------|---------|------|
+| Google Places API | Preload script | Offline batch only |
+| Firecrawl API (search, scrape, map) | Preload script | Offline batch only |
+| Claude API (Haiku) | Preload script | Offline batch only |
+| Claude API (Haiku) | API backend | Post-MVP only (on-demand ingredient breakdown) |
+
+Deployment topology (to be determined)
 
 ---
 
@@ -239,17 +281,37 @@ The Next.js backend is API-only — no server-rendered pages. All endpoints serv
 - Macro results always include `{ confidence, hadPhoto, estimatedAt, ingredientBreakdown }`
 
 ### 3.3 Query and Filtering
-- Macro target matching: calorie range, protein min, carb max, fat max
-- Cuisine filter, chain vs. independent filter
-- Sort options: distance, macro match closeness, confidence tier
+
+**Distance filtering (hard cutoff):**
+- `radius` param: user-configurable max distance (1mi, 3mi, 5mi, 10mi). Default: 3mi.
+- PostGIS `ST_DWithin` query on restaurant `(lat, lng)` — only returns restaurants within the radius.
+- Distance is a **filter**, not a ranking signal.
+
+**Ranking (by macro match quality):**
+- Primary sort: **macro match score** — how closely a restaurant's best menu item matches the user's macro targets.
+- Match score calculation: for each menu item, compute distance from user targets across all specified macros (calories, protein, carbs, fat). Restaurant score = best item score.
+- A restaurant 2mi away with a perfect macro match ranks above one 0.5mi away with a poor match.
+- Tie-breaking: number of matching items (more options = better), then distance.
+
+**Additional filters:**
+- Cuisine type (multi-select)
+- Chain vs. independent
+- Confidence tier (optional: only show high-confidence estimates)
+
+**Match score formula (to be refined during implementation):**
+- Normalize each macro dimension by the user's target
+- Weighted Euclidean distance: `sqrt(w_cal * (cal_diff/target)^2 + w_p * (p_diff/target)^2 + ...)`
+- Only compute on dimensions the user specified (skip unset fields)
+- Lower score = better match
 
 ---
 
 ## 4. External Service Integration
 
 ### 4.1 Integration Principles
-- All external calls go through service wrappers in `apps/api/services/`
-- Each wrapper handles: auth, request formatting, response normalization, error mapping
+- **Preload script**: calls external APIs directly (no wrappers needed — it's a batch script, not a service)
+- **API backend**: no external API calls at runtime for MVP-0. All data served from DB.
+- **Post-MVP**: if on-demand estimation is added, Claude calls go through a service wrapper in `apps/api/services/`
 - No raw external API types leak into business logic
 
 ### 4.2 Google Places API (New)
@@ -258,19 +320,24 @@ The Next.js backend is API-only — no server-rendered pages. All endpoints serv
 - Cost: $0.032 per Nearby Search call (returns up to 20 results)
 - Response mapping to internal Restaurant model
 
-### 4.3 Firecrawl API
-- Purpose: scrape restaurant websites, handle JS rendering, return clean Markdown
-- Handles: JavaScript-rendered sites, anti-bot, proxies, CAPTCHA
-- Returns: clean Markdown (20-30% fewer tokens than raw HTML)
-- Cost: $0.00083/page (Standard plan, 100k credits/$83)
-- Also detects schema.org structured data (some sites embed `Menu` schemas)
+### 4.3 Firecrawl API (Preload Only)
+- Purpose: find and scrape restaurant menus for the preload pipeline
+- **Three endpoints used:**
+  - `POST /v1/search` — web search with `scrapeOptions` (search + scrape in one call). Primary discovery mechanism — finds menus on aggregators (Grubhub, Yelp, zmenu, allmenus) without needing to know the restaurant's website.
+  - `POST /v1/map` — discover all pages on a restaurant's website, filtered by "menu". Fallback when search doesn't find a third-party source.
+  - `POST /v1/scrape` — scrape a single URL for Markdown. Fallback for homepage scraping and screenshot capture.
+- Handles: JavaScript-rendered sites, anti-bot, proxies
+- Returns: clean Markdown (20-30% fewer tokens than raw HTML), or screenshots for image-based menus
+- Cost: ~$0.002/search, $0.00083/scrape, $0.00083/map
+- **Not used at runtime** — preload pipeline only
 
 ### 4.4 Claude API (Haiku 4.5)
-- Purpose: macro estimation — the core of the pipeline
-- **Phase 1 (batch)**: Macros-only per restaurant, compact JSON output
-- **Phase 2 (on-demand)**: Full ingredient breakdown for a single item
-- Cost: ~$0.0005/restaurant (batch), ~$0.001/item (breakdown)
+- Purpose: macro estimation from menu text
+- **Preload (MVP-0)**: Extract menu items and estimate macros from scraped Markdown. One Haiku call per restaurant. Returns structured JSON with item name, calories, protein, carbs, fat, confidence tier.
+- **On-demand (post-MVP)**: Full ingredient breakdown when user taps a specific meal. Requires a Claude service wrapper in `apps/api/services/`.
+- Cost: ~$0.001/restaurant (preload), ~$0.001/item (on-demand breakdown)
 - Latency: ~1.7s per call
+- **Not used at runtime for MVP-0** — all estimates precomputed and stored in DB
 - Prompt versioning strategy (prompts are a core asset — version and track changes)
 
 ### 4.5 Yelp Fusion API (Optional, post-MVP)
@@ -286,7 +353,7 @@ The Next.js backend is API-only — no server-rendered pages. All endpoints serv
 - **MacroTarget**: userId (FK), calories, proteinG, carbsG, fatG, goal type
 - **Restaurant**: id, externalPlaceId, name, address, lat, lng, cuisine tags, chain flag, source, created/updated
 - **MenuItem**: id, restaurantId (FK), name, description, photoUrl, category, price, created/updated
-- **MacroEstimate** (cache): id, menuItemId (FK), calories, proteinG, carbsG, fatG, confidence (medium/low), hadPhoto (bool), ingredientBreakdown (JSON), reasoning (text), estimatedAt, expiresAt
+- **MacroEstimate** (cache): id, menuItemId (FK), calories, proteinG, carbsG, fatG, confidence (high/medium/low), hadPhoto (bool), ingredientBreakdown (JSON), reasoning (text), estimatedAt, expiresAt
 - **SavedItem**: userId (FK), restaurantId or menuItemId (FK), type, created
 
 ### 5.2 Entity Relationship Diagram
@@ -385,10 +452,9 @@ erDiagram
 ## 6. Caching Strategy
 
 ### 6.1 Macro Cache Lifecycle
-- On first request for a menu item: run pipeline, persist MacroEstimate row
-- Subsequent requests: serve from cache if not stale
-- Staleness threshold: 14 days (LLM estimates may improve with model/prompt updates)
-- Re-estimation: **on-demand only** — when a stale record is accessed, re-estimate inline. No background jobs at MVP scale.
+- **MVP-0**: All macro estimates are preloaded. No estimation at runtime. Every request is a DB read.
+- **Post-MVP**: Staleness threshold of 14 days. Re-estimation on-demand when a stale record is accessed, or via periodic re-preload batch.
+- No background jobs at MVP scale.
 
 ### 6.2 Cache Invalidation
 - Explicit: admin or user flags an estimate as wrong
@@ -460,13 +526,14 @@ erDiagram
 - **Photo sourcing**: Google Places only. No user uploads.
 - **Pipeline approach**: Three-stage (discover → scrape → estimate). Single LLM call per restaurant for batch macros. Ingredient breakdown on-demand.
 - **Estimation model**: Claude Haiku 4.5. Tested: accurate within ±20% for common items, ~1.7s latency, ~$0.0005/restaurant. Gemini Flash-Lite tested but less reliable (outlier estimates).
-- **Scraping approach**: Firecrawl API for all page fetching. Handles JS rendering, anti-bot, returns clean Markdown. No self-hosted headless browsers at MVP.
-- **MVP geography**: Los Angeles only. Total preload cost: ~$72.
+- **Scraping approach**: Firecrawl search + map + scrape pipeline (validated in spike, see `docs/engineering/backend/scraping-spike.md`). Firecrawl search with `scrapeOptions` is the primary discovery mechanism — finds menus on aggregator sites. Map and homepage scrape as fallbacks. No self-hosted headless browsers.
+- **MVP geography**: Los Angeles only (90029 zip code for MVP-0). Preload cost: ~$0.25 for 50 restaurants.
 - **Place Details not needed**: `websiteUri` is available directly from Nearby Search, saving $0.017/restaurant.
-- **Two-phase estimation**: Macros-only for batch (cheap), ingredient breakdown on-demand (pay for ~5% of items).
+- **Two-phase estimation**: Macros-only for preload (cheap), ingredient breakdown on-demand post-MVP.
+- **No runtime external API calls**: MVP-0 is preload-only. The API backend is a read-only query layer.
+- **Menu extraction rate**: ~85-90% validated in spike (50 restaurants in 90029). Remaining ~10-15% are image-based menus or restaurants with no online presence.
 
 ## Open Questions
 
 - [ ] Neon vs. Supabase — both work, pick before first migration
 - [ ] Prompt structure: how many menu items can we batch per call while maintaining accuracy?
-- [ ] Menu extraction rate in practice — need to test against 100+ LA restaurants to validate >60% target
