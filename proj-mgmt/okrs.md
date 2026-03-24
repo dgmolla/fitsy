@@ -29,6 +29,7 @@ the context that makes every agent task better.
 | KR1 | Vision PRD, System Design, and Design Brief complete and approved | **Done** | Merged in PR #2 |
 | KR2 | Business Model and GTM Strategy drafted | Not started | Moved to Phase 3 — redo after MVP is built |
 | KR3 | CI/CD pipeline operational with structural tests | **Done** | Structural + security running; typecheck/test/build activate when code exists |
+| KR4 | CLAUDE.md fully populated with architecture and conventions | **Done** | Populated in PR #6 |
 
 ### O2: Validate the tiered macro estimation approach
 The pipeline is the core differentiator — nail the design before building.
