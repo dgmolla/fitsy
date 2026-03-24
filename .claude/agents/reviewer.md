@@ -11,7 +11,7 @@ Multiple agents may review the same PR if it crosses domains.
 
 | Path pattern | Reviewing agent |
 |---|---|
-| `apps/api/`, `prisma/`, `packages/shared/` | **backend** |
+| `apps/api/`, `prisma/`, `packages/shared/`, `packages/shared/src/` | **backend** |
 | `apps/mobile/` | **frontend** |
 | `docs/design/` | **designer** |
 | `docs/product/`, `proj-mgmt/okrs*` | **product-manager** |

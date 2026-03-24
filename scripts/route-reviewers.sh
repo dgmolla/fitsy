@@ -8,6 +8,8 @@
 set -euo pipefail
 
 CHANGED=$(cat)
+# Exclude auto-generated files — not domain code
+CHANGED=$(echo "$CHANGED" | grep -v 'package-lock\.json$')
 AGENTS=""
 
 # Root-level config files are CTO infrastructure
@@ -37,9 +39,10 @@ if echo "$CHANGED" | grep -qE '^apps/api/(app|lib|services)/'; then
   AGENTS="$AGENTS backend"
 fi
 
-# Shared package src is CTO infrastructure (contract between all packages)   -> cto
+# Shared package src — co-owned by backend and frontend; route to backend    -> backend
+# (frontend becomes co-owner once mobile source code exists)
 if echo "$CHANGED" | grep -qE '^packages/shared/src/'; then
-  AGENTS="$AGENTS cto"
+  AGENTS="$AGENTS backend"
 fi
 
 # Frontend: actual source code in mobile source directories                  -> frontend
