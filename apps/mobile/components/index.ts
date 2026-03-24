@@ -2,5 +2,6 @@
 // Screens import from '@/components', not from individual component files.
 
 export { ConfidenceBadge } from './ConfidenceBadge';
+export { MacroInputBar } from './MacroInputBar';
 export { MenuItem } from './MenuItem';
 export { RestaurantCard } from './RestaurantCard';

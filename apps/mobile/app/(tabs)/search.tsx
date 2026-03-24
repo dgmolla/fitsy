@@ -7,49 +7,24 @@ import {
   SafeAreaView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { router } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RestaurantResult } from '@fitsy/shared';
-import { RestaurantCard } from '@/components';
+import { MacroInputBar, RestaurantCard } from '@/components';
+import type { MacroValues } from '@/lib/macroPresets';
 import { fetchRestaurants } from '@/lib/apiClient';
 
-interface MacroInputs {
-  protein: string;
-  carbs: string;
-  fat: string;
-  calories: string;
-}
-
 const DEBOUNCE_MS = 600;
+const STORAGE_KEY = 'fitsy:macroTargets';
 
-function MacroField({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <View style={styles.macroField}>
-      <Text style={styles.macroLabel}>{label}</Text>
-      <TextInput
-        style={styles.macroInput}
-        value={value}
-        onChangeText={onChange}
-        keyboardType="numeric"
-        placeholder="—"
-        placeholderTextColor="#9CA3AF"
-        returnKeyType="done"
-        accessibilityLabel={`${label} in grams`}
-        maxLength={5}
-      />
-    </View>
-  );
-}
+const DEFAULT_INPUTS: MacroValues = {
+  protein: '',
+  carbs: '',
+  fat: '',
+  calories: '',
+};
 
 function EmptyState({ hasInputs }: { hasInputs: boolean }) {
   return (
@@ -64,15 +39,11 @@ function EmptyState({ hasInputs }: { hasInputs: boolean }) {
 }
 
 export default function SearchScreen() {
-  const [inputs, setInputs] = useState<MacroInputs>({
-    protein: '',
-    carbs: '',
-    fat: '',
-    calories: '',
-  });
+  const [inputs, setInputs] = useState<MacroValues>(DEFAULT_INPUTS);
   const [results, setResults] = useState<RestaurantResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasHydrated, setHasHydrated] = useState(false);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -82,7 +53,31 @@ export default function SearchScreen() {
     inputs.fat !== '' ||
     inputs.calories !== '';
 
-  const doFetch = useCallback(async (current: MacroInputs) => {
+  // Load persisted macro targets on mount
+  useEffect(() => {
+    AsyncStorage.getItem(STORAGE_KEY)
+      .then((raw) => {
+        if (raw) {
+          setInputs(JSON.parse(raw) as MacroValues);
+        }
+      })
+      .catch(() => {
+        // Ignore storage errors — use defaults
+      })
+      .finally(() => {
+        setHasHydrated(true);
+      });
+  }, []);
+
+  // Persist macro targets whenever they change (only after hydration)
+  useEffect(() => {
+    if (!hasHydrated) return;
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(inputs)).catch(() => {
+      // Ignore storage write errors
+    });
+  }, [inputs, hasHydrated]);
+
+  const doFetch = useCallback(async (current: MacroValues) => {
     setLoading(true);
     setError(null);
 
@@ -124,12 +119,16 @@ export default function SearchScreen() {
     };
   }, [inputs, doFetch]);
 
-  const setField = useCallback(
-    (field: keyof MacroInputs) => (value: string) => {
+  const handleChange = useCallback(
+    (field: keyof MacroValues, value: string) => {
       setInputs((prev) => ({ ...prev, [field]: value }));
     },
     []
   );
+
+  const handleChangeAll = useCallback((values: MacroValues) => {
+    setInputs(values);
+  }, []);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -137,29 +136,12 @@ export default function SearchScreen() {
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        {/* Macro target inputs */}
-        <View style={styles.inputBar}>
-          <MacroField
-            label="Protein (g)"
-            value={inputs.protein}
-            onChange={setField('protein')}
-          />
-          <MacroField
-            label="Carbs (g)"
-            value={inputs.carbs}
-            onChange={setField('carbs')}
-          />
-          <MacroField
-            label="Fat (g)"
-            value={inputs.fat}
-            onChange={setField('fat')}
-          />
-          <MacroField
-            label="Cals"
-            value={inputs.calories}
-            onChange={setField('calories')}
-          />
-        </View>
+        {/* Macro target inputs + presets */}
+        <MacroInputBar
+          values={inputs}
+          onChange={handleChange}
+          onChangeAll={handleChangeAll}
+        />
 
         {/* Location label */}
         <View style={styles.locationBar}>
@@ -211,40 +193,6 @@ const styles = StyleSheet.create({
   },
   flex: {
     flex: 1,
-  },
-  inputBar: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#D1D5DB',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 8,
-  },
-  macroField: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 4,
-  },
-  macroLabel: {
-    fontSize: 10,
-    color: '#6B7280',
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-    textAlign: 'center',
-  },
-  macroInput: {
-    width: '100%',
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 6,
-    fontSize: 14,
-    color: '#111827',
-    textAlign: 'center',
-    backgroundColor: '#F9FAFB',
   },
   locationBar: {
     paddingHorizontal: 16,
