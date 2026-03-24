@@ -12,7 +12,8 @@
     "build:api": "npm run build -w apps/api",
     "build": "npm run build -w apps/api",
     "start:api": "npm run start -w apps/api",
-    "test": "npm run test --workspaces --if-present"
+    "test": "npm run test --workspaces --if-present",
+    "test:coverage": "npm run test:coverage --workspaces --if-present"
   },
   "engines": {
     "node": ">=20"
