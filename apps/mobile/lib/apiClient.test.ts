@@ -1,8 +1,8 @@
 /**
  * @jest-environment node
  */
-import { fetchRestaurants } from './apiClient';
-import type { RestaurantsResponse } from '@fitsy/shared';
+import { fetchMenu, fetchRestaurants } from './apiClient';
+import type { MenuApiResponseBody, MenuResponse, RestaurantsResponse } from '@fitsy/shared';
 
 const BASE_URL = 'http://localhost:3000';
 
@@ -103,5 +103,89 @@ describe('fetchRestaurants', () => {
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe('r1');
     expect(result[0].name).toBe('Test Bistro');
+  });
+});
+
+const sampleMenuResponse: MenuResponse = {
+  restaurantId: 'r1',
+  restaurantName: 'Test Bistro',
+  menuItems: [
+    {
+      id: 'mi1',
+      name: 'Grilled Chicken',
+      category: 'Entrees',
+      price: 12.99,
+      macros: {
+        calories: 420,
+        proteinG: 45,
+        carbsG: 10,
+        fatG: 18,
+        confidence: 'HIGH',
+        hadPhoto: false,
+        estimatedAt: '2024-01-01T00:00:00Z',
+      },
+    },
+    {
+      id: 'mi2',
+      name: 'House Salad',
+      category: 'Starters',
+      macros: null,
+    },
+  ],
+};
+
+describe('fetchMenu', () => {
+  const originalFetch = global.fetch;
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    jest.resetAllMocks();
+  });
+
+  it('calls the correct URL', async () => {
+    const mockBody: MenuApiResponseBody = { data: sampleMenuResponse };
+    global.fetch = makeMockFetch({ ok: true, body: mockBody });
+
+    await fetchMenu('r1');
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    const calledUrl: string = (global.fetch as jest.Mock).mock.calls[0][0];
+    expect(calledUrl).toBe(`${BASE_URL}/api/restaurants/r1/menu`);
+  });
+
+  it('returns MenuResponse on success', async () => {
+    const mockBody: MenuApiResponseBody = { data: sampleMenuResponse };
+    global.fetch = makeMockFetch({ ok: true, body: mockBody });
+
+    const result = await fetchMenu('r1');
+
+    expect(result).not.toBeNull();
+    expect(result?.restaurantId).toBe('r1');
+    expect(result?.restaurantName).toBe('Test Bistro');
+    expect(result?.menuItems).toHaveLength(2);
+  });
+
+  it('returns null on API error response', async () => {
+    global.fetch = makeMockFetch({ ok: false, status: 404, body: { error: 'Not found' } });
+
+    const result = await fetchMenu('not-exist');
+
+    expect(result).toBeNull();
+  });
+
+  it('returns null when API returns error shape', async () => {
+    global.fetch = makeMockFetch({ ok: true, body: { error: 'Something went wrong' } });
+
+    const result = await fetchMenu('r1');
+
+    expect(result).toBeNull();
+  });
+
+  it('returns null on network error', async () => {
+    global.fetch = jest.fn().mockRejectedValue(new Error('Network failure'));
+
+    const result = await fetchMenu('r1');
+
+    expect(result).toBeNull();
   });
 });
