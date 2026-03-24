@@ -4,20 +4,19 @@ kanban-plugin: basic
 
 ## Backlog
 
-- [ ] **S-16** Scaffold mobile app: Expo Router, bottom tab nav, Search screen shell #frontend #O1 #wave-3 ^dep-S-10b ^dep-S-11
+- [ ] **S-11** Implement preload script — run against 90029 zip, persist to DB #cto #O1 #wave-2 ^dep-S-10
+- [ ] **S-12** Implement `GET /api/restaurants` endpoint — query + macro filter + rank #cto #O1 #wave-2 ^dep-S-10
+- [ ] **S-13** Implement `GET /api/restaurants/[id]/menu` endpoint — menu items with cached macros #cto #O1 #wave-2 ^dep-S-10
+- [ ] **S-14** Write unit tests: macro match scoring + confidence rounding #cto #O1 #wave-2 ^dep-S-10
+- [ ] **S-16** Scaffold mobile app: Expo Router, bottom tab nav, Search screen shell #frontend #O1 #wave-3 ^dep-S-11
 
 ## In Progress
 
-- [ ] **S-11** Implement preload script — run against 90029 zip, persist to DB #cto #O1 #wave-2 ^dep-S-10a
-- [ ] **S-12** Implement `GET /api/restaurants` endpoint — query + macro filter + rank #backend #O1 #wave-2 ^dep-S-10a
-- [ ] **S-13** Implement `GET /api/restaurants/[id]/menu` endpoint — menu items with cached macros #backend #O1 #wave-2 ^dep-S-10a
-- [ ] **S-14** Write unit tests: macro match scoring + confidence rounding #backend #O1 #wave-2 ^dep-S-10a
+- [ ] **S-10** Monorepo scaffolding — root package.json, workspaces, Prisma schema, first migration #cto #O1 #wave-1
 
 ## Done
 
 - [x] **S-15** Auto-route PRs to domain-specific agent reviewers #cto #harness #wave-1 @completed(2026-03-23)
-- [x] **S-10a** CTO monorepo scaffold — root workspaces, Prisma schema, first migration, API scaffold #cto #O1 #wave-1 @completed(2026-03-24)
-- [x] **S-10b** Mobile workspace scaffold — apps/mobile package.json, tsconfig, Expo config #frontend #O1 #wave-1 @completed(2026-03-24)
 
 ## Sprint Review
 
