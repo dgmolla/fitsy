@@ -23,6 +23,20 @@ const config = {
     ],
   },
   testMatch: ["**/*.test.ts", "**/*.test.tsx"],
+  collectCoverageFrom: [
+    "lib/**/*.ts",
+    "!lib/**/*.test.ts",
+    "!lib/**/.gitkeep",
+  ],
+  coverageThreshold: {
+    global: {
+      lines: 80,
+      functions: 80,
+      branches: 70,
+      statements: 80,
+    },
+  },
+  coverageReporters: ["text", "lcov"],
 };
 
 module.exports = config;
