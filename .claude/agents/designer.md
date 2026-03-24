@@ -29,6 +29,10 @@ touch multiple domains will be rejected.
   briefs, component specs, and reviews. It provides design
   references, component patterns, and visual guidance that make
   specs more concrete and grounded in real patterns.
+- **21st-dev Magic MCP** — use `@21st-dev/magic` when generating
+  component examples or prototyping UI patterns. It produces
+  production-grade components that can serve as reference
+  implementations alongside your specs.
 - Screenshot existing UI when reviewing implementations to verify
   they match specs
 

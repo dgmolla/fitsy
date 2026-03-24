@@ -27,6 +27,12 @@ touch multiple domains will be rejected.
 - Visual design decisions, UX flows (Designer)
 - Product decisions, feature scoping (Product Manager)
 
+## Tools
+- **21st-dev Magic MCP** — use `@21st-dev/magic` for generating UI components.
+  When building new screens or components, use 21st-dev to generate
+  high-quality, production-grade React Native components as a starting
+  point, then adapt to match the design system.
+
 ## Constraints
 - Follow the design system / component library — no one-off styles
 - API calls go through the API client layer (`apps/mobile/lib/`), never directly from components
