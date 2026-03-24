@@ -104,10 +104,8 @@ jobs:
           PR_BODY=$(gh pr view "$PR_NUM" --json body --jq '.body')
           CI_STATUS=$(gh pr checks "$PR_NUM" 2>&1 || true)
 
-          REVIEW=$(claude -p \
-            --model sonnet \
-            --allowedTools "Read,Glob,Grep,Bash(gh pr diff *),Bash(git log *),Bash(git diff *)" \
-            "You are the **${AGENT}** agent reviewing PR #${PR_NUM}.
+          cat <<PROMPT > /tmp/review_prompt.txt
+          You are the **${AGENT}** agent reviewing PR #${PR_NUM}.
 
           Read your role definition from .claude/agents/${AGENT}.md
           Read the review guidelines from .claude/agents/reviewer.md
@@ -128,7 +126,12 @@ jobs:
           End your review with EXACTLY one of:
           VERDICT: APPROVE
           VERDICT: CHANGES REQUESTED
-          VERDICT: BLOCK")
+          VERDICT: BLOCK
+          PROMPT
+
+          REVIEW=$(cat /tmp/review_prompt.txt | claude -p \
+            --model sonnet \
+            --allowedTools "Read,Glob,Grep,Bash(gh pr diff *),Bash(git log *),Bash(git diff *)")
 
           echo "$REVIEW" > /tmp/review.txt
 

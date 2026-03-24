@@ -73,7 +73,8 @@ jobs:
 
             # Build the prompt — first attempt gets review feedback, retries get gate errors
             if [ "$attempt" -eq 1 ]; then
-              PROMPT="You are the **${AGENT}** agent fixing review feedback on this PR.
+              cat <<PROMPT > /tmp/fix_prompt.txt
+          You are the **${AGENT}** agent fixing review feedback on this PR.
 
           ${AGENT_CONTEXT}
           Read CLAUDE.md for project context and conventions.
@@ -87,9 +88,11 @@ jobs:
           2. Read the relevant source files to understand full context before editing
           3. Make the fixes using the Edit tool
           4. Do NOT refactor, improve, or change anything beyond what the review requested
-          5. Do NOT add comments, docstrings, or type annotations unless the review asked for them"
+          5. Do NOT add comments, docstrings, or type annotations unless the review asked for them
+          PROMPT
             else
-              PROMPT="You are the **${AGENT}** agent. Your previous fix attempt failed the pre-PR gates.
+              cat <<PROMPT > /tmp/fix_prompt.txt
+          You are the **${AGENT}** agent. Your previous fix attempt failed the pre-PR gates.
 
           ${AGENT_CONTEXT}
           Read CLAUDE.md for project context and conventions.
@@ -103,13 +106,13 @@ jobs:
           ${GATE_ERRORS}
 
           Fix these errors. Read the failing files, understand the issue, and correct it.
-          Do NOT revert your previous fixes — build on them."
+          Do NOT revert your previous fixes — build on them.
+          PROMPT
             fi
 
-            claude -p \
+            cat /tmp/fix_prompt.txt | claude -p \
               --model sonnet \
-              --allowedTools "Read,Glob,Grep,Edit,Write,Bash(npx tsc *),Bash(npm test *),Bash(npm run build *),Bash(bash scripts/structural-tests.sh),Bash(git diff *)" \
-              "$PROMPT"
+              --allowedTools "Read,Glob,Grep,Edit,Write,Bash(npx tsc *),Bash(npm test *),Bash(npm run build *),Bash(bash scripts/structural-tests.sh),Bash(git diff *)"
 
             # Run pre-PR gates
             echo "=== Running pre-PR gates ==="
