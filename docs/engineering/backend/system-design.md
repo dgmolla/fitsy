@@ -353,7 +353,7 @@ The Next.js backend is API-only — no server-rendered pages. All endpoints serv
 - **MacroTarget**: userId (FK), calories, proteinG, carbsG, fatG, goal type
 - **Restaurant**: id, externalPlaceId, name, address, lat, lng, cuisine tags, chain flag, source, created/updated
 - **MenuItem**: id, restaurantId (FK), name, description, photoUrl, category, price, created/updated
-- **MacroEstimate** (cache): id, menuItemId (FK), calories, proteinG, carbsG, fatG, confidence (medium/low), hadPhoto (bool), ingredientBreakdown (JSON), reasoning (text), estimatedAt, expiresAt
+- **MacroEstimate** (cache): id, menuItemId (FK), calories, proteinG, carbsG, fatG, confidence (high/medium/low), hadPhoto (bool), ingredientBreakdown (JSON), reasoning (text), estimatedAt, expiresAt
 - **SavedItem**: userId (FK), restaurantId or menuItemId (FK), type, created
 
 ### 5.2 Entity Relationship Diagram

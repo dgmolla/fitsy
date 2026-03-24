@@ -114,7 +114,7 @@ Step 4: SKIP + flag for manual review
 | 50 (test) | 50 | ~$0.25 |
 | 500 (LA MVP) | 500 | ~$2.50 |
 | 5,000 (Full LA) | 5,000 | ~$25 |
-| 50,000 (USA) | 50,000 | ~$240 |
+| 50,000 (USA subset) | 50,000 | ~$240 |
 
 ### Expected Hit Rate
 - Step 1 (search): ~70-80%
@@ -173,24 +173,12 @@ cheaper, and more predictable.
 
 ## Infrastructure & Keys
 
-### API Keys (macOS Keychain, scoped to `fitsy`)
-```bash
-security find-generic-password -a "fitsy" -s "fitsy/anthropic-api-key" -w
-security find-generic-password -a "fitsy" -s "fitsy/google-places-api-key" -w
-security find-generic-password -a "fitsy" -s "fitsy/firecrawl-api-key" -w
-security find-generic-password -a "fitsy" -s "fitsy/google-cse-id" -w
-```
-
-Exported in `~/.zshrc` on shell startup. Keys should be rotated — they were
-shared in plain text during the session.
+API keys are stored in macOS Keychain (scoped to `fitsy`) and
+exported via `~/.zshrc`. See `.env.example` for required variables.
 
 ### Google CSE
-- CSE ID: `9511c17065b084c64`
-- Sites configured: allmenus.com, menupix.com, zmenu.com, sirved.com,
-  opentable.com, goto-where.com
 - **Status: BLOCKED** — Custom Search JSON API permissions never propagated.
-  May need a fresh GCP project. Low priority since v3 pipeline uses
-  Firecrawl search instead.
+  Low priority since v3 pipeline uses Firecrawl search instead.
 
 ### Test Scripts
 All in `scripts/discovery-test/`:
