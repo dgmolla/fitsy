@@ -32,8 +32,9 @@ jobs:
           CHANGED=$(gh pr diff ${{ github.event.pull_request.number }} --name-only 2>/dev/null \
             || git diff --name-only origin/main...HEAD)
 
-          # Exclude .gitkeep files — they are directory scaffolding, not domain code
-          CHANGED=$(echo "$CHANGED" | grep -v '\.gitkeep$')
+          # Exclude auto-generated and scaffolding files — not domain code
+          CHANGED=$(echo "$CHANGED" | grep -v 'package-lock.json$')
+          CHANGED=$(echo "$CHANGED" | grep -v '.gitkeep$')
 
           AGENTS=""
 
@@ -57,9 +58,10 @@ jobs:
           if echo "$CHANGED" | grep -qE '^apps/api/(app|lib|services)/'; then
             AGENTS="$AGENTS backend"
           fi
-          # Shared package src is CTO infrastructure (contract between all packages)
+          # Shared package src — co-owned by backend and frontend; route to backend
+          # (frontend will become a co-owner once mobile source code exists)
           if echo "$CHANGED" | grep -qE '^packages/shared/src/'; then
-            AGENTS="$AGENTS cto"
+            AGENTS="$AGENTS backend"
           fi
           # Frontend: actual source code in mobile source directories
           if echo "$CHANGED" | grep -qE '^apps/mobile/(app|components|lib)/'; then
