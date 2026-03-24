@@ -1,0 +1,118 @@
+// This is your Prisma schema file.
+// Learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         String       @id @default(cuid())
+  email      String       @unique
+  name       String?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  macroTarget MacroTarget?
+  savedItems SavedItem[]
+}
+
+model MacroTarget {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  calories  Int
+  proteinG  Float
+  carbsG    Float
+  fatG      Float
+  goalType  GoalType @default(maintain)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Restaurant {
+  id              String      @id @default(cuid())
+  externalPlaceId String      @unique
+  name            String
+  address         String
+  lat             Float
+  lng             Float
+  cuisineTags     String[]
+  chainFlag       Boolean     @default(false)
+  source          String
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  menuItems       MenuItem[]
+  savedItems      SavedItem[]
+
+  @@index([externalPlaceId])
+}
+
+model MenuItem {
+  id             String          @id @default(cuid())
+  restaurantId   String
+  name           String
+  description    String?
+  photoUrl       String?
+  category       String?
+  price          Float?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  restaurant     Restaurant      @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  macroEstimates MacroEstimate[]
+  savedItems     SavedItem[]
+
+  @@index([restaurantId])
+}
+
+model MacroEstimate {
+  id                   String          @id @default(cuid())
+  menuItemId           String
+  calories             Int
+  proteinG             Float
+  carbsG               Float
+  fatG                 Float
+  confidence           ConfidenceLevel
+  hadPhoto             Boolean         @default(false)
+  ingredientBreakdown  Json?
+  reasoning            String?
+  estimatedAt          DateTime        @default(now())
+  expiresAt            DateTime?
+  menuItem             MenuItem        @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+
+  @@index([menuItemId])
+  @@index([expiresAt])
+}
+
+model SavedItem {
+  id           String     @id @default(cuid())
+  userId       String
+  restaurantId String?
+  menuItemId   String?
+  itemType     SavedItemType
+  createdAt    DateTime   @default(now())
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  restaurant   Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: SetNull)
+  menuItem     MenuItem?   @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+}
+
+enum GoalType {
+  cut
+  bulk
+  maintain
+  custom
+}
+
+enum ConfidenceLevel {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum SavedItemType {
+  restaurant
+  menu_item
+}
