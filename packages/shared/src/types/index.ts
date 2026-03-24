@@ -114,3 +114,74 @@ export interface RestaurantWithBestItem extends Restaurant {
   bestItem?: MenuItem;
   matchingItemCount: number;
 }
+
+// ─── API Response Types (S-12 / S-13) ─────────────────────────────────────────
+
+export interface BestMatchSummary {
+  menuItemId: string;
+  name: string;
+  calories: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+  confidence: ConfidenceLevel;
+  matchScore: number;
+}
+
+/** Shape of a single restaurant row in GET /api/restaurants */
+export interface RestaurantResult {
+  id: string;
+  name: string;
+  address: string;
+  lat: number;
+  lng: number;
+  distanceMiles: number;
+  cuisineTags: string[];
+  chainFlag: boolean;
+  bestMatch: BestMatchSummary | null;
+}
+
+export interface RestaurantsMeta {
+  total: number;
+  limit: number;
+}
+
+export interface RestaurantsResponse {
+  data: RestaurantResult[];
+  meta: RestaurantsMeta;
+}
+
+export type RestaurantsApiResponse = RestaurantsResponse | ApiError;
+
+/** Macro summary embedded in menu item response */
+export interface MenuItemMacros {
+  calories: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+  confidence: ConfidenceLevel;
+  hadPhoto: boolean;
+  estimatedAt: string;
+}
+
+/** Shape of a single item in GET /api/restaurants/[id]/menu */
+export interface MenuItemResult {
+  id: string;
+  name: string;
+  description?: string;
+  category?: string;
+  price?: number;
+  macros: MenuItemMacros | null;
+}
+
+export interface MenuResponse {
+  restaurantId: string;
+  restaurantName: string;
+  menuItems: MenuItemResult[];
+}
+
+export interface MenuApiResponseBody {
+  data: MenuResponse;
+}
+
+export type MenuApiResponse = MenuApiResponseBody | ApiError;
