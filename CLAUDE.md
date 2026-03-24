@@ -177,7 +177,7 @@ git diff --cached --name-only | grep -E '\.(js|js\.map)$' # should be empty
 
 | Knob | Value |
 |------|-------|
-| human-review-gate | specs-only |
+| human-review-gate | cruise |
 | spec-requirement | always |
 | auto-merge | on-approval |
 | active-roles | all |
