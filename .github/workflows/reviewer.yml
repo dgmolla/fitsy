@@ -45,9 +45,13 @@ jobs:
           if echo "$CHANGED" | grep -qE '^prisma/'; then
             AGENTS="$AGENTS cto"
           fi
-          # Per-package config files (package.json, tsconfig, build configs) are CTO infrastructure
-          if echo "$CHANGED" | grep -qE '^(apps/api|apps/mobile|packages/shared)/(package\.json|tsconfig\.json|next\.config\..*)$'; then
+          # Per-package config files for API and shared workspace packages are CTO infrastructure
+          if echo "$CHANGED" | grep -qE '^(apps/api|packages/shared)/(package\.json|tsconfig\.json|next\.config\..*)$'; then
             AGENTS="$AGENTS cto"
+          fi
+          # Mobile app config files (package.json, tsconfig.json, app.config.ts) are frontend
+          if echo "$CHANGED" | grep -qE '^apps/mobile/(package\.json|tsconfig\.json|app\.config\..*)$'; then
+            AGENTS="$AGENTS frontend"
           fi
           # Backend: actual source code in api source directories
           if echo "$CHANGED" | grep -qE '^apps/api/(app|lib|services)/'; then

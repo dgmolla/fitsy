@@ -20,10 +20,16 @@ if echo "$CHANGED" | grep -qE '^prisma/'; then
   AGENTS="$AGENTS cto"
 fi
 
-# Per-package config files (package.json, tsconfig, build configs) are CTO infrastructure
+# Per-package config files for API and shared workspace packages → CTO infrastructure
 # BEGIN ROUTING TABLE
-if echo "$CHANGED" | grep -qE '^(apps/api|apps/mobile|packages/shared)/(package\.json|tsconfig\.json|next\.config\..*)$'; then
+if echo "$CHANGED" | grep -qE '^(apps/api|packages/shared)/(package\.json|tsconfig\.json|next\.config\..*)$'; then
   AGENTS="$AGENTS cto"
+fi
+
+# Mobile app config files (package.json, tsconfig.json, app.config.ts) → frontend
+# app.config.ts is Expo-specific and owned by the frontend team
+if echo "$CHANGED" | grep -qE '^apps/mobile/(package\.json|tsconfig\.json|app\.config\..*)$'; then
+  AGENTS="$AGENTS frontend"
 fi
 
 # Backend: actual source code in api source directories                      -> backend
