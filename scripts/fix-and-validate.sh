@@ -77,8 +77,8 @@ STRUCTURAL TESTS FAILED:
 $(cat /tmp/gate_output.txt)"
   fi
 
-  # Skip code gates if project isn't scaffolded yet (no package-lock.json)
-  if [ -f package-lock.json ]; then
+  # Skip code gates if project isn't scaffolded yet (no package.json)
+  if [ -f package.json ]; then
     echo "--- Type check ---"
     if ! npx tsc --noEmit > /tmp/gate_output.txt 2>&1; then
       GATES_PASSED=false
@@ -114,7 +114,7 @@ $(cat /tmp/gate_output.txt)"
 BUILD OUTPUT DETECTED IN WORKING TREE — remove compiled .js/.js.map files"
     fi
   else
-    echo "--- Skipping tsc/test/build gates (no package-lock.json) ---"
+    echo "--- Skipping tsc/test/build gates (no package.json) ---"
   fi
 }
 

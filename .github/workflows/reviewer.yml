@@ -130,10 +130,6 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install dependencies
-        if: steps.review.outputs.decision == 'changes_requested'
-        run: npm install --ignore-scripts || true
-
       - name: Save review as fix input
         if: steps.review.outputs.decision == 'changes_requested'
         run: cp /tmp/review.txt /tmp/review_comments.txt
