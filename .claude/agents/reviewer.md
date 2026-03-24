@@ -19,9 +19,9 @@ Multiple agents may review the same PR if it crosses domains.
 | `.github/`, `.claude/`, `scripts/`, `CLAUDE.md`, `docs/engineering/adrs/`, `docs/engineering/devops/` | **cto** |
 | No match / fallback | **cto** |
 
-This routing is enforced in `.github/workflows/reviewer.yml`. When
-adding new top-level directories or agents, update both the workflow
-and this table.
+**Source of truth**: `scripts/route-reviewers.sh`. The workflow calls
+this script. A structural test (test 11) verifies this table stays in
+sync. When adding agents or paths, update both files.
 
 ## How to Review
 

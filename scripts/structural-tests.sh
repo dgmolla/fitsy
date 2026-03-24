@@ -184,6 +184,29 @@ else
   echo "PASS"
 fi
 
+echo -n "11. Reviewer routing table matches route-reviewers.sh... "
+ROUTE_SCRIPT="$REPO_ROOT/scripts/route-reviewers.sh"
+REVIEWER_MD="$REPO_ROOT/.claude/agents/reviewer.md"
+if [ -f "$ROUTE_SCRIPT" ] && [ -f "$REVIEWER_MD" ]; then
+  # Extract agents from script (comment lines between markers: "-> agent")
+  SCRIPT_AGENTS=$(sed -n '/BEGIN ROUTING TABLE/,/END ROUTING TABLE/p' "$ROUTE_SCRIPT" \
+    | sed -n 's/.*-> \([a-z-]*\)/\1/p' | sort -u | tr '\n' ' ' | xargs)
+  # Extract agents from reviewer.md table (bold agent names between **)
+  MD_AGENTS=$(sed -n 's/.*\*\*\([a-z-]*\)\*\*.*/\1/p' "$REVIEWER_MD" \
+    | sort -u | tr '\n' ' ' | xargs)
+  if [ "$SCRIPT_AGENTS" != "$MD_AGENTS" ]; then
+    echo "FAIL"
+    echo "  route-reviewers.sh agents: $SCRIPT_AGENTS"
+    echo "  reviewer.md agents:        $MD_AGENTS"
+    echo "  Update both when adding/removing agents."
+    ERRORS=$((ERRORS + 1))
+  else
+    echo "PASS"
+  fi
+else
+  echo "SKIP (files not found)"
+fi
+
 echo ""
 echo "=== Results ==="
 if [ $ERRORS -gt 0 ]; then

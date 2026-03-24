@@ -24,52 +24,14 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
 
-      - name: Determine reviewing agents from changed files
+      - name: Determine reviewing agents
         id: route
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          CHANGED=$(gh pr diff ${{ github.event.pull_request.number }} --name-only 2>/dev/null || git diff --name-only origin/main...HEAD)
-
-          AGENTS=""
-
-          # Backend: API code, database, shared packages
-          if echo "$CHANGED" | grep -qE '^(apps/api/|prisma/|packages/shared/)'; then
-            AGENTS="$AGENTS backend"
-          fi
-
-          # Frontend: mobile app
-          if echo "$CHANGED" | grep -qE '^apps/mobile/'; then
-            AGENTS="$AGENTS frontend"
-          fi
-
-          # Designer: design docs, component specs
-          if echo "$CHANGED" | grep -qE '^docs/design/'; then
-            AGENTS="$AGENTS designer"
-          fi
-
-          # Product Manager: product docs, specs, OKRs
-          if echo "$CHANGED" | grep -qE '^(docs/product/|proj-mgmt/okrs)'; then
-            AGENTS="$AGENTS product-manager"
-          fi
-
-          # GTM: go-to-market docs
-          if echo "$CHANGED" | grep -qE '^docs/gtm/'; then
-            AGENTS="$AGENTS gtm"
-          fi
-
-          # CTO: infra, CI, harness, agent defs, architecture
-          if echo "$CHANGED" | grep -qE '^(\.github/|\.claude/|scripts/|CLAUDE\.md|docs/engineering/(adrs|devops)/)'; then
-            AGENTS="$AGENTS cto"
-          fi
-
-          # Fallback: if no specific agent matched, CTO reviews
-          if [ -z "$AGENTS" ]; then
-            AGENTS="cto"
-          fi
-
-          # Deduplicate, remove empty strings, format as JSON array
-          AGENTS_JSON=$(echo "$AGENTS" | tr ' ' '\n' | sed '/^$/d' | sort -u | jq -R . | jq -sc .)
+          CHANGED=$(gh pr diff ${{ github.event.pull_request.number }} --name-only 2>/dev/null \
+            || git diff --name-only origin/main...HEAD)
+          AGENTS_JSON=$(echo "$CHANGED" | bash scripts/route-reviewers.sh)
           echo "agents=$AGENTS_JSON" >> $GITHUB_OUTPUT
           echo "Routed to: $AGENTS_JSON"
 
@@ -81,9 +43,6 @@ jobs:
       matrix:
         agent: ${{ fromJson(needs.route.outputs.agents) }}
       fail-fast: false
-    outputs:
-      # Each matrix job writes its decision; we collect them in the fix job
-      decision: ${{ steps.post.outputs.decision }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -102,7 +61,6 @@ jobs:
           PR_NUM=${{ github.event.pull_request.number }}
           AGENT="${{ matrix.agent }}"
 
-          # Get PR metadata
           PR_TITLE=$(gh pr view "$PR_NUM" --json title --jq '.title')
           PR_BODY=$(gh pr view "$PR_NUM" --json body --jq '.body')
           CI_STATUS=$(gh pr checks "$PR_NUM" 2>&1 || true)
@@ -164,7 +122,6 @@ jobs:
             fi
           else
             gh pr review ${{ github.event.pull_request.number }} --comment --body-file /tmp/review_body.md
-            # Fail the job so merge blocks and fix job knows changes were requested
             exit 1
           fi
 
@@ -172,7 +129,6 @@ jobs:
     name: Auto-fix Review Comments
     runs-on: ubuntu-latest
     needs: [route, review]
-    # Always run after reviews to check if fixes are needed
     if: ${{ always() && needs.route.result == 'success' }}
     steps:
       - uses: actions/checkout@v4
@@ -185,10 +141,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Collect all review comments with CHANGES REQUESTED from this run
           REVIEWS=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews \
             --jq '[.[] | select(.user.login == "github-actions[bot]" and (.body | contains("VERDICT: CHANGES REQUESTED")))] | length')
-
           if [ "$REVIEWS" -eq 0 ]; then
             echo "No changes requested — skipping fix"
             echo "needed=false" >> $GITHUB_OUTPUT
@@ -205,7 +159,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.check.outputs.needed == 'true'
-        run: npm install --ignore-scripts || true
+        run: npm install --ignore-scripts
 
       - name: Install Claude Code
         if: steps.check.outputs.needed == 'true'
@@ -217,178 +171,31 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_NUM=${{ github.event.pull_request.number }}
-
-          # Get all CHANGES REQUESTED reviews from bot
           gh api repos/${{ github.repository }}/pulls/${PR_NUM}/reviews \
             --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | contains("VERDICT: CHANGES REQUESTED"))) | .body' \
             > /tmp/review_comments.txt
 
-          # Get which agents requested changes
           REQUESTING_AGENTS=$(gh api repos/${{ github.repository }}/pulls/${PR_NUM}/reviews \
             --jq '[.[] | select(.user.login == "github-actions[bot]" and (.body | contains("VERDICT: CHANGES REQUESTED"))) | .body | capture("## (?<agent>\\S+) Review") | .agent] | join(", ")')
-
           gh pr comment "$PR_NUM" --body "**harness-bot**: Starting auto-fix for feedback from **${REQUESTING_AGENTS}**..."
 
-      - name: Fix and validate loop
+      - name: Fix and validate
         if: steps.check.outputs.needed == 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          REVIEW_COMMENTS=$(cat /tmp/review_comments.txt)
-          MAX_ATTEMPTS=10
-          STUCK_THRESHOLD=3
-          PR_NUM=${{ github.event.pull_request.number }}
-
-          GATE_ERRORS=""
-          PREV_ERROR_HASH=""
-          SAME_ERROR_COUNT=0
-
-          for attempt in $(seq 1 $MAX_ATTEMPTS); do
-            echo "=== Attempt $attempt of $MAX_ATTEMPTS ==="
-
-            # Build the prompt — first attempt gets review feedback, retries get gate errors
-            if [ "$attempt" -eq 1 ]; then
-              cat <<PROMPT > /tmp/fix_prompt.txt
-          You are fixing review feedback on this PR. Multiple reviewers may have flagged issues.
-
-          Read CLAUDE.md for project context and conventions.
-          Read .claude/agents/reviewer.md for review standards.
-
-          Here is ALL the review feedback you must address:
-
-          ${REVIEW_COMMENTS}
-
-          Instructions:
-          1. Read the review feedback carefully — only fix issues that were flagged
-          2. Read the relevant source files to understand full context before editing
-          3. Make the fixes using the Edit tool
-          4. Do NOT refactor, improve, or change anything beyond what the reviews requested
-          5. Do NOT add comments, docstrings, or type annotations unless a review asked for them
-          PROMPT
-            else
-              cat <<PROMPT > /tmp/fix_prompt.txt
-          Your previous fix attempt failed the pre-PR gates.
-
-          Read CLAUDE.md for project context and conventions.
-
-          Here is the original review feedback:
-
-          ${REVIEW_COMMENTS}
-
-          Here are the gate errors from your last attempt:
-
-          ${GATE_ERRORS}
-
-          Fix these errors. Read the failing files, understand the issue, and correct it.
-          Do NOT revert your previous fixes — build on them.
-          PROMPT
-            fi
-
-            cat /tmp/fix_prompt.txt | claude -p \
-              --model sonnet \
-              --allowedTools "Read,Glob,Grep,Edit,Write,Bash(npx tsc *),Bash(npm test *),Bash(npm run build *),Bash(bash scripts/structural-tests.sh),Bash(git diff *)"
-
-            # Run pre-PR gates
-            echo "=== Running pre-PR gates ==="
-            GATE_ERRORS=""
-            GATES_PASSED=true
-
-            echo "--- Structural tests ---"
-            if ! bash scripts/structural-tests.sh > /tmp/gate_output.txt 2>&1; then
-              GATES_PASSED=false
-              GATE_ERRORS="${GATE_ERRORS}
-
-          STRUCTURAL TESTS FAILED:
-          $(cat /tmp/gate_output.txt)"
-            fi
-
-            echo "--- Type check ---"
-            if ! npx tsc --noEmit > /tmp/gate_output.txt 2>&1; then
-              GATES_PASSED=false
-              GATE_ERRORS="${GATE_ERRORS}
-
-          TYPE CHECK FAILED:
-          $(cat /tmp/gate_output.txt)"
-            fi
-
-            echo "--- Tests ---"
-            if ! npm test > /tmp/gate_output.txt 2>&1; then
-              GATES_PASSED=false
-              GATE_ERRORS="${GATE_ERRORS}
-
-          TESTS FAILED:
-          $(cat /tmp/gate_output.txt)"
-            fi
-
-            echo "--- Build ---"
-            if ! npm run build > /tmp/gate_output.txt 2>&1; then
-              GATES_PASSED=false
-              GATE_ERRORS="${GATE_ERRORS}
-
-          BUILD FAILED:
-          $(cat /tmp/gate_output.txt)"
-            fi
-
-            echo "--- No build output ---"
-            if git diff --name-only | grep -qE '\.(js|js\.map)$'; then
-              GATES_PASSED=false
-              GATE_ERRORS="${GATE_ERRORS}
-
-          BUILD OUTPUT DETECTED IN WORKING TREE — remove compiled .js/.js.map files"
-            fi
-
-            if [ "$GATES_PASSED" = "true" ]; then
-              echo "All gates passed on attempt $attempt"
-              break
-            fi
-
-            echo "Gates failed on attempt $attempt"
-            if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
-              gh pr comment "$PR_NUM" --body "**harness-bot**: Fix attempt ${attempt} failed gates — retrying (attempt $((attempt + 1))/${MAX_ATTEMPTS})..."
-            fi
-
-            # Detect if we're stuck on the same error
-            CURRENT_ERROR_HASH=$(echo "$GATE_ERRORS" | md5sum | cut -d' ' -f1)
-            if [ "$CURRENT_ERROR_HASH" = "$PREV_ERROR_HASH" ]; then
-              SAME_ERROR_COUNT=$((SAME_ERROR_COUNT + 1))
-            else
-              SAME_ERROR_COUNT=1
-              PREV_ERROR_HASH="$CURRENT_ERROR_HASH"
-            fi
-
-            if [ "$SAME_ERROR_COUNT" -ge "$STUCK_THRESHOLD" ]; then
-              echo "ERROR: Same error $STUCK_THRESHOLD times in a row — stuck"
-              gh pr comment "$PR_NUM" --body "**harness-bot**: Auto-fix is stuck — same gate error ${STUCK_THRESHOLD}x in a row after ${attempt} attempts.
-
-          \`\`\`
-          ${GATE_ERRORS}
-          \`\`\`
-
-          Manual intervention needed."
-              exit 1
-            fi
-
-            if [ "$attempt" -eq "$MAX_ATTEMPTS" ]; then
-              echo "ERROR: Failed after $MAX_ATTEMPTS attempts"
-              gh pr comment "$PR_NUM" --body "**harness-bot**: Auto-fix failed after ${MAX_ATTEMPTS} attempts. Gate errors on final attempt:
-
-          \`\`\`
-          ${GATE_ERRORS}
-          \`\`\`
-
-          Manual intervention needed."
-              exit 1
-            fi
-          done
+          PR_NUM: ${{ github.event.pull_request.number }}
+        run: bash scripts/fix-and-validate.sh /tmp/review_comments.txt
 
       - name: Commit and push fixes
         if: steps.check.outputs.needed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name "harness-bot"
           git config user.email "bot@harness.dev"
           PR_NUM=${{ github.event.pull_request.number }}
-          git add -A
+          git add -u
           if ! git diff --cached --quiet; then
             git commit -m "[Bot] Fix review comments"
             git push
@@ -402,7 +209,6 @@ jobs:
     name: Auto-merge
     runs-on: ubuntu-latest
     needs: [route, review]
-    # Only run if ALL review jobs succeeded (all approved)
     if: ${{ !contains(needs.review.result, 'failure') }}
     steps:
       - uses: actions/checkout@v4
@@ -419,7 +225,6 @@ jobs:
             exit 0
           fi
 
-          # Wait for CI to finish (excluding our own review jobs)
           for i in $(seq 1 30); do
             STATUS=$(gh pr checks ${{ github.event.pull_request.number }} --json name,state \
               --jq '[.[] | select(.name | test("Review|Route|Auto-merge|Auto-fix") | not) | .state] | if length == 0 then "pass" elif all(. == "SUCCESS") then "pass" elif any(. == "FAILURE") then "fail" else "pending" end' 2>/dev/null || echo "pending")
