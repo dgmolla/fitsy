@@ -1,0 +1,1 @@
+Follow the instructions in .claude/agents/sprint.md exactly. Read the current sprint state and execute accordingly.
