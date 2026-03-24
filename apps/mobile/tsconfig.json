@@ -1,0 +1,12 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"],
+      "@fitsy/shared": ["../../packages/shared/src/index.ts"],
+      "@fitsy/shared/*": ["../../packages/shared/src/*"]
+    }
+  }
+}
