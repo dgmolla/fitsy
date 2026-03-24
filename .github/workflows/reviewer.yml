@@ -70,7 +70,12 @@ jobs:
           if echo "$CHANGED" | grep -qE '^docs/gtm/'; then
             AGENTS="$AGENTS gtm"
           fi
-          if echo "$CHANGED" | grep -qE '^(\.github/|\.claude/|scripts/|CLAUDE\.md|docs/engineering/)'; then
+          # docs/engineering/backend/ is backend-owned spec territory
+          if echo "$CHANGED" | grep -qE '^docs/engineering/backend/'; then
+            AGENTS="$AGENTS backend"
+          fi
+          # .github/ .claude/ scripts/ CLAUDE.md docs/engineering/adrs/ devops/ -> cto
+          if echo "$CHANGED" | grep -qE '^(\.github/|\.claude/|scripts/|CLAUDE\.md|docs/engineering/(adrs|devops)/)'; then
             AGENTS="$AGENTS cto"
           fi
 
