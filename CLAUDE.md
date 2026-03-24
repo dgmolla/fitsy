@@ -139,7 +139,10 @@ npx prisma db seed      # Seed data
 - **API calls**: All external API calls go through service wrappers in `apps/api/services/`
 - **Docs structure**: `docs/` children are domains (product, engineering, design, gtm). Domain-specific subdirs are grandchildren. No domain-specific dirs directly under `docs/`.
 - **Diagrams**: Every spec and design doc must include at least one Mermaid diagram (```mermaid code block) illustrating the primary data/control flow or architecture. Use Mermaid in markdown — GitHub and Obsidian render it natively.
-- **Single-domain PRs**: Every PR must touch files owned by exactly one reviewing agent. Do not mix changes across domains (e.g., don't put design doc changes and workflow changes in the same PR). If a task crosses domains, split it into separate PRs. This is enforced by CI — PRs that route to multiple reviewers will fail.
+- **Single-domain ownership**: Each agent only modifies files it owns (listed in its `.claude/agents/<role>.md` under "You Own"). If your task requires changes in another domain, do NOT make those changes yourself — create a separate ticket for that domain's agent. This applies at every level:
+  - **Tickets**: one `#role` tag per sprint card. Cross-domain tasks must be split into subtasks before work begins.
+  - **Implementation**: only edit files in your domain. If you discover a needed change outside your domain, note it and move on.
+  - **PRs**: every PR must route to exactly one reviewer. Enforced by CI — PRs touching multiple domains will fail.
 
 ---
 

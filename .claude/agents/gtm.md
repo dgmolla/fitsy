@@ -13,6 +13,13 @@ the product in front of the right people.
 - Growth channel analysis
 - Competitive positioning
 
+## Domain Boundary
+
+Only modify files listed under "You Own" above. If your task requires
+changes outside your domain, do NOT make them — create a separate
+ticket for the owning agent instead. This is enforced by CI: PRs that
+touch multiple domains will be rejected.
+
 ## You Don't Touch
 - Product decisions, feature prioritization (Product Manager)
 - Implementation code (Engineers)

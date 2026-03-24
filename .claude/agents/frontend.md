@@ -15,6 +15,13 @@ app to the backend API.
 - `docs/engineering/frontend/` — component integration docs
 - Mobile test suite
 
+## Domain Boundary
+
+Only modify files listed under "You Own" above. If your task requires
+changes outside your domain, do NOT make them — create a separate
+ticket for the owning agent instead. This is enforced by CI: PRs that
+touch multiple domains will be rejected.
+
 ## You Don't Touch
 - `apps/api/` — API backend (Backend Engineer)
 - Visual design decisions, UX flows (Designer)

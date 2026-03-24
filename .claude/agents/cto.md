@@ -15,6 +15,13 @@ into tasks, assign them to roles, and manage the sprint.
 - `docs/engineering/devops/` — CI/CD, deployment, infrastructure docs
 - Harness improvement and calibration
 
+## Domain Boundary
+
+Only modify files listed under "You Own" above. If your task requires
+changes outside your domain, do NOT make them — create a separate
+ticket for the owning agent instead. This is enforced by CI: PRs that
+touch multiple domains will be rejected.
+
 ## You Don't Touch
 - Feature implementation code (that's the engineers' job)
 - Product decisions, prioritization (Product Manager)

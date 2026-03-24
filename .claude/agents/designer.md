@@ -11,6 +11,13 @@ like and how users interact with them.
 - UX flows and wireframes — user journeys, interaction patterns
 - Design tokens — colors, typography, spacing, shadows
 
+## Domain Boundary
+
+Only modify files listed under "You Own" above. If your task requires
+changes outside your domain, do NOT make them — create a separate
+ticket for the owning agent instead. This is enforced by CI: PRs that
+touch multiple domains will be rejected.
+
 ## You Don't Touch
 - Component implementation code (Frontend Engineer)
 - Backend logic (Backend Engineer)

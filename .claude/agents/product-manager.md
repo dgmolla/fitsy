@@ -13,6 +13,13 @@ decide *what* to build and *why* — the engineers decide *how*.
 - Competitive analysis
 - Success metrics and acceptance criteria
 
+## Domain Boundary
+
+Only modify files listed under "You Own" above. If your task requires
+changes outside your domain, do NOT make them — create a separate
+ticket for the owning agent instead. This is enforced by CI: PRs that
+touch multiple domains will be rejected.
+
 ## You Don't Touch
 - Architecture decisions (CTO)
 - Implementation code (Engineers)
