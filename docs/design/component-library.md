@@ -417,7 +417,15 @@ interface FilterChipProps {
 | Confidence | Toggle: All / Estimated + Verified / Verified only |
 | Macro range | Sliders per macro (optional — post-MVP) |
 
-**States:**
+**FilterChip states:**
+
+| State | Treatment |
+|-------|-----------|
+| `inactive` | Unselected; muted/neutral style |
+| `active` | Selected; accent color background with × remove button |
+| `disabled` | Grayed out (`colors.neutral.300` background, `colors.neutral.500` text); non-interactive; used when no results exist for that filter |
+
+**FilterSheet states:**
 
 | State | Treatment |
 |-------|-----------|
@@ -477,6 +485,14 @@ Match: ████████░░  82%
 |---------|-------------|
 | `bar` | Horizontal fill bar with percentage. Default. |
 | `badge` | Compact percentage circle. Used on `RestaurantCard` at small sizes. |
+
+**States:**
+
+| State | Treatment |
+|-------|-----------|
+| `loaded` | Bar/badge filled to score value with appropriate match color |
+| `loading` | Skeleton shimmer bar or circle |
+| `no-target` | Score is meaningless without user targets; display `—` and hide the fill bar |
 
 **Color mapping:**
 
@@ -552,3 +568,4 @@ graph TD
 - Test on both iOS and Android — use `Platform.select` for divergent behavior
 - All skeleton states use a shared `Skeleton` primitive (shimmer animation)
 - Fonts: load `Inter` and `SpaceMono` via `expo-font` in the app root
+- **Dark mode:** The token file above defines light-mode values only. Dark mode support is deferred to a follow-up spec. When implemented, introduce a semantic alias layer (e.g., `colors.text.primary`, `colors.surface.card`) that resolves to different hex values per color scheme via `useColorScheme()`. All components must reference semantic aliases — never raw hex — so the single token swap covers the entire component set. No hardcoded light-mode hex values should appear in component `StyleSheet.create()` calls.
