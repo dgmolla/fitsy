@@ -234,7 +234,8 @@ git diff --cached --name-only | grep -E '\.(js|js\.map)$' # should be empty
 | human-review-gate | specs-only |
 | spec-requirement | always |
 | auto-merge | on-approval |
-| active-roles | all |
+| active-roles | cto, backend, frontend, designer, product-manager |
+| deferred-roles | gtm (activate in Phase 3: Roll Out) |
 | wave-progression | auto |
 
 See `docs/tuning-guide.md` for what each knob does and when to change it.

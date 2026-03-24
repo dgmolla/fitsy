@@ -13,7 +13,10 @@ reflect whichever phase you're in.
 
 1. **Foundation** — Vision, architecture, brand identity, devops ✅
 2. **Implement** — Build the product based on the foundation ← current
-3. **Roll Out** — Deployment, GTM strategy, launch prep
+   - GTM and pricing/business-model work is **deferred** to Phase 3
+   - Active roles: cto, backend, frontend, designer, product-manager
+3. **Roll Out** — Deployment, GTM strategy, pricing, launch prep
+   - Activate GTM role; finalize business model and pricing
 4. **Get Users** — Launch, grow, iterate
 
 ---

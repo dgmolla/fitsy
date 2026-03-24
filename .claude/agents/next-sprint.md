@@ -69,6 +69,14 @@ Resume the sprint. Pick up where things left off:
 
 Read `Shipyard Settings` from CLAUDE.md and follow them:
 
+- **active-roles**: Only assign tasks to these roles. Ignore tasks
+  tagged with roles not in this list.
+- **deferred-roles**: These roles are inactive until their activation
+  phase. Do NOT create tasks for deferred roles, do NOT assign work
+  to them, and skip any backlog items tagged with a deferred role.
+  When the project transitions to the activation phase, move deferred
+  roles to active-roles.
+
 - **human-review-gate**: Determines when to wait for human review
   - `yolo`: No human review at all. Fully autonomous.
   - `cruise`: Don't wait for human intra-sprint. Human reviews at sprint end.
