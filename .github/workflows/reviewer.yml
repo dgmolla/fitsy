@@ -157,6 +157,8 @@ jobs:
           git add -u
           if ! git diff --cached --quiet; then
             git commit -m "[Bot] Fix ${AGENT} review comments"
+            # Rebase on top of any parallel fix pushes from other agents
+            git pull --rebase origin ${{ github.event.pull_request.head.ref }} || true
             git push
             COMMIT_SHA=$(git rev-parse --short HEAD)
             gh pr comment "$PR_NUM" --body "**harness-bot** (${AGENT}): Pushed fix commit \`${COMMIT_SHA}\` — triggering re-review."
