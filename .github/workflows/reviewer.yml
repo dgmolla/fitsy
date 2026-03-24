@@ -5,7 +5,7 @@ on:
     types: [opened, synchronize]
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
 
 concurrency:
@@ -81,6 +81,9 @@ jobs:
       matrix:
         agent: ${{ fromJson(needs.route.outputs.agents) }}
       fail-fast: false
+    outputs:
+      # Each matrix job writes its decision; we collect them in the fix job
+      decision: ${{ steps.post.outputs.decision }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -142,11 +145,13 @@ jobs:
           else echo "decision=changes_requested" >> $GITHUB_OUTPUT; fi
 
       - name: Post review and handle verdict
+        id: post
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           DECISION="${{ steps.review.outputs.decision }}"
           AGENT="${{ matrix.agent }}"
+          echo "decision=$DECISION" >> $GITHUB_OUTPUT
           printf '## %s Review\n\n%s' "$AGENT" "$(cat /tmp/review.txt)" > /tmp/review_body.md
 
           NEEDS_HUMAN=$(gh pr view ${{ github.event.pull_request.number }} --json labels \
@@ -161,10 +166,227 @@ jobs:
             gh pr review ${{ github.event.pull_request.number }} --comment --body-file /tmp/review_body.md
           fi
 
+  fix:
+    name: Auto-fix Review Comments
+    runs-on: ubuntu-latest
+    needs: [route, review]
+    # Run if any review job posted a non-approve verdict
+    if: ${{ contains(needs.review.result, 'success') && always() }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Check if fixes are needed
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Collect all review comments with CHANGES REQUESTED from this run
+          REVIEWS=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews \
+            --jq '[.[] | select(.user.login == "github-actions[bot]" and (.body | contains("VERDICT: CHANGES REQUESTED")))] | length')
+
+          if [ "$REVIEWS" -eq 0 ]; then
+            echo "No changes requested — skipping fix"
+            echo "needed=false" >> $GITHUB_OUTPUT
+          else
+            echo "$REVIEWS review(s) requested changes"
+            echo "needed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup Node.js
+        if: steps.check.outputs.needed == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        if: steps.check.outputs.needed == 'true'
+        run: npm ci
+
+      - name: Install Claude Code
+        if: steps.check.outputs.needed == 'true'
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Collect review feedback
+        if: steps.check.outputs.needed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get all CHANGES REQUESTED reviews from bot
+          gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | contains("VERDICT: CHANGES REQUESTED"))) | .body' \
+            > /tmp/review_comments.txt
+
+      - name: Fix and validate loop
+        if: steps.check.outputs.needed == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          REVIEW_COMMENTS=$(cat /tmp/review_comments.txt)
+          MAX_ATTEMPTS=10
+          STUCK_THRESHOLD=3
+          PR_NUM=${{ github.event.pull_request.number }}
+
+          GATE_ERRORS=""
+          PREV_ERROR_HASH=""
+          SAME_ERROR_COUNT=0
+
+          for attempt in $(seq 1 $MAX_ATTEMPTS); do
+            echo "=== Attempt $attempt of $MAX_ATTEMPTS ==="
+
+            # Build the prompt — first attempt gets review feedback, retries get gate errors
+            if [ "$attempt" -eq 1 ]; then
+              cat <<PROMPT > /tmp/fix_prompt.txt
+          You are fixing review feedback on this PR. Multiple reviewers may have flagged issues.
+
+          Read CLAUDE.md for project context and conventions.
+          Read .claude/agents/reviewer.md for review standards.
+
+          Here is ALL the review feedback you must address:
+
+          ${REVIEW_COMMENTS}
+
+          Instructions:
+          1. Read the review feedback carefully — only fix issues that were flagged
+          2. Read the relevant source files to understand full context before editing
+          3. Make the fixes using the Edit tool
+          4. Do NOT refactor, improve, or change anything beyond what the reviews requested
+          5. Do NOT add comments, docstrings, or type annotations unless a review asked for them
+          PROMPT
+            else
+              cat <<PROMPT > /tmp/fix_prompt.txt
+          Your previous fix attempt failed the pre-PR gates.
+
+          Read CLAUDE.md for project context and conventions.
+
+          Here is the original review feedback:
+
+          ${REVIEW_COMMENTS}
+
+          Here are the gate errors from your last attempt:
+
+          ${GATE_ERRORS}
+
+          Fix these errors. Read the failing files, understand the issue, and correct it.
+          Do NOT revert your previous fixes — build on them.
+          PROMPT
+            fi
+
+            cat /tmp/fix_prompt.txt | claude -p \
+              --model sonnet \
+              --allowedTools "Read,Glob,Grep,Edit,Write,Bash(npx tsc *),Bash(npm test *),Bash(npm run build *),Bash(bash scripts/structural-tests.sh),Bash(git diff *)"
+
+            # Run pre-PR gates
+            echo "=== Running pre-PR gates ==="
+            GATE_ERRORS=""
+            GATES_PASSED=true
+
+            echo "--- Structural tests ---"
+            if ! bash scripts/structural-tests.sh > /tmp/gate_output.txt 2>&1; then
+              GATES_PASSED=false
+              GATE_ERRORS="${GATE_ERRORS}
+
+          STRUCTURAL TESTS FAILED:
+          $(cat /tmp/gate_output.txt)"
+            fi
+
+            echo "--- Type check ---"
+            if ! npx tsc --noEmit > /tmp/gate_output.txt 2>&1; then
+              GATES_PASSED=false
+              GATE_ERRORS="${GATE_ERRORS}
+
+          TYPE CHECK FAILED:
+          $(cat /tmp/gate_output.txt)"
+            fi
+
+            echo "--- Tests ---"
+            if ! npm test > /tmp/gate_output.txt 2>&1; then
+              GATES_PASSED=false
+              GATE_ERRORS="${GATE_ERRORS}
+
+          TESTS FAILED:
+          $(cat /tmp/gate_output.txt)"
+            fi
+
+            echo "--- Build ---"
+            if ! npm run build > /tmp/gate_output.txt 2>&1; then
+              GATES_PASSED=false
+              GATE_ERRORS="${GATE_ERRORS}
+
+          BUILD FAILED:
+          $(cat /tmp/gate_output.txt)"
+            fi
+
+            echo "--- No build output ---"
+            if git diff --name-only | grep -qE '\.(js|js\.map)$'; then
+              GATES_PASSED=false
+              GATE_ERRORS="${GATE_ERRORS}
+
+          BUILD OUTPUT DETECTED IN WORKING TREE — remove compiled .js/.js.map files"
+            fi
+
+            if [ "$GATES_PASSED" = "true" ]; then
+              echo "All gates passed on attempt $attempt"
+              break
+            fi
+
+            echo "Gates failed on attempt $attempt"
+
+            # Detect if we're stuck on the same error
+            CURRENT_ERROR_HASH=$(echo "$GATE_ERRORS" | md5sum | cut -d' ' -f1)
+            if [ "$CURRENT_ERROR_HASH" = "$PREV_ERROR_HASH" ]; then
+              SAME_ERROR_COUNT=$((SAME_ERROR_COUNT + 1))
+            else
+              SAME_ERROR_COUNT=1
+              PREV_ERROR_HASH="$CURRENT_ERROR_HASH"
+            fi
+
+            if [ "$SAME_ERROR_COUNT" -ge "$STUCK_THRESHOLD" ]; then
+              echo "ERROR: Same error $STUCK_THRESHOLD times in a row — stuck"
+              gh pr comment "$PR_NUM" --body "**harness-bot**: Auto-fix is stuck — same gate error ${STUCK_THRESHOLD}x in a row after ${attempt} attempts.
+
+          \`\`\`
+          ${GATE_ERRORS}
+          \`\`\`
+
+          Manual intervention needed."
+              exit 1
+            fi
+
+            if [ "$attempt" -eq "$MAX_ATTEMPTS" ]; then
+              echo "ERROR: Failed after $MAX_ATTEMPTS attempts"
+              gh pr comment "$PR_NUM" --body "**harness-bot**: Auto-fix failed after ${MAX_ATTEMPTS} attempts. Gate errors on final attempt:
+
+          \`\`\`
+          ${GATE_ERRORS}
+          \`\`\`
+
+          Manual intervention needed."
+              exit 1
+            fi
+          done
+
+      - name: Commit and push fixes
+        if: steps.check.outputs.needed == 'true'
+        run: |
+          git config user.name "harness-bot"
+          git config user.email "bot@harness.dev"
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "[Bot] Fix review comments"
+            git push
+          else
+            echo "No changes to commit"
+          fi
+
   merge:
     name: Auto-merge
     runs-on: ubuntu-latest
     needs: [route, review]
+    # Only run if ALL review jobs succeeded (all approved)
     if: ${{ !contains(needs.review.result, 'failure') }}
     steps:
       - uses: actions/checkout@v4
@@ -184,7 +406,7 @@ jobs:
           # Wait for CI to finish (excluding our own review jobs)
           for i in $(seq 1 30); do
             STATUS=$(gh pr checks ${{ github.event.pull_request.number }} --json name,state \
-              --jq '[.[] | select(.name | test("Review|Route|Auto-merge") | not) | .state] | if length == 0 then "pass" elif all(. == "SUCCESS") then "pass" elif any(. == "FAILURE") then "fail" else "pending" end' 2>/dev/null || echo "pending")
+              --jq '[.[] | select(.name | test("Review|Route|Auto-merge|Auto-fix") | not) | .state] | if length == 0 then "pass" elif all(. == "SUCCESS") then "pass" elif any(. == "FAILURE") then "fail" else "pending" end' 2>/dev/null || echo "pending")
             if [ "$STATUS" = "pass" ]; then
               gh pr merge ${{ github.event.pull_request.number }} --squash --delete-branch
               break

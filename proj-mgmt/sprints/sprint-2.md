@@ -8,7 +8,6 @@ kanban-plugin: basic
 - [ ] **S-12** Implement `GET /api/restaurants` endpoint — query + macro filter + rank #cto #O1 #wave-2 ^dep-S-10
 - [ ] **S-13** Implement `GET /api/restaurants/[id]/menu` endpoint — menu items with cached macros #cto #O1 #wave-2 ^dep-S-10
 - [ ] **S-14** Write unit tests: macro match scoring + confidence rounding #cto #O1 #wave-2 ^dep-S-10
-- [x] **S-15** Auto-route PRs to domain-specific agent reviewers #cto #harness #wave-1 @completed(2026-03-23)
 - [ ] **S-16** Scaffold mobile app: Expo Router, bottom tab nav, Search screen shell #frontend #O1 #wave-3 ^dep-S-11
 
 ## In Progress
@@ -16,6 +15,8 @@ kanban-plugin: basic
 - [ ] **S-10** Monorepo scaffolding — root package.json, workspaces, Prisma schema, first migration #cto #O1 #wave-1
 
 ## Done
+
+- [x] **S-15** Auto-route PRs to domain-specific agent reviewers #cto #harness #wave-1 @completed(2026-03-23)
 
 ## Sprint Review
 
