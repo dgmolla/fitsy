@@ -63,17 +63,56 @@ This is a fresh sprint. Begin execution:
 
 **If all tasks are in Done:**
 
-The sprint is complete. Run the sprint review:
+The sprint is complete. Run the sprint review, then **stop and wait
+for human sign-off** before creating the next sprint.
 
-1. Tell the user the sprint is complete
-2. Run the sprint review process (see sprint board checklist):
-   - CTO: harness metrics, gap evaluation, CLAUDE.md update
-   - PM: OKR progress, sprint archival, next sprint board
-3. Present the sprint summary to the human for review
-4. After human reviews, create the next sprint board
-5. Tell the user:
-   > Sprint {N} complete. Sprint {N+1} is ready.
-   > Run `/next-sprint` when you're ready to begin.
+1. Run the sprint review process:
+   - CTO: `bash scripts/harness-metrics.sh`, gap evaluation, CLAUDE.md update
+   - PM: update OKR progress in `proj-mgmt/okrs.md`
+
+2. Generate the **Sprint Summary** and present it to the human:
+
+   > ## Sprint {N} Summary
+   >
+   > ### What shipped
+   > - S-XX: {description} — {outcome, any notable decisions}
+   > - S-XX: {description} — {outcome}
+   >
+   > ### What didn't ship (and why)
+   > - S-XX: {description} — {reason: blocked, deferred, cut}
+   >
+   > ### Harness metrics
+   > {paste output from harness-metrics.sh}
+   >
+   > ### OKR progress
+   > | Key Result | Before | After |
+   > |------------|--------|-------|
+   > | {KR} | {old status} | {new status} |
+   >
+   > ### Risks / open questions
+   > - {anything that came up during the sprint}
+   >
+   > ### Proposed next sprint
+   > | Task | Role | Why |
+   > |------|------|-----|
+   > | S-XX: {description} | {role} | {ties to which OKR/gap} |
+   >
+   > ---
+   > **Please review and let me know:**
+   > 1. Any course corrections?
+   > 2. Approve the next sprint backlog, or reprioritize?
+   > 3. Anything to add/remove/change?
+
+3. **Wait for human response.** Do not proceed until the human
+   reviews and approves. This is a hard gate — never skip it
+   regardless of knob settings.
+
+4. After human approves:
+   - Archive the sprint in `proj-mgmt/sprint.md`
+   - Create the next sprint board with approved backlog
+   - Tell the user:
+     > Sprint {N} complete. Sprint {N+1} is ready.
+     > Run `/next-sprint` when you're ready to begin.
 
 **If tasks are in In Progress:**
 
