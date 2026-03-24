@@ -6,16 +6,14 @@ kanban-plugin: basic
 
 ## In Progress
 
+- [ ] **S-19** Restaurant detail screen — menu items with macro breakdown #frontend #O1 #wave-2 ^dep-S-17
+- [ ] **S-20** Macro target input form — protein/carb/fat inputs wired to search on Search screen #frontend #O1 #wave-2 ^dep-S-17
+- [ ] **S-21** Harness fix — add CI coverage gate (fail build if coverage < 80%) #cto #harness #wave-2 ^dep-S-18
+
 ## Done
 
-- [x] **S-16** Scaffold mobile app: Expo Router, bottom tab nav, Search screen shell #frontend #O1 #wave-3 @completed(2026-03-24)
-- [x] **S-14** Write unit tests: macro match scoring + confidence rounding #backend #O1 #wave-2 @completed(2026-03-24)
-- [x] **S-13** Implement `GET /api/restaurants/[id]/menu` endpoint — menu items with cached macros #backend #O1 #wave-2 @completed(2026-03-24)
-- [x] **S-12** Implement `GET /api/restaurants` endpoint — query + macro filter + rank #backend #O1 #wave-2 @completed(2026-03-24)
-- [x] **S-11** Implement preload script — run against 90029 zip, persist to DB #cto #O1 #wave-2 @completed(2026-03-24)
-- [x] **S-15** Auto-route PRs to domain-specific agent reviewers #cto #harness #wave-1 @completed(2026-03-23)
-- [x] **S-10a** CTO monorepo scaffold — root workspaces, Prisma schema, first migration, API scaffold #cto #O1 #wave-1 @completed(2026-03-24)
-- [x] **S-10b** Mobile workspace scaffold — apps/mobile package.json, tsconfig, Expo config #frontend #O1 #wave-1 @completed(2026-03-24)
+- [x] **S-17** Search results screen — restaurant list with macro match scores and distance #frontend #O1 #wave-1 @completed(2026-03-24)
+- [x] **S-18** API endpoint integration tests — GET /api/restaurants + GET /api/restaurants/[id]/menu coverage ≥80% #backend #O1 #wave-1 @completed(2026-03-24)
 
 ## Sprint Review
 
