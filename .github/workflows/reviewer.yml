@@ -2,17 +2,81 @@ name: Automated Review
 
 on:
   pull_request:
-    types: [labeled, opened, synchronize]
+    types: [opened, synchronize]
 
 concurrency:
   group: review-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
-  review:
-    name: Automated Code Review
+  route:
+    name: Route to Reviewer
     runs-on: ubuntu-latest
-    if: contains(github.event.pull_request.labels.*.name, 'review')
+    outputs:
+      agents: ${{ steps.route.outputs.agents }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Determine reviewing agents from changed files
+        id: route
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          CHANGED=$(gh pr diff ${{ github.event.pull_request.number }} --name-only 2>/dev/null || git diff --name-only origin/main...HEAD)
+
+          AGENTS=""
+
+          # Backend: API code, database, shared packages
+          if echo "$CHANGED" | grep -qE '^(apps/api/|prisma/|packages/shared/)'; then
+            AGENTS="$AGENTS backend"
+          fi
+
+          # Frontend: mobile app
+          if echo "$CHANGED" | grep -qE '^apps/mobile/'; then
+            AGENTS="$AGENTS frontend"
+          fi
+
+          # Designer: design docs, component specs
+          if echo "$CHANGED" | grep -qE '^docs/design/'; then
+            AGENTS="$AGENTS designer"
+          fi
+
+          # Product Manager: product docs, specs, OKRs
+          if echo "$CHANGED" | grep -qE '^(docs/product/|proj-mgmt/okrs)'; then
+            AGENTS="$AGENTS product-manager"
+          fi
+
+          # GTM: go-to-market docs
+          if echo "$CHANGED" | grep -qE '^docs/gtm/'; then
+            AGENTS="$AGENTS gtm"
+          fi
+
+          # CTO: infra, CI, harness, agent defs, architecture
+          if echo "$CHANGED" | grep -qE '^(\.github/|\.claude/|scripts/|CLAUDE\.md|docs/engineering/(adrs|devops)/)'; then
+            AGENTS="$AGENTS cto"
+          fi
+
+          # Fallback: if no specific agent matched, CTO reviews
+          if [ -z "$AGENTS" ]; then
+            AGENTS="cto"
+          fi
+
+          # Deduplicate and format as JSON array
+          AGENTS_JSON=$(echo "$AGENTS" | tr ' ' '\n' | sort -u | jq -R . | jq -sc .)
+          echo "agents=$AGENTS_JSON" >> $GITHUB_OUTPUT
+          echo "Routed to: $AGENTS_JSON"
+
+  review:
+    name: "Review (${{ matrix.agent }})"
+    runs-on: ubuntu-latest
+    needs: route
+    strategy:
+      matrix:
+        agent: ${{ fromJson(needs.route.outputs.agents) }}
+      fail-fast: false
     steps:
       - uses: actions/checkout@v4
         with:
@@ -27,36 +91,59 @@ jobs:
           gh pr view ${{ github.event.pull_request.number }} --json title,body,files > /tmp/pr_info.json
           gh pr checks ${{ github.event.pull_request.number }} > /tmp/pr_checks.txt 2>&1 || true
 
-      - name: Build project context
+      - name: Build review prompt
         run: |
+          # Load the generic review guidelines
+          REVIEWER_PROMPT=$(cat .claude/agents/reviewer.md)
+
+          # Load the domain-specific agent prompt
+          AGENT_PROMPT=$(cat .claude/agents/${{ matrix.agent }}.md)
+
+          # Load project context
           PROJECT_CONTEXT=""
           if [ -f CLAUDE.md ]; then
-            PROJECT_CONTEXT="## Project Context (CLAUDE.md)\n\n$(cat CLAUDE.md)"
+            PROJECT_CONTEXT=$(head -c 50000 CLAUDE.md)
           fi
-          echo "$PROJECT_CONTEXT" > /tmp/project_context.txt
+
+          # Combine: agent role + review guidelines + project context
+          SYSTEM_PROMPT=$(cat <<SYSPROMPT
+          $AGENT_PROMPT
+
+          ---
+
+          $REVIEWER_PROMPT
+
+          ---
+
+          ## Project Context (CLAUDE.md)
+
+          $PROJECT_CONTEXT
+          SYSPROMPT
+          )
+
+          echo "$SYSTEM_PROMPT" > /tmp/system_prompt.txt
 
       - name: Run review
         id: review
         run: |
-          REVIEWER_PROMPT=$(cat .claude/agents/reviewer.md)
-          PROJECT_CONTEXT=$(head -c 50000 /tmp/project_context.txt)
+          SYSTEM=$(head -c 80000 /tmp/system_prompt.txt)
           DIFF=$(head -c 100000 /tmp/pr_diff.txt)
           PR_INFO=$(cat /tmp/pr_info.json)
           CI_STATUS=$(cat /tmp/pr_checks.txt)
 
           REQUEST_BODY=$(jq -n \
-            --arg system "$REVIEWER_PROMPT" \
-            --arg context "$PROJECT_CONTEXT" \
+            --arg system "$SYSTEM" \
             --arg diff "$DIFF" \
             --arg pr_info "$PR_INFO" \
             --arg ci_status "$CI_STATUS" \
+            --arg agent "${{ matrix.agent }}" \
             '{
               model: "claude-sonnet-4-20250514",
               max_tokens: 4096,
               system: $system,
               messages: [{
                 role: "user",
-                content: ("Review this PR. You have full project context below.\n\n" + $context + "\n\n---\n\n## PR Info\n" + $pr_info + "\n\n## CI Status\n" + $ci_status + "\n\n## Diff\n```\n" + $diff + "\n```\n\nReview against your checklist. Be specific with file paths and line references.\n\nEnd with EXACTLY one of:\nVERDICT: APPROVE\nVERDICT: CHANGES REQUESTED\nVERDICT: BLOCK")
+                content: ("You are reviewing this PR as the **" + $agent + "** agent. Review from your domain expertise.\n\n## PR Info\n" + $pr_info + "\n\n## CI Status\n" + $ci_status + "\n\n## Diff\n```\n" + $diff + "\n```\n\nReview against your role-specific checklist AND the general review checklist. Be specific with file paths and line references.\n\nEnd with EXACTLY one of:\nVERDICT: APPROVE\nVERDICT: CHANGES REQUESTED\nVERDICT: BLOCK")
               }]
             }')
 
@@ -93,23 +180,51 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           DECISION="${{ steps.review.outputs.decision }}"
-          printf '## Automated Review\n\n%s' "$(cat /tmp/review.txt)" > /tmp/review_body.md
+          AGENT="${{ matrix.agent }}"
+          printf '## %s Review\n\n%s' "$AGENT" "$(cat /tmp/review.txt)" > /tmp/review_body.md
+
           NEEDS_HUMAN=$(gh pr view ${{ github.event.pull_request.number }} --json labels \
             --jq '.labels | map(.name) | if any(. == "human-review") then "true" else "false" end')
 
           if [ "$DECISION" = "approve" ]; then
             gh pr review ${{ github.event.pull_request.number }} --approve --body-file /tmp/review_body.md
             if [ "$NEEDS_HUMAN" = "true" ]; then
-              gh pr comment ${{ github.event.pull_request.number }} --body "Automated review approved. Waiting for human review."
-            else
-              for i in $(seq 1 30); do
-                STATUS=$(gh pr checks ${{ github.event.pull_request.number }} --json name,state \
-                  --jq '[.[] | select(.name != "Automated Code Review") | .state] | if length == 0 then "pass" elif all(. == "SUCCESS") then "pass" elif any(. == "FAILURE") then "fail" else "pending" end' 2>/dev/null || echo "pending")
-                if [ "$STATUS" = "pass" ]; then gh pr merge ${{ github.event.pull_request.number }} --squash --delete-branch; break
-                elif [ "$STATUS" = "fail" ]; then gh pr comment ${{ github.event.pull_request.number }} --body "Review approved but CI failing."; break; fi
-                sleep 10
-              done
+              gh pr comment ${{ github.event.pull_request.number }} --body "**$AGENT** approved. Waiting for human review."
             fi
           else
             gh pr review ${{ github.event.pull_request.number }} --comment --body-file /tmp/review_body.md
           fi
+
+  merge:
+    name: Auto-merge
+    runs-on: ubuntu-latest
+    needs: [route, review]
+    if: ${{ !contains(needs.review.result, 'failure') }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check all reviews approved and merge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NEEDS_HUMAN=$(gh pr view ${{ github.event.pull_request.number }} --json labels \
+            --jq '.labels | map(.name) | if any(. == "human-review") then "true" else "false" end')
+
+          if [ "$NEEDS_HUMAN" = "true" ]; then
+            echo "Human review required — skipping auto-merge"
+            exit 0
+          fi
+
+          # Wait for CI to finish (excluding our own review jobs)
+          for i in $(seq 1 30); do
+            STATUS=$(gh pr checks ${{ github.event.pull_request.number }} --json name,state \
+              --jq '[.[] | select(.name | test("Review|Route|Auto-merge") | not) | .state] | if length == 0 then "pass" elif all(. == "SUCCESS") then "pass" elif any(. == "FAILURE") then "fail" else "pending" end' 2>/dev/null || echo "pending")
+            if [ "$STATUS" = "pass" ]; then
+              gh pr merge ${{ github.event.pull_request.number }} --squash --delete-branch
+              break
+            elif [ "$STATUS" = "fail" ]; then
+              gh pr comment ${{ github.event.pull_request.number }} --body "All agent reviews passed but CI is failing. Fix CI before merge."
+              break
+            fi
+            sleep 10
+          done

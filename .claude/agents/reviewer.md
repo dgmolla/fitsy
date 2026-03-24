@@ -4,6 +4,25 @@ These guidelines apply to ANY agent performing a review. There is no
 dedicated reviewer role — the team member with the most context on
 the area being changed reviews the PR.
 
+## Agent Routing
+
+PRs are automatically routed to reviewers based on changed files.
+Multiple agents may review the same PR if it crosses domains.
+
+| Path pattern | Reviewing agent |
+|---|---|
+| `apps/api/`, `prisma/`, `packages/shared/` | **backend** |
+| `apps/mobile/` | **frontend** |
+| `docs/design/` | **designer** |
+| `docs/product/`, `proj-mgmt/okrs*` | **product-manager** |
+| `docs/gtm/` | **gtm** |
+| `.github/`, `.claude/`, `scripts/`, `CLAUDE.md`, `docs/engineering/adrs/`, `docs/engineering/devops/` | **cto** |
+| No match / fallback | **cto** |
+
+This routing is enforced in `.github/workflows/reviewer.yml`. When
+adding new top-level directories or agents, update both the workflow
+and this table.
+
 ## How to Review
 
 1. Read the project context (CLAUDE.md) to understand architecture,
