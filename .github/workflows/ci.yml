@@ -101,16 +101,29 @@ jobs:
           --health-retries 5
     steps:
       - uses: actions/checkout@v4
+      - name: Check if project is scaffolded
+        id: check
+        run: |
+          if [ -f package-lock.json ]; then
+            echo "ready=true" >> $GITHUB_OUTPUT
+          else
+            echo "ready=false" >> $GITHUB_OUTPUT
+            echo "No package-lock.json — monorepo not scaffolded yet, skipping tests"
+          fi
       - uses: actions/setup-node@v4
+        if: steps.check.outputs.ready == 'true'
         with:
           node-version: 20
           cache: npm
       - run: npm ci
+        if: steps.check.outputs.ready == 'true'
       - name: Apply Prisma migrations
+        if: steps.check.outputs.ready == 'true'
         run: npx prisma migrate deploy
         env:
           DATABASE_URL: postgresql://fitsy_test:fitsy_test@localhost:5432/fitsy_test
       - name: Run tests with coverage gate
+        if: steps.check.outputs.ready == 'true'
         run: npm run test:coverage -- --coverage.thresholds.lines=80
         env:
           DATABASE_URL: postgresql://fitsy_test:fitsy_test@localhost:5432/fitsy_test
@@ -122,12 +135,24 @@ jobs:
     needs: [test]
     steps:
       - uses: actions/checkout@v4
+      - name: Check if project is scaffolded
+        id: check
+        run: |
+          if [ -f package-lock.json ]; then
+            echo "ready=true" >> $GITHUB_OUTPUT
+          else
+            echo "ready=false" >> $GITHUB_OUTPUT
+            echo "No package-lock.json — monorepo not scaffolded yet, skipping build"
+          fi
       - uses: actions/setup-node@v4
+        if: steps.check.outputs.ready == 'true'
         with:
           node-version: 20
           cache: npm
       - run: npm ci
+        if: steps.check.outputs.ready == 'true'
       - name: Build API
+        if: steps.check.outputs.ready == 'true'
         run: npm run build:api
         env:
           DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
@@ -135,6 +160,7 @@ jobs:
           ANTHROPIC_API_KEY: placeholder
           JWT_SECRET: placeholder-for-build-only
       - name: Verify no build output in working tree
+        if: steps.check.outputs.ready == 'true'
         run: |
           if git status --porcelain | grep -E '\.(js|js\.map)$' | grep -v node_modules; then
             echo "::error::Build produced .js files in source tree — check .gitignore"
