@@ -216,10 +216,18 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          PR_NUM=${{ github.event.pull_request.number }}
+
           # Get all CHANGES REQUESTED reviews from bot
-          gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews \
+          gh api repos/${{ github.repository }}/pulls/${PR_NUM}/reviews \
             --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | contains("VERDICT: CHANGES REQUESTED"))) | .body' \
             > /tmp/review_comments.txt
+
+          # Get which agents requested changes
+          REQUESTING_AGENTS=$(gh api repos/${{ github.repository }}/pulls/${PR_NUM}/reviews \
+            --jq '[.[] | select(.user.login == "github-actions[bot]" and (.body | contains("VERDICT: CHANGES REQUESTED"))) | .body | capture("## (?<agent>\\S+) Review") | .agent] | join(", ")')
+
+          gh pr comment "$PR_NUM" --body "**harness-bot**: Starting auto-fix for feedback from **${REQUESTING_AGENTS}**..."
 
       - name: Fix and validate loop
         if: steps.check.outputs.needed == 'true'
@@ -336,6 +344,9 @@ jobs:
             fi
 
             echo "Gates failed on attempt $attempt"
+            if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
+              gh pr comment "$PR_NUM" --body "**harness-bot**: Fix attempt ${attempt} failed gates — retrying (attempt $((attempt + 1))/${MAX_ATTEMPTS})..."
+            fi
 
             # Detect if we're stuck on the same error
             CURRENT_ERROR_HASH=$(echo "$GATE_ERRORS" | md5sum | cut -d' ' -f1)
@@ -376,12 +387,15 @@ jobs:
         run: |
           git config user.name "harness-bot"
           git config user.email "bot@harness.dev"
+          PR_NUM=${{ github.event.pull_request.number }}
           git add -A
           if ! git diff --cached --quiet; then
             git commit -m "[Bot] Fix review comments"
             git push
+            COMMIT_SHA=$(git rev-parse --short HEAD)
+            gh pr comment "$PR_NUM" --body "**harness-bot**: Pushed fix commit \`${COMMIT_SHA}\` — triggering re-review."
           else
-            echo "No changes to commit"
+            gh pr comment "$PR_NUM" --body "**harness-bot**: Review feedback addressed — no file changes needed."
           fi
 
   merge:
