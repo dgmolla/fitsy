@@ -77,39 +77,44 @@ STRUCTURAL TESTS FAILED:
 $(cat /tmp/gate_output.txt)"
   fi
 
-  echo "--- Type check ---"
-  if ! npx tsc --noEmit > /tmp/gate_output.txt 2>&1; then
-    GATES_PASSED=false
-    GATE_ERRORS="${GATE_ERRORS}
+  # Skip code gates if project isn't scaffolded yet (no package-lock.json)
+  if [ -f package-lock.json ]; then
+    echo "--- Type check ---"
+    if ! npx tsc --noEmit > /tmp/gate_output.txt 2>&1; then
+      GATES_PASSED=false
+      GATE_ERRORS="${GATE_ERRORS}
 
 TYPE CHECK FAILED:
 $(cat /tmp/gate_output.txt)"
-  fi
+    fi
 
-  echo "--- Tests ---"
-  if ! npm test > /tmp/gate_output.txt 2>&1; then
-    GATES_PASSED=false
-    GATE_ERRORS="${GATE_ERRORS}
+    echo "--- Tests ---"
+    if ! npm test > /tmp/gate_output.txt 2>&1; then
+      GATES_PASSED=false
+      GATE_ERRORS="${GATE_ERRORS}
 
 TESTS FAILED:
 $(cat /tmp/gate_output.txt)"
-  fi
+    fi
 
-  echo "--- Build ---"
-  if ! npm run build > /tmp/gate_output.txt 2>&1; then
-    GATES_PASSED=false
-    GATE_ERRORS="${GATE_ERRORS}
+    echo "--- Build ---"
+    if ! npm run build > /tmp/gate_output.txt 2>&1; then
+      GATES_PASSED=false
+      GATE_ERRORS="${GATE_ERRORS}
 
 BUILD FAILED:
 $(cat /tmp/gate_output.txt)"
-  fi
+    fi
 
-  echo "--- No build output ---"
-  if git diff --name-only | grep -qE '\.(js|js\.map)$'; then
-    GATES_PASSED=false
-    GATE_ERRORS="${GATE_ERRORS}
+    echo "--- No build output ---"
+    if git diff --name-only | grep -qE '\.(js|js\.map)$'; then
+      GATES_PASSED=false
+      GATE_ERRORS="${GATE_ERRORS}
 
 BUILD OUTPUT DETECTED IN WORKING TREE — remove compiled .js/.js.map files"
+    fi
+  else
+    echo "--- Skipping tsc/test/build gates (no package-lock.json) ---"
   fi
 }
 
