@@ -145,16 +145,19 @@ jobs:
               | group_by(.body | capture("## (?<a>\\S+) Review").a // "unknown")
               | map(sort_by(.submitted_at) | last)
               | [.[] | select(.body | contains("VERDICT: CHANGES REQUESTED")) | .body | capture("## (?<a>\\S+) Review").a]
-              | if length == 0 then "[]" else . end
             ')
-          echo "agents=${AGENTS_JSON}" >> $GITHUB_OUTPUT
-          echo "Agents requesting changes: ${AGENTS_JSON}"
+          # Default to empty array if no agents found
+          if [ -z "$AGENTS_JSON" ] || [ "$AGENTS_JSON" = "null" ]; then
+            AGENTS_JSON="[]"
+          fi
+          echo "agents=$AGENTS_JSON" >> $GITHUB_OUTPUT
+          echo "Agents requesting changes: $AGENTS_JSON"
 
   fix:
     name: "Fix (${{ matrix.agent }})"
     runs-on: ubuntu-latest
     needs: [route-fixes]
-    if: ${{ needs.route-fixes.outputs.agents != '[]' }}
+    if: ${{ needs.route-fixes.outputs.agents != '[]' && needs.route-fixes.outputs.agents != '' }}
     strategy:
       matrix:
         agent: ${{ fromJson(needs.route-fixes.outputs.agents) }}
