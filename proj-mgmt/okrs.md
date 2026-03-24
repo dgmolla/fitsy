@@ -1,7 +1,7 @@
 # OKRs
 
 **Cadence**: Review after every sprint.
-**Last reviewed**: 2026-03-23
+**Last reviewed**: 2026-03-24
 **Current phase**: Implement (transitioned after Sprint 1)
 
 ---
@@ -49,10 +49,10 @@ Fitsy's macro pipeline, restaurant discovery, and UI all work together.
 
 | # | Key Result | Status | Notes |
 |---|------------|--------|-------|
-| KR1 | Preload pipeline runs for LA (90029 zip code) and persists results | Not started | Scripts/preload-pipeline — Sprint 2 target |
-| KR2 | API returns restaurants ranked by macro match from preloaded data | Not started | Sprint 2 target |
-| KR3 | Mobile app shows search results with macro breakdowns | Not started | Sprint 3 target |
-| KR4 | Test coverage on macro scoring and API contracts ≥80% | Not started | Sprint 2 target |
+| KR1 | Preload pipeline runs for LA (90029 zip code) and persists results | **Done** | Merged in PR #17 (S-11) |
+| KR2 | API returns restaurants ranked by macro match from preloaded data | **Done** | Merged in PR #18 (S-12/S-13/S-14) |
+| KR3 | Mobile app shows search results with macro breakdowns | In progress | Search screen shell merged (S-16); full results UI is Sprint 3 |
+| KR4 | Test coverage on macro scoring and API contracts ≥80% | In progress | 29 macro scoring tests passing; API endpoint coverage pending Sprint 3 |
 | KR5 | Maestro E2E flows pass against staging environment | Not started | Final task — requires staging env + mobile app |
 
 ---

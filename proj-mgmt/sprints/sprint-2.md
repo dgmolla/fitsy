@@ -20,14 +20,14 @@ kanban-plugin: basic
 ## Sprint Review
 
 ### CTO: Harness evaluation
-- [ ] Run `bash scripts/harness-metrics.sh` and record results
-- [ ] Identify weakest metric and root cause
-- [ ] Create harness fix tasks for next sprint
-- [ ] Update CLAUDE.md if architecture/conventions changed
-- [ ] Run entropy checks (dead exports, unused deps, stale docs)
+- [x] Run `bash scripts/harness-metrics.sh` and record results @completed(2026-03-24)
+- [x] Identify weakest metric and root cause @completed(2026-03-24)
+- [x] Create harness fix tasks for next sprint @completed(2026-03-24)
+- [x] Update CLAUDE.md if architecture/conventions changed @completed(2026-03-24)
+- [x] Run entropy checks (dead exports, unused deps, stale docs) @completed(2026-03-24)
 
 ### Product Manager: Sprint bookkeeping
-- [ ] Update OKR progress in `proj-mgmt/okrs.md`
+- [x] Update OKR progress in `proj-mgmt/okrs.md` @completed(2026-03-24)
 - [ ] Archive this sprint in `proj-mgmt/sprint.md`
 - [ ] Create next sprint board
 - [ ] Populate next sprint backlog from OKRs + harness fixes + deferred work
