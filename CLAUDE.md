@@ -60,75 +60,14 @@ fitsy/
 
 ### Key Architecture Decisions
 
-**Two separate systems — not one:**
-
-The API backend does **not** scrape or estimate macros at runtime.
-All restaurant and macro data is preloaded offline by a batch script.
-The API backend is a **read-only query layer** over a pre-populated database.
+**Two separate systems — not one:** The API backend is a read-only query layer over a pre-populated database — no runtime scraping or macro estimation.
 
 | System | Location | What it does |
 |--------|----------|-------------|
 | Preload pipeline | `scripts/` | Google Places → Firecrawl → Claude Haiku → PostgreSQL |
 | API backend | `apps/api/` | Query + filter preloaded data; no external API calls |
 
-**Preload pipeline (offline batch, run once per area):**
-1. **Google Places** Nearby Search → restaurants with `websiteUri` (no Place Details needed)
-2. **Firecrawl search** with `scrapeOptions` → finds menu on aggregators (Grubhub, Yelp, zmenu)
-3. **Firecrawl map + scrape** → fallback: discover menu pages on restaurant's own site
-4. **Claude Haiku** → extract menu items, estimate macros from Markdown
-5. Write to PostgreSQL
-
-Cost: ~$5 for 500 restaurants (MVP-0), ~$114 for all LA, ~$1,640 for USA.
-Validated in scraping spike: ~85-90% extraction rate. See `docs/engineering/backend/scraping-spike.md`.
-
-**API backend (read-only at runtime):**
-- `GET /api/restaurants` — nearby restaurants filtered by macro match, cuisine, chain/indie
-- `GET /api/restaurants/[id]/menu` — menu items with cached macros
-- `POST /api/meals/estimate` — on-demand ingredient breakdown (post-MVP; Claude call)
-- Ranking: by macro match score (not distance — distance is a hard filter via PostGIS `ST_DWithin`)
-
-**Service boundaries:**
-- `apps/api/services/restaurant.ts` — query, filter, rank restaurants
-- No scraping service, no Claude service at runtime for MVP-0
-- Preload script calls external APIs directly (no service wrapper needed)
-
-**Confidence tiers:**
-- `medium` — LLM estimated with photo
-- `low` — LLM estimated from description only
-- `high` — restaurant-published verified data (post-MVP)
-- Never show `low` confidence values at full precision: round to nearest 5g
-
-### Database Schema
-
-**Core entities** (full ERD: `docs/engineering/backend/system-design.md`):
-
-| Entity | Key fields |
-|--------|-----------|
-| `Restaurant` | id, externalPlaceId, name, lat, lng, cuisineTags, chainFlag |
-| `MenuItem` | id, restaurantId, name, description, photoUrl, category, price |
-| `MacroEstimate` | id, menuItemId, calories, proteinG, carbsG, fatG, confidence, hadPhoto, ingredientBreakdown (JSON), estimatedAt |
-| `User` | id, email, name (post-MVP auth) |
-| `MacroTarget` | id, userId, calories, proteinG, carbsG, fatG (all optional) |
-| `SavedItem` | id, userId, restaurantId/menuItemId (post-MVP) |
-
-**Key indexes:** geospatial on `Restaurant(lat, lng)`, `MenuItem(restaurantId)`, `MacroEstimate(menuItemId)`.
-**DB hosting:** Managed PostgreSQL with PostGIS (Neon or Supabase free tier for MVP).
-
-### Authentication
-
-Post-MVP. MVP-0 has no user accounts — macro targets are session-local on the mobile client.
-When added: JWT tokens, stored on device via `expo-secure-store`. Auth required for saved items and targets.
-
-### External Services
-
-| Service | Used by | When | Purpose |
-|---------|---------|------|---------|
-| Google Places API | Preload script | Offline only | Restaurant discovery, `websiteUri` |
-| Firecrawl (search/map/scrape) | Preload script | Offline only | Menu retrieval, JS rendering |
-| Claude API (Haiku 4.5) | Preload script | Offline only | Menu extraction + macro estimation |
-| Claude API (Haiku 4.5) | `apps/api/services/` | Post-MVP on-demand | Ingredient breakdown |
-| Yelp Fusion API | — | Post-MVP | Supplementary restaurant data |
-
+Full details — pipeline steps, cost, endpoints, service boundaries, confidence tiers, DB schema, auth, and external services: `docs/engineering/backend/system-design.md`.
 ---
 
 ## Development Commands
