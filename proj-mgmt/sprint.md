@@ -1,16 +1,18 @@
 # Sprint Index
 
-**Last updated**: 2026-03-22
+**Last updated**: 2026-03-23
 
-<!-- CURRENT_SPRINT: sprints/sprint-1.md -->
+<!-- CURRENT_SPRINT: sprints/sprint-2.md -->
 
 ## Active
 
-- [[sprints/sprint-1|Sprint 1: Foundation]] — **current**
+- [[sprints/sprint-2|Sprint 2: Implement]] — **current**
 
 ## Upcoming
 
 ## Completed
+
+- [[sprints/sprint-1|Sprint 1: Foundation]] — @completed(2026-03-23)
 
 ---
 

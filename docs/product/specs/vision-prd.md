@@ -1,6 +1,6 @@
 # Fitsy Vision PRD
 
-> **Status:** OUTLINE — awaiting human review before full write-up.
+> **Status:** DRAFT — pending human review before implementation.
 
 ---
 
@@ -75,9 +75,18 @@ restaurant, not just chains.
    on whichever fields the user fills in.
 2. **Restaurant discovery** — Location-based search returning nearby
    restaurants with menu items that match or are close to targets.
+   - **Ranked by match quality**: restaurants sorted by how closely their
+     best menu items match the user's macro targets (not by distance or
+     rating). A restaurant 2 miles away with a perfect macro match ranks
+     above one 0.5 miles away with a poor match.
+   - **Configurable distance limit**: user sets max distance (e.g., 1mi,
+     3mi, 5mi, 10mi). Default: 3mi. Only restaurants within the limit
+     are returned. Distance is a filter, not a ranking signal.
 3. **LLM macro estimation pipeline:**
-   - Single Claude API call per menu item: name + description +
-     optional photo → returns total macros + ingredient breakdown.
+   - Macros are preloaded offline (not estimated at runtime). A batch
+     script runs Claude Haiku once per menu item — name + description +
+     optional photo → total macros + ingredient breakdown — and stores
+     results in the database. Users see cached estimates at query time.
    - Ingredient breakdown shown to users for transparency.
 4. **Match scoring** — Each menu item gets a match score against the
    user's targets. Restaurants are ranked by their best-matching items.
@@ -100,7 +109,7 @@ flowchart TD
     B --> C["Enter targets<br/>(calories and/or P/C/F — fill what you track)"]
     C --> D[Search by Location]
 
-    D --> Loading["⏳ Backend works:<br/>1. Discover nearby restaurants<br/>2. Scrape menus<br/>3. Estimate macros (LLM)<br/>4. Rank by target match"]
+    D --> Loading["⏳ Backend works:<br/>1. Query preloaded restaurant data<br/>2. Filter by distance<br/>3. Filter by macro match<br/>4. Rank by match score"]
 
     Loading --> List["Restaurant List<br/>(ranked by best-matching meals)<br/>Each card: name, cuisine, distance,<br/>best match preview, # of fitting meals"]
 
@@ -217,7 +226,7 @@ graph LR
 - `GET /api/restaurants?lat=&lng=&radius=&protein=&carbs=&fat=`
 - `GET /api/restaurants/:id/menu`
 - `GET /api/menu-items/:id/macros`
-- `POST /api/targets` — set macro targets (session or account-based)
+- *(Post-MVP)* `POST /api/targets` — set macro targets server-side (requires user accounts; MVP-0 stores targets session-local on the mobile client)
 
 ---
 
