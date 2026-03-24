@@ -10,34 +10,60 @@ set -euo pipefail
 CHANGED=$(cat)
 AGENTS=""
 
-# BEGIN ROUTING TABLE
-# apps/api/ prisma/ packages/shared/                                      -> backend
-if echo "$CHANGED" | grep -qE '^(apps/api/|prisma/|packages/shared/)'; then
-  AGENTS="$AGENTS backend"
+# Root-level config files are CTO infrastructure
+if echo "$CHANGED" | grep -qE '^(package\.json|tsconfig\.json|\.nvmrc|\.env[^/]*)$'; then
+  AGENTS="$AGENTS cto"
 fi
 
-# apps/mobile/                                                            -> frontend
-if echo "$CHANGED" | grep -qE '^apps/mobile/'; then
+# Prisma schema is CTO infrastructure (data model design)
+if echo "$CHANGED" | grep -qE '^prisma/'; then
+  AGENTS="$AGENTS cto"
+fi
+
+# Per-package config files for API and shared workspace packages → CTO infrastructure
+# BEGIN ROUTING TABLE
+if echo "$CHANGED" | grep -qE '^(apps/api|packages/shared)/(package\.json|tsconfig\.json|next\.config\..*)$'; then
+  AGENTS="$AGENTS cto"
+fi
+
+# Mobile app config files (package.json, tsconfig.json, app.config.ts) → frontend
+# app.config.ts is Expo-specific and owned by the frontend team
+if echo "$CHANGED" | grep -qE '^apps/mobile/(package\.json|tsconfig\.json|app\.config\..*)$'; then
   AGENTS="$AGENTS frontend"
 fi
 
-# docs/design/                                                            -> designer
+# Backend: actual source code in api source directories                      -> backend
+if echo "$CHANGED" | grep -qE '^apps/api/(app|lib|services)/'; then
+  AGENTS="$AGENTS backend"
+fi
+
+# Shared package src is CTO infrastructure (contract between all packages)   -> cto
+if echo "$CHANGED" | grep -qE '^packages/shared/src/'; then
+  AGENTS="$AGENTS cto"
+fi
+
+# Frontend: actual source code in mobile source directories                  -> frontend
+if echo "$CHANGED" | grep -qE '^apps/mobile/(app|components|lib)/'; then
+  AGENTS="$AGENTS frontend"
+fi
+
+# docs/design/                                                                -> designer
 if echo "$CHANGED" | grep -qE '^docs/design/'; then
   AGENTS="$AGENTS designer"
 fi
 
-# docs/product/ proj-mgmt/okrs                                            -> product-manager
-if echo "$CHANGED" | grep -qE '^(docs/product/|proj-mgmt/okrs)'; then
+# docs/product/ proj-mgmt/                                                   -> product-manager
+if echo "$CHANGED" | grep -qE '^(docs/product/|proj-mgmt/)'; then
   AGENTS="$AGENTS product-manager"
 fi
 
-# docs/gtm/                                                               -> gtm
+# docs/gtm/                                                                   -> gtm
 if echo "$CHANGED" | grep -qE '^docs/gtm/'; then
   AGENTS="$AGENTS gtm"
 fi
 
-# .github/ .claude/ scripts/ CLAUDE.md docs/engineering/adrs/ docs/engineering/devops/ -> cto
-if echo "$CHANGED" | grep -qE '^(\.github/|\.claude/|scripts/|CLAUDE\.md|docs/engineering/(adrs|devops)/)'; then
+# .github/ .claude/ scripts/ CLAUDE.md docs/engineering/                     -> cto
+if echo "$CHANGED" | grep -qE '^(\.github/|\.claude/|scripts/|CLAUDE\.md|docs/engineering/)'; then
   AGENTS="$AGENTS cto"
 fi
 # END ROUTING TABLE

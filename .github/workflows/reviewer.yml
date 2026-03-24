@@ -32,12 +32,37 @@ jobs:
           CHANGED=$(gh pr diff ${{ github.event.pull_request.number }} --name-only 2>/dev/null \
             || git diff --name-only origin/main...HEAD)
 
+          # Exclude .gitkeep files — they are directory scaffolding, not domain code
+          CHANGED=$(echo "$CHANGED" | grep -v '\.gitkeep$')
+
           AGENTS=""
 
-          if echo "$CHANGED" | grep -qE '^(apps/api/|prisma/|packages/shared/)'; then
+          # Root-level config files are CTO infrastructure
+          if echo "$CHANGED" | grep -qE '^(package\.json|tsconfig\.json|\.nvmrc|\.env[^/]*)$'; then
+            AGENTS="$AGENTS cto"
+          fi
+          # Prisma schema is CTO infrastructure (data model design)
+          if echo "$CHANGED" | grep -qE '^prisma/'; then
+            AGENTS="$AGENTS cto"
+          fi
+          # Per-package config files for API and shared workspace packages are CTO infrastructure
+          if echo "$CHANGED" | grep -qE '^(apps/api|packages/shared)/(package\.json|tsconfig\.json|next\.config\..*)$'; then
+            AGENTS="$AGENTS cto"
+          fi
+          # Mobile app config files (package.json, tsconfig.json, app.config.ts) are frontend
+          if echo "$CHANGED" | grep -qE '^apps/mobile/(package\.json|tsconfig\.json|app\.config\..*)$'; then
+            AGENTS="$AGENTS frontend"
+          fi
+          # Backend: actual source code in api source directories
+          if echo "$CHANGED" | grep -qE '^apps/api/(app|lib|services)/'; then
             AGENTS="$AGENTS backend"
           fi
-          if echo "$CHANGED" | grep -qE '^apps/mobile/'; then
+          # Shared package src is CTO infrastructure (contract between all packages)
+          if echo "$CHANGED" | grep -qE '^packages/shared/src/'; then
+            AGENTS="$AGENTS cto"
+          fi
+          # Frontend: actual source code in mobile source directories
+          if echo "$CHANGED" | grep -qE '^apps/mobile/(app|components|lib)/'; then
             AGENTS="$AGENTS frontend"
           fi
           if echo "$CHANGED" | grep -qE '^docs/design/'; then
@@ -71,3 +96,34 @@ jobs:
           fi
 
           echo "Single domain: $UNIQUE"
+
+  structural-tests:
+    name: Structural Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Setup Node (if workspace exists)
+        id: node-check
+        run: |
+          if [ -f package.json ]; then
+            echo "has_pkg=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_pkg=false" >> $GITHUB_OUTPUT
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.node-check.outputs.has_pkg == 'true'
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        if: steps.node-check.outputs.has_pkg == 'true'
+        run: npm ci
+
+      - name: Run structural tests
+        run: bash scripts/structural-tests.sh
