@@ -198,6 +198,9 @@ npm run build
 
 # 5. No build output committed
 git diff --cached --name-only | grep -E '\.(js|js\.map)$' # should be empty
+
+# 6. E2E staging (main only — runs post-merge via Maestro)
+# maestro test e2e/flows/
 ```
 
 **The rule**: if CI would catch it, you should have caught it first.

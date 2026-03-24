@@ -26,7 +26,7 @@ gets tested in proportion to its blast radius.
 ```mermaid
 graph TD
     subgraph pyramid["Test Pyramid — Fitsy"]
-        E2E["E2E Tests\n~5% of suite\nFew critical flows\nSlow, brittle — use sparingly"]
+        E2E["E2E Staging Tests\n~5% of suite\nMaestro against staging env\nFinal gate — prod-like"]
         INT["Integration Tests\n~30% of suite\nAPI routes + DB\nReal DB, mocked external services"]
         UNIT["Unit Tests\n~65% of suite\nPure functions, business logic\nFast, no I/O"]
     end
@@ -42,7 +42,7 @@ graph TD
 |-------|------|-------|-------|
 | Unit | Pure functions, match scoring, macro math | Vitest | <1s |
 | Integration | API routes + Prisma against test DB | Vitest + testcontainers | <30s |
-| E2E | Critical mobile flows (search → results) | Detox (post-MVP) | minutes |
+| E2E Staging | Critical mobile flows against prod-like env | Maestro | minutes |
 
 ---
 
@@ -216,7 +216,59 @@ test intent invisible.
 
 ---
 
-## 9. CI Gate
+## 9. E2E Staging Tests (Maestro)
+
+Maestro is the final catch-all gate. It runs against a **prod-like staging
+environment** — real API, real database (seeded), real mobile app build.
+
+### Why Maestro
+
+- YAML-based flows — no flaky JS selectors
+- Works with Expo/React Native out of the box
+- Runs on CI with `maestro cloud` or self-hosted via `maestro test`
+- Fast to write, easy to maintain
+
+### Staging environment
+
+The staging env mirrors production:
+- Staging API deployed with real database (seeded with 90029 test data)
+- Expo preview build pointing at staging API
+- Same infra as prod, separate instance
+
+### Flow files
+
+```
+e2e/
+  flows/
+    search-restaurants.yaml      # Search → results appear
+    view-menu.yaml               # Tap restaurant → menu with macros
+    filter-by-macros.yaml        # Set targets → filtered results
+    empty-state.yaml             # No results → empty state message
+```
+
+### Example flow
+
+```yaml
+# e2e/flows/search-restaurants.yaml
+appId: com.fitsy.app
+---
+- launchApp
+- tapOn: "Search restaurants"
+- inputText: "90029"
+- tapOn: "Search"
+- assertVisible: ".*restaurant.*"
+- assertVisible: "cal"
+```
+
+### When it runs
+
+Maestro E2E is the **last CI job** — it runs only after build passes.
+On `main` merges, it runs against the staging deployment. On PRs, it's
+skipped (too slow and requires staging infra).
+
+Setup is the final task before launch — requires staging env to exist first.
+
+## 10. CI Gate
 
 All of the following must pass before a PR can merge:
 
@@ -226,6 +278,7 @@ All of the following must pass before a PR can merge:
 3. npm test                           → all tests pass
 4. npm run test:coverage              → coverage ≥ 80%
 5. npm run build                      → no build errors
+6. maestro test e2e/flows/            → E2E pass (main only, staging)
 ```
 
 CI runs these in parallel where possible. The structural test is fastest and
@@ -233,7 +286,7 @@ runs first to give quick feedback on obvious violations.
 
 ---
 
-## 10. Pre-MVP Test Scope (What to Write Now)
+## 11. Pre-MVP Test Scope (What to Write Now)
 
 Before any code exists, write tests for:
 

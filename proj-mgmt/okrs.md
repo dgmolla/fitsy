@@ -52,6 +52,7 @@ Fitsy's macro pipeline, restaurant discovery, and UI all work together.
 | KR2 | API returns restaurants ranked by macro match from preloaded data | Not started | Sprint 2 target |
 | KR3 | Mobile app shows search results with macro breakdowns | Not started | Sprint 3 target |
 | KR4 | Test coverage on macro scoring and API contracts ≥80% | Not started | Sprint 2 target |
+| KR5 | Maestro E2E flows pass against staging environment | Not started | Final task — requires staging env + mobile app |
 
 ---
 
