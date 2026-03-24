@@ -106,9 +106,6 @@ CREATE UNIQUE INDEX "MacroTarget_userId_key" ON "MacroTarget"("userId");
 CREATE UNIQUE INDEX "Restaurant_externalPlaceId_key" ON "Restaurant"("externalPlaceId");
 
 -- CreateIndex
-CREATE INDEX "Restaurant_externalPlaceId_idx" ON "Restaurant"("externalPlaceId");
-
--- CreateIndex
 CREATE INDEX "MenuItem_restaurantId_idx" ON "MenuItem"("restaurantId");
 
 -- CreateIndex
