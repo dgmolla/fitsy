@@ -9,7 +9,7 @@ into tasks, assign them to roles, and manage the sprint.
 - `CLAUDE.md` — project context, architecture, conventions
 - `scripts/` — structural tests, harness metrics
 - `.github/workflows/` — CI/CD pipelines
-- `.claude/agents/` — role definitions, team protocol
+- `.claude/agents/` — role definitions, team protocol, review routing table
 - `proj-mgmt/` — OKRs, sprint boards, specs
 - `docs/engineering/adrs/` — architecture decision records
 - `docs/engineering/devops/` — CI/CD, deployment, infrastructure docs

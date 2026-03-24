@@ -184,6 +184,66 @@ else
   echo "PASS"
 fi
 
+echo -n "11. Reviewer routing table matches route-reviewers.sh... "
+ROUTE_SCRIPT="$REPO_ROOT/scripts/route-reviewers.sh"
+REVIEWER_MD="$REPO_ROOT/.claude/agents/reviewer.md"
+if [ -f "$ROUTE_SCRIPT" ] && [ -f "$REVIEWER_MD" ]; then
+  # Extract agents from script (comment lines between markers: "-> agent")
+  SCRIPT_AGENTS=$(sed -n '/BEGIN ROUTING TABLE/,/END ROUTING TABLE/p' "$ROUTE_SCRIPT" \
+    | sed -n 's/.*-> \([a-z-]*\)/\1/p' | sort -u | tr '\n' ' ' | xargs)
+  # Extract agents from reviewer.md table (bold agent names between **)
+  MD_AGENTS=$(sed -n 's/.*\*\*\([a-z-]*\)\*\*.*/\1/p' "$REVIEWER_MD" \
+    | sort -u | tr '\n' ' ' | xargs)
+  if [ "$SCRIPT_AGENTS" != "$MD_AGENTS" ]; then
+    echo "FAIL"
+    echo "  route-reviewers.sh agents: $SCRIPT_AGENTS"
+    echo "  reviewer.md agents:        $MD_AGENTS"
+    echo "  Update both when adding/removing agents."
+    ERRORS=$((ERRORS + 1))
+  else
+    echo "PASS"
+  fi
+else
+  echo "SKIP (files not found)"
+fi
+
+echo -n "12. Scaffolding completeness (if package.json exists)... "
+if [ -f "$REPO_ROOT/package.json" ]; then
+  SCAFFOLD_ERRORS=""
+  # Must have a lock file
+  if [ ! -f "$REPO_ROOT/package-lock.json" ]; then
+    SCAFFOLD_ERRORS="$SCAFFOLD_ERRORS\n  Missing package-lock.json — run npm install"
+  fi
+  # Must have test script
+  if ! grep -q '"test"' "$REPO_ROOT/package.json"; then
+    SCAFFOLD_ERRORS="$SCAFFOLD_ERRORS\n  Missing \"test\" script in package.json"
+  fi
+  # Must have build script
+  if ! grep -q '"build"' "$REPO_ROOT/package.json"; then
+    SCAFFOLD_ERRORS="$SCAFFOLD_ERRORS\n  Missing \"build\" script in package.json"
+  fi
+  # Must have tsconfig
+  if [ ! -f "$REPO_ROOT/tsconfig.json" ] && \
+     [ ! -f "$REPO_ROOT/apps/api/tsconfig.json" ] && \
+     [ ! -f "$REPO_ROOT/apps/mobile/tsconfig.json" ]; then
+    SCAFFOLD_ERRORS="$SCAFFOLD_ERRORS\n  Missing tsconfig.json — TypeScript not configured"
+  fi
+  # npm ci gate in reviewer workflow must have install step
+  if ! grep -q 'npm ci\|npm install' "$REPO_ROOT/.github/workflows/reviewer.yml" 2>/dev/null; then
+    SCAFFOLD_ERRORS="$SCAFFOLD_ERRORS\n  reviewer.yml missing npm install step — add it now that package.json exists"
+  fi
+  if [ -n "$SCAFFOLD_ERRORS" ]; then
+    echo "FAIL"
+    echo "  package.json exists but scaffolding is incomplete:"
+    echo -e "$SCAFFOLD_ERRORS"
+    ERRORS=$((ERRORS + 1))
+  else
+    echo "PASS"
+  fi
+else
+  echo "SKIP (no package.json yet)"
+fi
+
 echo ""
 echo "=== Results ==="
 if [ $ERRORS -gt 0 ]; then

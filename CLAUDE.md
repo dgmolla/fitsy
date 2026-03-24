@@ -10,14 +10,15 @@ and more.
 ## Current State
 
 ### What Works
-- Nothing yet — project scaffolding only
+- Foundation docs complete: Vision PRD, System Design, Design Brief, Business Model, Component Library spec
+- Scraping pipeline validated: Firecrawl search + map + Haiku v3, ~85-90% menu extraction rate on 90029 test
 
 ### What's Missing
-1. Core macro-matching engine (LLM menu parsing → Nutritionix lookup)
-2. Restaurant discovery (location-based, Google Places / Yelp)
-3. User accounts and saved macro targets
-4. Filtering system (cuisine, chain/independent, etc.)
-5. Mobile UI (React Native / Expo)
+1. Prisma schema and database migration
+2. Preload script (Google Places → Firecrawl → Claude Haiku → PostgreSQL)
+3. API backend: restaurant query + macro filtering endpoints
+4. Mobile UI (React Native / Expo)
+5. CI/CD pipeline
 
 ---
 
@@ -59,41 +60,14 @@ fitsy/
 
 ### Key Architecture Decisions
 
-**Data Pipeline (MVP):**
+**Two separate systems — not one:** The API backend is a read-only query layer over a pre-populated database — no runtime scraping or macro estimation.
 
-Three-stage pipeline: discover → scrape → estimate.
+| System | Location | What it does |
+|--------|----------|-------------|
+| Preload pipeline | `scripts/` | Google Places → Firecrawl → Claude Haiku → PostgreSQL |
+| API backend | `apps/api/` | Query + filter preloaded data; no external API calls |
 
-1. **Google Places** Nearby Search → restaurants with `websiteUri`
-2. **Firecrawl** → scrape website, return clean Markdown
-3. **Claude Haiku** → estimate macros for all menu items (batch)
-
-Two-phase estimation: macros-only for batch preload (cheap),
-ingredient breakdown on-demand when user taps a meal.
-MVP scope: Los Angeles only. Preload cost: ~$72.
-
-Results are persisted per menu item (see Macro Cache below) so we
-only estimate once per item. Show confidence tier to users —
-never false precision on lower tiers.
-
-**Macro Cache:** Estimated macros are stored per menu item with
-tier, timestamp, and source. Stale data is re-estimated periodically.
-Details in system design doc (`docs/engineering/backend/`).
-
-### Database Schema
-
-<!-- Fill in after system design -->
-
-### Authentication
-
-<!-- Define in system design — likely token-based (JWT) for mobile client -->
-
-### External Services
-
-- **Google Places API** — restaurant discovery, `websiteUri`, photos
-- **Firecrawl** — website scraping, JS rendering, Markdown conversion
-- **Claude API (Haiku)** — macro estimation, menu extraction
-- **Yelp Fusion API** — supplementary restaurant data (optional, post-MVP)
-
+Full details — pipeline steps, cost, endpoints, service boundaries, confidence tiers, DB schema, auth, and external services: `docs/engineering/backend/system-design.md`.
 ---
 
 ## Development Commands
@@ -167,6 +141,9 @@ npm run build
 
 # 5. No build output committed
 git diff --cached --name-only | grep -E '\.(js|js\.map)$' # should be empty
+
+# 6. E2E staging (main only — runs post-merge via Maestro)
+# maestro test e2e/flows/
 ```
 
 **The rule**: if CI would catch it, you should have caught it first.
@@ -191,7 +168,7 @@ git diff --cached --name-only | grep -E '\.(js|js\.map)$' # should be empty
 - **Data integrity (nutrition estimates)** — LLM-estimated macros are
   approximate; users may make health decisions based on this data.
   Always show confidence ranges, never false precision.
-- **External APIs** — Google Places + Nutritionix + Claude are core
+- **External APIs** — Google Places + Firecrawl + Claude are core
   dependencies. Handle rate limits, failures, and caching.
 
 ---
@@ -207,16 +184,17 @@ git diff --cached --name-only | grep -E '\.(js|js\.map)$' # should be empty
 | wave-progression | auto |
 
 See `docs/tuning-guide.md` for what each knob does and when to change it.
-
 ---
 
 ## Deployment
 
-<!-- Fill in when deployment strategy is decided -->
+- **API**: Vercel or Railway (Next.js). Free tier for MVP.
+- **Database**: Neon or Supabase managed PostgreSQL with PostGIS (pick before first migration).
+- **Mobile**: Expo EAS Build. TestFlight for beta.
+- **Preload script**: Run locally or on CI runner — not a production service.
 
 ---
 
 ## Project Management
 
-- **OKR board**: `proj-mgmt/okrs.md`
-- **Sprint board**: See `proj-mgmt/sprint.md`
+- **OKR board**: `proj-mgmt/okrs.md` | **Sprint board**: `proj-mgmt/sprint.md`
