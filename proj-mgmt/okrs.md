@@ -79,7 +79,7 @@ Real users validate whether macro-aware restaurant discovery solves a real probl
 | # | Key Result | Status | Notes |
 |---|------------|--------|-------|
 | KR1 | 10 users signed up and using the app | Not started | |
-| KR2 | Users completing at least 3 searches per week | Not started | |
+| KR2 | Users completing at least 3 searches per week | Not started | Measurable only after KR1 — needs active users first |
 | KR3 | 2 rounds of user testing completed with findings triaged | Not started | |
 | KR4 | Feedback loop operational (capture → triage → spec → ship) | Not started | |
 

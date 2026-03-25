@@ -5,10 +5,10 @@ kanban-plugin: basic
 ## Backlog
 
 - [ ] **S-34** E2E video pipeline — set up Playwright with video recording against staging, agents run before opening PRs, upload videos to PR description. Frontend PRs must include a screen recording showing the UI works. #cto #harness #wave-1 ^dep-S-32
-- [ ] **S-35** CI first-run pass rate fix — root-cause why CI fails on first run 84% of the time (currently 16% pass rate vs. 90% target); add pre-commit / pre-push checks to catch failures locally before they hit CI #cto #harness #wave-1
 - [ ] **S-36** App Store listing prep — screenshots, description copy, privacy policy page, support URL; everything needed to submit to TestFlight and App Store Connect #product-manager #O1 #wave-2 ^dep-S-32
-- [ ] **S-37** User onboarding email — welcome email template and Resend integration; triggered on first sign-in; includes macro target setup walkthrough #backend #frontend #O1 #wave-2
-- [ ] **S-38** Feedback loop MVP — in-app "send feedback" button (email or Typeform link); triage checklist in `docs/product/feedback-triage.md` #product-manager #O1 #wave-2 ^dep-S-37
+- [ ] **S-37b** User onboarding email backend — Resend integration, welcome email trigger on first sign-in #backend #O1 #wave-2
+- [ ] **S-37f** User onboarding email UI — in-app "setup your macros" CTA screen shown after sign-in #frontend #O1 #wave-2 ^dep-S-37b
+- [ ] **S-38** Feedback loop MVP — in-app "send feedback" button (email or Typeform link); triage checklist in `docs/product/feedback-triage.md` #product-manager #O1 #wave-2
 
 ## In Progress
 
