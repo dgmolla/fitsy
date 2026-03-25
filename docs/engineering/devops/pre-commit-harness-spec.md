@@ -95,10 +95,10 @@ until both typecheck and lint pass.
 
 ## Files Changed
 
-| File | Change |
-|------|--------|
-| `package.json` | Add husky, lint-staged, lint script, prepare script |
-| `apps/api/package.json` | Add eslint deps, lint script |
-| `eslint.config.mjs` | New — flat ESLint config |
-| `.husky/pre-commit` | New — type-check + lint hook |
-| `.github/workflows/ci.yml` | Add parallel lint job |
+| File | Domain | Change |
+|------|--------|--------|
+| `package.json` | cto | Add ESLint devDeps, husky, lint/type-check/prepare scripts |
+| `eslint.config.mjs` | cto | New — flat ESLint config scoped to apps/api + packages/shared |
+| `.husky/pre-commit` | cto | New — type-check + lint hook |
+| `.github/workflows/ci.yml` | cto | Add parallel lint job |
+| `apps/api/package.json` | backend | Add lint script pointing at root config (PR #32) |
