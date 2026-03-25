@@ -6,7 +6,11 @@ import {
   type MacroTargets,
   type ScoredItem,
 } from "./macroScoring";
-import type { RestaurantResult, MenuResponse } from "@fitsy/shared";
+import type {
+  RestaurantsResponse,
+  RestaurantResult,
+  MenuResponse,
+} from "@fitsy/shared";
 
 // ─── Prisma singleton ─────────────────────────────────────────────────────────
 
