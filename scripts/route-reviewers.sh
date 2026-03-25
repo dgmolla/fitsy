@@ -9,8 +9,9 @@ set -euo pipefail
 
 CHANGED=$(cat)
 # Exclude auto-generated and bookkeeping files — not domain code
-CHANGED=$(echo "$CHANGED" | grep -v 'package-lock\.json$')
-CHANGED=$(echo "$CHANGED" | grep -v '^proj-mgmt/sprints/')
+# '|| true': grep exits 1 when all lines are filtered; don't let set -e abort
+CHANGED=$(echo "$CHANGED" | grep -v 'package-lock\.json$' || true)
+CHANGED=$(echo "$CHANGED" | grep -v '^proj-mgmt/sprints/' || true)
 AGENTS=""
 
 # Root-level config files are CTO infrastructure
