@@ -29,7 +29,8 @@ test.describe("Search flow — GET /api/restaurants", () => {
     });
     expect(res.status()).toBe(200);
     const body = await res.json();
-    expect(Array.isArray(body)).toBe(true);
+    expect(Array.isArray(body.data)).toBe(true);
+    expect(body).toHaveProperty("meta");
   });
 
   test("returns 200 with macro-filtered results when targets supplied", async ({
@@ -45,7 +46,7 @@ test.describe("Search flow — GET /api/restaurants", () => {
     });
     expect(res.status()).toBe(200);
     const body = await res.json();
-    expect(Array.isArray(body)).toBe(true);
+    expect(Array.isArray(body.data)).toBe(true);
   });
 
   test("returns 400 when lat is missing", async ({ request }) => {
@@ -98,7 +99,8 @@ test.describe("Restaurant detail flow — GET /api/restaurants/:id/menu", () => 
       params: { lat: String(TEST_LAT), lng: String(TEST_LNG) },
     });
     expect(searchRes.status()).toBe(200);
-    const restaurants = await searchRes.json();
+    const searchBody = await searchRes.json();
+    const restaurants = searchBody.data as Array<{ id: string }>;
 
     if (!Array.isArray(restaurants) || restaurants.length === 0) {
       // Staging DB is empty — graceful skip
@@ -106,7 +108,7 @@ test.describe("Restaurant detail flow — GET /api/restaurants/:id/menu", () => 
     }
 
     // Tap the first restaurant and verify menu endpoint
-    const firstId = (restaurants[0] as { id: string }).id;
+    const firstId = restaurants[0]!.id;
     const menuRes = await request.get(`/api/restaurants/${firstId}/menu`);
     expect([200, 404]).toContain(menuRes.status());
 
