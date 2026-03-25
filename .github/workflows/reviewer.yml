@@ -32,8 +32,9 @@ jobs:
           CHANGED=$(gh pr diff ${{ github.event.pull_request.number }} --name-only 2>/dev/null \
             || git diff --name-only origin/main...HEAD)
 
-          # Use route-reviewers.sh as single source of truth
-          RESULT=$(echo "$CHANGED" | bash scripts/route-reviewers.sh)
+          # Always use main's route-reviewers.sh so PR branches don't need rebasing
+          git show origin/main:scripts/route-reviewers.sh > /tmp/route-reviewers.sh
+          RESULT=$(echo "$CHANGED" | bash /tmp/route-reviewers.sh)
           echo "Route result: $RESULT"
 
           # Parse JSON array → space-separated unique agents
