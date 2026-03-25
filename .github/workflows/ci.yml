@@ -191,9 +191,11 @@ jobs:
         if: steps.check.outputs.ready == 'true'
       - name: Build API
         if: steps.check.outputs.ready == 'true'
-        run: npm run build:api
+        # --no-lint skips Next.js built-in ESLint; we have a dedicated lint CI step
+        run: npm run build:api -- -- --no-lint
         env:
-          DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+          POSTGRES_PRISMA_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+          POSTGRES_URL_NON_POOLING: postgresql://placeholder:placeholder@localhost:5432/placeholder
           GOOGLE_PLACES_API_KEY: placeholder
           ANTHROPIC_API_KEY: placeholder
           JWT_SECRET: placeholder-for-build-only
