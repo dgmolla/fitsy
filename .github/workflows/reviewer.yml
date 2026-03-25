@@ -42,9 +42,9 @@ jobs:
           if echo "$CHANGED" | grep -qE '^(package\.json|tsconfig\.json|\.nvmrc|\.env[^/]*)$'; then
             AGENTS="$AGENTS cto"
           fi
-          # Prisma schema is CTO infrastructure (data model design)
+          # Prisma schema ships with API code — route to backend
           if echo "$CHANGED" | grep -qE '^prisma/'; then
-            AGENTS="$AGENTS cto"
+            AGENTS="$AGENTS backend"
           fi
           # All of apps/api/ → backend (source code, config, tests, etc.)
           if echo "$CHANGED" | grep -qE '^apps/api/'; then
