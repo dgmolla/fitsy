@@ -4,16 +4,14 @@ kanban-plugin: basic
 
 ## Backlog
 
-- [ ] **S-44** Fix E2E video pipeline — rework to run `npm run build && npm start` locally instead of Vercel previews (now disabled). Agent runs Playwright, records video, embeds in PR description. Update frontend/backend role files to require video for frontend PRs. Delete broken S-34c CI workflow. #cto #harness
-- [ ] **S-45** Update CLAUDE.md "What Actually Works" — audit every feature listed, verify it works end-to-end (app runs, API returns data, DB has preloaded restaurants). Agents must read this before proposing new phases. #cto #harness
-- [ ] **S-46** Preload staging DB — run the preload pipeline (Google Places → Firecrawl → Claude Haiku → PostgreSQL) against staging Supabase for at least one ZIP code (90029). Verify restaurants + menu items + macro estimates are in the DB. #backend #O1
-- [ ] **S-47** End-to-end smoke test — run the full flow: open mobile app → search → see restaurants → view macros. Fix whatever's broken. Must pass before any "Get Users" sprint. #cto #O1 ^dep-S-46
-
 ## In Progress
-
 
 ## Done
 
+- [x] **S-44** Fix E2E video pipeline — rework to run `npm run build && npm start` locally (PR #64) #cto #harness @completed(2026-03-25)
+- [x] **S-45** Update CLAUDE.md "What Actually Works" — full audit (PR #66) #cto #harness @completed(2026-03-25)
+- [x] **S-46** Preload staging DB — 9 restaurants, 105 menu items, 105 macro estimates in staging Supabase (PRs #68, #70, #71) #backend #O1 @completed(2026-03-25)
+- [x] **S-47** End-to-end smoke test — full flow verified, all API endpoints working, Playwright 2/2 pass (PR #72) #cto #O1 @completed(2026-03-25)
 - [x] **S-34** E2E video pipeline — Playwright recording on frontend PRs (PRs #55, #56) #cto #harness #wave-1 @completed(2026-03-26)
 - [x] **S-35** CI first-run pass rate fix — guard E2E prebuild failure, add pre-push hook #cto #harness #wave-1 @completed(2026-03-26)
 - [x] **S-36** App Store listing prep — screenshots, description copy, privacy policy page, support URL (PR #61) #product-manager #O1 #wave-2 @completed(2026-03-24)
