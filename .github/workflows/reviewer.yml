@@ -32,59 +32,13 @@ jobs:
           CHANGED=$(gh pr diff ${{ github.event.pull_request.number }} --name-only 2>/dev/null \
             || git diff --name-only origin/main...HEAD)
 
-          # Exclude auto-generated and scaffolding files — not domain code
-          CHANGED=$(echo "$CHANGED" | grep -v 'package-lock.json$')
-          CHANGED=$(echo "$CHANGED" | grep -v '.gitkeep$')
+          # Use route-reviewers.sh as single source of truth
+          RESULT=$(echo "$CHANGED" | bash scripts/route-reviewers.sh)
+          echo "Route result: $RESULT"
 
-          AGENTS=""
-
-          # Root-level config files are CTO infrastructure
-          if echo "$CHANGED" | grep -qE '^(package\.json|tsconfig\.json|\.nvmrc|\.env[^/]*)$'; then
-            AGENTS="$AGENTS cto"
-          fi
-          # Prisma schema ships with API code — route to backend
-          if echo "$CHANGED" | grep -qE '^prisma/'; then
-            AGENTS="$AGENTS backend"
-          fi
-          # All of apps/api/ → backend (source code, config, tests, etc.)
-          if echo "$CHANGED" | grep -qE '^apps/api/'; then
-            AGENTS="$AGENTS backend"
-          fi
-          # All of apps/mobile/ → frontend
-          if echo "$CHANGED" | grep -qE '^apps/mobile/'; then
-            AGENTS="$AGENTS frontend"
-          fi
-          # packages/shared/ — workspace config → cto; src/ → backend
-          if echo "$CHANGED" | grep -qE '^packages/shared/(package\.json|tsconfig\.json)$'; then
-            AGENTS="$AGENTS cto"
-          fi
-          if echo "$CHANGED" | grep -qE '^packages/shared/src/'; then
-            AGENTS="$AGENTS backend"
-          fi
-          if echo "$CHANGED" | grep -qE '^docs/design/'; then
-            AGENTS="$AGENTS designer"
-          fi
-          if echo "$CHANGED" | grep -qE '^(docs/product/|proj-mgmt/)'; then
-            AGENTS="$AGENTS product-manager"
-          fi
-          if echo "$CHANGED" | grep -qE '^docs/gtm/'; then
-            AGENTS="$AGENTS gtm"
-          fi
-          # docs/engineering/backend/ is backend-owned spec territory
-          if echo "$CHANGED" | grep -qE '^docs/engineering/backend/'; then
-            AGENTS="$AGENTS backend"
-          fi
-          # .github/ .claude/ scripts/ CLAUDE.md docs/engineering/adrs/ devops/ -> cto
-          if echo "$CHANGED" | grep -qE '^(\.github/|\.claude/|scripts/|CLAUDE\.md|docs/engineering/(adrs|devops)/)'; then
-            AGENTS="$AGENTS cto"
-          fi
-
-          if [ -z "$AGENTS" ]; then
-            AGENTS="cto"
-          fi
-
-          COUNT=$(echo "$AGENTS" | tr ' ' '\n' | sed '/^$/d' | sort -u | wc -l | xargs)
-          UNIQUE=$(echo "$AGENTS" | tr ' ' '\n' | sed '/^$/d' | sort -u | tr '\n' ' ' | xargs)
+          # Parse JSON array → space-separated unique agents
+          UNIQUE=$(echo "$RESULT" | tr -d '[]"' | tr ',' '\n' | sed '/^$/d' | sort -u | tr '\n' ' ' | xargs)
+          COUNT=$(echo "$UNIQUE" | wc -w | xargs)
 
           echo "agent=$UNIQUE" >> $GITHUB_OUTPUT
           echo "Domains touched: $UNIQUE ($COUNT)"
