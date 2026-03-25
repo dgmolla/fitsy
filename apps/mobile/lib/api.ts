@@ -1,7 +1,22 @@
+import { getStoredToken } from './authClient';
+
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
 
-async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`);
+async function get<T>(path: string, authenticated = false): Promise<T> {
+  const headers: Record<string, string> = {};
+
+  if (authenticated) {
+    const token = await getStoredToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+  }
+
+  const init: RequestInit =
+    Object.keys(headers).length > 0 ? { headers } : {};
+
+  const res = await fetch(`${BASE_URL}${path}`, init);
+
   if (!res.ok) {
     const body = await res.json().catch(() => ({})) as { error?: string };
     throw new Error(body.error ?? `Request failed: ${res.status}`);
