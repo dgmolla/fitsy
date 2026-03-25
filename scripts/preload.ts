@@ -80,6 +80,19 @@ interface PipelineStats {
   skippedDbError: number;
 }
 
+// Claude Haiku 4.5 pricing (per token)
+const HAIKU_COST_PER_INPUT_TOKEN = 0.0000008; // $0.80/MTok
+const HAIKU_COST_PER_OUTPUT_TOKEN = 0.000005; // $5.00/MTok
+// Google Places Nearby Search pricing
+const GOOGLE_PLACES_COST_PER_CALL = 0.005; // ~$5/1000 requests
+
+interface CostStats {
+  anthropicInputTokens: number;
+  anthropicOutputTokens: number;
+  anthropicCalls: number;
+  googlePlacesCalls: number;
+}
+
 // ---------------------------------------------------------------------------
 // Validation
 // ---------------------------------------------------------------------------
@@ -364,7 +377,8 @@ If you cannot extract any menu items, return an empty array: []`;
 async function estimateMacros(
   restaurantName: string,
   menuMarkdown: string,
-  anthropic: Anthropic
+  anthropic: Anthropic,
+  costStats: CostStats
 ): Promise<HaikuMenuItem[]> {
   const truncatedMarkdown = menuMarkdown.slice(0, CONFIG.maxMenuChars);
 
@@ -379,6 +393,10 @@ ${truncatedMarkdown}`;
     system: HAIKU_SYSTEM_PROMPT,
     messages: [{ role: "user", content: userMessage }],
   });
+
+  costStats.anthropicCalls++;
+  costStats.anthropicInputTokens += message.usage.input_tokens;
+  costStats.anthropicOutputTokens += message.usage.output_tokens;
 
   const contentBlock = message.content[0];
   if (!contentBlock || contentBlock.type !== "text") {
@@ -619,12 +637,21 @@ async function main(): Promise<void> {
     skippedDbError: 0,
   };
 
+  const costStats: CostStats = {
+    anthropicInputTokens: 0,
+    anthropicOutputTokens: 0,
+    anthropicCalls: 0,
+    googlePlacesCalls: 0,
+  };
+
   try {
     // Stage 1: Discover restaurants
     log("Discovering restaurants via Google Places...");
     let places: PlaceResult[];
     try {
       places = await discoverRestaurants();
+      // discoverRestaurants paginates up to 3 pages; count actual pages used
+      costStats.googlePlacesCalls = Math.ceil(places.length / 20) || 1;
     } catch (err) {
       log(`Google Places API error: ${String(err)}`);
       process.exit(1);
@@ -673,7 +700,7 @@ async function main(): Promise<void> {
       // Stage 2b: Estimate macros
       let menuItems: HaikuMenuItem[] = [];
       try {
-        menuItems = await estimateMacros(place.name, menuMarkdown, anthropic);
+        menuItems = await estimateMacros(place.name, menuMarkdown, anthropic, costStats);
       } catch (err) {
         log(`  Haiku failed: ${String(err)}`);
         stats.skippedHaikuFailed++;
@@ -713,6 +740,27 @@ async function main(): Promise<void> {
       `${stats.skippedNoMenu} skipped (no menu) / ` +
       `${stats.skippedHaikuFailed} skipped (Haiku failed) / ` +
       `${stats.skippedDbError} skipped (DB error)`
+  );
+
+  const anthropicCostUsd =
+    costStats.anthropicInputTokens * HAIKU_COST_PER_INPUT_TOKEN +
+    costStats.anthropicOutputTokens * HAIKU_COST_PER_OUTPUT_TOKEN;
+  const googleCostUsd = costStats.googlePlacesCalls * GOOGLE_PLACES_COST_PER_CALL;
+  const totalCostUsd = anthropicCostUsd + googleCostUsd;
+
+  console.log(
+    "[preload:costs]",
+    JSON.stringify({
+      restaurants_discovered: stats.discovered,
+      restaurants_persisted: stats.persisted,
+      anthropic_calls: costStats.anthropicCalls,
+      anthropic_tokens_in: costStats.anthropicInputTokens,
+      anthropic_tokens_out: costStats.anthropicOutputTokens,
+      anthropic_cost_usd: parseFloat(anthropicCostUsd.toFixed(4)),
+      google_places_calls: costStats.googlePlacesCalls,
+      google_places_cost_usd: parseFloat(googleCostUsd.toFixed(4)),
+      total_cost_usd: parseFloat(totalCostUsd.toFixed(4)),
+    })
   );
 }
 
