@@ -14,6 +14,8 @@ jobs:
   e2e-video:
     name: E2E video recording
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
 
@@ -44,11 +46,11 @@ jobs:
         run: npm start &
         env:
           PORT: 3000
-          POSTGRES_PRISMA_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
-          POSTGRES_URL_NON_POOLING: postgresql://placeholder:placeholder@localhost:5432/placeholder
+          POSTGRES_PRISMA_URL: ${{ secrets.POSTGRES_PRISMA_URL }}
+          POSTGRES_URL_NON_POOLING: ${{ secrets.POSTGRES_URL_NON_POOLING }}
           GOOGLE_PLACES_API_KEY: placeholder
           ANTHROPIC_API_KEY: placeholder
-          JWT_SECRET: placeholder-for-e2e-only
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
           NODE_ENV: production
 
       - name: Wait for server to be ready
