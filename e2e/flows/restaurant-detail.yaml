@@ -7,9 +7,9 @@ appId: com.fitsy.app
 # Ensure we are on the search screen
 - assertVisible: "Searching near"
 
-# Apply the "High Protein" preset to get consistent results
+# Apply the "Cut (2000 kcal)" preset to get consistent results
 - tapOn:
-    label: "Apply High Protein preset"
+    label: "Apply Cut (2000 kcal) preset"
 
 # Wait for results to load
 - extendedWaitUntil:

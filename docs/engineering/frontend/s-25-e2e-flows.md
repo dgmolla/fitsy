@@ -45,7 +45,7 @@ sequenceDiagram
     note over U,S: Flow 3 — Restaurant Detail
     U->>A: launchApp (already authenticated)
     A->>U: Search screen visible
-    U->>A: Apply "High Protein" preset
+    U->>A: Apply "Cut (2000 kcal)" preset
     A->>S: GET /api/restaurants?protein=...&calories=...
     S-->>A: Restaurant results list
     A->>U: First restaurant card visible
@@ -73,7 +73,7 @@ implementation-agnostic identifiers that do not change with visual redesigns.
 | Register | Submit button | `Create account` |
 | Search | Protein input | `Protein (g) target` |
 | Search | Calories input | `Cals target` |
-| Search | Preset button | `Apply High Protein preset` |
+| Search | Preset button | `Apply Cut (2000 kcal) preset` |
 | Search | Loading spinner | `Loading restaurants` |
 | Search | Restaurant card | `View menu for {name}` (dynamic) |
 | Restaurant | Loading spinner | `Loading menu` |
