@@ -25,8 +25,10 @@ const config = {
   testMatch: ["**/*.test.ts", "**/*.test.tsx"],
   collectCoverageFrom: [
     "lib/**/*.ts",
-    "!lib/**/*.test.ts",
-    "!lib/**/.gitkeep",
+    "services/**/*.ts",
+    "app/api/auth/**/*.ts",
+    "!**/*.test.ts",
+    "!**/.gitkeep",
   ],
   coverageThreshold: {
     global: {

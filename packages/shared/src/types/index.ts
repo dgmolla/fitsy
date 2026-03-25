@@ -185,3 +185,18 @@ export interface MenuApiResponseBody {
 }
 
 export type MenuApiResponse = MenuApiResponseBody | ApiError;
+
+// ─── Auth ──────────────────────────────────────────────────────────────────────
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string | null;
+}
+
+export interface AuthResponse {
+  token: string;
+  user: AuthUser;
+}
+
+export type AuthApiResponse = AuthResponse | ApiError;
