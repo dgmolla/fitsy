@@ -1,8 +1,9 @@
-// ─── Mock Prisma + authService ─────────────────────────────────────────────────
+// ─── Mock Prisma + authService + emailService ──────────────────────────────────
 
 const mockUserCreate = jest.fn();
 const mockHashPassword = jest.fn();
 const mockSignToken = jest.fn();
+const mockSendWelcomeEmail = jest.fn();
 
 jest.mock("@prisma/client", () => ({
   PrismaClient: jest.fn().mockImplementation(() => ({
@@ -15,6 +16,10 @@ jest.mock("@/services/authService", () => ({
   signToken: mockSignToken,
 }));
 
+jest.mock("@/services/emailService", () => ({
+  sendWelcomeEmail: mockSendWelcomeEmail,
+}));
+
 // Clear Prisma singleton before each test
 beforeEach(() => {
   const g = globalThis as unknown as { prisma?: unknown };
@@ -22,6 +27,8 @@ beforeEach(() => {
   mockUserCreate.mockReset();
   mockHashPassword.mockReset();
   mockSignToken.mockReset();
+  mockSendWelcomeEmail.mockReset();
+  mockSendWelcomeEmail.mockResolvedValue(undefined);
 });
 
 import { POST } from "./route";
@@ -105,6 +112,46 @@ describe("POST /api/auth/register — validation", () => {
     });
     const res = await POST(req);
     expect(res.status).toBe(400);
+  });
+});
+
+// ─── Welcome email ────────────────────────────────────────────────────────────
+
+describe("POST /api/auth/register — welcome email", () => {
+  it("triggers sendWelcomeEmail with user email and name on success", async () => {
+    mockHashPassword.mockResolvedValue("$2b$12$hash");
+    mockUserCreate.mockResolvedValue({
+      id: "user-1",
+      email: "alice@example.com",
+      name: "Alice",
+    });
+    mockSignToken.mockResolvedValue("jwt-token");
+
+    const res = await POST(
+      makeRequest({ email: "alice@example.com", password: "password123", name: "Alice" }),
+    );
+
+    expect(res.status).toBe(201);
+    // Fire-and-forget: give the microtask queue a tick to flush
+    await Promise.resolve();
+    expect(mockSendWelcomeEmail).toHaveBeenCalledWith("alice@example.com", "Alice");
+  });
+
+  it("does not prevent 201 when sendWelcomeEmail rejects", async () => {
+    mockHashPassword.mockResolvedValue("$2b$12$hash");
+    mockUserCreate.mockResolvedValue({
+      id: "user-2",
+      email: "bob@example.com",
+      name: null,
+    });
+    mockSignToken.mockResolvedValue("jwt-token");
+    mockSendWelcomeEmail.mockRejectedValue(new Error("Resend down"));
+
+    const res = await POST(
+      makeRequest({ email: "bob@example.com", password: "password123" }),
+    );
+
+    expect(res.status).toBe(201);
   });
 });
 
