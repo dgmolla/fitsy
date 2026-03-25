@@ -34,12 +34,11 @@ jobs:
         working-directory: apps/api
         run: npm run build
         env:
-          # Placeholder values — build-time only, not used at runtime for E2E tests
-          POSTGRES_PRISMA_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
-          POSTGRES_URL_NON_POOLING: postgresql://placeholder:placeholder@localhost:5432/placeholder
+          POSTGRES_PRISMA_URL: ${{ secrets.POSTGRES_PRISMA_URL }}
+          POSTGRES_URL_NON_POOLING: ${{ secrets.POSTGRES_URL_NON_POOLING }}
           GOOGLE_PLACES_API_KEY: placeholder
           ANTHROPIC_API_KEY: placeholder
-          JWT_SECRET: placeholder-for-build-only
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
 
       - name: Test DB connection
         env:
