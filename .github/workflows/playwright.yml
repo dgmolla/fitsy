@@ -40,18 +40,6 @@ jobs:
           ANTHROPIC_API_KEY: placeholder
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
 
-      - name: Test DB connection
-        env:
-          POSTGRES_PRISMA_URL: ${{ secrets.POSTGRES_PRISMA_URL }}
-        run: |
-          node -e "
-          const { PrismaClient } = require('@prisma/client');
-          const p = new PrismaClient();
-          p.\$queryRaw\`SELECT 1 as ok\`
-            .then(r => { console.log('DB connection OK:', JSON.stringify(r)); return p.\$disconnect(); })
-            .catch(e => { console.error('DB connection FAILED:', e.message, 'code:', e.code); p.\$disconnect(); process.exit(1); });
-          "
-
       - name: Start API server
         working-directory: apps/api
         run: npm start > /tmp/api-server.log 2>&1 &
@@ -66,58 +54,6 @@ jobs:
 
       - name: Wait for server to be ready
         run: npx wait-on http://localhost:3000 --timeout 30000
-
-      - name: Test prisma.user.create directly
-        env:
-          POSTGRES_PRISMA_URL: ${{ secrets.POSTGRES_PRISMA_URL }}
-        run: |
-          node -e "
-          const { PrismaClient } = require('@prisma/client');
-          const p = new PrismaClient();
-          p.user.create({
-            data: {
-              email: 'ci-direct-test-' + Date.now() + '@fitsy.test',
-              passwordHash: 'testhash',
-            },
-            select: { id: true, email: true }
-          }).then(u => { console.log('user.create OK:', JSON.stringify(u)); return p.\$disconnect(); })
-            .catch(e => { console.error('user.create FAILED:', e.message, 'code:', e.code); p.\$disconnect(); process.exit(1); });
-          "
-
-      - name: Test bcrypt and jose modules
-        env:
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-        run: |
-          node -e "
-          const bcrypt = require('bcryptjs');
-          const { SignJWT } = require('jose');
-          async function run() {
-            const hash = await bcrypt.hash('TestPass123!', 12);
-            console.log('bcrypt OK:', hash.substr(0, 10) + '...');
-            const secret = new TextEncoder().encode(process.env.JWT_SECRET);
-            const token = await new SignJWT({ email: 'test@test.com' })
-              .setProtectedHeader({ alg: 'HS256' })
-              .setSubject('test-id')
-              .setIssuedAt()
-              .setExpirationTime('7d')
-              .sign(secret);
-            console.log('jose OK: token starts with', token.substr(0, 20));
-          }
-          run().catch(e => { console.error('FAILED:', e); process.exit(1); });
-          "
-
-      - name: Smoke-test health and register endpoints
-        run: |
-          echo "=== /api/health ==="
-          curl -s http://localhost:3000/api/health
-          echo ""
-          echo "=== /api/auth/register ==="
-          curl -s -X POST http://localhost:3000/api/auth/register \
-            -H 'Content-Type: application/json' \
-            -d '{"email":"smoke-ci-debug@fitsy.test","password":"TestPass123!"}'
-          echo ""
-          echo "=== Server logs ==="
-          cat /tmp/api-server.log || true
 
       - name: Run Playwright tests with video
         working-directory: apps/api
