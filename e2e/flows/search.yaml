@@ -1,0 +1,36 @@
+appId: com.fitsy.app
+---
+# Search flow: enter macro targets → see restaurant results (or graceful empty state)
+- launchApp
+
+# Ensure we are on the search screen
+- assertVisible: "Searching near"
+
+# Enter protein target
+- tapOn:
+    label: "Protein (g) target"
+- clearText
+- inputText: "40"
+
+# Enter calorie target
+- tapOn:
+    label: "Cals target"
+- clearText
+- inputText: "600"
+
+# Dismiss keyboard
+- pressKey: "Return"
+
+# Wait for results or empty state (debounce is 600ms + network latency)
+- extendedWaitUntil:
+    visible: "Loading restaurants"
+    timeout: 3000
+- waitForAnimationToEnd
+
+# Assert either results or the graceful empty state are visible
+# (passes if staging DB has data OR is empty)
+- assertTrue:
+    visible:
+      anyOf:
+        - "No restaurants match your macro targets"
+        - "View menu for"

@@ -1,0 +1,29 @@
+appId: com.fitsy.app
+---
+# Onboarding flow: new user register → arrives at search screen
+- launchApp:
+    clearState: true
+
+# Start on Login screen — navigate to Register
+- assertVisible: "Welcome back"
+- tapOn:
+    label: "Create an account"
+
+# Register screen
+- assertVisible: "Create account"
+- tapOn:
+    label: "Full name"
+- inputText: "E2E Test User"
+- tapOn:
+    label: "Email address"
+- inputText: "e2e-test@fitsy.app"
+- tapOn:
+    label: "Password"
+- inputText: "Test1234!"
+
+# Submit registration
+- tapOn:
+    label: "Create account"
+
+# After successful registration, app should navigate to the search tab
+- assertVisible: "Searching near"

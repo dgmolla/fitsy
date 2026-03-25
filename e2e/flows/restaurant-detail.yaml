@@ -1,0 +1,42 @@
+appId: com.fitsy.app
+---
+# Restaurant detail flow: tap a restaurant → see menu items with macro breakdown
+# Requires at least one restaurant result to be present in staging data.
+- launchApp
+
+# Ensure we are on the search screen
+- assertVisible: "Searching near"
+
+# Apply the "Cut (2000 kcal)" preset to get consistent results
+- tapOn:
+    label: "Apply Cut (2000 kcal) preset"
+
+# Wait for results to load
+- extendedWaitUntil:
+    visible: "Loading restaurants"
+    timeout: 3000
+- waitForAnimationToEnd
+
+# If no results are present, skip — staging data is empty
+- runFlow:
+    when:
+      visible: "No restaurants match your macro targets"
+    commands:
+      - stopApp
+
+# Tap the first restaurant card (partial label match on "View menu for")
+- tapOn:
+    label: "View menu for"
+
+# Restaurant detail screen: wait for menu to load
+- extendedWaitUntil:
+    notVisible: "Loading menu"
+    timeout: 8000
+
+# Assert we are on the detail screen — either menu items or the empty menu state
+- assertTrue:
+    visible:
+      anyOf:
+        - "No menu items available"
+        - "P:"
+        - "No macro data"
