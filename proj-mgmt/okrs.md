@@ -1,8 +1,8 @@
 # OKRs
 
 **Cadence**: Review after every sprint.
-**Last reviewed**: 2026-03-25
-**Current phase**: Roll Out (transitioned after Sprint 4)
+**Last reviewed**: 2026-03-26
+**Current phase**: Get Users (transitioned after Sprint 5)
 
 ---
 
@@ -13,8 +13,8 @@ reflect whichever phase you're in.
 
 1. **Foundation** — Vision, architecture, brand identity, devops ✅
 2. **Implement** — Build the product based on the foundation ✅
-3. **Roll Out** — Deployment, GTM strategy, business model, pricing, launch prep ← current
-4. **Get Users** — Launch, grow, iterate
+3. **Roll Out** — Deployment, GTM strategy, business model, pricing, launch prep ✅
+4. **Get Users** — Launch, grow, iterate ← current
 
 ---
 
@@ -57,21 +57,20 @@ Fitsy's macro pipeline, restaurant discovery, and UI all work together.
 
 ---
 
-## Phase 3: Roll Out
+## Phase 3: Roll Out ✅ Complete
 
 ### O1: Ready to launch
 Production deployment with monitoring, ready for real users.
 
 | # | Key Result | Status | Notes |
 |---|------------|--------|-------|
-| KR1 | Deployed to production with auth and data pipeline operational | Not started | S-30 |
-| KR2 | Business Model and pricing strategy finalized | Not started | S-31 |
-| KR3 | GTM materials complete (landing page, CTA to App Store) | Not started | S-32 |
-| KR4 | Monitoring and alerting operational (API costs, rate limits, accuracy) | Not started | S-33 |
+| KR1 | Deployed to production with auth and data pipeline operational | **Done** | S-30 merged; runbook + verify-prod.sh shipped |
+| KR2 | Business Model and pricing strategy finalized | **Done** | S-31 merged; $30/yr + $5/mo Stripe spec complete |
+| KR3 | GTM materials complete (landing page, CTA to App Store) | **Done** | S-32 merged; Next.js marketing site with hero, features, CTA |
+| KR4 | Monitoring and alerting operational (API costs, rate limits, accuracy) | **Done** | S-33 merged; health endpoint + Vercel analytics |
 
 ---
 
-<!--
 ## Phase 4: Get Users
 
 ### O1: Ship MVP to first 10 users
@@ -80,10 +79,9 @@ Real users validate whether macro-aware restaurant discovery solves a real probl
 | # | Key Result | Status | Notes |
 |---|------------|--------|-------|
 | KR1 | 10 users signed up and using the app | Not started | |
-| KR2 | Users completing at least 3 searches per week | Not started | |
+| KR2 | Users completing at least 3 searches per week | Not started | Measurable only after KR1 — needs active users first |
 | KR3 | 2 rounds of user testing completed with findings triaged | Not started | |
 | KR4 | Feedback loop operational (capture → triage → spec → ship) | Not started | |
--->
 
 ---
 
