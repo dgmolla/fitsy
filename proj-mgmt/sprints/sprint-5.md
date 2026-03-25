@@ -4,6 +4,8 @@ kanban-plugin: basic
 
 ## Backlog
 
+- [ ] **S-34** E2E video pipeline — set up Playwright with video recording against staging, agents run before opening PRs, upload videos to PR description. Frontend PRs must include a screen recording showing the UI works. #cto #harness #wave-3 ^dep-S-32
+
 ## In Progress
 
 - [ ] **S-32** Landing page — marketing site (Next.js), hero, feature highlights, CTA to App Store #frontend #O3 #wave-2 ^dep-S-30
