@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "apps/api/**"
+      - "apps/mobile/**"
 
 concurrency:
   group: playwright-${{ github.ref }}
@@ -27,48 +28,40 @@ jobs:
         working-directory: apps/api
         run: npx playwright install --with-deps chromium
 
-      - name: Resolve preview URL
-        id: preview
+      - name: Build API
+        working-directory: apps/api
+        run: npm run build
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_TEAM_SLUG: ${{ secrets.VERCEL_TEAM_SLUG }}
-          VERCEL_PROJECT: fitsy-api
-          SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          if [ -z "$VERCEL_TOKEN" ]; then
-            echo "VERCEL_TOKEN not set — skipping E2E"
-            echo "url=" >> $GITHUB_OUTPUT
-          else
-            # Poll up to 3 min for a ready Vercel deployment matching this commit
-            DEADLINE=$((SECONDS + 180))
-            while [ $SECONDS -lt $DEADLINE ]; do
-              URL=$(curl -s -H "Authorization: Bearer $VERCEL_TOKEN" \
-                "https://api.vercel.com/v6/deployments?teamId=$VERCEL_TEAM_SLUG&projectId=$VERCEL_PROJECT&limit=5" \
-                | jq -r --arg sha "$SHA" \
-                  '.deployments[] | select(.meta.githubCommitSha == $sha and .state == "READY") | .url' \
-                | head -1)
-              if [ -n "$URL" ]; then
-                echo "url=https://$URL" >> $GITHUB_OUTPUT
-                echo "Preview URL: https://$URL"
-                break
-              fi
-              sleep 15
-            done
-            if [ -z "$URL" ]; then
-              echo "::warning::No ready Vercel preview found for SHA $SHA — skipping E2E"
-              echo "url=" >> $GITHUB_OUTPUT
-            fi
-          fi
+          # Placeholder values — build-time only, not used at runtime for E2E tests
+          POSTGRES_PRISMA_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+          POSTGRES_URL_NON_POOLING: postgresql://placeholder:placeholder@localhost:5432/placeholder
+          GOOGLE_PLACES_API_KEY: placeholder
+          ANTHROPIC_API_KEY: placeholder
+          JWT_SECRET: placeholder-for-build-only
+
+      - name: Start API server
+        working-directory: apps/api
+        run: npm start &
+        env:
+          PORT: 3000
+          POSTGRES_PRISMA_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+          POSTGRES_URL_NON_POOLING: postgresql://placeholder:placeholder@localhost:5432/placeholder
+          GOOGLE_PLACES_API_KEY: placeholder
+          ANTHROPIC_API_KEY: placeholder
+          JWT_SECRET: placeholder-for-e2e-only
+          NODE_ENV: production
+
+      - name: Wait for server to be ready
+        run: npx wait-on http://localhost:3000 --timeout 30000
 
       - name: Run Playwright tests with video
-        if: steps.preview.outputs.url != ''
         working-directory: apps/api
         env:
-          BASE_URL: ${{ steps.preview.outputs.url }}
+          BASE_URL: http://localhost:3000
         run: npx playwright test
 
       - name: Upload video artifacts
-        if: always() && steps.preview.outputs.url != ''
+        if: always()
         uses: actions/upload-artifact@v4
         id: upload
         with:
@@ -77,7 +70,7 @@ jobs:
           retention-days: 14
 
       - name: Post video link to PR
-        if: always() && steps.preview.outputs.url != '' && steps.upload.outputs.artifact-id != ''
+        if: always() && steps.upload.outputs.artifact-id != ''
         uses: actions/github-script@v7
         with:
           script: |
@@ -87,7 +80,7 @@ jobs:
             const body = [
               `## ${outcome} Playwright E2E videos`,
               '',
-              `Preview tested: ${{ steps.preview.outputs.url }}`,
+              `Tested against: local build (localhost:3000)`,
               '',
               `📹 [Download videos](${artifactUrl}) (retained 14 days)`,
             ].join('\n');

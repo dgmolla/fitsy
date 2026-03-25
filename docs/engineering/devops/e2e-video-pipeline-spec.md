@@ -1,12 +1,16 @@
 # E2E Video Pipeline — Spec (S-34)
 
+> **Superseded**: The Vercel-preview approach described below was replaced in
+> S-44. See [`e2e-video-pipeline-fix-spec.md`](./e2e-video-pipeline-fix-spec.md)
+> for the current implementation (local `npm run build && npm start`).
+
 ## Problem
 
 Frontend PRs have no automated visual verification. Reviewers must manually
 check deployed previews to confirm the UI works. There is no video evidence
 that a PR was tested before merge.
 
-## Solution
+## Solution (Original — Vercel-based, now disabled)
 
 Add Playwright with video recording to the frontend (Next.js landing page in
 `apps/api`). On every PR that touches `apps/api/**`, CI:
@@ -67,6 +71,7 @@ Triggers on PRs touching `apps/api/**`. Steps:
 ## Acceptance Criteria
 
 - [x] `playwright.config.ts` and smoke test merged (PR #55)
-- [ ] CI workflow triggers on PRs touching `apps/api/**`
-- [ ] Video artifact is uploaded and linked from a PR comment
-- [ ] Workflow exits cleanly when `VERCEL_TOKEN` is not set (skip, not fail)
+- [x] CI workflow triggers on PRs touching `apps/api/**`
+- [x] Video artifact is uploaded and linked from a PR comment
+- [x] Workflow exits cleanly when `VERCEL_TOKEN` is not set (skip, not fail)
+- [x] Reworked to use local build in S-44 (Vercel previews disabled)
