@@ -172,12 +172,14 @@ LIMIT 20;
 
 **Expected result for a successful 90029 run (50-restaurant cap):**
 
-| Metric | Expected |
-|--------|---------|
-| Restaurants discovered | ~40–60 |
-| Restaurants persisted | ~30–45 (≥60% success rate) |
-| Menu items per restaurant | 5–30 |
-| Macro confidence breakdown | HIGH ~20%, MEDIUM ~60%, LOW ~20% |
+| Metric | Expected | S-46 Actual (1500m radius, 20 discovered) |
+|--------|---------|------------------------------------------|
+| Restaurants discovered | ~40–60 (3000m radius) | 20 (1500m radius) |
+| Restaurants persisted | ~30–45 (≥60% success rate) | 9 (45%) — Haiku truncation at max_tokens |
+| Menu items per restaurant | 5–30 | ~12 avg |
+| Macro confidence breakdown | HIGH ~20%, MEDIUM ~60%, LOW ~20% | Not measured |
+
+> **Note (S-46):** The 1500m default radius returns only ~20 restaurants in this area. Increase `TARGET_RADIUS` to 3000m to get closer to the 40–60 discovery target. Haiku failures (9 of 18 attempts) were due to truncated JSON at `max_tokens: 4096` — consider increasing to 8192 for large menus.
 
 ---
 
@@ -240,6 +242,8 @@ direct connection.
 
 ## Cost model (90029 ZIP, 50-restaurant cap)
 
+**Projected (pre-S-46 estimate):**
+
 | Component | Cost |
 |-----------|------|
 | Google Places Nearby Search (1–3 pages) | ~$0.01–0.05 |
@@ -247,6 +251,17 @@ direct connection.
 | Firecrawl map/scrape fallbacks (~20%) | ~$0.02 |
 | Claude Haiku (50 restaurants) | ~$0.025 |
 | **Total** | **~$0.35–0.40** |
+
+**Calibrated actuals (S-46 run — 20 discovered, 18 Haiku calls):**
+
+| Component | Actual |
+|-----------|--------|
+| Google Places (1 page) | $0.005 |
+| Firecrawl (18 search calls, cached) | ~$0.01 est |
+| Claude Haiku (18 calls, 58k in / 35k out tokens) | $0.22 |
+| **Total** | **$0.23** |
+
+> **Note:** Haiku cost is ~$0.012/restaurant — significantly higher than the $0.0005/restaurant projection. The discrepancy is due to large Firecrawl markdown payloads (up to 68k chars, truncated to 8k). Projected total for a 50-restaurant run at calibrated rates: **~$0.60–0.80**.
 
 ---
 
