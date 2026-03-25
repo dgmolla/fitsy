@@ -4,6 +4,10 @@ kanban-plugin: basic
 
 ## Backlog
 
+- [ ] **S-44** Fix E2E video pipeline — rework to run `npm run build && npm start` locally instead of Vercel previews (now disabled). Agent runs Playwright, records video, embeds in PR description. Update frontend/backend role files to require video for frontend PRs. Delete broken S-34c CI workflow. #cto #harness
+- [ ] **S-45** Update CLAUDE.md "What Actually Works" — audit every feature listed, verify it works end-to-end (app runs, API returns data, DB has preloaded restaurants). Agents must read this before proposing new phases. #cto #harness
+- [ ] **S-46** End-to-end smoke test — run the full flow: open mobile app → search → see restaurants → view macros. Verify preload pipeline has populated staging DB. Fix whatever's broken. Must pass before any "Get Users" sprint. #cto #O1
+
 ## In Progress
 
 
