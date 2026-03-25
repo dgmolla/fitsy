@@ -10,11 +10,11 @@ kanban-plugin: basic
 ## In Progress
 
 - [ ] **S-30** Production deployment — provision prod Supabase DB, run preload script against 90029, verify Vercel prod endpoints are live #cto #O3 #wave-1
-- [ ] **S-29** Verify Maestro E2E flows pass against staging — run `maestro test e2e/flows/` against live staging env, capture results #frontend #O1 #wave-1
 
 ## Done
 
 - [x] **S-31** Business model spec — pricing tiers ($30/yr + $5/mo), payment integration approach (Stripe), upgrade/downgrade flows #product-manager #O3 #wave-1 @completed(2026-03-24)
+- [x] **S-29** Verify Maestro E2E flows pass against staging — enable CI trigger, fix iOS build pipeline, document Vercel SSO blocker #cto #O1 #wave-1 @completed(2026-03-24)
 
 ## Sprint Review
 
