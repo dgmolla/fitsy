@@ -4,16 +4,16 @@ kanban-plugin: basic
 
 ## Backlog
 
-- [ ] **S-23** Welcome/onboarding screens — registration + profile setup flow #frontend #O1 #wave-2 ^dep-S-22
-- [ ] **S-25** Maestro E2E flows — search → detail → macro match flow against staging #frontend #O1 #wave-3 ^dep-S-24
+- [ ] **S-25** Maestro E2E flows — search → detail → macro match flow against staging #frontend #O1 #wave-3 ^dep-S-23
 - [ ] **S-28** Harness: extend structural test 11 to validate path-to-agent mapping in reviewer.md (not just agent names) #cto #harness #wave-1
 
 ## In Progress
 
-- [ ] **S-22** User auth backend — JWT sign-up/sign-in endpoints (`POST /api/auth/register`, `POST /api/auth/login`) #backend #O1 #wave-1
+- [ ] **S-23** Welcome/onboarding screens — registration + profile setup flow #frontend #O1 #wave-2 ^dep-S-22
 
 ## Done
 
+- [x] **S-22** User auth backend — JWT sign-up/sign-in endpoints (`POST /api/auth/register`, `POST /api/auth/login`) #backend #O1 #wave-1 @completed(2026-03-25)
 - [x] **S-27** Reviewer routing — route `prisma/` to backend; update reviewer.md, reviewer.yml, route-reviewers.sh #cto #harness @completed(2026-03-25)
 - [x] **S-24** Staging environment setup — Vercel deploy + Supabase DB provisioning runbook #cto #O1 #wave-1 @completed(2026-03-25)
 - [x] **S-26** Harness fix — pre-commit type check + lint to improve CI first-run pass rate #cto #harness #wave-1 @completed(2026-03-25)
