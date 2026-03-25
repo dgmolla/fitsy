@@ -13,8 +13,8 @@ Multiple agents may review the same PR if it crosses domains.
 |---|---|
 | `apps/api/` (all files) | **backend** |
 | `apps/mobile/` (all files) | **frontend** |
-| `packages/shared/src/` | **backend** |
-| `packages/shared/(package.json\|tsconfig.json)`, `prisma/` | **cto** |
+| `packages/shared/src/`, `prisma/` | **backend** |
+| `packages/shared/(package.json\|tsconfig.json)` | **cto** |
 | `docs/design/` | **designer** |
 | `docs/product/`, `proj-mgmt/okrs*` | **product-manager** |
 | `docs/gtm/` | **gtm** |
