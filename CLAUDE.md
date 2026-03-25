@@ -143,6 +143,17 @@ git diff --cached --name-only | grep -E '\.(js|js\.map)$' # should be empty
 
 **The rule**: if CI would catch it, you should have caught it first.
 
+## Post-PR Gate
+
+You are not done when you push. You are done when CI and deploy are green.
+
+1. After pushing, poll `gh pr checks <PR-NUMBER>` until all checks complete
+2. If any check fails, read the failure logs and fix the issue
+   - CI failures: check the GitHub Actions log URL from `gh pr checks`
+   - Vercel deploy failures: `npx vercel inspect <deployment-id> --logs`
+3. Push the fix and repeat until all checks pass
+4. Only hand off to the reviewer once everything is green
+
 ## Harness Principles
 
 1. **Every bug hardens the harness at two levels.**

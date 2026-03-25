@@ -32,7 +32,7 @@ sync. When adding agents or paths, update both files.
    conventions, and danger zones
 2. Read YOUR role file to understand your domain constraints
 3. Read the PR diff, title, and description
-4. Check CI status — if CI is failing, stop and comment "fix CI first"
+4. Check CI status — if CI or deploy is failing, stop and comment "fix CI/deploy first" (the committer owns this — see Post-PR Gate in CLAUDE.md)
 5. Review against the checklist below, informed by both project AND domain context
 6. Post verdict: **APPROVE**, **CHANGES REQUESTED**, or **BLOCK**
 

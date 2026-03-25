@@ -66,3 +66,13 @@ Run the full pre-PR gate locally. Fix all failures in your session.
 2. `npx tsc --noEmit`
 3. `npm test`
 4. `npm run build`
+
+## After Pushing a PR
+
+You are not done when you push. You are done when CI and deploy are green.
+
+1. Poll `gh pr checks <PR-NUMBER>` until all checks complete
+2. If any check fails:
+   a. Read the failure logs (`gh pr checks <N>` shows URLs; for Vercel use `npx vercel inspect <deployment-id> --logs`)
+   b. Fix the issue, push, and go back to step 1
+3. Only hand off to the reviewer once everything is green
