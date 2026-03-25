@@ -8,12 +8,11 @@ kanban-plugin: basic
 
 ## In Progress
 
-- [ ] **S-32** Landing page — marketing site (Next.js), hero, feature highlights, CTA to App Store #frontend #O3 #wave-2 ^dep-S-30
-- [ ] **S-33** Monitoring and alerting — API cost tracking (Anthropic + Google), error rate alerts, Vercel analytics #cto #O3 #wave-2 ^dep-S-30
-
 
 ## Done
 
+- [x] **S-32** Landing page — marketing site (Next.js), hero, feature highlights, CTA to App Store #frontend #O3 #wave-2 @completed(2026-03-25)
+- [x] **S-33** Monitoring and alerting — API cost tracking (Anthropic + Google), error rate alerts, health endpoint, Vercel analytics #cto #backend #O3 #wave-2 @completed(2026-03-25)
 - [x] **S-31** Business model spec — pricing tiers ($30/yr + $5/mo), payment integration approach (Stripe), upgrade/downgrade flows #product-manager #O3 #wave-1 @completed(2026-03-24)
 - [x] **S-29** Verify Maestro E2E flows pass against staging — enable CI trigger, fix iOS build pipeline, document Vercel SSO blocker #cto #O1 #wave-1 @completed(2026-03-24)
 - [x] **S-30** Production deployment — runbook + verify-prod.sh, routing harness fix #cto #O3 #wave-1 @completed(2026-03-24)
