@@ -84,9 +84,10 @@ npx prisma migrate dev # Run migrations
 ```bash
 git config core.hooksPath .githooks
 ```
-This activates the pre-push gate (`scripts/pre-push.sh`) — runs structural
-tests and TypeScript checks locally before every push. Catches CI failures
-before they hit GitHub Actions.
+This activates a **fast local gate** (`scripts/pre-push.sh`) — runs structural
+tests and TypeScript checks before every push. This is a quick filter, not a
+substitute for the full Pre-PR Gate above (which also requires `npm test` and
+`npm run build`). Catches the most common CI failures in seconds.
 
 ### Environment Variables
 Managed via Vercel CLI. All secrets live in Vercel → auto-synced to deploys.

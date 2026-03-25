@@ -1,18 +1,17 @@
 # Sprint Index
 
-**Last updated**: 2026-03-26
+**Last updated**: 2026-03-25
 
-<!-- CURRENT_SPRINT: sprints/sprint-6.md -->
+<!-- CURRENT_SPRINT: sprints/sprint-5.md -->
 
 ## Active
 
-- [[sprints/sprint-6|Sprint 6: Get Users]] — **current**
+- [[sprints/sprint-5|Sprint 5: Roll Out]] — **current**
 
 ## Upcoming
 
 ## Completed
 
-- [[sprints/sprint-5|Sprint 5: Roll Out]] — @completed(2026-03-26)
 - [[sprints/sprint-4|Sprint 4: Implement (auth + E2E)]] — @completed(2026-03-25)
 - [[sprints/sprint-3|Sprint 3: Implement (screens + coverage)]] — @completed(2026-03-25)
 - [[sprints/sprint-2|Sprint 2: Implement]] — @completed(2026-03-25)
