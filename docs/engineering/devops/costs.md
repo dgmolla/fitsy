@@ -2,6 +2,22 @@
 
 Last updated: 2026-03-24
 
+```mermaid
+graph LR
+    subgraph "Monthly Fixed"
+        CC[Claude Code $100/mo]
+    end
+    subgraph "Usage-Based"
+        ANT[Anthropic API ~$0/mo]
+        GCP[Google Places ~$0/mo]
+    end
+    subgraph "Free Tiers"
+        VCL[Vercel Hobby $0]
+        SUP[Supabase Free $0]
+        GH[GitHub Free $0]
+    end
+```
+
 ## Monthly Recurring
 
 | Service | Tier | Cost | What it covers |
