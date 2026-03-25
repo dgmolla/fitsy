@@ -162,7 +162,7 @@ async function discoverRestaurants(): Promise<PlaceResult[]> {
           "Content-Type": "application/json",
           "X-Goog-Api-Key": apiKey,
           "X-Goog-FieldMask":
-            "places.id,places.displayName,places.formattedAddress,places.location,places.websiteUri,places.types,nextPageToken",
+            "places.id,places.displayName,places.formattedAddress,places.location,places.websiteUri,places.types",
         },
         body: JSON.stringify(body),
       }
@@ -405,7 +405,9 @@ ${truncatedMarkdown}`;
     throw new Error("Unexpected Haiku response type");
   }
 
-  const text = contentBlock.text.trim();
+  const raw = contentBlock.text.trim();
+  // Strip markdown fences if model wraps response despite instructions
+  const text = raw.replace(/^```(?:json)?\s*\n?/, "").replace(/\n?```\s*$/, "");
   const items = JSON.parse(text) as unknown;
 
   if (!Array.isArray(items)) {

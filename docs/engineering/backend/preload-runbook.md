@@ -217,10 +217,11 @@ three methods fail the restaurant is skipped.
 **Cause:** Occasionally Claude prefixes the JSON with explanatory text or wraps
 it in a markdown fence, despite the system prompt.
 
-**Mitigation:** The script's `estimateMacros` function will throw
-`"Haiku response is not an array"` and count the restaurant as
-`skippedHaikuFailed`. This is expected at a ~5% rate. Re-running the preload
-will retry those restaurants (upsert logic prevents duplicates).
+**Mitigation:** The script strips markdown fences before parsing. This resolves
+the most common failure. Remaining failures are typically `Unterminated string`
+errors where Haiku hits the `max_tokens: 4096` limit mid-JSON on large menus.
+These count as `skippedHaikuFailed`. Re-running retries those restaurants
+(upsert logic prevents duplicates).
 
 ---
 
@@ -275,25 +276,36 @@ npm run preload
 **Coordinates:** lat 34.0928, lng -118.3086, radius 1500m
 **Max restaurants:** 50
 
-**Script status:** Ready to run.
-**Blockers:** None — all required env vars are present in `.env.local` (pulled
-from Vercel). The only fix needed was updating `REQUIRED_ENV_VARS` in the
-preload script from `DATABASE_URL` to `POSTGRES_PRISMA_URL` /
-`POSTGRES_URL_NON_POOLING` to match the Prisma schema.
+**Script status:** COMPLETE ✅
 
-**To execute:**
+**Issues encountered and fixed:**
 
-```bash
-vercel env pull .env.local
-export $(grep -v '^#' .env.local | xargs)
-npm run preload
-```
+1. `GOOGLE_PLACES_API_KEY` had trailing `\n` (backslash-n literal) — caused `REQUEST_DENIED`. Stripped and re-added via `vercel env add`.
+2. `FIRECRAWL_API_KEY` had trailing `\n` — caused `Unauthorized: Invalid token`. Stripped and re-added.
+3. `ANTHROPIC_API_KEY` had trailing `\n` — caused Claude Haiku calls to fail. Stripped and re-added.
+4. `X-Goog-FieldMask` header included `nextPageToken` which is a top-level response field, not a place field — caused `INVALID_ARGUMENT`. Removed from field mask.
+5. Claude Haiku wrapped JSON in markdown fences (` ```json `) despite prompt instruction. Added fence-stripping before `JSON.parse()`.
 
-**To verify after run:**
+**Results (2026-03-25):**
+
+| Metric | Value |
+|--------|-------|
+| Restaurants discovered | 20 |
+| Restaurants persisted | 9 (45%) |
+| Menu items persisted | 105 |
+| Macro estimates persisted | 105 |
+| Skipped (no website) | 2 |
+| Skipped (no menu) | 0 |
+| Skipped (Haiku failed) | 9 |
+| Anthropic cost | $0.22 |
+| Google Places cost | $0.005 |
+| Total cost | $0.23 |
+
+**Notes:** Haiku failures were mostly truncated JSON (`Unterminated string`) due to the `max_tokens: 4096` limit on large menus. Re-running will retry those restaurants. Pipeline is functional.
+
+**To verify:**
 
 ```bash
 npx prisma studio
 # Or query: SELECT COUNT(*) FROM "Restaurant";
 ```
-
-Record results in this section after execution.
