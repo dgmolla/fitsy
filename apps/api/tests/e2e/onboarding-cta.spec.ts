@@ -92,7 +92,7 @@ test.describe("Onboarding CTA flow", () => {
 
     // Nav brand
     await expect(page.locator("nav")).toBeVisible();
-    await expect(page.locator("text=fitsy")).toBeVisible();
+    await expect(page.locator("nav").getByText("fitsy", { exact: true })).toBeVisible();
 
     // Hero
     await expect(page.locator("h1")).toBeVisible();
