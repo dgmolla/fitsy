@@ -26,10 +26,12 @@ test.describe("Auth flow — register", () => {
       data: { email: uniqueEmail, password: TEST_PASSWORD, name: TEST_NAME },
     });
 
+    const bodyText = await res.text();
+    console.log("register response:", res.status(), bodyText);
     expect(res.status()).toBe(201);
-    const body = await res.json();
+    const body = JSON.parse(bodyText) as Record<string, unknown>;
     expect(body).toHaveProperty("token");
-    expect(body.user.email).toBe(uniqueEmail);
+    expect((body.user as Record<string, unknown>).email).toBe(uniqueEmail);
   });
 
   test("rejects duplicate registration with 409", async ({ request }) => {
