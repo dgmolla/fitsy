@@ -72,33 +72,28 @@ Full details — pipeline steps, cost, endpoints, service boundaries, confidence
 
 ## Development Commands
 
-### Build & Run
+### Commands
 ```bash
 npm run dev:api        # API dev server
 npm run dev:mobile     # Expo dev client
-npm run build:api      # Production API build
-npm run start:api      # Production API start
-```
-
-### Tests
-```bash
 npm test               # Run tests
-npm run test:coverage  # With coverage
+npx prisma migrate dev # Run migrations
 ```
 
-### Database
+### Environment Variables
+Managed via Vercel CLI. All secrets live in Vercel → auto-synced to deploys.
 ```bash
-npx prisma migrate dev  # Run migrations
-npx prisma db seed      # Seed data
+vercel env ls              # List all env vars
+vercel env pull .env.local # Pull to local dev
+vercel env add KEY prod    # Add/update a secret
 ```
-
-### Required Environment Variables
-| Variable | Purpose | Where |
-|----------|---------|-------|
-| `DATABASE_URL` | Database connection | Backend |
-| `GOOGLE_PLACES_API_KEY` | Restaurant discovery | Backend |
-| `ANTHROPIC_API_KEY` | Menu parsing LLM | Backend |
-| `JWT_SECRET` | Auth token signing | Backend |
+| Variable | Purpose | Source |
+|----------|---------|--------|
+| `POSTGRES_PRISMA_URL` | DB connection (pooled) | Supabase integration |
+| `POSTGRES_URL_NON_POOLING` | DB migrations (direct) | Supabase integration |
+| `GOOGLE_PLACES_API_KEY` | Restaurant discovery | Google Cloud Console |
+| `FIRECRAWL_API_KEY` | Menu scraping | firecrawl.dev |
+| `ANTHROPIC_API_KEY` | Macro estimation (Haiku) | console.anthropic.com |
 
 ---
 
