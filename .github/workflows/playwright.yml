@@ -43,7 +43,7 @@ jobs:
 
       - name: Start API server
         working-directory: apps/api
-        run: npm start &
+        run: npm start > /tmp/api-server.log 2>&1 &
         env:
           PORT: 3000
           POSTGRES_PRISMA_URL: ${{ secrets.POSTGRES_PRISMA_URL }}
@@ -61,6 +61,10 @@ jobs:
         env:
           BASE_URL: http://localhost:3000
         run: npx playwright test
+
+      - name: Dump server logs
+        if: always()
+        run: cat /tmp/api-server.log || true
 
       - name: Upload video artifacts
         if: always()
