@@ -1,0 +1,39 @@
+name: EAS Build + TestFlight
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+concurrency:
+  group: eas-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-submit:
+    name: iOS build → TestFlight
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
+
+      - name: Build iOS (production)
+        working-directory: apps/mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: eas build --platform ios --profile production --non-interactive
+
+      - name: Submit to TestFlight
+        working-directory: apps/mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: eas submit --platform ios --latest --non-interactive

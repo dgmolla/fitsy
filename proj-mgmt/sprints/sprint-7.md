@@ -4,16 +4,15 @@ kanban-plugin: basic
 
 ## Backlog
 
-- [ ] **S-51** TestFlight beta build — EAS Build + internal test group setup #cto #O1 #wave-2 ^dep-S-48 ^dep-S-49 ^dep-S-50
-
 ## In Progress
 
-- [ ] **S-50** E2E validation — onboarding CTA flow with Playwright recording in PR description #cto #O1 #wave-1
+- [ ] **S-51** TestFlight beta build — EAS Build + internal test group setup #cto #O1 #wave-2 ^dep-S-48 ^dep-S-49 ^dep-S-50
 
 ## Done
 
 - [x] **S-48** E2E validation — auth flow (register + login) with Playwright recording in PR description #cto #O1 #wave-1 @completed(2026-03-25)
 - [x] **S-49** E2E validation — search → restaurant detail flow with Playwright recording in PR description #cto #O1 #wave-1 @completed(2026-03-25)
+- [x] **S-50** E2E validation — onboarding CTA flow with Playwright recording in PR description #cto #O1 #wave-1 @completed(2026-03-25)
 
 ## Sprint Review
 
