@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Stack, router } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { getStoredToken } from '@/lib/authClient';
 
 export default function RootLayout() {
@@ -27,7 +27,7 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       {checking ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <View style={styles.loader}>
           <ActivityIndicator size="large" color="#2D7D46" accessibilityLabel="Loading" />
         </View>
       ) : (
@@ -36,3 +36,11 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  loader: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});

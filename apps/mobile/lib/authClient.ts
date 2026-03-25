@@ -26,6 +26,11 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    const message = (data as { error?: string }).error ?? `HTTP ${res.status}`;
+    throw new Error(message);
+  }
   return res.json() as Promise<T>;
 }
 

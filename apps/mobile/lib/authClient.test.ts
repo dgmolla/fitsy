@@ -65,11 +65,27 @@ describe('loginAndStore', () => {
     );
   });
 
-  it('throws on API error shape', async () => {
+  it('throws on API error shape (200 with error body)', async () => {
     global.fetch = makeMockFetch({ ok: true, body: errorResponse });
 
     await expect(loginAndStore('bad@example.com', 'wrong')).rejects.toThrow(
       'Invalid credentials',
+    );
+  });
+
+  it('throws on HTTP error response with error body', async () => {
+    global.fetch = makeMockFetch({ ok: false, status: 401, body: { error: 'Invalid credentials' } });
+
+    await expect(loginAndStore('bad@example.com', 'wrong')).rejects.toThrow(
+      'Invalid credentials',
+    );
+  });
+
+  it('throws with HTTP status fallback when error body is empty', async () => {
+    global.fetch = makeMockFetch({ ok: false, status: 500, body: {} });
+
+    await expect(loginAndStore('jane@example.com', 'secret')).rejects.toThrow(
+      'HTTP 500',
     );
   });
 
@@ -116,11 +132,19 @@ describe('registerAndStore', () => {
     );
   });
 
-  it('throws on API error shape', async () => {
+  it('throws on API error shape (200 with error body)', async () => {
     global.fetch = makeMockFetch({
       ok: true,
       body: { error: 'Email already in use' } satisfies AuthApiResponse,
     });
+
+    await expect(
+      registerAndStore('Jane', 'existing@example.com', 'secret'),
+    ).rejects.toThrow('Email already in use');
+  });
+
+  it('throws on HTTP error response with error body', async () => {
+    global.fetch = makeMockFetch({ ok: false, status: 409, body: { error: 'Email already in use' } });
 
     await expect(
       registerAndStore('Jane', 'existing@example.com', 'secret'),
