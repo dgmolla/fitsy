@@ -1,7 +1,9 @@
 name: E2E Staging Tests
 
 on:
-  workflow_dispatch: # disabled until E2E flows exist — re-enable by adding push trigger
+  push:
+    branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: e2e-staging
@@ -39,11 +41,43 @@ jobs:
           curl -Ls "https://get.maestro.mobile.dev" | bash
           echo "$HOME/.maestro/bin" >> $GITHUB_PATH
 
-      - name: Build Expo preview
+      - name: Expo prebuild (iOS)
         if: steps.check.outputs.should_run == 'true'
-        run: cd apps/mobile && npx expo prebuild --platform ios --no-install
+        working-directory: apps/mobile
+        run: npx expo prebuild --platform ios --no-install
         env:
+          EXPO_NO_GIT_STATUS: 1
           API_URL: ${{ secrets.STAGING_API_URL }}
+
+      - name: Build iOS app for simulator
+        if: steps.check.outputs.should_run == 'true'
+        working-directory: apps/mobile/ios
+        run: |
+          xcodebuild \
+            -workspace fitsy.xcworkspace \
+            -scheme fitsy \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcpretty
+
+      - name: Boot iOS simulator
+        if: steps.check.outputs.should_run == 'true'
+        run: |
+          UDID=$(xcrun simctl list devices available --json \
+            | jq -r '[.devices | to_entries[] | .value[] | select(.name == "iPhone 15" and .isAvailable == true)] | first | .udid')
+          echo "SIMULATOR_UDID=$UDID" >> $GITHUB_ENV
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+
+      - name: Install app on simulator
+        if: steps.check.outputs.should_run == 'true'
+        run: |
+          APP_PATH=$(find apps/mobile/ios/build -name "*.app" -not -path "*/intermediates/*" | head -1)
+          xcrun simctl install "$SIMULATOR_UDID" "$APP_PATH"
 
       - name: Run Maestro flows
         if: steps.check.outputs.should_run == 'true'
