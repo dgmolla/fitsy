@@ -1,17 +1,19 @@
 # Sprint Index
 
-**Last updated**: 2026-03-23
+**Last updated**: 2026-03-25
 
-<!-- CURRENT_SPRINT: sprints/sprint-2.md -->
+<!-- CURRENT_SPRINT: sprints/sprint-4.md -->
 
 ## Active
 
-- [[sprints/sprint-2|Sprint 2: Implement]] — **current**
+- [[sprints/sprint-4|Sprint 4: Implement (auth + E2E)]] — **current**
 
 ## Upcoming
 
 ## Completed
 
+- [[sprints/sprint-3|Sprint 3: Implement (screens + coverage)]] — @completed(2026-03-25)
+- [[sprints/sprint-2|Sprint 2: Implement]] — @completed(2026-03-25)
 - [[sprints/sprint-1|Sprint 1: Foundation]] — @completed(2026-03-23)
 
 ---
