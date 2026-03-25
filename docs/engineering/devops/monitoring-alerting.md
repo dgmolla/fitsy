@@ -70,7 +70,7 @@ Response schema:
 }
 ```
 
-Returns `503` if DB is unreachable. DB check: count `Restaurant` rows (fast, exercises the connection).
+Returns `503` if DB is unreachable. DB check: `SELECT 1` (fast, exercises the connection without depending on table contents).
 
 ### 2. Vercel Analytics
 
@@ -131,10 +131,27 @@ Response 503: { status: "error", db: "unreachable", error: string }
 
 ## Constraints
 
-- Health check DB query must complete in <500ms — use a simple count, not a complex query
+- Health check DB query must complete in <500ms — use `SELECT 1`, not a table count or complex query
 - No external monitoring services (DataDog, Sentry, etc.) at MVP — Vercel-native only
 - Cost tracking is manual/stdout at MVP — no dashboards or DB persistence
 - Analytics requires `@vercel/analytics` ≥2.0 for Next.js App Router compatibility
+
+## Deployment behavior
+
+`vercel.json` sets `ignoreCommand` to skip builds on all Vercel environments except production:
+
+```bash
+if [ "$VERCEL_ENV" = "production" ]; then exit 1; else exit 0; fi
+```
+
+Vercel interprets exit 1 as "build this deploy" and exit 0 as "skip." This means:
+- **Preview deploys** (PR branches): skipped — no Vercel preview URL generated
+- **Development deploys**: skipped
+- **Production deploys** (main branch): built and deployed
+
+Rationale: The API project has no meaningful UI to preview in a branch deploy, and skipping previews stays within Vercel's free-tier build quota.
+
+---
 
 ## Out of Scope
 
