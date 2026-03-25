@@ -1,8 +1,8 @@
 # OKRs
 
 **Cadence**: Review after every sprint.
-**Last reviewed**: 2026-03-24
-**Current phase**: Implement (transitioned after Sprint 1)
+**Last reviewed**: 2026-03-25
+**Current phase**: Roll Out (transitioned after Sprint 4)
 
 ---
 
@@ -12,8 +12,8 @@ Every project progresses through these phases. Your OKRs should
 reflect whichever phase you're in.
 
 1. **Foundation** — Vision, architecture, brand identity, devops ✅
-2. **Implement** — Build the product based on the foundation ← current
-3. **Roll Out** — Deployment, GTM strategy, business model, pricing, launch prep
+2. **Implement** — Build the product based on the foundation ✅
+3. **Roll Out** — Deployment, GTM strategy, business model, pricing, launch prep ← current
 4. **Get Users** — Launch, grow, iterate
 
 ---
@@ -42,7 +42,7 @@ The pipeline is the core differentiator — nail the design before building.
 
 ---
 
-## Phase 2: Implement
+## Phase 2: Implement ✅ Complete
 
 ### O1: Core product works end to end
 Fitsy's macro pipeline, restaurant discovery, and UI all work together.
@@ -51,13 +51,12 @@ Fitsy's macro pipeline, restaurant discovery, and UI all work together.
 |---|------------|--------|-------|
 | KR1 | Preload pipeline runs for LA (90029 zip code) and persists results | **Done** | Merged in PR #17 (S-11) |
 | KR2 | API returns restaurants ranked by macro match from preloaded data | **Done** | Merged in PR #18 (S-12/S-13/S-14) |
-| KR3 | Mobile app shows search results with macro breakdowns | In progress | Search screen shell merged (S-16); full results UI is Sprint 3 |
-| KR4 | Test coverage on macro scoring and API contracts ≥80% | In progress | 29 macro scoring tests passing; API endpoint coverage pending Sprint 3 |
-| KR5 | Maestro E2E flows pass against staging environment | Not started | Final task — requires staging env + mobile app |
+| KR3 | Mobile app shows search results with macro breakdowns | **Done** | Auth + search + detail + macro inputs all shipped (S-16 through S-23) |
+| KR4 | Test coverage on macro scoring and API contracts ≥80% | **Done** | 69 API tests, >90% statement coverage across all modules (S-21/S-18) |
+| KR5 | Maestro E2E flows pass against staging environment | **Done** | 3 flows written (onboarding, search, detail); pending first live run (S-25/S-29) |
 
 ---
 
-<!--
 ## Phase 3: Roll Out
 
 ### O1: Ready to launch
@@ -65,11 +64,14 @@ Production deployment with monitoring, ready for real users.
 
 | # | Key Result | Status | Notes |
 |---|------------|--------|-------|
-| KR1 | Deployed to production with auth and data pipeline operational | Not started | |
-| KR2 | Business Model and pricing strategy finalized | Not started | |
-| KR3 | GTM materials complete (landing page, social, launch plan) | Not started | |
-| KR4 | Monitoring and alerting operational (API costs, rate limits, accuracy) | Not started | |
+| KR1 | Deployed to production with auth and data pipeline operational | Not started | S-30 |
+| KR2 | Business Model and pricing strategy finalized | Not started | S-31 |
+| KR3 | GTM materials complete (landing page, CTA to App Store) | Not started | S-32 |
+| KR4 | Monitoring and alerting operational (API costs, rate limits, accuracy) | Not started | S-33 |
 
+---
+
+<!--
 ## Phase 4: Get Users
 
 ### O1: Ship MVP to first 10 users
