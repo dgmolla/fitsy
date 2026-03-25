@@ -9,10 +9,11 @@
  *   npm run preload
  *
  * Environment variables:
- *   DATABASE_URL          — Prisma connection string (required)
- *   GOOGLE_PLACES_API_KEY — Google Places Nearby Search (required)
- *   ANTHROPIC_API_KEY     — Claude Haiku API (required)
- *   FIRECRAWL_API_KEY     — Firecrawl search/map/scrape (required)
+ *   POSTGRES_PRISMA_URL       — Prisma pooled connection string (required)
+ *   POSTGRES_URL_NON_POOLING  — Prisma direct connection for migrations (required)
+ *   GOOGLE_PLACES_API_KEY     — Google Places Nearby Search (required)
+ *   ANTHROPIC_API_KEY         — Claude Haiku API (required)
+ *   FIRECRAWL_API_KEY         — Firecrawl search/map/scrape (required)
  *   TARGET_LAT            — Target latitude (default: 34.0928)
  *   TARGET_LNG            — Target longitude (default: -118.3086)
  *   TARGET_RADIUS         — Search radius in meters (default: 1500)
@@ -27,7 +28,8 @@ import Anthropic from "@anthropic-ai/sdk";
 // ---------------------------------------------------------------------------
 
 const REQUIRED_ENV_VARS = [
-  "DATABASE_URL",
+  "POSTGRES_PRISMA_URL",
+  "POSTGRES_URL_NON_POOLING",
   "GOOGLE_PLACES_API_KEY",
   "ANTHROPIC_API_KEY",
   "FIRECRAWL_API_KEY",
