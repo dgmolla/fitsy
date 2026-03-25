@@ -4,13 +4,14 @@ kanban-plugin: basic
 
 ## Backlog
 
-- [ ] **S-30** Production deployment — provision prod Supabase DB, run preload script against 90029, verify Vercel prod endpoints are live #cto #O3 #wave-1
-- [ ] **S-31** Business model spec — pricing tiers ($30/yr + $5/mo), payment integration approach (Stripe), upgrade/downgrade flows #product-manager #O3 #wave-1
 - [ ] **S-32** Landing page — marketing site (Next.js), hero, feature highlights, CTA to App Store #frontend #O3 #wave-2 ^dep-S-30
 - [ ] **S-33** Monitoring and alerting — API cost tracking (Anthropic + Google), error rate alerts, Vercel analytics #cto #O3 #wave-2 ^dep-S-30
-- [ ] **S-29** Verify Maestro E2E flows pass against staging — run `maestro test e2e/flows/` against live staging env, capture results #frontend #O1 #wave-1
 
 ## In Progress
+
+- [ ] **S-30** Production deployment — provision prod Supabase DB, run preload script against 90029, verify Vercel prod endpoints are live #cto #O3 #wave-1
+- [ ] **S-31** Business model spec — pricing tiers ($30/yr + $5/mo), payment integration approach (Stripe), upgrade/downgrade flows #product-manager #O3 #wave-1
+- [ ] **S-29** Verify Maestro E2E flows pass against staging — run `maestro test e2e/flows/` against live staging env, capture results #frontend #O1 #wave-1
 
 ## Done
 
