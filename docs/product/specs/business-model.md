@@ -1,6 +1,6 @@
 # Business Model & Pricing
 
-> **Status:** Approved — Sprint 5 implementation
+> **Status:** Draft — under review
 > **Author:** Product Manager
 > **Date:** 2026-03-24
 
@@ -128,6 +128,32 @@ POST /api/billing/webhook
 - No annual-to-monthly mid-period downgrade at MVP — too many edge cases
 - Stripe Customer Portal handles all subscription management — no custom UI for cancel/upgrade
 - App Store in-app purchases are explicitly out of scope for MVP — Stripe web flow only
+
+## Edge Cases
+
+1. **User cancels during trial (before Day 7)** — subscription status transitions to `CANCELED` immediately; access revoked at `subscriptionPeriodEnd` which equals trial end date (Day 7). No charge is made.
+2. **Multi-device subscription state sync** — `subscriptionStatus` is server-side; every API request re-checks DB. No client-side caching of subscription state — stale state is not possible.
+3. **Stripe webhook arrives out of order** — e.g., `subscription.updated` arrives before `subscription.created`. Webhook handler must be idempotent: upsert on `subscriptionId`, never assume prior state. `subscription.created` can safely overwrite `subscription.updated` state because Stripe guarantees the event reflects current state at time of dispatch.
+4. **User deletes account while subscription is active** — account deletion must call `stripe.subscriptions.cancel({ prorate: false })` and then delete the DB record. Do not leave orphan Stripe subscriptions.
+5. **Reactivation after cancellation** — treated as a new subscription. Trial does NOT restart (Stripe handles this via `trial_end: 'now'` on new subscription creation for existing customers). Implement by checking `stripeCustomerId` existence before creating checkout session.
+6. **Payment method update during grace period** — Stripe Smart Retries handle retrying. If user updates payment method in Stripe Portal, a retry is triggered immediately. No separate handling needed.
+
+---
+
+## Acceptance Criteria
+
+- [ ] User can complete Stripe Checkout and reach `TRIALING` subscription state in DB
+- [ ] API returns `402` with `{ "error": "Subscription required" }` for `PAST_DUE`, `CANCELED`, and `EXPIRED` statuses
+- [ ] API allows access for `TRIALING` and `ACTIVE` statuses
+- [ ] Mobile client shows paywall screen on `402` response
+- [ ] Webhook handler correctly transitions subscription status for each event: `created` → `TRIALING/ACTIVE`, `updated` → reflect new state, `deleted` → `CANCELED`, `payment_failed` → `PAST_DUE`
+- [ ] Upgrade (monthly → annual) prorates correctly and switches plan; user remains `ACTIVE`
+- [ ] Downgrade (annual → monthly) defers until period end; user remains `ACTIVE` until then
+- [ ] After grace period exhausted (7 days past due), status transitions to `EXPIRED`
+- [ ] Reactivation after cancellation creates a new subscription without restarting the 7-day trial
+- [ ] Account deletion cancels the Stripe subscription (no orphan subscriptions)
+
+---
 
 ## Out of Scope
 
