@@ -4,11 +4,6 @@ kanban-plugin: basic
 
 ## Backlog
 
-- [ ] **S-36** App Store listing prep — screenshots, description copy, privacy policy page, support URL; everything needed to submit to TestFlight and App Store Connect #product-manager #O1 #wave-2 ^dep-S-32
-- [ ] **S-37b** User onboarding email backend — Resend integration, welcome email trigger on first sign-in #backend #O1 #wave-2
-- [ ] **S-37f** User onboarding email UI — in-app "setup your macros" CTA screen shown after sign-in #frontend #O1 #wave-2 ^dep-S-37b
-- [ ] **S-38** Feedback loop MVP — in-app "send feedback" button (email or Typeform link); triage checklist in `docs/product/feedback-triage.md` #product-manager #O1 #wave-2
-
 ## In Progress
 
 
@@ -16,6 +11,10 @@ kanban-plugin: basic
 
 - [x] **S-34** E2E video pipeline — Playwright recording on frontend PRs (PRs #55, #56) #cto #harness #wave-1 @completed(2026-03-26)
 - [x] **S-35** CI first-run pass rate fix — guard E2E prebuild failure, add pre-push hook #cto #harness #wave-1 @completed(2026-03-26)
+- [x] **S-36** App Store listing prep — screenshots, description copy, privacy policy page, support URL (PR #61) #product-manager #O1 #wave-2 @completed(2026-03-24)
+- [x] **S-37b** User onboarding email backend — Resend integration, welcome email trigger on register (PR #58) #backend #O1 #wave-2 @completed(2026-03-24)
+- [x] **S-37f** User onboarding CTA screen — in-app "set up my macros" screen after register (PR #62) #frontend #O1 #wave-2 @completed(2026-03-24)
+- [x] **S-38** Feedback loop MVP — triage checklist in `docs/product/feedback-triage.md` (PR #61) #product-manager #O1 #wave-2 @completed(2026-03-24)
 
 ## Sprint Review
 
