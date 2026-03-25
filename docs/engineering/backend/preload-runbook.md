@@ -172,12 +172,14 @@ LIMIT 20;
 
 **Expected result for a successful 90029 run (50-restaurant cap):**
 
-| Metric | Expected |
-|--------|---------|
-| Restaurants discovered | ~40–60 |
-| Restaurants persisted | ~30–45 (≥60% success rate) |
-| Menu items per restaurant | 5–30 |
-| Macro confidence breakdown | HIGH ~20%, MEDIUM ~60%, LOW ~20% |
+| Metric | Expected | S-46 Actual (1500m radius, 20 discovered) |
+|--------|---------|------------------------------------------|
+| Restaurants discovered | ~40–60 (3000m radius) | 20 (1500m radius) |
+| Restaurants persisted | ~30–45 (≥60% success rate) | 9 (45%) — Haiku truncation at max_tokens |
+| Menu items per restaurant | 5–30 | ~12 avg |
+| Macro confidence breakdown | HIGH ~20%, MEDIUM ~60%, LOW ~20% | Not measured |
+
+> **Note (S-46):** The 1500m default radius returns only ~20 restaurants in this area. Increase `TARGET_RADIUS` to 3000m to get closer to the 40–60 discovery target. Haiku failures (9 of 18 attempts) were due to truncated JSON at `max_tokens: 4096` — consider increasing to 8192 for large menus.
 
 ---
 
@@ -217,10 +219,11 @@ three methods fail the restaurant is skipped.
 **Cause:** Occasionally Claude prefixes the JSON with explanatory text or wraps
 it in a markdown fence, despite the system prompt.
 
-**Mitigation:** The script's `estimateMacros` function will throw
-`"Haiku response is not an array"` and count the restaurant as
-`skippedHaikuFailed`. This is expected at a ~5% rate. Re-running the preload
-will retry those restaurants (upsert logic prevents duplicates).
+**Mitigation:** The script strips markdown fences before parsing. This resolves
+the most common failure. Remaining failures are typically `Unterminated string`
+errors where Haiku hits the `max_tokens: 4096` limit mid-JSON on large menus.
+These count as `skippedHaikuFailed`. Re-running retries those restaurants
+(upsert logic prevents duplicates).
 
 ---
 
@@ -239,6 +242,8 @@ direct connection.
 
 ## Cost model (90029 ZIP, 50-restaurant cap)
 
+**Projected (pre-S-46 estimate):**
+
 | Component | Cost |
 |-----------|------|
 | Google Places Nearby Search (1–3 pages) | ~$0.01–0.05 |
@@ -246,6 +251,17 @@ direct connection.
 | Firecrawl map/scrape fallbacks (~20%) | ~$0.02 |
 | Claude Haiku (50 restaurants) | ~$0.025 |
 | **Total** | **~$0.35–0.40** |
+
+**Calibrated actuals (S-46 run — 20 discovered, 18 Haiku calls):**
+
+| Component | Actual |
+|-----------|--------|
+| Google Places (1 page) | $0.005 |
+| Firecrawl (18 search calls, cached) | ~$0.01 est |
+| Claude Haiku (18 calls, 58k in / 35k out tokens) | $0.22 |
+| **Total** | **$0.23** |
+
+> **Note:** Haiku cost is ~$0.012/restaurant — significantly higher than the $0.0005/restaurant projection. The discrepancy is due to large Firecrawl markdown payloads (up to 68k chars, truncated to 8k). Projected total for a 50-restaurant run at calibrated rates: **~$0.60–0.80**.
 
 ---
 
@@ -275,25 +291,37 @@ npm run preload
 **Coordinates:** lat 34.0928, lng -118.3086, radius 1500m
 **Max restaurants:** 50
 
-**Script status:** Ready to run.
-**Blockers:** None — all required env vars are present in `.env.local` (pulled
-from Vercel). The only fix needed was updating `REQUIRED_ENV_VARS` in the
-preload script from `DATABASE_URL` to `POSTGRES_PRISMA_URL` /
-`POSTGRES_URL_NON_POOLING` to match the Prisma schema.
+**Script status:** COMPLETE ✅
 
-**To execute:**
+**Issues encountered and fixed:**
 
-```bash
-vercel env pull .env.local
-export $(grep -v '^#' .env.local | xargs)
-npm run preload
+1. `GOOGLE_PLACES_API_KEY`, `FIRECRAWL_API_KEY`, and `ANTHROPIC_API_KEY` all had trailing `\n` (backslash-n literal) in Vercel — caused auth failures for each service. Stripped and re-added via `vercel env add`.
+2. `X-Goog-FieldMask` header included `nextPageToken` which is a top-level response field, not a place field — caused `INVALID_ARGUMENT`. Fixed in `scripts/preload.ts`.
+3. Claude Haiku wrapped JSON in markdown fences (` ```json `) despite prompt instruction. Fixed in `scripts/preload.ts` by stripping fences before `JSON.parse()`.
+
+**Results (2026-03-25):**
+
+| Metric | Value |
+|--------|-------|
+| Restaurants discovered | 20 |
+| Restaurants persisted | 9 (45%) |
+| Menu items persisted | 105 |
+| Macro estimates persisted | 105 |
+| Skipped (no website) | 2 |
+| Skipped (no menu) | 0 |
+| Skipped (Haiku failed — truncated JSON) | 9 |
+| Anthropic cost | $0.22 |
+| Google Places cost | $0.005 |
+| Total cost | $0.23 |
+
+**Notes:** Haiku failures were mostly truncated JSON (`Unterminated string`) due to the `max_tokens: 4096` limit on large menus. Re-running will retry those restaurants. Pipeline is functional and S-47 (smoke test) is unblocked.
+
+**DB verification:**
+
 ```
+Restaurants: 9
+MenuItems: 105
+MacroEstimates: 105
 
-**To verify after run:**
-
-```bash
-npx prisma studio
-# Or query: SELECT COUNT(*) FROM "Restaurant";
+Sample — Chick-fil-A Chicken Sandwich: 440 cal, 41g protein, 39g carbs, 16g fat (HIGH)
 ```
-
-Record results in this section after execution.
