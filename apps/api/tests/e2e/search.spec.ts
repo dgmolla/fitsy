@@ -114,9 +114,9 @@ test.describe("Restaurant detail flow — GET /api/restaurants/:id/menu", () => 
 
     if (menuRes.status() === 200) {
       const menu = await menuRes.json();
-      expect(menu).toHaveProperty("restaurant");
-      expect(menu).toHaveProperty("menuItems");
-      expect(Array.isArray(menu.menuItems)).toBe(true);
+      expect(menu).toHaveProperty("data");
+      expect(menu.data).toHaveProperty("menuItems");
+      expect(Array.isArray(menu.data.menuItems)).toBe(true);
     }
   });
 });
