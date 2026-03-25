@@ -41,6 +41,18 @@ jobs:
           ANTHROPIC_API_KEY: placeholder
           JWT_SECRET: placeholder-for-build-only
 
+      - name: Test DB connection
+        env:
+          POSTGRES_PRISMA_URL: ${{ secrets.POSTGRES_PRISMA_URL }}
+        run: |
+          node -e "
+          const { PrismaClient } = require('@prisma/client');
+          const p = new PrismaClient();
+          p.\$queryRaw\`SELECT 1 as ok\`
+            .then(r => { console.log('DB connection OK:', JSON.stringify(r)); return p.\$disconnect(); })
+            .catch(e => { console.error('DB connection FAILED:', e.message, 'code:', e.code); p.\$disconnect(); process.exit(1); });
+          "
+
       - name: Start API server
         working-directory: apps/api
         run: npm start > /tmp/api-server.log 2>&1 &
