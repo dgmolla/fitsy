@@ -188,17 +188,89 @@ echo -n "11. Reviewer routing table matches route-reviewers.sh... "
 ROUTE_SCRIPT="$REPO_ROOT/scripts/route-reviewers.sh"
 REVIEWER_MD="$REPO_ROOT/.claude/agents/reviewer.md"
 if [ -f "$ROUTE_SCRIPT" ] && [ -f "$REVIEWER_MD" ]; then
+  # Part A: agent-set check (original)
   # Extract agents from script (comment lines between markers: "-> agent")
   SCRIPT_AGENTS=$(sed -n '/BEGIN ROUTING TABLE/,/END ROUTING TABLE/p' "$ROUTE_SCRIPT" \
     | sed -n 's/.*-> \([a-z-]*\)/\1/p' | sort -u | tr '\n' ' ' | xargs)
   # Extract agents from reviewer.md table (bold agent names between **)
   MD_AGENTS=$(sed -n 's/.*\*\*\([a-z-]*\)\*\*.*/\1/p' "$REVIEWER_MD" \
     | sort -u | tr '\n' ' ' | xargs)
+  ROUTING_ERRORS=""
   if [ "$SCRIPT_AGENTS" != "$MD_AGENTS" ]; then
+    ROUTING_ERRORS="$ROUTING_ERRORS\n  Agent sets differ:"
+    ROUTING_ERRORS="$ROUTING_ERRORS\n    route-reviewers.sh: $SCRIPT_AGENTS"
+    ROUTING_ERRORS="$ROUTING_ERRORS\n    reviewer.md:        $MD_AGENTS"
+    ROUTING_ERRORS="$ROUTING_ERRORS\n  Update both when adding/removing agents."
+  fi
+
+  # Part B: path-to-agent mapping check (extended)
+  # Parse each non-header, non-fallback table row from reviewer.md.
+  # Row format:  | `path/pattern` | **agentname** |
+  # A row may have multiple comma-separated patterns in the path cell.
+  # We map each individual pattern to a representative file path for testing.
+  #
+  # Strategy: strip markdown backtick/bold formatting, split comma-separated
+  # path patterns, construct a minimal file path for each, then verify that
+  # route-reviewers.sh routes it to the expected agent.
+  #
+  # Pre-process: replace markdown-escaped pipes (\|) with a placeholder so
+  # IFS='|' splitting on the column separator is not confused by \| in patterns.
+  while IFS='|' read -r _ path_cell agent_cell _rest; do
+    # Skip rows that don't look like data rows (header, separator, empty)
+    [[ "$path_cell" =~ ^[[:space:]]*[-:]*[[:space:]]*$ ]] && continue
+    [[ "$path_cell" =~ Path[[:space:]]*pattern ]] && continue
+    [[ "$path_cell" =~ No[[:space:]]*match ]] && continue
+    [[ -z "${path_cell// }" ]] && continue
+
+    # Extract the expected agent name (strip bold markers and whitespace)
+    expected_agent=$(echo "$agent_cell" | sed 's/\*\*//g' | xargs)
+    [[ -z "$expected_agent" ]] && continue
+
+    # Extract path patterns: strip backticks, parens (regex alternation), whitespace
+    # Then split on commas to get individual patterns
+    raw_patterns=$(echo "$path_cell" | sed "s/\`//g" | xargs)
+    IFS=',' read -ra pattern_list <<< "$raw_patterns"
+
+    for raw_pat in "${pattern_list[@]}"; do
+      pat=$(echo "$raw_pat" | xargs)  # trim whitespace
+      [[ -z "$pat" ]] && continue
+
+      # Derive a representative file path from the pattern:
+      #   - Remove trailing "(all files)" annotation
+      #   - If it ends with /, append a dummy filename
+      #   - If it contains | (alternation like package.json|tsconfig.json), use first alternative
+      #   - If it ends without /, use as-is (exact file path)
+      clean_pat=$(echo "$pat" | sed 's/ *(all files)//g' | xargs)
+      # Handle alternation groups like packages/shared/(package.json|tsconfig.json)
+      # \| was replaced with PIPE_PLACEHOLDER before IFS='|' splitting above
+      if echo "$clean_pat" | grep -q '('; then
+        # Extract the base before ( and the first alternative inside
+        base=$(echo "$clean_pat" | sed 's/(.*//')
+        first_alt=$(echo "$clean_pat" | sed 's/.*(\([^PIPE_PLACEHOLDER)]*\).*/\1/')
+        clean_pat="${base}${first_alt}"
+      fi
+      # Handle glob star patterns like proj-mgmt/okrs* — use a concrete filename
+      clean_pat=$(echo "$clean_pat" | sed 's/\*$/okrs.md/')
+      # If pattern ends with /, append a dummy file
+      if [[ "$clean_pat" == */ ]]; then
+        probe_path="${clean_pat}foo.ts"
+      else
+        probe_path="$clean_pat"
+      fi
+
+      # Route the probe path and check output contains the expected agent
+      actual_json=$(echo "$probe_path" | bash "$ROUTE_SCRIPT" 2>/dev/null)
+      if ! echo "$actual_json" | grep -q "\"$expected_agent\""; then
+        ROUTING_ERRORS="$ROUTING_ERRORS\n  Path '$probe_path' should route to '$expected_agent' but got: $actual_json"
+        ROUTING_ERRORS="$ROUTING_ERRORS\n    (reviewer.md row: $pat → $expected_agent)"
+      fi
+    done
+  done < <(sed 's/\\|/PIPE_PLACEHOLDER/g' "$REVIEWER_MD")
+
+  if [ -n "$ROUTING_ERRORS" ]; then
     echo "FAIL"
-    echo "  route-reviewers.sh agents: $SCRIPT_AGENTS"
-    echo "  reviewer.md agents:        $MD_AGENTS"
-    echo "  Update both when adding/removing agents."
+    echo -e "$ROUTING_ERRORS"
+    echo "  Sync reviewer.md routing table with route-reviewers.sh."
     ERRORS=$((ERRORS + 1))
   else
     echo "PASS"
