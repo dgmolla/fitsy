@@ -77,6 +77,10 @@ jobs:
         if: steps.check.outputs.should_run == 'true'
         run: |
           APP_PATH=$(find apps/mobile/ios/build -name "*.app" -not -path "*/intermediates/*" | head -1)
+          if [ -z "$APP_PATH" ]; then
+            echo "::error::No .app artifact found — xcodebuild may have failed silently"
+            exit 1
+          fi
           xcrun simctl install "$SIMULATOR_UDID" "$APP_PATH"
 
       - name: Run Maestro flows
