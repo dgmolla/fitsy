@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 
 /**
- * S-48: E2E auth flow — register + login
+ * S-48: E2E auth flow — register + login (health check debug)
  *
  * Tests the auth API lifecycle against the live server:
  *   1. Register a new user → 201 + JWT

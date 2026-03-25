@@ -67,14 +67,17 @@ jobs:
       - name: Wait for server to be ready
         run: npx wait-on http://localhost:3000 --timeout 30000
 
-      - name: Smoke-test register endpoint
+      - name: Smoke-test health endpoint (Prisma via Next.js)
         run: |
+          echo "=== /api/health response ==="
+          curl -s http://localhost:3000/api/health
+          echo ""
+          echo "=== /api/auth/register response ==="
           curl -s -X POST http://localhost:3000/api/auth/register \
             -H 'Content-Type: application/json' \
-            -d '{"email":"smoke-ci-debug@fitsy.test","password":"TestPass123!"}' \
-            | tee /tmp/register-response.json
+            -d '{"email":"smoke-ci-debug@fitsy.test","password":"TestPass123!"}'
           echo ""
-          echo "HTTP status: $(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:3000/api/auth/register -H 'Content-Type: application/json' -d '{"email":"smoke-ci-debug2@fitsy.test","password":"TestPass123!"}')"
+          echo "=== Server logs ==="
           cat /tmp/api-server.log || true
 
       - name: Run Playwright tests with video
