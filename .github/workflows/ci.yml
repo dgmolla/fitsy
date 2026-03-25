@@ -155,12 +155,16 @@ jobs:
         if: steps.check.outputs.ready == 'true'
         run: npx prisma migrate deploy
         env:
-          DATABASE_URL: postgresql://fitsy_test:fitsy_test@localhost:5432/fitsy_test
+          # Prisma schema uses POSTGRES_PRISMA_URL (pooled) + POSTGRES_URL_NON_POOLING (direct).
+          # In CI both point to the same local container — no separate pooler needed.
+          POSTGRES_PRISMA_URL: postgresql://fitsy_test:fitsy_test@localhost:5432/fitsy_test
+          POSTGRES_URL_NON_POOLING: postgresql://fitsy_test:fitsy_test@localhost:5432/fitsy_test
       - name: Run tests with coverage gate
         if: steps.check.outputs.ready == 'true'
         run: npm run test:coverage --workspace=apps/api
         env:
-          DATABASE_URL: postgresql://fitsy_test:fitsy_test@localhost:5432/fitsy_test
+          POSTGRES_PRISMA_URL: postgresql://fitsy_test:fitsy_test@localhost:5432/fitsy_test
+          POSTGRES_URL_NON_POOLING: postgresql://fitsy_test:fitsy_test@localhost:5432/fitsy_test
           # External API keys intentionally absent — tests must mock all external services
 
   build:
