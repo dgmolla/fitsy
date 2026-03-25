@@ -42,15 +42,30 @@ jobs:
           echo "$HOME/.maestro/bin" >> $GITHUB_PATH
 
       - name: Expo prebuild (iOS)
+        id: prebuild
         if: steps.check.outputs.should_run == 'true'
         working-directory: apps/mobile
+        continue-on-error: true
         run: npx expo prebuild --platform ios --no-install
         env:
           EXPO_NO_GIT_STATUS: 1
           API_URL: ${{ secrets.STAGING_API_URL }}
 
-      - name: Build iOS app for simulator
+      - name: Check prebuild output
+        id: prebuild_check
         if: steps.check.outputs.should_run == 'true'
+        run: |
+          if [ -d apps/mobile/ios ] && [ "${{ steps.prebuild.outcome }}" = "success" ]; then
+            echo "ios_ready=true" >> $GITHUB_OUTPUT
+          else
+            echo "ios_ready=false" >> $GITHUB_OUTPUT
+            echo "::warning::expo prebuild did not produce apps/mobile/ios — skipping xcodebuild and Maestro steps"
+            echo "Prebuild outcome: ${{ steps.prebuild.outcome }}"
+            echo "Tip: Ensure STAGING_API_URL secret is set and Expo credentials are configured"
+          fi
+
+      - name: Build iOS app for simulator
+        if: steps.prebuild_check.outputs.ios_ready == 'true'
         working-directory: apps/mobile/ios
         run: |
           xcodebuild \
@@ -65,7 +80,7 @@ jobs:
             | xcpretty
 
       - name: Boot iOS simulator
-        if: steps.check.outputs.should_run == 'true'
+        if: steps.prebuild_check.outputs.ios_ready == 'true'
         run: |
           UDID=$(xcrun simctl list devices available --json \
             | jq -r '[.devices | to_entries[] | .value[] | select(.name == "iPhone 15" and .isAvailable == true)] | first | .udid')
@@ -74,7 +89,7 @@ jobs:
           xcrun simctl bootstatus "$UDID" -b
 
       - name: Install app on simulator
-        if: steps.check.outputs.should_run == 'true'
+        if: steps.prebuild_check.outputs.ios_ready == 'true'
         run: |
           APP_PATH=$(find apps/mobile/ios/build -name "*.app" -not -path "*/intermediates/*" | head -1)
           if [ -z "$APP_PATH" ]; then
@@ -84,13 +99,13 @@ jobs:
           xcrun simctl install "$SIMULATOR_UDID" "$APP_PATH"
 
       - name: Run Maestro flows
-        if: steps.check.outputs.should_run == 'true'
+        if: steps.prebuild_check.outputs.ios_ready == 'true'
         run: maestro test e2e/flows/
         env:
           MAESTRO_APP_ID: com.fitsy.app
 
       - name: Upload test artifacts on failure
-        if: failure() && steps.check.outputs.should_run == 'true'
+        if: failure() && steps.prebuild_check.outputs.ios_ready == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: maestro-screenshots

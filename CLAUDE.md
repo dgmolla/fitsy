@@ -80,6 +80,15 @@ npm test               # Run tests
 npx prisma migrate dev # Run migrations
 ```
 
+### Git Hooks Setup (one-time, per clone)
+```bash
+git config core.hooksPath .githooks
+```
+This activates a **fast local gate** (`scripts/pre-push.sh`) — runs structural
+tests and TypeScript checks before every push. This is a quick filter, not a
+substitute for the full Pre-PR Gate above (which also requires `npm test` and
+`npm run build`). Catches the most common CI failures in seconds.
+
 ### Environment Variables
 Managed via Vercel CLI. All secrets live in Vercel → auto-synced to deploys.
 ```bash

@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Git pre-push hook — runs pre-push.sh before every push.
+# Activate with: git config core.hooksPath .githooks
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+bash "$REPO_ROOT/scripts/pre-push.sh"
