@@ -18,7 +18,7 @@ persisted to the database.
   - "You're in! Fitsy finds restaurants near you with meals that match
     your macros."
   - CTA button: "Set up your macro targets" → links to the app (deep
-    link or web URL TBD; use `EXPO_PUBLIC_APP_URL` env var with fallback
+    link or web URL TBD; use `APP_URL` env var with fallback
     to `https://fitsy.app`)
   - Footer: "This is a transactional email. To stop receiving emails,
     delete your account."
@@ -33,7 +33,7 @@ API key stored as `RESEND_API_KEY` env var.
 **Why Resend:** Zero-config DNS setup, generous free tier for MVP, simple
 REST API, TypeScript SDK.
 
-### Service: `apps/api/services/email.ts`
+### Service: `apps/api/services/emailService.ts`
 
 ```typescript
 export async function sendWelcomeEmail(to: string, name?: string): Promise<void>
@@ -89,4 +89,4 @@ sequenceDiagram
 - [ ] `POST /api/auth/register` triggers a welcome email (assert in tests)
 - [ ] Email delivery failure does not cause register to return 500
 - [ ] `RESEND_API_KEY` absent: email silently skipped, register succeeds
-- [ ] `sendWelcomeEmail` is in `apps/api/services/email.ts`
+- [x] `sendWelcomeEmail` is in `apps/api/services/emailService.ts`

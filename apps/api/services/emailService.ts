@@ -40,7 +40,7 @@ export async function sendWelcomeEmail(
   await sendEmail({
     from: "Fitsy <hello@fitsy.app>",
     to,
-    subject: "Welcome to Fitsy — let's find food that fits",
+    subject: "Welcome to Fitsy \uD83E\uDD57 — let's find food that fits",
     html: `
 <p>${greeting}</p>
 <p>You're in! Fitsy finds restaurants near you with meals that match your protein, carb, and fat targets.</p>
