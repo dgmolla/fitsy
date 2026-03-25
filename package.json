@@ -14,12 +14,19 @@
     "start:api": "npm run start -w apps/api",
     "test": "npm run test --workspaces --if-present",
     "test:coverage": "npm run test:coverage --workspaces --if-present",
-    "preload": "npx tsx scripts/preload.ts"
+    "lint": "npm run lint --workspaces --if-present",
+    "type-check": "npm run type-check --workspaces --if-present",
+    "preload": "npx tsx scripts/preload.ts",
+    "prepare": "husky"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.36.3"
   },
   "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.57.2",
+    "@typescript-eslint/parser": "^8.57.2",
+    "eslint": "^10.1.0",
+    "husky": "^9.1.7",
     "tsx": "^4.21.0"
   },
   "engines": {
