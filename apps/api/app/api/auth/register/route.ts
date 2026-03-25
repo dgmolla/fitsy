@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/restaurantService";
 import { hashPassword, signToken } from "@/services/authService";
+import { sendWelcomeEmail } from "@/services/emailService";
 import type { AuthApiResponse } from "@fitsy/shared";
 
 export async function POST(
@@ -55,6 +56,9 @@ export async function POST(
     });
 
     const token = await signToken({ sub: user.id, email: user.email });
+
+    // Fire-and-forget: email failure must not break registration
+    sendWelcomeEmail(user.email, user.name ?? undefined).catch(console.error);
 
     return NextResponse.json({ token, user }, { status: 201 });
   } catch (err) {
