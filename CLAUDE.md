@@ -9,16 +9,13 @@ and more.
 
 ## Current State
 
-### What Works
-- Foundation docs complete: Vision PRD, System Design, Design Brief, Business Model, Component Library spec
-- Scraping pipeline validated: Firecrawl search + map + Haiku v3, ~85-90% menu extraction rate on 90029 test
+Last audited: 2026-03-25 (S-45). Full findings: `docs/engineering/audit-2026-03-25.md`.
 
-### What's Missing
-1. Prisma schema and database migration
-2. Preload script (Google Places → Firecrawl → Claude Haiku → PostgreSQL)
-3. API backend: restaurant query + macro filtering endpoints
-4. Mobile UI (React Native / Expo)
-5. CI/CD pipeline
+**Built and passing** (104 API + 29 mobile tests, build green): Prisma schema (2 migrations, 5 models), all 5 API routes (`/api/health`, auth register/login, `GET /api/restaurants`, `GET /api/restaurants/[id]/menu`), full mobile auth flow, search screen, restaurant detail screen, core components, preload pipeline script, CI/CD.
+
+**Not working**: (1) DB is empty — preload (S-46) has not run, so restaurant/menu routes return empty/404. (2) Search uses hardcoded Silver Lake coordinates — no GPS yet. (3) Profile screen is a stub. (4) No macro target setup screen. (5) Restaurant routes have no JWT middleware.
+
+**Next**: S-46 (preload staging DB) → S-47 (smoke test) → GPS, profile, macro setup.
 
 ---
 
