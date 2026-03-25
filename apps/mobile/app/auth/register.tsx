@@ -25,7 +25,8 @@ export default function RegisterScreen() {
     setLoading(true);
     try {
       await registerAndStore(name.trim(), email.trim(), password);
-      router.replace('/(tabs)/search');
+      const encodedName = name.trim() ? encodeURIComponent(name.trim()) : '';
+      router.replace(encodedName ? `/onboarding?name=${encodedName}` : '/onboarding');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed. Please try again.');
     } finally {
