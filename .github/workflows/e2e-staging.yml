@@ -1,8 +1,7 @@
 name: E2E Staging Tests
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch: # disabled until E2E flows exist — re-enable by adding push trigger
 
 concurrency:
   group: e2e-staging
