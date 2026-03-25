@@ -10,35 +10,40 @@ import { test, expect } from "@playwright/test";
  *   4. Register duplicate email → 409
  */
 
-const TEST_EMAIL = `e2e-auth-${Date.now()}@fitsy.test`;
 const TEST_PASSWORD = "E2ePassword1!";
 const TEST_NAME = "E2E Auth User";
 
 test.describe("Auth flow — register", () => {
   test("registers a new user and returns 201 with token", async ({ request, page }) => {
-    // Navigate to the landing page first so the video has context
+    // Navigate to landing page first: gives Playwright video meaningful context
+    // showing the product UI before the API calls begin
     await page.goto("/");
     await expect(page.locator("h1")).toBeVisible();
 
+    // Use a unique email per test run to avoid conflicts with other parallel runs
+    const uniqueEmail = `e2e-reg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}@fitsy.test`;
     const res = await request.post("/api/auth/register", {
-      data: { email: TEST_EMAIL, password: TEST_PASSWORD, name: TEST_NAME },
+      data: { email: uniqueEmail, password: TEST_PASSWORD, name: TEST_NAME },
     });
 
     expect(res.status()).toBe(201);
     const body = await res.json();
     expect(body).toHaveProperty("token");
-    expect(body.user.email).toBe(TEST_EMAIL);
+    expect(body.user.email).toBe(uniqueEmail);
   });
 
   test("rejects duplicate registration with 409", async ({ request }) => {
+    // Each test owns its own email — no dependency on other tests running first
+    const dupeEmail = `e2e-dupe-${Date.now()}-${Math.random().toString(36).slice(2, 7)}@fitsy.test`;
+
     // Register once
     await request.post("/api/auth/register", {
-      data: { email: TEST_EMAIL, password: TEST_PASSWORD },
+      data: { email: dupeEmail, password: TEST_PASSWORD },
     });
 
     // Try again with the same email
     const res = await request.post("/api/auth/register", {
-      data: { email: TEST_EMAIL, password: TEST_PASSWORD },
+      data: { email: dupeEmail, password: TEST_PASSWORD },
     });
 
     expect(res.status()).toBe(409);
@@ -71,7 +76,7 @@ test.describe("Auth flow — login", () => {
       data: { email: uniqueEmail, password: TEST_PASSWORD, name: TEST_NAME },
     });
 
-    // Navigate to landing page for video context
+    // Navigate to landing page: gives Playwright video meaningful context
     await page.goto("/");
 
     // Login
