@@ -1,0 +1,14 @@
+#!/usr/bin/env sh
+# Pre-commit: type-check + lint
+# Catches issues locally before they reach CI.
+# Skip with --no-verify for emergencies (CI will still catch violations).
+
+set -e
+
+echo "Pre-commit: type check..."
+npm run type-check -w apps/api
+
+echo "Pre-commit: lint..."
+npm run lint -w apps/api
+
+echo "Pre-commit: passed"
