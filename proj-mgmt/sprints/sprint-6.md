@@ -4,7 +4,6 @@ kanban-plugin: basic
 
 ## Backlog
 
-- [ ] **S-34** E2E video pipeline — set up Playwright with video recording against staging, agents run before opening PRs, upload videos to PR description. Frontend PRs must include a screen recording showing the UI works. #cto #harness #wave-1 ^dep-S-32
 - [ ] **S-36** App Store listing prep — screenshots, description copy, privacy policy page, support URL; everything needed to submit to TestFlight and App Store Connect #product-manager #O1 #wave-2 ^dep-S-32
 - [ ] **S-37b** User onboarding email backend — Resend integration, welcome email trigger on first sign-in #backend #O1 #wave-2
 - [ ] **S-37f** User onboarding email UI — in-app "setup your macros" CTA screen shown after sign-in #frontend #O1 #wave-2 ^dep-S-37b
@@ -15,6 +14,7 @@ kanban-plugin: basic
 
 ## Done
 
+- [x] **S-34** E2E video pipeline — Playwright recording on frontend PRs (PRs #55, #56) #cto #harness #wave-1 @completed(2026-03-26)
 - [x] **S-35** CI first-run pass rate fix — guard E2E prebuild failure, add pre-push hook #cto #harness #wave-1 @completed(2026-03-26)
 
 ## Sprint Review
