@@ -17,9 +17,9 @@ if echo "$CHANGED" | grep -qE '^(package\.json|tsconfig\.json|\.nvmrc|\.env[^/]*
   AGENTS="$AGENTS cto"
 fi
 
-# Prisma schema is CTO infrastructure (data model design)
+# Prisma schema is owned by backend (schema changes ship with API changes)
 if echo "$CHANGED" | grep -qE '^prisma/'; then
-  AGENTS="$AGENTS cto"
+  AGENTS="$AGENTS backend"
 fi
 
 # BEGIN ROUTING TABLE
