@@ -4,10 +4,10 @@ kanban-plugin: basic
 
 ## Backlog
 
+## In Progress
+
 - [ ] **S-32** Landing page — marketing site (Next.js), hero, feature highlights, CTA to App Store #frontend #O3 #wave-2 ^dep-S-30
 - [ ] **S-33** Monitoring and alerting — API cost tracking (Anthropic + Google), error rate alerts, Vercel analytics #cto #O3 #wave-2 ^dep-S-30
-
-## In Progress
 
 
 ## Done
