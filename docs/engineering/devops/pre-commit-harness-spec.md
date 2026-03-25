@@ -38,8 +38,8 @@ graph LR
 
 Runs on every `git commit`:
 
-1. `npm run type-check -w apps/api` — full TypeScript strict check
-2. `npm run lint -w apps/api` — ESLint on `apps/api/**/*.{ts,tsx}`
+1. `npm run type-check --workspaces --if-present` — full TypeScript strict check across all workspaces
+2. `npm run lint --workspaces --if-present` — ESLint on all workspaces that declare a `lint` script
 
 Fast-fail: first violation aborts the commit with a clear error message.
 Skippable with `--no-verify` for emergencies (hook does not block CI).
@@ -72,7 +72,7 @@ lint:
     - uses: actions/setup-node@v4
       with: { node-version: 20, cache: npm }
     - run: npm ci
-    - run: npm run lint
+    - run: npm run lint --workspaces --if-present
 ```
 
 Runs in parallel with `typecheck` — does not block the test/build chain

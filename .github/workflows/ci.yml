@@ -71,9 +71,9 @@ jobs:
           cache: npm
       - run: npm ci
         if: steps.check.outputs.ready == 'true'
-      - name: Lint — API
+      - name: Lint
         if: steps.check.outputs.ready == 'true'
-        run: npm run lint -w apps/api
+        run: npm run lint --workspaces --if-present
 
   typecheck:
     name: Type Check

@@ -6,9 +6,9 @@
 set -e
 
 echo "Pre-commit: type check..."
-npm run type-check -w apps/api
+npm run type-check --workspaces --if-present
 
 echo "Pre-commit: lint..."
-npm run lint -w apps/api
+npm run lint --workspaces --if-present
 
 echo "Pre-commit: passed"
