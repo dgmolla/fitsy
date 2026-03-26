@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRestaurantMenu } from "@/lib/restaurantService";
+import { requireAuth } from "@/lib/auth";
 import type { MenuApiResponse } from "@fitsy/shared";
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse<MenuApiResponse>> {
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth as never;
+
   const { id } = await params;
 
   try {
