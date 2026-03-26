@@ -4,17 +4,16 @@ kanban-plugin: basic
 
 ## Backlog
 
+- [ ] **S-55** Macro target setup screen — onboarding flow to capture protein/carbs/fat targets, persisted to AsyncStorage #frontend #O1 #wave-1 ^dep-S-53
+- [ ] **S-56** Profile screen — display saved macros, allow editing, show account email #frontend #O1 #wave-1 ^dep-S-53
 - [ ] **S-58** Recruit first 10 TestFlight testers — send invites, set up onboarding message, confirm installs #cto #O1 #wave-2 ^dep-S-53 ^dep-S-55
 
 ## In Progress
-
-- [ ] **S-55** Macro target setup screen — onboarding flow to capture protein/carbs/fat targets, persisted to AsyncStorage #frontend #O1 #wave-1 ^dep-S-53
+- [ ] **S-54** GPS integration — replace hardcoded Silver Lake coords with `expo-location` device GPS #frontend #O1 #wave-1
+- [ ] **S-57** JWT middleware on restaurant routes — protect `GET /api/restaurants` and `GET /api/restaurants/[id]/menu` #backend #O1 #wave-1
 
 ## Done
 
-- [x] **S-56** Profile screen — display saved macros, allow editing, show account email #frontend #O1 #wave-1 @completed(2026-03-25)
-- [x] **S-54** GPS integration — replace hardcoded Silver Lake coords with `expo-location` device GPS #frontend #O1 #wave-1 @completed(2026-03-25)
-- [x] **S-57** JWT middleware on restaurant routes — protect `GET /api/restaurants` and `GET /api/restaurants/[id]/menu` #backend #O1 #wave-1 @completed(2026-03-25)
 - [x] **S-53** Fix mobile crash — reproduce and resolve "exception in host function" on physical device (Expo Router v6 + React 19 compat) #cto #O1 #wave-1 @completed(2026-03-25)
 
 ## Sprint Review

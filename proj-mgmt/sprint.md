@@ -2,17 +2,16 @@
 
 **Last updated**: 2026-03-25
 
-<!-- CURRENT_SPRINT: sprints/sprint-8 -->
+<!-- CURRENT_SPRINT: sprints/sprint-7 -->
 
 ## Active
 
-- [[sprints/sprint-8|Sprint 8: Get Users — Mobile Polish + TestFlight]]
+- [[sprints/sprint-7|Sprint 7: E2E Validation + TestFlight]]
 
 ## Upcoming
 
 ## Completed
 
-- [[sprints/sprint-7|Sprint 7: E2E Validation + TestFlight]] — @completed(2026-03-25)
 - [[sprints/sprint-6|Sprint 6: Get Users]] — @completed(2026-03-25)
 - [[sprints/sprint-5|Sprint 5: Roll Out]] — @completed(2026-03-26)
 - [[sprints/sprint-4|Sprint 4: Implement (auth + E2E)]] — @completed(2026-03-25)

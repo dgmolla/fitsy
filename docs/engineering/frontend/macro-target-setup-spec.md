@@ -64,7 +64,6 @@ interface StoredMacroTargets {
   protein: string; // numeric string, e.g. "150"
   carbs: string;
   fat: string;
-  calories: string;
 }
 ```
 
@@ -92,7 +91,6 @@ export interface StoredMacroTargets {
   protein: string;
   carbs: string;
   fat: string;
-  calories: string;
 }
 
 export async function getMacroTargets(): Promise<StoredMacroTargets | null>
