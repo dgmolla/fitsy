@@ -6,11 +6,11 @@ kanban-plugin: basic
 
 ## In Progress
 
-- [ ] **S-52** Mobile E2E — Maestro flows (auth + search + restaurant detail) with iOS Simulator recordings uploaded to GitHub Release and linked in PR description #cto #O1 #wave-3 ^dep-S-51
 
 
 ## Done
 
+- [x] **S-52** Mobile E2E — Maestro flows with iOS Simulator recordings uploaded to GitHub Release #cto #O1 #wave-3 @completed(2026-03-25)
 - [x] **S-51** TestFlight beta build — EAS Build + internal test group setup #cto #O1 #wave-2 @completed(2026-03-25)
 - [x] **S-48** E2E validation — auth flow (register + login) with Playwright recording in PR description #cto #O1 #wave-1 @completed(2026-03-25)
 - [x] **S-49** E2E validation — search → restaurant detail flow with Playwright recording in PR description #cto #O1 #wave-1 @completed(2026-03-25)
