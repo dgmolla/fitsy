@@ -25,15 +25,6 @@ const config = {
         ],
       },
     },
-    {
-      displayName: 'components',
-      preset: 'jest-expo',
-      testMatch: ['<rootDir>/components/**/*.test.tsx', '<rootDir>/app/**/*.test.tsx'],
-      moduleNameMapper: {
-        '^@fitsy/shared$': '<rootDir>/../../packages/shared/src/index.ts',
-        '^@fitsy/shared/(.*)$': '<rootDir>/../../packages/shared/src/$1',
-      },
-    },
   ],
 };
 

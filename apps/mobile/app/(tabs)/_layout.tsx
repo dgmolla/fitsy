@@ -18,7 +18,6 @@ export default function TabLayout() {
         options={{
           title: 'Search',
           tabBarIcon: ({ color, size }) => (
-            // @ts-expect-error — @expo/vector-icons Icon type is incompatible with @types/react@18.3
             <Ionicons name="search" size={size} color={color} />
           ),
         }}
@@ -28,7 +27,6 @@ export default function TabLayout() {
         options={{
           title: 'Profile',
           tabBarIcon: ({ color, size }) => (
-            // @ts-expect-error — @expo/vector-icons Icon type is incompatible with @types/react@18.3
             <Ionicons name="person" size={size} color={color} />
           ),
         }}
