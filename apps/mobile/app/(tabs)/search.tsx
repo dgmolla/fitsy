@@ -12,6 +12,7 @@ import {
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RestaurantResult } from '@fitsy/shared';
+import { LocationBar } from '@/components/LocationBar';
 import { MacroInputBar, RestaurantCard } from '@/components';
 import type { MacroValues } from '@/lib/macroPresets';
 import { fetchRestaurants } from '@/lib/apiClient';
@@ -141,16 +142,6 @@ export default function SearchScreen() {
     setInputs(values);
   }, []);
 
-  const locationLabel =
-    location.source === 'gps'
-      ? 'Searching near your location'
-      : 'Searching near Silver Lake, LA';
-
-  const locationAccessibilityLabel =
-    location.source === 'gps'
-      ? 'Searching near your current location'
-      : 'Location unavailable — searching near Silver Lake, Los Angeles';
-
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -164,24 +155,8 @@ export default function SearchScreen() {
           onChangeAll={handleChangeAll}
         />
 
-        {/* Location label */}
-        <View
-          style={[
-            styles.locationBar,
-            location.source === 'fallback' && styles.locationBarFallback,
-          ]}
-          accessibilityLabel={locationAccessibilityLabel}
-          accessibilityRole="text"
-        >
-          <Text
-            style={[
-              styles.locationText,
-              location.source === 'fallback' && styles.locationTextFallback,
-            ]}
-          >
-            {location.loading ? 'Locating…' : locationLabel}
-          </Text>
-        </View>
+        {/* Location status bar */}
+        <LocationBar location={location} />
 
         {/* Loading */}
         {loading && (
@@ -228,25 +203,6 @@ const styles = StyleSheet.create({
   },
   flex: {
     flex: 1,
-  },
-  locationBar: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#D1D5DB',
-  },
-  locationBarFallback: {
-    backgroundColor: '#FFFBEB',
-    borderBottomColor: '#FCD34D',
-  },
-  locationText: {
-    fontSize: 12,
-    color: '#6B7280',
-    textAlign: 'center',
-  },
-  locationTextFallback: {
-    color: '#92400E',
   },
   spinner: {
     marginTop: 32,
