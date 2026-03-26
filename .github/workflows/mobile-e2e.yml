@@ -1,0 +1,95 @@
+name: Mobile E2E (Maestro + Simulator)
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "GitHub Release tag for uploading recordings"
+        required: false
+        default: "e2e-mobile-sprint7"
+
+# Requires macos runner for xcrun simctl + Xcode
+jobs:
+  mobile-e2e:
+    runs-on: macos-latest
+    timeout-minutes: 60
+
+    env:
+      EXPO_PUBLIC_API_URL: ${{ secrets.STAGING_API_URL }}
+      RELEASE_TAG: ${{ github.event.inputs.release_tag || 'e2e-mobile-sprint7' }}
+      MAESTRO_APP_ID: com.fitsy.app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Maestro CLI
+        run: |
+          curl -Ls "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> $GITHUB_PATH
+
+      - name: Expo prebuild (iOS)
+        working-directory: apps/mobile
+        run: npx expo prebuild --platform ios --no-install
+        env:
+          EXPO_NO_GIT_STATUS: 1
+          API_URL: ${{ secrets.STAGING_API_URL }}
+
+      - name: Build iOS app for simulator
+        working-directory: apps/mobile/ios
+        run: |
+          xcodebuild \
+            -workspace fitsy.xcworkspace \
+            -scheme fitsy \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcpretty
+
+      - name: Boot iOS Simulator
+        run: |
+          UDID=$(xcrun simctl list devices available --json \
+            | jq -r '[.devices | to_entries[] | .value[] | select(.name == "iPhone 15" and .isAvailable == true)] | first | .udid')
+          echo "SIMULATOR_UDID=$UDID" >> $GITHUB_ENV
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+
+      - name: Install app on simulator
+        run: |
+          APP_PATH=$(find apps/mobile/ios/build -name "*.app" -not -path "*/intermediates/*" | head -1)
+          if [ -z "$APP_PATH" ]; then
+            echo "::error::No .app artifact found — xcodebuild may have failed silently"
+            exit 1
+          fi
+          xcrun simctl install "$SIMULATOR_UDID" "$APP_PATH"
+
+      - name: Run Maestro flows + capture recordings
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash scripts/record-mobile-e2e.sh --release-tag "$RELEASE_TAG"
+
+      - name: Upload recordings as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-e2e-recordings
+          path: recordings/*.mp4
+          retention-days: 30
+
+      - name: Upload Maestro screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-screenshots
+          path: ~/.maestro/tests/
+          retention-days: 7
