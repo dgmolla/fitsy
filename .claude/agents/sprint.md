@@ -173,7 +173,7 @@ Agent(
 
     Post your review on the PR:
     - If approving: gh pr review {N} --approve --body "your review"
-    - If requesting changes: gh pr review {N} --comment --body "your review"
+    - If requesting changes: gh pr review {N} --request-changes --body "your review"
 
     End your review with EXACTLY one of:
     VERDICT: APPROVE
@@ -186,9 +186,13 @@ Agent(
 
 #### c. Handle verdict
 
-- **APPROVE**: Move to merge (step d)
-- **CHANGES REQUESTED**: Fix in current session (you have full
-  context from implementation). Then:
+After the reviewer agent finishes, verify the review state via
+`gh pr view {N} --json reviews` — check the latest review's `state`
+field. Do not rely solely on the agent's text output.
+
+- **APPROVED** (state = `APPROVED`): Move to merge (step d)
+- **CHANGES REQUESTED** (state = `CHANGES_REQUESTED`): Fix in current
+  session (you have full context from implementation). Then:
   1. Make the fixes
   2. Run gates locally
   3. Commit and push
@@ -196,6 +200,11 @@ Agent(
      the previous reviewer's session
   5. Max 5 review rounds. If stuck, tell the user and stop.
 - **BLOCK**: Stop and tell the user. Do not attempt to fix.
+
+If the review state is `COMMENTED` (not `APPROVED` or
+`CHANGES_REQUESTED`), the reviewer agent used the wrong gh flag.
+Treat it as `CHANGES_REQUESTED` — the reviewer had feedback but
+used `--comment` instead of `--request-changes`.
 
 #### d. Merge
 
