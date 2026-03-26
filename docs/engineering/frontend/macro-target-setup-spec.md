@@ -45,9 +45,9 @@ flowchart TD
 
 | Field | Label | Type | Validation |
 |-------|-------|------|-----------|
-| protein | Protein (g) | numeric | required, > 0, integer |
-| carbs | Carbs (g) | numeric | required, > 0, integer |
-| fat | Fat (g) | numeric | required, > 0, integer |
+| protein | Protein (g) | numeric | required, > 0, positive number |
+| carbs | Carbs (g) | numeric | required, > 0, positive number |
+| fat | Fat (g) | numeric | required, > 0, positive number |
 
 Calories are intentionally omitted on this screen — they are derived from the three macros on the search screen.
 
