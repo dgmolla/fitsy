@@ -4,16 +4,17 @@
 import { loginAndStore, registerAndStore } from './authClient';
 import type { AuthApiResponse } from '@fitsy/shared';
 
-// Mock expo-secure-store
-jest.mock('expo-secure-store', () => ({
-  getItemAsync: jest.fn(),
-  setItemAsync: jest.fn().mockResolvedValue(undefined),
-  deleteItemAsync: jest.fn().mockResolvedValue(undefined),
+// Mock @react-native-async-storage/async-storage
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  __esModule: true,
+  default: {
+    getItem: jest.fn(),
+    setItem: jest.fn().mockResolvedValue(undefined),
+    removeItem: jest.fn().mockResolvedValue(undefined),
+  },
 }));
 
-const SecureStore = jest.requireMock('expo-secure-store') as {
-  setItemAsync: jest.Mock;
-};
+const AsyncStorage = (jest.requireMock('@react-native-async-storage/async-storage') as { default: { setItem: jest.Mock } }).default;
 
 function makeMockFetch(options: { ok: boolean; status?: number; body?: unknown }) {
   return jest.fn().mockResolvedValue({
@@ -59,7 +60,7 @@ describe('loginAndStore', () => {
 
     await loginAndStore('jane@example.com', 'secret');
 
-    expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
       'fitsy:authToken',
       'jwt-token-abc',
     );
@@ -126,7 +127,7 @@ describe('registerAndStore', () => {
 
     await registerAndStore('Jane', 'jane@example.com', 'secret');
 
-    expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
       'fitsy:authToken',
       'jwt-token-abc',
     );

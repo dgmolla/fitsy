@@ -7,6 +7,7 @@ const config: ExpoConfig = {
   version: "1.0.0",
   orientation: "portrait",
   platforms: ["ios", "android"],
+  plugins: ["expo-router"],
   extra: {
     apiBaseUrl: process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000",
   },

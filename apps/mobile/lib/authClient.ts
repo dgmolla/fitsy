@@ -1,4 +1,4 @@
-import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { AuthApiResponse, AuthResponse } from '@fitsy/shared';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
@@ -7,15 +7,15 @@ const TOKEN_KEY = 'fitsy:authToken';
 // ─── Token storage ────────────────────────────────────────────────────────────
 
 export async function getStoredToken(): Promise<string | null> {
-  return SecureStore.getItemAsync(TOKEN_KEY);
+  return AsyncStorage.getItem(TOKEN_KEY);
 }
 
 export async function storeToken(token: string): Promise<void> {
-  await SecureStore.setItemAsync(TOKEN_KEY, token);
+  await AsyncStorage.setItem(TOKEN_KEY, token);
 }
 
 export async function clearToken(): Promise<void> {
-  await SecureStore.deleteItemAsync(TOKEN_KEY);
+  await AsyncStorage.removeItem(TOKEN_KEY);
 }
 
 // ─── Auth API calls ───────────────────────────────────────────────────────────
