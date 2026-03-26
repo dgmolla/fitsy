@@ -159,3 +159,4 @@ test.describe("Restaurant detail flow — GET /api/restaurants/:id/menu", () => 
     }
   });
 });
+// trigger E2E test

@@ -74,24 +74,35 @@ jobs:
           path: apps/api/test-results/
           retention-days: 14
 
-      - name: Post video link to PR
-        if: always() && steps.upload.outputs.artifact-id != ''
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            const artifactUrl = `${runUrl}#artifacts`;
-            const outcome = '${{ job.status }}' === 'success' ? '✅' : '⚠️';
-            const body = [
-              `## ${outcome} Playwright E2E videos`,
-              '',
-              `Tested against: local build (localhost:3000)`,
-              '',
-              `📹 [Download videos](${artifactUrl}) (retained 14 days)`,
-            ].join('\n');
-            github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body,
-            });
+      - name: Upload videos and post to PR
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          shopt -s nullglob
+          videos=(apps/api/test-results/**/*.webm)
+
+          if [ ${#videos[@]} -eq 0 ]; then
+            echo "No video files found"
+            exit 0
+          fi
+
+          outcome='${{ job.status }}'
+          icon=$([[ "$outcome" == "success" ]] && echo "✅" || echo "⚠️")
+          run_url="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          artifact_url="${run_url}#artifacts"
+
+          body="## ${icon} Playwright E2E — ${#videos[@]} recording(s)"$'\n\n'
+
+          for video in "${videos[@]}"; do
+            dir_name=$(basename "$(dirname "$video")")
+            label=$(echo "$dir_name" | sed 's/-chromium.*//' | tr '-' ' ')
+            body+="<details><summary><b>${label}</b></summary>"$'\n\n'
+            body+="_(download from artifacts)_"$'\n'
+            body+="</details>"$'\n\n'
+          done
+
+          body+=$'\n'"📹 [Download all videos](${artifact_url}) (retained 14 days)"
+
+          gh pr comment ${{ github.event.pull_request.number }} --body "$body"
