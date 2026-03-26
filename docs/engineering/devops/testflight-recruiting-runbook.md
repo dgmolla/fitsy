@@ -41,7 +41,7 @@ Target profile: fitness-conscious people who track macros or care about what the
 Ask one question to qualify: "Do you ever look up nutrition info when eating out?" Anyone who says yes is a good candidate.
 
 ### What to send alongside the invite
-Use the invite template in `docs/gtm/testflight-invite-template.md`. Send the Apple TestFlight link once the tester confirms they have an iPhone (iOS 16+).
+Use the invite message in Step 3 below. Invite message templates are tracked in a separate GTM task (S-58b). Send the Apple TestFlight link once the tester confirms they have an iPhone (iOS 16+).
 
 ---
 
@@ -65,7 +65,7 @@ Log each invite in the install tracker (see Step 4) immediately when sent. Do no
 
 ## Step 3 — Onboarding Message
 
-Send this message alongside the TestFlight invite (via DM, iMessage, or email). Full email template: `docs/gtm/testflight-invite-template.md`.
+Send this message alongside the TestFlight invite (via DM, iMessage, or email). Invite message templates are tracked in a separate GTM task (S-58b).
 
 **Short version for DMs:**
 ```
