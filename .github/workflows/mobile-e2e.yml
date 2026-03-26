@@ -17,6 +17,7 @@ jobs:
     env:
       EXPO_PUBLIC_API_URL: ${{ secrets.STAGING_API_URL }}
       RELEASE_TAG: ${{ github.event.inputs.release_tag || 'e2e-mobile-sprint7' }}
+      MAESTRO_APP_ID: com.fitsy.app
 
     steps:
       - uses: actions/checkout@v4
@@ -30,40 +31,46 @@ jobs:
         run: npm ci
 
       - name: Install Maestro CLI
-        run: curl -Ls "https://get.maestro.mobile.dev" | bash
-        # Maestro installs to ~/.maestro/bin; add to PATH for subsequent steps
-
-      - name: Add Maestro to PATH
-        run: echo "$HOME/.maestro/bin" >> $GITHUB_PATH
-
-      - name: Install Expo CLI
-        run: npm install -g expo-cli @expo/cli eas-cli
-
-      - name: Build iOS app (simulator)
-        working-directory: apps/mobile
         run: |
-          npx expo prebuild --platform ios --clean
+          curl -Ls "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> $GITHUB_PATH
+
+      - name: Expo prebuild (iOS)
+        working-directory: apps/mobile
+        run: npx expo prebuild --platform ios --no-install
+        env:
+          EXPO_NO_GIT_STATUS: 1
+          API_URL: ${{ secrets.STAGING_API_URL }}
+
+      - name: Build iOS app for simulator
+        working-directory: apps/mobile/ios
+        run: |
           xcodebuild \
-            -workspace ios/Fitsy.xcworkspace \
-            -scheme Fitsy \
+            -workspace fitsy.xcworkspace \
+            -scheme fitsy \
             -configuration Debug \
             -sdk iphonesimulator \
             -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             | xcpretty
 
       - name: Boot iOS Simulator
         run: |
-          DEVICE_UDID=$(xcrun simctl list devices available | grep "iPhone 15 Pro" | head -1 | grep -o '[A-F0-9-]\{36\}')
-          if [[ -z "$DEVICE_UDID" ]]; then
-            DEVICE_UDID=$(xcrun simctl list devices available | grep "iPhone" | head -1 | grep -o '[A-F0-9-]\{36\}')
-          fi
-          echo "SIMULATOR_UDID=$DEVICE_UDID" >> $GITHUB_ENV
-          xcrun simctl boot "$DEVICE_UDID" || true
+          UDID=$(xcrun simctl list devices available --json \
+            | jq -r '[.devices | to_entries[] | .value[] | select(.name == "iPhone 15" and .isAvailable == true)] | first | .udid')
+          echo "SIMULATOR_UDID=$UDID" >> $GITHUB_ENV
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
 
       - name: Install app on simulator
         run: |
-          APP_PATH=$(find apps/mobile/build -name "*.app" -type d | head -1)
+          APP_PATH=$(find apps/mobile/ios/build -name "*.app" -not -path "*/intermediates/*" | head -1)
+          if [ -z "$APP_PATH" ]; then
+            echo "::error::No .app artifact found — xcodebuild may have failed silently"
+            exit 1
+          fi
           xcrun simctl install "$SIMULATOR_UDID" "$APP_PATH"
 
       - name: Run Maestro flows + capture recordings
