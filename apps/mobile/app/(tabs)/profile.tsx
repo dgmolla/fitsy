@@ -9,13 +9,11 @@ import {
   View,
 } from 'react-native';
 import { router } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { clearToken, getStoredToken } from '@/lib/authClient';
 import { decodeEmailFromToken } from '@/lib/jwtUtils';
 import type { MacroValues } from '@/lib/macroPresets';
+import { getMacroTargets, saveMacroTargets } from '@/lib/macroStorage';
 import { MacroTargetsSection } from '@/components/MacroTargetsSection';
-
-const MACRO_STORAGE_KEY = 'fitsy:macroTargets';
 
 export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
@@ -25,17 +23,17 @@ export default function ProfileScreen() {
   useEffect(() => {
     async function load() {
       try {
-        const [token, rawMacros] = await Promise.all([
+        const [token, macros] = await Promise.all([
           getStoredToken(),
-          AsyncStorage.getItem(MACRO_STORAGE_KEY),
+          getMacroTargets(),
         ]);
 
         if (token) {
           setEmail(decodeEmailFromToken(token));
         }
 
-        if (rawMacros) {
-          setMacroTargets(JSON.parse(rawMacros) as MacroValues);
+        if (macros) {
+          setMacroTargets(macros);
         }
       } catch {
         // Use defaults on storage failure
@@ -47,7 +45,7 @@ export default function ProfileScreen() {
   }, []);
 
   const handleSaveMacros = useCallback(async (values: MacroValues) => {
-    await AsyncStorage.setItem(MACRO_STORAGE_KEY, JSON.stringify(values));
+    await saveMacroTargets(values);
     setMacroTargets(values);
   }, []);
 
