@@ -12,8 +12,7 @@ import {
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RestaurantResult } from '@fitsy/shared';
-import { LocationBar } from '@/components/LocationBar';
-import { MacroInputBar, RestaurantCard } from '@/components';
+import { EmptyState, LocationBar, MacroInputBar, RestaurantCard } from '@/components';
 import type { MacroValues } from '@/lib/macroPresets';
 import { fetchRestaurants } from '@/lib/apiClient';
 import { useLocation } from '@/lib/useLocation';
@@ -27,18 +26,6 @@ const DEFAULT_INPUTS: MacroValues = {
   fat: '',
   calories: '',
 };
-
-function EmptyState({ hasInputs }: { hasInputs: boolean }) {
-  return (
-    <View style={styles.emptyState}>
-      <Text style={styles.emptyStateText}>
-        {hasInputs
-          ? 'No restaurants match your macro targets'
-          : 'Enter macro targets above to find matching restaurants'}
-      </Text>
-    </View>
-  );
-}
 
 export default function SearchScreen() {
   const [inputs, setInputs] = useState<MacroValues>(DEFAULT_INPUTS);
@@ -57,7 +44,6 @@ export default function SearchScreen() {
     inputs.fat !== '' ||
     inputs.calories !== '';
 
-  // Load persisted macro targets on mount
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY)
       .then((raw) => {
@@ -73,12 +59,9 @@ export default function SearchScreen() {
       });
   }, []);
 
-  // Persist macro targets whenever they change (only after hydration)
   useEffect(() => {
     if (!hasHydrated) return;
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(inputs)).catch(() => {
-      // Ignore storage write errors
-    });
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(inputs)).catch(() => {});
   }, [inputs, hasHydrated]);
 
   const doFetch = useCallback(
@@ -110,9 +93,6 @@ export default function SearchScreen() {
     []
   );
 
-  // Re-run search when inputs or resolved location changes.
-  // Wait until location is resolved (loading: false) to avoid a redundant
-  // fetch with fallback coords immediately followed by one with real coords.
   useEffect(() => {
     if (location.loading) return;
 
@@ -148,17 +128,12 @@ export default function SearchScreen() {
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        {/* Macro target inputs + presets */}
         <MacroInputBar
           values={inputs}
           onChange={handleChange}
           onChangeAll={handleChangeAll}
         />
-
-        {/* Location status bar */}
         <LocationBar location={location} />
-
-        {/* Loading */}
         {loading && (
           <ActivityIndicator
             size="small"
@@ -167,15 +142,11 @@ export default function SearchScreen() {
             accessibilityLabel="Loading restaurants"
           />
         )}
-
-        {/* Error */}
         {!loading && error !== null && (
           <View style={styles.errorBanner}>
             <Text style={styles.errorText}>{error}</Text>
           </View>
         )}
-
-        {/* Results list */}
         {!loading && error === null && (
           <FlatList
             data={results}
@@ -223,18 +194,5 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingTop: 8,
     paddingBottom: 24,
-  },
-  emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-    paddingTop: 64,
-  },
-  emptyStateText: {
-    fontSize: 15,
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 22,
   },
 });

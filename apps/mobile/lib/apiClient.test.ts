@@ -72,7 +72,7 @@ describe('fetchRestaurants', () => {
     };
     global.fetch = makeMockFetch({ ok: true, body: mockBody });
 
-    await fetchRestaurants({ protein: 30 });
+    await fetchRestaurants({ protein: 30, lat: 34.0869, lng: -118.3269 });
 
     expect(global.fetch).toHaveBeenCalledTimes(1);
     const calledUrl: string = (global.fetch as jest.Mock).mock.calls[0][0];
@@ -86,7 +86,7 @@ describe('fetchRestaurants', () => {
   it('returns empty array on API error response (non-ok)', async () => {
     global.fetch = makeMockFetch({ ok: false, status: 500, body: { error: 'Server error' } });
 
-    const result = await fetchRestaurants({ protein: 30 });
+    const result = await fetchRestaurants({ protein: 30, lat: 34.0869, lng: -118.3269 });
 
     expect(result).toEqual([]);
   });
@@ -98,7 +98,7 @@ describe('fetchRestaurants', () => {
     };
     global.fetch = makeMockFetch({ ok: true, body: mockBody });
 
-    const result = await fetchRestaurants({ protein: 40, calories: 500 });
+    const result = await fetchRestaurants({ protein: 40, calories: 500, lat: 34.0869, lng: -118.3269 });
 
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe('r1');
