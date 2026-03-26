@@ -31,5 +31,11 @@ if [ -f package.json ] && node -e "require('./package.json').scripts.lint" 2>/de
   npm run lint
 fi
 
+# 4. Unit + integration tests (only if script defined)
+if [ -f package.json ] && node -e "require('./package.json').scripts.test" 2>/dev/null; then
+  echo "--- Tests ---"
+  npm test
+fi
+
 echo ""
 echo "=== Pre-push gate passed ==="
