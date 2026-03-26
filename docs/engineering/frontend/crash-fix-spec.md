@@ -124,3 +124,20 @@ includes it in the native bundle and Metro resolves it deterministically.
 
 - This ticket does not change navigation logic or layout structure.
 - GPS integration (S-54) and JWT middleware (S-57) are separate tickets.
+
+---
+
+## Harness Note — Detecting Undeclared Transitive Mobile Dependencies
+
+**Bug class:** Native mobile module used transitively (not declared in `apps/mobile/package.json`) passes local Metro dev but crashes on EAS Build / physical device.
+
+**Why the harness missed it:** `scripts/structural-tests.sh` does not currently verify that every `import` in `apps/mobile/` resolves to a package explicitly declared in `apps/mobile/package.json`. Transitive resolution via the monorepo root `node_modules` masks the gap locally.
+
+**Recommended harness task (CTO domain — S-harness):** Add a structural test that:
+1. Parses all `import` statements in `apps/mobile/` source files.
+2. Extracts the package name (the first path segment of each bare import).
+3. Asserts every package name appears in `apps/mobile/package.json` `dependencies` or `devDependencies`.
+
+This check would have caught the missing `@expo/vector-icons` declaration before an EAS Build was triggered.
+
+Until the check is implemented: when adding any new component that uses an icon library or native module, explicitly verify the package is declared in `apps/mobile/package.json` (not just reachable via the monorepo root).
