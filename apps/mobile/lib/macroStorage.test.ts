@@ -32,7 +32,7 @@ const AsyncStorage = (
   }
 ).default;
 
-const SAMPLE: StoredMacroTargets = { protein: '150', carbs: '200', fat: '67' };
+const SAMPLE: StoredMacroTargets = { protein: '150', carbs: '200', fat: '67', calories: '2000' };
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -71,7 +71,7 @@ describe('saveMacroTargets', () => {
 
   it('overwrites a previously stored value', async () => {
     await saveMacroTargets(SAMPLE);
-    const updated: StoredMacroTargets = { protein: '180', carbs: '350', fat: '100' };
+    const updated: StoredMacroTargets = { protein: '180', carbs: '350', fat: '100', calories: '3000' };
     await saveMacroTargets(updated);
     const result = await getMacroTargets();
     expect(result).toEqual(updated);

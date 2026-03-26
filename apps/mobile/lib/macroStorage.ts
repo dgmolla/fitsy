@@ -6,6 +6,7 @@ export interface StoredMacroTargets {
   protein: string;
   carbs: string;
   fat: string;
+  calories: string;
 }
 
 export async function getMacroTargets(): Promise<StoredMacroTargets | null> {
