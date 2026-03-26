@@ -15,6 +15,7 @@ import { RestaurantResult } from '@fitsy/shared';
 import { MacroInputBar, RestaurantCard } from '@/components';
 import type { MacroValues } from '@/lib/macroPresets';
 import { fetchRestaurants } from '@/lib/apiClient';
+import { useLocation } from '@/lib/useLocation';
 
 const DEBOUNCE_MS = 600;
 const STORAGE_KEY = 'fitsy:macroTargets';
@@ -44,6 +45,8 @@ export default function SearchScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasHydrated, setHasHydrated] = useState(false);
+
+  const location = useLocation();
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -77,39 +80,47 @@ export default function SearchScreen() {
     });
   }, [inputs, hasHydrated]);
 
-  const doFetch = useCallback(async (current: MacroValues) => {
-    setLoading(true);
-    setError(null);
+  const doFetch = useCallback(
+    async (current: MacroValues, lat: number, lng: number) => {
+      setLoading(true);
+      setError(null);
 
-    const params: Parameters<typeof fetchRestaurants>[0] = {};
-    const protein = parseFloat(current.protein);
-    const carbs = parseFloat(current.carbs);
-    const fat = parseFloat(current.fat);
-    const calories = parseFloat(current.calories);
+      const params: Parameters<typeof fetchRestaurants>[0] = { lat, lng };
+      const protein = parseFloat(current.protein);
+      const carbs = parseFloat(current.carbs);
+      const fat = parseFloat(current.fat);
+      const calories = parseFloat(current.calories);
 
-    if (!isNaN(protein)) params.protein = protein;
-    if (!isNaN(carbs)) params.carbs = carbs;
-    if (!isNaN(fat)) params.fat = fat;
-    if (!isNaN(calories)) params.calories = calories;
+      if (!isNaN(protein)) params.protein = protein;
+      if (!isNaN(carbs)) params.carbs = carbs;
+      if (!isNaN(fat)) params.fat = fat;
+      if (!isNaN(calories)) params.calories = calories;
 
-    try {
-      const data = await fetchRestaurants(params);
-      setResults(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load results');
-      setResults([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      try {
+        const data = await fetchRestaurants(params);
+        setResults(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load results');
+        setResults([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    []
+  );
 
+  // Re-run search when inputs or resolved location changes.
+  // Wait until location is resolved (loading: false) to avoid a redundant
+  // fetch with fallback coords immediately followed by one with real coords.
   useEffect(() => {
+    if (location.loading) return;
+
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
     }
 
     debounceRef.current = setTimeout(() => {
-      doFetch(inputs);
+      doFetch(inputs, location.lat, location.lng);
     }, DEBOUNCE_MS);
 
     return () => {
@@ -117,7 +128,7 @@ export default function SearchScreen() {
         clearTimeout(debounceRef.current);
       }
     };
-  }, [inputs, doFetch]);
+  }, [inputs, location.lat, location.lng, location.loading, doFetch]);
 
   const handleChange = useCallback(
     (field: keyof MacroValues, value: string) => {
@@ -129,6 +140,16 @@ export default function SearchScreen() {
   const handleChangeAll = useCallback((values: MacroValues) => {
     setInputs(values);
   }, []);
+
+  const locationLabel =
+    location.source === 'gps'
+      ? 'Searching near your location'
+      : 'Searching near Silver Lake, LA';
+
+  const locationAccessibilityLabel =
+    location.source === 'gps'
+      ? 'Searching near your current location'
+      : 'Location unavailable — searching near Silver Lake, Los Angeles';
 
   return (
     <SafeAreaView style={styles.container}>
@@ -144,8 +165,22 @@ export default function SearchScreen() {
         />
 
         {/* Location label */}
-        <View style={styles.locationBar}>
-          <Text style={styles.locationText}>Searching near Silver Lake, LA</Text>
+        <View
+          style={[
+            styles.locationBar,
+            location.source === 'fallback' && styles.locationBarFallback,
+          ]}
+          accessibilityLabel={locationAccessibilityLabel}
+          accessibilityRole="text"
+        >
+          <Text
+            style={[
+              styles.locationText,
+              location.source === 'fallback' && styles.locationTextFallback,
+            ]}
+          >
+            {location.loading ? 'Locating…' : locationLabel}
+          </Text>
         </View>
 
         {/* Loading */}
@@ -201,10 +236,17 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#D1D5DB',
   },
+  locationBarFallback: {
+    backgroundColor: '#FFFBEB',
+    borderBottomColor: '#FCD34D',
+  },
   locationText: {
     fontSize: 12,
     color: '#6B7280',
     textAlign: 'center',
+  },
+  locationTextFallback: {
+    color: '#92400E',
   },
   spinner: {
     marginTop: 32,

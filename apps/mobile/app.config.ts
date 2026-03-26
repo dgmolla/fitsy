@@ -7,7 +7,16 @@ const config: ExpoConfig = {
   version: "1.0.0",
   orientation: "portrait",
   platforms: ["ios", "android"],
-  plugins: ["expo-router"],
+  plugins: [
+    "expo-router",
+    [
+      "expo-location",
+      {
+        locationWhenInUsePermission:
+          "Fitsy uses your location to find restaurants near you.",
+      },
+    ],
+  ],
   extra: {
     apiBaseUrl: process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000",
   },
