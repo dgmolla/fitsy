@@ -1,18 +1,18 @@
 import React from 'react';
 import {
-  Pressable,
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import type { MacroValues } from '@/lib/macroPresets';
 
-const FIELDS: { key: keyof MacroValues; label: string }[] = [
-  { key: 'protein', label: 'Protein' },
-  { key: 'carbs', label: 'Carbs' },
-  { key: 'fat', label: 'Fat' },
-  { key: 'calories', label: 'Calories' },
+const FIELDS: { key: keyof MacroValues; label: string; unit: string }[] = [
+  { key: 'protein', label: 'Protein', unit: 'g' },
+  { key: 'carbs', label: 'Carbs', unit: 'g' },
+  { key: 'fat', label: 'Fat', unit: 'g' },
+  { key: 'calories', label: 'Calories', unit: 'kcal' },
 ];
 
 export interface MacroTargetsEditFormProps {
@@ -33,9 +33,9 @@ export function MacroTargetsEditForm({
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>Macro Targets</Text>
-      {FIELDS.map(({ key, label }) => (
+      {FIELDS.map(({ key, label, unit }) => (
         <View key={key} style={styles.editRow}>
-          <Text style={styles.editLabel}>{label} (g)</Text>
+          <Text style={styles.editLabel}>{label} ({unit})</Text>
           <TextInput
             style={styles.editInput}
             value={draft[key]}
@@ -53,22 +53,22 @@ export function MacroTargetsEditForm({
         <Text style={styles.errorText} accessibilityLiveRegion="polite">{saveError}</Text>
       )}
       <View style={styles.editActions}>
-        <Pressable
+        <TouchableOpacity
           style={styles.saveButton}
           onPress={onSave}
           accessibilityRole="button"
           accessibilityLabel="Save macro targets"
         >
           <Text style={styles.saveButtonText}>Save</Text>
-        </Pressable>
-        <Pressable
+        </TouchableOpacity>
+        <TouchableOpacity
           style={styles.cancelButton}
           onPress={onCancel}
           accessibilityRole="button"
           accessibilityLabel="Cancel editing macro targets"
         >
           <Text style={styles.cancelButtonText}>Cancel</Text>
-        </Pressable>
+        </TouchableOpacity>
       </View>
     </View>
   );

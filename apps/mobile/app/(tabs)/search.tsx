@@ -10,15 +10,14 @@ import {
   View,
 } from 'react-native';
 import { router } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RestaurantResult } from '@fitsy/shared';
 import { EmptyState, LocationBar, MacroInputBar, RestaurantCard } from '@/components';
 import type { MacroValues } from '@/lib/macroPresets';
 import { fetchRestaurants } from '@/lib/apiClient';
 import { useLocation } from '@/lib/useLocation';
+import { getMacroTargets, saveMacroTargets } from '@/lib/macroStorage';
 
 const DEBOUNCE_MS = 600;
-const STORAGE_KEY = 'fitsy:macroTargets';
 
 const DEFAULT_INPUTS: MacroValues = {
   protein: '',
@@ -45,10 +44,10 @@ export default function SearchScreen() {
     inputs.calories !== '';
 
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY)
-      .then((raw) => {
-        if (raw) {
-          setInputs(JSON.parse(raw) as MacroValues);
+    getMacroTargets()
+      .then((saved) => {
+        if (saved) {
+          setInputs(saved);
         }
       })
       .catch(() => {
@@ -61,7 +60,7 @@ export default function SearchScreen() {
 
   useEffect(() => {
     if (!hasHydrated) return;
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(inputs)).catch(() => {});
+    saveMacroTargets(inputs).catch(() => {});
   }, [inputs, hasHydrated]);
 
   const doFetch = useCallback(
