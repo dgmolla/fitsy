@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { findNearbyRestaurants } from "@/lib/restaurantService";
+import { requireAuth } from "@/lib/auth";
 import type { RestaurantsApiResponse } from "@fitsy/shared";
 
 export async function GET(
   request: NextRequest,
 ): Promise<NextResponse<RestaurantsApiResponse>> {
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth as never;
+
   const { searchParams } = request.nextUrl;
 
   // ─── Required params ────────────────────────────────────────────────────────
