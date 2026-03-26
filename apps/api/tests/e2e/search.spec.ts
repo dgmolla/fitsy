@@ -9,11 +9,41 @@ import { test, expect } from "@playwright/test";
  *   3. GET /api/restaurants with invalid lat/lng → 400
  *   4. GET /api/restaurants/:id/menu with valid id → 200 or 404
  *   5. GET /api/restaurants/:id/menu with bogus id → 404
+ *
+ * Auth note: restaurant routes are JWT-protected (added in S-57).
+ * We register a throwaway test user in beforeAll, obtain a token, and
+ * attach it to every restaurant request via Authorization: Bearer <token>.
  */
 
 // Silver Lake, LA — same coords used in the hardcoded mobile search screen
 const TEST_LAT = 34.0868;
 const TEST_LNG = -118.2703;
+
+// Unique per run so parallel CI workers don't collide
+const TEST_EMAIL = `e2e-search-${Date.now()}@fitsy-test.invalid`;
+const TEST_PASSWORD = "E2eTestPass1!";
+
+let authToken: string;
+
+test.beforeAll(async ({ request }) => {
+  // Register a throwaway test user
+  await request.post("/api/auth/register", {
+    data: { email: TEST_EMAIL, password: TEST_PASSWORD, name: "E2E Test User" },
+  });
+
+  // Log in to get a JWT
+  const loginRes = await request.post("/api/auth/login", {
+    data: { email: TEST_EMAIL, password: TEST_PASSWORD },
+  });
+  expect(loginRes.status()).toBe(200);
+  const loginBody = await loginRes.json();
+  authToken = loginBody.token as string;
+  expect(typeof authToken).toBe("string");
+});
+
+function authHeaders() {
+  return { Authorization: `Bearer ${authToken}` };
+}
 
 test.describe("Search flow — GET /api/restaurants", () => {
   test("returns 200 with restaurants array for valid coords", async ({
@@ -26,6 +56,7 @@ test.describe("Search flow — GET /api/restaurants", () => {
 
     const res = await request.get("/api/restaurants", {
       params: { lat: String(TEST_LAT), lng: String(TEST_LNG) },
+      headers: authHeaders(),
     });
     expect(res.status()).toBe(200);
     const body = await res.json();
@@ -43,6 +74,7 @@ test.describe("Search flow — GET /api/restaurants", () => {
         protein: "40",
         calories: "600",
       },
+      headers: authHeaders(),
     });
     expect(res.status()).toBe(200);
     const body = await res.json();
@@ -52,6 +84,7 @@ test.describe("Search flow — GET /api/restaurants", () => {
   test("returns 400 when lat is missing", async ({ request }) => {
     const res = await request.get("/api/restaurants", {
       params: { lng: String(TEST_LNG) },
+      headers: authHeaders(),
     });
     expect(res.status()).toBe(400);
     const body = await res.json();
@@ -61,6 +94,7 @@ test.describe("Search flow — GET /api/restaurants", () => {
   test("returns 400 when lng is missing", async ({ request }) => {
     const res = await request.get("/api/restaurants", {
       params: { lat: String(TEST_LAT) },
+      headers: authHeaders(),
     });
     expect(res.status()).toBe(400);
     const body = await res.json();
@@ -70,6 +104,7 @@ test.describe("Search flow — GET /api/restaurants", () => {
   test("returns 400 for invalid lat/lng values", async ({ request }) => {
     const res = await request.get("/api/restaurants", {
       params: { lat: "not-a-number", lng: String(TEST_LNG) },
+      headers: authHeaders(),
     });
     expect(res.status()).toBe(400);
     const body = await res.json();
@@ -81,6 +116,7 @@ test.describe("Restaurant detail flow — GET /api/restaurants/:id/menu", () => 
   test("returns 404 for a bogus restaurant id", async ({ request }) => {
     const res = await request.get(
       "/api/restaurants/bogus-nonexistent-id-xyz/menu",
+      { headers: authHeaders() },
     );
     expect(res.status()).toBe(404);
     const body = await res.json();
@@ -97,6 +133,7 @@ test.describe("Restaurant detail flow — GET /api/restaurants/:id/menu", () => 
 
     const searchRes = await request.get("/api/restaurants", {
       params: { lat: String(TEST_LAT), lng: String(TEST_LNG) },
+      headers: authHeaders(),
     });
     expect(searchRes.status()).toBe(200);
     const searchBody = await searchRes.json();
@@ -109,7 +146,9 @@ test.describe("Restaurant detail flow — GET /api/restaurants/:id/menu", () => 
 
     // Tap the first restaurant and verify menu endpoint
     const firstId = restaurants[0]!.id;
-    const menuRes = await request.get(`/api/restaurants/${firstId}/menu`);
+    const menuRes = await request.get(`/api/restaurants/${firstId}/menu`, {
+      headers: authHeaders(),
+    });
     expect([200, 404]).toContain(menuRes.status());
 
     if (menuRes.status() === 200) {
