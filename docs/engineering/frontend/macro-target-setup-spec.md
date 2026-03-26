@@ -48,8 +48,9 @@ flowchart TD
 | protein | Protein (g) | numeric | required, > 0, positive number |
 | carbs | Carbs (g) | numeric | required, > 0, positive number |
 | fat | Fat (g) | numeric | required, > 0, positive number |
+| calories | Calories (kcal) | numeric | required, > 0, positive number |
 
-Calories are intentionally omitted on this screen — they are derived from the three macros on the search screen.
+Calories are captured directly on this screen rather than derived from macros. This gives users explicit control over their daily calorie target independent of the protein/carbs/fat split.
 
 ### Preset Shortcuts
 
@@ -72,7 +73,7 @@ Key: `@fitsy/macro_targets`. The helper `saveMacroTargets` in `apps/mobile/lib/m
 
 ### Validation Rules
 
-- All three fields are required.
+- All four fields are required.
 - Value must parse to a positive number (`> 0`).
 - Inline error message shown below the field on blur or on submit attempt.
 
@@ -144,5 +145,4 @@ New test file: `apps/mobile/lib/macroStorage.test.ts`
 ## Out of Scope (S-56)
 
 - Editing targets from the Profile screen
-- Calories field (derived, not captured here)
 - Body-weight / TDEE calculator

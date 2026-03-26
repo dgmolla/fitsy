@@ -118,7 +118,7 @@ export default function MacroSetupScreen() {
             <Text style={styles.emoji}>🎯</Text>
             <Text style={styles.title}>Set your macro targets</Text>
             <Text style={styles.subtitle}>
-              We&apos;ll use these to surface meals that fit your daily goals.
+              We'll use these to surface meals that fit your daily goals.
             </Text>
           </View>
 
@@ -177,8 +177,9 @@ export default function MacroSetupScreen() {
               onPress={handleSave}
               accessibilityRole="button"
               accessibilityLabel={formValid ? 'Save macro targets' : 'Fill in all macro targets to continue'}
+              accessibilityState={{ disabled: !formValid }}
             >
-              <Text style={styles.saveText}>Save &amp; Continue</Text>
+              <Text style={styles.saveText}>Save & Continue</Text>
             </Pressable>
 
             <Pressable
