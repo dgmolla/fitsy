@@ -27,7 +27,7 @@ export function LocationBar({ location }: LocationBarProps) {
     <View
       style={[
         styles.locationBar,
-        location.source === 'fallback' && styles.locationBarFallback,
+        !location.loading && location.source === 'fallback' && styles.locationBarFallback,
       ]}
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="text"
@@ -35,7 +35,7 @@ export function LocationBar({ location }: LocationBarProps) {
       <Text
         style={[
           styles.locationText,
-          location.source === 'fallback' && styles.locationTextFallback,
+          !location.loading && location.source === 'fallback' && styles.locationTextFallback,
         ]}
       >
         {location.loading ? 'Locating\u2026' : label}
