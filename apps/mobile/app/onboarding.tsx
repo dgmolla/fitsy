@@ -13,6 +13,10 @@ export default function OnboardingScreen() {
 
   const heading = name ? `You're in, ${name}!` : "You're in!";
 
+  function goToMacroSetup() {
+    router.replace('/macro-setup');
+  }
+
   function goToSearch() {
     router.replace('/(tabs)/search');
   }
@@ -32,7 +36,7 @@ export default function OnboardingScreen() {
         <View style={styles.actions}>
           <Pressable
             style={styles.ctaButton}
-            onPress={goToSearch}
+            onPress={goToMacroSetup}
             accessibilityRole="button"
             accessibilityLabel="Set up my macros"
           >

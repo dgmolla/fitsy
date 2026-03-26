@@ -4,6 +4,8 @@
 export { ConfidenceBadge } from './ConfidenceBadge';
 export { EmptyState } from './EmptyState';
 export { LocationBar } from './LocationBar';
+export { MacroField } from './MacroField';
+export type { MacroFieldProps } from './MacroField';
 export { MacroInputBar } from './MacroInputBar';
 export { MacroTargetsSection } from './MacroTargetsSection';
 export { MenuItem } from './MenuItem';

@@ -2,18 +2,28 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { Redirect } from 'expo-router';
 import { getStoredToken } from '@/lib/authClient';
+import { getMacroTargets } from '@/lib/macroStorage';
+
+type Destination = '/(tabs)/search' | '/auth/login' | '/macro-setup';
 
 export default function Index() {
-  const [destination, setDestination] = useState<'/(tabs)/search' | '/auth/login' | null>(null);
+  const [destination, setDestination] = useState<Destination | null>(null);
 
   useEffect(() => {
-    getStoredToken()
-      .then((token) => {
-        setDestination(token ? '/(tabs)/search' : '/auth/login');
-      })
-      .catch(() => {
+    async function resolve() {
+      try {
+        const token = await getStoredToken();
+        if (!token) {
+          setDestination('/auth/login');
+          return;
+        }
+        const targets = await getMacroTargets();
+        setDestination(targets ? '/(tabs)/search' : '/macro-setup');
+      } catch {
         setDestination('/auth/login');
-      });
+      }
+    }
+    resolve();
   }, []);
 
   if (!destination) {
