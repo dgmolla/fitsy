@@ -22,8 +22,8 @@ const sampleRestaurant = {
   id: 'r1',
   name: 'Test Bistro',
   address: '123 Main St',
-  lat: 34.0869,
-  lng: -118.3269,
+  lat: 34.0868,
+  lng: -118.3273,
   distanceMiles: 0.5,
   cuisineTags: ['american'],
   chainFlag: false,
@@ -50,8 +50,8 @@ describe('fetchRestaurants', () => {
       carbs: 50,
       fat: 20,
       calories: 500,
-      lat: 34.0869,
-      lng: -118.3269,
+      lat: 34.0868,
+      lng: -118.3273,
     });
 
     expect(global.fetch).toHaveBeenCalledTimes(1);
@@ -61,8 +61,8 @@ describe('fetchRestaurants', () => {
     expect(url.searchParams.get('carbs')).toBe('50');
     expect(url.searchParams.get('fat')).toBe('20');
     expect(url.searchParams.get('calories')).toBe('500');
-    expect(url.searchParams.get('lat')).toBe('34.0869');
-    expect(url.searchParams.get('lng')).toBe('-118.3269');
+    expect(url.searchParams.get('lat')).toBe('34.0868');
+    expect(url.searchParams.get('lng')).toBe('-118.3273');
   });
 
   it('omits undefined macro params from query string', async () => {
@@ -72,7 +72,7 @@ describe('fetchRestaurants', () => {
     };
     global.fetch = makeMockFetch({ ok: true, body: mockBody });
 
-    await fetchRestaurants({ protein: 30, lat: 34.0869, lng: -118.3269 });
+    await fetchRestaurants({ protein: 30, lat: 34.0868, lng: -118.3273 });
 
     expect(global.fetch).toHaveBeenCalledTimes(1);
     const calledUrl: string = (global.fetch as jest.Mock).mock.calls[0][0];
@@ -86,7 +86,7 @@ describe('fetchRestaurants', () => {
   it('returns empty array on API error response (non-ok)', async () => {
     global.fetch = makeMockFetch({ ok: false, status: 500, body: { error: 'Server error' } });
 
-    const result = await fetchRestaurants({ protein: 30, lat: 34.0869, lng: -118.3269 });
+    const result = await fetchRestaurants({ protein: 30, lat: 34.0868, lng: -118.3273 });
 
     expect(result).toEqual([]);
   });
@@ -98,7 +98,7 @@ describe('fetchRestaurants', () => {
     };
     global.fetch = makeMockFetch({ ok: true, body: mockBody });
 
-    const result = await fetchRestaurants({ protein: 40, calories: 500, lat: 34.0869, lng: -118.3269 });
+    const result = await fetchRestaurants({ protein: 40, calories: 500, lat: 34.0868, lng: -118.3273 });
 
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe('r1');
