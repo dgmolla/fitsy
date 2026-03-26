@@ -12,9 +12,10 @@ import {
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RestaurantResult } from '@fitsy/shared';
-import { MacroInputBar, RestaurantCard } from '@/components';
+import { EmptyState, LocationBar, MacroInputBar, RestaurantCard } from '@/components';
 import type { MacroValues } from '@/lib/macroPresets';
 import { fetchRestaurants } from '@/lib/apiClient';
+import { useLocation } from '@/lib/useLocation';
 
 const DEBOUNCE_MS = 600;
 const STORAGE_KEY = 'fitsy:macroTargets';
@@ -26,24 +27,14 @@ const DEFAULT_INPUTS: MacroValues = {
   calories: '',
 };
 
-function EmptyState({ hasInputs }: { hasInputs: boolean }) {
-  return (
-    <View style={styles.emptyState}>
-      <Text style={styles.emptyStateText}>
-        {hasInputs
-          ? 'No restaurants match your macro targets'
-          : 'Enter macro targets above to find matching restaurants'}
-      </Text>
-    </View>
-  );
-}
-
 export default function SearchScreen() {
   const [inputs, setInputs] = useState<MacroValues>(DEFAULT_INPUTS);
   const [results, setResults] = useState<RestaurantResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasHydrated, setHasHydrated] = useState(false);
+
+  const location = useLocation();
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -53,7 +44,6 @@ export default function SearchScreen() {
     inputs.fat !== '' ||
     inputs.calories !== '';
 
-  // Load persisted macro targets on mount
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY)
       .then((raw) => {
@@ -69,47 +59,49 @@ export default function SearchScreen() {
       });
   }, []);
 
-  // Persist macro targets whenever they change (only after hydration)
   useEffect(() => {
     if (!hasHydrated) return;
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(inputs)).catch(() => {
-      // Ignore storage write errors
-    });
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(inputs)).catch(() => {});
   }, [inputs, hasHydrated]);
 
-  const doFetch = useCallback(async (current: MacroValues) => {
-    setLoading(true);
-    setError(null);
+  const doFetch = useCallback(
+    async (current: MacroValues, lat: number, lng: number) => {
+      setLoading(true);
+      setError(null);
 
-    const params: Parameters<typeof fetchRestaurants>[0] = {};
-    const protein = parseFloat(current.protein);
-    const carbs = parseFloat(current.carbs);
-    const fat = parseFloat(current.fat);
-    const calories = parseFloat(current.calories);
+      const params: Parameters<typeof fetchRestaurants>[0] = { lat, lng };
+      const protein = parseFloat(current.protein);
+      const carbs = parseFloat(current.carbs);
+      const fat = parseFloat(current.fat);
+      const calories = parseFloat(current.calories);
 
-    if (!isNaN(protein)) params.protein = protein;
-    if (!isNaN(carbs)) params.carbs = carbs;
-    if (!isNaN(fat)) params.fat = fat;
-    if (!isNaN(calories)) params.calories = calories;
+      if (!isNaN(protein)) params.protein = protein;
+      if (!isNaN(carbs)) params.carbs = carbs;
+      if (!isNaN(fat)) params.fat = fat;
+      if (!isNaN(calories)) params.calories = calories;
 
-    try {
-      const data = await fetchRestaurants(params);
-      setResults(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load results');
-      setResults([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      try {
+        const data = await fetchRestaurants(params);
+        setResults(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load results');
+        setResults([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    []
+  );
 
   useEffect(() => {
+    if (location.loading) return;
+
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
     }
 
     debounceRef.current = setTimeout(() => {
-      doFetch(inputs);
+      doFetch(inputs, location.lat, location.lng);
     }, DEBOUNCE_MS);
 
     return () => {
@@ -117,7 +109,7 @@ export default function SearchScreen() {
         clearTimeout(debounceRef.current);
       }
     };
-  }, [inputs, doFetch]);
+  }, [inputs, location.lat, location.lng, location.loading, doFetch]);
 
   const handleChange = useCallback(
     (field: keyof MacroValues, value: string) => {
@@ -136,19 +128,12 @@ export default function SearchScreen() {
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        {/* Macro target inputs + presets */}
         <MacroInputBar
           values={inputs}
           onChange={handleChange}
           onChangeAll={handleChangeAll}
         />
-
-        {/* Location label */}
-        <View style={styles.locationBar}>
-          <Text style={styles.locationText}>Searching near Silver Lake, LA</Text>
-        </View>
-
-        {/* Loading */}
+        <LocationBar location={location} />
         {loading && (
           <ActivityIndicator
             size="small"
@@ -157,15 +142,11 @@ export default function SearchScreen() {
             accessibilityLabel="Loading restaurants"
           />
         )}
-
-        {/* Error */}
         {!loading && error !== null && (
           <View style={styles.errorBanner}>
             <Text style={styles.errorText}>{error}</Text>
           </View>
         )}
-
-        {/* Results list */}
         {!loading && error === null && (
           <FlatList
             data={results}
@@ -194,18 +175,6 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
-  locationBar: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#D1D5DB',
-  },
-  locationText: {
-    fontSize: 12,
-    color: '#6B7280',
-    textAlign: 'center',
-  },
   spinner: {
     marginTop: 32,
   },
@@ -225,18 +194,5 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingTop: 8,
     paddingBottom: 24,
-  },
-  emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-    paddingTop: 64,
-  },
-  emptyStateText: {
-    fontSize: 15,
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 22,
   },
 });
