@@ -2,12 +2,15 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { MenuItemResult } from '@fitsy/shared';
 import { ConfidenceBadge } from './ConfidenceBadge';
+import { BookmarkButton } from './BookmarkButton';
 
 interface Props {
   item: MenuItemResult;
+  isSaved?: boolean;
+  onToggleSave?: (id: string) => void;
 }
 
-export function MenuItem({ item }: Props) {
+export function MenuItem({ item, isSaved, onToggleSave }: Props) {
   const priceLabel =
     item.price !== undefined && item.price !== null
       ? `$${item.price.toFixed(2)}`
@@ -30,6 +33,12 @@ export function MenuItem({ item }: Props) {
           ) : null}
           {item.macros ? (
             <ConfidenceBadge confidence={item.macros.confidence} />
+          ) : null}
+          {onToggleSave !== undefined ? (
+            <BookmarkButton
+              isSaved={isSaved ?? false}
+              onPress={() => onToggleSave(item.id)}
+            />
           ) : null}
         </View>
       </View>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -8,9 +8,9 @@ import {
   View,
 } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { MenuItemResult, MenuResponse } from '@fitsy/shared';
+import { MenuItemResult, MenuResponse, SavedItemResponse } from '@fitsy/shared';
 import { MenuItem } from '@/components';
-import { fetchMenu } from '@/lib/apiClient';
+import { fetchMenu, getSavedItems, saveItem, unsaveItem } from '@/lib/apiClient';
 
 type Section = {
   title: string;
@@ -42,6 +42,8 @@ export default function RestaurantDetailScreen() {
   const [menu, setMenu] = useState<MenuResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Map from menuItemId -> savedItemId (present when saved)
+  const [savedMap, setSavedMap] = useState<Map<string, string>>(new Map());
 
   useEffect(() => {
     let cancelled = false;
@@ -56,7 +58,10 @@ export default function RestaurantDetailScreen() {
       setLoading(true);
       setError(null);
 
-      const result = await fetchMenu(id);
+      const [result, savedResult] = await Promise.all([
+        fetchMenu(id),
+        getSavedItems(),
+      ]);
 
       if (cancelled) return;
 
@@ -65,15 +70,45 @@ export default function RestaurantDetailScreen() {
       } else {
         setMenu(result);
       }
+
+      if (savedResult) {
+        const map = new Map<string, string>();
+        for (const saved of savedResult.data) {
+          if (saved.menuItemId) {
+            map.set(saved.menuItemId, saved.id);
+          }
+        }
+        setSavedMap(map);
+      }
+
       setLoading(false);
     }
 
-    load();
+    void load();
 
     return () => {
       cancelled = true;
     };
   }, [id]);
+
+  const handleToggleSave = useCallback(async (menuItemId: string) => {
+    const existingSavedId = savedMap.get(menuItemId);
+    if (existingSavedId) {
+      const success = await unsaveItem(existingSavedId);
+      if (success) {
+        setSavedMap((prev) => {
+          const next = new Map(prev);
+          next.delete(menuItemId);
+          return next;
+        });
+      }
+    } else {
+      const saved = await saveItem(menuItemId);
+      if (saved) {
+        setSavedMap((prev) => new Map(prev).set(menuItemId, saved.id));
+      }
+    }
+  }, [savedMap]);
 
   const restaurantName = menu?.restaurantName ?? 'Restaurant';
 
@@ -116,7 +151,13 @@ export default function RestaurantDetailScreen() {
               <SectionList
                 sections={buildSections(menu.menuItems)}
                 keyExtractor={(item) => item.id}
-                renderItem={({ item }) => <MenuItem item={item} />}
+                renderItem={({ item }) => (
+                  <MenuItem
+                    item={item}
+                    isSaved={savedMap.has(item.id)}
+                    onToggleSave={handleToggleSave}
+                  />
+                )}
                 renderSectionHeader={({ section }) =>
                   section.title ? (
                     <View style={styles.sectionHeader}>
@@ -131,7 +172,13 @@ export default function RestaurantDetailScreen() {
               <FlatList
                 data={menu.menuItems}
                 keyExtractor={(item) => item.id}
-                renderItem={({ item }) => <MenuItem item={item} />}
+                renderItem={({ item }) => (
+                  <MenuItem
+                    item={item}
+                    isSaved={savedMap.has(item.id)}
+                    onToggleSave={handleToggleSave}
+                  />
+                )}
                 contentContainerStyle={styles.listContent}
               />
             )}

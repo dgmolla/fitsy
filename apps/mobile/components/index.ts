@@ -1,6 +1,7 @@
 // Component barrel — export all public components from this file.
 // Screens import from '@/components', not from individual component files.
 
+export { BookmarkButton } from './BookmarkButton';
 export { ConfidenceBadge } from './ConfidenceBadge';
 export { EmptyState } from './EmptyState';
 export { LocationBar } from './LocationBar';
