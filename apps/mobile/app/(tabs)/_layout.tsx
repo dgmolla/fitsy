@@ -14,30 +14,32 @@ export default function TabLayout() {
         headerShown: false,
         tabBarStyle: {
           position: 'absolute',
-          bottom: 24,
-          left: 24,
-          right: 24,
-          height: 64,
-          borderRadius: 32,
+          bottom: 28,
+          left: 32,
+          right: 32,
+          height: 60,
+          borderRadius: 30,
           borderTopWidth: 0,
           backgroundColor: 'transparent',
           elevation: 0,
           shadowColor: '#000',
-          shadowOffset: { width: 0, height: 8 },
-          shadowOpacity: 0.12,
-          shadowRadius: 24,
+          shadowOffset: { width: 0, height: 10 },
+          shadowOpacity: 0.10,
+          shadowRadius: 28,
           overflow: 'hidden',
+          borderWidth: 1,
+          borderColor: colors.border,
         },
         tabBarBackground: () => (
           <BlurFallback
             tint={mode === 'dark' ? 'dark' : 'light'}
-            intensity={90}
+            intensity={92}
             fallbackColor={colors.tabBarBg}
-            style={{ borderRadius: 32 }}
+            style={{ borderRadius: 30 }}
           />
         ),
         tabBarItemStyle: {
-          paddingVertical: 8,
+          paddingVertical: 6,
         },
         tabBarShowLabel: false,
       }}
