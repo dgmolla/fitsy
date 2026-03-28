@@ -12,6 +12,7 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/lib/theme';
 import { PRESETS, type MacroValues } from '@/lib/macroPresets';
+import { saveMacroTargets } from '@/lib/macroStorage';
 
 const FIELDS: { key: keyof MacroValues; label: string; unit: string }[] = [
   { key: 'protein', label: 'Protein', unit: 'g' },
@@ -39,12 +40,9 @@ export default function FilterScreen() {
     });
   }, [params.protein, params.carbs, params.fat, params.calories]);
 
-  function handleApply() {
+  async function handleApply() {
+    await saveMacroTargets(draft);
     router.back();
-    // Pass values back via params — search screen reads from storage
-    // We save to storage here so search screen picks it up
-    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-    AsyncStorage.setItem('fitsy:macroTargets', JSON.stringify(draft)).catch(() => {});
   }
 
   function handleClear() {
