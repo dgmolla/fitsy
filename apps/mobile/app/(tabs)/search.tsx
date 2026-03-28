@@ -9,16 +9,17 @@ import {
   Text,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router, useFocusEffect } from 'expo-router';
 import { RestaurantResult } from '@fitsy/shared';
-import { EmptyState, LocationBar, MacroInputBar, RestaurantCard } from '@/components';
+import { EmptyState, LocationBar, RestaurantCard } from '@/components';
+import { SearchHeader } from '@/components/SearchHeader';
 import type { MacroValues } from '@/lib/macroPresets';
 import { fetchRestaurants } from '@/lib/apiClient';
 import { useLocation } from '@/lib/useLocation';
+import { getMacroTargets } from '@/lib/macroStorage';
+import { useTheme } from '@/lib/theme';
 
 const DEBOUNCE_MS = 600;
-const STORAGE_KEY = 'fitsy:macroTargets';
 
 const DEFAULT_INPUTS: MacroValues = {
   protein: '',
@@ -32,10 +33,9 @@ export default function SearchScreen() {
   const [results, setResults] = useState<RestaurantResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [hasHydrated, setHasHydrated] = useState(false);
+  const { colors } = useTheme();
 
   const location = useLocation();
-
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const hasInputs =
@@ -44,25 +44,19 @@ export default function SearchScreen() {
     inputs.fat !== '' ||
     inputs.calories !== '';
 
-  useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY)
-      .then((raw) => {
-        if (raw) {
-          setInputs(JSON.parse(raw) as MacroValues);
-        }
-      })
-      .catch(() => {
-        // Ignore storage errors — use defaults
-      })
-      .finally(() => {
-        setHasHydrated(true);
-      });
-  }, []);
-
-  useEffect(() => {
-    if (!hasHydrated) return;
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(inputs)).catch(() => {});
-  }, [inputs, hasHydrated]);
+  // Re-read macro targets from storage every time the screen gains focus
+  // (e.g. after returning from the filter screen)
+  useFocusEffect(
+    useCallback(() => {
+      getMacroTargets()
+        .then((saved) => {
+          if (saved) {
+            setInputs(saved);
+          }
+        })
+        .catch(() => {});
+    }, [])
+  );
 
   const doFetch = useCallback(
     async (current: MacroValues, lat: number, lng: number) => {
@@ -111,40 +105,32 @@ export default function SearchScreen() {
     };
   }, [inputs, location.lat, location.lng, location.loading, doFetch]);
 
-  const handleChange = useCallback(
-    (field: keyof MacroValues, value: string) => {
-      setInputs((prev) => ({ ...prev, [field]: value }));
-    },
-    []
-  );
-
-  const handleChangeAll = useCallback((values: MacroValues) => {
-    setInputs(values);
-  }, []);
+  function openFilters() {
+    router.push({
+      pathname: '/filter',
+      params: { ...inputs },
+    });
+  }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <MacroInputBar
-          values={inputs}
-          onChange={handleChange}
-          onChangeAll={handleChangeAll}
-        />
+        <SearchHeader values={inputs} onPress={openFilters} />
         <LocationBar location={location} />
         {loading && (
           <ActivityIndicator
             size="small"
-            color="#2D7D46"
+            color={colors.accent}
             style={styles.spinner}
             accessibilityLabel="Loading restaurants"
           />
         )}
         {!loading && error !== null && (
-          <View style={styles.errorBanner}>
-            <Text style={styles.errorText}>{error}</Text>
+          <View style={[styles.errorBanner, { backgroundColor: colors.errorBg }]}>
+            <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
           </View>
         )}
         {!loading && error === null && (
@@ -170,7 +156,6 @@ export default function SearchScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
   },
   flex: {
     flex: 1,
@@ -181,18 +166,16 @@ const styles = StyleSheet.create({
   errorBanner: {
     marginHorizontal: 16,
     marginTop: 16,
-    backgroundColor: '#FEE2E2',
     borderRadius: 8,
     padding: 12,
   },
   errorText: {
     fontSize: 14,
-    color: '#DC2626',
     textAlign: 'center',
   },
   listContent: {
     flexGrow: 1,
     paddingTop: 8,
-    paddingBottom: 24,
+    paddingBottom: 100,
   },
 });

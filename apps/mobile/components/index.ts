@@ -15,4 +15,5 @@ export { MacroTargetsSection } from './MacroTargetsSection';
 export { MenuItem } from './MenuItem';
 export { ProgressDots } from './ProgressDots';
 export { RestaurantCard } from './RestaurantCard';
+export { SearchHeader } from './SearchHeader';
 export { SelectionCard } from './SelectionCard';
