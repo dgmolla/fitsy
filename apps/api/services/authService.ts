@@ -7,7 +7,7 @@ const JWT_EXPIRY = "7d";
 const BCRYPT_ROUNDS = 12;
 
 function getJwtSecret(): Uint8Array {
-  const secret = process.env["JWT_SECRET"];
+  const secret = process.env["JWT_SECRET"] ?? process.env["SUPABASE_JWT_SECRET"];
   if (!secret) {
     throw new Error("JWT_SECRET environment variable is not set");
   }
