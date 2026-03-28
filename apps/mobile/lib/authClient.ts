@@ -73,3 +73,56 @@ export async function registerAndStore(
   await storeToken(result.token);
   return result;
 }
+
+// ─── Stub functions (implemented in later sprints) ────────────────────────────
+
+export interface UserProfileData {
+  age?: number;
+  heightCm?: number;
+  weightKg?: number;
+  activityLevel?: string;
+  goal?: string;
+}
+
+export interface SubscriptionData {
+  plan: 'monthly' | 'yearly';
+  receiptData?: string;
+}
+
+export async function appleSignIn(): Promise<never> {
+  throw new Error('not implemented');
+}
+
+export async function updateProfile(data: UserProfileData): Promise<void> {
+  const token = await getStoredToken();
+  const res = await fetch(`${BASE_URL}/api/user/profile`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const message = (body as { error?: string }).error ?? `HTTP ${res.status}`;
+    throw new Error(message);
+  }
+}
+
+export async function verifySubscription(data: SubscriptionData): Promise<void> {
+  const token = await getStoredToken();
+  const res = await fetch(`${BASE_URL}/api/subscriptions/verify`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const message = (body as { error?: string }).error ?? `HTTP ${res.status}`;
+    throw new Error(message);
+  }
+}

@@ -3,6 +3,7 @@
 
 export { BookmarkButton } from './BookmarkButton';
 export { ConfidenceBadge } from './ConfidenceBadge';
+export { ContinueButton } from './ContinueButton';
 export { EmptyState } from './EmptyState';
 export { FitsyLoader } from './FitsyLoader';
 export type { FitsyLoaderSize } from './FitsyLoader';
@@ -12,4 +13,6 @@ export type { MacroFieldProps } from './MacroField';
 export { MacroInputBar } from './MacroInputBar';
 export { MacroTargetsSection } from './MacroTargetsSection';
 export { MenuItem } from './MenuItem';
+export { ProgressDots } from './ProgressDots';
 export { RestaurantCard } from './RestaurantCard';
+export { SelectionCard } from './SelectionCard';
