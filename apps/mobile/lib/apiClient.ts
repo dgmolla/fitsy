@@ -1,4 +1,4 @@
-import { MenuApiResponse, MenuResponse, RestaurantResult, RestaurantsApiResponse } from '@fitsy/shared';
+import { MenuApiResponse, MenuResponse, RestaurantResult, RestaurantsApiResponse, SavedItemResponse, SavedItemsResponse } from '@fitsy/shared';
 import { api } from './api';
 
 export interface FetchRestaurantsParams {
@@ -52,5 +52,36 @@ export async function fetchMenu(restaurantId: string): Promise<MenuResponse | nu
     return response.data;
   } catch {
     return null;
+  }
+}
+
+export async function getSavedItems(cursor?: string): Promise<SavedItemsResponse | null> {
+  try {
+    const qs = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+    const response = await api.get<SavedItemsResponse>(`/api/saved-items${qs}`, true);
+    return response;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveItem(menuItemId: string): Promise<SavedItemResponse | null> {
+  try {
+    const response = await api.post<{ data: SavedItemResponse }>(
+      '/api/saved-items',
+      { menuItemId }
+    );
+    return response.data;
+  } catch {
+    return null;
+  }
+}
+
+export async function unsaveItem(savedItemId: string): Promise<boolean> {
+  try {
+    await api.del(`/api/saved-items/${savedItemId}`);
+    return true;
+  } catch {
+    return false;
   }
 }

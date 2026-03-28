@@ -24,4 +24,51 @@ async function get<T>(path: string, authenticated = false): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export const api = { get };
+async function post<T>(path: string, body: unknown, authenticated = true): Promise<T> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  if (authenticated) {
+    const token = await getStoredToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+  }
+
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(errBody.error ?? `Request failed: ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+async function del<T>(path: string, authenticated = true): Promise<T> {
+  const headers: Record<string, string> = {};
+
+  if (authenticated) {
+    const token = await getStoredToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+  }
+
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method: 'DELETE',
+    headers: Object.keys(headers).length > 0 ? headers : undefined,
+  });
+
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(errBody.error ?? `Request failed: ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+export const api = { get, post, del };
