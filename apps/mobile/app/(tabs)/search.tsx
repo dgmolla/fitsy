@@ -9,14 +9,15 @@ import {
   Text,
   View,
 } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { router } from 'expo-router';
 import { RestaurantResult } from '@fitsy/shared';
 import { EmptyState, RestaurantCard } from '@/components';
 import { SearchHeader } from '@/components/SearchHeader';
+import { FilterPopup } from '@/components/FilterPopup';
 import type { MacroValues } from '@/lib/macroPresets';
 import { fetchRestaurants } from '@/lib/apiClient';
 import { useLocation } from '@/lib/useLocation';
-import { getMacroTargets } from '@/lib/macroStorage';
+import { getMacroTargets, saveMacroTargets } from '@/lib/macroStorage';
 import { useTheme } from '@/lib/theme';
 
 const DEBOUNCE_MS = 600;
@@ -33,6 +34,7 @@ export default function SearchScreen() {
   const [results, setResults] = useState<RestaurantResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [filterVisible, setFilterVisible] = useState(false);
   const { colors } = useTheme();
 
   const location = useLocation();
@@ -44,19 +46,14 @@ export default function SearchScreen() {
     inputs.fat !== '' ||
     inputs.calories !== '';
 
-  // Re-read macro targets from storage every time the screen gains focus
-  // (e.g. after returning from the filter screen)
-  useFocusEffect(
-    useCallback(() => {
-      getMacroTargets()
-        .then((saved) => {
-          if (saved) {
-            setInputs(saved);
-          }
-        })
-        .catch(() => {});
-    }, [])
-  );
+  // Hydrate macro targets from storage on mount
+  useEffect(() => {
+    getMacroTargets()
+      .then((saved) => {
+        if (saved) setInputs(saved);
+      })
+      .catch(() => {});
+  }, []);
 
   const doFetch = useCallback(
     async (current: MacroValues, lat: number, lng: number) => {
@@ -106,10 +103,13 @@ export default function SearchScreen() {
   }, [inputs, location.lat, location.lng, location.loading, doFetch]);
 
   function openFilters() {
-    router.push({
-      pathname: '/filter',
-      params: { ...inputs },
-    });
+    setFilterVisible(true);
+  }
+
+  function handleApplyFilters(newValues: MacroValues) {
+    setFilterVisible(false);
+    setInputs(newValues);
+    saveMacroTargets(newValues).catch(() => {});
   }
 
   return (
@@ -148,6 +148,12 @@ export default function SearchScreen() {
           />
         )}
       </KeyboardAvoidingView>
+      <FilterPopup
+        visible={filterVisible}
+        values={inputs}
+        onApply={handleApplyFilters}
+        onClose={() => setFilterVisible(false)}
+      />
     </SafeAreaView>
   );
 }
