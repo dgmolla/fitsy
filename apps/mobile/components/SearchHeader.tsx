@@ -12,10 +12,16 @@ interface SearchHeaderProps {
   onPress: () => void;
 }
 
-const FIELDS: { key: keyof MacroValues; label: string }[] = [
-  { key: 'protein', label: 'P' },
-  { key: 'fat', label: 'F' },
-  { key: 'carbs', label: 'C' },
+const MACRO_COLORS = {
+  protein: '#3B82F6',
+  carbs: '#F59E0B',
+  fat: '#EF4444',
+} as const;
+
+const FIELDS: { key: keyof MacroValues; label: string; color: string }[] = [
+  { key: 'protein', label: 'P', color: MACRO_COLORS.protein },
+  { key: 'carbs', label: 'C', color: MACRO_COLORS.carbs },
+  { key: 'fat', label: 'F', color: MACRO_COLORS.fat },
 ];
 
 export function SearchHeader({ values, location, onPress }: SearchHeaderProps) {
@@ -32,8 +38,8 @@ export function SearchHeader({ values, location, onPress }: SearchHeaderProps) {
       <View style={styles.topRow}>
         <Text style={[styles.logo, { color: BRAND.color }]}>{BRAND.name}</Text>
         <View style={styles.locationRow}>
-          <Ionicons name="location-sharp" size={12} color={colors.accent} />
-          <Text style={[styles.location, { color: colors.textSecondary }]}>
+          <Ionicons name="location-sharp" size={12} color={colors.textTertiary} />
+          <Text style={[styles.location, { color: colors.textTertiary }]}>
             {locationLabel}
           </Text>
         </View>
@@ -45,20 +51,20 @@ export function SearchHeader({ values, location, onPress }: SearchHeaderProps) {
         accessibilityLabel="Edit macro filters"
         accessibilityRole="button"
       >
-        {FIELDS.map(({ key, label }, i) => {
+        {FIELDS.map(({ key, label, color }, i) => {
           const val = values[key];
           return (
             <React.Fragment key={key}>
-              {i > 0 && <Text style={[styles.dot, { color: colors.borderSubtle }]}> · </Text>}
-              <Text style={[styles.macroLabel, { color: colors.textTertiary }]}>
-                {label.toLowerCase()}{' '}
-              </Text>
-              <Text style={[
-                styles.macroValue,
-                { color: val ? colors.textPrimary : colors.textTertiary },
-              ]}>
-                {val || '—'}
-              </Text>
+              {i > 0 && <View style={styles.chipSpacer} />}
+              <View style={[styles.macroChip, { backgroundColor: colors.bgElevated }]}>
+                <View style={[styles.macroDot, { backgroundColor: color }]} />
+                <Text style={[styles.macroText, { color: colors.textSecondary }]}>
+                  {val ? `${val}g` : '\u2014'}{' '}
+                </Text>
+                <Text style={[styles.macroLabel, { color: colors.textTertiary }]}>
+                  {label}
+                </Text>
+              </View>
             </React.Fragment>
           );
         })}
@@ -98,15 +104,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 2,
   },
-  macroLabel: {
-    fontSize: 13,
-    fontWeight: '500',
+  chipSpacer: {
+    width: 8,
   },
-  macroValue: {
+  macroChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    gap: 6,
+  },
+  macroDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  macroText: {
     fontSize: 13,
     fontWeight: '700',
   },
-  dot: {
+  macroLabel: {
     fontSize: 13,
+    fontWeight: '500',
   },
 });

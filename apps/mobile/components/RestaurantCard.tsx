@@ -56,7 +56,7 @@ export function RestaurantCard({ item, onPress }: Props) {
           </Text>
 
           {item.bestMatch ? (
-            <View style={[styles.bestMatch, { backgroundColor: colors.bgElevated }]}>
+            <View style={styles.bestMatch}>
               <View style={styles.bestMatchRow}>
                 <Text
                   style={[styles.bestMatchName, { color: colors.textPrimary }]}
@@ -67,29 +67,48 @@ export function RestaurantCard({ item, onPress }: Props) {
                 <ConfidenceBadge confidence={item.bestMatch.confidence} />
               </View>
               <View style={styles.macroRow}>
-                {[
-                  { label: 'P', value: `${item.bestMatch.proteinG}g` },
-                  { label: 'C', value: `${item.bestMatch.carbsG}g` },
-                  { label: 'F', value: `${item.bestMatch.fatG}g` },
-                ].map(({ label, value }) => (
-                  <View key={label} style={styles.macroChip}>
-                    <Text style={[styles.macroChipUnit, { color: colors.textTertiary }]}>
-                      {label}
-                    </Text>
-                    <Text style={[styles.macroChipValue, { color: colors.textPrimary }]}>
-                      {value}
-                    </Text>
-                  </View>
-                ))}
-                <View style={[styles.macroChip, styles.kcalChip, {
-                  backgroundColor: colors.accentBg,
-                  borderColor: colors.accentBorder,
-                }]}>
-                  <Text style={[styles.kcalValue, { color: colors.accent }]}>
+                <View style={[styles.macroChipInline, { backgroundColor: colors.bgElevated }]}>
+                  <Text style={[styles.macroChipLabel, { color: colors.textTertiary }]}>
+                    CALS
+                  </Text>
+                  <Text style={[styles.macroChipVal, { color: colors.textPrimary }]}>
                     {item.bestMatch.calories}
                   </Text>
-                  <Text style={[styles.kcalUnit, { color: colors.accent }]}> kcal</Text>
                 </View>
+                <View style={[styles.macroChipInline, { backgroundColor: colors.bgElevated }]}>
+                  <Text style={[styles.macroChipLabel, { color: colors.textTertiary }]}>
+                    PRO
+                  </Text>
+                  <Text style={[styles.macroChipVal, { color: colors.textPrimary }]}>
+                    {item.bestMatch.proteinG}g
+                  </Text>
+                </View>
+                <View style={[styles.macroChipInline, { backgroundColor: colors.bgElevated }]}>
+                  <Text style={[styles.macroChipLabel, { color: colors.textTertiary }]}>
+                    CARBS
+                  </Text>
+                  <Text style={[styles.macroChipVal, { color: colors.textPrimary }]}>
+                    {item.bestMatch.carbsG}g
+                  </Text>
+                </View>
+                <View style={[styles.macroChipInline, { backgroundColor: colors.bgElevated }]}>
+                  <Text style={[styles.macroChipLabel, { color: colors.textTertiary }]}>
+                    FAT
+                  </Text>
+                  <Text style={[styles.macroChipVal, { color: colors.textPrimary }]}>
+                    {item.bestMatch.fatG}g
+                  </Text>
+                </View>
+                {isHighConfidence && (
+                  <View style={[styles.matchBadge, {
+                    backgroundColor: colors.accentBg,
+                    borderColor: colors.accentBorder,
+                  }]}>
+                    <Text style={[styles.matchBadgeText, { color: colors.accent }]}>
+                      Match
+                    </Text>
+                  </View>
+                )}
               </View>
             </View>
           ) : (
@@ -159,8 +178,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   bestMatch: {
-    borderRadius: 12,
-    padding: 12,
     gap: 10,
   },
   bestMatchRow: {
@@ -179,35 +196,34 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 6,
     flexWrap: 'wrap',
+    alignItems: 'center',
   },
-  macroChip: {
+  macroChipInline: {
     flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 3,
+    alignItems: 'center',
+    gap: 4,
     borderRadius: 8,
-    paddingHorizontal: 9,
+    paddingHorizontal: 8,
     paddingVertical: 5,
   },
-  macroChipUnit: {
-    fontSize: 10,
+  macroChipLabel: {
+    fontSize: 9,
     fontWeight: '700',
-    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  macroChipValue: {
+  macroChipVal: {
     fontSize: 13,
     fontWeight: '700',
   },
-  kcalChip: {
+  matchBadge: {
+    borderRadius: 8,
     borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
-  kcalValue: {
-    fontSize: 13,
+  matchBadgeText: {
+    fontSize: 11,
     fontWeight: '700',
-  },
-  kcalUnit: {
-    fontSize: 10,
-    fontWeight: '600',
-    opacity: 0.7,
   },
   noMacro: {
     fontSize: 13,
