@@ -12,6 +12,9 @@ kanban-plugin: basic
 
 ## Done
 
+- [x] **S-59** Saved meals — Saved tab, BookmarkButton, GET/POST/DELETE /api/saved-items, restaurant detail integration #backend #frontend #O1 @completed(2026-03-28)
+- [x] **S-60** Welcome flow — 7 onboarding screens, Apple auth API, profile PATCH, TDEE calculator, subscription verify stub #backend #frontend #O1 @completed(2026-03-28)
+- [x] **S-61** Loading animation — FitsyLoader letter-bounce Reanimated component, wired into restaurant detail + saved tab #frontend #O1 @completed(2026-03-28)
 - [x] **S-55** Macro target setup screen — onboarding flow to capture protein/carbs/fat targets, persisted to AsyncStorage #frontend #O1 #wave-1 @completed(2026-03-25)
 - [x] **S-56** Profile screen — display saved macros, allow editing, show account email #frontend #O1 #wave-1 @completed(2026-03-25)
 - [x] **S-54** GPS integration — replace hardcoded Silver Lake coords with `expo-location` device GPS #frontend #O1 #wave-1 @completed(2026-03-25)
