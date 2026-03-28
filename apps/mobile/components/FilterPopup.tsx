@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  Animated,
   Modal,
   Pressable,
   StyleSheet,
@@ -29,41 +30,93 @@ export function FilterPopup({ visible, values, onApply, onClose }: FilterPopupPr
   const { colors, mode } = useTheme();
   const [draft, setDraft] = useState<MacroValues>(values);
 
-  React.useEffect(() => {
-    if (visible) setDraft(values);
-  }, [visible, values]);
+  const scaleAnim = useRef(new Animated.Value(0)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      setDraft(values);
+      scaleAnim.setValue(0.85);
+      opacityAnim.setValue(0);
+      Animated.parallel([
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          damping: 18,
+          stiffness: 280,
+          mass: 0.8,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: 1,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [visible, values, scaleAnim, opacityAnim]);
+
+  function handleClose() {
+    Animated.parallel([
+      Animated.timing(scaleAnim, {
+        toValue: 0.9,
+        duration: 120,
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: 0,
+        duration: 120,
+        useNativeDriver: true,
+      }),
+    ]).start(() => onClose());
+  }
 
   function handleApply() {
-    onApply(draft);
+    Animated.parallel([
+      Animated.timing(scaleAnim, {
+        toValue: 0.9,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: 0,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start(() => onApply(draft));
   }
 
   return (
-    <Modal visible={visible} transparent animationType="slide">
+    <Modal visible={visible} transparent animationType="none">
       <View style={styles.overlay}>
-        <BlurFallback
-          tint={mode === 'dark' ? 'dark' : 'light'}
-          intensity={120}
-          fallbackColor="rgba(0,0,0,0.75)"
-          style={StyleSheet.absoluteFill as ViewStyle}
-        />
+        <Animated.View style={[StyleSheet.absoluteFill, { opacity: opacityAnim }]}>
+          <BlurFallback
+            tint={mode === 'dark' ? 'dark' : 'light'}
+            intensity={100}
+            fallbackColor="rgba(0,0,0,0.6)"
+            style={StyleSheet.absoluteFill as ViewStyle}
+          />
+        </Animated.View>
 
-        <Pressable style={styles.backdrop} onPress={onClose} />
+        <Pressable style={styles.backdrop} onPress={handleClose} />
 
-        <View style={[styles.sheet, {
+        <Animated.View style={[styles.card, {
           backgroundColor: colors.bgCard,
           borderColor: colors.border,
           shadowColor: colors.glassShadowColor,
           shadowOpacity: colors.glassShadowOpacity,
           shadowRadius: colors.glassShadowRadius,
-          shadowOffset: { width: 0, height: -8 },
+          shadowOffset: { width: 0, height: 12 },
           elevation: 24,
+          opacity: opacityAnim,
+          transform: [
+            { scale: scaleAnim },
+            // Start from slightly above (where the chips are)
+            { translateY: scaleAnim.interpolate({
+              inputRange: [0.85, 1],
+              outputRange: [-30, 0],
+            })},
+          ],
         }]}>
-          <View style={styles.handle} />
-
-          <Text style={[styles.title, { color: colors.textPrimary }]}>
-            Macro Targets
-          </Text>
-
           {/* Three macro inputs in a row */}
           <View style={styles.macroRow}>
             {MACROS.map(({ key, label, unit, color }) => (
@@ -80,7 +133,7 @@ export function FilterPopup({ visible, values, onApply, onClose }: FilterPopupPr
                   value={draft[key]}
                   onChangeText={(t) => setDraft((p) => ({ ...p, [key]: t }))}
                   keyboardType="numeric"
-                  placeholder="\u2014"
+                  placeholder={'\u2014'}
                   placeholderTextColor={colors.textTertiary}
                   maxLength={4}
                   textAlign="center"
@@ -104,7 +157,7 @@ export function FilterPopup({ visible, values, onApply, onClose }: FilterPopupPr
                 value={draft.calories}
                 onChangeText={(t) => setDraft((p) => ({ ...p, calories: t }))}
                 keyboardType="numeric"
-                placeholder="\u2014"
+                placeholder={'\u2014'}
                 placeholderTextColor={colors.textTertiary}
                 maxLength={5}
               />
@@ -118,10 +171,10 @@ export function FilterPopup({ visible, values, onApply, onClose }: FilterPopupPr
             onPress={handleApply}
           >
             <Text style={[styles.applyText, { color: colors.accentOnAccent }]}>
-              Apply Filters
+              Apply
             </Text>
           </Pressable>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -130,47 +183,34 @@ export function FilterPopup({ visible, values, onApply, onClose }: FilterPopupPr
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    justifyContent: 'flex-end',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    paddingTop: 120,
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
   },
-  sheet: {
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+  card: {
+    width: '90%',
+    maxWidth: 380,
+    borderRadius: 24,
     borderWidth: 1,
-    borderBottomWidth: 0,
-    paddingHorizontal: 20,
-    paddingBottom: 40,
-    paddingTop: 10,
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(128,128,128,0.3)',
-    alignSelf: 'center',
-    marginBottom: 16,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-    letterSpacing: -0.4,
-    marginBottom: 20,
-    textAlign: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 18,
+    paddingTop: 18,
   },
   macroRow: {
     flexDirection: 'row',
     gap: 10,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   macroBox: {
     flex: 1,
     borderRadius: 16,
     borderWidth: 1,
-    paddingVertical: 16,
+    paddingVertical: 14,
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
     overflow: 'hidden',
   },
   macroColorBar: {
@@ -181,15 +221,15 @@ const styles = StyleSheet.create({
     height: 3,
   },
   macroInput: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '800',
     letterSpacing: -1,
-    minWidth: 60,
+    minWidth: 56,
     textAlign: 'center',
     padding: 0,
   },
   macroUnit: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
     letterSpacing: 0.2,
   },
@@ -200,11 +240,11 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginBottom: 20,
+    paddingVertical: 12,
+    marginBottom: 14,
   },
   calLabel: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '500',
   },
   calRight: {
@@ -213,7 +253,7 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   calInput: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     minWidth: 50,
     textAlign: 'right',
@@ -225,18 +265,18 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   applyButton: {
-    borderRadius: 16,
-    paddingVertical: 18,
+    borderRadius: 14,
+    paddingVertical: 16,
     alignItems: 'center',
     shadowColor: '#2D7D46',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 14,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 6,
   },
   applyText: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
-    letterSpacing: -0.3,
+    letterSpacing: -0.2,
   },
 });
