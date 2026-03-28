@@ -7,7 +7,7 @@ interface FitsyLoaderProps {
   size?: FitsyLoaderSize;
 }
 
-const LETTERS = ['F', 'I', 'T', 'S', 'Y'] as const;
+const LETTERS = ['f', 'i', 't', 's', 'y'] as const;
 
 const FONT_SIZES: Record<FitsyLoaderSize, number> = {
   sm: 20,
