@@ -9,7 +9,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { useTheme } from '@/lib/theme';
-import { PRESETS, type MacroValues } from '@/lib/macroPresets';
+import type { MacroValues } from '@/lib/macroPresets';
 import { BlurFallback } from '@/lib/BlurFallback';
 
 interface FilterPopupProps {
@@ -42,8 +42,8 @@ export function FilterPopup({ visible, values, onApply, onClose }: FilterPopupPr
       <View style={styles.overlay}>
         <BlurFallback
           tint={mode === 'dark' ? 'dark' : 'light'}
-          intensity={70}
-          fallbackColor="rgba(0,0,0,0.45)"
+          intensity={95}
+          fallbackColor="rgba(0,0,0,0.65)"
           style={StyleSheet.absoluteFill as ViewStyle}
         />
 
@@ -105,24 +105,6 @@ export function FilterPopup({ visible, values, onApply, onClose }: FilterPopupPr
               />
               <Text style={[styles.calUnit, { color: colors.textTertiary }]}>kcal</Text>
             </View>
-          </View>
-
-          {/* Presets */}
-          <View style={styles.presets}>
-            {PRESETS.map((preset) => (
-              <Pressable
-                key={preset.label}
-                style={[styles.presetChip, {
-                  backgroundColor: colors.accentBg,
-                  borderColor: colors.accentBorder,
-                }]}
-                onPress={() => setDraft(preset.values)}
-              >
-                <Text style={[styles.presetText, { color: colors.accent }]}>
-                  {preset.label}
-                </Text>
-              </Pressable>
-            ))}
           </View>
 
           {/* Apply */}
@@ -222,22 +204,6 @@ const styles = StyleSheet.create({
   calUnit: {
     fontSize: 12,
     fontWeight: '500',
-  },
-  presets: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 18,
-  },
-  presetChip: {
-    borderRadius: 20,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-  },
-  presetText: {
-    fontSize: 12,
-    fontWeight: '600',
   },
   applyButton: {
     borderRadius: 16,
