@@ -279,6 +279,3 @@ export interface SubscriptionVerifyResponse {
   };
 }
 
-// ─── Loading ───────────────────────────────────────────────────────────────────
-
-export type FitsyLoaderSize = "sm" | "md" | "lg";
