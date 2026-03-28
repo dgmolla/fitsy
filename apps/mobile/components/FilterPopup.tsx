@@ -19,18 +19,16 @@ interface FilterPopupProps {
   onClose: () => void;
 }
 
-const FIELDS: { key: keyof MacroValues; label: string; unit: string }[] = [
+const MACROS: { key: keyof MacroValues; label: string; unit: string }[] = [
   { key: 'protein', label: 'Protein', unit: 'g' },
   { key: 'carbs', label: 'Carbs', unit: 'g' },
   { key: 'fat', label: 'Fat', unit: 'g' },
-  { key: 'calories', label: 'Calories', unit: 'kcal' },
 ];
 
 export function FilterPopup({ visible, values, onApply, onClose }: FilterPopupProps) {
   const { colors, mode } = useTheme();
   const [draft, setDraft] = useState<MacroValues>(values);
 
-  // Sync draft when popup opens with new values
   React.useEffect(() => {
     if (visible) setDraft(values);
   }, [visible, values]);
@@ -39,17 +37,13 @@ export function FilterPopup({ visible, values, onApply, onClose }: FilterPopupPr
     onApply(draft);
   }
 
-  function handleClear() {
-    setDraft({ protein: '', carbs: '', fat: '', calories: '' });
-  }
-
   return (
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.overlay}>
         <BlurFallback
           tint={mode === 'dark' ? 'dark' : 'light'}
-          intensity={60}
-          fallbackColor="rgba(0,0,0,0.5)"
+          intensity={70}
+          fallbackColor="rgba(0,0,0,0.45)"
           style={StyleSheet.absoluteFill as ViewStyle}
         />
 
@@ -58,48 +52,62 @@ export function FilterPopup({ visible, values, onApply, onClose }: FilterPopupPr
         <View style={[styles.card, {
           backgroundColor: colors.bgCard,
           borderColor: colors.border,
+          shadowColor: colors.glassShadowColor,
+          shadowOpacity: colors.glassShadowOpacity,
+          shadowRadius: colors.glassShadowRadius,
+          shadowOffset: { width: 0, height: 16 },
+          elevation: 24,
         }]}>
           <View style={styles.handle} />
 
-          <View style={styles.header}>
-            <Pressable onPress={onClose} hitSlop={12}>
-              <Text style={[styles.headerAction, { color: colors.textTertiary }]}>Cancel</Text>
-            </Pressable>
-            <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Macro Targets</Text>
-            <Pressable onPress={handleClear} hitSlop={12}>
-              <Text style={[styles.headerAction, { color: colors.accent }]}>Clear</Text>
-            </Pressable>
-          </View>
-
-          <View style={[styles.fieldsContainer, {
-            backgroundColor: colors.inputBg,
-            borderColor: colors.inputBorder,
-          }]}>
-            {FIELDS.map(({ key, label, unit }, i) => (
-              <View key={key} style={[
-                styles.fieldRow,
-                i < FIELDS.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.borderSubtle },
-              ]}>
-                <Text style={[styles.fieldLabel, { color: colors.textPrimary }]}>{label}</Text>
-                <View style={styles.fieldRight}>
-                  <TextInput
-                    style={[styles.fieldInput, {
-                      color: draft[key] ? colors.textPrimary : colors.textTertiary,
-                    }]}
-                    value={draft[key]}
-                    onChangeText={(text) => setDraft((prev) => ({ ...prev, [key]: text }))}
-                    keyboardType="numeric"
-                    placeholder="--"
-                    placeholderTextColor={colors.textTertiary}
-                    maxLength={5}
-                  />
-                  <Text style={[styles.fieldUnit, { color: colors.textTertiary }]}>{unit}</Text>
-                </View>
+          {/* Three macro glass boxes */}
+          <View style={styles.macroRow}>
+            {MACROS.map(({ key, label, unit }) => (
+              <View
+                key={key}
+                style={[styles.macroBox, {
+                  backgroundColor: colors.inputBg,
+                  borderColor: colors.inputBorder,
+                }]}
+              >
+                <TextInput
+                  style={[styles.macroInput, { color: colors.textPrimary }]}
+                  value={draft[key]}
+                  onChangeText={(t) => setDraft((p) => ({ ...p, [key]: t }))}
+                  keyboardType="numeric"
+                  placeholder="—"
+                  placeholderTextColor={colors.textTertiary}
+                  maxLength={4}
+                  textAlign="center"
+                />
+                <Text style={[styles.macroUnit, { color: colors.textTertiary }]}>
+                  {label} ({unit})
+                </Text>
               </View>
             ))}
           </View>
 
-          <Text style={[styles.presetLabel, { color: colors.textTertiary }]}>Quick presets</Text>
+          {/* Calories row */}
+          <View style={[styles.calRow, {
+            backgroundColor: colors.inputBg,
+            borderColor: colors.inputBorder,
+          }]}>
+            <Text style={[styles.calLabel, { color: colors.textSecondary }]}>Calories</Text>
+            <View style={styles.calRight}>
+              <TextInput
+                style={[styles.calInput, { color: colors.textPrimary }]}
+                value={draft.calories}
+                onChangeText={(t) => setDraft((p) => ({ ...p, calories: t }))}
+                keyboardType="numeric"
+                placeholder="—"
+                placeholderTextColor={colors.textTertiary}
+                maxLength={5}
+              />
+              <Text style={[styles.calUnit, { color: colors.textTertiary }]}>kcal</Text>
+            </View>
+          </View>
+
+          {/* Presets */}
           <View style={styles.presets}>
             {PRESETS.map((preset) => (
               <Pressable
@@ -117,12 +125,13 @@ export function FilterPopup({ visible, values, onApply, onClose }: FilterPopupPr
             ))}
           </View>
 
+          {/* Apply */}
           <Pressable
             style={[styles.applyButton, { backgroundColor: colors.accent }]}
             onPress={handleApply}
           >
             <Text style={[styles.applyText, { color: colors.accentOnAccent }]}>
-              Apply Targets
+              Apply
             </Text>
           </Pressable>
         </View>
@@ -142,95 +151,92 @@ const styles = StyleSheet.create({
   },
   card: {
     width: '88%',
-    maxWidth: 380,
-    borderRadius: 24,
+    maxWidth: 360,
+    borderRadius: 28,
     borderWidth: 1,
-    paddingHorizontal: 22,
-    paddingBottom: 22,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
     paddingTop: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 0.18,
-    shadowRadius: 40,
-    elevation: 24,
   },
   handle: {
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: 'rgba(0,0,0,0.12)',
+    backgroundColor: 'rgba(0,0,0,0.1)',
     alignSelf: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
   },
-  header: {
+  macroRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 10,
+  },
+  macroBox: {
+    flex: 1,
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingVertical: 16,
+    alignItems: 'center',
+    gap: 6,
+  },
+  macroInput: {
+    fontSize: 28,
+    fontWeight: '800',
+    letterSpacing: -1,
+    minWidth: 60,
+    textAlign: 'center',
+    padding: 0,
+  },
+  macroUnit: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  calRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-  },
-  headerAction: {
-    fontSize: 15,
-    fontWeight: '500',
-  },
-  fieldsContainer: {
     borderRadius: 14,
     borderWidth: 1,
-    overflow: 'hidden',
-    marginBottom: 20,
-  },
-  fieldRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 14,
     paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 16,
   },
-  fieldLabel: {
+  calLabel: {
     fontSize: 15,
     fontWeight: '500',
   },
-  fieldRight: {
+  calRight: {
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: 3,
   },
-  fieldInput: {
-    fontSize: 18,
+  calInput: {
+    fontSize: 20,
     fontWeight: '700',
-    minWidth: 52,
+    minWidth: 50,
     textAlign: 'right',
-    letterSpacing: -0.3,
+    padding: 0,
+    letterSpacing: -0.5,
   },
-  fieldUnit: {
+  calUnit: {
     fontSize: 12,
     fontWeight: '500',
-  },
-  presetLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-    marginBottom: 10,
   },
   presets: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    marginBottom: 22,
+    marginBottom: 18,
   },
   presetChip: {
     borderRadius: 20,
     borderWidth: 1,
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: 7,
   },
   presetText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
   },
   applyButton: {
@@ -239,13 +245,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     shadowColor: '#2D7D46',
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowOpacity: 0.3,
+    shadowRadius: 14,
+    elevation: 8,
   },
   applyText: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '700',
-    letterSpacing: -0.2,
+    letterSpacing: -0.3,
   },
 });

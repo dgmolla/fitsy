@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
+import { BRAND } from '@/lib/brand';
 
 export type FitsyLoaderSize = 'sm' | 'md' | 'lg';
 
@@ -15,7 +16,7 @@ const FONT_SIZES: Record<FitsyLoaderSize, number> = {
   lg: 48,
 };
 
-const ACCENT_COLOR = '#2D7D46';
+const ACCENT_COLOR = BRAND.color;
 const STAGGER_MS = 90;
 const BOUNCE_MS = 200;
 const LOOP_MS = (LETTERS.length - 1) * STAGGER_MS + BOUNCE_MS + 400;
@@ -66,7 +67,7 @@ const styles = StyleSheet.create({
   },
   letter: {
     color: ACCENT_COLOR,
-    fontWeight: 'bold',
-    letterSpacing: 2,
+    fontWeight: BRAND.fontWeight,
+    letterSpacing: BRAND.letterSpacing,
   },
 });

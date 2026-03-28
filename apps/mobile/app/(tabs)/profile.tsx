@@ -11,6 +11,7 @@ import {
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { clearToken, getStoredToken } from '@/lib/authClient';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { decodeEmailFromToken } from '@/lib/jwtUtils';
 import type { MacroValues } from '@/lib/macroPresets';
 import { MacroTargetsSection } from '@/components/MacroTargetsSection';
@@ -83,7 +84,7 @@ export default function ProfileScreen() {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={[styles.screenTitle, { color: colors.textPrimary }]}>Profile</Text>
+        <ScreenHeader />
 
         {/* Avatar + account section */}
         <View style={[styles.section, {

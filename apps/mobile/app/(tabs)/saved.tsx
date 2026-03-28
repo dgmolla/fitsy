@@ -10,6 +10,7 @@ import { useFocusEffect } from 'expo-router';
 import { SavedItemResponse } from '@fitsy/shared';
 import { getSavedItems, unsaveItem } from '@/lib/apiClient';
 import { BookmarkButton, FitsyLoader } from '@/components';
+import { ScreenHeader } from '@/components/ScreenHeader';
 
 type Section = {
   title: string;
@@ -71,7 +72,7 @@ export default function SavedScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.screenTitle}>Saved</Text>
+      <ScreenHeader />
 
       {loading ? (
         <View style={styles.centered}>

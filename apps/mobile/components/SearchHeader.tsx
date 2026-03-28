@@ -2,6 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/lib/theme';
+import { BRAND } from '@/lib/brand';
 import type { MacroValues } from '@/lib/macroPresets';
 import type { LocationState } from '@/lib/useLocation';
 
@@ -29,7 +30,7 @@ export function SearchHeader({ values, location, onPress }: SearchHeaderProps) {
   return (
     <View style={[styles.container, { backgroundColor: colors.bg }]}>
       <View style={styles.topRow}>
-        <Text style={[styles.logo, { color: colors.accent }]}>fitsy</Text>
+        <Text style={[styles.logo, { color: BRAND.color }]}>{BRAND.name}</Text>
         <View style={styles.locationRow}>
           <Ionicons name="location-sharp" size={12} color={colors.accent} />
           <Text style={[styles.location, { color: colors.textSecondary }]}>
@@ -80,8 +81,8 @@ const styles = StyleSheet.create({
   },
   logo: {
     fontSize: 30,
-    fontWeight: '800',
-    letterSpacing: -1,
+    fontWeight: BRAND.fontWeight,
+    letterSpacing: BRAND.letterSpacing,
   },
   locationRow: {
     flexDirection: 'row',

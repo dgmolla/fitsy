@@ -1,6 +1,10 @@
 /**
  * @jest-environment node
  */
+jest.mock('./authClient', () => ({
+  getStoredToken: jest.fn().mockResolvedValue('test-token'),
+}));
+
 import { fetchMenu, fetchRestaurants } from './apiClient';
 import type { MenuApiResponseBody, MenuResponse, RestaurantsResponse } from '@fitsy/shared';
 
