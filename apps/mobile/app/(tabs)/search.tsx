@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { RestaurantResult } from '@fitsy/shared';
-import { EmptyState, LocationBar, RestaurantCard } from '@/components';
+import { EmptyState, RestaurantCard } from '@/components';
 import { SearchHeader } from '@/components/SearchHeader';
 import type { MacroValues } from '@/lib/macroPresets';
 import { fetchRestaurants } from '@/lib/apiClient';
@@ -118,8 +118,7 @@ export default function SearchScreen() {
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <SearchHeader values={inputs} onPress={openFilters} />
-        <LocationBar location={location} />
+        <SearchHeader values={inputs} location={location} onPress={openFilters} />
         {loading && (
           <ActivityIndicator
             size="small"
