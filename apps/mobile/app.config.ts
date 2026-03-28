@@ -7,7 +7,7 @@ const config: ExpoConfig = {
   version: "1.0.0",
   orientation: "portrait",
   platforms: ["ios", "android"],
-  newArchEnabled: false,
+
   plugins: [
     "expo-router",
     [

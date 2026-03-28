@@ -15,4 +15,17 @@ config.resolver.nodeModulesPaths = [
   path.resolve(monorepoRoot, "node_modules"),
 ];
 
+// Force core RN packages to resolve from mobile workspace (prevent duplicate instances)
+config.resolver.extraNodeModules = new Proxy(
+  {
+    react: path.resolve(projectRoot, "node_modules/react"),
+    "react-native": path.resolve(projectRoot, "node_modules/react-native"),
+    "react-native-screens": path.resolve(projectRoot, "node_modules/react-native-screens"),
+  },
+  {
+    get: (target, name) =>
+      target[name] ?? path.resolve(projectRoot, "node_modules", name),
+  }
+);
+
 module.exports = config;
