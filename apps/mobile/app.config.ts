@@ -7,6 +7,7 @@ const config: ExpoConfig = {
   version: "1.0.0",
   orientation: "portrait",
   platforms: ["ios", "android"],
+  newArchEnabled: false,
   plugins: [
     "expo-router",
     [
@@ -19,6 +20,9 @@ const config: ExpoConfig = {
   ],
   extra: {
     apiBaseUrl: process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000",
+    eas: {
+      projectId: "a204190c-0b71-4c31-b126-f3bc62d1c4ee",
+    },
   },
 };
 

@@ -101,8 +101,8 @@ describe('fetchRestaurants', () => {
     const result = await fetchRestaurants({ protein: 40, calories: 500, lat: 34.0868, lng: -118.3273 });
 
     expect(result).toHaveLength(1);
-    expect(result[0].id).toBe('r1');
-    expect(result[0].name).toBe('Test Bistro');
+    expect(result[0]!.id).toBe('r1');
+    expect(result[0]!.name).toBe('Test Bistro');
   });
 });
 
