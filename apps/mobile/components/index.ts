@@ -4,6 +4,8 @@
 export { BookmarkButton } from './BookmarkButton';
 export { ConfidenceBadge } from './ConfidenceBadge';
 export { EmptyState } from './EmptyState';
+export { FitsyLoader } from './FitsyLoader';
+export type { FitsyLoaderSize } from './FitsyLoader';
 export { LocationBar } from './LocationBar';
 export { MacroField } from './MacroField';
 export type { MacroFieldProps } from './MacroField';
