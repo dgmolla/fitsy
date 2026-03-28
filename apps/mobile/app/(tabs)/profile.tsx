@@ -14,10 +14,12 @@ import { clearToken, getStoredToken } from '@/lib/authClient';
 import { decodeEmailFromToken } from '@/lib/jwtUtils';
 import type { MacroValues } from '@/lib/macroPresets';
 import { MacroTargetsSection } from '@/components/MacroTargetsSection';
+import { useTheme } from '@/lib/theme';
 
 const MACRO_STORAGE_KEY = 'fitsy:macroTargets';
 
 export default function ProfileScreen() {
+  const { colors } = useTheme();
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState<string>('—');
   const [macroTargets, setMacroTargets] = useState<MacroValues | null>(null);
@@ -60,12 +62,14 @@ export default function ProfileScreen() {
     router.replace('/auth/login');
   }, []);
 
+  const initials = email !== '—' ? email.charAt(0).toUpperCase() : '?';
+
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
         <ActivityIndicator
           size="large"
-          color="#2D7D46"
+          color={colors.spinnerColor}
           style={styles.spinner}
           accessibilityLabel="Loading profile"
         />
@@ -74,19 +78,33 @@ export default function ProfileScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.screenTitle}>Profile</Text>
+        <Text style={[styles.screenTitle, { color: colors.textPrimary }]}>Profile</Text>
 
-        {/* Account section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Account</Text>
-          <View style={styles.emailRow}>
-            <Text style={styles.emailLabel}>Email</Text>
-            <Text style={styles.emailValue} accessibilityLabel={`Email: ${email}`}>
+        {/* Avatar + account section */}
+        <View style={[styles.section, {
+          backgroundColor: colors.bgCard,
+          borderColor: colors.border,
+          shadowColor: colors.glassShadowColor,
+          shadowOpacity: colors.glassShadowOpacity,
+          shadowRadius: colors.glassShadowRadius,
+          shadowOffset: { width: 0, height: 4 },
+          elevation: 8,
+        }]}>
+          <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>Account</Text>
+          <View style={styles.accountRow}>
+            <View style={[styles.avatar, { backgroundColor: colors.accentBg, borderColor: colors.accentBorder }]}>
+              <Text style={[styles.avatarText, { color: colors.accent }]}>{initials}</Text>
+            </View>
+            <Text
+              style={[styles.emailValue, { color: colors.textSecondary }]}
+              numberOfLines={1}
+              accessibilityLabel={`Email: ${email}`}
+            >
               {email}
             </Text>
           </View>
@@ -101,12 +119,12 @@ export default function ProfileScreen() {
 
         {/* Logout */}
         <Pressable
-          style={styles.logoutButton}
+          style={[styles.logoutButton, { backgroundColor: colors.errorBg, borderColor: colors.errorBorder }]}
           onPress={handleLogout}
           accessibilityRole="button"
           accessibilityLabel="Log out"
         >
-          <Text style={styles.logoutButtonText}>Log out</Text>
+          <Text style={[styles.logoutButtonText, { color: colors.error }]}>Log out</Text>
         </Pressable>
       </ScrollView>
     </SafeAreaView>
@@ -116,7 +134,6 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
   },
   spinner: {
     flex: 1,
@@ -124,55 +141,60 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 100,
   },
   screenTitle: {
     fontSize: 28,
-    fontWeight: '700',
-    color: '#111827',
+    fontWeight: '800',
     marginBottom: 20,
+    letterSpacing: -0.5,
   },
   section: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 18,
     padding: 16,
     marginBottom: 12,
+    borderWidth: 1,
   },
-  sectionTitle: {
-    fontSize: 16,
+  sectionLabel: {
+    fontSize: 11,
     fontWeight: '600',
-    color: '#111827',
+    textTransform: 'uppercase',
+    letterSpacing: 0.7,
     marginBottom: 12,
   },
-  emailRow: {
+  accountRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 12,
   },
-  emailLabel: {
-    fontSize: 14,
-    color: '#6B7280',
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  avatarText: {
+    fontSize: 16,
+    fontWeight: '700',
   },
   emailValue: {
     fontSize: 14,
-    color: '#111827',
     fontWeight: '500',
-    flexShrink: 1,
-    textAlign: 'right',
+    flex: 1,
   },
   logoutButton: {
     height: 50,
-    backgroundColor: '#FEE2E2',
-    borderRadius: 10,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 8,
     borderWidth: 1,
-    borderColor: '#FECACA',
   },
   logoutButtonText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
-    color: '#DC2626',
   },
 });

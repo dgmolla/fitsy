@@ -7,6 +7,7 @@ import {
   View,
 } from 'react-native';
 import type { MacroValues } from '@/lib/macroPresets';
+import { useTheme } from '@/lib/theme';
 
 export interface MacroTargetsSectionProps {
   targets: MacroValues | null;
@@ -22,6 +23,16 @@ const FIELDS: { key: keyof MacroValues; label: string }[] = [
 ];
 
 export function MacroTargetsSection({ targets, onSave, onSetupPress }: MacroTargetsSectionProps) {
+  const { colors } = useTheme();
+  const glassSection = {
+    backgroundColor: colors.bgCard,
+    borderColor: colors.border,
+    shadowColor: colors.glassShadowColor,
+    shadowOpacity: colors.glassShadowOpacity,
+    shadowRadius: colors.glassShadowRadius,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+  } as const;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<MacroValues>({ protein: '', carbs: '', fat: '', calories: '' });
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -51,43 +62,43 @@ export function MacroTargetsSection({ targets, onSave, onSetupPress }: MacroTarg
 
   if (editing) {
     return (
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Macro Targets</Text>
+      <View style={[styles.section, glassSection]}>
+        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Macro Targets</Text>
         {FIELDS.map(({ key, label }) => (
           <View key={key} style={styles.editRow}>
-            <Text style={styles.editLabel}>{label} (g)</Text>
+            <Text style={[styles.editLabel, { color: colors.textSecondary }]}>{label} (g)</Text>
             <TextInput
-              style={styles.editInput}
+              style={[styles.editInput, { borderColor: colors.border, color: colors.textPrimary, backgroundColor: colors.bg }]}
               value={draft[key]}
               onChangeText={(text) => setDraft((prev) => ({ ...prev, [key]: text }))}
               keyboardType="numeric"
               returnKeyType="done"
-              placeholder="—"
-              placeholderTextColor="#9CA3AF"
+              placeholder="--"
+              placeholderTextColor={colors.inputPlaceholder}
               accessibilityLabel={`${label} target`}
               maxLength={5}
             />
           </View>
         ))}
         {saveError !== null && (
-          <Text style={styles.errorText} accessibilityLiveRegion="polite">{saveError}</Text>
+          <Text style={[styles.errorText, { color: colors.error }]} accessibilityLiveRegion="polite">{saveError}</Text>
         )}
         <View style={styles.editActions}>
           <Pressable
-            style={styles.saveButton}
+            style={[styles.saveButton, { backgroundColor: colors.accent }]}
             onPress={handleSave}
             accessibilityRole="button"
             accessibilityLabel="Save macro targets"
           >
-            <Text style={styles.saveButtonText}>Save</Text>
+            <Text style={[styles.saveButtonText, { color: colors.accentOnAccent }]}>Save</Text>
           </Pressable>
           <Pressable
-            style={styles.cancelButton}
+            style={[styles.cancelButton, { backgroundColor: colors.bgCard, borderColor: colors.border }]}
             onPress={handleCancel}
             accessibilityRole="button"
             accessibilityLabel="Cancel editing macro targets"
           >
-            <Text style={styles.cancelButtonText}>Cancel</Text>
+            <Text style={[styles.cancelButtonText, { color: colors.textSecondary }]}>Cancel</Text>
           </Pressable>
         </View>
       </View>
@@ -96,39 +107,39 @@ export function MacroTargetsSection({ targets, onSave, onSetupPress }: MacroTarg
 
   if (!targets || !FIELDS.some(({ key }) => targets[key] !== '')) {
     return (
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Macro Targets</Text>
-        <Text style={styles.emptyText}>No macro targets set yet.</Text>
+      <View style={[styles.section, glassSection]}>
+        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Macro Targets</Text>
+        <Text style={[styles.emptyText, { color: colors.textTertiary }]}>No macro targets set yet.</Text>
         <Pressable
-          style={styles.ctaButton}
+          style={[styles.ctaButton, { backgroundColor: colors.accent }]}
           onPress={onSetupPress}
           accessibilityRole="button"
           accessibilityLabel="Set up macro targets"
         >
-          <Text style={styles.ctaButtonText}>Set up macro targets</Text>
+          <Text style={[styles.ctaButtonText, { color: colors.accentOnAccent }]}>Set up macro targets</Text>
         </Pressable>
       </View>
     );
   }
 
   return (
-    <View style={styles.section}>
+    <View style={[styles.section, glassSection]}>
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Macro Targets</Text>
+        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Macro Targets</Text>
         <Pressable
           onPress={handleEditPress}
           accessibilityRole="button"
           accessibilityLabel="Edit macro targets"
           hitSlop={8}
         >
-          <Text style={styles.editLink}>Edit</Text>
+          <Text style={[styles.editLink, { color: colors.accent }]}>Edit</Text>
         </Pressable>
       </View>
       <View style={styles.macroGrid}>
         {FIELDS.map(({ key, label }) => (
-          <View key={key} style={styles.macroCard}>
-            <Text style={styles.macroValue}>{targets[key] || '—'}</Text>
-            <Text style={styles.macroLabel}>{label}</Text>
+          <View key={key} style={[styles.macroCard, { backgroundColor: colors.bg, borderColor: colors.border }]}>
+            <Text style={[styles.macroValue, { color: colors.accent }]}>{targets[key] || '--'}</Text>
+            <Text style={[styles.macroLabel, { color: colors.textTertiary }]}>{label}</Text>
           </View>
         ))}
       </View>
@@ -138,10 +149,10 @@ export function MacroTargetsSection({ targets, onSave, onSetupPress }: MacroTarg
 
 const styles = StyleSheet.create({
   section: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 18,
     padding: 16,
     marginBottom: 12,
+    borderWidth: 1,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -150,10 +161,11 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: '600',
-    color: '#111827',
     marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
   },
   macroGrid: {
     flexDirection: 'row',
@@ -161,27 +173,26 @@ const styles = StyleSheet.create({
   },
   macroCard: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
+    borderRadius: 12,
     padding: 10,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
   },
   macroValue: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#2D7D46',
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: -0.3,
   },
   macroLabel: {
-    fontSize: 11,
-    color: '#6B7280',
-    marginTop: 2,
+    fontSize: 10,
+    marginTop: 3,
     textAlign: 'center',
+    fontWeight: '500',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
   },
   editLink: {
-    fontSize: 14,
-    color: '#2D7D46',
+    fontSize: 13,
     fontWeight: '600',
   },
   editRow: {
@@ -193,19 +204,16 @@ const styles = StyleSheet.create({
   editLabel: {
     flex: 1,
     fontSize: 14,
-    color: '#374151',
     fontWeight: '500',
   },
   editInput: {
     width: 80,
-    height: 40,
+    height: 42,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
     borderRadius: 8,
     paddingHorizontal: 10,
-    fontSize: 15,
-    color: '#111827',
-    backgroundColor: '#F9FAFB',
+    fontSize: 16,
+    fontWeight: '700',
     textAlign: 'center',
   },
   editActions: {
@@ -216,51 +224,42 @@ const styles = StyleSheet.create({
   saveButton: {
     flex: 1,
     height: 44,
-    backgroundColor: '#2D7D46',
-    borderRadius: 10,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
   saveButtonText: {
     fontSize: 15,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontWeight: '700',
   },
   cancelButton: {
     flex: 1,
     height: 44,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 10,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
   },
   cancelButtonText: {
     fontSize: 15,
     fontWeight: '500',
-    color: '#374151',
   },
   emptyText: {
     fontSize: 14,
-    color: '#6B7280',
     marginBottom: 12,
   },
   ctaButton: {
     height: 44,
-    backgroundColor: '#2D7D46',
-    borderRadius: 10,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
   ctaButtonText: {
     fontSize: 15,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontWeight: '700',
   },
   errorText: {
     fontSize: 13,
-    color: '#DC2626',
     marginBottom: 8,
   },
 });

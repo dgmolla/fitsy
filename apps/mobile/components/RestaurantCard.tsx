@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { RestaurantResult } from '@fitsy/shared';
 import { ConfidenceBadge } from './ConfidenceBadge';
+import { useTheme } from '@/lib/theme';
 
 interface Props {
   item: RestaurantResult;
@@ -9,94 +10,132 @@ interface Props {
 }
 
 export function RestaurantCard({ item, onPress }: Props) {
+  const { colors } = useTheme();
   const distanceLabel = `${item.distanceMiles.toFixed(1)} mi`;
+  const isHighConfidence = item.bestMatch?.confidence === 'HIGH';
 
   return (
     <TouchableOpacity
       style={styles.cardWrapper}
       onPress={onPress}
-      activeOpacity={onPress ? 0.7 : 1}
+      activeOpacity={onPress ? 0.8 : 1}
       accessibilityRole="button"
       accessibilityLabel={`View menu for ${item.name}`}
     >
-    <View style={styles.card}>
-      <View style={styles.header}>
-        <Text style={styles.name} numberOfLines={1}>
-          {item.name}
-        </Text>
-        <Text style={styles.distance}>{distanceLabel}</Text>
-      </View>
+      <View style={[styles.card, {
+        backgroundColor: colors.bgCard,
+        borderColor: colors.border,
+        shadowColor: colors.glassShadowColor,
+        shadowOpacity: colors.glassShadowOpacity,
+        shadowRadius: colors.glassShadowRadius,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 8,
+      }]}>
+        {isHighConfidence && <View style={[styles.accentStrip, { backgroundColor: colors.accent }]} />}
 
-      <Text style={styles.address} numberOfLines={1}>
-        {item.address}
-      </Text>
-
-      {item.bestMatch ? (
-        <View style={styles.bestMatch}>
-          <View style={styles.bestMatchRow}>
-            <Text style={styles.bestMatchName} numberOfLines={1}>
-              {item.bestMatch.name}
+        <View style={styles.cardBody}>
+          <View style={styles.header}>
+            <Text style={[styles.name, { color: colors.textPrimary }]} numberOfLines={1}>
+              {item.name}
             </Text>
-            <ConfidenceBadge confidence={item.bestMatch.confidence} />
+            <View style={[styles.distancePill, { backgroundColor: colors.bgElevated, borderColor: colors.border }]}>
+              <Text style={[styles.distance, { color: colors.textSecondary }]}>{distanceLabel}</Text>
+            </View>
           </View>
-          <Text style={styles.macros}>
-            {`${item.bestMatch.proteinG}g P · ${item.bestMatch.carbsG}g C · ${item.bestMatch.fatG}g F · ${item.bestMatch.calories} kcal`}
+
+          <Text style={[styles.address, { color: colors.textTertiary }]} numberOfLines={1}>
+            {item.address}
           </Text>
+
+          {item.bestMatch ? (
+            <View style={[styles.bestMatch, { borderTopColor: colors.borderSubtle }]}>
+              <View style={styles.bestMatchRow}>
+                <Text style={[styles.bestMatchName, { color: colors.textSecondary }]} numberOfLines={1}>
+                  {item.bestMatch.name}
+                </Text>
+                <ConfidenceBadge confidence={item.bestMatch.confidence} />
+              </View>
+              <View style={styles.macroRow}>
+                <View style={[styles.macroChip, { backgroundColor: colors.bgElevated, borderColor: colors.border }]}>
+                  <Text style={[styles.macroChipUnit, { color: colors.textTertiary }]}>P</Text>
+                  <Text style={[styles.macroChipValue, { color: colors.textPrimary }]}>{item.bestMatch.proteinG}g</Text>
+                </View>
+                <View style={[styles.macroChip, { backgroundColor: colors.bgElevated, borderColor: colors.border }]}>
+                  <Text style={[styles.macroChipUnit, { color: colors.textTertiary }]}>C</Text>
+                  <Text style={[styles.macroChipValue, { color: colors.textPrimary }]}>{item.bestMatch.carbsG}g</Text>
+                </View>
+                <View style={[styles.macroChip, { backgroundColor: colors.bgElevated, borderColor: colors.border }]}>
+                  <Text style={[styles.macroChipUnit, { color: colors.textTertiary }]}>F</Text>
+                  <Text style={[styles.macroChipValue, { color: colors.textPrimary }]}>{item.bestMatch.fatG}g</Text>
+                </View>
+                <View style={[styles.macroChip, styles.kcalChip, { borderColor: colors.accentBorder, backgroundColor: colors.accentBg }]}>
+                  <Text style={[styles.kcalValue, { color: colors.accent }]}>{item.bestMatch.calories}</Text>
+                  <Text style={styles.kcalUnit}> kcal</Text>
+                </View>
+              </View>
+            </View>
+          ) : (
+            <Text style={[styles.noMacro, { color: colors.textTertiary, borderTopColor: colors.borderSubtle }]}>No macro data</Text>
+          )}
         </View>
-      ) : (
-        <Text style={styles.noMacro}>No macro data</Text>
-      )}
-    </View>
+      </View>
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   cardWrapper: {
-    // no extra styling needed; card handles its own margins
+    marginHorizontal: 14,
+    marginVertical: 5,
   },
   card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    padding: 14,
-    marginHorizontal: 16,
-    marginVertical: 6,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    overflow: 'hidden',
+    flexDirection: 'row',
+  },
+  accentStrip: {
+    width: 3,
+    borderTopLeftRadius: 18,
+    borderBottomLeftRadius: 18,
+  },
+  cardBody: {
+    flex: 1,
+    padding: 14,
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    marginBottom: 2,
+    marginBottom: 3,
   },
   name: {
     flex: 1,
     fontSize: 16,
-    fontWeight: '700',
-    color: '#111827',
-    marginRight: 8,
+    fontWeight: '800',
+    marginRight: 10,
+    letterSpacing: -0.3,
   },
-  distance: {
-    fontSize: 13,
-    color: '#6B7280',
+  distancePill: {
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: 1,
     flexShrink: 0,
   },
+  distance: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
   address: {
-    fontSize: 13,
-    color: '#6B7280',
-    marginBottom: 8,
+    fontSize: 12,
+    marginBottom: 11,
+    fontWeight: '400',
   },
   bestMatch: {
     borderTopWidth: 1,
-    borderTopColor: '#D1D5DB',
-    paddingTop: 8,
-    gap: 4,
+    paddingTop: 10,
+    gap: 8,
   },
   bestMatchRow: {
     flexDirection: 'row',
@@ -105,21 +144,47 @@ const styles = StyleSheet.create({
   },
   bestMatchName: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-    color: '#111827',
     marginRight: 8,
   },
-  macros: {
-    fontSize: 13,
-    color: '#6B7280',
+  macroRow: {
+    flexDirection: 'row',
+    gap: 5,
+    flexWrap: 'wrap',
+  },
+  macroChip: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 2,
+    borderRadius: 7,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1,
+  },
+  macroChipUnit: {
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  macroChipValue: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  kcalChip: {},
+  kcalValue: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  kcalUnit: {
+    fontSize: 10,
+    fontWeight: '600',
+    opacity: 0.6,
   },
   noMacro: {
-    fontSize: 13,
-    color: '#6B7280',
+    fontSize: 12,
     fontStyle: 'italic',
     borderTopWidth: 1,
-    borderTopColor: '#D1D5DB',
-    paddingTop: 8,
+    paddingTop: 10,
   },
 });
