@@ -1,47 +1,33 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '@/lib/theme';
-import { BlurFallback } from '@/lib/BlurFallback';
 
 export default function TabLayout() {
-  const { colors, mode } = useTheme();
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: colors.accent,
-        tabBarInactiveTintColor: colors.textTertiary,
+        tabBarActiveTintColor: '#4ADE80',
+        tabBarInactiveTintColor: '#6B7280',
         headerShown: false,
         tabBarStyle: {
           position: 'absolute',
-          bottom: 28,
-          left: 60,
-          right: 60,
-          height: 56,
-          borderRadius: 28,
+          bottom: 32,
+          left: 80,
+          right: 80,
+          height: 52,
+          borderRadius: 26,
           borderTopWidth: 0,
-          backgroundColor: 'transparent',
-          elevation: 0,
+          backgroundColor: '#1A1A1A',
+          elevation: 12,
           shadowColor: '#000',
-          shadowOffset: { width: 0, height: 10 },
-          shadowOpacity: 0.10,
-          shadowRadius: 28,
-          overflow: 'hidden',
-          borderWidth: 1,
-          borderColor: colors.border,
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.25,
+          shadowRadius: 20,
         },
-        tabBarBackground: () => (
-          <BlurFallback
-            tint={mode === 'dark' ? 'dark' : 'light'}
-            intensity={92}
-            fallbackColor={colors.tabBarBg}
-            style={{ borderRadius: 28 }}
-          />
-        ),
         tabBarItemStyle: {
           justifyContent: 'center',
           alignItems: 'center',
-          height: 56,
+          height: 52,
         },
         tabBarShowLabel: false,
       }}
