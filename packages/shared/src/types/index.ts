@@ -200,3 +200,85 @@ export interface AuthResponse {
 }
 
 export type AuthApiResponse = AuthResponse | ApiError;
+
+// ─── Saved Meals ───────────────────────────────────────────────────────────────
+
+export interface SavedItemResponse {
+  id: string;
+  menuItemId: string;
+  restaurantId: string | null;
+  itemType: "menu_item" | "restaurant";
+  createdAt: string;
+  menuItem: {
+    id: string;
+    name: string;
+    description?: string;
+    category?: string;
+    price?: number;
+    macros: MenuItemMacros | null;
+    restaurant: {
+      id: string;
+      name: string;
+      address: string;
+    };
+  } | null;
+}
+
+export interface SavedItemsResponse {
+  data: SavedItemResponse[];
+  meta: PaginationMeta;
+}
+
+// ─── Welcome Flow ──────────────────────────────────────────────────────────────
+
+export type ActivityLevel =
+  | "sedentary"
+  | "lightly_active"
+  | "active"
+  | "very_active";
+
+export type UserGoal = "lose_fat" | "maintain" | "build_muscle";
+
+export interface AppleAuthRequest {
+  identityToken: string;
+  authorizationCode: string;
+  fullName?: { givenName?: string; familyName?: string } | null;
+  email?: string | null;
+}
+
+export interface AppleAuthResponse {
+  token: string;
+  user: AuthUser;
+  isNewUser: boolean;
+}
+
+export interface ProfileUpdateRequest {
+  age?: number;
+  heightCm?: number;
+  weightKg?: number;
+  activityLevel?: ActivityLevel;
+  goal?: UserGoal;
+  onboardingStep?: number;
+}
+
+export interface SubscriptionVerifyRequest {
+  receiptData: string;
+  productId: string;
+}
+
+export interface SubscriptionVerifyResponse {
+  success: boolean;
+  plan: string;
+  status: string;
+  expiresAt?: string;
+  macroTarget?: {
+    calories: number;
+    proteinG: number;
+    carbsG: number;
+    fatG: number;
+  };
+}
+
+// ─── Loading ───────────────────────────────────────────────────────────────────
+
+export type FitsyLoaderSize = "sm" | "md" | "lg";

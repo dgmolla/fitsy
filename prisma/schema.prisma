@@ -12,14 +12,22 @@ datasource db {
 }
 
 model User {
-  id           String       @id @default(cuid())
-  email        String       @unique
-  name         String?
-  passwordHash String?
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
-  macroTarget  MacroTarget?
-  savedItems   SavedItem[]
+  id              String        @id @default(cuid())
+  email           String        @unique
+  name            String?
+  passwordHash    String?
+  appleUserId     String?       @unique
+  age             Int?
+  heightCm        Float?
+  weightKg        Float?
+  activityLevel   String?
+  goal            String?
+  onboardingStep  Int           @default(0)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  macroTarget     MacroTarget?
+  savedItems      SavedItem[]
+  subscription    Subscription?
 }
 
 model MacroTarget {
@@ -86,17 +94,29 @@ model MacroEstimate {
 }
 
 model SavedItem {
-  id           String     @id @default(cuid())
+  id           String        @id @default(cuid())
   userId       String
   restaurantId String?
   menuItemId   String?
   itemType     SavedItemType
-  createdAt    DateTime   @default(now())
-  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  restaurant   Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: SetNull)
-  menuItem     MenuItem?   @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
+  createdAt    DateTime      @default(now())
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  restaurant   Restaurant?   @relation(fields: [restaurantId], references: [id], onDelete: SetNull)
+  menuItem     MenuItem?     @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
 
   @@index([userId])
+  @@unique([userId, menuItemId])
+}
+
+model Subscription {
+  id                   String    @id @default(cuid())
+  userId               String    @unique
+  plan                 String
+  status               String
+  appleTransactionId   String?
+  expiresAt            DateTime?
+  createdAt            DateTime  @default(now())
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 enum GoalType {
