@@ -1,6 +1,5 @@
 import React, { useCallback, useState } from 'react';
 import {
-  ActivityIndicator,
   SafeAreaView,
   SectionList,
   StyleSheet,
@@ -10,7 +9,7 @@ import {
 import { useFocusEffect } from 'expo-router';
 import { SavedItemResponse } from '@fitsy/shared';
 import { getSavedItems, unsaveItem } from '@/lib/apiClient';
-import { BookmarkButton } from '@/components';
+import { BookmarkButton, FitsyLoader } from '@/components';
 
 type Section = {
   title: string;
@@ -76,11 +75,7 @@ export default function SavedScreen() {
 
       {loading ? (
         <View style={styles.centered}>
-          <ActivityIndicator
-            size="large"
-            color="#2D7D46"
-            accessibilityLabel="Loading saved meals"
-          />
+          <FitsyLoader size="md" />
         </View>
       ) : savedItems.length === 0 ? (
         <View style={styles.centered}>

@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   SectionList,
   StyleSheet,
@@ -9,7 +8,7 @@ import {
 } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { MenuItemResult, MenuResponse, SavedItemResponse } from '@fitsy/shared';
-import { MenuItem } from '@/components';
+import { FitsyLoader, MenuItem } from '@/components';
 import { fetchMenu, getSavedItems, saveItem, unsaveItem } from '@/lib/apiClient';
 
 type Section = {
@@ -127,11 +126,7 @@ export default function RestaurantDetailScreen() {
       <View style={styles.container}>
         {loading && (
           <View style={styles.centered}>
-            <ActivityIndicator
-              size="large"
-              color="#2D7D46"
-              accessibilityLabel="Loading menu"
-            />
+            <FitsyLoader size="md" />
           </View>
         )}
 
