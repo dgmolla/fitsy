@@ -26,7 +26,7 @@ gets tested in proportion to its blast radius.
 ```mermaid
 graph TD
     subgraph pyramid["Test Pyramid — Fitsy"]
-        E2E["E2E Staging Tests\n~5% of suite\nMaestro against staging env\nFinal gate — prod-like"]
+        E2E["E2E Simulator Tests\n~5% of suite\nMobile MCP + Expo Go\nFinal gate — real device"]
         INT["Integration Tests\n~30% of suite\nAPI routes + DB\nReal DB, mocked external services"]
         UNIT["Unit Tests\n~65% of suite\nPure functions, business logic\nFast, no I/O"]
     end
@@ -42,7 +42,7 @@ graph TD
 |-------|------|-------|-------|
 | Unit | Pure functions, match scoring, macro math | Vitest | <1s |
 | Integration | API routes + Prisma against test DB | Vitest + testcontainers | <30s |
-| E2E Staging | Critical mobile flows against prod-like env | Maestro | minutes |
+| E2E Simulator | Critical mobile flows on local simulator | Mobile MCP + Expo Go | minutes |
 
 ---
 
@@ -216,57 +216,50 @@ test intent invisible.
 
 ---
 
-## 9. E2E Staging Tests (Maestro)
+## 9. E2E Tests (Mobile MCP + Expo Go Simulator)
 
-Maestro is the final catch-all gate. It runs against a **prod-like staging
-environment** — real API, real database (seeded), real mobile app build.
+E2E testing uses the **mobile MCP** (`@mobilenext/mobile-mcp`) to drive the
+Expo Go simulator on the local machine. This replaces Playwright (which was
+designed for web, not mobile) and Maestro.
 
-### Why Maestro
+### Why Mobile MCP
 
-- YAML-based flows — no flaky JS selectors
-- Works with Expo/React Native out of the box
-- Runs on CI with `maestro cloud` or self-hosted via `maestro test`
-- Fast to write, easy to maintain
+- Directly controls the iOS simulator — tap, swipe, type, screenshot
+- Works with Expo Go — no native build required
+- Agents can run E2E checks as part of their PR workflow
+- No CI infra needed — runs on any Mac with Xcode + simulator
 
-### Staging environment
+### Configuration
 
-The staging env mirrors production:
-- Staging API deployed with real database (seeded with 90029 test data)
-- Expo preview build pointing at staging API
-- Same infra as prod, separate instance
-
-### Flow files
-
-```
-e2e/
-  flows/
-    search-restaurants.yaml      # Search → results appear
-    view-menu.yaml               # Tap restaurant → menu with macros
-    filter-by-macros.yaml        # Set targets → filtered results
-    empty-state.yaml             # No results → empty state message
+Already configured in `.mcp.json`:
+```json
+{
+  "mcpServers": {
+    "mobile-mcp": {
+      "command": "npx",
+      "args": ["-y", "@mobilenext/mobile-mcp@latest"]
+    }
+  }
+}
 ```
 
-### Example flow
+### How to run
 
-```yaml
-# e2e/flows/search-restaurants.yaml
-appId: com.fitsy.app
----
-- launchApp
-- tapOn: "Search restaurants"
-- inputText: "90029"
-- tapOn: "Search"
-- assertVisible: ".*restaurant.*"
-- assertVisible: "cal"
-```
+1. Start the Expo dev server: `npm run dev:mobile`
+2. Boot the iOS simulator (Expo opens it automatically)
+3. Use mobile MCP tools to interact with the app — tap elements, take
+   screenshots, verify screen state
 
-### When it runs
+### Smoke test flows
 
-Maestro E2E is the **last CI job** — it runs only after build passes.
-On `main` merges, it runs against the staging deployment. On PRs, it's
-skipped (too slow and requires staging infra).
+Before opening a PR, agents should verify these flows via mobile MCP:
 
-Setup is the final task before launch — requires staging env to exist first.
+- **Welcome/onboarding**: screens render, navigation works
+- **Auth**: register → login → lands on tabs
+- **Search**: search screen loads, results appear (when DB is seeded)
+- **Restaurant detail**: tap restaurant → menu with macros visible
+- **Saved meals**: bookmark a meal → appears in Saved tab
+- **Profile**: profile screen renders with macro targets
 
 ## 10. CI Gate
 
@@ -278,7 +271,7 @@ All of the following must pass before a PR can merge:
 3. npm test                           → all tests pass
 4. npm run test:coverage              → coverage ≥ 80%
 5. npm run build                      → no build errors
-6. maestro test e2e/flows/            → E2E pass (main only, staging)
+6. Mobile MCP smoke tests via Expo Go  → E2E pass (pre-PR, local simulator)
 ```
 
 CI runs these in parallel where possible. The structural test is fastest and

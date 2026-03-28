@@ -77,9 +77,8 @@ Run the full pre-PR gate locally. Fix all failures in your session.
 2. `npx tsc --noEmit`
 3. `npm test`
 4. `npm run build`
-5. **Video required**: PRs touching `apps/mobile/` trigger the Playwright E2E
-   video CI job. Wait for it to complete and confirm a video artifact is linked
-   in the CI comment before requesting review.
+5. **Mobile E2E**: Use the mobile MCP (`@mobilenext/mobile-mcp`) to run smoke
+   tests against the Expo Go simulator before requesting review.
 
 ## After Pushing a PR
 

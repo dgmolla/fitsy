@@ -51,15 +51,12 @@ sequenceDiagram
 | `EXPO_PUBLIC_API_URL` in Vercel | No trailing `\n` |
 | API base URL resolves | `https://fitsy-api.vercel.app` (no garbage suffix) |
 
-### 3. Playwright E2E (landing page / API)
+### 3. Mobile E2E (Expo Go simulator)
 
-Run existing Playwright tests against the local build:
-
-```bash
-cd apps/api
-npm run build && npm start &
-npx playwright test --video=on
-```
+Use mobile MCP to verify critical flows in the Expo Go simulator:
+- Welcome/onboarding screens render
+- Search screen loads with restaurant results
+- Restaurant detail shows menu with macros
 
 ### 4. Known issues (not blockers for smoke test)
 
@@ -92,15 +89,6 @@ npx playwright test --video=on
 ### Mobile app config — FIXED ✅
 
 `EXPO_PUBLIC_API_URL` had trailing `\n` literal in Vercel — stripped and re-added.
-
-### Playwright E2E — PASS ✅
-
-```
-Running 2 tests using 1 worker
-  ✓  landing page renders hero and CTA (393ms)
-  ✓  landing page has how-it-works section (273ms)
-  2 passed (1.9s)
-```
 
 ---
 

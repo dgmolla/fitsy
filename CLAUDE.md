@@ -143,8 +143,8 @@ npm run build
 # 5. No build output committed
 git diff --cached --name-only | grep -E '\.(js|js\.map)$' # should be empty
 
-# 6. E2E staging (main only — runs post-merge via Maestro)
-# maestro test e2e/flows/
+# 6. E2E smoke tests (local — via mobile MCP + Expo Go simulator)
+# Use mobile MCP tools to verify critical flows in the simulator
 ```
 
 **The rule**: if CI would catch it, you should have caught it first.
