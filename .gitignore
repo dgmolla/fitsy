@@ -39,3 +39,16 @@ yarn-error.log*
 
 # Expo local state
 .expo/
+apps/mobile/ios/
+
+# Build artifacts
+*.tsbuildinfo
+
+# Obsidian
+.obsidian/
+
+# Local recordings
+recordings/
+
+# Claude Code worktrees
+.claude/worktrees/
