@@ -26,7 +26,7 @@ export async function fetchRestaurants(
 
   try {
     const response = await api.get<RestaurantsApiResponse>(
-      `/api/restaurants?${qs.toString()}`
+      `/api/restaurants?${qs.toString()}`, true
     );
 
     if ('error' in response) {
@@ -42,7 +42,7 @@ export async function fetchRestaurants(
 export async function fetchMenu(restaurantId: string): Promise<MenuResponse | null> {
   try {
     const response = await api.get<MenuApiResponse>(
-      `/api/restaurants/${restaurantId}/menu`
+      `/api/restaurants/${restaurantId}/menu`, true
     );
 
     if ('error' in response) {
