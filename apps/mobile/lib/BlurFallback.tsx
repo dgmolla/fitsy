@@ -15,15 +15,17 @@ interface BlurFallbackProps {
 export function BlurFallback({ tint, intensity, fallbackColor, style }: BlurFallbackProps) {
   if (isExpoGo) {
     return (
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: fallbackColor }, style]} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: fallbackColor, overflow: 'hidden' }, style]} />
     );
   }
 
   return (
-    <BlurView
-      tint={tint}
-      intensity={intensity}
-      style={[StyleSheet.absoluteFill, style]}
-    />
+    <View style={[StyleSheet.absoluteFill, { overflow: 'hidden' }, style]}>
+      <BlurView
+        tint={tint}
+        intensity={intensity}
+        style={StyleSheet.absoluteFill}
+      />
+    </View>
   );
 }
