@@ -40,15 +40,7 @@ export function SearchHeader({ values, location, onPress }: SearchHeaderProps) {
 
       <Pressable
         onPress={onPress}
-        style={[styles.macroBar, {
-          backgroundColor: colors.bgCard,
-          borderColor: colors.border,
-          shadowColor: colors.glassShadowColor,
-          shadowOpacity: colors.glassShadowOpacity * 0.5,
-          shadowRadius: 8,
-          shadowOffset: { width: 0, height: 2 },
-          elevation: 3,
-        }]}
+        style={styles.macroRow}
         accessibilityLabel="Edit macro filters"
         accessibilityRole="button"
       >
@@ -56,26 +48,19 @@ export function SearchHeader({ values, location, onPress }: SearchHeaderProps) {
           const val = values[key];
           return (
             <React.Fragment key={key}>
-              {i > 0 && (
-                <View style={[styles.divider, { backgroundColor: colors.borderSubtle }]} />
-              )}
-              <View style={styles.macroItem}>
-                <Text style={[styles.macroLabel, { color: colors.textTertiary }]}>
-                  {label}
-                </Text>
-                <Text style={[
-                  styles.macroValue,
-                  { color: val ? colors.textPrimary : colors.textTertiary },
-                ]}>
-                  {val || '--'}
-                </Text>
-              </View>
+              {i > 0 && <Text style={[styles.dot, { color: colors.borderSubtle }]}> · </Text>}
+              <Text style={[styles.macroLabel, { color: colors.textTertiary }]}>
+                {label.toLowerCase()}{' '}
+              </Text>
+              <Text style={[
+                styles.macroValue,
+                { color: val ? colors.textPrimary : colors.textTertiary },
+              ]}>
+                {val || '—'}
+              </Text>
             </React.Fragment>
           );
         })}
-        <View style={[styles.editHint, { backgroundColor: colors.accentBg }]}>
-          <Ionicons name="options-outline" size={14} color={colors.accent} />
-        </View>
       </Pressable>
     </View>
   );
@@ -107,41 +92,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
   },
-  macroBar: {
+  macroRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 4,
-  },
-  macroItem: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 1,
+    marginTop: 2,
   },
   macroLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
+    fontSize: 13,
+    fontWeight: '500',
   },
   macroValue: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '700',
-    letterSpacing: -0.3,
   },
-  divider: {
-    width: 1,
-    height: 24,
-    borderRadius: 0.5,
-  },
-  editHint: {
-    width: 30,
-    height: 30,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 4,
+  dot: {
+    fontSize: 13,
   },
 });

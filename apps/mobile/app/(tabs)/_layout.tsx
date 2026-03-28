@@ -15,10 +15,10 @@ export default function TabLayout() {
         tabBarStyle: {
           position: 'absolute',
           bottom: 28,
-          left: 32,
-          right: 32,
-          height: 60,
-          borderRadius: 30,
+          left: 60,
+          right: 60,
+          height: 56,
+          borderRadius: 28,
           borderTopWidth: 0,
           backgroundColor: 'transparent',
           elevation: 0,
@@ -35,11 +35,13 @@ export default function TabLayout() {
             tint={mode === 'dark' ? 'dark' : 'light'}
             intensity={92}
             fallbackColor={colors.tabBarBg}
-            style={{ borderRadius: 30 }}
+            style={{ borderRadius: 28 }}
           />
         ),
         tabBarItemStyle: {
-          paddingVertical: 6,
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: 56,
         },
         tabBarShowLabel: false,
       }}
