@@ -1,26 +1,10 @@
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { useTheme } from '@/lib/theme';
 
 type Unit = 'cm' | 'ft';
-
-function MountainScene() {
-  const { colors } = useTheme();
-  return (
-    <View style={illStyles.wrap}>
-      <Ionicons name="sunny-outline" size={22} color="#F59E0B" style={illStyles.sun} />
-      <View style={illStyles.peaks}>
-        <Ionicons name="triangle" size={28} color={colors.textTertiary} style={illStyles.peakSmall} />
-        <Ionicons name="triangle" size={48} color={colors.accent} />
-        <Ionicons name="triangle" size={32} color={colors.accentBorder} style={illStyles.peakSmall} />
-      </View>
-      <View style={[illStyles.ground, { backgroundColor: colors.accentBg }]} />
-    </View>
-  );
-}
 
 export default function HeightScreen() {
   const { colors } = useTheme();
@@ -44,7 +28,7 @@ export default function HeightScreen() {
     <WelcomeScreen
       step={2}
       totalSteps={7}
-      illustration={<MountainScene />}
+      illustration={<Image source={require('@/assets/illustrations/height.jpg')} style={{ width: 180, height: 180, resizeMode: 'contain' }} />}
       title="How tall are you?"
       subtitle="Used to estimate your basal metabolic rate. We keep this between us."
       onContinue={() => router.push('/welcome/weight')}
@@ -124,14 +108,6 @@ export default function HeightScreen() {
     </WelcomeScreen>
   );
 }
-
-const illStyles = StyleSheet.create({
-  wrap: { alignItems: 'center', height: 80 },
-  sun: { position: 'absolute', top: 0, right: 20 },
-  peaks: { flexDirection: 'row', alignItems: 'flex-end', gap: -8, marginTop: 12 },
-  peakSmall: { marginBottom: 0 },
-  ground: { width: 140, height: 8, borderRadius: 4, marginTop: -2 },
-});
 
 const styles = StyleSheet.create({
   toggle: {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
@@ -29,17 +29,6 @@ const GOALS: { id: Goal; icon: IoniconsName; title: string; desc: string }[] = [
   },
 ];
 
-function TrophyScene() {
-  const { colors } = useTheme();
-  return (
-    <View style={illStyles.wrap}>
-      <Ionicons name="flag-outline" size={20} color={colors.textTertiary} />
-      <Ionicons name="trophy" size={42} color={colors.accent} />
-      <Ionicons name="star-outline" size={20} color="#F59E0B" />
-    </View>
-  );
-}
-
 export default function GoalScreen() {
   const { colors } = useTheme();
   const [selected, setSelected] = useState<Goal | null>(null);
@@ -48,7 +37,7 @@ export default function GoalScreen() {
     <WelcomeScreen
       step={5}
       totalSteps={7}
-      illustration={<TrophyScene />}
+      illustration={<Image source={require('@/assets/illustrations/goal.jpg')} style={{ width: 180, height: 180, resizeMode: 'contain' }} />}
       title="What's your goal?"
       subtitle="We'll set your macro targets to match. You can always change this later."
       onContinue={() => router.push('/welcome/payment')}
@@ -108,10 +97,6 @@ export default function GoalScreen() {
     </WelcomeScreen>
   );
 }
-
-const illStyles = StyleSheet.create({
-  wrap: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-});
 
 const styles = StyleSheet.create({
   cards: { flex: 1, marginTop: -8 },

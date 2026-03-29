@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
@@ -20,18 +20,6 @@ const OPTIONS: {
   { id: 'very_active', icon: 'flash-outline', title: 'Very Active', desc: 'Hard exercise 6-7 days/week' },
 ];
 
-function ForestScene() {
-  const { colors } = useTheme();
-  return (
-    <View style={illStyles.wrap}>
-      <Ionicons name="leaf-outline" size={18} color={colors.textTertiary} />
-      <Ionicons name="leaf" size={28} color={colors.accentBorder} />
-      <Ionicons name="leaf" size={38} color={colors.accent} />
-      <Ionicons name="flash" size={22} color="#F59E0B" />
-    </View>
-  );
-}
-
 export default function ActivityScreen() {
   const { colors } = useTheme();
   const [selected, setSelected] = useState<ActivityLevel | null>(null);
@@ -40,7 +28,7 @@ export default function ActivityScreen() {
     <WelcomeScreen
       step={4}
       totalSteps={7}
-      illustration={<ForestScene />}
+      illustration={<Image source={require('@/assets/illustrations/activity.jpg')} style={{ width: 180, height: 180, resizeMode: 'contain' }} />}
       title="How active are you?"
       subtitle="Pick the level that best describes your typical week. Be honest!"
       onContinue={() => router.push('/welcome/goal')}
@@ -100,10 +88,6 @@ export default function ActivityScreen() {
     </WelcomeScreen>
   );
 }
-
-const illStyles = StyleSheet.create({
-  wrap: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
-});
 
 const styles = StyleSheet.create({
   cards: { flex: 1, marginTop: -8 },

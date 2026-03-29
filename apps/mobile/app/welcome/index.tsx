@@ -1,30 +1,9 @@
 import React from 'react';
-import { Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/lib/theme';
 import { BRAND } from '@/lib/brand';
-
-function NatureScene() {
-  const { colors } = useTheme();
-  const green = colors.accent;
-  const dim = colors.textTertiary;
-  return (
-    <View style={sceneStyles.wrap}>
-      <Ionicons name="sunny" size={28} color="#F59E0B" style={sceneStyles.sun} />
-      <View style={sceneStyles.row}>
-        <Ionicons name="leaf" size={22} color={dim} style={sceneStyles.leafL} />
-        <Ionicons name="leaf" size={36} color={green} />
-        <Ionicons name="leaf" size={22} color={dim} style={sceneStyles.leafR} />
-      </View>
-      <View style={[sceneStyles.ground, { backgroundColor: colors.accentBg }]}>
-        <Ionicons name="ellipse" size={8} color={colors.accentBorder} />
-        <Ionicons name="ellipse" size={6} color={colors.accentBorder} />
-        <Ionicons name="ellipse" size={8} color={colors.accentBorder} />
-      </View>
-    </View>
-  );
-}
 
 export default function WelcomeSplash() {
   const { colors } = useTheme();
@@ -34,7 +13,7 @@ export default function WelcomeSplash() {
       <View style={styles.content}>
         {/* Hero */}
         <View style={styles.hero}>
-          <NatureScene />
+          <Image source={require('@/assets/illustrations/welcome.jpg')} style={{ width: 180, height: 180, resizeMode: 'contain' }} />
           <View
             style={[
               styles.logoMark,
@@ -85,22 +64,6 @@ export default function WelcomeSplash() {
     </SafeAreaView>
   );
 }
-
-const sceneStyles = StyleSheet.create({
-  wrap: { alignItems: 'center', marginBottom: 16 },
-  sun: { marginBottom: -4 },
-  row: { flexDirection: 'row', alignItems: 'flex-end', gap: 2 },
-  leafL: { transform: [{ rotate: '-30deg' }], marginBottom: 4 },
-  leafR: { transform: [{ rotate: '30deg' }], marginBottom: 4 },
-  ground: {
-    flexDirection: 'row',
-    gap: 12,
-    paddingHorizontal: 32,
-    paddingVertical: 6,
-    borderRadius: 20,
-    marginTop: 4,
-  },
-});
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },

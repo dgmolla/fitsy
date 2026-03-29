@@ -1,39 +1,8 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { useTheme } from '@/lib/theme';
-
-function TreeGrowth() {
-  const { colors } = useTheme();
-  const g = colors.accent;
-  const dim = colors.textTertiary;
-  return (
-    <View style={illStyles.wrap}>
-      {/* Small sapling */}
-      <View style={illStyles.stage}>
-        <Ionicons name="leaf-outline" size={16} color={dim} />
-        <View style={[illStyles.stem, { backgroundColor: dim }]} />
-      </View>
-      {/* Medium tree */}
-      <View style={illStyles.stage}>
-        <Ionicons name="leaf" size={24} color={colors.accentBorder} />
-        <View style={[illStyles.stem, { backgroundColor: colors.accentBorder, height: 16 }]} />
-      </View>
-      {/* Full tree */}
-      <View style={illStyles.stage}>
-        <Ionicons name="leaf" size={36} color={g} />
-        <View style={[illStyles.stem, { backgroundColor: g, height: 22 }]} />
-      </View>
-      {/* Arrow hints */}
-      <View style={illStyles.arrows}>
-        <Ionicons name="arrow-forward" size={14} color={dim} />
-        <Ionicons name="arrow-forward" size={14} color={dim} />
-      </View>
-    </View>
-  );
-}
 
 export default function AgeScreen() {
   const { colors } = useTheme();
@@ -46,7 +15,7 @@ export default function AgeScreen() {
     <WelcomeScreen
       step={1}
       totalSteps={7}
-      illustration={<TreeGrowth />}
+      illustration={<Image source={require('@/assets/illustrations/age.jpg')} style={{ width: 180, height: 180, resizeMode: 'contain' }} />}
       title="How old are you?"
       subtitle="We use your age to calculate an accurate daily calorie target. This stays private."
       onContinue={() => router.push('/welcome/height')}
@@ -73,21 +42,6 @@ export default function AgeScreen() {
     </WelcomeScreen>
   );
 }
-
-const illStyles = StyleSheet.create({
-  wrap: { flexDirection: 'row', alignItems: 'flex-end', gap: 20 },
-  stage: { alignItems: 'center' },
-  stem: { width: 3, height: 10, borderRadius: 2, marginTop: -2 },
-  arrows: {
-    position: 'absolute',
-    flexDirection: 'row',
-    gap: 40,
-    bottom: 14,
-    left: 24,
-    right: 24,
-    justifyContent: 'space-between',
-  },
-});
 
 const styles = StyleSheet.create({
   inputRow: {

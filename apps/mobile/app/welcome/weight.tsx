@@ -1,25 +1,10 @@
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { useTheme } from '@/lib/theme';
 
 type Unit = 'kg' | 'lbs';
-
-function BalanceScene() {
-  const { colors } = useTheme();
-  return (
-    <View style={illStyles.wrap}>
-      <Ionicons name="fitness-outline" size={40} color={colors.accent} />
-      <View style={illStyles.row}>
-        <Ionicons name="leaf-outline" size={18} color={colors.textTertiary} />
-        <View style={[illStyles.bar, { backgroundColor: colors.accentBorder }]} />
-        <Ionicons name="leaf-outline" size={18} color={colors.textTertiary} />
-      </View>
-    </View>
-  );
-}
 
 export default function WeightScreen() {
   const { colors } = useTheme();
@@ -37,7 +22,7 @@ export default function WeightScreen() {
     <WelcomeScreen
       step={3}
       totalSteps={7}
-      illustration={<BalanceScene />}
+      illustration={<Image source={require('@/assets/illustrations/weight.jpg')} style={{ width: 180, height: 180, resizeMode: 'contain' }} />}
       title="What do you weigh?"
       subtitle="No judgment here. This helps us dial in your macro targets perfectly."
       onContinue={() => router.push('/welcome/activity')}
@@ -86,12 +71,6 @@ export default function WeightScreen() {
     </WelcomeScreen>
   );
 }
-
-const illStyles = StyleSheet.create({
-  wrap: { alignItems: 'center', gap: 6 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  bar: { width: 60, height: 3, borderRadius: 2 },
-});
 
 const styles = StyleSheet.create({
   toggle: {

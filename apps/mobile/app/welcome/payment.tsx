@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,19 +20,6 @@ const PLANS: { id: PlanId; label: string; price: string; perMonth: string; badge
   { id: 'monthly', label: 'Monthly', price: '$4.99 / month', perMonth: '' },
 ];
 
-function PremiumScene() {
-  const { colors } = useTheme();
-  return (
-    <View style={illStyles.wrap}>
-      <Ionicons name="shield-checkmark" size={42} color={colors.accent} />
-      <View style={illStyles.sparkles}>
-        <Ionicons name="star" size={14} color="#F59E0B" />
-        <Ionicons name="star" size={10} color={colors.accentBorder} />
-      </View>
-    </View>
-  );
-}
-
 export default function PaymentScreen() {
   const { colors } = useTheme();
   const [plan, setPlan] = useState<PlanId>('yearly');
@@ -52,7 +39,7 @@ export default function PaymentScreen() {
     <WelcomeScreen
       step={7}
       totalSteps={7}
-      illustration={<PremiumScene />}
+      illustration={<Image source={require('@/assets/illustrations/payment.jpg')} style={{ width: 180, height: 180, resizeMode: 'contain' }} />}
       title="Start your free trial"
       subtitle="Try Fitsy free for 7 days. Cancel anytime before trial ends."
       onContinue={handleStart}
@@ -132,16 +119,6 @@ export default function PaymentScreen() {
     </WelcomeScreen>
   );
 }
-
-const illStyles = StyleSheet.create({
-  wrap: { alignItems: 'center' },
-  sparkles: {
-    position: 'absolute',
-    top: -4,
-    right: -18,
-    gap: 2,
-  },
-});
 
 const styles = StyleSheet.create({
   features: { gap: 12, marginBottom: 24 },
