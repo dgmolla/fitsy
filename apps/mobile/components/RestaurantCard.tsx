@@ -11,6 +11,25 @@ interface Props {
   onPress?: () => void;
 }
 
+// Mock restaurant images until real photos are available
+const MOCK_IMAGES = [
+  'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=600&q=70',
+  'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=600&q=70',
+  'https://images.unsplash.com/photo-1476224203421-9ac39bcb3327?w=600&q=70',
+  'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=600&q=70',
+  'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=600&q=70',
+  'https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?w=600&q=70',
+  'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=600&q=70',
+  'https://images.unsplash.com/photo-1565958011703-44f9829ba187?w=600&q=70',
+  'https://images.unsplash.com/photo-1482049016688-2d3e1b311543?w=600&q=70',
+];
+
+function getMockImage(name: string): string {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return MOCK_IMAGES[h % MOCK_IMAGES.length];
+}
+
 // Deterministic placeholder color from name
 function placeholderColor(name: string): string {
   const COLORS = [
@@ -55,17 +74,11 @@ export function RestaurantCard({ item, onPress }: Props) {
 
         {/* ─── Hero image ─────────────────────────────────────────────────── */}
         <View style={styles.imageContainer}>
-          {item.photoUrl ? (
-            <Image
-              source={{ uri: item.photoUrl }}
-              style={styles.image}
-              resizeMode="cover"
-            />
-          ) : (
-            <View style={[styles.imagePlaceholder, { backgroundColor: bgColor }]}>
-              <Text style={styles.placeholderInitials}>{initials}</Text>
-            </View>
-          )}
+          <Image
+            source={{ uri: item.photoUrl || getMockImage(item.name) }}
+            style={styles.image}
+            resizeMode="cover"
+          />
 
           {/* overlay — name + meta float over image */}
           <View style={[styles.imageGradient, { backgroundColor: overlayColor }]} pointerEvents="none" />
