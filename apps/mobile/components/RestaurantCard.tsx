@@ -47,9 +47,6 @@ export function RestaurantCard({ item, onPress }: Props) {
   const distanceLabel = `${item.distanceMiles.toFixed(1)} mi`;
   const initials = item.name.slice(0, 2).toUpperCase();
 
-  // Convert matchScore to percentage (0-1 → 0-100, capped)
-  const matchPct = item.bestMatch ? Math.min(Math.round(item.bestMatch.matchScore * 100), 99) : 0;
-  const matchColor = matchPct >= 80 ? colors.accent : matchPct >= 50 ? '#F59E0B' : colors.textTertiary;
   const bgColor = placeholderColor(item.name);
 
   const overlayColor = mode === 'dark' ? 'rgba(0,0,0,0.52)' : 'rgba(0,0,0,0.38)';
@@ -94,12 +91,6 @@ export function RestaurantCard({ item, onPress }: Props) {
             </View>
           </View>
 
-          {/* match % badge */}
-          {item.bestMatch && (
-            <View style={[styles.matchPill, { backgroundColor: matchColor }]}>
-              <Text style={styles.matchPillText}>{matchPct}%</Text>
-            </View>
-          )}
         </View>
 
         {/* ─── Card body ──────────────────────────────────────────────────── */}
@@ -226,20 +217,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: 'rgba(255,255,255,0.75)',
-  },
-  matchPill: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  matchPillText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: -0.3,
   },
 
   // ─── Body ──────────────────────────────────────────────────────────────────
