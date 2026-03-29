@@ -48,10 +48,39 @@ export async function POST(
 
   // ─── Upsert profile in our DB ────────────────────────────────────────────────
 
-  const existingUser = await prisma.user.findUnique({
+  const email = data.user.email;
+  if (!email) {
+    return NextResponse.json(
+      { error: "Google account has no email" },
+      { status: 400 },
+    );
+  }
+
+  const derivedName =
+    (data.user.user_metadata?.["name"] as string | undefined) ?? null;
+
+  let existingUser = await prisma.user.findUnique({
     where: { id: data.user.id },
     select: { id: true },
   });
+
+  // If no user with this Supabase ID, check if one exists with the same email
+  // (e.g. previously registered via email/password with a different auth provider)
+  if (!existingUser) {
+    const userByEmail = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+    if (userByEmail) {
+      // Link: update existing user's ID to the new Supabase auth ID
+      await prisma.user.update({
+        where: { email },
+        data: { id: data.user.id },
+      });
+      existingUser = { id: data.user.id };
+    }
+  }
+
   const isNewUser = !existingUser;
 
   const user = await prisma.user.upsert({
@@ -59,9 +88,8 @@ export async function POST(
     update: {},
     create: {
       id: data.user.id,
-      email: data.user.email!,
-      name:
-        (data.user.user_metadata?.["name"] as string | undefined) ?? null,
+      email,
+      name: derivedName,
     },
     select: { id: true, email: true, name: true },
   });
