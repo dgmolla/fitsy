@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { ContinueButton } from '@/components/ContinueButton';
-import { ProgressDots } from '@/components/ProgressDots';
+import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { useTheme } from '@/lib/theme';
-import { BRAND } from '@/lib/brand';
 
 type PlanId = 'monthly' | 'yearly';
 
@@ -18,27 +16,29 @@ const FEATURES = [
 ];
 
 const PLANS: { id: PlanId; label: string; price: string; perMonth: string; badge?: string }[] = [
-  {
-    id: 'yearly',
-    label: 'Annual',
-    price: '$29.99 / year',
-    perMonth: '$2.50 / mo',
-    badge: 'Best Value',
-  },
-  {
-    id: 'monthly',
-    label: 'Monthly',
-    price: '$4.99 / month',
-    perMonth: '',
-  },
+  { id: 'yearly', label: 'Annual', price: '$29.99 / year', perMonth: '$2.50 / mo', badge: 'Best Value' },
+  { id: 'monthly', label: 'Monthly', price: '$4.99 / month', perMonth: '' },
 ];
+
+function PremiumScene() {
+  const { colors } = useTheme();
+  return (
+    <View style={illStyles.wrap}>
+      <Ionicons name="shield-checkmark" size={42} color={colors.accent} />
+      <View style={illStyles.sparkles}>
+        <Ionicons name="star" size={14} color="#F59E0B" />
+        <Ionicons name="star" size={10} color={colors.accentBorder} />
+      </View>
+    </View>
+  );
+}
 
 export default function PaymentScreen() {
   const { colors } = useTheme();
-  const [selectedPlan, setSelectedPlan] = useState<PlanId>('yearly');
+  const [plan, setPlan] = useState<PlanId>('yearly');
   const [loading, setLoading] = useState(false);
 
-  async function handleStartTrial() {
+  async function handleStart() {
     setLoading(true);
     try {
       await AsyncStorage.setItem('onboardingComplete', 'true');
@@ -49,175 +49,119 @@ export default function PaymentScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <ProgressDots current={7} total={7} />
-        </View>
+    <WelcomeScreen
+      step={7}
+      totalSteps={7}
+      illustration={<PremiumScene />}
+      title="Start your free trial"
+      subtitle="Try Fitsy free for 7 days. Cancel anytime before trial ends."
+      onContinue={handleStart}
+      canContinue={!loading}
+      continueLabel={loading ? 'Setting up...' : 'Start Free Trial'}
+      scrollable
+    >
+      {/* Features */}
+      <View style={styles.features}>
+        {FEATURES.map((f) => (
+          <View key={f} style={styles.featureRow}>
+            <Ionicons name="checkmark-circle" size={20} color={colors.accent} />
+            <Text style={[styles.featureTxt, { color: colors.textPrimary }]}>{f}</Text>
+          </View>
+        ))}
+      </View>
 
-        <View style={styles.heroSection}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>Start your free trial</Text>
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Try Fitsy free for 7 days. Cancel anytime.</Text>
-        </View>
-
-        <View style={styles.features}>
-          {FEATURES.map((f) => (
-            <View key={f} style={styles.featureRow}>
-              <Ionicons name="checkmark-circle" size={20} color={colors.accent} />
-              <Text style={[styles.featureText, { color: colors.textPrimary }]}>{f}</Text>
-            </View>
-          ))}
-        </View>
-
-        <View style={styles.plans}>
-          {PLANS.map((plan) => (
+      {/* Plans */}
+      <View style={styles.plans}>
+        {PLANS.map((p) => {
+          const active = plan === p.id;
+          return (
             <Pressable
-              key={plan.id}
+              key={p.id}
               style={[
                 styles.planCard,
-                { borderColor: colors.border, backgroundColor: colors.bg },
-                selectedPlan === plan.id && {
-                  borderColor: BRAND.color,
-                  backgroundColor: colors.accentBg,
-                },
+                { borderColor: colors.border, backgroundColor: colors.bgCard },
+                active && { borderColor: colors.accent, backgroundColor: colors.accentBg },
               ]}
-              onPress={() => setSelectedPlan(plan.id)}
+              onPress={() => setPlan(p.id)}
               accessibilityRole="button"
-              accessibilityLabel={plan.label}
-              accessibilityState={{ selected: selectedPlan === plan.id }}
+              accessibilityLabel={p.label}
+              accessibilityState={{ selected: active }}
             >
               <View style={styles.planLeft}>
                 <Text
                   style={[
                     styles.planLabel,
                     { color: colors.textPrimary },
-                    selectedPlan === plan.id && { color: colors.accent },
+                    active && { color: colors.accent },
                   ]}
                 >
-                  {plan.label}
+                  {p.label}
                 </Text>
-                {plan.perMonth ? (
-                  <Text style={[styles.planPerMonth, { color: colors.textSecondary }]}>{plan.perMonth}</Text>
+                {p.perMonth ? (
+                  <Text style={[styles.planSub, { color: colors.textSecondary }]}>
+                    {p.perMonth}
+                  </Text>
                 ) : null}
               </View>
               <View style={styles.planRight}>
-                {plan.badge ? (
+                {p.badge ? (
                   <View style={[styles.badge, { backgroundColor: colors.accent }]}>
-                    <Text style={[styles.badgeText, { color: colors.accentOnAccent }]}>{plan.badge}</Text>
+                    <Text style={[styles.badgeTxt, { color: colors.accentOnAccent }]}>
+                      {p.badge}
+                    </Text>
                   </View>
                 ) : null}
                 <Text
                   style={[
                     styles.planPrice,
                     { color: colors.textPrimary },
-                    selectedPlan === plan.id && { color: colors.accent },
+                    active && { color: colors.accent },
                   ]}
                 >
-                  {plan.price}
+                  {p.price}
                 </Text>
               </View>
             </Pressable>
-          ))}
-        </View>
+          );
+        })}
+      </View>
 
-        <View style={styles.cta}>
-          <ContinueButton
-            label={loading ? 'Setting up...' : 'Start Free Trial'}
-            onPress={handleStartTrial}
-            disabled={loading}
-          />
-          <Text style={[styles.disclaimer, { color: colors.textTertiary }]}>
-            {`No charge for 7 days. Then ${selectedPlan === 'yearly' ? '$29.99/year' : '$4.99/month'}. Cancel before trial ends to avoid charge.`}
-          </Text>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+      <Text style={[styles.disclaimer, { color: colors.textTertiary }]}>
+        {`No charge for 7 days. Then ${plan === 'yearly' ? '$29.99/year' : '$4.99/month'}. Cancel before trial ends to avoid charge.`}
+      </Text>
+    </WelcomeScreen>
   );
 }
 
+const illStyles = StyleSheet.create({
+  wrap: { alignItems: 'center' },
+  sparkles: {
+    position: 'absolute',
+    top: -4,
+    right: -18,
+    gap: 2,
+  },
+});
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scroll: {
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 48,
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: 32,
-  },
-  heroSection: {
-    marginBottom: 28,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  features: {
-    gap: 12,
-    marginBottom: 28,
-  },
-  featureRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  featureText: {
-    fontSize: 15,
-    flex: 1,
-  },
-  plans: {
-    gap: 10,
-    marginBottom: 28,
-  },
+  features: { gap: 12, marginBottom: 24 },
+  featureRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  featureTxt: { fontSize: 15, flex: 1 },
+  plans: { gap: 10, marginBottom: 16 },
   planCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 2,
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 16,
   },
-  planLeft: {
-    gap: 2,
-  },
-  planLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  planPerMonth: {
-    fontSize: 13,
-  },
-  planRight: {
-    alignItems: 'flex-end',
-    gap: 4,
-  },
-  badge: {
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  planPrice: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  cta: {
-    gap: 12,
-  },
-  disclaimer: {
-    fontSize: 12,
-    textAlign: 'center',
-    lineHeight: 18,
-  },
+  planLeft: { gap: 2 },
+  planLabel: { fontSize: 16, fontWeight: '600' },
+  planSub: { fontSize: 13 },
+  planRight: { alignItems: 'flex-end', gap: 4 },
+  badge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 },
+  badgeTxt: { fontSize: 11, fontWeight: '600' },
+  planPrice: { fontSize: 15, fontWeight: '600' },
+  disclaimer: { fontSize: 12, textAlign: 'center', lineHeight: 18 },
 });

@@ -1,11 +1,25 @@
 import React, { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, SafeAreaView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
-import { ContinueButton } from '@/components/ContinueButton';
-import { ProgressDots } from '@/components/ProgressDots';
+import { Ionicons } from '@expo/vector-icons';
+import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { useTheme } from '@/lib/theme';
 
 type Unit = 'kg' | 'lbs';
+
+function BalanceScene() {
+  const { colors } = useTheme();
+  return (
+    <View style={illStyles.wrap}>
+      <Ionicons name="fitness-outline" size={40} color={colors.accent} />
+      <View style={illStyles.row}>
+        <Ionicons name="leaf-outline" size={18} color={colors.textTertiary} />
+        <View style={[illStyles.bar, { backgroundColor: colors.accentBorder }]} />
+        <Ionicons name="leaf-outline" size={18} color={colors.textTertiary} />
+      </View>
+    </View>
+  );
+}
 
 export default function WeightScreen() {
   const { colors } = useTheme();
@@ -20,144 +34,90 @@ export default function WeightScreen() {
   })();
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
-      <KeyboardAvoidingView
-        style={styles.inner}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <View style={styles.header}>
-          <ProgressDots current={3} total={7} />
-        </View>
+    <WelcomeScreen
+      step={3}
+      totalSteps={7}
+      illustration={<BalanceScene />}
+      title="What do you weigh?"
+      subtitle="No judgment here. This helps us dial in your macro targets perfectly."
+      onContinue={() => router.push('/welcome/activity')}
+      canContinue={isValid}
+    >
+      {/* Toggle */}
+      <View style={[styles.toggle, { backgroundColor: colors.bgElevated }]}>
+        {(['lbs', 'kg'] as Unit[]).map((u) => (
+          <Pressable
+            key={u}
+            style={[
+              styles.toggleOpt,
+              unit === u && [styles.toggleOptActive, { backgroundColor: colors.bgCard }],
+            ]}
+            onPress={() => setUnit(u)}
+            accessibilityRole="button"
+            accessibilityLabel={u === 'kg' ? 'Kilograms' : 'Pounds'}
+            accessibilityState={{ selected: unit === u }}
+          >
+            <Text
+              style={[
+                styles.toggleTxt,
+                { color: colors.textSecondary },
+                unit === u && { color: colors.textPrimary, fontWeight: '600' },
+              ]}
+            >
+              {u}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
 
-        <View style={styles.body}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>What is your weight?</Text>
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Used to personalize your daily macro targets.</Text>
-
-          <View style={[styles.toggle, { backgroundColor: colors.bgElevated }]}>
-            {(['lbs', 'kg'] as Unit[]).map((u) => (
-              <Pressable
-                key={u}
-                style={[
-                  styles.toggleOption,
-                  unit === u && [
-                    styles.toggleOptionActive,
-                    {
-                      backgroundColor: colors.bgCard,
-                      shadowColor: colors.glassShadowColor,
-                    },
-                  ],
-                ]}
-                onPress={() => setUnit(u)}
-                accessibilityRole="button"
-                accessibilityLabel={u === 'kg' ? 'Kilograms' : 'Pounds'}
-                accessibilityState={{ selected: unit === u }}
-              >
-                <Text
-                  style={[
-                    styles.toggleLabel,
-                    { color: colors.textSecondary },
-                    unit === u && { color: colors.textPrimary, fontWeight: '600' },
-                  ]}
-                >
-                  {u}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-
-          <View style={[styles.inputRow, { borderColor: colors.inputBorder }]}>
-            <TextInput
-              style={[styles.input, { color: colors.textPrimary }]}
-              keyboardType="decimal-pad"
-              placeholder={unit === 'lbs' ? '160' : '73'}
-              placeholderTextColor={colors.inputPlaceholder}
-              value={value}
-              onChangeText={setValue}
-              maxLength={5}
-              accessibilityLabel={`Weight in ${unit}`}
-            />
-            <Text style={[styles.unit, { color: colors.textSecondary }]}>{unit}</Text>
-          </View>
-        </View>
-
-        <View style={styles.footer}>
-          <ContinueButton
-            onPress={() => router.push('/welcome/activity')}
-            disabled={!isValid}
-          />
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+      <View style={[styles.inputRow, { backgroundColor: colors.bgCard, borderColor: colors.inputBorder }]}>
+        <TextInput
+          style={[styles.input, { color: colors.textPrimary }]}
+          keyboardType="decimal-pad"
+          placeholder={unit === 'lbs' ? '160' : '73'}
+          placeholderTextColor={colors.inputPlaceholder}
+          value={value}
+          onChangeText={setValue}
+          maxLength={5}
+          accessibilityLabel={`Weight in ${unit}`}
+        />
+        <Text style={[styles.unit, { color: colors.textSecondary }]}>{unit}</Text>
+      </View>
+    </WelcomeScreen>
   );
 }
 
+const illStyles = StyleSheet.create({
+  wrap: { alignItems: 'center', gap: 6 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  bar: { width: 60, height: 3, borderRadius: 2 },
+});
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  inner: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 32,
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: 40,
-  },
-  body: {
-    flex: 1,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 15,
-    marginBottom: 32,
-    lineHeight: 22,
-  },
   toggle: {
     flexDirection: 'row',
     borderRadius: 10,
     padding: 4,
-    marginBottom: 28,
+    marginBottom: 20,
   },
-  toggleOption: {
-    flex: 1,
-    paddingVertical: 8,
-    alignItems: 'center',
-    borderRadius: 8,
-  },
-  toggleOptionActive: {
+  toggleOpt: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 8 },
+  toggleOptActive: {
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowRadius: 2,
     elevation: 1,
   },
-  toggleLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
+  toggleTxt: { fontSize: 14, fontWeight: '500' },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 2,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    height: 60,
+    borderRadius: 14,
+    paddingHorizontal: 20,
+    height: 64,
     gap: 8,
   },
-  input: {
-    flex: 1,
-    fontSize: 24,
-    fontWeight: '600',
-  },
-  unit: {
-    fontSize: 16,
-  },
-  footer: {
-    paddingTop: 16,
-  },
+  input: { flex: 1, fontSize: 28, fontWeight: '700' },
+  unit: { fontSize: 16, fontWeight: '500' },
 });

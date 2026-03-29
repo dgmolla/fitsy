@@ -1,116 +1,129 @@
 import React, { useState } from 'react';
-import { SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { ContinueButton } from '@/components/ContinueButton';
-import { ProgressDots } from '@/components/ProgressDots';
-import { SelectionCard } from '@/components/SelectionCard';
+import { Ionicons } from '@expo/vector-icons';
+import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { useTheme } from '@/lib/theme';
 
 type ActivityLevel = 'sedentary' | 'lightly_active' | 'active' | 'very_active';
+type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
-const ACTIVITY_OPTIONS: {
+const OPTIONS: {
   id: ActivityLevel;
-  icon: React.ComponentProps<typeof SelectionCard>['icon'];
+  icon: IoniconsName;
   title: string;
-  subtitle: string;
+  desc: string;
 }[] = [
-  {
-    id: 'sedentary',
-    icon: 'desktop-outline',
-    title: 'Sedentary',
-    subtitle: 'Little or no exercise, desk job',
-  },
-  {
-    id: 'lightly_active',
-    icon: 'walk-outline',
-    title: 'Lightly Active',
-    subtitle: 'Light exercise 1-3 days/week',
-  },
-  {
-    id: 'active',
-    icon: 'bicycle-outline',
-    title: 'Active',
-    subtitle: 'Moderate exercise 3-5 days/week',
-  },
-  {
-    id: 'very_active',
-    icon: 'barbell-outline',
-    title: 'Very Active',
-    subtitle: 'Hard exercise 6-7 days/week',
-  },
+  { id: 'sedentary', icon: 'leaf-outline', title: 'Sedentary', desc: 'Little or no exercise, desk job' },
+  { id: 'lightly_active', icon: 'walk-outline', title: 'Lightly Active', desc: 'Light exercise 1-3 days/week' },
+  { id: 'active', icon: 'leaf', title: 'Active', desc: 'Moderate exercise 3-5 days/week' },
+  { id: 'very_active', icon: 'flash-outline', title: 'Very Active', desc: 'Hard exercise 6-7 days/week' },
 ];
+
+function ForestScene() {
+  const { colors } = useTheme();
+  return (
+    <View style={illStyles.wrap}>
+      <Ionicons name="leaf-outline" size={18} color={colors.textTertiary} />
+      <Ionicons name="leaf" size={28} color={colors.accentBorder} />
+      <Ionicons name="leaf" size={38} color={colors.accent} />
+      <Ionicons name="flash" size={22} color="#F59E0B" />
+    </View>
+  );
+}
 
 export default function ActivityScreen() {
   const { colors } = useTheme();
   const [selected, setSelected] = useState<ActivityLevel | null>(null);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
-      <View style={styles.inner}>
-        <View style={styles.header}>
-          <ProgressDots current={4} total={7} />
-        </View>
-
-        <View style={styles.titleSection}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>How active are you?</Text>
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Pick the level that best describes your typical week.</Text>
-        </View>
-
-        <ScrollView style={styles.cards} showsVerticalScrollIndicator={false}>
-          {ACTIVITY_OPTIONS.map((option) => (
-            <SelectionCard
-              key={option.id}
-              icon={option.icon}
-              title={option.title}
-              subtitle={option.subtitle}
-              selected={selected === option.id}
-              onPress={() => setSelected(option.id)}
-            />
-          ))}
-        </ScrollView>
-
-        <View style={styles.footer}>
-          <ContinueButton
-            onPress={() => router.push('/welcome/goal')}
-            disabled={selected === null}
-          />
-        </View>
-      </View>
-    </SafeAreaView>
+    <WelcomeScreen
+      step={4}
+      totalSteps={7}
+      illustration={<ForestScene />}
+      title="How active are you?"
+      subtitle="Pick the level that best describes your typical week. Be honest!"
+      onContinue={() => router.push('/welcome/goal')}
+      canContinue={selected !== null}
+      scrollable
+    >
+      <ScrollView showsVerticalScrollIndicator={false} style={styles.cards}>
+        {OPTIONS.map((opt) => {
+          const active = selected === opt.id;
+          return (
+            <Pressable
+              key={opt.id}
+              style={[
+                styles.card,
+                { backgroundColor: colors.bgCard, borderColor: colors.border },
+                active && { borderColor: colors.accent, backgroundColor: colors.accentBg },
+              ]}
+              onPress={() => setSelected(opt.id)}
+              accessibilityRole="button"
+              accessibilityLabel={opt.title}
+              accessibilityState={{ selected: active }}
+            >
+              <View
+                style={[
+                  styles.iconWrap,
+                  { backgroundColor: colors.bgElevated },
+                  active && { backgroundColor: colors.accent },
+                ]}
+              >
+                <Ionicons
+                  name={opt.icon}
+                  size={24}
+                  color={active ? colors.accentOnAccent : colors.textSecondary}
+                />
+              </View>
+              <View style={styles.cardText}>
+                <Text
+                  style={[
+                    styles.cardTitle,
+                    { color: colors.textPrimary },
+                    active && { color: colors.accent },
+                  ]}
+                >
+                  {opt.title}
+                </Text>
+                <Text style={[styles.cardDesc, { color: colors.textSecondary }]}>
+                  {opt.desc}
+                </Text>
+              </View>
+              {active ? (
+                <Ionicons name="checkmark-circle" size={22} color={colors.accent} />
+              ) : null}
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+    </WelcomeScreen>
   );
 }
 
+const illStyles = StyleSheet.create({
+  wrap: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
+});
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  inner: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 32,
-  },
-  header: {
+  cards: { flex: 1, marginTop: -8 },
+  card: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 40,
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 10,
+    borderWidth: 2,
+    gap: 12,
   },
-  titleSection: {
-    marginBottom: 8,
+  iconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  cards: {
-    flex: 1,
-    marginTop: 16,
-  },
-  footer: {
-    paddingTop: 16,
-  },
+  cardText: { flex: 1 },
+  cardTitle: { fontSize: 16, fontWeight: '600' },
+  cardDesc: { fontSize: 13, marginTop: 2 },
 });
