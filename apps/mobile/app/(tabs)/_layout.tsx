@@ -27,8 +27,8 @@ export default function TabLayout() {
         name="search"
         options={{
           title: 'Search',
-          tabBarIcon: ({ color }: { color: string; size: number }) => (
-            <Ionicons name="search" size={22} color={color} />
+          tabBarIcon: ({ color, focused }: { color: string; size: number; focused: boolean }) => (
+            <Ionicons name={focused ? 'search' : 'search-outline'} size={22} color={color} />
           ),
         }}
       />
@@ -36,8 +36,8 @@ export default function TabLayout() {
         name="saved"
         options={{
           title: 'Saved',
-          tabBarIcon: ({ color }: { color: string; size: number }) => (
-            <Ionicons name="bookmark" size={22} color={color} />
+          tabBarIcon: ({ color, focused }: { color: string; size: number; focused: boolean }) => (
+            <Ionicons name={focused ? 'bookmark' : 'bookmark-outline'} size={22} color={color} />
           ),
         }}
       />
@@ -45,8 +45,8 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color }: { color: string; size: number }) => (
-            <Ionicons name="person" size={22} color={color} />
+          tabBarIcon: ({ color, focused }: { color: string; size: number; focused: boolean }) => (
+            <Ionicons name={focused ? 'person' : 'person-outline'} size={22} color={color} />
           ),
         }}
       />
