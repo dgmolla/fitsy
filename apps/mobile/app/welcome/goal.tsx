@@ -37,7 +37,7 @@ export default function GoalScreen() {
     <WelcomeScreen
       step={5}
       totalSteps={7}
-      illustration={<Image source={require('@/assets/illustrations/goal.png')} style={{ width: 180, height: 180, resizeMode: 'contain' }} />}
+      illustration={<Image source={require('@/assets/illustrations/goal.png')} style={{ width: 240, height: 240, resizeMode: 'contain' }} />}
       title="What's your goal?"
       subtitle="We'll set your macro targets to match. You can always change this later."
       onContinue={() => router.push('/welcome/payment')}

@@ -15,7 +15,7 @@ export default function AgeScreen() {
     <WelcomeScreen
       step={1}
       totalSteps={7}
-      illustration={<Image source={require('@/assets/illustrations/age.png')} style={{ width: 180, height: 180, resizeMode: 'contain' }} />}
+      illustration={<Image source={require('@/assets/illustrations/age.png')} style={{ width: 240, height: 240, resizeMode: 'contain' }} />}
       title="How old are you?"
       subtitle="We use your age to calculate an accurate daily calorie target. This stays private."
       onContinue={() => router.push('/welcome/height')}

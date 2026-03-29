@@ -22,7 +22,7 @@ export default function WeightScreen() {
     <WelcomeScreen
       step={3}
       totalSteps={7}
-      illustration={<Image source={require('@/assets/illustrations/weight.png')} style={{ width: 180, height: 180, resizeMode: 'contain' }} />}
+      illustration={<Image source={require('@/assets/illustrations/weight.png')} style={{ width: 240, height: 240, resizeMode: 'contain' }} />}
       title="What do you weigh?"
       subtitle="No judgment here. This helps us dial in your macro targets perfectly."
       onContinue={() => router.push('/welcome/activity')}

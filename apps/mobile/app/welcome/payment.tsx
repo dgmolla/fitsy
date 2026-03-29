@@ -39,7 +39,7 @@ export default function PaymentScreen() {
     <WelcomeScreen
       step={7}
       totalSteps={7}
-      illustration={<Image source={require('@/assets/illustrations/payment.png')} style={{ width: 180, height: 180, resizeMode: 'contain' }} />}
+      illustration={<Image source={require('@/assets/illustrations/payment.png')} style={{ width: 240, height: 240, resizeMode: 'contain' }} />}
       title="Start your free trial"
       subtitle="Try Fitsy free for 7 days. Cancel anytime before trial ends."
       onContinue={handleStart}

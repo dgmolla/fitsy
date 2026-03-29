@@ -28,7 +28,7 @@ export default function HeightScreen() {
     <WelcomeScreen
       step={2}
       totalSteps={7}
-      illustration={<Image source={require('@/assets/illustrations/height.png')} style={{ width: 180, height: 180, resizeMode: 'contain' }} />}
+      illustration={<Image source={require('@/assets/illustrations/height.png')} style={{ width: 240, height: 240, resizeMode: 'contain' }} />}
       title="How tall are you?"
       subtitle="Used to estimate your basal metabolic rate. We keep this between us."
       onContinue={() => router.push('/welcome/weight')}
