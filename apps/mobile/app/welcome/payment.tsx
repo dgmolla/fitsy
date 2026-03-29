@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,7 +29,7 @@ export default function PaymentScreen() {
     setLoading(true);
     try {
       await AsyncStorage.setItem('onboardingComplete', 'true');
-      router.replace('/(tabs)');
+      router.replace('/(tabs)/search');
     } finally {
       setLoading(false);
     }
@@ -39,13 +39,11 @@ export default function PaymentScreen() {
     <WelcomeScreen
       step={7}
       totalSteps={7}
-      illustration={<Image source={require('@/assets/illustrations/payment.png')} style={{ width: 240, height: 240, resizeMode: 'contain' }} />}
       title="Start your free trial"
       subtitle="Try Fitsy free for 7 days. Cancel anytime before trial ends."
       onContinue={handleStart}
       canContinue={!loading}
       continueLabel={loading ? 'Setting up...' : 'Start Free Trial'}
-      scrollable
     >
       {/* Features */}
       <View style={styles.features}>

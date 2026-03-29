@@ -1,47 +1,40 @@
 import React, { useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
+import { ScrollPicker, rangeValues } from '@/components/ScrollPicker';
 import { useTheme } from '@/lib/theme';
 import { saveOnboardingField } from '@/lib/onboardingStorage';
 
 type Unit = 'cm' | 'ft';
 
+const CM_VALUES = rangeValues(100, 250);
+const FEET_VALUES = rangeValues(3, 8);
+const INCHES_VALUES = rangeValues(0, 11);
+
 export default function HeightScreen() {
   const { colors } = useTheme();
   const [unit, setUnit] = useState<Unit>('cm');
-  const [cm, setCm] = useState('');
-  const [feet, setFeet] = useState('');
-  const [inches, setInches] = useState('');
-
-  const isValidCm = (() => {
-    const n = parseInt(cm, 10);
-    return !isNaN(n) && n >= 100 && n <= 250;
-  })();
-  const isValidFtIn = (() => {
-    const ft = parseInt(feet, 10);
-    const inch = parseInt(inches, 10);
-    return !isNaN(ft) && ft >= 3 && ft <= 8 && !isNaN(inch) && inch >= 0 && inch <= 11;
-  })();
-  const isValid = unit === 'cm' ? isValidCm : isValidFtIn;
+  const [cm, setCm] = useState(170);
+  const [feet, setFeet] = useState(5);
+  const [inches, setInches] = useState(9);
 
   return (
     <WelcomeScreen
       step={2}
       totalSteps={7}
-      illustration={<Image source={require('@/assets/illustrations/height.png')} style={{ width: 240, height: 240, resizeMode: 'contain' }} />}
       title="How tall are you?"
       subtitle="Used to estimate your basal metabolic rate. We keep this between us."
       onContinue={async () => {
         const heightCm = unit === 'cm'
-          ? parseInt(cm, 10)
-          : Math.round(parseInt(feet, 10) * 30.48 + parseInt(inches, 10) * 2.54);
+          ? cm
+          : Math.round(feet * 30.48 + inches * 2.54);
         await saveOnboardingField('heightCm', heightCm);
         router.push('/welcome/weight');
       }}
-      canContinue={isValid}
+      canContinue={true}
     >
-      {/* Toggle */}
+      {/* Unit toggle */}
       <View style={[styles.toggle, { backgroundColor: colors.bgElevated }]}>
         {(['cm', 'ft'] as Unit[]).map((u) => (
           <Pressable
@@ -68,50 +61,17 @@ export default function HeightScreen() {
         ))}
       </View>
 
-      {unit === 'cm' ? (
-        <View style={[styles.inputRow, { backgroundColor: colors.bgCard, borderColor: colors.inputBorder }]}>
-          <TextInput
-            style={[styles.input, { color: colors.textPrimary }]}
-            keyboardType="number-pad"
-            placeholder="170"
-            placeholderTextColor={colors.inputPlaceholder}
-            value={cm}
-            onChangeText={setCm}
-            maxLength={3}
-            accessibilityLabel="Height in centimeters"
-          />
-          <Text style={[styles.unit, { color: colors.textSecondary }]}>cm</Text>
-        </View>
-      ) : (
-        <View style={styles.ftRow}>
-          <View style={[styles.inputRow, styles.flex, { backgroundColor: colors.bgCard, borderColor: colors.inputBorder }]}>
-            <TextInput
-              style={[styles.input, { color: colors.textPrimary }]}
-              keyboardType="number-pad"
-              placeholder="5"
-              placeholderTextColor={colors.inputPlaceholder}
-              value={feet}
-              onChangeText={setFeet}
-              maxLength={1}
-              accessibilityLabel="Feet"
-            />
-            <Text style={[styles.unit, { color: colors.textSecondary }]}>ft</Text>
-          </View>
-          <View style={[styles.inputRow, styles.flex, { backgroundColor: colors.bgCard, borderColor: colors.inputBorder }]}>
-            <TextInput
-              style={[styles.input, { color: colors.textPrimary }]}
-              keyboardType="number-pad"
-              placeholder="9"
-              placeholderTextColor={colors.inputPlaceholder}
-              value={inches}
-              onChangeText={setInches}
-              maxLength={2}
-              accessibilityLabel="Inches"
-            />
-            <Text style={[styles.unit, { color: colors.textSecondary }]}>in</Text>
-          </View>
-        </View>
-      )}
+      {/* Pickers */}
+      <View style={styles.pickerRow}>
+        {unit === 'cm' ? (
+          <ScrollPicker values={CM_VALUES} value={cm} unit="cm" onChange={setCm} />
+        ) : (
+          <>
+            <ScrollPicker values={FEET_VALUES} value={feet} unit="ft" onChange={setFeet} />
+            <ScrollPicker values={INCHES_VALUES} value={inches} unit="in" onChange={setInches} />
+          </>
+        )}
+      </View>
     </WelcomeScreen>
   );
 }
@@ -121,7 +81,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderRadius: 10,
     padding: 4,
-    marginBottom: 20,
+    marginBottom: 16,
   },
   toggleOpt: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 8 },
   toggleOptActive: {
@@ -132,17 +92,9 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   toggleTxt: { fontSize: 14, fontWeight: '500' },
-  inputRow: {
+  pickerRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderRadius: 14,
-    paddingHorizontal: 20,
-    height: 64,
-    gap: 8,
+    gap: 12,
+    flex: 1,
   },
-  flex: { flex: 1 },
-  ftRow: { flexDirection: 'row', gap: 12 },
-  input: { flex: 1, fontSize: 28, fontWeight: '700' },
-  unit: { fontSize: 16, fontWeight: '500' },
 });

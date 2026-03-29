@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Image, StyleSheet, Text, View } from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
@@ -71,12 +71,6 @@ export default function SignInScreen() {
     <WelcomeScreen
       step={6}
       totalSteps={7}
-      illustration={
-        <Image
-          source={require('@/assets/illustrations/welcome.png')}
-          style={{ width: 200, height: 200, resizeMode: 'contain' }}
-        />
-      }
       title="Create your account"
       subtitle="Save your targets and start finding meals that fit your goals."
       onContinue={() => {}}

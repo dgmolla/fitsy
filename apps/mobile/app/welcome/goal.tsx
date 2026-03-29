@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
@@ -38,7 +38,6 @@ export default function GoalScreen() {
     <WelcomeScreen
       step={5}
       totalSteps={7}
-      illustration={<Image source={require('@/assets/illustrations/goal.png')} style={{ width: 240, height: 240, resizeMode: 'contain' }} />}
       title="What's your goal?"
       subtitle="We'll set your macro targets to match. You can always change this later."
       onContinue={async () => {
@@ -46,9 +45,8 @@ export default function GoalScreen() {
         router.push({ pathname: '/macro-setup', params: { fromOnboarding: '1' } });
       }}
       canContinue={selected !== null}
-      scrollable
     >
-      <ScrollView showsVerticalScrollIndicator={false} style={styles.cards}>
+      <View style={styles.cards}>
         {GOALS.map((g) => {
           const active = selected === g.id;
           return (
@@ -97,7 +95,7 @@ export default function GoalScreen() {
             </Pressable>
           );
         })}
-      </ScrollView>
+      </View>
     </WelcomeScreen>
   );
 }

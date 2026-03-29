@@ -1,63 +1,42 @@
 import React, { useState } from 'react';
-import { Image, StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
-import { useTheme } from '@/lib/theme';
+import { ScrollPicker, rangeValues } from '@/components/ScrollPicker';
 import { saveOnboardingField } from '@/lib/onboardingStorage';
 
-export default function AgeScreen() {
-  const { colors } = useTheme();
-  const [age, setAge] = useState('');
+const AGE_VALUES = rangeValues(13, 99);
 
-  const ageNum = parseInt(age, 10);
-  const isValid = !isNaN(ageNum) && ageNum >= 13 && ageNum <= 99;
+export default function AgeScreen() {
+  const [age, setAge] = useState(25);
 
   return (
     <WelcomeScreen
       step={1}
       totalSteps={7}
-      illustration={<Image source={require('@/assets/illustrations/age.png')} style={{ width: 240, height: 240, resizeMode: 'contain' }} />}
       title="How old are you?"
       subtitle="We use your age to calculate an accurate daily calorie target. This stays private."
       onContinue={async () => {
-        await saveOnboardingField('age', ageNum);
+        await saveOnboardingField('age', age);
         router.push('/welcome/height');
       }}
-      canContinue={isValid}
+      canContinue={true}
     >
-      <View style={[styles.inputRow, { backgroundColor: colors.bgCard, borderColor: colors.inputBorder }]}>
-        <TextInput
-          style={[styles.input, { color: colors.textPrimary }]}
-          keyboardType="number-pad"
-          placeholder="25"
-          placeholderTextColor={colors.inputPlaceholder}
+      <View style={styles.pickerContainer}>
+        <ScrollPicker
+          values={AGE_VALUES}
           value={age}
-          onChangeText={setAge}
-          maxLength={2}
-          accessibilityLabel="Age"
+          unit="years"
+          onChange={setAge}
         />
-        <Text style={[styles.unit, { color: colors.textSecondary }]}>years</Text>
       </View>
-      {age.length > 0 && !isValid ? (
-        <Text style={[styles.error, { color: colors.error }]}>
-          Age must be between 13 and 99.
-        </Text>
-      ) : null}
     </WelcomeScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  inputRow: {
+  pickerContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderRadius: 14,
-    paddingHorizontal: 20,
-    height: 64,
-    gap: 8,
+    flex: 1,
   },
-  input: { flex: 1, fontSize: 28, fontWeight: '700' },
-  unit: { fontSize: 16, fontWeight: '500' },
-  error: { marginTop: 8, fontSize: 13 },
 });

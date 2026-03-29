@@ -40,7 +40,7 @@ export default function WelcomeSplash() {
           />
           <Text style={[styles.wordmark, { color: BRAND.color }]}>{BRAND.name}</Text>
           <Text style={[styles.tagline, { color: colors.textSecondary }]}>
-            Eat well, wherever you go.
+            {BRAND.tagline}
           </Text>
         </View>
 

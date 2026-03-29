@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -13,6 +12,7 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RestaurantResult } from '@fitsy/shared';
 import { EmptyState, RestaurantCard } from '@/components';
+import { FitsyLoader } from '@/components/FitsyLoader';
 import { SearchHeader } from '@/components/SearchHeader';
 import { FilterPopup } from '@/components/FilterPopup';
 import type { MacroValues } from '@/lib/macroPresets';
@@ -124,14 +124,11 @@ export default function SearchScreen() {
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <SearchHeader values={inputs} location={location} onPress={openFilters} />
+        {!loading && <SearchHeader values={inputs} location={location} onPress={openFilters} />}
         {loading && (
-          <ActivityIndicator
-            size="small"
-            color={colors.accent}
-            style={styles.spinner}
-            accessibilityLabel="Loading restaurants"
-          />
+          <View style={styles.loaderWrap}>
+            <FitsyLoader size="md" />
+          </View>
         )}
         {!loading && error !== null && (
           <View style={[styles.errorBanner, { backgroundColor: colors.errorBg }]}>
@@ -174,8 +171,10 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
-  spinner: {
-    marginTop: 32,
+  loaderWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   errorBanner: {
     marginHorizontal: 16,

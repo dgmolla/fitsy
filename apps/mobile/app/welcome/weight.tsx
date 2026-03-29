@@ -1,41 +1,38 @@
 import React, { useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
+import { ScrollPicker, rangeValues } from '@/components/ScrollPicker';
 import { useTheme } from '@/lib/theme';
 import { saveOnboardingField } from '@/lib/onboardingStorage';
 
 type Unit = 'kg' | 'lbs';
 
+const KG_VALUES = rangeValues(30, 200);
+const LBS_VALUES = rangeValues(66, 440);
+
 export default function WeightScreen() {
   const { colors } = useTheme();
   const [unit, setUnit] = useState<Unit>('lbs');
-  const [value, setValue] = useState('');
-
-  const isValid = (() => {
-    const n = parseFloat(value);
-    if (isNaN(n)) return false;
-    if (unit === 'kg') return n >= 30 && n <= 300;
-    return n >= 66 && n <= 660;
-  })();
+  const [kg, setKg] = useState(73);
+  const [lbs, setLbs] = useState(160);
 
   return (
     <WelcomeScreen
       step={3}
       totalSteps={7}
-      illustration={<Image source={require('@/assets/illustrations/weight.png')} style={{ width: 240, height: 240, resizeMode: 'contain' }} />}
       title="What do you weigh?"
       subtitle="No judgment here. This helps us dial in your macro targets perfectly."
       onContinue={async () => {
         const weightKg = unit === 'kg'
-          ? parseFloat(value)
-          : Math.round(parseFloat(value) * 0.453592 * 10) / 10;
+          ? kg
+          : Math.round(lbs * 0.453592 * 10) / 10;
         await saveOnboardingField('weightKg', weightKg);
         router.push('/welcome/activity');
       }}
-      canContinue={isValid}
+      canContinue={true}
     >
-      {/* Toggle */}
+      {/* Unit toggle */}
       <View style={[styles.toggle, { backgroundColor: colors.bgElevated }]}>
         {(['lbs', 'kg'] as Unit[]).map((u) => (
           <Pressable
@@ -62,18 +59,13 @@ export default function WeightScreen() {
         ))}
       </View>
 
-      <View style={[styles.inputRow, { backgroundColor: colors.bgCard, borderColor: colors.inputBorder }]}>
-        <TextInput
-          style={[styles.input, { color: colors.textPrimary }]}
-          keyboardType="decimal-pad"
-          placeholder={unit === 'lbs' ? '160' : '73'}
-          placeholderTextColor={colors.inputPlaceholder}
-          value={value}
-          onChangeText={setValue}
-          maxLength={5}
-          accessibilityLabel={`Weight in ${unit}`}
-        />
-        <Text style={[styles.unit, { color: colors.textSecondary }]}>{unit}</Text>
+      {/* Picker */}
+      <View style={styles.pickerRow}>
+        {unit === 'lbs' ? (
+          <ScrollPicker values={LBS_VALUES} value={lbs} unit="lbs" onChange={setLbs} />
+        ) : (
+          <ScrollPicker values={KG_VALUES} value={kg} unit="kg" onChange={setKg} />
+        )}
       </View>
     </WelcomeScreen>
   );
@@ -84,7 +76,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderRadius: 10,
     padding: 4,
-    marginBottom: 20,
+    marginBottom: 16,
   },
   toggleOpt: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 8 },
   toggleOptActive: {
@@ -95,15 +87,9 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   toggleTxt: { fontSize: 14, fontWeight: '500' },
-  inputRow: {
+  pickerRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderRadius: 14,
-    paddingHorizontal: 20,
-    height: 64,
-    gap: 8,
+    gap: 12,
+    flex: 1,
   },
-  input: { flex: 1, fontSize: 28, fontWeight: '700' },
-  unit: { fontSize: 16, fontWeight: '500' },
 });

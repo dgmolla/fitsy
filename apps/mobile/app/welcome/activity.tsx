@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
@@ -29,7 +29,6 @@ export default function ActivityScreen() {
     <WelcomeScreen
       step={4}
       totalSteps={7}
-      illustration={<Image source={require('@/assets/illustrations/activity.png')} style={{ width: 240, height: 240, resizeMode: 'contain' }} />}
       title="How active are you?"
       subtitle="Pick the level that best describes your typical week. Be honest!"
       onContinue={async () => {
@@ -37,9 +36,8 @@ export default function ActivityScreen() {
         router.push('/welcome/goal');
       }}
       canContinue={selected !== null}
-      scrollable
     >
-      <ScrollView showsVerticalScrollIndicator={false} style={styles.cards}>
+      <View style={styles.cards}>
         {OPTIONS.map((opt) => {
           const active = selected === opt.id;
           return (
@@ -88,7 +86,7 @@ export default function ActivityScreen() {
             </Pressable>
           );
         })}
-      </ScrollView>
+      </View>
     </WelcomeScreen>
   );
 }

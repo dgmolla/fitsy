@@ -91,6 +91,18 @@ export function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       gap: 10,
     },
+    pickerColumn: {
+      flex: 1,
+      alignItems: 'center',
+      gap: 6,
+    },
+    pickerLabel: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.8,
+    },
     actions: {
       gap: 12,
       alignItems: 'center',

@@ -1,19 +1,30 @@
 import React, { useState, useEffect } from 'react';
-import { Alert, Pressable, SafeAreaView, Text, View } from 'react-native';
+import { Alert, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { router, useLocalSearchParams } from 'expo-router';
 import { saveMacroTargets } from '@/lib/macroStorage';
-import { MacroScrollPicker } from '@/components/MacroScrollPicker';
-import { useTheme } from '@/lib/theme';
-import { createStyles } from './macro-setup.styles';
-import { SUGGESTION_FILTERS, applySuggestionFilter } from '@/lib/macroSuggestions';
+import { ScrollPicker, rangeValues } from '@/components/ScrollPicker';
+import { useTheme, type ThemeColors } from '@/lib/theme';
+import { applySuggestionFilter, type SuggestionFilter } from '@/lib/macroSuggestions';
 import { getOnboardingData, calculateSuggestedCalories } from '@/lib/onboardingStorage';
 
-interface FormValues {
+interface MacroValues {
   protein: number;
   carbs: number;
   fat: number;
-  calories: number;
 }
+
+const PICKER_VALUES = {
+  protein: rangeValues(50, 300, 5),
+  carbs: rangeValues(50, 500, 5),
+  fat: rangeValues(20, 150, 2),
+};
+
+type DietStyleId = SuggestionFilter['id'] | 'recommended' | 'custom';
+
+const DIET_STYLES: { id: DietStyleId; label: string }[] = [
+  { id: 'recommended', label: 'Recommended' },
+];
 
 function snapToStep(v: number, step: number): number {
   return Math.round(v / step) * step;
@@ -23,175 +34,249 @@ function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
 }
 
+function computeCalories(v: MacroValues): number {
+  return v.protein * 4 + v.carbs * 4 + v.fat * 9;
+}
+
 export default function MacroSetupScreen() {
   const { colors } = useTheme();
-  const styles = createStyles(colors);
   const { fromOnboarding } = useLocalSearchParams<{ fromOnboarding?: string }>();
 
-  const [values, setValues] = useState<FormValues>({
-    protein: 150,
-    carbs: 200,
-    fat: 66,
-    calories: 2000,
-  });
-  const [activeFilter, setActiveFilter] = useState<string | null>(null);
+  const [values, setValues] = useState<MacroValues>({ protein: 150, carbs: 200, fat: 66 });
+  const [suggestedCal, setSuggestedCal] = useState(2000);
+  const [activeFilter, setActiveFilter] = useState<DietStyleId>('recommended');
   const [loaded, setLoaded] = useState(false);
+
+  const totalCalories = computeCalories(values);
 
   useEffect(() => {
     getOnboardingData().then((data) => {
-      const suggestedCalories = calculateSuggestedCalories(data);
-      const cal = snapToStep(suggestedCalories, 25);
-      // Balanced macro split: ~30% protein, ~45% carbs, ~25% fat
+      const suggested = calculateSuggestedCalories(data);
+      const cal = snapToStep(suggested, 25);
+      setSuggestedCal(cal);
       const protein = clamp(snapToStep(Math.round((cal * 0.3) / 4), 5), 50, 300);
       const carbs = clamp(snapToStep(Math.round((cal * 0.45) / 4), 5), 50, 500);
       const fat = clamp(snapToStep(Math.round((cal * 0.25) / 9), 2), 20, 150);
-      const calories = clamp(cal, 1200, 3500);
-      setValues({ protein, carbs, fat, calories });
+      setValues({ protein, carbs, fat });
       setLoaded(true);
     });
   }, []);
 
+  function applyDietStyle(filterId: DietStyleId) {
+    if (filterId === 'custom') {
+      setActiveFilter('custom');
+      return;
+    }
+
+    if (filterId === 'recommended') {
+      const cal = suggestedCal;
+      const protein = clamp(snapToStep(Math.round((cal * 0.3) / 4), 5), 50, 300);
+      const carbs = clamp(snapToStep(Math.round((cal * 0.45) / 4), 5), 50, 500);
+      const fat = clamp(snapToStep(Math.round((cal * 0.25) / 9), 2), 20, 150);
+      setValues({ protein, carbs, fat });
+      setActiveFilter('recommended');
+      return;
+    }
+
+    const split = applySuggestionFilter(filterId, String(suggestedCal));
+    const protein = clamp(snapToStep(parseInt(split.protein, 10), 5), 50, 300);
+    const carbs = clamp(snapToStep(parseInt(split.carbs, 10), 5), 50, 500);
+    const fat = clamp(snapToStep(parseInt(split.fat, 10), 2), 20, 150);
+    setValues({ protein, carbs, fat });
+    setActiveFilter(filterId);
+  }
+
+  function updateMacro(key: keyof MacroValues, v: number) {
+    setValues((prev) => ({ ...prev, [key]: v }));
+    setActiveFilter('custom');
+  }
+
   async function handleSave() {
     try {
+      const cal = computeCalories(values);
       const mealTargets = {
         protein: String(Math.round(values.protein / 3)),
         carbs: String(Math.round(values.carbs / 3)),
         fat: String(Math.round(values.fat / 3)),
-        calories: String(Math.round(values.calories / 3)),
+        calories: String(Math.round(cal / 3)),
       };
       await saveMacroTargets(mealTargets);
-      if (fromOnboarding) {
-        router.push('/welcome/signin');
-      } else {
-        router.replace('/(tabs)/search');
-      }
+      router.push(fromOnboarding ? '/welcome/signin' : '/(tabs)/search');
     } catch {
-      Alert.alert('Save failed', 'Could not save your macro targets. Please try again.', [
-        { text: 'OK' },
-      ]);
+      Alert.alert('Save failed', 'Could not save your macro targets. Please try again.');
     }
   }
 
   function handleSkip() {
-    if (fromOnboarding) {
-      router.push('/welcome/signin');
-    } else {
-      router.replace('/(tabs)/search');
-    }
+    router.push(fromOnboarding ? '/welcome/signin' : '/(tabs)/search');
   }
 
-  function handleSuggestionFilter(filterId: (typeof SUGGESTION_FILTERS)[number]['id']) {
-    const split = applySuggestionFilter(filterId, String(values.calories));
-    const protein = clamp(snapToStep(parseInt(split.protein, 10), 5), 50, 300);
-    const carbs = clamp(snapToStep(parseInt(split.carbs, 10), 5), 50, 500);
-    const fat = clamp(snapToStep(parseInt(split.fat, 10), 2), 20, 150);
-    setValues((prev) => ({ ...prev, protein, carbs, fat }));
-    setActiveFilter(filterId === activeFilter ? null : filterId);
-  }
+  const s = createStyles(colors);
 
-  if (!loaded) return <SafeAreaView style={styles.container} />;
+  if (!loaded) return <SafeAreaView style={s.container} />;
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.inner}>
-        <View style={styles.header}>
-          <Text style={styles.emoji}>🎯</Text>
-          <Text style={styles.title}>Set your macro targets</Text>
-          <Text style={styles.subtitle}>
-            Enter your daily targets — we'll find meals that fit ~1/3 of them.
+  const content = (
+    <View style={s.contentWrap}>
+      {!fromOnboarding && (
+        <View style={s.header}>
+          <Text style={s.title}>Set your macro targets</Text>
+          <Text style={s.subtitle}>
+            We recommend ~{suggestedCal} kcal/day based on your profile.
+            We'll find restaurants based on your targets.
           </Text>
         </View>
+      )}
 
-        <View style={styles.suggestionsSection}>
-          <Text style={styles.suggestionsLabel}>Diet style</Text>
-          <View style={styles.suggestionsRow}>
-            {SUGGESTION_FILTERS.map((filter) => {
-              const active = activeFilter === filter.id;
-              return (
-                <Pressable
-                  key={filter.id}
-                  style={[styles.suggestionPill, active && styles.suggestionPillActive]}
-                  onPress={() => handleSuggestionFilter(filter.id)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Apply ${filter.label} macro split`}
-                  accessibilityHint={filter.hint}
-                  accessibilityState={{ selected: active }}
-                >
-                  <Text style={styles.suggestionIcon}>{filter.icon}</Text>
-                  <Text style={[styles.suggestionText, active && styles.suggestionTextActive]}>
-                    {filter.label}
-                  </Text>
-                  <Text style={styles.suggestionHint}>{filter.hint}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
+        {/* Diet style pills */}
+        <View style={s.dietRow}>
+          {DIET_STYLES.map((ds) => {
+            const active = activeFilter === ds.id;
+            return (
+              <Pressable
+                key={ds.id}
+                style={[s.dietPill, active && s.dietPillActive]}
+                onPress={() => applyDietStyle(ds.id)}
+              >
+                <Text style={[s.dietLabel, active && s.dietLabelActive]}>{ds.label}</Text>
+              </Pressable>
+            );
+          })}
         </View>
 
-        <View style={styles.pickerGrid}>
-          <View style={styles.pickerRow}>
-            <MacroScrollPicker
-              label="Protein"
+        {/* Three pickers side by side */}
+        <View style={s.pickerRow}>
+          <View style={s.pickerCol}>
+            <Text style={s.pickerLabel}>Protein</Text>
+            <ScrollPicker
+              values={PICKER_VALUES.protein}
               value={values.protein}
-              min={50}
-              max={300}
-              step={5}
-              unit="g / day"
-              onChange={(v) => setValues((prev) => ({ ...prev, protein: v }))}
+              unit="g"
+              onChange={(v) => updateMacro('protein', v)}
+              itemHeight={36}
+              visibleItems={5}
             />
-            <MacroScrollPicker
-              label="Carbs"
+          </View>
+          <View style={s.pickerCol}>
+            <Text style={s.pickerLabel}>Carbs</Text>
+            <ScrollPicker
+              values={PICKER_VALUES.carbs}
               value={values.carbs}
-              min={50}
-              max={500}
-              step={5}
-              unit="g / day"
-              onChange={(v) => setValues((prev) => ({ ...prev, carbs: v }))}
+              unit="g"
+              onChange={(v) => updateMacro('carbs', v)}
+              itemHeight={36}
+              visibleItems={5}
             />
           </View>
-          <View style={styles.pickerRow}>
-            <MacroScrollPicker
-              label="Fat"
+          <View style={s.pickerCol}>
+            <Text style={s.pickerLabel}>Fat</Text>
+            <ScrollPicker
+              values={PICKER_VALUES.fat}
               value={values.fat}
-              min={20}
-              max={150}
-              step={2}
-              unit="g / day"
-              onChange={(v) => setValues((prev) => ({ ...prev, fat: v }))}
-            />
-            <MacroScrollPicker
-              label="Calories"
-              value={values.calories}
-              min={1200}
-              max={3500}
-              step={25}
-              unit="kcal / day"
-              onChange={(v) => setValues((prev) => ({ ...prev, calories: v }))}
+              unit="g"
+              onChange={(v) => updateMacro('fat', v)}
+              itemHeight={36}
+              visibleItems={5}
             />
           </View>
         </View>
 
-        <View style={styles.actions}>
-          <Pressable
-            style={styles.saveButton}
-            onPress={handleSave}
-            accessibilityRole="button"
-            accessibilityLabel="Save macro targets"
-          >
-            <Text style={styles.saveText}>Save & Continue</Text>
-          </Pressable>
+        {/* Live calories */}
+        <View style={s.calorieBar}>
+          <Text style={s.calorieLabel}>Daily total</Text>
+          <Text style={s.calorieValue}>{totalCalories} kcal</Text>
+        </View>
 
-          <Pressable
-            style={styles.skipButton}
-            onPress={handleSkip}
-            accessibilityRole="button"
-            accessibilityLabel="Skip for now"
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Text style={styles.skipText}>Skip for now</Text>
+        <View style={s.spacer} />
+
+        {/* Actions */}
+        <View style={s.actions}>
+          <Pressable style={s.saveButton} onPress={handleSave} accessibilityRole="button">
+            <Text style={s.saveText}>Save & Continue</Text>
+          </Pressable>
+          <Pressable style={s.skipButton} onPress={handleSkip} accessibilityRole="button" hitSlop={8}>
+            <Text style={s.skipText}>Skip for now</Text>
           </Pressable>
         </View>
+    </View>
+  );
+
+  if (fromOnboarding) {
+    return (
+      <WelcomeScreen
+        step={6}
+        totalSteps={7}
+        title="Set your macro targets"
+        subtitle={`We recommend ~${suggestedCal} kcal/day based on your profile. We'll find restaurants based on your targets.`}
+        onContinue={handleSave}
+        canContinue={true}
+        hideFooter={true}
+      >
+        {content}
+      </WelcomeScreen>
+    );
+  }
+
+  return (
+    <SafeAreaView style={s.container}>
+      <View style={s.inner}>
+        {content}
       </View>
     </SafeAreaView>
   );
+}
+
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.bg },
+    inner: { flex: 1, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 16 },
+    contentWrap: { flex: 1, gap: 16 },
+    header: { gap: 6 },
+    title: { fontSize: 26, fontWeight: '700', color: colors.textPrimary },
+    subtitle: { fontSize: 14, color: colors.textSecondary, lineHeight: 20 },
+
+    dietRow: { flexDirection: 'row' },
+    dietPill: {
+      alignItems: 'center',
+      paddingVertical: 6,
+      paddingHorizontal: 14,
+      borderRadius: 20,
+      borderWidth: 1.5,
+      borderColor: colors.border,
+      backgroundColor: colors.bgCard,
+    },
+    dietPillActive: { borderColor: colors.accent, backgroundColor: colors.accentBg },
+    dietIcon: { fontSize: 16 },
+    dietLabel: { fontSize: 12, fontWeight: '600', color: colors.textPrimary },
+    dietLabelActive: { color: colors.accent },
+
+    pickerRow: { flexDirection: 'row', gap: 8, height: 36 * 5 },
+    pickerCol: { flex: 1, alignItems: 'center', gap: 6 },
+    pickerLabel: { fontSize: 11, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.8 },
+
+    calorieBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: colors.accentBg,
+      borderRadius: 14,
+      paddingVertical: 12,
+      paddingHorizontal: 20,
+    },
+    calorieLabel: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
+    calorieValue: { fontSize: 22, fontWeight: '800', color: colors.accent },
+
+    spacer: { flex: 1 },
+    actions: { gap: 10, alignItems: 'center' },
+    saveButton: {
+      width: '100%',
+      height: 52,
+      backgroundColor: colors.accent,
+      borderRadius: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    saveText: { fontSize: 17, fontWeight: '700', color: colors.accentOnAccent },
+    skipButton: { paddingVertical: 6 },
+    skipText: { fontSize: 15, color: colors.textTertiary },
+  });
 }

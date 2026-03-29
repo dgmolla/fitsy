@@ -10,13 +10,13 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useNavigation } from 'expo-router';
 import { useTheme } from '@/lib/theme';
 
 interface Props {
   step: number;
   totalSteps: number;
-  illustration: React.ReactNode;
+  illustration?: React.ReactNode;
   title: string;
   subtitle: string;
   children: React.ReactNode;
@@ -24,6 +24,7 @@ interface Props {
   canContinue: boolean;
   continueLabel?: string;
   showBack?: boolean;
+  onBack?: () => void;
   scrollable?: boolean;
   hideFooter?: boolean;
 }
@@ -39,15 +40,25 @@ export function WelcomeScreen({
   canContinue,
   continueLabel = 'Continue',
   showBack = true,
+  onBack,
   scrollable = false,
   hideFooter = false,
 }: Props) {
   const { colors } = useTheme();
+  const navigation = useNavigation();
   const progress = step / totalSteps;
+
+  const handleBack = onBack ?? (() => {
+    if (navigation.canGoBack()) {
+      router.back();
+    } else {
+      router.navigate('/welcome');
+    }
+  });
 
   const body = (
     <>
-      <View style={styles.illustrationWrap}>{illustration}</View>
+      {illustration && <View style={styles.illustrationWrap}>{illustration}</View>}
       <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
       <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
         {subtitle}
@@ -66,7 +77,7 @@ export function WelcomeScreen({
         <View style={styles.header}>
           {showBack ? (
             <Pressable
-              onPress={() => router.back()}
+              onPress={handleBack}
               hitSlop={12}
               accessibilityRole="button"
               accessibilityLabel="Go back"
