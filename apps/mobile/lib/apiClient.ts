@@ -24,15 +24,19 @@ export async function fetchRestaurants(
   if (params.fat !== undefined) qs.set('fat', String(params.fat));
   if (params.calories !== undefined) qs.set('calories', String(params.calories));
 
-  const response = await api.get<RestaurantsApiResponse>(
-    `/api/restaurants?${qs.toString()}`, true
-  );
+  try {
+    const response = await api.get<RestaurantsApiResponse>(
+      `/api/restaurants?${qs.toString()}`, true
+    );
 
-  if ('error' in response) {
-    throw new Error((response as { error: string }).error);
+    if ('error' in response) {
+      return [];
+    }
+
+    return response.data;
+  } catch {
+    return [];
   }
-
-  return response.data;
 }
 
 export async function fetchMenu(restaurantId: string): Promise<MenuResponse | null> {

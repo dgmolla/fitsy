@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { ContinueButton } from '@/components/ContinueButton';
 import { ProgressDots } from '@/components/ProgressDots';
 import { SelectionCard } from '@/components/SelectionCard';
+import { useTheme } from '@/lib/theme';
 
 type Goal = 'lose_fat' | 'maintain' | 'build_muscle';
 
@@ -34,18 +35,19 @@ const GOAL_OPTIONS: {
 ];
 
 export default function GoalScreen() {
+  const { colors } = useTheme();
   const [selected, setSelected] = useState<Goal | null>(null);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
       <View style={styles.inner}>
         <View style={styles.header}>
           <ProgressDots current={5} total={7} />
         </View>
 
         <View style={styles.titleSection}>
-          <Text style={styles.title}>What is your goal?</Text>
-          <Text style={styles.subtitle}>We will set your macro targets based on this.</Text>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>What is your goal?</Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>We will set your macro targets based on this.</Text>
         </View>
 
         <ScrollView style={styles.cards} showsVerticalScrollIndicator={false}>
@@ -75,7 +77,6 @@ export default function GoalScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   inner: {
     flex: 1,
@@ -93,12 +94,10 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#111827',
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 15,
-    color: '#6B7280',
     lineHeight: 22,
   },
   cards: {

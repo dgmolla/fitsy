@@ -1,6 +1,8 @@
 // Component barrel — export all public components from this file.
 // Screens import from '@/components', not from individual component files.
 
+export { AuthForm } from './AuthForm';
+export type { AuthFormProps } from './AuthForm';
 export { BookmarkButton } from './BookmarkButton';
 export { ConfidenceBadge } from './ConfidenceBadge';
 export { ContinueButton } from './ContinueButton';

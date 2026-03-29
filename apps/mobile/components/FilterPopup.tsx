@@ -110,7 +110,12 @@ export function FilterPopup({ visible, values, onApply, onClose }: FilterPopupPr
         />
       </Animated.View>
 
-      <Pressable style={StyleSheet.absoluteFill} onPress={() => dismiss(onClose)} />
+      <Pressable
+        style={StyleSheet.absoluteFill}
+        onPress={() => dismiss(onClose)}
+        accessibilityLabel="Close filters"
+        accessibilityRole="button"
+      />
 
       <View style={styles.overlay} pointerEvents="box-none">
         <Animated.View

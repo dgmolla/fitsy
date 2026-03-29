@@ -13,7 +13,8 @@ import { router } from 'expo-router';
 import { saveMacroTargets } from '@/lib/macroStorage';
 import { PRESETS } from '@/lib/macroPresets';
 import { MacroField } from '@/components';
-import { styles } from './macro-setup.styles';
+import { useTheme } from '@/lib/theme';
+import { createStyles } from './macro-setup.styles';
 
 interface FormValues {
   protein: string;
@@ -52,6 +53,8 @@ function isValid(errors: FormErrors): boolean {
 }
 
 export default function MacroSetupScreen() {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const [values, setValues] = useState<FormValues>(EMPTY);
   const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState<Partial<Record<keyof FormValues, boolean>>>({});

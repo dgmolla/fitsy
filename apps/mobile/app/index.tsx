@@ -3,10 +3,12 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { Redirect } from 'expo-router';
 import { getStoredToken } from '@/lib/authClient';
 import { getMacroTargets } from '@/lib/macroStorage';
+import { useTheme } from '@/lib/theme';
 
 type Destination = '/(tabs)/search' | '/auth/login' | '/macro-setup';
 
 export default function Index() {
+  const { colors } = useTheme();
   const [destination, setDestination] = useState<Destination | null>(null);
 
   useEffect(() => {
@@ -29,7 +31,7 @@ export default function Index() {
   if (!destination) {
     return (
       <View style={styles.loader}>
-        <ActivityIndicator size="large" color="#2D7D46" accessibilityLabel="Loading" />
+        <ActivityIndicator size="large" color={colors.spinnerColor} accessibilityLabel="Loading" />
       </View>
     );
   }

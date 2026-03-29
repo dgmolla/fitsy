@@ -3,15 +3,17 @@ import { KeyboardAvoidingView, Platform, SafeAreaView, StyleSheet, Text, TextInp
 import { router } from 'expo-router';
 import { ContinueButton } from '@/components/ContinueButton';
 import { ProgressDots } from '@/components/ProgressDots';
+import { useTheme } from '@/lib/theme';
 
 export default function AgeScreen() {
+  const { colors } = useTheme();
   const [age, setAge] = useState('');
 
   const ageNum = parseInt(age, 10);
   const isValid = !isNaN(ageNum) && ageNum >= 13 && ageNum <= 99;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
       <KeyboardAvoidingView
         style={styles.inner}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -21,25 +23,25 @@ export default function AgeScreen() {
         </View>
 
         <View style={styles.body}>
-          <Text style={styles.title}>How old are you?</Text>
-          <Text style={styles.subtitle}>We use this to calculate your daily calorie target.</Text>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>How old are you?</Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>We use this to calculate your daily calorie target.</Text>
 
-          <View style={styles.inputRow}>
+          <View style={[styles.inputRow, { borderColor: colors.inputBorder }]}>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { color: colors.textPrimary }]}
               keyboardType="number-pad"
               placeholder="25"
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={colors.inputPlaceholder}
               value={age}
               onChangeText={setAge}
               maxLength={2}
               accessibilityLabel="Age"
             />
-            <Text style={styles.unit}>years</Text>
+            <Text style={[styles.unit, { color: colors.textSecondary }]}>years</Text>
           </View>
 
           {age.length > 0 && !isValid ? (
-            <Text style={styles.error}>Age must be between 13 and 99.</Text>
+            <Text style={[styles.error, { color: colors.error }]}>Age must be between 13 and 99.</Text>
           ) : null}
         </View>
 
@@ -57,7 +59,6 @@ export default function AgeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   inner: {
     flex: 1,
@@ -75,12 +76,10 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#111827',
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 15,
-    color: '#6B7280',
     marginBottom: 40,
     lineHeight: 22,
   },
@@ -88,7 +87,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#D1D5DB',
     borderRadius: 12,
     paddingHorizontal: 16,
     height: 60,
@@ -98,16 +96,13 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 24,
     fontWeight: '600',
-    color: '#111827',
   },
   unit: {
     fontSize: 16,
-    color: '#6B7280',
   },
   error: {
     marginTop: 8,
     fontSize: 13,
-    color: '#EF4444',
   },
   footer: {
     paddingTop: 16,

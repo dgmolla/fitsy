@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RestaurantResult } from '@fitsy/shared';
 import { EmptyState, RestaurantCard } from '@/components';
 import { SearchHeader } from '@/components/SearchHeader';
@@ -21,6 +22,8 @@ import { getMacroTargets, saveMacroTargets } from '@/lib/macroStorage';
 import { useTheme } from '@/lib/theme';
 
 const DEBOUNCE_MS = 600;
+const NAV_BAR_HEIGHT = 48;
+const NAV_BAR_SPACING = 16;
 
 const DEFAULT_INPUTS: MacroValues = {
   protein: '',
@@ -36,6 +39,7 @@ export default function SearchScreen() {
   const [error, setError] = useState<string | null>(null);
   const [filterVisible, setFilterVisible] = useState(false);
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const location = useLocation();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -112,6 +116,8 @@ export default function SearchScreen() {
     saveMacroTargets(newValues).catch(() => {});
   }
 
+  const listPaddingBottom = NAV_BAR_HEIGHT + NAV_BAR_SPACING + (insets.bottom > 0 ? insets.bottom : 12) + 16;
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
       <KeyboardAvoidingView
@@ -143,7 +149,7 @@ export default function SearchScreen() {
               />
             )}
             ListEmptyComponent={<EmptyState hasInputs={hasInputs} />}
-            contentContainerStyle={styles.listContent}
+            contentContainerStyle={[styles.listContent, { paddingBottom: listPaddingBottom }]}
             keyboardShouldPersistTaps="handled"
           />
         )}
@@ -181,6 +187,5 @@ const styles = StyleSheet.create({
   listContent: {
     flexGrow: 1,
     paddingTop: 8,
-    paddingBottom: 100,
   },
 });

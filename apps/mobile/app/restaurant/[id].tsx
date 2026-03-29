@@ -7,9 +7,11 @@ import {
   View,
 } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { MenuItemResult, MenuResponse, SavedItemResponse } from '@fitsy/shared';
+import { MenuItemResult, MenuResponse } from '@fitsy/shared';
 import { FitsyLoader, MenuItem } from '@/components';
 import { fetchMenu, getSavedItems, saveItem, unsaveItem } from '@/lib/apiClient';
+import { useTheme } from '@/lib/theme';
+import { BRAND } from '@/lib/brand';
 
 type Section = {
   title: string;
@@ -37,6 +39,7 @@ function hasCategories(items: MenuItemResult[]): boolean {
 }
 
 export default function RestaurantDetailScreen() {
+  const { colors } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [menu, setMenu] = useState<MenuResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -118,12 +121,12 @@ export default function RestaurantDetailScreen() {
           headerShown: true,
           title: restaurantName,
           headerBackTitle: 'Back',
-          headerStyle: { backgroundColor: '#FFFFFF' },
-          headerTitleStyle: { fontWeight: '700', color: '#111827' },
-          headerTintColor: '#2D7D46',
+          headerStyle: { backgroundColor: colors.bg },
+          headerTitleStyle: { fontWeight: '700', color: colors.textPrimary },
+          headerTintColor: BRAND.color,
         }}
       />
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.bg }]}>
         {loading && (
           <View style={styles.centered}>
             <FitsyLoader size="md" />
@@ -131,8 +134,8 @@ export default function RestaurantDetailScreen() {
         )}
 
         {!loading && error !== null && (
-          <View style={styles.errorBanner}>
-            <Text style={styles.errorText}>{error}</Text>
+          <View style={[styles.errorBanner, { backgroundColor: colors.errorBg }]}>
+            <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
           </View>
         )}
 
@@ -140,7 +143,7 @@ export default function RestaurantDetailScreen() {
           <>
             {menu.menuItems.length === 0 ? (
               <View style={styles.centered}>
-                <Text style={styles.emptyText}>No menu items available</Text>
+                <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No menu items available</Text>
               </View>
             ) : hasCategories(menu.menuItems) ? (
               <SectionList
@@ -155,8 +158,8 @@ export default function RestaurantDetailScreen() {
                 )}
                 renderSectionHeader={({ section }) =>
                   section.title ? (
-                    <View style={styles.sectionHeader}>
-                      <Text style={styles.sectionTitle}>{section.title}</Text>
+                    <View style={[styles.sectionHeader, { backgroundColor: colors.bgElevated, borderBottomColor: colors.border }]}>
+                      <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{section.title}</Text>
                     </View>
                   ) : null
                 }
@@ -187,7 +190,6 @@ export default function RestaurantDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
   },
   centered: {
     flex: 1,
@@ -197,32 +199,26 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 15,
-    color: '#6B7280',
     textAlign: 'center',
     lineHeight: 22,
   },
   errorBanner: {
     margin: 16,
-    backgroundColor: '#FEE2E2',
     borderRadius: 8,
     padding: 12,
   },
   errorText: {
     fontSize: 14,
-    color: '#DC2626',
     textAlign: 'center',
   },
   sectionHeader: {
-    backgroundColor: '#F3F4F6',
     paddingHorizontal: 16,
     paddingVertical: 6,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
   },
   sectionTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#374151',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },

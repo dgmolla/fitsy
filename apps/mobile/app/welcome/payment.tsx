@@ -5,6 +5,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { ContinueButton } from '@/components/ContinueButton';
 import { ProgressDots } from '@/components/ProgressDots';
+import { useTheme } from '@/lib/theme';
+import { BRAND } from '@/lib/brand';
 
 type PlanId = 'monthly' | 'yearly';
 
@@ -32,6 +34,7 @@ const PLANS: { id: PlanId; label: string; price: string; perMonth: string; badge
 ];
 
 export default function PaymentScreen() {
+  const { colors } = useTheme();
   const [selectedPlan, setSelectedPlan] = useState<PlanId>('yearly');
   const [loading, setLoading] = useState(false);
 
@@ -46,22 +49,22 @@ export default function PaymentScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <ProgressDots current={7} total={7} />
         </View>
 
         <View style={styles.heroSection}>
-          <Text style={styles.title}>Start your free trial</Text>
-          <Text style={styles.subtitle}>Try Fitsy free for 7 days. Cancel anytime.</Text>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>Start your free trial</Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Try Fitsy free for 7 days. Cancel anytime.</Text>
         </View>
 
         <View style={styles.features}>
           {FEATURES.map((f) => (
             <View key={f} style={styles.featureRow}>
-              <Ionicons name="checkmark-circle" size={20} color="#2D7D46" />
-              <Text style={styles.featureText}>{f}</Text>
+              <Ionicons name="checkmark-circle" size={20} color={colors.accent} />
+              <Text style={[styles.featureText, { color: colors.textPrimary }]}>{f}</Text>
             </View>
           ))}
         </View>
@@ -70,27 +73,46 @@ export default function PaymentScreen() {
           {PLANS.map((plan) => (
             <Pressable
               key={plan.id}
-              style={[styles.planCard, selectedPlan === plan.id && styles.planCardSelected]}
+              style={[
+                styles.planCard,
+                { borderColor: colors.border, backgroundColor: colors.bg },
+                selectedPlan === plan.id && {
+                  borderColor: BRAND.color,
+                  backgroundColor: colors.accentBg,
+                },
+              ]}
               onPress={() => setSelectedPlan(plan.id)}
               accessibilityRole="button"
               accessibilityLabel={plan.label}
               accessibilityState={{ selected: selectedPlan === plan.id }}
             >
               <View style={styles.planLeft}>
-                <Text style={[styles.planLabel, selectedPlan === plan.id && styles.planLabelSelected]}>
+                <Text
+                  style={[
+                    styles.planLabel,
+                    { color: colors.textPrimary },
+                    selectedPlan === plan.id && { color: colors.accent },
+                  ]}
+                >
                   {plan.label}
                 </Text>
                 {plan.perMonth ? (
-                  <Text style={styles.planPerMonth}>{plan.perMonth}</Text>
+                  <Text style={[styles.planPerMonth, { color: colors.textSecondary }]}>{plan.perMonth}</Text>
                 ) : null}
               </View>
               <View style={styles.planRight}>
                 {plan.badge ? (
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>{plan.badge}</Text>
+                  <View style={[styles.badge, { backgroundColor: colors.accent }]}>
+                    <Text style={[styles.badgeText, { color: colors.accentOnAccent }]}>{plan.badge}</Text>
                   </View>
                 ) : null}
-                <Text style={[styles.planPrice, selectedPlan === plan.id && styles.planPriceSelected]}>
+                <Text
+                  style={[
+                    styles.planPrice,
+                    { color: colors.textPrimary },
+                    selectedPlan === plan.id && { color: colors.accent },
+                  ]}
+                >
                   {plan.price}
                 </Text>
               </View>
@@ -104,7 +126,7 @@ export default function PaymentScreen() {
             onPress={handleStartTrial}
             disabled={loading}
           />
-          <Text style={styles.disclaimer}>
+          <Text style={[styles.disclaimer, { color: colors.textTertiary }]}>
             {`No charge for 7 days. Then ${selectedPlan === 'yearly' ? '$29.99/year' : '$4.99/month'}. Cancel before trial ends to avoid charge.`}
           </Text>
         </View>
@@ -116,7 +138,6 @@ export default function PaymentScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   scroll: {
     paddingHorizontal: 24,
@@ -133,12 +154,10 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#111827',
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 15,
-    color: '#6B7280',
     lineHeight: 22,
   },
   features: {
@@ -152,7 +171,6 @@ const styles = StyleSheet.create({
   },
   featureText: {
     fontSize: 15,
-    color: '#374151',
     flex: 1,
   },
   plans: {
@@ -164,14 +182,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 2,
-    borderColor: '#E5E7EB',
     borderRadius: 12,
     padding: 16,
-    backgroundColor: '#FFFFFF',
-  },
-  planCardSelected: {
-    borderColor: '#2D7D46',
-    backgroundColor: '#F0FDF4',
   },
   planLeft: {
     gap: 2,
@@ -179,21 +191,15 @@ const styles = StyleSheet.create({
   planLabel: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
-  },
-  planLabelSelected: {
-    color: '#1A5C32',
   },
   planPerMonth: {
     fontSize: 13,
-    color: '#6B7280',
   },
   planRight: {
     alignItems: 'flex-end',
     gap: 4,
   },
   badge: {
-    backgroundColor: '#2D7D46',
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 2,
@@ -201,22 +207,16 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#FFFFFF',
   },
   planPrice: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#374151',
-  },
-  planPriceSelected: {
-    color: '#1A5C32',
   },
   cta: {
     gap: 12,
   },
   disclaimer: {
     fontSize: 12,
-    color: '#9CA3AF',
     textAlign: 'center',
     lineHeight: 18,
   },

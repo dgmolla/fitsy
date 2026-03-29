@@ -3,17 +3,30 @@ import { Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { ContinueButton } from '@/components/ContinueButton';
+import { useTheme } from '@/lib/theme';
+import { BRAND } from '@/lib/brand';
 
 export default function WelcomeScreen() {
+  const { colors } = useTheme();
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
       <View style={styles.content}>
         <View style={styles.logoSection}>
-          <View style={styles.logoMark}>
-            <Ionicons name="leaf" size={48} color="#FFFFFF" />
+          <View
+            style={[
+              styles.logoMark,
+              {
+                backgroundColor: colors.accent,
+                shadowColor: colors.glassShadowColor,
+                shadowOpacity: colors.glassShadowOpacity,
+              },
+            ]}
+          >
+            <Ionicons name="leaf" size={48} color={colors.accentOnAccent} />
           </View>
-          <Text style={styles.wordmark}>fitsy</Text>
-          <Text style={styles.tagline}>Find meals that match your macros</Text>
+          <Text style={[styles.wordmark, { color: colors.textPrimary }]}>{BRAND.name}</Text>
+          <Text style={[styles.tagline, { color: colors.textSecondary }]}>Find meals that match your macros</Text>
         </View>
 
         <View style={styles.actions}>
@@ -27,11 +40,11 @@ export default function WelcomeScreen() {
             accessibilityRole="button"
             accessibilityLabel="Continue with Email"
           >
-            <Text style={styles.emailLinkText}>Continue with Email</Text>
+            <Text style={[styles.emailLinkText, { color: BRAND.color }]}>Continue with Email</Text>
           </Pressable>
         </View>
 
-        <Text style={styles.legal}>
+        <Text style={[styles.legal, { color: colors.textTertiary }]}>
           By continuing you agree to our Terms of Service and Privacy Policy.
         </Text>
       </View>
@@ -42,7 +55,6 @@ export default function WelcomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   content: {
     flex: 1,
@@ -61,24 +73,19 @@ const styles = StyleSheet.create({
     width: 88,
     height: 88,
     borderRadius: 22,
-    backgroundColor: '#2D7D46',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#2D7D46',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
     shadowRadius: 12,
     elevation: 6,
   },
   wordmark: {
     fontSize: 42,
     fontWeight: '800',
-    color: '#111827',
-    letterSpacing: -1,
+    letterSpacing: BRAND.letterSpacing,
   },
   tagline: {
     fontSize: 16,
-    color: '#6B7280',
     textAlign: 'center',
   },
   actions: {
@@ -92,11 +99,9 @@ const styles = StyleSheet.create({
   emailLinkText: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#2D7D46',
   },
   legal: {
     fontSize: 12,
-    color: '#9CA3AF',
     textAlign: 'center',
     lineHeight: 18,
   },

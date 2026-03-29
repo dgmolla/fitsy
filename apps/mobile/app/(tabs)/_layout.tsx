@@ -1,16 +1,21 @@
-import { Dimensions } from 'react-native';
+import { useWindowDimensions } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/lib/theme';
 
-const SCREEN_WIDTH = Dimensions.get('window').width;
-const NAV_MARGIN = Math.round(SCREEN_WIDTH * 0.30);
+const NAV_BAR_HEIGHT = 48;
+const NAV_BAR_BOTTOM_MARGIN = 12;
 
 export default function TabLayout() {
   const { colors, mode } = useTheme();
+  const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
 
   const isDark = mode === 'dark';
   const navBg = isDark ? 'rgba(30,30,30,0.95)' : 'rgba(255,255,255,0.95)';
+  const navMargin = Math.round(width * 0.30);
+  const bottomPosition = insets.bottom > 0 ? insets.bottom : NAV_BAR_BOTTOM_MARGIN;
 
   return (
     <Tabs
@@ -18,16 +23,16 @@ export default function TabLayout() {
         headerShown: false,
         tabBarStyle: {
           position: 'absolute',
-          bottom: 32,
-          left: NAV_MARGIN,
-          right: NAV_MARGIN,
-          height: 48,
+          bottom: bottomPosition,
+          left: navMargin,
+          right: navMargin,
+          height: NAV_BAR_HEIGHT,
           borderRadius: 24,
           borderTopWidth: 0,
           backgroundColor: navBg,
           borderWidth: 1,
           borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
-          shadowColor: '#000',
+          shadowColor: colors.glassShadowColor,
           shadowOffset: { width: 0, height: 4 },
           shadowOpacity: isDark ? 0.3 : 0.12,
           shadowRadius: 12,
@@ -36,7 +41,7 @@ export default function TabLayout() {
           paddingTop: 0,
         },
         tabBarActiveTintColor: colors.accent,
-        tabBarInactiveTintColor: isDark ? '#666' : '#9CA3AF',
+        tabBarInactiveTintColor: colors.textTertiary,
         tabBarItemStyle: {
           flex: 1,
           justifyContent: 'center',

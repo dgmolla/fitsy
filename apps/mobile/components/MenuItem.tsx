@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { MenuItemResult } from '@fitsy/shared';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { BookmarkButton } from './BookmarkButton';
+import { useTheme } from '@/lib/theme';
 
 interface Props {
   item: MenuItemResult;
@@ -11,25 +12,26 @@ interface Props {
 }
 
 export function MenuItem({ item, isSaved, onToggleSave }: Props) {
+  const { colors } = useTheme();
   const priceLabel =
     item.price !== undefined && item.price !== null
       ? `$${item.price.toFixed(2)}`
       : null;
 
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, { backgroundColor: colors.bgCard, borderBottomColor: colors.border }]}>
       <View style={styles.topRow}>
         <View style={styles.nameBlock}>
-          <Text style={styles.name} numberOfLines={2}>
+          <Text style={[styles.name, { color: colors.textPrimary }]} numberOfLines={2}>
             {item.name}
           </Text>
           {item.category ? (
-            <Text style={styles.category}>{item.category}</Text>
+            <Text style={[styles.category, { color: colors.textSecondary }]}>{item.category}</Text>
           ) : null}
         </View>
         <View style={styles.rightBlock}>
           {priceLabel ? (
-            <Text style={styles.price}>{priceLabel}</Text>
+            <Text style={[styles.price, { color: colors.textPrimary }]}>{priceLabel}</Text>
           ) : null}
           {item.macros ? (
             <ConfidenceBadge confidence={item.macros.confidence} />
@@ -44,11 +46,11 @@ export function MenuItem({ item, isSaved, onToggleSave }: Props) {
       </View>
 
       {item.macros ? (
-        <Text style={styles.macros}>
+        <Text style={[styles.macros, { color: colors.textSecondary }]}>
           {`P: ${item.macros.proteinG}g  C: ${item.macros.carbsG}g  F: ${item.macros.fatG}g  Kcal: ${item.macros.calories}`}
         </Text>
       ) : (
-        <Text style={styles.noMacro}>No macro data</Text>
+        <Text style={[styles.noMacro, { color: colors.textSecondary }]}>No macro data</Text>
       )}
     </View>
   );
@@ -58,9 +60,7 @@ const styles = StyleSheet.create({
   row: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
   },
   topRow: {
     flexDirection: 'row',
@@ -75,11 +75,9 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#111827',
   },
   category: {
     fontSize: 12,
-    color: '#6B7280',
     marginTop: 2,
   },
   rightBlock: {
@@ -89,15 +87,12 @@ const styles = StyleSheet.create({
   price: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#374151',
   },
   macros: {
     fontSize: 13,
-    color: '#6B7280',
   },
   noMacro: {
     fontSize: 13,
-    color: '#6B7280',
     fontStyle: 'italic',
   },
 });

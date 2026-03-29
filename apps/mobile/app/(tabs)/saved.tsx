@@ -9,8 +9,9 @@ import {
 import { useFocusEffect } from 'expo-router';
 import { SavedItemResponse } from '@fitsy/shared';
 import { getSavedItems, unsaveItem } from '@/lib/apiClient';
-import { BookmarkButton, FitsyLoader } from '@/components';
+import { BookmarkButton, FitsyLoader, MenuItem } from '@/components';
 import { ScreenHeader } from '@/components/ScreenHeader';
+import { useTheme } from '@/lib/theme';
 
 type Section = {
   title: string;
@@ -37,6 +38,7 @@ function buildSections(items: SavedItemResponse[]): Section[] {
 }
 
 export default function SavedScreen() {
+  const { colors } = useTheme();
   const [savedItems, setSavedItems] = useState<SavedItemResponse[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -71,7 +73,7 @@ export default function SavedScreen() {
   const sections = buildSections(savedItems);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
       <ScreenHeader />
 
       {loading ? (
@@ -80,7 +82,7 @@ export default function SavedScreen() {
         </View>
       ) : savedItems.length === 0 ? (
         <View style={styles.centered}>
-          <Text style={styles.emptyText}>
+          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
             No saved meals yet.{'\n'}Bookmark items from restaurant menus.
           </Text>
         </View>
@@ -89,8 +91,8 @@ export default function SavedScreen() {
           sections={sections}
           keyExtractor={(item) => item.id}
           renderSectionHeader={({ section }) => (
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>{section.title}</Text>
+            <View style={[styles.sectionHeader, { backgroundColor: colors.bgElevated, borderBottomColor: colors.border }]}>
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{section.title}</Text>
             </View>
           )}
           renderItem={({ item }) => (
@@ -113,55 +115,27 @@ function SavedItemRow({ item, onUnsave }: SavedItemRowProps) {
   const menuItem = item.menuItem;
   if (!menuItem) return null;
 
-  const priceLabel =
-    menuItem.price !== undefined && menuItem.price !== null
-      ? `$${menuItem.price.toFixed(2)}`
-      : null;
+  // Adapt SavedItemResponse's menuItem shape to MenuItemResult for MenuItem
+  const menuItemResult: import('@fitsy/shared').MenuItemResult = {
+    id: menuItem.id,
+    name: menuItem.name,
+    category: menuItem.category ?? undefined,
+    price: menuItem.price ?? undefined,
+    macros: menuItem.macros,
+  };
 
   return (
-    <View style={styles.row}>
-      <View style={styles.topRow}>
-        <View style={styles.nameBlock}>
-          <Text style={styles.itemName} numberOfLines={2}>
-            {menuItem.name}
-          </Text>
-          {menuItem.category ? (
-            <Text style={styles.category}>{menuItem.category}</Text>
-          ) : null}
-        </View>
-        <View style={styles.rightBlock}>
-          {priceLabel ? <Text style={styles.price}>{priceLabel}</Text> : null}
-          <BookmarkButton
-            isSaved
-            onPress={() => onUnsave(item.id)}
-            accessibilityLabel={`Remove ${menuItem.name} from saved`}
-          />
-        </View>
-      </View>
-
-      {menuItem.macros ? (
-        <Text style={styles.macros}>
-          {`P: ${menuItem.macros.proteinG}g  C: ${menuItem.macros.carbsG}g  F: ${menuItem.macros.fatG}g  Kcal: ${menuItem.macros.calories}`}
-        </Text>
-      ) : (
-        <Text style={styles.noMacro}>No macro data</Text>
-      )}
-    </View>
+    <MenuItem
+      item={menuItemResult}
+      isSaved
+      onToggleSave={() => onUnsave(item.id)}
+    />
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
-  screenTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#111827',
-    marginHorizontal: 16,
-    marginTop: 8,
-    marginBottom: 12,
   },
   centered: {
     flex: 1,
@@ -171,71 +145,22 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 15,
-    color: '#6B7280',
     textAlign: 'center',
     lineHeight: 22,
   },
   sectionHeader: {
-    backgroundColor: '#F3F4F6',
     paddingHorizontal: 16,
     paddingVertical: 6,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
   },
   sectionTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#374151',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   listContent: {
     flexGrow: 1,
     paddingBottom: 32,
-  },
-  row: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  nameBlock: {
-    flex: 1,
-    marginRight: 8,
-  },
-  itemName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  category: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  rightBlock: {
-    alignItems: 'flex-end',
-    gap: 4,
-  },
-  price: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-  },
-  macros: {
-    fontSize: 13,
-    color: '#6B7280',
-  },
-  noMacro: {
-    fontSize: 13,
-    color: '#6B7280',
-    fontStyle: 'italic',
   },
 });

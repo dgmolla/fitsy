@@ -7,8 +7,10 @@ import {
   View,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useTheme } from '@/lib/theme';
 
 export default function OnboardingScreen() {
+  const { colors } = useTheme();
   const { name } = useLocalSearchParams<{ name?: string }>();
 
   const heading = name ? `You're in, ${name}!` : "You're in!";
@@ -22,12 +24,12 @@ export default function OnboardingScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
       <View style={styles.content}>
         <View style={styles.header}>
           <Text style={styles.emoji}>🥗</Text>
-          <Text style={styles.heading}>{heading}</Text>
-          <Text style={styles.body}>
+          <Text style={[styles.heading, { color: colors.textPrimary }]}>{heading}</Text>
+          <Text style={[styles.body, { color: colors.textSecondary }]}>
             Fitsy finds restaurants near you with meals that match your protein,
             carb, and fat targets — so you can eat out without blowing your plan.
           </Text>
@@ -35,12 +37,12 @@ export default function OnboardingScreen() {
 
         <View style={styles.actions}>
           <Pressable
-            style={styles.ctaButton}
+            style={[styles.ctaButton, { backgroundColor: colors.accent }]}
             onPress={goToMacroSetup}
             accessibilityRole="button"
             accessibilityLabel="Set up my macros"
           >
-            <Text style={styles.ctaText}>Set up my macros</Text>
+            <Text style={[styles.ctaText, { color: colors.accentOnAccent }]}>Set up my macros</Text>
           </Pressable>
 
           <Pressable
@@ -50,7 +52,7 @@ export default function OnboardingScreen() {
             accessibilityLabel="Skip for now"
             hitSlop={8}
           >
-            <Text style={styles.skipText}>Skip for now</Text>
+            <Text style={[styles.skipText, { color: colors.textTertiary }]}>Skip for now</Text>
           </Pressable>
         </View>
       </View>
@@ -61,7 +63,6 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
   },
   content: {
     flex: 1,
@@ -79,12 +80,10 @@ const styles = StyleSheet.create({
   heading: {
     fontSize: 30,
     fontWeight: '700',
-    color: '#111827',
     textAlign: 'center',
   },
   body: {
     fontSize: 16,
-    color: '#6B7280',
     lineHeight: 24,
     textAlign: 'center',
   },
@@ -95,7 +94,6 @@ const styles = StyleSheet.create({
   ctaButton: {
     width: '100%',
     height: 52,
-    backgroundColor: '#2D7D46',
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
@@ -103,13 +101,11 @@ const styles = StyleSheet.create({
   ctaText: {
     fontSize: 17,
     fontWeight: '600',
-    color: '#FFFFFF',
   },
   skipButton: {
     paddingVertical: 8,
   },
   skipText: {
     fontSize: 15,
-    color: '#9CA3AF',
   },
 });

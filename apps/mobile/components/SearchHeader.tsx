@@ -18,6 +18,11 @@ const MACRO_COLORS = {
   fat: '#EF4444',
 } as const;
 
+/** Animation timing constants */
+const PULSE_DURATION_MS = 2000;
+const PULSE_GAP_MS = 600;
+const PULSE_STAGGER_MS = 250;
+
 const FIELDS: { key: keyof MacroValues; label: string; color: string }[] = [
   { key: 'protein', label: 'P', color: MACRO_COLORS.protein },
   { key: 'carbs', label: 'C', color: MACRO_COLORS.carbs },
@@ -33,11 +38,11 @@ function PulsingDot({ color, delay = 0 }: { color: string; delay?: number }) {
         Animated.delay(delay),
         Animated.timing(pulse, {
           toValue: 1,
-          duration: 2000,
+          duration: PULSE_DURATION_MS,
           easing: Easing.out(Easing.quad),
           useNativeDriver: true,
         }),
-        Animated.delay(600),
+        Animated.delay(PULSE_GAP_MS),
       ])
     );
     anim.start();
@@ -94,7 +99,7 @@ export function SearchHeader({ values, location, onPress }: SearchHeaderProps) {
             <React.Fragment key={key}>
               {i > 0 && <View style={styles.chipSpacer} />}
               <View style={[styles.macroChip, { backgroundColor: colors.bgElevated }]}>
-                <PulsingDot color={color} delay={i * 250} />
+                <PulsingDot color={color} delay={i * PULSE_STAGGER_MS} />
                 <Text style={[styles.macroText, { color: colors.textSecondary }]}>
                   {val ? `${val}g` : '\u2014'}{' '}
                 </Text>

@@ -42,7 +42,12 @@ export function LocationBar({ location }: LocationBarProps) {
   const dotColor = location.loading ? colors.textTertiary : isFallback ? colors.warning : colors.accent;
 
   return (
-    <View style={[styles.wrapper, { backgroundColor: colors.bg }]} accessibilityRole="text" accessibilityLabel={accessibilityLabel}>
+    <View
+      style={[styles.wrapper, { backgroundColor: colors.bg }]}
+      accessibilityRole="summary"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityLiveRegion="polite"
+    >
       <View style={[
         styles.pill,
         {

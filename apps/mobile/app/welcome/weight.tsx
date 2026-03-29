@@ -3,10 +3,12 @@ import { KeyboardAvoidingView, Platform, Pressable, SafeAreaView, StyleSheet, Te
 import { router } from 'expo-router';
 import { ContinueButton } from '@/components/ContinueButton';
 import { ProgressDots } from '@/components/ProgressDots';
+import { useTheme } from '@/lib/theme';
 
 type Unit = 'kg' | 'lbs';
 
 export default function WeightScreen() {
+  const { colors } = useTheme();
   const [unit, setUnit] = useState<Unit>('lbs');
   const [value, setValue] = useState('');
 
@@ -18,7 +20,7 @@ export default function WeightScreen() {
   })();
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
       <KeyboardAvoidingView
         style={styles.inner}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -28,38 +30,53 @@ export default function WeightScreen() {
         </View>
 
         <View style={styles.body}>
-          <Text style={styles.title}>What is your weight?</Text>
-          <Text style={styles.subtitle}>Used to personalize your daily macro targets.</Text>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>What is your weight?</Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Used to personalize your daily macro targets.</Text>
 
-          <View style={styles.toggle}>
+          <View style={[styles.toggle, { backgroundColor: colors.bgElevated }]}>
             {(['lbs', 'kg'] as Unit[]).map((u) => (
               <Pressable
                 key={u}
-                style={[styles.toggleOption, unit === u && styles.toggleOptionActive]}
+                style={[
+                  styles.toggleOption,
+                  unit === u && [
+                    styles.toggleOptionActive,
+                    {
+                      backgroundColor: colors.bgCard,
+                      shadowColor: colors.glassShadowColor,
+                    },
+                  ],
+                ]}
                 onPress={() => setUnit(u)}
                 accessibilityRole="button"
                 accessibilityLabel={u === 'kg' ? 'Kilograms' : 'Pounds'}
                 accessibilityState={{ selected: unit === u }}
               >
-                <Text style={[styles.toggleLabel, unit === u && styles.toggleLabelActive]}>
+                <Text
+                  style={[
+                    styles.toggleLabel,
+                    { color: colors.textSecondary },
+                    unit === u && { color: colors.textPrimary, fontWeight: '600' },
+                  ]}
+                >
                   {u}
                 </Text>
               </Pressable>
             ))}
           </View>
 
-          <View style={styles.inputRow}>
+          <View style={[styles.inputRow, { borderColor: colors.inputBorder }]}>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { color: colors.textPrimary }]}
               keyboardType="decimal-pad"
               placeholder={unit === 'lbs' ? '160' : '73'}
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={colors.inputPlaceholder}
               value={value}
               onChangeText={setValue}
               maxLength={5}
               accessibilityLabel={`Weight in ${unit}`}
             />
-            <Text style={styles.unit}>{unit}</Text>
+            <Text style={[styles.unit, { color: colors.textSecondary }]}>{unit}</Text>
           </View>
         </View>
 
@@ -77,7 +94,6 @@ export default function WeightScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   inner: {
     flex: 1,
@@ -95,18 +111,15 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#111827',
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 15,
-    color: '#6B7280',
     marginBottom: 32,
     lineHeight: 22,
   },
   toggle: {
     flexDirection: 'row',
-    backgroundColor: '#F3F4F6',
     borderRadius: 10,
     padding: 4,
     marginBottom: 28,
@@ -118,8 +131,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   toggleOptionActive: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
@@ -128,17 +139,11 @@ const styles = StyleSheet.create({
   toggleLabel: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#6B7280',
-  },
-  toggleLabelActive: {
-    color: '#111827',
-    fontWeight: '600',
   },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#D1D5DB',
     borderRadius: 12,
     paddingHorizontal: 16,
     height: 60,
@@ -148,11 +153,9 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 24,
     fontWeight: '600',
-    color: '#111827',
   },
   unit: {
     fontSize: 16,
-    color: '#6B7280',
   },
   footer: {
     paddingTop: 16,
