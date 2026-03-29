@@ -47,7 +47,7 @@ function HeroSection({ name, address, distance, itemCount }: {
       <Image source={{ uri: MOCK_RESTAURANT_IMAGE }} style={styles.heroImage} />
 
       <View style={[styles.heroCard, {
-        backgroundColor: colors.bgCard,
+        backgroundColor: colors.bg,
       }]}>
         <View style={styles.heroTop}>
           <Text style={[styles.heroName, { color: colors.textPrimary }]} numberOfLines={2}>
