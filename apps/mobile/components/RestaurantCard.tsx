@@ -3,7 +3,6 @@ import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
 import { RestaurantResult } from '@fitsy/shared';
-import { ConfidenceBadge } from './ConfidenceBadge';
 import { useTheme } from '@/lib/theme';
 import { MACRO_COLORS } from '@/lib/macroColors';
 
@@ -27,8 +26,11 @@ function placeholderColor(name: string): string {
 export function RestaurantCard({ item, onPress }: Props) {
   const { colors, mode } = useTheme();
   const distanceLabel = `${item.distanceMiles.toFixed(1)} mi`;
-  const isHighConfidence = item.bestMatch?.confidence === 'HIGH';
   const initials = item.name.slice(0, 2).toUpperCase();
+
+  // Convert matchScore to percentage (0-1 → 0-100, capped)
+  const matchPct = item.bestMatch ? Math.min(Math.round(item.bestMatch.matchScore * 100), 99) : 0;
+  const matchColor = matchPct >= 80 ? colors.accent : matchPct >= 50 ? '#F59E0B' : colors.textTertiary;
   const bgColor = placeholderColor(item.name);
 
   const overlayColor = mode === 'dark' ? 'rgba(0,0,0,0.52)' : 'rgba(0,0,0,0.38)';
@@ -79,9 +81,11 @@ export function RestaurantCard({ item, onPress }: Props) {
             </View>
           </View>
 
-          {/* high-confidence accent strip */}
-          {isHighConfidence && (
-            <View style={[styles.accentDot, { backgroundColor: colors.accent }]} />
+          {/* match % badge */}
+          {item.bestMatch && (
+            <View style={[styles.matchPill, { backgroundColor: matchColor }]}>
+              <Text style={styles.matchPillText}>{matchPct}%</Text>
+            </View>
           )}
         </View>
 
@@ -115,15 +119,12 @@ export function RestaurantCard({ item, onPress }: Props) {
           {/* best match */}
           {item.bestMatch ? (
             <View style={styles.bestMatch}>
-              <View style={styles.bestMatchRow}>
-                <Text
-                  style={[styles.bestMatchName, { color: colors.textPrimary }]}
-                  numberOfLines={1}
-                >
-                  {item.bestMatch.name}
-                </Text>
-                <ConfidenceBadge confidence={item.bestMatch.confidence} />
-              </View>
+              <Text
+                style={[styles.bestMatchName, { color: colors.textPrimary }]}
+                numberOfLines={1}
+              >
+                {item.bestMatch.name}
+              </Text>
               <View style={styles.macroRow}>
                 <View style={[styles.macroChip, { backgroundColor: colors.bgElevated }]}>
                   <Text style={[styles.macroChipLabel, { color: colors.textTertiary }]}>CALS</Text>
@@ -141,14 +142,6 @@ export function RestaurantCard({ item, onPress }: Props) {
                   <Text style={[styles.macroChipLabel, { color: colors.textTertiary }]}>FAT</Text>
                   <Text style={[styles.macroChipVal, { color: MACRO_COLORS.fat }]}>{item.bestMatch.fatG}g</Text>
                 </View>
-                {isHighConfidence && (
-                  <View style={[styles.matchBadge, {
-                    backgroundColor: colors.accentBg,
-                    borderColor: colors.accentBorder,
-                  }]}>
-                    <Text style={[styles.matchBadgeText, { color: colors.accent }]}>Match</Text>
-                  </View>
-                )}
               </View>
             </View>
           ) : (
@@ -233,13 +226,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: 'rgba(255,255,255,0.75)',
   },
-  accentDot: {
+  matchPill: {
     position: 'absolute',
     top: 10,
     right: 10,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  matchPillText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.3,
   },
 
   // ─── Body ──────────────────────────────────────────────────────────────────
@@ -279,11 +278,6 @@ const styles = StyleSheet.create({
   bestMatch: {
     gap: 8,
   },
-  bestMatchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
   bestMatchName: {
     flex: 1,
     fontSize: 14,
@@ -312,16 +306,6 @@ const styles = StyleSheet.create({
   },
   macroChipVal: {
     fontSize: 13,
-    fontWeight: '700',
-  },
-  matchBadge: {
-    borderRadius: 8,
-    borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  matchBadgeText: {
-    fontSize: 11,
     fontWeight: '700',
   },
   noMacro: {
