@@ -48,11 +48,6 @@ function HeroSection({ name, address, distance, itemCount }: {
 
       <View style={[styles.heroCard, {
         backgroundColor: colors.bgCard,
-        shadowColor: colors.glassShadowColor,
-        shadowOpacity: colors.glassShadowOpacity,
-        shadowRadius: 16,
-        shadowOffset: { width: 0, height: -4 },
-        elevation: 12,
       }]}>
         <View style={styles.heroTop}>
           <Text style={[styles.heroName, { color: colors.textPrimary }]} numberOfLines={2}>
@@ -63,17 +58,13 @@ function HeroSection({ name, address, distance, itemCount }: {
         <View style={styles.infoRow}>
           {distance ? (
             <View style={styles.infoItem}>
-              <Text style={[styles.infoLabel, { color: colors.textTertiary }]}>DISTANCE</Text>
-              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{distance} mi</Text>
+              <Ionicons name="navigate-outline" size={13} color={colors.textSecondary} />
+              <Text style={[styles.infoValue, { color: colors.textSecondary }]}>{distance} mi</Text>
             </View>
           ) : null}
           <View style={styles.infoItem}>
-            <Text style={[styles.infoLabel, { color: colors.textTertiary }]}>ITEMS</Text>
-            <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{itemCount}</Text>
-          </View>
-          <View style={styles.infoItem}>
-            <Text style={[styles.infoLabel, { color: colors.textTertiary }]}>MACRO FIT</Text>
-            <Text style={[styles.infoValue, { color: colors.accent }]}>Estimated</Text>
+            <Ionicons name="restaurant-outline" size={13} color={colors.textSecondary} />
+            <Text style={[styles.infoValue, { color: colors.textSecondary }]}>{itemCount} items</Text>
           </View>
         </View>
 
@@ -224,15 +215,10 @@ const styles = StyleSheet.create({
   },
   infoRow: {
     flexDirection: 'row',
-    gap: 24,
+    gap: 16,
     marginBottom: 12,
   },
-  infoItem: { gap: 2 },
-  infoLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-  },
+  infoItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   infoValue: {
     fontSize: 14,
     fontWeight: '600',
