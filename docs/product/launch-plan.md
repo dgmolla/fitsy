@@ -72,6 +72,62 @@ Must be complete before Round 1 recruiting begins.
 
 ---
 
+## Beta Distribution Strategy
+
+No need to fully launch on the App Store for testing. Three distribution methods, escalating in scale:
+
+### Option 1: EAS Dev Build + Registered Devices (Round 1)
+
+Best for the first 10 testers. Fastest path, no Apple review.
+
+```bash
+eas build --profile development --platform ios
+```
+
+- Builds a full native .ipa with all features (Apple Sign-In, etc.)
+- Testers must have their device UDID registered in Apple Developer portal (100 device limit)
+- Share via QR code or direct download link
+- Instant updates via `eas update` — no rebuild needed for JS changes
+
+**Tradeoff**: Manual device registration, but zero review wait.
+
+### Option 2: TestFlight External (Rounds 2-3)
+
+Scales to 10,000 testers via a public link.
+
+```bash
+eas build --profile production --platform ios
+eas submit --platform ios
+```
+
+- Upload build to App Store Connect → enable TestFlight
+- **Internal testers** (up to 100, your team): no review needed, instant access
+- **External testers** (up to 10,000): requires lightweight Apple review (~24-48h, much faster than full App Store review)
+- Testers install TestFlight app from App Store → tap your invite link → done
+- Builds expire after 90 days
+
+**Tradeoff**: 1-2 day review for external, but testers just tap a link (no device registration).
+
+### Option 3: Expo Go (development only)
+
+What we use now for development. Testers install Expo Go → scan QR code. Zero build process. But can't use native modules (Apple Sign-In, etc.), so **not suitable for real user testing**.
+
+### Recommended Rollout
+
+| Round | Method | Why |
+|-------|--------|-----|
+| Round 1 (10 testers) | EAS dev build + registered devices | Fastest, no review, full native features |
+| Rounds 2-3 (10 each) | TestFlight external link | Scales, no device registration, testers just tap a link |
+| Public launch | App Store submission | Full review, production release |
+
+### Already Configured
+
+- `eas.json` with `development-simulator`, `development`, `preview`, `production` profiles
+- EAS project ID: `a204190c-0b71-4c31-b126-f3bc62d1c4ee`
+- App bundle ID: configured in `app.config.ts`
+
+---
+
 ## Phase 2: MVP Testing (3 Rounds)
 
 ### Strategy
