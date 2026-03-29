@@ -11,7 +11,9 @@ interface Props {
 
 export function BookmarkButton({ isSaved, onPress, accessibilityLabel }: Props) {
   const handlePress = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {
+      // Haptics not available on simulator or some devices — safe to ignore
+    });
     onPress();
   };
 

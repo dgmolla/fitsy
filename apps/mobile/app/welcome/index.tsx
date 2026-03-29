@@ -38,7 +38,7 @@ export default function WelcomeSplash() {
 
           <Pressable
             style={[styles.emailBtn, { borderColor: colors.border }]}
-            onPress={() => router.push('/welcome/age')}
+            onPress={() => router.push('/welcome/email')}
             accessibilityRole="button"
             accessibilityLabel="Continue with Email"
           >
