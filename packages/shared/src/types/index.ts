@@ -138,6 +138,7 @@ export interface RestaurantResult {
   distanceMiles: number;
   cuisineTags: string[];
   chainFlag: boolean;
+  photoUrl?: string;
   bestMatch: BestMatchSummary | null;
 }
 

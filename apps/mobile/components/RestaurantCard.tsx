@@ -1,5 +1,6 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { RestaurantResult } from '@fitsy/shared';
 import { ConfidenceBadge } from './ConfidenceBadge';
@@ -10,10 +11,29 @@ interface Props {
   onPress?: () => void;
 }
 
+// Deterministic placeholder color from name
+function placeholderColor(name: string): string {
+  const COLORS = [
+    '#2D6A4F', '#40916C', '#1B4332', '#52796F',
+    '#354F52', '#2F3E46', '#84A98C', '#3D5A80',
+    '#5C4033', '#6D4C41', '#4A4E69', '#22577A',
+  ];
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return COLORS[h % COLORS.length];
+}
+
 export function RestaurantCard({ item, onPress }: Props) {
-  const { colors } = useTheme();
+  const { colors, mode } = useTheme();
   const distanceLabel = `${item.distanceMiles.toFixed(1)} mi`;
   const isHighConfidence = item.bestMatch?.confidence === 'HIGH';
+  const initials = item.name.slice(0, 2).toUpperCase();
+  const bgColor = placeholderColor(item.name);
+
+  const gradientColors: [string, string] =
+    mode === 'dark'
+      ? ['transparent', 'rgba(0,0,0,0.72)']
+      : ['transparent', 'rgba(0,0,0,0.55)'];
 
   return (
     <TouchableOpacity
@@ -32,29 +52,73 @@ export function RestaurantCard({ item, onPress }: Props) {
         shadowOffset: { width: 0, height: 6 },
         elevation: 8,
       }]}>
-        {isHighConfidence && (
-          <View style={[styles.accentStrip, { backgroundColor: colors.accent }]} />
-        )}
 
-        <View style={styles.cardBody}>
-          <View style={styles.header}>
-            <View style={styles.nameBlock}>
-              <Text style={[styles.name, { color: colors.textPrimary }]} numberOfLines={1}>
-                {item.name}
-              </Text>
-              <View style={styles.metaRow}>
-                <Ionicons name="navigate-outline" size={11} color={colors.textTertiary} />
-                <Text style={[styles.distance, { color: colors.textTertiary }]}>
-                  {distanceLabel}
-                </Text>
-              </View>
+        {/* ─── Hero image ─────────────────────────────────────────────────── */}
+        <View style={styles.imageContainer}>
+          {item.photoUrl ? (
+            <Image
+              source={{ uri: item.photoUrl }}
+              style={styles.image}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={[styles.imagePlaceholder, { backgroundColor: bgColor }]}>
+              <Text style={styles.placeholderInitials}>{initials}</Text>
+            </View>
+          )}
+
+          {/* gradient overlay — name + meta float over image */}
+          <LinearGradient
+            colors={gradientColors}
+            style={styles.imageGradient}
+            pointerEvents="none"
+          />
+
+          {/* name + distance over image */}
+          <View style={styles.imageOverlay}>
+            <Text style={styles.imageOverlayName} numberOfLines={1}>
+              {item.name}
+            </Text>
+            <View style={styles.distanceRow}>
+              <Ionicons name="navigate-outline" size={11} color="rgba(255,255,255,0.7)" />
+              <Text style={styles.imageOverlayDistance}>{distanceLabel}</Text>
             </View>
           </View>
 
-          <Text style={[styles.address, { color: colors.textTertiary }]} numberOfLines={1}>
-            {item.address}
-          </Text>
+          {/* high-confidence accent strip */}
+          {isHighConfidence && (
+            <View style={[styles.accentDot, { backgroundColor: colors.accent }]} />
+          )}
+        </View>
 
+        {/* ─── Card body ──────────────────────────────────────────────────── */}
+        <View style={styles.cardBody}>
+          {/* address + cuisine tags */}
+          <View style={styles.metaRow}>
+            <Text style={[styles.address, { color: colors.textTertiary }]} numberOfLines={1}>
+              {item.address}
+            </Text>
+          </View>
+
+          {item.cuisineTags.length > 0 && (
+            <View style={styles.tagsRow}>
+              {item.cuisineTags.slice(0, 3).map((tag) => (
+                <View
+                  key={tag}
+                  style={[styles.cuisineTag, { backgroundColor: colors.bgElevated, borderColor: colors.border }]}
+                >
+                  <Text style={[styles.cuisineTagText, { color: colors.textSecondary }]}>
+                    {tag}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* divider */}
+          <View style={[styles.divider, { backgroundColor: colors.borderSubtle }]} />
+
+          {/* best match */}
           {item.bestMatch ? (
             <View style={styles.bestMatch}>
               <View style={styles.bestMatchRow}>
@@ -67,46 +131,28 @@ export function RestaurantCard({ item, onPress }: Props) {
                 <ConfidenceBadge confidence={item.bestMatch.confidence} />
               </View>
               <View style={styles.macroRow}>
-                <View style={[styles.macroChipInline, { backgroundColor: colors.bgElevated }]}>
-                  <Text style={[styles.macroChipLabel, { color: colors.textTertiary }]}>
-                    CALS
-                  </Text>
-                  <Text style={[styles.macroChipVal, { color: colors.textPrimary }]}>
-                    {item.bestMatch.calories}
-                  </Text>
+                <View style={[styles.macroChip, { backgroundColor: colors.bgElevated }]}>
+                  <Text style={[styles.macroChipLabel, { color: colors.textTertiary }]}>CALS</Text>
+                  <Text style={[styles.macroChipVal, { color: colors.textPrimary }]}>{item.bestMatch.calories}</Text>
                 </View>
-                <View style={[styles.macroChipInline, { backgroundColor: colors.bgElevated }]}>
-                  <Text style={[styles.macroChipLabel, { color: colors.textTertiary }]}>
-                    PRO
-                  </Text>
-                  <Text style={[styles.macroChipVal, { color: colors.textPrimary }]}>
-                    {item.bestMatch.proteinG}g
-                  </Text>
+                <View style={[styles.macroChip, { backgroundColor: colors.bgElevated }]}>
+                  <Text style={[styles.macroChipLabel, { color: colors.textTertiary }]}>PRO</Text>
+                  <Text style={[styles.macroChipVal, { color: colors.textPrimary }]}>{item.bestMatch.proteinG}g</Text>
                 </View>
-                <View style={[styles.macroChipInline, { backgroundColor: colors.bgElevated }]}>
-                  <Text style={[styles.macroChipLabel, { color: colors.textTertiary }]}>
-                    CARBS
-                  </Text>
-                  <Text style={[styles.macroChipVal, { color: colors.textPrimary }]}>
-                    {item.bestMatch.carbsG}g
-                  </Text>
+                <View style={[styles.macroChip, { backgroundColor: colors.bgElevated }]}>
+                  <Text style={[styles.macroChipLabel, { color: colors.textTertiary }]}>CARBS</Text>
+                  <Text style={[styles.macroChipVal, { color: colors.textPrimary }]}>{item.bestMatch.carbsG}g</Text>
                 </View>
-                <View style={[styles.macroChipInline, { backgroundColor: colors.bgElevated }]}>
-                  <Text style={[styles.macroChipLabel, { color: colors.textTertiary }]}>
-                    FAT
-                  </Text>
-                  <Text style={[styles.macroChipVal, { color: colors.textPrimary }]}>
-                    {item.bestMatch.fatG}g
-                  </Text>
+                <View style={[styles.macroChip, { backgroundColor: colors.bgElevated }]}>
+                  <Text style={[styles.macroChipLabel, { color: colors.textTertiary }]}>FAT</Text>
+                  <Text style={[styles.macroChipVal, { color: colors.textPrimary }]}>{item.bestMatch.fatG}g</Text>
                 </View>
                 {isHighConfidence && (
                   <View style={[styles.matchBadge, {
                     backgroundColor: colors.accentBg,
                     borderColor: colors.accentBorder,
                   }]}>
-                    <Text style={[styles.matchBadgeText, { color: colors.accent }]}>
-                      Match
-                    </Text>
+                    <Text style={[styles.matchBadgeText, { color: colors.accent }]}>Match</Text>
                   </View>
                 )}
               </View>
@@ -131,54 +177,113 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     overflow: 'hidden',
-    flexDirection: 'row',
   },
-  accentStrip: {
-    width: 3.5,
-    borderTopLeftRadius: 20,
-    borderBottomLeftRadius: 20,
+
+  // ─── Image ─────────────────────────────────────────────────────────────────
+  imageContainer: {
+    height: 152,
+    width: '100%',
+    overflow: 'hidden',
   },
-  cardBody: {
-    flex: 1,
-    padding: 16,
-    gap: 2,
+  image: {
+    width: '100%',
+    height: '100%',
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-  },
-  nameBlock: {
-    flex: 1,
-    flexDirection: 'row',
+  imagePlaceholder: {
+    width: '100%',
+    height: '100%',
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  placeholderInitials: {
+    fontSize: 40,
+    fontWeight: '800',
+    color: 'rgba(255,255,255,0.35)',
+    letterSpacing: 2,
+  },
+  imageGradient: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 80,
+  },
+  imageOverlay: {
+    position: 'absolute',
+    bottom: 12,
+    left: 14,
+    right: 14,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
     justifyContent: 'space-between',
     gap: 8,
   },
-  name: {
+  imageOverlayName: {
     flex: 1,
-    fontSize: 17,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#FFFFFF',
     letterSpacing: -0.4,
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
-  metaRow: {
+  distanceRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
     flexShrink: 0,
   },
-  distance: {
+  imageOverlayDistance: {
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.75)',
+  },
+  accentDot: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+
+  // ─── Body ──────────────────────────────────────────────────────────────────
+  cardBody: {
+    padding: 14,
+    gap: 8,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   address: {
+    flex: 1,
     fontSize: 12,
     fontWeight: '400',
-    marginBottom: 10,
-    marginTop: 2,
+  },
+  tagsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: -2,
+  },
+  cuisineTag: {
+    borderRadius: 6,
+    borderWidth: 1,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  cuisineTagText: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  divider: {
+    height: 1,
+    marginVertical: 2,
   },
   bestMatch: {
-    gap: 10,
+    gap: 8,
   },
   bestMatchRow: {
     flexDirection: 'row',
@@ -198,7 +303,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     alignItems: 'center',
   },
-  macroChipInline: {
+  macroChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -228,6 +333,5 @@ const styles = StyleSheet.create({
   noMacro: {
     fontSize: 13,
     fontStyle: 'italic',
-    paddingTop: 10,
   },
 });

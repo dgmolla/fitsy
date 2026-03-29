@@ -172,6 +172,7 @@ export async function findNearbyRestaurants(
       distanceMiles: Math.round(distanceMiles * 100) / 100,
       cuisineTags: r.cuisineTags,
       chainFlag: r.chainFlag,
+      ...(r.photoUrl ? { photoUrl: r.photoUrl } : {}),
       bestMatch: bestMatch
         ? {
             menuItemId: bestMatch.menuItemId,

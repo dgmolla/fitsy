@@ -51,6 +51,7 @@ model Restaurant {
   cuisineTags     String[]
   chainFlag       Boolean     @default(false)
   source          String
+  photoUrl        String?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
   menuItems       MenuItem[]
