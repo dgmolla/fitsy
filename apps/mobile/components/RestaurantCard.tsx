@@ -1,6 +1,6 @@
 import React from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+
 import { Ionicons } from '@expo/vector-icons';
 import { RestaurantResult } from '@fitsy/shared';
 import { ConfidenceBadge } from './ConfidenceBadge';
@@ -30,10 +30,7 @@ export function RestaurantCard({ item, onPress }: Props) {
   const initials = item.name.slice(0, 2).toUpperCase();
   const bgColor = placeholderColor(item.name);
 
-  const gradientColors: [string, string] =
-    mode === 'dark'
-      ? ['transparent', 'rgba(0,0,0,0.72)']
-      : ['transparent', 'rgba(0,0,0,0.55)'];
+  const overlayColor = mode === 'dark' ? 'rgba(0,0,0,0.52)' : 'rgba(0,0,0,0.38)';
 
   return (
     <TouchableOpacity
@@ -67,12 +64,8 @@ export function RestaurantCard({ item, onPress }: Props) {
             </View>
           )}
 
-          {/* gradient overlay — name + meta float over image */}
-          <LinearGradient
-            colors={gradientColors}
-            style={styles.imageGradient}
-            pointerEvents="none"
-          />
+          {/* overlay — name + meta float over image */}
+          <View style={[styles.imageGradient, { backgroundColor: overlayColor }]} pointerEvents="none" />
 
           {/* name + distance over image */}
           <View style={styles.imageOverlay}>

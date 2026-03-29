@@ -1,12 +1,18 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { FlatList, SectionList, StyleSheet, Text, View } from 'react-native';
+import {
+  FlatList,
+  Image,
+  SectionList,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { MenuItemResult, MenuResponse } from '@fitsy/shared';
 import { FitsyLoader, MenuItem } from '@/components';
 import { fetchMenu, getSavedItems, saveItem, unsaveItem } from '@/lib/apiClient';
 import { useTheme } from '@/lib/theme';
-import { BRAND } from '@/lib/brand';
 
 type Section = { title: string; data: MenuItemResult[] };
 
@@ -25,27 +31,67 @@ function hasCategories(items: MenuItemResult[]): boolean {
   return items.some((i) => Boolean(i.category));
 }
 
-function HeroHeader({ name, itemCount }: { name: string; itemCount: number }) {
+const HERO_IMAGE_HEIGHT = 220;
+const HERO_OVERLAP = 44;
+
+// Mock image — will be replaced with real restaurant photos later
+const MOCK_RESTAURANT_IMAGE = 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&q=80';
+
+function HeroSection({ name, address, distance, itemCount }: {
+  name: string; address?: string; distance?: string; itemCount: number;
+}) {
   const { colors } = useTheme();
-  const highCount = itemCount; // all items shown
+
   return (
-    <View style={[styles.hero, { backgroundColor: colors.bg }]}>
-      <Text style={[styles.heroName, { color: colors.textPrimary }]}>{name}</Text>
-      <View style={styles.infoPills}>
-        <View style={[styles.pill, { backgroundColor: colors.accentBg, borderColor: colors.accentBorder }]}>
-          <Ionicons name="sparkles" size={12} color={colors.accent} />
-          <Text style={[styles.pillText, { color: colors.accent }]}>Macro Fit</Text>
+    <View style={styles.heroWrap}>
+      <Image source={{ uri: MOCK_RESTAURANT_IMAGE }} style={styles.heroImage} />
+
+      <View style={[styles.heroCard, {
+        backgroundColor: colors.bgCard,
+        shadowColor: colors.glassShadowColor,
+        shadowOpacity: colors.glassShadowOpacity,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: -4 },
+        elevation: 12,
+      }]}>
+        <View style={styles.heroTop}>
+          <Text style={[styles.heroName, { color: colors.textPrimary }]} numberOfLines={2}>
+            {name}
+          </Text>
         </View>
-        <View style={[styles.pill, { backgroundColor: colors.bgElevated, borderColor: colors.borderSubtle }]}>
-          <Ionicons name="restaurant-outline" size={12} color={colors.textSecondary} />
-          <Text style={[styles.pillText, { color: colors.textSecondary }]}>{highCount} items</Text>
+
+        <View style={styles.infoRow}>
+          {distance ? (
+            <View style={styles.infoItem}>
+              <Text style={[styles.infoLabel, { color: colors.textTertiary }]}>DISTANCE</Text>
+              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{distance} mi</Text>
+            </View>
+          ) : null}
+          <View style={styles.infoItem}>
+            <Text style={[styles.infoLabel, { color: colors.textTertiary }]}>ITEMS</Text>
+            <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{itemCount}</Text>
+          </View>
+          <View style={styles.infoItem}>
+            <Text style={[styles.infoLabel, { color: colors.textTertiary }]}>MACRO FIT</Text>
+            <Text style={[styles.infoValue, { color: colors.accent }]}>Estimated</Text>
+          </View>
         </View>
-      </View>
-      <View style={styles.sectionLabel}>
-        <Ionicons name="leaf" size={14} color={colors.accent} />
-        <Text style={[styles.sectionLabelText, { color: colors.textPrimary }]}>AI Estimated Menu</Text>
-        <View style={[styles.aiBadge, { backgroundColor: colors.accentBg }]}>
-          <Text style={[styles.aiBadgeText, { color: colors.accent }]}>AI</Text>
+
+        {address ? (
+          <View style={styles.addressRow}>
+            <Ionicons name="location-outline" size={13} color={colors.textTertiary} />
+            <Text style={[styles.addressText, { color: colors.textTertiary }]} numberOfLines={1}>
+              {address}
+            </Text>
+          </View>
+        ) : null}
+
+        <View style={[styles.menuLabel, { borderTopColor: colors.borderSubtle }]}>
+          <Ionicons name="leaf" size={14} color={colors.accent} />
+          <Text style={[styles.menuLabelText, { color: colors.textPrimary }]}>AI Estimated Menu</Text>
+          <View style={[styles.aiBadge, { backgroundColor: colors.accentBg }]}>
+            <Text style={[styles.aiBadgeText, { color: colors.accent }]}>AI</Text>
+          </View>
         </View>
       </View>
     </View>
@@ -54,7 +100,8 @@ function HeroHeader({ name, itemCount }: { name: string; itemCount: number }) {
 
 export default function RestaurantDetailScreen() {
   const { colors } = useTheme();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id: string; address?: string; distance?: string }>();
+  const id = params.id;
   const [menu, setMenu] = useState<MenuResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -67,7 +114,7 @@ export default function RestaurantDetailScreen() {
       setLoading(true); setError(null);
       const [result, savedResult] = await Promise.all([fetchMenu(id), getSavedItems()]);
       if (cancelled) return;
-      if (result === null) { setError('Could not load menu. Please try again.'); }
+      if (result === null) { setError('Could not load menu.'); }
       else { setMenu(result); }
       if (savedResult) {
         const m = new Map<string, string>();
@@ -96,54 +143,54 @@ export default function RestaurantDetailScreen() {
     <MenuItem item={item} isSaved={savedMap.has(item.id)} onToggleSave={handleToggleSave} />
   ), [savedMap, handleToggleSave]);
 
+  const header = (
+    <HeroSection
+      name={restaurantName}
+      address={params.address}
+      distance={params.distance}
+      itemCount={menu?.menuItems.length ?? 0}
+    />
+  );
+
   return (
     <>
-      <Stack.Screen options={{
-        headerShown: true, title: restaurantName, headerBackTitle: 'Back',
-        headerStyle: { backgroundColor: colors.bg },
-        headerTitleStyle: { fontWeight: '700', color: colors.textPrimary },
-        headerTintColor: BRAND.color,
-      }} />
+      <Stack.Screen options={{ headerShown: false }} />
       <View style={[styles.container, { backgroundColor: colors.bg }]}>
-        {loading && (
-          <View style={styles.centered}><FitsyLoader size="md" /></View>
-        )}
+        {loading && <View style={styles.centered}><FitsyLoader size="md" /></View>}
         {!loading && error !== null && (
           <View style={[styles.errorBanner, { backgroundColor: colors.errorBg }]}>
             <Ionicons name="alert-circle" size={16} color={colors.error} />
             <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
           </View>
         )}
-        {!loading && error === null && menu !== null && (
-          <>
-            {menu.menuItems.length === 0 ? (
-              <View style={styles.centered}>
-                <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No menu items available</Text>
-              </View>
-            ) : hasCategories(menu.menuItems) ? (
-              <SectionList
-                sections={buildSections(menu.menuItems)}
-                keyExtractor={(item) => item.id}
-                renderItem={renderItem}
-                renderSectionHeader={({ section }) => section.title ? (
-                  <View style={[styles.sectionHeader, { backgroundColor: colors.bgElevated, borderBottomColor: colors.border }]}>
-                    <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{section.title}</Text>
-                  </View>
-                ) : null}
-                ListHeaderComponent={<HeroHeader name={restaurantName} itemCount={menu.menuItems.length} />}
-                contentContainerStyle={styles.listContent}
-                stickySectionHeadersEnabled
-              />
-            ) : (
-              <FlatList
-                data={menu.menuItems}
-                keyExtractor={(item) => item.id}
-                renderItem={renderItem}
-                ListHeaderComponent={<HeroHeader name={restaurantName} itemCount={menu.menuItems.length} />}
-                contentContainerStyle={styles.listContent}
-              />
-            )}
-          </>
+        {!loading && !error && menu && (
+          menu.menuItems.length === 0 ? (
+            <View style={styles.centered}>
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No menu items available</Text>
+            </View>
+          ) : hasCategories(menu.menuItems) ? (
+            <SectionList
+              sections={buildSections(menu.menuItems)}
+              keyExtractor={(item) => item.id}
+              renderItem={renderItem}
+              renderSectionHeader={({ section }) => section.title ? (
+                <View style={[styles.sectionHeader, { backgroundColor: colors.bgElevated, borderBottomColor: colors.border }]}>
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{section.title}</Text>
+                </View>
+              ) : null}
+              ListHeaderComponent={header}
+              contentContainerStyle={styles.listContent}
+              stickySectionHeadersEnabled
+            />
+          ) : (
+            <FlatList
+              data={menu.menuItems}
+              keyExtractor={(item) => item.id}
+              renderItem={renderItem}
+              ListHeaderComponent={header}
+              contentContainerStyle={styles.listContent}
+            />
+          )
         )}
       </View>
     </>
@@ -153,13 +200,61 @@ export default function RestaurantDetailScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
-  hero: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 },
-  heroName: { fontSize: 26, fontWeight: '800', letterSpacing: -0.5, marginBottom: 10 },
-  infoPills: { flexDirection: 'row', gap: 8, marginBottom: 14 },
-  pill: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 20, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 5 },
-  pillText: { fontSize: 12, fontWeight: '600' },
-  sectionLabel: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  sectionLabelText: { fontSize: 15, fontWeight: '700' },
+  heroWrap: { marginBottom: 8 },
+  heroImage: {
+    width: '100%',
+    height: HERO_IMAGE_HEIGHT,
+    backgroundColor: '#E5E7EB',
+  },
+  heroCard: {
+    marginTop: -HERO_OVERLAP,
+    marginHorizontal: 16,
+    borderRadius: 20,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 14,
+  },
+  heroTop: {
+    marginBottom: 14,
+  },
+  heroName: {
+    fontSize: 24,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    gap: 24,
+    marginBottom: 12,
+  },
+  infoItem: { gap: 2 },
+  infoLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+  },
+  infoValue: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  addressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 14,
+  },
+  addressText: {
+    fontSize: 12,
+    flex: 1,
+  },
+  menuLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingTop: 12,
+    borderTopWidth: 1,
+  },
+  menuLabelText: { fontSize: 15, fontWeight: '700' },
   aiBadge: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
   aiBadgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
   emptyText: { fontSize: 15, textAlign: 'center', lineHeight: 22 },

@@ -145,7 +145,10 @@ export default function SearchScreen() {
             renderItem={({ item }) => (
               <RestaurantCard
                 item={item}
-                onPress={() => router.push(`/restaurant/${item.id}`)}
+                onPress={() => router.push({
+                  pathname: `/restaurant/${item.id}`,
+                  params: { address: item.address, distance: item.distanceMiles?.toFixed(1) },
+                })}
               />
             )}
             ListEmptyComponent={<EmptyState hasInputs={hasInputs} />}
