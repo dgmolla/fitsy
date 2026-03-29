@@ -11,6 +11,9 @@ const config = {
         '^@fitsy/shared$': '<rootDir>/../../packages/shared/src/index.ts',
         '^@fitsy/shared/(.*)$': '<rootDir>/../../packages/shared/src/$1',
         '^expo-location$': '<rootDir>/__mocks__/expo-location.ts',
+        '^expo-apple-authentication$': '<rootDir>/__mocks__/expo-apple-authentication.ts',
+        '^expo-auth-session(/.*)?$': '<rootDir>/__mocks__/expo-auth-session.ts',
+        '^expo-web-browser$': '<rootDir>/__mocks__/expo-web-browser.ts',
       },
       transform: {
         '^.+\\.tsx?$': [
@@ -35,6 +38,9 @@ const config = {
         '^@fitsy/shared$': '<rootDir>/../../packages/shared/src/index.ts',
         '^@fitsy/shared/(.*)$': '<rootDir>/../../packages/shared/src/$1',
         '^expo-location$': '<rootDir>/__mocks__/expo-location.ts',
+        '^expo-apple-authentication$': '<rootDir>/__mocks__/expo-apple-authentication.ts',
+        '^expo-auth-session(/.*)?$': '<rootDir>/__mocks__/expo-auth-session.ts',
+        '^expo-web-browser$': '<rootDir>/__mocks__/expo-web-browser.ts',
       },
     },
   ],

@@ -4,9 +4,10 @@ kanban-plugin: basic
 
 ## Backlog
 
-
-
 ## In Progress
+
+- [ ] **S-62** Fix saved meals — saving meals silently fails; debug BookmarkButton → POST /api/saved-items flow, fix root cause, e2e test via mobile MCP + simulator before PR, post PR to Slack #frontend #backend #O1
+- [ ] **S-63** Fix auth — restrict sign-in to Apple and Gmail only; remove or disable all other auth providers, e2e test full sign-in flow via mobile MCP + simulator before PR, post PR to Slack #frontend #backend #O1
 
 
 

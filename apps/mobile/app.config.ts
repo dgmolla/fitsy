@@ -17,6 +17,8 @@ const config: ExpoConfig = {
           "Fitsy uses your location to find restaurants near you.",
       },
     ],
+    "expo-apple-authentication",
+    "expo-web-browser",
   ],
   extra: {
     apiBaseUrl: process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000",

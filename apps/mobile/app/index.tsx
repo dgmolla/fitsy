@@ -5,7 +5,7 @@ import { getStoredToken } from '@/lib/authClient';
 import { getMacroTargets } from '@/lib/macroStorage';
 import { useTheme } from '@/lib/theme';
 
-type Destination = '/(tabs)/search' | '/auth/login' | '/macro-setup';
+type Destination = '/(tabs)/search' | '/welcome' | '/macro-setup';
 
 export default function Index() {
   const { colors } = useTheme();
@@ -16,13 +16,13 @@ export default function Index() {
       try {
         const token = await getStoredToken();
         if (!token) {
-          setDestination('/auth/login');
+          setDestination('/welcome');
           return;
         }
         const targets = await getMacroTargets();
         setDestination(targets ? '/(tabs)/search' : '/macro-setup');
       } catch {
-        setDestination('/auth/login');
+        setDestination('/welcome');
       }
     }
     resolve();

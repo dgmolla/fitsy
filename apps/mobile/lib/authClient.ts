@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { AuthApiResponse, AuthResponse } from '@fitsy/shared';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import type { AppleAuthResponse, AuthApiResponse, AuthResponse } from '@fitsy/shared';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
 const TOKEN_KEY = 'fitsy:authToken';
@@ -74,7 +75,57 @@ export async function registerAndStore(
   return result;
 }
 
-// ─── Stub functions (implemented in later sprints) ────────────────────────────
+// ─── Apple Sign In ────────────────────────────────────────────────────────────
+
+export async function appleSignIn(): Promise<AppleAuthResponse> {
+  const credential = await AppleAuthentication.signInAsync({
+    requestedScopes: [
+      AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+      AppleAuthentication.AppleAuthenticationScope.EMAIL,
+    ],
+  });
+
+  const { identityToken, authorizationCode, fullName, email } = credential;
+
+  if (!identityToken || !authorizationCode) {
+    throw new Error('Apple Sign In failed: missing credentials');
+  }
+
+  const result = await postJson<AppleAuthResponse>('/api/auth/apple', {
+    identityToken,
+    authorizationCode,
+    fullName: fullName
+      ? {
+          givenName: fullName.givenName ?? undefined,
+          familyName: fullName.familyName ?? undefined,
+        }
+      : undefined,
+    email: email ?? undefined,
+  });
+
+  await storeToken(result.token);
+  return result;
+}
+
+// ─── Google Sign In ───────────────────────────────────────────────────────────
+
+export interface GoogleAuthResponse {
+  token: string;
+  user: { id: string; email: string; name: string | null };
+  isNewUser: boolean;
+}
+
+/**
+ * Exchange a Google ID token (obtained via expo-auth-session) for a Fitsy JWT.
+ * Call this after the OAuth browser flow completes successfully.
+ */
+export async function completeGoogleSignIn(idToken: string): Promise<GoogleAuthResponse> {
+  const result = await postJson<GoogleAuthResponse>('/api/auth/google', { idToken });
+  await storeToken(result.token);
+  return result;
+}
+
+// ─── Profile + Subscription ───────────────────────────────────────────────────
 
 export interface UserProfileData {
   age?: number;
@@ -87,10 +138,6 @@ export interface UserProfileData {
 export interface SubscriptionData {
   plan: 'monthly' | 'yearly';
   receiptData?: string;
-}
-
-export async function appleSignIn(): Promise<never> {
-  throw new Error('not implemented');
 }
 
 export async function updateProfile(data: UserProfileData): Promise<void> {

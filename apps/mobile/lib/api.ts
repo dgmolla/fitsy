@@ -61,7 +61,7 @@ async function del(path: string, authenticated = true): Promise<void> {
 
   const res = await fetch(`${BASE_URL}${path}`, {
     method: 'DELETE',
-    headers: Object.keys(headers).length > 0 ? headers : undefined,
+    headers,
   });
 
   if (!res.ok) {
