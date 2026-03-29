@@ -70,7 +70,7 @@ export function MenuItem({ item, isSaved, onToggleSave }: Props) {
 const styles = StyleSheet.create({
   card: {
     marginHorizontal: 16,
-    marginTop: 10,
+    marginVertical: 6,
     borderRadius: 14,
     borderWidth: 1,
     paddingHorizontal: 16,

@@ -246,7 +246,7 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 15, textAlign: 'center', lineHeight: 22 },
   errorBanner: { margin: 16, borderRadius: 10, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
   errorText: { fontSize: 14, flex: 1 },
-  sectionHeader: { paddingHorizontal: 20, paddingVertical: 6, borderBottomWidth: 1 },
+  sectionHeader: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8, borderBottomWidth: 1 },
   sectionTitle: { fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
   listContent: { flexGrow: 1, paddingBottom: 32 },
 });
