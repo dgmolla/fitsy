@@ -13,7 +13,7 @@ export default function WelcomeSplash() {
       <View style={styles.content}>
         {/* Hero */}
         <View style={styles.hero}>
-          <Image source={require('@/assets/illustrations/welcome.jpg')} style={{ width: 180, height: 180, resizeMode: 'contain' }} />
+          <Image source={require('@/assets/illustrations/welcome.png')} style={{ width: 180, height: 180, resizeMode: 'contain' }} />
           <View
             style={[
               styles.logoMark,

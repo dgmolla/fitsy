@@ -28,7 +28,7 @@ export default function ActivityScreen() {
     <WelcomeScreen
       step={4}
       totalSteps={7}
-      illustration={<Image source={require('@/assets/illustrations/activity.jpg')} style={{ width: 180, height: 180, resizeMode: 'contain' }} />}
+      illustration={<Image source={require('@/assets/illustrations/activity.png')} style={{ width: 180, height: 180, resizeMode: 'contain' }} />}
       title="How active are you?"
       subtitle="Pick the level that best describes your typical week. Be honest!"
       onContinue={() => router.push('/welcome/goal')}
