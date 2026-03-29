@@ -3,6 +3,7 @@ import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-nativ
 import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { useTheme } from '@/lib/theme';
+import { saveOnboardingField } from '@/lib/onboardingStorage';
 
 type Unit = 'cm' | 'ft';
 
@@ -31,7 +32,13 @@ export default function HeightScreen() {
       illustration={<Image source={require('@/assets/illustrations/height.png')} style={{ width: 240, height: 240, resizeMode: 'contain' }} />}
       title="How tall are you?"
       subtitle="Used to estimate your basal metabolic rate. We keep this between us."
-      onContinue={() => router.push('/welcome/weight')}
+      onContinue={async () => {
+        const heightCm = unit === 'cm'
+          ? parseInt(cm, 10)
+          : Math.round(parseInt(feet, 10) * 30.48 + parseInt(inches, 10) * 2.54);
+        await saveOnboardingField('heightCm', heightCm);
+        router.push('/welcome/weight');
+      }}
       canContinue={isValid}
     >
       {/* Toggle */}

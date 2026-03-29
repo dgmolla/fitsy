@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { useTheme } from '@/lib/theme';
+import { saveOnboardingField } from '@/lib/onboardingStorage';
 
 type ActivityLevel = 'sedentary' | 'lightly_active' | 'active' | 'very_active';
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
@@ -31,7 +32,10 @@ export default function ActivityScreen() {
       illustration={<Image source={require('@/assets/illustrations/activity.png')} style={{ width: 240, height: 240, resizeMode: 'contain' }} />}
       title="How active are you?"
       subtitle="Pick the level that best describes your typical week. Be honest!"
-      onContinue={() => router.push('/welcome/goal')}
+      onContinue={async () => {
+        if (selected) await saveOnboardingField('activity', selected);
+        router.push('/welcome/goal');
+      }}
       canContinue={selected !== null}
       scrollable
     >

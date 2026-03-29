@@ -1,30 +1,34 @@
-// ─── Mock Prisma + authService ─────────────────────────────────────────────────
+// ─── Mock modules ─────────────────────────────────────────────────────────────
 
-const mockUserFindUnique = jest.fn();
-const mockVerifyPassword = jest.fn();
-const mockSignToken = jest.fn();
-
-jest.mock("@prisma/client", () => ({
-  PrismaClient: jest.fn().mockImplementation(() => ({
-    user: { findUnique: mockUserFindUnique },
-  })),
+jest.mock("@/lib/supabase", () => ({
+  getSupabaseClient: jest.fn(),
 }));
 
-jest.mock("@/services/authService", () => ({
-  verifyPassword: mockVerifyPassword,
-  signToken: mockSignToken,
+jest.mock("@/lib/restaurantService", () => ({
+  prisma: { user: { upsert: jest.fn() } },
 }));
-
-beforeEach(() => {
-  const g = globalThis as unknown as { prisma?: unknown };
-  delete g.prisma;
-  mockUserFindUnique.mockReset();
-  mockVerifyPassword.mockReset();
-  mockSignToken.mockReset();
-});
 
 import { POST } from "./route";
 import { NextRequest } from "next/server";
+import { getSupabaseClient } from "@/lib/supabase";
+import { prisma } from "@/lib/restaurantService";
+
+const mockSignInWithPassword = jest.fn();
+
+const SUPABASE_USER = {
+  id: "supa-uuid-1",
+  email: "alice@example.com",
+  user_metadata: { name: "Alice" },
+};
+const SUPABASE_SESSION = { access_token: "supa-jwt-token" };
+const DB_USER = { id: "supa-uuid-1", email: "alice@example.com", name: "Alice" };
+
+beforeEach(() => {
+  jest.resetAllMocks();
+  (getSupabaseClient as jest.Mock).mockReturnValue({
+    auth: { signInWithPassword: mockSignInWithPassword },
+  });
+});
 
 function makeRequest(body: unknown): NextRequest {
   return new NextRequest("http://localhost/api/auth/login", {
@@ -37,83 +41,67 @@ function makeRequest(body: unknown): NextRequest {
 // ─── Success ──────────────────────────────────────────────────────────────────
 
 describe("POST /api/auth/login — success", () => {
-  it("returns 200 with token on valid credentials", async () => {
-    mockUserFindUnique.mockResolvedValue({
-      id: "user-1",
-      email: "alice@example.com",
-      name: "Alice",
-      passwordHash: "$2b$12$hash",
+  it("returns 200 with Supabase access token on valid credentials", async () => {
+    mockSignInWithPassword.mockResolvedValue({
+      data: { session: SUPABASE_SESSION, user: SUPABASE_USER },
+      error: null,
     });
-    mockVerifyPassword.mockResolvedValue(true);
-    mockSignToken.mockResolvedValue("jwt-token");
+    (prisma.user.upsert as jest.Mock).mockResolvedValue(DB_USER);
 
-    const res = await POST(makeRequest({ email: "alice@example.com", password: "password123" }));
+    const res = await POST(
+      makeRequest({ email: "alice@example.com", password: "password123" }),
+    );
 
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.token).toBe("jwt-token");
+    expect(body.token).toBe("supa-jwt-token");
     expect(body.user.email).toBe("alice@example.com");
     expect(body.user.passwordHash).toBeUndefined();
   });
 
-  it("normalises email before lookup", async () => {
-    mockUserFindUnique.mockResolvedValue({
-      id: "user-2",
-      email: "bob@example.com",
-      name: null,
-      passwordHash: "$2b$12$hash",
+  it("normalises email before passing to Supabase", async () => {
+    mockSignInWithPassword.mockResolvedValue({
+      data: { session: SUPABASE_SESSION, user: SUPABASE_USER },
+      error: null,
     });
-    mockVerifyPassword.mockResolvedValue(true);
-    mockSignToken.mockResolvedValue("token");
+    (prisma.user.upsert as jest.Mock).mockResolvedValue(DB_USER);
 
-    await POST(makeRequest({ email: "  BOB@EXAMPLE.COM  ", password: "password123" }));
+    await POST(makeRequest({ email: "  ALICE@EXAMPLE.COM  ", password: "password123" }));
 
-    expect(mockUserFindUnique).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { email: "bob@example.com" },
-      }),
-    );
+    expect(mockSignInWithPassword).toHaveBeenCalledWith({
+      email: "alice@example.com",
+      password: "password123",
+    });
   });
 });
 
 // ─── Auth failures ────────────────────────────────────────────────────────────
 
 describe("POST /api/auth/login — auth failures", () => {
-  it("returns 401 when user not found", async () => {
-    mockUserFindUnique.mockResolvedValue(null);
+  it("returns 401 when Supabase returns an error", async () => {
+    mockSignInWithPassword.mockResolvedValue({
+      data: { session: null, user: null },
+      error: { message: "Invalid login credentials" },
+    });
 
-    const res = await POST(makeRequest({ email: "ghost@example.com", password: "password123" }));
+    const res = await POST(
+      makeRequest({ email: "ghost@example.com", password: "password123" }),
+    );
     expect(res.status).toBe(401);
     const body = await res.json();
     expect(body.error).toBe("Invalid credentials");
   });
 
-  it("returns 401 when user has no passwordHash (OAuth user)", async () => {
-    mockUserFindUnique.mockResolvedValue({
-      id: "user-3",
-      email: "oauth@example.com",
-      name: null,
-      passwordHash: null,
+  it("returns 401 when session is null", async () => {
+    mockSignInWithPassword.mockResolvedValue({
+      data: { session: null, user: null },
+      error: null,
     });
 
-    const res = await POST(makeRequest({ email: "oauth@example.com", password: "password123" }));
+    const res = await POST(
+      makeRequest({ email: "eve@example.com", password: "wrongpassword" }),
+    );
     expect(res.status).toBe(401);
-  });
-
-  it("returns 401 when password is wrong", async () => {
-    mockUserFindUnique.mockResolvedValue({
-      id: "user-4",
-      email: "eve@example.com",
-      name: null,
-      passwordHash: "$2b$12$hash",
-    });
-    mockVerifyPassword.mockResolvedValue(false);
-
-    const res = await POST(makeRequest({ email: "eve@example.com", password: "wrongpassword" }));
-    expect(res.status).toBe(401);
-    // Should never reveal whether the email exists
-    const body = await res.json();
-    expect(body.error).toBe("Invalid credentials");
   });
 });
 

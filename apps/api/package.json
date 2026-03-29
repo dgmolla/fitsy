@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@prisma/client": "^6.0.0",
+    "@supabase/supabase-js": "^2.100.1",
     "bcryptjs": "^3.0.3",
     "jose": "^6.2.2",
     "next": "^15.0.0",

@@ -1,38 +1,48 @@
-// ─── Mock Prisma + authService + emailService ──────────────────────────────────
+// ─── Mock modules ─────────────────────────────────────────────────────────────
 
-const mockUserCreate = jest.fn();
-const mockHashPassword = jest.fn();
-const mockSignToken = jest.fn();
-const mockSendWelcomeEmail = jest.fn();
-
-jest.mock("@prisma/client", () => ({
-  PrismaClient: jest.fn().mockImplementation(() => ({
-    user: { create: mockUserCreate },
-  })),
+jest.mock("@/lib/supabase", () => ({
+  getSupabaseAdmin: jest.fn(),
+  getSupabaseClient: jest.fn(),
 }));
 
-jest.mock("@/services/authService", () => ({
-  hashPassword: mockHashPassword,
-  signToken: mockSignToken,
+jest.mock("@/lib/restaurantService", () => ({
+  prisma: { user: { create: jest.fn() } },
 }));
 
 jest.mock("@/services/emailService", () => ({
-  sendWelcomeEmail: mockSendWelcomeEmail,
+  sendWelcomeEmail: jest.fn(),
 }));
-
-// Clear Prisma singleton before each test
-beforeEach(() => {
-  const g = globalThis as unknown as { prisma?: unknown };
-  delete g.prisma;
-  mockUserCreate.mockReset();
-  mockHashPassword.mockReset();
-  mockSignToken.mockReset();
-  mockSendWelcomeEmail.mockReset();
-  mockSendWelcomeEmail.mockResolvedValue(undefined);
-});
 
 import { POST } from "./route";
 import { NextRequest } from "next/server";
+import { getSupabaseAdmin, getSupabaseClient } from "@/lib/supabase";
+import { prisma } from "@/lib/restaurantService";
+import { sendWelcomeEmail } from "@/services/emailService";
+
+const mockAdminCreateUser = jest.fn();
+const mockAdminDeleteUser = jest.fn();
+const mockSignInWithPassword = jest.fn();
+
+const SUPABASE_USER = { id: "supa-uuid-1", email: "alice@example.com" };
+const DB_USER = { id: "supa-uuid-1", email: "alice@example.com", name: "Alice" };
+const SUPABASE_SESSION = { access_token: "supa-jwt-token" };
+
+beforeEach(() => {
+  jest.resetAllMocks();
+  (getSupabaseAdmin as jest.Mock).mockReturnValue({
+    auth: {
+      admin: {
+        createUser: mockAdminCreateUser,
+        deleteUser: mockAdminDeleteUser,
+      },
+    },
+  });
+  (getSupabaseClient as jest.Mock).mockReturnValue({
+    auth: { signInWithPassword: mockSignInWithPassword },
+  });
+  (sendWelcomeEmail as jest.Mock).mockResolvedValue(undefined);
+  mockAdminDeleteUser.mockResolvedValue({ error: null });
+});
 
 function makeRequest(body: unknown): NextRequest {
   return new NextRequest("http://localhost/api/auth/register", {
@@ -45,14 +55,13 @@ function makeRequest(body: unknown): NextRequest {
 // ─── Success ──────────────────────────────────────────────────────────────────
 
 describe("POST /api/auth/register — success", () => {
-  it("creates user and returns 201 with token", async () => {
-    mockHashPassword.mockResolvedValue("$2b$12$hash");
-    mockUserCreate.mockResolvedValue({
-      id: "user-1",
-      email: "alice@example.com",
-      name: "Alice",
+  it("creates user and returns 201 with Supabase token", async () => {
+    mockAdminCreateUser.mockResolvedValue({ data: { user: SUPABASE_USER }, error: null });
+    (prisma.user.create as jest.Mock).mockResolvedValue(DB_USER);
+    mockSignInWithPassword.mockResolvedValue({
+      data: { session: SUPABASE_SESSION, user: SUPABASE_USER },
+      error: null,
     });
-    mockSignToken.mockResolvedValue("jwt-token");
 
     const res = await POST(
       makeRequest({ email: "alice@example.com", password: "password123", name: "Alice" }),
@@ -60,25 +69,40 @@ describe("POST /api/auth/register — success", () => {
 
     expect(res.status).toBe(201);
     const body = await res.json();
-    expect(body.token).toBe("jwt-token");
+    expect(body.token).toBe("supa-jwt-token");
     expect(body.user.email).toBe("alice@example.com");
   });
 
-  it("lowercases and trims email before creation", async () => {
-    mockHashPassword.mockResolvedValue("$2b$12$hash");
-    mockUserCreate.mockResolvedValue({
-      id: "user-2",
-      email: "bob@example.com",
-      name: null,
+  it("passes email_confirm: true to Supabase admin.createUser", async () => {
+    mockAdminCreateUser.mockResolvedValue({ data: { user: SUPABASE_USER }, error: null });
+    (prisma.user.create as jest.Mock).mockResolvedValue(DB_USER);
+    mockSignInWithPassword.mockResolvedValue({
+      data: { session: SUPABASE_SESSION, user: SUPABASE_USER },
+      error: null,
     });
-    mockSignToken.mockResolvedValue("token");
+
+    await POST(makeRequest({ email: "alice@example.com", password: "password123", name: "Alice" }));
+
+    expect(mockAdminCreateUser).toHaveBeenCalledWith(
+      expect.objectContaining({ email_confirm: true }),
+    );
+  });
+
+  it("lowercases and trims email", async () => {
+    mockAdminCreateUser.mockResolvedValue({
+      data: { user: { ...SUPABASE_USER, email: "bob@example.com" } },
+      error: null,
+    });
+    (prisma.user.create as jest.Mock).mockResolvedValue({ ...DB_USER, email: "bob@example.com" });
+    mockSignInWithPassword.mockResolvedValue({
+      data: { session: SUPABASE_SESSION, user: SUPABASE_USER },
+      error: null,
+    });
 
     await POST(makeRequest({ email: "  BOB@EXAMPLE.COM  ", password: "password123" }));
 
-    expect(mockUserCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ email: "bob@example.com" }),
-      }),
+    expect(mockAdminCreateUser).toHaveBeenCalledWith(
+      expect.objectContaining({ email: "bob@example.com" }),
     );
   });
 });
@@ -118,37 +142,34 @@ describe("POST /api/auth/register — validation", () => {
 // ─── Welcome email ────────────────────────────────────────────────────────────
 
 describe("POST /api/auth/register — welcome email", () => {
-  it("triggers sendWelcomeEmail with user email and name on success", async () => {
-    mockHashPassword.mockResolvedValue("$2b$12$hash");
-    mockUserCreate.mockResolvedValue({
-      id: "user-1",
-      email: "alice@example.com",
-      name: "Alice",
+  it("triggers sendWelcomeEmail on success", async () => {
+    mockAdminCreateUser.mockResolvedValue({ data: { user: SUPABASE_USER }, error: null });
+    (prisma.user.create as jest.Mock).mockResolvedValue(DB_USER);
+    mockSignInWithPassword.mockResolvedValue({
+      data: { session: SUPABASE_SESSION, user: SUPABASE_USER },
+      error: null,
     });
-    mockSignToken.mockResolvedValue("jwt-token");
 
     const res = await POST(
       makeRequest({ email: "alice@example.com", password: "password123", name: "Alice" }),
     );
 
     expect(res.status).toBe(201);
-    // Fire-and-forget: give the microtask queue a tick to flush
     await Promise.resolve();
-    expect(mockSendWelcomeEmail).toHaveBeenCalledWith("alice@example.com", "Alice");
+    expect(sendWelcomeEmail).toHaveBeenCalledWith("alice@example.com", "Alice");
   });
 
   it("does not prevent 201 when sendWelcomeEmail rejects", async () => {
-    mockHashPassword.mockResolvedValue("$2b$12$hash");
-    mockUserCreate.mockResolvedValue({
-      id: "user-2",
-      email: "bob@example.com",
-      name: null,
+    mockAdminCreateUser.mockResolvedValue({ data: { user: SUPABASE_USER }, error: null });
+    (prisma.user.create as jest.Mock).mockResolvedValue({ ...DB_USER, name: null });
+    mockSignInWithPassword.mockResolvedValue({
+      data: { session: SUPABASE_SESSION, user: SUPABASE_USER },
+      error: null,
     });
-    mockSignToken.mockResolvedValue("jwt-token");
-    mockSendWelcomeEmail.mockRejectedValue(new Error("Resend down"));
+    (sendWelcomeEmail as jest.Mock).mockRejectedValue(new Error("Email down"));
 
     const res = await POST(
-      makeRequest({ email: "bob@example.com", password: "password123" }),
+      makeRequest({ email: "alice@example.com", password: "password123" }),
     );
 
     expect(res.status).toBe(201);
@@ -158,11 +179,15 @@ describe("POST /api/auth/register — welcome email", () => {
 // ─── Conflict ─────────────────────────────────────────────────────────────────
 
 describe("POST /api/auth/register — conflict", () => {
-  it("returns 409 when email already exists", async () => {
-    mockHashPassword.mockResolvedValue("$2b$12$hash");
-    mockUserCreate.mockRejectedValue({ code: "P2002" });
+  it("returns 409 when Supabase returns status 422 (email already registered)", async () => {
+    mockAdminCreateUser.mockResolvedValue({
+      data: { user: null },
+      error: { message: "User already registered", status: 422 },
+    });
 
-    const res = await POST(makeRequest({ email: "dup@example.com", password: "password123" }));
+    const res = await POST(
+      makeRequest({ email: "dup@example.com", password: "password123" }),
+    );
     expect(res.status).toBe(409);
     const body = await res.json();
     expect(body.error).toMatch(/already registered/i);

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/restaurantService";
-import { signToken } from "@/services/authService";
-import { verifyAppleToken } from "@/services/appleAuth";
+import { getSupabaseClient } from "@/lib/supabase";
 import type { AppleAuthRequest, AppleAuthResponse } from "@fitsy/shared";
 
 export async function POST(
@@ -18,7 +17,7 @@ export async function POST(
     return NextResponse.json({ error: "Request body required" }, { status: 400 });
   }
 
-  const { identityToken, authorizationCode, fullName, email } =
+  const { identityToken, authorizationCode, nonce, fullName } =
     body as Partial<AppleAuthRequest>;
 
   if (typeof identityToken !== "string" || !identityToken) {
@@ -35,87 +34,60 @@ export async function POST(
     );
   }
 
-  // ─── Verify Apple identity token ─────────────────────────────────────────────
+  if (typeof nonce !== "string" || !nonce) {
+    return NextResponse.json(
+      { error: "nonce is required" },
+      { status: 400 },
+    );
+  }
 
-  let claims: { sub: string; email?: string; name?: string };
-  try {
-    claims = await verifyAppleToken(identityToken);
-  } catch {
+  // ─── Sign in via Supabase ────────────────────────────────────────────────────
+
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.auth.signInWithIdToken({
+    provider: "apple",
+    token: identityToken,
+    nonce,
+  });
+
+  if (error || !data.session || !data.user) {
     return NextResponse.json(
       { error: "Invalid identity token" },
       { status: 401 },
     );
   }
 
-  const appleUserId = claims.sub;
-
-  // Prefer email from Apple token claims, then from request body (first-time only)
-  const resolvedEmail =
-    claims.email ?? (typeof email === "string" ? email : undefined);
-
-  // Derive display name from fullName field if present
+  // Prefer fullName from request (Apple only sends it on first sign-in)
   const derivedName =
     fullName?.givenName || fullName?.familyName
       ? [fullName?.givenName, fullName?.familyName].filter(Boolean).join(" ")
-      : (claims.name ?? undefined);
+      : (data.user.user_metadata?.["name"] as string | undefined);
 
-  // ─── Find or create user ──────────────────────────────────────────────────────
+  // ─── Upsert profile in our DB ────────────────────────────────────────────────
 
-  try {
-    let isNewUser = false;
+  const existingUser = await prisma.user.findUnique({
+    where: { id: data.user.id },
+    select: { id: true },
+  });
+  const isNewUser = !existingUser;
 
-    // 1. Try to find by Apple user ID
-    let user = await prisma.user.findUnique({
-      where: { appleUserId },
-      select: { id: true, email: true, name: true },
-    });
+  const user = await prisma.user.upsert({
+    where: { id: data.user.id },
+    update: {},
+    create: {
+      id: data.user.id,
+      email: data.user.email!,
+      name: derivedName ?? null,
+    },
+    select: { id: true, email: true, name: true },
+  });
 
-    // 2. Fallback: find by email (link existing account)
-    if (!user && resolvedEmail) {
-      user = await prisma.user.findUnique({
-        where: { email: resolvedEmail.toLowerCase().trim() },
-        select: { id: true, email: true, name: true },
-      });
-
-      if (user) {
-        // Link the Apple user ID to the existing email account
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { appleUserId },
-        });
-      }
-    }
-
-    // 3. Create new user
-    if (!user) {
-      if (!resolvedEmail) {
-        return NextResponse.json(
-          { error: "Email is required for new accounts" },
-          { status: 400 },
-        );
-      }
-
-      user = await prisma.user.create({
-        data: {
-          appleUserId,
-          email: resolvedEmail.toLowerCase().trim(),
-          name: derivedName ?? null,
-        },
-        select: { id: true, email: true, name: true },
-      });
-      isNewUser = true;
-    }
-
-    const token = await signToken({ sub: user.id, email: user.email });
-
-    return NextResponse.json(
-      { token, user: { id: user.id, email: user.email, name: user.name }, isNewUser },
-      { status: 200 },
-    );
-  } catch {
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
-    );
-  }
+  return NextResponse.json(
+    {
+      token: data.session.access_token,
+      user: { id: user.id, email: user.email, name: user.name },
+      isNewUser,
+    },
+    { status: 200 },
+  );
 }

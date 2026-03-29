@@ -3,7 +3,7 @@ import { StyleSheet, View, type ViewStyle } from 'react-native';
 import Constants from 'expo-constants';
 import { BlurView } from 'expo-blur';
 
-const isExpoGo = Constants.appOwnership === 'expo';
+const isExpoGo = Constants.executionEnvironment === 'storeClient';
 
 interface BlurFallbackProps {
   tint: 'dark' | 'light';

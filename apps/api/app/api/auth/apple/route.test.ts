@@ -1,38 +1,39 @@
-// ─── Mocks ────────────────────────────────────────────────────────────────────
+// ─── Mock modules ─────────────────────────────────────────────────────────────
 
-const mockPrismaUserFindUnique = jest.fn();
-const mockPrismaUserCreate = jest.fn();
-const mockPrismaUserUpdate = jest.fn();
-const mockVerifyAppleToken = jest.fn();
-const mockSignToken = jest.fn();
+jest.mock("@/lib/supabase", () => ({
+  getSupabaseClient: jest.fn(),
+}));
 
 jest.mock("@/lib/restaurantService", () => ({
   prisma: {
     user: {
-      findUnique: mockPrismaUserFindUnique,
-      create: mockPrismaUserCreate,
-      update: mockPrismaUserUpdate,
+      findUnique: jest.fn(),
+      upsert: jest.fn(),
     },
   },
 }));
 
-jest.mock("@/services/appleAuth", () => ({
-  verifyAppleToken: mockVerifyAppleToken,
-}));
-
-jest.mock("@/services/authService", () => ({
-  signToken: mockSignToken,
-}));
-
 import { POST } from "./route";
 import { NextRequest } from "next/server";
+import { getSupabaseClient } from "@/lib/supabase";
+import { prisma } from "@/lib/restaurantService";
 
-// Helper to build a minimal Apple identity token for test env
-function makeTestToken(payload: Record<string, unknown>): string {
-  const header = Buffer.from(JSON.stringify({ alg: "RS256", kid: "test" })).toString("base64url");
-  const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  return `${header}.${body}.fakesig`;
-}
+const mockSignInWithIdToken = jest.fn();
+
+const SUPABASE_USER = {
+  id: "supa-uuid-1",
+  email: "user@icloud.com",
+  user_metadata: { name: "Jane" },
+};
+const SUPABASE_SESSION = { access_token: "supa-jwt-token" };
+const DB_USER = { id: "supa-uuid-1", email: "user@icloud.com", name: "Jane" };
+
+beforeEach(() => {
+  jest.resetAllMocks();
+  (getSupabaseClient as jest.Mock).mockReturnValue({
+    auth: { signInWithIdToken: mockSignInWithIdToken },
+  });
+});
 
 function makeRequest(body: unknown): NextRequest {
   return new NextRequest("http://localhost/api/auth/apple", {
@@ -42,30 +43,28 @@ function makeRequest(body: unknown): NextRequest {
   });
 }
 
-const APPLE_CLAIMS = { sub: "apple-uid-123", email: "user@icloud.com" };
-const MOCK_TOKEN = "signed.jwt.token";
-const EXISTING_USER = { id: "user-1", email: "user@icloud.com", name: "Jane" };
-
-beforeEach(() => {
-  jest.resetAllMocks();
-  mockSignToken.mockResolvedValue(MOCK_TOKEN);
-});
-
 // ─── Validation ───────────────────────────────────────────────────────────────
 
 describe("POST /api/auth/apple — validation", () => {
   it("returns 400 when identityToken is missing", async () => {
-    const res = await POST(makeRequest({ authorizationCode: "code-123" }));
+    const res = await POST(makeRequest({ authorizationCode: "code-123", nonce: "raw-nonce" }));
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toMatch(/identityToken/i);
   });
 
   it("returns 400 when authorizationCode is missing", async () => {
-    const res = await POST(makeRequest({ identityToken: "tok" }));
+    const res = await POST(makeRequest({ identityToken: "tok", nonce: "raw-nonce" }));
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toMatch(/authorizationCode/i);
+  });
+
+  it("returns 400 when nonce is missing", async () => {
+    const res = await POST(makeRequest({ identityToken: "tok", authorizationCode: "code-123" }));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/nonce/i);
   });
 
   it("returns 400 on invalid JSON", async () => {
@@ -81,11 +80,15 @@ describe("POST /api/auth/apple — validation", () => {
 
 // ─── Token verification ───────────────────────────────────────────────────────
 
-describe("POST /api/auth/apple — Apple token verification", () => {
-  it("returns 401 when verifyAppleToken throws", async () => {
-    mockVerifyAppleToken.mockRejectedValue(new Error("Invalid token"));
+describe("POST /api/auth/apple — Supabase token verification", () => {
+  it("returns 401 when Supabase signInWithIdToken returns an error", async () => {
+    mockSignInWithIdToken.mockResolvedValue({
+      data: { session: null, user: null },
+      error: { message: "Invalid token" },
+    });
+
     const res = await POST(
-      makeRequest({ identityToken: "bad.token.sig", authorizationCode: "code-abc" }),
+      makeRequest({ identityToken: "bad.identity.token", authorizationCode: "code-abc", nonce: "raw-nonce" }),
     );
     expect(res.status).toBe(401);
     const body = await res.json();
@@ -93,92 +96,77 @@ describe("POST /api/auth/apple — Apple token verification", () => {
   });
 });
 
-// ─── New user creation ────────────────────────────────────────────────────────
+// ─── New user ─────────────────────────────────────────────────────────────────
 
 describe("POST /api/auth/apple — new user", () => {
-  it("creates a new user and returns isNewUser=true", async () => {
-    mockVerifyAppleToken.mockResolvedValue(APPLE_CLAIMS);
-    mockPrismaUserFindUnique.mockResolvedValue(null); // not found by appleUserId
-    // second call — not found by email either
-    mockPrismaUserFindUnique.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
-    mockPrismaUserCreate.mockResolvedValue(EXISTING_USER);
+  it("creates a new profile and returns isNewUser=true", async () => {
+    mockSignInWithIdToken.mockResolvedValue({
+      data: { session: SUPABASE_SESSION, user: SUPABASE_USER },
+      error: null,
+    });
+    (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
+    (prisma.user.upsert as jest.Mock).mockResolvedValue(DB_USER);
 
     const res = await POST(
-      makeRequest({
-        identityToken: makeTestToken(APPLE_CLAIMS),
-        authorizationCode: "code-123",
-        email: "user@icloud.com",
-      }),
+      makeRequest({ identityToken: "valid.apple.token", authorizationCode: "code-123", nonce: "raw-nonce" }),
     );
 
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.isNewUser).toBe(true);
-    expect(body.token).toBe(MOCK_TOKEN);
-    expect(body.user.id).toBe(EXISTING_USER.id);
-    expect(mockPrismaUserCreate).toHaveBeenCalledTimes(1);
-  });
-
-  it("returns 400 when no email available for new user", async () => {
-    mockVerifyAppleToken.mockResolvedValue({ sub: "apple-uid-123" }); // no email
-    mockPrismaUserFindUnique.mockResolvedValue(null);
-
-    const res = await POST(
-      makeRequest({
-        identityToken: makeTestToken({ sub: "apple-uid-123" }),
-        authorizationCode: "code-123",
-      }),
+    expect(body.token).toBe("supa-jwt-token");
+    expect(body.user.id).toBe(DB_USER.id);
+    expect(mockSignInWithIdToken).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: "apple", nonce: "raw-nonce" }),
     );
-
-    expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(body.error).toMatch(/email/i);
   });
 });
 
 // ─── Existing user ────────────────────────────────────────────────────────────
 
 describe("POST /api/auth/apple — existing user", () => {
-  it("finds existing user by appleUserId and returns isNewUser=false", async () => {
-    mockVerifyAppleToken.mockResolvedValue(APPLE_CLAIMS);
-    mockPrismaUserFindUnique.mockResolvedValue(EXISTING_USER);
+  it("returns isNewUser=false when profile already exists", async () => {
+    mockSignInWithIdToken.mockResolvedValue({
+      data: { session: SUPABASE_SESSION, user: SUPABASE_USER },
+      error: null,
+    });
+    (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: DB_USER.id });
+    (prisma.user.upsert as jest.Mock).mockResolvedValue(DB_USER);
 
     const res = await POST(
-      makeRequest({
-        identityToken: makeTestToken(APPLE_CLAIMS),
-        authorizationCode: "code-123",
-      }),
+      makeRequest({ identityToken: "valid.apple.token", authorizationCode: "code-123", nonce: "raw-nonce" }),
     );
 
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.isNewUser).toBe(false);
-    expect(body.user.id).toBe(EXISTING_USER.id);
-    expect(mockPrismaUserCreate).not.toHaveBeenCalled();
+    expect(body.user.id).toBe(DB_USER.id);
   });
 
-  it("finds existing user by email and links appleUserId", async () => {
-    mockVerifyAppleToken.mockResolvedValue(APPLE_CLAIMS);
-    // Not found by appleUserId
-    mockPrismaUserFindUnique
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(EXISTING_USER); // found by email
-    mockPrismaUserUpdate.mockResolvedValue(EXISTING_USER);
+  it("prefers fullName from request over user_metadata for new users", async () => {
+    mockSignInWithIdToken.mockResolvedValue({
+      data: {
+        session: SUPABASE_SESSION,
+        user: { ...SUPABASE_USER, user_metadata: {} },
+      },
+      error: null,
+    });
+    (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
+    (prisma.user.upsert as jest.Mock).mockResolvedValue({ ...DB_USER, name: "John Doe" });
 
     const res = await POST(
       makeRequest({
-        identityToken: makeTestToken(APPLE_CLAIMS),
+        identityToken: "valid.apple.token",
         authorizationCode: "code-123",
+        nonce: "raw-nonce",
+        fullName: { givenName: "John", familyName: "Doe" },
       }),
     );
 
     expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.isNewUser).toBe(false);
-    expect(mockPrismaUserUpdate).toHaveBeenCalledWith(
+    expect(prisma.user.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: EXISTING_USER.id },
-        data: { appleUserId: "apple-uid-123" },
+        create: expect.objectContaining({ name: "John Doe" }),
       }),
     );
   });

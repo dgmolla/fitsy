@@ -1,202 +1,197 @@
-import React, { useState } from 'react';
-import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  SafeAreaView,
-  ScrollView,
-  Text,
-  View,
-} from 'react-native';
-import { router } from 'expo-router';
+import React, { useState, useEffect } from 'react';
+import { Alert, Pressable, SafeAreaView, Text, View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
 import { saveMacroTargets } from '@/lib/macroStorage';
-import { PRESETS } from '@/lib/macroPresets';
-import { MacroField } from '@/components';
+import { MacroScrollPicker } from '@/components/MacroScrollPicker';
 import { useTheme } from '@/lib/theme';
 import { createStyles } from './macro-setup.styles';
+import { SUGGESTION_FILTERS, applySuggestionFilter } from '@/lib/macroSuggestions';
+import { getOnboardingData, calculateSuggestedCalories } from '@/lib/onboardingStorage';
 
 interface FormValues {
-  protein: string;
-  carbs: string;
-  fat: string;
-  calories: string;
+  protein: number;
+  carbs: number;
+  fat: number;
+  calories: number;
 }
 
-interface FormErrors {
-  protein?: string;
-  carbs?: string;
-  fat?: string;
-  calories?: string;
+function snapToStep(v: number, step: number): number {
+  return Math.round(v / step) * step;
 }
 
-const EMPTY: FormValues = { protein: '', carbs: '', fat: '', calories: '' };
-
-function validateField(value: string): string | undefined {
-  if (value.trim() === '') return 'Required';
-  const n = parseFloat(value);
-  if (isNaN(n) || n <= 0) return 'Must be a positive number';
-  return undefined;
-}
-
-function validateForm(values: FormValues): FormErrors {
-  return {
-    protein: validateField(values.protein),
-    carbs: validateField(values.carbs),
-    fat: validateField(values.fat),
-    calories: validateField(values.calories),
-  };
-}
-
-function isValid(errors: FormErrors): boolean {
-  return !errors.protein && !errors.carbs && !errors.fat && !errors.calories;
+function clamp(v: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, v));
 }
 
 export default function MacroSetupScreen() {
   const { colors } = useTheme();
   const styles = createStyles(colors);
-  const [values, setValues] = useState<FormValues>(EMPTY);
-  const [errors, setErrors] = useState<FormErrors>({});
-  const [touched, setTouched] = useState<Partial<Record<keyof FormValues, boolean>>>({});
+  const { fromOnboarding } = useLocalSearchParams<{ fromOnboarding?: string }>();
 
-  function handleChange(field: keyof FormValues, text: string) {
-    const next = { ...values, [field]: text };
-    setValues(next);
-    if (touched[field]) {
-      setErrors((prev) => ({ ...prev, [field]: validateField(text) }));
-    }
-  }
+  const [values, setValues] = useState<FormValues>({
+    protein: 150,
+    carbs: 200,
+    fat: 66,
+    calories: 2000,
+  });
+  const [activeFilter, setActiveFilter] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
-  function handleBlur(field: keyof FormValues) {
-    setTouched((prev) => ({ ...prev, [field]: true }));
-    setErrors((prev) => ({ ...prev, [field]: validateField(values[field]) }));
-  }
+  useEffect(() => {
+    getOnboardingData().then((data) => {
+      const suggestedCalories = calculateSuggestedCalories(data);
+      const cal = snapToStep(suggestedCalories, 25);
+      // Balanced macro split: ~30% protein, ~45% carbs, ~25% fat
+      const protein = clamp(snapToStep(Math.round((cal * 0.3) / 4), 5), 50, 300);
+      const carbs = clamp(snapToStep(Math.round((cal * 0.45) / 4), 5), 50, 500);
+      const fat = clamp(snapToStep(Math.round((cal * 0.25) / 9), 2), 20, 150);
+      const calories = clamp(cal, 1200, 3500);
+      setValues({ protein, carbs, fat, calories });
+      setLoaded(true);
+    });
+  }, []);
 
   async function handleSave() {
-    setTouched({ protein: true, carbs: true, fat: true, calories: true });
-    const errs = validateForm(values);
-    setErrors(errs);
-    if (!isValid(errs)) return;
     try {
-      await saveMacroTargets(values);
-      router.replace('/(tabs)/search');
-    } catch (e) {
-      Alert.alert(
-        'Save failed',
-        'Could not save your macro targets. Please try again.',
-        [{ text: 'OK' }],
-      );
+      const mealTargets = {
+        protein: String(Math.round(values.protein / 3)),
+        carbs: String(Math.round(values.carbs / 3)),
+        fat: String(Math.round(values.fat / 3)),
+        calories: String(Math.round(values.calories / 3)),
+      };
+      await saveMacroTargets(mealTargets);
+      if (fromOnboarding) {
+        router.push('/welcome/signin');
+      } else {
+        router.replace('/(tabs)/search');
+      }
+    } catch {
+      Alert.alert('Save failed', 'Could not save your macro targets. Please try again.', [
+        { text: 'OK' },
+      ]);
     }
   }
 
   function handleSkip() {
-    router.replace('/(tabs)/search');
+    if (fromOnboarding) {
+      router.push('/welcome/signin');
+    } else {
+      router.replace('/(tabs)/search');
+    }
   }
 
-  function applyPreset(preset: (typeof PRESETS)[number]) {
-    const next: FormValues = {
-      protein: preset.values.protein,
-      carbs: preset.values.carbs,
-      fat: preset.values.fat,
-      calories: preset.values.calories,
-    };
-    setValues(next);
-    setErrors({});
-    setTouched({});
+  function handleSuggestionFilter(filterId: (typeof SUGGESTION_FILTERS)[number]['id']) {
+    const split = applySuggestionFilter(filterId, String(values.calories));
+    const protein = clamp(snapToStep(parseInt(split.protein, 10), 5), 50, 300);
+    const carbs = clamp(snapToStep(parseInt(split.carbs, 10), 5), 50, 500);
+    const fat = clamp(snapToStep(parseInt(split.fat, 10), 2), 20, 150);
+    setValues((prev) => ({ ...prev, protein, carbs, fat }));
+    setActiveFilter(filterId === activeFilter ? null : filterId);
   }
 
-  const formValid = isValid(validateForm(values));
+  if (!loaded) return <SafeAreaView style={styles.container} />;
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          keyboardShouldPersistTaps="handled"
-        >
-          <View style={styles.header}>
-            <Text style={styles.emoji}>🎯</Text>
-            <Text style={styles.title}>Set your macro targets</Text>
-            <Text style={styles.subtitle}>
-              We'll use these to surface meals that fit your daily goals.
-            </Text>
-          </View>
+      <View style={styles.inner}>
+        <View style={styles.header}>
+          <Text style={styles.emoji}>🎯</Text>
+          <Text style={styles.title}>Set your macro targets</Text>
+          <Text style={styles.subtitle}>
+            Enter your daily targets — we'll find meals that fit ~1/3 of them.
+          </Text>
+        </View>
 
-          <View style={styles.presetRow}>
-            {PRESETS.map((preset) => (
-              <Pressable
-                key={preset.label}
-                style={styles.presetPill}
-                onPress={() => applyPreset(preset)}
-                accessibilityRole="button"
-                accessibilityLabel={`Apply ${preset.label} preset`}
-              >
-                <Text style={styles.presetText}>{preset.label}</Text>
-              </Pressable>
-            ))}
+        <View style={styles.suggestionsSection}>
+          <Text style={styles.suggestionsLabel}>Diet style</Text>
+          <View style={styles.suggestionsRow}>
+            {SUGGESTION_FILTERS.map((filter) => {
+              const active = activeFilter === filter.id;
+              return (
+                <Pressable
+                  key={filter.id}
+                  style={[styles.suggestionPill, active && styles.suggestionPillActive]}
+                  onPress={() => handleSuggestionFilter(filter.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Apply ${filter.label} macro split`}
+                  accessibilityHint={filter.hint}
+                  accessibilityState={{ selected: active }}
+                >
+                  <Text style={styles.suggestionIcon}>{filter.icon}</Text>
+                  <Text style={[styles.suggestionText, active && styles.suggestionTextActive]}>
+                    {filter.label}
+                  </Text>
+                  <Text style={styles.suggestionHint}>{filter.hint}</Text>
+                </Pressable>
+              );
+            })}
           </View>
+        </View>
 
-          <View style={styles.form}>
-            <MacroField
-              label="Protein (g)"
-              accessibilityLabel="Daily protein target in grams"
+        <View style={styles.pickerGrid}>
+          <View style={styles.pickerRow}>
+            <MacroScrollPicker
+              label="Protein"
               value={values.protein}
-              error={touched.protein ? errors.protein : undefined}
-              onChangeText={(t) => handleChange('protein', t)}
-              onBlur={() => handleBlur('protein')}
+              min={50}
+              max={300}
+              step={5}
+              unit="g / day"
+              onChange={(v) => setValues((prev) => ({ ...prev, protein: v }))}
             />
-            <MacroField
-              label="Carbs (g)"
-              accessibilityLabel="Daily carbohydrate target in grams"
+            <MacroScrollPicker
+              label="Carbs"
               value={values.carbs}
-              error={touched.carbs ? errors.carbs : undefined}
-              onChangeText={(t) => handleChange('carbs', t)}
-              onBlur={() => handleBlur('carbs')}
+              min={50}
+              max={500}
+              step={5}
+              unit="g / day"
+              onChange={(v) => setValues((prev) => ({ ...prev, carbs: v }))}
             />
-            <MacroField
-              label="Fat (g)"
-              accessibilityLabel="Daily fat target in grams"
+          </View>
+          <View style={styles.pickerRow}>
+            <MacroScrollPicker
+              label="Fat"
               value={values.fat}
-              error={touched.fat ? errors.fat : undefined}
-              onChangeText={(t) => handleChange('fat', t)}
-              onBlur={() => handleBlur('fat')}
+              min={20}
+              max={150}
+              step={2}
+              unit="g / day"
+              onChange={(v) => setValues((prev) => ({ ...prev, fat: v }))}
             />
-            <MacroField
-              label="Calories (kcal)"
-              accessibilityLabel="Daily calorie target in kilocalories"
+            <MacroScrollPicker
+              label="Calories"
               value={values.calories}
-              error={touched.calories ? errors.calories : undefined}
-              onChangeText={(t) => handleChange('calories', t)}
-              onBlur={() => handleBlur('calories')}
+              min={1200}
+              max={3500}
+              step={25}
+              unit="kcal / day"
+              onChange={(v) => setValues((prev) => ({ ...prev, calories: v }))}
             />
           </View>
+        </View>
 
-          <View style={styles.actions}>
-            <Pressable
-              style={[styles.saveButton, !formValid && styles.saveButtonDisabled]}
-              onPress={handleSave}
-              accessibilityRole="button"
-              accessibilityLabel={formValid ? 'Save macro targets' : 'Fill in all macro targets to continue'}
-              accessibilityState={{ disabled: !formValid }}
-            >
-              <Text style={styles.saveText}>Save & Continue</Text>
-            </Pressable>
+        <View style={styles.actions}>
+          <Pressable
+            style={styles.saveButton}
+            onPress={handleSave}
+            accessibilityRole="button"
+            accessibilityLabel="Save macro targets"
+          >
+            <Text style={styles.saveText}>Save & Continue</Text>
+          </Pressable>
 
-            <Pressable
-              style={styles.skipButton}
-              onPress={handleSkip}
-              accessibilityRole="button"
-              accessibilityLabel="Skip for now"
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Text style={styles.skipText}>Skip for now</Text>
-            </Pressable>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+          <Pressable
+            style={styles.skipButton}
+            onPress={handleSkip}
+            accessibilityRole="button"
+            accessibilityLabel="Skip for now"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={styles.skipText}>Skip for now</Text>
+          </Pressable>
+        </View>
+      </View>
     </SafeAreaView>
   );
 }

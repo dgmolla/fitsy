@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { useTheme } from '@/lib/theme';
+import { saveOnboardingField } from '@/lib/onboardingStorage';
 
 type Goal = 'lose_fat' | 'maintain' | 'build_muscle';
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
@@ -40,7 +41,10 @@ export default function GoalScreen() {
       illustration={<Image source={require('@/assets/illustrations/goal.png')} style={{ width: 240, height: 240, resizeMode: 'contain' }} />}
       title="What's your goal?"
       subtitle="We'll set your macro targets to match. You can always change this later."
-      onContinue={() => router.push('/welcome/payment')}
+      onContinue={async () => {
+        if (selected) await saveOnboardingField('goal', selected);
+        router.push({ pathname: '/macro-setup', params: { fromOnboarding: '1' } });
+      }}
       canContinue={selected !== null}
       scrollable
     >

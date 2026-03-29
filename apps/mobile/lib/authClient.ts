@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import * as Crypto from 'expo-crypto';
 import type { AppleAuthResponse, AuthApiResponse, AuthResponse } from '@fitsy/shared';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
@@ -77,12 +78,24 @@ export async function registerAndStore(
 
 // ─── Apple Sign In ────────────────────────────────────────────────────────────
 
+async function generateNonce(): Promise<{ rawNonce: string; hashedNonce: string }> {
+  const rawNonce = Crypto.randomUUID().replace(/-/g, '') + Crypto.randomUUID().replace(/-/g, '');
+  const hashedNonce = await Crypto.digestStringAsync(
+    Crypto.CryptoDigestAlgorithm.SHA256,
+    rawNonce,
+  );
+  return { rawNonce, hashedNonce };
+}
+
 export async function appleSignIn(): Promise<AppleAuthResponse> {
+  const { rawNonce, hashedNonce } = await generateNonce();
+
   const credential = await AppleAuthentication.signInAsync({
     requestedScopes: [
       AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
       AppleAuthentication.AppleAuthenticationScope.EMAIL,
     ],
+    nonce: hashedNonce,
   });
 
   const { identityToken, authorizationCode, fullName, email } = credential;
@@ -94,6 +107,7 @@ export async function appleSignIn(): Promise<AppleAuthResponse> {
   const result = await postJson<AppleAuthResponse>('/api/auth/apple', {
     identityToken,
     authorizationCode,
+    nonce: rawNonce,
     fullName: fullName
       ? {
           givenName: fullName.givenName ?? undefined,

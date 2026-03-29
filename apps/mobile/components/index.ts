@@ -13,6 +13,7 @@ export { LocationBar } from './LocationBar';
 export { MacroChips } from './MacroChips';
 export { MacroField } from './MacroField';
 export type { MacroFieldProps } from './MacroField';
+export { MacroScrollPicker } from './MacroScrollPicker';
 export { MacroInputBar } from './MacroInputBar';
 export { MacroTargetsSection } from './MacroTargetsSection';
 export { MenuItem } from './MenuItem';

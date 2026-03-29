@@ -25,6 +25,7 @@ interface Props {
   continueLabel?: string;
   showBack?: boolean;
   scrollable?: boolean;
+  hideFooter?: boolean;
 }
 
 export function WelcomeScreen({
@@ -39,6 +40,7 @@ export function WelcomeScreen({
   continueLabel = 'Continue',
   showBack = true,
   scrollable = false,
+  hideFooter = false,
 }: Props) {
   const { colors } = useTheme();
   const progress = step / totalSteps;
@@ -101,24 +103,26 @@ export function WelcomeScreen({
         )}
 
         {/* Continue button */}
-        <View style={styles.footer}>
-          <Pressable
-            style={[
-              styles.continueBtn,
-              { backgroundColor: colors.accent },
-              !canContinue && { opacity: 0.4 },
-            ]}
-            onPress={onContinue}
-            disabled={!canContinue}
-            accessibilityRole="button"
-            accessibilityLabel={continueLabel}
-            accessibilityState={{ disabled: !canContinue }}
-          >
-            <Text style={[styles.continueTxt, { color: colors.accentOnAccent }]}>
-              {continueLabel}
-            </Text>
-          </Pressable>
-        </View>
+        {!hideFooter && (
+          <View style={styles.footer}>
+            <Pressable
+              style={[
+                styles.continueBtn,
+                { backgroundColor: colors.accent },
+                !canContinue && { opacity: 0.4 },
+              ]}
+              onPress={onContinue}
+              disabled={!canContinue}
+              accessibilityRole="button"
+              accessibilityLabel={continueLabel}
+              accessibilityState={{ disabled: !canContinue }}
+            >
+              <Text style={[styles.continueTxt, { color: colors.accentOnAccent }]}>
+                {continueLabel}
+              </Text>
+            </Pressable>
+          </View>
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

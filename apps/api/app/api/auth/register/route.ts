@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/restaurantService";
-import { hashPassword, signToken } from "@/services/authService";
+import { getSupabaseAdmin, getSupabaseClient } from "@/lib/supabase";
 import { sendWelcomeEmail } from "@/services/emailService";
 import type { AuthApiResponse } from "@fitsy/shared";
 
@@ -42,33 +42,22 @@ export async function POST(
   const nameValue =
     typeof name === "string" && name.length > 0 ? name : undefined;
 
-  // ─── Create user ────────────────────────────────────────────────────────────
+  const normalizedEmail = email.toLowerCase().trim();
 
-  try {
-    const passwordHash = await hashPassword(password);
-    const user = await prisma.user.create({
-      data: {
-        email: email.toLowerCase().trim(),
-        passwordHash,
-        name: nameValue ?? null,
-      },
-      select: { id: true, email: true, name: true },
+  // ─── Create user in Supabase ─────────────────────────────────────────────────
+
+  const supabaseAdmin = getSupabaseAdmin();
+  const { data: createData, error: createError } =
+    await supabaseAdmin.auth.admin.createUser({
+      email: normalizedEmail,
+      password,
+      email_confirm: true, // skip email verification for mobile sign-up
+      user_metadata: nameValue ? { name: nameValue } : {},
     });
 
-    const token = await signToken({ sub: user.id, email: user.email });
-
-    // Fire-and-forget: email failure must not break registration
-    sendWelcomeEmail(user.email, user.name ?? undefined).catch(console.error);
-
-    return NextResponse.json({ token, user }, { status: 201 });
-  } catch (err) {
-    // Prisma unique constraint violation on email
-    if (
-      typeof err === "object" &&
-      err !== null &&
-      "code" in err &&
-      (err as { code: string }).code === "P2002"
-    ) {
+  if (createError) {
+    // 422 = email already registered
+    if (createError.status === 422) {
       return NextResponse.json(
         { error: "Email already registered" } as never,
         { status: 409 },
@@ -78,4 +67,49 @@ export async function POST(
       status: 500,
     });
   }
+
+  // ─── Create profile in our DB ────────────────────────────────────────────────
+
+  let user: { id: string; email: string; name: string | null };
+  try {
+    user = await prisma.user.create({
+      data: {
+        id: createData.user.id,
+        email: createData.user.email!,
+        name: nameValue ?? null,
+      },
+      select: { id: true, email: true, name: true },
+    });
+  } catch {
+    // Clean up Supabase user if profile creation fails
+    await supabaseAdmin.auth.admin.deleteUser(createData.user.id).catch(() => {
+      /* best-effort */
+    });
+    return NextResponse.json({ error: "Internal server error" } as never, {
+      status: 500,
+    });
+  }
+
+  // ─── Get session token ───────────────────────────────────────────────────────
+
+  const supabase = getSupabaseClient();
+  const { data: signInData, error: signInError } =
+    await supabase.auth.signInWithPassword({
+      email: normalizedEmail,
+      password,
+    });
+
+  if (signInError || !signInData.session) {
+    return NextResponse.json({ error: "Internal server error" } as never, {
+      status: 500,
+    });
+  }
+
+  // Fire-and-forget: email failure must not break registration
+  sendWelcomeEmail(user.email, user.name ?? undefined).catch(console.error);
+
+  return NextResponse.json(
+    { token: signInData.session.access_token, user },
+    { status: 201 },
+  );
 }

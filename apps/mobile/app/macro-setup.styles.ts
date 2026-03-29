@@ -7,61 +7,92 @@ export function createStyles(colors: ThemeColors) {
       flex: 1,
       backgroundColor: colors.bg,
     },
-    flex: {
+    inner: {
       flex: 1,
-    },
-    scroll: {
-      paddingHorizontal: 24,
-      paddingTop: 40,
-      paddingBottom: 40,
-      gap: 32,
+      paddingHorizontal: 20,
+      paddingTop: 24,
+      paddingBottom: 16,
+      gap: 20,
     },
     header: {
       alignItems: 'center',
-      gap: 12,
+      gap: 8,
     },
     emoji: {
-      fontSize: 52,
+      fontSize: 44,
     },
     title: {
-      fontSize: 26,
+      fontSize: 24,
       fontWeight: '700',
       color: colors.textPrimary,
       textAlign: 'center',
     },
     subtitle: {
-      fontSize: 15,
+      fontSize: 14,
       color: colors.textSecondary,
-      lineHeight: 22,
+      lineHeight: 20,
       textAlign: 'center',
     },
-    presetRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
+    suggestionsSection: {
       gap: 8,
-      justifyContent: 'center',
     },
-    presetPill: {
+    suggestionsLabel: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.textTertiary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.8,
+      paddingLeft: 2,
+    },
+    suggestionsRow: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    suggestionPill: {
+      flex: 1,
       backgroundColor: colors.bgElevated,
-      borderRadius: 20,
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-      borderWidth: 1,
+      borderRadius: 12,
+      paddingVertical: 10,
+      paddingHorizontal: 8,
+      borderWidth: 1.5,
       borderColor: colors.border,
-      minHeight: 44,
-      justifyContent: 'center',
       alignItems: 'center',
+      gap: 3,
+      minHeight: 68,
+      justifyContent: 'center',
     },
-    presetText: {
-      fontSize: 13,
+    suggestionPillActive: {
+      backgroundColor: colors.accentBg,
+      borderColor: colors.accent,
+    },
+    suggestionIcon: {
+      fontSize: 18,
+    },
+    suggestionText: {
+      fontSize: 11,
+      fontWeight: '600',
       color: colors.textPrimary,
-      fontWeight: '500',
+      textAlign: 'center',
     },
-    form: {
-      gap: 20,
+    suggestionTextActive: {
+      color: colors.accent,
+    },
+    suggestionHint: {
+      fontSize: 10,
+      color: colors.textTertiary,
+      textAlign: 'center',
+    },
+    pickerGrid: {
+      flex: 1,
+      gap: 10,
+    },
+    pickerRow: {
+      flex: 1,
+      flexDirection: 'row',
+      gap: 10,
     },
     actions: {
-      gap: 16,
+      gap: 12,
       alignItems: 'center',
     },
     saveButton: {
@@ -71,9 +102,6 @@ export function createStyles(colors: ThemeColors) {
       borderRadius: 12,
       alignItems: 'center',
       justifyContent: 'center',
-    },
-    saveButtonDisabled: {
-      opacity: 0.5,
     },
     saveText: {
       fontSize: 17,

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/restaurantService";
-import { verifyPassword, signToken } from "@/services/authService";
+import { getSupabaseClient } from "@/lib/supabase";
 import type { AuthApiResponse } from "@fitsy/shared";
 
 export async function POST(
@@ -23,8 +23,6 @@ export async function POST(
 
   const { email, password } = body as Record<string, unknown>;
 
-  // ─── Validation ─────────────────────────────────────────────────────────────
-
   if (typeof email !== "string" || typeof password !== "string") {
     return NextResponse.json(
       { error: "email and password are required" } as never,
@@ -32,38 +30,40 @@ export async function POST(
     );
   }
 
-  // ─── Authenticate ────────────────────────────────────────────────────────────
+  // ─── Sign in via Supabase ────────────────────────────────────────────────────
 
-  try {
-    const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase().trim() },
-      select: { id: true, email: true, name: true, passwordHash: true },
-    });
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: email.toLowerCase().trim(),
+    password,
+  });
 
-    // Generic error — never reveal whether email exists
-    const invalidCredentials = NextResponse.json(
+  if (error || !data.session || !data.user) {
+    return NextResponse.json(
       { error: "Invalid credentials" } as never,
       { status: 401 },
     );
-
-    if (!user || !user.passwordHash) {
-      return invalidCredentials;
-    }
-
-    const passwordValid = await verifyPassword(password, user.passwordHash);
-    if (!passwordValid) {
-      return invalidCredentials;
-    }
-
-    const token = await signToken({ sub: user.id, email: user.email });
-
-    return NextResponse.json(
-      { token, user: { id: user.id, email: user.email, name: user.name } },
-      { status: 200 },
-    );
-  } catch {
-    return NextResponse.json({ error: "Internal server error" } as never, {
-      status: 500,
-    });
   }
+
+  // ─── Sync profile to our DB ──────────────────────────────────────────────────
+
+  const user = await prisma.user.upsert({
+    where: { id: data.user.id },
+    update: {},
+    create: {
+      id: data.user.id,
+      email: data.user.email!,
+      name:
+        (data.user.user_metadata?.["name"] as string | undefined) ?? null,
+    },
+    select: { id: true, email: true, name: true },
+  });
+
+  return NextResponse.json(
+    {
+      token: data.session.access_token,
+      user: { id: user.id, email: user.email, name: user.name },
+    },
+    { status: 200 },
+  );
 }

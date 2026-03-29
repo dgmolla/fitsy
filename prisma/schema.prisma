@@ -12,12 +12,9 @@ datasource db {
 }
 
 model User {
-  id              String        @id @default(cuid())
+  id              String        @id  // UUID provided by Supabase auth.users.id
   email           String        @unique
   name            String?
-  passwordHash    String?
-  appleUserId     String?       @unique
-  googleUserId    String?       @unique
   age             Int?
   heightCm        Float?
   weightKg        Float?

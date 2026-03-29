@@ -28,4 +28,21 @@ config.resolver.extraNodeModules = new Proxy(
   }
 );
 
+// Hard-pin packages that must match Expo Go's native binary versions.
+// extraNodeModules is only a fallback; resolveRequest overrides all resolutions.
+const PINNED_MODULES = {
+  "react-native-screens": path.resolve(projectRoot, "node_modules/react-native-screens"),
+};
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  const pinned = Object.keys(PINNED_MODULES).find(
+    (pkg) => moduleName === pkg || moduleName.startsWith(pkg + "/")
+  );
+  if (pinned) {
+    const suffix = moduleName.slice(pinned.length);
+    const redirected = PINNED_MODULES[pinned] + suffix;
+    return context.resolveRequest(context, redirected, platform);
+  }
+  return context.resolveRequest(context, moduleName, platform);
+};
+
 module.exports = config;

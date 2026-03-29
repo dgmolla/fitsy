@@ -95,13 +95,6 @@ export function RestaurantCard({ item, onPress }: Props) {
 
         {/* ─── Card body ──────────────────────────────────────────────────── */}
         <View style={styles.cardBody}>
-          {/* address + cuisine tags */}
-          <View style={styles.metaRow}>
-            <Text style={[styles.address, { color: colors.textTertiary }]} numberOfLines={1}>
-              {item.address}
-            </Text>
-          </View>
-
           {item.cuisineTags.length > 0 && (
             <View style={styles.tagsRow}>
               {item.cuisineTags.slice(0, 3).map((tag) => (

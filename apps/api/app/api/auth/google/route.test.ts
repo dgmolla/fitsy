@@ -1,40 +1,39 @@
-// ─── Mocks ────────────────────────────────────────────────────────────────────
+// ─── Mock modules ─────────────────────────────────────────────────────────────
 
-const mockPrismaUserFindFirst = jest.fn();
-const mockPrismaUserFindUnique = jest.fn();
-const mockPrismaUserCreate = jest.fn();
-const mockPrismaUserUpdate = jest.fn();
-const mockVerifyGoogleToken = jest.fn();
-const mockSignToken = jest.fn();
+jest.mock("@/lib/supabase", () => ({
+  getSupabaseClient: jest.fn(),
+}));
 
 jest.mock("@/lib/restaurantService", () => ({
   prisma: {
     user: {
-      findFirst: mockPrismaUserFindFirst,
-      findUnique: mockPrismaUserFindUnique,
-      create: mockPrismaUserCreate,
-      update: mockPrismaUserUpdate,
+      findUnique: jest.fn(),
+      upsert: jest.fn(),
     },
   },
 }));
 
-jest.mock("@/services/googleAuth", () => ({
-  verifyGoogleToken: mockVerifyGoogleToken,
-}));
-
-jest.mock("@/services/authService", () => ({
-  signToken: mockSignToken,
-}));
-
 import { POST } from "./route";
 import { NextRequest } from "next/server";
+import { getSupabaseClient } from "@/lib/supabase";
+import { prisma } from "@/lib/restaurantService";
 
-// Encode a payload as a minimal JWT-shaped token (header.payload.sig)
-function makeTestToken(payload: Record<string, unknown>): string {
-  const header = Buffer.from(JSON.stringify({ alg: "RS256" })).toString("base64url");
-  const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  return `${header}.${body}.fakesig`;
-}
+const mockSignInWithIdToken = jest.fn();
+
+const SUPABASE_USER = {
+  id: "supa-uuid-2",
+  email: "user@gmail.com",
+  user_metadata: { name: "Jane" },
+};
+const SUPABASE_SESSION = { access_token: "supa-jwt-token" };
+const DB_USER = { id: "supa-uuid-2", email: "user@gmail.com", name: "Jane" };
+
+beforeEach(() => {
+  jest.resetAllMocks();
+  (getSupabaseClient as jest.Mock).mockReturnValue({
+    auth: { signInWithIdToken: mockSignInWithIdToken },
+  });
+});
 
 function makeRequest(body: unknown): NextRequest {
   return new NextRequest("http://localhost/api/auth/google", {
@@ -43,15 +42,6 @@ function makeRequest(body: unknown): NextRequest {
     body: JSON.stringify(body),
   });
 }
-
-const GOOGLE_CLAIMS = { sub: "google-uid-456", email: "user@gmail.com", name: "Jane" };
-const MOCK_TOKEN = "signed.jwt.token";
-const EXISTING_USER = { id: "user-1", email: "user@gmail.com", name: "Jane" };
-
-beforeEach(() => {
-  jest.resetAllMocks();
-  mockSignToken.mockResolvedValue(MOCK_TOKEN);
-});
 
 // ─── Validation ───────────────────────────────────────────────────────────────
 
@@ -76,9 +66,13 @@ describe("POST /api/auth/google — validation", () => {
 
 // ─── Token verification ───────────────────────────────────────────────────────
 
-describe("POST /api/auth/google — Google token verification", () => {
-  it("returns 401 when verifyGoogleToken throws", async () => {
-    mockVerifyGoogleToken.mockRejectedValue(new Error("Invalid token"));
+describe("POST /api/auth/google — Supabase token verification", () => {
+  it("returns 401 when Supabase signInWithIdToken returns an error", async () => {
+    mockSignInWithIdToken.mockResolvedValue({
+      data: { session: null, user: null },
+      error: { message: "Invalid token" },
+    });
+
     const res = await POST(makeRequest({ idToken: "bad.token.sig" }));
     expect(res.status).toBe(401);
     const body = await res.json();
@@ -86,59 +80,59 @@ describe("POST /api/auth/google — Google token verification", () => {
   });
 });
 
-// ─── New user creation ────────────────────────────────────────────────────────
+// ─── New user ─────────────────────────────────────────────────────────────────
 
 describe("POST /api/auth/google — new user", () => {
-  it("creates a new user and returns isNewUser=true", async () => {
-    mockVerifyGoogleToken.mockResolvedValue(GOOGLE_CLAIMS);
-    mockPrismaUserFindFirst.mockResolvedValue(null);
-    mockPrismaUserFindUnique.mockResolvedValue(null);
-    mockPrismaUserCreate.mockResolvedValue(EXISTING_USER);
+  it("creates a new profile and returns isNewUser=true", async () => {
+    mockSignInWithIdToken.mockResolvedValue({
+      data: { session: SUPABASE_SESSION, user: SUPABASE_USER },
+      error: null,
+    });
+    (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
+    (prisma.user.upsert as jest.Mock).mockResolvedValue(DB_USER);
 
-    const res = await POST(makeRequest({ idToken: makeTestToken(GOOGLE_CLAIMS) }));
+    const res = await POST(makeRequest({ idToken: "valid.google.token" }));
 
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.isNewUser).toBe(true);
-    expect(body.token).toBe(MOCK_TOKEN);
-    expect(body.user.id).toBe(EXISTING_USER.id);
-    expect(mockPrismaUserCreate).toHaveBeenCalledTimes(1);
+    expect(body.token).toBe("supa-jwt-token");
+    expect(body.user.id).toBe(DB_USER.id);
   });
 });
 
 // ─── Existing user ────────────────────────────────────────────────────────────
 
 describe("POST /api/auth/google — existing user", () => {
-  it("finds existing user by googleUserId and returns isNewUser=false", async () => {
-    mockVerifyGoogleToken.mockResolvedValue(GOOGLE_CLAIMS);
-    mockPrismaUserFindFirst.mockResolvedValue(EXISTING_USER);
+  it("returns isNewUser=false when profile already exists", async () => {
+    mockSignInWithIdToken.mockResolvedValue({
+      data: { session: SUPABASE_SESSION, user: SUPABASE_USER },
+      error: null,
+    });
+    (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: DB_USER.id });
+    (prisma.user.upsert as jest.Mock).mockResolvedValue(DB_USER);
 
-    const res = await POST(makeRequest({ idToken: makeTestToken(GOOGLE_CLAIMS) }));
+    const res = await POST(makeRequest({ idToken: "valid.google.token" }));
 
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.isNewUser).toBe(false);
-    expect(body.user.id).toBe(EXISTING_USER.id);
-    expect(mockPrismaUserCreate).not.toHaveBeenCalled();
+    expect(body.user.id).toBe(DB_USER.id);
   });
 
-  it("finds existing user by email and links googleUserId", async () => {
-    mockVerifyGoogleToken.mockResolvedValue(GOOGLE_CLAIMS);
-    mockPrismaUserFindFirst.mockResolvedValue(null);
-    mockPrismaUserFindUnique.mockResolvedValue(EXISTING_USER);
-    mockPrismaUserUpdate.mockResolvedValue(EXISTING_USER);
+  it("passes provider google to signInWithIdToken", async () => {
+    mockSignInWithIdToken.mockResolvedValue({
+      data: { session: SUPABASE_SESSION, user: SUPABASE_USER },
+      error: null,
+    });
+    (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: DB_USER.id });
+    (prisma.user.upsert as jest.Mock).mockResolvedValue(DB_USER);
 
-    const res = await POST(makeRequest({ idToken: makeTestToken(GOOGLE_CLAIMS) }));
+    await POST(makeRequest({ idToken: "valid.google.token" }));
 
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.isNewUser).toBe(false);
-    expect(mockPrismaUserUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: EXISTING_USER.id },
-        data: { googleUserId: "google-uid-456" },
-      }),
-    );
-    expect(mockPrismaUserCreate).not.toHaveBeenCalled();
+    expect(mockSignInWithIdToken).toHaveBeenCalledWith({
+      provider: "google",
+      token: "valid.google.token",
+    });
   });
 });

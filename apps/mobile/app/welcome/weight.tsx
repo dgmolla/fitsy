@@ -3,6 +3,7 @@ import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-nativ
 import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { useTheme } from '@/lib/theme';
+import { saveOnboardingField } from '@/lib/onboardingStorage';
 
 type Unit = 'kg' | 'lbs';
 
@@ -25,7 +26,13 @@ export default function WeightScreen() {
       illustration={<Image source={require('@/assets/illustrations/weight.png')} style={{ width: 240, height: 240, resizeMode: 'contain' }} />}
       title="What do you weigh?"
       subtitle="No judgment here. This helps us dial in your macro targets perfectly."
-      onContinue={() => router.push('/welcome/activity')}
+      onContinue={async () => {
+        const weightKg = unit === 'kg'
+          ? parseFloat(value)
+          : Math.round(parseFloat(value) * 0.453592 * 10) / 10;
+        await saveOnboardingField('weightKg', weightKg);
+        router.push('/welcome/activity');
+      }}
       canContinue={isValid}
     >
       {/* Toggle */}

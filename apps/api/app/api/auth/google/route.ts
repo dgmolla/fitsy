@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/restaurantService";
-import { signToken } from "@/services/authService";
-import { verifyGoogleToken } from "@/services/googleAuth";
+import { getSupabaseClient } from "@/lib/supabase";
 
 interface GoogleAuthResponse {
   token: string;
@@ -32,69 +31,47 @@ export async function POST(
     );
   }
 
-  // ─── Verify Google ID token ───────────────────────────────────────────────────
+  // ─── Sign in via Supabase ────────────────────────────────────────────────────
 
-  let claims: { sub: string; email: string; name?: string | undefined };
-  try {
-    claims = await verifyGoogleToken(idToken);
-  } catch {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.auth.signInWithIdToken({
+    provider: "google",
+    token: idToken,
+  });
+
+  if (error || !data.session || !data.user) {
     return NextResponse.json(
       { error: "Invalid Google ID token" },
       { status: 401 },
     );
   }
 
-  const { sub: googleUserId, email, name } = claims;
+  // ─── Upsert profile in our DB ────────────────────────────────────────────────
 
-  // ─── Find or create user ──────────────────────────────────────────────────────
+  const existingUser = await prisma.user.findUnique({
+    where: { id: data.user.id },
+    select: { id: true },
+  });
+  const isNewUser = !existingUser;
 
-  try {
-    let isNewUser = false;
+  const user = await prisma.user.upsert({
+    where: { id: data.user.id },
+    update: {},
+    create: {
+      id: data.user.id,
+      email: data.user.email!,
+      name:
+        (data.user.user_metadata?.["name"] as string | undefined) ?? null,
+    },
+    select: { id: true, email: true, name: true },
+  });
 
-    // 1. Try to find by Google user ID
-    let user = await prisma.user.findFirst({
-      where: { googleUserId },
-      select: { id: true, email: true, name: true },
-    });
-
-    // 2. Fallback: find by email (link existing account)
-    if (!user) {
-      user = await prisma.user.findUnique({
-        where: { email: email.toLowerCase().trim() },
-        select: { id: true, email: true, name: true },
-      });
-
-      if (user) {
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { googleUserId },
-        });
-      }
-    }
-
-    // 3. Create new user
-    if (!user) {
-      user = await prisma.user.create({
-        data: {
-          googleUserId,
-          email: email.toLowerCase().trim(),
-          name: name ?? null,
-        },
-        select: { id: true, email: true, name: true },
-      });
-      isNewUser = true;
-    }
-
-    const token = await signToken({ sub: user.id, email: user.email });
-
-    return NextResponse.json(
-      { token, user: { id: user.id, email: user.email, name: user.name }, isNewUser },
-      { status: 200 },
-    );
-  } catch {
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
-    );
-  }
+  return NextResponse.json(
+    {
+      token: data.session.access_token,
+      user: { id: user.id, email: user.email, name: user.name },
+      isNewUser,
+    },
+    { status: 200 },
+  );
 }

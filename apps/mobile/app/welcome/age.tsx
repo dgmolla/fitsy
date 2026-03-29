@@ -3,6 +3,7 @@ import { Image, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { useTheme } from '@/lib/theme';
+import { saveOnboardingField } from '@/lib/onboardingStorage';
 
 export default function AgeScreen() {
   const { colors } = useTheme();
@@ -18,7 +19,10 @@ export default function AgeScreen() {
       illustration={<Image source={require('@/assets/illustrations/age.png')} style={{ width: 240, height: 240, resizeMode: 'contain' }} />}
       title="How old are you?"
       subtitle="We use your age to calculate an accurate daily calorie target. This stays private."
-      onContinue={() => router.push('/welcome/height')}
+      onContinue={async () => {
+        await saveOnboardingField('age', ageNum);
+        router.push('/welcome/height');
+      }}
       canContinue={isValid}
     >
       <View style={[styles.inputRow, { backgroundColor: colors.bgCard, borderColor: colors.inputBorder }]}>
