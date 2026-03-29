@@ -1,5 +1,5 @@
-import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/lib/theme';
 import { BRAND } from '@/lib/brand';
@@ -23,6 +23,43 @@ const FIELDS: { key: keyof MacroValues; label: string; color: string }[] = [
   { key: 'carbs', label: 'C', color: MACRO_COLORS.carbs },
   { key: 'fat', label: 'F', color: MACRO_COLORS.fat },
 ];
+
+function PulsingDot({ color, delay = 0 }: { color: string; delay?: number }) {
+  const pulse = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.delay(delay),
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 2000,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.delay(600),
+      ])
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [pulse, delay]);
+
+  // Max 25% radius expansion: dot is 8px (r=4), ring goes to r=5 → scale 1.25
+  const ringScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1.0, 1.25] });
+  const ringOpacity = pulse.interpolate({ inputRange: [0, 0.1, 0.4, 1], outputRange: [0, 0.5, 0.2, 0] });
+
+  return (
+    <View style={styles.dotContainer}>
+      <Animated.View
+        style={[
+          styles.pulseRing,
+          { backgroundColor: color, transform: [{ scale: ringScale }], opacity: ringOpacity },
+        ]}
+      />
+      <View style={[styles.macroDot, { backgroundColor: color }]} />
+    </View>
+  );
+}
 
 export function SearchHeader({ values, location, onPress }: SearchHeaderProps) {
   const { colors } = useTheme();
@@ -57,7 +94,7 @@ export function SearchHeader({ values, location, onPress }: SearchHeaderProps) {
             <React.Fragment key={key}>
               {i > 0 && <View style={styles.chipSpacer} />}
               <View style={[styles.macroChip, { backgroundColor: colors.bgElevated }]}>
-                <View style={[styles.macroDot, { backgroundColor: color }]} />
+                <PulsingDot color={color} delay={i * 250} />
                 <Text style={[styles.macroText, { color: colors.textSecondary }]}>
                   {val ? `${val}g` : '\u2014'}{' '}
                 </Text>
@@ -114,6 +151,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     gap: 6,
+  },
+  dotContainer: {
+    width: 10,
+    height: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pulseRing: {
+    position: 'absolute',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   macroDot: {
     width: 8,
