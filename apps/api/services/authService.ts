@@ -1,15 +1,16 @@
-import { jwtVerify } from "jose";
+import { jwtVerify, createRemoteJWKSet } from "jose";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-function getJwtSecret(): Uint8Array {
-  const secret =
-    process.env["SUPABASE_JWT_SECRET"] ?? process.env["JWT_SECRET"];
-  if (!secret) {
-    throw new Error("SUPABASE_JWT_SECRET environment variable is not set");
-  }
-  return new TextEncoder().encode(secret);
+function getSupabaseUrl(): string {
+  const url = process.env["SUPABASE_URL"];
+  if (!url) throw new Error("SUPABASE_URL environment variable is not set");
+  return url;
 }
+
+const jwks = createRemoteJWKSet(
+  new URL(`${getSupabaseUrl()}/auth/v1/.well-known/jwks.json`),
+);
 
 // ─── JWT helpers ──────────────────────────────────────────────────────────────
 
@@ -19,11 +20,11 @@ export interface JwtPayload {
 }
 
 /**
- * Verifies a Supabase-issued JWT using SUPABASE_JWT_SECRET.
+ * Verifies a Supabase-issued JWT using the project's JWKS (ES256).
  * Returns the decoded payload on success; throws on failure.
  */
 export async function verifyToken(token: string): Promise<JwtPayload> {
-  const { payload } = await jwtVerify(token, getJwtSecret());
+  const { payload } = await jwtVerify(token, jwks);
   return {
     sub: payload.sub as string,
     email: payload["email"] as string,
