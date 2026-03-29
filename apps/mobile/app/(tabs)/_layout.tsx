@@ -1,14 +1,16 @@
+import { Dimensions } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/lib/theme';
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const NAV_MARGIN = Math.round(SCREEN_WIDTH * 0.30);
 
 export default function TabLayout() {
   const { colors, mode } = useTheme();
 
   const isDark = mode === 'dark';
   const navBg = isDark ? 'rgba(30,30,30,0.95)' : 'rgba(255,255,255,0.95)';
-  const activeColor = colors.accent;
-  const inactiveColor = isDark ? '#666' : '#9CA3AF';
 
   return (
     <Tabs
@@ -17,8 +19,8 @@ export default function TabLayout() {
         tabBarStyle: {
           position: 'absolute',
           bottom: 32,
-          left: 130,
-          right: 130,
+          left: NAV_MARGIN,
+          right: NAV_MARGIN,
           height: 48,
           borderRadius: 24,
           borderTopWidth: 0,
@@ -33,8 +35,8 @@ export default function TabLayout() {
           paddingBottom: 0,
           paddingTop: 0,
         },
-        tabBarActiveTintColor: activeColor,
-        tabBarInactiveTintColor: inactiveColor,
+        tabBarActiveTintColor: colors.accent,
+        tabBarInactiveTintColor: isDark ? '#666' : '#9CA3AF',
         tabBarItemStyle: {
           flex: 1,
           justifyContent: 'center',
