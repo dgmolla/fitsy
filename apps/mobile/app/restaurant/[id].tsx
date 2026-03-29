@@ -2,13 +2,15 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   FlatList,
   Image,
+  Pressable,
   SectionList,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { MenuItemResult, MenuResponse } from '@fitsy/shared';
 import { FitsyLoader, MenuItem } from '@/components';
 import { fetchMenu, getSavedItems, saveItem, unsaveItem } from '@/lib/apiClient';
@@ -91,6 +93,7 @@ function HeroSection({ name, address, distance, itemCount }: {
 
 export default function RestaurantDetailScreen() {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id: string; address?: string; distance?: string }>();
   const id = params.id;
   const [menu, setMenu] = useState<MenuResponse | null>(null);
@@ -147,6 +150,16 @@ export default function RestaurantDetailScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={[styles.container, { backgroundColor: colors.bg }]}>
+        {/* Floating back button */}
+        <Pressable
+          onPress={() => router.back()}
+          style={[styles.backButton, { top: insets.top + 8, backgroundColor: colors.bg }]}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
+        </Pressable>
         {loading && <View style={styles.centered}><FitsyLoader size="md" /></View>}
         {!loading && error !== null && (
           <View style={[styles.errorBanner, { backgroundColor: colors.errorBg }]}>
@@ -190,6 +203,21 @@ export default function RestaurantDetailScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  backButton: {
+    position: 'absolute',
+    left: 16,
+    zIndex: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 4,
+  },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
   heroWrap: { marginBottom: 8 },
   heroImage: {
