@@ -13,16 +13,8 @@ export default function WelcomeSplash() {
       <View style={styles.content}>
         {/* Hero */}
         <View style={styles.hero}>
-          <Image source={require('@/assets/illustrations/welcome.png')} style={{ width: 180, height: 180, resizeMode: 'contain' }} />
-          <View
-            style={[
-              styles.logoMark,
-              { backgroundColor: colors.accent, shadowColor: colors.glassShadowColor },
-            ]}
-          >
-            <Ionicons name="leaf" size={44} color={colors.accentOnAccent} />
-          </View>
-          <Text style={[styles.wordmark, { color: colors.textPrimary }]}>
+          <Image source={require('@/assets/illustrations/welcome.png')} style={{ width: 200, height: 200, resizeMode: 'contain' }} />
+          <Text style={[styles.wordmark, { color: BRAND.color }]}>
             {BRAND.name}
           </Text>
           <Text style={[styles.tagline, { color: colors.textSecondary }]}>
@@ -75,17 +67,7 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
   },
   hero: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 },
-  logoMark: {
-    width: 80,
-    height: 80,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 6,
-  },
+
   wordmark: {
     fontSize: 42,
     fontWeight: '800',
