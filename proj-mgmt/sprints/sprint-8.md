@@ -6,12 +6,12 @@ kanban-plugin: basic
 
 ## In Progress
 
-- [ ] **S-62** Fix saved meals — saving meals silently fails; debug BookmarkButton → POST /api/saved-items flow, fix root cause, e2e test via mobile MCP + simulator before PR, post PR to Slack #frontend #backend #O1
-- [ ] **S-63** Fix auth — restrict sign-in to Apple and Gmail only; remove or disable all other auth providers, e2e test full sign-in flow via mobile MCP + simulator before PR, post PR to Slack #frontend #backend #O1
-
 
 
 ## Done
+
+- [x] **S-62** Fix saved meals — saving meals silently fails; debug BookmarkButton → POST /api/saved-items flow, fix root cause, e2e test via mobile MCP + simulator before PR, post PR to Slack #frontend #backend #O1 @completed(2026-03-29)
+- [x] **S-63** Fix auth — restrict sign-in to Apple and Gmail only; remove or disable all other auth providers, e2e test full sign-in flow via mobile MCP + simulator before PR, post PR to Slack #frontend #backend #O1 @completed(2026-03-29)
 
 - [x] **S-59** Saved meals — Saved tab, BookmarkButton, GET/POST/DELETE /api/saved-items, restaurant detail integration #backend #frontend #O1 @completed(2026-03-28)
 - [x] **S-60** Welcome flow — 7 onboarding screens, Apple auth API, profile PATCH, TDEE calculator, subscription verify stub #backend #frontend #O1 @completed(2026-03-28)
