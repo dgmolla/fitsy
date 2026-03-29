@@ -25,8 +25,13 @@ if echo "$CHANGED" | grep -qE '^prisma/'; then
 fi
 
 # BEGIN ROUTING TABLE
-# All of apps/api/                                                          -> backend
-if echo "$CHANGED" | grep -qE '^apps/api/'; then
+# E2E tests under apps/api/tests/e2e/ are cross-domain — CTO reviews      -> cto
+if echo "$CHANGED" | grep -qE '^apps/api/tests/e2e/'; then
+  AGENTS="$AGENTS cto"
+fi
+
+# All of apps/api/ except e2e tests                                        -> backend
+if echo "$CHANGED" | grep -vE '^apps/api/tests/e2e/' | grep -qE '^apps/api/'; then
   AGENTS="$AGENTS backend"
 fi
 
