@@ -4,7 +4,7 @@ import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { RestaurantResult } from '@fitsy/shared';
 import { useTheme } from '@/lib/theme';
-import { MACRO_COLORS } from '@/lib/macroColors';
+import { MacroChips } from './MacroChips';
 
 interface Props {
   item: RestaurantResult;
@@ -125,24 +125,12 @@ export function RestaurantCard({ item, onPress }: Props) {
               >
                 {item.bestMatch.name}
               </Text>
-              <View style={styles.macroRow}>
-                <View style={[styles.macroChip, { backgroundColor: colors.bgElevated }]}>
-                  <Text style={[styles.macroChipLabel, { color: colors.textTertiary }]}>CALS</Text>
-                  <Text style={[styles.macroChipVal, { color: colors.textPrimary }]}>{item.bestMatch.calories}</Text>
-                </View>
-                <View style={[styles.macroChip, { backgroundColor: colors.bgElevated }]}>
-                  <Text style={[styles.macroChipLabel, { color: colors.textTertiary }]}>PRO</Text>
-                  <Text style={[styles.macroChipVal, { color: MACRO_COLORS.protein }]}>{item.bestMatch.proteinG}g</Text>
-                </View>
-                <View style={[styles.macroChip, { backgroundColor: colors.bgElevated }]}>
-                  <Text style={[styles.macroChipLabel, { color: colors.textTertiary }]}>CARBS</Text>
-                  <Text style={[styles.macroChipVal, { color: MACRO_COLORS.carbs }]}>{item.bestMatch.carbsG}g</Text>
-                </View>
-                <View style={[styles.macroChip, { backgroundColor: colors.bgElevated }]}>
-                  <Text style={[styles.macroChipLabel, { color: colors.textTertiary }]}>FAT</Text>
-                  <Text style={[styles.macroChipVal, { color: MACRO_COLORS.fat }]}>{item.bestMatch.fatG}g</Text>
-                </View>
-              </View>
+              <MacroChips
+                calories={item.bestMatch.calories}
+                protein={item.bestMatch.proteinG}
+                carbs={item.bestMatch.carbsG}
+                fat={item.bestMatch.fatG}
+              />
             </View>
           ) : (
             <Text style={[styles.noMacro, { color: colors.textTertiary }]}>
@@ -284,29 +272,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginRight: 8,
     letterSpacing: -0.2,
-  },
-  macroRow: {
-    flexDirection: 'row',
-    gap: 6,
-    flexWrap: 'wrap',
-    alignItems: 'center',
-  },
-  macroChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-  },
-  macroChipLabel: {
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  macroChipVal: {
-    fontSize: 13,
-    fontWeight: '700',
   },
   noMacro: {
     fontSize: 13,

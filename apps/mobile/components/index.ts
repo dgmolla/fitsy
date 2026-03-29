@@ -10,6 +10,7 @@ export { EmptyState } from './EmptyState';
 export { FitsyLoader } from './FitsyLoader';
 export type { FitsyLoaderSize } from './FitsyLoader';
 export { LocationBar } from './LocationBar';
+export { MacroChips } from './MacroChips';
 export { MacroField } from './MacroField';
 export type { MacroFieldProps } from './MacroField';
 export { MacroInputBar } from './MacroInputBar';
