@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useTheme } from '@/lib/theme';
 import type { MacroValues } from '@/lib/macroPresets';
+import { MACRO_COLORS } from '@/lib/macroColors';
 import { BlurFallback } from '@/lib/BlurFallback';
 
 interface FilterPopupProps {
@@ -22,9 +23,9 @@ interface FilterPopupProps {
 }
 
 const MACROS: { key: keyof MacroValues; label: string; unit: string; color: string }[] = [
-  { key: 'protein', label: 'P', unit: 'g', color: '#3B82F6' },
-  { key: 'carbs', label: 'C', unit: 'g', color: '#F59E0B' },
-  { key: 'fat', label: 'F', unit: 'g', color: '#EF4444' },
+  { key: 'protein', label: 'P', unit: 'g', color: MACRO_COLORS.protein },
+  { key: 'carbs', label: 'C', unit: 'g', color: MACRO_COLORS.carbs },
+  { key: 'fat', label: 'F', unit: 'g', color: MACRO_COLORS.fat },
 ];
 
 // Approximate half-height of card for top-anchored transform

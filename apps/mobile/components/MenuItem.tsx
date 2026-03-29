@@ -5,6 +5,7 @@ import { MenuItemResult } from '@fitsy/shared';
 import { BookmarkButton } from './BookmarkButton';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { useTheme } from '@/lib/theme';
+import { MACRO_COLORS } from '@/lib/macroColors';
 
 interface Props {
   item: MenuItemResult;
@@ -41,17 +42,17 @@ export function MenuItem({ item, isSaved, onToggleSave }: Props) {
             <Text style={[styles.calUnit, { color: colors.textTertiary }]}> cal</Text>
           </Text>
           <View style={[styles.macroDot, { backgroundColor: colors.borderSubtle }]} />
-          <Text style={[styles.macroInline, { color: colors.accent }]}>
+          <Text style={[styles.macroInline, { color: MACRO_COLORS.protein }]}>
             {m.proteinG}g
             <Text style={[styles.macroSuffix, { color: colors.textTertiary }]}> PRO</Text>
           </Text>
           <View style={[styles.macroDot, { backgroundColor: colors.borderSubtle }]} />
-          <Text style={[styles.macroInline, { color: colors.warning }]}>
+          <Text style={[styles.macroInline, { color: MACRO_COLORS.carbs }]}>
             {m.carbsG}g
             <Text style={[styles.macroSuffix, { color: colors.textTertiary }]}> CARB</Text>
           </Text>
           <View style={[styles.macroDot, { backgroundColor: colors.borderSubtle }]} />
-          <Text style={[styles.macroInline, { color: colors.error }]}>
+          <Text style={[styles.macroInline, { color: MACRO_COLORS.fat }]}>
             {m.fatG}g
             <Text style={[styles.macroSuffix, { color: colors.textTertiary }]}> FAT</Text>
           </Text>

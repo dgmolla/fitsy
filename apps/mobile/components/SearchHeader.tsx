@@ -12,11 +12,7 @@ interface SearchHeaderProps {
   onPress: () => void;
 }
 
-const MACRO_COLORS = {
-  protein: '#3B82F6',
-  carbs: '#F59E0B',
-  fat: '#EF4444',
-} as const;
+import { MACRO_COLORS } from '@/lib/macroColors';
 
 /** Animation timing constants */
 const PULSE_DURATION_MS = 2000;
