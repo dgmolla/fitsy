@@ -8,7 +8,7 @@ kanban-plugin: basic
 
 ## In Progress
 
-- [ ] **S-58** Recruit first 10 TestFlight testers — send invites, set up onboarding message, confirm installs #cto #O1 #wave-2 ^dep-S-53 ^dep-S-55
+
 
 ## Done
 

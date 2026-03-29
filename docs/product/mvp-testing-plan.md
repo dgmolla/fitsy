@@ -126,7 +126,7 @@ Save each round's analysis to `docs/product/feedback/round-{N}-insights.md`.
 - One follow-up nudge 2 days later if they haven't responded
 - Target: 8/10 response rate per round (in-person relationship helps)
 
-Feed actionable items into the existing feedback triage playbook (`docs/product/feedback-triage.md`).
+Feed actionable items into the community feedback forum (`docs/product/specs/community-feedback-forum.md`) — post-launch, testers and users submit feedback directly in-app where others can upvote and comment.
 
 ---
 
