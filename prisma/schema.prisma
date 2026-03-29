@@ -17,7 +17,6 @@ model User {
   name            String?
   passwordHash    String?
   appleUserId     String?       @unique
-  googleUserId    String?       @unique
   age             Int?
   heightCm        Float?
   weightKg        Float?
