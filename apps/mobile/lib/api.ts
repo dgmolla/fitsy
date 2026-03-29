@@ -49,7 +49,7 @@ async function post<T>(path: string, body: unknown, authenticated = true): Promi
   return res.json() as Promise<T>;
 }
 
-async function del<T>(path: string, authenticated = true): Promise<T> {
+async function del(path: string, authenticated = true): Promise<void> {
   const headers: Record<string, string> = {};
 
   if (authenticated) {
@@ -68,7 +68,7 @@ async function del<T>(path: string, authenticated = true): Promise<T> {
     const errBody = await res.json().catch(() => ({})) as { error?: string };
     throw new Error(errBody.error ?? `Request failed: ${res.status}`);
   }
-  return res.json() as Promise<T>;
+  // 204 No Content — nothing to parse
 }
 
 export const api = { get, post, del };
