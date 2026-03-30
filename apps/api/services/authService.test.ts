@@ -1,24 +1,26 @@
 // ─── Mock jose before importing the service ────────────────────────────────────
 
 const mockVerify = jest.fn();
+const mockJWKS = jest.fn().mockReturnValue("mock-jwks");
 
 jest.mock("jose", () => ({
   jwtVerify: mockVerify,
+  createRemoteJWKSet: mockJWKS,
 }));
-
-import { verifyToken } from "./authService";
 
 const ORIGINAL_ENV = process.env;
 
 beforeEach(() => {
-  jest.resetModules();
-  process.env = { ...ORIGINAL_ENV, SUPABASE_JWT_SECRET: "test-secret-key" };
+  process.env = { ...ORIGINAL_ENV, SUPABASE_URL: "https://test.supabase.co" };
   mockVerify.mockReset();
 });
 
 afterEach(() => {
   process.env = ORIGINAL_ENV;
 });
+
+// Import AFTER env is set up
+import { verifyToken } from "./authService";
 
 // ─── verifyToken ──────────────────────────────────────────────────────────────
 
@@ -34,15 +36,5 @@ describe("verifyToken", () => {
   it("throws on invalid token", async () => {
     mockVerify.mockRejectedValue(new Error("invalid signature"));
     await expect(verifyToken("bad.token")).rejects.toThrow("invalid signature");
-  });
-
-  it("throws when SUPABASE_JWT_SECRET is not set", async () => {
-    process.env = { ...ORIGINAL_ENV };
-    delete process.env["SUPABASE_JWT_SECRET"];
-    delete process.env["JWT_SECRET"];
-
-    await expect(verifyToken("some.token")).rejects.toThrow(
-      "SUPABASE_JWT_SECRET environment variable is not set",
-    );
   });
 });

@@ -1,4 +1,4 @@
-import { jwtVerify, createRemoteJWKSet } from "jose";
+import { jwtVerify, createRemoteJWKSet, type FlattenedJWSInput, type JWSHeaderParameters, type GetKeyFunction } from "jose";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -8,9 +8,16 @@ function getSupabaseUrl(): string {
   return url;
 }
 
-const jwks = createRemoteJWKSet(
-  new URL(`${getSupabaseUrl()}/auth/v1/.well-known/jwks.json`),
-);
+let _jwks: GetKeyFunction<JWSHeaderParameters, FlattenedJWSInput> | null = null;
+
+function getJwks() {
+  if (!_jwks) {
+    _jwks = createRemoteJWKSet(
+      new URL(`${getSupabaseUrl()}/auth/v1/.well-known/jwks.json`),
+    );
+  }
+  return _jwks;
+}
 
 // ─── JWT helpers ──────────────────────────────────────────────────────────────
 
@@ -24,7 +31,7 @@ export interface JwtPayload {
  * Returns the decoded payload on success; throws on failure.
  */
 export async function verifyToken(token: string): Promise<JwtPayload> {
-  const { payload } = await jwtVerify(token, jwks);
+  const { payload } = await jwtVerify(token, getJwks());
   return {
     sub: payload.sub as string,
     email: payload["email"] as string,

@@ -54,6 +54,8 @@ model Restaurant {
   updatedAt       DateTime    @updatedAt
   menuItems       MenuItem[]
   savedItems      SavedItem[]
+
+  @@index([lat, lng])
 }
 
 model MenuItem {

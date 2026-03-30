@@ -27,11 +27,13 @@ beforeEach(() => {
   delete g.prisma;
   mockFindMany.mockReset();
   mockFindUnique.mockReset();
+  geoCacheClear();
 });
 
 // Import AFTER jest.mock so the mock is in place when the module initialises.
 import { findNearbyRestaurants, getRestaurantMenu } from "./restaurantService";
 import type { NearbyRestaurantsParams } from "./restaurantService";
+import { geoCacheClear } from "./geoCache";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
