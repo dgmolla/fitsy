@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -8,83 +8,113 @@ import {
   Text,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
 import { clearToken, getStoredToken } from '@/lib/authClient';
 import { ScreenHeader } from '@/components/ScreenHeader';
+import { ScreenBackground } from '@/components/ScreenBackground';
 import { decodeEmailFromToken } from '@/lib/jwtUtils';
 import type { MacroValues } from '@/lib/macroPresets';
-import { MacroTargetsSection } from '@/components/MacroTargetsSection';
+import { getMacroTargets } from '@/lib/macroStorage';
+import { getOnboardingData, type OnboardingData } from '@/lib/onboardingStorage';
+import { calculateAge } from '@fitsy/shared';
+import { pushProfileToServer } from '@/lib/profileSync';
 import { useTheme } from '@/lib/theme';
 
-const MACRO_STORAGE_KEY = 'fitsy:macroTargets';
+function formatBirthday(iso: string): string {
+  const d = new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function ProfileRow({ label, value, onPress, colors }: {
+  label: string;
+  value?: string;
+  onPress: () => void;
+  colors: ReturnType<typeof useTheme>['colors'];
+}) {
+  return (
+    <Pressable style={styles.profileRow} onPress={onPress} accessibilityRole="button">
+      <Text style={[styles.profileLabel, { color: colors.textSecondary }]}>{label}</Text>
+      <Text style={[styles.profileValue, { color: value ? colors.textPrimary : colors.textTertiary }]}>
+        {value ?? 'Not set'}
+      </Text>
+      <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
+    </Pressable>
+  );
+}
 
 export default function ProfileScreen() {
   const { colors } = useTheme();
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState<string>('—');
   const [macroTargets, setMacroTargets] = useState<MacroValues | null>(null);
+  const [profile, setProfile] = useState<OnboardingData>({});
+  const prevProfile = useRef<string>('');
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const [token, rawMacros] = await Promise.all([
-          getStoredToken(),
-          AsyncStorage.getItem(MACRO_STORAGE_KEY),
-        ]);
+  useFocusEffect(
+    useCallback(() => {
+      async function load() {
+        try {
+          const [token, stored, onboarding] = await Promise.all([
+            getStoredToken(),
+            getMacroTargets(),
+            getOnboardingData(),
+          ]);
 
-        if (token) {
-          setEmail(decodeEmailFromToken(token));
+          if (token) {
+            setEmail(decodeEmailFromToken(token));
+          }
+
+          if (stored) {
+            setMacroTargets(stored as unknown as MacroValues);
+          }
+
+          setProfile(onboarding);
+
+          // Push to server if profile data changed since last focus
+          const snapshot = JSON.stringify(onboarding);
+          if (prevProfile.current && prevProfile.current !== snapshot) {
+            pushProfileToServer();
+          }
+          prevProfile.current = snapshot;
+        } catch {
+          // Use defaults on storage failure
+        } finally {
+          setLoading(false);
         }
-
-        if (rawMacros) {
-          setMacroTargets(JSON.parse(rawMacros) as MacroValues);
-        }
-      } catch {
-        // Use defaults on storage failure
-      } finally {
-        setLoading(false);
       }
-    }
-    void load();
-  }, []);
-
-  const handleSaveMacros = useCallback(async (values: MacroValues) => {
-    await AsyncStorage.setItem(MACRO_STORAGE_KEY, JSON.stringify(values));
-    setMacroTargets(values);
-  }, []);
-
-  const handleSetupPress = useCallback(() => {
-    router.replace('/(tabs)/search');
-  }, []);
+      void load();
+    }, []),
+  );
 
   const handleLogout = useCallback(async () => {
     await clearToken();
-    router.replace('/auth/login');
+    router.replace('/welcome');
   }, []);
 
   const initials = email !== '—' ? email.charAt(0).toUpperCase() : '?';
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
+      <ScreenBackground>
         <ActivityIndicator
           size="large"
           color={colors.spinnerColor}
           style={styles.spinner}
           accessibilityLabel="Loading profile"
         />
-      </SafeAreaView>
+      </ScreenBackground>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
+    <ScreenBackground>
+      <ScreenHeader />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        <ScreenHeader />
 
         {/* Avatar + account section */}
         <View style={[styles.section, {
@@ -111,12 +141,78 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* Macro targets section */}
-        <MacroTargetsSection
-          targets={macroTargets}
-          onSave={handleSaveMacros}
-          onSetupPress={handleSetupPress}
-        />
+        {/* Body stats */}
+        <View style={[styles.section, {
+          backgroundColor: colors.bgCard,
+          borderColor: colors.border,
+          shadowColor: colors.glassShadowColor,
+          shadowOpacity: colors.glassShadowOpacity,
+          shadowRadius: colors.glassShadowRadius,
+          shadowOffset: { width: 0, height: 4 },
+          elevation: 8,
+        }]}>
+          <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>Body Stats</Text>
+          <ProfileRow
+            label="Birthday"
+            value={profile.birthday ? `${formatBirthday(profile.birthday)} (${calculateAge(profile.birthday)} yrs)` : undefined}
+            onPress={() => router.push('/welcome/age')}
+            colors={colors}
+          />
+          <ProfileRow
+            label="Height"
+            value={profile.heightCm ? `${profile.heightCm} cm` : undefined}
+            onPress={() => router.push('/welcome/height')}
+            colors={colors}
+          />
+          <ProfileRow
+            label="Weight"
+            value={profile.weightKg ? `${profile.weightKg} kg` : undefined}
+            onPress={() => router.push('/welcome/weight')}
+            colors={colors}
+          />
+          <ProfileRow
+            label="Activity"
+            value={profile.activity?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+            onPress={() => router.push('/welcome/activity')}
+            colors={colors}
+          />
+          <ProfileRow
+            label="Goal"
+            value={profile.goal?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+            onPress={() => router.push('/welcome/goal')}
+            colors={colors}
+          />
+        </View>
+
+        {/* Per-meal macros (read-only, derived from body stats) */}
+        {macroTargets && (
+          <View style={[styles.section, {
+            backgroundColor: colors.bgCard,
+            borderColor: colors.border,
+            shadowColor: colors.glassShadowColor,
+            shadowOpacity: colors.glassShadowOpacity,
+            shadowRadius: colors.glassShadowRadius,
+            shadowOffset: { width: 0, height: 4 },
+            elevation: 8,
+          }]}>
+            <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>Per-Meal Targets</Text>
+            <View style={styles.macroGrid}>
+              {[
+                { label: 'Protein', value: macroTargets.protein, unit: 'g' },
+                { label: 'Carbs', value: macroTargets.carbs, unit: 'g' },
+                { label: 'Fat', value: macroTargets.fat, unit: 'g' },
+              ].map(({ label, value, unit }) => (
+                <View key={label} style={styles.macroChip}>
+                  <Text style={[styles.macroChipValue, { color: colors.accent }]}>{value || '--'}{unit}</Text>
+                  <Text style={[styles.macroChipLabel, { color: colors.textTertiary }]}>{label}</Text>
+                </View>
+              ))}
+            </View>
+            <Text style={[styles.macroHint, { color: colors.textTertiary }]}>
+              Calculated from your body stats. Adjust targets in the search tab.
+            </Text>
+          </View>
+        )}
 
         {/* Logout */}
         <Pressable
@@ -128,7 +224,7 @@ export default function ProfileScreen() {
           <Text style={[styles.logoutButtonText, { color: colors.error }]}>Log out</Text>
         </Pressable>
       </ScrollView>
-    </SafeAreaView>
+    </ScreenBackground>
   );
 }
 
@@ -141,7 +237,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   scrollContent: {
-    padding: 16,
+    paddingHorizontal: 20,
     paddingBottom: 100,
   },
   screenTitle: {
@@ -185,6 +281,47 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     flex: 1,
+  },
+  profileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    gap: 8,
+  },
+  profileLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    width: 70,
+  },
+  profileValue: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  macroGrid: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 8,
+  },
+  macroChip: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 2,
+  },
+  macroChipValue: {
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  macroChipLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  macroHint: {
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 17,
   },
   logoutButton: {
     height: 50,

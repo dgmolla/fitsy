@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { calculateAge } from '@fitsy/shared';
 
 const KEY = '@fitsy/onboarding';
 
@@ -6,7 +7,7 @@ export type ActivityLevel = 'sedentary' | 'lightly_active' | 'active' | 'very_ac
 export type Goal = 'lose_fat' | 'maintain' | 'build_muscle';
 
 export interface OnboardingData {
-  age?: number;
+  birthday?: string;
   heightCm?: number;
   weightKg?: number;
   activity?: ActivityLevel;
@@ -50,7 +51,8 @@ function calcBMR(weightKg: number, heightCm: number, age: number): number {
 }
 
 export function calculateSuggestedCalories(data: OnboardingData): number {
-  const { age = 25, heightCm = 170, weightKg = 75, activity = 'lightly_active', goal = 'maintain' } = data;
+  const { birthday, heightCm = 170, weightKg = 75, activity = 'lightly_active', goal = 'maintain' } = data;
+  const age = birthday ? calculateAge(birthday) : 25;
   const bmr = calcBMR(weightKg, heightCm, age);
   const tdee = Math.round(bmr * ACTIVITY_MULTIPLIERS[activity]);
   const adjusted = tdee + GOAL_ADJUSTMENTS[goal];

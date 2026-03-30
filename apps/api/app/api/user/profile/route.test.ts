@@ -36,7 +36,7 @@ const MOCK_USER_BASE = {
   id: "user-1",
   email: "alice@example.com",
   name: "Alice",
-  age: null,
+  birthday: null,
   heightCm: null,
   weightKg: null,
   activityLevel: null,
@@ -66,7 +66,7 @@ describe("PATCH /api/user/profile — auth guard", () => {
     mockRequireAuth.mockResolvedValue(
       NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
     );
-    const res = await PATCH(makeRequest({ age: 30 }));
+    const res = await PATCH(makeRequest({ birthday: "1996-03-15" }));
     expect(res.status).toBe(401);
   });
 });
@@ -78,18 +78,40 @@ describe("PATCH /api/user/profile — validation", () => {
     mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
   });
 
-  it("returns 400 for age below 13", async () => {
-    const res = await PATCH(makeRequest({ age: 12 }, "Bearer valid"));
+  it("returns 400 for invalid birthday string", async () => {
+    const res = await PATCH(makeRequest({ birthday: "not-a-date" }, "Bearer valid"));
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.error).toMatch(/age/i);
+    expect(body.error).toMatch(/birthday/i);
   });
 
-  it("returns 400 for age above 99", async () => {
-    const res = await PATCH(makeRequest({ age: 100 }, "Bearer valid"));
+  it("returns 400 for user under 13", async () => {
+    const fiveYearsAgo = new Date();
+    fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
+    const res = await PATCH(
+      makeRequest({ birthday: fiveYearsAgo.toISOString().split("T")[0] }, "Bearer valid"),
+    );
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.error).toMatch(/age/i);
+    expect(body.error).toMatch(/between 13 and 99/i);
+  });
+
+  it("returns 400 for user over 99", async () => {
+    const hundredYearsAgo = new Date();
+    hundredYearsAgo.setFullYear(hundredYearsAgo.getFullYear() - 100);
+    const res = await PATCH(
+      makeRequest({ birthday: hundredYearsAgo.toISOString().split("T")[0] }, "Bearer valid"),
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/between 13 and 99/i);
+  });
+
+  it("returns 400 for non-string birthday", async () => {
+    const res = await PATCH(makeRequest({ birthday: 1996 }, "Bearer valid"));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/birthday/i);
   });
 
   it("returns 400 for weightKg below 23", async () => {
@@ -143,16 +165,21 @@ describe("PATCH /api/user/profile — success", () => {
   });
 
   it("updates partial profile fields and returns updated user", async () => {
-    const updatedUser = { ...MOCK_USER_BASE, age: 30, onboardingStep: 1 };
+    const updatedUser = {
+      ...MOCK_USER_BASE,
+      birthday: new Date("1996-03-15"),
+      onboardingStep: 1,
+    };
     mockPrismaUserUpdate.mockResolvedValue(updatedUser);
 
     const res = await PATCH(
-      makeRequest({ age: 30, onboardingStep: 1 }, "Bearer valid"),
+      makeRequest({ birthday: "1996-03-15", onboardingStep: 1 }, "Bearer valid"),
     );
 
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.user.age).toBe(30);
+    expect(body.user.birthday).toBe("1996-03-15");
+    expect(body.user.age).toBeGreaterThanOrEqual(29);
     expect(body.user.onboardingStep).toBe(1);
     expect(mockPrismaMacroTargetUpsert).not.toHaveBeenCalled();
   });
@@ -160,7 +187,7 @@ describe("PATCH /api/user/profile — success", () => {
   it("calculates TDEE and upserts MacroTarget when all fields are set", async () => {
     const fullUser = {
       ...MOCK_USER_BASE,
-      age: 28,
+      birthday: new Date("1998-01-15"),
       heightCm: 170,
       weightKg: 70,
       activityLevel: "active",
@@ -179,7 +206,7 @@ describe("PATCH /api/user/profile — success", () => {
     const res = await PATCH(
       makeRequest(
         {
-          age: 28,
+          birthday: "1998-01-15",
           heightCm: 170,
           weightKg: 70,
           activityLevel: "active",
@@ -191,7 +218,13 @@ describe("PATCH /api/user/profile — success", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(mockCalculateTdee).toHaveBeenCalledWith(28, 170, 70, "active", "maintain");
+    expect(mockCalculateTdee).toHaveBeenCalledWith(
+      expect.any(Number),
+      170,
+      70,
+      "active",
+      "maintain",
+    );
     expect(mockPrismaMacroTargetUpsert).toHaveBeenCalledTimes(1);
   });
 });

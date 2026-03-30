@@ -2,7 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/restaurantService";
 import { requireAuth } from "@/lib/auth";
 import { calculateTdee } from "@/lib/tdeeCalculator";
-import type { ProfileUpdateRequest, ActivityLevel, UserGoal } from "@fitsy/shared";
+import { calculateAge } from "@fitsy/shared";
+import type {
+  ProfileUpdateRequest,
+  ProfileResponse,
+  ActivityLevel,
+  UserGoal,
+} from "@fitsy/shared";
 
 // ─── Validation constants ────────────────────────────────────────────────────
 
@@ -14,6 +20,76 @@ const VALID_ACTIVITY_LEVELS: ActivityLevel[] = [
 ];
 
 const VALID_GOALS: UserGoal[] = ["lose_fat", "maintain", "build_muscle"];
+
+const USER_SELECT = {
+  id: true,
+  email: true,
+  name: true,
+  birthday: true,
+  heightCm: true,
+  weightKg: true,
+  activityLevel: true,
+  goal: true,
+  onboardingStep: true,
+} as const;
+
+// ─── GET /api/user/profile ──────────────────────────────────────────────────
+
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: auth.sub },
+      select: {
+        ...USER_SELECT,
+        macroTarget: {
+          select: {
+            calories: true,
+            proteinG: true,
+            carbsG: true,
+            fatG: true,
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    const response: ProfileResponse = {
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        birthday: user.birthday?.toISOString().split("T")[0] ?? null,
+        age: user.birthday ? calculateAge(user.birthday) : null,
+        heightCm: user.heightCm,
+        weightKg: user.weightKg,
+        activityLevel: user.activityLevel as ActivityLevel | null,
+        goal: user.goal as UserGoal | null,
+        onboardingStep: user.onboardingStep,
+      },
+      macroTarget: user.macroTarget
+        ? {
+            calories: user.macroTarget.calories,
+            proteinG: user.macroTarget.proteinG,
+            carbsG: user.macroTarget.carbsG,
+            fatG: user.macroTarget.fatG,
+          }
+        : null,
+    };
+
+    return NextResponse.json(response, { status: 200 });
+  } catch {
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
+  }
+}
 
 // ─── PATCH /api/user/profile ─────────────────────────────────────────────────
 
@@ -36,15 +112,24 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
 
   // ─── Field validation ──────────────────────────────────────────────────────
 
-  if (update.age !== undefined) {
-    if (
-      typeof update.age !== "number" ||
-      !Number.isInteger(update.age) ||
-      update.age < 13 ||
-      update.age > 99
-    ) {
+  if (update.birthday !== undefined) {
+    if (typeof update.birthday !== "string") {
       return NextResponse.json(
-        { error: "age must be an integer between 13 and 99" },
+        { error: "birthday must be a date string (YYYY-MM-DD)" },
+        { status: 400 },
+      );
+    }
+    const parsed = new Date(update.birthday);
+    if (isNaN(parsed.getTime())) {
+      return NextResponse.json(
+        { error: "birthday must be a valid date (YYYY-MM-DD)" },
+        { status: 400 },
+      );
+    }
+    const age = calculateAge(parsed);
+    if (age < 13 || age > 99) {
+      return NextResponse.json(
+        { error: "user must be between 13 and 99 years old" },
         { status: 400 },
       );
     }
@@ -115,7 +200,9 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     const updatedUser = await prisma.user.update({
       where: { id: auth.sub },
       data: {
-        ...(update.age !== undefined && { age: update.age }),
+        ...(update.birthday !== undefined && {
+          birthday: new Date(update.birthday),
+        }),
         ...(update.heightCm !== undefined && { heightCm: update.heightCm }),
         ...(update.weightKg !== undefined && { weightKg: update.weightKg }),
         ...(update.activityLevel !== undefined && {
@@ -126,30 +213,39 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
           onboardingStep: update.onboardingStep,
         }),
       },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        age: true,
-        heightCm: true,
-        weightKg: true,
-        activityLevel: true,
-        goal: true,
-        onboardingStep: true,
-      },
+      select: USER_SELECT,
     });
 
-    // ─── Auto-calculate TDEE if all required fields present ──────────────────
+    // ─── Explicit macro targets override auto-calc ───────────────────────────
 
-    if (
-      updatedUser.age !== null &&
+    if (update.macroTarget) {
+      await prisma.macroTarget.upsert({
+        where: { userId: auth.sub },
+        create: {
+          userId: auth.sub,
+          calories: update.macroTarget.calories,
+          proteinG: update.macroTarget.proteinG,
+          carbsG: update.macroTarget.carbsG,
+          fatG: update.macroTarget.fatG,
+          goalType: "maintain",
+        },
+        update: {
+          calories: update.macroTarget.calories,
+          proteinG: update.macroTarget.proteinG,
+          carbsG: update.macroTarget.carbsG,
+          fatG: update.macroTarget.fatG,
+        },
+      });
+    } else if (
+      updatedUser.birthday !== null &&
       updatedUser.heightCm !== null &&
       updatedUser.weightKg !== null &&
       updatedUser.activityLevel !== null &&
       updatedUser.goal !== null
     ) {
+      // Auto-calculate TDEE only when no explicit macros provided
       const tdee = calculateTdee(
-        updatedUser.age,
+        calculateAge(updatedUser.birthday),
         updatedUser.heightCm,
         updatedUser.weightKg,
         updatedUser.activityLevel as ActivityLevel,
@@ -175,7 +271,20 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
       });
     }
 
-    return NextResponse.json({ user: updatedUser }, { status: 200 });
+    return NextResponse.json(
+      {
+        user: {
+          ...updatedUser,
+          birthday: updatedUser.birthday
+            ? updatedUser.birthday.toISOString().split("T")[0]
+            : null,
+          age: updatedUser.birthday
+            ? calculateAge(updatedUser.birthday)
+            : null,
+        },
+      },
+      { status: 200 },
+    );
   } catch {
     return NextResponse.json(
       { error: "Internal server error" },

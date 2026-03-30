@@ -4,6 +4,8 @@ kanban-plugin: basic
 
 ## Backlog
 
+- [ ] **S-64** RevenueCat integration — install `react-native-purchases`, configure RevenueCat project + App Store Connect IAP products ($5/mo, $30/yr), implement paywall screen, gate paid features behind entitlement check, replace subscription verify stub from S-60. Prereqs: Apple Developer account, ASC app record, IAP products + subscription group created in ASC, RevenueCat project linked, free-vs-paid feature split decided. #frontend #backend #O1
+
 ## In Progress
 
 

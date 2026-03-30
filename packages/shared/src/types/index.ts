@@ -255,12 +255,39 @@ export interface AppleAuthResponse {
 }
 
 export interface ProfileUpdateRequest {
-  age?: number;
+  birthday?: string;
   heightCm?: number;
   weightKg?: number;
   activityLevel?: ActivityLevel;
   goal?: UserGoal;
   onboardingStep?: number;
+  macroTarget?: {
+    calories: number;
+    proteinG: number;
+    carbsG: number;
+    fatG: number;
+  };
+}
+
+export interface ProfileResponse {
+  user: {
+    id: string;
+    email: string;
+    name: string | null;
+    birthday: string | null;
+    age: number | null;
+    heightCm: number | null;
+    weightKg: number | null;
+    activityLevel: ActivityLevel | null;
+    goal: UserGoal | null;
+    onboardingStep: number;
+  };
+  macroTarget: {
+    calories: number;
+    proteinG: number;
+    carbsG: number;
+    fatG: number;
+  } | null;
 }
 
 export interface SubscriptionVerifyRequest {
