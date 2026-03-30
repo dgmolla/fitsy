@@ -63,6 +63,46 @@ Must be complete before Round 1 recruiting begins.
 - [ ] GDPR: data export + deletion on request
 - [ ] Google OAuth verification (if using Google Sign-In)
 
+### Security
+
+Run a full security audit before launch. Use [vibe-security-skill](https://github.com/raroque/vibe-security-skill) for automated checks.
+
+**Secrets & Environment**
+- [ ] No hardcoded API keys in source (grep for key patterns)
+- [ ] `EXPO_PUBLIC_*` vars don't leak server secrets (only safe client values)
+- [ ] `.env.local` is gitignored and not committed
+- [ ] Vercel env vars scoped correctly (production vs preview vs development)
+
+**Auth & Authorization**
+- [ ] JWT tokens verified server-side on all protected routes
+- [ ] Tokens stored securely on device (AsyncStorage is fine for Expo Go, SecureStore for production builds)
+- [ ] No unverified JWT decoding (always verify signature)
+- [ ] Session expiry enforced (currently 7 days — confirm appropriate)
+
+**Database**
+- [ ] Supabase Row Level Security (RLS) enabled on all tables
+- [ ] No sensitive fields exposed in API responses (password hashes, internal IDs)
+- [ ] Prisma queries scoped to authenticated user where applicable
+
+**Rate Limiting**
+- [ ] Auth endpoints (register, login) rate-limited (prevent brute force)
+- [ ] Search endpoint rate-limited (prevent scraping)
+- [ ] Rate limits enforced server-side, not client-side
+
+**Mobile**
+- [ ] No API keys in JS bundle (check with `npx expo export` and inspect output)
+- [ ] Deep links validated (can't navigate to auth-protected screens without token)
+
+**Deployment**
+- [ ] No debug/dev modes in production build
+- [ ] HTTPS enforced on all API endpoints
+- [ ] CORS configured correctly on Vercel (restrict origins)
+- [ ] Security headers set (X-Content-Type-Options, X-Frame-Options, etc.)
+
+**AI/LLM**
+- [ ] Anthropic API key not exposed to client
+- [ ] LLM outputs sanitized before storage (no prompt injection in macro estimates)
+
 ### Performance
 
 - [ ] App size < 50MB
