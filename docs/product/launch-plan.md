@@ -63,6 +63,34 @@ Must be complete before Round 1 recruiting begins.
 - [ ] GDPR: data export + deletion on request
 - [ ] Google OAuth verification (if using Google Sign-In)
 
+### Payments — RevenueCat (deprecate Stripe)
+
+**Why**: Apple requires all digital subscriptions to use In-App Purchases (IAP). Stripe for in-app subscriptions will be rejected by App Store review. RevenueCat wraps Apple/Google IAP with a clean SDK.
+
+**Deprecate Stripe**:
+- [ ] Remove `@stripe/stripe-react-native` from mobile deps (if installed)
+- [ ] Remove `STRIPE_SECRET_KEY` / `STRIPE_PUBLISHABLE_KEY` from Vercel env vars
+- [ ] Remove `apps/api/app/api/subscriptions/verify/` Stripe webhook route
+- [ ] Remove Stripe-related code from welcome/payment screen
+- [ ] Keep Stripe env vars in docs only if planning future web billing (to avoid Apple's 30%)
+
+**RevenueCat integration**:
+- [ ] Apple Developer: create subscription products in App Store Connect
+  - Monthly: $4.99/mo (product ID: `fitsy_monthly`)
+  - Annual: $29.99/yr (product ID: `fitsy_annual`)
+  - 7-day free trial on both
+- [ ] RevenueCat account (free tier covers up to $2.5M revenue)
+  - Create project, connect App Store Connect
+  - Create entitlement: `pro`
+  - Create offering with monthly + annual packages
+- [ ] Install `react-native-purchases` SDK
+  - `npx expo install react-native-purchases`
+  - Configure in app entry with RevenueCat API key
+- [ ] Update welcome/payment screen to use RevenueCat purchase flow
+- [ ] Server-side: verify entitlements via RevenueCat webhook or REST API
+- [ ] Apple sandbox tester account for testing purchases
+- [ ] **Note**: IAP does not work in Expo Go or simulator — requires EAS production/dev build
+
 ### Security
 
 Run a full security audit before launch. Use [vibe-security-skill](https://github.com/raroque/vibe-security-skill) for automated checks.
