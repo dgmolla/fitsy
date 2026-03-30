@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  FlatList,
   Image,
   Pressable,
   SectionList,
@@ -14,23 +13,55 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { MenuItemResult, MenuResponse } from '@fitsy/shared';
 import { FitsyLoader, MenuItem } from '@/components';
 import { fetchMenu, getSavedItems, saveItem, unsaveItem } from '@/lib/apiClient';
+import { getMacroTargets } from '@/lib/macroStorage';
+import type { MacroValues } from '@/lib/macroPresets';
 import { useTheme } from '@/lib/theme';
 
 type Section = { title: string; data: MenuItemResult[] };
 
-function buildSections(items: MenuItemResult[]): Section[] {
-  const map = new Map<string, MenuItemResult[]>();
-  for (const item of items) {
-    const key = item.category ?? '';
-    const bucket = map.get(key) ?? [];
-    bucket.push(item);
-    map.set(key, bucket);
-  }
-  return Array.from(map.entries()).map(([title, data]) => ({ title, data }));
+function computeMatchPct(item: MenuItemResult, targets: MacroValues | null): number {
+  if (!targets || !item.macros) return -1;
+  const t = {
+    calories: targets.calories ? Number(targets.calories) : 0,
+    protein: targets.protein ? Number(targets.protein) : 0,
+    carbs: targets.carbs ? Number(targets.carbs) : 0,
+    fat: targets.fat ? Number(targets.fat) : 0,
+  };
+  const dims: { target: number; actual: number }[] = [];
+  if (t.calories > 0) dims.push({ target: t.calories, actual: item.macros.calories });
+  if (t.protein > 0) dims.push({ target: t.protein, actual: item.macros.proteinG });
+  if (t.carbs > 0) dims.push({ target: t.carbs, actual: item.macros.carbsG });
+  if (t.fat > 0) dims.push({ target: t.fat, actual: item.macros.fatG });
+  if (dims.length === 0) return -1;
+  const avgError = dims.reduce((sum, d) => sum + Math.abs(d.actual - d.target) / d.target, 0) / dims.length;
+  return Math.max(0, Math.round((1 - avgError) * 100));
 }
 
-function hasCategories(items: MenuItemResult[]): boolean {
-  return items.some((i) => Boolean(i.category));
+function buildMatchSections(items: MenuItemResult[], targets: MacroValues | null): Section[] {
+  if (!targets) {
+    return [{ title: 'Menu', data: items }];
+  }
+
+  const scored = items
+    .map((item) => ({ item, pct: computeMatchPct(item, targets) }))
+    .sort((a, b) => b.pct - a.pct);
+
+  const high: MenuItemResult[] = [];
+  const medium: MenuItemResult[] = [];
+  const low: MenuItemResult[] = [];
+
+  for (const { item, pct } of scored) {
+    if (pct >= 80) high.push(item);
+    else if (pct >= 50) medium.push(item);
+    else low.push(item);
+  }
+
+  const sections: Section[] = [];
+  if (high.length > 0) sections.push({ title: 'Great match', data: high });
+  if (medium.length > 0) sections.push({ title: 'Good match', data: medium });
+  if (low.length > 0) sections.push({ title: 'Other items', data: low });
+
+  return sections;
 }
 
 const HERO_IMAGE_HEIGHT = 220;
@@ -97,6 +128,7 @@ export default function RestaurantDetailScreen() {
   const params = useLocalSearchParams<{ id: string; address?: string; distance?: string }>();
   const id = params.id;
   const [menu, setMenu] = useState<MenuResponse | null>(null);
+  const [targets, setTargets] = useState<MacroValues | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [savedMap, setSavedMap] = useState<Map<string, string>>(new Map());
@@ -106,10 +138,15 @@ export default function RestaurantDetailScreen() {
     async function load() {
       if (!id) { setError('Invalid restaurant ID'); setLoading(false); return; }
       setLoading(true); setError(null);
-      const [result, savedResult] = await Promise.all([fetchMenu(id), getSavedItems()]);
+      const [result, savedResult, macroTargets] = await Promise.all([
+        fetchMenu(id),
+        getSavedItems(),
+        getMacroTargets(),
+      ]);
       if (cancelled) return;
       if (result === null) { setError('Could not load menu.'); }
       else { setMenu(result); }
+      setTargets(macroTargets);
       if (savedResult) {
         const m = new Map<string, string>();
         for (const saved of savedResult.data) { if (saved.menuItemId) m.set(saved.menuItemId, saved.id); }
@@ -172,27 +209,19 @@ export default function RestaurantDetailScreen() {
             <View style={styles.centered}>
               <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No menu items available</Text>
             </View>
-          ) : hasCategories(menu.menuItems) ? (
+          ) : (
             <SectionList
-              sections={buildSections(menu.menuItems)}
+              sections={buildMatchSections(menu.menuItems, targets)}
               keyExtractor={(item) => item.id}
               renderItem={renderItem}
-              renderSectionHeader={({ section }) => section.title ? (
+              renderSectionHeader={({ section }) => (
                 <View style={[styles.sectionHeader, { backgroundColor: colors.bgElevated, borderBottomColor: colors.border }]}>
                   <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{section.title}</Text>
                 </View>
-              ) : null}
+              )}
               ListHeaderComponent={header}
               contentContainerStyle={styles.listContent}
               stickySectionHeadersEnabled
-            />
-          ) : (
-            <FlatList
-              data={menu.menuItems}
-              keyExtractor={(item) => item.id}
-              renderItem={renderItem}
-              ListHeaderComponent={header}
-              contentContainerStyle={styles.listContent}
             />
           )
         )}

@@ -1,21 +1,145 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { Alert, StyleSheet, Text, View } from 'react-native';
+import { ScreenBackground } from '@/components/ScreenBackground';
 import { router } from 'expo-router';
-import { loginAndStore } from '@/lib/authClient';
-import { AuthForm } from '@/components/AuthForm';
+import * as WebBrowser from 'expo-web-browser';
+import * as Google from 'expo-auth-session/providers/google';
+import { Ionicons } from '@expo/vector-icons';
+import { Pressable } from 'react-native';
+import { appleSignIn, completeGoogleSignIn } from '@/lib/authClient';
+import { pullProfileFromServer } from '@/lib/profileSync';
+import { useTheme } from '@/lib/theme';
+import { BRAND } from '@/lib/brand';
+
+WebBrowser.maybeCompleteAuthSession();
+
+const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
 
 export default function LoginScreen() {
-  async function handleSubmit({ email, password }: { email: string; password: string }) {
-    await loginAndStore(email, password);
-    router.replace('/(tabs)/search');
+  const { colors } = useTheme();
+  const [appleLoading, setAppleLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  const [, response, promptGoogleAsync] = Google.useIdTokenAuthRequest({
+    iosClientId: GOOGLE_IOS_CLIENT_ID ?? 'not-configured',
+  });
+
+  useEffect(() => {
+    if (response?.type === 'success') {
+      const idToken = response.params['id_token'];
+      if (idToken) {
+        setGoogleLoading(true);
+        completeGoogleSignIn(idToken)
+          .then(() => pullProfileFromServer())
+          .then(() => {
+            setGoogleLoading(false);
+            router.replace('/(tabs)/search');
+          })
+          .catch((err: Error) => {
+            setGoogleLoading(false);
+            Alert.alert('Sign In Failed', err.message);
+          });
+      }
+    } else if (response?.type === 'error') {
+      Alert.alert('Google Sign In Error', response.error?.message ?? 'Unknown error');
+    }
+  }, [response]);
+
+  async function handleAppleSignIn() {
+    setAppleLoading(true);
+    try {
+      await appleSignIn();
+      await pullProfileFromServer();
+      router.replace('/(tabs)/search');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Apple Sign In failed';
+      if (!msg.includes('canceled')) {
+        Alert.alert('Sign In Failed', msg);
+      }
+    } finally {
+      setAppleLoading(false);
+    }
   }
 
+  async function handleGoogleSignIn() {
+    if (!GOOGLE_IOS_CLIENT_ID) {
+      Alert.alert('Not Configured', 'Google Sign In is not configured yet.');
+      return;
+    }
+    await promptGoogleAsync();
+  }
+
+  const isLoading = appleLoading || googleLoading;
+
   return (
-    <AuthForm
-      mode="login"
-      onSubmit={handleSubmit}
-      footerText="Don't have an account?"
-      footerLinkText="Create one"
-      onFooterPress={() => router.push('/auth/register')}
-    />
+    <ScreenBackground>
+      <View style={styles.content}>
+        <View style={styles.header}>
+          <Text style={[styles.logo, { color: BRAND.color }]}>{BRAND.name}</Text>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>Welcome back</Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+            Sign in to continue finding meals that fit your goals.
+          </Text>
+        </View>
+
+        <View style={styles.buttons}>
+          <Pressable
+            style={[styles.appleBtn, { backgroundColor: colors.textPrimary }, isLoading && styles.disabled]}
+            onPress={handleAppleSignIn}
+            disabled={isLoading}
+            accessibilityRole="button"
+            accessibilityLabel="Continue with Apple"
+          >
+            <Ionicons name="logo-apple" size={20} color={colors.bg} />
+            <Text style={[styles.appleTxt, { color: colors.bg }]}>
+              {appleLoading ? 'Signing in…' : 'Continue with Apple'}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.googleBtn, { borderColor: colors.border }, isLoading && styles.disabled]}
+            onPress={handleGoogleSignIn}
+            disabled={isLoading}
+            accessibilityRole="button"
+            accessibilityLabel="Continue with Google"
+          >
+            <Ionicons name="logo-google" size={20} color={colors.textPrimary} />
+            <Text style={[styles.googleTxt, { color: colors.textPrimary }]}>
+              {googleLoading ? 'Signing in…' : 'Continue with Google'}
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+    </ScreenBackground>
   );
 }
+
+const styles = StyleSheet.create({
+  safe: { flex: 1 },
+  content: { flex: 1, paddingHorizontal: 24, justifyContent: 'center', gap: 40 },
+  header: { gap: 8 },
+  logo: { fontSize: 36, fontWeight: '800', letterSpacing: -1, marginBottom: 8 },
+  title: { fontSize: 28, fontWeight: '700' },
+  subtitle: { fontSize: 15, lineHeight: 22 },
+  buttons: { gap: 12 },
+  appleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    borderRadius: 14,
+    paddingVertical: 16,
+  },
+  appleTxt: { fontSize: 16, fontWeight: '600' },
+  googleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    borderRadius: 14,
+    paddingVertical: 16,
+    borderWidth: 1.5,
+  },
+  googleTxt: { fontSize: 16, fontWeight: '600' },
+  disabled: { opacity: 0.5 },
+});

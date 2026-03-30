@@ -37,7 +37,7 @@ export default function GoalScreen() {
   return (
     <WelcomeScreen
       step={5}
-      totalSteps={7}
+      totalSteps={9}
       title="What's your goal?"
       subtitle="We'll set your macro targets to match. You can always change this later."
       onContinue={async () => {

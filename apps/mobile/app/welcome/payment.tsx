@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { pushProfileToServer } from '@/lib/profileSync';
 import { Ionicons } from '@expo/vector-icons';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { useTheme } from '@/lib/theme';
@@ -29,6 +30,7 @@ export default function PaymentScreen() {
     setLoading(true);
     try {
       await AsyncStorage.setItem('onboardingComplete', 'true');
+      pushProfileToServer(); // fire-and-forget sync to server
       router.replace('/(tabs)/search');
     } finally {
       setLoading(false);
@@ -37,8 +39,8 @@ export default function PaymentScreen() {
 
   return (
     <WelcomeScreen
-      step={7}
-      totalSteps={7}
+      step={9}
+      totalSteps={9}
       title="Start your free trial"
       subtitle="Try Fitsy free for 7 days. Cancel anytime before trial ends."
       onContinue={handleStart}

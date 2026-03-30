@@ -24,6 +24,10 @@ const MOCK_IMAGES = [
   'https://images.unsplash.com/photo-1482049016688-2d3e1b311543?w=600&q=70',
 ];
 
+function formatTag(tag: string): string {
+  return tag.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 function getMockImage(name: string): string {
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
@@ -42,12 +46,20 @@ function placeholderColor(name: string): string {
   return COLORS[h % COLORS.length];
 }
 
+function matchScoreToFitPct(score: number): number {
+  // matchScore is normalized Euclidean distance: 0 = perfect, ~1 = 100% off
+  // Convert to a 0-100% where lower score = higher fit
+  return Math.max(0, Math.round((1 - score) * 100));
+}
+
+const FIT_THRESHOLD = 30;
+
 export function RestaurantCard({ item, onPress }: Props) {
   const { colors, mode } = useTheme();
   const distanceLabel = `${item.distanceMiles.toFixed(1)} mi`;
-  const initials = item.name.slice(0, 2).toUpperCase();
 
-  const bgColor = placeholderColor(item.name);
+  const fitPct = item.bestMatch ? matchScoreToFitPct(item.bestMatch.matchScore) : null;
+  const showFitPill = fitPct !== null && fitPct >= FIT_THRESHOLD;
 
   const overlayColor = mode === 'dark' ? 'rgba(0,0,0,0.52)' : 'rgba(0,0,0,0.38)';
 
@@ -77,6 +89,13 @@ export function RestaurantCard({ item, onPress }: Props) {
             resizeMode="cover"
           />
 
+          {/* fit pill */}
+          {showFitPill && (
+            <View style={styles.fitPill}>
+              <Text style={styles.fitPillText}>{fitPct}% fit</Text>
+            </View>
+          )}
+
           {/* overlay — name + meta float over image */}
           <View style={[styles.imageGradient, { backgroundColor: overlayColor }]} pointerEvents="none" />
 
@@ -103,7 +122,7 @@ export function RestaurantCard({ item, onPress }: Props) {
                   style={[styles.cuisineTag, { backgroundColor: colors.bgElevated, borderColor: colors.border }]}
                 >
                   <Text style={[styles.cuisineTagText, { color: colors.textSecondary }]}>
-                    {tag}
+                    {formatTag(tag)}
                   </Text>
                 </View>
               ))}
@@ -143,7 +162,7 @@ export function RestaurantCard({ item, onPress }: Props) {
 const styles = StyleSheet.create({
   cardWrapper: {
     marginHorizontal: 16,
-    marginVertical: 6,
+    marginVertical: 8,
   },
   card: {
     borderRadius: 20,
@@ -172,6 +191,21 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: 'rgba(255,255,255,0.35)',
     letterSpacing: 2,
+  },
+  fitPill: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: '#2D7D46',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    zIndex: 2,
+  },
+  fitPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   imageGradient: {
     position: 'absolute',
@@ -215,7 +249,7 @@ const styles = StyleSheet.create({
   // ─── Body ──────────────────────────────────────────────────────────────────
   cardBody: {
     padding: 14,
-    gap: 8,
+    gap: 10,
   },
   metaRow: {
     flexDirection: 'row',
@@ -247,7 +281,7 @@ const styles = StyleSheet.create({
     marginVertical: 2,
   },
   bestMatch: {
-    gap: 8,
+    gap: 10,
   },
   bestMatchName: {
     flex: 1,

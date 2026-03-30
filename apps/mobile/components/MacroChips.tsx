@@ -49,15 +49,15 @@ export function MacroChips({ calories, protein, carbs, fat }: MacroChipsProps) {
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 8,
     flexWrap: 'wrap',
   },
   chip: {
     alignItems: 'center',
     borderRadius: 8,
     paddingHorizontal: 10,
-    paddingVertical: 5,
-    gap: 1,
+    paddingVertical: 6,
+    gap: 2,
   },
   label: {
     fontSize: 9,
@@ -65,8 +65,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   value: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '800',
     letterSpacing: -0.3,
   },
 });

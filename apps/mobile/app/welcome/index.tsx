@@ -1,5 +1,6 @@
 import React from 'react';
-import { Image, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ScreenBackground } from '@/components/ScreenBackground';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/lib/theme';
@@ -29,7 +30,7 @@ export default function WelcomeSplash() {
   const { colors } = useTheme();
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]}>
+    <ScreenBackground>
       <View style={styles.content}>
         {/* Hero */}
         <View style={styles.hero}>
@@ -83,7 +84,7 @@ export default function WelcomeSplash() {
           </Pressable>
         </View>
       </View>
-    </SafeAreaView>
+    </ScreenBackground>
   );
 }
 

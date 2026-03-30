@@ -3,6 +3,7 @@ import { Alert, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-na
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { router, useLocalSearchParams } from 'expo-router';
 import { saveMacroTargets } from '@/lib/macroStorage';
+import { pushProfileToServer } from '@/lib/profileSync';
 import { ScrollPicker, rangeValues } from '@/components/ScrollPicker';
 import { useTheme, type ThemeColors } from '@/lib/theme';
 import { applySuggestionFilter, type SuggestionFilter } from '@/lib/macroSuggestions';
@@ -101,14 +102,15 @@ export default function MacroSetupScreen() {
         calories: String(Math.round(cal / 3)),
       };
       await saveMacroTargets(mealTargets);
-      router.push(fromOnboarding ? '/welcome/signin' : '/(tabs)/search');
+      if (!fromOnboarding) pushProfileToServer(); // sync to server (onboarding syncs at payment)
+      router.push(fromOnboarding ? '/welcome/how-it-works' : '/(tabs)/search');
     } catch {
       Alert.alert('Save failed', 'Could not save your macro targets. Please try again.');
     }
   }
 
   function handleSkip() {
-    router.push(fromOnboarding ? '/welcome/signin' : '/(tabs)/search');
+    router.push(fromOnboarding ? '/welcome/how-it-works' : '/(tabs)/search');
   }
 
   const s = createStyles(colors);
@@ -127,66 +129,68 @@ export default function MacroSetupScreen() {
         </View>
       )}
 
-        {/* Diet style pills */}
-        <View style={s.dietRow}>
-          {DIET_STYLES.map((ds) => {
-            const active = activeFilter === ds.id;
-            return (
-              <Pressable
-                key={ds.id}
-                style={[s.dietPill, active && s.dietPillActive]}
-                onPress={() => applyDietStyle(ds.id)}
-              >
-                <Text style={[s.dietLabel, active && s.dietLabelActive]}>{ds.label}</Text>
-              </Pressable>
-            );
-          })}
+        <View style={s.pickerSection}>
+          {/* Diet style pills */}
+          <View style={s.dietRow}>
+            {DIET_STYLES.map((ds) => {
+              const active = activeFilter === ds.id;
+              return (
+                <Pressable
+                  key={ds.id}
+                  style={[s.dietPill, active && s.dietPillActive]}
+                  onPress={() => applyDietStyle(ds.id)}
+                >
+                  <Text style={[s.dietLabel, active && s.dietLabelActive]}>{ds.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {/* Three pickers side by side */}
+          <View style={s.pickerRow}>
+            <View style={s.pickerCol}>
+              <Text style={s.pickerLabel}>Protein</Text>
+              <ScrollPicker
+                values={PICKER_VALUES.protein}
+                value={values.protein}
+                unit="g"
+                onChange={(v) => updateMacro('protein', v)}
+                itemHeight={40}
+                visibleItems={5}
+              />
+            </View>
+            <View style={s.pickerCol}>
+              <Text style={s.pickerLabel}>Carbs</Text>
+              <ScrollPicker
+                values={PICKER_VALUES.carbs}
+                value={values.carbs}
+                unit="g"
+                onChange={(v) => updateMacro('carbs', v)}
+                itemHeight={40}
+                visibleItems={5}
+              />
+            </View>
+            <View style={s.pickerCol}>
+              <Text style={s.pickerLabel}>Fat</Text>
+              <ScrollPicker
+                values={PICKER_VALUES.fat}
+                value={values.fat}
+                unit="g"
+                onChange={(v) => updateMacro('fat', v)}
+                itemHeight={40}
+                visibleItems={5}
+              />
+            </View>
+          </View>
+
+          {/* Live calories */}
+          <View style={s.calorieBar}>
+            <Text style={s.calorieLabel}>Daily total</Text>
+            <Text style={s.calorieValue}>{totalCalories} kcal</Text>
+          </View>
         </View>
 
-        {/* Three pickers side by side */}
-        <View style={s.pickerRow}>
-          <View style={s.pickerCol}>
-            <Text style={s.pickerLabel}>Protein</Text>
-            <ScrollPicker
-              values={PICKER_VALUES.protein}
-              value={values.protein}
-              unit="g"
-              onChange={(v) => updateMacro('protein', v)}
-              itemHeight={36}
-              visibleItems={5}
-            />
-          </View>
-          <View style={s.pickerCol}>
-            <Text style={s.pickerLabel}>Carbs</Text>
-            <ScrollPicker
-              values={PICKER_VALUES.carbs}
-              value={values.carbs}
-              unit="g"
-              onChange={(v) => updateMacro('carbs', v)}
-              itemHeight={36}
-              visibleItems={5}
-            />
-          </View>
-          <View style={s.pickerCol}>
-            <Text style={s.pickerLabel}>Fat</Text>
-            <ScrollPicker
-              values={PICKER_VALUES.fat}
-              value={values.fat}
-              unit="g"
-              onChange={(v) => updateMacro('fat', v)}
-              itemHeight={36}
-              visibleItems={5}
-            />
-          </View>
-        </View>
-
-        {/* Live calories */}
-        <View style={s.calorieBar}>
-          <Text style={s.calorieLabel}>Daily total</Text>
-          <Text style={s.calorieValue}>{totalCalories} kcal</Text>
-        </View>
-
-        <View style={s.spacer} />
+        <View style={{ flex: 1 }} />
 
         {/* Actions */}
         <View style={s.actions}>
@@ -204,7 +208,7 @@ export default function MacroSetupScreen() {
     return (
       <WelcomeScreen
         step={6}
-        totalSteps={7}
+        totalSteps={9}
         title="Set your macro targets"
         subtitle={`We recommend ~${suggestedCal} kcal/day based on your profile. We'll find restaurants based on your targets.`}
         onContinue={handleSave}
@@ -234,7 +238,9 @@ function createStyles(colors: ThemeColors) {
     title: { fontSize: 26, fontWeight: '700', color: colors.textPrimary },
     subtitle: { fontSize: 14, color: colors.textSecondary, lineHeight: 20 },
 
-    dietRow: { flexDirection: 'row' },
+    pickerSection: { gap: 20 },
+
+    dietRow: { flexDirection: 'row', marginBottom: 8 },
     dietPill: {
       alignItems: 'center',
       paddingVertical: 6,
@@ -245,12 +251,11 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.bgCard,
     },
     dietPillActive: { borderColor: colors.accent, backgroundColor: colors.accentBg },
-    dietIcon: { fontSize: 16 },
     dietLabel: { fontSize: 12, fontWeight: '600', color: colors.textPrimary },
     dietLabelActive: { color: colors.accent },
 
-    pickerRow: { flexDirection: 'row', gap: 8, height: 36 * 5 },
-    pickerCol: { flex: 1, alignItems: 'center', gap: 6 },
+    pickerRow: { flexDirection: 'row', gap: 4, height: 40 * 5 + 16, marginTop: 12, marginBottom: 20 },
+    pickerCol: { flex: 1, alignItems: 'center', gap: 4 },
     pickerLabel: { fontSize: 11, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.8 },
 
     calorieBar: {
@@ -265,7 +270,6 @@ function createStyles(colors: ThemeColors) {
     calorieLabel: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
     calorieValue: { fontSize: 22, fontWeight: '800', color: colors.accent },
 
-    spacer: { flex: 1 },
     actions: { gap: 10, alignItems: 'center' },
     saveButton: {
       width: '100%',

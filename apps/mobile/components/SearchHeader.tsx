@@ -5,6 +5,7 @@ import { useTheme } from '@/lib/theme';
 import { BRAND } from '@/lib/brand';
 import type { MacroValues } from '@/lib/macroPresets';
 import type { LocationState } from '@/lib/useLocation';
+import { MACRO_COLORS } from '@/lib/macroColors';
 
 interface SearchHeaderProps {
   values: MacroValues;
@@ -12,49 +13,59 @@ interface SearchHeaderProps {
   onPress: () => void;
 }
 
-import { MACRO_COLORS } from '@/lib/macroColors';
-
-/** Animation timing constants */
-const PULSE_DURATION_MS = 2000;
-const PULSE_GAP_MS = 600;
-const PULSE_STAGGER_MS = 250;
-
-const FIELDS: { key: keyof MacroValues; label: string; color: string }[] = [
-  { key: 'protein', label: 'P', color: MACRO_COLORS.protein },
-  { key: 'carbs', label: 'C', color: MACRO_COLORS.carbs },
-  { key: 'fat', label: 'F', color: MACRO_COLORS.fat },
-];
+const PULSE_DURATION_MS = 1800;
+const PULSE_STAGGER_MS = 300;
 
 function PulsingDot({ color, delay = 0 }: { color: string; delay?: number }) {
-  const pulse = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(1)).current;
+  const ringOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     const anim = Animated.loop(
       Animated.sequence([
         Animated.delay(delay),
-        Animated.timing(pulse, {
-          toValue: 1,
-          duration: PULSE_DURATION_MS,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
-        }),
-        Animated.delay(PULSE_GAP_MS),
-      ])
+        Animated.parallel([
+          Animated.sequence([
+            Animated.timing(scale, {
+              toValue: 2,
+              duration: PULSE_DURATION_MS * 0.6,
+              easing: Easing.out(Easing.cubic),
+              useNativeDriver: true,
+            }),
+            Animated.timing(scale, {
+              toValue: 1,
+              duration: PULSE_DURATION_MS * 0.4,
+              easing: Easing.in(Easing.cubic),
+              useNativeDriver: true,
+            }),
+          ]),
+          Animated.sequence([
+            Animated.timing(ringOpacity, {
+              toValue: 0.4,
+              duration: PULSE_DURATION_MS * 0.15,
+              easing: Easing.out(Easing.quad),
+              useNativeDriver: true,
+            }),
+            Animated.timing(ringOpacity, {
+              toValue: 0,
+              duration: PULSE_DURATION_MS * 0.85,
+              easing: Easing.in(Easing.quad),
+              useNativeDriver: true,
+            }),
+          ]),
+        ]),
+      ]),
     );
     anim.start();
     return () => anim.stop();
-  }, [pulse, delay]);
-
-  // Max 25% radius expansion: dot is 8px (r=4), ring goes to r=5 → scale 1.25
-  const ringScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1.0, 1.25] });
-  const ringOpacity = pulse.interpolate({ inputRange: [0, 0.1, 0.4, 1], outputRange: [0, 0.5, 0.2, 0] });
+  }, [scale, ringOpacity, delay]);
 
   return (
     <View style={styles.dotContainer}>
       <Animated.View
         style={[
           styles.pulseRing,
-          { backgroundColor: color, transform: [{ scale: ringScale }], opacity: ringOpacity },
+          { backgroundColor: color, transform: [{ scale }], opacity: ringOpacity },
         ]}
       />
       <View style={[styles.macroDot, { backgroundColor: color }]} />
@@ -71,8 +82,10 @@ export function SearchHeader({ values, location, onPress }: SearchHeaderProps) {
     ? 'Near you'
     : 'Silver Lake, LA';
 
+  const hasTargets = values.protein || values.carbs || values.fat;
+
   return (
-    <View style={[styles.container, { backgroundColor: colors.bg }]}>
+    <View style={styles.container}>
       <View style={styles.topRow}>
         <Text style={[styles.logo, { color: BRAND.color }]}>{BRAND.name}</Text>
         <View style={styles.locationRow}>
@@ -85,27 +98,32 @@ export function SearchHeader({ values, location, onPress }: SearchHeaderProps) {
 
       <Pressable
         onPress={onPress}
-        style={styles.macroRow}
+        style={[styles.macroButton, { backgroundColor: colors.bgElevated, borderColor: colors.border }]}
         accessibilityLabel="Edit macro filters"
         accessibilityRole="button"
       >
-        {FIELDS.map(({ key, label, color }, i) => {
-          const val = values[key];
-          return (
-            <React.Fragment key={key}>
-              {i > 0 && <View style={styles.chipSpacer} />}
-              <View style={[styles.macroChip, { backgroundColor: colors.bgElevated }]}>
-                <PulsingDot color={color} delay={i * PULSE_STAGGER_MS} />
-                <Text style={[styles.macroText, { color: colors.textSecondary }]}>
-                  {val ? `${val}g` : '\u2014'}{' '}
-                </Text>
-                <Text style={[styles.macroLabel, { color: colors.textTertiary }]}>
-                  {label}
-                </Text>
-              </View>
-            </React.Fragment>
-          );
-        })}
+        {hasTargets ? (
+          <>
+            <View style={styles.macroItem}>
+              <PulsingDot color={MACRO_COLORS.protein} delay={0} />
+              <Text style={[styles.macroNum, { color: colors.textSecondary }]}>{values.protein ?? 0}</Text>
+              <Text style={[styles.macroLetter, { color: colors.textTertiary }]}>p</Text>
+            </View>
+            <View style={styles.macroItem}>
+              <PulsingDot color={MACRO_COLORS.carbs} delay={0} />
+              <Text style={[styles.macroNum, { color: colors.textSecondary }]}>{values.carbs ?? 0}</Text>
+              <Text style={[styles.macroLetter, { color: colors.textTertiary }]}>c</Text>
+            </View>
+            <View style={styles.macroItem}>
+              <PulsingDot color={MACRO_COLORS.fat} delay={0} />
+              <Text style={[styles.macroNum, { color: colors.textSecondary }]}>{values.fat ?? 0}</Text>
+              <Text style={[styles.macroLetter, { color: colors.textTertiary }]}>f</Text>
+            </View>
+          </>
+        ) : (
+          <Text style={[styles.macroLetter, { color: colors.textTertiary }]}>Set targets</Text>
+        )}
+        <Ionicons name="pencil" size={12} color={colors.textTertiary} />
       </Pressable>
     </View>
   );
@@ -137,21 +155,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
   },
-  macroRow: {
+  macroButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 2,
-  },
-  chipSpacer: {
-    width: 8,
-  },
-  macroChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    alignSelf: 'flex-start',
     borderRadius: 20,
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    gap: 6,
+    paddingVertical: 8,
+    gap: 10,
+    borderWidth: 1,
+  },
+  macroItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   dotContainer: {
     width: 10,
@@ -170,12 +187,12 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
   },
-  macroText: {
-    fontSize: 13,
-    fontWeight: '700',
+  macroNum: {
+    fontSize: 14,
+    fontWeight: '800',
   },
-  macroLabel: {
+  macroLetter: {
     fontSize: 13,
-    fontWeight: '500',
+    fontWeight: '400',
   },
 });

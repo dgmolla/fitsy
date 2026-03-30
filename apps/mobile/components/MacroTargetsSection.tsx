@@ -19,8 +19,14 @@ const FIELDS: { key: keyof MacroValues; label: string }[] = [
   { key: 'protein', label: 'Protein' },
   { key: 'carbs', label: 'Carbs' },
   { key: 'fat', label: 'Fat' },
-  { key: 'calories', label: 'Calories' },
 ];
+
+function computeCalories(vals: MacroValues): number {
+  const p = parseFloat(vals.protein) || 0;
+  const c = parseFloat(vals.carbs) || 0;
+  const f = parseFloat(vals.fat) || 0;
+  return p * 4 + c * 4 + f * 9;
+}
 
 export function MacroTargetsSection({ targets, onSave, onSetupPress }: MacroTargetsSectionProps) {
   const { colors } = useTheme();
@@ -63,7 +69,7 @@ export function MacroTargetsSection({ targets, onSave, onSetupPress }: MacroTarg
   if (editing) {
     return (
       <View style={[styles.section, glassSection]}>
-        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Macro Targets</Text>
+        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Daily Macros</Text>
         {FIELDS.map(({ key, label }) => (
           <View key={key} style={styles.editRow}>
             <Text style={[styles.editLabel, { color: colors.textSecondary }]}>{label} (g)</Text>
@@ -80,6 +86,10 @@ export function MacroTargetsSection({ targets, onSave, onSetupPress }: MacroTarg
             />
           </View>
         ))}
+        <View style={styles.calorieRow}>
+          <Text style={[styles.editLabel, { color: colors.textSecondary }]}>Calories</Text>
+          <Text style={[styles.calorieValue, { color: colors.accent }]}>{computeCalories(draft)} kcal</Text>
+        </View>
         {saveError !== null && (
           <Text style={[styles.errorText, { color: colors.error }]} accessibilityLiveRegion="polite">{saveError}</Text>
         )}
@@ -88,7 +98,7 @@ export function MacroTargetsSection({ targets, onSave, onSetupPress }: MacroTarg
             style={[styles.saveButton, { backgroundColor: colors.accent }]}
             onPress={handleSave}
             accessibilityRole="button"
-            accessibilityLabel="Save macro targets"
+            accessibilityLabel="Save daily macros"
           >
             <Text style={[styles.saveButtonText, { color: colors.accentOnAccent }]}>Save</Text>
           </Pressable>
@@ -96,7 +106,7 @@ export function MacroTargetsSection({ targets, onSave, onSetupPress }: MacroTarg
             style={[styles.cancelButton, { backgroundColor: colors.bgCard, borderColor: colors.border }]}
             onPress={handleCancel}
             accessibilityRole="button"
-            accessibilityLabel="Cancel editing macro targets"
+            accessibilityLabel="Cancel editing daily macros"
           >
             <Text style={[styles.cancelButtonText, { color: colors.textSecondary }]}>Cancel</Text>
           </Pressable>
@@ -108,15 +118,15 @@ export function MacroTargetsSection({ targets, onSave, onSetupPress }: MacroTarg
   if (!targets || !FIELDS.some(({ key }) => targets[key] !== '')) {
     return (
       <View style={[styles.section, glassSection]}>
-        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Macro Targets</Text>
-        <Text style={[styles.emptyText, { color: colors.textTertiary }]}>No macro targets set yet.</Text>
+        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Daily Macros</Text>
+        <Text style={[styles.emptyText, { color: colors.textTertiary }]}>No daily macros set yet.</Text>
         <Pressable
           style={[styles.ctaButton, { backgroundColor: colors.accent }]}
           onPress={onSetupPress}
           accessibilityRole="button"
-          accessibilityLabel="Set up macro targets"
+          accessibilityLabel="Set up daily macros"
         >
-          <Text style={[styles.ctaButtonText, { color: colors.accentOnAccent }]}>Set up macro targets</Text>
+          <Text style={[styles.ctaButtonText, { color: colors.accentOnAccent }]}>Set up daily macros</Text>
         </Pressable>
       </View>
     );
@@ -125,11 +135,11 @@ export function MacroTargetsSection({ targets, onSave, onSetupPress }: MacroTarg
   return (
     <View style={[styles.section, glassSection]}>
       <View style={styles.sectionHeader}>
-        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Macro Targets</Text>
+        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Daily Macros</Text>
         <Pressable
           onPress={handleEditPress}
           accessibilityRole="button"
-          accessibilityLabel="Edit macro targets"
+          accessibilityLabel="Edit daily macros"
           hitSlop={8}
         >
           <Text style={[styles.editLink, { color: colors.accent }]}>Edit</Text>
@@ -143,6 +153,12 @@ export function MacroTargetsSection({ targets, onSave, onSetupPress }: MacroTarg
           </View>
         ))}
       </View>
+      {targets && (
+        <View style={styles.calorieRow}>
+          <Text style={[styles.editLabel, { color: colors.textSecondary }]}>Calories</Text>
+          <Text style={[styles.calorieValue, { color: colors.accent }]}>{computeCalories(targets)} kcal</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -205,6 +221,19 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: '500',
+  },
+  calorieRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(0,0,0,0.06)',
+  },
+  calorieValue: {
+    fontSize: 16,
+    fontWeight: '800',
   },
   editInput: {
     width: 80,

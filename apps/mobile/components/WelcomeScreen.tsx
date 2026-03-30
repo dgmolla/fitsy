@@ -12,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { router, useNavigation } from 'expo-router';
 import { useTheme } from '@/lib/theme';
+import { ScreenBackground } from './ScreenBackground';
 
 interface Props {
   step: number;
@@ -57,18 +58,18 @@ export function WelcomeScreen({
   });
 
   const body = (
-    <>
+    <View>
       {illustration && <View style={styles.illustrationWrap}>{illustration}</View>}
       <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
       <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
         {subtitle}
       </Text>
       <View style={styles.childrenWrap}>{children}</View>
-    </>
+    </View>
   );
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]}>
+    <ScreenBackground>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -99,43 +100,38 @@ export function WelcomeScreen({
           <View style={styles.backBtn} />
         </View>
 
-        {/* Body */}
-        {scrollable ? (
-          <ScrollView
-            style={styles.flex}
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
-            {body}
-          </ScrollView>
-        ) : (
-          <View style={styles.body}>{body}</View>
-        )}
-
-        {/* Continue button */}
-        {!hideFooter && (
-          <View style={styles.footer}>
-            <Pressable
-              style={[
-                styles.continueBtn,
-                { backgroundColor: colors.accent },
-                !canContinue && { opacity: 0.4 },
-              ]}
-              onPress={onContinue}
-              disabled={!canContinue}
-              accessibilityRole="button"
-              accessibilityLabel={continueLabel}
-              accessibilityState={{ disabled: !canContinue }}
-            >
-              <Text style={[styles.continueTxt, { color: colors.accentOnAccent }]}>
-                {continueLabel}
-              </Text>
-            </Pressable>
-          </View>
-        )}
+        {/* Body + Footer */}
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          bounces={false}
+        >
+          {body}
+          {!hideFooter && (
+            <View style={styles.footer}>
+              <Pressable
+                style={[
+                  styles.continueBtn,
+                  { backgroundColor: colors.accent },
+                  !canContinue && { opacity: 0.4 },
+                ]}
+                onPress={onContinue}
+                disabled={!canContinue}
+                accessibilityRole="button"
+                accessibilityLabel={continueLabel}
+                accessibilityState={{ disabled: !canContinue }}
+              >
+                <Text style={[styles.continueTxt, { color: colors.accentOnAccent }]}>
+                  {continueLabel}
+                </Text>
+              </Pressable>
+            </View>
+          )}
+        </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </ScreenBackground>
   );
 }
 
@@ -161,13 +157,11 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 2,
   },
-  body: {
-    flex: 1,
-    paddingHorizontal: 24,
-  },
   scrollContent: {
     paddingHorizontal: 24,
-    paddingBottom: 16,
+    paddingBottom: 40,
+    flexGrow: 1,
+    justifyContent: 'space-between',
   },
   illustrationWrap: {
     alignItems: 'center',
@@ -185,12 +179,12 @@ const styles = StyleSheet.create({
     marginBottom: 28,
   },
   childrenWrap: {
-    flex: 1,
+    minHeight: 280,
   },
   footer: {
     paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: 16,
+    paddingTop: 16,
+    marginBottom: 24,
   },
   continueBtn: {
     borderRadius: 14,

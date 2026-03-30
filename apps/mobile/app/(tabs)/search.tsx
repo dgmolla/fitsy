@@ -8,11 +8,12 @@ import {
   Text,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RestaurantResult } from '@fitsy/shared';
 import { EmptyState, RestaurantCard } from '@/components';
 import { FitsyLoader } from '@/components/FitsyLoader';
+import { ScreenBackground } from '@/components/ScreenBackground';
 import { SearchHeader } from '@/components/SearchHeader';
 import { FilterPopup } from '@/components/FilterPopup';
 import type { MacroValues } from '@/lib/macroPresets';
@@ -35,8 +36,9 @@ const DEFAULT_INPUTS: MacroValues = {
 export default function SearchScreen() {
   const [inputs, setInputs] = useState<MacroValues>(DEFAULT_INPUTS);
   const [results, setResults] = useState<RestaurantResult[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const initialFetch = useRef(true);
   const [filterVisible, setFilterVisible] = useState(false);
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -50,14 +52,16 @@ export default function SearchScreen() {
     inputs.fat !== '' ||
     inputs.calories !== '';
 
-  // Hydrate macro targets from storage on mount
-  useEffect(() => {
-    getMacroTargets()
-      .then((saved) => {
-        if (saved) setInputs(saved);
-      })
-      .catch(() => {});
-  }, []);
+  // Hydrate macro targets from storage on every focus
+  useFocusEffect(
+    useCallback(() => {
+      getMacroTargets()
+        .then((saved) => {
+          if (saved) setInputs(saved);
+        })
+        .catch(() => {});
+    }, []),
+  );
 
   const doFetch = useCallback(
     async (current: MacroValues, lat: number, lng: number) => {
@@ -95,6 +99,13 @@ export default function SearchScreen() {
       clearTimeout(debounceRef.current);
     }
 
+    // Skip debounce on first load — fetch immediately
+    if (initialFetch.current) {
+      initialFetch.current = false;
+      doFetch(inputs, location.lat, location.lng);
+      return;
+    }
+
     debounceRef.current = setTimeout(() => {
       doFetch(inputs, location.lat, location.lng);
     }, DEBOUNCE_MS);
@@ -116,10 +127,10 @@ export default function SearchScreen() {
     saveMacroTargets(newValues).catch(() => {});
   }
 
-  const listPaddingBottom = NAV_BAR_HEIGHT + NAV_BAR_SPACING + (insets.bottom > 0 ? insets.bottom : 12) + 16;
+  const listPaddingBottom = 100;
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
+    <ScreenBackground>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -160,7 +171,7 @@ export default function SearchScreen() {
         onApply={handleApplyFilters}
         onClose={() => setFilterVisible(false)}
       />
-    </SafeAreaView>
+    </ScreenBackground>
   );
 }
 

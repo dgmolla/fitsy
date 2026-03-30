@@ -28,7 +28,7 @@ export default function ActivityScreen() {
   return (
     <WelcomeScreen
       step={4}
-      totalSteps={7}
+      totalSteps={9}
       title="How active are you?"
       subtitle="Pick the level that best describes your typical week. Be honest!"
       onContinue={async () => {

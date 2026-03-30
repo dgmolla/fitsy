@@ -20,7 +20,7 @@ export default function WeightScreen() {
   return (
     <WelcomeScreen
       step={3}
-      totalSteps={7}
+      totalSteps={9}
       title="What do you weigh?"
       subtitle="No judgment here. This helps us dial in your macro targets perfectly."
       onContinue={async () => {

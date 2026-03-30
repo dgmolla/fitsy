@@ -7,6 +7,7 @@ import {
   View,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
+import { ScreenBackground } from '@/components/ScreenBackground';
 import { SavedItemResponse } from '@fitsy/shared';
 import { getSavedItems, unsaveItem } from '@/lib/apiClient';
 import { BookmarkButton, FitsyLoader, MenuItem } from '@/components';
@@ -73,7 +74,7 @@ export default function SavedScreen() {
   const sections = buildSections(savedItems);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
+    <ScreenBackground>
       <ScreenHeader />
 
       {loading ? (
@@ -102,7 +103,7 @@ export default function SavedScreen() {
           stickySectionHeadersEnabled
         />
       )}
-    </SafeAreaView>
+    </ScreenBackground>
   );
 }
 

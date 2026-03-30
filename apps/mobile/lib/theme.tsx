@@ -38,6 +38,8 @@ export interface ThemeColors {
   glassShadowColor: string;
   glassShadowOpacity: number;
   glassShadowRadius: number;
+  // Background gradient
+  bgGradient: [string, string];
 }
 
 const darkColors: ThemeColors = {
@@ -68,10 +70,11 @@ const darkColors: ThemeColors = {
   glassShadowColor: '#000',
   glassShadowOpacity: 0.45,
   glassShadowRadius: 24,
+  bgGradient: ['#0A0E14', '#111820'] as [string, string],
 };
 
 const lightColors: ThemeColors = {
-  bg: '#F6F5F3',
+  bg: '#FFFFFF',
   bgCard: 'rgba(255,255,255,0.72)',
   bgElevated: 'rgba(255,255,255,0.55)',
   textPrimary: '#141414',
@@ -98,6 +101,7 @@ const lightColors: ThemeColors = {
   glassShadowColor: '#000',
   glassShadowOpacity: 0.08,
   glassShadowRadius: 20,
+  bgGradient: ['#E8F0E4', '#F2F7F0'] as [string, string],
 };
 
 type ThemeMode = 'light' | 'dark';

@@ -1,13 +1,12 @@
-import React, { useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { useRef, useEffect, useCallback } from 'react';
 import {
-  FlatList,
+  ScrollView,
   View,
   Text,
   StyleSheet,
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
 
@@ -36,7 +35,7 @@ export function ScrollPicker({
   visibleItems = DEFAULT_VISIBLE_ITEMS,
 }: Props) {
   const { colors } = useTheme();
-  const listRef = useRef<FlatList<number>>(null);
+  const scrollRef = useRef<ScrollView>(null);
   const prevValue = useRef(value);
   const hasInitialScrolled = useRef(false);
 
@@ -53,8 +52,8 @@ export function ScrollPicker({
 
   const scrollToIndex = useCallback(
     (idx: number, animated: boolean) => {
-      listRef.current?.scrollToOffset({
-        offset: idx * itemHeight,
+      scrollRef.current?.scrollTo({
+        y: idx * itemHeight,
         animated,
       });
     },
@@ -88,15 +87,6 @@ export function ScrollPicker({
     return unit ? `${label} ${unit}` : label;
   };
 
-  const getItemLayout = useMemo(
-    () => (_: unknown, index: number) => ({
-      length: itemHeight,
-      offset: itemHeight * index,
-      index,
-    }),
-    [itemHeight],
-  );
-
   return (
     <View style={[styles.wrapper, { height: pickerHeight }]}>
       {/* Selection highlight */}
@@ -104,23 +94,36 @@ export function ScrollPicker({
         style={[
           styles.selectionBar,
           {
-            top: itemHeight * padRows,
-            height: itemHeight,
+            top: itemHeight * padRows - 4,
+            height: itemHeight + 8,
             backgroundColor: colors.accentBg,
-            borderRadius: 10,
+            borderRadius: 14,
           },
         ]}
         pointerEvents="none"
       />
 
-      <FlatList
-        ref={listRef}
-        data={values}
-        keyExtractor={(item) => String(item)}
-        renderItem={({ item }) => {
+      <ScrollView
+        ref={scrollRef}
+        showsVerticalScrollIndicator={false}
+        snapToInterval={itemHeight}
+        decelerationRate={0.985}
+        contentContainerStyle={{ paddingVertical: itemHeight * padRows }}
+        onMomentumScrollEnd={onScrollEnd}
+        onScrollEndDrag={onScrollEnd}
+        scrollEventThrottle={16}
+        nestedScrollEnabled
+        onLayout={() => {
+          if (!hasInitialScrolled.current) {
+            hasInitialScrolled.current = true;
+            scrollToIndex(indexForValue(value), false);
+          }
+        }}
+      >
+        {values.map((item) => {
           const isSelected = item === value;
           return (
-            <View style={{ height: itemHeight, alignItems: 'center', justifyContent: 'center' }}>
+            <View key={item} style={{ height: itemHeight, alignItems: 'center', justifyContent: 'center' }}>
               <Text
                 style={[
                   styles.itemText,
@@ -132,35 +135,8 @@ export function ScrollPicker({
               </Text>
             </View>
           );
-        }}
-        showsVerticalScrollIndicator={false}
-        snapToInterval={itemHeight}
-        decelerationRate="fast"
-        contentContainerStyle={{ paddingVertical: itemHeight * padRows }}
-        onMomentumScrollEnd={onScrollEnd}
-        onScrollEndDrag={onScrollEnd}
-        getItemLayout={getItemLayout}
-        scrollEventThrottle={16}
-        onLayout={() => {
-          if (!hasInitialScrolled.current) {
-            hasInitialScrolled.current = true;
-            scrollToIndex(indexForValue(value), false);
-          }
-        }}
-      />
-
-      {/* Top fade */}
-      <LinearGradient
-        colors={[colors.bg, colors.bg + '00']}
-        style={[styles.fadeEdge, { top: 0, height: itemHeight }]}
-        pointerEvents="none"
-      />
-      {/* Bottom fade */}
-      <LinearGradient
-        colors={[colors.bg + '00', colors.bg]}
-        style={[styles.fadeEdge, { bottom: 0, height: itemHeight }]}
-        pointerEvents="none"
-      />
+        })}
+      </ScrollView>
     </View>
   );
 }
@@ -179,8 +155,8 @@ const styles = StyleSheet.create({
   },
   selectionBar: {
     position: 'absolute',
-    left: 4,
-    right: 4,
+    left: 0,
+    right: 0,
     zIndex: 1,
     pointerEvents: 'none',
   },
@@ -191,11 +167,5 @@ const styles = StyleSheet.create({
   itemTextSelected: {
     fontSize: 20,
     fontWeight: '700',
-  },
-  fadeEdge: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    zIndex: 2,
   },
 });

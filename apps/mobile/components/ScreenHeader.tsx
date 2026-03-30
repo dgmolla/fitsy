@@ -7,7 +7,7 @@ export function ScreenHeader() {
   const { colors } = useTheme();
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.bg }]}>
+    <View style={styles.container}>
       <Text style={[styles.logo, { color: BRAND.color }]}>{BRAND.name}</Text>
     </View>
   );

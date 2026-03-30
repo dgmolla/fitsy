@@ -6,6 +6,7 @@ import * as Google from 'expo-auth-session/providers/google';
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable } from 'react-native';
 import { appleSignIn, completeGoogleSignIn } from '@/lib/authClient';
+import { pullProfileFromServer } from '@/lib/profileSync';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { useTheme } from '@/lib/theme';
 
@@ -28,9 +29,15 @@ export default function SignInScreen() {
       if (idToken) {
         setGoogleLoading(true);
         completeGoogleSignIn(idToken)
-          .then(() => {
-            setGoogleLoading(false);
-            router.replace('/welcome/payment');
+          .then(async (result) => {
+            if (!result.isNewUser) {
+              await pullProfileFromServer();
+              setGoogleLoading(false);
+              router.replace('/(tabs)/search');
+            } else {
+              setGoogleLoading(false);
+              router.replace('/welcome/payment');
+            }
           })
           .catch((err: Error) => {
             setGoogleLoading(false);
@@ -45,8 +52,13 @@ export default function SignInScreen() {
   async function handleAppleSignIn() {
     setAppleLoading(true);
     try {
-      await appleSignIn();
-      router.replace('/welcome/payment');
+      const result = await appleSignIn();
+      if (!result.isNewUser) {
+        await pullProfileFromServer();
+        router.replace('/(tabs)/search');
+      } else {
+        router.replace('/welcome/payment');
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Apple Sign In failed';
       if (!msg.includes('canceled')) {
@@ -69,14 +81,16 @@ export default function SignInScreen() {
 
   return (
     <WelcomeScreen
-      step={6}
-      totalSteps={7}
+      step={9}
+      totalSteps={9}
       title="Create your account"
       subtitle="Save your targets and start finding meals that fit your goals."
       onContinue={() => {}}
       canContinue={false}
       hideFooter={true}
+      onBack={() => router.back()}
     >
+      <View style={styles.buttonsWrap}>
       <View style={styles.buttons}>
         <Pressable
           style={[styles.appleBtn, { backgroundColor: colors.textPrimary }, isLoading && styles.disabled]}
@@ -108,11 +122,13 @@ export default function SignInScreen() {
       <Text style={[styles.legal, { color: colors.textTertiary }]}>
         By continuing you agree to our Terms of Service and Privacy Policy.
       </Text>
+      </View>
     </WelcomeScreen>
   );
 }
 
 const styles = StyleSheet.create({
+  buttonsWrap: { flex: 1, justifyContent: 'center' },
   buttons: { gap: 12, marginBottom: 16 },
   appleBtn: {
     flexDirection: 'row',
