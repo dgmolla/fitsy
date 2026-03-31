@@ -1,11 +1,8 @@
-import React, { useEffect, useRef } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import React from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '@/lib/theme';
-import { BRAND } from '@/lib/brand';
 import type { MacroValues } from '@/lib/macroPresets';
 import type { LocationState } from '@/lib/useLocation';
-import { MACRO_COLORS } from '@/lib/macroColors';
 
 interface SearchHeaderProps {
   values: MacroValues;
@@ -13,186 +10,159 @@ interface SearchHeaderProps {
   onPress: () => void;
 }
 
-const PULSE_DURATION_MS = 1800;
-const PULSE_STAGGER_MS = 300;
-
-function PulsingDot({ color, delay = 0 }: { color: string; delay?: number }) {
-  const scale = useRef(new Animated.Value(1)).current;
-  const ringOpacity = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const anim = Animated.loop(
-      Animated.sequence([
-        Animated.delay(delay),
-        Animated.parallel([
-          Animated.sequence([
-            Animated.timing(scale, {
-              toValue: 2,
-              duration: PULSE_DURATION_MS * 0.6,
-              easing: Easing.out(Easing.cubic),
-              useNativeDriver: true,
-            }),
-            Animated.timing(scale, {
-              toValue: 1,
-              duration: PULSE_DURATION_MS * 0.4,
-              easing: Easing.in(Easing.cubic),
-              useNativeDriver: true,
-            }),
-          ]),
-          Animated.sequence([
-            Animated.timing(ringOpacity, {
-              toValue: 0.4,
-              duration: PULSE_DURATION_MS * 0.15,
-              easing: Easing.out(Easing.quad),
-              useNativeDriver: true,
-            }),
-            Animated.timing(ringOpacity, {
-              toValue: 0,
-              duration: PULSE_DURATION_MS * 0.85,
-              easing: Easing.in(Easing.quad),
-              useNativeDriver: true,
-            }),
-          ]),
-        ]),
-      ]),
-    );
-    anim.start();
-    return () => anim.stop();
-  }, [scale, ringOpacity, delay]);
-
+function MacroBox({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
-    <View style={styles.dotContainer}>
-      <Animated.View
-        style={[
-          styles.pulseRing,
-          { backgroundColor: color, transform: [{ scale }], opacity: ringOpacity },
-        ]}
-      />
-      <View style={[styles.macroDot, { backgroundColor: color }]} />
+    <View style={[h.macroBox, highlight && h.macroBoxHighlight]}>
+      <Text style={[h.macroValue, highlight && h.macroValueHighlight]}>
+        {value || '—'}
+      </Text>
+      <Text style={[h.macroLabel, highlight && h.macroLabelHighlight]}>
+        {label}
+      </Text>
     </View>
   );
 }
 
 export function SearchHeader({ values, location, onPress }: SearchHeaderProps) {
-  const { colors } = useTheme();
-
   const locationLabel = location.loading
     ? 'Locating...'
     : location.source === 'gps'
     ? 'Near you'
     : 'Silver Lake, LA';
 
-  const hasTargets = values.protein || values.carbs || values.fat;
-
   return (
-    <View style={styles.container}>
-      <View style={styles.topRow}>
-        <Text style={[styles.logo, { color: BRAND.color }]}>{BRAND.name}</Text>
-        <View style={styles.locationRow}>
-          <Ionicons name="location-sharp" size={12} color={colors.textTertiary} />
-          <Text style={[styles.location, { color: colors.textTertiary }]}>
-            {locationLabel}
-          </Text>
+    <View style={h.wrapper}>
+      <Pressable onPress={onPress} style={h.inner}>
+        {/* Row 1: logo + location */}
+        <View style={h.row1}>
+          <View style={h.logoLeft}>
+            <Ionicons name="restaurant" size={18} color="#4ADE80" />
+            <Text style={h.logo}>fitsy</Text>
+          </View>
+          <View style={h.locationPill}>
+            <View style={h.locationDot} />
+            <Text style={h.locationText}>{locationLabel}</Text>
+          </View>
         </View>
-      </View>
 
-      <Pressable
-        onPress={onPress}
-        style={[styles.macroButton, { backgroundColor: colors.bgElevated, borderColor: colors.border }]}
-        accessibilityLabel="Edit macro filters"
-        accessibilityRole="button"
-      >
-        {hasTargets ? (
-          <>
-            <View style={styles.macroItem}>
-              <PulsingDot color={MACRO_COLORS.protein} delay={0} />
-              <Text style={[styles.macroNum, { color: colors.textSecondary }]}>{values.protein ?? 0}</Text>
-              <Text style={[styles.macroLetter, { color: colors.textTertiary }]}>p</Text>
-            </View>
-            <View style={styles.macroItem}>
-              <PulsingDot color={MACRO_COLORS.carbs} delay={0} />
-              <Text style={[styles.macroNum, { color: colors.textSecondary }]}>{values.carbs ?? 0}</Text>
-              <Text style={[styles.macroLetter, { color: colors.textTertiary }]}>c</Text>
-            </View>
-            <View style={styles.macroItem}>
-              <PulsingDot color={MACRO_COLORS.fat} delay={0} />
-              <Text style={[styles.macroNum, { color: colors.textSecondary }]}>{values.fat ?? 0}</Text>
-              <Text style={[styles.macroLetter, { color: colors.textTertiary }]}>f</Text>
-            </View>
-          </>
-        ) : (
-          <Text style={[styles.macroLetter, { color: colors.textTertiary }]}>Set targets</Text>
-        )}
-        <Ionicons name="pencil" size={12} color={colors.textTertiary} />
+        {/* Row 2: headline + reset */}
+        <View style={h.row2}>
+          <Text style={h.headline}>Crave something.</Text>
+          <Text style={h.reset}>✕  RESET</Text>
+        </View>
+
+        {/* Row 3: macro boxes */}
+        <View style={h.row3}>
+          <MacroBox label="PROT" value={values.protein || '45'} />
+          <MacroBox label="CARB" value={values.carbs || '60'} />
+          <MacroBox label="FAT" value={values.fat || '12'} />
+          <MacroBox label="KCAL" value={values.calories || '550'} highlight />
+        </View>
       </Pressable>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: 20,
-    paddingTop: 6,
-    paddingBottom: 16,
+const h = StyleSheet.create({
+  wrapper: {
+    backgroundColor: '#0A0E14',
   },
-  topRow: {
+  inner: {
+    paddingHorizontal: 20,
+    paddingBottom: 22,
+    gap: 16,
+  },
+  row1: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 14,
+    marginBottom: 4,
+  },
+  logoLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   logo: {
-    fontSize: 30,
-    fontWeight: BRAND.fontWeight,
-    letterSpacing: BRAND.letterSpacing,
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#4ADE80',
+    letterSpacing: -0.8,
   },
-  locationRow: {
+  locationPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-  },
-  location: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  macroButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    gap: 10,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 14,
+    paddingHorizontal: 11,
+    paddingVertical: 5,
     borderWidth: 1,
+    borderColor: 'rgba(68,72,79,0.25)',
+    gap: 5,
   },
-  macroItem: {
+  locationDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#4ADE80',
+  },
+  locationText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: 'rgba(241,243,252,0.6)',
+  },
+  row2: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
   },
-  dotContainer: {
-    width: 10,
-    height: 10,
+  headline: {
+    fontFamily: 'PlayfairDisplay-BoldItalic',
+    fontSize: 28,
+    color: '#F1F3FC',
+  },
+  reset: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: 'rgba(241,243,252,0.28)',
+    letterSpacing: 1,
+  },
+  row3: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  macroBox: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'transparent',
+    borderRadius: 14,
+    paddingVertical: 12,
+    borderWidth: 1.5,
+    borderColor: 'rgba(68,72,79,0.4)',
   },
-  pulseRing: {
-    position: 'absolute',
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  macroBoxHighlight: {
+    borderColor: 'rgba(74,222,128,0.5)',
+    backgroundColor: 'transparent',
   },
-  macroDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  macroValue: {
+    fontFamily: 'Manrope-Bold',
+    fontSize: 18,
+    color: '#F1F3FC',
+    letterSpacing: -0.3,
   },
-  macroNum: {
-    fontSize: 14,
+  macroValueHighlight: {
+    color: '#4ADE80',
+    fontWeight: '500',
+  },
+  macroLabel: {
+    fontSize: 9,
     fontWeight: '800',
+    color: 'rgba(168,171,179,0.4)',
+    letterSpacing: 1.5,
+    marginTop: 2,
   },
-  macroLetter: {
-    fontSize: 13,
-    fontWeight: '400',
+  macroLabelHighlight: {
+    color: 'rgba(74,222,128,0.4)',
   },
 });
