@@ -76,7 +76,6 @@ export default function SavedScreen() {
   return (
     <ScreenBackground>
       <ScreenHeader />
-
       {loading ? (
         <View style={styles.centered}>
           <FitsyLoader size="md" />
@@ -163,5 +162,11 @@ const styles = StyleSheet.create({
   listContent: {
     flexGrow: 1,
     paddingBottom: 32,
+  },
+  tagline: {
+    fontFamily: 'PlayfairDisplay-BoldItalic',
+    fontSize: 28,
+    paddingHorizontal: 20,
+    marginBottom: 16,
   },
 });

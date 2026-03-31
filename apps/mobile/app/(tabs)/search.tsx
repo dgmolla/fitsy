@@ -248,7 +248,7 @@ export default function SearchScreen() {
                   pathname: `/restaurant/${r.id}`,
                   params: { address: r.address, distance: r.distanceMiles?.toFixed(1) },
                 })}
-                style={styles.heroContainer}
+                style={[styles.heroContainer, { borderColor: colors.border }]}
               >
                 <Image
                   source={{ uri: r.photoUrl || getMockImage(r.name) }}
