@@ -18,7 +18,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 0,
     paddingBottom: 12,
-    backgroundColor: '#0A0E14',
+    backgroundColor: 'transparent',
   },
   logoRow: {
     flexDirection: 'row',
