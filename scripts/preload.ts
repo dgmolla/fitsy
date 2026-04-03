@@ -17,6 +17,8 @@
  *   SUPABASE_URL              — Supabase project URL (optional; photos skipped if absent)
  *   SUPABASE_SERVICE_ROLE_KEY — Supabase service role key for Storage uploads (optional)
  *   YELP_API_KEY              — Yelp Fusion API key for photo fallback (optional)
+ *   PHOTOS_ONLY               — Set to "true" to backfill photos for existing DB restaurants only
+ *                               (skips scraping/macro stages; requires SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY)
  *   TARGET_LAT            — Target latitude (default: 34.0928)
  *   TARGET_LNG            — Target longitude (default: -118.3086)
  *   TARGET_RADIUS         — Search radius in meters (default: 1500)
@@ -529,7 +531,7 @@ async function uploadToSupabase(placeId: string, imageBuffer: Buffer): Promise<s
         "Content-Type": "image/jpeg",
         "x-upsert": "true",
       },
-      body: imageBuffer,
+      body: new Uint8Array(imageBuffer),
     },
   );
 
@@ -572,6 +574,138 @@ async function fetchAndStorePhoto(
 
   const url = await uploadToSupabase(place.placeId, imageBuffer);
   return { url, source };
+}
+
+// ---------------------------------------------------------------------------
+// Google Places — Get Place details (for photos-only backfill)
+// ---------------------------------------------------------------------------
+
+interface GooglePlaceDetails {
+  photos?: Array<{ name?: string }>;
+}
+
+async function getPlacePhotoName(placeId: string): Promise<string | null> {
+  const apiKey = process.env["GOOGLE_PLACES_API_KEY"] ?? "";
+
+  const response = await fetch(
+    `${CONFIG.googlePlacesBaseUrl}/places/${placeId}`,
+    {
+      headers: {
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-FieldMask": "photos",
+      },
+    }
+  );
+
+  if (!response.ok) return null;
+
+  const data = (await response.json()) as GooglePlaceDetails;
+  return data.photos?.[0]?.name ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Photos-only backfill — runs when PHOTOS_ONLY=true
+// ---------------------------------------------------------------------------
+
+async function runPhotosOnly(prisma: PrismaClient): Promise<void> {
+  const supabaseUrl = process.env["SUPABASE_URL"];
+  const serviceKey = process.env["SUPABASE_SERVICE_ROLE_KEY"];
+  if (!supabaseUrl || !serviceKey) {
+    log("PHOTOS_ONLY mode requires SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY");
+    process.exit(1);
+  }
+
+  const useGoogle = !!process.env["GOOGLE_PLACES_API_KEY"];
+  if (!useGoogle) {
+    log("GOOGLE_PLACES_API_KEY not set — will use Yelp fallback only");
+  }
+
+  const restaurants = await prisma.restaurant.findMany({
+    where: { photoUrl: null },
+    select: { id: true, externalPlaceId: true, name: true, address: true },
+  });
+
+  log(`Found ${restaurants.length} restaurants without photos`);
+
+  const costStats: CostStats = {
+    anthropicInputTokens: 0,
+    anthropicOutputTokens: 0,
+    anthropicCalls: 0,
+    googlePlacesCalls: 0,
+    googlePlacesPhotoCalls: 0,
+  };
+
+  let stored = 0;
+  let noSource = 0;
+  let errors = 0;
+
+  for (let i = 0; i < restaurants.length; i++) {
+    const r = restaurants[i]!;
+    log(`[${i + 1}/${restaurants.length}] ${r.name}`);
+
+    try {
+      let imageBuffer: Buffer | null = null;
+      let source: string | null = null;
+
+      if (useGoogle) {
+        const photoName = await getPlacePhotoName(r.externalPlaceId);
+        costStats.googlePlacesCalls++;
+        if (photoName) {
+          imageBuffer = await fetchGooglePlacesPhoto(photoName);
+          if (imageBuffer) {
+            source = "google_places";
+            costStats.googlePlacesPhotoCalls++;
+          }
+        }
+      }
+
+      if (!imageBuffer) {
+        imageBuffer = await fetchYelpPhoto(r.name, r.address);
+        if (imageBuffer) source = "yelp";
+      }
+
+      if (!imageBuffer || !source) {
+        log(`  No photo source found`);
+        noSource++;
+      } else {
+        const url = await uploadToSupabase(r.externalPlaceId, imageBuffer);
+        await prisma.restaurant.update({
+          where: { id: r.id },
+          data: { photoUrl: url, photoSource: source },
+        });
+        log(`  Stored from ${source}`);
+        stored++;
+      }
+    } catch (err) {
+      log(`  Error: ${String(err)}`);
+      errors++;
+    }
+
+    await delay(CONFIG.rateLimitDelayMs);
+  }
+
+  log(
+    `Photos-only done: ${stored} stored / ${noSource} no source / ${errors} errors`
+  );
+
+  const googleCostUsd = costStats.googlePlacesCalls * GOOGLE_PLACES_COST_PER_CALL;
+  const googlePhotoCostUsd =
+    costStats.googlePlacesPhotoCalls * GOOGLE_PLACES_PHOTO_COST_PER_CALL;
+
+  console.log(
+    "[preload:costs]",
+    JSON.stringify({
+      mode: "photos_only",
+      google_places_calls: costStats.googlePlacesCalls,
+      google_places_cost_usd: parseFloat(googleCostUsd.toFixed(4)),
+      google_places_photo_calls: costStats.googlePlacesPhotoCalls,
+      google_places_photo_cost_usd: parseFloat(googlePhotoCostUsd.toFixed(4)),
+      total_cost_usd: parseFloat((googleCostUsd + googlePhotoCostUsd).toFixed(4)),
+      photos_stored: stored,
+      photos_no_source: noSource,
+      photos_error: errors,
+    })
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -698,6 +832,38 @@ async function upsertMenuItem(
 }
 
 // ---------------------------------------------------------------------------
+// MacroEstimate upsert helper — idempotent: update most-recent or create new
+// ---------------------------------------------------------------------------
+
+async function upsertMacroEstimate(
+  menuItemId: string,
+  item: HaikuMenuItem,
+  prisma: PrismaClient
+): Promise<void> {
+  const existing = await prisma.macroEstimate.findFirst({
+    where: { menuItemId },
+    select: { id: true },
+    orderBy: { estimatedAt: "desc" },
+  });
+
+  const data = {
+    calories: Math.round(item.cal),
+    proteinG: item.p,
+    carbsG: item.c,
+    fatG: item.f,
+    confidence: item.conf as "HIGH" | "MEDIUM" | "LOW",
+    hadPhoto: false,
+    expiresAt: null as Date | null,
+  };
+
+  if (existing) {
+    await prisma.macroEstimate.update({ where: { id: existing.id }, data });
+  } else {
+    await prisma.macroEstimate.create({ data: { menuItemId, ...data } });
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Prisma persistence
 // ---------------------------------------------------------------------------
 
@@ -732,18 +898,7 @@ async function persistRestaurant(
     try {
       const menuItemId = await upsertMenuItem(restaurant.id, item, prisma);
 
-      await prisma.macroEstimate.create({
-        data: {
-          menuItemId,
-          calories: Math.round(item.cal),
-          proteinG: item.p,
-          carbsG: item.c,
-          fatG: item.f,
-          confidence: item.conf,
-          hadPhoto: false,
-          expiresAt: null,
-        },
-      });
+      await upsertMacroEstimate(menuItemId, item, prisma);
     } catch (err) {
       log(`  Failed to persist item "${item.n}": ${String(err)}`);
     }
@@ -767,6 +922,24 @@ function log(message: string): void {
 // ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
+  // Photos-only mode: backfill images for existing DB restaurants, no scraping
+  if (process.env["PHOTOS_ONLY"] === "true") {
+    const missing = (
+      ["POSTGRES_PRISMA_URL", "POSTGRES_URL_NON_POOLING"] as const
+    ).filter((v) => !process.env[v]);
+    if (missing.length > 0) {
+      console.error(`[preload] Missing required env vars: ${missing.join(", ")}`);
+      process.exit(1);
+    }
+    const prisma = new PrismaClient();
+    try {
+      await runPhotosOnly(prisma);
+    } finally {
+      await prisma.$disconnect();
+    }
+    return;
+  }
+
   validateEnv();
 
   log(
