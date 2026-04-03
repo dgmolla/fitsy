@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/restaurantService";
 import { requireAuth } from "@/lib/auth";
+import { prisma } from "@/lib/restaurantService";
 import type {
   SubscriptionVerifyRequest,
   SubscriptionVerifyResponse,

@@ -5,6 +5,9 @@ kanban-plugin: basic
 ## Backlog
 
 - [ ] **S-64** RevenueCat integration — install `react-native-purchases`, configure RevenueCat project + App Store Connect IAP products ($5/mo, $30/yr), implement paywall screen, gate paid features behind entitlement check, replace subscription verify stub from S-60. Prereqs: Apple Developer account, ASC app record, IAP products + subscription group created in ASC, RevenueCat project linked, free-vs-paid feature split decided. #frontend #backend #O1
+- [ ] **S-65** Frontend theme centralization — Replace 30+ hardcoded hex/rgba colors with theme references across SearchHeader, FilterPopup, RestaurantCard, search.tsx, _layout.tsx. Add missing theme props: `navBg`, `accentHighlight`, `accentHighlightBg`. Ensure light mode works fully. #frontend #O1
+- [ ] **S-66** Design token constants — Create `lib/fonts.ts` (centralize font family strings: PlayfairDisplay-BoldItalic, Manrope-Bold, Caslon540Italic), `lib/spacing.ts` (SPACING + BORDER_RADIUS constants to replace 80+ magic numbers). Replace across codebase. #frontend #O1
+- [ ] **S-67** Extract shared UI components — Extract `<GlassmorphicCard>` (duplicated 3x: search, FilterPopup, RestaurantCard), `<MacroInput>` (duplicated in SearchHeader + FilterPopup), `<ProfileSection>` (repeated 3x in profile.tsx). Remove 3 unused style definitions. #frontend #O1
 
 ## In Progress
 

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/restaurantService";
 import { getSupabaseAdmin, getSupabaseClient } from "@/lib/supabase";
 import { sendWelcomeEmail } from "@/services/emailService";
 import type { AuthApiResponse } from "@fitsy/shared";
@@ -72,14 +71,18 @@ export async function POST(
 
   let user: { id: string; email: string; name: string | null };
   try {
-    user = await prisma.user.create({
-      data: {
+    const { data: profileData, error: profileError } = await supabaseAdmin
+      .from("User")
+      .insert({
         id: createData.user.id,
         email: createData.user.email!,
         name: nameValue ?? null,
-      },
-      select: { id: true, email: true, name: true },
-    });
+      })
+      .select("id, email, name")
+      .single();
+
+    if (profileError) throw profileError;
+    user = profileData as { id: string; email: string; name: string | null };
   } catch {
     // Clean up Supabase user if profile creation fails
     await supabaseAdmin.auth.admin.deleteUser(createData.user.id).catch(() => {

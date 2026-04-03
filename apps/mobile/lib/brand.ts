@@ -7,7 +7,7 @@ import { TextStyle } from 'react-native';
  */
 export const BRAND = {
   name: 'fitsy',
-  tagline: 'Find restaurants that fit your fitness goals',
+  tagline: 'Try new food that fits your goals',
   color: '#2D7D46',
   letterSpacing: -1,
   fontWeight: '800' as TextStyle['fontWeight'],

@@ -11,20 +11,15 @@ import {
   geoCacheSet,
   type CachedRestaurant,
 } from "./geoCache";
+import { getSupabaseAdmin } from "./supabase";
 import type { RestaurantResult, MenuResponse } from "@fitsy/shared";
 
 // ─── Prisma singleton ─────────────────────────────────────────────────────────
-
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
-};
-
+// Reuse a single PrismaClient instance across hot-reloads in dev (Next.js).
+const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 export const prisma: PrismaClient =
   globalForPrisma.prisma ?? new PrismaClient();
-
-if (process.env["NODE_ENV"] !== "production") {
-  globalForPrisma.prisma = prisma;
-}
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
 // ─── Query params ─────────────────────────────────────────────────────────────
 
@@ -88,29 +83,39 @@ async function fetchGeoData(
     radiusMiles,
   );
 
-  const dbRestaurants = await prisma.restaurant.findMany({
-    where: {
-      lat: { gte: latMin, lte: latMax },
-      lng: { gte: lngMin, lte: lngMax },
-      ...(cuisineType !== undefined
-        ? { cuisineTags: { has: cuisineType } }
-        : {}),
-      ...(chainOnly !== undefined ? { chainFlag: chainOnly } : {}),
-    },
-    include: {
-      menuItems: {
-        include: {
-          macroEstimates: {
-            orderBy: { estimatedAt: "desc" },
-            take: 1,
-          },
-        },
-      },
-    },
-  });
+  const supabase = getSupabaseAdmin();
+
+  let query = supabase
+    .from("Restaurant")
+    .select(
+      `id, name, address, lat, lng, cuisineTags, chainFlag, photoUrl,
+       menuItems:MenuItem(
+         id, name,
+         macroEstimates:MacroEstimate(
+           calories, proteinG, carbsG, fatG, confidence, estimatedAt
+         )
+       )`,
+    )
+    .gte("lat", latMin)
+    .lte("lat", latMax)
+    .gte("lng", lngMin)
+    .lte("lng", lngMax);
+
+  if (cuisineType !== undefined) {
+    query = query.contains("cuisineTags", [cuisineType]);
+  }
+  if (chainOnly !== undefined) {
+    query = query.eq("chainFlag", chainOnly);
+  }
+
+  const { data: dbRestaurants, error } = await query;
+
+  if (error) {
+    throw new Error(`Supabase query failed: ${error.message}`);
+  }
 
   // Filter to true radius and flatten into cache-friendly shape
-  const restaurants: CachedRestaurant[] = dbRestaurants
+  const restaurants: CachedRestaurant[] = (dbRestaurants ?? [])
     .filter((r) => computeDistanceMiles(lat, lng, r.lat, r.lng) <= radiusMiles)
     .map((r) => ({
       id: r.id,
@@ -118,13 +123,30 @@ async function fetchGeoData(
       address: r.address,
       lat: r.lat,
       lng: r.lng,
-      cuisineTags: r.cuisineTags,
+      cuisineTags: r.cuisineTags as string[],
       chainFlag: r.chainFlag,
-      photoUrl: r.photoUrl,
-      menuItems: r.menuItems
+      photoUrl: r.photoUrl ?? null,
+      menuItems: (r.menuItems as Array<{
+        id: string;
+        name: string;
+        macroEstimates: Array<{
+          calories: number;
+          proteinG: number;
+          carbsG: number;
+          fatG: number;
+          confidence: string;
+          estimatedAt: string;
+        }>;
+      }>)
         .filter((item) => item.macroEstimates.length > 0)
         .map((item) => {
-          const est = item.macroEstimates[0]!;
+          // Take the most recent estimate
+          const sorted = [...item.macroEstimates].sort(
+            (a, b) =>
+              new Date(b.estimatedAt).getTime() -
+              new Date(a.estimatedAt).getTime(),
+          );
+          const est = sorted[0]!;
           return {
             menuItemId: item.id,
             name: item.name,
@@ -283,28 +305,54 @@ export async function findNearbyRestaurants(
 export async function getRestaurantMenu(
   restaurantId: string,
 ): Promise<MenuResponse | null> {
-  const restaurant = await prisma.restaurant.findUnique({
-    where: { id: restaurantId },
-    include: {
-      menuItems: {
-        orderBy: { name: "asc" },
-        include: {
-          macroEstimates: {
-            orderBy: { estimatedAt: "desc" },
-            take: 1,
-          },
-        },
-      },
-    },
-  });
+  const supabase = getSupabaseAdmin();
 
-  if (!restaurant) return null;
+  const { data: restaurant, error } = await supabase
+    .from("Restaurant")
+    .select(
+      `id, name,
+       menuItems:MenuItem(
+         id, name, description, category, price,
+         macroEstimates:MacroEstimate(
+           calories, proteinG, carbsG, fatG, confidence, hadPhoto, estimatedAt
+         )
+       )`,
+    )
+    .eq("id", restaurantId)
+    .single();
+
+  if (error || !restaurant) return null;
+
+  type MenuItemRow = {
+    id: string;
+    name: string;
+    description: string | null;
+    category: string | null;
+    price: number | null;
+    macroEstimates: Array<{
+      calories: number;
+      proteinG: number;
+      carbsG: number;
+      fatG: number;
+      confidence: string;
+      hadPhoto: boolean;
+      estimatedAt: string;
+    }>;
+  };
+
+  const menuItemsSorted = [...(restaurant.menuItems as MenuItemRow[])].sort(
+    (a, b) => a.name.localeCompare(b.name),
+  );
 
   return {
     restaurantId: restaurant.id,
     restaurantName: restaurant.name,
-    menuItems: restaurant.menuItems.map((item) => {
-      const estimate = item.macroEstimates[0] ?? null;
+    menuItems: menuItemsSorted.map((item) => {
+      const sorted = [...item.macroEstimates].sort(
+        (a, b) =>
+          new Date(b.estimatedAt).getTime() - new Date(a.estimatedAt).getTime(),
+      );
+      const estimate = sorted[0] ?? null;
       return {
         id: item.id,
         name: item.name,
@@ -319,9 +367,9 @@ export async function getRestaurantMenu(
               proteinG: estimate.proteinG,
               carbsG: estimate.carbsG,
               fatG: estimate.fatG,
-              confidence: estimate.confidence,
+              confidence: estimate.confidence as "HIGH" | "MEDIUM" | "LOW",
               hadPhoto: estimate.hadPhoto,
-              estimatedAt: estimate.estimatedAt.toISOString(),
+              estimatedAt: estimate.estimatedAt,
             }
           : null,
       };

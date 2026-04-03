@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/restaurantService";
-import { getSupabaseClient } from "@/lib/supabase";
+import { getSupabaseAdmin, getSupabaseClient } from "@/lib/supabase";
 import type { AuthApiResponse } from "@fitsy/shared";
 
 export async function POST(
@@ -47,17 +46,32 @@ export async function POST(
 
   // ─── Sync profile to our DB ──────────────────────────────────────────────────
 
-  const user = await prisma.user.upsert({
-    where: { id: data.user.id },
-    update: {},
-    create: {
+  const supabaseAdmin = getSupabaseAdmin();
+  const { data: existingUser } = await supabaseAdmin
+    .from("User")
+    .select("id, email, name")
+    .eq("id", data.user.id)
+    .single();
+
+  let user: { id: string; email: string; name: string | null };
+  if (existingUser) {
+    user = existingUser as { id: string; email: string; name: string | null };
+  } else {
+    const { data: newUser } = await supabaseAdmin
+      .from("User")
+      .insert({
+        id: data.user.id,
+        email: data.user.email!,
+        name: (data.user.user_metadata?.["name"] as string | undefined) ?? null,
+      })
+      .select("id, email, name")
+      .single();
+    user = (newUser ?? {
       id: data.user.id,
       email: data.user.email!,
-      name:
-        (data.user.user_metadata?.["name"] as string | undefined) ?? null,
-    },
-    select: { id: true, email: true, name: true },
-  });
+      name: null,
+    }) as { id: string; email: string; name: string | null };
+  }
 
   return NextResponse.json(
     {

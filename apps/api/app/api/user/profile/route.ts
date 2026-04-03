@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/restaurantService";
 import { requireAuth } from "@/lib/auth";
 import { calculateTdee } from "@/lib/tdeeCalculator";
+import { prisma } from "@/lib/restaurantService";
 import { calculateAge } from "@fitsy/shared";
 import type {
   ProfileUpdateRequest,

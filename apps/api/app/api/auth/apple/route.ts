@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/restaurantService";
 import { getSupabaseClient } from "@/lib/supabase";
+import { prisma } from "@/lib/restaurantService";
 import type { AppleAuthRequest, AppleAuthResponse } from "@fitsy/shared";
 
 export async function POST(

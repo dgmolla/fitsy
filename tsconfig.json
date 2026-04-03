@@ -1,7 +1,9 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022"],
+    "lib": [
+      "ES2022"
+    ],
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "strict": true,
@@ -11,9 +13,18 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "paths": {
-      "@fitsy/shared": ["./packages/shared/src/index.ts"],
-      "@fitsy/shared/*": ["./packages/shared/src/*"]
+      "@fitsy/shared": [
+        "./packages/shared/src/index.ts"
+      ],
+      "@fitsy/shared/*": [
+        "./packages/shared/src/*"
+      ]
     }
   },
-  "exclude": ["node_modules", "dist", ".next"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    ".next"
+  ],
+  "extends": "expo/tsconfig.base"
 }

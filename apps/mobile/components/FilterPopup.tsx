@@ -30,7 +30,7 @@ const MACROS: { key: keyof MacroValues; label: string; fullLabel: string; unit: 
 const CARD_HALF_H = 132;
 
 export function FilterPopup({ visible, values, onApply, onClose }: FilterPopupProps) {
-  const { colors } = useTheme();
+  const { colors, mode } = useTheme();
   const [draft, setDraft] = useState<MacroValues>(values);
 
   const scaleAnim = useRef(new Animated.Value(0.72)).current;
@@ -100,11 +100,11 @@ export function FilterPopup({ visible, values, onApply, onClose }: FilterPopupPr
       {/* Heavy blur backdrop */}
       <Animated.View style={[StyleSheet.absoluteFill, { opacity: blurOpacity }]}>
         <BlurView
-          tint="dark"
+          tint={mode === 'dark' ? 'dark' : 'light'}
           intensity={80}
           style={StyleSheet.absoluteFill as ViewStyle}
         />
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(10,14,20,0.75)' }]} />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: mode === 'dark' ? 'rgba(10,14,20,0.75)' : 'rgba(248,250,252,0.75)' }]} />
       </Animated.View>
 
       <Pressable
@@ -119,6 +119,8 @@ export function FilterPopup({ visible, values, onApply, onClose }: FilterPopupPr
           style={[
             s.card,
             {
+              backgroundColor: colors.glassBg,
+              borderColor: colors.glassBorder,
               opacity: opacityAnim,
               transform: [{ scale: scaleAnim }, { translateY }],
             },
@@ -127,45 +129,45 @@ export function FilterPopup({ visible, values, onApply, onClose }: FilterPopupPr
           {/* Macro boxes */}
           <View style={s.macroRow}>
             {MACROS.map(({ key, fullLabel }) => (
-              <View key={key} style={s.macroBox}>
+              <View key={key} style={[s.macroBox, { borderColor: colors.inputBorder }]}>
                 <TextInput
-                  style={s.macroInput}
+                  style={[s.macroInput, { color: colors.textPrimary }]}
                   value={draft[key]}
                   onChangeText={(t) => setDraft((p) => ({ ...p, [key]: t }))}
                   keyboardType="numeric"
                   placeholder="—"
-                  placeholderTextColor="rgba(241,243,252,0.25)"
+                  placeholderTextColor={colors.inputPlaceholder}
                   maxLength={4}
                   textAlign="center"
-                  selectionColor="#4ADE80"
+                  selectionColor={colors.accent}
                 />
-                <Text style={s.macroLabel}>{fullLabel}</Text>
+                <Text style={[s.macroLabel, { color: colors.textTertiary }]}>{fullLabel}</Text>
               </View>
             ))}
           </View>
 
           {/* Calories */}
-          <View style={s.calBox}>
+          <View style={[s.calBox, { borderColor: colors.accentBorder }]}>
             <TextInput
-              style={s.calInput}
+              style={[s.calInput, { color: colors.accent }]}
               value={draft.calories}
               onChangeText={(t) => setDraft((p) => ({ ...p, calories: t }))}
               keyboardType="numeric"
               placeholder="—"
-              placeholderTextColor="rgba(241,243,252,0.25)"
+              placeholderTextColor={colors.inputPlaceholder}
               maxLength={5}
               textAlign="center"
-              selectionColor="#4ADE80"
+              selectionColor={colors.accent}
             />
-            <Text style={s.calLabel}>KCAL</Text>
+            <Text style={[s.calLabel, { color: colors.accentBorder }]}>KCAL</Text>
           </View>
 
           {/* Apply */}
           <Pressable
-            style={s.applyButton}
+            style={[s.applyButton, { backgroundColor: colors.accent, shadowColor: colors.accent }]}
             onPress={() => dismiss(() => onApply(draft))}
           >
-            <Text style={s.applyText}>Apply</Text>
+            <Text style={[s.applyText, { color: colors.accentOnAccent }]}>Apply</Text>
           </Pressable>
         </Animated.View>
       </View>
@@ -184,9 +186,7 @@ const s = StyleSheet.create({
     width: '100%',
     maxWidth: 360,
     borderRadius: 24,
-    backgroundColor: 'rgba(21,26,33,0.85)',
     borderWidth: 1,
-    borderColor: 'rgba(68,72,79,0.25)',
     paddingHorizontal: 18,
     paddingTop: 24,
     paddingBottom: 20,
@@ -195,7 +195,6 @@ const s = StyleSheet.create({
   title: {
     fontFamily: 'Caslon540Italic',
     fontSize: 26,
-    color: '#F1F3FC',
     textAlign: 'center',
     marginBottom: 4,
   },
@@ -209,14 +208,12 @@ const s = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: 'rgba(68,72,79,0.4)',
     paddingVertical: 14,
     gap: 4,
   },
   macroInput: {
     fontSize: 22,
     fontWeight: '400',
-    color: '#F1F3FC',
     letterSpacing: -0.3,
     minWidth: 52,
     textAlign: 'center',
@@ -225,7 +222,6 @@ const s = StyleSheet.create({
   macroLabel: {
     fontSize: 9,
     fontWeight: '800',
-    color: 'rgba(168,171,179,0.4)',
     letterSpacing: 1.5,
   },
   /* Calories */
@@ -233,14 +229,12 @@ const s = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: 'rgba(74,222,128,0.5)',
     paddingVertical: 14,
     gap: 4,
   },
   calInput: {
     fontSize: 22,
     fontWeight: '500',
-    color: '#4ADE80',
     minWidth: 60,
     textAlign: 'center',
     padding: 0,
@@ -248,7 +242,6 @@ const s = StyleSheet.create({
   calLabel: {
     fontSize: 9,
     fontWeight: '800',
-    color: 'rgba(74,222,128,0.4)',
     letterSpacing: 1.5,
   },
   /* Apply */
@@ -256,8 +249,6 @@ const s = StyleSheet.create({
     borderRadius: 16,
     paddingVertical: 16,
     alignItems: 'center',
-    backgroundColor: '#4ADE80',
-    shadowColor: '#4ADE80',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 12,
@@ -266,7 +257,6 @@ const s = StyleSheet.create({
   applyText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#0A0E14',
     letterSpacing: -0.2,
   },
 });

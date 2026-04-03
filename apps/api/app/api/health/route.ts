@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/restaurantService";
+import { getSupabaseAdmin } from "@/lib/supabase";
 
 export async function GET() {
   try {
-    await prisma.$queryRaw`SELECT 1`;
+    const supabase = getSupabaseAdmin();
+    const { error } = await supabase.from("Restaurant").select("id").limit(1);
+    if (error) throw new Error(error.message);
     return NextResponse.json({
       status: "ok",
       db: "connected",

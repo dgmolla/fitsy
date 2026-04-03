@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/restaurantService";
 import { getSupabaseClient } from "@/lib/supabase";
+import { prisma } from "@/lib/restaurantService";
 
 interface GoogleAuthResponse {
   token: string;
