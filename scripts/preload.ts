@@ -11,9 +11,12 @@
  * Environment variables:
  *   POSTGRES_PRISMA_URL       — Prisma pooled connection string (required)
  *   POSTGRES_URL_NON_POOLING  — Prisma direct connection for migrations (required)
- *   GOOGLE_PLACES_API_KEY     — Google Places Nearby Search (required)
+ *   GOOGLE_PLACES_API_KEY     — Google Places Nearby Search + Photo API (required)
  *   ANTHROPIC_API_KEY         — Claude Haiku API (required)
  *   FIRECRAWL_API_KEY         — Firecrawl search/map/scrape (required)
+ *   SUPABASE_URL              — Supabase project URL (optional; photos skipped if absent)
+ *   SUPABASE_SERVICE_ROLE_KEY — Supabase service role key for Storage uploads (optional)
+ *   YELP_API_KEY              — Yelp Fusion API key for photo fallback (optional)
  *   TARGET_LAT            — Target latitude (default: 34.0928)
  *   TARGET_LNG            — Target longitude (default: -118.3086)
  *   TARGET_RADIUS         — Search radius in meters (default: 1500)
@@ -60,6 +63,8 @@ interface PlaceResult {
   lng: number;
   websiteUri: string | null;
   types: string[];
+  // First photo resource name returned by Nearby Search (e.g. "places/{id}/photos/{ref}")
+  photoName: string | null;
 }
 
 interface HaikuMenuItem {
@@ -80,19 +85,24 @@ interface PipelineStats {
   skippedNoMenu: number;
   skippedHaikuFailed: number;
   skippedDbError: number;
+  photosStored: number;
+  photosNoSource: number;
+  photosError: number;
 }
 
 // Claude Haiku 4.5 pricing (per token)
 const HAIKU_COST_PER_INPUT_TOKEN = 0.0000008; // $0.80/MTok
 const HAIKU_COST_PER_OUTPUT_TOKEN = 0.000005; // $5.00/MTok
-// Google Places Nearby Search pricing
-const GOOGLE_PLACES_COST_PER_CALL = 0.005; // ~$5/1000 requests
+// Google Places pricing
+const GOOGLE_PLACES_COST_PER_CALL = 0.005; // ~$5/1000 requests (Nearby Search)
+const GOOGLE_PLACES_PHOTO_COST_PER_CALL = 0.007; // ~$7/1000 requests (Photo API)
 
 interface CostStats {
   anthropicInputTokens: number;
   anthropicOutputTokens: number;
   anthropicCalls: number;
   googlePlacesCalls: number;
+  googlePlacesPhotoCalls: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -120,6 +130,7 @@ interface GooglePlacesEntry {
   location?: { latitude?: number; longitude?: number };
   websiteUri?: string;
   types?: string[];
+  photos?: Array<{ name?: string }>;
 }
 
 interface GooglePlacesNearbyResponse {
@@ -162,7 +173,7 @@ async function discoverRestaurants(): Promise<PlaceResult[]> {
           "Content-Type": "application/json",
           "X-Goog-Api-Key": apiKey,
           "X-Goog-FieldMask":
-            "places.id,places.displayName,places.formattedAddress,places.location,places.websiteUri,places.types",
+            "places.id,places.displayName,places.formattedAddress,places.location,places.websiteUri,places.types,places.photos",
         },
         body: JSON.stringify(body),
       }
@@ -190,6 +201,7 @@ async function discoverRestaurants(): Promise<PlaceResult[]> {
         lng: place.location?.longitude ?? CONFIG.targetLng,
         websiteUri: place.websiteUri ?? null,
         types: place.types ?? [],
+        photoName: place.photos?.[0]?.name ?? null,
       });
     }
 
@@ -428,6 +440,141 @@ ${truncatedMarkdown}`;
 }
 
 // ---------------------------------------------------------------------------
+// Stage 4 — Photo fetch + Supabase Storage upload
+// ---------------------------------------------------------------------------
+
+interface GooglePlacesPhotoMediaResponse {
+  photoUri?: string;
+}
+
+/**
+ * Fetch an image buffer from the Google Places Photo API (new v1).
+ * Returns null if the API call fails or returns no URI.
+ */
+async function fetchGooglePlacesPhoto(photoName: string): Promise<Buffer | null> {
+  const apiKey = process.env["GOOGLE_PLACES_API_KEY"] ?? "";
+
+  // skipHttpRedirect=true → returns JSON { photoUri } instead of 302
+  const response = await fetch(
+    `${CONFIG.googlePlacesBaseUrl}/${photoName}/media?maxWidthPx=800&skipHttpRedirect=true`,
+    {
+      headers: { "X-Goog-Api-Key": apiKey },
+    },
+  );
+
+  if (!response.ok) return null;
+
+  const data = (await response.json()) as GooglePlacesPhotoMediaResponse;
+  if (!data.photoUri) return null;
+
+  const imageResponse = await fetch(data.photoUri);
+  if (!imageResponse.ok) return null;
+
+  const arrayBuffer = await imageResponse.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
+/**
+ * Fetch an image buffer from Yelp Fusion (fallback).
+ * Returns null if YELP_API_KEY is unset, no match, or no image.
+ */
+async function fetchYelpPhoto(name: string, address: string): Promise<Buffer | null> {
+  const apiKey = process.env["YELP_API_KEY"];
+  if (!apiKey) return null;
+
+  const params = new URLSearchParams({ term: name, location: address, limit: "1" });
+
+  let response: Response;
+  try {
+    response = await fetch(
+      `https://api.yelp.com/v3/businesses/search?${params.toString()}`,
+      { headers: { Authorization: `Bearer ${apiKey}` } },
+    );
+  } catch {
+    return null;
+  }
+
+  if (!response.ok) return null;
+
+  const data = (await response.json()) as {
+    businesses?: Array<{ image_url?: string }>;
+  };
+  const imageUrl = data.businesses?.[0]?.image_url;
+  if (!imageUrl) return null;
+
+  const imageResponse = await fetch(imageUrl);
+  if (!imageResponse.ok) return null;
+
+  const arrayBuffer = await imageResponse.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
+/**
+ * Upload an image buffer to the Supabase Storage `restaurant-photos` bucket.
+ * Returns the public CDN URL.
+ */
+async function uploadToSupabase(placeId: string, imageBuffer: Buffer): Promise<string> {
+  const supabaseUrl = process.env["SUPABASE_URL"] ?? "";
+  const serviceKey = process.env["SUPABASE_SERVICE_ROLE_KEY"] ?? "";
+  const bucket = "restaurant-photos";
+  const path = `${placeId}.jpg`;
+
+  const response = await fetch(
+    `${supabaseUrl}/storage/v1/object/${bucket}/${path}`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${serviceKey}`,
+        apikey: serviceKey,
+        "Content-Type": "image/jpeg",
+        "x-upsert": "true",
+      },
+      body: imageBuffer,
+    },
+  );
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Supabase Storage upload failed (${response.status}): ${text}`);
+  }
+
+  return `${supabaseUrl}/storage/v1/object/public/${bucket}/${path}`;
+}
+
+/**
+ * Full photo pipeline for one restaurant:
+ * 1. Try Google Places Photo (if photoName available)
+ * 2. Fall back to Yelp Fusion
+ * 3. Upload to Supabase Storage
+ * Returns { url, source } or null if no photo found.
+ */
+async function fetchAndStorePhoto(
+  place: PlaceResult,
+  costStats: CostStats,
+): Promise<{ url: string; source: string } | null> {
+  let imageBuffer: Buffer | null = null;
+  let source: string | null = null;
+
+  if (place.photoName) {
+    imageBuffer = await fetchGooglePlacesPhoto(place.photoName);
+    if (imageBuffer) {
+      source = "google_places";
+      costStats.googlePlacesPhotoCalls++;
+    }
+  }
+
+  if (!imageBuffer) {
+    imageBuffer = await fetchYelpPhoto(place.name, place.address);
+    if (imageBuffer) source = "yelp";
+  }
+
+  if (!imageBuffer || !source) return null;
+
+  const url = await uploadToSupabase(place.placeId, imageBuffer);
+  return { url, source };
+}
+
+// ---------------------------------------------------------------------------
 // Cuisine tag extraction from Google Places types
 // ---------------------------------------------------------------------------
 
@@ -639,6 +786,9 @@ async function main(): Promise<void> {
     skippedNoMenu: 0,
     skippedHaikuFailed: 0,
     skippedDbError: 0,
+    photosStored: 0,
+    photosNoSource: 0,
+    photosError: 0,
   };
 
   const costStats: CostStats = {
@@ -646,7 +796,15 @@ async function main(): Promise<void> {
     anthropicOutputTokens: 0,
     anthropicCalls: 0,
     googlePlacesCalls: 0,
+    googlePlacesPhotoCalls: 0,
   };
+
+  const photoEnabled =
+    !!process.env["SUPABASE_URL"] && !!process.env["SUPABASE_SERVICE_ROLE_KEY"];
+
+  if (!photoEnabled) {
+    log("Photo stage disabled — set SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY to enable");
+  }
 
   try {
     // Stage 1: Discover restaurants
@@ -729,6 +887,29 @@ async function main(): Promise<void> {
       } catch (err) {
         log(`  DB error: ${String(err)}`);
         stats.skippedDbError++;
+        await delay(CONFIG.rateLimitDelayMs);
+        continue;
+      }
+
+      // Stage 4: Fetch photo and upload to Supabase Storage
+      if (photoEnabled) {
+        try {
+          const photo = await fetchAndStorePhoto(place, costStats);
+          if (photo) {
+            await prisma.restaurant.update({
+              where: { externalPlaceId: place.placeId },
+              data: { photoUrl: photo.url, photoSource: photo.source },
+            });
+            log(`  Photo: stored from ${photo.source}`);
+            stats.photosStored++;
+          } else {
+            log(`  Photo: no source found`);
+            stats.photosNoSource++;
+          }
+        } catch (err) {
+          log(`  Photo error: ${String(err)}`);
+          stats.photosError++;
+        }
       }
 
       await delay(CONFIG.rateLimitDelayMs);
@@ -745,12 +926,19 @@ async function main(): Promise<void> {
       `${stats.skippedHaikuFailed} skipped (Haiku failed) / ` +
       `${stats.skippedDbError} skipped (DB error)`
   );
+  if (photoEnabled) {
+    log(
+      `Photos: ${stats.photosStored} stored / ${stats.photosNoSource} no source / ${stats.photosError} errors`
+    );
+  }
 
   const anthropicCostUsd =
     costStats.anthropicInputTokens * HAIKU_COST_PER_INPUT_TOKEN +
     costStats.anthropicOutputTokens * HAIKU_COST_PER_OUTPUT_TOKEN;
   const googleCostUsd = costStats.googlePlacesCalls * GOOGLE_PLACES_COST_PER_CALL;
-  const totalCostUsd = anthropicCostUsd + googleCostUsd;
+  const googlePhotoCostUsd =
+    costStats.googlePlacesPhotoCalls * GOOGLE_PLACES_PHOTO_COST_PER_CALL;
+  const totalCostUsd = anthropicCostUsd + googleCostUsd + googlePhotoCostUsd;
 
   console.log(
     "[preload:costs]",
@@ -763,7 +951,12 @@ async function main(): Promise<void> {
       anthropic_cost_usd: parseFloat(anthropicCostUsd.toFixed(4)),
       google_places_calls: costStats.googlePlacesCalls,
       google_places_cost_usd: parseFloat(googleCostUsd.toFixed(4)),
+      google_places_photo_calls: costStats.googlePlacesPhotoCalls,
+      google_places_photo_cost_usd: parseFloat(googlePhotoCostUsd.toFixed(4)),
       total_cost_usd: parseFloat(totalCostUsd.toFixed(4)),
+      photos_stored: stats.photosStored,
+      photos_no_source: stats.photosNoSource,
+      photos_error: stats.photosError,
     })
   );
 }

@@ -50,6 +50,7 @@ model Restaurant {
   chainFlag       Boolean     @default(false)
   source          String
   photoUrl        String?
+  photoSource     String?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
   menuItems       MenuItem[]
