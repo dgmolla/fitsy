@@ -85,6 +85,36 @@ describe("parseFFNTableRow", () => {
     const result = parseFFNTableRow(html);
     expect(result.proteinG).toBe(12.5);
   });
+
+  it("handles values with 'g' unit suffix (live FFN format)", () => {
+    const html = `<td title="Amount of fat in a Big Mac">28g</td>`;
+    const result = parseFFNTableRow(html);
+    expect(result.fatG).toBe(28);
+  });
+
+  it("handles 'Amount of carbohydrates' title prefix (live FFN format)", () => {
+    const html = `<td title="Amount of carbohydrates in a Big Mac">46g</td>`;
+    const result = parseFFNTableRow(html);
+    expect(result.carbsG).toBe(46);
+  });
+
+  it("first-wins: real value not overwritten by percent daily value row", () => {
+    const html = `
+      <td title="Amount of carbohydrates in a Big Mac">46g</td>
+      <td title="Percent daily value of carbohydrates in a Big Mac">15</td>
+    `;
+    const result = parseFFNTableRow(html);
+    expect(result.carbsG).toBe(46); // not 15
+  });
+
+  it("skips 'calories from fat' rows", () => {
+    const html = `
+      <td title="Calories in a Big Mac">540</td>
+      <td title="Calories from fat in a Big Mac">252</td>
+    `;
+    const result = parseFFNTableRow(html);
+    expect(result.calories).toBe(540);
+  });
 });
 
 // ─── parseFFNPage ─────────────────────────────────────────────────────────────
