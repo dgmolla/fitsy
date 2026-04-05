@@ -40,11 +40,17 @@ export function toFFNSlug(name: string): string {
  * Parse a single nutrition row from FFN HTML.
  * Returns null if the row doesn't match the expected pattern.
  *
- * FFN table row format:
+ * FFN table row format (single-item pages):
  *   <tr>
  *     <td class="nfactl"><span class="f700">Calories</span></td>
  *     <td title="Calories in a McDonald's Big Mac">540</td>
  *   </tr>
+ *
+ * Live FFN pages use "Amount of fat", "Amount of carbohydrates", and
+ * "Amount of protein" title prefixes (not "Total Fat" / "Protein").
+ * Values may have a "g" unit suffix (e.g. "28g"). We use first-wins to
+ * avoid clobbering real values with "Percent daily value of …" rows that
+ * also contain the keyword but carry a percent number, not a gram value.
  */
 export function parseFFNTableRow(html: string): {
   calories?: number;
@@ -54,21 +60,39 @@ export function parseFFNTableRow(html: string): {
 } {
   const result: { calories?: number; proteinG?: number; carbsG?: number; fatG?: number } = {};
 
-  // Extract value from <td title="...">VALUE</td> pattern
-  const tdPattern = /<td[^>]+title="([^"]*)"[^>]*>\s*(\d+\.?\d*)\s*<\/td>/gi;
+  // Match <td title="...">…VALUE…</td> — value may be followed by a "g" unit.
+  // Using a permissive inner match: extract the first integer/decimal in the cell.
+  const tdPattern = /<td[^>]+title="([^"]*)"[^>]*>([\s\S]*?)<\/td>/gi;
   let match: RegExpExecArray | null;
 
   while ((match = tdPattern.exec(html)) !== null) {
     const rawTitle = match[1];
-    const rawValue = match[2];
-    if (rawTitle === undefined || rawValue === undefined) continue;
+    const cellHtml = match[2];
+    if (rawTitle === undefined || cellHtml === undefined) continue;
     const title = rawTitle.toLowerCase();
-    const value = parseFloat(rawValue);
 
-    if (title.includes("calorie")) result.calories = value;
-    else if (title.includes("protein")) result.proteinG = value;
-    else if (title.includes("carb")) result.carbsG = value;
-    else if (title.includes("fat") && !title.includes("saturated") && !title.includes("trans")) {
+    // Skip percentage rows and "calories from fat"
+    if (title.includes("percent") || title.includes("calories from")) continue;
+
+    // Extract the first number in the cell (handles plain "540" and "28g")
+    const valMatch = cellHtml.match(/(\d+\.?\d*)/);
+    if (!valMatch?.[1]) continue;
+    const value = parseFloat(valMatch[1]);
+
+    // First-wins: only set each field once so "Amount of carbohydrates" (46g)
+    // takes precedence over a later "Percent daily value of carbohydrates" (15).
+    if (title.includes("calorie") && result.calories === undefined) {
+      result.calories = value;
+    } else if (title.includes("protein") && result.proteinG === undefined) {
+      result.proteinG = value;
+    } else if (title.includes("carb") && result.carbsG === undefined) {
+      result.carbsG = value;
+    } else if (
+      title.includes("fat") &&
+      !title.includes("saturated") &&
+      !title.includes("trans") &&
+      result.fatG === undefined
+    ) {
       result.fatG = value;
     }
   }
