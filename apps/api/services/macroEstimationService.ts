@@ -118,6 +118,12 @@ export async function estimateMacros(
     throw new Error("macroEstimationService: Haiku response is not an array");
   }
 
+  if (parsed.length !== items.length) {
+    throw new Error(
+      `macroEstimationService: Haiku returned ${parsed.length} items for ${items.length} inputs`,
+    );
+  }
+
   // Preserve positional contract: one entry per input item, null for invalid estimates
   return parsed.map((item: unknown): MacroData | null => {
     if (

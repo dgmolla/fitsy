@@ -83,16 +83,18 @@ describe("estimateMacros", () => {
     expect(mockCreate).not.toHaveBeenCalled();
   });
 
-  it("sets source field to 'haiku' on all valid items", async () => {
-    mockCreate.mockResolvedValue(makeTextResponse(JSON.stringify(HAIKU_ESTIMATES)));
+  it("sets source field to 'haiku' on all valid items in mixed result", async () => {
+    // Test with one valid + one null so we verify valid items specifically have source: "haiku"
+    const mixedEstimates = [
+      { cal: 320, p: 42, c: 2, f: 14, conf: "HIGH" },
+      null, // will become null in output
+    ];
+    mockCreate.mockResolvedValue(makeTextResponse(JSON.stringify(mixedEstimates)));
 
     const result = await estimateMacros(ITEMS, client);
 
-    for (const item of result) {
-      if (item !== null) {
-        expect(item.source).toBe("haiku");
-      }
-    }
+    expect(result[0]?.source).toBe("haiku");
+    expect(result[1]).toBeNull();
   });
 
   // ── Markdown fence stripping ──────────────────────────────────────────────
@@ -141,6 +143,29 @@ describe("estimateMacros", () => {
 
     await expect(estimateMacros(ITEMS, client)).rejects.toThrow(
       "macroEstimationService: unexpected Haiku response type",
+    );
+  });
+
+  it("throws when Haiku returns fewer items than input", async () => {
+    // Haiku ignores prompt instruction and returns only 1 item for 2 inputs
+    const tooFewEstimates = [{ cal: 320, p: 42, c: 2, f: 14, conf: "HIGH" }];
+    mockCreate.mockResolvedValue(makeTextResponse(JSON.stringify(tooFewEstimates)));
+
+    await expect(estimateMacros(ITEMS, client)).rejects.toThrow(
+      "macroEstimationService: Haiku returned 1 items for 2 inputs",
+    );
+  });
+
+  it("throws when Haiku returns more items than input", async () => {
+    const tooManyEstimates = [
+      { cal: 320, p: 42, c: 2, f: 14, conf: "HIGH" },
+      { cal: 380, p: 8, c: 30, f: 24, conf: "MEDIUM" },
+      { cal: 200, p: 5, c: 20, f: 10, conf: "LOW" }, // extra item
+    ];
+    mockCreate.mockResolvedValue(makeTextResponse(JSON.stringify(tooManyEstimates)));
+
+    await expect(estimateMacros(ITEMS, client)).rejects.toThrow(
+      "macroEstimationService: Haiku returned 3 items for 2 inputs",
     );
   });
 
