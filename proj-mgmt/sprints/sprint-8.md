@@ -5,15 +5,13 @@ kanban-plugin: basic
 ## Backlog
 
 - [ ] **S-64** RevenueCat integration — install `react-native-purchases`, configure RevenueCat project + App Store Connect IAP products ($5/mo, $30/yr), implement paywall screen, gate paid features behind entitlement check, replace subscription verify stub from S-60. Prereqs: Apple Developer account, ASC app record, IAP products + subscription group created in ASC, RevenueCat project linked, free-vs-paid feature split decided. #frontend #backend #O1
-- [ ] **S-72** Hero eval — primary benchmark for new pipeline. Fetch UE store pages for ~8 chains via raw HTTP, extract JSON-LD menus. Fetch FFN ground truth macros. Run items through the new estimation flow (UE structured context → Haiku). Compare against FFN ground truth AND against name-only baseline. Target: MdAPE ≤ 8% (down from 10-13%), red flags ≤ 12/60. Spec + exit criteria: `docs/engineering/menu-data-sources-analysis.md`. #backend #O1 ^dep-S-71
-
 ## In Progress
-
-- [ ] **S-71** Refactor preload.ts — thin orchestrator using service imports. Schema migration for `MacroEstimate.source`, `MenuItem.section`, `Restaurant.menuSourceId`. #backend #O1
 
 
 ## Done
 
+- [x] **S-72** Hero eval — primary benchmark for new pipeline. Fetch UE store pages for ~8 chains via raw HTTP, extract JSON-LD menus. Fetch FFN ground truth macros. Run items through the new estimation flow (UE structured context → Haiku). Compare against FFN ground truth AND against name-only baseline. Target: MdAPE ≤ 8% (down from 10-13%), red flags ≤ 12/60. Spec + exit criteria: `docs/engineering/menu-data-sources-analysis.md`. #backend #O1 ^dep-S-71 @completed(2026-04-05)
+- [x] **S-71** Refactor preload.ts — thin orchestrator using service imports. Schema migration for `MacroEstimate.source`, `MenuItem.section`, `Restaurant.menuSourceId`. #backend #O1 @completed(2026-04-05)
 - [x] **S-73** FFN parser validation — Scrape 10 chains from FFN/FatSecret, parse HTML tables, compare against hand-curated `ground-truth.json` fixtures. Pass criteria: 0% calorie error. Every mismatch is a parser bug. Spec: `docs/engineering/menu-data-sources-analysis.md`. #backend #O1 @completed(2026-04-05)
 - [x] **S-70** Build macro estimation service — `macroEstimationService.ts`, `(MacroData | null)[]` positional contract, 17 unit tests. #backend #O1 @completed(2026-04-05)
 - [x] **S-69** Build MenuSource modules — `types.ts`, `ffnSource.ts`, `uberEatsSource.ts`, `resolver.ts`. 50 unit tests with cached HTML fixtures. #backend #O1 @completed(2026-04-05)
