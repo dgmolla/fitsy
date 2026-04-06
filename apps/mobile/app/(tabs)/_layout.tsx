@@ -1,6 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { COLORS } from '@/lib/brand';
 import { useTheme } from '@/lib/theme';
 
 export default function TabLayout() {
@@ -17,7 +18,7 @@ export default function TabLayout() {
           paddingTop: 8,
           height: 80,
         },
-        tabBarActiveTintColor: '#4ADE80',
+        tabBarActiveTintColor: COLORS.greenLight,
         tabBarInactiveTintColor: colors.textTertiary,
         tabBarLabelStyle: {
           fontSize: 10,
@@ -44,17 +45,17 @@ export default function TabLayout() {
               width: 52,
               height: 52,
               borderRadius: 26,
-              backgroundColor: '#4ADE80',
+              backgroundColor: COLORS.greenLight,
               alignItems: 'center',
               justifyContent: 'center',
               marginBottom: 20,
-              shadowColor: '#4ADE80',
+              shadowColor: COLORS.greenLight,
               shadowOpacity: 0.4,
               shadowRadius: 12,
               shadowOffset: { width: 0, height: 4 },
               elevation: 8,
             }}>
-              <Ionicons name="search" size={24} color="#0A0E14" />
+              <Ionicons name="search" size={24} color={COLORS.text} />
             </View>
           ),
         }}

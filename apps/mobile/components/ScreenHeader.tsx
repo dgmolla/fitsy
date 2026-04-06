@@ -1,12 +1,13 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { COLORS } from '@/lib/brand';
 
 export function ScreenHeader() {
   return (
     <View style={styles.container}>
       <View style={styles.logoRow}>
-        <Ionicons name="restaurant" size={18} color="#4ADE80" />
+        <Ionicons name="restaurant" size={18} color={COLORS.greenLight} />
         <Text style={styles.logo}>fitsy</Text>
       </View>
     </View>
@@ -18,7 +19,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 0,
     paddingBottom: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.white,
   },
   logoRow: {
     flexDirection: 'row',
@@ -28,7 +29,7 @@ const styles = StyleSheet.create({
   logo: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#22C55E',
+    color: COLORS.green,
     letterSpacing: -0.8,
   },
 });

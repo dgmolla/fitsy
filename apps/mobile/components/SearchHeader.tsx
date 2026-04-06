@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { COLORS, FONTS } from '@/lib/brand';
 import type { MacroValues } from '@/lib/macroPresets';
 import type { LocationState } from '@/lib/useLocation';
 
@@ -36,7 +37,7 @@ export function SearchHeader({ values, location, onPress }: SearchHeaderProps) {
         {/* Row 1: logo + location */}
         <View style={h.row1}>
           <View style={h.logoLeft}>
-            <Ionicons name="restaurant" size={18} color="#4ADE80" />
+            <Ionicons name="restaurant" size={18} color={COLORS.greenLight} />
             <Text style={h.logo}>fitsy</Text>
           </View>
           <View style={h.locationPill}>
@@ -65,7 +66,7 @@ export function SearchHeader({ values, location, onPress }: SearchHeaderProps) {
 
 const h = StyleSheet.create({
   wrapper: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.white,
   },
   inner: {
     paddingHorizontal: 20,
@@ -86,30 +87,30 @@ const h = StyleSheet.create({
   logo: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#22C55E',
+    color: COLORS.green,
     letterSpacing: -0.8,
   },
   locationPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F3F4F6',
+    backgroundColor: COLORS.borderLight,
     borderRadius: 14,
     paddingHorizontal: 11,
     paddingVertical: 5,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: COLORS.border,
     gap: 5,
   },
   locationDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#22C55E',
+    backgroundColor: COLORS.green,
   },
   locationText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#6B7280',
+    color: COLORS.textSecondary,
   },
   row2: {
     flexDirection: 'row',
@@ -117,14 +118,14 @@ const h = StyleSheet.create({
     justifyContent: 'space-between',
   },
   headline: {
-    fontFamily: 'PlayfairDisplay-BoldItalic',
+    fontFamily: FONTS.headline,
     fontSize: 28,
-    color: '#111827',
+    color: COLORS.text,
   },
   reset: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#9CA3AF',
+    color: COLORS.textTertiary,
     letterSpacing: 1,
   },
   row3: {
@@ -139,30 +140,30 @@ const h = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 12,
     borderWidth: 1.5,
-    borderColor: '#E5E7EB',
+    borderColor: COLORS.border,
   },
   macroBoxHighlight: {
-    borderColor: '#22C55E',
+    borderColor: COLORS.green,
     backgroundColor: 'transparent',
   },
   macroValue: {
-    fontFamily: 'Manrope-Bold',
+    fontFamily: FONTS.body,
     fontSize: 18,
-    color: '#111827',
+    color: COLORS.text,
     letterSpacing: -0.3,
   },
   macroValueHighlight: {
-    color: '#22C55E',
+    color: COLORS.green,
     fontWeight: '500',
   },
   macroLabel: {
     fontSize: 9,
     fontWeight: '800',
-    color: '#9CA3AF',
+    color: COLORS.textTertiary,
     letterSpacing: 1.5,
     marginTop: 2,
   },
   macroLabelHighlight: {
-    color: '#16A34A',
+    color: COLORS.greenDark,
   },
 });

@@ -11,6 +11,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
+import { COLORS } from '@/lib/brand';
 import { useTheme } from '@/lib/theme';
 import type { MacroValues } from '@/lib/macroPresets';
 
@@ -134,10 +135,10 @@ export function FilterPopup({ visible, values, onApply, onClose }: FilterPopupPr
                   onChangeText={(t) => setDraft((p) => ({ ...p, [key]: t }))}
                   keyboardType="numeric"
                   placeholder="—"
-                  placeholderTextColor="#D1D5DB"
+                  placeholderTextColor={COLORS.textDisabled}
                   maxLength={4}
                   textAlign="center"
-                  selectionColor="#22C55E"
+                  selectionColor={COLORS.green}
                 />
                 <Text style={s.macroLabel}>{fullLabel}</Text>
               </View>
@@ -152,10 +153,10 @@ export function FilterPopup({ visible, values, onApply, onClose }: FilterPopupPr
               onChangeText={(t) => setDraft((p) => ({ ...p, calories: t }))}
               keyboardType="numeric"
               placeholder="—"
-              placeholderTextColor="#D1D5DB"
+              placeholderTextColor={COLORS.textDisabled}
               maxLength={5}
               textAlign="center"
-              selectionColor="#22C55E"
+              selectionColor={COLORS.green}
             />
             <Text style={s.calLabel}>KCAL</Text>
           </View>
@@ -184,9 +185,9 @@ const s = StyleSheet.create({
     width: '100%',
     maxWidth: 360,
     borderRadius: 24,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.white,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: COLORS.border,
     paddingHorizontal: 18,
     paddingTop: 24,
     paddingBottom: 20,
@@ -200,7 +201,7 @@ const s = StyleSheet.create({
   title: {
     fontFamily: 'Caslon540Italic',
     fontSize: 26,
-    color: '#111827',
+    color: COLORS.text,
     textAlign: 'center',
     marginBottom: 4,
   },
@@ -214,14 +215,14 @@ const s = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: '#E5E7EB',
+    borderColor: COLORS.border,
     paddingVertical: 14,
     gap: 4,
   },
   macroInput: {
     fontSize: 22,
     fontWeight: '400',
-    color: '#111827',
+    color: COLORS.text,
     letterSpacing: -0.3,
     minWidth: 52,
     textAlign: 'center',
@@ -230,7 +231,7 @@ const s = StyleSheet.create({
   macroLabel: {
     fontSize: 9,
     fontWeight: '800',
-    color: '#9CA3AF',
+    color: COLORS.textTertiary,
     letterSpacing: 1.5,
   },
   /* Calories */
@@ -238,14 +239,14 @@ const s = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: '#22C55E',
+    borderColor: COLORS.green,
     paddingVertical: 14,
     gap: 4,
   },
   calInput: {
     fontSize: 22,
     fontWeight: '500',
-    color: '#22C55E',
+    color: COLORS.green,
     minWidth: 60,
     textAlign: 'center',
     padding: 0,
@@ -253,7 +254,7 @@ const s = StyleSheet.create({
   calLabel: {
     fontSize: 9,
     fontWeight: '800',
-    color: '#16A34A',
+    color: COLORS.greenDark,
     letterSpacing: 1.5,
   },
   /* Apply */
@@ -261,8 +262,8 @@ const s = StyleSheet.create({
     borderRadius: 16,
     paddingVertical: 16,
     alignItems: 'center',
-    backgroundColor: '#22C55E',
-    shadowColor: '#22C55E',
+    backgroundColor: COLORS.green,
+    shadowColor: COLORS.green,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 12,
@@ -271,7 +272,7 @@ const s = StyleSheet.create({
   applyText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: COLORS.white,
     letterSpacing: -0.2,
   },
 });

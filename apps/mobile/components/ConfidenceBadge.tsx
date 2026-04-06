@@ -1,15 +1,16 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { ConfidenceLevel } from '@fitsy/shared';
+import { COLORS } from '@/lib/brand';
 
 interface Props {
   confidence: ConfidenceLevel;
 }
 
 const CONF: Record<ConfidenceLevel, { text: string; dot: string; bg: string; border: string }> = {
-  HIGH:   { text: '#4ADE80', dot: '#4ADE80', bg: 'rgba(74,222,128,0.10)',  border: 'rgba(74,222,128,0.22)' },
-  MEDIUM: { text: '#F59E0B', dot: '#F59E0B', bg: 'rgba(245,158,11,0.10)',  border: 'rgba(245,158,11,0.22)' },
-  LOW:    { text: '#A8ABB3', dot: '#4A5260', bg: 'rgba(74,82,96,0.12)',    border: 'rgba(74,82,96,0.2)' },
+  HIGH:   { text: COLORS.confHigh, dot: COLORS.confHigh, bg: COLORS.confHighBg,  border: 'rgba(74,222,128,0.22)' },
+  MEDIUM: { text: COLORS.confMedium, dot: COLORS.confMedium, bg: COLORS.confMediumBg,  border: 'rgba(245,158,11,0.22)' },
+  LOW:    { text: COLORS.confLow, dot: COLORS.confLow, bg: COLORS.confLowBg,    border: 'rgba(74,82,96,0.2)' },
 };
 
 const LABEL: Record<ConfidenceLevel, string> = {
