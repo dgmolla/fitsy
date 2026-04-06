@@ -100,11 +100,11 @@ export function FilterPopup({ visible, values, onApply, onClose }: FilterPopupPr
       {/* Heavy blur backdrop */}
       <Animated.View style={[StyleSheet.absoluteFill, { opacity: blurOpacity }]}>
         <BlurView
-          tint="dark"
-          intensity={80}
+          tint="light"
+          intensity={60}
           style={StyleSheet.absoluteFill as ViewStyle}
         />
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(10,14,20,0.75)' }]} />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.3)' }]} />
       </Animated.View>
 
       <Pressable
@@ -134,10 +134,10 @@ export function FilterPopup({ visible, values, onApply, onClose }: FilterPopupPr
                   onChangeText={(t) => setDraft((p) => ({ ...p, [key]: t }))}
                   keyboardType="numeric"
                   placeholder="—"
-                  placeholderTextColor="rgba(241,243,252,0.25)"
+                  placeholderTextColor="#D1D5DB"
                   maxLength={4}
                   textAlign="center"
-                  selectionColor="#4ADE80"
+                  selectionColor="#22C55E"
                 />
                 <Text style={s.macroLabel}>{fullLabel}</Text>
               </View>
@@ -152,10 +152,10 @@ export function FilterPopup({ visible, values, onApply, onClose }: FilterPopupPr
               onChangeText={(t) => setDraft((p) => ({ ...p, calories: t }))}
               keyboardType="numeric"
               placeholder="—"
-              placeholderTextColor="rgba(241,243,252,0.25)"
+              placeholderTextColor="#D1D5DB"
               maxLength={5}
               textAlign="center"
-              selectionColor="#4ADE80"
+              selectionColor="#22C55E"
             />
             <Text style={s.calLabel}>KCAL</Text>
           </View>
@@ -184,18 +184,23 @@ const s = StyleSheet.create({
     width: '100%',
     maxWidth: 360,
     borderRadius: 24,
-    backgroundColor: 'rgba(21,26,33,0.85)',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: 'rgba(68,72,79,0.25)',
+    borderColor: '#E5E7EB',
     paddingHorizontal: 18,
     paddingTop: 24,
     paddingBottom: 20,
     gap: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 8,
   },
   title: {
     fontFamily: 'Caslon540Italic',
     fontSize: 26,
-    color: '#F1F3FC',
+    color: '#111827',
     textAlign: 'center',
     marginBottom: 4,
   },
@@ -209,14 +214,14 @@ const s = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: 'rgba(68,72,79,0.4)',
+    borderColor: '#E5E7EB',
     paddingVertical: 14,
     gap: 4,
   },
   macroInput: {
     fontSize: 22,
     fontWeight: '400',
-    color: '#F1F3FC',
+    color: '#111827',
     letterSpacing: -0.3,
     minWidth: 52,
     textAlign: 'center',
@@ -225,7 +230,7 @@ const s = StyleSheet.create({
   macroLabel: {
     fontSize: 9,
     fontWeight: '800',
-    color: 'rgba(168,171,179,0.4)',
+    color: '#9CA3AF',
     letterSpacing: 1.5,
   },
   /* Calories */
@@ -233,14 +238,14 @@ const s = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: 'rgba(74,222,128,0.5)',
+    borderColor: '#22C55E',
     paddingVertical: 14,
     gap: 4,
   },
   calInput: {
     fontSize: 22,
     fontWeight: '500',
-    color: '#4ADE80',
+    color: '#22C55E',
     minWidth: 60,
     textAlign: 'center',
     padding: 0,
@@ -248,7 +253,7 @@ const s = StyleSheet.create({
   calLabel: {
     fontSize: 9,
     fontWeight: '800',
-    color: 'rgba(74,222,128,0.4)',
+    color: '#16A34A',
     letterSpacing: 1.5,
   },
   /* Apply */
@@ -256,17 +261,17 @@ const s = StyleSheet.create({
     borderRadius: 16,
     paddingVertical: 16,
     alignItems: 'center',
-    backgroundColor: '#4ADE80',
-    shadowColor: '#4ADE80',
+    backgroundColor: '#22C55E',
+    shadowColor: '#22C55E',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.2,
     shadowRadius: 12,
     elevation: 6,
   },
   applyText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#0A0E14',
+    color: '#FFFFFF',
     letterSpacing: -0.2,
   },
 });
