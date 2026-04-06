@@ -1,0 +1,353 @@
+{
+  "timestamp": "2026-04-06T04:59:36.820Z",
+  "eval": "two-path",
+  "totalMatched": 24,
+  "totalGroundTruth": 64,
+  "path1Count": 24,
+  "path2Count": 0,
+  "mdape": 3.52,
+  "path1Mdape": 3.52,
+  "path2Mdape": 0,
+  "redFlags": 2,
+  "catastrophic": 0,
+  "perChain": [
+    {
+      "chain": "McDonald's",
+      "ffnItems": 0,
+      "fatSecretItems": 7,
+      "haikuItems": 0,
+      "unmatched": 1,
+      "mdape": 3.7,
+      "redFlags": 1
+    },
+    {
+      "chain": "Chick-fil-A",
+      "ffnItems": 0,
+      "fatSecretItems": 5,
+      "haikuItems": 0,
+      "unmatched": 3,
+      "mdape": 4.55,
+      "redFlags": 1
+    },
+    {
+      "chain": "Taco Bell",
+      "ffnItems": 0,
+      "fatSecretItems": 2,
+      "haikuItems": 0,
+      "unmatched": 6,
+      "mdape": 1.43,
+      "redFlags": 0
+    },
+    {
+      "chain": "Chipotle",
+      "ffnItems": 0,
+      "fatSecretItems": 0,
+      "haikuItems": 0,
+      "unmatched": 8,
+      "mdape": 0,
+      "redFlags": 0
+    },
+    {
+      "chain": "Subway",
+      "ffnItems": 0,
+      "fatSecretItems": 0,
+      "haikuItems": 0,
+      "unmatched": 8,
+      "mdape": 0,
+      "redFlags": 0
+    },
+    {
+      "chain": "Burger King",
+      "ffnItems": 0,
+      "fatSecretItems": 6,
+      "haikuItems": 0,
+      "unmatched": 2,
+      "mdape": 2.63,
+      "redFlags": 0
+    },
+    {
+      "chain": "Wendy's",
+      "ffnItems": 0,
+      "fatSecretItems": 3,
+      "haikuItems": 0,
+      "unmatched": 5,
+      "mdape": 10,
+      "redFlags": 0
+    },
+    {
+      "chain": "Starbucks",
+      "ffnItems": 0,
+      "fatSecretItems": 1,
+      "haikuItems": 0,
+      "unmatched": 7,
+      "mdape": 3.85,
+      "redFlags": 0
+    }
+  ],
+  "items": [
+    {
+      "chain": "McDonald's",
+      "itemName": "Big Mac",
+      "path": "fatsecret",
+      "gtCalories": 540,
+      "estimatedCalories": 590,
+      "caloriePctError": 9.25925925925926,
+      "isRedFlag": false,
+      "isCatastrophic": false,
+      "confidence": "HIGH"
+    },
+    {
+      "chain": "McDonald's",
+      "itemName": "McChicken",
+      "path": "fatsecret",
+      "gtCalories": 410,
+      "estimatedCalories": 390,
+      "caloriePctError": 4.878048780487805,
+      "isRedFlag": false,
+      "isCatastrophic": false,
+      "confidence": "HIGH"
+    },
+    {
+      "chain": "McDonald's",
+      "itemName": "Quarter Pounder with Cheese",
+      "path": "fatsecret",
+      "gtCalories": 540,
+      "estimatedCalories": 520,
+      "caloriePctError": 3.7037037037037033,
+      "isRedFlag": false,
+      "isCatastrophic": false,
+      "confidence": "HIGH"
+    },
+    {
+      "chain": "McDonald's",
+      "itemName": "Egg McMuffin",
+      "path": "fatsecret",
+      "gtCalories": 300,
+      "estimatedCalories": 310,
+      "caloriePctError": 3.3333333333333335,
+      "isRedFlag": false,
+      "isCatastrophic": false,
+      "confidence": "HIGH"
+    },
+    {
+      "chain": "McDonald's",
+      "itemName": "Double Cheeseburger",
+      "path": "fatsecret",
+      "gtCalories": 450,
+      "estimatedCalories": 440,
+      "caloriePctError": 2.2222222222222223,
+      "isRedFlag": false,
+      "isCatastrophic": false,
+      "confidence": "HIGH"
+    },
+    {
+      "chain": "McDonald's",
+      "itemName": "McDouble",
+      "path": "fatsecret",
+      "gtCalories": 400,
+      "estimatedCalories": 390,
+      "caloriePctError": 2.5,
+      "isRedFlag": false,
+      "isCatastrophic": false,
+      "confidence": "HIGH"
+    },
+    {
+      "chain": "McDonald's",
+      "itemName": "Sausage Egg McMuffin",
+      "path": "fatsecret",
+      "gtCalories": 480,
+      "estimatedCalories": 310,
+      "caloriePctError": 35.41666666666667,
+      "isRedFlag": true,
+      "isCatastrophic": false,
+      "confidence": "HIGH"
+    },
+    {
+      "chain": "Chick-fil-A",
+      "itemName": "Chicken Sandwich",
+      "path": "fatsecret",
+      "gtCalories": 440,
+      "estimatedCalories": 420,
+      "caloriePctError": 4.545454545454546,
+      "isRedFlag": false,
+      "isCatastrophic": false,
+      "confidence": "HIGH"
+    },
+    {
+      "chain": "Chick-fil-A",
+      "itemName": "Spicy Deluxe",
+      "path": "fatsecret",
+      "gtCalories": 550,
+      "estimatedCalories": 540,
+      "caloriePctError": 1.8181818181818181,
+      "isRedFlag": false,
+      "isCatastrophic": false,
+      "confidence": "HIGH"
+    },
+    {
+      "chain": "Chick-fil-A",
+      "itemName": "Chargrilled Chicken Sandwich",
+      "path": "fatsecret",
+      "gtCalories": 320,
+      "estimatedCalories": 390,
+      "caloriePctError": 21.875,
+      "isRedFlag": true,
+      "isCatastrophic": false,
+      "confidence": "HIGH"
+    },
+    {
+      "chain": "Chick-fil-A",
+      "itemName": "Spicy Chicken Sandwich",
+      "path": "fatsecret",
+      "gtCalories": 460,
+      "estimatedCalories": 450,
+      "caloriePctError": 2.1739130434782608,
+      "isRedFlag": false,
+      "isCatastrophic": false,
+      "confidence": "HIGH"
+    },
+    {
+      "chain": "Chick-fil-A",
+      "itemName": "Cobb Salad",
+      "path": "fatsecret",
+      "gtCalories": 900,
+      "estimatedCalories": 830,
+      "caloriePctError": 7.777777777777778,
+      "isRedFlag": false,
+      "isCatastrophic": false,
+      "confidence": "HIGH"
+    },
+    {
+      "chain": "Taco Bell",
+      "itemName": "Bean Burrito",
+      "path": "fatsecret",
+      "gtCalories": 350,
+      "estimatedCalories": 360,
+      "caloriePctError": 2.857142857142857,
+      "isRedFlag": false,
+      "isCatastrophic": false,
+      "confidence": "HIGH"
+    },
+    {
+      "chain": "Taco Bell",
+      "itemName": "Crunchy Taco",
+      "path": "fatsecret",
+      "gtCalories": 170,
+      "estimatedCalories": 170,
+      "caloriePctError": 0,
+      "isRedFlag": false,
+      "isCatastrophic": false,
+      "confidence": "HIGH"
+    },
+    {
+      "chain": "Burger King",
+      "itemName": "Whopper",
+      "path": "fatsecret",
+      "gtCalories": 660,
+      "estimatedCalories": 670,
+      "caloriePctError": 1.5151515151515151,
+      "isRedFlag": false,
+      "isCatastrophic": false,
+      "confidence": "HIGH"
+    },
+    {
+      "chain": "Burger King",
+      "itemName": "Whopper with Cheese",
+      "path": "fatsecret",
+      "gtCalories": 740,
+      "estimatedCalories": 770,
+      "caloriePctError": 4.054054054054054,
+      "isRedFlag": false,
+      "isCatastrophic": false,
+      "confidence": "HIGH"
+    },
+    {
+      "chain": "Burger King",
+      "itemName": "Double Whopper",
+      "path": "fatsecret",
+      "gtCalories": 900,
+      "estimatedCalories": 920,
+      "caloriePctError": 2.2222222222222223,
+      "isRedFlag": false,
+      "isCatastrophic": false,
+      "confidence": "HIGH"
+    },
+    {
+      "chain": "Burger King",
+      "itemName": "Chicken Sandwich",
+      "path": "fatsecret",
+      "gtCalories": 660,
+      "estimatedCalories": 680,
+      "caloriePctError": 3.0303030303030303,
+      "isRedFlag": false,
+      "isCatastrophic": false,
+      "confidence": "HIGH"
+    },
+    {
+      "chain": "Burger King",
+      "itemName": "Impossible Whopper",
+      "path": "fatsecret",
+      "gtCalories": 630,
+      "estimatedCalories": 630,
+      "caloriePctError": 0,
+      "isRedFlag": false,
+      "isCatastrophic": false,
+      "confidence": "HIGH"
+    },
+    {
+      "chain": "Burger King",
+      "itemName": "Bacon King",
+      "path": "fatsecret",
+      "gtCalories": 1150,
+      "estimatedCalories": 1200,
+      "caloriePctError": 4.3478260869565215,
+      "isRedFlag": false,
+      "isCatastrophic": false,
+      "confidence": "HIGH"
+    },
+    {
+      "chain": "Wendy's",
+      "itemName": "Baconator",
+      "path": "fatsecret",
+      "gtCalories": 930,
+      "estimatedCalories": 930,
+      "caloriePctError": 0,
+      "isRedFlag": false,
+      "isCatastrophic": false,
+      "confidence": "HIGH"
+    },
+    {
+      "chain": "Wendy's",
+      "itemName": "Spicy Chicken Sandwich",
+      "path": "fatsecret",
+      "gtCalories": 530,
+      "estimatedCalories": 470,
+      "caloriePctError": 11.320754716981133,
+      "isRedFlag": false,
+      "isCatastrophic": false,
+      "confidence": "HIGH"
+    },
+    {
+      "chain": "Wendy's",
+      "itemName": "Cheeseburger",
+      "path": "fatsecret",
+      "gtCalories": 400,
+      "estimatedCalories": 360,
+      "caloriePctError": 10,
+      "isRedFlag": false,
+      "isCatastrophic": false,
+      "confidence": "HIGH"
+    },
+    {
+      "chain": "Starbucks",
+      "itemName": "Butter Croissant",
+      "path": "fatsecret",
+      "gtCalories": 260,
+      "estimatedCalories": 250,
+      "caloriePctError": 3.8461538461538463,
+      "isRedFlag": false,
+      "isCatastrophic": false,
+      "confidence": "HIGH"
+    }
+  ]
+}
