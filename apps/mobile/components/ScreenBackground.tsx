@@ -1,6 +1,5 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/lib/theme';
 
@@ -19,13 +18,6 @@ export function ScreenBackground({ children }: Props) {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.bg }]}>
-      <LinearGradient
-        colors={[colors.bgGradient[0], colors.bgGradient[1], colors.bg]}
-        locations={[0, 0.4, 1]}
-        style={StyleSheet.absoluteFill}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      />
       <View style={[styles.content, { paddingTop: insets.top }]}>
         {children}
       </View>

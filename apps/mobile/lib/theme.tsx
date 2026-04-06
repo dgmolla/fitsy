@@ -101,7 +101,7 @@ const lightColors: ThemeColors = {
   glassShadowColor: '#000',
   glassShadowOpacity: 0.08,
   glassShadowRadius: 20,
-  bgGradient: ['#E8F0E4', '#F2F7F0'] as [string, string],
+  bgGradient: ['#FFFFFF', '#FFFFFF'] as [string, string],
 };
 
 type ThemeMode = 'light' | 'dark';

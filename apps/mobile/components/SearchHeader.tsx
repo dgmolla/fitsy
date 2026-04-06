@@ -65,7 +65,7 @@ export function SearchHeader({ values, location, onPress }: SearchHeaderProps) {
 
 const h = StyleSheet.create({
   wrapper: {
-    backgroundColor: '#0A0E14',
+    backgroundColor: '#FFFFFF',
   },
   inner: {
     paddingHorizontal: 20,
@@ -86,30 +86,30 @@ const h = StyleSheet.create({
   logo: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#4ADE80',
+    color: '#22C55E',
     letterSpacing: -0.8,
   },
   locationPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: '#F3F4F6',
     borderRadius: 14,
     paddingHorizontal: 11,
     paddingVertical: 5,
     borderWidth: 1,
-    borderColor: 'rgba(68,72,79,0.25)',
+    borderColor: '#E5E7EB',
     gap: 5,
   },
   locationDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#4ADE80',
+    backgroundColor: '#22C55E',
   },
   locationText: {
     fontSize: 11,
     fontWeight: '600',
-    color: 'rgba(241,243,252,0.6)',
+    color: '#6B7280',
   },
   row2: {
     flexDirection: 'row',
@@ -119,12 +119,12 @@ const h = StyleSheet.create({
   headline: {
     fontFamily: 'PlayfairDisplay-BoldItalic',
     fontSize: 28,
-    color: '#F1F3FC',
+    color: '#111827',
   },
   reset: {
     fontSize: 11,
     fontWeight: '600',
-    color: 'rgba(241,243,252,0.28)',
+    color: '#9CA3AF',
     letterSpacing: 1,
   },
   row3: {
@@ -139,30 +139,30 @@ const h = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 12,
     borderWidth: 1.5,
-    borderColor: 'rgba(68,72,79,0.4)',
+    borderColor: '#E5E7EB',
   },
   macroBoxHighlight: {
-    borderColor: 'rgba(74,222,128,0.5)',
+    borderColor: '#22C55E',
     backgroundColor: 'transparent',
   },
   macroValue: {
     fontFamily: 'Manrope-Bold',
     fontSize: 18,
-    color: '#F1F3FC',
+    color: '#111827',
     letterSpacing: -0.3,
   },
   macroValueHighlight: {
-    color: '#4ADE80',
+    color: '#22C55E',
     fontWeight: '500',
   },
   macroLabel: {
     fontSize: 9,
     fontWeight: '800',
-    color: 'rgba(168,171,179,0.4)',
+    color: '#9CA3AF',
     letterSpacing: 1.5,
     marginTop: 2,
   },
   macroLabelHighlight: {
-    color: 'rgba(74,222,128,0.4)',
+    color: '#16A34A',
   },
 });
