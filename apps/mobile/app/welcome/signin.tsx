@@ -13,6 +13,7 @@ import { useTheme } from '@/lib/theme';
 WebBrowser.maybeCompleteAuthSession();
 
 const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
 
 export default function SignInScreen() {
   const { colors } = useTheme();
@@ -21,6 +22,7 @@ export default function SignInScreen() {
 
   const [, response, promptGoogleAsync] = Google.useIdTokenAuthRequest({
     iosClientId: GOOGLE_IOS_CLIENT_ID ?? 'not-configured',
+    clientId: GOOGLE_WEB_CLIENT_ID,
   });
 
   useEffect(() => {

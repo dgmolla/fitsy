@@ -14,6 +14,7 @@ import { BRAND } from '@/lib/brand';
 WebBrowser.maybeCompleteAuthSession();
 
 const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
 
 export default function LoginScreen() {
   const { colors } = useTheme();
@@ -22,6 +23,7 @@ export default function LoginScreen() {
 
   const [, response, promptGoogleAsync] = Google.useIdTokenAuthRequest({
     iosClientId: GOOGLE_IOS_CLIENT_ID ?? 'not-configured',
+    clientId: GOOGLE_WEB_CLIENT_ID,
   });
 
   useEffect(() => {
@@ -69,7 +71,32 @@ export default function LoginScreen() {
     await promptGoogleAsync();
   }
 
-  const isLoading = appleLoading || googleLoading;
+  const [devLoading, setDevLoading] = useState(false);
+
+  async function handleDevLogin() {
+    setDevLoading(true);
+    try {
+      const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000'}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'dev@fitsy.local', password: 'dev12345' }),
+      });
+      const data = await res.json() as { token?: string; error?: string };
+      if (data.token) {
+        const { storeToken } = await import('@/lib/authClient');
+        await storeToken(data.token);
+        router.replace('/(tabs)/search');
+      } else {
+        Alert.alert('Dev Login Failed', data.error ?? 'Unknown error');
+      }
+    } catch (err) {
+      Alert.alert('Dev Login Failed', err instanceof Error ? err.message : 'Network error');
+    } finally {
+      setDevLoading(false);
+    }
+  }
+
+  const isLoading = appleLoading || googleLoading || devLoading;
 
   return (
     <ScreenBackground>
@@ -108,6 +135,20 @@ export default function LoginScreen() {
               {googleLoading ? 'Signing in…' : 'Continue with Google'}
             </Text>
           </Pressable>
+
+          {__DEV__ && (
+            <Pressable
+              style={[styles.googleBtn, { borderColor: colors.border }, isLoading && styles.disabled]}
+              onPress={handleDevLogin}
+              disabled={isLoading}
+              accessibilityRole="button"
+            >
+              <Ionicons name="code-slash" size={20} color={colors.textTertiary} />
+              <Text style={[styles.googleTxt, { color: colors.textTertiary }]}>
+                {devLoading ? 'Signing in…' : 'Dev Login (skip auth)'}
+              </Text>
+            </Pressable>
+          )}
         </View>
       </View>
     </ScreenBackground>
