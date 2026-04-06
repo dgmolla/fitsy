@@ -1,14 +1,14 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { useTheme } from '@/lib/theme';
-import { BRAND } from '@/lib/brand';
+import { Ionicons } from '@expo/vector-icons';
 
 export function ScreenHeader() {
-  const { colors } = useTheme();
-
   return (
     <View style={styles.container}>
-      <Text style={[styles.logo, { color: BRAND.color }]}>{BRAND.name}</Text>
+      <View style={styles.logoRow}>
+        <Ionicons name="restaurant" size={18} color="#4ADE80" />
+        <Text style={styles.logo}>fitsy</Text>
+      </View>
     </View>
   );
 }
@@ -16,12 +16,19 @@ export function ScreenHeader() {
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 20,
-    paddingTop: 6,
+    paddingTop: 0,
     paddingBottom: 12,
+    backgroundColor: '#0A0E14',
+  },
+  logoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   logo: {
-    fontSize: 30,
-    fontWeight: BRAND.fontWeight,
-    letterSpacing: BRAND.letterSpacing,
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#4ADE80',
+    letterSpacing: -0.8,
   },
 });
