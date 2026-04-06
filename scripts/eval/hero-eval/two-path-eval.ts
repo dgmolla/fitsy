@@ -1,12 +1,12 @@
 /**
- * Two-Path Eval: Resolver Pipeline vs FFN Ground Truth (S-76)
+ * Two-Path Eval: Resolver Pipeline vs Ground Truth (S-76)
  *
  * Validates the production two-path estimation strategy:
- *   Path 1 (chains): FFN/FatSecret → official macros (expected: 0% error)
+ *   Path 1 (chains): FatSecret → official macros (expected: low error)
  *   Path 2 (indies): UberEats/Firecrawl → Haiku estimation
  *
  * For each chain in ground-truth.json:
- *   1. Run FFNSource.lookup() and FatSecretSource.lookup()
+ *   1. Run FatSecretSource.lookup()
  *   2. Match returned items to ground truth by name
  *   3. Compare official macros to ground truth (should be near-zero error)
  *   4. For unmatched items, fall back to UberEats → Haiku estimation
@@ -29,7 +29,6 @@ import * as fs from "fs";
 import * as path from "path";
 import * as dotenv from "dotenv";
 import Anthropic from "@anthropic-ai/sdk";
-import { FFNSource } from "../../../apps/api/services/menuSources/ffnSource.js";
 import { FatSecretSource } from "../../../apps/api/services/menuSources/fatSecretSource.js";
 import {
   extractJsonLdBlocks,
@@ -65,7 +64,7 @@ interface GroundTruth {
   chains: GroundTruthChain[];
 }
 
-type EstimationPath = "ffn" | "fatsecret" | "haiku" | "unmatched";
+type EstimationPath = "fatsecret" | "haiku" | "unmatched";
 
 interface ItemComparison {
   chain: string;
@@ -81,7 +80,6 @@ interface ItemComparison {
 
 interface ChainResult {
   chain: string;
-  ffnItemCount: number;
   fatSecretItemCount: number;
   haikuItemCount: number;
   unmatchedCount: number;
@@ -171,12 +169,6 @@ async function evalChain(
 ): Promise<ChainResult> {
   console.log(`\n  Chain: ${chain.name} (${chain.items.length} items)`);
 
-  // Path 1: Try FFN
-  const ffnSource = new FFNSource();
-  const ffnResult = await ffnSource.lookup(chain.name, "");
-  const ffnMacros = ffnResult.macros ?? new Map<string, MacroData>();
-  console.log(`    FFN: ${ffnMacros.size} items`);
-
   // Path 1: Try FatSecret
   const fatSecretSource = new FatSecretSource();
   const fsResult = await fatSecretSource.lookup(chain.name, "");
@@ -190,32 +182,10 @@ async function evalChain(
   // Match each ground truth item to the best available source
   const comparisons: ItemComparison[] = [];
   const unmatchedForHaiku: Array<{ gtItem: GroundTruthItem; ueItem: StructuredMenuItem }> = [];
-  let ffnCount = 0;
   let fsCount = 0;
   let unmatchedCount = 0;
 
   for (const gtItem of chain.items) {
-    // Try FFN first
-    const ffnMacro = findMacroMatch(gtItem.name, ffnMacros);
-    if (ffnMacro) {
-      const pctError = Math.abs(ffnMacro.calories - gtItem.calories) / gtItem.calories * 100;
-      comparisons.push({
-        chain: chain.name,
-        itemName: gtItem.name,
-        path: "ffn",
-        gtCalories: gtItem.calories,
-        estimatedCalories: ffnMacro.calories,
-        caloriePctError: pctError,
-        isRedFlag: pctError > 15,
-        isCatastrophic: pctError > 50,
-        confidence: "HIGH",
-      });
-      ffnCount++;
-      const flag = pctError > 15 ? "FLAG" : "OK  ";
-      console.log(`    [${flag}][FFN] ${gtItem.name}: est=${ffnMacro.calories} gt=${gtItem.calories} err=${pctError.toFixed(1)}%`);
-      continue;
-    }
-
     // Try FatSecret
     const fsMacro = findMacroMatch(gtItem.name, fsMacros);
     if (fsMacro) {
@@ -285,7 +255,6 @@ async function evalChain(
 
   return {
     chain: chain.name,
-    ffnItemCount: ffnCount,
     fatSecretItemCount: fsCount,
     haikuItemCount: haikuCount,
     unmatchedCount,
@@ -301,7 +270,7 @@ function printSummary(
 ): void {
   const sep = "=".repeat(70);
   const all = chains.flatMap((c) => c.comparisons);
-  const path1 = all.filter((c) => c.path === "ffn" || c.path === "fatsecret");
+  const path1 = all.filter((c) => c.path === "fatsecret");
   const path2 = all.filter((c) => c.path === "haiku");
 
   console.log("\n" + sep);
@@ -312,14 +281,14 @@ function printSummary(
     const chainMdAPE = calcMdAPE(chain.comparisons);
     const flags = chain.comparisons.filter((c) => c.isRedFlag).length;
     console.log(
-      `  ${chain.chain.padEnd(20)}  ffn=${chain.ffnItemCount}  fs=${chain.fatSecretItemCount}  haiku=${chain.haikuItemCount}  miss=${chain.unmatchedCount}  MdAPE=${chainMdAPE.toFixed(1)}%  flags=${flags}`,
+      `  ${chain.chain.padEnd(20)}  fs=${chain.fatSecretItemCount}  haiku=${chain.haikuItemCount}  miss=${chain.unmatchedCount}  MdAPE=${chainMdAPE.toFixed(1)}%  flags=${flags}`,
     );
   }
 
   console.log("\n" + sep);
   console.log("PATH BREAKDOWN");
   console.log(sep);
-  console.log(`  Path 1 (FFN/FatSecret) : ${path1.length} items  MdAPE=${calcMdAPE(path1).toFixed(2)}%`);
+  console.log(`  Path 1 (FatSecret)     : ${path1.length} items  MdAPE=${calcMdAPE(path1).toFixed(2)}%`);
   console.log(`  Path 2 (Haiku)         : ${path2.length} items  MdAPE=${calcMdAPE(path2).toFixed(2)}%`);
   console.log(`  Total matched          : ${all.length} / ${totalGroundTruth}`);
 
@@ -351,7 +320,7 @@ async function main(): Promise<void> {
   }
   const client = new Anthropic({ apiKey });
 
-  console.log("Two-Path Eval: Resolver Pipeline vs FFN Ground Truth (S-76)");
+  console.log("Two-Path Eval: Resolver Pipeline vs Ground Truth (S-76)");
   console.log(`Chains: ${groundTruth.chains.map((c) => c.name).join(", ")}`);
   console.log("─".repeat(70));
 
@@ -374,7 +343,7 @@ async function main(): Promise<void> {
     eval: "two-path",
     totalMatched: all.length,
     totalGroundTruth,
-    path1Count: all.filter((c) => c.path === "ffn" || c.path === "fatsecret").length,
+    path1Count: all.filter((c) => c.path === "fatsecret").length,
     path2Count: all.filter((c) => c.path === "haiku").length,
     mdape: parseFloat(calcMdAPE(all).toFixed(2)),
     path1Mdape: parseFloat(calcMdAPE(all.filter((c) => c.path !== "haiku")).toFixed(2)),
@@ -383,7 +352,6 @@ async function main(): Promise<void> {
     catastrophic: all.filter((c) => c.isCatastrophic).length,
     perChain: chainResults.map((c) => ({
       chain: c.chain,
-      ffnItems: c.ffnItemCount,
       fatSecretItems: c.fatSecretItemCount,
       haikuItems: c.haikuItemCount,
       unmatched: c.unmatchedCount,
