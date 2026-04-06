@@ -3,16 +3,16 @@
  *
  * Thin orchestrator. External API logic lives in service modules:
  *   - googlePlacesService      → restaurant discovery
- *   - MenuSourceResolver       → phased menu/macro lookup (FFN → FatSecret → UberEats → Firecrawl)
+ *   - MenuSourceResolver       → phased menu/macro lookup (FatSecret → UberEats → Firecrawl)
  *   - FirecrawlSource          → website-based fallback (map + scrape)
  *   - macroEstimationService   → Haiku macro estimation for structured items
  *
  * Two-path estimation strategy:
- *   Path 1 (chains): FFN/FatSecret return official macros → skip Haiku entirely
+ *   Path 1 (chains): FatSecret returns official macros → skip Haiku entirely
  *   Path 2 (indies): UberEats/Firecrawl return structured items → Haiku estimates WITH descriptions
  *
  * Flow per restaurant:
- *   1. resolver.resolve()                   → FFN | FatSecret (direct macros) | UberEats | Firecrawl
+ *   1. resolver.resolve()                   → FatSecret (direct macros) | UberEats | Firecrawl
  *   2. fallback: firecrawlSource.lookupByUrl() if website URI known
  *   3. persist: chain items with official macros, indie items via Haiku estimation
  *
@@ -40,7 +40,6 @@ import {
   type PlaceResult,
 } from "../apps/api/services/googlePlacesService.js";
 import { MenuSourceResolver } from "../apps/api/services/menuSources/resolver.js";
-import { FFNSource } from "../apps/api/services/menuSources/ffnSource.js";
 import { FatSecretSource } from "../apps/api/services/menuSources/fatSecretSource.js";
 import { UberEatsSource } from "../apps/api/services/menuSources/uberEatsSource.js";
 import { FirecrawlSource } from "../apps/api/services/menuSources/firecrawlSource.js";
@@ -239,10 +238,9 @@ async function main(): Promise<void> {
   const anthropic = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"] });
 
   const firecrawlSource = new FirecrawlSource(anthropic);
-  // Two-path resolver: chains get official macros (FFN/FatSecret),
+  // Two-path resolver: chains get official macros (FatSecret),
   // indies get structured menus for Haiku estimation (UberEats/Firecrawl)
   const resolver = new MenuSourceResolver([
-    new FFNSource(),        // Path 1: ~200 chains, official macros, $0
     new FatSecretSource(),  // Path 1: ~1,060 chains, official macros, $0
     new UberEatsSource(),   // Path 2: indie menus with descriptions, $0
     firecrawlSource,        // Path 2: fallback scraping, ~$0.006
@@ -290,7 +288,7 @@ async function main(): Promise<void> {
       index++;
       log(`Processing ${place.name} (${index}/${places.length})...`);
 
-      // Resolver: FFN → FatSecret → UberEats → Firecrawl search
+      // Resolver: FatSecret → UberEats → Firecrawl search
       let menuResult = await resolver.resolve(place.name, place.address);
 
       // Phase 3b: Firecrawl website fallback if resolver found nothing
@@ -340,7 +338,7 @@ async function main(): Promise<void> {
       }
 
       // Two-path estimation:
-      // Path 1 (chains): FFN/FatSecret provide official macros — skip Haiku entirely
+      // Path 1 (chains): FatSecret provides official macros — skip Haiku entirely
       // Path 2 (indies): UberEats/Firecrawl provide structured items — Haiku estimates
       //   with description context (descriptions help indie items, hurt chain items)
       let macros: (MacroData | null)[];

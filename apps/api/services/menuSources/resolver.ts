@@ -5,8 +5,7 @@
  * The pipeline instantiates the resolver with sources in priority order:
  *
  *   new MenuSourceResolver([
- *     new FFNSource(),       // Phase 1: official chain macros, $0
- *     new FatSecretSource(), // Phase 1b: more chain macros, $0
+ *     new FatSecretSource(), // Phase 1: official chain macros (~1,060 chains), $0
  *     new UberEatsSource(),  // Phase 2: structured indie menus, $0
  *     new FirecrawlSource(), // Phase 3: fallback scraping, ~$0.006
  *   ])
