@@ -37,7 +37,7 @@ export function SearchHeader({ values, location, onPress }: SearchHeaderProps) {
         {/* Row 1: logo + location */}
         <View style={h.row1}>
           <View style={h.logoLeft}>
-            <Ionicons name="restaurant" size={18} color={COLORS.greenLight} />
+            <Ionicons name="restaurant" size={18} color={COLORS.green} />
             <Text style={h.logo}>fitsy</Text>
           </View>
           <View style={h.locationPill}>

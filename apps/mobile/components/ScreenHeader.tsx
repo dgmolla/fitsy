@@ -7,7 +7,7 @@ export function ScreenHeader() {
   return (
     <View style={styles.container}>
       <View style={styles.logoRow}>
-        <Ionicons name="restaurant" size={18} color={COLORS.greenLight} />
+        <Ionicons name="restaurant" size={18} color={COLORS.green} />
         <Text style={styles.logo}>fitsy</Text>
       </View>
     </View>

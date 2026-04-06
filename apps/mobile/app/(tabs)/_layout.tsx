@@ -18,7 +18,7 @@ export default function TabLayout() {
           paddingTop: 8,
           height: 80,
         },
-        tabBarActiveTintColor: COLORS.greenLight,
+        tabBarActiveTintColor: COLORS.green,
         tabBarInactiveTintColor: colors.textTertiary,
         tabBarLabelStyle: {
           fontSize: 10,
@@ -45,17 +45,17 @@ export default function TabLayout() {
               width: 52,
               height: 52,
               borderRadius: 26,
-              backgroundColor: COLORS.greenLight,
+              backgroundColor: COLORS.green,
               alignItems: 'center',
               justifyContent: 'center',
               marginBottom: 20,
-              shadowColor: COLORS.greenLight,
-              shadowOpacity: 0.4,
-              shadowRadius: 12,
-              shadowOffset: { width: 0, height: 4 },
-              elevation: 8,
+              shadowColor: COLORS.greenDark,
+              shadowOpacity: 0.25,
+              shadowRadius: 8,
+              shadowOffset: { width: 0, height: 3 },
+              elevation: 6,
             }}>
-              <Ionicons name="search" size={24} color={COLORS.text} />
+              <Ionicons name="search" size={24} color={COLORS.white} />
             </View>
           ),
         }}

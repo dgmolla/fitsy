@@ -9,11 +9,11 @@ import { TextStyle } from 'react-native';
 // ─── Colors ──────────────────────────────────────────────────────────────────
 
 export const COLORS = {
-  // Brand green — primary accent
-  green: '#22C55E',
-  greenDark: '#16A34A',
-  greenLight: '#4ADE80',
-  greenBg: '#F0FDF4',
+  // Brand green — muted sage, reads well on white
+  green: '#2F8F5B',
+  greenDark: '#246E47',
+  greenLight: '#3DAE6F',
+  greenBg: '#EFF6F1',
 
   // Neutrals
   white: '#FFFFFF',
@@ -35,8 +35,8 @@ export const COLORS = {
   warningBg: '#FFFBEB',
 
   // Confidence badges
-  confHigh: '#22C55E',
-  confHighBg: '#F0FDF4',
+  confHigh: '#2F8F5B',
+  confHighBg: '#EFF6F1',
   confMedium: '#F59E0B',
   confMediumBg: '#FFFBEB',
   confLow: '#9CA3AF',
