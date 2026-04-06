@@ -14,6 +14,8 @@ const config = {
         '^expo-apple-authentication$': '<rootDir>/__mocks__/expo-apple-authentication.ts',
         '^expo-auth-session(/.*)?$': '<rootDir>/__mocks__/expo-auth-session.ts',
         '^expo-web-browser$': '<rootDir>/__mocks__/expo-web-browser.ts',
+        '^expo-router$': '<rootDir>/__mocks__/expo-router.ts',
+        '^expo-crypto$': '<rootDir>/__mocks__/expo-crypto.ts',
       },
       transform: {
         '^.+\\.tsx?$': [
@@ -41,6 +43,8 @@ const config = {
         '^expo-apple-authentication$': '<rootDir>/__mocks__/expo-apple-authentication.ts',
         '^expo-auth-session(/.*)?$': '<rootDir>/__mocks__/expo-auth-session.ts',
         '^expo-web-browser$': '<rootDir>/__mocks__/expo-web-browser.ts',
+        '^expo-router$': '<rootDir>/__mocks__/expo-router.ts',
+        '^expo-crypto$': '<rootDir>/__mocks__/expo-crypto.ts',
       },
     },
   ],

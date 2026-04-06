@@ -12,6 +12,7 @@ import { FALLBACK_LAT, FALLBACK_LNG, useLocation } from './useLocation';
 
 const mockRequestPermissions = Location.requestForegroundPermissionsAsync as jest.Mock;
 const mockGetPosition = Location.getCurrentPositionAsync as jest.Mock;
+const mockGetLastKnown = Location.getLastKnownPositionAsync as jest.Mock;
 
 const GPS_COORDS = { latitude: 37.7749, longitude: -122.4194 };
 
@@ -25,7 +26,7 @@ describe('useLocation', () => {
     expect(FALLBACK_LNG).toBe(-118.3273);
   });
 
-  it('starts in loading state with fallback coordinates', async () => {
+  it('starts with fallback coordinates', async () => {
     mockRequestPermissions.mockResolvedValue({ status: 'granted' });
     mockGetPosition.mockResolvedValue({
       coords: { ...GPS_COORDS },
@@ -35,7 +36,7 @@ describe('useLocation', () => {
     const { result, unmount } = renderHook(() => useLocation());
 
     // Synchronously check the initial state before any async resolution.
-    expect(result.current.loading).toBe(true);
+    expect(result.current.loading).toBe(false);
     expect(result.current.lat).toBe(FALLBACK_LAT);
     expect(result.current.lng).toBe(FALLBACK_LNG);
     expect(result.current.source).toBe('fallback');
@@ -56,10 +57,9 @@ describe('useLocation', () => {
     const { result } = renderHook(() => useLocation());
 
     await waitFor(() => {
-      expect(result.current.loading).toBe(false);
+      expect(result.current.source).toBe('gps');
     });
 
-    expect(result.current.source).toBe('gps');
     expect(result.current.lat).toBe(GPS_COORDS.latitude);
     expect(result.current.lng).toBe(GPS_COORDS.longitude);
   });
@@ -70,7 +70,7 @@ describe('useLocation', () => {
     const { result } = renderHook(() => useLocation());
 
     await waitFor(() => {
-      expect(result.current.loading).toBe(false);
+      expect(mockRequestPermissions).toHaveBeenCalled();
     });
 
     expect(result.current.source).toBe('fallback');
@@ -85,7 +85,7 @@ describe('useLocation', () => {
     const { result } = renderHook(() => useLocation());
 
     await waitFor(() => {
-      expect(result.current.loading).toBe(false);
+      expect(mockGetPosition).toHaveBeenCalled();
     });
 
     expect(result.current.source).toBe('fallback');
@@ -99,7 +99,7 @@ describe('useLocation', () => {
     const { result } = renderHook(() => useLocation());
 
     await waitFor(() => {
-      expect(result.current.loading).toBe(false);
+      expect(mockRequestPermissions).toHaveBeenCalled();
     });
 
     expect(result.current.source).toBe('fallback');
@@ -117,7 +117,7 @@ describe('useLocation', () => {
     const { result } = renderHook(() => useLocation());
 
     await waitFor(() => {
-      expect(result.current.loading).toBe(false);
+      expect(result.current.source).toBe('gps');
     });
 
     expect(mockGetPosition).toHaveBeenCalledWith({

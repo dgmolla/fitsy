@@ -20,6 +20,8 @@ export const requestForegroundPermissionsAsync = jest.fn().mockResolvedValue({
   status: PermissionStatus.GRANTED,
 });
 
+export const getLastKnownPositionAsync = jest.fn().mockResolvedValue(null);
+
 export const getCurrentPositionAsync = jest.fn().mockResolvedValue({
   coords: {
     latitude: 37.7749,
