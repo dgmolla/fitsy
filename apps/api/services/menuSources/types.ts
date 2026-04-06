@@ -10,6 +10,7 @@ export interface StructuredMenuItem {
   name: string;
   description?: string;
   price?: number;
+  calories?: number; // calories extracted from source (e.g. UberEats markdown) — use directly when set
   category?: string; // "Entree", "Side", "Drink"
   section?: string;  // menu section heading (e.g., "Appetizers", "Salads")
 }

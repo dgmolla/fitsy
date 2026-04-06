@@ -4,7 +4,9 @@ kanban-plugin: basic
 
 ## Backlog
 
-- [ ] **S-64** RevenueCat integration — install `react-native-purchases`, configure RevenueCat project + App Store Connect IAP products ($5/mo, $30/yr), implement paywall screen, gate paid features behind entitlement check, replace subscription verify stub from S-60. Prereqs: Apple Developer account, ASC app record, IAP products + subscription group created in ASC, RevenueCat project linked, free-vs-paid feature split decided. #frontend #backend #O1
+- [ ] **S-74** Add FatSecret source — implement `fatSecretSource.ts` in `apps/api/services/menuSources/`. Raw fetch to `foods.fatsecret.com/calories-nutrition/{slug}`, parse `<b>` + `Per 1 serving - Calories: Xkcal | Fat: Xg | Carbs: Xg | Protein: Xg` pattern. Returns `macros` map. ~1,060 chains covered. Unit tests with cached HTML fixture. Add to resolver as Phase 1b (after FFN, before UE). Spec: `docs/engineering/menu-data-sources-analysis.md`. #backend #O1
+- [ ] **S-75** Two-path estimation — update resolver/preload to use two estimation strategies: (1) if FFN/FatSecret found macros → use official data, done; (2) everything else → UE JSON-LD description + Haiku estimation. This ensures descriptions only fire for indie restaurants where Haiku has no memorized data. Spec: `docs/engineering/menu-data-sources-analysis.md`. #backend #O1 ^dep-S-74
+- [ ] **S-76** Re-run hero eval with two-path pipeline — validate that chains get official macros (0% error) and indie items get description-informed estimates. Compare against previous hero eval baselines. Spec: `docs/engineering/menu-data-sources-analysis.md`. #backend #O1 ^dep-S-75
 ## In Progress
 
 

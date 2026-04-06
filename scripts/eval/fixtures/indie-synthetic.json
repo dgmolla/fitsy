@@ -1,0 +1,322 @@
+[
+  {
+    "id": "indie-double-burger",
+    "chain": "Joe's Burger Joint",
+    "itemName": "The Double Stack",
+    "description": "Two seasoned beef patties with our house-made special sauce, shredded lettuce, american cheese, dill pickles, and diced onions on a toasted sesame seed bun",
+    "category": "Entree",
+    "servingSize": "1 sandwich (200g)",
+    "source": "synthetic from mcdonalds-big-mac",
+    "officialMacros": {
+      "calories": 540,
+      "proteinG": 25,
+      "carbsG": 46,
+      "fatG": 28
+    },
+    "tags": ["indie-synthetic"]
+  },
+  {
+    "id": "indie-qp-smash-burger",
+    "chain": "Joe's Burger Joint",
+    "itemName": "Quarter Pound Smash Burger with Cheese",
+    "description": "Hand-smashed quarter pound beef patty with melted american cheese, ketchup, mustard, slivered onions, and pickles on a sesame bun",
+    "category": "Entree",
+    "servingSize": "1 sandwich (202g)",
+    "source": "synthetic from mcdonalds-quarter-pounder-with-cheese",
+    "officialMacros": {
+      "calories": 540,
+      "proteinG": 31,
+      "carbsG": 42,
+      "fatG": 28
+    },
+    "tags": ["indie-synthetic"]
+  },
+  {
+    "id": "indie-breakfast-egg-muffin",
+    "chain": "Sunrise Diner",
+    "itemName": "Classic Egg Muffin",
+    "description": "Farm egg, back bacon, and a slice of american cheese on a toasted english muffin",
+    "category": "Breakfast",
+    "servingSize": "1 sandwich (137g)",
+    "source": "synthetic from mcdonalds-egg-mcmuffin",
+    "officialMacros": {
+      "calories": 300,
+      "proteinG": 17,
+      "carbsG": 30,
+      "fatG": 12
+    },
+    "tags": ["indie-synthetic"]
+  },
+  {
+    "id": "indie-medium-fries",
+    "chain": "Joe's Burger Joint",
+    "itemName": "Hand-Cut Fries (Regular)",
+    "description": "Crispy golden french fries cut in-house daily, lightly salted. Regular portion",
+    "category": "Side",
+    "servingSize": "1 regular (117g)",
+    "source": "synthetic from mcdonalds-medium-fries",
+    "officialMacros": {
+      "calories": 340,
+      "proteinG": 4,
+      "carbsG": 44,
+      "fatG": 16
+    },
+    "tags": ["indie-synthetic"]
+  },
+  {
+    "id": "indie-crispy-chicken-sandwich",
+    "chain": "The Healthy Hen",
+    "itemName": "Original Crispy Chicken Sandwich",
+    "description": "Pressure-fried seasoned chicken breast filet, two pickle chips, and butter on a toasted brioche bun",
+    "category": "Entree",
+    "servingSize": "1 sandwich (200g)",
+    "source": "synthetic from chickfila-chicken-sandwich",
+    "officialMacros": {
+      "calories": 440,
+      "proteinG": 29,
+      "carbsG": 41,
+      "fatG": 17
+    },
+    "tags": ["indie-synthetic"]
+  },
+  {
+    "id": "indie-spicy-chicken-sandwich",
+    "chain": "The Healthy Hen",
+    "itemName": "Spicy Fried Chicken Sandwich",
+    "description": "Crispy chicken breast seasoned with a spicy pepper blend, served with dill pickle chips on a toasted buttered bun",
+    "category": "Entree",
+    "servingSize": "1 sandwich (209g)",
+    "source": "synthetic from chickfila-spicy-chicken-sandwich",
+    "officialMacros": {
+      "calories": 460,
+      "proteinG": 28,
+      "carbsG": 45,
+      "fatG": 19
+    },
+    "tags": ["indie-synthetic"]
+  },
+  {
+    "id": "indie-grilled-chicken-bites",
+    "chain": "The Healthy Hen",
+    "itemName": "Grilled Chicken Bites (8pc)",
+    "description": "Eight pieces of marinated grilled chicken breast, no breading. Served with your choice of dipping sauce",
+    "category": "Entree",
+    "servingSize": "8 pieces (110g)",
+    "source": "synthetic from chickfila-grilled-nuggets-8pc",
+    "officialMacros": {
+      "calories": 130,
+      "proteinG": 25,
+      "carbsG": 1,
+      "fatG": 3
+    },
+    "tags": ["indie-synthetic"]
+  },
+  {
+    "id": "indie-waffle-fries",
+    "chain": "The Healthy Hen",
+    "itemName": "Waffle-Cut Potato Fries (Regular)",
+    "description": "Thick-cut waffle-shaped potatoes, fried until golden and crispy. Lightly seasoned with sea salt",
+    "category": "Side",
+    "servingSize": "1 regular (125g)",
+    "source": "synthetic from chickfila-waffle-fries-medium",
+    "officialMacros": {
+      "calories": 420,
+      "proteinG": 5,
+      "carbsG": 45,
+      "fatG": 24
+    },
+    "tags": ["indie-synthetic"]
+  },
+  {
+    "id": "indie-avocado-spread",
+    "chain": "Morning Buzz Cafe",
+    "itemName": "Avocado Spread (add-on)",
+    "description": "Side of seasoned mashed avocado with a hint of sea salt and lemon, 1.1oz packet",
+    "category": "Condiment",
+    "servingSize": "1 container (57g)",
+    "source": "synthetic from starbucks-avocado-spread",
+    "officialMacros": {
+      "calories": 90,
+      "proteinG": 1,
+      "carbsG": 5,
+      "fatG": 8
+    },
+    "tags": ["indie-synthetic", "condiment", "serving-size-tricky"]
+  },
+  {
+    "id": "indie-grilled-cheese-sourdough",
+    "chain": "Morning Buzz Cafe",
+    "itemName": "Crispy Grilled Cheese on Sourdough",
+    "description": "Three-cheese blend (white cheddar, mozzarella, parmesan) griddled between thick-sliced sourdough bread until golden and melty",
+    "category": "Entree",
+    "servingSize": "1 sandwich (143g)",
+    "source": "synthetic from starbucks-crispy-grilled-cheese-on-sourdough",
+    "officialMacros": {
+      "calories": 520,
+      "proteinG": 21,
+      "carbsG": 47,
+      "fatG": 29
+    },
+    "tags": ["indie-synthetic"]
+  },
+  {
+    "id": "indie-cake-pop",
+    "chain": "Morning Buzz Cafe",
+    "itemName": "Birthday Cake Pop",
+    "description": "Vanilla cake ball dipped in white chocolatey coating with pink and white sprinkles, served on a stick",
+    "category": "Dessert",
+    "servingSize": "1 cake pop (43g)",
+    "source": "synthetic from starbucks-birthday-cake-pop",
+    "officialMacros": {
+      "calories": 170,
+      "proteinG": 1,
+      "carbsG": 23,
+      "fatG": 9
+    },
+    "tags": ["indie-synthetic", "serving-size-tricky"]
+  },
+  {
+    "id": "indie-grand-breakfast",
+    "chain": "Rosie's Kitchen",
+    "itemName": "The Grand Breakfast",
+    "description": "Two buttermilk pancakes, two eggs any style, two strips of bacon, and two pork sausage links. Served with butter and maple syrup",
+    "category": "Breakfast",
+    "servingSize": "1 order",
+    "source": "synthetic from dennys-grand-slam",
+    "officialMacros": {
+      "calories": 770,
+      "proteinG": 34,
+      "carbsG": 79,
+      "fatG": 36
+    },
+    "tags": ["indie-synthetic", "serving-size-tricky"]
+  },
+  {
+    "id": "indie-bourbon-burger",
+    "chain": "Rosie's Kitchen",
+    "itemName": "Bourbon BBQ Bacon Burger",
+    "description": "Half-pound beef patty topped with bourbon BBQ glaze, thick-cut smoked bacon, cheddar cheese, crispy onion rings, lettuce, and tomato on a brioche bun",
+    "category": "Entree",
+    "servingSize": "1 order",
+    "source": "synthetic from dennys-bourbon-bacon-burger",
+    "officialMacros": {
+      "calories": 921,
+      "proteinG": 50,
+      "carbsG": 60,
+      "fatG": 53
+    },
+    "tags": ["indie-synthetic"]
+  },
+  {
+    "id": "indie-veggie-omelette",
+    "chain": "Rosie's Kitchen",
+    "itemName": "Garden Veggie Omelette",
+    "description": "Three-egg omelette loaded with sauteed mushrooms, bell peppers, onions, tomatoes, and shredded cheddar. Cooked in butter",
+    "category": "Breakfast",
+    "servingSize": "1 order",
+    "source": "synthetic from dennys-loaded-veggie-omelette",
+    "officialMacros": {
+      "calories": 450,
+      "proteinG": 29,
+      "carbsG": 8,
+      "fatG": 33
+    },
+    "tags": ["indie-synthetic"]
+  },
+  {
+    "id": "indie-chicken-burrito",
+    "chain": "Casa Verde Taqueria",
+    "itemName": "Grilled Chicken Burrito",
+    "description": "Flour tortilla stuffed with grilled chicken, cilantro-lime white rice, black beans, pico de gallo, shredded cheese, and sour cream. Approx 20oz",
+    "category": "Entree",
+    "servingSize": "1 burrito (567g)",
+    "source": "synthetic from chipotle-chicken-burrito",
+    "officialMacros": {
+      "calories": 1030,
+      "proteinG": 53,
+      "carbsG": 104,
+      "fatG": 42
+    },
+    "tags": ["indie-synthetic", "serving-size-tricky"]
+  },
+  {
+    "id": "indie-steak-rice-bowl",
+    "chain": "Casa Verde Taqueria",
+    "itemName": "Carne Asada Rice Bowl",
+    "description": "Grilled steak over cilantro-lime white rice with black beans and fresh pico de gallo. No tortilla",
+    "category": "Entree",
+    "servingSize": "1 bowl (482g)",
+    "source": "synthetic from chipotle-steak-bowl",
+    "officialMacros": {
+      "calories": 640,
+      "proteinG": 42,
+      "carbsG": 75,
+      "fatG": 18
+    },
+    "tags": ["indie-synthetic", "serving-size-tricky"]
+  },
+  {
+    "id": "indie-chips-guac",
+    "chain": "Casa Verde Taqueria",
+    "itemName": "House Chips & Guacamole",
+    "description": "Fresh-fried tortilla chips with our house-made guacamole (avocado, lime, cilantro, jalapeno, red onion). Large shareable portion",
+    "category": "Side",
+    "servingSize": "1 order (7.5 oz / 213g)",
+    "source": "synthetic from chipotle-chips-and-guacamole",
+    "officialMacros": {
+      "calories": 720,
+      "proteinG": 10,
+      "carbsG": 81,
+      "fatG": 40
+    },
+    "tags": ["indie-synthetic"]
+  },
+  {
+    "id": "indie-turkey-sub",
+    "chain": "Main Street Deli",
+    "itemName": "Turkey Breast Sub (6-inch)",
+    "description": "Sliced oven-roasted turkey breast on a fresh-baked 6-inch Italian roll with lettuce, tomato, onion, and green pepper",
+    "category": "Entree",
+    "servingSize": "1 sandwich (227g)",
+    "source": "synthetic from subway-6in-turkey-breast",
+    "officialMacros": {
+      "calories": 260,
+      "proteinG": 20,
+      "carbsG": 40,
+      "fatG": 3
+    },
+    "tags": ["indie-synthetic"]
+  },
+  {
+    "id": "indie-meatball-sub",
+    "chain": "Main Street Deli",
+    "itemName": "Meatball Marinara Sub (6-inch)",
+    "description": "Beef and pork meatballs simmered in house marinara sauce with melted provolone on a toasted 6-inch Italian roll",
+    "category": "Entree",
+    "servingSize": "1 sandwich (321g)",
+    "source": "synthetic from subway-6in-meatball-marinara",
+    "officialMacros": {
+      "calories": 410,
+      "proteinG": 20,
+      "carbsG": 44,
+      "fatG": 18
+    },
+    "tags": ["indie-synthetic"]
+  },
+  {
+    "id": "indie-teriyaki-chicken-sub",
+    "chain": "Main Street Deli",
+    "itemName": "Sweet Onion Teriyaki Chicken Sub (6-inch)",
+    "description": "Glazed teriyaki chicken strips with sweet onion sauce, lettuce, tomato, and green pepper on a 6-inch Italian roll",
+    "category": "Entree",
+    "servingSize": "1 sandwich (272g)",
+    "source": "synthetic from subway-6in-chicken-teriyaki",
+    "officialMacros": {
+      "calories": 340,
+      "proteinG": 24,
+      "carbsG": 50,
+      "fatG": 4
+    },
+    "tags": ["indie-synthetic"]
+  }
+]

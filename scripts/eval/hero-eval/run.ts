@@ -1,54 +1,59 @@
 /**
- * Hero Eval: Uber Eats Pipeline vs FFN Ground Truth (S-72)
+ * Hero Eval: Parametrizable macro estimation accuracy vs FFN ground truth (S-72)
  *
- * End-to-end eval of the UberEats → Haiku macro estimation pipeline.
- * For each chain in ground-truth.json:
- *   1. Fetch Uber Eats store page (raw HTTP — same approach as UberEatsSource)
- *   2. Extract JSON-LD menu items via extractJsonLdBlocks + findRestaurantBlock + parseMenuItems
- *   3. Match UE items to FFN ground-truth items by name (fuzzy lowercase match)
- *   4. Run matched items through macroEstimationService (Haiku)
- *   5. Compare Haiku calorie estimates against FFN ground truth
+ * Each run is driven by an EvalConfig (strategy × promptId):
+ *   strategy  — how StructuredMenuItems are built from ground truth
+ *     name-only   : { name, section: chainName }  — no UE scraping
+ *     ue-markdown : Firecrawl → UE Markdown → name + calories extracted
+ *                   When matched: calorie score = UE calorie vs FFN (no Haiku needed)
+ *                   Falls back to name-only if scrape fails or no items found.
+ *   promptId  — which system prompt Haiku receives for unmatched items (see prompts.ts)
  *
- * Metrics:
- *   - MdAPE (Median Absolute Percentage Error) for calories across all matched items
- *   - Red flag count: items with >15% calorie error
- *   - Catastrophic count: items with >50% calorie error
+ * FFN (fastfoodnutrition.org) is the benchmark — official published values.
  *
- * Exit criteria (per docs/engineering/menu-data-sources-analysis.md):
- *   - MdAPE ≤ 8%
- *   - Red flags ≤ 12 / 60
- *   - Catastrophic errors ≤ 3 / 60
+ * Metrics (per config):
+ *   MdAPE ≤ 8%  |  red flags (>15%) ≤ 30/160  |  catastrophic (>50%) ≤ 7/160
  *
- * Usage:
+ * CLI:
  *   npx tsx scripts/eval/hero-eval/run.ts
+ *     → runs all configs, prints comparison table
  *
- * Requires:
- *   - ANTHROPIC_API_KEY (from apps/api/.env.local or process env)
- *   - Network access to ubereats.com and fastfoodnutrition.org
+ *   npx tsx scripts/eval/hero-eval/run.ts --config name-only-default
+ *     → runs one config
  *
- * This eval makes live API calls. It is NOT a unit test.
+ *   npx tsx scripts/eval/hero-eval/run.ts --config name-only-default,ue-markdown-default
+ *     → runs two configs and compares
+ *
+ *   npx tsx scripts/eval/hero-eval/run.ts --list
+ *     → prints available config ids and exits
+ *
+ * Env:
+ *   ANTHROPIC_API_KEY  (required)
+ *   FIRECRAWL_API_KEY  (required for ue-markdown strategy)
  */
 
 import * as fs from "fs";
 import * as path from "path";
 import * as dotenv from "dotenv";
 import Anthropic from "@anthropic-ai/sdk";
-import {
-  extractJsonLdBlocks,
-  findRestaurantBlock,
-  parseMenuItems,
-} from "../../../apps/api/services/menuSources/uberEatsSource.js";
 import { estimateMacros } from "../../../apps/api/services/macroEstimationService.js";
+import {
+  scrapeUberEatsMarkdown,
+  parseUberEatsMarkdown,
+} from "../../../apps/api/services/menuSources/uberEatsSource.js";
 import type { StructuredMenuItem } from "../../../apps/api/services/menuSources/types.js";
+import { CONFIGS, CONFIG_MAP } from "./configs.js";
+import type { EvalConfig } from "./configs.js";
+import { PROMPTS } from "./prompts.js";
 
-// Load env from apps/api/.env.local (contains ANTHROPIC_API_KEY)
+// Load env from apps/api/.env.local
 dotenv.config({ path: path.join(__dirname, "../../../apps/api/.env.local") });
 
 // ─── Exit criteria ─────────────────────────────────────────────────────────────
 
 const TARGET_MDAPE = 8; // percent
-const TARGET_RED_FLAGS = 12; // out of 60
-const TARGET_CATASTROPHIC = 3; // out of 60
+const TARGET_RED_FLAGS = 30; // out of 160 (~18.75% — same ratio as original 12/64)
+const TARGET_CATASTROPHIC = 7; // out of 160 (~4.4% — same ratio as original 3/64)
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -63,7 +68,7 @@ interface GroundTruthItem {
 interface GroundTruthChain {
   name: string;
   ffnSlug: string;
-  uberEatsSlug: string;
+  uberEatsUrl?: string;
   items: GroundTruthItem[];
 }
 
@@ -71,28 +76,31 @@ interface GroundTruth {
   chains: GroundTruthChain[];
 }
 
+type EvalMode = "ue-markdown" | "name-only";
+
 interface ItemComparison {
   chain: string;
   itemName: string;
-  groundTruthName: string;
+  mode: EvalMode;
   gtCalories: number;
   estimatedCalories: number;
   caloriePctError: number;
   isRedFlag: boolean;
   isCatastrophic: boolean;
   confidence: string;
-  uberEatsFound: boolean;
 }
 
 interface ChainResult {
   chain: string;
-  uberEatsFound: boolean;
-  ueItemCount: number;
-  matchedCount: number;
+  mode: EvalMode;
+  itemCount: number;
+  ueItemsFound: number;
   comparisons: ItemComparison[];
 }
 
 interface EvalResults {
+  configId: string;
+  configLabel: string;
   chains: ChainResult[];
   totalMatched: number;
   totalGroundTruth: number;
@@ -107,120 +115,32 @@ interface EvalResults {
   };
 }
 
-// ─── Uber Eats fetch helpers ──────────────────────────────────────────────────
-
-const UE_BASE = "https://www.ubereats.com";
-
-const HEADERS = {
-  "User-Agent":
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  Accept: "text/html,application/xhtml+xml",
-  "Accept-Language": "en-US,en;q=0.9",
-};
-
-async function fetchUberEatsPage(url: string): Promise<string | null> {
-  try {
-    const response = await fetch(url, { headers: HEADERS });
-    if (!response.ok) return null;
-    return response.text();
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Try multiple URL patterns for a chain's Uber Eats page.
- * Returns parsed items if found, null otherwise.
- */
-async function fetchUberEatsItems(
-  chain: GroundTruthChain,
-): Promise<StructuredMenuItem[] | null> {
-  const slugVariants = [
-    chain.uberEatsSlug,
-    chain.name
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, "")
-      .trim()
-      .replace(/\s+/g, "-"),
-  ];
-
-  // Deduplicate
-  const uniqueSlugs = [...new Set(slugVariants)];
-
-  for (const slug of uniqueSlugs) {
-    const url = `${UE_BASE}/store/${slug}`;
-    console.log(`    Trying: ${url}`);
-    const html = await fetchUberEatsPage(url);
-    if (!html) continue;
-
-    const blocks = extractJsonLdBlocks(html);
-    const restaurant = findRestaurantBlock(blocks);
-    if (!restaurant) continue;
-
-    const items = parseMenuItems(restaurant);
-    if (items.length > 0) {
-      console.log(`    Found ${items.length} items via JSON-LD`);
-      return items;
-    }
-  }
-
-  return null;
-}
-
 // ─── Item matching ────────────────────────────────────────────────────────────
 
-/**
- * Normalize a menu item name for fuzzy matching.
- * Lowercases, removes punctuation, collapses whitespace.
- */
-function normalizeName(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+function normalize(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9 ]/g, "").trim();
 }
 
 /**
- * Find the best UE item match for a ground-truth item name.
- * Uses substring matching after normalization — handles slight naming differences
- * between FFN and Uber Eats (e.g., "Big Mac" vs "Big Mac Combo").
+ * Find the best-matching UberEats item for an FFN item name.
+ * Tries exact match, then substring containment in either direction.
  */
-function findBestMatch(
-  gtName: string,
+function findMatchingUEItem(
+  ffnName: string,
   ueItems: StructuredMenuItem[],
 ): StructuredMenuItem | null {
-  const normGt = normalizeName(gtName);
+  const target = normalize(ffnName);
 
-  // Exact match first
-  for (const ueItem of ueItems) {
-    if (normalizeName(ueItem.name) === normGt) return ueItem;
-  }
+  let match = ueItems.find((item) => normalize(item.name) === target);
+  if (match) return match;
 
-  // Substring match: GT name is contained in UE name (catches "Big Mac" in "Big Mac Combo")
-  for (const ueItem of ueItems) {
-    const normUe = normalizeName(ueItem.name);
-    if (normUe.includes(normGt) || normGt.includes(normUe)) return ueItem;
-  }
+  match = ueItems.find((item) => normalize(item.name).includes(target));
+  if (match) return match;
 
-  // Word-overlap score: require at least 2 matching significant words
-  const gtWords = normGt.split(" ").filter((w) => w.length > 2);
-  let bestItem: StructuredMenuItem | null = null;
-  let bestScore = 0;
+  match = ueItems.find((item) => target.includes(normalize(item.name)));
+  if (match) return match;
 
-  for (const ueItem of ueItems) {
-    const ueWords = normalizeName(ueItem.name)
-      .split(" ")
-      .filter((w) => w.length > 2);
-    const overlap = gtWords.filter((w) => ueWords.includes(w)).length;
-    const score = overlap / Math.max(gtWords.length, ueWords.length);
-    if (overlap >= 2 && score > bestScore) {
-      bestScore = score;
-      bestItem = ueItem;
-    }
-  }
-
-  return bestItem;
+  return null;
 }
 
 // ─── Metrics ──────────────────────────────────────────────────────────────────
@@ -234,186 +154,129 @@ function calcMdAPE(comparisons: ItemComparison[]): number {
     : errors[mid]!;
 }
 
-// ─── Main eval ────────────────────────────────────────────────────────────────
+// ─── Per-chain eval ───────────────────────────────────────────────────────────
 
 async function evalChain(
   chain: GroundTruthChain,
+  config: EvalConfig,
   client: Anthropic,
 ): Promise<ChainResult> {
-  console.log(`\n  Chain: ${chain.name}`);
+  console.log(`\n  Chain: ${chain.name} (${chain.items.length} items)`);
 
-  // Step 1: Fetch Uber Eats page and extract JSON-LD items
-  const ueItems = await fetchUberEatsItems(chain);
+  let ueItems: StructuredMenuItem[] = [];
+  let mode: EvalMode = "name-only";
 
-  if (!ueItems) {
-    console.log(`  [MISS] No Uber Eats JSON-LD found for ${chain.name}`);
-    return {
-      chain: chain.name,
-      uberEatsFound: false,
-      ueItemCount: 0,
-      matchedCount: 0,
-      comparisons: [],
-    };
-  }
-
-  // Step 2: Match UE items to ground truth items
-  const matchedItems: Array<{ gtItem: GroundTruthItem; ueItem: StructuredMenuItem }> = [];
-
-  for (const gtItem of chain.items) {
-    const match = findBestMatch(gtItem.name, ueItems);
-    if (match) {
-      matchedItems.push({ gtItem, ueItem: match });
-      console.log(`    Matched: "${gtItem.name}" → "${match.name}"`);
-    } else {
-      console.log(`    No match: "${gtItem.name}"`);
+  if (config.strategy === "ue-markdown" && chain.uberEatsUrl) {
+    process.stdout.write(`    Scraping UberEats via Firecrawl (markdown)... `);
+    const markdown = await scrapeUberEatsMarkdown(chain.uberEatsUrl);
+    if (markdown) {
+      ueItems = parseUberEatsMarkdown(markdown);
     }
+
+    if (ueItems.length > 0) {
+      mode = "ue-markdown";
+      console.log(`found ${ueItems.length} UE items (mode: ue-markdown)`);
+    } else {
+      console.log(`no items found in markdown — falling back to name-only`);
+    }
+  } else if (config.strategy === "ue-markdown") {
+    console.log(`    No uberEatsUrl — using name-only fallback`);
+  } else {
+    console.log(`    Strategy: name-only`);
   }
 
-  if (matchedItems.length === 0) {
-    console.log(`  [SKIP] No items matched between UE and ground truth for ${chain.name}`);
-    return {
-      chain: chain.name,
-      uberEatsFound: true,
-      ueItemCount: ueItems.length,
-      matchedCount: 0,
-      comparisons: [],
-    };
-  }
+  // Build StructuredMenuItems for each FFN ground-truth item
+  const structuredItems: StructuredMenuItem[] = chain.items.map((gtItem) => {
+    if (mode === "ue-markdown") {
+      const matched = findMatchingUEItem(gtItem.name, ueItems);
+      if (matched) return matched;
+    }
+    return { name: gtItem.name, section: chain.name };
+  });
 
-  // Step 3: Run matched UE items through Haiku estimation
-  const itemsToEstimate = matchedItems.map((m) => m.ueItem);
-
+  // Run Haiku estimation with this config's prompt
+  const systemPrompt = PROMPTS[config.promptId];
   let estimates: (import("../../../apps/api/services/menuSources/types.js").MacroData | null)[];
   try {
-    estimates = await estimateMacros(itemsToEstimate, client);
+    estimates = await estimateMacros(structuredItems, client, systemPrompt);
   } catch (err) {
     console.error(`  [ERROR] Haiku estimation failed for ${chain.name}:`, err);
-    return {
-      chain: chain.name,
-      uberEatsFound: true,
-      ueItemCount: ueItems.length,
-      matchedCount: matchedItems.length,
-      comparisons: [],
-    };
+    return { chain: chain.name, mode, itemCount: chain.items.length, ueItemsFound: ueItems.length, comparisons: [] };
   }
 
-  // Step 4: Build comparisons
+  // Compare estimates to FFN ground truth
   const comparisons: ItemComparison[] = [];
-  for (let i = 0; i < matchedItems.length; i++) {
-    const { gtItem, ueItem } = matchedItems[i]!;
+  for (let i = 0; i < chain.items.length; i++) {
+    const gtItem = chain.items[i]!;
     const estimate = estimates[i];
 
-    if (!estimate) {
-      console.log(`    [NULL] Haiku returned null for "${ueItem.name}"`);
-      continue;
+    // For ue-markdown items: if UE has calorie data, use it directly (bypass Haiku)
+    const ueMatch = mode === "ue-markdown" ? findMatchingUEItem(gtItem.name, ueItems) : null;
+    const ueCalories = ueMatch?.calories;
+
+    const itemMode: EvalMode = ueCalories !== undefined ? "ue-markdown" : "name-only";
+
+    let estimatedCalories: number;
+    let confidence: string;
+
+    if (ueCalories !== undefined) {
+      // UE calorie data — authoritative, no Haiku needed for calories
+      estimatedCalories = ueCalories;
+      confidence = "HIGH";
+    } else {
+      if (!estimate) {
+        console.log(`    [NULL] Haiku returned null for "${gtItem.name}"`);
+        continue;
+      }
+      estimatedCalories = estimate.calories;
+      confidence = estimate.confidence;
     }
 
-    const pctError = Math.abs(estimate.calories - gtItem.calories) / gtItem.calories * 100;
+    const pctError = Math.abs(estimatedCalories - gtItem.calories) / gtItem.calories * 100;
     const isRedFlag = pctError > 15;
     const isCatastrophic = pctError > 50;
 
     const flag = isCatastrophic ? "CATA" : isRedFlag ? "FLAG" : "OK  ";
+    const modeTag = itemMode === "ue-markdown" ? "UE" : "NO";
     console.log(
-      `    [${flag}] ${ueItem.name}: est=${estimate.calories} gt=${gtItem.calories} err=${pctError.toFixed(1)}%`,
+      `    [${flag}][${modeTag}] ${gtItem.name}: est=${estimatedCalories} gt=${gtItem.calories} err=${pctError.toFixed(1)}%`,
     );
 
     comparisons.push({
       chain: chain.name,
-      itemName: ueItem.name,
-      groundTruthName: gtItem.name,
+      itemName: gtItem.name,
+      mode: itemMode,
       gtCalories: gtItem.calories,
-      estimatedCalories: estimate.calories,
+      estimatedCalories,
       caloriePctError: pctError,
       isRedFlag,
       isCatastrophic,
-      confidence: estimate.confidence,
-      uberEatsFound: true,
+      confidence,
     });
   }
 
-  return {
-    chain: chain.name,
-    uberEatsFound: true,
-    ueItemCount: ueItems.length,
-    matchedCount: matchedItems.length,
-    comparisons,
-  };
+  return { chain: chain.name, mode, itemCount: chain.items.length, ueItemsFound: ueItems.length, comparisons };
 }
 
-// ─── Report ───────────────────────────────────────────────────────────────────
+// ─── Single config run ────────────────────────────────────────────────────────
 
-function printSummary(results: EvalResults): void {
-  const sep = "=".repeat(70);
-  console.log("\n" + sep);
-  console.log("HERO EVAL RESULTS: Uber Eats → Haiku vs FFN Ground Truth");
-  console.log(sep);
-  console.log("");
-
-  // Per-chain summary
-  for (const chain of results.chains) {
-    if (!chain.uberEatsFound) {
-      console.log(`  ${chain.chain.padEnd(20)}  [NO UE DATA]`);
-      continue;
-    }
-    const chainMdAPE = calcMdAPE(chain.comparisons);
-    const flags = chain.comparisons.filter((c) => c.isRedFlag).length;
-    const cats = chain.comparisons.filter((c) => c.isCatastrophic).length;
-    console.log(
-      `  ${chain.chain.padEnd(20)}  matched=${chain.matchedCount}/${chain.comparisons.length}  MdAPE=${chainMdAPE.toFixed(1)}%  flags=${flags}  cata=${cats}`,
-    );
-  }
-
-  console.log("");
-  console.log(sep);
-  console.log("OVERALL");
-  console.log(sep);
-  console.log(`  Total matched items : ${results.totalMatched} (of ${results.totalGroundTruth} ground-truth items)`);
-  console.log(`  MdAPE (calories)    : ${results.mdape.toFixed(2)}%  (target: ≤${results.targets.mdape}%)`);
-  console.log(`  Red flags (>15%)    : ${results.redFlagCount} / ${results.totalMatched}  (target: ≤${results.targets.redFlags})`);
-  console.log(`  Catastrophic (>50%) : ${results.catastrophicCount} / ${results.totalMatched}  (target: ≤${results.targets.catastrophic})`);
-  console.log("");
-
-  const mdapePass = results.mdape <= results.targets.mdape;
-  const redFlagPass = results.redFlagCount <= results.targets.redFlags;
-  const catPass = results.catastrophicCount <= results.targets.catastrophic;
-
-  console.log(`  MdAPE     : ${mdapePass ? "PASS" : "FAIL"}`);
-  console.log(`  Red flags : ${redFlagPass ? "PASS" : "FAIL"}`);
-  console.log(`  Cata      : ${catPass ? "PASS" : "FAIL"}`);
-  console.log("");
-  console.log(`  Overall   : ${results.targetMet ? "PASS — all targets met" : "FAIL — one or more targets missed"}`);
-  console.log(sep);
-}
-
-// ─── Entry point ──────────────────────────────────────────────────────────────
-
-async function main(): Promise<void> {
-  // Load ground truth
-  const gtPath = path.join(__dirname, "ground-truth.json");
-  const groundTruth: GroundTruth = JSON.parse(fs.readFileSync(gtPath, "utf-8"));
-
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    console.error(
-      "ANTHROPIC_API_KEY not set. Set it in apps/api/.env.local or as an environment variable.",
-    );
-    process.exit(1);
-  }
-
-  const client = new Anthropic({ apiKey });
-
-  console.log("Hero Eval: Uber Eats → Haiku vs FFN Ground Truth");
-  console.log(`Chains: ${groundTruth.chains.map((c) => c.name).join(", ")}`);
+async function runConfig(
+  config: EvalConfig,
+  groundTruth: GroundTruth,
+  client: Anthropic,
+): Promise<EvalResults> {
+  console.log(`\n${"─".repeat(70)}`);
+  console.log(`Config: ${config.id}  |  ${config.label}`);
+  console.log(`Strategy: ${config.strategy}  |  Prompt: ${config.promptId}`);
   console.log("─".repeat(70));
 
   const chainResults: ChainResult[] = [];
 
   for (const chain of groundTruth.chains) {
-    const result = await evalChain(chain, client);
+    const result = await evalChain(chain, config, client);
     chainResults.push(result);
   }
 
-  // Aggregate metrics
   const allComparisons = chainResults.flatMap((c) => c.comparisons);
   const totalGroundTruth = groundTruth.chains.reduce((sum, c) => sum + c.items.length, 0);
   const totalMatched = allComparisons.length;
@@ -426,7 +289,9 @@ async function main(): Promise<void> {
     redFlagCount <= TARGET_RED_FLAGS &&
     catastrophicCount <= TARGET_CATASTROPHIC;
 
-  const results: EvalResults = {
+  return {
+    configId: config.id,
+    configLabel: config.label,
     chains: chainResults,
     totalMatched,
     totalGroundTruth,
@@ -440,37 +305,186 @@ async function main(): Promise<void> {
       catastrophic: TARGET_CATASTROPHIC,
     },
   };
+}
 
-  printSummary(results);
+// ─── Report ───────────────────────────────────────────────────────────────────
 
-  // Print machine-readable JSON blob for CI / downstream consumption
+function printSingleResult(results: EvalResults): void {
+  const sep = "=".repeat(70);
+  console.log("\n" + sep);
+  console.log(`RESULTS: ${results.configLabel}`);
+  console.log(sep);
+
+  for (const chain of results.chains) {
+    const chainMdAPE = calcMdAPE(chain.comparisons);
+    const flags = chain.comparisons.filter((c) => c.isRedFlag).length;
+    const cats = chain.comparisons.filter((c) => c.isCatastrophic).length;
+    const modeLabel = chain.mode === "ue-markdown" ? "ue-markdown" : "name-only";
+    console.log(
+      `  ${chain.chain.padEnd(20)}  mode=${modeLabel.padEnd(9)}  ue=${chain.ueItemsFound.toString().padStart(3)}  matched=${chain.comparisons.length}/${chain.itemCount}  MdAPE=${chainMdAPE.toFixed(1)}%  flags=${flags}  cata=${cats}`,
+    );
+  }
+
+  console.log("");
+  console.log(sep);
+  console.log("OVERALL");
+  console.log(sep);
+  console.log(`  Items matched    : ${results.totalMatched} / ${results.totalGroundTruth}`);
+  console.log(`  MdAPE (calories) : ${results.mdape.toFixed(2)}%  (target ≤${results.targets.mdape}%)  ${results.mdape <= results.targets.mdape ? "PASS" : "FAIL"}`);
+  console.log(`  Red flags >15%   : ${results.redFlagCount} / ${results.totalMatched}  (target ≤${results.targets.redFlags})  ${results.redFlagCount <= results.targets.redFlags ? "PASS" : "FAIL"}`);
+  console.log(`  Catastrophic >50%: ${results.catastrophicCount} / ${results.totalMatched}  (target ≤${results.targets.catastrophic})  ${results.catastrophicCount <= results.targets.catastrophic ? "PASS" : "FAIL"}`);
+  console.log(`  Overall          : ${results.targetMet ? "PASS" : "FAIL"}`);
+  console.log(sep);
+}
+
+function printComparisonTable(allResults: EvalResults[]): void {
+  const sep = "=".repeat(90);
+  console.log("\n" + sep);
+  console.log("COMPARISON TABLE");
+  console.log(sep);
+
+  const header = [
+    "config".padEnd(30),
+    "strategy".padEnd(10),
+    "prompt".padEnd(22),
+    "MdAPE".padStart(7),
+    "flags".padStart(6),
+    "cata".padStart(5),
+    "pass".padStart(5),
+  ].join("  ");
+  console.log("  " + header);
+  console.log("  " + "─".repeat(header.length));
+
+  for (const r of allResults) {
+    const config = CONFIG_MAP.get(r.configId)!;
+    const row = [
+      r.configId.padEnd(30),
+      config.strategy.padEnd(10),
+      config.promptId.padEnd(22),
+      `${r.mdape.toFixed(1)}%`.padStart(7),
+      r.redFlagCount.toString().padStart(6),
+      r.catastrophicCount.toString().padStart(5),
+      (r.targetMet ? "YES" : "no").padStart(5),
+    ].join("  ");
+    console.log("  " + row);
+  }
+
+  console.log(sep);
+
+  // Best config by MdAPE
+  const best = allResults.reduce((a, b) => (a.mdape < b.mdape ? a : b));
+  console.log(`\n  Best MdAPE: ${best.configId} (${best.mdape.toFixed(2)}%)`);
+}
+
+// ─── Entry point ──────────────────────────────────────────────────────────────
+
+async function main(): Promise<void> {
+  const args = process.argv.slice(2);
+
+  // --list: print available configs and exit
+  if (args.includes("--list")) {
+    console.log("Available eval configs:\n");
+    for (const c of CONFIGS) {
+      console.log(`  ${c.id.padEnd(32)}  ${c.label}`);
+    }
+    process.exit(0);
+  }
+
+  // --config id1,id2,...: select specific configs
+  const configFlag = args.find((a) => a.startsWith("--config=") || a === "--config");
+  let selectedConfigs: EvalConfig[];
+
+  if (configFlag) {
+    const rawValue = configFlag === "--config"
+      ? args[args.indexOf("--config") + 1]
+      : configFlag.slice("--config=".length);
+
+    if (!rawValue) {
+      console.error("--config requires a value. Use --list to see available configs.");
+      process.exit(1);
+    }
+
+    const ids = rawValue.split(",").map((s) => s.trim());
+    selectedConfigs = [];
+    for (const id of ids) {
+      const c = CONFIG_MAP.get(id);
+      if (!c) {
+        console.error(`Unknown config id: "${id}". Use --list to see available configs.`);
+        process.exit(1);
+      }
+      selectedConfigs.push(c);
+    }
+  } else {
+    // Default: run all configs
+    selectedConfigs = CONFIGS;
+  }
+
+  const gtPath = path.join(__dirname, "ground-truth.json");
+  const groundTruth: GroundTruth = JSON.parse(fs.readFileSync(gtPath, "utf-8"));
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    console.error("ANTHROPIC_API_KEY not set. Set it in apps/api/.env.local.");
+    process.exit(1);
+  }
+
+  const hasFirecrawl = !!process.env.FIRECRAWL_API_KEY;
+  const chainsWithUrl = groundTruth.chains.filter((c) => c.uberEatsUrl).length;
+  const needsFirecrawl = selectedConfigs.some((c) => c.strategy === "ue-markdown");
+
+  console.log("Hero Eval: Parametrizable Macro Estimation vs FFN Ground Truth");
+  console.log(`Chains  : ${groundTruth.chains.map((c) => c.name).join(", ")}`);
+  console.log(`Configs : ${selectedConfigs.map((c) => c.id).join(", ")}`);
+  console.log(`Firecrawl: ${hasFirecrawl ? "available" : "NOT SET — ue-markdown configs will fall back to name-only"}`);
+  if (needsFirecrawl) {
+    console.log(`UberEats URLs populated: ${chainsWithUrl} / ${groundTruth.chains.length}`);
+  }
+
+  const client = new Anthropic({ apiKey });
+
+  const allResults: EvalResults[] = [];
+  for (const config of selectedConfigs) {
+    const result = await runConfig(config, groundTruth, client);
+    allResults.push(result);
+    printSingleResult(result);
+  }
+
+  if (allResults.length > 1) {
+    printComparisonTable(allResults);
+  }
+
+  // Machine-readable JSON for CI / downstream consumption
+  const anyTargetMet = allResults.some((r) => r.targetMet);
   console.log("\nJSON_RESULTS_START");
   console.log(
     JSON.stringify(
-      {
-        mdape: parseFloat(mdape.toFixed(2)),
-        redFlags: redFlagCount,
-        catastrophic: catastrophicCount,
-        totalMatched,
-        totalGroundTruth,
-        targetMet,
-        perChain: chainResults.map((c) => ({
+      allResults.map((r) => ({
+        configId: r.configId,
+        configLabel: r.configLabel,
+        mdape: parseFloat(r.mdape.toFixed(2)),
+        redFlags: r.redFlagCount,
+        catastrophic: r.catastrophicCount,
+        totalMatched: r.totalMatched,
+        totalGroundTruth: r.totalGroundTruth,
+        targetMet: r.targetMet,
+        perChain: r.chains.map((c) => ({
           chain: c.chain,
-          uberEatsFound: c.uberEatsFound,
-          ueItemCount: c.ueItemCount,
-          matchedCount: c.matchedCount,
+          mode: c.mode,
+          itemCount: c.itemCount,
+          ueItemsFound: c.ueItemsFound,
+          estimatedCount: c.comparisons.length,
           mdape: parseFloat(calcMdAPE(c.comparisons).toFixed(2)),
           redFlags: c.comparisons.filter((x) => x.isRedFlag).length,
           catastrophic: c.comparisons.filter((x) => x.isCatastrophic).length,
         })),
-      },
+      })),
       null,
       2,
     ),
   );
   console.log("JSON_RESULTS_END");
 
-  process.exit(targetMet ? 0 : 1);
+  process.exit(anyTargetMet ? 0 : 1);
 }
 
 main().catch((err: unknown) => {

@@ -1,0 +1,3 @@
+{"date":"2026-04-05T07:03:37.285Z","caseName":"haiku-baseline","model":"claude-haiku-4-5","prompt":"baseline","items":60,"costUsd":0.03787439999999999}
+{"date":"2026-04-05T07:05:51.130Z","caseName":"haiku-chain-hints","model":"claude-haiku-4-5","prompt":"chain-hints","items":60,"costUsd":0.0436104}
+{"date":"2026-04-05T07:06:01.632Z","caseName":"haiku-serving","model":"claude-haiku-4-5","prompt":"serving-size","items":60,"costUsd":0.04642239999999999}

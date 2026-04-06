@@ -1,0 +1,3468 @@
+{
+  "caseName": "haiku-chain-hints",
+  "model": "claude-haiku-4-5",
+  "promptVariant": "chain-hints",
+  "timestamp": "2026-04-05T07:05:51.127Z",
+  "itemCount": 60,
+  "aggregate": {
+    "calories": {
+      "medianAbsPctError": 11.627906976744185,
+      "meanAbsPctError": 23.814456884655662,
+      "p90AbsPctError": 60,
+      "medianSignedPctError": 0.390625
+    },
+    "proteinG": {
+      "medianAbsPctError": 16.228070175438596,
+      "meanAbsPctError": 25.969057156268367,
+      "p90AbsPctError": 55.55555555555556,
+      "medianSignedPctError": 0
+    },
+    "carbsG": {
+      "medianAbsPctError": 13.030303030303031,
+      "meanAbsPctError": 55.7042649276486,
+      "p90AbsPctError": 100,
+      "medianSignedPctError": 0
+    },
+    "fatG": {
+      "medianAbsPctError": 16.666666666666664,
+      "meanAbsPctError": 39.18974728314154,
+      "p90AbsPctError": 86,
+      "medianSignedPctError": 0
+    }
+  },
+  "confidenceCalibration": [
+    {
+      "confidence": "HIGH",
+      "count": 60,
+      "medianCalError": 11.627906976744185
+    }
+  ],
+  "perChain": [
+    {
+      "chain": "Chick-fil-A",
+      "count": 10,
+      "medianCalError": 11.490683229813664
+    },
+    {
+      "chain": "Chipotle",
+      "count": 10,
+      "medianCalError": 17.9796918767507
+    },
+    {
+      "chain": "Denny's",
+      "count": 10,
+      "medianCalError": 30.861678004535147
+    },
+    {
+      "chain": "McDonald's",
+      "count": 10,
+      "medianCalError": 3.0713640469738026
+    },
+    {
+      "chain": "Starbucks",
+      "count": 10,
+      "medianCalError": 8.516656191074794
+    },
+    {
+      "chain": "Subway",
+      "count": 10,
+      "medianCalError": 11.911764705882353
+    }
+  ],
+  "redFlags": [
+    {
+      "id": "starbucks-avocado-spread",
+      "chain": "Starbucks",
+      "itemName": "Avocado Spread",
+      "officialCalories": 90,
+      "estimatedCalories": 240,
+      "pctError": 166.66666666666669,
+      "diagnosis": "SERVING_TYPE",
+      "diagnosisDetail": "condiment→meal",
+      "modelReasoning": "Starbucks Avocado Spread is a standard menu item consisting of mashed avocado with lemon juice and salt on a small portion base. Based on Starbucks' published nutrition information, this item typically contains approximately 240 calories with the macronutrient breakdown dominated by fat from avocado (about 20g), moderate carbohydrates from any bread component (15g), and minimal protein (3g). This estimate aligns with Starbucks' official nutritional guidelines for this prepared spread item."
+    },
+    {
+      "id": "chickfila-grilled-nuggets-8pc",
+      "chain": "Chick-fil-A",
+      "itemName": "Grilled Nuggets (8-count)",
+      "officialCalories": 130,
+      "estimatedCalories": 320,
+      "pctError": 146.15384615384613,
+      "diagnosis": "UNKNOWN",
+      "diagnosisDetail": "unclassified divergence",
+      "modelReasoning": "Chick-fil-A's 8-count Grilled Chicken Nuggets are a well-documented menu item. This estimate is based on official published nutritional information for this specific product, which consists of grilled (not fried) chicken breast pieces. The macronutrient profile reflects the lean protein content of grilled chicken with minimal added fat from preparation."
+    },
+    {
+      "id": "dennys-fit-slam",
+      "chain": "Denny's",
+      "itemName": "Fit Slam",
+      "officialCalories": 430,
+      "estimatedCalories": 1020,
+      "pctError": 137.2093023255814,
+      "diagnosis": "UNKNOWN",
+      "diagnosisDetail": "unclassified divergence",
+      "modelReasoning": "The Fit Slam at Denny's is a signature breakfast item featuring eggs, lean protein (turkey sausage or bacon), toast, and hash browns. Based on Denny's published nutrition information, this meal typically contains approximately 1020 calories with substantial protein from eggs and meat, moderate carbohydrates from toast and potatoes, and fat from cooking oils and meat. Denny's official menu data supports these estimates."
+    },
+    {
+      "id": "dennys-country-fried-steak",
+      "chain": "Denny's",
+      "itemName": "Country Fried Steak & Hash Browns",
+      "officialCalories": 571,
+      "estimatedCalories": 1130,
+      "pctError": 97.8984238178634,
+      "diagnosis": "SERVING_SIZE",
+      "diagnosisDetail": "2x overestimate",
+      "modelReasoning": "Denny's Country Fried Steak is a breaded and fried beef cutlet served with hash browns. Based on Denny's standard portion sizes: the country fried steak (breaded, fried) with gravy (~6 oz meat) contributes ~600 cal, 30g protein, 25g carbs, 42g fat. Hash browns (~4 oz) add ~530 cal, 8g protein, 64g carbs, 26g fat. Typical plating includes garnishes. This aligns with published Denny's nutrition data for this popular breakfast/lunch item."
+    },
+    {
+      "id": "subway-footlong-cold-cut-combo",
+      "chain": "Subway",
+      "itemName": "Footlong Cold Cut Combo",
+      "officialCalories": 560,
+      "estimatedCalories": 920,
+      "pctError": 64.28571428571429,
+      "diagnosis": "SERVING_SIZE",
+      "diagnosisDetail": "1.4x overestimate",
+      "modelReasoning": "Subway's Footlong Cold Cut Combo on 6-inch Italian bread with standard portions of turkey, ham, and roast beef, plus typical vegetables and standard amount of mayo-based sauce. Values based on Subway's published nutrition information for this standard menu item."
+    },
+    {
+      "id": "mcdonalds-sausage-burrito",
+      "chain": "McDonald's",
+      "itemName": "Sausage Burrito",
+      "officialCalories": 300,
+      "estimatedCalories": 480,
+      "pctError": 60,
+      "diagnosis": "SERVING_SIZE",
+      "diagnosisDetail": "1.5x overestimate",
+      "modelReasoning": "McDonald's Sausage Burrito is a standard breakfast item with published nutrition data. It contains a sausage patty, eggs, cheese, and a flour tortilla. The calorie count and macronutrients are well-documented in McDonald's official nutrition information."
+    },
+    {
+      "id": "chipotle-chicken-burrito",
+      "chain": "Chipotle",
+      "itemName": "Chicken Burrito (white rice, black beans, fresh tomato salsa, cheese, sour cream)",
+      "officialCalories": 1030,
+      "estimatedCalories": 500,
+      "pctError": 51.45631067961165,
+      "diagnosis": "SERVING_SIZE",
+      "diagnosisDetail": "0.5x underestimate",
+      "modelReasoning": "Chipotle publishes nutrition data for their bowls/burritos. A chicken burrito with white rice, black beans, salsa, cheese, and sour cream is a standard menu item. Estimates based on: ~4oz grilled chicken (~180cal, 26g protein), ~4oz white rice (~150cal, 35g carbs), ~4oz black beans (~120cal, 20g carbs, 8g protein, 1g fat), salsa (~10cal, 2g carbs), ~1.5oz cheese (~180cal, 11g protein, 15g fat), ~2oz sour cream (~60cal, 6g fat). Adjusted slightly lower (~500cal) as burrito portions are sometimes less than separate bowl components. Confidence high due to published chain data."
+    },
+    {
+      "id": "subway-6in-tuna",
+      "chain": "Subway",
+      "itemName": "6\" Tuna",
+      "officialCalories": 430,
+      "estimatedCalories": 215,
+      "pctError": 50,
+      "diagnosis": "UNKNOWN",
+      "diagnosisDetail": "unclassified divergence",
+      "modelReasoning": "Based on Subway's official nutrition data for a 6\" Tuna sub on Italian herbs & cheese bread with standard toppings (no mayo added). This reflects the standard sandwich preparation with lettuce, tomatoes, onions, and pickles."
+    },
+    {
+      "id": "chipotle-chicken-quesadilla",
+      "chain": "Chipotle",
+      "itemName": "Chicken Quesadilla",
+      "officialCalories": 830,
+      "estimatedCalories": 540,
+      "pctError": 34.93975903614458,
+      "diagnosis": "SERVING_SIZE",
+      "diagnosisDetail": "0.6x underestimate",
+      "modelReasoning": "Chipotle chicken quesadilla made with 2-3 oz grilled chicken, cheese, and tortilla. Based on Chipotle's published nutrition data, a chicken quesadilla is approximately 540 calories with significant protein from chicken and cheese, moderate carbs from the flour tortilla, and fat from cheese and cooking oil."
+    },
+    {
+      "id": "dennys-club-sandwich",
+      "chain": "Denny's",
+      "itemName": "Club Sandwich",
+      "officialCalories": 831,
+      "estimatedCalories": 1120,
+      "pctError": 34.777376654632974,
+      "diagnosis": "SERVING_SIZE",
+      "diagnosisDetail": "1.2x overestimate",
+      "modelReasoning": "Denny's Club Sandwich is a triple-decker sandwich with turkey, bacon, ham, cheese, lettuce, tomato, and mayo on toasted bread. Based on Denny's standard preparation and published nutrition information, this typically contains approximately 1120 calories with substantial protein from the three meats and cheese, significant carbs from the three bread slices, and fat from bacon, mayo, and cheese."
+    },
+    {
+      "id": "dennys-grand-slam",
+      "chain": "Denny's",
+      "itemName": "Original Grand Slam",
+      "officialCalories": 770,
+      "estimatedCalories": 1030,
+      "pctError": 33.76623376623377,
+      "diagnosis": "SERVING_SIZE",
+      "diagnosisDetail": "1.3x overestimate",
+      "modelReasoning": "The Original Grand Slam at Denny's is their signature breakfast item consisting of 2 pancakes, 2 eggs, 2 strips of bacon, and 2 sausage links. Based on Denny's published nutrition information, this combination typically yields approximately 1030 calories with substantial protein from the eggs and meat, significant carbs from the pancakes, and moderate fat from the cooking methods and meat portions."
+    },
+    {
+      "id": "chickfila-cobb-salad",
+      "chain": "Chick-fil-A",
+      "itemName": "Cobb Salad (with Grilled Filet)",
+      "officialCalories": 390,
+      "estimatedCalories": 520,
+      "pctError": 33.33333333333333,
+      "diagnosis": "SERVING_SIZE",
+      "diagnosisDetail": "1.2x overestimate",
+      "modelReasoning": "Chick-fil-A's Cobb Salad with Grilled Filet contains grilled chicken filet, mixed greens, bacon, hard-boiled eggs, cheddar cheese, and avocado with dressing. Based on Chick-fil-A's published nutrition data, this salad typically provides approximately 520 calories with high protein from the chicken filet and eggs, moderate carbs from vegetables and dressing, and significant fat from cheese, avocado, bacon, and dressing."
+    },
+    {
+      "id": "starbucks-bacon-gouda-egg-sandwich",
+      "chain": "Starbucks",
+      "itemName": "Bacon, Gouda & Egg Sandwich",
+      "officialCalories": 370,
+      "estimatedCalories": 490,
+      "pctError": 32.432432432432435,
+      "diagnosis": "SERVING_SIZE",
+      "diagnosisDetail": "1.3x overestimate",
+      "modelReasoning": "Starbucks publishes official nutrition information for this item. The sandwich contains a croissant base (~280 cal), bacon (~80 cal), Gouda cheese (~100 cal), and a large egg patty (~80 cal). These components align with Starbucks' standard preparation and published nutrition data for this breakfast sandwich."
+    },
+    {
+      "id": "starbucks-grande-caramel-frappuccino",
+      "chain": "Starbucks",
+      "itemName": "Caramel Frappuccino (Grande)",
+      "officialCalories": 370,
+      "estimatedCalories": 250,
+      "pctError": 32.432432432432435,
+      "diagnosis": "SERVING_SIZE",
+      "diagnosisDetail": "0.7x underestimate",
+      "modelReasoning": "Starbucks publishes official nutrition data for their beverages. Grande Caramel Frappuccino with 2% milk and whipped cream contains approximately 250 calories, 3.5g protein, 36g carbohydrates (from milk, caramel syrup, and frappuccino base), and 9.5g fat primarily from milk and whipped cream. This is based on standard Starbucks preparation."
+    },
+    {
+      "id": "dennys-loaded-veggie-omelette",
+      "chain": "Denny's",
+      "itemName": "Loaded Veggie Omelette",
+      "officialCalories": 450,
+      "estimatedCalories": 590,
+      "pctError": 31.11111111111111,
+      "diagnosis": "UNKNOWN",
+      "diagnosisDetail": "unclassified divergence",
+      "modelReasoning": "Denny's Loaded Veggie Omelette typically contains 3 eggs (about 210 cal, 18g protein), vegetables like mushrooms, onions, tomatoes, and peppers (about 40 cal, 2g carbs), cheese (about 110 cal, 7g protein, 9g fat), hash browns (about 200 cal, 4g carbs, 12g fat), and butter/oil for cooking (about 30 cal, 4g fat). Total aligns with Denny's published nutrition data for this menu item."
+    },
+    {
+      "id": "dennys-chicken-strips-dinner",
+      "chain": "Denny's",
+      "itemName": "Chicken Strips Dinner",
+      "officialCalories": 490,
+      "estimatedCalories": 640,
+      "pctError": 30.612244897959183,
+      "diagnosis": "SERVING_SIZE",
+      "diagnosisDetail": "1.2x overestimate",
+      "modelReasoning": "Denny's Chicken Strips Dinner typically includes 3-4 breaded and fried chicken strips (approximately 5-6 oz), served with sides like fries and coleslaw. Based on Denny's published nutrition information, this entree averages around 640 calories with substantial protein from the chicken, moderate carbohydrates from breading and sides, and moderate fat from frying and preparation methods."
+    },
+    {
+      "id": "chipotle-large-chips-and-queso",
+      "chain": "Chipotle",
+      "itemName": "Large Chips & Queso",
+      "officialCalories": 770,
+      "estimatedCalories": 570,
+      "pctError": 25.97402597402597,
+      "diagnosis": "UNKNOWN",
+      "diagnosisDetail": "unclassified divergence",
+      "modelReasoning": "Chipotle's Large Chips & Queso consists of tortilla chips (approximately 4 oz or 113g) with a standard serving of queso dip (approximately 4 oz or 113g). The chips contribute roughly 560 calories with 8g protein, 56g carbs, and 28g fat. The queso adds approximately 10g protein and 4g carbs with minimal additional fat. This aligns with published Chipotle nutrition information."
+    },
+    {
+      "id": "mcdonalds-mccafe-iced-coffee-small",
+      "chain": "McDonald's",
+      "itemName": "McCafe Iced Coffee (Small)",
+      "officialCalories": 200,
+      "estimatedCalories": 150,
+      "pctError": 25,
+      "diagnosis": "UNKNOWN",
+      "diagnosisDetail": "unclassified divergence",
+      "modelReasoning": "McDonald's McCafe Iced Coffee small with default 2% milk and syrup. Based on McDonald's published nutrition information: approximately 150 calories, 4g protein from milk, 24g carbs from milk and added syrup, and 3.5g fat from 2% milk."
+    },
+    {
+      "id": "chipotle-side-of-queso",
+      "chain": "Chipotle",
+      "itemName": "Side of Queso Blanco",
+      "officialCalories": 120,
+      "estimatedCalories": 150,
+      "pctError": 25,
+      "diagnosis": "UNKNOWN",
+      "diagnosisDetail": "unclassified divergence",
+      "modelReasoning": "Chipotle's Queso Blanco is a cheese-based dip served as a side. Based on Chipotle's published nutrition information, a standard 4 oz (113g) serving contains approximately 150 calories, 9g protein, 1g carbohydrates, and 12g fat. This reflects the cheese-heavy composition with minimal carbs."
+    },
+    {
+      "id": "chickfila-lemonade-medium",
+      "chain": "Chick-fil-A",
+      "itemName": "Lemonade (Medium)",
+      "officialCalories": 220,
+      "estimatedCalories": 270,
+      "pctError": 22.727272727272727,
+      "diagnosis": "UNKNOWN",
+      "diagnosisDetail": "unclassified divergence",
+      "modelReasoning": "Chick-fil-A's medium lemonade is a standard beverage made from lemonade concentrate and water. Based on published nutrition information, a medium (20 oz) serving contains approximately 270 calories, primarily from 66g of carbohydrates (sugar), with negligible protein and fat. This is consistent with typical chain restaurant lemonade formulations."
+    },
+    {
+      "id": "subway-6in-italian-bmt",
+      "chain": "Subway",
+      "itemName": "6\" Italian B.M.T.",
+      "officialCalories": 360,
+      "estimatedCalories": 280,
+      "pctError": 22.22222222222222,
+      "diagnosis": "UNKNOWN",
+      "diagnosisDetail": "unclassified divergence",
+      "modelReasoning": "Subway's 6\" Italian B.M.T. (Baloney, Mortadella, Pepperoni) on Italian bread is a well-documented menu item with publicly available nutrition information. The 6\" sandwich typically contains about 280 calories with moderate protein from the processed meats, carbohydrates from the bread, and fat from the various meat toppings and any mayo. These values align with Subway's published nutritional data for this specific item."
+    },
+    {
+      "id": "dennys-bourbon-bacon-burger",
+      "chain": "Denny's",
+      "itemName": "Bourbon Bacon Burger",
+      "officialCalories": 921,
+      "estimatedCalories": 1120,
+      "pctError": 21.606948968512487,
+      "diagnosis": "UNKNOWN",
+      "diagnosisDetail": "unclassified divergence",
+      "modelReasoning": "Denny's Bourbon Bacon Burger typically features a 1/2 lb beef patty, bacon strips, bourbon glaze, cheese, and standard burger toppings on a brioche bun. This aligns with Denny's published nutrition data for similar premium burgers in their lineup, which typically range 1000-1200 calories with moderate protein from the beef and bacon, significant carbs from the bun, and substantial fat from the patty, bacon, and cheese."
+    },
+    {
+      "id": "chipotle-chips-and-guacamole",
+      "chain": "Chipotle",
+      "itemName": "Chips & Guacamole",
+      "officialCalories": 720,
+      "estimatedCalories": 570,
+      "pctError": 20.833333333333336,
+      "diagnosis": "UNKNOWN",
+      "diagnosisDetail": "unclassified divergence",
+      "modelReasoning": "Chipotle's chips & guacamole consists of approximately 4 oz tortilla chips (~300 cal, 4g protein, 36g carbs, 15g fat) and 2 oz guacamole (~170 cal, 2g protein, 8g carbs, 15g fat). The remaining carbs account for the lime and salt seasoning on chips. This matches Chipotle's published nutrition information."
+    },
+    {
+      "id": "chickfila-strawberry-hibiscus-sprite-small",
+      "chain": "Chick-fil-A",
+      "itemName": "Strawberry Hibiscus Sprite (Small)",
+      "officialCalories": 120,
+      "estimatedCalories": 140,
+      "pctError": 16.666666666666664,
+      "diagnosis": "UNKNOWN",
+      "diagnosisDetail": "unclassified divergence",
+      "modelReasoning": "Chick-fil-A's Strawberry Hibiscus Sprite is a seasonal beverage. Small size (21 oz) contains primarily carbonated water, high fructose corn syrup, and fruit juice concentrate. Based on Chick-fil-A's published nutrition data for similar small fountain drinks, this contains approximately 140 calories from carbohydrates with no protein or fat."
+    },
+    {
+      "id": "subway-footlong-steak-and-cheese",
+      "chain": "Subway",
+      "itemName": "Footlong Steak & Cheese",
+      "officialCalories": 640,
+      "estimatedCalories": 540,
+      "pctError": 15.625,
+      "diagnosis": "UNKNOWN",
+      "diagnosisDetail": "unclassified divergence",
+      "modelReasoning": "Subway's Footlong Steak & Cheese on 6-inch bread contains approximately 380-400 calories; doubling to footlong gives ~760-800 calories. However, the actual footlong version is typically reported at 540 calories. Protein from steak and cheese (~32g), carbs from bread (~48g), and fat from meat, cheese, and oils (~22g) based on Subway's published nutrition information for this sandwich."
+    },
+    {
+      "id": "dennys-lumberjack-slam",
+      "chain": "Denny's",
+      "itemName": "Lumberjack Slam",
+      "officialCalories": 971,
+      "estimatedCalories": 1120,
+      "pctError": 15.345005149330587,
+      "diagnosis": "UNKNOWN",
+      "diagnosisDetail": "unclassified divergence",
+      "modelReasoning": "Denny's Lumberjack Slam is a signature breakfast item consisting of two eggs, two pancakes, two strips of bacon, two sausage links, and hash browns. Based on Denny's published nutrition information and standard portion sizes for their breakfast items, this estimate reflects the high caloric content typical of this hearty combination with fried potatoes and multiple protein sources."
+    },
+    {
+      "id": "chipotle-sofritas-bowl",
+      "chain": "Chipotle",
+      "itemName": "Sofritas Burrito Bowl (white rice, black beans, fresh tomato salsa)",
+      "officialCalories": 595,
+      "estimatedCalories": 505,
+      "pctError": 15.126050420168067,
+      "diagnosis": "UNKNOWN",
+      "diagnosisDetail": "unclassified divergence",
+      "modelReasoning": "Based on Chipotle's published nutrition information for a Sofritas Bowl with white rice, black beans, and salsa. Sofritas (tofu) provides lean protein, white rice contributes carbohydrates, black beans add protein and fiber, and salsa is low-calorie. This matches Chipotle's standard serving sizes and official menu data."
+    }
+  ],
+  "totalCostUsd": 0.0436104,
+  "totalLatencyMs": 96541,
+  "items": [
+    {
+      "groundTruth": {
+        "id": "mcdonalds-big-mac",
+        "chain": "McDonald's",
+        "itemName": "Big Mac",
+        "category": "Entree",
+        "servingSize": "1 sandwich (200g)",
+        "source": "fastfoodnutrition.org/mcdonalds.com",
+        "officialMacros": {
+          "calories": 540,
+          "proteinG": 25,
+          "carbsG": 46,
+          "fatG": 28
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 550,
+        "proteinG": 25,
+        "carbsG": 46,
+        "fatG": 28,
+        "confidence": "HIGH",
+        "reasoning": "McDonald's publishes official nutrition information for the Big Mac. This is one of their most iconic and standardized menu items with consistent preparation across locations. The values are based on the official McDonald's USA nutrition data for a standard Big Mac.",
+        "inputTokens": 178,
+        "outputTokens": 105,
+        "latencyMs": 1431,
+        "costUsd": 0.0005624
+      },
+      "errors": {
+        "calories": {
+          "absolute": 10,
+          "pct": 1.8518518518518516,
+          "signed": 1.8518518518518516
+        },
+        "proteinG": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        },
+        "carbsG": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        },
+        "fatG": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "mcdonalds-quarter-pounder-with-cheese",
+        "chain": "McDonald's",
+        "itemName": "Quarter Pounder with Cheese",
+        "category": "Entree",
+        "servingSize": "1 sandwich (202g)",
+        "source": "fastfoodnutrition.org/mcdonalds.com",
+        "officialMacros": {
+          "calories": 540,
+          "proteinG": 31,
+          "carbsG": 42,
+          "fatG": 28
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 520,
+        "proteinG": 30,
+        "carbsG": 42,
+        "fatG": 26,
+        "confidence": "HIGH",
+        "reasoning": "McDonald's officially publishes nutrition information for their Quarter Pounder with Cheese. This burger contains a quarter-pound beef patty, American cheese, pickles, onions, and mustard on a sesame seed bun. The values are based on McDonald's standard published nutritional data for this widely-available menu item.",
+        "inputTokens": 183,
+        "outputTokens": 125,
+        "latencyMs": 1176,
+        "costUsd": 0.0006464
+      },
+      "errors": {
+        "calories": {
+          "absolute": 20,
+          "pct": 3.7037037037037033,
+          "signed": -3.7037037037037033
+        },
+        "proteinG": {
+          "absolute": 1,
+          "pct": 3.225806451612903,
+          "signed": -3.225806451612903
+        },
+        "carbsG": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        },
+        "fatG": {
+          "absolute": 2,
+          "pct": 7.142857142857142,
+          "signed": -7.142857142857142
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "mcdonalds-egg-mcmuffin",
+        "chain": "McDonald's",
+        "itemName": "Egg McMuffin",
+        "category": "Breakfast",
+        "servingSize": "1 sandwich (137g)",
+        "source": "fastfoodnutrition.org/mcdonalds.com",
+        "officialMacros": {
+          "calories": 300,
+          "proteinG": 17,
+          "carbsG": 30,
+          "fatG": 12
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 300,
+        "proteinG": 17,
+        "carbsG": 30,
+        "fatG": 12,
+        "confidence": "HIGH",
+        "reasoning": "McDonald's Egg McMuffin is a well-documented menu item with published nutrition information. It consists of a toasted English muffin, a single egg patty, Canadian bacon, and American cheese. The high confidence is based on McDonald's official nutritional transparency and the standardized preparation of this iconic breakfast sandwich.",
+        "inputTokens": 181,
+        "outputTokens": 123,
+        "latencyMs": 1460,
+        "costUsd": 0.0006367999999999999
+      },
+      "errors": {
+        "calories": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        },
+        "proteinG": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        },
+        "carbsG": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        },
+        "fatG": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "mcdonalds-sausage-mcmuffin-with-egg",
+        "chain": "McDonald's",
+        "itemName": "Sausage McMuffin with Egg",
+        "category": "Breakfast",
+        "servingSize": "1 sandwich (167g)",
+        "source": "fastfoodnutrition.org/mcdonalds.com",
+        "officialMacros": {
+          "calories": 480,
+          "proteinG": 21,
+          "carbsG": 30,
+          "fatG": 30
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 480,
+        "proteinG": 17,
+        "carbsG": 29,
+        "fatG": 28,
+        "confidence": "HIGH",
+        "reasoning": "McDonald's Sausage McMuffin with Egg is a standard breakfast item with published nutrition information. It consists of a toasted English muffin, a sausage patty, and a folded egg. Based on McDonald's official nutrition data, this sandwich contains approximately 480 calories with significant fat content from the sausage patty and egg, moderate protein from the meat and egg, and carbohydrates from the muffin.",
+        "inputTokens": 186,
+        "outputTokens": 152,
+        "latencyMs": 1541,
+        "costUsd": 0.0007568
+      },
+      "errors": {
+        "calories": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        },
+        "proteinG": {
+          "absolute": 4,
+          "pct": 19.047619047619047,
+          "signed": -19.047619047619047
+        },
+        "carbsG": {
+          "absolute": 1,
+          "pct": 3.3333333333333335,
+          "signed": -3.3333333333333335
+        },
+        "fatG": {
+          "absolute": 2,
+          "pct": 6.666666666666667,
+          "signed": -6.666666666666667
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "mcdonalds-4pc-chicken-mcnuggets",
+        "chain": "McDonald's",
+        "itemName": "Chicken McNuggets (4pc)",
+        "category": "Entree",
+        "servingSize": "4 nuggets (65g)",
+        "source": "fastfoodnutrition.org/mcdonalds.com",
+        "officialMacros": {
+          "calories": 180,
+          "proteinG": 10,
+          "carbsG": 11,
+          "fatG": 11
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 190,
+        "proteinG": 12,
+        "carbsG": 11,
+        "fatG": 10,
+        "confidence": "HIGH",
+        "reasoning": "McDonald's publishes official nutrition information for all menu items. A 4-piece Chicken McNuggets order is a standard menu item with consistent preparation. The values are based on McDonald's official nutritional data: approximately 190 calories, 12g protein, 11g carbohydrates, and 10g fat per serving.",
+        "inputTokens": 185,
+        "outputTokens": 128,
+        "latencyMs": 1395,
+        "costUsd": 0.00066
+      },
+      "errors": {
+        "calories": {
+          "absolute": 10,
+          "pct": 5.555555555555555,
+          "signed": 5.555555555555555
+        },
+        "proteinG": {
+          "absolute": 2,
+          "pct": 20,
+          "signed": 20
+        },
+        "carbsG": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        },
+        "fatG": {
+          "absolute": 1,
+          "pct": 9.090909090909092,
+          "signed": -9.090909090909092
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "mcdonalds-mcchicken",
+        "chain": "McDonald's",
+        "itemName": "McChicken",
+        "category": "Entree",
+        "servingSize": "1 sandwich (147g)",
+        "source": "fastfoodnutrition.org/mcdonalds.com",
+        "officialMacros": {
+          "calories": 410,
+          "proteinG": 15,
+          "carbsG": 39,
+          "fatG": 22
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 400,
+        "proteinG": 15,
+        "carbsG": 41,
+        "fatG": 20,
+        "confidence": "HIGH",
+        "reasoning": "McDonald's publishes official nutrition information. The McChicken is a standard breaded chicken patty sandwich with mayo-based sauce on a regular bun. This estimate is based on McDonald's documented nutrition data showing approximately 400 calories, 15g protein, 41g carbs, and 20g fat per sandwich.",
+        "inputTokens": 180,
+        "outputTokens": 126,
+        "latencyMs": 2682,
+        "costUsd": 0.000648
+      },
+      "errors": {
+        "calories": {
+          "absolute": 10,
+          "pct": 2.4390243902439024,
+          "signed": -2.4390243902439024
+        },
+        "proteinG": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        },
+        "carbsG": {
+          "absolute": 2,
+          "pct": 5.128205128205128,
+          "signed": 5.128205128205128
+        },
+        "fatG": {
+          "absolute": 2,
+          "pct": 9.090909090909092,
+          "signed": -9.090909090909092
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "mcdonalds-filet-o-fish",
+        "chain": "McDonald's",
+        "itemName": "Filet-O-Fish",
+        "category": "Entree",
+        "servingSize": "1 sandwich (142g)",
+        "source": "fastfoodnutrition.org/mcdonalds.com",
+        "officialMacros": {
+          "calories": 390,
+          "proteinG": 17,
+          "carbsG": 38,
+          "fatG": 19
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 390,
+        "proteinG": 15,
+        "carbsG": 41,
+        "fatG": 18,
+        "confidence": "HIGH",
+        "reasoning": "McDonald's publishes official nutrition information for all US menu items. The Filet-O-Fish is a standardized item consisting of a breaded fish patty, tartar sauce, and cheese on a steamed bun. These values are consistent with McDonald's publicly available nutritional data.",
+        "inputTokens": 183,
+        "outputTokens": 118,
+        "latencyMs": 1704,
+        "costUsd": 0.0006184
+      },
+      "errors": {
+        "calories": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        },
+        "proteinG": {
+          "absolute": 2,
+          "pct": 11.76470588235294,
+          "signed": -11.76470588235294
+        },
+        "carbsG": {
+          "absolute": 3,
+          "pct": 7.894736842105263,
+          "signed": 7.894736842105263
+        },
+        "fatG": {
+          "absolute": 1,
+          "pct": 5.263157894736842,
+          "signed": -5.263157894736842
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "mcdonalds-sausage-burrito",
+        "chain": "McDonald's",
+        "itemName": "Sausage Burrito",
+        "category": "Breakfast",
+        "servingSize": "1 burrito (113g)",
+        "source": "fastfoodnutrition.org/mcdonalds.com",
+        "officialMacros": {
+          "calories": 300,
+          "proteinG": 13,
+          "carbsG": 26,
+          "fatG": 16
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 480,
+        "proteinG": 17,
+        "carbsG": 41,
+        "fatG": 26,
+        "confidence": "HIGH",
+        "reasoning": "McDonald's Sausage Burrito is a standard breakfast item with published nutrition data. It contains a sausage patty, eggs, cheese, and a flour tortilla. The calorie count and macronutrients are well-documented in McDonald's official nutrition information.",
+        "inputTokens": 183,
+        "outputTokens": 116,
+        "latencyMs": 1138,
+        "costUsd": 0.0006104
+      },
+      "errors": {
+        "calories": {
+          "absolute": 180,
+          "pct": 60,
+          "signed": 60
+        },
+        "proteinG": {
+          "absolute": 4,
+          "pct": 30.76923076923077,
+          "signed": 30.76923076923077
+        },
+        "carbsG": {
+          "absolute": 15,
+          "pct": 57.692307692307686,
+          "signed": 57.692307692307686
+        },
+        "fatG": {
+          "absolute": 10,
+          "pct": 62.5,
+          "signed": 62.5
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "mcdonalds-medium-fries",
+        "chain": "McDonald's",
+        "itemName": "Medium French Fries",
+        "category": "Side",
+        "servingSize": "1 medium (117g)",
+        "source": "fastfoodnutrition.org/mcdonalds.com",
+        "officialMacros": {
+          "calories": 340,
+          "proteinG": 4,
+          "carbsG": 44,
+          "fatG": 16
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 320,
+        "proteinG": 4,
+        "carbsG": 43,
+        "fatG": 15,
+        "confidence": "HIGH",
+        "reasoning": "McDonald's publishes official nutrition information. A medium order of French fries is a standard menu item with consistent portion sizes and preparation. These values align with McDonald's documented nutrition data for this item.",
+        "inputTokens": 181,
+        "outputTokens": 97,
+        "latencyMs": 1136,
+        "costUsd": 0.0005327999999999999
+      },
+      "errors": {
+        "calories": {
+          "absolute": 20,
+          "pct": 5.88235294117647,
+          "signed": -5.88235294117647
+        },
+        "proteinG": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        },
+        "carbsG": {
+          "absolute": 1,
+          "pct": 2.272727272727273,
+          "signed": -2.272727272727273
+        },
+        "fatG": {
+          "absolute": 1,
+          "pct": 6.25,
+          "signed": -6.25
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "mcdonalds-mccafe-iced-coffee-small",
+        "chain": "McDonald's",
+        "itemName": "McCafe Iced Coffee (Small)",
+        "category": "Drink",
+        "servingSize": "1 small (237ml)",
+        "source": "fastfoodnutrition.org/mcdonalds.com",
+        "officialMacros": {
+          "calories": 200,
+          "proteinG": 2,
+          "carbsG": 30,
+          "fatG": 8
+        },
+        "tags": [
+          "drink"
+        ]
+      },
+      "estimated": {
+        "calories": 150,
+        "proteinG": 4,
+        "carbsG": 24,
+        "fatG": 3.5,
+        "confidence": "HIGH",
+        "reasoning": "McDonald's McCafe Iced Coffee small with default 2% milk and syrup. Based on McDonald's published nutrition information: approximately 150 calories, 4g protein from milk, 24g carbs from milk and added syrup, and 3.5g fat from 2% milk.",
+        "inputTokens": 185,
+        "outputTokens": 124,
+        "latencyMs": 1368,
+        "costUsd": 0.000644
+      },
+      "errors": {
+        "calories": {
+          "absolute": 50,
+          "pct": 25,
+          "signed": -25
+        },
+        "proteinG": {
+          "absolute": 2,
+          "pct": 100,
+          "signed": 100
+        },
+        "carbsG": {
+          "absolute": 6,
+          "pct": 20,
+          "signed": -20
+        },
+        "fatG": {
+          "absolute": 4.5,
+          "pct": 56.25,
+          "signed": -56.25
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "chickfila-chicken-sandwich",
+        "chain": "Chick-fil-A",
+        "itemName": "Chicken Sandwich",
+        "category": "Entree",
+        "servingSize": "1 sandwich (200g)",
+        "source": "fastfoodnutrition.org/chick-fil-a.com",
+        "officialMacros": {
+          "calories": 440,
+          "proteinG": 29,
+          "carbsG": 41,
+          "fatG": 17
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 440,
+        "proteinG": 41,
+        "carbsG": 41,
+        "fatG": 19,
+        "confidence": "HIGH",
+        "reasoning": "Chick-fil-A's classic Chicken Sandwich consists of a boneless, skinless chicken breast filet on a toasted bun with two dill pickle chips. Based on published Chick-fil-A nutrition information, this sandwich typically contains approximately 440 calories, 41g protein, 41g carbohydrates, and 19g fat. High confidence due to chain's publicly available nutritional data.",
+        "inputTokens": 190,
+        "outputTokens": 149,
+        "latencyMs": 1547,
+        "costUsd": 0.000748
+      },
+      "errors": {
+        "calories": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        },
+        "proteinG": {
+          "absolute": 12,
+          "pct": 41.37931034482759,
+          "signed": 41.37931034482759
+        },
+        "carbsG": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        },
+        "fatG": {
+          "absolute": 2,
+          "pct": 11.76470588235294,
+          "signed": 11.76470588235294
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "chickfila-spicy-chicken-sandwich",
+        "chain": "Chick-fil-A",
+        "itemName": "Spicy Chicken Sandwich",
+        "category": "Entree",
+        "servingSize": "1 sandwich (209g)",
+        "source": "fastfoodnutrition.org/chick-fil-a.com",
+        "officialMacros": {
+          "calories": 460,
+          "proteinG": 28,
+          "carbsG": 45,
+          "fatG": 19
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 480,
+        "proteinG": 32,
+        "carbsG": 39,
+        "fatG": 19,
+        "confidence": "HIGH",
+        "reasoning": "Chick-fil-A's Spicy Chicken Sandwich is a well-documented menu item. It consists of a breaded and fried chicken breast filet on a bun with two dill pickle chips. Standard nutrition data shows approximately 480 calories, 32g protein from the chicken filet, 39g carbohydrates from the bun and breading, and 19g fat from frying. High confidence based on published chain nutrition information.",
+        "inputTokens": 193,
+        "outputTokens": 157,
+        "latencyMs": 1673,
+        "costUsd": 0.0007823999999999999
+      },
+      "errors": {
+        "calories": {
+          "absolute": 20,
+          "pct": 4.3478260869565215,
+          "signed": 4.3478260869565215
+        },
+        "proteinG": {
+          "absolute": 4,
+          "pct": 14.285714285714285,
+          "signed": 14.285714285714285
+        },
+        "carbsG": {
+          "absolute": 6,
+          "pct": 13.333333333333334,
+          "signed": -13.333333333333334
+        },
+        "fatG": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "chickfila-nuggets-8pc",
+        "chain": "Chick-fil-A",
+        "itemName": "Chicken Nuggets (8-count)",
+        "category": "Entree",
+        "servingSize": "8 nuggets (113g)",
+        "source": "fatsecret.com/chick-fil-a.com",
+        "officialMacros": {
+          "calories": 250,
+          "proteinG": 27,
+          "carbsG": 11,
+          "fatG": 11
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 260,
+        "proteinG": 12,
+        "carbsG": 12,
+        "fatG": 12,
+        "confidence": "HIGH",
+        "reasoning": "Chick-fil-A's 8-count Chicken Nuggets are a standard menu item with published nutrition information. The nuggets are breaded and fried chicken pieces. This estimate aligns with the chain's official nutritional data for this specific portion size.",
+        "inputTokens": 196,
+        "outputTokens": 114,
+        "latencyMs": 1043,
+        "costUsd": 0.0006127999999999999
+      },
+      "errors": {
+        "calories": {
+          "absolute": 10,
+          "pct": 4,
+          "signed": 4
+        },
+        "proteinG": {
+          "absolute": 15,
+          "pct": 55.55555555555556,
+          "signed": -55.55555555555556
+        },
+        "carbsG": {
+          "absolute": 1,
+          "pct": 9.090909090909092,
+          "signed": 9.090909090909092
+        },
+        "fatG": {
+          "absolute": 1,
+          "pct": 9.090909090909092,
+          "signed": 9.090909090909092
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "chickfila-nuggets-12pc",
+        "chain": "Chick-fil-A",
+        "itemName": "Chicken Nuggets (12-count)",
+        "category": "Entree",
+        "servingSize": "12 nuggets (170g)",
+        "source": "fatsecret.com/chick-fil-a.com",
+        "officialMacros": {
+          "calories": 380,
+          "proteinG": 40,
+          "carbsG": 16,
+          "fatG": 17
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 370,
+        "proteinG": 28,
+        "carbsG": 17,
+        "fatG": 17,
+        "confidence": "HIGH",
+        "reasoning": "Chick-fil-A's 12-count Chicken Nuggets are a standard menu item with published nutrition information. The nuggets are breaded and fried chicken pieces. Official data shows approximately 370 calories, 28g protein, 17g carbohydrates, and 17g fat per 12-piece serving. HIGH confidence due to this being a major chain with publicly available nutrition data.",
+        "inputTokens": 196,
+        "outputTokens": 145,
+        "latencyMs": 1353,
+        "costUsd": 0.0007368
+      },
+      "errors": {
+        "calories": {
+          "absolute": 10,
+          "pct": 2.631578947368421,
+          "signed": -2.631578947368421
+        },
+        "proteinG": {
+          "absolute": 12,
+          "pct": 30,
+          "signed": -30
+        },
+        "carbsG": {
+          "absolute": 1,
+          "pct": 6.25,
+          "signed": 6.25
+        },
+        "fatG": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "chickfila-waffle-fries-medium",
+        "chain": "Chick-fil-A",
+        "itemName": "Waffle Potato Fries (Medium)",
+        "category": "Side",
+        "servingSize": "1 medium (125g)",
+        "source": "fatsecret.com/chick-fil-a.com",
+        "officialMacros": {
+          "calories": 420,
+          "proteinG": 5,
+          "carbsG": 45,
+          "fatG": 24
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 360,
+        "proteinG": 4,
+        "carbsG": 41,
+        "fatG": 17,
+        "confidence": "HIGH",
+        "reasoning": "Chick-fil-A publishes official nutrition information for their menu items. Medium Waffle Potato Fries are a signature item made from potatoes fried in peanut oil. Based on the chain's published nutritional data, a medium serving contains approximately 360 calories, 4g protein, 41g carbohydrates, and 17g fat. High confidence due to availability of official chain nutrition data.",
+        "inputTokens": 197,
+        "outputTokens": 149,
+        "latencyMs": 1346,
+        "costUsd": 0.0007535999999999999
+      },
+      "errors": {
+        "calories": {
+          "absolute": 60,
+          "pct": 14.285714285714285,
+          "signed": -14.285714285714285
+        },
+        "proteinG": {
+          "absolute": 1,
+          "pct": 20,
+          "signed": -20
+        },
+        "carbsG": {
+          "absolute": 4,
+          "pct": 8.88888888888889,
+          "signed": -8.88888888888889
+        },
+        "fatG": {
+          "absolute": 7,
+          "pct": 29.166666666666668,
+          "signed": -29.166666666666668
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "chickfila-chicken-biscuit",
+        "chain": "Chick-fil-A",
+        "itemName": "Chicken Biscuit",
+        "category": "Breakfast",
+        "servingSize": "1 biscuit (179g)",
+        "source": "fastfoodnutrition.org/chick-fil-a.com",
+        "officialMacros": {
+          "calories": 460,
+          "proteinG": 19,
+          "carbsG": 45,
+          "fatG": 23
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 420,
+        "proteinG": 28,
+        "carbsG": 41,
+        "fatG": 16,
+        "confidence": "HIGH",
+        "reasoning": "Chick-fil-A's Chicken Biscuit consists of a grilled chicken breast filet on a buttered biscuit. Based on Chick-fil-A's published nutrition information, this sandwich contains approximately 420 calories with 28g protein from the chicken, 41g carbohydrates from the biscuit, and 16g fat from the chicken and butter. This estimate aligns with Chick-fil-A's standard menu specifications.",
+        "inputTokens": 192,
+        "outputTokens": 160,
+        "latencyMs": 1290,
+        "costUsd": 0.0007936
+      },
+      "errors": {
+        "calories": {
+          "absolute": 40,
+          "pct": 8.695652173913043,
+          "signed": -8.695652173913043
+        },
+        "proteinG": {
+          "absolute": 9,
+          "pct": 47.368421052631575,
+          "signed": 47.368421052631575
+        },
+        "carbsG": {
+          "absolute": 4,
+          "pct": 8.88888888888889,
+          "signed": -8.88888888888889
+        },
+        "fatG": {
+          "absolute": 7,
+          "pct": 30.434782608695656,
+          "signed": -30.434782608695656
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "chickfila-grilled-nuggets-8pc",
+        "chain": "Chick-fil-A",
+        "itemName": "Grilled Nuggets (8-count)",
+        "category": "Entree",
+        "servingSize": "8 nuggets (110g)",
+        "source": "chick-fil-a.com",
+        "officialMacros": {
+          "calories": 130,
+          "proteinG": 25,
+          "carbsG": 1,
+          "fatG": 3
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 320,
+        "proteinG": 28,
+        "carbsG": 12,
+        "fatG": 17,
+        "confidence": "HIGH",
+        "reasoning": "Chick-fil-A's 8-count Grilled Chicken Nuggets are a well-documented menu item. This estimate is based on official published nutritional information for this specific product, which consists of grilled (not fried) chicken breast pieces. The macronutrient profile reflects the lean protein content of grilled chicken with minimal added fat from preparation.",
+        "inputTokens": 197,
+        "outputTokens": 137,
+        "latencyMs": 1651,
+        "costUsd": 0.0007056
+      },
+      "errors": {
+        "calories": {
+          "absolute": 190,
+          "pct": 146.15384615384613,
+          "signed": 146.15384615384613
+        },
+        "proteinG": {
+          "absolute": 3,
+          "pct": 12,
+          "signed": 12
+        },
+        "carbsG": {
+          "absolute": 11,
+          "pct": 1100,
+          "signed": 1100
+        },
+        "fatG": {
+          "absolute": 14,
+          "pct": 466.6666666666667,
+          "signed": 466.6666666666667
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "chickfila-cobb-salad",
+        "chain": "Chick-fil-A",
+        "itemName": "Cobb Salad (with Grilled Filet)",
+        "category": "Entree",
+        "servingSize": "1 salad (432g)",
+        "source": "fastfoodnutrition.org/chick-fil-a.com",
+        "officialMacros": {
+          "calories": 390,
+          "proteinG": 36,
+          "carbsG": 21,
+          "fatG": 19
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 520,
+        "proteinG": 47,
+        "carbsG": 21,
+        "fatG": 27,
+        "confidence": "HIGH",
+        "reasoning": "Chick-fil-A's Cobb Salad with Grilled Filet contains grilled chicken filet, mixed greens, bacon, hard-boiled eggs, cheddar cheese, and avocado with dressing. Based on Chick-fil-A's published nutrition data, this salad typically provides approximately 520 calories with high protein from the chicken filet and eggs, moderate carbs from vegetables and dressing, and significant fat from cheese, avocado, bacon, and dressing.",
+        "inputTokens": 201,
+        "outputTokens": 170,
+        "latencyMs": 1440,
+        "costUsd": 0.0008408
+      },
+      "errors": {
+        "calories": {
+          "absolute": 130,
+          "pct": 33.33333333333333,
+          "signed": 33.33333333333333
+        },
+        "proteinG": {
+          "absolute": 11,
+          "pct": 30.555555555555557,
+          "signed": 30.555555555555557
+        },
+        "carbsG": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        },
+        "fatG": {
+          "absolute": 8,
+          "pct": 42.10526315789473,
+          "signed": 42.10526315789473
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "chickfila-lemonade-medium",
+        "chain": "Chick-fil-A",
+        "itemName": "Lemonade (Medium)",
+        "category": "Drink",
+        "servingSize": "1 medium (414ml)",
+        "source": "fatsecret.com/chick-fil-a.com",
+        "officialMacros": {
+          "calories": 220,
+          "proteinG": 0,
+          "carbsG": 58,
+          "fatG": 0
+        },
+        "tags": [
+          "drink"
+        ]
+      },
+      "estimated": {
+        "calories": 270,
+        "proteinG": 0,
+        "carbsG": 66,
+        "fatG": 0,
+        "confidence": "HIGH",
+        "reasoning": "Chick-fil-A's medium lemonade is a standard beverage made from lemonade concentrate and water. Based on published nutrition information, a medium (20 oz) serving contains approximately 270 calories, primarily from 66g of carbohydrates (sugar), with negligible protein and fat. This is consistent with typical chain restaurant lemonade formulations.",
+        "inputTokens": 193,
+        "outputTokens": 137,
+        "latencyMs": 1400,
+        "costUsd": 0.0007023999999999999
+      },
+      "errors": {
+        "calories": {
+          "absolute": 50,
+          "pct": 22.727272727272727,
+          "signed": 22.727272727272727
+        },
+        "proteinG": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        },
+        "carbsG": {
+          "absolute": 8,
+          "pct": 13.793103448275861,
+          "signed": 13.793103448275861
+        },
+        "fatG": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "chickfila-strawberry-hibiscus-sprite-small",
+        "chain": "Chick-fil-A",
+        "itemName": "Strawberry Hibiscus Sprite (Small)",
+        "category": "Drink",
+        "servingSize": "1 small (414ml)",
+        "source": "chick-fil-a.com",
+        "officialMacros": {
+          "calories": 120,
+          "proteinG": 0,
+          "carbsG": 32,
+          "fatG": 0
+        },
+        "tags": [
+          "drink"
+        ]
+      },
+      "estimated": {
+        "calories": 140,
+        "proteinG": 0,
+        "carbsG": 36,
+        "fatG": 0,
+        "confidence": "HIGH",
+        "reasoning": "Chick-fil-A's Strawberry Hibiscus Sprite is a seasonal beverage. Small size (21 oz) contains primarily carbonated water, high fructose corn syrup, and fruit juice concentrate. Based on Chick-fil-A's published nutrition data for similar small fountain drinks, this contains approximately 140 calories from carbohydrates with no protein or fat.",
+        "inputTokens": 198,
+        "outputTokens": 143,
+        "latencyMs": 1372,
+        "costUsd": 0.0007304
+      },
+      "errors": {
+        "calories": {
+          "absolute": 20,
+          "pct": 16.666666666666664,
+          "signed": 16.666666666666664
+        },
+        "proteinG": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        },
+        "carbsG": {
+          "absolute": 4,
+          "pct": 12.5,
+          "signed": 12.5
+        },
+        "fatG": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "starbucks-avocado-spread",
+        "chain": "Starbucks",
+        "itemName": "Avocado Spread",
+        "category": "Condiment",
+        "servingSize": "1 container (57g)",
+        "source": "fastfoodnutrition.org/starbucks.com",
+        "officialMacros": {
+          "calories": 90,
+          "proteinG": 1,
+          "carbsG": 5,
+          "fatG": 8
+        },
+        "tags": [
+          "condiment",
+          "serving-size-tricky"
+        ]
+      },
+      "estimated": {
+        "calories": 240,
+        "proteinG": 3,
+        "carbsG": 15,
+        "fatG": 20,
+        "confidence": "HIGH",
+        "reasoning": "Starbucks Avocado Spread is a standard menu item consisting of mashed avocado with lemon juice and salt on a small portion base. Based on Starbucks' published nutrition information, this item typically contains approximately 240 calories with the macronutrient breakdown dominated by fat from avocado (about 20g), moderate carbohydrates from any bread component (15g), and minimal protein (3g). This estimate aligns with Starbucks' official nutritional guidelines for this prepared spread item.",
+        "inputTokens": 186,
+        "outputTokens": 172,
+        "latencyMs": 1913,
+        "costUsd": 0.0008368
+      },
+      "errors": {
+        "calories": {
+          "absolute": 150,
+          "pct": 166.66666666666669,
+          "signed": 166.66666666666669
+        },
+        "proteinG": {
+          "absolute": 2,
+          "pct": 200,
+          "signed": 200
+        },
+        "carbsG": {
+          "absolute": 10,
+          "pct": 200,
+          "signed": 200
+        },
+        "fatG": {
+          "absolute": 12,
+          "pct": 150,
+          "signed": 150
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "starbucks-crispy-grilled-cheese-on-sourdough",
+        "chain": "Starbucks",
+        "itemName": "Crispy Grilled Cheese on Sourdough",
+        "category": "Entree",
+        "servingSize": "1 sandwich (143g)",
+        "source": "starbucks.com",
+        "officialMacros": {
+          "calories": 520,
+          "proteinG": 21,
+          "carbsG": 47,
+          "fatG": 29
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 510,
+        "proteinG": 19,
+        "carbsG": 49,
+        "fatG": 27,
+        "confidence": "HIGH",
+        "reasoning": "Starbucks publishes official nutrition data for their food items. The Crispy Grilled Cheese on Sourdough is a standard menu item consisting of melted cheese between two slices of sourdough bread with a crispy exterior from buttering and grilling. Based on Starbucks' published nutritional information, this sandwich typically contains approximately 510 calories with 19g protein, 49g carbohydrates, and 27g fat.",
+        "inputTokens": 193,
+        "outputTokens": 157,
+        "latencyMs": 1246,
+        "costUsd": 0.0007823999999999999
+      },
+      "errors": {
+        "calories": {
+          "absolute": 10,
+          "pct": 1.9230769230769231,
+          "signed": -1.9230769230769231
+        },
+        "proteinG": {
+          "absolute": 2,
+          "pct": 9.523809523809524,
+          "signed": -9.523809523809524
+        },
+        "carbsG": {
+          "absolute": 2,
+          "pct": 4.25531914893617,
+          "signed": 4.25531914893617
+        },
+        "fatG": {
+          "absolute": 2,
+          "pct": 6.896551724137931,
+          "signed": -6.896551724137931
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "starbucks-spicy-falafel-pocket",
+        "chain": "Starbucks",
+        "itemName": "Spicy Falafel Pocket",
+        "category": "Entree",
+        "servingSize": "1 pocket (227g)",
+        "source": "starbucks.com",
+        "officialMacros": {
+          "calories": 430,
+          "proteinG": 14,
+          "carbsG": 55,
+          "fatG": 18
+        },
+        "tags": [
+          "serving-size-tricky"
+        ]
+      },
+      "estimated": {
+        "calories": 480,
+        "proteinG": 16,
+        "carbsG": 62,
+        "fatG": 18,
+        "confidence": "HIGH",
+        "reasoning": "Starbucks' Spicy Falafel Pocket is a published menu item with official nutrition information. Typical composition includes fried falafel patties (protein and fat), pita bread (carbs), vegetables, and tahini-based sauce. This estimate aligns with Starbucks' standard labeling for similar savory pocket sandwiches.",
+        "inputTokens": 189,
+        "outputTokens": 135,
+        "latencyMs": 1335,
+        "costUsd": 0.0006912
+      },
+      "errors": {
+        "calories": {
+          "absolute": 50,
+          "pct": 11.627906976744185,
+          "signed": 11.627906976744185
+        },
+        "proteinG": {
+          "absolute": 2,
+          "pct": 14.285714285714285,
+          "signed": 14.285714285714285
+        },
+        "carbsG": {
+          "absolute": 7,
+          "pct": 12.727272727272727,
+          "signed": 12.727272727272727
+        },
+        "fatG": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "starbucks-ham-swiss-on-baguette",
+        "chain": "Starbucks",
+        "itemName": "Ham & Swiss on Baguette",
+        "category": "Entree",
+        "servingSize": "1 sandwich (176g)",
+        "source": "calorieking.com/starbucks.com",
+        "officialMacros": {
+          "calories": 480,
+          "proteinG": 24,
+          "carbsG": 41,
+          "fatG": 23
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 480,
+        "proteinG": 23,
+        "carbsG": 48,
+        "fatG": 20,
+        "confidence": "HIGH",
+        "reasoning": "Starbucks Ham & Swiss on Baguette is a standard sandwich item with published nutrition information. Typical composition: sliced ham (~2-3 oz), Swiss cheese slice, on a baguette roll. The estimate accounts for the bread base (primary carb source), deli ham (protein), Swiss cheese (fat and protein), and a modest amount of condiments/butter.",
+        "inputTokens": 188,
+        "outputTokens": 140,
+        "latencyMs": 1564,
+        "costUsd": 0.0007103999999999999
+      },
+      "errors": {
+        "calories": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        },
+        "proteinG": {
+          "absolute": 1,
+          "pct": 4.166666666666666,
+          "signed": -4.166666666666666
+        },
+        "carbsG": {
+          "absolute": 7,
+          "pct": 17.073170731707318,
+          "signed": 17.073170731707318
+        },
+        "fatG": {
+          "absolute": 3,
+          "pct": 13.043478260869565,
+          "signed": -13.043478260869565
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "starbucks-bacon-gouda-egg-sandwich",
+        "chain": "Starbucks",
+        "itemName": "Bacon, Gouda & Egg Sandwich",
+        "category": "Breakfast",
+        "servingSize": "1 sandwich (116g)",
+        "source": "fastfoodnutrition.org/starbucks.com",
+        "officialMacros": {
+          "calories": 370,
+          "proteinG": 18,
+          "carbsG": 33,
+          "fatG": 18
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 490,
+        "proteinG": 21,
+        "carbsG": 41,
+        "fatG": 25,
+        "confidence": "HIGH",
+        "reasoning": "Starbucks publishes official nutrition information for this item. The sandwich contains a croissant base (~280 cal), bacon (~80 cal), Gouda cheese (~100 cal), and a large egg patty (~80 cal). These components align with Starbucks' standard preparation and published nutrition data for this breakfast sandwich.",
+        "inputTokens": 191,
+        "outputTokens": 129,
+        "latencyMs": 1406,
+        "costUsd": 0.0006688
+      },
+      "errors": {
+        "calories": {
+          "absolute": 120,
+          "pct": 32.432432432432435,
+          "signed": 32.432432432432435
+        },
+        "proteinG": {
+          "absolute": 3,
+          "pct": 16.666666666666664,
+          "signed": 16.666666666666664
+        },
+        "carbsG": {
+          "absolute": 8,
+          "pct": 24.242424242424242,
+          "signed": 24.242424242424242
+        },
+        "fatG": {
+          "absolute": 7,
+          "pct": 38.88888888888889,
+          "signed": 38.88888888888889
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "starbucks-impossible-breakfast-sandwich",
+        "chain": "Starbucks",
+        "itemName": "Impossible Breakfast Sandwich",
+        "category": "Breakfast",
+        "servingSize": "1 sandwich (128g)",
+        "source": "fastfoodnutrition.org/starbucks.com",
+        "officialMacros": {
+          "calories": 430,
+          "proteinG": 22,
+          "carbsG": 36,
+          "fatG": 23
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 380,
+        "proteinG": 17,
+        "carbsG": 34,
+        "fatG": 20,
+        "confidence": "HIGH",
+        "reasoning": "Starbucks' Impossible Breakfast Sandwich contains an Impossible patty (plant-based meat), cheese, and egg on an English muffin. Based on Starbucks' published nutrition data, this sandwich provides approximately 380 calories with moderate protein from the Impossible patty and egg, significant carbs from the English muffin, and fat from the patty, cheese, and egg.",
+        "inputTokens": 186,
+        "outputTokens": 144,
+        "latencyMs": 1787,
+        "costUsd": 0.0007248
+      },
+      "errors": {
+        "calories": {
+          "absolute": 50,
+          "pct": 11.627906976744185,
+          "signed": -11.627906976744185
+        },
+        "proteinG": {
+          "absolute": 5,
+          "pct": 22.727272727272727,
+          "signed": -22.727272727272727
+        },
+        "carbsG": {
+          "absolute": 2,
+          "pct": 5.555555555555555,
+          "signed": -5.555555555555555
+        },
+        "fatG": {
+          "absolute": 3,
+          "pct": 13.043478260869565,
+          "signed": -13.043478260869565
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "starbucks-birthday-cake-pop",
+        "chain": "Starbucks",
+        "itemName": "Birthday Cake Pop",
+        "category": "Dessert",
+        "servingSize": "1 cake pop (43g)",
+        "source": "fastfoodnutrition.org/starbucks.com",
+        "officialMacros": {
+          "calories": 170,
+          "proteinG": 1,
+          "carbsG": 23,
+          "fatG": 9
+        },
+        "tags": [
+          "serving-size-tricky"
+        ]
+      },
+      "estimated": {
+        "calories": 170,
+        "proteinG": 1,
+        "carbsG": 23,
+        "fatG": 8,
+        "confidence": "HIGH",
+        "reasoning": "Starbucks Birthday Cake Pop is a standard menu item with published nutrition information. It's a small cake pop (approximately 42g) with vanilla cake, frosting, and sprinkles. The calorie count of 170 is based on Starbucks' official nutritional data, with minimal protein, moderate carbohydrates from sugar and cake, and fat primarily from the frosting coating.",
+        "inputTokens": 184,
+        "outputTokens": 143,
+        "latencyMs": 1634,
+        "costUsd": 0.0007192
+      },
+      "errors": {
+        "calories": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        },
+        "proteinG": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        },
+        "carbsG": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        },
+        "fatG": {
+          "absolute": 1,
+          "pct": 11.11111111111111,
+          "signed": -11.11111111111111
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "starbucks-grande-caffe-latte",
+        "chain": "Starbucks",
+        "itemName": "Caffe Latte (Grande, 2% milk)",
+        "category": "Drink",
+        "servingSize": "1 grande (16 fl oz)",
+        "source": "fatsecret.com/starbucks.com",
+        "officialMacros": {
+          "calories": 190,
+          "proteinG": 13,
+          "carbsG": 19,
+          "fatG": 7
+        },
+        "tags": [
+          "drink"
+        ]
+      },
+      "estimated": {
+        "calories": 190,
+        "proteinG": 13,
+        "carbsG": 18,
+        "fatG": 7,
+        "confidence": "HIGH",
+        "reasoning": "Starbucks grande caffe latte with 2% milk is a published menu item. Standard recipe: 2 shots espresso (10 cal) + steamed 2% milk (180 cal) with small milk foam. Official Starbucks nutrition data confirms these values.",
+        "inputTokens": 194,
+        "outputTokens": 119,
+        "latencyMs": 1348,
+        "costUsd": 0.0006312
+      },
+      "errors": {
+        "calories": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        },
+        "proteinG": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        },
+        "carbsG": {
+          "absolute": 1,
+          "pct": 5.263157894736842,
+          "signed": -5.263157894736842
+        },
+        "fatG": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "starbucks-grande-caramel-frappuccino",
+        "chain": "Starbucks",
+        "itemName": "Caramel Frappuccino (Grande)",
+        "category": "Drink",
+        "servingSize": "1 grande (16 fl oz)",
+        "source": "fastfoodnutrition.org/starbucks.com",
+        "officialMacros": {
+          "calories": 370,
+          "proteinG": 4,
+          "carbsG": 57,
+          "fatG": 15
+        },
+        "tags": [
+          "drink"
+        ]
+      },
+      "estimated": {
+        "calories": 250,
+        "proteinG": 3.5,
+        "carbsG": 36,
+        "fatG": 9.5,
+        "confidence": "HIGH",
+        "reasoning": "Starbucks publishes official nutrition data for their beverages. Grande Caramel Frappuccino with 2% milk and whipped cream contains approximately 250 calories, 3.5g protein, 36g carbohydrates (from milk, caramel syrup, and frappuccino base), and 9.5g fat primarily from milk and whipped cream. This is based on standard Starbucks preparation.",
+        "inputTokens": 192,
+        "outputTokens": 158,
+        "latencyMs": 1600,
+        "costUsd": 0.0007856
+      },
+      "errors": {
+        "calories": {
+          "absolute": 120,
+          "pct": 32.432432432432435,
+          "signed": -32.432432432432435
+        },
+        "proteinG": {
+          "absolute": 0.5,
+          "pct": 12.5,
+          "signed": -12.5
+        },
+        "carbsG": {
+          "absolute": 21,
+          "pct": 36.84210526315789,
+          "signed": -36.84210526315789
+        },
+        "fatG": {
+          "absolute": 5.5,
+          "pct": 36.666666666666664,
+          "signed": -36.666666666666664
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "starbucks-tomato-mozzarella-on-focaccia",
+        "chain": "Starbucks",
+        "itemName": "Tomato & Mozzarella on Focaccia",
+        "category": "Entree",
+        "servingSize": "1 sandwich (194g)",
+        "source": "fastfoodnutrition.org/starbucks.com",
+        "officialMacros": {
+          "calories": 370,
+          "proteinG": 18,
+          "carbsG": 42,
+          "fatG": 14
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 350,
+        "proteinG": 14,
+        "carbsG": 42,
+        "fatG": 14,
+        "confidence": "HIGH",
+        "reasoning": "Starbucks' Tomato & Mozzarella Focaccia is a standard sandwich item. It typically contains fresh mozzarella, tomato, basil, and olive oil on focaccia bread. The focaccia accounts for most carbs (~35-40g), mozzarella provides protein (~12-15g) and fat (~12-14g from cheese and oil), with tomato and basil adding minimal calories. Total approximately 350 calories based on typical Starbucks sandwich portions and published nutritional data for similar items.",
+        "inputTokens": 194,
+        "outputTokens": 178,
+        "latencyMs": 1912,
+        "costUsd": 0.0008671999999999999
+      },
+      "errors": {
+        "calories": {
+          "absolute": 20,
+          "pct": 5.405405405405405,
+          "signed": -5.405405405405405
+        },
+        "proteinG": {
+          "absolute": 4,
+          "pct": 22.22222222222222,
+          "signed": -22.22222222222222
+        },
+        "carbsG": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        },
+        "fatG": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "dennys-bourbon-bacon-burger",
+        "chain": "Denny's",
+        "itemName": "Bourbon Bacon Burger",
+        "category": "Entree",
+        "servingSize": "1 order",
+        "source": "fastfoodnutrition.org/dennys.com",
+        "officialMacros": {
+          "calories": 921,
+          "proteinG": 50,
+          "carbsG": 60,
+          "fatG": 53
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 1120,
+        "proteinG": 52,
+        "carbsG": 68,
+        "fatG": 65,
+        "confidence": "HIGH",
+        "reasoning": "Denny's Bourbon Bacon Burger typically features a 1/2 lb beef patty, bacon strips, bourbon glaze, cheese, and standard burger toppings on a brioche bun. This aligns with Denny's published nutrition data for similar premium burgers in their lineup, which typically range 1000-1200 calories with moderate protein from the beef and bacon, significant carbs from the bun, and substantial fat from the patty, bacon, and cheese.",
+        "inputTokens": 186,
+        "outputTokens": 164,
+        "latencyMs": 2008,
+        "costUsd": 0.0008048
+      },
+      "errors": {
+        "calories": {
+          "absolute": 199,
+          "pct": 21.606948968512487,
+          "signed": 21.606948968512487
+        },
+        "proteinG": {
+          "absolute": 2,
+          "pct": 4,
+          "signed": 4
+        },
+        "carbsG": {
+          "absolute": 8,
+          "pct": 13.333333333333334,
+          "signed": 13.333333333333334
+        },
+        "fatG": {
+          "absolute": 12,
+          "pct": 22.641509433962266,
+          "signed": 22.641509433962266
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "dennys-grand-slam",
+        "chain": "Denny's",
+        "itemName": "Original Grand Slam",
+        "category": "Breakfast",
+        "servingSize": "1 order",
+        "source": "fastfoodnutrition.org/dennys.com",
+        "officialMacros": {
+          "calories": 770,
+          "proteinG": 34,
+          "carbsG": 79,
+          "fatG": 36
+        },
+        "tags": [
+          "serving-size-tricky"
+        ]
+      },
+      "estimated": {
+        "calories": 1030,
+        "proteinG": 44,
+        "carbsG": 104,
+        "fatG": 42,
+        "confidence": "HIGH",
+        "reasoning": "The Original Grand Slam at Denny's is their signature breakfast item consisting of 2 pancakes, 2 eggs, 2 strips of bacon, and 2 sausage links. Based on Denny's published nutrition information, this combination typically yields approximately 1030 calories with substantial protein from the eggs and meat, significant carbs from the pancakes, and moderate fat from the cooking methods and meat portions.",
+        "inputTokens": 184,
+        "outputTokens": 150,
+        "latencyMs": 1664,
+        "costUsd": 0.0007472
+      },
+      "errors": {
+        "calories": {
+          "absolute": 260,
+          "pct": 33.76623376623377,
+          "signed": 33.76623376623377
+        },
+        "proteinG": {
+          "absolute": 10,
+          "pct": 29.411764705882355,
+          "signed": 29.411764705882355
+        },
+        "carbsG": {
+          "absolute": 25,
+          "pct": 31.645569620253166,
+          "signed": 31.645569620253166
+        },
+        "fatG": {
+          "absolute": 6,
+          "pct": 16.666666666666664,
+          "signed": 16.666666666666664
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "dennys-all-american-slam",
+        "chain": "Denny's",
+        "itemName": "All-American Slam (with Hash Browns)",
+        "category": "Breakfast",
+        "servingSize": "1 order",
+        "source": "fastfoodnutrition.org/dennys.com",
+        "officialMacros": {
+          "calories": 931,
+          "proteinG": 44,
+          "carbsG": 19,
+          "fatG": 74
+        },
+        "tags": [
+          "serving-size-tricky"
+        ]
+      },
+      "estimated": {
+        "calories": 1030,
+        "proteinG": 36,
+        "carbsG": 102,
+        "fatG": 48,
+        "confidence": "HIGH",
+        "reasoning": "Denny's All-American Slam typically includes 2 eggs, 2 bacon strips, 2 sausage links, 2 pancakes, and hash browns. Based on Denny's standard portions and published nutrition information for similar breakfast combos, this yields approximately 1030 calories with significant protein from eggs and meat, carbs from pancakes and hash browns, and fat from cooking methods and meat products.",
+        "inputTokens": 190,
+        "outputTokens": 150,
+        "latencyMs": 1778,
+        "costUsd": 0.000752
+      },
+      "errors": {
+        "calories": {
+          "absolute": 99,
+          "pct": 10.633727175080558,
+          "signed": 10.633727175080558
+        },
+        "proteinG": {
+          "absolute": 8,
+          "pct": 18.181818181818183,
+          "signed": -18.181818181818183
+        },
+        "carbsG": {
+          "absolute": 83,
+          "pct": 436.84210526315786,
+          "signed": 436.84210526315786
+        },
+        "fatG": {
+          "absolute": 26,
+          "pct": 35.13513513513514,
+          "signed": -35.13513513513514
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "dennys-lumberjack-slam",
+        "chain": "Denny's",
+        "itemName": "Lumberjack Slam",
+        "category": "Breakfast",
+        "servingSize": "1 order",
+        "source": "fastfoodnutrition.org/dennys.com",
+        "officialMacros": {
+          "calories": 971,
+          "proteinG": 38,
+          "carbsG": 96,
+          "fatG": 49
+        },
+        "tags": [
+          "serving-size-tricky"
+        ]
+      },
+      "estimated": {
+        "calories": 1120,
+        "proteinG": 36,
+        "carbsG": 104,
+        "fatG": 54,
+        "confidence": "HIGH",
+        "reasoning": "Denny's Lumberjack Slam is a signature breakfast item consisting of two eggs, two pancakes, two strips of bacon, two sausage links, and hash browns. Based on Denny's published nutrition information and standard portion sizes for their breakfast items, this estimate reflects the high caloric content typical of this hearty combination with fried potatoes and multiple protein sources.",
+        "inputTokens": 187,
+        "outputTokens": 140,
+        "latencyMs": 1673,
+        "costUsd": 0.0007095999999999999
+      },
+      "errors": {
+        "calories": {
+          "absolute": 149,
+          "pct": 15.345005149330587,
+          "signed": 15.345005149330587
+        },
+        "proteinG": {
+          "absolute": 2,
+          "pct": 5.263157894736842,
+          "signed": -5.263157894736842
+        },
+        "carbsG": {
+          "absolute": 8,
+          "pct": 8.333333333333332,
+          "signed": 8.333333333333332
+        },
+        "fatG": {
+          "absolute": 5,
+          "pct": 10.204081632653061,
+          "signed": 10.204081632653061
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "dennys-moons-over-my-hammy",
+        "chain": "Denny's",
+        "itemName": "Moons Over My Hammy",
+        "category": "Entree",
+        "servingSize": "1 order",
+        "source": "fastfoodnutrition.org/dennys.com",
+        "officialMacros": {
+          "calories": 951,
+          "proteinG": 44,
+          "carbsG": 57,
+          "fatG": 60
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 1040,
+        "proteinG": 36,
+        "carbsG": 84,
+        "fatG": 56,
+        "confidence": "HIGH",
+        "reasoning": "Denny's 'Moons Over My Hammy' is a signature breakfast item consisting of two eggs, ham, cheese, and hash browns served between two slices of bread/pancakes with a butter-forward preparation. Based on Denny's published nutritional information and standard portion sizes for this classic dish, it contains approximately 1040 calories with significant fat content from the eggs, ham, cheese, and butter used in preparation.",
+        "inputTokens": 188,
+        "outputTokens": 152,
+        "latencyMs": 1787,
+        "costUsd": 0.0007583999999999999
+      },
+      "errors": {
+        "calories": {
+          "absolute": 89,
+          "pct": 9.35856992639327,
+          "signed": 9.35856992639327
+        },
+        "proteinG": {
+          "absolute": 8,
+          "pct": 18.181818181818183,
+          "signed": -18.181818181818183
+        },
+        "carbsG": {
+          "absolute": 27,
+          "pct": 47.368421052631575,
+          "signed": 47.368421052631575
+        },
+        "fatG": {
+          "absolute": 4,
+          "pct": 6.666666666666667,
+          "signed": -6.666666666666667
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "dennys-country-fried-steak",
+        "chain": "Denny's",
+        "itemName": "Country Fried Steak & Hash Browns",
+        "category": "Entree",
+        "servingSize": "1 order",
+        "source": "fastfoodnutrition.org/dennys.com",
+        "officialMacros": {
+          "calories": 571,
+          "proteinG": 20,
+          "carbsG": 38,
+          "fatG": 37
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 1130,
+        "proteinG": 38,
+        "carbsG": 89,
+        "fatG": 68,
+        "confidence": "HIGH",
+        "reasoning": "Denny's Country Fried Steak is a breaded and fried beef cutlet served with hash browns. Based on Denny's standard portion sizes: the country fried steak (breaded, fried) with gravy (~6 oz meat) contributes ~600 cal, 30g protein, 25g carbs, 42g fat. Hash browns (~4 oz) add ~530 cal, 8g protein, 64g carbs, 26g fat. Typical plating includes garnishes. This aligns with published Denny's nutrition data for this popular breakfast/lunch item.",
+        "inputTokens": 190,
+        "outputTokens": 195,
+        "latencyMs": 2208,
+        "costUsd": 0.000932
+      },
+      "errors": {
+        "calories": {
+          "absolute": 559,
+          "pct": 97.8984238178634,
+          "signed": 97.8984238178634
+        },
+        "proteinG": {
+          "absolute": 18,
+          "pct": 90,
+          "signed": 90
+        },
+        "carbsG": {
+          "absolute": 51,
+          "pct": 134.21052631578948,
+          "signed": 134.21052631578948
+        },
+        "fatG": {
+          "absolute": 31,
+          "pct": 83.78378378378379,
+          "signed": 83.78378378378379
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "dennys-fit-slam",
+        "chain": "Denny's",
+        "itemName": "Fit Slam",
+        "category": "Breakfast",
+        "servingSize": "1 order",
+        "source": "fastfoodnutrition.org/dennys.com",
+        "officialMacros": {
+          "calories": 430,
+          "proteinG": 27,
+          "carbsG": 56,
+          "fatG": 12
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 1020,
+        "proteinG": 48,
+        "carbsG": 89,
+        "fatG": 41,
+        "confidence": "HIGH",
+        "reasoning": "The Fit Slam at Denny's is a signature breakfast item featuring eggs, lean protein (turkey sausage or bacon), toast, and hash browns. Based on Denny's published nutrition information, this meal typically contains approximately 1020 calories with substantial protein from eggs and meat, moderate carbohydrates from toast and potatoes, and fat from cooking oils and meat. Denny's official menu data supports these estimates.",
+        "inputTokens": 184,
+        "outputTokens": 150,
+        "latencyMs": 2083,
+        "costUsd": 0.0007472
+      },
+      "errors": {
+        "calories": {
+          "absolute": 590,
+          "pct": 137.2093023255814,
+          "signed": 137.2093023255814
+        },
+        "proteinG": {
+          "absolute": 21,
+          "pct": 77.77777777777779,
+          "signed": 77.77777777777779
+        },
+        "carbsG": {
+          "absolute": 33,
+          "pct": 58.92857142857143,
+          "signed": 58.92857142857143
+        },
+        "fatG": {
+          "absolute": 29,
+          "pct": 241.66666666666666,
+          "signed": 241.66666666666666
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "dennys-club-sandwich",
+        "chain": "Denny's",
+        "itemName": "Club Sandwich",
+        "category": "Entree",
+        "servingSize": "1 order",
+        "source": "fastfoodnutrition.org/dennys.com",
+        "officialMacros": {
+          "calories": 831,
+          "proteinG": 47,
+          "carbsG": 74,
+          "fatG": 39
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 1120,
+        "proteinG": 48,
+        "carbsG": 82,
+        "fatG": 58,
+        "confidence": "HIGH",
+        "reasoning": "Denny's Club Sandwich is a triple-decker sandwich with turkey, bacon, ham, cheese, lettuce, tomato, and mayo on toasted bread. Based on Denny's standard preparation and published nutrition information, this typically contains approximately 1120 calories with substantial protein from the three meats and cheese, significant carbs from the three bread slices, and fat from bacon, mayo, and cheese.",
+        "inputTokens": 183,
+        "outputTokens": 147,
+        "latencyMs": 3190,
+        "costUsd": 0.0007344
+      },
+      "errors": {
+        "calories": {
+          "absolute": 289,
+          "pct": 34.777376654632974,
+          "signed": 34.777376654632974
+        },
+        "proteinG": {
+          "absolute": 1,
+          "pct": 2.127659574468085,
+          "signed": 2.127659574468085
+        },
+        "carbsG": {
+          "absolute": 8,
+          "pct": 10.81081081081081,
+          "signed": 10.81081081081081
+        },
+        "fatG": {
+          "absolute": 19,
+          "pct": 48.717948717948715,
+          "signed": 48.717948717948715
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "dennys-chicken-strips-dinner",
+        "chain": "Denny's",
+        "itemName": "Chicken Strips Dinner",
+        "category": "Entree",
+        "servingSize": "1 order",
+        "source": "fastfoodnutrition.org/dennys.com",
+        "officialMacros": {
+          "calories": 490,
+          "proteinG": 34,
+          "carbsG": 53,
+          "fatG": 17
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 640,
+        "proteinG": 38,
+        "carbsG": 52,
+        "fatG": 28,
+        "confidence": "HIGH",
+        "reasoning": "Denny's Chicken Strips Dinner typically includes 3-4 breaded and fried chicken strips (approximately 5-6 oz), served with sides like fries and coleslaw. Based on Denny's published nutrition information, this entree averages around 640 calories with substantial protein from the chicken, moderate carbohydrates from breading and sides, and moderate fat from frying and preparation methods.",
+        "inputTokens": 186,
+        "outputTokens": 149,
+        "latencyMs": 1401,
+        "costUsd": 0.0007447999999999999
+      },
+      "errors": {
+        "calories": {
+          "absolute": 150,
+          "pct": 30.612244897959183,
+          "signed": 30.612244897959183
+        },
+        "proteinG": {
+          "absolute": 4,
+          "pct": 11.76470588235294,
+          "signed": 11.76470588235294
+        },
+        "carbsG": {
+          "absolute": 1,
+          "pct": 1.8867924528301887,
+          "signed": -1.8867924528301887
+        },
+        "fatG": {
+          "absolute": 11,
+          "pct": 64.70588235294117,
+          "signed": 64.70588235294117
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "dennys-loaded-veggie-omelette",
+        "chain": "Denny's",
+        "itemName": "Loaded Veggie Omelette",
+        "category": "Breakfast",
+        "servingSize": "1 order",
+        "source": "fastfoodnutrition.org/dennys.com",
+        "officialMacros": {
+          "calories": 450,
+          "proteinG": 29,
+          "carbsG": 8,
+          "fatG": 33
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 590,
+        "proteinG": 18,
+        "carbsG": 48,
+        "fatG": 35,
+        "confidence": "HIGH",
+        "reasoning": "Denny's Loaded Veggie Omelette typically contains 3 eggs (about 210 cal, 18g protein), vegetables like mushrooms, onions, tomatoes, and peppers (about 40 cal, 2g carbs), cheese (about 110 cal, 7g protein, 9g fat), hash browns (about 200 cal, 4g carbs, 12g fat), and butter/oil for cooking (about 30 cal, 4g fat). Total aligns with Denny's published nutrition data for this menu item.",
+        "inputTokens": 189,
+        "outputTokens": 187,
+        "latencyMs": 1797,
+        "costUsd": 0.0008992
+      },
+      "errors": {
+        "calories": {
+          "absolute": 140,
+          "pct": 31.11111111111111,
+          "signed": 31.11111111111111
+        },
+        "proteinG": {
+          "absolute": 11,
+          "pct": 37.93103448275862,
+          "signed": -37.93103448275862
+        },
+        "carbsG": {
+          "absolute": 40,
+          "pct": 500,
+          "signed": 500
+        },
+        "fatG": {
+          "absolute": 2,
+          "pct": 6.0606060606060606,
+          "signed": 6.0606060606060606
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "chipotle-chicken-burrito",
+        "chain": "Chipotle",
+        "itemName": "Chicken Burrito (white rice, black beans, fresh tomato salsa, cheese, sour cream)",
+        "category": "Entree",
+        "servingSize": "1 burrito (567g)",
+        "source": "fastfoodnutrition.org/chipotle.com",
+        "officialMacros": {
+          "calories": 1030,
+          "proteinG": 53,
+          "carbsG": 104,
+          "fatG": 42
+        },
+        "tags": [
+          "serving-size-tricky"
+        ]
+      },
+      "estimated": {
+        "calories": 500,
+        "proteinG": 26,
+        "carbsG": 65,
+        "fatG": 15,
+        "confidence": "HIGH",
+        "reasoning": "Chipotle publishes nutrition data for their bowls/burritos. A chicken burrito with white rice, black beans, salsa, cheese, and sour cream is a standard menu item. Estimates based on: ~4oz grilled chicken (~180cal, 26g protein), ~4oz white rice (~150cal, 35g carbs), ~4oz black beans (~120cal, 20g carbs, 8g protein, 1g fat), salsa (~10cal, 2g carbs), ~1.5oz cheese (~180cal, 11g protein, 15g fat), ~2oz sour cream (~60cal, 6g fat). Adjusted slightly lower (~500cal) as burrito portions are sometimes less than separate bowl components. Confidence high due to published chain data.",
+        "inputTokens": 204,
+        "outputTokens": 236,
+        "latencyMs": 2963,
+        "costUsd": 0.0011072
+      },
+      "errors": {
+        "calories": {
+          "absolute": 530,
+          "pct": 51.45631067961165,
+          "signed": -51.45631067961165
+        },
+        "proteinG": {
+          "absolute": 27,
+          "pct": 50.943396226415096,
+          "signed": -50.943396226415096
+        },
+        "carbsG": {
+          "absolute": 39,
+          "pct": 37.5,
+          "signed": -37.5
+        },
+        "fatG": {
+          "absolute": 27,
+          "pct": 64.28571428571429,
+          "signed": -64.28571428571429
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "chipotle-steak-bowl",
+        "chain": "Chipotle",
+        "itemName": "Steak Burrito Bowl (white rice, black beans, fresh tomato salsa)",
+        "category": "Entree",
+        "servingSize": "1 bowl (482g)",
+        "source": "fastfoodnutrition.org/chipotle.com",
+        "officialMacros": {
+          "calories": 640,
+          "proteinG": 42,
+          "carbsG": 75,
+          "fatG": 18
+        },
+        "tags": [
+          "serving-size-tricky"
+        ]
+      },
+      "estimated": {
+        "calories": 640,
+        "proteinG": 38,
+        "carbsG": 65,
+        "fatG": 21,
+        "confidence": "HIGH",
+        "reasoning": "Based on Chipotle's published nutrition data for a steak burrito bowl with white rice, black beans, and fresh tomato salsa. Standard portion sizes: 4oz steak (~180 cal, 25g protein), white rice base (~210 cal, 6g protein), black beans (~130 cal, 8g protein), salsa (~25 cal, <1g protein), and standard toppings. This represents a typical full-size bowl without guacamole or sour cream.",
+        "inputTokens": 200,
+        "outputTokens": 168,
+        "latencyMs": 1737,
+        "costUsd": 0.000832
+      },
+      "errors": {
+        "calories": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        },
+        "proteinG": {
+          "absolute": 4,
+          "pct": 9.523809523809524,
+          "signed": -9.523809523809524
+        },
+        "carbsG": {
+          "absolute": 10,
+          "pct": 13.333333333333334,
+          "signed": -13.333333333333334
+        },
+        "fatG": {
+          "absolute": 3,
+          "pct": 16.666666666666664,
+          "signed": 16.666666666666664
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "chipotle-chicken-quesadilla",
+        "chain": "Chipotle",
+        "itemName": "Chicken Quesadilla",
+        "category": "Entree",
+        "servingSize": "1 quesadilla",
+        "source": "fastfoodnutrition.org/chipotle.com",
+        "officialMacros": {
+          "calories": 830,
+          "proteinG": 58,
+          "carbsG": 53,
+          "fatG": 40
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 540,
+        "proteinG": 28,
+        "carbsG": 42,
+        "fatG": 25,
+        "confidence": "HIGH",
+        "reasoning": "Chipotle chicken quesadilla made with 2-3 oz grilled chicken, cheese, and tortilla. Based on Chipotle's published nutrition data, a chicken quesadilla is approximately 540 calories with significant protein from chicken and cheese, moderate carbs from the flour tortilla, and fat from cheese and cooking oil.",
+        "inputTokens": 187,
+        "outputTokens": 132,
+        "latencyMs": 1291,
+        "costUsd": 0.0006776
+      },
+      "errors": {
+        "calories": {
+          "absolute": 290,
+          "pct": 34.93975903614458,
+          "signed": -34.93975903614458
+        },
+        "proteinG": {
+          "absolute": 30,
+          "pct": 51.724137931034484,
+          "signed": -51.724137931034484
+        },
+        "carbsG": {
+          "absolute": 11,
+          "pct": 20.754716981132077,
+          "signed": -20.754716981132077
+        },
+        "fatG": {
+          "absolute": 15,
+          "pct": 37.5,
+          "signed": -37.5
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "chipotle-chips-and-guacamole",
+        "chain": "Chipotle",
+        "itemName": "Chips & Guacamole",
+        "category": "Side",
+        "servingSize": "1 order (7.5 oz / 213g)",
+        "source": "fastfoodnutrition.org/chipotle.com",
+        "officialMacros": {
+          "calories": 720,
+          "proteinG": 10,
+          "carbsG": 81,
+          "fatG": 40
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 570,
+        "proteinG": 10,
+        "carbsG": 54,
+        "fatG": 32,
+        "confidence": "HIGH",
+        "reasoning": "Chipotle's chips & guacamole consists of approximately 4 oz tortilla chips (~300 cal, 4g protein, 36g carbs, 15g fat) and 2 oz guacamole (~170 cal, 2g protein, 8g carbs, 15g fat). The remaining carbs account for the lime and salt seasoning on chips. This matches Chipotle's published nutrition information.",
+        "inputTokens": 188,
+        "outputTokens": 155,
+        "latencyMs": 1882,
+        "costUsd": 0.0007704
+      },
+      "errors": {
+        "calories": {
+          "absolute": 150,
+          "pct": 20.833333333333336,
+          "signed": -20.833333333333336
+        },
+        "proteinG": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        },
+        "carbsG": {
+          "absolute": 27,
+          "pct": 33.33333333333333,
+          "signed": -33.33333333333333
+        },
+        "fatG": {
+          "absolute": 8,
+          "pct": 20,
+          "signed": -20
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "chipotle-chicken-tacos-3",
+        "chain": "Chipotle",
+        "itemName": "Chicken Tacos (3, soft flour tortilla)",
+        "category": "Entree",
+        "servingSize": "3 tacos",
+        "source": "fastfoodnutrition.org/chipotle.com",
+        "officialMacros": {
+          "calories": 460,
+          "proteinG": 38,
+          "carbsG": 36,
+          "fatG": 14
+        },
+        "tags": [
+          "serving-size-tricky"
+        ]
+      },
+      "estimated": {
+        "calories": 510,
+        "proteinG": 28,
+        "carbsG": 48,
+        "fatG": 18,
+        "confidence": "HIGH",
+        "reasoning": "Based on Chipotle's published nutrition data for 3 chicken soft tacos with flour tortillas (assuming standard serving with chicken, salsa, and lettuce). Each tortilla adds ~50 cal and ~8g carbs. Chicken provides ~28g protein and ~9g fat. Total reflects standard preparation without additional toppings like cheese, sour cream, or guacamole.",
+        "inputTokens": 193,
+        "outputTokens": 143,
+        "latencyMs": 1591,
+        "costUsd": 0.0007264
+      },
+      "errors": {
+        "calories": {
+          "absolute": 50,
+          "pct": 10.869565217391305,
+          "signed": 10.869565217391305
+        },
+        "proteinG": {
+          "absolute": 10,
+          "pct": 26.31578947368421,
+          "signed": -26.31578947368421
+        },
+        "carbsG": {
+          "absolute": 12,
+          "pct": 33.33333333333333,
+          "signed": 33.33333333333333
+        },
+        "fatG": {
+          "absolute": 4,
+          "pct": 28.57142857142857,
+          "signed": 28.57142857142857
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "chipotle-sofritas-bowl",
+        "chain": "Chipotle",
+        "itemName": "Sofritas Burrito Bowl (white rice, black beans, fresh tomato salsa)",
+        "category": "Entree",
+        "servingSize": "1 bowl (456g)",
+        "source": "fastfoodnutrition.org/chipotle.com",
+        "officialMacros": {
+          "calories": 595,
+          "proteinG": 20,
+          "carbsG": 82,
+          "fatG": 21
+        },
+        "tags": [
+          "serving-size-tricky"
+        ]
+      },
+      "estimated": {
+        "calories": 505,
+        "proteinG": 17,
+        "carbsG": 65,
+        "fatG": 18,
+        "confidence": "HIGH",
+        "reasoning": "Based on Chipotle's published nutrition information for a Sofritas Bowl with white rice, black beans, and salsa. Sofritas (tofu) provides lean protein, white rice contributes carbohydrates, black beans add protein and fiber, and salsa is low-calorie. This matches Chipotle's standard serving sizes and official menu data.",
+        "inputTokens": 201,
+        "outputTokens": 137,
+        "latencyMs": 1375,
+        "costUsd": 0.0007088
+      },
+      "errors": {
+        "calories": {
+          "absolute": 90,
+          "pct": 15.126050420168067,
+          "signed": -15.126050420168067
+        },
+        "proteinG": {
+          "absolute": 3,
+          "pct": 15,
+          "signed": -15
+        },
+        "carbsG": {
+          "absolute": 17,
+          "pct": 20.73170731707317,
+          "signed": -20.73170731707317
+        },
+        "fatG": {
+          "absolute": 3,
+          "pct": 14.285714285714285,
+          "signed": -14.285714285714285
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "chipotle-carnitas-burrito-bowl",
+        "chain": "Chipotle",
+        "itemName": "Carnitas Burrito Bowl (white rice, black beans, fresh tomato salsa)",
+        "category": "Entree",
+        "servingSize": "1 bowl (482g)",
+        "source": "fastfoodnutrition.org/chipotle.com",
+        "officialMacros": {
+          "calories": 640,
+          "proteinG": 39,
+          "carbsG": 74,
+          "fatG": 19
+        },
+        "tags": [
+          "serving-size-tricky"
+        ]
+      },
+      "estimated": {
+        "calories": 645,
+        "proteinG": 25,
+        "carbsG": 84,
+        "fatG": 18,
+        "confidence": "HIGH",
+        "reasoning": "Based on Chipotle's published nutrition data for a carnitas burrito bowl with white rice, black beans, and salsa. Standard portion: ~4oz carnitas (210 cal, 20g protein), white rice serving (~200 cal, 45g carbs), black beans (~130 cal, 8g protein, 23g carbs), salsa (~20 cal). Fat primarily from carnitas and minor ingredients.",
+        "inputTokens": 200,
+        "outputTokens": 151,
+        "latencyMs": 1595,
+        "costUsd": 0.0007639999999999999
+      },
+      "errors": {
+        "calories": {
+          "absolute": 5,
+          "pct": 0.78125,
+          "signed": 0.78125
+        },
+        "proteinG": {
+          "absolute": 14,
+          "pct": 35.8974358974359,
+          "signed": -35.8974358974359
+        },
+        "carbsG": {
+          "absolute": 10,
+          "pct": 13.513513513513514,
+          "signed": 13.513513513513514
+        },
+        "fatG": {
+          "absolute": 1,
+          "pct": 5.263157894736842,
+          "signed": -5.263157894736842
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "chipotle-side-of-queso",
+        "chain": "Chipotle",
+        "itemName": "Side of Queso Blanco",
+        "category": "Side",
+        "servingSize": "1 side (2 oz / 57g)",
+        "source": "fastfoodnutrition.org/chipotle.com",
+        "officialMacros": {
+          "calories": 120,
+          "proteinG": 6,
+          "carbsG": 4,
+          "fatG": 8
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 150,
+        "proteinG": 9,
+        "carbsG": 1,
+        "fatG": 12,
+        "confidence": "HIGH",
+        "reasoning": "Chipotle's Queso Blanco is a cheese-based dip served as a side. Based on Chipotle's published nutrition information, a standard 4 oz (113g) serving contains approximately 150 calories, 9g protein, 1g carbohydrates, and 12g fat. This reflects the cheese-heavy composition with minimal carbs.",
+        "inputTokens": 188,
+        "outputTokens": 140,
+        "latencyMs": 1325,
+        "costUsd": 0.0007103999999999999
+      },
+      "errors": {
+        "calories": {
+          "absolute": 30,
+          "pct": 25,
+          "signed": 25
+        },
+        "proteinG": {
+          "absolute": 3,
+          "pct": 50,
+          "signed": 50
+        },
+        "carbsG": {
+          "absolute": 3,
+          "pct": 75,
+          "signed": -75
+        },
+        "fatG": {
+          "absolute": 4,
+          "pct": 50,
+          "signed": 50
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "chipotle-chips",
+        "chain": "Chipotle",
+        "itemName": "Chips",
+        "category": "Side",
+        "servingSize": "1 order (4 oz / 113g)",
+        "source": "fastfoodnutrition.org/chipotle.com",
+        "officialMacros": {
+          "calories": 570,
+          "proteinG": 8,
+          "carbsG": 73,
+          "fatG": 27
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 570,
+        "proteinG": 8,
+        "carbsG": 71,
+        "fatG": 27,
+        "confidence": "HIGH",
+        "reasoning": "Chipotle's tortilla chips are a standard side item. A typical serving is approximately 4 oz (113g) of fried corn tortilla chips. This matches Chipotle's official nutrition data for their chips, which contain roughly 570 calories, high carbs from the corn tortillas, moderate protein, and significant fat from the frying process.",
+        "inputTokens": 182,
+        "outputTokens": 135,
+        "latencyMs": 1655,
+        "costUsd": 0.0006856
+      },
+      "errors": {
+        "calories": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        },
+        "proteinG": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        },
+        "carbsG": {
+          "absolute": 2,
+          "pct": 2.73972602739726,
+          "signed": -2.73972602739726
+        },
+        "fatG": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "chipotle-large-chips-and-queso",
+        "chain": "Chipotle",
+        "itemName": "Large Chips & Queso",
+        "category": "Side",
+        "servingSize": "1 order (8 oz / 227g)",
+        "source": "fastfoodnutrition.org/chipotle.com",
+        "officialMacros": {
+          "calories": 770,
+          "proteinG": 20,
+          "carbsG": 82,
+          "fatG": 41
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 570,
+        "proteinG": 17,
+        "carbsG": 60,
+        "fatG": 28,
+        "confidence": "HIGH",
+        "reasoning": "Chipotle's Large Chips & Queso consists of tortilla chips (approximately 4 oz or 113g) with a standard serving of queso dip (approximately 4 oz or 113g). The chips contribute roughly 560 calories with 8g protein, 56g carbs, and 28g fat. The queso adds approximately 10g protein and 4g carbs with minimal additional fat. This aligns with published Chipotle nutrition information.",
+        "inputTokens": 187,
+        "outputTokens": 163,
+        "latencyMs": 1617,
+        "costUsd": 0.0008016
+      },
+      "errors": {
+        "calories": {
+          "absolute": 200,
+          "pct": 25.97402597402597,
+          "signed": -25.97402597402597
+        },
+        "proteinG": {
+          "absolute": 3,
+          "pct": 15,
+          "signed": -15
+        },
+        "carbsG": {
+          "absolute": 22,
+          "pct": 26.82926829268293,
+          "signed": -26.82926829268293
+        },
+        "fatG": {
+          "absolute": 13,
+          "pct": 31.70731707317073,
+          "signed": -31.70731707317073
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "subway-6in-turkey-breast",
+        "chain": "Subway",
+        "itemName": "6\" Turkey Breast",
+        "category": "Entree",
+        "servingSize": "1 sandwich (227g)",
+        "source": "fastfoodnutrition.org/subway.com",
+        "officialMacros": {
+          "calories": 260,
+          "proteinG": 20,
+          "carbsG": 40,
+          "fatG": 3
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 280,
+        "proteinG": 18,
+        "carbsG": 41,
+        "fatG": 3.5,
+        "confidence": "HIGH",
+        "reasoning": "Subway's 6\" Turkey Breast sandwich on 6-inch bread is a standard menu item with published nutrition information. The estimate accounts for sliced turkey breast (~2 oz), 6-inch white bread, lettuce, tomato, and standard vegetables with minimal oil-based condiments. Values are based on Subway's official nutritional data for this specific sandwich.",
+        "inputTokens": 182,
+        "outputTokens": 138,
+        "latencyMs": 1560,
+        "costUsd": 0.0006975999999999999
+      },
+      "errors": {
+        "calories": {
+          "absolute": 20,
+          "pct": 7.6923076923076925,
+          "signed": 7.6923076923076925
+        },
+        "proteinG": {
+          "absolute": 2,
+          "pct": 10,
+          "signed": -10
+        },
+        "carbsG": {
+          "absolute": 1,
+          "pct": 2.5,
+          "signed": 2.5
+        },
+        "fatG": {
+          "absolute": 0.5,
+          "pct": 16.666666666666664,
+          "signed": 16.666666666666664
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "subway-6in-italian-bmt",
+        "chain": "Subway",
+        "itemName": "6\" Italian B.M.T.",
+        "category": "Entree",
+        "servingSize": "1 sandwich (240g)",
+        "source": "fastfoodnutrition.org/subway.com",
+        "officialMacros": {
+          "calories": 360,
+          "proteinG": 19,
+          "carbsG": 40,
+          "fatG": 16
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 280,
+        "proteinG": 12,
+        "carbsG": 33,
+        "fatG": 10,
+        "confidence": "HIGH",
+        "reasoning": "Subway's 6\" Italian B.M.T. (Baloney, Mortadella, Pepperoni) on Italian bread is a well-documented menu item with publicly available nutrition information. The 6\" sandwich typically contains about 280 calories with moderate protein from the processed meats, carbohydrates from the bread, and fat from the various meat toppings and any mayo. These values align with Subway's published nutritional data for this specific item.",
+        "inputTokens": 186,
+        "outputTokens": 159,
+        "latencyMs": 1571,
+        "costUsd": 0.0007848
+      },
+      "errors": {
+        "calories": {
+          "absolute": 80,
+          "pct": 22.22222222222222,
+          "signed": -22.22222222222222
+        },
+        "proteinG": {
+          "absolute": 7,
+          "pct": 36.84210526315789,
+          "signed": -36.84210526315789
+        },
+        "carbsG": {
+          "absolute": 7,
+          "pct": 17.5,
+          "signed": -17.5
+        },
+        "fatG": {
+          "absolute": 6,
+          "pct": 37.5,
+          "signed": -37.5
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "subway-6in-meatball-marinara",
+        "chain": "Subway",
+        "itemName": "6\" Meatball Marinara",
+        "category": "Entree",
+        "servingSize": "1 sandwich (321g)",
+        "source": "fastfoodnutrition.org/subway.com",
+        "officialMacros": {
+          "calories": 410,
+          "proteinG": 20,
+          "carbsG": 44,
+          "fatG": 18
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 380,
+        "proteinG": 21,
+        "carbsG": 41,
+        "fatG": 14,
+        "confidence": "HIGH",
+        "reasoning": "Based on Subway's official published nutrition information for a 6\" Meatball Marinara sub on Italian BMT bread with standard toppings. The sandwich contains approximately 4-5 meatballs in marinara sauce, provolone cheese, and vegetables. Values align with Subway's documented nutrition data for this standard menu item.",
+        "inputTokens": 186,
+        "outputTokens": 131,
+        "latencyMs": 1270,
+        "costUsd": 0.0006727999999999999
+      },
+      "errors": {
+        "calories": {
+          "absolute": 30,
+          "pct": 7.317073170731707,
+          "signed": -7.317073170731707
+        },
+        "proteinG": {
+          "absolute": 1,
+          "pct": 5,
+          "signed": 5
+        },
+        "carbsG": {
+          "absolute": 3,
+          "pct": 6.8181818181818175,
+          "signed": -6.8181818181818175
+        },
+        "fatG": {
+          "absolute": 4,
+          "pct": 22.22222222222222,
+          "signed": -22.22222222222222
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "subway-6in-chicken-teriyaki",
+        "chain": "Subway",
+        "itemName": "6\" Sweet Onion Chicken Teriyaki",
+        "category": "Entree",
+        "servingSize": "1 sandwich (272g)",
+        "source": "fastfoodnutrition.org/subway.com",
+        "officialMacros": {
+          "calories": 340,
+          "proteinG": 24,
+          "carbsG": 50,
+          "fatG": 4
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 370,
+        "proteinG": 30,
+        "carbsG": 48,
+        "fatG": 5,
+        "confidence": "HIGH",
+        "reasoning": "Subway's 6\" Sweet Onion Chicken Teriyaki is a standard menu item with published nutritional information. The sandwich contains grilled chicken breast, sweet onion sauce, and vegetables on a 6\" wheat or Italian bread. High confidence based on Subway's consistent portion sizes and standardized recipes across locations.",
+        "inputTokens": 189,
+        "outputTokens": 126,
+        "latencyMs": 1712,
+        "costUsd": 0.0006552
+      },
+      "errors": {
+        "calories": {
+          "absolute": 30,
+          "pct": 8.823529411764707,
+          "signed": 8.823529411764707
+        },
+        "proteinG": {
+          "absolute": 6,
+          "pct": 25,
+          "signed": 25
+        },
+        "carbsG": {
+          "absolute": 2,
+          "pct": 4,
+          "signed": -4
+        },
+        "fatG": {
+          "absolute": 1,
+          "pct": 25,
+          "signed": 25
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "subway-6in-veggie-delite",
+        "chain": "Subway",
+        "itemName": "6\" Veggie Delite",
+        "category": "Entree",
+        "servingSize": "1 sandwich (165g)",
+        "source": "fastfoodnutrition.org/subway.com",
+        "officialMacros": {
+          "calories": 200,
+          "proteinG": 8,
+          "carbsG": 37,
+          "fatG": 2
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 230,
+        "proteinG": 9,
+        "carbsG": 44,
+        "fatG": 3,
+        "confidence": "HIGH",
+        "reasoning": "Subway's 6\" Veggie Delite on 6-inch bread with standard vegetables (lettuce, tomato, onion, bell pepper, cucumber) and minimal oil-based dressing. Official Subway nutritional data shows this sandwich at approximately 230 calories with 9g protein, 44g carbs, and 3g fat. High confidence based on published chain nutrition information.",
+        "inputTokens": 185,
+        "outputTokens": 143,
+        "latencyMs": 1462,
+        "costUsd": 0.00072
+      },
+      "errors": {
+        "calories": {
+          "absolute": 30,
+          "pct": 15,
+          "signed": 15
+        },
+        "proteinG": {
+          "absolute": 1,
+          "pct": 12.5,
+          "signed": 12.5
+        },
+        "carbsG": {
+          "absolute": 7,
+          "pct": 18.91891891891892,
+          "signed": 18.91891891891892
+        },
+        "fatG": {
+          "absolute": 1,
+          "pct": 50,
+          "signed": 50
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "subway-footlong-steak-and-cheese",
+        "chain": "Subway",
+        "itemName": "Footlong Steak & Cheese",
+        "category": "Entree",
+        "servingSize": "1 footlong (322g)",
+        "source": "fastfoodnutrition.org/subway.com",
+        "officialMacros": {
+          "calories": 640,
+          "proteinG": 50,
+          "carbsG": 74,
+          "fatG": 20
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 540,
+        "proteinG": 32,
+        "carbsG": 48,
+        "fatG": 22,
+        "confidence": "HIGH",
+        "reasoning": "Subway's Footlong Steak & Cheese on 6-inch bread contains approximately 380-400 calories; doubling to footlong gives ~760-800 calories. However, the actual footlong version is typically reported at 540 calories. Protein from steak and cheese (~32g), carbs from bread (~48g), and fat from meat, cheese, and oils (~22g) based on Subway's published nutrition information for this sandwich.",
+        "inputTokens": 185,
+        "outputTokens": 157,
+        "latencyMs": 1650,
+        "costUsd": 0.000776
+      },
+      "errors": {
+        "calories": {
+          "absolute": 100,
+          "pct": 15.625,
+          "signed": -15.625
+        },
+        "proteinG": {
+          "absolute": 18,
+          "pct": 36,
+          "signed": -36
+        },
+        "carbsG": {
+          "absolute": 26,
+          "pct": 35.13513513513514,
+          "signed": -35.13513513513514
+        },
+        "fatG": {
+          "absolute": 2,
+          "pct": 10,
+          "signed": 10
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "subway-6in-tuna",
+        "chain": "Subway",
+        "itemName": "6\" Tuna",
+        "category": "Entree",
+        "servingSize": "1 sandwich (252g)",
+        "source": "fastfoodnutrition.org/subway.com",
+        "officialMacros": {
+          "calories": 430,
+          "proteinG": 19,
+          "carbsG": 38,
+          "fatG": 25
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 215,
+        "proteinG": 22,
+        "carbsG": 21,
+        "fatG": 3.5,
+        "confidence": "HIGH",
+        "reasoning": "Based on Subway's official nutrition data for a 6\" Tuna sub on Italian herbs & cheese bread with standard toppings (no mayo added). This reflects the standard sandwich preparation with lettuce, tomatoes, onions, and pickles.",
+        "inputTokens": 182,
+        "outputTokens": 112,
+        "latencyMs": 1304,
+        "costUsd": 0.0005936
+      },
+      "errors": {
+        "calories": {
+          "absolute": 215,
+          "pct": 50,
+          "signed": -50
+        },
+        "proteinG": {
+          "absolute": 3,
+          "pct": 15.789473684210526,
+          "signed": 15.789473684210526
+        },
+        "carbsG": {
+          "absolute": 17,
+          "pct": 44.73684210526316,
+          "signed": -44.73684210526316
+        },
+        "fatG": {
+          "absolute": 21.5,
+          "pct": 86,
+          "signed": -86
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "subway-chocolate-chip-cookie",
+        "chain": "Subway",
+        "itemName": "Chocolate Chip Cookie",
+        "category": "Dessert",
+        "servingSize": "1 cookie (45g)",
+        "source": "fastfoodnutrition.org/subway.com",
+        "officialMacros": {
+          "calories": 220,
+          "proteinG": 2,
+          "carbsG": 30,
+          "fatG": 10
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 210,
+        "proteinG": 3,
+        "carbsG": 28,
+        "fatG": 10,
+        "confidence": "HIGH",
+        "reasoning": "Subway's chocolate chip cookie is a standard menu item with published nutrition information. A typical Subway chocolate chip cookie weighs approximately 45g and contains roughly 210 calories, with significant carbohydrates from sugar and flour, moderate fat from butter and chocolate chips, and minimal protein.",
+        "inputTokens": 181,
+        "outputTokens": 117,
+        "latencyMs": 1187,
+        "costUsd": 0.0006127999999999999
+      },
+      "errors": {
+        "calories": {
+          "absolute": 10,
+          "pct": 4.545454545454546,
+          "signed": -4.545454545454546
+        },
+        "proteinG": {
+          "absolute": 1,
+          "pct": 50,
+          "signed": 50
+        },
+        "carbsG": {
+          "absolute": 2,
+          "pct": 6.666666666666667,
+          "signed": -6.666666666666667
+        },
+        "fatG": {
+          "absolute": 0,
+          "pct": 0,
+          "signed": 0
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "subway-footlong-cold-cut-combo",
+        "chain": "Subway",
+        "itemName": "Footlong Cold Cut Combo",
+        "category": "Entree",
+        "servingSize": "1 footlong (426g)",
+        "source": "fastfoodnutrition.org/subway.com",
+        "officialMacros": {
+          "calories": 560,
+          "proteinG": 34,
+          "carbsG": 76,
+          "fatG": 20
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 920,
+        "proteinG": 39,
+        "carbsG": 84,
+        "fatG": 39,
+        "confidence": "HIGH",
+        "reasoning": "Subway's Footlong Cold Cut Combo on 6-inch Italian bread with standard portions of turkey, ham, and roast beef, plus typical vegetables and standard amount of mayo-based sauce. Values based on Subway's published nutrition information for this standard menu item.",
+        "inputTokens": 183,
+        "outputTokens": 114,
+        "latencyMs": 1281,
+        "costUsd": 0.0006023999999999999
+      },
+      "errors": {
+        "calories": {
+          "absolute": 360,
+          "pct": 64.28571428571429,
+          "signed": 64.28571428571429
+        },
+        "proteinG": {
+          "absolute": 5,
+          "pct": 14.705882352941178,
+          "signed": 14.705882352941178
+        },
+        "carbsG": {
+          "absolute": 8,
+          "pct": 10.526315789473683,
+          "signed": 10.526315789473683
+        },
+        "fatG": {
+          "absolute": 19,
+          "pct": 95,
+          "signed": 95
+        }
+      }
+    },
+    {
+      "groundTruth": {
+        "id": "subway-6in-rotisserie-chicken",
+        "chain": "Subway",
+        "itemName": "6\" Rotisserie-Style Chicken",
+        "category": "Entree",
+        "servingSize": "1 sandwich (243g)",
+        "source": "fastfoodnutrition.org/subway.com",
+        "officialMacros": {
+          "calories": 300,
+          "proteinG": 23,
+          "carbsG": 38,
+          "fatG": 6
+        },
+        "tags": []
+      },
+      "estimated": {
+        "calories": 320,
+        "proteinG": 38,
+        "carbsG": 0,
+        "fatG": 17,
+        "confidence": "HIGH",
+        "reasoning": "Subway's 6\" Rotisserie-Style Chicken sandwich on 6\" bread with standard toppings. Based on Subway's published nutrition information, a 6\" rotisserie chicken sandwich typically contains approximately 320 calories, 38g protein, minimal carbohydrates from the fillings alone (bread carbs would be additional), and 17g fat from the chicken and any mayo-based spreads.",
+        "inputTokens": 187,
+        "outputTokens": 148,
+        "latencyMs": 2033,
+        "costUsd": 0.0007416
+      },
+      "errors": {
+        "calories": {
+          "absolute": 20,
+          "pct": 6.666666666666667,
+          "signed": 6.666666666666667
+        },
+        "proteinG": {
+          "absolute": 15,
+          "pct": 65.21739130434783,
+          "signed": 65.21739130434783
+        },
+        "carbsG": {
+          "absolute": 38,
+          "pct": 100,
+          "signed": -100
+        },
+        "fatG": {
+          "absolute": 11,
+          "pct": 183.33333333333331,
+          "signed": 183.33333333333331
+        }
+      }
+    }
+  ]
+}

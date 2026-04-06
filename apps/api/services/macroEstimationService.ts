@@ -68,10 +68,15 @@ function getClient(): Anthropic {
  * must handle nulls rather than assuming all items succeed.
  *
  * Throws if the API call fails or the top-level response cannot be parsed.
+ *
+ * @param systemPrompt - Optional override for the system prompt. Defaults to
+ *   SYSTEM_PROMPT. Pass a custom prompt to test different estimation strategies
+ *   in evals without touching the production default.
  */
 export async function estimateMacros(
   items: StructuredMenuItem[],
   client?: Anthropic,
+  systemPrompt?: string,
 ): Promise<(MacroData | null)[]> {
   if (items.length === 0) {
     return [];
@@ -92,7 +97,7 @@ export async function estimateMacros(
   const message = await anthropic.messages.create({
     model: HAIKU_MODEL,
     max_tokens: MAX_TOKENS,
-    system: SYSTEM_PROMPT,
+    system: systemPrompt ?? SYSTEM_PROMPT,
     messages: [{ role: "user", content: userMessage }],
   });
 

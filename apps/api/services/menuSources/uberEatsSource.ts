@@ -1,31 +1,30 @@
 /**
  * Uber Eats MenuSource
  *
- * Extracts full menu data from Uber Eats store pages via raw HTTP.
- * Uses JSON-LD `<script type="application/ld+json">` structured data
- * embedded in the page for Google Rich Results compatibility.
+ * Extracts structured menu data from Uber Eats store pages via Schema.org
+ * JSON-LD embedded in the server-side rendered HTML.
+ *
+ * Pipeline:
+ *   1. URL discovery: Firecrawl search (one-time, ~$0.006) → cached
+ *   2. Menu extraction: raw HTTP fetch ($0) → parse JSON-LD
+ *      Restaurant.hasMenu.hasMenuSection[].hasMenuItem[]
  *
  * Data shape:
- *   Restaurant → hasMenu → hasMenuSection[] → hasMenuItem[]
- *   Each MenuItem: name, description, offers.price
+ *   Each MenuItem: name, description, price, section
  *
+ * UberEats embeds full Schema.org JSON-LD in <script type="application/ld+json">
+ * for Google Rich Results / SEO. This data is in the initial SSR HTML response —
+ * no headless browser or JS rendering needed. A raw fetch() with browser UA works.
+ *
+ * Cost: $0.006 one-time for URL discovery (Firecrawl), then $0/fetch forever.
  * Coverage: excellent indie and chain coverage in major US cities.
- * Bot detection: passive (not enforced on initial page load — required
- * for Google SEO, so removing it would hurt UE's search ranking).
  *
- * Returns structured items — no macros. Pipeline passes items to Haiku.
+ * Falls back to Firecrawl markdown scraping if JSON-LD is absent.
  */
 
 import type { MenuSource, MenuSourceResult, StructuredMenuItem } from "./types";
 
-const UE_BASE = "https://www.ubereats.com";
-
-const HEADERS = {
-  "User-Agent":
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  Accept: "text/html,application/xhtml+xml",
-  "Accept-Language": "en-US,en;q=0.9",
-};
+const FIRECRAWL_BASE = "https://api.firecrawl.dev";
 
 // ─── JSON-LD types ────────────────────────────────────────────────────────────
 
@@ -177,16 +176,230 @@ export function parseMenuItems(restaurant: JsonLdRestaurant): StructuredMenuItem
 // ─── URL discovery ────────────────────────────────────────────────────────────
 
 /**
- * Build a candidate Uber Eats store URL from restaurant name.
- * Uber Eats uses slugs like /store/mcdonalds-westwood/abc123
- *
- * This is a best-effort slug for direct fetch. In production the resolver
- * should cache discovered URLs in the DB after a successful lookup.
+ * Firecrawl search result shape (url field).
  */
-export function toUberEatsSearchUrl(name: string, address: string): string {
-  // Use UE's search endpoint — returns the store page with JSON-LD
-  const params = new URLSearchParams({ q: `${name} ${address}` });
-  return `${UE_BASE}/find-food?${params.toString()}`;
+interface FirecrawlSearchHit {
+  url?: string;
+  sourceURL?: string;
+  markdown?: string;
+}
+interface FirecrawlSearchResponse {
+  data?: FirecrawlSearchHit[];
+}
+interface FirecrawlScrapeResponse {
+  data?: { html?: string; markdown?: string; content?: string; };
+}
+
+/**
+ * Use Firecrawl web search to find the location-specific UberEats store URL.
+ *
+ * UberEats store URLs require a UUID suffix (/store/{slug}/{uuid}) that can't
+ * be guessed from the name alone. This resolves the real URL by searching
+ * Firecrawl's index for the matching store page.
+ *
+ * Requires FIRECRAWL_API_KEY. Returns null if the key is absent or search fails.
+ */
+export async function discoverUberEatsUrl(
+  name: string,
+  address: string,
+): Promise<string | null> {
+  const apiKey = process.env["FIRECRAWL_API_KEY"];
+  if (!apiKey) return null;
+
+  // Search for the specific store page with location context
+  const query = `site:ubereats.com/store ${name} ${address}`;
+
+  let response: Response;
+  try {
+    response = await fetch(`${FIRECRAWL_BASE}/v1/search`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({ query, limit: 3 }),
+    });
+  } catch {
+    return null;
+  }
+
+  if (!response.ok) return null;
+
+  const data = (await response.json()) as FirecrawlSearchResponse;
+  for (const hit of data.data ?? []) {
+    const url = hit.url ?? hit.sourceURL ?? "";
+    // Only accept real store pages (with the UUID segment, not just /store/{slug})
+    if (/ubereats\.com\/store\/[^/]+\/[^/?]+/.test(url)) return url;
+  }
+  return null;
+}
+
+/**
+ * Use Firecrawl to scrape a known UberEats store URL, returning HTML.
+ *
+ * Kept for backward compatibility. Prefer scrapeUberEatsMarkdown() which
+ * returns Markdown with embedded calorie data (UberEats has no JSON-LD).
+ *
+ * Requires FIRECRAWL_API_KEY.
+ */
+export async function scrapeUberEatsViaFirecrawl(url: string): Promise<string | null> {
+  const apiKey = process.env["FIRECRAWL_API_KEY"];
+  if (!apiKey) return null;
+
+  let response: Response;
+  try {
+    response = await fetch(`${FIRECRAWL_BASE}/v1/scrape`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({ url, formats: ["html"] }),
+    });
+  } catch {
+    return null;
+  }
+
+  if (!response.ok) return null;
+
+  const data = (await response.json()) as FirecrawlScrapeResponse;
+  return data.data?.html ?? null;
+}
+
+/**
+ * Use Firecrawl to scrape a known UberEats store URL, returning Markdown.
+ *
+ * UberEats does NOT embed JSON-LD. The Markdown returned by Firecrawl
+ * contains menu items with calorie data in the format:
+ *   {name}\\ \n${price} • {calories} Cal.
+ *
+ * Use parseUberEatsMarkdown() to extract items with name + calories.
+ *
+ * Requires FIRECRAWL_API_KEY.
+ */
+export async function scrapeUberEatsMarkdown(url: string): Promise<string | null> {
+  const apiKey = process.env["FIRECRAWL_API_KEY"];
+  if (!apiKey) return null;
+
+  let response: Response;
+  try {
+    response = await fetch(`${FIRECRAWL_BASE}/v1/scrape`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({ url, formats: ["markdown"] }),
+    });
+  } catch {
+    return null;
+  }
+
+  if (!response.ok) return null;
+
+  const data = (await response.json()) as FirecrawlScrapeResponse;
+  return data.data?.markdown ?? null;
+}
+
+/**
+ * Parse UberEats Firecrawl markdown into structured menu items.
+ *
+ * UberEats markdown from Firecrawl embeds calorie data in each menu item link:
+ *   {name}\\\n${price} • {calories} Cal.
+ *
+ * This parser extracts item name and calories. Price is also extracted when
+ * available. Items with calorie ranges (e.g. "430 - 530 Cal.") use the
+ * lower bound as the calorie count.
+ *
+ * Returns an empty array if no items are found (e.g. login-gated page).
+ */
+export function parseUberEatsMarkdown(markdown: string): StructuredMenuItem[] {
+  const items: StructuredMenuItem[] = [];
+  const seen = new Set<string>();
+
+  // UberEats markdown format (from Firecrawl):
+  //   {name}\\\n\\\n${price} • {N} Cal.  (typical — two backslash-newlines between name and price)
+  //   {name}\\\n${price} • {N} Cal.  (compact — one backslash-newline)
+  //   {name}\\\n${price} • {N} - {M} Cal.  (range — use lower bound)
+  //
+  // Backslashes are Firecrawl's encoding of markdown hard line breaks.
+  // There may be one or more "backslash + newline" sequences between the item
+  // name and the price+calorie line (often an empty \ line as a blank separator).
+  // We use `(?:\\+[ \t]*\n)+` to consume all of them.
+  const lineBreakPattern = /([^\n\[\]\\|]+?)(?:\\+[ \t]*\n)+[ \t]*\$[\d.]+[ \t]*•[ \t]*(\d+)(?:[ \t]*-[ \t]*\d+)?[ \t]*Cal\./g;
+
+  let match: RegExpExecArray | null;
+  while ((match = lineBreakPattern.exec(markdown)) !== null) {
+    const rawName = match[1]!.trim();
+    const calories = parseInt(match[2]!, 10);
+
+    // Skip empty names or obvious non-item matches (e.g. "#1 most liked")
+    if (!rawName || rawName.startsWith("#") || isNaN(calories)) continue;
+
+    // Deduplicate: UberEats often shows the same item in Featured and its section
+    if (seen.has(rawName)) continue;
+    seen.add(rawName);
+
+    const item: StructuredMenuItem = { name: rawName, calories };
+    items.push(item);
+  }
+
+  return items;
+}
+
+// ─── Raw fetch for JSON-LD ───────────────────────────────────────────────────
+
+const BROWSER_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
+/**
+ * Raw HTTP fetch of a UberEats store page. Returns HTML string.
+ * UberEats SSRs the page with JSON-LD for Google SEO — no JS rendering needed.
+ */
+export async function fetchUberEatsHtml(
+  storeUrl: string,
+): Promise<string | null> {
+  try {
+    const response = await fetch(storeUrl, {
+      headers: { "User-Agent": BROWSER_UA, Accept: "text/html" },
+    });
+    if (!response.ok) return null;
+    return await response.text();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Full JSON-LD extraction: raw fetch → parse → structured menu items.
+ * Returns null if the page has no JSON-LD menu data.
+ */
+export async function extractMenuViaJsonLd(
+  storeUrl: string,
+): Promise<{ items: StructuredMenuItem[]; restaurant?: { name: string; cuisine?: string[]; priceRange?: string } } | null> {
+  const html = await fetchUberEatsHtml(storeUrl);
+  if (!html) return null;
+
+  const blocks = extractJsonLdBlocks(html);
+  const restaurantBlock = findRestaurantBlock(blocks);
+  if (!restaurantBlock) return null;
+
+  const items = parseMenuItems(restaurantBlock);
+  if (items.length === 0) return null;
+
+  const cuisine = restaurantBlock.servesCuisine
+    ? Array.isArray(restaurantBlock.servesCuisine)
+      ? restaurantBlock.servesCuisine
+      : [restaurantBlock.servesCuisine]
+    : undefined;
+
+  const restaurant: { name: string; cuisine?: string[]; priceRange?: string } = {
+    name: restaurantBlock.name ?? "",
+  };
+  if (cuisine) restaurant.cuisine = cuisine;
+  if (restaurantBlock.priceRange) restaurant.priceRange = restaurantBlock.priceRange;
+
+  return { items, restaurant };
 }
 
 // ─── MenuSource implementation ────────────────────────────────────────────────
@@ -194,79 +407,51 @@ export function toUberEatsSearchUrl(name: string, address: string): string {
 export class UberEatsSource implements MenuSource {
   readonly id = "ubereats";
 
+  private cachedUrl: string | undefined;
+
   /**
-   * The address is used to disambiguate stores (e.g., "McDonald's in Silver Lake
-   * vs McDonald's in Santa Monica"). We search by name+address to get a direct
-   * store page, then extract JSON-LD from it.
+   * Create a UberEatsSource. Optionally pass a pre-discovered store URL
+   * to skip Firecrawl URL discovery (useful for cached URLs or eval).
+   */
+  constructor(storeUrl?: string) {
+    this.cachedUrl = storeUrl ?? undefined;
+  }
+
+  /**
+   * Lookup menu data for a restaurant.
+   *
+   * Flow:
+   *   1. Resolve store URL (cached → Firecrawl discovery)
+   *   2. Raw fetch + JSON-LD extraction ($0)
+   *   3. Fallback: Firecrawl markdown scraping if JSON-LD absent
    */
   async lookup(name: string, address: string): Promise<MenuSourceResult> {
-    // Try direct slug approach first (most restaurants are indexed)
-    const slug = name
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, "")
-      .trim()
-      .replace(/\s+/g, "-");
+    // Step 1: Get the store URL
+    const storeUrl = this.cachedUrl ?? (await discoverUberEatsUrl(name, address));
+    if (!storeUrl) return { found: false, items: [], sourceId: this.id };
 
-    const storeUrl = `${UE_BASE}/store/${slug}`;
-
-    const html = await this.fetchPage(storeUrl);
-    if (html) {
-      const result = this.parseHTML(html, name);
-      if (result.found) return result;
+    // Step 2: Try JSON-LD extraction (free, structured)
+    const jsonLdResult = await extractMenuViaJsonLd(storeUrl);
+    if (jsonLdResult && jsonLdResult.items.length > 0) {
+      const result: MenuSourceResult = {
+        found: true,
+        items: jsonLdResult.items,
+        sourceId: this.id,
+      };
+      if (jsonLdResult.restaurant) result.restaurant = jsonLdResult.restaurant;
+      return result;
     }
 
-    // Fallback: search page
-    const searchUrl = toUberEatsSearchUrl(name, address);
-    const searchHtml = await this.fetchPage(searchUrl);
-    if (searchHtml) {
-      const result = this.parseHTML(searchHtml, name);
-      if (result.found) return result;
-    }
+    // Step 3: Fallback to Firecrawl markdown (paid, less structured)
+    const markdown = await scrapeUberEatsMarkdown(storeUrl);
+    if (!markdown) return { found: false, items: [], sourceId: this.id };
 
-    return { found: false, items: [], sourceId: this.id };
-  }
-
-  private async fetchPage(url: string): Promise<string | null> {
-    let response: Response;
-    try {
-      response = await fetch(url, { headers: HEADERS });
-    } catch {
-      return null;
-    }
-
-    if (!response.ok) return null;
-    return response.text();
-  }
-
-  private parseHTML(html: string, restaurantName: string): MenuSourceResult {
-    const blocks = extractJsonLdBlocks(html);
-    const restaurant = findRestaurantBlock(blocks);
-
-    if (!restaurant) {
-      return { found: false, items: [], sourceId: this.id };
-    }
-
-    const items = parseMenuItems(restaurant);
-
-    if (items.length === 0) {
-      return { found: false, items: [], sourceId: this.id };
-    }
-
-    const cuisine = restaurant.servesCuisine
-      ? Array.isArray(restaurant.servesCuisine)
-        ? restaurant.servesCuisine
-        : [restaurant.servesCuisine]
-      : undefined;
-
-    const restaurantMeta: MenuSourceResult["restaurant"] = {
-      name: restaurant.name ?? restaurantName,
-    };
-    if (cuisine !== undefined) restaurantMeta.cuisine = cuisine;
-    if (restaurant.priceRange !== undefined) restaurantMeta.priceRange = restaurant.priceRange;
+    const items = parseUberEatsMarkdown(markdown);
+    if (items.length === 0) return { found: false, items: [], sourceId: this.id };
 
     return {
       found: true,
-      restaurant: restaurantMeta,
+      restaurant: { name },
       items,
       sourceId: this.id,
     };
