@@ -48,6 +48,7 @@ import type {
   MacroData,
   StructuredMenuItem,
 } from "../apps/api/services/menuSources/types.js";
+import { aggregateDietaryOptions } from "./constants.js";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -209,6 +210,25 @@ async function persistItems(
     }
   }
   return count;
+}
+
+// ─── Dietary summary ──────────────────────────────────────────────────────────
+
+async function computeAndStoreDietaryOptions(
+  restaurantId: string,
+  prisma: PrismaClient,
+): Promise<void> {
+  const items = await prisma.menuItem.findMany({
+    where: { restaurantId },
+    select: { dietaryTags: true },
+  });
+
+  const dietaryOptions = aggregateDietaryOptions(items.map((i) => i.dietaryTags));
+
+  await prisma.restaurant.update({
+    where: { id: restaurantId },
+    data: { dietaryOptions },
+  });
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -376,6 +396,8 @@ async function main(): Promise<void> {
       const persisted = await persistItems(restaurantId, menuResult.items, macros, prisma);
       log(`  Persisted ${persisted} items`);
       stats.persisted++;
+
+      await computeAndStoreDietaryOptions(restaurantId, prisma);
 
       await delay(CONFIG.rateLimitDelayMs);
     }

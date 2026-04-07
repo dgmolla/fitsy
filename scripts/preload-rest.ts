@@ -17,6 +17,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { randomUUID } from "crypto";
+import { aggregateDietaryOptions } from "./constants.js";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -500,6 +501,10 @@ interface MenuItemRow {
   name: string;
 }
 
+interface DietaryTagsRow {
+  dietaryTags: string[];
+}
+
 async function upsertRestaurant(place: PlaceResult): Promise<string> {
   const now = new Date().toISOString();
   const body = {
@@ -636,6 +641,33 @@ async function upsertMacroEstimate(
   }
 }
 
+async function computeAndStoreDietaryOptions(restaurantId: string): Promise<void> {
+  const resp = await fetch(
+    `${restUrl("MenuItem")}?restaurantId=eq.${encodeURIComponent(restaurantId)}&select=dietaryTags`,
+    { headers: supabaseHeaders() }
+  );
+  if (!resp.ok) {
+    log(`  Warning: could not fetch menu items for dietary summary (${resp.status})`);
+    return;
+  }
+
+  const items = (await resp.json()) as DietaryTagsRow[];
+  const dietaryOptions = aggregateDietaryOptions(items.map((i) => i.dietaryTags ?? []));
+
+  const patchResp = await fetch(
+    `${restUrl("Restaurant")}?id=eq.${encodeURIComponent(restaurantId)}`,
+    {
+      method: "PATCH",
+      headers: supabaseHeaders(),
+      body: JSON.stringify({ dietaryOptions }),
+    }
+  );
+  if (!patchResp.ok) {
+    const text = await patchResp.text();
+    log(`  Warning: failed to update dietaryOptions (${patchResp.status}): ${text}`);
+  }
+}
+
 async function persistRestaurant(
   place: PlaceResult,
   menuItems: HaikuMenuItem[]
@@ -650,6 +682,8 @@ async function persistRestaurant(
       log(`  Failed to persist item "${item.n}": ${String(err)}`);
     }
   }
+
+  await computeAndStoreDietaryOptions(restaurantId);
 }
 
 // ---------------------------------------------------------------------------
