@@ -1,11 +1,9 @@
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, EDITORIAL } from '@/lib/brand';
-import { useTheme } from '@/lib/theme';
 
 export default function TabLayout() {
-  const { colors } = useTheme();
 
   return (
     <Tabs

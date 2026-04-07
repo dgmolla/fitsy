@@ -126,7 +126,13 @@ function MacroStrip({ macros, onEdit }: { macros: MacroValues; onEdit: () => voi
         <Text style={s.macroVal}>{cal}</Text>
         <Text style={s.macroLbl}>kcal</Text>
       </View>
-      <TouchableOpacity style={s.editBtn} onPress={onEdit} activeOpacity={0.7}>
+      <TouchableOpacity
+        style={s.editBtn}
+        onPress={onEdit}
+        activeOpacity={0.7}
+        accessibilityLabel="Edit macro targets"
+        accessibilityRole="button"
+      >
         <Text style={s.editBtnText}>Edit</Text>
       </TouchableOpacity>
     </View>
@@ -146,6 +152,9 @@ function CuisineRow({ selected, onSelect }: { selected: string; onSelect: (id: s
             style={[s.filterBubble, active && s.filterBubbleActive]}
             onPress={() => onSelect(f.id)}
             activeOpacity={0.7}
+            accessibilityLabel={`Filter by ${f.label}`}
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
           >
             <Ionicons name={f.icon as any} size={15} color={active ? EDITORIAL.cream : EDITORIAL.textSoft} />
             <Text style={[s.filterLabel, active && s.filterLabelActive]}>{f.label}</Text>
@@ -186,6 +195,8 @@ function HeroCard({ result }: { result: RestaurantResult }) {
         pathname: `/restaurant/${result.id}`,
         params: { address: result.address, distance: result.distanceMiles?.toFixed(1) },
       })}
+      accessibilityLabel={`${result.name}${result.bestMatch ? `, best match: ${result.bestMatch.name}` : ''}`}
+      accessibilityRole="button"
     >
       <Image source={{ uri: imgUri }} style={hero.image} resizeMode="cover" />
       <LinearGradient
@@ -231,6 +242,8 @@ function DishCard({ result }: { result: RestaurantResult }) {
         pathname: `/restaurant/${result.id}`,
         params: { address: result.address, distance: result.distanceMiles?.toFixed(1) },
       })}
+      accessibilityLabel={result.bestMatch ? `${result.bestMatch.name} at ${result.name}` : result.name}
+      accessibilityRole="button"
     >
       <Image source={{ uri: imgUri }} style={dc.image} resizeMode="cover" />
       <LinearGradient colors={['transparent', EDITORIAL.cardGrad]} style={dc.gradient} />
@@ -390,13 +403,6 @@ export default function SearchScreen() {
           {listResults.map((r, i) => (
             <RestaurantSection key={r.id} result={r} index={i} />
           ))}
-
-          {results.length === 0 && (
-            <View style={s.emptyState}>
-              <Ionicons name="search-outline" size={48} color={EDITORIAL.textSoft} />
-              <Text style={s.emptyText}>No matches for these filters</Text>
-            </View>
-          )}
         </ScrollView>
       )}
       <FilterPopup
@@ -453,7 +459,8 @@ const s = StyleSheet.create({
   macroDivider: { width: 1, height: 28, backgroundColor: EDITORIAL.creamDeep },
   editBtn: {
     backgroundColor: EDITORIAL.green, borderRadius: 10,
-    paddingHorizontal: 14, paddingVertical: 8, marginLeft: 10,
+    paddingHorizontal: 14, paddingVertical: 12, marginLeft: 10,
+    minHeight: 44,
   },
   editBtnText: { fontSize: 12, fontWeight: '700', color: EDITORIAL.cream, letterSpacing: 0.2 },
 
@@ -461,8 +468,9 @@ const s = StyleSheet.create({
   filterBubble: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     backgroundColor: EDITORIAL.creamCard,
-    borderRadius: 20, borderWidth: 1, borderColor: EDITORIAL.border,
-    paddingHorizontal: 13, paddingVertical: 8,
+    borderRadius: 22, borderWidth: 1, borderColor: EDITORIAL.border,
+    paddingHorizontal: 13, paddingVertical: 12,
+    minHeight: 44,
   },
   filterBubbleActive: { backgroundColor: EDITORIAL.green, borderColor: EDITORIAL.green },
   filterLabel: { fontSize: 13, fontWeight: '600', color: EDITORIAL.textSoft },
