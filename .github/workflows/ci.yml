@@ -166,6 +166,9 @@ jobs:
           POSTGRES_PRISMA_URL: postgresql://fitsy_test:fitsy_test@localhost:5432/fitsy_test
           POSTGRES_URL_NON_POOLING: postgresql://fitsy_test:fitsy_test@localhost:5432/fitsy_test
           # External API keys intentionally absent — tests must mock all external services
+      - name: Run scripts unit tests
+        if: steps.check.outputs.ready == 'true'
+        run: npm test --workspace=@fitsy/scripts
 
   build:
     name: Build

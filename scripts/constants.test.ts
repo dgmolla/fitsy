@@ -35,17 +35,16 @@ describe("aggregateDietaryOptions", () => {
     expect(result).toEqual(["has_gluten-free", "has_vegan"]);
   });
 
-  it("counts each item's tags independently (no double-counting per item)", () => {
-    // An item with 2 copies of the same tag should count as 1 occurrence
+  it("counts duplicate tags within a single item as one vote", () => {
+    // An item with ["vegan", "vegan"] should count as 1 item signalling vegan,
+    // not 2 — one item = one vote per tag
     const items = [
-      ["vegan", "vegan"], // duplicates within one item
-      ["vegan"],
+      ["vegan", "vegan"], // duplicate within one item = 1 vote
+      ["vegan"],          // 1 vote
     ];
-    // Only 2 unique item-occurrences of "vegan" (even though 3 tag strings) — below threshold
-    // Note: current impl counts each string occurrence, so this tests actual behavior
+    // Only 2 unique item-votes for "vegan" — below threshold of 3
     const result = aggregateDietaryOptions(items);
-    // 3 total tag strings, meets threshold
-    expect(result).toEqual(["has_vegan"]);
+    expect(result).toEqual([]);
   });
 
   it("returns empty array when called with empty input", () => {

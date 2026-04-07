@@ -15,7 +15,8 @@ export const DIETARY_TAG_THRESHOLD = 3;
 export function aggregateDietaryOptions(itemTagGroups: string[][]): string[] {
   const tagCounts = new Map<string, number>();
   for (const tags of itemTagGroups) {
-    for (const tag of tags) {
+    // Deduplicate tags within a single item: one item = one vote per tag
+    for (const tag of new Set(tags)) {
       tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
     }
   }
