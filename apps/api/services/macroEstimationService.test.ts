@@ -34,8 +34,8 @@ const ITEMS: StructuredMenuItem[] = [
 ];
 
 const HAIKU_ESTIMATES = [
-  { cal: 320, p: 42, c: 2, f: 14, conf: "HIGH" },
-  { cal: 380, p: 8, c: 30, f: 24, conf: "MEDIUM" },
+  { cal: 320, p: 42, c: 2, f: 14, conf: "HIGH", tags: [] },
+  { cal: 380, p: 8, c: 30, f: 24, conf: "MEDIUM", tags: ["vegetarian"] },
 ];
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -66,6 +66,7 @@ describe("estimateMacros", () => {
       fatG: 14,
       confidence: "HIGH",
       source: "haiku",
+      dietaryTags: [],
     });
     expect(second).toEqual<MacroData>({
       calories: 380,
@@ -74,6 +75,7 @@ describe("estimateMacros", () => {
       fatG: 24,
       confidence: "MEDIUM",
       source: "haiku",
+      dietaryTags: ["vegetarian"],
     });
   });
 
@@ -86,7 +88,7 @@ describe("estimateMacros", () => {
   it("sets source field to 'haiku' on all valid items in mixed result", async () => {
     // Test with one valid + one null so we verify valid items specifically have source: "haiku"
     const mixedEstimates = [
-      { cal: 320, p: 42, c: 2, f: 14, conf: "HIGH" },
+      { cal: 320, p: 42, c: 2, f: 14, conf: "HIGH", tags: [] },
       null, // will become null in output
     ];
     mockCreate.mockResolvedValue(makeTextResponse(JSON.stringify(mixedEstimates)));
@@ -148,7 +150,7 @@ describe("estimateMacros", () => {
 
   it("throws when Haiku returns fewer items than input", async () => {
     // Haiku ignores prompt instruction and returns only 1 item for 2 inputs
-    const tooFewEstimates = [{ cal: 320, p: 42, c: 2, f: 14, conf: "HIGH" }];
+    const tooFewEstimates = [{ cal: 320, p: 42, c: 2, f: 14, conf: "HIGH", tags: [] }];
     mockCreate.mockResolvedValue(makeTextResponse(JSON.stringify(tooFewEstimates)));
 
     await expect(estimateMacros(ITEMS, client)).rejects.toThrow(
@@ -158,9 +160,9 @@ describe("estimateMacros", () => {
 
   it("throws when Haiku returns more items than input", async () => {
     const tooManyEstimates = [
-      { cal: 320, p: 42, c: 2, f: 14, conf: "HIGH" },
-      { cal: 380, p: 8, c: 30, f: 24, conf: "MEDIUM" },
-      { cal: 200, p: 5, c: 20, f: 10, conf: "LOW" }, // extra item
+      { cal: 320, p: 42, c: 2, f: 14, conf: "HIGH", tags: [] },
+      { cal: 380, p: 8, c: 30, f: 24, conf: "MEDIUM", tags: [] },
+      { cal: 200, p: 5, c: 20, f: 10, conf: "LOW", tags: [] }, // extra item
     ];
     mockCreate.mockResolvedValue(makeTextResponse(JSON.stringify(tooManyEstimates)));
 
@@ -173,8 +175,8 @@ describe("estimateMacros", () => {
 
   it("returns null at position of invalid item, preserving subsequent valid items", async () => {
     const partialEstimates = [
-      { cal: "not-a-number", p: 8, c: 30, f: 24, conf: "MEDIUM" }, // invalid cal type
-      { cal: 320, p: 42, c: 2, f: 14, conf: "HIGH" },
+      { cal: "not-a-number", p: 8, c: 30, f: 24, conf: "MEDIUM", tags: [] }, // invalid cal type
+      { cal: 320, p: 42, c: 2, f: 14, conf: "HIGH", tags: [] },
     ];
     mockCreate.mockResolvedValue(makeTextResponse(JSON.stringify(partialEstimates)));
 
@@ -187,8 +189,8 @@ describe("estimateMacros", () => {
 
   it("returns null for items missing required numeric fields", async () => {
     const partialEstimates = [
-      { cal: 320, p: 42, c: 2, f: 14, conf: "HIGH" },
-      { p: 8, c: 30, f: 24, conf: "MEDIUM" }, // missing cal
+      { cal: 320, p: 42, c: 2, f: 14, conf: "HIGH", tags: [] },
+      { p: 8, c: 30, f: 24, conf: "MEDIUM", tags: [] }, // missing cal
     ];
     mockCreate.mockResolvedValue(makeTextResponse(JSON.stringify(partialEstimates)));
 
@@ -201,8 +203,8 @@ describe("estimateMacros", () => {
 
   it("returns null for items with invalid confidence value", async () => {
     const badEstimates = [
-      { cal: 320, p: 42, c: 2, f: 14, conf: "VERY_HIGH" }, // invalid conf
-      { cal: 380, p: 8, c: 30, f: 24, conf: "LOW" },
+      { cal: 320, p: 42, c: 2, f: 14, conf: "VERY_HIGH", tags: [] }, // invalid conf
+      { cal: 380, p: 8, c: 30, f: 24, conf: "LOW", tags: [] },
     ];
     mockCreate.mockResolvedValue(makeTextResponse(JSON.stringify(badEstimates)));
 
@@ -214,7 +216,7 @@ describe("estimateMacros", () => {
   });
 
   it("returns null for null entries in Haiku array", async () => {
-    const mixedEstimates = [null, { cal: 380, p: 8, c: 30, f: 24, conf: "LOW" }];
+    const mixedEstimates = [null, { cal: 380, p: 8, c: 30, f: 24, conf: "LOW", tags: [] }];
     mockCreate.mockResolvedValue(makeTextResponse(JSON.stringify(mixedEstimates)));
 
     const result = await estimateMacros(ITEMS, client);
@@ -256,5 +258,46 @@ describe("estimateMacros", () => {
         system: expect.stringContaining("nutrition expert"),
       }),
     );
+  });
+
+  // ── Dietary tags ──────────────────────────────────────────────────────────
+
+  it("maps known dietary tags to dietaryTags field", async () => {
+    const estimates = [
+      { cal: 200, p: 5, c: 30, f: 4, conf: "HIGH", tags: ["vegan", "gluten-free"] },
+      { cal: 380, p: 8, c: 30, f: 24, conf: "MEDIUM", tags: ["vegetarian"] },
+    ];
+    mockCreate.mockResolvedValue(makeTextResponse(JSON.stringify(estimates)));
+
+    const result = await estimateMacros(ITEMS, client);
+
+    expect(result[0]?.dietaryTags).toEqual(["vegan", "gluten-free"]);
+    expect(result[1]?.dietaryTags).toEqual(["vegetarian"]);
+  });
+
+  it("strips unknown tags and preserves known ones", async () => {
+    const estimates = [
+      { cal: 200, p: 5, c: 30, f: 4, conf: "HIGH", tags: ["vegan", "organic", "local"] },
+      { cal: 380, p: 8, c: 30, f: 24, conf: "MEDIUM", tags: [] },
+    ];
+    mockCreate.mockResolvedValue(makeTextResponse(JSON.stringify(estimates)));
+
+    const result = await estimateMacros(ITEMS, client);
+
+    expect(result[0]?.dietaryTags).toEqual(["vegan"]);
+    expect(result[1]?.dietaryTags).toEqual([]);
+  });
+
+  it("returns empty dietaryTags when tags field is missing", async () => {
+    const estimates = [
+      { cal: 320, p: 42, c: 2, f: 14, conf: "HIGH" }, // no tags field
+      { cal: 380, p: 8, c: 30, f: 24, conf: "MEDIUM", tags: [] },
+    ];
+    mockCreate.mockResolvedValue(makeTextResponse(JSON.stringify(estimates)));
+
+    const result = await estimateMacros(ITEMS, client);
+
+    expect(result[0]?.dietaryTags).toEqual([]);
+    expect(result[1]?.dietaryTags).toEqual([]);
   });
 });

@@ -22,6 +22,7 @@ export interface MacroData {
   fatG: number;
   confidence: "HIGH" | "MEDIUM" | "LOW";
   source: string; // "ffn" | "fatsecret" | "haiku"
+  dietaryTags: string[]; // e.g. ["vegan", "gluten-free"]
 }
 
 export interface MenuSourceResult {
