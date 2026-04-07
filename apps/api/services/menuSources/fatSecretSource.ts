@@ -128,6 +128,7 @@ export function parseFatSecretPage(html: string): ParsedItem[] {
             fatG: parsed.fatG,
             confidence: "HIGH",
             source: "fatsecret",
+            dietaryTags: [],
           },
         });
       }
