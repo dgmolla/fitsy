@@ -8,6 +8,9 @@ export default function RootLayout() {
     'Caslon540Italic': require('@/assets/fonts/Caslon540Italic.ttf'),
     'PlayfairDisplay-BoldItalic': require('@expo-google-fonts/playfair-display/700Bold_Italic/PlayfairDisplay_700Bold_Italic.ttf'),
     'Manrope-Bold': require('@expo-google-fonts/manrope/700Bold/Manrope_700Bold.ttf'),
+    'Newsreader-Regular': require('@expo-google-fonts/newsreader/400Regular/Newsreader_400Regular.ttf'),
+    'Newsreader-Italic': require('@expo-google-fonts/newsreader/400Regular_Italic/Newsreader_400Regular_Italic.ttf'),
+    'Newsreader-Bold': require('@expo-google-fonts/newsreader/700Bold/Newsreader_700Bold.ttf'),
   });
 
   if (!fontsLoaded) return null;
