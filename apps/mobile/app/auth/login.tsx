@@ -75,13 +75,27 @@ export default function LoginScreen() {
 
   async function handleDevLogin() {
     setDevLoading(true);
+    const baseUrl = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
+    const creds = { email: 'dev@fitsy.local', password: 'dev12345' };
     try {
-      const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000'}/api/auth/register`, {
+      // Try login first, fall back to register for fresh DBs
+      let res = await fetch(`${baseUrl}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: 'dev@fitsy.local', password: 'dev12345' }),
+        body: JSON.stringify(creds),
       });
-      const data = await res.json() as { token?: string; error?: string };
+      let data = await res.json() as { token?: string; error?: string };
+
+      if (!data.token) {
+        // Login failed — try register (fresh DB case)
+        res = await fetch(`${baseUrl}/api/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(creds),
+        });
+        data = await res.json() as { token?: string; error?: string };
+      }
+
       if (data.token) {
         const { storeToken } = await import('@/lib/authClient');
         await storeToken(data.token);
