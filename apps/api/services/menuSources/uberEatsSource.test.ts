@@ -253,14 +253,16 @@ describe("UberEatsSource", () => {
     const jsonLdHtml = fixture("ubereats-thai-place.html");
 
     mockFetch
-      // Step 1: Firecrawl URL discovery
+      // Step 3: Slug guess (fails — 404)
+      .mockResolvedValueOnce({ ok: false, status: 404 })
+      // Step 5: Firecrawl URL discovery
       .mockResolvedValueOnce({
         ok: true,
         json: jest.fn().mockResolvedValue({
           data: [{ url: "https://www.ubereats.com/store/thai-orchid/AbCd1234" }],
         }),
       })
-      // Step 2: Raw fetch for JSON-LD
+      // Raw fetch for JSON-LD
       .mockResolvedValueOnce({
         ok: true,
         text: jest.fn().mockResolvedValue(jsonLdHtml),
@@ -280,6 +282,7 @@ describe("UberEatsSource", () => {
     const jsonLdHtml = fixture("ubereats-thai-place.html");
 
     mockFetch
+      .mockResolvedValueOnce({ ok: false, status: 404 }) // slug guess
       .mockResolvedValueOnce({
         ok: true,
         json: jest.fn().mockResolvedValue({
@@ -295,84 +298,49 @@ describe("UberEatsSource", () => {
     expect(result.restaurant?.name).toBeDefined();
   });
 
-  it("falls back to Firecrawl markdown when JSON-LD is absent", async () => {
-    const noMenuHtml = fixture("ubereats-no-menu.html");
-    const markdown = `
-- [![Pad Thai](https://img.jpg)\\
-Pad Thai\\
-$18.00 • 620 Cal.](https://www.ubereats.com/store/thai-orchid/AbCd1234)
-`;
-
+  it("returns found: false when slug guess and Firecrawl both fail", async () => {
     mockFetch
-      // Step 1: Firecrawl URL discovery
-      .mockResolvedValueOnce({
+      .mockResolvedValueOnce({ ok: false, status: 404 }) // slug guess
+      .mockResolvedValueOnce({ // Firecrawl discovery — no UE match
         ok: true,
-        json: jest.fn().mockResolvedValue({
-          data: [{ url: "https://www.ubereats.com/store/thai-orchid/AbCd1234" }],
-        }),
-      })
-      // Step 2: Raw fetch — no JSON-LD menu
-      .mockResolvedValueOnce({
-        ok: true,
-        text: jest.fn().mockResolvedValue(noMenuHtml),
-      })
-      // Step 3: Firecrawl markdown fallback
-      .mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValue({ data: { markdown } }),
+        json: jest.fn().mockResolvedValue({ data: [{ url: "https://www.ubereats.com" }] }),
       });
-
-    const result = await source.lookup("Thai Orchid", "2301 Hyperion Ave, LA");
-    expect(result.found).toBe(true);
-    expect(result.items.length).toBeGreaterThan(0);
-    expect(result.items[0]?.calories).toBeDefined();
-  });
-
-  it("returns found: false when Firecrawl search returns no matching store URL", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: jest.fn().mockResolvedValue({ data: [{ url: "https://www.ubereats.com" }] }),
-    });
 
     const result = await source.lookup("Unknown Place", "LA");
     expect(result.found).toBe(false);
   });
 
-  it("returns found: false when Firecrawl API key is absent", async () => {
+  it("returns found: false when Firecrawl API key is absent and slug fails", async () => {
     delete process.env["FIRECRAWL_API_KEY"];
+
+    mockFetch
+      .mockResolvedValueOnce({ ok: false, status: 404 }); // slug guess
 
     const result = await source.lookup("Thai Orchid", "2301 Hyperion Ave, LA");
     expect(result.found).toBe(false);
-    expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it("returns found: false on Firecrawl network error", async () => {
+  it("returns found: false on network error", async () => {
     mockFetch.mockRejectedValue(new Error("Network error"));
 
     const result = await source.lookup("Test", "Anywhere");
     expect(result.found).toBe(false);
   });
 
-  it("returns found: false when both JSON-LD and Firecrawl markdown have no items", async () => {
+  it("returns found: false when all discovery methods find no menu", async () => {
     const noMenuHtml = fixture("ubereats-no-menu.html");
 
     mockFetch
-      // Step 1: Firecrawl URL discovery
-      .mockResolvedValueOnce({
+      .mockResolvedValueOnce({ ok: false, status: 404 }) // slug guess
+      .mockResolvedValueOnce({ // Firecrawl discovery
         ok: true,
         json: jest.fn().mockResolvedValue({
           data: [{ url: "https://www.ubereats.com/store/thai-orchid/AbCd1234" }],
         }),
       })
-      // Step 2: Raw fetch — no JSON-LD menu
-      .mockResolvedValueOnce({
+      .mockResolvedValueOnce({ // Raw fetch — no JSON-LD
         ok: true,
         text: jest.fn().mockResolvedValue(noMenuHtml),
-      })
-      // Step 3: Firecrawl markdown — also no items
-      .mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValue({ data: { markdown: "<html>No menu</html>" } }),
       });
 
     const result = await source.lookup("Thai Orchid", "2301 Hyperion Ave, LA");

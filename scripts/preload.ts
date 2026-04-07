@@ -3,18 +3,21 @@
  *
  * Thin orchestrator. External API logic lives in service modules:
  *   - googlePlacesService      → restaurant discovery
- *   - MenuSourceResolver       → phased menu/macro lookup (FatSecret → UberEats → Firecrawl)
- *   - FirecrawlSource          → website-based fallback (map + scrape)
+ *   - MenuSourceResolver       → phased menu/macro lookup (FatSecret → UberEats)
+ *   - WebScraperSource         → generic web scraper fallback (Jina or Firecrawl)
+ *   - UESitemapIndex           → free UberEats URL discovery via sitemaps
  *   - macroEstimationService   → Haiku macro estimation for structured items
  *
  * Two-path estimation strategy:
  *   Path 1 (chains): FatSecret returns official macros → skip Haiku entirely
- *   Path 2 (indies): UberEats/Firecrawl return structured items → Haiku estimates WITH descriptions
+ *   Path 2 (indies): UberEats/WebScraper return structured items → Haiku estimates WITH descriptions
  *
  * Flow per restaurant:
- *   1. resolver.resolve()                   → FatSecret (direct macros) | UberEats | Firecrawl
- *   2. fallback: firecrawlSource.lookupByUrl() if website URI known
- *   3. persist: chain items with official macros, indie items via Haiku estimation
+ *   1. resolver.resolve()                      → FatSecret (direct macros) | UberEats
+ *   2. fallback: webScraperSource.lookupByUrl() if website URI known
+ *   3. fallback: webScraperSource.lookup()      for web search
+ *   4. fallback: name-only Haiku estimation
+ *   5. persist: chain items with official macros, indie items via Haiku estimation
  *
  * Usage:
  *   npx tsx scripts/preload.ts
@@ -25,11 +28,11 @@
  *   POSTGRES_URL_NON_POOLING  — Prisma direct connection for migrations (required)
  *   GOOGLE_PLACES_API_KEY     — Google Places Nearby Search (required)
  *   ANTHROPIC_API_KEY         — Claude Haiku API (required)
- *   FIRECRAWL_API_KEY         — Firecrawl search/map/scrape (required)
+ *   FIRECRAWL_API_KEY         — Firecrawl search/map/scrape (optional — used by UE discovery fallback)
  *   TARGET_LAT                — Target latitude (default: 34.0928)
  *   TARGET_LNG                — Target longitude (default: -118.3086)
- *   TARGET_RADIUS             — Search radius in meters (default: 1500)
- *   MAX_RESTAURANTS           — Max restaurants to process (default: 50)
+ *   TARGET_RADIUS             — Search radius in meters (default: 3000)
+ *   MAX_RESTAURANTS           — Max restaurants to process (default: 100)
  */
 
 import { PrismaClient } from "@prisma/client";
@@ -42,7 +45,9 @@ import {
 import { MenuSourceResolver } from "../apps/api/services/menuSources/resolver.js";
 import { FatSecretSource } from "../apps/api/services/menuSources/fatSecretSource.js";
 import { UberEatsSource } from "../apps/api/services/menuSources/uberEatsSource.js";
-import { FirecrawlSource } from "../apps/api/services/menuSources/firecrawlSource.js";
+import { UESitemapIndex } from "../apps/api/services/menuSources/ueSitemapIndex.js";
+import { JinaScraper } from "../apps/api/services/scrapers/jinaScraper.js";
+import { WebScraperSource } from "../apps/api/services/menuSources/webScraperSource.js";
 import { estimateMacros } from "../apps/api/services/macroEstimationService.js";
 import type {
   MacroData,
@@ -57,14 +62,13 @@ const REQUIRED_ENV_VARS = [
   "POSTGRES_URL_NON_POOLING",
   "GOOGLE_PLACES_API_KEY",
   "ANTHROPIC_API_KEY",
-  "FIRECRAWL_API_KEY",
 ] as const;
 
 const CONFIG = {
   targetLat: parseFloat(process.env["TARGET_LAT"] ?? "34.0928"),
   targetLng: parseFloat(process.env["TARGET_LNG"] ?? "-118.3086"),
-  targetRadius: parseInt(process.env["TARGET_RADIUS"] ?? "1500", 10),
-  maxRestaurants: parseInt(process.env["MAX_RESTAURANTS"] ?? "50", 10),
+  targetRadius: parseInt(process.env["TARGET_RADIUS"] ?? "3000", 10),
+  maxRestaurants: parseInt(process.env["MAX_RESTAURANTS"] ?? "100", 10),
   rateLimitDelayMs: 500,
 };
 
@@ -78,6 +82,7 @@ interface PipelineStats {
   skippedDbError: number;
   anthropicCalls: number;
   googlePlacesCalls: number;
+  sourceBreakdown: Record<string, number>; // sourceId → count
 }
 
 // ─── Cuisine tag / chain detection ────────────────────────────────────────────
@@ -253,6 +258,7 @@ function log(message: string): void {
 
 async function main(): Promise<void> {
   validateEnv();
+  const startTime = Date.now();
 
   log(
     `Starting preload (lat: ${CONFIG.targetLat}, lng: ${CONFIG.targetLng}, radius: ${CONFIG.targetRadius}m)`,
@@ -262,13 +268,19 @@ async function main(): Promise<void> {
   const prisma = new PrismaClient();
   const anthropic = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"] });
 
-  const firecrawlSource = new FirecrawlSource(anthropic);
+  // Build the UE sitemap index (downloads once, caches locally for 7 days)
+  const sitemapIndex = new UESitemapIndex();
+  await sitemapIndex.load();
+
+  // Create the web scraper (Jina = free tier, swap to FirecrawlScraper if needed)
+  const scraper = new JinaScraper();
+  const webScraperSource = new WebScraperSource(scraper, anthropic);
+
   // Two-path resolver: chains get official macros (FatSecret),
-  // indies get structured menus for Haiku estimation (UberEats/Firecrawl)
+  // indies get structured menus for Haiku estimation (UberEats)
   const resolver = new MenuSourceResolver([
-    new FatSecretSource(),  // Path 1: ~1,060 chains, official macros, $0
-    new UberEatsSource(),   // Path 2: indie menus with descriptions, $0
-    firecrawlSource,        // Path 2: fallback scraping, ~$0.006
+    new FatSecretSource(),                      // Path 1: ~1,060 chains, official macros, $0
+    new UberEatsSource(undefined, sitemapIndex, scraper), // Path 2: indie menus with descriptions, $0 (Jina search for URL discovery)
   ]);
 
   const stats: PipelineStats = {
@@ -279,6 +291,7 @@ async function main(): Promise<void> {
     skippedDbError: 0,
     anthropicCalls: 0,
     googlePlacesCalls: 0,
+    sourceBreakdown: {},
   };
 
   try {
@@ -313,22 +326,33 @@ async function main(): Promise<void> {
       index++;
       log(`Processing ${place.name} (${index}/${places.length})...`);
 
-      // Resolver: FatSecret → UberEats → Firecrawl search
+      // Resolver: FatSecret → UberEats (with sitemap index)
       let menuResult = await resolver.resolve(place.name, place.address);
 
-      // Phase 3b: Firecrawl website fallback if resolver found nothing
+      // Phase 3a: Web scraper website scrape if resolver found nothing and website known
       if (!menuResult.found && place.websiteUri) {
-        menuResult = await firecrawlSource.lookupByUrl(place.name, place.websiteUri);
+        log(`  Trying ${scraper.id} website: ${place.websiteUri}`);
+        menuResult = await webScraperSource.lookupByUrl(place.name, place.websiteUri);
       }
 
+      // Phase 3b: Web scraper search fallback (searches the web for menu)
       if (!menuResult.found) {
-        log(`  Skipping — no menu found`);
-        stats.skippedNoMenu++;
-        await delay(CONFIG.rateLimitDelayMs);
-        continue;
+        log(`  Trying ${scraper.id} search: "${place.name} menu"`);
+        menuResult = await webScraperSource.lookup(place.name, place.address);
+      }
+
+      // Phase 4: Name-only Haiku estimation (last resort)
+      if (!menuResult.found) {
+        log(`  No menu source found — using name-only Haiku estimation`);
+        menuResult = {
+          found: true,
+          items: [{ name: `${place.name} - Popular Items` }],
+          sourceId: "name-only",
+        };
       }
 
       log(`  Source: ${menuResult.sourceId}, ${menuResult.items.length} items`);
+      stats.sourceBreakdown[menuResult.sourceId] = (stats.sourceBreakdown[menuResult.sourceId] ?? 0) + 1;
 
       // Upsert restaurant
       let restaurantId: string;
@@ -405,6 +429,8 @@ async function main(): Promise<void> {
     await prisma.$disconnect();
   }
 
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
   log("Done.");
   log(
     `Summary: ${stats.discovered} discovered / ${stats.persisted} persisted / ` +
@@ -413,8 +439,12 @@ async function main(): Promise<void> {
       `${stats.skippedDbError} skipped (DB error)`,
   );
   log(
+    `Source breakdown: ${Object.entries(stats.sourceBreakdown).map(([k, v]) => `${k}: ${v}`).join(", ") || "none"}`,
+  );
+  log(
     `API calls: ${stats.googlePlacesCalls} Google Places / ${stats.anthropicCalls} Haiku`,
   );
+  log(`Total time: ${elapsed}s`);
 }
 
 main().catch((err) => {

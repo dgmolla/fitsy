@@ -32,6 +32,9 @@ const config = {
     // External API wrappers — require integration test infrastructure, excluded from unit coverage
     "!services/googlePlacesService.ts",
     "!services/menuSources/firecrawlSource.ts",
+    "!services/menuSources/ueSitemapIndex.ts",
+    "!services/scrapers/jinaScraper.ts",
+    "!services/scrapers/firecrawlScraper.ts",
   ],
   coverageThreshold: {
     global: {

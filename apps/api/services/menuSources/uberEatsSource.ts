@@ -23,6 +23,8 @@
  */
 
 import type { MenuSource, MenuSourceResult, StructuredMenuItem } from "./types";
+import type { UESitemapIndex } from "./ueSitemapIndex";
+import type { WebScraper } from "../scrapers/types";
 
 const FIRECRAWL_BASE = "https://api.firecrawl.dev";
 
@@ -206,8 +208,8 @@ export async function discoverUberEatsUrl(
   const apiKey = process.env["FIRECRAWL_API_KEY"];
   if (!apiKey) return null;
 
-  // Search for the specific store page with location context
-  const query = `site:ubereats.com/store ${name} ${address}`;
+  // Search for the store page — broader query works better than site: operator
+  const query = `${name} uber eats ${address}`;
 
   let response: Response;
   try {
@@ -408,29 +410,42 @@ export class UberEatsSource implements MenuSource {
   readonly id = "ubereats";
 
   private cachedUrl: string | undefined;
+  private sitemapIndex: UESitemapIndex | undefined;
+  private searchScraper: WebScraper | undefined;
 
   /**
-   * Create a UberEatsSource. Optionally pass a pre-discovered store URL
-   * to skip Firecrawl URL discovery (useful for cached URLs or eval).
+   * Create a UberEatsSource.
+   * @param storeUrl — pre-discovered store URL (skip discovery)
+   * @param sitemapIndex — UE sitemap index for free slug-based discovery
+   * @param searchScraper — web scraper for search-based URL discovery (e.g. JinaScraper)
    */
-  constructor(storeUrl?: string) {
+  constructor(storeUrl?: string, sitemapIndex?: UESitemapIndex, searchScraper?: WebScraper) {
     this.cachedUrl = storeUrl ?? undefined;
+    this.sitemapIndex = sitemapIndex;
+    this.searchScraper = searchScraper;
   }
 
   /**
-   * Lookup menu data for a restaurant.
-   *
-   * Flow:
-   *   1. Resolve store URL (cached → Firecrawl discovery)
-   *   2. Raw fetch + JSON-LD extraction ($0)
-   *   3. Fallback: Firecrawl markdown scraping if JSON-LD absent
+   * Build a guessed UberEats URL from a restaurant name (slug-based).
+   * UberEats URLs are: /store/{slug}/{uuid} — we can't guess the UUID,
+   * but some stores work with just the slug.
    */
-  async lookup(name: string, address: string): Promise<MenuSourceResult> {
-    // Step 1: Get the store URL
-    const storeUrl = this.cachedUrl ?? (await discoverUberEatsUrl(name, address));
-    if (!storeUrl) return { found: false, items: [], sourceId: this.id };
+  private buildSlugUrl(name: string): string {
+    const slug = name
+      .toLowerCase()
+      .replace(/'/g, "")
+      .replace(/&/g, "and")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "");
+    return `https://www.ubereats.com/store/${slug}`;
+  }
 
-    // Step 2: Try JSON-LD extraction (free, structured)
+  /**
+   * Try JSON-LD extraction from a UberEats store URL.
+   * Returns a MenuSourceResult if successful, null otherwise.
+   */
+  private async tryJsonLd(storeUrl: string, _name: string): Promise<MenuSourceResult | null> {
     const jsonLdResult = await extractMenuViaJsonLd(storeUrl);
     if (jsonLdResult && jsonLdResult.items.length > 0) {
       const result: MenuSourceResult = {
@@ -441,19 +456,74 @@ export class UberEatsSource implements MenuSource {
       if (jsonLdResult.restaurant) result.restaurant = jsonLdResult.restaurant;
       return result;
     }
+    return null;
+  }
 
-    // Step 3: Fallback to Firecrawl markdown (paid, less structured)
-    const markdown = await scrapeUberEatsMarkdown(storeUrl);
-    if (!markdown) return { found: false, items: [], sourceId: this.id };
+  /**
+   * Search the web for a restaurant's UberEats store URL.
+   * Parses the search results markdown for ubereats.com/store/ links.
+   */
+  private async discoverViaSearch(name: string, address: string): Promise<string | null> {
+    if (!this.searchScraper) return null;
 
-    const items = parseUberEatsMarkdown(markdown);
-    if (items.length === 0) return { found: false, items: [], sourceId: this.id };
+    const query = `${name} uber eats ${address}`;
+    const markdown = await this.searchScraper.search(query);
+    if (!markdown) return null;
 
-    return {
-      found: true,
-      restaurant: { name },
-      items,
-      sourceId: this.id,
-    };
+    // Extract UE store URLs from search results
+    const match = markdown.match(/ubereats\.com\/store\/[a-z0-9%-]+\/[a-zA-Z0-9_-]+/);
+    if (match) return `https://www.${match[0]}`;
+
+    return null;
+  }
+
+  /**
+   * Lookup menu data for a restaurant.
+   *
+   * Flow:
+   *   1. Try cached URL (if provided)
+   *   2. Try sitemap index (free, if provided)
+   *   3. Try slug guess (free)
+   *   4. Search-based URL discovery (free via Jina/etc.)
+   *   5. Firecrawl URL discovery (paid fallback)
+   */
+  async lookup(name: string, address: string): Promise<MenuSourceResult> {
+    // Step 1: Try cached URL
+    if (this.cachedUrl) {
+      const result = await this.tryJsonLd(this.cachedUrl, name);
+      if (result) return result;
+    }
+
+    // Step 2: Try sitemap index (free)
+    if (this.sitemapIndex) {
+      const sitemapUrl = this.sitemapIndex.findUrl(name);
+      if (sitemapUrl) {
+        const result = await this.tryJsonLd(sitemapUrl, name);
+        if (result) return result;
+      }
+    }
+
+    // Step 3: Try slug guess (free)
+    const slugUrl = this.buildSlugUrl(name);
+    const slugResult = await this.tryJsonLd(slugUrl, name);
+    if (slugResult) return slugResult;
+
+    // Step 4: Search-based URL discovery (free via Jina/Brave/etc.)
+    if (this.searchScraper) {
+      const searchUrl = await this.discoverViaSearch(name, address);
+      if (searchUrl) {
+        const result = await this.tryJsonLd(searchUrl, name);
+        if (result) return result;
+      }
+    }
+
+    // Step 5: Firecrawl URL discovery (paid fallback, only if API key present)
+    const discoveredUrl = await discoverUberEatsUrl(name, address);
+    if (discoveredUrl) {
+      const result = await this.tryJsonLd(discoveredUrl, name);
+      if (result) return result;
+    }
+
+    return { found: false, items: [], sourceId: this.id };
   }
 }
