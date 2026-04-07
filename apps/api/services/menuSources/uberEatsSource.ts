@@ -460,60 +460,11 @@ export class UberEatsSource implements MenuSource {
   }
 
   /**
-   * Search the web for a restaurant's UberEats store URL.
-   * Tries multiple free methods:
-   *   1. Brave Search (HTML scraping, no API key)
-   *   2. WebScraper search (Jina/etc., may require API key)
-   */
-  private async discoverViaSearch(name: string, address: string): Promise<string | null> {
-    // Method 1: WebScraper search (Jina with API key = 500 RPM)
-    if (this.searchScraper) {
-      const query = `${name} uber eats ${address}`;
-      const markdown = await this.searchScraper.search(query);
-      if (markdown) {
-        const match = markdown.match(/ubereats\.com\/store\/[a-z0-9%-]+\/[a-zA-Z0-9_-]+/);
-        if (match) return `https://www.${match[0]}`;
-      }
-    }
-
-    // Method 2: Brave Search fallback (free, no key, HTML scraping)
-    const braveUrl = await this.discoverViaBrave(name, address);
-    if (braveUrl) return braveUrl;
-
-    return null;
-  }
-
-  private static readonly BRAVE_UA =
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
-
-  /**
-   * Scrape Brave Search results for a UberEats store URL.
-   * Free, no API key, no rate limit issues at low volume.
-   */
-  private async discoverViaBrave(name: string, address: string): Promise<string | null> {
-    const query = encodeURIComponent(`${name} uber eats ${address}`);
-    try {
-      const response = await fetch(`https://search.brave.com/search?q=${query}`, {
-        headers: { "User-Agent": UberEatsSource.BRAVE_UA, Accept: "text/html" },
-      });
-      if (!response.ok) return null;
-      const html = await response.text();
-      const match = html.match(/ubereats\.com\/store\/[a-z0-9%-]+\/[a-zA-Z0-9_-]+/);
-      return match ? `https://www.${match[0]}` : null;
-    } catch {
-      return null;
-    }
-  }
-
-  /**
    * Lookup menu data for a restaurant.
    *
    * Flow:
    *   1. Try cached URL (if provided)
-   *   2. Try sitemap index (free, if provided)
-   *   3. Try slug guess (free)
-   *   4. Search-based URL discovery (free via Jina/etc.)
-   *   5. Firecrawl URL discovery (paid fallback)
+   *   2. Firecrawl URL discovery → JSON-LD
    */
   async lookup(name: string, address: string): Promise<MenuSourceResult> {
     // Step 1: Try cached URL
@@ -522,30 +473,7 @@ export class UberEatsSource implements MenuSource {
       if (result) return result;
     }
 
-    // Step 2: Try sitemap index (free)
-    if (this.sitemapIndex) {
-      const sitemapUrl = this.sitemapIndex.findUrl(name);
-      if (sitemapUrl) {
-        const result = await this.tryJsonLd(sitemapUrl, name);
-        if (result) return result;
-      }
-    }
-
-    // Step 3: Try slug guess (free)
-    const slugUrl = this.buildSlugUrl(name);
-    const slugResult = await this.tryJsonLd(slugUrl, name);
-    if (slugResult) return slugResult;
-
-    // Step 4: Search-based URL discovery (free via Jina/Brave/etc.)
-    if (this.searchScraper) {
-      const searchUrl = await this.discoverViaSearch(name, address);
-      if (searchUrl) {
-        const result = await this.tryJsonLd(searchUrl, name);
-        if (result) return result;
-      }
-    }
-
-    // Step 5: Firecrawl URL discovery (paid fallback, only if API key present)
+    // Step 2: Firecrawl URL discovery → JSON-LD
     const discoveredUrl = await discoverUberEatsUrl(name, address);
     if (discoveredUrl) {
       const result = await this.tryJsonLd(discoveredUrl, name);

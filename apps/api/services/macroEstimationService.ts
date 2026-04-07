@@ -127,14 +127,17 @@ export async function estimateMacros(
     throw new Error("macroEstimationService: Haiku response is not an array");
   }
 
+  // Lenient: if Haiku returned fewer/more items, pad with nulls or truncate
+  // (Haiku sometimes merges duplicates or skips items it can't estimate)
   if (parsed.length !== items.length) {
-    throw new Error(
-      `macroEstimationService: Haiku returned ${parsed.length} items for ${items.length} inputs`,
+    console.warn(
+      `[macroEstimation] Haiku returned ${parsed.length} items for ${items.length} inputs — padding/truncating`,
     );
   }
 
   // Preserve positional contract: one entry per input item, null for invalid estimates
-  return parsed.map((item: unknown): MacroData | null => {
+  const paddedParsed = Array.from({ length: items.length }, (_, i) => parsed[i] ?? null);
+  return paddedParsed.map((item: unknown): MacroData | null => {
     if (
       item === null ||
       typeof item !== "object" ||

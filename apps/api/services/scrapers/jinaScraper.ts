@@ -13,7 +13,8 @@ import type { WebScraper } from "./types";
 
 const JINA_READER_BASE = "https://r.jina.ai/";
 const JINA_SEARCH_BASE = "https://s.jina.ai/";
-const RATE_LIMIT_DELAY_MS = 3000;
+// 500 RPM with API key (120ms), 20 RPM without (3000ms)
+const RATE_LIMIT_DELAY_MS = process.env["JINA_API_KEY"] ? 150 : 3000;
 const MIN_CONTENT_LENGTH = 100;
 
 function buildHeaders(): Record<string, string> {

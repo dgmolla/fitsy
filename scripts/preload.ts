@@ -45,8 +45,8 @@ import {
 import { MenuSourceResolver } from "../apps/api/services/menuSources/resolver.js";
 import { FatSecretSource } from "../apps/api/services/menuSources/fatSecretSource.js";
 import { UberEatsSource } from "../apps/api/services/menuSources/uberEatsSource.js";
-import { UESitemapIndex } from "../apps/api/services/menuSources/ueSitemapIndex.js";
-import { JinaScraper } from "../apps/api/services/scrapers/jinaScraper.js";
+// UESitemapIndex + JinaScraper available as free alternatives
+import { FirecrawlScraper } from "../apps/api/services/scrapers/firecrawlScraper.js";
 import { WebScraperSource } from "../apps/api/services/menuSources/webScraperSource.js";
 import { estimateMacros } from "../apps/api/services/macroEstimationService.js";
 import type {
@@ -62,6 +62,7 @@ const REQUIRED_ENV_VARS = [
   "POSTGRES_URL_NON_POOLING",
   "GOOGLE_PLACES_API_KEY",
   "ANTHROPIC_API_KEY",
+  "FIRECRAWL_API_KEY",
 ] as const;
 
 const CONFIG = {
@@ -187,34 +188,57 @@ async function persistItems(
   macros: (MacroData | null)[],
   prisma: PrismaClient,
 ): Promise<number> {
-  let count = 0;
+  const validPairs: { item: StructuredMenuItem; macro: MacroData }[] = [];
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
     const macro = macros[i];
-    if (!item || !macro) continue;
-    try {
-      const menuItemId = await upsertMenuItem(restaurantId, item, prisma, macro.dietaryTags);
-      await prisma.$transaction([
-        prisma.macroEstimate.deleteMany({ where: { menuItemId } }),
-        prisma.macroEstimate.create({
-          data: {
-            menuItemId,
-            calories: Math.round(macro.calories),
-            proteinG: macro.proteinG,
-            carbsG: macro.carbsG,
-            fatG: macro.fatG,
-            confidence: macro.confidence,
-            source: macro.source,
-            hadPhoto: false,
-          },
-        }),
-      ]);
-      count++;
-    } catch {
-      // individual item failure should not abort the batch
-    }
+    if (item && macro) validPairs.push({ item, macro });
   }
-  return count;
+  if (validPairs.length === 0) return 0;
+
+  // Step 1: Delete existing data for this restaurant (2 queries)
+  const existingItems = await prisma.menuItem.findMany({
+    where: { restaurantId },
+    select: { id: true },
+  });
+  if (existingItems.length > 0) {
+    const ids = existingItems.map((i) => i.id);
+    await prisma.macroEstimate.deleteMany({ where: { menuItemId: { in: ids } } });
+    await prisma.menuItem.deleteMany({ where: { restaurantId } });
+  }
+
+  // Step 2: Bulk create menu items (1 query for all items)
+  const createdItems = await prisma.menuItem.createManyAndReturn({
+    data: validPairs.map(({ item, macro }) => ({
+      restaurantId,
+      name: item.name,
+      ...(item.description !== undefined ? { description: item.description } : {}),
+      ...(item.category !== undefined ? { category: item.category } : {}),
+      ...(item.section !== undefined ? { section: item.section } : {}),
+      ...(item.price !== undefined ? { price: item.price } : {}),
+      ...(macro.dietaryTags !== undefined ? { dietaryTags: macro.dietaryTags } : {}),
+    })),
+    select: { id: true },
+  });
+
+  // Step 3: Bulk create macro estimates (1 query for all estimates)
+  await prisma.macroEstimate.createMany({
+    data: createdItems.map((menuItem, i) => {
+      const macro = validPairs[i]!.macro;
+      return {
+        menuItemId: menuItem.id,
+        calories: Math.round(macro.calories),
+        proteinG: macro.proteinG,
+        carbsG: macro.carbsG,
+        fatG: macro.fatG,
+        confidence: macro.confidence,
+        source: macro.source,
+        hadPhoto: false,
+      };
+    }),
+  });
+
+  return createdItems.length;
 }
 
 // ─── Dietary summary ──────────────────────────────────────────────────────────
@@ -268,19 +292,15 @@ async function main(): Promise<void> {
   const prisma = new PrismaClient();
   const anthropic = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"] });
 
-  // Build the UE sitemap index (downloads once, caches locally for 7 days)
-  const sitemapIndex = new UESitemapIndex();
-  await sitemapIndex.load();
-
-  // Create the web scraper (Jina = free tier, swap to FirecrawlScraper if needed)
-  const scraper = new JinaScraper();
+  // Create the web scraper (Firecrawl for speed + reliability)
+  const scraper = new (await import("../apps/api/services/scrapers/firecrawlScraper.js")).FirecrawlScraper();
   const webScraperSource = new WebScraperSource(scraper, anthropic);
 
   // Two-path resolver: chains get official macros (FatSecret),
-  // indies get structured menus for Haiku estimation (UberEats)
+  // indies get structured menus for Haiku estimation (UberEats via Firecrawl discovery)
   const resolver = new MenuSourceResolver([
-    new FatSecretSource(),                      // Path 1: ~1,060 chains, official macros, $0
-    new UberEatsSource(undefined, sitemapIndex, scraper), // Path 2: indie menus with descriptions, $0 (Jina search for URL discovery)
+    new FatSecretSource(),                         // Path 1: ~1,060 chains, official macros, $0
+    new UberEatsSource(undefined, undefined, scraper), // Path 2: indie menus, Firecrawl for UE URL discovery
   ]);
 
   const stats: PipelineStats = {
