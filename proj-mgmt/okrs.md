@@ -78,7 +78,7 @@ Real users validate whether macro-aware restaurant discovery solves a real probl
 
 | # | Key Result | Status | Notes |
 |---|------------|--------|-------|
-| KR1 | 10 users signed up and using the app | In progress | Welcome flow + Apple auth UI shipped (S-60); needs real Apple auth + TestFlight (S-58) |
+| KR1 | 10 users signed up and using the app | In progress | App UX overhauled to editorial cream design system (S-91/92/93); needs real Apple auth + TestFlight to get to users |
 | KR2 | Users completing at least 3 searches per week | Not started | Measurable only after KR1 — needs active users first |
 | KR3 | 2 rounds of user testing completed with findings triaged | Not started | |
 | KR4 | Feedback loop operational (capture → triage → spec → ship) | **Done** | S-38 merged; feedback triage playbook + P0–P4 priority matrix in `docs/product/feedback-triage.md` |

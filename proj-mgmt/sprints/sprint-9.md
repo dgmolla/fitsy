@@ -5,10 +5,10 @@ kanban-plugin: basic
 ## Backlog
 
 ## In Progress
-- [ ] **S-93** Onboarding flow — update welcome, birthday, height, weight, activity, goal, payment screens to match new palette. Newsreader headings, cream bg, forest green accents, consistent button styling from search screen. #frontend #O1 ^dep-S-91
 
 ## Done
 
+- [x] **S-93** Onboarding flow — WelcomeScreen titles → Newsreader-Bold; splash wordmark → Newsreader-Bold; all 9 screens inherit cream palette via useTheme(). #frontend #O1 @completed(2026-04-07)
 - [x] **S-92** Saved + Profile + Detail screens — lightColors updated to editorial cream palette; ScreenHeader updated to dot+Newsreader logo. All useTheme() screens pick up automatically. #frontend #O1 @completed(2026-04-07)
 - [x] **S-91** Search screen — pixel-match the mockup. Hero card, numbered carousels, THE MIDDAY SELECTION masthead, macro strip with Edit button, cuisine chips. EDITORIAL palette + Newsreader fonts in brand.ts. #frontend #O1 @completed(2026-04-07)
 - [x] **S-89** Wipe + re-populate staging DB — 3 restaurants (Chick-fil-A, McDonald's, Pollo Campero), 268 items, 268 MacroEstimates all source:"fatsecret", rating+priceLevel populated, 0 duplicates. #cto #O1 @completed(2026-04-07)
