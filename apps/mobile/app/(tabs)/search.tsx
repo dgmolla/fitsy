@@ -41,6 +41,33 @@ const CUISINE_FILTERS = [
   { id: 'sushi', label: 'Sushi', icon: 'fish-outline' },
 ] as const;
 
+// ─── Dietary / price filters ──────────────────────────────────────────────────
+
+const DIETARY_FILTERS = [
+  { id: 'all', label: 'All Diets' },
+  { id: 'vegan', label: 'Vegan' },
+  { id: 'vegetarian', label: 'Vegetarian' },
+  { id: 'gluten-free', label: 'Gluten-Free' },
+  { id: 'keto', label: 'Keto' },
+  { id: 'dairy-free', label: 'Dairy-Free' },
+] as const;
+
+const PRICE_FILTERS = [
+  { id: 'all', label: 'Any $' },
+  { id: '$', label: '$' },
+  { id: '$$', label: '$$' },
+  { id: '$$$', label: '$$$' },
+] as const;
+
+// Map dietary tag stored in DB to a display label
+const DIETARY_BADGE_LABELS: Record<string, string> = {
+  has_vegan: 'Vegan',
+  has_vegetarian: 'Veg',
+  'has_gluten-free': 'GF',
+  has_keto: 'Keto',
+  'has_dairy-free': 'DF',
+};
+
 // ─── Mock images ─────────────────────────────────────────────────────────────
 
 const MOCK_IMAGES = [
@@ -77,23 +104,19 @@ interface Category {
   data: RestaurantResult[];
 }
 
-function categorize(results: RestaurantResult[], cuisineFilter: string): Category[] {
-  const filtered = cuisineFilter === 'all'
-    ? results
-    : results.filter((r) => r.cuisineTags.some((t) => t.includes(cuisineFilter)));
+function categorize(results: RestaurantResult[], isFiltered: boolean): Category[] {
+  if (results.length === 0) return [];
 
-  if (filtered.length === 0) return [];
-
-  if (cuisineFilter !== 'all') {
-    const label = CUISINE_FILTERS.find((f) => f.id === cuisineFilter)?.label ?? cuisineFilter;
-    return [{ title: label, data: filtered }];
+  // When filters are active, results are already server-filtered — show flat list
+  if (isFiltered) {
+    return [{ title: 'Results', data: results }];
   }
 
-  // Sort by distance for "Near You", then create smart categories
-  const sorted = [...filtered].sort((a, b) => a.distanceMiles - b.distanceMiles);
+  // Smart categories for unfiltered view
+  const sorted = [...results].sort((a, b) => a.distanceMiles - b.distanceMiles);
   const nearYou = sorted.slice(0, Math.min(6, sorted.length));
-  const highProtein = filtered.filter((r) => (r.bestMatch?.proteinG ?? 0) >= 30);
-  const light = filtered.filter((r) => (r.bestMatch?.calories ?? 9999) <= 500);
+  const highProtein = results.filter((r) => (r.bestMatch?.proteinG ?? 0) >= 30);
+  const light = results.filter((r) => (r.bestMatch?.calories ?? 9999) <= 500);
 
   const categories: Category[] = [
     { title: 'Near You', data: nearYou },
@@ -101,12 +124,7 @@ function categorize(results: RestaurantResult[], cuisineFilter: string): Categor
     { title: 'Quick & Light', data: light },
   ].filter((c) => c.data.length > 0);
 
-  // If no smart categories matched, show all as "Nearby"
-  if (categories.length === 0) {
-    return [{ title: 'Nearby', data: filtered }];
-  }
-
-  return categories;
+  return categories.length > 0 ? categories : [{ title: 'Nearby', data: results }];
 }
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
@@ -151,24 +169,63 @@ function Header({ macros, location: loc, onPress }: { macros: MacroValues; locat
   );
 }
 
-function CuisineFiltersRow({ selected, onSelect }: { selected: string; onSelect: (id: string) => void }) {
+function FilterChip({ label, active, onPress, icon }: { label: string; active: boolean; onPress: () => void; icon?: string }) {
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterRow}>
-      {CUISINE_FILTERS.map((f) => {
-        const active = f.id === selected;
-        return (
-          <TouchableOpacity
-            key={f.id}
-            style={[s.filterBubble, active && s.filterBubbleActive]}
-            onPress={() => onSelect(f.id)}
-            activeOpacity={0.7}
-          >
-            <Ionicons name={f.icon as any} size={18} color={active ? '#FFFFFF' : COLORS.textSecondary} />
-            <Text style={[s.filterLabel, active && s.filterLabelActive]}>{f.label}</Text>
-          </TouchableOpacity>
-        );
-      })}
-    </ScrollView>
+    <TouchableOpacity
+      style={[s.filterBubble, active && s.filterBubbleActive]}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      {icon ? <Ionicons name={icon as any} size={16} color={active ? '#FFFFFF' : COLORS.textSecondary} /> : null}
+      <Text style={[s.filterLabel, active && s.filterLabelActive]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
+function FiltersPanel({
+  cuisine, onCuisine,
+  dietary, onDietary,
+  priceLevel, onPriceLevel,
+}: {
+  cuisine: string; onCuisine: (v: string) => void;
+  dietary: string; onDietary: (v: string) => void;
+  priceLevel: string; onPriceLevel: (v: string) => void;
+}) {
+  return (
+    <View style={s.filtersPanel}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterRow}>
+        {CUISINE_FILTERS.map((f) => (
+          <FilterChip key={f.id} label={f.label} icon={f.icon} active={f.id === cuisine} onPress={() => onCuisine(f.id)} />
+        ))}
+      </ScrollView>
+      <View style={s.filterDivider} />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterRow}>
+        {DIETARY_FILTERS.map((f) => (
+          <FilterChip key={f.id} label={f.label} active={f.id === dietary} onPress={() => onDietary(f.id)} />
+        ))}
+        <View style={s.filterSeparator} />
+        {PRICE_FILTERS.map((f) => (
+          <FilterChip key={f.id} label={f.label} active={f.id === priceLevel} onPress={() => onPriceLevel(f.id)} />
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+function DietaryBadges({ options }: { options?: string[] }) {
+  if (!options || options.length === 0) return null;
+  const badges = options
+    .map((o) => DIETARY_BADGE_LABELS[o])
+    .filter(Boolean) as string[];
+  if (badges.length === 0) return null;
+  return (
+    <View style={card.badgeRow}>
+      {badges.slice(0, 3).map((b) => (
+        <View key={b} style={card.badge}>
+          <Text style={card.badgeText}>{b}</Text>
+        </View>
+      ))}
+    </View>
   );
 }
 
@@ -189,7 +246,10 @@ function MealCard({ result }: { result: RestaurantResult }) {
         {bm && <Text style={card.dishName} numberOfLines={1}>{bm.name}</Text>}
         <Text style={card.restName} numberOfLines={1}>
           {result.name} {'\u2022'} {result.distanceMiles.toFixed(1)} mi
+          {result.priceLevel ? ` \u2022 ${result.priceLevel}` : ''}
+          {result.rating ? ` \u2022 \u2605${result.rating.toFixed(1)}` : ''}
         </Text>
+        <DietaryBadges options={result.dietaryOptions} />
         {bm && (
           <View style={card.macroRow}>
             <Text style={card.macroPill}>P {bm.proteinG}g</Text>
@@ -231,6 +291,8 @@ export default function SearchScreen() {
   const initialFetch = useRef(true);
   const [filterVisible, setFilterVisible] = useState(false);
   const [cuisineFilter, setCuisineFilter] = useState('all');
+  const [dietaryFilter, setDietaryFilter] = useState('all');
+  const [priceLevelFilter, setPriceLevelFilter] = useState('all');
 
   const location = useLocation();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -247,7 +309,14 @@ export default function SearchScreen() {
   );
 
   const doFetch = useCallback(
-    async (current: MacroValues, lat: number, lng: number) => {
+    async (
+      current: MacroValues,
+      lat: number,
+      lng: number,
+      cuisine: string,
+      dietary: string,
+      priceLevel: string,
+    ) => {
       setLoading(true);
       setError(null);
 
@@ -261,6 +330,9 @@ export default function SearchScreen() {
       if (!isNaN(carbs)) params.carbs = carbs;
       if (!isNaN(fat)) params.fat = fat;
       if (!isNaN(calories)) params.calories = calories;
+      if (cuisine !== 'all') params.cuisineType = cuisine;
+      if (dietary !== 'all') params.dietary = dietary;
+      if (priceLevel !== 'all') params.maxPriceLevel = priceLevel;
 
       try {
         const data = await fetchRestaurants(params);
@@ -281,16 +353,16 @@ export default function SearchScreen() {
 
     if (initialFetch.current) {
       initialFetch.current = false;
-      doFetch(inputs, location.lat, location.lng);
+      doFetch(inputs, location.lat, location.lng, cuisineFilter, dietaryFilter, priceLevelFilter);
       return;
     }
 
     debounceRef.current = setTimeout(() => {
-      doFetch(inputs, location.lat, location.lng);
+      doFetch(inputs, location.lat, location.lng, cuisineFilter, dietaryFilter, priceLevelFilter);
     }, DEBOUNCE_MS);
 
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [inputs, location.lat, location.lng, location.loading, doFetch]);
+  }, [inputs, location.lat, location.lng, location.loading, cuisineFilter, dietaryFilter, priceLevelFilter, doFetch]);
 
   function handleApplyFilters(newValues: MacroValues) {
     setFilterVisible(false);
@@ -298,7 +370,8 @@ export default function SearchScreen() {
     saveMacroTargets(newValues).catch(() => {});
   }
 
-  const categories = categorize(results, cuisineFilter);
+  const isFiltered = cuisineFilter !== 'all' || dietaryFilter !== 'all' || priceLevelFilter !== 'all';
+  const categories = categorize(results, isFiltered);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
@@ -326,7 +399,14 @@ export default function SearchScreen() {
             location={location}
             onPress={() => setFilterVisible(true)}
           />
-          <CuisineFiltersRow selected={cuisineFilter} onSelect={setCuisineFilter} />
+          <FiltersPanel
+            cuisine={cuisineFilter}
+            onCuisine={setCuisineFilter}
+            dietary={dietaryFilter}
+            onDietary={setDietaryFilter}
+            priceLevel={priceLevelFilter}
+            onPriceLevel={setPriceLevelFilter}
+          />
           {categories.map((cat) => (
             <CategoryRow key={cat.title} category={cat} />
           ))}
@@ -377,6 +457,9 @@ const s = StyleSheet.create({
   macroPillUnit: { fontSize: 10, fontWeight: '600', color: COLORS.textTertiary, marginLeft: -2 },
   macroPillUnitH: { color: COLORS.greenDark },
 
+  filtersPanel: { backgroundColor: '#FFFFFF' },
+  filterDivider: { height: 1, marginHorizontal: 16, backgroundColor: COLORS.borderLight },
+  filterSeparator: { width: 1, height: 20, backgroundColor: COLORS.border, alignSelf: 'center', marginHorizontal: 4 },
   filterRow: { paddingHorizontal: 16, paddingVertical: 14, gap: 8 },
   filterBubble: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
@@ -415,4 +498,7 @@ const card = StyleSheet.create({
   macroRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 6 },
   macroPill: { fontSize: 9, fontWeight: '600', color: 'rgba(241,243,252,0.5)', letterSpacing: 0.3 },
   calPill: { fontSize: 9, fontWeight: '700', color: 'rgba(74,222,128,0.8)' },
+  badgeRow: { flexDirection: 'row', gap: 4, marginTop: 4 },
+  badge: { backgroundColor: 'rgba(74,222,128,0.2)', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2 },
+  badgeText: { fontSize: 8, fontWeight: '700', color: 'rgba(74,222,128,0.9)', letterSpacing: 0.2 },
 });
