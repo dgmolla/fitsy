@@ -187,8 +187,7 @@ async function persistItems(
     const macro = macros[i];
     if (!item || !macro) continue;
     try {
-      // TODO(S-79): pass macro.dietaryTags once S-79 backend merges (MacroData gains dietaryTags)
-      const menuItemId = await upsertMenuItem(restaurantId, item, prisma);
+      const menuItemId = await upsertMenuItem(restaurantId, item, prisma, macro.dietaryTags);
       await prisma.$transaction([
         prisma.macroEstimate.deleteMany({ where: { menuItemId } }),
         prisma.macroEstimate.create({
