@@ -461,20 +461,48 @@ export class UberEatsSource implements MenuSource {
 
   /**
    * Search the web for a restaurant's UberEats store URL.
-   * Parses the search results markdown for ubereats.com/store/ links.
+   * Tries multiple free methods:
+   *   1. Brave Search (HTML scraping, no API key)
+   *   2. WebScraper search (Jina/etc., may require API key)
    */
   private async discoverViaSearch(name: string, address: string): Promise<string | null> {
-    if (!this.searchScraper) return null;
+    // Method 1: WebScraper search (Jina with API key = 500 RPM)
+    if (this.searchScraper) {
+      const query = `${name} uber eats ${address}`;
+      const markdown = await this.searchScraper.search(query);
+      if (markdown) {
+        const match = markdown.match(/ubereats\.com\/store\/[a-z0-9%-]+\/[a-zA-Z0-9_-]+/);
+        if (match) return `https://www.${match[0]}`;
+      }
+    }
 
-    const query = `${name} uber eats ${address}`;
-    const markdown = await this.searchScraper.search(query);
-    if (!markdown) return null;
-
-    // Extract UE store URLs from search results
-    const match = markdown.match(/ubereats\.com\/store\/[a-z0-9%-]+\/[a-zA-Z0-9_-]+/);
-    if (match) return `https://www.${match[0]}`;
+    // Method 2: Brave Search fallback (free, no key, HTML scraping)
+    const braveUrl = await this.discoverViaBrave(name, address);
+    if (braveUrl) return braveUrl;
 
     return null;
+  }
+
+  private static readonly BRAVE_UA =
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
+  /**
+   * Scrape Brave Search results for a UberEats store URL.
+   * Free, no API key, no rate limit issues at low volume.
+   */
+  private async discoverViaBrave(name: string, address: string): Promise<string | null> {
+    const query = encodeURIComponent(`${name} uber eats ${address}`);
+    try {
+      const response = await fetch(`https://search.brave.com/search?q=${query}`, {
+        headers: { "User-Agent": UberEatsSource.BRAVE_UA, Accept: "text/html" },
+      });
+      if (!response.ok) return null;
+      const html = await response.text();
+      const match = html.match(/ubereats\.com\/store\/[a-z0-9%-]+\/[a-zA-Z0-9_-]+/);
+      return match ? `https://www.${match[0]}` : null;
+    } catch {
+      return null;
+    }
   }
 
   /**

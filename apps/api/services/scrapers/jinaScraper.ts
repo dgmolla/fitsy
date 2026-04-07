@@ -16,10 +16,17 @@ const JINA_SEARCH_BASE = "https://s.jina.ai/";
 const RATE_LIMIT_DELAY_MS = 3000;
 const MIN_CONTENT_LENGTH = 100;
 
-const HEADERS: Record<string, string> = {
-  Accept: "text/plain",
-  "X-No-Cache": "true",
-};
+function buildHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    Accept: "text/plain",
+    "X-No-Cache": "true",
+  };
+  const apiKey = process.env["JINA_API_KEY"];
+  if (apiKey) {
+    headers["Authorization"] = `Bearer ${apiKey}`;
+  }
+  return headers;
+}
 
 export class JinaScraper implements WebScraper {
   readonly id = "jina";
@@ -43,7 +50,7 @@ export class JinaScraper implements WebScraper {
     let response: Response;
     try {
       response = await fetch(`${JINA_READER_BASE}${url}`, {
-        headers: HEADERS,
+        headers: buildHeaders(),
       });
     } catch {
       return null;
@@ -64,7 +71,7 @@ export class JinaScraper implements WebScraper {
     try {
       response = await fetch(
         `${JINA_SEARCH_BASE}${encodeURIComponent(query)}`,
-        { headers: HEADERS },
+        { headers: buildHeaders() },
       );
     } catch {
       return null;
@@ -73,7 +80,7 @@ export class JinaScraper implements WebScraper {
     if (!response.ok) return null;
 
     const text = await response.text();
-    if (!text || text.length < MIN_CONTENT_LENGTH) return null;
+    if (!text || text.length === 0) return null;
 
     return text;
   }
