@@ -21,14 +21,15 @@ import type { MacroValues } from '@/lib/macroPresets';
 import { fetchRestaurants } from '@/lib/apiClient';
 import { useLocation } from '@/lib/useLocation';
 import { getMacroTargets, saveMacroTargets } from '@/lib/macroStorage';
-import { COLORS, FONTS } from '@/lib/brand';
+import { EDITORIAL, FONTS } from '@/lib/brand';
 
 const DEBOUNCE_MS = 600;
 const { width: SCREEN_W } = Dimensions.get('window');
-const CARD_W = SCREEN_W * 0.52;
-const CARD_H = 180;
+const HERO_H = 320;
+const DISH_CARD_W = SCREEN_W * 0.44;
+const DISH_CARD_H = 138;
 
-// ─── Cuisine filters ─────────────────────────────────────────────────────────
+// ─── Cuisine filters ──────────────────────────────────────────────────────────
 
 const CUISINE_FILTERS = [
   { id: 'all', label: 'All', icon: 'grid-outline' },
@@ -37,225 +38,190 @@ const CUISINE_FILTERS = [
   { id: 'healthy', label: 'Healthy', icon: 'leaf-outline' },
   { id: 'fast_food', label: 'Fast Food', icon: 'fast-food-outline' },
   { id: 'vegan', label: 'Vegan', icon: 'nutrition-outline' },
-  { id: 'italian', label: 'Italian', icon: 'pizza-outline' },
-  { id: 'sushi', label: 'Sushi', icon: 'fish-outline' },
 ] as const;
 
-// ─── Dietary / price filters ──────────────────────────────────────────────────
+// ─── Dietary badge labels ─────────────────────────────────────────────────────
 
-const DIETARY_FILTERS = [
-  { id: 'all', label: 'All Diets' },
-  { id: 'vegan', label: 'Vegan' },
-  { id: 'vegetarian', label: 'Vegetarian' },
-  { id: 'gluten-free', label: 'Gluten-Free' },
-  { id: 'keto', label: 'Keto' },
-  { id: 'dairy-free', label: 'Dairy-Free' },
-] as const;
-
-const PRICE_FILTERS = [
-  { id: 'all', label: 'Any $' },
-  { id: '$', label: '$' },
-  { id: '$$', label: '$$' },
-  { id: '$$$', label: '$$$' },
-] as const;
-
-// Map dietary tag stored in DB to a display label
 const DIETARY_BADGE_LABELS: Record<string, string> = {
-  has_vegan: 'Vegan',
-  has_vegetarian: 'Veg',
+  has_vegan: 'VEGAN',
+  has_vegetarian: 'VEG',
   'has_gluten-free': 'GF',
-  has_keto: 'Keto',
+  has_keto: 'KETO',
   'has_dairy-free': 'DF',
 };
 
-// ─── Mock images ─────────────────────────────────────────────────────────────
+// ─── Mock images + fallback data ──────────────────────────────────────────────
 
 const MOCK_IMAGES = [
-  'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=600&q=70',
-  'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=600&q=70',
-  'https://images.unsplash.com/photo-1476224203421-9ac39bcb3327?w=600&q=70',
-  'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=600&q=70',
-  'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=600&q=70',
-  'https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?w=600&q=70',
+  'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800&q=70',
+  'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=800&q=70',
+  'https://images.unsplash.com/photo-1476224203421-9ac39bcb3327?w=800&q=70',
+  'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=70',
+  'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800&q=70',
+  'https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?w=800&q=70',
 ];
 
 function getMockImage(name: string): string {
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  return MOCK_IMAGES[h % MOCK_IMAGES.length];
+  return MOCK_IMAGES[h % MOCK_IMAGES.length]!;
 }
 
-// Mock data shown when DB is empty
-const MOCK_RESULTS = [
-  { id: 'mock-1', name: 'Evergreen Kitchen', address: '1424 Sunset Blvd, Silver Lake', lat: 34.0875, lng: -118.2604, distanceMiles: 0.4, cuisineTags: ['healthy', 'bowls'], photoUrl: MOCK_IMAGES[0], bestMatch: { name: 'Seared Ahi Bowl', calories: 482, proteinG: 42, carbsG: 38, fatG: 14, matchScore: 0.02, confidence: 'HIGH' as const, menuItemId: 'mock-mi-1' } },
-  { id: 'mock-2', name: 'The Iron Grill', address: '3302 Glendale Blvd', lat: 34.0922, lng: -118.2587, distanceMiles: 1.2, cuisineTags: ['american', 'fast_food'], photoUrl: MOCK_IMAGES[2], bestMatch: { name: 'Double Smash Burger', calories: 620, proteinG: 48, carbsG: 32, fatG: 28, matchScore: 0.12, confidence: 'MEDIUM' as const, menuItemId: 'mock-mi-2' } },
-  { id: 'mock-3', name: 'Mesa Verde', address: '2100 Echo Park Ave', lat: 34.0781, lng: -118.2606, distanceMiles: 1.8, cuisineTags: ['mexican'], photoUrl: MOCK_IMAGES[4], bestMatch: { name: 'Chicken Burrito Bowl', calories: 610, proteinG: 45, carbsG: 52, fatG: 18, matchScore: 0.22, confidence: 'HIGH' as const, menuItemId: 'mock-mi-3' } },
-  { id: 'mock-4', name: 'Harvest Market', address: '890 Hyperion Ave', lat: 34.0955, lng: -118.2732, distanceMiles: 0.9, cuisineTags: ['healthy', 'vegan'], photoUrl: MOCK_IMAGES[5], bestMatch: { name: 'Power Greens Salad', calories: 320, proteinG: 28, carbsG: 18, fatG: 16, matchScore: 0.08, confidence: 'HIGH' as const, menuItemId: 'mock-mi-4' } },
-  { id: 'mock-5', name: 'Sakura Ramen', address: '4501 Melrose Ave', lat: 34.0835, lng: -118.3100, distanceMiles: 2.0, cuisineTags: ['asian', 'japanese'], photoUrl: MOCK_IMAGES[3], bestMatch: { name: 'Chicken Teriyaki Bowl', calories: 580, proteinG: 40, carbsG: 65, fatG: 14, matchScore: 0.30, confidence: 'HIGH' as const, menuItemId: 'mock-mi-5' } },
-  { id: 'mock-6', name: 'Ocean Blue', address: '1200 Pacific Ave', lat: 34.0800, lng: -118.2900, distanceMiles: 1.5, cuisineTags: ['healthy', 'seafood'], photoUrl: MOCK_IMAGES[1], bestMatch: { name: 'Grilled Salmon Plate', calories: 510, proteinG: 44, carbsG: 28, fatG: 22, matchScore: 0.06, confidence: 'HIGH' as const, menuItemId: 'mock-mi-6' } },
-] as RestaurantResult[];
+const MOCK_RESULTS: RestaurantResult[] = [
+  { id: 'mock-1', name: 'Evergreen Kitchen', address: '1424 Sunset Blvd, Silver Lake', lat: 34.0875, lng: -118.2604, distanceMiles: 0.4, cuisineTags: ['healthy', 'bowls'], chainFlag: false, photoUrl: MOCK_IMAGES[0]!, bestMatch: { name: 'Seared Ahi Bowl', calories: 482, proteinG: 42, carbsG: 38, fatG: 14, matchScore: 0.02, confidence: 'HIGH', menuItemId: 'mock-mi-1' } },
+  { id: 'mock-2', name: 'The Iron Grill', address: '3302 Glendale Blvd', lat: 34.0922, lng: -118.2587, distanceMiles: 1.2, cuisineTags: ['american', 'fast_food'], chainFlag: true, photoUrl: MOCK_IMAGES[2]!, bestMatch: { name: 'Double Smash Burger', calories: 620, proteinG: 48, carbsG: 32, fatG: 28, matchScore: 0.12, confidence: 'MEDIUM', menuItemId: 'mock-mi-2' } },
+  { id: 'mock-3', name: 'Mesa Verde', address: '2100 Echo Park Ave', lat: 34.0781, lng: -118.2606, distanceMiles: 1.8, cuisineTags: ['mexican'], chainFlag: false, photoUrl: MOCK_IMAGES[4]!, bestMatch: { name: 'Chicken Burrito Bowl', calories: 610, proteinG: 45, carbsG: 52, fatG: 18, matchScore: 0.22, confidence: 'HIGH', menuItemId: 'mock-mi-3' } },
+  { id: 'mock-4', name: 'Harvest Market', address: '890 Hyperion Ave', lat: 34.0955, lng: -118.2732, distanceMiles: 0.9, cuisineTags: ['healthy', 'vegan'], chainFlag: false, photoUrl: MOCK_IMAGES[5]!, bestMatch: { name: 'Power Greens Salad', calories: 320, proteinG: 28, carbsG: 18, fatG: 16, matchScore: 0.08, confidence: 'HIGH', menuItemId: 'mock-mi-4' } },
+  { id: 'mock-5', name: 'Sakura Ramen', address: '4501 Melrose Ave', lat: 34.0835, lng: -118.3100, distanceMiles: 2.0, cuisineTags: ['asian', 'japanese'], chainFlag: false, photoUrl: MOCK_IMAGES[3]!, bestMatch: { name: 'Chicken Teriyaki Bowl', calories: 580, proteinG: 40, carbsG: 65, fatG: 14, matchScore: 0.30, confidence: 'HIGH', menuItemId: 'mock-mi-5' } },
+];
 
 const DEFAULT_INPUTS: MacroValues = { protein: '', carbs: '', fat: '', calories: '' };
 
-// ─── Categorization ──────────────────────────────────────────────────────────
+// ─── Masthead ─────────────────────────────────────────────────────────────────
 
-interface Category {
-  title: string;
-  data: RestaurantResult[];
-}
-
-function categorize(results: RestaurantResult[], isFiltered: boolean): Category[] {
-  if (results.length === 0) return [];
-
-  // When filters are active, results are already server-filtered — show flat list
-  if (isFiltered) {
-    return [{ title: 'Results', data: results }];
-  }
-
-  // Smart categories for unfiltered view
-  const sorted = [...results].sort((a, b) => a.distanceMiles - b.distanceMiles);
-  const nearYou = sorted.slice(0, Math.min(6, sorted.length));
-  const highProtein = results.filter((r) => (r.bestMatch?.proteinG ?? 0) >= 30);
-  const light = results.filter((r) => (r.bestMatch?.calories ?? 9999) <= 500);
-
-  const categories: Category[] = [
-    { title: 'Near You', data: nearYou },
-    { title: 'High Protein', data: highProtein },
-    { title: 'Quick & Light', data: light },
-  ].filter((c) => c.data.length > 0);
-
-  return categories.length > 0 ? categories : [{ title: 'Nearby', data: results }];
-}
-
-// ─── Sub-components ──────────────────────────────────────────────────────────
-
-function MacroPill({ label, value, unit, highlight }: { label: string; value: string; unit?: string; highlight?: boolean }) {
+function Masthead({ locationLabel }: { locationLabel: string }) {
   return (
-    <View style={[s.macroPill, highlight && s.macroPillHighlight]}>
-      {label ? <Text style={[s.macroPillLabel, highlight && s.macroPillLabelH]}>{label}</Text> : null}
-      <Text style={[s.macroPillValue, highlight && s.macroPillValueH]}>{value}</Text>
-      {unit ? <Text style={[s.macroPillUnit, highlight && s.macroPillUnitH]}>{unit}</Text> : null}
+    <View style={s.masthead}>
+      <View style={s.mastheadTop}>
+        <View style={s.logoRow}>
+          <View style={s.logoDot} />
+          <Text style={s.logo}>fitsy</Text>
+        </View>
+        <View style={s.locationChip}>
+          <Ionicons name="location" size={11} color={EDITORIAL.greenAccent} />
+          <Text style={s.locationText}>{locationLabel}</Text>
+        </View>
+      </View>
+      <Text style={s.issueLabel}>THE MIDDAY SELECTION</Text>
     </View>
   );
 }
 
-function Header({ macros, location: loc, onPress }: { macros: MacroValues; location: { loading: boolean; source: string }; onPress: () => void }) {
-  const locationLabel = loc.loading ? 'Locating...' : loc.source === 'gps' ? 'Near you' : 'Silver Lake, LA';
+// ─── Macro strip ──────────────────────────────────────────────────────────────
+
+function MacroStrip({ macros, onEdit }: { macros: MacroValues; onEdit: () => void }) {
   const p = macros.protein || '45';
   const c = macros.carbs || '60';
   const f = macros.fat || '12';
   const cal = macros.calories || '550';
 
   return (
-    <TouchableOpacity activeOpacity={0.8} onPress={onPress} style={s.header}>
-      <View style={s.headerTop}>
-        <View style={s.logoRow}>
-          <Ionicons name="restaurant" size={18} color={COLORS.green} />
-          <Text style={s.logo}>fitsy</Text>
-        </View>
-        <View style={s.locationPill}>
-          <View style={s.locationDot} />
-          <Text style={s.locationText}>{locationLabel}</Text>
-        </View>
+    <View style={s.macroStrip}>
+      <View style={s.macroItem}>
+        <Text style={s.macroVal}>{p}g</Text>
+        <Text style={s.macroLbl}>protein</Text>
       </View>
-      <Text style={s.greeting}>Food that fits.</Text>
-      <View style={s.macroSummary}>
-        <MacroPill label="P" value={`${p}g`} />
-        <MacroPill label="C" value={`${c}g`} />
-        <MacroPill label="F" value={`${f}g`} />
-        <MacroPill label="" value={cal} unit="kcal" highlight />
+      <View style={s.macroDivider} />
+      <View style={s.macroItem}>
+        <Text style={s.macroVal}>{c}g</Text>
+        <Text style={s.macroLbl}>carbs</Text>
       </View>
-    </TouchableOpacity>
-  );
-}
-
-function FilterChip({ label, active, onPress, icon }: { label: string; active: boolean; onPress: () => void; icon?: string }) {
-  return (
-    <TouchableOpacity
-      style={[s.filterBubble, active && s.filterBubbleActive]}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      {icon ? <Ionicons name={icon as any} size={16} color={active ? '#FFFFFF' : COLORS.textSecondary} /> : null}
-      <Text style={[s.filterLabel, active && s.filterLabelActive]}>{label}</Text>
-    </TouchableOpacity>
-  );
-}
-
-function FiltersPanel({
-  cuisine, onCuisine,
-  dietary, onDietary,
-  priceLevel, onPriceLevel,
-}: {
-  cuisine: string; onCuisine: (v: string) => void;
-  dietary: string; onDietary: (v: string) => void;
-  priceLevel: string; onPriceLevel: (v: string) => void;
-}) {
-  return (
-    <View style={s.filtersPanel}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterRow}>
-        {CUISINE_FILTERS.map((f) => (
-          <FilterChip key={f.id} label={f.label} icon={f.icon} active={f.id === cuisine} onPress={() => onCuisine(f.id)} />
-        ))}
-      </ScrollView>
-      <View style={s.filterDivider} />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterRow}>
-        {DIETARY_FILTERS.map((f) => (
-          <FilterChip key={f.id} label={f.label} active={f.id === dietary} onPress={() => onDietary(f.id)} />
-        ))}
-        <View style={s.filterSeparator} />
-        {PRICE_FILTERS.map((f) => (
-          <FilterChip key={f.id} label={f.label} active={f.id === priceLevel} onPress={() => onPriceLevel(f.id)} />
-        ))}
-      </ScrollView>
+      <View style={s.macroDivider} />
+      <View style={s.macroItem}>
+        <Text style={s.macroVal}>{f}g</Text>
+        <Text style={s.macroLbl}>fat</Text>
+      </View>
+      <View style={s.macroDivider} />
+      <View style={s.macroItem}>
+        <Text style={s.macroVal}>{cal}</Text>
+        <Text style={s.macroLbl}>kcal</Text>
+      </View>
+      <TouchableOpacity
+        style={s.editBtn}
+        onPress={onEdit}
+        activeOpacity={0.7}
+        accessibilityLabel="Edit macro targets"
+        accessibilityRole="button"
+      >
+        <Text style={s.editBtnText}>Edit</Text>
+      </TouchableOpacity>
     </View>
   );
 }
 
+// ─── Cuisine chips ────────────────────────────────────────────────────────────
+
+function CuisineRow({ selected, onSelect }: { selected: string; onSelect: (id: string) => void }) {
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterRow}>
+      {CUISINE_FILTERS.map((f) => {
+        const active = f.id === selected;
+        return (
+          <TouchableOpacity
+            key={f.id}
+            style={[s.filterBubble, active && s.filterBubbleActive]}
+            onPress={() => onSelect(f.id)}
+            activeOpacity={0.7}
+            accessibilityLabel={`Filter by ${f.label}`}
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
+          >
+            <Ionicons name={f.icon as any} size={15} color={active ? EDITORIAL.cream : EDITORIAL.textSoft} />
+            <Text style={[s.filterLabel, active && s.filterLabelActive]}>{f.label}</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
+// ─── Dietary badges ──────────────────────────────────────────────────────────
+
 function DietaryBadges({ options }: { options?: string[] }) {
   if (!options || options.length === 0) return null;
-  const badges = options
-    .map((o) => DIETARY_BADGE_LABELS[o])
-    .filter(Boolean) as string[];
+  const badges = options.map((o) => DIETARY_BADGE_LABELS[o]).filter(Boolean) as string[];
   if (badges.length === 0) return null;
   return (
-    <View style={card.badgeRow}>
-      {badges.slice(0, 3).map((b) => (
-        <View key={b} style={card.badge}>
-          <Text style={card.badgeText}>{b}</Text>
+    <View style={hero.badgeRow}>
+      {badges.slice(0, 2).map((b) => (
+        <View key={b} style={hero.badge}>
+          <Text style={hero.badgeText}>{b}</Text>
         </View>
       ))}
     </View>
   );
 }
 
-function MealCard({ result }: { result: RestaurantResult }) {
+// ─── Hero card (#01) ──────────────────────────────────────────────────────────
+
+function HeroCard({ result }: { result: RestaurantResult }) {
   const bm = result.bestMatch;
+  const imgUri = result.photoUrl || getMockImage(result.name);
   return (
     <TouchableOpacity
-      activeOpacity={0.9}
-      style={card.container}
+      activeOpacity={0.92}
+      style={hero.container}
       onPress={() => router.push({
         pathname: `/restaurant/${result.id}`,
         params: { address: result.address, distance: result.distanceMiles?.toFixed(1) },
       })}
+      accessibilityLabel={`${result.name}${result.bestMatch ? `, best match: ${result.bestMatch.name}` : ''}`}
+      accessibilityRole="button"
     >
-      <Image source={{ uri: result.photoUrl || getMockImage(result.name) }} style={card.image} resizeMode="cover" />
-      <LinearGradient colors={['transparent', 'rgba(0,0,0,0.75)']} style={card.gradient} />
-      <View style={card.info}>
-        {bm && <Text style={card.dishName} numberOfLines={1}>{bm.name}</Text>}
-        <Text style={card.restName} numberOfLines={1}>
-          {result.name} {'\u2022'} {result.distanceMiles.toFixed(1)} mi
-          {result.priceLevel ? ` \u2022 ${result.priceLevel}` : ''}
-          {result.rating ? ` \u2022 \u2605${result.rating.toFixed(1)}` : ''}
-        </Text>
-        <DietaryBadges options={result.dietaryOptions} />
+      <Image source={{ uri: imgUri }} style={hero.image} resizeMode="cover" />
+      <LinearGradient
+        colors={['transparent', EDITORIAL.heroGrad]}
+        style={hero.gradient}
+      />
+      <View style={hero.overlay}>
+        <View style={hero.topRow}>
+          <View style={hero.indexBadge}>
+            <Text style={hero.indexText}>01</Text>
+          </View>
+          <DietaryBadges options={result.dietaryOptions} />
+          <Text style={hero.distText}>{result.distanceMiles?.toFixed(1)} mi</Text>
+        </View>
+        <Text style={hero.restName} numberOfLines={1}>{result.name}</Text>
+        {bm && <Text style={hero.dishName} numberOfLines={1}>{bm.name}</Text>}
         {bm && (
-          <View style={card.macroRow}>
-            <Text style={card.macroPill}>P {bm.proteinG}g</Text>
-            <Text style={card.macroPill}>C {bm.carbsG}g</Text>
-            <Text style={card.macroPill}>F {bm.fatG}g</Text>
-            <Text style={card.calPill}>{bm.calories} kcal</Text>
+          <View style={hero.macroRow}>
+            <Text style={hero.macroText}>P {bm.proteinG}g</Text>
+            <Text style={hero.dot}>·</Text>
+            <Text style={hero.macroText}>C {bm.carbsG}g</Text>
+            <Text style={hero.dot}>·</Text>
+            <Text style={hero.macroText}>F {bm.fatG}g</Text>
+            <Text style={hero.dot}>·</Text>
+            <Text style={hero.calText}>{bm.calories} kcal</Text>
           </View>
         )}
       </View>
@@ -263,25 +229,63 @@ function MealCard({ result }: { result: RestaurantResult }) {
   );
 }
 
-function CategoryRow({ category }: { category: Category }) {
+// ─── Dish carousel card ───────────────────────────────────────────────────────
+
+function DishCard({ result }: { result: RestaurantResult }) {
+  const bm = result.bestMatch;
+  const imgUri = result.photoUrl || getMockImage(result.name);
   return (
-    <View style={s.categorySection}>
-      <View style={s.categoryHeader}>
-        <Text style={s.categoryTitle}>{category.title}</Text>
+    <TouchableOpacity
+      activeOpacity={0.88}
+      style={dc.container}
+      onPress={() => router.push({
+        pathname: `/restaurant/${result.id}`,
+        params: { address: result.address, distance: result.distanceMiles?.toFixed(1) },
+      })}
+      accessibilityLabel={result.bestMatch ? `${result.bestMatch.name} at ${result.name}` : result.name}
+      accessibilityRole="button"
+    >
+      <Image source={{ uri: imgUri }} style={dc.image} resizeMode="cover" />
+      <LinearGradient colors={['transparent', EDITORIAL.cardGrad]} style={dc.gradient} />
+      <View style={dc.info}>
+        {bm && <Text style={dc.dishName} numberOfLines={2}>{bm.name}</Text>}
+        {bm && <Text style={dc.cal}>{bm.calories} kcal · P {bm.proteinG}g</Text>}
       </View>
+    </TouchableOpacity>
+  );
+}
+
+// ─── Numbered restaurant section (#02+) ──────────────────────────────────────
+
+function RestaurantSection({ result, index }: { result: RestaurantResult; index: number }) {
+  const indexStr = String(index + 2).padStart(2, '0');
+  return (
+    <View style={s.restSection}>
+      <View style={s.sectionHeader}>
+        <Text style={s.sectionIndex}>{indexStr}</Text>
+        <View style={s.sectionTitleBlock}>
+          <Text style={s.sectionRestName} numberOfLines={1}>{result.name}</Text>
+          <Text style={s.sectionSub}>
+            {result.distanceMiles?.toFixed(1)} mi
+            {result.priceLevel ? ` · ${result.priceLevel}` : ''}
+            {result.rating ? ` · ★${result.rating.toFixed(1)}` : ''}
+          </Text>
+        </View>
+      </View>
+      {/* Carousel — single result shown as one card; future: multiple dishes per restaurant */}
       <FlatList
-        data={category.data}
+        data={[result]}
         keyExtractor={(r) => r.id}
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={s.cardRow}
-        renderItem={({ item }) => <MealCard result={item} />}
+        contentContainerStyle={s.dishRow}
+        renderItem={({ item }) => <DishCard result={item} />}
       />
     </View>
   );
 }
 
-// ─── Main Screen ─────────────────────────────────────────────────────────────
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function SearchScreen() {
   const [inputs, setInputs] = useState<MacroValues>(DEFAULT_INPUTS);
@@ -291,8 +295,6 @@ export default function SearchScreen() {
   const initialFetch = useRef(true);
   const [filterVisible, setFilterVisible] = useState(false);
   const [cuisineFilter, setCuisineFilter] = useState('all');
-  const [dietaryFilter, setDietaryFilter] = useState('all');
-  const [priceLevelFilter, setPriceLevelFilter] = useState('all');
 
   const location = useLocation();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -309,14 +311,7 @@ export default function SearchScreen() {
   );
 
   const doFetch = useCallback(
-    async (
-      current: MacroValues,
-      lat: number,
-      lng: number,
-      cuisine: string,
-      dietary: string,
-      priceLevel: string,
-    ) => {
+    async (current: MacroValues, lat: number, lng: number, cuisine: string) => {
       setLoading(true);
       setError(null);
 
@@ -331,8 +326,6 @@ export default function SearchScreen() {
       if (!isNaN(fat)) params.fat = fat;
       if (!isNaN(calories)) params.calories = calories;
       if (cuisine !== 'all') params.cuisineType = cuisine;
-      if (dietary !== 'all') params.dietary = dietary;
-      if (priceLevel !== 'all') params.maxPriceLevel = priceLevel;
 
       try {
         const data = await fetchRestaurants(params);
@@ -353,16 +346,16 @@ export default function SearchScreen() {
 
     if (initialFetch.current) {
       initialFetch.current = false;
-      doFetch(inputs, location.lat, location.lng, cuisineFilter, dietaryFilter, priceLevelFilter);
+      doFetch(inputs, location.lat, location.lng, cuisineFilter);
       return;
     }
 
     debounceRef.current = setTimeout(() => {
-      doFetch(inputs, location.lat, location.lng, cuisineFilter, dietaryFilter, priceLevelFilter);
+      doFetch(inputs, location.lat, location.lng, cuisineFilter);
     }, DEBOUNCE_MS);
 
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [inputs, location.lat, location.lng, location.loading, cuisineFilter, dietaryFilter, priceLevelFilter, doFetch]);
+  }, [inputs, location.lat, location.lng, location.loading, cuisineFilter, doFetch]);
 
   function handleApplyFilters(newValues: MacroValues) {
     setFilterVisible(false);
@@ -370,11 +363,16 @@ export default function SearchScreen() {
     saveMacroTargets(newValues).catch(() => {});
   }
 
-  const isFiltered = cuisineFilter !== 'all' || dietaryFilter !== 'all' || priceLevelFilter !== 'all';
-  const categories = categorize(results, isFiltered);
+  const locationLabel = location.loading
+    ? 'Locating...'
+    : location.source === 'gps'
+      ? 'Near You'
+      : 'Silver Lake, LA';
+
+  const [heroResult, ...listResults] = results;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: EDITORIAL.cream }}>
       {loading && (
         <View style={s.loaderWrap}>
           <FitsyLoader size="md" />
@@ -391,31 +389,20 @@ export default function SearchScreen() {
       {!loading && results.length > 0 && (
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={{ paddingBottom: 100 }}
+          contentContainerStyle={{ paddingBottom: 110 }}
           showsVerticalScrollIndicator={false}
         >
-          <Header
-            macros={inputs}
-            location={location}
-            onPress={() => setFilterVisible(true)}
-          />
-          <FiltersPanel
-            cuisine={cuisineFilter}
-            onCuisine={setCuisineFilter}
-            dietary={dietaryFilter}
-            onDietary={setDietaryFilter}
-            priceLevel={priceLevelFilter}
-            onPriceLevel={setPriceLevelFilter}
-          />
-          {categories.map((cat) => (
-            <CategoryRow key={cat.title} category={cat} />
+          <Masthead locationLabel={locationLabel} />
+          <MacroStrip macros={inputs} onEdit={() => setFilterVisible(true)} />
+          <CuisineRow selected={cuisineFilter} onSelect={setCuisineFilter} />
+
+          {/* #01 — Hero card */}
+          {heroResult && <HeroCard result={heroResult} />}
+
+          {/* #02+ — Numbered sections with dish carousels */}
+          {listResults.map((r, i) => (
+            <RestaurantSection key={r.id} result={r} index={i} />
           ))}
-          {categories.length === 0 && (
-            <View style={s.emptyState}>
-              <Ionicons name="search-outline" size={48} color={COLORS.textTertiary} />
-              <Text style={s.emptyText}>No matches for these filters</Text>
-            </View>
-          )}
         </ScrollView>
       )}
       <FilterPopup
@@ -428,77 +415,147 @@ export default function SearchScreen() {
   );
 }
 
-// ─── Styles ──────────────────────────────────────────────────────────────────
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  header: { backgroundColor: '#FFFFFF', paddingHorizontal: 20, paddingBottom: 16, gap: 12 },
-  headerTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  logoRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  logo: { fontSize: 22, fontWeight: '800', color: COLORS.green, letterSpacing: -0.8 },
-  locationPill: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.borderLight,
-    borderRadius: 14, paddingHorizontal: 11, paddingVertical: 5, borderWidth: 1, borderColor: COLORS.border, gap: 5,
+  masthead: {
+    backgroundColor: EDITORIAL.cream,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 12,
+    gap: 10,
   },
-  locationDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.green },
-  locationText: { fontSize: 11, fontWeight: '600', color: COLORS.textSecondary },
-  greeting: { fontFamily: FONTS.headline, fontSize: 26, color: COLORS.text, letterSpacing: -0.5, marginBottom: 12 },
-
-  macroSummary: { flexDirection: 'row', gap: 8 },
-  macroPill: {
+  mastheadTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  logoRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  logoDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: EDITORIAL.green },
+  logo: {
+    fontSize: 20,
+    fontFamily: FONTS.newsreaderBold,
+    color: EDITORIAL.green,
+    letterSpacing: -0.5,
+  },
+  locationChip: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: COLORS.borderLight, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 8,
-    borderWidth: 1, borderColor: COLORS.border,
+    backgroundColor: EDITORIAL.creamCard, borderRadius: 12,
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderWidth: 1, borderColor: EDITORIAL.border,
   },
-  macroPillHighlight: { backgroundColor: COLORS.greenBg, borderColor: COLORS.green },
-  macroPillLabel: { fontSize: 11, fontWeight: '800', color: COLORS.textTertiary },
-  macroPillLabelH: { color: COLORS.greenDark },
-  macroPillValue: { fontSize: 14, fontWeight: '700', color: COLORS.text },
-  macroPillValueH: { color: COLORS.green },
-  macroPillUnit: { fontSize: 10, fontWeight: '600', color: COLORS.textTertiary, marginLeft: -2 },
-  macroPillUnitH: { color: COLORS.greenDark },
+  locationText: { fontSize: 11, fontWeight: '600', color: EDITORIAL.textSoft },
+  issueLabel: {
+    fontSize: 10, fontWeight: '700', color: EDITORIAL.textSoft,
+    letterSpacing: 2.5, textTransform: 'uppercase',
+  },
 
-  filtersPanel: { backgroundColor: '#FFFFFF' },
-  filterDivider: { height: 1, marginHorizontal: 16, backgroundColor: COLORS.borderLight },
-  filterSeparator: { width: 1, height: 20, backgroundColor: COLORS.border, alignSelf: 'center', marginHorizontal: 4 },
-  filterRow: { paddingHorizontal: 16, paddingVertical: 14, gap: 8 },
+  macroStrip: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: EDITORIAL.creamCard,
+    borderRadius: 14, borderWidth: 1, borderColor: EDITORIAL.border,
+    marginHorizontal: 16, marginBottom: 4,
+    paddingHorizontal: 14, paddingVertical: 12,
+  },
+  macroItem: { flex: 1, alignItems: 'center', gap: 2 },
+  macroVal: { fontSize: 14, fontWeight: '700', color: EDITORIAL.text },
+  macroLbl: { fontSize: 9, fontWeight: '600', color: EDITORIAL.textSoft, letterSpacing: 0.3 },
+  macroDivider: { width: 1, height: 28, backgroundColor: EDITORIAL.creamDeep },
+  editBtn: {
+    backgroundColor: EDITORIAL.green, borderRadius: 10,
+    paddingHorizontal: 14, paddingVertical: 12, marginLeft: 10,
+    minHeight: 44,
+  },
+  editBtnText: { fontSize: 12, fontWeight: '700', color: EDITORIAL.cream, letterSpacing: 0.2 },
+
+  filterRow: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
   filterBubble: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: '#FFFFFF', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 10,
-    borderWidth: 1, borderColor: COLORS.border,
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: EDITORIAL.creamCard,
+    borderRadius: 22, borderWidth: 1, borderColor: EDITORIAL.border,
+    paddingHorizontal: 13, paddingVertical: 12,
+    minHeight: 44,
   },
-  filterBubbleActive: { backgroundColor: COLORS.green, borderColor: COLORS.green },
-  filterLabel: { fontSize: 13, fontWeight: '600', color: COLORS.textSecondary },
-  filterLabelActive: { color: '#FFFFFF' },
+  filterBubbleActive: { backgroundColor: EDITORIAL.green, borderColor: EDITORIAL.green },
+  filterLabel: { fontSize: 13, fontWeight: '600', color: EDITORIAL.textSoft },
+  filterLabelActive: { color: EDITORIAL.cream },
 
-  categorySection: { marginTop: 8 },
-  categoryHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 20, marginBottom: 12,
+  restSection: { marginTop: 22 },
+  sectionHeader: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 12,
+    paddingHorizontal: 20, marginBottom: 10,
   },
-  categoryTitle: { fontSize: 20, fontWeight: '700', color: COLORS.text, letterSpacing: -0.3 },
-  cardRow: { paddingHorizontal: 16, gap: 12, paddingBottom: 16 },
+  sectionIndex: {
+    fontFamily: FONTS.newsreaderItalic,
+    fontSize: 32, color: EDITORIAL.creamDeep,
+    lineHeight: 34, letterSpacing: -1,
+  },
+  sectionTitleBlock: { flex: 1, paddingTop: 4 },
+  sectionRestName: {
+    fontFamily: FONTS.newsreaderBold,
+    fontSize: 20, color: EDITORIAL.text, letterSpacing: -0.5,
+  },
+  sectionSub: { fontSize: 11, fontWeight: '500', color: EDITORIAL.textSoft, marginTop: 1 },
+  dishRow: { paddingHorizontal: 16, gap: 10, paddingBottom: 4 },
 
   loaderWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  errorBanner: { marginHorizontal: 16, marginTop: 16, borderRadius: 8, padding: 12, backgroundColor: COLORS.errorBg },
-  errorText: { fontSize: 14, textAlign: 'center', color: COLORS.error },
+  errorBanner: {
+    marginHorizontal: 16, marginTop: 16, borderRadius: 8, padding: 12,
+    backgroundColor: '#FEF2F2',
+  },
+  errorText: { fontSize: 14, textAlign: 'center', color: '#DC2626' },
   emptyState: { alignItems: 'center', justifyContent: 'center', paddingTop: 60, gap: 12 },
-  emptyText: { fontSize: 16, fontWeight: '500', color: COLORS.textTertiary },
+  emptyText: { fontSize: 16, fontWeight: '500', color: EDITORIAL.textSoft },
 });
 
-const card = StyleSheet.create({
+const hero = StyleSheet.create({
   container: {
-    width: CARD_W, height: CARD_H, borderRadius: 18, overflow: 'hidden',
-    backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)',
+    height: HERO_H,
+    marginHorizontal: 16,
+    borderRadius: 24,
+    overflow: 'hidden',
+    backgroundColor: EDITORIAL.creamDeep,
+    marginTop: 4,
   },
   image: { width: '100%', height: '100%' },
-  gradient: { position: 'absolute', bottom: 0, left: 0, right: 0, height: CARD_H * 0.7 },
-  info: { position: 'absolute', bottom: 12, left: 12, right: 12 },
-  dishName: { fontSize: 16, fontWeight: '700', color: '#F1F3FC', letterSpacing: -0.2 },
-  restName: { fontSize: 11, fontWeight: '500', color: 'rgba(241,243,252,0.6)', marginTop: 2 },
-  macroRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 6 },
-  macroPill: { fontSize: 9, fontWeight: '600', color: 'rgba(241,243,252,0.5)', letterSpacing: 0.3 },
-  calPill: { fontSize: 9, fontWeight: '700', color: 'rgba(74,222,128,0.8)' },
-  badgeRow: { flexDirection: 'row', gap: 4, marginTop: 4 },
-  badge: { backgroundColor: 'rgba(74,222,128,0.2)', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2 },
-  badgeText: { fontSize: 8, fontWeight: '700', color: 'rgba(74,222,128,0.9)', letterSpacing: 0.2 },
+  gradient: { position: 'absolute', bottom: 0, left: 0, right: 0, height: HERO_H * 0.65 },
+  overlay: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20, gap: 4 },
+  topRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6,
+  },
+  indexBadge: {
+    backgroundColor: 'rgba(253,251,247,0.22)', borderRadius: 6,
+    paddingHorizontal: 7, paddingVertical: 3,
+  },
+  indexText: { fontSize: 11, fontWeight: '800', color: 'rgba(253,251,247,0.95)', letterSpacing: 0.5 },
+  badgeRow: { flexDirection: 'row', gap: 4 },
+  badge: {
+    backgroundColor: 'rgba(253,251,247,0.18)', borderRadius: 6,
+    paddingHorizontal: 7, paddingVertical: 3,
+  },
+  badgeText: { fontSize: 9, fontWeight: '700', color: 'rgba(253,251,247,0.9)', letterSpacing: 1 },
+  distText: { fontSize: 11, fontWeight: '600', color: 'rgba(253,251,247,0.65)', marginLeft: 'auto' },
+  restName: {
+    fontFamily: FONTS.newsreaderBold,
+    fontSize: 28, color: EDITORIAL.cream, letterSpacing: -0.8, lineHeight: 30,
+  },
+  dishName: {
+    fontFamily: FONTS.newsreaderItalic,
+    fontSize: 18, color: 'rgba(253,251,247,0.85)', letterSpacing: -0.3,
+  },
+  macroRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 },
+  macroText: { fontSize: 11, fontWeight: '600', color: 'rgba(253,251,247,0.6)' },
+  dot: { fontSize: 11, color: 'rgba(253,251,247,0.3)' },
+  calText: { fontSize: 11, fontWeight: '700', color: 'rgba(253,251,247,0.88)' },
+});
+
+const dc = StyleSheet.create({
+  container: {
+    width: DISH_CARD_W, height: DISH_CARD_H, borderRadius: 16, overflow: 'hidden',
+    backgroundColor: EDITORIAL.creamDeep,
+  },
+  image: { width: '100%', height: '100%' },
+  gradient: { position: 'absolute', bottom: 0, left: 0, right: 0, height: DISH_CARD_H * 0.7 },
+  info: { position: 'absolute', bottom: 10, left: 10, right: 10 },
+  dishName: {
+    fontSize: 13, fontFamily: FONTS.newsreaderBold,
+    color: EDITORIAL.cream, letterSpacing: -0.2, lineHeight: 16,
+  },
+  cal: { fontSize: 9, fontWeight: '600', color: 'rgba(253,251,247,0.65)', marginTop: 2 },
 });

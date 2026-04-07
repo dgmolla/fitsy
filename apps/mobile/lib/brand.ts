@@ -43,12 +43,37 @@ export const COLORS = {
   confLowBg: '#F3F4F6',
 } as const;
 
+// ─── Editorial Cream Palette ─────────────────────────────────────────────────
+// Used by search screen and downstream screens (S-91, S-92, S-93).
+
+export const EDITORIAL = {
+  // Backgrounds
+  cream:     '#FDFBF7',
+  creamCard: '#F5EFE8',
+  creamDeep: '#EDE6DE',
+  // Text
+  green:     '#1B3A26',
+  greenMid:  '#2A5438',
+  greenAccent:'#3A7050',
+  text:      '#0F1F15',
+  textMid:   '#3A4F41',
+  textSoft:  '#7A8C7E',
+  // Borders
+  border:    '#E8E2D8',
+  // Gradients (on hero/cards)
+  heroGrad:  'rgba(27,58,38,0.92)' as string,
+  cardGrad:  'rgba(27,58,38,0.80)' as string,
+} as const;
+
 // ─── Fonts ───────────────────────────────────────────────────────────────────
 
 export const FONTS = {
   headline: 'PlayfairDisplay-BoldItalic',
   body: 'Manrope-Bold',
   accent: 'Caslon540Italic',
+  newsreaderBold: 'Newsreader-Bold',
+  newsreaderItalic: 'Newsreader-Italic',
+  newsreaderRegular: 'Newsreader-Regular',
   // System font is used for everything else (no fontFamily needed)
 } as const;
 
