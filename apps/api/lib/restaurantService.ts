@@ -35,7 +35,23 @@ export interface NearbyRestaurantsParams {
   targets: MacroTargets;
   cuisineType?: string | undefined;
   chainOnly?: boolean | undefined;
+  dietary?: string | undefined;
+  maxPriceLevel?: string | undefined;
+  minRating?: number | undefined;
   limit: number;
+}
+
+// ─── Price level helpers ──────────────────────────────────────────────────────
+
+const PRICE_LEVEL_ORDER = ["$", "$$", "$$$", "$$$$"] as const;
+
+function allowedPriceLevels(maxPriceLevel: string): string[] {
+  const idx = PRICE_LEVEL_ORDER.indexOf(
+    maxPriceLevel as (typeof PRICE_LEVEL_ORDER)[number],
+  );
+  return idx >= 0
+    ? (PRICE_LEVEL_ORDER.slice(0, idx + 1) as unknown as string[])
+    : (PRICE_LEVEL_ORDER as unknown as string[]);
 }
 
 // ─── Distance helpers ─────────────────────────────────────────────────────────
@@ -74,8 +90,11 @@ async function fetchGeoData(
   radiusMiles: number,
   cuisineType?: string,
   chainOnly?: boolean,
+  dietary?: string,
+  maxPriceLevel?: string,
+  minRating?: number,
 ): Promise<{ restaurants: CachedRestaurant[]; cacheHit: boolean }> {
-  const key = geoCacheKey(lat, lng, radiusMiles, cuisineType, chainOnly);
+  const key = geoCacheKey(lat, lng, radiusMiles, cuisineType, chainOnly, dietary, maxPriceLevel, minRating);
   const cached = geoCacheGet(key);
 
   if (cached) {
@@ -96,6 +115,13 @@ async function fetchGeoData(
         ? { cuisineTags: { has: cuisineType } }
         : {}),
       ...(chainOnly !== undefined ? { chainFlag: chainOnly } : {}),
+      ...(dietary !== undefined
+        ? { dietaryOptions: { has: `has_${dietary}` } }
+        : {}),
+      ...(maxPriceLevel !== undefined
+        ? { priceLevel: { in: allowedPriceLevels(maxPriceLevel) } }
+        : {}),
+      ...(minRating !== undefined ? { rating: { gte: minRating } } : {}),
     },
     include: {
       menuItems: {
@@ -121,6 +147,9 @@ async function fetchGeoData(
       cuisineTags: r.cuisineTags,
       chainFlag: r.chainFlag,
       photoUrl: r.photoUrl,
+      rating: r.rating,
+      priceLevel: r.priceLevel,
+      dietaryOptions: r.dietaryOptions,
       menuItems: r.menuItems
         .filter((item) => item.macroEstimates.length > 0)
         .map((item) => {
@@ -199,7 +228,7 @@ function scoreRestaurant(
 export async function findNearbyRestaurants(
   params: NearbyRestaurantsParams,
 ): Promise<{ data: RestaurantResult[]; total: number }> {
-  const { lat, lng, radiusMiles, targets, cuisineType, chainOnly, limit } =
+  const { lat, lng, radiusMiles, targets, cuisineType, chainOnly, dietary, maxPriceLevel, minRating, limit } =
     params;
 
   const startMs = Date.now();
@@ -211,6 +240,9 @@ export async function findNearbyRestaurants(
     radiusMiles,
     cuisineType,
     chainOnly,
+    dietary,
+    maxPriceLevel,
+    minRating,
   );
 
   const fetchMs = Date.now() - startMs;
@@ -245,6 +277,9 @@ export async function findNearbyRestaurants(
       cuisineTags: r.cuisineTags,
       chainFlag: r.chainFlag,
       ...(r.photoUrl ? { photoUrl: r.photoUrl } : {}),
+      ...(r.rating !== null ? { rating: r.rating } : {}),
+      ...(r.priceLevel !== null ? { priceLevel: r.priceLevel } : {}),
+      ...(r.dietaryOptions.length > 0 ? { dietaryOptions: r.dietaryOptions } : {}),
       bestMatch: bestMatch
         ? {
             menuItemId: bestMatch.menuItemId,
@@ -267,7 +302,7 @@ export async function findNearbyRestaurants(
     JSON.stringify({
       event: "geo_cache",
       hit: cacheHit,
-      key: geoCacheKey(lat, lng, radiusMiles, cuisineType, chainOnly),
+      key: geoCacheKey(lat, lng, radiusMiles, cuisineType, chainOnly, dietary, maxPriceLevel, minRating),
       restaurants: restaurants.length,
       fetchMs,
       scoringMs: totalMs - fetchMs,

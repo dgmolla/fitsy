@@ -67,6 +67,10 @@ interface MockRestaurant {
   lng: number;
   cuisineTags: string[];
   chainFlag: boolean;
+  photoUrl: string | null;
+  rating: number | null;
+  priceLevel: string | null;
+  dietaryOptions: string[];
   menuItems: MockMenuItem[];
 }
 
@@ -108,6 +112,10 @@ function makeRestaurant(overrides: Partial<MockRestaurant> = {}): MockRestaurant
     lng: -118.0,
     cuisineTags: ["american"],
     chainFlag: false,
+    photoUrl: null,
+    rating: null,
+    priceLevel: null,
+    dietaryOptions: [],
     menuItems: [makeMenuItem()],
     ...overrides,
   };
@@ -239,6 +247,42 @@ describe("findNearbyRestaurants", () => {
     expect(mockFindMany).toHaveBeenCalledTimes(1);
     const [callArg] = mockFindMany.mock.calls[0] as [{ where: Record<string, unknown> }];
     expect(callArg.where).toMatchObject({ chainFlag: true });
+  });
+
+  // ── Test 7a ─────────────────────────────────────────────────────────────────
+  it("applies dietary filter — passes dietaryOptions has-clause to Prisma", async () => {
+    mockFindMany.mockResolvedValue([]);
+
+    await findNearbyRestaurants({ ...BASE_PARAMS, dietary: "vegan" });
+
+    const [callArg] = mockFindMany.mock.calls[0] as [{ where: Record<string, unknown> }];
+    expect(callArg.where).toMatchObject({
+      dietaryOptions: { has: "has_vegan" },
+    });
+  });
+
+  // ── Test 7b ─────────────────────────────────────────────────────────────────
+  it("applies maxPriceLevel filter — passes priceLevel in-clause to Prisma", async () => {
+    mockFindMany.mockResolvedValue([]);
+
+    await findNearbyRestaurants({ ...BASE_PARAMS, maxPriceLevel: "$$" });
+
+    const [callArg] = mockFindMany.mock.calls[0] as [{ where: Record<string, unknown> }];
+    expect(callArg.where).toMatchObject({
+      priceLevel: { in: ["$", "$$"] },
+    });
+  });
+
+  // ── Test 7c ─────────────────────────────────────────────────────────────────
+  it("applies minRating filter — passes rating gte-clause to Prisma", async () => {
+    mockFindMany.mockResolvedValue([]);
+
+    await findNearbyRestaurants({ ...BASE_PARAMS, minRating: 4 });
+
+    const [callArg] = mockFindMany.mock.calls[0] as [{ where: Record<string, unknown> }];
+    expect(callArg.where).toMatchObject({
+      rating: { gte: 4 },
+    });
   });
 
   // ── Test 7 ──────────────────────────────────────────────────────────────────
