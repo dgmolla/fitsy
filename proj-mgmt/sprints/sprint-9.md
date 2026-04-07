@@ -3,10 +3,10 @@ kanban-plugin: basic
 ---
 
 ## Backlog
-- [ ] **S-92** Saved + Profile + Detail screens — update to match new palette (cream bg, forest green, warm borders). Saved: match search screen header style. Profile: match card styling. Restaurant detail: verify nav from new cards works, update colors. #frontend #O1 ^dep-S-91
 - [ ] **S-93** Onboarding flow — update welcome, birthday, height, weight, activity, goal, payment screens to match new palette. Newsreader headings, cream bg, forest green accents, consistent button styling from search screen. #frontend #O1 ^dep-S-91
 
 ## In Progress
+- [ ] **S-92** Saved + Profile + Detail screens — update to match new palette (cream bg, forest green, warm borders). Saved: match search screen header style. Profile: match card styling. Restaurant detail: verify nav from new cards works, update colors. #frontend #O1 ^dep-S-91
 
 ## Done
 
