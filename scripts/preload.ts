@@ -323,6 +323,9 @@ async function main(): Promise<void> {
             chainFlag: isChain(place.name, place.types),
             source: "google_places",
             menuSourceId: menuResult.sourceId,
+            rating: place.rating,
+            userRatingCount: place.userRatingCount,
+            priceLevel: place.priceLevel,
           },
           update: {
             name: place.name,
@@ -330,6 +333,9 @@ async function main(): Promise<void> {
             cuisineTags: extractCuisineTags(place.types),
             chainFlag: isChain(place.name, place.types),
             menuSourceId: menuResult.sourceId,
+            rating: place.rating,
+            userRatingCount: place.userRatingCount,
+            priceLevel: place.priceLevel,
           },
         });
         restaurantId = restaurant.id;

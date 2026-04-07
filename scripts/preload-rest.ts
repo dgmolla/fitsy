@@ -55,6 +55,9 @@ interface PlaceResult {
   lng: number;
   websiteUri: string | null;
   types: string[];
+  rating: number | null;
+  userRatingCount: number | null;
+  priceLevel: string | null;
 }
 
 interface HaikuMenuItem {
@@ -113,6 +116,9 @@ interface GooglePlacesEntry {
   location?: { latitude?: number; longitude?: number };
   websiteUri?: string;
   types?: string[];
+  rating?: number;
+  userRatingCount?: number;
+  priceLevel?: string;
 }
 
 interface GooglePlacesNearbyResponse {
@@ -149,7 +155,7 @@ async function discoverRestaurants(): Promise<PlaceResult[]> {
           "Content-Type": "application/json",
           "X-Goog-Api-Key": apiKey,
           "X-Goog-FieldMask":
-            "places.id,places.displayName,places.formattedAddress,places.location,places.websiteUri,places.types",
+            "places.id,places.displayName,places.formattedAddress,places.location,places.websiteUri,places.types,places.rating,places.userRatingCount,places.priceLevel",
         },
         body: JSON.stringify(body),
       }
@@ -173,6 +179,9 @@ async function discoverRestaurants(): Promise<PlaceResult[]> {
         lng: place.location?.longitude ?? CONFIG.targetLng,
         websiteUri: place.websiteUri ?? null,
         types: place.types ?? [],
+        rating: place.rating ?? null,
+        userRatingCount: place.userRatingCount ?? null,
+        priceLevel: normalizePriceLevel(place.priceLevel),
       });
     }
 
@@ -444,6 +453,19 @@ function isChain(name: string, types: string[]): boolean {
   return hasChainType || isKnownChain;
 }
 
+const PRICE_LEVEL_MAP: Record<string, string> = {
+  PRICE_LEVEL_FREE: "$",
+  PRICE_LEVEL_INEXPENSIVE: "$",
+  PRICE_LEVEL_MODERATE: "$$",
+  PRICE_LEVEL_EXPENSIVE: "$$$",
+  PRICE_LEVEL_VERY_EXPENSIVE: "$$$$",
+};
+
+function normalizePriceLevel(raw: string | undefined): string | null {
+  if (!raw) return null;
+  return PRICE_LEVEL_MAP[raw] ?? null;
+}
+
 // ---------------------------------------------------------------------------
 // Supabase REST persistence (replaces Prisma)
 // ---------------------------------------------------------------------------
@@ -486,6 +508,9 @@ async function upsertRestaurant(place: PlaceResult): Promise<string> {
     cuisineTags: extractCuisineTags(place.types),
     chainFlag: isChain(place.name, place.types),
     source: "google_places",
+    rating: place.rating,
+    userRatingCount: place.userRatingCount,
+    priceLevel: place.priceLevel,
     createdAt: now,
     updatedAt: now,
   };
