@@ -29,6 +29,9 @@ const config = {
     "app/api/auth/**/*.ts",
     "!**/*.test.ts",
     "!**/.gitkeep",
+    // External API wrappers — require integration test infrastructure, excluded from unit coverage
+    "!services/googlePlacesService.ts",
+    "!services/menuSources/firecrawlSource.ts",
   ],
   coverageThreshold: {
     global: {
