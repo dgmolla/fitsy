@@ -8,10 +8,9 @@ kanban-plugin: basic
 
 ## In Progress
 
-- [ ] **S-91** Search screen — pixel-match the mockup. Header (• fitsy + location pill + "THE MIDDAY SELECTION"), macro strip with Edit button, cuisine filter chips (All/Asian/Mexican/Healthy with icons), hero card (#01 full-bleed photo + gradient + dietary badge + Newsreader serif name + italic dish + P/C/F/kcal), list cards (#02+ numbered with dish photo carousel). Cream bg (#FDFBF7), forest green text (#1B3A26), warm borders (#E8E2D8). Wire to real DB data. Add bottom nav bar. All components modular/abstracted in brand.ts. Ref: mockup screenshot 2026-04-07. #frontend #O1
-
 ## Done
 
+- [x] **S-91** Search screen — pixel-match the mockup. Hero card, numbered carousels, THE MIDDAY SELECTION masthead, macro strip with Edit button, cuisine chips. EDITORIAL palette + Newsreader fonts in brand.ts. #frontend #O1 @completed(2026-04-07)
 - [x] **S-89** Wipe + re-populate staging DB — 3 restaurants (Chick-fil-A, McDonald's, Pollo Campero), 268 items, 268 MacroEstimates all source:"fatsecret", rating+priceLevel populated, 0 duplicates. #cto #O1 @completed(2026-04-07)
 - [x] **S-83** Wire filters in mobile UI — FiltersPanel (cuisine + dietary + price rows), doFetch wired to API params, DietaryBadges on cards. #frontend #O1 @completed(2026-04-07)
 - [x] **S-81** API filter expansion — `dietary`, `maxPriceLevel`, `minRating` params added to GET /api/restaurants; `RestaurantResult` exposes rating/priceLevel/dietaryOptions. #backend #O1 @completed(2026-04-07)
