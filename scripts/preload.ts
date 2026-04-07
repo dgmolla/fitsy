@@ -186,18 +186,21 @@ async function persistItems(
     if (!item || !macro) continue;
     try {
       const menuItemId = await upsertMenuItem(restaurantId, item, prisma);
-      await prisma.macroEstimate.create({
-        data: {
-          menuItemId,
-          calories: Math.round(macro.calories),
-          proteinG: macro.proteinG,
-          carbsG: macro.carbsG,
-          fatG: macro.fatG,
-          confidence: macro.confidence,
-          source: macro.source,
-          hadPhoto: false,
-        },
-      });
+      await prisma.$transaction([
+        prisma.macroEstimate.deleteMany({ where: { menuItemId } }),
+        prisma.macroEstimate.create({
+          data: {
+            menuItemId,
+            calories: Math.round(macro.calories),
+            proteinG: macro.proteinG,
+            carbsG: macro.carbsG,
+            fatG: macro.fatG,
+            confidence: macro.confidence,
+            source: macro.source,
+            hadPhoto: false,
+          },
+        }),
+      ]);
       count++;
     } catch {
       // individual item failure should not abort the batch
