@@ -25,6 +25,9 @@ export interface CachedRestaurant {
   cuisineTags: string[];
   chainFlag: boolean;
   photoUrl: string | null;
+  rating: number | null;
+  priceLevel: string | null;
+  dietaryOptions: string[];
   menuItems: CachedMenuItem[];
 }
 
@@ -50,14 +53,20 @@ export function geoCacheKey(
   radiusMiles: number,
   cuisineType?: string,
   chainOnly?: boolean,
+  dietary?: string,
+  maxPriceLevel?: string,
+  minRating?: number,
 ): string {
-  const parts = [
+  const parts: (number | string)[] = [
     roundCoord(lat),
     roundCoord(lng),
     radiusMiles,
   ];
-  if (cuisineType !== undefined) parts.push(cuisineType as unknown as number);
+  if (cuisineType !== undefined) parts.push(cuisineType);
   if (chainOnly !== undefined) parts.push(chainOnly ? 1 : 0);
+  if (dietary !== undefined) parts.push(dietary);
+  if (maxPriceLevel !== undefined) parts.push(maxPriceLevel);
+  if (minRating !== undefined) parts.push(minRating);
   return parts.join(":");
 }
 

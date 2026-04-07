@@ -62,6 +62,25 @@ export async function GET(
 
   const cuisineTypeRaw = searchParams.get("cuisineType");
   const chainOnlyRaw = searchParams.get("chainOnly");
+  const dietaryRaw = searchParams.get("dietary");
+  const maxPriceLevelRaw = searchParams.get("maxPriceLevel");
+  const minRatingRaw = searchParams.get("minRating");
+
+  const minRating = minRatingRaw !== null ? Number(minRatingRaw) : undefined;
+  if (minRating !== undefined && (!isFinite(minRating) || minRating < 0 || minRating > 5)) {
+    return NextResponse.json(
+      { error: "minRating must be between 0 and 5" } as never,
+      { status: 400 },
+    );
+  }
+
+  const VALID_PRICE_LEVELS = ["$", "$$", "$$$", "$$$$"];
+  if (maxPriceLevelRaw !== null && !VALID_PRICE_LEVELS.includes(maxPriceLevelRaw)) {
+    return NextResponse.json(
+      { error: `maxPriceLevel must be one of: ${VALID_PRICE_LEVELS.join(", ")}` } as never,
+      { status: 400 },
+    );
+  }
 
   // ─── Query ──────────────────────────────────────────────────────────────────
 
@@ -72,9 +91,10 @@ export async function GET(
       radiusMiles,
       targets,
       ...(cuisineTypeRaw !== null ? { cuisineType: cuisineTypeRaw } : {}),
-      ...(chainOnlyRaw !== null
-        ? { chainOnly: chainOnlyRaw === "true" }
-        : {}),
+      ...(chainOnlyRaw !== null ? { chainOnly: chainOnlyRaw === "true" } : {}),
+      ...(dietaryRaw !== null ? { dietary: dietaryRaw } : {}),
+      ...(maxPriceLevelRaw !== null ? { maxPriceLevel: maxPriceLevelRaw } : {}),
+      ...(minRating !== undefined ? { minRating } : {}),
       limit,
     });
 

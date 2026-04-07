@@ -139,6 +139,9 @@ export interface RestaurantResult {
   cuisineTags: string[];
   chainFlag: boolean;
   photoUrl?: string;
+  rating?: number;
+  priceLevel?: string;
+  dietaryOptions?: string[];
   bestMatch: BestMatchSummary | null;
 }
 
