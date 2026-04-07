@@ -11,6 +11,11 @@ kanban-plugin: basic
 - [ ] **S-81** API filter expansion — add query params to GET /api/restaurants: `dietary` (string, filter by dietaryOptions), `maxPriceLevel` (string, "$"–"$$$$"), `minRating` (number). Update restaurantService.ts Prisma where clause. #backend #O1 ^dep-S-80
 - [ ] **S-82** Run preload with enrichments — run full preload pipeline against staging DB with new fields (rating, priceLevel, dietary tags). Verify data populated correctly. #cto #O1 ^dep-S-78 ^dep-S-79
 - [ ] **S-83** Wire filters in mobile UI — connect cuisine filter bubbles + add dietary/price filters to the search screen. Fetch with new API params. Show dietary badges on cards. #frontend #O1 ^dep-S-81 ^dep-S-82
+- [ ] **S-84** Add Newsreader font — install `@expo-google-fonts/newsreader` via expo-google-fonts, load in root layout alongside existing PlayfairDisplay + Manrope. Verify renders on iOS simulator. #frontend #O1
+- [ ] **S-85** Mockup V3-A: Editorial Cream — retheme current V2 with cream bg (#fcf9f8), deeper forest green (#012d1d), Newsreader headlines, compact macro strip with "Edit" button, tonal layering (no borders). Keep current card layout + cuisine filter bubbles. Ref: `/tmp/stitch-fitsy/DESIGN.md`. #frontend #O1 ^dep-S-84
+- [ ] **S-86** Mockup V3-B: Editorial Cards — cream bg + taller restaurant cards with asymmetric info overlay (Stitch "Editorial Float" style). Cuisine bubbles + macro strip. Each restaurant gets a hero image with floating info panel overlapping bottom corner. #frontend #O1 ^dep-S-84
+- [ ] **S-87** Mockup V3-C: Magazine Layout — full editorial treatment. Large hero image for top restaurant, "The Midday Selection" Newsreader headline, dish carousel below each restaurant, section headers in italic serif. Closest to Stitch design but with fitsy branding + cuisine filters. #frontend #O1 ^dep-S-84
+- [ ] **S-88** Mockup V3-D: Hybrid Minimal — cream bg + compact horizontal cards (current V2 size) but with glassmorphic info overlay, macro strip, tonal layering only (no borders/shadows). Lightest editorial touch. #frontend #O1 ^dep-S-84
 
 ## In Progress
 
