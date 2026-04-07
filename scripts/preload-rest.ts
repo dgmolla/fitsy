@@ -55,6 +55,9 @@ interface PlaceResult {
   lng: number;
   websiteUri: string | null;
   types: string[];
+  rating: number | null;
+  userRatingCount: number | null;
+  priceLevel: string | null;
 }
 
 interface HaikuMenuItem {
@@ -66,6 +69,7 @@ interface HaikuMenuItem {
   c: number;
   f: number;
   conf: "HIGH" | "MEDIUM" | "LOW";
+  tags?: string[];
 }
 
 interface PipelineStats {
@@ -113,11 +117,27 @@ interface GooglePlacesEntry {
   location?: { latitude?: number; longitude?: number };
   websiteUri?: string;
   types?: string[];
+  rating?: number;
+  userRatingCount?: number;
+  priceLevel?: string;
 }
 
 interface GooglePlacesNearbyResponse {
   places?: GooglePlacesEntry[];
   nextPageToken?: string;
+}
+
+const PRICE_LEVEL_MAP: Record<string, string> = {
+  PRICE_LEVEL_FREE: "$",
+  PRICE_LEVEL_INEXPENSIVE: "$",
+  PRICE_LEVEL_MODERATE: "$$",
+  PRICE_LEVEL_EXPENSIVE: "$$$",
+  PRICE_LEVEL_VERY_EXPENSIVE: "$$$$",
+};
+
+function normalizePriceLevel(raw: string | undefined): string | null {
+  if (!raw) return null;
+  return PRICE_LEVEL_MAP[raw] ?? null;
 }
 
 async function discoverRestaurants(): Promise<PlaceResult[]> {
@@ -149,7 +169,7 @@ async function discoverRestaurants(): Promise<PlaceResult[]> {
           "Content-Type": "application/json",
           "X-Goog-Api-Key": apiKey,
           "X-Goog-FieldMask":
-            "places.id,places.displayName,places.formattedAddress,places.location,places.websiteUri,places.types",
+            "places.id,places.displayName,places.formattedAddress,places.location,places.websiteUri,places.types,places.rating,places.userRatingCount,places.priceLevel",
         },
         body: JSON.stringify(body),
       }
@@ -173,6 +193,9 @@ async function discoverRestaurants(): Promise<PlaceResult[]> {
         lng: place.location?.longitude ?? CONFIG.targetLng,
         websiteUri: place.websiteUri ?? null,
         types: place.types ?? [],
+        rating: place.rating ?? null,
+        userRatingCount: place.userRatingCount ?? null,
+        priceLevel: normalizePriceLevel(place.priceLevel),
       });
     }
 
@@ -292,6 +315,8 @@ async function getMenuMarkdown(
 // Claude Haiku (unchanged from preload.ts)
 // ---------------------------------------------------------------------------
 
+const VALID_DIETARY_TAGS = new Set(["vegan", "vegetarian", "gluten-free", "keto", "dairy-free"]);
+
 const HAIKU_SYSTEM_PROMPT = `You are a nutrition expert. Extract menu items from the provided restaurant menu text and estimate macros for each item.
 
 Return ONLY valid JSON (no markdown fences, no explanation) as an array of objects with these exact fields:
@@ -303,6 +328,7 @@ Return ONLY valid JSON (no markdown fences, no explanation) as an array of objec
 - c: carbohydrates in grams (number)
 - f: fat in grams (number)
 - conf: confidence level (string: "HIGH", "MEDIUM", or "LOW")
+- tags: array of applicable dietary tags (strings). Only include from: "vegan", "vegetarian", "gluten-free", "keto", "dairy-free". Use [] if none apply.
 
 Confidence levels:
 - HIGH: known chain item or clear description with specific ingredients
@@ -486,6 +512,9 @@ async function upsertRestaurant(place: PlaceResult): Promise<string> {
     cuisineTags: extractCuisineTags(place.types),
     chainFlag: isChain(place.name, place.types),
     source: "google_places",
+    rating: place.rating,
+    userRatingCount: place.userRatingCount,
+    priceLevel: place.priceLevel,
     createdAt: now,
     updatedAt: now,
   };
@@ -534,12 +563,16 @@ async function getOrCreateMenuItem(
 
   // Create new
   const now = new Date().toISOString();
+  const dietaryTags = Array.isArray(item.tags)
+    ? item.tags.filter((t): t is string => typeof t === "string" && VALID_DIETARY_TAGS.has(t))
+    : [];
   const body = {
     id: randomUUID(),
     restaurantId,
     name: item.n,
     description: item.desc ?? null,
     category: item.cat ?? null,
+    dietaryTags,
     createdAt: now,
     updatedAt: now,
   };
@@ -583,6 +616,7 @@ async function upsertMacroEstimate(
     carbsG: item.c,
     fatG: item.f,
     confidence: item.conf,
+    source: "haiku",
     hadPhoto: false,
     estimatedAt: now,
     expiresAt: null,

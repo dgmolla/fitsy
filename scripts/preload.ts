@@ -149,6 +149,7 @@ async function upsertMenuItem(
   restaurantId: string,
   item: StructuredMenuItem,
   prisma: PrismaClient,
+  dietaryTags?: string[],
 ): Promise<string> {
   const existing = await prisma.menuItem.findFirst({
     where: { restaurantId, name: item.name },
@@ -160,6 +161,7 @@ async function upsertMenuItem(
     ...(item.category !== undefined ? { category: item.category } : {}),
     ...(item.section !== undefined ? { section: item.section } : {}),
     ...(item.price !== undefined ? { price: item.price } : {}),
+    ...(dietaryTags !== undefined ? { dietaryTags } : {}),
   };
 
   if (existing) {
@@ -185,6 +187,7 @@ async function persistItems(
     const macro = macros[i];
     if (!item || !macro) continue;
     try {
+      // TODO(S-79): pass macro.dietaryTags once S-79 backend merges (MacroData gains dietaryTags)
       const menuItemId = await upsertMenuItem(restaurantId, item, prisma);
       await prisma.$transaction([
         prisma.macroEstimate.deleteMany({ where: { menuItemId } }),
@@ -323,6 +326,9 @@ async function main(): Promise<void> {
             chainFlag: isChain(place.name, place.types),
             source: "google_places",
             menuSourceId: menuResult.sourceId,
+            rating: place.rating,
+            userRatingCount: place.userRatingCount,
+            priceLevel: place.priceLevel,
           },
           update: {
             name: place.name,
@@ -330,6 +336,9 @@ async function main(): Promise<void> {
             cuisineTags: extractCuisineTags(place.types),
             chainFlag: isChain(place.name, place.types),
             menuSourceId: menuResult.sourceId,
+            rating: place.rating,
+            userRatingCount: place.userRatingCount,
+            priceLevel: place.priceLevel,
           },
         });
         restaurantId = restaurant.id;
