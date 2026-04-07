@@ -12,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { router, useNavigation } from 'expo-router';
 import { useTheme } from '@/lib/theme';
+import { FONTS } from '@/lib/brand';
 import { ScreenBackground } from './ScreenBackground';
 
 interface Props {
@@ -170,7 +171,8 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontWeight: '700',
+    fontFamily: FONTS.newsreaderBold,
+    letterSpacing: -0.8,
     marginBottom: 8,
   },
   subtitle: {

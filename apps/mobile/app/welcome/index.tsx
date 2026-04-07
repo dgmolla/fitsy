@@ -4,7 +4,7 @@ import { ScreenBackground } from '@/components/ScreenBackground';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/lib/theme';
-import { BRAND } from '@/lib/brand';
+import { BRAND, FONTS } from '@/lib/brand';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -100,8 +100,8 @@ const styles = StyleSheet.create({
   hero: { alignItems: 'center', gap: 8 },
   wordmark: {
     fontSize: 42,
-    fontWeight: '800',
-    letterSpacing: BRAND.letterSpacing,
+    fontFamily: FONTS.newsreaderBold,
+    letterSpacing: -1.5,
   },
   tagline: { fontSize: 16, textAlign: 'center' },
   props: { gap: 20 },
