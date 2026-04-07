@@ -413,7 +413,7 @@ export default function SearchScreen() {
           {categories.length === 0 && (
             <View style={s.emptyState}>
               <Ionicons name="search-outline" size={48} color={COLORS.textTertiary} />
-              <Text style={s.emptyText}>No matches for this cuisine</Text>
+              <Text style={s.emptyText}>No matches for these filters</Text>
             </View>
           )}
         </ScrollView>
