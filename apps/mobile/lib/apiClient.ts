@@ -8,6 +8,10 @@ export interface FetchRestaurantsParams {
   calories?: number;
   lat: number;
   lng: number;
+  cuisineType?: string;
+  dietary?: string;
+  maxPriceLevel?: string;
+  minRating?: number;
 }
 
 export async function fetchRestaurants(
@@ -23,6 +27,10 @@ export async function fetchRestaurants(
   if (params.carbs !== undefined) qs.set('carbs', String(params.carbs));
   if (params.fat !== undefined) qs.set('fat', String(params.fat));
   if (params.calories !== undefined) qs.set('calories', String(params.calories));
+  if (params.cuisineType !== undefined) qs.set('cuisineType', params.cuisineType);
+  if (params.dietary !== undefined) qs.set('dietary', params.dietary);
+  if (params.maxPriceLevel !== undefined) qs.set('maxPriceLevel', params.maxPriceLevel);
+  if (params.minRating !== undefined) qs.set('minRating', String(params.minRating));
 
   try {
     const response = await api.get<RestaurantsApiResponse>(
