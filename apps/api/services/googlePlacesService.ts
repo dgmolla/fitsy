@@ -20,6 +20,9 @@ export interface PlaceResult {
   lng: number;
   websiteUri: string | null;
   types: string[];
+  rating: number | null;
+  userRatingCount: number | null;
+  priceLevel: string | null;
 }
 
 export interface DiscoveryConfig {
@@ -39,6 +42,9 @@ interface GooglePlacesEntry {
   location?: { latitude?: number; longitude?: number };
   websiteUri?: string;
   types?: string[];
+  rating?: number;
+  userRatingCount?: number;
+  priceLevel?: string;
 }
 
 interface GooglePlacesNearbyResponse {
@@ -50,7 +56,7 @@ interface GooglePlacesNearbyResponse {
 
 const BASE_URL = "https://places.googleapis.com/v1";
 const FIELD_MASK =
-  "places.id,places.displayName,places.formattedAddress,places.location,places.websiteUri,places.types";
+  "places.id,places.displayName,places.formattedAddress,places.location,places.websiteUri,places.types,places.rating,places.userRatingCount,places.priceLevel";
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 
@@ -120,6 +126,9 @@ export async function discoverRestaurants(
         lng: place.location?.longitude ?? lng,
         websiteUri: place.websiteUri ?? null,
         types: place.types ?? [],
+        rating: place.rating ?? null,
+        userRatingCount: place.userRatingCount ?? null,
+        priceLevel: normalizePriceLevel(place.priceLevel),
       });
     }
 
@@ -136,4 +145,17 @@ export async function discoverRestaurants(
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export const PRICE_LEVEL_MAP: Record<string, string> = {
+  PRICE_LEVEL_FREE: "$",
+  PRICE_LEVEL_INEXPENSIVE: "$",
+  PRICE_LEVEL_MODERATE: "$$",
+  PRICE_LEVEL_EXPENSIVE: "$$$",
+  PRICE_LEVEL_VERY_EXPENSIVE: "$$$$",
+};
+
+export function normalizePriceLevel(raw: string | undefined): string | null {
+  if (!raw) return null;
+  return PRICE_LEVEL_MAP[raw] ?? null;
 }
