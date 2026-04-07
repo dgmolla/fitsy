@@ -66,6 +66,7 @@ interface HaikuMenuItem {
   c: number;
   f: number;
   conf: "HIGH" | "MEDIUM" | "LOW";
+  tags?: string[];
 }
 
 interface PipelineStats {
@@ -303,11 +304,14 @@ Return ONLY valid JSON (no markdown fences, no explanation) as an array of objec
 - c: carbohydrates in grams (number)
 - f: fat in grams (number)
 - conf: confidence level (string: "HIGH", "MEDIUM", or "LOW")
+- tags: array of applicable dietary tags from ["vegan", "vegetarian", "gluten-free", "keto", "dairy-free"]. Use [] if none apply.
 
 Confidence levels:
 - HIGH: known chain item or clear description with specific ingredients
 - MEDIUM: typical restaurant item with reasonable description
 - LOW: vague name, no description, or unusual item
+
+Tag criteria: vegan (no animal products), vegetarian (no meat/fish), gluten-free (no wheat/barley/rye), keto (≤10g net carbs), dairy-free (no milk/cheese/butter/cream).
 
 If you cannot extract any menu items, return an empty array: []`;
 
@@ -533,6 +537,10 @@ async function getOrCreateMenuItem(
   }
 
   // Create new
+  const VALID_TAGS = new Set(["vegan", "vegetarian", "gluten-free", "keto", "dairy-free"]);
+  const dietaryTags = Array.isArray(item.tags)
+    ? item.tags.filter((t): t is string => typeof t === "string" && VALID_TAGS.has(t))
+    : [];
   const now = new Date().toISOString();
   const body = {
     id: randomUUID(),
@@ -540,6 +548,7 @@ async function getOrCreateMenuItem(
     name: item.n,
     description: item.desc ?? null,
     category: item.cat ?? null,
+    dietaryTags,
     createdAt: now,
     updatedAt: now,
   };

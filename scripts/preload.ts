@@ -149,6 +149,7 @@ async function upsertMenuItem(
   restaurantId: string,
   item: StructuredMenuItem,
   prisma: PrismaClient,
+  dietaryTags?: string[],
 ): Promise<string> {
   const existing = await prisma.menuItem.findFirst({
     where: { restaurantId, name: item.name },
@@ -160,6 +161,7 @@ async function upsertMenuItem(
     ...(item.category !== undefined ? { category: item.category } : {}),
     ...(item.section !== undefined ? { section: item.section } : {}),
     ...(item.price !== undefined ? { price: item.price } : {}),
+    ...(dietaryTags !== undefined ? { dietaryTags } : {}),
   };
 
   if (existing) {
@@ -185,7 +187,7 @@ async function persistItems(
     const macro = macros[i];
     if (!item || !macro) continue;
     try {
-      const menuItemId = await upsertMenuItem(restaurantId, item, prisma);
+      const menuItemId = await upsertMenuItem(restaurantId, item, prisma, macro.dietaryTags);
       await prisma.$transaction([
         prisma.macroEstimate.deleteMany({ where: { menuItemId } }),
         prisma.macroEstimate.create({

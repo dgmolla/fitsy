@@ -24,6 +24,7 @@ interface HaikuEstimate {
   c: number;
   f: number;
   conf: "HIGH" | "MEDIUM" | "LOW";
+  tags: string[];
 }
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
@@ -31,7 +32,7 @@ interface HaikuEstimate {
 const HAIKU_MODEL = "claude-haiku-4-5" as const;
 const MAX_TOKENS = 8192;
 
-const SYSTEM_PROMPT = `You are a nutrition expert. You will receive a JSON array of restaurant menu items that have already been identified. For each item, estimate its macronutrient content.
+const SYSTEM_PROMPT = `You are a nutrition expert. You will receive a JSON array of restaurant menu items that have already been identified. For each item, estimate its macronutrient content and classify dietary tags.
 
 Return ONLY valid JSON (no markdown fences, no explanation) as an array of objects in the SAME ORDER as the input, with these exact fields:
 - cal: calories (integer)
@@ -39,6 +40,14 @@ Return ONLY valid JSON (no markdown fences, no explanation) as an array of objec
 - c: carbohydrates in grams (number)
 - f: fat in grams (number)
 - conf: confidence level (string: "HIGH", "MEDIUM", or "LOW")
+- tags: array of applicable dietary tags from this set: ["vegan", "vegetarian", "gluten-free", "keto", "dairy-free"]. Use an empty array if none apply.
+
+Tag criteria:
+- vegan: no animal products (meat, dairy, eggs, honey)
+- vegetarian: no meat or fish; dairy and eggs are OK
+- gluten-free: no wheat, barley, or rye
+- keto: high-fat, low-carb (≤10g net carbs estimated)
+- dairy-free: no milk, cheese, butter, or cream
 
 Confidence levels:
 - HIGH: known chain item or clear description with specific ingredients
@@ -155,6 +164,11 @@ export async function estimateMacros(
       return null;
     }
 
+    const VALID_TAGS = new Set(["vegan", "vegetarian", "gluten-free", "keto", "dairy-free"]);
+    const dietaryTags = Array.isArray(est.tags)
+      ? est.tags.filter((t): t is string => typeof t === "string" && VALID_TAGS.has(t))
+      : [];
+
     return {
       calories: est.cal,
       proteinG: est.p,
@@ -162,6 +176,7 @@ export async function estimateMacros(
       fatG: est.f,
       confidence: est.conf,
       source: "haiku",
+      dietaryTags,
     };
   });
 }

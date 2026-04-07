@@ -34,8 +34,8 @@ const ITEMS: StructuredMenuItem[] = [
 ];
 
 const HAIKU_ESTIMATES = [
-  { cal: 320, p: 42, c: 2, f: 14, conf: "HIGH" },
-  { cal: 380, p: 8, c: 30, f: 24, conf: "MEDIUM" },
+  { cal: 320, p: 42, c: 2, f: 14, conf: "HIGH", tags: [] },
+  { cal: 380, p: 8, c: 30, f: 24, conf: "MEDIUM", tags: ["vegetarian"] },
 ];
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -66,6 +66,7 @@ describe("estimateMacros", () => {
       fatG: 14,
       confidence: "HIGH",
       source: "haiku",
+      dietaryTags: [],
     });
     expect(second).toEqual<MacroData>({
       calories: 380,
@@ -74,6 +75,7 @@ describe("estimateMacros", () => {
       fatG: 24,
       confidence: "MEDIUM",
       source: "haiku",
+      dietaryTags: ["vegetarian"],
     });
   });
 
