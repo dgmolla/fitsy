@@ -24,7 +24,7 @@ interface HaikuEstimate {
   c: number;
   f: number;
   conf: "HIGH" | "MEDIUM" | "LOW";
-  tags: string[];
+  tags?: string[]; // optional — Haiku may omit if not following prompt exactly
 }
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
