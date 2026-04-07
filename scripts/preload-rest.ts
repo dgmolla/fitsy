@@ -498,6 +498,7 @@ interface MenuItemRow {
   id: string;
   restaurantId: string;
   name: string;
+  dietaryTags: string[];
 }
 
 async function upsertRestaurant(place: PlaceResult): Promise<string> {
@@ -636,6 +637,40 @@ async function upsertMacroEstimate(
   }
 }
 
+const DIETARY_TAG_THRESHOLD = 3;
+
+async function computeAndStoreDietaryOptions(restaurantId: string): Promise<void> {
+  const resp = await fetch(
+    `${restUrl("MenuItem")}?restaurantId=eq.${encodeURIComponent(restaurantId)}&select=dietaryTags`,
+    { headers: supabaseHeaders() }
+  );
+  if (!resp.ok) return;
+
+  const items = (await resp.json()) as MenuItemRow[];
+  const tagCounts = new Map<string, number>();
+  for (const item of items) {
+    for (const tag of item.dietaryTags ?? []) {
+      tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
+    }
+  }
+
+  const dietaryOptions: string[] = [];
+  for (const [tag, count] of tagCounts) {
+    if (count >= DIETARY_TAG_THRESHOLD) {
+      dietaryOptions.push(`has_${tag}`);
+    }
+  }
+
+  await fetch(
+    `${restUrl("Restaurant")}?id=eq.${encodeURIComponent(restaurantId)}`,
+    {
+      method: "PATCH",
+      headers: supabaseHeaders(),
+      body: JSON.stringify({ dietaryOptions }),
+    }
+  );
+}
+
 async function persistRestaurant(
   place: PlaceResult,
   menuItems: HaikuMenuItem[]
@@ -650,6 +685,8 @@ async function persistRestaurant(
       log(`  Failed to persist item "${item.n}": ${String(err)}`);
     }
   }
+
+  await computeAndStoreDietaryOptions(restaurantId);
 }
 
 // ---------------------------------------------------------------------------
