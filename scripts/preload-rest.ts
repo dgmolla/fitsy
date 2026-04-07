@@ -560,10 +560,20 @@ async function getOrCreateMenuItem(
   return rows[0].id;
 }
 
-async function createMacroEstimate(
+async function upsertMacroEstimate(
   menuItemId: string,
   item: HaikuMenuItem
 ): Promise<void> {
+  // Delete existing estimates first to avoid duplicates on re-run
+  const deleteResp = await fetch(
+    `${restUrl("MacroEstimate")}?menuItemId=eq.${encodeURIComponent(menuItemId)}`,
+    { method: "DELETE", headers: supabaseHeaders() }
+  );
+  if (!deleteResp.ok) {
+    const text = await deleteResp.text();
+    throw new Error(`Delete MacroEstimate failed (${deleteResp.status}): ${text}`);
+  }
+
   const now = new Date().toISOString();
   const body = {
     id: randomUUID(),
@@ -601,7 +611,7 @@ async function persistRestaurant(
   for (const item of menuItems) {
     try {
       const menuItemId = await getOrCreateMenuItem(restaurantId, item);
-      await createMacroEstimate(menuItemId, item);
+      await upsertMacroEstimate(menuItemId, item);
     } catch (err) {
       log(`  Failed to persist item "${item.n}": ${String(err)}`);
     }
