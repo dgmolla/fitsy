@@ -79,12 +79,13 @@ model MenuItem {
   macroEstimates MacroEstimate[]
   savedItems     SavedItem[]
 
+  @@unique([restaurantId, name])
   @@index([restaurantId])
 }
 
 model MacroEstimate {
   id                   String          @id @default(cuid())
-  menuItemId           String
+  menuItemId           String          @unique
   calories             Int
   proteinG             Float
   carbsG               Float
@@ -98,7 +99,6 @@ model MacroEstimate {
   expiresAt            DateTime?
   menuItem             MenuItem        @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
 
-  @@index([menuItemId])
   @@index([expiresAt])
 }
 
