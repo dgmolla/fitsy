@@ -58,7 +58,7 @@ export default function WelcomeSplash() {
         <View style={styles.actions}>
           <Pressable
             style={styles.ctaBtn}
-            onPress={() => router.push('/welcome/age')}
+            onPress={() => router.push('/welcome/problem')}
             accessibilityRole="button"
             accessibilityLabel="Get Started"
           >
