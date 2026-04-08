@@ -79,6 +79,13 @@ const DEFAULT_INPUTS: MacroValues = { protein: '', carbs: '', fat: '', calories:
 
 // ─── Masthead ─────────────────────────────────────────────────────────────────
 
+function getSelectionLabel(): string {
+  const hour = new Date().getHours();
+  if (hour < 11) return 'THE MORNING SELECTION';
+  if (hour < 17) return 'THE MIDDAY SELECTION';
+  return 'THE EVENING SELECTION';
+}
+
 function Masthead({ locationLabel }: { locationLabel: string }) {
   return (
     <View style={s.masthead}>
@@ -92,7 +99,7 @@ function Masthead({ locationLabel }: { locationLabel: string }) {
           <Text style={s.locationText}>{locationLabel}</Text>
         </View>
       </View>
-      <Text style={s.issueLabel}>THE MIDDAY SELECTION</Text>
+      <Text style={s.issueLabel}>{getSelectionLabel()}</Text>
     </View>
   );
 }
