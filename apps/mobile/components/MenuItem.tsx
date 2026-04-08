@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { MenuItemResult } from '@fitsy/shared';
 import { BookmarkButton } from './BookmarkButton';
-import { useTheme } from '@/lib/theme';
+import { EDITORIAL, FONTS } from '@/lib/brand';
 import { MacroChips } from './MacroChips';
 
 interface Props {
@@ -13,18 +13,17 @@ interface Props {
 }
 
 export function MenuItem({ item, isSaved, onToggleSave }: Props) {
-  const { colors } = useTheme();
   const m = item.macros;
 
   return (
-    <View style={[styles.card, { backgroundColor: colors.bgCard, borderColor: colors.borderSubtle }]}>
+    <View style={styles.card}>
       <View style={styles.topRow}>
         <View style={styles.nameBlock}>
-          <Text style={[styles.name, { color: colors.textPrimary }]} numberOfLines={2}>
+          <Text style={styles.name} numberOfLines={2}>
             {item.name}
           </Text>
           {item.description ? (
-            <Text style={[styles.description, { color: colors.textTertiary }]} numberOfLines={1}>
+            <Text style={styles.description} numberOfLines={1}>
               {item.description}
             </Text>
           ) : null}
@@ -43,8 +42,8 @@ export function MenuItem({ item, isSaved, onToggleSave }: Props) {
         />
       ) : (
         <View style={styles.noMacroRow}>
-          <Ionicons name="alert-circle-outline" size={14} color={colors.textTertiary} />
-          <Text style={[styles.noMacro, { color: colors.textTertiary }]}>No macro data</Text>
+          <Ionicons name="alert-circle-outline" size={14} color={EDITORIAL.textSoft} />
+          <Text style={styles.noMacro}>No macro data</Text>
         </View>
       )}
     </View>
@@ -57,6 +56,8 @@ const styles = StyleSheet.create({
     marginVertical: 6,
     borderRadius: 14,
     borderWidth: 1,
+    borderColor: EDITORIAL.border,
+    backgroundColor: EDITORIAL.creamCard,
     paddingHorizontal: 16,
     paddingVertical: 14,
   },
@@ -67,8 +68,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   nameBlock: { flex: 1, marginRight: 8 },
-  name: { fontSize: 16, fontWeight: '700', lineHeight: 21 },
-  description: { fontSize: 13, marginTop: 2, lineHeight: 17 },
+  name: {
+    fontFamily: FONTS.newsreaderBold,
+    fontSize: 16,
+    color: EDITORIAL.text,
+    lineHeight: 21,
+  },
+  description: { fontSize: 13, marginTop: 2, lineHeight: 17, color: EDITORIAL.textSoft },
   noMacroRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  noMacro: { fontSize: 13, fontStyle: 'italic' },
+  noMacro: { fontSize: 13, fontStyle: 'italic', color: EDITORIAL.textSoft },
 });

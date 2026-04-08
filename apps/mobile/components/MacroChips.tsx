@@ -1,13 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { useTheme } from '@/lib/theme';
+import { EDITORIAL } from '@/lib/brand';
 import { MACRO_COLORS } from '@/lib/macroColors';
-
-/**
- * Centralized macro display component.
- * Label above number, colored by macro type.
- * Used in RestaurantCard, MenuItem, and anywhere macros are shown.
- */
 
 interface MacroChipsProps {
   calories?: number;
@@ -17,14 +11,13 @@ interface MacroChipsProps {
 }
 
 const CHIPS: { key: keyof MacroChipsProps; label: string; color: string; unit: string }[] = [
-  { key: 'calories', label: 'CALS', color: '', unit: '' },
+  { key: 'calories', label: 'CALS', color: EDITORIAL.text, unit: '' },
   { key: 'protein', label: 'PRO', color: MACRO_COLORS.protein, unit: 'g' },
   { key: 'carbs', label: 'CARB', color: MACRO_COLORS.carbs, unit: 'g' },
   { key: 'fat', label: 'FAT', color: MACRO_COLORS.fat, unit: 'g' },
 ];
 
 export function MacroChips({ calories, protein, carbs, fat }: MacroChipsProps) {
-  const { colors } = useTheme();
   const values: MacroChipsProps = { calories, protein, carbs, fat };
 
   return (
@@ -32,11 +25,10 @@ export function MacroChips({ calories, protein, carbs, fat }: MacroChipsProps) {
       {CHIPS.map(({ key, label, color, unit }) => {
         const val = values[key];
         if (val === undefined) return null;
-        const chipColor = color || colors.textPrimary;
         return (
-          <View key={key} style={[styles.chip, { backgroundColor: colors.bgElevated }]}>
-            <Text style={[styles.label, { color: colors.textTertiary }]}>{label}</Text>
-            <Text style={[styles.value, { color: chipColor }]}>
+          <View key={key} style={styles.chip}>
+            <Text style={styles.label}>{label}</Text>
+            <Text style={[styles.value, { color }]}>
               {val}{unit}
             </Text>
           </View>
@@ -58,11 +50,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     gap: 2,
+    backgroundColor: EDITORIAL.creamDeep,
   },
   label: {
     fontSize: 9,
     fontWeight: '700',
     letterSpacing: 0.5,
+    color: EDITORIAL.textSoft,
   },
   value: {
     fontSize: 15,

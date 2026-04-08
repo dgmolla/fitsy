@@ -1,12 +1,12 @@
 /**
  * Centralized macro nutrient color config.
- * All P/C/F color references throughout the app should use this.
+ * Editorial palette — muted tones that work on cream backgrounds.
  * Change here → reflects everywhere.
  */
 export const MACRO_COLORS = {
-  protein: '#3B82F6',  // blue
-  carbs: '#2D7D46',    // green (brand)
-  fat: '#D946EF',      // magenta
+  protein: '#5B7C6B',  // muted sage
+  carbs: '#8B7355',    // warm brown
+  fat: '#7B6B8A',      // muted purple
 } as const;
 
 export type MacroKey = keyof typeof MACRO_COLORS;
