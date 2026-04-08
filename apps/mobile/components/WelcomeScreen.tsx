@@ -11,9 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useNavigation } from 'expo-router';
-import { useTheme } from '@/lib/theme';
-import { FONTS } from '@/lib/brand';
-import { ScreenBackground } from './ScreenBackground';
+import { EDITORIAL, FONTS } from '@/lib/brand';
 
 interface Props {
   step: number;
@@ -46,7 +44,6 @@ export function WelcomeScreen({
   scrollable = false,
   hideFooter = false,
 }: Props) {
-  const { colors } = useTheme();
   const navigation = useNavigation();
   const progress = step / totalSteps;
 
@@ -61,8 +58,8 @@ export function WelcomeScreen({
   const body = (
     <View>
       {illustration && <View style={styles.illustrationWrap}>{illustration}</View>}
-      <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
-      <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+      <Text style={styles.title}>{title}</Text>
+      <Text style={styles.subtitle}>
         {subtitle}
       </Text>
       <View style={styles.childrenWrap}>{children}</View>
@@ -70,7 +67,7 @@ export function WelcomeScreen({
   );
 
   return (
-    <ScreenBackground>
+    <SafeAreaView style={{ flex: 1, backgroundColor: EDITORIAL.cream }}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -85,16 +82,16 @@ export function WelcomeScreen({
               accessibilityLabel="Go back"
               style={styles.backBtn}
             >
-              <Ionicons name="chevron-back" size={24} color={colors.textSecondary} />
+              <Ionicons name="chevron-back" size={24} color={EDITORIAL.textSoft} />
             </Pressable>
           ) : (
             <View style={styles.backBtn} />
           )}
-          <View style={[styles.progressTrack, { backgroundColor: colors.borderSubtle }]}>
+          <View style={[styles.progressTrack, { backgroundColor: EDITORIAL.border }]}>
             <View
               style={[
                 styles.progressFill,
-                { backgroundColor: colors.accent, width: `${progress * 100}%` },
+                { backgroundColor: EDITORIAL.greenAccent, width: `${progress * 100}%` },
               ]}
             />
           </View>
@@ -115,7 +112,7 @@ export function WelcomeScreen({
               <Pressable
                 style={[
                   styles.continueBtn,
-                  { backgroundColor: colors.accent },
+                  { backgroundColor: EDITORIAL.green },
                   !canContinue && { opacity: 0.4 },
                 ]}
                 onPress={onContinue}
@@ -124,7 +121,7 @@ export function WelcomeScreen({
                 accessibilityLabel={continueLabel}
                 accessibilityState={{ disabled: !canContinue }}
               >
-                <Text style={[styles.continueTxt, { color: colors.accentOnAccent }]}>
+                <Text style={[styles.continueTxt, { color: EDITORIAL.cream }]}>
                   {continueLabel}
                 </Text>
               </Pressable>
@@ -132,7 +129,7 @@ export function WelcomeScreen({
           )}
         </ScrollView>
       </KeyboardAvoidingView>
-    </ScreenBackground>
+    </SafeAreaView>
   );
 }
 
@@ -172,12 +169,14 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontFamily: FONTS.newsreaderBold,
+    color: EDITORIAL.text,
     letterSpacing: -0.8,
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 15,
     lineHeight: 22,
+    color: EDITORIAL.textSoft,
     marginBottom: 28,
   },
   childrenWrap: {

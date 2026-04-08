@@ -1,10 +1,8 @@
 import React from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import { ScreenBackground } from '@/components/ScreenBackground';
+import { Image, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '@/lib/theme';
-import { BRAND, FONTS } from '@/lib/brand';
+import { EDITORIAL, FONTS } from '@/lib/brand';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -27,10 +25,8 @@ const VALUE_PROPS: { icon: IoniconsName; title: string; desc: string }[] = [
 ];
 
 export default function WelcomeSplash() {
-  const { colors } = useTheme();
-
   return (
-    <ScreenBackground>
+    <SafeAreaView style={{ flex: 1, backgroundColor: EDITORIAL.cream }}>
       <View style={styles.content}>
         {/* Hero */}
         <View style={styles.hero}>
@@ -39,22 +35,20 @@ export default function WelcomeSplash() {
             style={{ width: 180, height: 180 }}
             resizeMode="contain"
           />
-          <Text style={[styles.wordmark, { color: BRAND.color }]}>{BRAND.name}</Text>
-          <Text style={[styles.tagline, { color: colors.textSecondary }]}>
-            {BRAND.tagline}
-          </Text>
+          <Text style={styles.wordmark}>fitsy</Text>
+          <Text style={styles.tagline}>Find food that fits</Text>
         </View>
 
         {/* Value props */}
         <View style={styles.props}>
           {VALUE_PROPS.map((vp) => (
             <View key={vp.title} style={styles.propRow}>
-              <View style={[styles.iconWrap, { backgroundColor: BRAND.color + '18' }]}>
-                <Ionicons name={vp.icon} size={22} color={BRAND.color} />
+              <View style={styles.iconWrap}>
+                <Ionicons name={vp.icon} size={22} color={EDITORIAL.greenAccent} />
               </View>
               <View style={styles.propText}>
-                <Text style={[styles.propTitle, { color: colors.textPrimary }]}>{vp.title}</Text>
-                <Text style={[styles.propDesc, { color: colors.textSecondary }]}>{vp.desc}</Text>
+                <Text style={styles.propTitle}>{vp.title}</Text>
+                <Text style={styles.propDesc}>{vp.desc}</Text>
               </View>
             </View>
           ))}
@@ -63,13 +57,13 @@ export default function WelcomeSplash() {
         {/* CTA */}
         <View style={styles.actions}>
           <Pressable
-            style={[styles.ctaBtn, { backgroundColor: BRAND.color }]}
+            style={styles.ctaBtn}
             onPress={() => router.push('/welcome/age')}
             accessibilityRole="button"
             accessibilityLabel="Get Started"
           >
             <Text style={styles.ctaTxt}>Get Started</Text>
-            <Ionicons name="arrow-forward" size={18} color="#fff" />
+            <Ionicons name="arrow-forward" size={18} color={EDITORIAL.cream} />
           </Pressable>
 
           <Pressable
@@ -77,19 +71,18 @@ export default function WelcomeSplash() {
             accessibilityRole="button"
             accessibilityLabel="Already have an account? Log in"
           >
-            <Text style={[styles.loginHint, { color: colors.textTertiary }]}>
+            <Text style={styles.loginHint}>
               Already have an account?{' '}
-              <Text style={{ color: BRAND.color, fontWeight: '600' }}>Log in</Text>
+              <Text style={{ color: EDITORIAL.greenAccent, fontWeight: '600' }}>Log in</Text>
             </Text>
           </Pressable>
         </View>
       </View>
-    </ScreenBackground>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1 },
   content: {
     flex: 1,
     paddingHorizontal: 24,
@@ -101,37 +94,40 @@ const styles = StyleSheet.create({
   wordmark: {
     fontSize: 42,
     fontFamily: FONTS.newsreaderBold,
+    color: EDITORIAL.green,
     letterSpacing: -1.5,
   },
-  tagline: { fontSize: 16, textAlign: 'center' },
+  tagline: { fontSize: 16, textAlign: 'center', color: EDITORIAL.textSoft },
   props: { gap: 20 },
   propRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
   iconWrap: {
     width: 44,
     height: 44,
     borderRadius: 12,
+    backgroundColor: EDITORIAL.creamDeep,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   propText: { flex: 1 },
-  propTitle: { fontSize: 15, fontWeight: '600', marginBottom: 2 },
-  propDesc: { fontSize: 13, lineHeight: 19 },
+  propTitle: { fontSize: 15, fontWeight: '600', color: EDITORIAL.text, marginBottom: 2 },
+  propDesc: { fontSize: 13, lineHeight: 19, color: EDITORIAL.textSoft },
   actions: { gap: 16, alignItems: 'center' },
   ctaBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    backgroundColor: EDITORIAL.green,
     borderRadius: 14,
     paddingVertical: 16,
     width: '100%',
-    shadowColor: BRAND.color,
+    shadowColor: EDITORIAL.green,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 4,
   },
-  ctaTxt: { fontSize: 16, fontWeight: '700', color: '#fff' },
-  loginHint: { fontSize: 14, textAlign: 'center' },
+  ctaTxt: { fontSize: 16, fontWeight: '700', color: EDITORIAL.cream },
+  loginHint: { fontSize: 14, textAlign: 'center', color: EDITORIAL.textSoft },
 });
