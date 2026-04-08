@@ -6,8 +6,6 @@ kanban-plugin: basic
 
 ## In Progress
 
-- [ ] **S-99** Validate Google Sign-In flow — confirm OAuth handshake, token exchange, and session creation work end-to-end in dev. Document any gaps before TestFlight. #cto #O1
-
 ## Done
 
 - [x] **S-93** Onboarding flow — WelcomeScreen titles → Newsreader-Bold; splash wordmark → Newsreader-Bold; all 9 screens inherit cream palette via useTheme(). #frontend #O1 @completed(2026-04-07)
