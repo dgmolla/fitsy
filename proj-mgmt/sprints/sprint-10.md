@@ -10,10 +10,9 @@ kanban-plugin: basic
 
 ## In Progress
 
-- [ ] **S-104** Add `ios.bundleIdentifier` to `app.config.ts` + configure `expo-google-services` plugin (`GoogleService-Info.plist`). Required for EAS Build + Google OAuth redirect to work on device. #frontend #O1
-
 ## Done
 
+- [x] **S-104** Add `ios.bundleIdentifier` to `app.config.ts` + configure `expo-google-services` plugin (`GoogleService-Info.plist`). Required for EAS Build + Google OAuth redirect to work on device. #frontend #O1 @completed(2026-04-08)
 - [x] **S-103** Security audit — rate limiting on all auth routes; security headers; Google auth TOCTOU fix; subscription guard + SKU validation; lat/lng range validation; 37 tests across 5 auth test files mock authLimiter. #cto #backend #O1 @completed(2026-04-08)
 - [x] **S-93** Auth E2E testing — 20 integration tests covering Apple/Google/login/register → JWT → protected routes (profile, saved-items). #backend #O1 @completed(2026-04-08)
 - [x] **S-94** Apple Sign-In + JWT middleware — spec written; transaction + issuer/audience fixes applied; authorizationCode made optional; account-linking test added. #backend #cto #O1 @completed(2026-04-08)

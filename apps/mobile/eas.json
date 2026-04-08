@@ -16,8 +16,17 @@
       "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "CONFIGURE_IN_EAS_DASHBOARD",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "CONFIGURE_IN_EAS_DASHBOARD"
+      }
     },
-    "production": {}
+    "production": {
+      "env": {
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "CONFIGURE_IN_EAS_DASHBOARD",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "CONFIGURE_IN_EAS_DASHBOARD"
+      }
+    }
   }
 }
