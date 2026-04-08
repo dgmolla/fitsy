@@ -6,11 +6,11 @@ kanban-plugin: basic
 
 ## Backlog
 
-- [ ] **S-105** Add `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` and `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` to EAS build profiles (`eas.json` production + preview); set values in EAS dashboard. After S-104 — also verify redirect URI in Google Cloud Console. #frontend #devops #O1
-
 ## In Progress
 
 ## Done
+
+- [x] **S-105** Add `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` and `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` to EAS build profiles (`eas.json` production + preview); placeholder values set, real values must be configured in EAS dashboard. Spec + runbook at `docs/engineering/frontend/s-105-eas-google-oauth-env-vars.md`. #frontend #devops #O1 @completed(2026-04-08)
 
 - [x] **S-104** Add `ios.bundleIdentifier` to `app.config.ts` + configure `expo-google-services` plugin (`GoogleService-Info.plist`). Required for EAS Build + Google OAuth redirect to work on device. #frontend #O1 @completed(2026-04-08)
 - [x] **S-103** Security audit — rate limiting on all auth routes; security headers; Google auth TOCTOU fix; subscription guard + SKU validation; lat/lng range validation; 37 tests across 5 auth test files mock authLimiter. #cto #backend #O1 @completed(2026-04-08)
