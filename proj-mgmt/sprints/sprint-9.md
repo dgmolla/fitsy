@@ -6,6 +6,8 @@ kanban-plugin: basic
 
 ## In Progress
 
+- [ ] **S-99** Validate Google Sign-In flow — confirm OAuth handshake, token exchange, and session creation work end-to-end in dev. Document any gaps before TestFlight. #cto #O1
+
 ## Done
 
 - [x] **S-93** Onboarding flow — WelcomeScreen titles → Newsreader-Bold; splash wordmark → Newsreader-Bold; all 9 screens inherit cream palette via useTheme(). #frontend #O1 @completed(2026-04-07)
@@ -30,12 +32,12 @@ kanban-plugin: basic
 ## Sprint Review
 
 ### CTO: Harness evaluation
-- [ ] Run `bash scripts/harness-metrics.sh` and record results
-- [ ] Identify weakest metric and root cause
-- [ ] Update CLAUDE.md if architecture/conventions changed
+- [x] Run `bash scripts/harness-metrics.sh` and record results @completed(2026-04-08)
+- [x] Identify weakest metric and root cause @completed(2026-04-08)
+- [x] Update CLAUDE.md if architecture/conventions changed @completed(2026-04-08)
 
 ### Product Manager: Sprint bookkeeping
-- [ ] Update OKR progress in `proj-mgmt/okrs.md`
+- [x] Update OKR progress in `proj-mgmt/okrs.md` @completed(2026-04-08)
 - [ ] Archive this sprint in `proj-mgmt/sprint.md`
 
 ### Human: Review and decide (hard gate — sprint does not advance without this)

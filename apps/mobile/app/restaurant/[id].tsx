@@ -103,10 +103,7 @@ function HeroSection({ name, address, distance, itemCount, photoUrl }: {
 
         <View style={styles.menuLabel}>
           <Ionicons name="leaf" size={14} color={EDITORIAL.greenAccent} />
-          <Text style={styles.menuLabelText}>AI Estimated Menu</Text>
-          <View style={styles.aiBadge}>
-            <Text style={styles.aiBadgeText}>AI</Text>
-          </View>
+          <Text style={styles.menuLabelText}>Menu</Text>
         </View>
       </View>
     </View>
@@ -296,8 +293,6 @@ const styles = StyleSheet.create({
     borderTopColor: EDITORIAL.border,
   },
   menuLabelText: { fontSize: 15, fontWeight: '700', color: EDITORIAL.text },
-  aiBadge: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, backgroundColor: EDITORIAL.creamCard },
-  aiBadgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5, color: EDITORIAL.greenAccent },
   emptyText: { fontSize: 15, textAlign: 'center', lineHeight: 22 },
   errorBanner: { margin: 16, borderRadius: 10, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
   errorText: { fontSize: 14, flex: 1 },
