@@ -96,7 +96,7 @@ This avoids maintaining Apple key rotation logic in application code.
 | Field | Required | Notes |
 |-------|----------|-------|
 | `identityToken` | Yes | Apple-signed JWT; passed directly to Supabase |
-| `authorizationCode` | Yes | Apple one-time auth code; validated presence |
+| `authorizationCode` | No | Apple one-time auth code; forwarded but not used server-side |
 | `nonce` | Yes | Raw nonce (Supabase hashes it for comparison) |
 | `fullName` | No | Apple only sends this on first sign-in |
 | `email` | No | Apple only sends this on first sign-in |
@@ -107,7 +107,6 @@ This avoids maintaining Apple key rotation logic in application code.
 |--------|------|-----------|
 | 200 | `{ token, user, isNewUser }` | Success |
 | 400 | `{ error: "identityToken is required" }` | Missing identityToken |
-| 400 | `{ error: "authorizationCode is required" }` | Missing authorizationCode |
 | 400 | `{ error: "nonce is required" }` | Missing nonce |
 | 400 | `{ error: "Apple account has no email" }` | Edge case: Apple account without email |
 | 400 | `{ error: "Invalid JSON body" }` | Malformed request |
