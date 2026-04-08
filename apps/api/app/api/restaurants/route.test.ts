@@ -99,4 +99,42 @@ describe("GET /api/restaurants — validation", () => {
 
     expect(res.status).toBe(400);
   });
+
+  it("returns 400 when lat is out of range (>90)", async () => {
+    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+
+    const res = await GET(makeRequest({ lat: "91", lng: "-118.0" }, "Bearer valid.token"));
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/lat/i);
+  });
+
+  it("returns 400 when lng is out of range (<-180)", async () => {
+    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+
+    const res = await GET(makeRequest({ lat: "34.0", lng: "-181" }, "Bearer valid.token"));
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/lng/i);
+  });
+
+  it("returns 400 when radius is too large (>50)", async () => {
+    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+
+    const res = await GET(makeRequest({ lat: "34.0", lng: "-118.0", radius: "99" }, "Bearer valid.token"));
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/radius/i);
+  });
+
+  it("returns 400 when radius is zero or negative", async () => {
+    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+
+    const res = await GET(makeRequest({ lat: "34.0", lng: "-118.0", radius: "0" }, "Bearer valid.token"));
+
+    expect(res.status).toBe(400);
+  });
 });

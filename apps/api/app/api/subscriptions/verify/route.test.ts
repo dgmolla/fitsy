@@ -33,6 +33,12 @@ function makeRequest(body: unknown, authHeader?: string): NextRequest {
 
 beforeEach(() => {
   jest.resetAllMocks();
+  // Enable stub mode in tests (mirrors dev/staging env var)
+  process.env["ALLOW_STUB_SUBSCRIPTIONS"] = "true";
+});
+
+afterEach(() => {
+  delete process.env["ALLOW_STUB_SUBSCRIPTIONS"];
 });
 
 // ─── Auth guard ───────────────────────────────────────────────────────────────
@@ -46,6 +52,20 @@ describe("POST /api/subscriptions/verify — auth guard", () => {
       makeRequest({ receiptData: "abc", productId: "fitsy.annual" }),
     );
     expect(res.status).toBe(401);
+  });
+});
+
+// ─── Stub guard ───────────────────────────────────────────────────────────────
+
+describe("POST /api/subscriptions/verify — stub guard", () => {
+  it("returns 503 when ALLOW_STUB_SUBSCRIPTIONS is not set", async () => {
+    delete process.env["ALLOW_STUB_SUBSCRIPTIONS"];
+    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+
+    const res = await POST(
+      makeRequest({ receiptData: "abc", productId: "fitsy.annual" }, "Bearer valid"),
+    );
+    expect(res.status).toBe(503);
   });
 });
 
@@ -82,6 +102,15 @@ describe("POST /api/subscriptions/verify — validation", () => {
     });
     const res = await POST(req);
     expect(res.status).toBe(400);
+  });
+
+  it("returns 400 when productId is not a known SKU", async () => {
+    const res = await POST(
+      makeRequest({ receiptData: "abc", productId: "hacker.free" }, "Bearer valid"),
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/productId/i);
   });
 });
 

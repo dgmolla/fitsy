@@ -33,10 +33,31 @@ export async function GET(
     );
   }
 
+  if (lat < -90 || lat > 90) {
+    return NextResponse.json(
+      { error: "lat must be between -90 and 90" } as never,
+      { status: 400 },
+    );
+  }
+
+  if (lng < -180 || lng > 180) {
+    return NextResponse.json(
+      { error: "lng must be between -180 and 180" } as never,
+      { status: 400 },
+    );
+  }
+
   // ─── Optional params ────────────────────────────────────────────────────────
 
   const radiusRaw = searchParams.get("radius");
   const radiusMiles = radiusRaw !== null ? Number(radiusRaw) : 3;
+
+  if (!isFinite(radiusMiles) || radiusMiles <= 0 || radiusMiles > 50) {
+    return NextResponse.json(
+      { error: "radius must be between 0 and 50 miles" } as never,
+      { status: 400 },
+    );
+  }
 
   const limitRaw = searchParams.get("limit");
   const limit = limitRaw !== null ? Number(limitRaw) : 20;
