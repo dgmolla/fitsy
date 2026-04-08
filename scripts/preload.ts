@@ -427,10 +427,13 @@ async function main(): Promise<void> {
       log(`  [${place.name}] Source: ${menuResult.sourceId}, ${menuResult.items.length} items`);
       stats.sourceBreakdown[menuResult.sourceId] = (stats.sourceBreakdown[menuResult.sourceId] ?? 0) + 1;
 
-      // Get photo: UE JSON-LD (free) → Google Places ($0.007)
-      let photoUrl: string | null = menuResult.restaurant?.imageUrl ?? null;
-      if (!photoUrl && place.photoName) {
+      // Get photo: Google Places (higher res, $0.007) → UE JSON-LD fallback (free, low res)
+      let photoUrl: string | null = null;
+      if (place.photoName) {
         photoUrl = await fetchGooglePlacesPhotoUrl(place.photoName);
+      }
+      if (!photoUrl) {
+        photoUrl = menuResult.restaurant?.imageUrl ?? null;
       }
 
       // Upsert restaurant (raw SQL)
