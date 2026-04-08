@@ -27,10 +27,10 @@ async function captureIdentity(userId: string, email?: string | null): Promise<v
     email: email ?? undefined,
     goal: onboardingData.goal,
     activity_level: onboardingData.activity,
-    macro_protein: macroTargets?.protein,
-    macro_carbs: macroTargets?.carbs,
-    macro_fat: macroTargets?.fat,
-    macro_calories: macroTargets?.calories,
+    macro_protein: macroTargets?.protein != null ? Number(macroTargets.protein) : undefined,
+    macro_carbs: macroTargets?.carbs != null ? Number(macroTargets.carbs) : undefined,
+    macro_fat: macroTargets?.fat != null ? Number(macroTargets.fat) : undefined,
+    macro_calories: macroTargets?.calories != null ? Number(macroTargets.calories) : undefined,
   });
 }
 
