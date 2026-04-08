@@ -61,8 +61,8 @@ export const EDITORIAL = {
   // Borders
   border:    '#E8E2D8',
   // Gradients (on hero/cards)
-  heroGrad:  'rgba(27,58,38,0.92)' as string,
-  cardGrad:  'rgba(27,58,38,0.80)' as string,
+  heroGrad:  'rgba(20,44,28,0.95)' as string,
+  cardGrad:  'rgba(20,44,28,0.88)' as string,
 } as const;
 
 // ─── Fonts ───────────────────────────────────────────────────────────────────

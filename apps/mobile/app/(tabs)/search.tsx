@@ -260,7 +260,16 @@ function DishCard({ result }: { result: RestaurantResult }) {
 function RestaurantSection({ result, index }: { result: RestaurantResult; index: number }) {
   const indexStr = String(index + 2).padStart(2, '0');
   return (
-    <View style={s.restSection}>
+    <TouchableOpacity
+      style={s.restSection}
+      activeOpacity={0.85}
+      onPress={() => router.push({
+        pathname: `/restaurant/${result.id}`,
+        params: { address: result.address, distance: result.distanceMiles?.toFixed(1) },
+      })}
+      accessibilityLabel={`${result.name}, view full menu`}
+      accessibilityRole="button"
+    >
       <View style={s.sectionHeader}>
         <Text style={s.sectionIndex}>{indexStr}</Text>
         <View style={s.sectionTitleBlock}>
@@ -272,16 +281,11 @@ function RestaurantSection({ result, index }: { result: RestaurantResult; index:
           </Text>
         </View>
       </View>
-      {/* Carousel — single result shown as one card; future: multiple dishes per restaurant */}
-      <FlatList
-        data={[result]}
-        keyExtractor={(r) => r.id}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={s.dishRow}
-        renderItem={({ item }) => <DishCard result={item} />}
-      />
-    </View>
+      <DishCard result={result} />
+      {result.bestMatch && (
+        <Text style={s.viewMenu}>View full menu →</Text>
+      )}
+    </TouchableOpacity>
   );
 }
 
@@ -383,10 +387,7 @@ export default function SearchScreen() {
           <Text style={s.errorText}>{error}</Text>
         </View>
       )}
-      {!loading && error === null && results.length === 0 && (
-        <EmptyState hasInputs={hasInputs} />
-      )}
-      {!loading && results.length > 0 && (
+      {!loading && (
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingBottom: 110 }}
@@ -395,6 +396,14 @@ export default function SearchScreen() {
           <Masthead locationLabel={locationLabel} />
           <MacroStrip macros={inputs} onEdit={() => setFilterVisible(true)} />
           <CuisineRow selected={cuisineFilter} onSelect={setCuisineFilter} />
+
+          {results.length === 0 && (
+            <View style={s.inlineEmpty}>
+              <Ionicons name="search-outline" size={32} color={EDITORIAL.creamDeep} />
+              <Text style={s.inlineEmptyText}>No restaurants match this filter</Text>
+              <Text style={s.inlineEmptyHint}>Try adjusting your macros or cuisine</Text>
+            </View>
+          )}
 
           {/* #01 — Hero card */}
           {heroResult && <HeroCard result={heroResult} />}
@@ -449,31 +458,29 @@ const s = StyleSheet.create({
   macroStrip: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: EDITORIAL.creamCard,
-    borderRadius: 14, borderWidth: 1, borderColor: EDITORIAL.border,
+    borderRadius: 10, borderWidth: 1, borderColor: EDITORIAL.border,
     marginHorizontal: 16, marginBottom: 4,
-    paddingHorizontal: 14, paddingVertical: 12,
+    paddingHorizontal: 10, paddingVertical: 7,
   },
-  macroItem: { flex: 1, alignItems: 'center', gap: 2 },
-  macroVal: { fontSize: 14, fontWeight: '700', color: EDITORIAL.text },
-  macroLbl: { fontSize: 9, fontWeight: '600', color: EDITORIAL.textSoft, letterSpacing: 0.3 },
-  macroDivider: { width: 1, height: 28, backgroundColor: EDITORIAL.creamDeep },
+  macroItem: { flex: 1, alignItems: 'center', gap: 1 },
+  macroVal: { fontSize: 12, fontWeight: '700', color: EDITORIAL.text },
+  macroLbl: { fontSize: 8, fontWeight: '600', color: EDITORIAL.textSoft, letterSpacing: 0.3 },
+  macroDivider: { width: 1, height: 22, backgroundColor: EDITORIAL.creamDeep },
   editBtn: {
-    backgroundColor: EDITORIAL.green, borderRadius: 10,
-    paddingHorizontal: 14, paddingVertical: 12, marginLeft: 10,
-    minHeight: 44,
+    backgroundColor: EDITORIAL.green, borderRadius: 8,
+    paddingHorizontal: 10, paddingVertical: 7, marginLeft: 8,
   },
-  editBtnText: { fontSize: 12, fontWeight: '700', color: EDITORIAL.cream, letterSpacing: 0.2 },
+  editBtnText: { fontSize: 11, fontWeight: '700', color: EDITORIAL.cream, letterSpacing: 0.2 },
 
-  filterRow: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
+  filterRow: { paddingHorizontal: 16, paddingVertical: 6, gap: 6 },
   filterBubble: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
     backgroundColor: EDITORIAL.creamCard,
-    borderRadius: 22, borderWidth: 1, borderColor: EDITORIAL.border,
-    paddingHorizontal: 13, paddingVertical: 12,
-    minHeight: 44,
+    borderRadius: 16, borderWidth: 1, borderColor: EDITORIAL.border,
+    paddingHorizontal: 10, paddingVertical: 6,
   },
   filterBubbleActive: { backgroundColor: EDITORIAL.green, borderColor: EDITORIAL.green },
-  filterLabel: { fontSize: 13, fontWeight: '600', color: EDITORIAL.textSoft },
+  filterLabel: { fontSize: 12, fontWeight: '600', color: EDITORIAL.textSoft },
   filterLabelActive: { color: EDITORIAL.cream },
 
   restSection: { marginTop: 22 },
@@ -492,8 +499,11 @@ const s = StyleSheet.create({
     fontSize: 20, color: EDITORIAL.text, letterSpacing: -0.5,
   },
   sectionSub: { fontSize: 11, fontWeight: '500', color: EDITORIAL.textSoft, marginTop: 1 },
-  dishRow: { paddingHorizontal: 16, gap: 10, paddingBottom: 4 },
+  viewMenu: { fontSize: 12, fontWeight: '600', color: EDITORIAL.greenAccent, paddingHorizontal: 20, marginTop: 6 },
 
+  inlineEmpty: { alignItems: 'center', paddingTop: 50, paddingBottom: 30, gap: 8 },
+  inlineEmptyText: { fontSize: 15, fontWeight: '600', color: EDITORIAL.textSoft },
+  inlineEmptyHint: { fontSize: 13, color: EDITORIAL.creamDeep },
   loaderWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   errorBanner: {
     marginHorizontal: 16, marginTop: 16, borderRadius: 8, padding: 12,
@@ -514,7 +524,7 @@ const hero = StyleSheet.create({
     marginTop: 4,
   },
   image: { width: '100%', height: '100%' },
-  gradient: { position: 'absolute', bottom: 0, left: 0, right: 0, height: HERO_H * 0.65 },
+  gradient: { position: 'absolute', bottom: 0, left: 0, right: 0, height: HERO_H * 0.75 },
   overlay: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20, gap: 4 },
   topRow: {
     flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6,
@@ -547,11 +557,12 @@ const hero = StyleSheet.create({
 
 const dc = StyleSheet.create({
   container: {
-    width: DISH_CARD_W, height: DISH_CARD_H, borderRadius: 16, overflow: 'hidden',
+    height: DISH_CARD_H, borderRadius: 16, overflow: 'hidden',
     backgroundColor: EDITORIAL.creamDeep,
+    marginHorizontal: 16,
   },
   image: { width: '100%', height: '100%' },
-  gradient: { position: 'absolute', bottom: 0, left: 0, right: 0, height: DISH_CARD_H * 0.7 },
+  gradient: { position: 'absolute', bottom: 0, left: 0, right: 0, height: DISH_CARD_H * 0.8 },
   info: { position: 'absolute', bottom: 10, left: 10, right: 10 },
   dishName: {
     fontSize: 13, fontFamily: FONTS.newsreaderBold,
