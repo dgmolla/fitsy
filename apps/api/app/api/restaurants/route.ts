@@ -102,7 +102,8 @@ export async function GET(
       { data, meta: { total, limit } },
       { status: 200 },
     );
-  } catch {
+  } catch (err) {
+    console.error("[GET /api/restaurants] Error:", err);
     return NextResponse.json(
       { error: "Internal server error" } as never,
       { status: 500 },

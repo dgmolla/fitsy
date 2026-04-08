@@ -329,9 +329,9 @@ export default function SearchScreen() {
 
       try {
         const data = await fetchRestaurants(params);
-        setResults(data.length > 0 ? data : MOCK_RESULTS);
+        setResults(data);
       } catch {
-        setResults(MOCK_RESULTS);
+        setResults([]);
       } finally {
         setLoading(false);
       }
