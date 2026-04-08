@@ -13,6 +13,7 @@ import { getSavedItems, unsaveItem } from '@/lib/apiClient';
 import { BookmarkButton, FitsyLoader, MenuItem } from '@/components';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { useTheme } from '@/lib/theme';
+import { trackItemSaved } from '@/lib/analytics';
 
 type Section = {
   title: string;
@@ -67,9 +68,18 @@ export default function SavedScreen() {
   const handleUnsave = useCallback(async (savedItemId: string) => {
     const success = await unsaveItem(savedItemId);
     if (success) {
+      const removed = savedItems.find((item) => item.id === savedItemId);
       setSavedItems((prev) => prev.filter((item) => item.id !== savedItemId));
+      if (removed?.menuItemId) {
+        trackItemSaved({
+          menu_item_id: removed.menuItemId,
+          restaurant_id: removed.menuItem?.restaurant.id ?? '',
+          action: 'unsave',
+          entry_point: 'saved_screen',
+        });
+      }
     }
-  }, []);
+  }, [savedItems]);
 
   const sections = buildSections(savedItems);
 

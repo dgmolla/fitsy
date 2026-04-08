@@ -9,11 +9,30 @@ import { appleSignIn, completeGoogleSignIn } from '@/lib/authClient';
 import { pullProfileFromServer } from '@/lib/profileSync';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { useTheme } from '@/lib/theme';
+import { getMacroTargets } from '@/lib/macroStorage';
+import { getOnboardingData } from '@/lib/onboardingStorage';
+import { identifyUser, trackAuthFailure, trackAuthSuccess } from '@/lib/analytics';
 
 WebBrowser.maybeCompleteAuthSession();
 
 const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
 const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+
+async function captureIdentity(userId: string, email?: string | null): Promise<void> {
+  const [macroTargets, onboardingData] = await Promise.all([
+    getMacroTargets(),
+    getOnboardingData(),
+  ]);
+  identifyUser(userId, {
+    email: email ?? undefined,
+    goal: onboardingData.goal,
+    activity_level: onboardingData.activity,
+    macro_protein: macroTargets?.protein != null ? Number(macroTargets.protein) : undefined,
+    macro_carbs: macroTargets?.carbs != null ? Number(macroTargets.carbs) : undefined,
+    macro_fat: macroTargets?.fat != null ? Number(macroTargets.fat) : undefined,
+    macro_calories: macroTargets?.calories != null ? Number(macroTargets.calories) : undefined,
+  });
+}
 
 export default function SignInScreen() {
   const { colors } = useTheme();
@@ -32,6 +51,8 @@ export default function SignInScreen() {
         setGoogleLoading(true);
         completeGoogleSignIn(idToken)
           .then(async (result) => {
+            trackAuthSuccess({ provider: 'google', is_new_user: result.isNewUser });
+            await captureIdentity(result.user.id, result.user.email);
             if (!result.isNewUser) {
               await pullProfileFromServer();
               setGoogleLoading(false);
@@ -42,11 +63,13 @@ export default function SignInScreen() {
             }
           })
           .catch((err: Error) => {
+            trackAuthFailure({ provider: 'google', error_message: err.message });
             setGoogleLoading(false);
             Alert.alert('Sign In Failed', err.message);
           });
       }
     } else if (response?.type === 'error') {
+      trackAuthFailure({ provider: 'google', error_message: response.error?.message });
       Alert.alert('Google Sign In Error', response.error?.message ?? 'Unknown error');
     }
   }, [response]);
@@ -55,6 +78,8 @@ export default function SignInScreen() {
     setAppleLoading(true);
     try {
       const result = await appleSignIn();
+      trackAuthSuccess({ provider: 'apple', is_new_user: result.isNewUser });
+      await captureIdentity(result.user.id, result.user.email);
       if (!result.isNewUser) {
         await pullProfileFromServer();
         router.replace('/(tabs)/search');
@@ -64,6 +89,7 @@ export default function SignInScreen() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Apple Sign In failed';
       if (!msg.includes('canceled')) {
+        trackAuthFailure({ provider: 'apple', error_message: msg });
         Alert.alert('Sign In Failed', msg);
       }
     } finally {
@@ -103,7 +129,7 @@ export default function SignInScreen() {
         >
           <Ionicons name="logo-apple" size={20} color={colors.bg} />
           <Text style={[styles.appleTxt, { color: colors.bg }]}>
-            {appleLoading ? 'Signing in…' : 'Continue with Apple'}
+            {appleLoading ? 'Signing in...' : 'Continue with Apple'}
           </Text>
         </Pressable>
 
@@ -116,7 +142,7 @@ export default function SignInScreen() {
         >
           <Ionicons name="logo-google" size={20} color={colors.textPrimary} />
           <Text style={[styles.googleTxt, { color: colors.textPrimary }]}>
-            {googleLoading ? 'Signing in…' : 'Continue with Google'}
+            {googleLoading ? 'Signing in...' : 'Continue with Google'}
           </Text>
         </Pressable>
       </View>

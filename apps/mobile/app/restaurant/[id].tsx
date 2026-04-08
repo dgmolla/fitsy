@@ -17,6 +17,7 @@ import { getMacroTargets } from '@/lib/macroStorage';
 import type { MacroValues } from '@/lib/macroPresets';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { useTheme } from '@/lib/theme';
+import { trackItemSaved } from '@/lib/analytics';
 
 type Section = { title: string; data: MenuItemResult[] };
 
@@ -150,12 +151,18 @@ export default function RestaurantDetailScreen() {
     const existingId = savedMap.get(menuItemId);
     if (existingId) {
       const ok = await unsaveItem(existingId);
-      if (ok) setSavedMap((p) => { const n = new Map(p); n.delete(menuItemId); return n; });
+      if (ok) {
+        setSavedMap((p) => { const n = new Map(p); n.delete(menuItemId); return n; });
+        trackItemSaved({ menu_item_id: menuItemId, restaurant_id: id ?? '', action: 'unsave', entry_point: 'restaurant_detail' });
+      }
     } else {
       const saved = await saveItem(menuItemId);
-      if (saved) setSavedMap((p) => new Map(p).set(menuItemId, saved.id));
+      if (saved) {
+        setSavedMap((p) => new Map(p).set(menuItemId, saved.id));
+        trackItemSaved({ menu_item_id: menuItemId, restaurant_id: id ?? '', action: 'save', entry_point: 'restaurant_detail' });
+      }
     }
-  }, [savedMap]);
+  }, [savedMap, id]);
 
   const restaurantName = menu?.restaurantName ?? 'Restaurant';
   const renderItem = useCallback(({ item }: { item: MenuItemResult }) => (

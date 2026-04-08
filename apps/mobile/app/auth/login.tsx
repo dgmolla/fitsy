@@ -10,11 +10,30 @@ import { appleSignIn, completeGoogleSignIn } from '@/lib/authClient';
 import { pullProfileFromServer } from '@/lib/profileSync';
 import { useTheme } from '@/lib/theme';
 import { BRAND } from '@/lib/brand';
+import { getMacroTargets } from '@/lib/macroStorage';
+import { getOnboardingData } from '@/lib/onboardingStorage';
+import { identifyUser, trackAuthFailure, trackAuthSuccess } from '@/lib/analytics';
 
 WebBrowser.maybeCompleteAuthSession();
 
 const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
 const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+
+async function captureIdentity(userId: string, email?: string | null): Promise<void> {
+  const [macroTargets, onboardingData] = await Promise.all([
+    getMacroTargets(),
+    getOnboardingData(),
+  ]);
+  identifyUser(userId, {
+    email: email ?? undefined,
+    goal: onboardingData.goal,
+    activity_level: onboardingData.activity,
+    macro_protein: macroTargets?.protein != null ? Number(macroTargets.protein) : undefined,
+    macro_carbs: macroTargets?.carbs != null ? Number(macroTargets.carbs) : undefined,
+    macro_fat: macroTargets?.fat != null ? Number(macroTargets.fat) : undefined,
+    macro_calories: macroTargets?.calories != null ? Number(macroTargets.calories) : undefined,
+  });
+}
 
 export default function LoginScreen() {
   const { colors } = useTheme();
@@ -32,17 +51,21 @@ export default function LoginScreen() {
       if (idToken) {
         setGoogleLoading(true);
         completeGoogleSignIn(idToken)
-          .then(() => pullProfileFromServer())
-          .then(() => {
+          .then(async (result) => {
+            trackAuthSuccess({ provider: 'google', is_new_user: result.isNewUser });
+            await captureIdentity(result.user.id, result.user.email);
+            await pullProfileFromServer();
             setGoogleLoading(false);
             router.replace('/(tabs)/search');
           })
           .catch((err: Error) => {
+            trackAuthFailure({ provider: 'google', error_message: err.message });
             setGoogleLoading(false);
             Alert.alert('Sign In Failed', err.message);
           });
       }
     } else if (response?.type === 'error') {
+      trackAuthFailure({ provider: 'google', error_message: response.error?.message });
       Alert.alert('Google Sign In Error', response.error?.message ?? 'Unknown error');
     }
   }, [response]);
@@ -56,6 +79,7 @@ export default function LoginScreen() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Apple Sign In failed';
       if (!msg.includes('canceled')) {
+        trackAuthFailure({ provider: 'apple', error_message: msg });
         Alert.alert('Sign In Failed', msg);
       }
     } finally {
@@ -78,33 +102,38 @@ export default function LoginScreen() {
     const baseUrl = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
     const creds = { email: 'dev@fitsy.local', password: 'dev12345' };
     try {
-      // Try login first, fall back to register for fresh DBs
       let res = await fetch(`${baseUrl}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(creds),
       });
-      let data = await res.json() as { token?: string; error?: string };
+      let data = await res.json() as { token?: string; error?: string; user?: { id: string; email: string } };
 
       if (!data.token) {
-        // Login failed — try register (fresh DB case)
         res = await fetch(`${baseUrl}/api/auth/register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(creds),
         });
-        data = await res.json() as { token?: string; error?: string };
+        data = await res.json() as { token?: string; error?: string; user?: { id: string; email: string } };
       }
 
       if (data.token) {
         const { storeToken } = await import('@/lib/authClient');
         await storeToken(data.token);
+        if (data.user) {
+          trackAuthSuccess({ provider: 'dev', is_new_user: false });
+          await captureIdentity(data.user.id, data.user.email);
+        }
         router.replace('/(tabs)/search');
       } else {
+        trackAuthFailure({ provider: 'dev', error_message: data.error });
         Alert.alert('Dev Login Failed', data.error ?? 'Unknown error');
       }
     } catch (err) {
-      Alert.alert('Dev Login Failed', err instanceof Error ? err.message : 'Network error');
+      const msg = err instanceof Error ? err.message : 'Network error';
+      trackAuthFailure({ provider: 'dev', error_message: msg });
+      Alert.alert('Dev Login Failed', msg);
     } finally {
       setDevLoading(false);
     }
@@ -133,7 +162,7 @@ export default function LoginScreen() {
           >
             <Ionicons name="logo-apple" size={20} color={colors.bg} />
             <Text style={[styles.appleTxt, { color: colors.bg }]}>
-              {appleLoading ? 'Signing in…' : 'Continue with Apple'}
+              {appleLoading ? 'Signing in...' : 'Continue with Apple'}
             </Text>
           </Pressable>
 
@@ -146,7 +175,7 @@ export default function LoginScreen() {
           >
             <Ionicons name="logo-google" size={20} color={colors.textPrimary} />
             <Text style={[styles.googleTxt, { color: colors.textPrimary }]}>
-              {googleLoading ? 'Signing in…' : 'Continue with Google'}
+              {googleLoading ? 'Signing in...' : 'Continue with Google'}
             </Text>
           </Pressable>
 
@@ -159,7 +188,7 @@ export default function LoginScreen() {
             >
               <Ionicons name="code-slash" size={20} color={colors.textTertiary} />
               <Text style={[styles.googleTxt, { color: colors.textTertiary }]}>
-                {devLoading ? 'Signing in…' : 'Dev Login (skip auth)'}
+                {devLoading ? 'Signing in...' : 'Dev Login (skip auth)'}
               </Text>
             </Pressable>
           )}
