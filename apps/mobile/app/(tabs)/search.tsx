@@ -256,7 +256,7 @@ function DishCard({ result }: { result: RestaurantResult }) {
       <LinearGradient colors={['transparent', EDITORIAL.cardGrad]} style={dc.gradient} />
       <View style={dc.info}>
         {bm && <Text style={dc.dishName} numberOfLines={2}>{bm.name}</Text>}
-        {bm && <Text style={dc.cal}>{bm.calories} kcal · P {bm.proteinG}g</Text>}
+        {bm && <Text style={dc.cal}>{bm.calories} kcal · P {bm.proteinG}g · C {bm.carbsG}g · F {bm.fatG}g</Text>}
       </View>
     </TouchableOpacity>
   );
