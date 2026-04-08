@@ -150,36 +150,44 @@ function isChain(name: string, types: string[]): boolean {
   return hasChainType || isKnownChain;
 }
 
-// ─── Persistence helpers ──────────────────────────────────────────────────────
+// ─── Raw SQL persistence ─────────────────────────────────────────────────────
+// Uses Prisma.$queryRawUnsafe for bulk inserts (3 queries instead of 7+).
+// Schema ref: prisma/schema.prisma — MenuItem, MacroEstimate tables.
 
-async function upsertMenuItem(
-  restaurantId: string,
-  item: StructuredMenuItem,
+async function upsertRestaurantRaw(
+  place: PlaceResult,
+  menuSourceId: string,
   prisma: PrismaClient,
-  dietaryTags?: string[],
 ): Promise<string> {
-  const existing = await prisma.menuItem.findFirst({
-    where: { restaurantId, name: item.name },
-    select: { id: true },
-  });
+  const cuisineTags = extractCuisineTags(place.types);
+  const chainFlag = isChain(place.name, place.types);
 
-  const data = {
-    ...(item.description !== undefined ? { description: item.description } : {}),
-    ...(item.category !== undefined ? { category: item.category } : {}),
-    ...(item.section !== undefined ? { section: item.section } : {}),
-    ...(item.price !== undefined ? { price: item.price } : {}),
-    ...(dietaryTags !== undefined ? { dietaryTags } : {}),
-  };
-
-  if (existing) {
-    await prisma.menuItem.update({ where: { id: existing.id }, data });
-    return existing.id;
-  }
-
-  const created = await prisma.menuItem.create({
-    data: { restaurantId, name: item.name, ...data },
-  });
-  return created.id;
+  const rows = await prisma.$queryRaw<{ id: string }[]>`
+    INSERT INTO "Restaurant" (
+      "id", "externalPlaceId", "name", "address", "lat", "lng",
+      "cuisineTags", "chainFlag", "source", "menuSourceId",
+      "rating", "userRatingCount", "priceLevel",
+      "createdAt", "updatedAt"
+    ) VALUES (
+      gen_random_uuid(), ${place.placeId}, ${place.name}, ${place.address},
+      ${place.lat}, ${place.lng}, ${cuisineTags}::text[], ${chainFlag},
+      'google_places', ${menuSourceId}, ${place.rating ?? null},
+      ${place.userRatingCount ?? null}, ${place.priceLevel ?? null},
+      now(), now()
+    )
+    ON CONFLICT ("externalPlaceId") DO UPDATE SET
+      "name" = EXCLUDED."name",
+      "address" = EXCLUDED."address",
+      "cuisineTags" = EXCLUDED."cuisineTags",
+      "chainFlag" = EXCLUDED."chainFlag",
+      "menuSourceId" = EXCLUDED."menuSourceId",
+      "rating" = EXCLUDED."rating",
+      "userRatingCount" = EXCLUDED."userRatingCount",
+      "priceLevel" = EXCLUDED."priceLevel",
+      "updatedAt" = now()
+    RETURNING "id"
+  `;
+  return rows[0]!.id;
 }
 
 async function persistItems(
@@ -196,68 +204,93 @@ async function persistItems(
   }
   if (validPairs.length === 0) return 0;
 
-  // Step 1: Delete existing data for this restaurant (2 queries)
-  const existingItems = await prisma.menuItem.findMany({
-    where: { restaurantId },
-    select: { id: true },
-  });
-  if (existingItems.length > 0) {
-    const ids = existingItems.map((i) => i.id);
-    await prisma.macroEstimate.deleteMany({ where: { menuItemId: { in: ids } } });
-    await prisma.menuItem.deleteMany({ where: { restaurantId } });
-  }
+  // Query 1: Delete existing items (cascade deletes estimates via FK)
+  await prisma.$executeRaw`
+    DELETE FROM "MacroEstimate" WHERE "menuItemId" IN (
+      SELECT "id" FROM "MenuItem" WHERE "restaurantId" = ${restaurantId}
+    )
+  `;
+  await prisma.$executeRaw`
+    DELETE FROM "MenuItem" WHERE "restaurantId" = ${restaurantId}
+  `;
 
-  // Step 2: Bulk create menu items (1 query for all items)
-  const createdItems = await prisma.menuItem.createManyAndReturn({
-    data: validPairs.map(({ item, macro }) => ({
-      restaurantId,
-      name: item.name,
-      ...(item.description !== undefined ? { description: item.description } : {}),
-      ...(item.category !== undefined ? { category: item.category } : {}),
-      ...(item.section !== undefined ? { section: item.section } : {}),
-      ...(item.price !== undefined ? { price: item.price } : {}),
-      ...(macro.dietaryTags !== undefined ? { dietaryTags: macro.dietaryTags } : {}),
-    })),
-    select: { id: true },
-  });
+  // Query 2: Bulk insert menu items — build VALUES clause
+  const names = validPairs.map((p) => p.item.name);
+  const descriptions = validPairs.map((p) => p.item.description ?? null);
+  const categories = validPairs.map((p) => p.item.category ?? null);
+  const sections = validPairs.map((p) => p.item.section ?? null);
+  const prices = validPairs.map((p) => p.item.price ?? null);
+  // Serialize dietary tags as JSON strings — Prisma can't handle text[][] in UNNEST
+  const dietaryTagsJson = validPairs.map((p) => JSON.stringify(p.macro.dietaryTags ?? []));
 
-  // Step 3: Bulk create macro estimates (1 query for all estimates)
-  await prisma.macroEstimate.createMany({
-    data: createdItems.map((menuItem, i) => {
-      const macro = validPairs[i]!.macro;
-      return {
-        menuItemId: menuItem.id,
-        calories: Math.round(macro.calories),
-        proteinG: macro.proteinG,
-        carbsG: macro.carbsG,
-        fatG: macro.fatG,
-        confidence: macro.confidence,
-        source: macro.source,
-        hadPhoto: false,
-      };
-    }),
-  });
+  const menuItemRows = await prisma.$queryRaw<{ id: string }[]>`
+    INSERT INTO "MenuItem" (
+      "id", "restaurantId", "name", "description", "category", "section", "price", "dietaryTags", "createdAt", "updatedAt"
+    )
+    SELECT
+      gen_random_uuid(),
+      ${restaurantId},
+      name, description, category, section, price,
+      ARRAY(SELECT jsonb_array_elements_text(tags::jsonb)),
+      now(), now()
+    FROM UNNEST(
+      ${names}::text[],
+      ${descriptions}::text[],
+      ${categories}::text[],
+      ${sections}::text[],
+      ${prices}::float[],
+      ${dietaryTagsJson}::text[]
+    ) AS t(name, description, category, section, price, tags)
+    RETURNING "id"
+  `;
 
-  return createdItems.length;
+  // Query 3: Bulk insert macro estimates
+  const menuItemIds = menuItemRows.map((r) => r.id);
+  const calories = validPairs.map((p) => Math.round(p.macro.calories));
+  const proteins = validPairs.map((p) => p.macro.proteinG);
+  const carbs = validPairs.map((p) => p.macro.carbsG);
+  const fats = validPairs.map((p) => p.macro.fatG);
+  const confidences = validPairs.map((p) => p.macro.confidence);
+  const sources = validPairs.map((p) => p.macro.source);
+
+  await prisma.$executeRaw`
+    INSERT INTO "MacroEstimate" (
+      "id", "menuItemId", "calories", "proteinG", "carbsG", "fatG",
+      "confidence", "source", "hadPhoto", "estimatedAt"
+    )
+    SELECT
+      gen_random_uuid(),
+      "menuItemId", calories, "proteinG", "carbsG", "fatG",
+      confidence::"ConfidenceLevel", source, false, now()
+    FROM UNNEST(
+      ${menuItemIds}::text[],
+      ${calories}::int[],
+      ${proteins}::float[],
+      ${carbs}::float[],
+      ${fats}::float[],
+      ${confidences}::text[],
+      ${sources}::text[]
+    ) AS t("menuItemId", calories, "proteinG", "carbsG", "fatG", confidence, source)
+  `;
+
+  return menuItemRows.length;
 }
 
-// ─── Dietary summary ──────────────────────────────────────────────────────────
+// ─── Dietary summary (raw SQL) ───────────────────────────────────────────────
 
 async function computeAndStoreDietaryOptions(
   restaurantId: string,
   prisma: PrismaClient,
 ): Promise<void> {
-  const items = await prisma.menuItem.findMany({
-    where: { restaurantId },
-    select: { dietaryTags: true },
-  });
-
+  const items = await prisma.$queryRaw<{ dietaryTags: string[] }[]>`
+    SELECT "dietaryTags" FROM "MenuItem" WHERE "restaurantId" = ${restaurantId}
+  `;
   const dietaryOptions = aggregateDietaryOptions(items.map((i) => i.dietaryTags));
 
-  await prisma.restaurant.update({
-    where: { id: restaurantId },
-    data: { dietaryOptions },
-  });
+  await prisma.$executeRaw`
+    UPDATE "Restaurant" SET "dietaryOptions" = ${dietaryOptions}::text[], "updatedAt" = now()
+    WHERE "id" = ${restaurantId}
+  `;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -340,30 +373,30 @@ async function main(): Promise<void> {
       process.exit(0);
     }
 
-    // Stage 2: Process each restaurant
-    let index = 0;
-    for (const place of places) {
-      index++;
+    // Stage 2: Process restaurants in parallel batches
+    const CONCURRENCY = 5;
+
+    async function processRestaurant(place: PlaceResult, index: number): Promise<void> {
       log(`Processing ${place.name} (${index}/${places.length})...`);
 
-      // Resolver: FatSecret → UberEats (with sitemap index)
+      // Resolver: FatSecret → UberEats
       let menuResult = await resolver.resolve(place.name, place.address);
 
-      // Phase 3a: Web scraper website scrape if resolver found nothing and website known
+      // Phase 3a: Web scraper website scrape
       if (!menuResult.found && place.websiteUri) {
-        log(`  Trying ${scraper.id} website: ${place.websiteUri}`);
+        log(`  [${place.name}] Trying ${scraper.id} website`);
         menuResult = await webScraperSource.lookupByUrl(place.name, place.websiteUri);
       }
 
-      // Phase 3b: Web scraper search fallback (searches the web for menu)
+      // Phase 3b: Web scraper search fallback
       if (!menuResult.found) {
-        log(`  Trying ${scraper.id} search: "${place.name} menu"`);
+        log(`  [${place.name}] Trying ${scraper.id} search`);
         menuResult = await webScraperSource.lookup(place.name, place.address);
       }
 
       // Phase 4: Name-only Haiku estimation (last resort)
       if (!menuResult.found) {
-        log(`  No menu source found — using name-only Haiku estimation`);
+        log(`  [${place.name}] Name-only Haiku`);
         menuResult = {
           found: true,
           items: [{ name: `${place.name} - Popular Items` }],
@@ -371,79 +404,59 @@ async function main(): Promise<void> {
         };
       }
 
-      log(`  Source: ${menuResult.sourceId}, ${menuResult.items.length} items`);
+      log(`  [${place.name}] Source: ${menuResult.sourceId}, ${menuResult.items.length} items`);
       stats.sourceBreakdown[menuResult.sourceId] = (stats.sourceBreakdown[menuResult.sourceId] ?? 0) + 1;
 
-      // Upsert restaurant
+      // Upsert restaurant (raw SQL)
       let restaurantId: string;
       try {
-        const restaurant = await prisma.restaurant.upsert({
-          where: { externalPlaceId: place.placeId },
-          create: {
-            externalPlaceId: place.placeId,
-            name: place.name,
-            address: place.address,
-            lat: place.lat,
-            lng: place.lng,
-            cuisineTags: extractCuisineTags(place.types),
-            chainFlag: isChain(place.name, place.types),
-            source: "google_places",
-            menuSourceId: menuResult.sourceId,
-            rating: place.rating,
-            userRatingCount: place.userRatingCount,
-            priceLevel: place.priceLevel,
-          },
-          update: {
-            name: place.name,
-            address: place.address,
-            cuisineTags: extractCuisineTags(place.types),
-            chainFlag: isChain(place.name, place.types),
-            menuSourceId: menuResult.sourceId,
-            rating: place.rating,
-            userRatingCount: place.userRatingCount,
-            priceLevel: place.priceLevel,
-          },
-        });
-        restaurantId = restaurant.id;
+        restaurantId = await upsertRestaurantRaw(place, menuResult.sourceId, prisma);
       } catch (err) {
-        log(`  DB error: ${String(err)}`);
+        log(`  [${place.name}] DB error: ${String(err)}`);
         stats.skippedDbError++;
-        await delay(CONFIG.rateLimitDelayMs);
-        continue;
+        return;
       }
 
-      // Two-path estimation:
-      // Path 1 (chains): FatSecret provides official macros — skip Haiku entirely
-      // Path 2 (indies): UberEats/Firecrawl provide structured items — Haiku estimates
-      //   with description context (descriptions help indie items, hurt chain items)
+      // Two-path estimation
       let macros: (MacroData | null)[];
 
       if (menuResult.macros && menuResult.macros.size > 0) {
-        // Path 1: official chain macros — convert map to positional array matching items
+        // Path 1: official chain macros
         macros = menuResult.items.map((item) => {
           const macro = menuResult.macros?.get(item.name.toLowerCase());
           return macro ?? null;
         });
       } else {
-        // Path 2: indie estimation — Haiku receives structured items with descriptions
+        // Path 2: indie estimation via Haiku
         try {
           macros = await estimateMacros(menuResult.items, anthropic);
           stats.anthropicCalls++;
         } catch (err) {
-          log(`  Haiku failed: ${String(err)}`);
+          log(`  [${place.name}] Haiku failed: ${String(err)}`);
           stats.skippedHaikuFailed++;
-          await delay(CONFIG.rateLimitDelayMs);
-          continue;
+          return;
         }
       }
 
       const persisted = await persistItems(restaurantId, menuResult.items, macros, prisma);
-      log(`  Persisted ${persisted} items`);
+      log(`  [${place.name}] Persisted ${persisted} items`);
       stats.persisted++;
 
       await computeAndStoreDietaryOptions(restaurantId, prisma);
+    }
 
-      await delay(CONFIG.rateLimitDelayMs);
+    // Process in parallel batches of CONCURRENCY
+    for (let i = 0; i < places.length; i += CONCURRENCY) {
+      const batch = places.slice(i, i + CONCURRENCY);
+      const results = await Promise.allSettled(
+        batch.map((place, j) => processRestaurant(place, i + j + 1)),
+      );
+      // Log any unexpected failures
+      for (const result of results) {
+        if (result.status === "rejected") {
+          log(`  Unexpected error: ${String(result.reason)}`);
+        }
+      }
     }
   } finally {
     await prisma.$disconnect();
