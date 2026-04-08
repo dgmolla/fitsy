@@ -200,7 +200,7 @@ function HeroCard({ result }: { result: RestaurantResult }) {
       style={hero.container}
       onPress={() => router.push({
         pathname: `/restaurant/${result.id}`,
-        params: { address: result.address, distance: result.distanceMiles?.toFixed(1) },
+        params: { address: result.address, distance: result.distanceMiles?.toFixed(1), photoUrl: result.photoUrl },
       })}
       accessibilityLabel={`${result.name}${result.bestMatch ? `, best match: ${result.bestMatch.name}` : ''}`}
       accessibilityRole="button"
@@ -247,7 +247,7 @@ function DishCard({ result }: { result: RestaurantResult }) {
       style={dc.container}
       onPress={() => router.push({
         pathname: `/restaurant/${result.id}`,
-        params: { address: result.address, distance: result.distanceMiles?.toFixed(1) },
+        params: { address: result.address, distance: result.distanceMiles?.toFixed(1), photoUrl: result.photoUrl },
       })}
       accessibilityLabel={result.bestMatch ? `${result.bestMatch.name} at ${result.name}` : result.name}
       accessibilityRole="button"
@@ -272,7 +272,7 @@ function RestaurantSection({ result, index }: { result: RestaurantResult; index:
       activeOpacity={0.85}
       onPress={() => router.push({
         pathname: `/restaurant/${result.id}`,
-        params: { address: result.address, distance: result.distanceMiles?.toFixed(1) },
+        params: { address: result.address, distance: result.distanceMiles?.toFixed(1), photoUrl: result.photoUrl },
       })}
       accessibilityLabel={`${result.name}, view full menu`}
       accessibilityRole="button"

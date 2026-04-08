@@ -15,6 +15,7 @@ import { FitsyLoader, MenuItem } from '@/components';
 import { fetchMenu, getSavedItems, saveItem, unsaveItem } from '@/lib/apiClient';
 import { getMacroTargets } from '@/lib/macroStorage';
 import type { MacroValues } from '@/lib/macroPresets';
+import { EDITORIAL, FONTS } from '@/lib/brand';
 import { useTheme } from '@/lib/theme';
 
 type Section = { title: string; data: MenuItemResult[] };
@@ -64,57 +65,47 @@ function buildMatchSections(items: MenuItemResult[], targets: MacroValues | null
   return sections;
 }
 
-const HERO_IMAGE_HEIGHT = 220;
+const HERO_IMAGE_HEIGHT = 240;
 const HERO_OVERLAP = 44;
 
-// Mock image — will be replaced with real restaurant photos later
-const MOCK_RESTAURANT_IMAGE = 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&q=80';
-
-function HeroSection({ name, address, distance, itemCount }: {
-  name: string; address?: string; distance?: string; itemCount: number;
+function HeroSection({ name, address, distance, itemCount, photoUrl }: {
+  name: string; address?: string; distance?: string; itemCount: number; photoUrl?: string;
 }) {
-  const { colors } = useTheme();
-
   return (
     <View style={styles.heroWrap}>
-      <Image source={{ uri: MOCK_RESTAURANT_IMAGE }} style={styles.heroImage} />
+      <Image
+        source={{ uri: photoUrl || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&q=80' }}
+        style={styles.heroImage}
+      />
 
-      <View style={[styles.heroCard, {
-        backgroundColor: colors.bg,
-      }]}>
-        <View style={styles.heroTop}>
-          <Text style={[styles.heroName, { color: colors.textPrimary }]} numberOfLines={2}>
-            {name}
-          </Text>
-        </View>
+      <View style={styles.heroCard}>
+        <Text style={styles.heroName} numberOfLines={2}>{name}</Text>
 
         <View style={styles.infoRow}>
           {distance ? (
             <View style={styles.infoItem}>
-              <Ionicons name="navigate-outline" size={13} color={colors.textSecondary} />
-              <Text style={[styles.infoValue, { color: colors.textSecondary }]}>{distance} mi</Text>
+              <Ionicons name="navigate-outline" size={13} color={EDITORIAL.textSoft} />
+              <Text style={styles.infoValue}>{distance} mi</Text>
             </View>
           ) : null}
           <View style={styles.infoItem}>
-            <Ionicons name="restaurant-outline" size={13} color={colors.textSecondary} />
-            <Text style={[styles.infoValue, { color: colors.textSecondary }]}>{itemCount} items</Text>
+            <Ionicons name="restaurant-outline" size={13} color={EDITORIAL.textSoft} />
+            <Text style={styles.infoValue}>{itemCount} items</Text>
           </View>
         </View>
 
         {address ? (
           <View style={styles.addressRow}>
-            <Ionicons name="location-outline" size={13} color={colors.textTertiary} />
-            <Text style={[styles.addressText, { color: colors.textTertiary }]} numberOfLines={1}>
-              {address}
-            </Text>
+            <Ionicons name="location-outline" size={13} color={EDITORIAL.textSoft} />
+            <Text style={styles.addressText} numberOfLines={1}>{address}</Text>
           </View>
         ) : null}
 
-        <View style={[styles.menuLabel, { borderTopColor: colors.borderSubtle }]}>
-          <Ionicons name="leaf" size={14} color={colors.accent} />
-          <Text style={[styles.menuLabelText, { color: colors.textPrimary }]}>AI Estimated Menu</Text>
-          <View style={[styles.aiBadge, { backgroundColor: colors.accentBg }]}>
-            <Text style={[styles.aiBadgeText, { color: colors.accent }]}>AI</Text>
+        <View style={styles.menuLabel}>
+          <Ionicons name="leaf" size={14} color={EDITORIAL.greenAccent} />
+          <Text style={styles.menuLabelText}>AI Estimated Menu</Text>
+          <View style={styles.aiBadge}>
+            <Text style={styles.aiBadgeText}>AI</Text>
           </View>
         </View>
       </View>
@@ -125,7 +116,7 @@ function HeroSection({ name, address, distance, itemCount }: {
 export default function RestaurantDetailScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ id: string; address?: string; distance?: string }>();
+  const params = useLocalSearchParams<{ id: string; address?: string; distance?: string; photoUrl?: string }>();
   const id = params.id;
   const [menu, setMenu] = useState<MenuResponse | null>(null);
   const [targets, setTargets] = useState<MacroValues | null>(null);
@@ -180,22 +171,23 @@ export default function RestaurantDetailScreen() {
       address={params.address}
       distance={params.distance}
       itemCount={menu?.menuItems.length ?? 0}
+      photoUrl={params.photoUrl}
     />
   );
 
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <View style={[styles.container, { backgroundColor: colors.bg }]}>
+      <View style={[styles.container, { backgroundColor: EDITORIAL.cream }]}>
         {/* Floating back button */}
         <Pressable
           onPress={() => router.back()}
-          style={[styles.backButton, { top: insets.top + 8, backgroundColor: colors.bg }]}
+          style={[styles.backButton, { top: insets.top + 8, backgroundColor: EDITORIAL.cream }]}
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={22} color={EDITORIAL.text} />
         </Pressable>
         {loading && <View style={styles.centered}><FitsyLoader size="md" /></View>}
         {!loading && error !== null && (
@@ -215,8 +207,8 @@ export default function RestaurantDetailScreen() {
               keyExtractor={(item) => item.id}
               renderItem={renderItem}
               renderSectionHeader={({ section }) => (
-                <View style={[styles.sectionHeader, { backgroundColor: colors.bgElevated, borderBottomColor: colors.border }]}>
-                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{section.title}</Text>
+                <View style={[styles.sectionHeader, { backgroundColor: EDITORIAL.creamCard, borderBottomColor: EDITORIAL.border }]}>
+                  <Text style={[styles.sectionTitle, { color: EDITORIAL.text }]}>{section.title}</Text>
                 </View>
               )}
               ListHeaderComponent={header}
@@ -261,14 +253,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingTop: 18,
     paddingBottom: 14,
+    backgroundColor: EDITORIAL.cream,
   },
   heroTop: {
     marginBottom: 14,
   },
   heroName: {
-    fontSize: 24,
-    fontWeight: '800',
+    fontFamily: FONTS.newsreaderBold,
+    fontSize: 26,
+    color: EDITORIAL.text,
     letterSpacing: -0.5,
+    marginBottom: 12,
   },
   infoRow: {
     flexDirection: 'row',
@@ -279,6 +274,7 @@ const styles = StyleSheet.create({
   infoValue: {
     fontSize: 14,
     fontWeight: '600',
+    color: EDITORIAL.textSoft,
   },
   addressRow: {
     flexDirection: 'row',
@@ -288,6 +284,7 @@ const styles = StyleSheet.create({
   },
   addressText: {
     fontSize: 12,
+    color: EDITORIAL.textSoft,
     flex: 1,
   },
   menuLabel: {
@@ -296,10 +293,11 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingTop: 12,
     borderTopWidth: 1,
+    borderTopColor: EDITORIAL.border,
   },
-  menuLabelText: { fontSize: 15, fontWeight: '700' },
-  aiBadge: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
-  aiBadgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
+  menuLabelText: { fontSize: 15, fontWeight: '700', color: EDITORIAL.text },
+  aiBadge: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, backgroundColor: EDITORIAL.creamCard },
+  aiBadgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5, color: EDITORIAL.greenAccent },
   emptyText: { fontSize: 15, textAlign: 'center', lineHeight: 22 },
   errorBanner: { margin: 16, borderRadius: 10, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
   errorText: { fontSize: 14, flex: 1 },
