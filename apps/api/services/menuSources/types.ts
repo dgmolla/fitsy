@@ -31,6 +31,7 @@ export interface MenuSourceResult {
     name: string;
     cuisine?: string[];
     priceRange?: string;
+    imageUrl?: string; // restaurant hero photo (from UE JSON-LD, Google Places, etc.)
   };
   items: StructuredMenuItem[];
   macros?: Map<string, MacroData>; // populated by FFN/FatSecret; key = item name (lowercased)

@@ -23,6 +23,7 @@ export interface PlaceResult {
   rating: number | null;
   userRatingCount: number | null;
   priceLevel: string | null;
+  photoName: string | null; // Google Places photo reference for Photo API
 }
 
 export interface DiscoveryConfig {
@@ -45,6 +46,7 @@ interface GooglePlacesEntry {
   rating?: number;
   userRatingCount?: number;
   priceLevel?: string;
+  photos?: Array<{ name?: string }>;
 }
 
 interface GooglePlacesNearbyResponse {
@@ -56,7 +58,7 @@ interface GooglePlacesNearbyResponse {
 
 const BASE_URL = "https://places.googleapis.com/v1";
 const FIELD_MASK =
-  "places.id,places.displayName,places.formattedAddress,places.location,places.websiteUri,places.types,places.rating,places.userRatingCount,places.priceLevel";
+  "places.id,places.displayName,places.formattedAddress,places.location,places.websiteUri,places.types,places.rating,places.userRatingCount,places.priceLevel,places.photos";
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 
@@ -129,6 +131,7 @@ export async function discoverRestaurants(
         rating: place.rating ?? null,
         userRatingCount: place.userRatingCount ?? null,
         priceLevel: normalizePriceLevel(place.priceLevel),
+        photoName: place.photos?.[0]?.name ?? null,
       });
     }
 

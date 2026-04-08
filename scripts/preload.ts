@@ -157,6 +157,7 @@ function isChain(name: string, types: string[]): boolean {
 async function upsertRestaurantRaw(
   place: PlaceResult,
   menuSourceId: string,
+  photoUrl: string | null,
   prisma: PrismaClient,
 ): Promise<string> {
   const cuisineTags = extractCuisineTags(place.types);
@@ -166,13 +167,14 @@ async function upsertRestaurantRaw(
     INSERT INTO "Restaurant" (
       "id", "externalPlaceId", "name", "address", "lat", "lng",
       "cuisineTags", "chainFlag", "source", "menuSourceId",
-      "rating", "userRatingCount", "priceLevel",
+      "rating", "userRatingCount", "priceLevel", "photoUrl",
       "createdAt", "updatedAt"
     ) VALUES (
       gen_random_uuid(), ${place.placeId}, ${place.name}, ${place.address},
       ${place.lat}, ${place.lng}, ${cuisineTags}::text[], ${chainFlag},
       'google_places', ${menuSourceId}, ${place.rating ?? null},
       ${place.userRatingCount ?? null}, ${place.priceLevel ?? null},
+      ${photoUrl},
       now(), now()
     )
     ON CONFLICT ("externalPlaceId") DO UPDATE SET
@@ -184,10 +186,28 @@ async function upsertRestaurantRaw(
       "rating" = EXCLUDED."rating",
       "userRatingCount" = EXCLUDED."userRatingCount",
       "priceLevel" = EXCLUDED."priceLevel",
+      "photoUrl" = COALESCE(EXCLUDED."photoUrl", "Restaurant"."photoUrl"),
       "updatedAt" = now()
     RETURNING "id"
   `;
   return rows[0]!.id;
+}
+
+// ─── Google Places Photo ────────────────────────────────────────────────────
+
+async function fetchGooglePlacesPhotoUrl(photoName: string): Promise<string | null> {
+  const apiKey = process.env["GOOGLE_PLACES_API_KEY"] ?? "";
+  try {
+    const res = await fetch(
+      `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=800&skipHttpRedirect=true`,
+      { headers: { "X-Goog-Api-Key": apiKey } },
+    );
+    if (!res.ok) return null;
+    const data = (await res.json()) as { photoUri?: string };
+    return data.photoUri ?? null;
+  } catch {
+    return null;
+  }
 }
 
 async function persistItems(
@@ -407,10 +427,16 @@ async function main(): Promise<void> {
       log(`  [${place.name}] Source: ${menuResult.sourceId}, ${menuResult.items.length} items`);
       stats.sourceBreakdown[menuResult.sourceId] = (stats.sourceBreakdown[menuResult.sourceId] ?? 0) + 1;
 
+      // Get photo: UE JSON-LD (free) → Google Places ($0.007)
+      let photoUrl: string | null = menuResult.restaurant?.imageUrl ?? null;
+      if (!photoUrl && place.photoName) {
+        photoUrl = await fetchGooglePlacesPhotoUrl(place.photoName);
+      }
+
       // Upsert restaurant (raw SQL)
       let restaurantId: string;
       try {
-        restaurantId = await upsertRestaurantRaw(place, menuResult.sourceId, prisma);
+        restaurantId = await upsertRestaurantRaw(place, menuResult.sourceId, photoUrl, prisma);
       } catch (err) {
         log(`  [${place.name}] DB error: ${String(err)}`);
         stats.skippedDbError++;

@@ -59,6 +59,7 @@ interface JsonLdRestaurant {
   name?: string;
   servesCuisine?: string | string[];
   priceRange?: string;
+  image?: string | string[];
   hasMenu?: JsonLdMenu | JsonLdMenu[];
 }
 
@@ -378,7 +379,7 @@ export async function fetchUberEatsHtml(
  */
 export async function extractMenuViaJsonLd(
   storeUrl: string,
-): Promise<{ items: StructuredMenuItem[]; restaurant?: { name: string; cuisine?: string[]; priceRange?: string } } | null> {
+): Promise<{ items: StructuredMenuItem[]; restaurant?: { name: string; cuisine?: string[]; priceRange?: string; imageUrl?: string } } | null> {
   const html = await fetchUberEatsHtml(storeUrl);
   if (!html) return null;
 
@@ -395,11 +396,16 @@ export async function extractMenuViaJsonLd(
       : [restaurantBlock.servesCuisine]
     : undefined;
 
-  const restaurant: { name: string; cuisine?: string[]; priceRange?: string } = {
+  // Extract hero image from JSON-LD (free)
+  const imageArr = restaurantBlock.image;
+  const imageUrl = Array.isArray(imageArr) ? imageArr[0] : typeof imageArr === "string" ? imageArr : undefined;
+
+  const restaurant: { name: string; cuisine?: string[]; priceRange?: string; imageUrl?: string } = {
     name: restaurantBlock.name ?? "",
   };
   if (cuisine) restaurant.cuisine = cuisine;
   if (restaurantBlock.priceRange) restaurant.priceRange = restaurantBlock.priceRange;
+  if (imageUrl) restaurant.imageUrl = imageUrl;
 
   return { items, restaurant };
 }
