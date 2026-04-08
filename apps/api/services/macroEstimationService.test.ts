@@ -148,17 +148,18 @@ describe("estimateMacros", () => {
     );
   });
 
-  it("throws when Haiku returns fewer items than input", async () => {
+  it("pads with null when Haiku returns fewer items than input", async () => {
     // Haiku ignores prompt instruction and returns only 1 item for 2 inputs
     const tooFewEstimates = [{ cal: 320, p: 42, c: 2, f: 14, conf: "HIGH", tags: [] }];
     mockCreate.mockResolvedValue(makeTextResponse(JSON.stringify(tooFewEstimates)));
 
-    await expect(estimateMacros(ITEMS, client)).rejects.toThrow(
-      "macroEstimationService: Haiku returned 1 items for 2 inputs",
-    );
+    const result = await estimateMacros(ITEMS, client);
+    expect(result).toHaveLength(2);
+    expect(result[0]).not.toBeNull(); // first item estimated
+    expect(result[1]).toBeNull();     // second item padded with null
   });
 
-  it("throws when Haiku returns more items than input", async () => {
+  it("truncates when Haiku returns more items than input", async () => {
     const tooManyEstimates = [
       { cal: 320, p: 42, c: 2, f: 14, conf: "HIGH", tags: [] },
       { cal: 380, p: 8, c: 30, f: 24, conf: "MEDIUM", tags: [] },
@@ -166,9 +167,10 @@ describe("estimateMacros", () => {
     ];
     mockCreate.mockResolvedValue(makeTextResponse(JSON.stringify(tooManyEstimates)));
 
-    await expect(estimateMacros(ITEMS, client)).rejects.toThrow(
-      "macroEstimationService: Haiku returned 3 items for 2 inputs",
-    );
+    const result = await estimateMacros(ITEMS, client);
+    expect(result).toHaveLength(2); // truncated to input length
+    expect(result[0]).not.toBeNull();
+    expect(result[1]).not.toBeNull();
   });
 
   // ── Positional contract — null preserves position ─────────────────────────

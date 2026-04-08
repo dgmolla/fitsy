@@ -253,9 +253,7 @@ describe("UberEatsSource", () => {
     const jsonLdHtml = fixture("ubereats-thai-place.html");
 
     mockFetch
-      // Step 3: Slug guess (fails — 404)
-      .mockResolvedValueOnce({ ok: false, status: 404 })
-      // Step 5: Firecrawl URL discovery
+      // Firecrawl URL discovery
       .mockResolvedValueOnce({
         ok: true,
         json: jest.fn().mockResolvedValue({
@@ -282,7 +280,6 @@ describe("UberEatsSource", () => {
     const jsonLdHtml = fixture("ubereats-thai-place.html");
 
     mockFetch
-      .mockResolvedValueOnce({ ok: false, status: 404 }) // slug guess
       .mockResolvedValueOnce({
         ok: true,
         json: jest.fn().mockResolvedValue({
