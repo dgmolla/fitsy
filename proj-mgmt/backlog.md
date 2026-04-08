@@ -8,3 +8,4 @@ Cross-cutting tasks that span multiple domains.
 - [ ] **Community feedback forum** — Public in-app forum with upvotes, comments, "Founder's Voice" badge. Spec: `docs/product/specs/community-feedback-forum.md` #frontend #backend
 - [ ] **Design token system** — Add spacing scale (xs/sm/md/lg/xl) + `Stack`/`Row` layout components to theme. Replace hardcoded pixel values across all screens. #frontend
 - [ ] **HealthKit integration** — Read daily macro budget + logged meals, write meal entries on restaurant pick. HealthKit is the hub — indirect sync covers MFP/Lose It/etc. Use `expo-health-kit`. Enables "remaining budget" ranking in search results. #frontend #backend
+- [ ] **SEO optimization** — Create web pages with macro/nutrition data per restaurant, optimized for search discovery. Consider static/server-rendered pages with structured data (schema.org). #frontend #backend #growth
