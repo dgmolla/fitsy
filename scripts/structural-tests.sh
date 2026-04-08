@@ -7,10 +7,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ERRORS=0
 
 SOURCE_DIRS=(
-  "$REPO_ROOT/apps/api"
-  "$REPO_ROOT/apps/mobile"
-  "$REPO_ROOT/packages/shared"
-  "$REPO_ROOT/scripts"
+  "$REPO_ROOT/src"
 )
 
 echo "=== Structural Tests ==="
@@ -30,17 +27,13 @@ else
   echo "PASS"
 fi
 
-echo -n "2. No hardcoded private IP ranges... "
-# Checks for hardcoded internal/private IP ranges that could indicate production
-# infrastructure committed to source. localhost is explicitly excluded — it is
-# a valid dev fallback (EXPO_PUBLIC_API_URL ?? 'http://localhost:3000').
+echo -n "2. No hardcoded URLs/IPs... "
 HARDCODED=$(grep -rn --include="*.ts" --include="*.tsx" \
-  --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.next \
-  -E '(192\.168\.[0-9]+\.[0-9]+|10\.[0-9]+\.[0-9]+\.[0-9]+|172\.(1[6-9]|2[0-9]|3[01])\.[0-9]+\.[0-9]+|127\.0\.0\.1)' \
+  -E '(192\.168\.|10\.0\.|172\.(1[6-9]|2[0-9]|3[01])\.|localhost:[0-9]|127\.0\.0\.1)' \
   "${SOURCE_DIRS[@]}" 2>/dev/null || true)
 if [ -n "$HARDCODED" ]; then
   echo "FAIL"
-  echo "  Hardcoded private IPs found. Use environment variables instead."
+  echo "  Hardcoded URLs/IPs found. Use environment variables instead."
   echo "$HARDCODED" | sed 's/^/  /'
   ERRORS=$((ERRORS + 1))
 else
@@ -79,10 +72,10 @@ for dir in "${SOURCE_DIRS[@]}"; do
     -not -path "*/node_modules/*" -not -path "*/dist/*" -not -path "*/.next/*" 2>/dev/null)
 done
 if [ -n "$LONG_FILES" ]; then
-  echo "WARN"
+  echo "FAIL"
   echo "  Files over $MAX_LINES lines found. Split into smaller modules."
   echo -e "$LONG_FILES"
-  # Warning only — not a blocking error. Pre-existing files are grandfathered.
+  ERRORS=$((ERRORS + 1))
 else
   echo "PASS"
 fi
