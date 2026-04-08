@@ -6,6 +6,16 @@ import type {
   SubscriptionVerifyResponse,
 } from "@fitsy/shared";
 
+// ─── Known product IDs ────────────────────────────────────────────────────────
+// Must match App Store Connect product identifiers exactly.
+
+const KNOWN_PRODUCT_IDS = ["fitsy.monthly", "fitsy.annual"] as const;
+type KnownProductId = (typeof KNOWN_PRODUCT_IDS)[number];
+
+function isKnownProductId(id: string): id is KnownProductId {
+  return (KNOWN_PRODUCT_IDS as readonly string[]).includes(id);
+}
+
 // ─── POST /api/subscriptions/verify ──────────────────────────────────────────
 
 export async function POST(
@@ -13,6 +23,17 @@ export async function POST(
 ): Promise<NextResponse<SubscriptionVerifyResponse | { error: string }>> {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth as never;
+
+  // ─── Stub guard ──────────────────────────────────────────────────────────────
+  // This endpoint performs no real Apple receipt validation.
+  // It MUST be blocked in production until App Store Server API is integrated.
+  // Set ALLOW_STUB_SUBSCRIPTIONS=true in dev/staging only.
+  if (process.env["ALLOW_STUB_SUBSCRIPTIONS"] !== "true") {
+    return NextResponse.json(
+      { error: "Subscription verification is not yet available" },
+      { status: 503 },
+    );
+  }
 
   let body: unknown;
   try {
@@ -41,9 +62,18 @@ export async function POST(
     );
   }
 
+  // ─── Validate productId against known SKUs ────────────────────────────────────
+  if (!isKnownProductId(productId)) {
+    return NextResponse.json(
+      {
+        error: `productId must be one of: ${KNOWN_PRODUCT_IDS.join(", ")}`,
+      },
+      { status: 400 },
+    );
+  }
+
   // ─── Stub: Apple receipt validation ──────────────────────────────────────────
-  // TODO: Integrate with Apple App Store Server API for real validation.
-  // For now, log the receipt and proceed with subscription creation.
+  // TODO (S-103b): Integrate with Apple App Store Server API for real validation.
   // Receipt data is intentionally not logged — it may contain sensitive info.
 
   try {

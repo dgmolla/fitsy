@@ -13,6 +13,10 @@ jest.mock("@/services/emailService", () => ({
   sendWelcomeEmail: jest.fn(),
 }));
 
+jest.mock("@/lib/rateLimit", () => ({
+  authLimiter: { check: () => ({ ok: true, remaining: 9, retryAfterMs: 0 }) },
+}));
+
 import { POST } from "./route";
 import { NextRequest } from "next/server";
 import { getSupabaseAdmin, getSupabaseClient } from "@/lib/supabase";

@@ -59,6 +59,12 @@ jest.mock("@/services/emailService", () => ({
   sendWelcomeEmail: jest.fn().mockResolvedValue(undefined),
 }));
 
+// rateLimit — always allow in tests; the singleton store persists across test
+// cases and exhausts the 10-req/min limit when many auth routes are exercised.
+jest.mock("@/lib/rateLimit", () => ({
+  authLimiter: { check: () => ({ ok: true, remaining: 9, retryAfterMs: 0 }) },
+}));
+
 // ─── Imports ───────────────────────────────────────────────────────────────────
 
 import { POST as applePost } from "./apple/route";

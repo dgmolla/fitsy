@@ -4,13 +4,24 @@ jest.mock("@/lib/supabase", () => ({
   getSupabaseClient: jest.fn(),
 }));
 
-jest.mock("@/lib/restaurantService", () => ({
-  prisma: {
-    user: {
-      findUnique: jest.fn(),
-      upsert: jest.fn(),
+jest.mock("@/lib/restaurantService", () => {
+  const user = {
+    findUnique: jest.fn(),
+    update: jest.fn(),
+    upsert: jest.fn(),
+  };
+  return {
+    prisma: {
+      user,
+      // $transaction passes the same mock objects so per-test mockResolvedValue
+      // calls on prisma.user.* apply inside the transaction callback too.
+      $transaction: jest.fn().mockImplementation(async (fn: (tx: { user: typeof user }) => unknown) => fn({ user })),
     },
-  },
+  };
+});
+
+jest.mock("@/lib/rateLimit", () => ({
+  authLimiter: { check: () => ({ ok: true, remaining: 9, retryAfterMs: 0 }) },
 }));
 
 import { POST } from "./route";
@@ -33,6 +44,9 @@ beforeEach(() => {
   (getSupabaseClient as jest.Mock).mockReturnValue({
     auth: { signInWithIdToken: mockSignInWithIdToken },
   });
+  // Re-wire $transaction after resetAllMocks clears the implementation
+  const user = (prisma as unknown as { user: { findUnique: jest.Mock; update: jest.Mock; upsert: jest.Mock } }).user;
+  (prisma.$transaction as jest.Mock).mockImplementation(async (fn: (tx: { user: typeof user }) => unknown) => fn({ user }));
 });
 
 function makeRequest(body: unknown): NextRequest {
@@ -98,6 +112,33 @@ describe("POST /api/auth/google — new user", () => {
     expect(body.isNewUser).toBe(true);
     expect(body.token).toBe("supa-jwt-token");
     expect(body.user.id).toBe(DB_USER.id);
+  });
+});
+
+// ─── Account linking ──────────────────────────────────────────────────────────
+
+describe("POST /api/auth/google — account linking", () => {
+  it("links existing email-matched account to new Supabase ID", async () => {
+    mockSignInWithIdToken.mockResolvedValue({
+      data: { session: SUPABASE_SESSION, user: SUPABASE_USER },
+      error: null,
+    });
+    // First findUnique (by Supabase ID) → not found
+    // Second findUnique (by email) → found with old ID from different provider
+    (prisma.user.findUnique as jest.Mock)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: "old-provider-id" });
+    (prisma.user.update as jest.Mock).mockResolvedValue({ id: DB_USER.id });
+    (prisma.user.upsert as jest.Mock).mockResolvedValue(DB_USER);
+
+    const res = await POST(makeRequest({ idToken: "valid.google.token" }));
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.isNewUser).toBe(false);
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { email: SUPABASE_USER.email } }),
+    );
   });
 });
 

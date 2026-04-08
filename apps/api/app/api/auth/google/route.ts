@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/restaurantService";
 import { getSupabaseClient } from "@/lib/supabase";
+import { authLimiter } from "@/lib/rateLimit";
 
 interface GoogleAuthResponse {
   token: string;
@@ -11,6 +12,24 @@ interface GoogleAuthResponse {
 export async function POST(
   request: NextRequest,
 ): Promise<NextResponse<GoogleAuthResponse | { error: string }>> {
+
+  // ─── Rate limiting ───────────────────────────────────────────────────────────
+
+  const ip =
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    request.headers.get("x-real-ip") ??
+    "unknown";
+  const rateResult = authLimiter.check(ip);
+  if (!rateResult.ok) {
+    return NextResponse.json(
+      { error: "Too many requests — please try again later" },
+      {
+        status: 429,
+        headers: { "Retry-After": String(Math.ceil(rateResult.retryAfterMs / 1000)) },
+      },
+    );
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -59,39 +78,45 @@ export async function POST(
   const derivedName =
     (data.user.user_metadata?.["name"] as string | undefined) ?? null;
 
-  let existingUser = await prisma.user.findUnique({
-    where: { id: data.user.id },
-    select: { id: true },
-  });
-
-  // If no user with this Supabase ID, check if one exists with the same email
-  // (e.g. previously registered via email/password with a different auth provider)
-  if (!existingUser) {
-    const userByEmail = await prisma.user.findUnique({
-      where: { email },
+  // Wrap account-linking and upsert in a transaction to prevent TOCTOU race
+  // between the existence check and the ID update (mirrors Apple auth pattern).
+  const { isNewUser, user } = await prisma.$transaction(async (tx) => {
+    let existingUser = await tx.user.findUnique({
+      where: { id: data.user.id },
       select: { id: true },
     });
-    if (userByEmail) {
-      // Link: update existing user's ID to the new Supabase auth ID
-      await prisma.user.update({
+
+    // If no user with this Supabase ID, check if one exists with the same email
+    // (e.g. previously registered via email/password with a different auth provider)
+    if (!existingUser) {
+      const userByEmail = await tx.user.findUnique({
         where: { email },
-        data: { id: data.user.id },
+        select: { id: true },
       });
-      existingUser = { id: data.user.id };
+      if (userByEmail) {
+        // Link: update existing user's ID to the new Supabase auth ID
+        await tx.user.update({
+          where: { email },
+          data: { id: data.user.id },
+        });
+        existingUser = { id: data.user.id };
+      }
     }
-  }
 
-  const isNewUser = !existingUser;
+    const isNewUser = !existingUser;
 
-  const user = await prisma.user.upsert({
-    where: { id: data.user.id },
-    update: {},
-    create: {
-      id: data.user.id,
-      email,
-      name: derivedName,
-    },
-    select: { id: true, email: true, name: true },
+    const user = await tx.user.upsert({
+      where: { id: data.user.id },
+      update: {},
+      create: {
+        id: data.user.id,
+        email,
+        name: derivedName,
+      },
+      select: { id: true, email: true, name: true },
+    });
+
+    return { isNewUser, user };
   });
 
   return NextResponse.json(
