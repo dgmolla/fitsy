@@ -53,3 +53,4 @@ recordings/
 # Claude Code worktrees
 .claude/worktrees/
 .env*.local
+scripts/cache/ue-sitemap-index.json
