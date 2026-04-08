@@ -4,14 +4,21 @@ jest.mock("@/lib/supabase", () => ({
   getSupabaseClient: jest.fn(),
 }));
 
-jest.mock("@/lib/restaurantService", () => ({
-  prisma: {
-    user: {
-      findUnique: jest.fn(),
-      upsert: jest.fn(),
+jest.mock("@/lib/restaurantService", () => {
+  const user = {
+    findUnique: jest.fn(),
+    upsert: jest.fn(),
+    update: jest.fn(),
+  };
+  return {
+    prisma: {
+      user,
+      // $transaction passes the same mock objects so per-test mockResolvedValue
+      // calls on prisma.user.* apply inside the transaction callback too.
+      $transaction: jest.fn().mockImplementation(async (fn) => fn({ user })),
     },
-  },
-}));
+  };
+});
 
 import { POST } from "./route";
 import { NextRequest } from "next/server";
@@ -33,6 +40,9 @@ beforeEach(() => {
   (getSupabaseClient as jest.Mock).mockReturnValue({
     auth: { signInWithIdToken: mockSignInWithIdToken },
   });
+  // Re-wire $transaction after resetAllMocks clears the implementation
+  const user = (prisma as unknown as { user: { findUnique: jest.Mock; upsert: jest.Mock; update: jest.Mock } }).user;
+  (prisma.$transaction as jest.Mock).mockImplementation(async (fn) => fn({ user }));
 });
 
 function makeRequest(body: unknown): NextRequest {
@@ -47,21 +57,14 @@ function makeRequest(body: unknown): NextRequest {
 
 describe("POST /api/auth/apple — validation", () => {
   it("returns 400 when identityToken is missing", async () => {
-    const res = await POST(makeRequest({ authorizationCode: "code-123", nonce: "raw-nonce" }));
+    const res = await POST(makeRequest({ nonce: "raw-nonce" }));
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toMatch(/identityToken/i);
   });
 
-  it("returns 400 when authorizationCode is missing", async () => {
-    const res = await POST(makeRequest({ identityToken: "tok", nonce: "raw-nonce" }));
-    expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(body.error).toMatch(/authorizationCode/i);
-  });
-
   it("returns 400 when nonce is missing", async () => {
-    const res = await POST(makeRequest({ identityToken: "tok", authorizationCode: "code-123" }));
+    const res = await POST(makeRequest({ identityToken: "tok" }));
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toMatch(/nonce/i);
@@ -88,7 +91,7 @@ describe("POST /api/auth/apple — Supabase token verification", () => {
     });
 
     const res = await POST(
-      makeRequest({ identityToken: "bad.identity.token", authorizationCode: "code-abc", nonce: "raw-nonce" }),
+      makeRequest({ identityToken: "bad.identity.token", nonce: "raw-nonce" }),
     );
     expect(res.status).toBe(401);
     const body = await res.json();
@@ -108,7 +111,7 @@ describe("POST /api/auth/apple — new user", () => {
     (prisma.user.upsert as jest.Mock).mockResolvedValue(DB_USER);
 
     const res = await POST(
-      makeRequest({ identityToken: "valid.apple.token", authorizationCode: "code-123", nonce: "raw-nonce" }),
+      makeRequest({ identityToken: "valid.apple.token", nonce: "raw-nonce" }),
     );
 
     expect(res.status).toBe(200);
@@ -118,6 +121,35 @@ describe("POST /api/auth/apple — new user", () => {
     expect(body.user.id).toBe(DB_USER.id);
     expect(mockSignInWithIdToken).toHaveBeenCalledWith(
       expect.objectContaining({ provider: "apple", nonce: "raw-nonce" }),
+    );
+  });
+});
+
+// ─── Account linking ──────────────────────────────────────────────────────────
+
+describe("POST /api/auth/apple — account linking", () => {
+  it("links existing email-matched account to new Supabase ID", async () => {
+    mockSignInWithIdToken.mockResolvedValue({
+      data: { session: SUPABASE_SESSION, user: SUPABASE_USER },
+      error: null,
+    });
+    // First findUnique (by Supabase ID) → not found
+    // Second findUnique (by email) → found with old ID from different provider
+    (prisma.user.findUnique as jest.Mock)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: "old-provider-id" });
+    (prisma.user.update as jest.Mock).mockResolvedValue({ id: DB_USER.id });
+    (prisma.user.upsert as jest.Mock).mockResolvedValue(DB_USER);
+
+    const res = await POST(
+      makeRequest({ identityToken: "valid.apple.token", nonce: "raw-nonce" }),
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.isNewUser).toBe(false); // existing account was linked
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { email: SUPABASE_USER.email } }),
     );
   });
 });
@@ -134,7 +166,7 @@ describe("POST /api/auth/apple — existing user", () => {
     (prisma.user.upsert as jest.Mock).mockResolvedValue(DB_USER);
 
     const res = await POST(
-      makeRequest({ identityToken: "valid.apple.token", authorizationCode: "code-123", nonce: "raw-nonce" }),
+      makeRequest({ identityToken: "valid.apple.token", nonce: "raw-nonce" }),
     );
 
     expect(res.status).toBe(200);
@@ -157,7 +189,6 @@ describe("POST /api/auth/apple — existing user", () => {
     const res = await POST(
       makeRequest({
         identityToken: "valid.apple.token",
-        authorizationCode: "code-123",
         nonce: "raw-nonce",
         fullName: { givenName: "John", familyName: "Doe" },
       }),
