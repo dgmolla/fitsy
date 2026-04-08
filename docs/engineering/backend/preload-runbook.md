@@ -267,14 +267,22 @@ direct connection.
 
 ## Re-running the preload
 
-The preload script is safe to re-run. It uses `upsert` for restaurants and
-menu items (keyed on `externalPlaceId` and `restaurantId + name`). Existing
-restaurants are updated; new macro estimates are appended.
+The preload script is safe to re-run. It uses upserts keyed on stable natural
+keys:
 
-To wipe and re-preload from scratch:
+| Table | Upsert key |
+|-------|-----------|
+| `Restaurant` | `externalPlaceId` |
+| `MenuItem` | `(restaurantId, name)` |
+| `MacroEstimate` | `menuItemId` |
+
+Existing rows are updated in place — their primary key IDs never change. This
+means user `SavedItem` references remain valid across re-runs.
+
+To wipe and re-preload from scratch (staging only — never production):
 
 ```bash
-# Connect to DB and truncate (staging only — never production)
+# Connect to DB and truncate (this also clears all SavedItems — use with caution)
 psql $POSTGRES_URL_NON_POOLING -c \
   "TRUNCATE \"MacroEstimate\", \"SavedItem\", \"MenuItem\", \"Restaurant\" CASCADE;"
 
