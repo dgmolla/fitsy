@@ -29,10 +29,10 @@ export interface UserProperties {
   email?: string;
   goal?: string;
   activity_level?: string;
-  macro_protein?: string;
-  macro_carbs?: string;
-  macro_fat?: string;
-  macro_calories?: string;
+  macro_protein?: number;
+  macro_carbs?: number;
+  macro_fat?: number;
+  macro_calories?: number;
   [key: string]: JsonType | undefined;
 }
 
