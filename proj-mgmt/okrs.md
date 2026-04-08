@@ -1,7 +1,7 @@
 # OKRs
 
 **Cadence**: Review after every sprint.
-**Last reviewed**: 2026-03-28
+**Last reviewed**: 2026-04-08
 **Current phase**: Get Users (transitioned after Sprint 5)
 
 ---
@@ -78,7 +78,7 @@ Real users validate whether macro-aware restaurant discovery solves a real probl
 
 | # | Key Result | Status | Notes |
 |---|------------|--------|-------|
-| KR1 | 10 users signed up and using the app | In progress | App UX overhauled to editorial cream design system (S-91/92/93); needs real Apple auth + TestFlight to get to users |
+| KR1 | 10 users signed up and using the app | In progress | Editorial cream design system complete across all screens (S-91/92/93). Data enrichment + filters shipped (S-77–83). DB populated with 268 real items (S-89). Blocker: Apple Sign-In + TestFlight not yet done — no real users possible until then. |
 | KR2 | Users completing at least 3 searches per week | Not started | Measurable only after KR1 — needs active users first |
 | KR3 | 2 rounds of user testing completed with findings triaged | Not started | |
 | KR4 | Feedback loop operational (capture → triage → spec → ship) | **Done** | S-38 merged; feedback triage playbook + P0–P4 priority matrix in `docs/product/feedback-triage.md` |

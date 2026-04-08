@@ -1,17 +1,18 @@
 # Sprint Index
 
-**Last updated**: 2026-04-06
+**Last updated**: 2026-04-08
 
-<!-- CURRENT_SPRINT: sprints/sprint-9 -->
+<!-- CURRENT_SPRINT: sprints/sprint-10 -->
 
 ## Active
 
-- [[sprints/sprint-9|Sprint 9: Get Users — Data Enrichment + Filters]]
+- [[sprints/sprint-10|Sprint 10: MVP Beta Readiness — Auth + Security + Analytics]]
 
 ## Upcoming
 
 ## Completed
 
+- [[sprints/sprint-9|Sprint 9: Get Users — Data Enrichment + Filters]] — @completed(2026-04-08)
 - [[sprints/sprint-8|Sprint 8: Get Users — Mobile Polish + TestFlight]] — @completed(2026-04-06)
 - [[sprints/sprint-7|Sprint 7: E2E Validation + TestFlight]] — @completed(2026-03-25)
 - [[sprints/sprint-6|Sprint 6: Get Users]] — @completed(2026-03-25)

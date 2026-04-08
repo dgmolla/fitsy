@@ -9,13 +9,15 @@ and more.
 
 ## Current State
 
-Last audited: 2026-03-25 (S-45). Full findings: `docs/engineering/audit-2026-03-25.md`.
+Last audited: 2026-04-08 (Sprint 9). Full findings: `docs/engineering/audit-2026-03-25.md`.
 
-**Built and passing** (104 API + 29 mobile tests, build green): Prisma schema (2 migrations, 5 models), all 5 API routes (`/api/health`, auth register/login, `GET /api/restaurants`, `GET /api/restaurants/[id]/menu`), full mobile auth flow, search screen, restaurant detail screen, core components, preload pipeline script, CI/CD.
+**Built and passing**: Prisma schema (3 migrations, 5 models + rating/priceLevel/userRatingCount on Restaurant, dietaryTags on MenuItem), all 5 API routes with filter expansion (`dietary`, `maxPriceLevel`, `minRating`), full mobile auth flow, 15-screen editorial onboarding, search screen (editorial cream V3-C layout, macro strip, cuisine chips, filter panel), restaurant detail + saved + profile screens (all on editorial cream palette), dietary tag extraction pipeline, preload script with ratings/price/dietary enrichment, CI/CD.
 
-**Not working**: (1) DB is empty — preload (S-46) has not run, so restaurant/menu routes return empty/404. (2) Search uses hardcoded Silver Lake coordinates — no GPS yet. (3) Profile screen is a stub. (4) No macro target setup screen. (5) Restaurant routes have no JWT middleware.
+**DB state**: Staging populated — 3 restaurants (Chick-fil-A, McDonald's, Pollo Campero), 268 items, 268 MacroEstimates (source: fatsecret), 0 duplicates.
 
-**Next**: S-46 (preload staging DB) → S-47 (smoke test) → GPS, profile, macro setup.
+**Not working**: (1) Search uses hardcoded Silver Lake coordinates — no GPS yet. (2) Profile screen is a stub (no real data). (3) Restaurant routes have no JWT middleware. (4) No real Apple auth — still using dev login. (5) Not on TestFlight.
+
+**Next**: Apple Sign-In + TestFlight → GPS → first 10 users.
 
 ---
 
