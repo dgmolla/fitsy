@@ -46,7 +46,7 @@ export default function TargetsRevealScreen() {
       totalSteps={8}
       title="Here's what we recommend."
       subtitle="Your personalized per-meal targets. Adjust anytime in the app."
-      onContinue={() => router.push('/welcome/payment')}
+      onContinue={() => router.push('/welcome/preview')}
       canContinue={macros !== null}
     >
       {macros ? (
