@@ -7,6 +7,10 @@ const config: ExpoConfig = {
   version: "1.0.0",
   orientation: "portrait",
   platforms: ["ios", "android"],
+  ios: {
+    bundleIdentifier: "com.fitsy.app",
+    supportsTablet: false,
+  },
 
   plugins: [
     "expo-router",

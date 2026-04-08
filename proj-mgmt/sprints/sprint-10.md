@@ -6,10 +6,11 @@ kanban-plugin: basic
 
 ## Backlog
 
-- [ ] **S-104** Add `ios.bundleIdentifier` to `app.config.ts` + configure `expo-google-services` plugin (`GoogleService-Info.plist`). Required for EAS Build + Google OAuth redirect to work on device. #frontend #O1
 - [ ] **S-105** Add `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` and `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` to EAS build profiles (`eas.json` production + preview); set values in EAS dashboard. After S-104 — also verify redirect URI in Google Cloud Console. #frontend #devops #O1
 
 ## In Progress
+
+- [ ] **S-104** Add `ios.bundleIdentifier` to `app.config.ts` + configure `expo-google-services` plugin (`GoogleService-Info.plist`). Required for EAS Build + Google OAuth redirect to work on device. #frontend #O1
 
 ## Done
 
