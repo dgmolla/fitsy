@@ -19,8 +19,8 @@ export default function WeightScreen() {
 
   return (
     <WelcomeScreen
-      step={3}
-      totalSteps={9}
+      step={5}
+      totalSteps={8}
       title="What do you weigh?"
       subtitle="No judgment here. This helps us dial in your macro targets perfectly."
       onContinue={async () => {
@@ -28,7 +28,7 @@ export default function WeightScreen() {
           ? kg
           : Math.round(lbs * 0.453592 * 10) / 10;
         await saveOnboardingField('weightKg', weightKg);
-        router.push('/welcome/activity');
+        router.push('/welcome/tuning');
       }}
       canContinue={true}
     >

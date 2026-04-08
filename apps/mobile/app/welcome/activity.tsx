@@ -27,13 +27,13 @@ export default function ActivityScreen() {
 
   return (
     <WelcomeScreen
-      step={4}
-      totalSteps={9}
+      step={2}
+      totalSteps={8}
       title="How active are you?"
       subtitle="Pick the level that best describes your typical week. Be honest!"
       onContinue={async () => {
         if (selected) await saveOnboardingField('activity', selected);
-        router.push('/welcome/goal');
+        router.push('/welcome/age');
       }}
       canContinue={selected !== null}
     >

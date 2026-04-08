@@ -21,8 +21,8 @@ export default function HeightScreen() {
 
   return (
     <WelcomeScreen
-      step={2}
-      totalSteps={9}
+      step={4}
+      totalSteps={8}
       title="How tall are you?"
       subtitle="Used to estimate your basal metabolic rate. We keep this between us."
       onContinue={async () => {

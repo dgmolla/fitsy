@@ -36,13 +36,13 @@ export default function GoalScreen() {
 
   return (
     <WelcomeScreen
-      step={5}
-      totalSteps={9}
+      step={1}
+      totalSteps={8}
       title="What's your goal?"
       subtitle="We'll set your macro targets to match. You can always change this later."
       onContinue={async () => {
         if (selected) await saveOnboardingField('goal', selected);
-        router.push({ pathname: '/macro-setup', params: { fromOnboarding: '1' } });
+        router.push('/welcome/activity');
       }}
       canContinue={selected !== null}
     >

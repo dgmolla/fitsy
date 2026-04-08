@@ -39,8 +39,8 @@ export default function PaymentScreen() {
 
   return (
     <WelcomeScreen
-      step={9}
-      totalSteps={9}
+      step={7}
+      totalSteps={8}
       title="Start your free trial"
       subtitle="Try Fitsy free for 7 days. Cancel anytime before trial ends."
       onContinue={handleStart}

@@ -37,8 +37,8 @@ export default function AgeScreen() {
 
   return (
     <WelcomeScreen
-      step={1}
-      totalSteps={9}
+      step={3}
+      totalSteps={8}
       title="When's your birthday?"
       subtitle="We use your age to personalize your daily calorie target. This stays private."
       onContinue={async () => {

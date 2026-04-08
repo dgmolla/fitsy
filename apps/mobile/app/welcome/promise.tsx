@@ -41,7 +41,7 @@ export default function PromiseScreen() {
 
         <Pressable
           style={styles.ctaBtn}
-          onPress={() => router.push('/welcome/age')}
+          onPress={() => router.push('/welcome/goal')}
           accessibilityRole="button"
         >
           <Text style={styles.ctaTxt}>Let's personalize</Text>
