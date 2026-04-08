@@ -9,15 +9,15 @@ and more.
 
 ## Current State
 
-Last audited: 2026-04-08 (Sprint 9). Full findings: `docs/engineering/audit-2026-03-25.md`.
+Last audited: 2026-04-08 (Sprint 10). Full findings: `docs/engineering/audit-2026-03-25.md`.
 
-**Built and passing**: Prisma schema (3 migrations, 5 models + rating/priceLevel/userRatingCount on Restaurant, dietaryTags on MenuItem), all 5 API routes with filter expansion (`dietary`, `maxPriceLevel`, `minRating`), full mobile auth flow, 15-screen editorial onboarding, search screen (editorial cream V3-C layout, macro strip, cuisine chips, filter panel), restaurant detail + saved + profile screens (all on editorial cream palette), dietary tag extraction pipeline, preload script with ratings/price/dietary enrichment, CI/CD.
+**Built and passing**: Prisma schema (3 migrations, 5 models + rating/priceLevel/userRatingCount on Restaurant, dietaryTags on MenuItem), all 5 API routes with filter expansion (`dietary`, `maxPriceLevel`, `minRating`) + JWT auth middleware on all routes, full mobile auth flow (Apple Sign-In + Google Sign-In implemented), 15-screen editorial onboarding, search screen (editorial cream V3-C layout, macro strip, cuisine chips, filter panel), restaurant detail + saved + profile screens (all on editorial cream palette), dietary tag extraction pipeline, preload script with ratings/price/dietary enrichment (idempotent with unique constraints), CI/CD, PostHog analytics (5 events), security hardening (rate limiting, security headers, TOCTOU fix, subscription guard, lat/lng validation), EAS build config (bundle ID + Google OAuth env vars in eas.json).
 
-**DB state**: Staging populated — 3 restaurants (Chick-fil-A, McDonald's, Pollo Campero), 268 items, 268 MacroEstimates (source: fatsecret), 0 duplicates.
+**DB state**: Staging populated — 22+ restaurants, 268+ items, 268 MacroEstimates (source: fatsecret), 0 duplicates.
 
-**Not working**: (1) Search uses hardcoded Silver Lake coordinates — no GPS yet. (2) Profile screen is a stub (no real data). (3) Restaurant routes have no JWT middleware. (4) No real Apple auth — still using dev login. (5) Not on TestFlight.
+**Not working**: (1) Search uses hardcoded Silver Lake coordinates — no GPS yet (deferred post-MVP). (2) Apple auth not validated on real device — needs TestFlight. (3) Not on TestFlight — blocked on human: requires Apple Developer account setup + EAS Build run.
 
-**Next**: Apple Sign-In + TestFlight → GPS → first 10 users.
+**Next**: EAS Build → TestFlight → first 10 users.
 
 ---
 
