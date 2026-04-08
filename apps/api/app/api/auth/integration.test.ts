@@ -62,7 +62,7 @@ jest.mock("@/services/emailService", () => ({
 // rateLimit — always allow in tests; the singleton store persists across test
 // cases and exhausts the 10-req/min limit when many auth routes are exercised.
 jest.mock("@/lib/rateLimit", () => ({
-  authLimiter: { check: jest.fn().mockReturnValue({ ok: true, remaining: 9, retryAfterMs: 0 }) },
+  authLimiter: { check: () => ({ ok: true, remaining: 9, retryAfterMs: 0 }) },
 }));
 
 // ─── Imports ───────────────────────────────────────────────────────────────────
