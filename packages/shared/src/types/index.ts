@@ -245,7 +245,7 @@ export type UserGoal = "lose_fat" | "maintain" | "build_muscle";
 
 export interface AppleAuthRequest {
   identityToken: string;
-  authorizationCode: string;
+  authorizationCode?: string;
   nonce: string;
   fullName?: { givenName?: string; familyName?: string } | null;
   email?: string | null;

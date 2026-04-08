@@ -28,10 +28,16 @@ export interface JwtPayload {
 
 /**
  * Verifies a Supabase-issued JWT using the project's JWKS (ES256).
+ * Validates issuer and audience to prevent tokens from other Supabase
+ * projects being accepted.
  * Returns the decoded payload on success; throws on failure.
  */
 export async function verifyToken(token: string): Promise<JwtPayload> {
-  const { payload } = await jwtVerify(token, getJwks());
+  const supabaseUrl = getSupabaseUrl();
+  const { payload } = await jwtVerify(token, getJwks(), {
+    issuer: `${supabaseUrl}/auth/v1`,
+    audience: "authenticated",
+  });
   return {
     sub: payload.sub as string,
     email: payload["email"] as string,
