@@ -57,7 +57,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     borderColor: EDITORIAL.border,
-    backgroundColor: EDITORIAL.creamCard,
+    backgroundColor: '#FFFFFF',
     paddingHorizontal: 16,
     paddingVertical: 14,
   },

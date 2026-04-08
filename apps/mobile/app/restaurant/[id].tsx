@@ -178,11 +178,11 @@ export default function RestaurantDetailScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <View style={[styles.container, { backgroundColor: EDITORIAL.cream }]}>
+      <View style={[styles.container, { backgroundColor: '#FFFFFF' }]}>
         {/* Floating back button */}
         <Pressable
           onPress={() => router.back()}
-          style={[styles.backButton, { top: insets.top + 8, backgroundColor: EDITORIAL.cream }]}
+          style={[styles.backButton, { top: insets.top + 8, backgroundColor: '#FFFFFF' }]}
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel="Go back"
