@@ -22,6 +22,10 @@ import { fetchRestaurants } from '@/lib/apiClient';
 import { useLocation } from '@/lib/useLocation';
 import { getMacroTargets, saveMacroTargets } from '@/lib/macroStorage';
 import { EDITORIAL, FONTS } from '@/lib/brand';
+import {
+  trackRestaurantTapped,
+  trackSearchPerformed,
+} from '@/lib/analytics';
 
 const DEBOUNCE_MS = 600;
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -198,10 +202,19 @@ function HeroCard({ result }: { result: RestaurantResult }) {
     <TouchableOpacity
       activeOpacity={0.92}
       style={hero.container}
-      onPress={() => router.push({
-        pathname: `/restaurant/${result.id}`,
-        params: { address: result.address, distance: result.distanceMiles?.toFixed(1), photoUrl: result.photoUrl },
-      })}
+      onPress={() => {
+        trackRestaurantTapped({
+          restaurant_id: result.id,
+          restaurant_name: result.name,
+          position: 0,
+          entry_point: 'hero',
+          best_match_calories: result.bestMatch?.calories,
+        });
+        router.push({
+          pathname: `/restaurant/${result.id}`,
+          params: { address: result.address, distance: result.distanceMiles?.toFixed(1), photoUrl: result.photoUrl },
+        });
+      }}
       accessibilityLabel={`${result.name}${result.bestMatch ? `, best match: ${result.bestMatch.name}` : ''}`}
       accessibilityRole="button"
     >
@@ -238,17 +251,23 @@ function HeroCard({ result }: { result: RestaurantResult }) {
 
 // ─── Dish carousel card ───────────────────────────────────────────────────────
 
-function DishCard({ result }: { result: RestaurantResult }) {
+function DishCard({ result, onPress }: { result: RestaurantResult; onPress?: () => void }) {
   const bm = result.bestMatch;
   const imgUri = result.photoUrl || getMockImage(result.name);
   return (
     <TouchableOpacity
       activeOpacity={0.88}
       style={dc.container}
-      onPress={() => router.push({
-        pathname: `/restaurant/${result.id}`,
-        params: { address: result.address, distance: result.distanceMiles?.toFixed(1), photoUrl: result.photoUrl },
-      })}
+      onPress={() => {
+        if (onPress) {
+          onPress();
+        } else {
+          router.push({
+            pathname: `/restaurant/${result.id}`,
+            params: { address: result.address, distance: result.distanceMiles?.toFixed(1), photoUrl: result.photoUrl },
+          });
+        }
+      }}
       accessibilityLabel={result.bestMatch ? `${result.bestMatch.name} at ${result.name}` : result.name}
       accessibilityRole="button"
     >
@@ -266,14 +285,42 @@ function DishCard({ result }: { result: RestaurantResult }) {
 
 function RestaurantSection({ result, index }: { result: RestaurantResult; index: number }) {
   const indexStr = String(index + 2).padStart(2, '0');
+  const position = index + 1;
+
+  function navigateToRestaurant() {
+    router.push({
+      pathname: `/restaurant/${result.id}`,
+      params: { address: result.address, distance: result.distanceMiles?.toFixed(1), photoUrl: result.photoUrl },
+    });
+  }
+
+  function handleSectionPress() {
+    trackRestaurantTapped({
+      restaurant_id: result.id,
+      restaurant_name: result.name,
+      position,
+      entry_point: 'section',
+      best_match_calories: result.bestMatch?.calories,
+    });
+    navigateToRestaurant();
+  }
+
+  function handleDishCardPress() {
+    trackRestaurantTapped({
+      restaurant_id: result.id,
+      restaurant_name: result.name,
+      position,
+      entry_point: 'dish_card',
+      best_match_calories: result.bestMatch?.calories,
+    });
+    navigateToRestaurant();
+  }
+
   return (
     <TouchableOpacity
       style={s.restSection}
       activeOpacity={0.85}
-      onPress={() => router.push({
-        pathname: `/restaurant/${result.id}`,
-        params: { address: result.address, distance: result.distanceMiles?.toFixed(1), photoUrl: result.photoUrl },
-      })}
+      onPress={handleSectionPress}
       accessibilityLabel={`${result.name}, view full menu`}
       accessibilityRole="button"
     >
@@ -288,7 +335,7 @@ function RestaurantSection({ result, index }: { result: RestaurantResult; index:
           </Text>
         </View>
       </View>
-      <DishCard result={result} />
+      <DishCard result={result} onPress={handleDishCardPress} />
       {result.bestMatch && (
         <Text style={s.viewMenu}>View full menu →</Text>
       )}
@@ -322,7 +369,7 @@ export default function SearchScreen() {
   );
 
   const doFetch = useCallback(
-    async (current: MacroValues, lat: number, lng: number, cuisine: string) => {
+    async (current: MacroValues, lat: number, lng: number, cuisine: string, locationSource: 'gps' | 'fallback') => {
       setLoading(true);
       setError(null);
 
@@ -341,8 +388,28 @@ export default function SearchScreen() {
       try {
         const data = await fetchRestaurants(params);
         setResults(data);
+        trackSearchPerformed({
+          has_protein_target: !isNaN(protein),
+          has_carbs_target: !isNaN(carbs),
+          has_fat_target: !isNaN(fat),
+          has_calories_target: !isNaN(calories),
+          cuisine_filter: cuisine,
+          result_count: data.length,
+          location_source: locationSource,
+          success: true,
+        });
       } catch {
         setResults([]);
+        trackSearchPerformed({
+          has_protein_target: !isNaN(protein),
+          has_carbs_target: !isNaN(carbs),
+          has_fat_target: !isNaN(fat),
+          has_calories_target: !isNaN(calories),
+          cuisine_filter: cuisine,
+          result_count: 0,
+          location_source: locationSource,
+          success: false,
+        });
       } finally {
         setLoading(false);
       }
@@ -355,14 +422,16 @@ export default function SearchScreen() {
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
+    const locSource: 'gps' | 'fallback' = location.source === 'gps' ? 'gps' : 'fallback';
+
     if (initialFetch.current) {
       initialFetch.current = false;
-      doFetch(inputs, location.lat, location.lng, cuisineFilter);
+      doFetch(inputs, location.lat, location.lng, cuisineFilter, locSource);
       return;
     }
 
     debounceRef.current = setTimeout(() => {
-      doFetch(inputs, location.lat, location.lng, cuisineFilter);
+      doFetch(inputs, location.lat, location.lng, cuisineFilter, locSource);
     }, DEBOUNCE_MS);
 
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };

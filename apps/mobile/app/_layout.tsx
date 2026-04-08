@@ -1,7 +1,9 @@
 import { Stack } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
+import { PostHogProvider } from 'posthog-react-native';
 import { ThemeProvider } from '@/lib/theme';
+import { getPostHogClient } from '@/lib/analytics';
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -16,10 +18,12 @@ export default function RootLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <SafeAreaProvider>
-      <ThemeProvider>
-        <Stack screenOptions={{ headerShown: false }} />
-      </ThemeProvider>
-    </SafeAreaProvider>
+    <PostHogProvider client={getPostHogClient()}>
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <Stack screenOptions={{ headerShown: false }} />
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </PostHogProvider>
   );
 }

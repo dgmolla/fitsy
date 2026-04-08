@@ -6,6 +6,8 @@ import { pushProfileToServer } from '@/lib/profileSync';
 import { Ionicons } from '@expo/vector-icons';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { EDITORIAL, FONTS } from '@/lib/brand';
+import { getOnboardingData } from '@/lib/onboardingStorage';
+import { trackOnboardingCompleted } from '@/lib/analytics';
 
 type PlanId = 'monthly' | 'yearly';
 
@@ -31,6 +33,13 @@ export default function PaymentScreen() {
     try {
       await AsyncStorage.setItem('onboardingComplete', 'true');
       pushProfileToServer();
+      const onboardingData = await getOnboardingData();
+      trackOnboardingCompleted({
+        goal: onboardingData.goal,
+        activity_level: onboardingData.activity,
+        has_weight: onboardingData.weightKg !== undefined,
+        has_height: onboardingData.heightCm !== undefined,
+      });
       router.push('/welcome/signin');
     } finally {
       setLoading(false);
