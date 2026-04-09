@@ -9,13 +9,13 @@ appId: com.fitsy.app
 # Enter protein target
 - tapOn:
     label: "Protein (g) target"
-- clearText
+- eraseText: 50
 - inputText: "40"
 
 # Enter calorie target
 - tapOn:
     label: "Cals target"
-- clearText
+- eraseText: 50
 - inputText: "600"
 
 # Dismiss keyboard
