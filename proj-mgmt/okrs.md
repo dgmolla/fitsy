@@ -53,7 +53,7 @@ Fitsy's macro pipeline, restaurant discovery, and UI all work together.
 | KR2 | API returns restaurants ranked by macro match from preloaded data | **Done** | Merged in PR #18 (S-12/S-13/S-14) |
 | KR3 | Mobile app shows search results with macro breakdowns | **Done** | Auth + search + detail + macro inputs all shipped (S-16 through S-23) |
 | KR4 | Test coverage on macro scoring and API contracts ≥80% | **Done** | 69 API tests, >90% statement coverage across all modules (S-21/S-18) |
-| KR5 | Maestro E2E flows pass against staging environment | **Done** | 3 flows written (onboarding, search, detail); pending first live run (S-25/S-29) |
+| KR5 | E2E smoke tests pass against staging environment | **Revised** | Maestro/Detox removed (RN 0.81 compat issues); E2E now via mobile MCP locally |
 
 ---
 

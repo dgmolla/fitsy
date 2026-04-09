@@ -20,10 +20,9 @@ graph TB
         PROD --> PRDB[(Supabase Production DB)]
     end
 
-    subgraph "CI / E2E"
-        MAIN --> GHA[GitHub Actions: e2e-staging.yml]
-        GHA --> VP
-        GHA --> MAESTRO[Maestro E2E flows]
+    subgraph "Local E2E"
+        DEV[Developer Mac] --> MCP[Mobile MCP + Simulator]
+        MCP --> VP
     end
 ```
 
@@ -87,16 +86,9 @@ vercel env add JWT_SECRET development
 
 ### 3. E2E Tests
 
-Maestro E2E flows run post-merge on `main` via `e2e-staging.yml`. They
-require the `STAGING_API_URL` secret set in GitHub:
-
-```bash
-# Get your production/staging API URL from Vercel
-vercel ls
-
-# Set in GitHub secrets (repo settings → Secrets → Actions)
-# STAGING_API_URL = https://fitsy-api-<your-project>.vercel.app
-```
+E2E testing is done locally via **mobile MCP** driving the iOS simulator
+against the Vercel dev server. No CI E2E pipeline — agents run E2E checks
+as part of their sprint workflow using mobile MCP tools.
 
 ### 4. Running Migrations on Staging
 
@@ -126,8 +118,8 @@ vercel --prod                         # Deploy to production
 2. Check the Vercel preview URL in the PR comments
 3. Smoke-test auth endpoints: `POST /api/auth/register`, `POST /api/auth/login`
 4. Smoke-test restaurant search: `GET /api/restaurants?lat=34.05&lng=-118.24`
-5. Merge to `main` → E2E tests run automatically via Maestro
-6. If E2E fails, check `maestro-screenshots` artifact in the GitHub Actions run
+5. Merge to `main` → production deployment triggers automatically
+6. Run local E2E smoke tests via mobile MCP if needed
 
 ## What's NOT Staging Yet
 
