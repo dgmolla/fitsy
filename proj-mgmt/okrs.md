@@ -53,7 +53,7 @@ Fitsy's macro pipeline, restaurant discovery, and UI all work together.
 | KR2 | API returns restaurants ranked by macro match from preloaded data | **Done** | Merged in PR #18 (S-12/S-13/S-14) |
 | KR3 | Mobile app shows search results with macro breakdowns | **Done** | Auth + search + detail + macro inputs all shipped (S-16 through S-23) |
 | KR4 | Test coverage on macro scoring and API contracts ≥80% | **Done** | 69 API tests, >90% statement coverage across all modules (S-21/S-18) |
-| KR5 | Maestro E2E flows pass against staging environment | **Done** | 3 flows written (onboarding, search, detail); pending first live run (S-25/S-29) |
+| KR5 | E2E smoke tests pass against staging environment | **Revised** | Maestro/Detox removed (RN 0.81 compat issues); E2E now via mobile MCP locally |
 
 ---
 
@@ -78,7 +78,7 @@ Real users validate whether macro-aware restaurant discovery solves a real probl
 
 | # | Key Result | Status | Notes |
 |---|------------|--------|-------|
-| KR1 | 10 users signed up and using the app | In progress | Editorial cream design system complete across all screens (S-91/92/93). Data enrichment + filters shipped (S-77–83). DB populated with 268 real items (S-89). Blocker: Apple Sign-In + TestFlight not yet done — no real users possible until then. |
+| KR1 | 10 users signed up and using the app | In progress | Auth fully implemented: Apple Sign-In + JWT middleware on all routes (S-94), Google Sign-In validated (S-99), security audit complete (S-103), PostHog analytics live (S-102), EAS build config ready (S-104/S-105). Blocker: EAS Build + TestFlight submission blocked on human — needs Apple Developer account + provisioning profiles. |
 | KR2 | Users completing at least 3 searches per week | Not started | Measurable only after KR1 — needs active users first |
 | KR3 | 2 rounds of user testing completed with findings triaged | Not started | |
 | KR4 | Feedback loop operational (capture → triage → spec → ship) | **Done** | S-38 merged; feedback triage playbook + P0–P4 priority matrix in `docs/product/feedback-triage.md` |

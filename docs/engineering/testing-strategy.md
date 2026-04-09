@@ -220,7 +220,7 @@ test intent invisible.
 
 E2E testing uses the **mobile MCP** (`@mobilenext/mobile-mcp`) to drive the
 Expo Go simulator on the local machine. This replaces Playwright (which was
-designed for web, not mobile) and Maestro.
+designed for web, not mobile).
 
 ### Why Mobile MCP
 
