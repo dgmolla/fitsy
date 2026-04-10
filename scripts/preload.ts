@@ -45,7 +45,7 @@ import {
 import { MenuSourceResolver } from "../apps/api/services/menuSources/resolver.js";
 import { FatSecretSource } from "../apps/api/services/menuSources/fatSecretSource.js";
 import { UberEatsSource } from "../apps/api/services/menuSources/uberEatsSource.js";
-// UESitemapIndex + JinaScraper available as free alternatives
+import { UESitemapIndex } from "../apps/api/services/menuSources/ueSitemapIndex.js";
 import { FirecrawlScraper } from "../apps/api/services/scrapers/firecrawlScraper.js";
 import { WebScraperSource } from "../apps/api/services/menuSources/webScraperSource.js";
 import { estimateMacros } from "../apps/api/services/macroEstimationService.js";
@@ -349,11 +349,16 @@ async function main(): Promise<void> {
   const scraper = new (await import("../apps/api/services/scrapers/firecrawlScraper.js")).FirecrawlScraper();
   const webScraperSource = new WebScraperSource(scraper, anthropic);
 
+  // Load UE sitemap index for free URL discovery (no Firecrawl needed)
+  const sitemapIndex = new UESitemapIndex();
+  await sitemapIndex.load();
+  log(`UE sitemap index loaded`);
+
   // Two-path resolver: chains get official macros (FatSecret),
-  // indies get structured menus for Haiku estimation (UberEats via Firecrawl discovery)
+  // indies get structured menus via UberEats JSON-LD (free sitemap discovery + raw fetch)
   const resolver = new MenuSourceResolver([
-    new FatSecretSource(),                         // Path 1: ~1,060 chains, official macros, $0
-    new UberEatsSource(undefined, undefined, scraper), // Path 2: indie menus, Firecrawl for UE URL discovery
+    new FatSecretSource(),                                    // Path 1: ~1,060 chains, official macros, $0
+    new UberEatsSource(undefined, sitemapIndex, scraper),     // Path 2: indie menus, sitemap for UE URL discovery (free), Firecrawl as fallback
   ]);
 
   const stats: PipelineStats = {

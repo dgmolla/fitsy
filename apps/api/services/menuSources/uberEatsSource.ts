@@ -479,7 +479,16 @@ export class UberEatsSource implements MenuSource {
       if (result) return result;
     }
 
-    // Step 2: Firecrawl URL discovery → JSON-LD
+    // Step 2: Try UE sitemap index (free, local lookup → raw fetch)
+    if (this.sitemapIndex) {
+      const sitemapUrl = this.sitemapIndex.findUrl(name);
+      if (sitemapUrl) {
+        const result = await this.tryJsonLd(sitemapUrl, name);
+        if (result) return result;
+      }
+    }
+
+    // Step 3: Firecrawl URL discovery → JSON-LD (costs credits)
     const discoveredUrl = await discoverUberEatsUrl(name, address);
     if (discoveredUrl) {
       const result = await this.tryJsonLd(discoveredUrl, name);
