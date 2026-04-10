@@ -59,20 +59,23 @@ describe("estimateMacros", () => {
 
     const first = result[0];
     const second = result[1];
+    // Post-hoc calibration: carbs × 1.08, fat × 1.3, cal recalculated from macros
+    // Input: { cal: 320, p: 42, c: 2, f: 14 } → c=2.2, f=18.2, cal=42*4+2.2*4+18.2*9=340
+    // Input: { cal: 380, p: 8, c: 30, f: 24 } → c=32.4, f=31.2, cal=8*4+32.4*4+31.2*9=442
     expect(first).toEqual<MacroData>({
-      calories: 320,
+      calories: 340,
       proteinG: 42,
-      carbsG: 2,
-      fatG: 14,
+      carbsG: 2.2,
+      fatG: 18.2,
       confidence: "HIGH",
       source: "haiku",
       dietaryTags: [],
     });
     expect(second).toEqual<MacroData>({
-      calories: 380,
+      calories: 442,
       proteinG: 8,
-      carbsG: 30,
-      fatG: 24,
+      carbsG: 32.4,
+      fatG: 31.2,
       confidence: "MEDIUM",
       source: "haiku",
       dietaryTags: ["vegetarian"],
@@ -108,7 +111,7 @@ describe("estimateMacros", () => {
     const result = await estimateMacros(ITEMS, client);
 
     expect(result).toHaveLength(2);
-    expect(result[0]?.calories).toBe(320);
+    expect(result[0]?.calories).toBe(340); // calibrated from 320
   });
 
   it("strips plain markdown fences (no language tag)", async () => {
@@ -186,7 +189,7 @@ describe("estimateMacros", () => {
 
     expect(result).toHaveLength(2);
     expect(result[0]).toBeNull(); // invalid item → null, not dropped
-    expect(result[1]?.calories).toBe(320); // valid item preserved at index 1
+    expect(result[1]?.calories).toBe(340); // valid item preserved at index 1 (calibrated from 320)
   });
 
   it("returns null for items missing required numeric fields", async () => {
@@ -199,7 +202,8 @@ describe("estimateMacros", () => {
     const result = await estimateMacros(ITEMS, client);
 
     expect(result).toHaveLength(2);
-    expect(result[0]?.calories).toBe(320);
+    // cal: 320 → calibrated: 340 (p:42, c:2*1.08=2.16, f:14*1.3=18.2, cal=42*4+2.16*4+18.2*9)
+    expect(result[0]?.calories).toBe(340);
     expect(result[1]).toBeNull();
   });
 
@@ -225,7 +229,8 @@ describe("estimateMacros", () => {
 
     expect(result).toHaveLength(2);
     expect(result[0]).toBeNull();
-    expect(result[1]?.calories).toBe(380);
+    // cal: 380 → calibrated: 442 (p:8, c:30*1.08=32.4, f:24*1.3=31.2, cal=8*4+32.4*4+31.2*9)
+    expect(result[1]?.calories).toBe(442);
   });
 
   // ── Correct model + max_tokens ─────────────────────────────────────────────

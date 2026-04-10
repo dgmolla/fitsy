@@ -166,11 +166,20 @@ export async function estimateMacros(
       ? est.tags.filter((t): t is string => typeof t === "string" && VALID_TAGS.has(t))
       : [];
 
+    // Post-hoc calibration: Haiku systematically underestimates restaurant
+    // portions — especially cooking fats (butter/oil) and carb bases (pasta/rice).
+    // Protein is accurate. Multipliers derived from eval-v2 (100-run, 8 indie cases).
+    const CARB_MULT = 1.08;
+    const FAT_MULT = 1.3;
+    const adjCarbs = est.c * CARB_MULT;
+    const adjFat = est.f * FAT_MULT;
+    const adjCal = est.p * 4 + adjCarbs * 4 + adjFat * 9;
+
     return {
-      calories: est.cal,
+      calories: Math.round(adjCal),
       proteinG: est.p,
-      carbsG: est.c,
-      fatG: est.f,
+      carbsG: Math.round(adjCarbs * 10) / 10,
+      fatG: Math.round(adjFat * 10) / 10,
       confidence: est.conf,
       source: "haiku",
       dietaryTags,

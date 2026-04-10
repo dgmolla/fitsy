@@ -132,16 +132,15 @@ function parseModelResponse(raw: string): { cal: number; p: number; c: number; f
   return obj;
 }
 
-async function callModel(
+async function callModelRaw(
   client: Anthropic,
   model: string,
   system: string,
   user: string,
   imageUrl?: string,
-): Promise<EstimateResult> {
+): Promise<{ parsed: Record<string, unknown>; latencyMs: number; costUsd: number }> {
   const start = Date.now();
 
-  // Build user content — text only, or text + image
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const userContent: any = imageUrl
     ? [
@@ -167,7 +166,7 @@ async function callModel(
     message.usage.input_tokens * pricing!.input +
     message.usage.output_tokens * pricing!.output;
 
-  return { ...parsed, latencyMs, costUsd };
+  return { parsed, latencyMs, costUsd };
 }
 
 // ─── Main ────────────────────────────────────────────────────────────────────
@@ -208,9 +207,13 @@ async function main() {
   const caseIdx = args.indexOf("--case");
   const caseFilter = caseIdx >= 0 ? args[caseIdx + 1] : null;
 
-  // Filter prompts
+  // --parallel concurrency
+  const parallelIdx = args.indexOf("--parallel");
+  const concurrency = parallelIdx >= 0 ? parseInt(args[parallelIdx + 1]!, 10) : 1;
+
+  // Filter prompts (comma-separated)
   const prompts = promptFilter
-    ? PROMPTS.filter((p) => p.id === promptFilter)
+    ? PROMPTS.filter((p) => promptFilter.split(",").includes(p.id))
     : PROMPTS;
 
   if (prompts.length === 0) {
@@ -247,58 +250,126 @@ async function main() {
     allRuns.set(prompt.id, []);
   }
 
+  // Build all tasks: { run, prompt, case } tuples
+  type Task = { run: number; promptId: string; caseIdx: number };
+  const tasks: Task[] = [];
   for (let run = 0; run < numRuns; run++) {
-    if (numRuns > 1) console.log(`── Run ${run + 1}/${numRuns} ──`);
-
     for (const prompt of prompts) {
-      const caseResults: CaseResult[] = [];
-      process.stdout.write(`  ${prompt.id.padEnd(20)}`);
+      for (let ci = 0; ci < cases.length; ci++) {
+        tasks.push({ run, promptId: prompt.id, caseIdx: ci });
+      }
+    }
+  }
 
-      for (const testCase of cases) {
-        const { system, user } = prompt.buildMessages(testCase as unknown as Record<string, unknown>);
-        const effectiveModel = prompt.modelOverride ?? modelName;
-        const imageUrl = prompt.useImage ? (testCase as unknown as Record<string, unknown>)["imageUrl"] as string | undefined : undefined;
+  // Results storage: [promptId][run][caseIdx]
+  const resultStore = new Map<string, Map<number, CaseResult[]>>();
+  for (const prompt of prompts) {
+    const runMap = new Map<number, CaseResult[]>();
+    for (let r = 0; r < numRuns; r++) runMap.set(r, []);
+    resultStore.set(prompt.id, runMap);
+  }
 
-        try {
-          const est = await callModel(client, effectiveModel, system, user, imageUrl);
-          const errors = {
-            calories: pctError(est.cal, testCase.expected.calories),
-            proteinG: pctError(est.p, testCase.expected.proteinG),
-            carbsG: pctError(est.c, testCase.expected.carbsG),
-            fatG: pctError(est.f, testCase.expected.fatG),
-          };
+  // Execute with concurrency limit
+  let completed = 0;
+  let errors = 0;
+  const total = tasks.length;
 
-          caseResults.push({
-            caseId: testCase.id,
-            caseName: testCase.name,
-            restaurant: testCase.restaurant,
-            expected: testCase.expected,
-            actual: {
-              calories: Math.round(est.cal),
-              proteinG: est.p,
-              carbsG: est.c,
-              fatG: est.f,
-              confidence: est.conf,
-            },
-            errors,
-            latencyMs: est.latencyMs,
-            costUsd: est.costUsd,
-          });
+  async function runTask(task: Task): Promise<void> {
+    const prompt = PROMPT_MAP.get(task.promptId)!;
+    const testCase = cases[task.caseIdx]!;
+    const { system, user } = prompt.buildMessages(testCase as unknown as Record<string, unknown>);
+    const effectiveModel = prompt.modelOverride ?? modelName;
+    const imageUrl = prompt.useImage ? (testCase as unknown as Record<string, unknown>)["imageUrl"] as string | undefined : undefined;
 
-          const avgErr = mean([errors.calories, errors.proteinG, errors.carbsG, errors.fatG]);
-          process.stdout.write(avgErr < 15 ? "✓" : avgErr < 30 ? "~" : "✗");
-        } catch (err) {
-          process.stdout.write("E");
-          console.error(`\n    Error on ${testCase.id}: ${err}`);
-        }
+    try {
+      let est: { cal: number; p: number; c: number; f: number; conf: string; latencyMs: number; costUsd: number };
+
+      if (task.promptId === "ensemble") {
+        // Ensemble: run name-only + decompose-no-mult, average results
+        const nameOnlyDef = PROMPT_MAP.get("name-only")!;
+        const decomposeDef = PROMPT_MAP.get("decompose-no-mult") ?? PROMPT_MAP.get("decompose-clean")!;
+        const noMsg = nameOnlyDef.buildMessages(testCase as unknown as Record<string, unknown>);
+        const deMsg = decomposeDef.buildMessages(testCase as unknown as Record<string, unknown>);
+
+        const [noRaw, deRaw] = await Promise.all([
+          callModelRaw(client, effectiveModel, noMsg.system, noMsg.user),
+          callModelRaw(client, effectiveModel, deMsg.system, deMsg.user),
+        ]);
+
+        const noEst = { cal: noRaw.parsed.cal as number, p: noRaw.parsed.p as number, c: noRaw.parsed.c as number, f: noRaw.parsed.f as number };
+        const deProcessed = decomposeDef.postProcess!(deRaw.parsed);
+
+        est = {
+          cal: Math.round((noEst.cal + deProcessed.cal) / 2),
+          p: Math.round(((noEst.p + deProcessed.p) / 2) * 10) / 10,
+          c: Math.round(((noEst.c + deProcessed.c) / 2) * 10) / 10,
+          f: Math.round(((noEst.f + deProcessed.f) / 2) * 10) / 10,
+          conf: "MEDIUM",
+          latencyMs: Math.max(noRaw.latencyMs, deRaw.latencyMs),
+          costUsd: noRaw.costUsd + deRaw.costUsd,
+        };
+      } else {
+        const raw = await callModelRaw(client, effectiveModel, system, user, imageUrl);
+        est = prompt.postProcess
+          ? { ...prompt.postProcess(raw.parsed), latencyMs: raw.latencyMs, costUsd: raw.costUsd }
+          : { cal: raw.parsed.cal as number, p: raw.parsed.p as number, c: raw.parsed.c as number, f: raw.parsed.f as number, conf: raw.parsed.conf as string, latencyMs: raw.latencyMs, costUsd: raw.costUsd };
       }
 
-      allRuns.get(prompt.id)!.push(caseResults);
+      const errs = {
+        calories: pctError(est.cal, testCase.expected.calories),
+        proteinG: pctError(est.p, testCase.expected.proteinG),
+        carbsG: pctError(est.c, testCase.expected.carbsG),
+        fatG: pctError(est.f, testCase.expected.fatG),
+      };
 
-      const avgErr = mean(
-        caseResults.flatMap((r) => [r.errors.calories, r.errors.proteinG, r.errors.carbsG, r.errors.fatG]),
-      );
-      console.log(`  avg err: ${avgErr.toFixed(1)}%`);
+      resultStore.get(task.promptId)!.get(task.run)!.push({
+        caseId: testCase.id,
+        caseName: testCase.name,
+        restaurant: testCase.restaurant,
+        expected: testCase.expected,
+        actual: {
+          calories: Math.round(est.cal),
+          proteinG: est.p,
+          carbsG: est.c,
+          fatG: est.f,
+          confidence: est.conf,
+        },
+        errors: errs,
+        latencyMs: est.latencyMs,
+        costUsd: est.costUsd,
+      });
+    } catch (err) {
+      errors++;
+      console.error(`  Error [${task.promptId}/${testCase.id}/run${task.run}]: ${err}`);
+    }
+
+    completed++;
+    if (completed % 20 === 0 || completed === total) {
+      process.stdout.write(`\r  Progress: ${completed}/${total} (${errors} errors)`);
+    }
+  }
+
+  // Semaphore-based parallel execution
+  async function runAll(): Promise<void> {
+    let idx = 0;
+    const workers = Array.from({ length: concurrency }, async () => {
+      while (idx < tasks.length) {
+        const task = tasks[idx++]!;
+        await runTask(task);
+      }
+    });
+    await Promise.all(workers);
+  }
+
+  console.log(`  Concurrency: ${concurrency}`);
+  await runAll();
+  console.log(); // newline after progress
+
+  // Flatten resultStore into allRuns format
+  for (const prompt of prompts) {
+    const runMap = resultStore.get(prompt.id)!;
+    for (let r = 0; r < numRuns; r++) {
+      allRuns.get(prompt.id)!.push(runMap.get(r)!);
     }
   }
 
