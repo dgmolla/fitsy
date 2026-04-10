@@ -237,11 +237,24 @@ async function persistItems(
     DELETE FROM "MenuItem" WHERE "restaurantId" = ${restaurantId}
   `;
 
+  // Decode HTML entities that leak through from source data (UE JSON-LD, FatSecret, etc.)
+  function decodeHtml(s: string | null | undefined): string | null {
+    if (!s) return s ?? null;
+    return s
+      .replace(/&amp;/g, "&")
+      .replace(/&#39;/g, "'")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#x27;/g, "'")
+      .replace(/&#x2F;/g, "/");
+  }
+
   // Query 2: Bulk insert menu items — build VALUES clause
-  const names = validPairs.map((p) => p.item.name);
-  const descriptions = validPairs.map((p) => p.item.description ?? null);
-  const categories = validPairs.map((p) => p.item.category ?? null);
-  const sections = validPairs.map((p) => p.item.section ?? null);
+  const names = validPairs.map((p) => decodeHtml(p.item.name)!);
+  const descriptions = validPairs.map((p) => decodeHtml(p.item.description) ?? null);
+  const categories = validPairs.map((p) => decodeHtml(p.item.category) ?? null);
+  const sections = validPairs.map((p) => decodeHtml(p.item.section) ?? null);
   const prices = validPairs.map((p) => p.item.price ?? null);
   // Serialize dietary tags as JSON strings — Prisma can't handle text[][] in UNNEST
   const dietaryTagsJson = validPairs.map((p) => JSON.stringify(p.macro.dietaryTags ?? []));
