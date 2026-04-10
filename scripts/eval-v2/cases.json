@@ -1,0 +1,72 @@
+[
+  {
+    "id": "superba-tagliatelle",
+    "restaurant": "Superba Food + Bread Hollywood",
+    "name": "PISTACHIO PESTO TAGLIATELLE",
+    "description": "pistachio, snap peas, hothouse tomatoes, grana padana",
+    "price": 26.00,
+    "section": "MAINS*",
+    "expected": { "calories": 820, "proteinG": 22, "carbsG": 85, "fatG": 42 }
+  },
+  {
+    "id": "bacari-mac-cheese",
+    "restaurant": "Bacari Silverlake",
+    "name": "mac & cheese",
+    "description": "five-cheese fondue, toasted panko, white truffle oil, scallion",
+    "section": "DINNER",
+    "expected": { "calories": 750, "proteinG": 28, "carbsG": 65, "fatG": 40 }
+  },
+  {
+    "id": "bacari-lamb-pizza",
+    "restaurant": "Bacari Silverlake",
+    "name": "lamb shakshouka pizza",
+    "description": "pilpelchuma, arugula, red onion, goat cheese emulsion, 9 min egg, frantoia olive oil, maldon salt",
+    "section": "DINNER",
+    "expected": { "calories": 700, "proteinG": 30, "carbsG": 60, "fatG": 35 }
+  },
+  {
+    "id": "lantica-cacio-pepe",
+    "restaurant": "L'Antica Pizzeria da Michele",
+    "name": "Spaghetti Cacio e Pepe",
+    "description": "Homemade Spaghetti, Pecorino, Black Pepper, Parmigiano, Extra Virgin Olive Oil",
+    "price": 29.00,
+    "section": "Pasta",
+    "expected": { "calories": 780, "proteinG": 24, "carbsG": 82, "fatG": 38 }
+  },
+  {
+    "id": "lantica-bolognese",
+    "restaurant": "L'Antica Pizzeria da Michele",
+    "name": "Maccheroni Bolognese",
+    "description": "Homemade Tagliatelle, Parmigiano, Beef and Pork Ragu",
+    "price": 34.00,
+    "section": "Pasta",
+    "imageUrl": "https://tb-static.uber.com/prod/image-proc/processed_images/6766ddd9b1575cbc437f9b6bdbaadc44/a19bb09692310dfd41e49a96c424b3a6.jpeg",
+    "expected": { "calories": 850, "proteinG": 40, "carbsG": 78, "fatG": 38 }
+  },
+  {
+    "id": "luv2eat-fried-rice",
+    "restaurant": "Luv2eat Thai Bistro",
+    "name": "35. Regular Fried Rice",
+    "description": "Fried rice with choice of protein, Chinese broccoli, tomato, onion, egg.",
+    "price": 18.00,
+    "section": "Stir-Fried (A La Carte)",
+    "expected": { "calories": 650, "proteinG": 14, "carbsG": 80, "fatG": 28 }
+  },
+  {
+    "id": "luv2eat-basil-fried-rice",
+    "restaurant": "Luv2eat Thai Bistro",
+    "name": "36. Thai Spicy Basil Fried Rice",
+    "description": "Fried rice with choice of protein, green beans, basil, red bell pepper.",
+    "price": 18.00,
+    "section": "Stir-Fried (A La Carte)",
+    "expected": { "calories": 680, "proteinG": 18, "carbsG": 78, "fatG": 30 }
+  },
+  {
+    "id": "bacari-beet-gnocchi",
+    "restaurant": "Bacari Silverlake",
+    "name": "ricotta & beet gnocchi",
+    "description": "hand-made, chèvre fondue, chimichurri",
+    "section": "DINNER",
+    "expected": { "calories": 620, "proteinG": 18, "carbsG": 70, "fatG": 28 }
+  }
+]
