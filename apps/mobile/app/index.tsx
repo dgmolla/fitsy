@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { Redirect } from 'expo-router';
 import { getStoredToken } from '@/lib/authClient';
 import { getMacroTargets } from '@/lib/macroStorage';
-import { useTheme } from '@/lib/theme';
+import { EDITORIAL, FONTS } from '@/lib/brand';
 
 type Destination = '/(tabs)/search' | '/welcome/problem' | '/macro-setup';
 
 export default function Index() {
-  const { colors } = useTheme();
   const [destination, setDestination] = useState<Destination | null>(null);
 
   useEffect(() => {
@@ -30,8 +30,10 @@ export default function Index() {
 
   if (!destination) {
     return (
-      <View style={styles.loader}>
-        <ActivityIndicator size="large" color={colors.spinnerColor} accessibilityLabel="Loading" />
+      <View style={s.container}>
+        <Animated.Text entering={FadeIn.duration(600)} style={s.wordmark}>
+          fitsy
+        </Animated.Text>
       </View>
     );
   }
@@ -39,10 +41,17 @@ export default function Index() {
   return <Redirect href={destination} />;
 }
 
-const styles = StyleSheet.create({
-  loader: {
+const s = StyleSheet.create({
+  container: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: EDITORIAL.cream,
+  },
+  wordmark: {
+    fontFamily: FONTS.newsreaderBold,
+    fontSize: 52,
+    color: EDITORIAL.green,
+    letterSpacing: -2,
   },
 });
