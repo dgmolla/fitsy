@@ -48,6 +48,8 @@ import { UberEatsSource } from "../apps/api/services/menuSources/uberEatsSource.
 import { UESitemapIndex } from "../apps/api/services/menuSources/ueSitemapIndex.js";
 import { FirecrawlScraper } from "../apps/api/services/scrapers/firecrawlScraper.js";
 import { WebScraperSource } from "../apps/api/services/menuSources/webScraperSource.js";
+import { readFileSync, writeFileSync } from "fs";
+import { join } from "path";
 import { estimateMacros } from "../apps/api/services/macroEstimationService.js";
 import type {
   MacroData,
@@ -354,11 +356,24 @@ async function main(): Promise<void> {
   await sitemapIndex.load();
   log(`UE sitemap index loaded`);
 
+  // Load persistent UE URL cache — survives across runs, avoids re-discovery
+  const URL_CACHE_PATH = join(process.cwd(), "scripts", "cache", "ue-discovered-urls.json");
+  const urlCache = new Map<string, string>();
+  try {
+    const cached = JSON.parse(readFileSync(URL_CACHE_PATH, "utf-8")) as Record<string, string>;
+    for (const [k, v] of Object.entries(cached)) urlCache.set(k, v);
+    log(`UE URL cache loaded (${urlCache.size} entries)`);
+  } catch {
+    log(`UE URL cache: starting fresh`);
+  }
+
   // Two-path resolver: chains get official macros (FatSecret),
-  // indies get structured menus via UberEats JSON-LD (free sitemap discovery + raw fetch)
+  // indies get structured menus via UberEats JSON-LD (cached URL → sitemap → Firecrawl)
+  const ueSource = new UberEatsSource(undefined, sitemapIndex, scraper);
+  ueSource.urlCache = urlCache;
   const resolver = new MenuSourceResolver([
-    new FatSecretSource(),                                    // Path 1: ~1,060 chains, official macros, $0
-    new UberEatsSource(undefined, sitemapIndex, scraper),     // Path 2: indie menus, sitemap for UE URL discovery (free), Firecrawl as fallback
+    new FatSecretSource(),  // Path 1: ~1,060 chains, official macros, $0
+    ueSource,               // Path 2: indie menus, URL cache → sitemap → Firecrawl
   ]);
 
   const stats: PipelineStats = {
@@ -497,6 +512,14 @@ async function main(): Promise<void> {
   }
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
+  // Persist URL cache — any newly discovered UE URLs survive for next run
+  if (urlCache.size > 0) {
+    const cacheObj: Record<string, string> = {};
+    for (const [k, v] of urlCache) cacheObj[k] = v;
+    writeFileSync(URL_CACHE_PATH, JSON.stringify(cacheObj, null, 2));
+    log(`UE URL cache saved (${urlCache.size} entries)`);
+  }
 
   log("Done.");
   log(

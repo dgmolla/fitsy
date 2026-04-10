@@ -472,27 +472,43 @@ export class UberEatsSource implements MenuSource {
    *   1. Try cached URL (if provided)
    *   2. Firecrawl URL discovery → JSON-LD
    */
+  /** Optional URL cache — callers can set this to persist discovered URLs across runs. */
+  urlCache: Map<string, string> | null = null;
+
   async lookup(name: string, address: string): Promise<MenuSourceResult> {
-    // Step 1: Try cached URL
+    // Step 1: Try constructor-provided URL
     if (this.cachedUrl) {
       const result = await this.tryJsonLd(this.cachedUrl, name);
       if (result) return result;
     }
 
-    // Step 2: Try UE sitemap index (free, local lookup → raw fetch)
+    // Step 2: Try persistent URL cache (survives across runs)
+    const cachedDiscoveredUrl = this.urlCache?.get(name);
+    if (cachedDiscoveredUrl) {
+      const result = await this.tryJsonLd(cachedDiscoveredUrl, name);
+      if (result) return result;
+    }
+
+    // Step 3: Try UE sitemap index (free, local lookup → raw fetch)
     if (this.sitemapIndex) {
       const sitemapUrl = this.sitemapIndex.findUrl(name);
       if (sitemapUrl) {
         const result = await this.tryJsonLd(sitemapUrl, name);
-        if (result) return result;
+        if (result) {
+          this.urlCache?.set(name, sitemapUrl);
+          return result;
+        }
       }
     }
 
-    // Step 3: Firecrawl URL discovery → JSON-LD (costs credits)
+    // Step 4: Firecrawl URL discovery → JSON-LD (costs credits)
     const discoveredUrl = await discoverUberEatsUrl(name, address);
     if (discoveredUrl) {
       const result = await this.tryJsonLd(discoveredUrl, name);
-      if (result) return result;
+      if (result) {
+        this.urlCache?.set(name, discoveredUrl);
+        return result;
+      }
     }
 
     return { found: false, items: [], sourceId: this.id };
