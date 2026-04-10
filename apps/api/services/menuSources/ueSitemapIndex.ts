@@ -83,20 +83,10 @@ export class UESitemapIndex {
     this.loaded = true;
   }
 
-  /** Find a UE store URL by restaurant name. Tries exact slug match, then substring. */
+  /** Find a UE store URL by restaurant name. Exact slug match only — no fuzzy/substring. */
   findUrl(restaurantName: string): string | null {
     const slug = this.nameToSlug(restaurantName);
-
-    // Exact match
-    const exact = this.index.get(slug);
-    if (exact) return exact;
-
-    // Substring match — find first slug that contains the search slug
-    for (const [indexSlug, url] of this.index) {
-      if (indexSlug.includes(slug)) return url;
-    }
-
-    return null;
+    return this.index.get(slug) ?? null;
   }
 
   /** Number of indexed URLs (for stats/testing). */

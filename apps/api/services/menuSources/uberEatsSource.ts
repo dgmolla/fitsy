@@ -451,18 +451,31 @@ export class UberEatsSource implements MenuSource {
    * Try JSON-LD extraction from a UberEats store URL.
    * Returns a MenuSourceResult if successful, null otherwise.
    */
-  private async tryJsonLd(storeUrl: string, _name: string): Promise<MenuSourceResult | null> {
+  private async tryJsonLd(storeUrl: string, expectedName: string): Promise<MenuSourceResult | null> {
     const jsonLdResult = await extractMenuViaJsonLd(storeUrl);
-    if (jsonLdResult && jsonLdResult.items.length > 0) {
-      const result: MenuSourceResult = {
-        found: true,
-        items: jsonLdResult.items,
-        sourceId: this.id,
-      };
-      if (jsonLdResult.restaurant) result.restaurant = jsonLdResult.restaurant;
-      return result;
+    if (!jsonLdResult || jsonLdResult.items.length === 0) return null;
+
+    // Validate: ensure the JSON-LD restaurant name roughly matches what we expected.
+    // Prevents caching wrong restaurants (e.g. "Taoxi Asian Cuisine" for "TAO").
+    if (jsonLdResult.restaurant?.name) {
+      const found = jsonLdResult.restaurant.name.toLowerCase();
+      const expected = expectedName.toLowerCase();
+      // Check if either name contains a significant portion of the other
+      const expectedWords = expected.split(/\s+/).filter(w => w.length > 2);
+      const matchCount = expectedWords.filter(w => found.includes(w)).length;
+      if (expectedWords.length > 0 && matchCount === 0) {
+        // No significant word overlap — likely wrong restaurant
+        return null;
+      }
     }
-    return null;
+
+    const result: MenuSourceResult = {
+      found: true,
+      items: jsonLdResult.items,
+      sourceId: this.id,
+    };
+    if (jsonLdResult.restaurant) result.restaurant = jsonLdResult.restaurant;
+    return result;
   }
 
   /**
