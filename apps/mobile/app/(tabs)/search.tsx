@@ -111,10 +111,13 @@ function Masthead({ locationLabel }: { locationLabel: string }) {
 // ─── Macro strip ──────────────────────────────────────────────────────────────
 
 function MacroStrip({ macros, onEdit }: { macros: MacroValues; onEdit: () => void }) {
-  const p = macros.protein || '45';
-  const c = macros.carbs || '60';
-  const f = macros.fat || '12';
-  const cal = macros.calories || '550';
+  const p = macros.protein || '—';
+  const c = macros.carbs || '—';
+  const f = macros.fat || '—';
+  const protein = parseFloat(macros.protein) || 0;
+  const carbs = parseFloat(macros.carbs) || 0;
+  const fat = parseFloat(macros.fat) || 0;
+  const cal = protein + carbs + fat > 0 ? String(Math.round(protein * 4 + carbs * 4 + fat * 9)) : '—';
 
   return (
     <View style={s.macroStrip}>
@@ -360,12 +363,22 @@ export default function SearchScreen() {
   const hasInputs =
     inputs.protein !== '' || inputs.carbs !== '' || inputs.fat !== '' || inputs.calories !== '';
 
+  // Load saved macro targets before initial fetch
+  const [targetsLoaded, setTargetsLoaded] = useState(false);
+  useEffect(() => {
+    getMacroTargets()
+      .then((saved) => { if (saved) setInputs(saved); })
+      .catch(() => {})
+      .finally(() => setTargetsLoaded(true));
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
+      if (!targetsLoaded) return;
       getMacroTargets()
         .then((saved) => { if (saved) setInputs(saved); })
         .catch(() => {});
-    }, []),
+    }, [targetsLoaded]),
   );
 
   const doFetch = useCallback(
@@ -418,7 +431,8 @@ export default function SearchScreen() {
   );
 
   useEffect(() => {
-    if (location.loading) return;
+    if (!targetsLoaded || location.loading) return;
+    if (!hasInputs) { setLoading(false); return; }
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
@@ -435,7 +449,7 @@ export default function SearchScreen() {
     }, DEBOUNCE_MS);
 
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [inputs, location.lat, location.lng, location.loading, cuisineFilter, doFetch]);
+  }, [inputs, location.lat, location.lng, location.loading, cuisineFilter, doFetch, targetsLoaded]);
 
   function handleApplyFilters(newValues: MacroValues) {
     setFilterVisible(false);
@@ -473,7 +487,15 @@ export default function SearchScreen() {
           <MacroStrip macros={inputs} onEdit={() => setFilterVisible(true)} />
           <CuisineRow selected={cuisineFilter} onSelect={setCuisineFilter} />
 
-          {results.length === 0 && (
+          {!hasInputs && (
+            <View style={s.inlineEmpty}>
+              <Ionicons name="nutrition-outline" size={32} color={EDITORIAL.greenAccent} />
+              <Text style={s.inlineEmptyText}>Set your macro targets</Text>
+              <Text style={s.inlineEmptyHint}>Tap Edit above to enter your protein, carb, fat, and calorie goals</Text>
+            </View>
+          )}
+
+          {hasInputs && results.length === 0 && (
             <View style={s.inlineEmpty}>
               <Ionicons name="search-outline" size={32} color={EDITORIAL.creamDeep} />
               <Text style={s.inlineEmptyText}>No restaurants match this filter</Text>
@@ -481,11 +503,9 @@ export default function SearchScreen() {
             </View>
           )}
 
-          {/* #01 — Hero card */}
-          {heroResult && <HeroCard result={heroResult} />}
+          {hasInputs && heroResult && <HeroCard result={heroResult} />}
 
-          {/* #02+ — Numbered sections with dish carousels */}
-          {listResults.map((r, i) => (
+          {hasInputs && listResults.map((r, i) => (
             <RestaurantSection key={r.id} result={r} index={i} />
           ))}
         </ScrollView>

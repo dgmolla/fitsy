@@ -132,7 +132,17 @@ export function FilterPopup({ visible, values, onApply, onClose }: FilterPopupPr
                 <TextInput
                   style={s.macroInput}
                   value={draft[key]}
-                  onChangeText={(t) => setDraft((p) => ({ ...p, [key]: t }))}
+                  onChangeText={(t) => {
+                    setDraft((p) => {
+                      const next = { ...p, [key]: t };
+                      const protein = parseFloat(next.protein) || 0;
+                      const carbs = parseFloat(next.carbs) || 0;
+                      const fat = parseFloat(next.fat) || 0;
+                      const cal = Math.round(protein * 4 + carbs * 4 + fat * 9);
+                      next.calories = protein + carbs + fat > 0 ? String(cal) : '';
+                      return next;
+                    });
+                  }}
                   keyboardType="numeric"
                   placeholder="—"
                   placeholderTextColor={COLORS.textDisabled}
@@ -145,19 +155,11 @@ export function FilterPopup({ visible, values, onApply, onClose }: FilterPopupPr
             ))}
           </View>
 
-          {/* Calories */}
+          {/* Calories — computed, read-only */}
           <View style={s.calBox}>
-            <TextInput
-              style={s.calInput}
-              value={draft.calories}
-              onChangeText={(t) => setDraft((p) => ({ ...p, calories: t }))}
-              keyboardType="numeric"
-              placeholder="—"
-              placeholderTextColor={COLORS.textDisabled}
-              maxLength={5}
-              textAlign="center"
-              selectionColor={COLORS.green}
-            />
+            <Text style={s.calInput}>
+              {draft.calories || '—'}
+            </Text>
             <Text style={s.calLabel}>KCAL</Text>
           </View>
 
