@@ -7,9 +7,16 @@ const config: ExpoConfig = {
   version: "1.0.0",
   orientation: "portrait",
   platforms: ["ios", "android"],
+  splash: {
+    backgroundColor: "#FDFBF7",
+    resizeMode: "contain",
+  },
   ios: {
     bundleIdentifier: "com.fitsy.app",
     supportsTablet: false,
+    splash: {
+      backgroundColor: "#FDFBF7",
+    },
   },
 
   plugins: [

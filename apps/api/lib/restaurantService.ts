@@ -220,6 +220,23 @@ function scoreRestaurant(
     }
   }
 
+  // Fallback: if no macro-matched best match, show the first menu item
+  if (!bestMatch && restaurant.menuItems.length > 0) {
+    const first = restaurant.menuItems[0]!;
+    bestMatch = {
+      menuItemId: first.menuItemId,
+      name: first.name,
+      macros: {
+        calories: first.calories,
+        proteinG: first.proteinG,
+        carbsG: first.carbsG,
+        fatG: first.fatG,
+        confidence: first.confidence as "HIGH" | "MEDIUM" | "LOW",
+      },
+      score: Infinity,
+    };
+  }
+
   return { distanceMiles, bestMatch };
 }
 
