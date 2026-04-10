@@ -59,14 +59,14 @@ describe("estimateMacros", () => {
 
     const first = result[0];
     const second = result[1];
-    // Post-hoc calibration: carbs × 1.08, fat × 1.3, cal recalculated from macros
-    // Input: { cal: 320, p: 42, c: 2, f: 14 } → c=2.2, f=18.2, cal=42*4+2.2*4+18.2*9=340
-    // Input: { cal: 380, p: 8, c: 30, f: 24 } → c=32.4, f=31.2, cal=8*4+32.4*4+31.2*9=442
+    // Post-hoc calibration: carbs × 1.08, fat × 1.3, cal from unrounded macros, display macros rounded to int
+    // Input: { p: 42, c: 2, f: 14 } → adjC=2.16, adjF=18.2, cal=round(42*4+2.16*4+18.2*9)=340
+    // Input: { p: 8, c: 30, f: 24 } → adjC=32.4, adjF=31.2, cal=round(8*4+32.4*4+31.2*9)=442
     expect(first).toEqual<MacroData>({
       calories: 340,
       proteinG: 42,
-      carbsG: 2.2,
-      fatG: 18.2,
+      carbsG: 2,
+      fatG: 18,
       confidence: "HIGH",
       source: "haiku",
       dietaryTags: [],
@@ -74,8 +74,8 @@ describe("estimateMacros", () => {
     expect(second).toEqual<MacroData>({
       calories: 442,
       proteinG: 8,
-      carbsG: 32.4,
-      fatG: 31.2,
+      carbsG: 32,
+      fatG: 31,
       confidence: "MEDIUM",
       source: "haiku",
       dietaryTags: ["vegetarian"],

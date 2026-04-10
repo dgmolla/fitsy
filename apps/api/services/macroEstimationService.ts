@@ -191,9 +191,9 @@ export async function estimateMacros(
 
     return {
       calories: Math.round(adjCal),
-      proteinG: est.p,
-      carbsG: Math.round(adjCarbs * 10) / 10,
-      fatG: Math.round(adjFat * 10) / 10,
+      proteinG: Math.round(est.p),
+      carbsG: Math.round(adjCarbs),
+      fatG: Math.round(adjFat),
       confidence: est.conf,
       source: "haiku",
       dietaryTags,
