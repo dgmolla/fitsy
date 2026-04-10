@@ -1,102 +1,116 @@
 import React from 'react';
-import { Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { EDITORIAL, FONTS } from '@/lib/brand';
+import { AnimatedPress } from '@/components/AnimatedPress';
 
 export default function HowItWorksScreen() {
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: EDITORIAL.cream }}>
-      <View style={styles.content}>
-        <View style={styles.header}>
-          <Pressable onPress={() => router.back()} hitSlop={12}>
-            <Ionicons name="chevron-back" size={24} color={EDITORIAL.textSoft} />
-          </Pressable>
-        </View>
-
-        <Text style={styles.headline}>Two sources.{'\n'}One goal.</Text>
-        <Text style={styles.sub}>Accurate macros for every restaurant.</Text>
-
-        <View style={styles.panels}>
-          <View style={styles.panel}>
-            <View style={[styles.badge, { backgroundColor: EDITORIAL.green }]}>
-              <Ionicons name="checkmark-circle" size={18} color={EDITORIAL.cream} />
-              <Text style={styles.badgeText}>VERIFIED</Text>
-            </View>
-            <Text style={styles.panelTitle}>Chain restaurants</Text>
-            <Text style={styles.panelDesc}>
-              Published nutrition data from official sources. McDonald's, Chick-fil-A, Jollibee — exact macros.
-            </Text>
-          </View>
-
-          <View style={styles.panel}>
-            <View style={[styles.badge, { backgroundColor: EDITORIAL.greenAccent }]}>
-              <Ionicons name="sparkles" size={18} color={EDITORIAL.cream} />
-              <Text style={styles.badgeText}>AI ESTIMATED</Text>
-            </View>
-            <Text style={styles.panelTitle}>Local restaurants</Text>
-            <Text style={styles.panelDesc}>
-              AI analyzes menus from Uber Eats and restaurant websites. Every estimate includes a confidence score.
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.spacer} />
-
-        <Pressable
-          style={styles.ctaBtn}
-          onPress={() => router.push('/welcome/payment')}
-        >
-          <Text style={styles.ctaTxt}>Start free trial</Text>
-          <Ionicons name="arrow-forward" size={18} color={EDITORIAL.cream} />
+    <SafeAreaView style={s.safe}>
+      <View style={s.content}>
+        <Pressable onPress={() => router.back()} hitSlop={16} style={s.back} accessibilityRole="button">
+          <Ionicons name="chevron-back" size={22} color={EDITORIAL.textMid} />
         </Pressable>
+
+        <Animated.Text entering={FadeInDown.duration(500)} style={s.title}>
+          Two sources.{'\n'}One goal.
+        </Animated.Text>
+
+        <View style={s.panels}>
+          {/* Verified — dark green panel with food image */}
+          <Animated.View entering={FadeInDown.duration(400).delay(150)} style={s.panelDark}>
+            <View style={s.panelDarkContent}>
+              <Text style={s.badgeLight}>VERIFIED</Text>
+              <Text style={s.titleLight}>Chain{'\n'}restaurants</Text>
+              <Text style={s.descLight}>Published nutrition. Exact macros.</Text>
+            </View>
+            <Image
+              source={{ uri: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=300&q=70' }}
+              style={s.panelImg}
+              resizeMode="cover"
+            />
+          </Animated.View>
+
+          {/* AI Estimated — cream panel with food image */}
+          <Animated.View entering={FadeInDown.duration(400).delay(280)} style={s.panelLight}>
+            <View style={s.panelLightContent}>
+              <Text style={s.badgeDark}>AI ESTIMATED</Text>
+              <Text style={s.titleDark}>Local{'\n'}restaurants</Text>
+              <Text style={s.descDark}>AI-analyzed menus. Confidence scores.</Text>
+            </View>
+            <Image
+              source={{ uri: 'https://images.unsplash.com/photo-1559314809-0d155014e29e?w=300&q=70' }}
+              style={s.panelImg}
+              resizeMode="cover"
+            />
+          </Animated.View>
+        </View>
+
+        <View style={{ flex: 1 }} />
+
+        <Animated.View entering={FadeIn.duration(400).delay(500)}>
+          <AnimatedPress
+            style={s.cta}
+            onPress={() => router.push('/welcome/payment')}
+            haptic
+            accessibilityRole="button"
+          >
+            <Text style={s.ctaTxt}>Start free trial</Text>
+            <Ionicons name="arrow-forward" size={15} color={EDITORIAL.cream} />
+          </AnimatedPress>
+        </Animated.View>
       </View>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  content: { flex: 1, paddingHorizontal: 24, paddingBottom: 32 },
-  header: { paddingTop: 8, paddingBottom: 12 },
-  headline: {
+const s = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: EDITORIAL.cream },
+  content: { flex: 1, paddingHorizontal: 36, paddingBottom: 40 },
+  back: { width: 44, height: 52, justifyContent: 'center' },
+  title: {
     fontFamily: FONTS.newsreaderBold,
     fontSize: 30,
     color: EDITORIAL.text,
-    letterSpacing: -0.8,
-    lineHeight: 36,
-    marginBottom: 6,
+    letterSpacing: -1.2,
+    lineHeight: 42,
+    marginBottom: 32,
   },
-  sub: { fontSize: 15, color: EDITORIAL.textSoft, marginBottom: 28 },
-  panels: { gap: 16 },
-  panel: {
-    backgroundColor: EDITORIAL.creamCard,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: EDITORIAL.border,
-    padding: 20,
-    gap: 10,
-  },
-  badge: {
+  panels: { gap: 14 },
+
+  /* Dark panel */
+  panelDark: {
+    backgroundColor: EDITORIAL.green,
+    borderRadius: 22,
     flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 5,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    overflow: 'hidden',
+    minHeight: 160,
   },
-  badgeText: { fontSize: 10, fontWeight: '800', color: EDITORIAL.cream, letterSpacing: 1 },
-  panelTitle: {
-    fontFamily: FONTS.newsreaderBold,
-    fontSize: 20,
-    color: EDITORIAL.text,
-    letterSpacing: -0.3,
+  panelDarkContent: { flex: 1, padding: 24, gap: 6, justifyContent: 'center' },
+  badgeLight: { fontSize: 10, fontWeight: '800', color: 'rgba(253,251,247,0.5)', letterSpacing: 2 },
+  titleLight: { fontFamily: FONTS.newsreaderBold, fontSize: 24, color: EDITORIAL.cream, letterSpacing: -0.3, lineHeight: 28 },
+  descLight: { fontSize: 14, lineHeight: 20, color: 'rgba(253,251,247,0.6)', marginTop: 4 },
+
+  /* Light panel */
+  panelLight: {
+    backgroundColor: EDITORIAL.creamCard,
+    borderRadius: 22,
+    flexDirection: 'row',
+    overflow: 'hidden',
+    minHeight: 160,
   },
-  panelDesc: { fontSize: 14, lineHeight: 21, color: EDITORIAL.textSoft },
-  spacer: { flex: 1 },
-  ctaBtn: {
+  panelLightContent: { flex: 1, padding: 24, gap: 6, justifyContent: 'center' },
+  badgeDark: { fontSize: 10, fontWeight: '800', color: EDITORIAL.greenAccent, letterSpacing: 2 },
+  titleDark: { fontFamily: FONTS.newsreaderBold, fontSize: 24, color: EDITORIAL.text, letterSpacing: -0.3, lineHeight: 28 },
+  descDark: { fontSize: 14, lineHeight: 20, color: EDITORIAL.textSoft, marginTop: 4 },
+
+  panelImg: { width: 110, height: '100%' },
+
+  cta: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: EDITORIAL.green, borderRadius: 14, paddingVertical: 16,
+    backgroundColor: EDITORIAL.green, borderRadius: 32, paddingVertical: 18,
   },
-  ctaTxt: { fontSize: 16, fontWeight: '700', color: EDITORIAL.cream },
+  ctaTxt: { fontSize: 16, fontWeight: '600', color: EDITORIAL.cream },
 });

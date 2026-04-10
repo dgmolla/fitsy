@@ -1,95 +1,80 @@
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
-import { ScrollPicker, rangeValues } from '@/components/ScrollPicker';
-import { useTheme } from '@/lib/theme';
+import { AnimatedPress } from '@/components/AnimatedPress';
 import { saveOnboardingField } from '@/lib/onboardingStorage';
+import { EDITORIAL, FONTS } from '@/lib/brand';
 
-type Unit = 'kg' | 'lbs';
-
-const KG_VALUES = rangeValues(30, 200);
-const LBS_VALUES = rangeValues(66, 440);
+type Unit = 'lbs' | 'kg';
 
 export default function WeightScreen() {
-  const { colors } = useTheme();
   const [unit, setUnit] = useState<Unit>('lbs');
-  const [kg, setKg] = useState(73);
-  const [lbs, setLbs] = useState(160);
+  const [value, setValue] = useState('');
+
+  function toKg(): number {
+    const v = parseInt(value, 10);
+    if (!v) return 70;
+    return unit === 'kg' ? v : Math.round(v * 0.453592 * 10) / 10;
+  }
 
   return (
     <WelcomeScreen
-      step={5}
-      totalSteps={8}
+      step={3}
+      totalSteps={7}
       title="What do you weigh?"
-      subtitle="No judgment here. This helps us dial in your macro targets perfectly."
       onContinue={async () => {
-        const weightKg = unit === 'kg'
-          ? kg
-          : Math.round(lbs * 0.453592 * 10) / 10;
-        await saveOnboardingField('weightKg', weightKg);
-        router.push('/welcome/tuning');
+        await saveOnboardingField('weightKg', toKg());
+        router.push('/welcome/age');
       }}
       canContinue={true}
+      onSkip={() => router.push('/welcome/age')}
     >
-      {/* Unit toggle */}
-      <View style={[styles.toggle, { backgroundColor: colors.bgElevated }]}>
-        {(['lbs', 'kg'] as Unit[]).map((u) => (
-          <Pressable
-            key={u}
-            style={[
-              styles.toggleOpt,
-              unit === u && [styles.toggleOptActive, { backgroundColor: colors.bgCard }],
-            ]}
-            onPress={() => setUnit(u)}
-            accessibilityRole="button"
-            accessibilityLabel={u === 'kg' ? 'Kilograms' : 'Pounds'}
-            accessibilityState={{ selected: unit === u }}
-          >
-            <Text
-              style={[
-                styles.toggleTxt,
-                { color: colors.textSecondary },
-                unit === u && { color: colors.textPrimary, fontWeight: '600' },
-              ]}
-            >
-              {u}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
+      <Animated.View entering={FadeInDown.duration(400).delay(100)} style={s.wrap}>
+        {/* Unit toggle */}
+        <View style={s.toggle}>
+          <AnimatedPress style={[s.toggleBtn, unit === 'lbs' && s.toggleOn]} onPress={() => setUnit('lbs')} haptic>
+            <Text style={[s.toggleTxt, unit === 'lbs' && s.toggleTxtOn]}>lbs</Text>
+          </AnimatedPress>
+          <AnimatedPress style={[s.toggleBtn, unit === 'kg' && s.toggleOn]} onPress={() => setUnit('kg')} haptic>
+            <Text style={[s.toggleTxt, unit === 'kg' && s.toggleTxtOn]}>kg</Text>
+          </AnimatedPress>
+        </View>
 
-      {/* Picker */}
-      <View style={styles.pickerRow}>
-        {unit === 'lbs' ? (
-          <ScrollPicker values={LBS_VALUES} value={lbs} unit="lbs" onChange={setLbs} />
-        ) : (
-          <ScrollPicker values={KG_VALUES} value={kg} unit="kg" onChange={setKg} />
-        )}
-      </View>
+        <View>
+          <Text style={s.label}>WEIGHT</Text>
+          <View style={s.inputRow}>
+            <TextInput
+              style={s.input}
+              value={value}
+              onChangeText={setValue}
+              keyboardType="number-pad"
+              maxLength={3}
+              placeholder={unit === 'lbs' ? '155' : '70'}
+              placeholderTextColor={EDITORIAL.creamDeep}
+              autoFocus
+            />
+            <Text style={s.unit}>{unit}</Text>
+          </View>
+        </View>
+      </Animated.View>
     </WelcomeScreen>
   );
 }
 
-const styles = StyleSheet.create({
-  toggle: {
-    flexDirection: 'row',
-    borderRadius: 10,
-    padding: 4,
-    marginBottom: 16,
+const s = StyleSheet.create({
+  wrap: { gap: 24 },
+  toggle: { flexDirection: 'row', backgroundColor: EDITORIAL.creamCard, borderRadius: 14, padding: 4 },
+  toggleBtn: { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 12 },
+  toggleOn: { backgroundColor: EDITORIAL.green },
+  toggleTxt: { fontSize: 14, fontWeight: '600', color: EDITORIAL.textSoft },
+  toggleTxtOn: { color: EDITORIAL.cream },
+  label: { fontSize: 11, fontWeight: '700', letterSpacing: 2, color: EDITORIAL.textSoft, textTransform: 'uppercase' },
+  inputRow: {
+    flexDirection: 'row', alignItems: 'baseline',
+    backgroundColor: EDITORIAL.creamCard, borderRadius: 16, paddingHorizontal: 24, paddingVertical: 20,
   },
-  toggleOpt: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 8 },
-  toggleOptActive: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  toggleTxt: { fontSize: 14, fontWeight: '500' },
-  pickerRow: {
-    flexDirection: 'row',
-    gap: 12,
-    flex: 1,
-  },
+  input: { flex: 1, fontFamily: FONTS.newsreaderBold, fontSize: 36, color: EDITORIAL.text, letterSpacing: -1, padding: 0 },
+  unit: { fontSize: 18, color: EDITORIAL.textSoft, fontWeight: '500' },
 });

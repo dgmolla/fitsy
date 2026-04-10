@@ -12,6 +12,7 @@ export interface OnboardingData {
   weightKg?: number;
   activity?: ActivityLevel;
   goal?: Goal;
+  dietary?: string[];
 }
 
 export async function saveOnboardingField<K extends keyof OnboardingData>(

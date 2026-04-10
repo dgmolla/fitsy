@@ -1,77 +1,54 @@
 import React, { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
-import { ScrollPicker, rangeValues } from '@/components/ScrollPicker';
 import { saveOnboardingField } from '@/lib/onboardingStorage';
-
-const MONTHS = rangeValues(1, 12);
-const DAYS = rangeValues(1, 31);
-
-const currentYear = new Date().getFullYear();
-const YEARS = rangeValues(currentYear - 99, currentYear - 13);
-
-const MONTH_NAMES: Record<number, string> = {
-  1: 'Jan', 2: 'Feb', 3: 'Mar', 4: 'Apr', 5: 'May', 6: 'Jun',
-  7: 'Jul', 8: 'Aug', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dec',
-};
-
-function daysInMonth(month: number, year: number): number {
-  return new Date(year, month, 0).getDate();
-}
+import { EDITORIAL, FONTS } from '@/lib/brand';
 
 export default function AgeScreen() {
-  const defaultYear = currentYear - 25;
-  const [month, setMonth] = useState(1);
-  const [day, setDay] = useState(1);
-  const [year, setYear] = useState(defaultYear);
-
-  const maxDay = daysInMonth(month, year);
-  const clampedDay = Math.min(day, maxDay);
-
-  const toISODate = () => {
-    const m = String(month).padStart(2, '0');
-    const d = String(clampedDay).padStart(2, '0');
-    return `${year}-${m}-${d}`;
-  };
+  const [value, setValue] = useState('');
 
   return (
     <WelcomeScreen
-      step={3}
-      totalSteps={8}
-      title="When's your birthday?"
-      subtitle="We use your age to personalize your daily calorie target. This stays private."
+      step={4}
+      totalSteps={7}
+      title="How old are you?"
       onContinue={async () => {
-        await saveOnboardingField('birthday', toISODate());
-        router.push('/welcome/height');
+        const age = parseInt(value, 10) || 25;
+        await saveOnboardingField('birthday', `${new Date().getFullYear() - age}-01-01`);
+        router.push('/welcome/activity');
       }}
       canContinue={true}
+      onSkip={() => router.push('/welcome/activity')}
     >
-      <View style={styles.pickerContainer}>
-        <ScrollPicker
-          values={MONTHS}
-          value={month}
-          formatItem={(v) => MONTH_NAMES[v] ?? String(v)}
-          onChange={setMonth}
-        />
-        <ScrollPicker
-          values={rangeValues(1, maxDay)}
-          value={clampedDay}
-          onChange={setDay}
-        />
-        <ScrollPicker
-          values={YEARS}
-          value={year}
-          onChange={setYear}
-        />
-      </View>
+      <Animated.View entering={FadeInDown.duration(400).delay(100)} style={s.wrap}>
+        <Text style={s.label}>AGE</Text>
+        <View style={s.inputRow}>
+          <TextInput
+            style={s.input}
+            value={value}
+            onChangeText={setValue}
+            keyboardType="number-pad"
+            maxLength={2}
+            placeholder="28"
+            placeholderTextColor={EDITORIAL.creamDeep}
+            autoFocus
+          />
+          <Text style={s.unit}>yrs</Text>
+        </View>
+      </Animated.View>
     </WelcomeScreen>
   );
 }
 
-const styles = StyleSheet.create({
-  pickerContainer: {
-    flexDirection: 'row',
-    flex: 1,
+const s = StyleSheet.create({
+  wrap: { gap: 10 },
+  label: { fontSize: 11, fontWeight: '700', letterSpacing: 2, color: EDITORIAL.textSoft, textTransform: 'uppercase' },
+  inputRow: {
+    flexDirection: 'row', alignItems: 'baseline',
+    backgroundColor: EDITORIAL.creamCard, borderRadius: 16, paddingHorizontal: 24, paddingVertical: 20,
   },
+  input: { flex: 1, fontFamily: FONTS.newsreaderBold, fontSize: 36, color: EDITORIAL.text, letterSpacing: -1, padding: 0 },
+  unit: { fontSize: 18, color: EDITORIAL.textSoft, fontWeight: '500' },
 });

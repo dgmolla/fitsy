@@ -1,17 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
+
 import { Ionicons } from '@expo/vector-icons';
-import { Pressable } from 'react-native';
 import { appleSignIn, completeGoogleSignIn } from '@/lib/authClient';
 import { pullProfileFromServer } from '@/lib/profileSync';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
-import { useTheme } from '@/lib/theme';
+import { AnimatedPress } from '@/components/AnimatedPress';
 import { getMacroTargets } from '@/lib/macroStorage';
 import { getOnboardingData } from '@/lib/onboardingStorage';
 import { identifyUser, trackAuthFailure, trackAuthSuccess } from '@/lib/analytics';
+import { EDITORIAL } from '@/lib/brand';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -19,23 +21,19 @@ const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
 const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
 
 async function captureIdentity(userId: string, email?: string | null): Promise<void> {
-  const [macroTargets, onboardingData] = await Promise.all([
-    getMacroTargets(),
-    getOnboardingData(),
-  ]);
+  const [mt, od] = await Promise.all([getMacroTargets(), getOnboardingData()]);
   identifyUser(userId, {
     email: email ?? undefined,
-    goal: onboardingData.goal,
-    activity_level: onboardingData.activity,
-    macro_protein: macroTargets?.protein != null ? Number(macroTargets.protein) : undefined,
-    macro_carbs: macroTargets?.carbs != null ? Number(macroTargets.carbs) : undefined,
-    macro_fat: macroTargets?.fat != null ? Number(macroTargets.fat) : undefined,
-    macro_calories: macroTargets?.calories != null ? Number(macroTargets.calories) : undefined,
+    goal: od.goal,
+    activity_level: od.activity,
+    macro_protein: mt?.protein != null ? Number(mt.protein) : undefined,
+    macro_carbs: mt?.carbs != null ? Number(mt.carbs) : undefined,
+    macro_fat: mt?.fat != null ? Number(mt.fat) : undefined,
+    macro_calories: mt?.calories != null ? Number(mt.calories) : undefined,
   });
 }
 
 export default function SignInScreen() {
-  const { colors } = useTheme();
   const [appleLoading, setAppleLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
@@ -50,17 +48,12 @@ export default function SignInScreen() {
       if (idToken) {
         setGoogleLoading(true);
         completeGoogleSignIn(idToken)
-          .then(async (result) => {
-            trackAuthSuccess({ provider: 'google', is_new_user: result.isNewUser });
-            await captureIdentity(result.user.id, result.user.email);
-            if (!result.isNewUser) {
-              await pullProfileFromServer();
-              setGoogleLoading(false);
-              router.replace('/(tabs)/search');
-            } else {
-              setGoogleLoading(false);
-              router.replace('/welcome/payment');
-            }
+          .then(async (r) => {
+            trackAuthSuccess({ provider: 'google', is_new_user: r.isNewUser });
+            await captureIdentity(r.user.id, r.user.email);
+            if (!r.isNewUser) await pullProfileFromServer();
+            setGoogleLoading(false);
+            router.replace('/(tabs)/search');
           })
           .catch((err: Error) => {
             trackAuthFailure({ provider: 'google', error_message: err.message });
@@ -74,114 +67,85 @@ export default function SignInScreen() {
     }
   }, [response]);
 
-  async function handleAppleSignIn() {
+  async function handleApple() {
     setAppleLoading(true);
     try {
-      const result = await appleSignIn();
-      trackAuthSuccess({ provider: 'apple', is_new_user: result.isNewUser });
-      await captureIdentity(result.user.id, result.user.email);
-      if (!result.isNewUser) {
-        await pullProfileFromServer();
-        router.replace('/(tabs)/search');
-      } else {
-        router.replace('/welcome/payment');
-      }
+      const r = await appleSignIn();
+      trackAuthSuccess({ provider: 'apple', is_new_user: r.isNewUser });
+      await captureIdentity(r.user.id, r.user.email);
+      if (!r.isNewUser) await pullProfileFromServer();
+      router.replace('/(tabs)/search');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Apple Sign In failed';
       if (!msg.includes('canceled')) {
         trackAuthFailure({ provider: 'apple', error_message: msg });
         Alert.alert('Sign In Failed', msg);
       }
-    } finally {
-      setAppleLoading(false);
-    }
+    } finally { setAppleLoading(false); }
   }
 
-  async function handleGoogleSignIn() {
-    if (!GOOGLE_IOS_CLIENT_ID) {
-      Alert.alert('Not Configured', 'Google Sign In is not configured yet.');
-      return;
-    }
+  async function handleGoogle() {
+    if (!GOOGLE_IOS_CLIENT_ID) { Alert.alert('Not Configured', 'Google Sign In is not configured yet.'); return; }
     await promptGoogleAsync();
   }
 
-  const isLoading = appleLoading || googleLoading;
+  const busy = appleLoading || googleLoading;
 
   return (
     <WelcomeScreen
-      step={9}
-      totalSteps={9}
-      title="Create your account"
-      subtitle="Save your targets and start finding meals that fit your goals."
+      title="Almost there."
+      subtitle="Create an account to save your targets."
       onContinue={() => {}}
       canContinue={false}
-      hideFooter={true}
+      hideFooter
       onBack={() => router.back()}
     >
-      <View style={styles.buttonsWrap}>
-      <View style={styles.buttons}>
-        <Pressable
-          style={[styles.appleBtn, { backgroundColor: colors.textPrimary }, isLoading && styles.disabled]}
-          onPress={handleAppleSignIn}
-          disabled={isLoading}
-          accessibilityRole="button"
-          accessibilityLabel="Continue with Apple"
-        >
-          <Ionicons name="logo-apple" size={20} color={colors.bg} />
-          <Text style={[styles.appleTxt, { color: colors.bg }]}>
-            {appleLoading ? 'Signing in...' : 'Continue with Apple'}
-          </Text>
-        </Pressable>
+      <View style={s.wrap}>
+        <Animated.View entering={FadeInDown.duration(400).delay(100)} style={s.btns}>
+          <AnimatedPress
+            style={[s.apple, busy ? s.dim : undefined]}
+            onPress={handleApple}
+            disabled={busy}
+            haptic
+            accessibilityRole="button"
+            accessibilityLabel="Continue with Apple"
+          >
+            <Ionicons name="logo-apple" size={20} color={EDITORIAL.cream} />
+            <Text style={s.appleTxt}>{appleLoading ? 'Signing in...' : 'Continue with Apple'}</Text>
+          </AnimatedPress>
 
-        <Pressable
-          style={[styles.googleBtn, { borderColor: colors.border }, isLoading && styles.disabled]}
-          onPress={handleGoogleSignIn}
-          disabled={isLoading}
-          accessibilityRole="button"
-          accessibilityLabel="Continue with Google"
-        >
-          <Ionicons name="logo-google" size={20} color={colors.textPrimary} />
-          <Text style={[styles.googleTxt, { color: colors.textPrimary }]}>
-            {googleLoading ? 'Signing in...' : 'Continue with Google'}
-          </Text>
-        </Pressable>
-      </View>
+          <AnimatedPress
+            style={[s.google, busy ? s.dim : undefined]}
+            onPress={handleGoogle}
+            disabled={busy}
+            haptic
+            accessibilityRole="button"
+            accessibilityLabel="Continue with Google"
+          >
+            <Ionicons name="logo-google" size={20} color={EDITORIAL.text} />
+            <Text style={s.googleTxt}>{googleLoading ? 'Signing in...' : 'Continue with Google'}</Text>
+          </AnimatedPress>
+        </Animated.View>
 
-      <Text style={[styles.legal, { color: colors.textTertiary }]}>
-        By continuing you agree to our Terms of Service and Privacy Policy.
-      </Text>
+        <Text style={s.legal}>By continuing you agree to our Terms of Service and Privacy Policy.</Text>
       </View>
     </WelcomeScreen>
   );
 }
 
-const styles = StyleSheet.create({
-  buttonsWrap: { flex: 1, justifyContent: 'center' },
-  buttons: { gap: 12, marginBottom: 16 },
-  appleBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    borderRadius: 14,
-    paddingVertical: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 3,
+const s = StyleSheet.create({
+  wrap: { flex: 1, justifyContent: 'center' },
+  btns: { gap: 12, marginBottom: 24 },
+  apple: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    backgroundColor: EDITORIAL.text, borderRadius: 32, paddingVertical: 18,
   },
-  appleTxt: { fontSize: 16, fontWeight: '600' },
-  googleBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    borderRadius: 14,
-    paddingVertical: 16,
-    borderWidth: 1.5,
+  appleTxt: { fontSize: 16, fontWeight: '600', color: EDITORIAL.cream },
+  google: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    backgroundColor: EDITORIAL.creamCard, borderRadius: 32, paddingVertical: 18,
   },
-  googleTxt: { fontSize: 16, fontWeight: '600' },
-  disabled: { opacity: 0.5 },
-  legal: { fontSize: 12, textAlign: 'center', lineHeight: 18, marginTop: 8 },
+  googleTxt: { fontSize: 16, fontWeight: '600', color: EDITORIAL.text },
+  dim: { opacity: 0.4 },
+  legal: { fontSize: 12, textAlign: 'center', lineHeight: 18, color: EDITORIAL.textSoft },
 });

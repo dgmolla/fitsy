@@ -9,7 +9,7 @@ import { Pressable } from 'react-native';
 import { appleSignIn, completeGoogleSignIn } from '@/lib/authClient';
 import { pullProfileFromServer } from '@/lib/profileSync';
 import { useTheme } from '@/lib/theme';
-import { BRAND } from '@/lib/brand';
+import { BRAND, EDITORIAL, FONTS } from '@/lib/brand';
 import { getMacroTargets } from '@/lib/macroStorage';
 import { getOnboardingData } from '@/lib/onboardingStorage';
 import { identifyUser, trackAuthFailure, trackAuthSuccess } from '@/lib/analytics';
@@ -145,7 +145,7 @@ export default function LoginScreen() {
     <ScreenBackground>
       <View style={styles.content}>
         <View style={styles.header}>
-          <Text style={[styles.logo, { color: BRAND.color }]}>{BRAND.name}</Text>
+          <Text style={styles.logo}>{BRAND.name}</Text>
           <Text style={[styles.title, { color: colors.textPrimary }]}>Welcome back</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
             Sign in to continue finding meals that fit your goals.
@@ -202,7 +202,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   content: { flex: 1, paddingHorizontal: 24, justifyContent: 'center', gap: 40 },
   header: { gap: 8 },
-  logo: { fontSize: 36, fontWeight: '800', letterSpacing: -1, marginBottom: 8 },
+  logo: { fontFamily: FONTS.newsreaderBold, fontSize: 42, color: EDITORIAL.green, letterSpacing: -2, marginBottom: 8 },
   title: { fontSize: 28, fontWeight: '700' },
   subtitle: { fontSize: 15, lineHeight: 22 },
   buttons: { gap: 12 },

@@ -1,45 +1,30 @@
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { pushProfileToServer } from '@/lib/profileSync';
-import { Ionicons } from '@expo/vector-icons';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
+import { AnimatedPress } from '@/components/AnimatedPress';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { getOnboardingData } from '@/lib/onboardingStorage';
 import { trackOnboardingCompleted } from '@/lib/analytics';
 
 type PlanId = 'monthly' | 'yearly';
 
-const FEATURES = [
-  'Macro-aware restaurant search',
-  'Published chain nutrition data',
-  'AI-estimated macros for local spots',
-  'Confidence scores on every estimate',
-  'Unlimited searches',
-];
-
-const PLANS: { id: PlanId; label: string; price: string; perMonth: string; badge?: string }[] = [
-  { id: 'yearly', label: 'Annual', price: '$29.99 / year', perMonth: '$2.50 / mo', badge: 'Best Value' },
-  { id: 'monthly', label: 'Monthly', price: '$4.99 / month', perMonth: '' },
-];
-
 export default function PaymentScreen() {
   const [plan, setPlan] = useState<PlanId>('yearly');
   const [loading, setLoading] = useState(false);
+  const [showDiscount, setShowDiscount] = useState(false);
 
-  async function handleStart() {
+  async function handleStart(discounted = false) {
     setLoading(true);
     try {
       await AsyncStorage.setItem('onboardingComplete', 'true');
+      if (discounted) await AsyncStorage.setItem('discountApplied', 'true');
       pushProfileToServer();
-      const onboardingData = await getOnboardingData();
-      trackOnboardingCompleted({
-        goal: onboardingData.goal,
-        activity_level: onboardingData.activity,
-        has_weight: onboardingData.weightKg !== undefined,
-        has_height: onboardingData.heightCm !== undefined,
-      });
+      const d = await getOnboardingData();
+      trackOnboardingCompleted({ goal: d.goal, activity_level: d.activity, has_weight: d.weightKg !== undefined, has_height: d.heightCm !== undefined });
       router.push('/welcome/signin');
     } finally {
       setLoading(false);
@@ -47,84 +32,97 @@ export default function PaymentScreen() {
   }
 
   return (
-    <WelcomeScreen
-      step={7}
-      totalSteps={8}
-      title="Try Fitsy free for 7 days."
-      subtitle="No charge until your trial ends. Cancel anytime."
-      onContinue={handleStart}
-      canContinue={!loading}
-      continueLabel={loading ? 'Setting up...' : 'Start Free Trial'}
-    >
-      <View style={styles.features}>
-        {FEATURES.map((f) => (
-          <View key={f} style={styles.featureRow}>
-            <Ionicons name="checkmark-circle" size={20} color={EDITORIAL.greenAccent} />
-            <Text style={styles.featureTxt}>{f}</Text>
-          </View>
-        ))}
-      </View>
-
-      <View style={styles.plans}>
-        {PLANS.map((p) => {
-          const active = plan === p.id;
-          return (
-            <Pressable
-              key={p.id}
-              style={[styles.planCard, active && styles.planCardActive]}
-              onPress={() => setPlan(p.id)}
+    <>
+      <WelcomeScreen
+        title={`Try Fitsy free\nfor 7 days.`}
+        subtitle="Cancel anytime. No charge until your trial ends."
+        onContinue={() => handleStart(false)}
+        canContinue={!loading}
+        continueLabel={loading ? 'Setting up...' : 'Start Free Trial'}
+        onSkip={() => setShowDiscount(true)}
+      >
+        <View style={s.plans}>
+          <Animated.View entering={FadeInDown.duration(400).delay(100)}>
+            <AnimatedPress
+              style={[s.plan, plan === 'yearly' && s.planOn]}
+              onPress={() => setPlan('yearly')}
+              haptic
               accessibilityRole="button"
-              accessibilityState={{ selected: active }}
+              accessibilityState={{ selected: plan === 'yearly' }}
             >
-              <View style={styles.planLeft}>
-                <Text style={[styles.planLabel, active && { color: EDITORIAL.green }]}>{p.label}</Text>
-                {p.perMonth ? <Text style={styles.planSub}>{p.perMonth}</Text> : null}
+              <View>
+                <View style={s.planRow}>
+                  <Text style={[s.planName, plan === 'yearly' && s.planNameOn]}>Annual</Text>
+                  <View style={s.badge}><Text style={s.badgeTxt}>Best Value</Text></View>
+                </View>
+                <Text style={s.planSub}>$2.50 / mo</Text>
               </View>
-              <View style={styles.planRight}>
-                {p.badge ? (
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeTxt}>{p.badge}</Text>
-                  </View>
-                ) : null}
-                <Text style={[styles.planPrice, active && { color: EDITORIAL.green }]}>{p.price}</Text>
-              </View>
-            </Pressable>
-          );
-        })}
-      </View>
+              <Text style={[s.planPrice, plan === 'yearly' && s.planPriceOn]}>$29.99/yr</Text>
+            </AnimatedPress>
+          </Animated.View>
 
-      <Text style={styles.disclaimer}>
-        {`No charge for 7 days. Then ${plan === 'yearly' ? '$29.99/year' : '$4.99/month'}. Cancel before trial ends to avoid charge.`}
-      </Text>
-    </WelcomeScreen>
+          <Animated.View entering={FadeInDown.duration(400).delay(180)}>
+            <AnimatedPress
+              style={[s.plan, plan === 'monthly' && s.planOn]}
+              onPress={() => setPlan('monthly')}
+              haptic
+              accessibilityRole="button"
+              accessibilityState={{ selected: plan === 'monthly' }}
+            >
+              <Text style={[s.planName, plan === 'monthly' && s.planNameOn]}>Monthly</Text>
+              <Text style={[s.planPrice, plan === 'monthly' && s.planPriceOn]}>$4.99/mo</Text>
+            </AnimatedPress>
+          </Animated.View>
+        </View>
+      </WelcomeScreen>
+
+      {/* Discount modal */}
+      <Modal visible={showDiscount} transparent animationType="fade" onRequestClose={() => setShowDiscount(false)}>
+        <View style={s.overlay}>
+          <Animated.View entering={FadeIn.duration(300)} style={s.modal}>
+            <Text style={s.modalTitle}>Wait — 50% off.</Text>
+            <Text style={s.modalBody}>
+              Lock in <Text style={{ fontWeight: '700' }}>$14.99/year</Text> if you start your free trial now.
+            </Text>
+            <AnimatedPress style={s.modalCta} onPress={() => { setShowDiscount(false); handleStart(true); }} haptic>
+              <Text style={s.modalCtaTxt}>Claim 50% Off</Text>
+            </AnimatedPress>
+            <AnimatedPress style={s.modalSkip} onPress={() => { setShowDiscount(false); handleStart(false); }}>
+              <Text style={s.modalSkipTxt}>No thanks</Text>
+            </AnimatedPress>
+          </Animated.View>
+        </View>
+      </Modal>
+    </>
   );
 }
 
-const styles = StyleSheet.create({
-  features: { gap: 12, marginBottom: 24 },
-  featureRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  featureTxt: { fontSize: 15, color: EDITORIAL.text, flex: 1 },
-  plans: { gap: 10, marginBottom: 16 },
-  planCard: {
+const s = StyleSheet.create({
+  plans: { gap: 12 },
+  plan: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderWidth: 2,
-    borderColor: EDITORIAL.border,
     backgroundColor: EDITORIAL.creamCard,
-    borderRadius: 14,
-    padding: 16,
+    borderRadius: 18,
+    padding: 22,
   },
-  planCardActive: {
-    borderColor: EDITORIAL.greenAccent,
-    backgroundColor: EDITORIAL.creamDeep,
-  },
-  planLeft: { gap: 2 },
-  planLabel: { fontFamily: FONTS.newsreaderBold, fontSize: 16, color: EDITORIAL.text },
-  planSub: { fontSize: 13, color: EDITORIAL.textSoft },
-  planRight: { alignItems: 'flex-end', gap: 4 },
-  badge: { backgroundColor: EDITORIAL.green, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 },
-  badgeTxt: { fontSize: 11, fontWeight: '600', color: EDITORIAL.cream },
-  planPrice: { fontSize: 15, fontWeight: '600', color: EDITORIAL.text },
-  disclaimer: { fontSize: 12, textAlign: 'center', lineHeight: 18, color: EDITORIAL.textSoft },
+  planOn: { backgroundColor: EDITORIAL.green },
+  planRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  planName: { fontFamily: FONTS.newsreaderBold, fontSize: 18, color: EDITORIAL.text },
+  planNameOn: { color: EDITORIAL.cream },
+  planSub: { fontSize: 13, color: EDITORIAL.textSoft, marginTop: 2 },
+  badge: { backgroundColor: 'rgba(253,251,247,0.2)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
+  badgeTxt: { fontSize: 10, fontWeight: '700', color: EDITORIAL.cream, letterSpacing: 0.5 },
+  planPrice: { fontFamily: FONTS.newsreaderBold, fontSize: 17, color: EDITORIAL.text },
+  planPriceOn: { color: EDITORIAL.cream },
+
+  overlay: { flex: 1, backgroundColor: 'rgba(15,31,21,0.55)', justifyContent: 'center', padding: 36 },
+  modal: { backgroundColor: EDITORIAL.cream, borderRadius: 28, padding: 36, alignItems: 'center', gap: 16 },
+  modalTitle: { fontFamily: FONTS.newsreaderBold, fontSize: 30, color: EDITORIAL.text, letterSpacing: -1 },
+  modalBody: { fontSize: 16, lineHeight: 24, color: EDITORIAL.textSoft, textAlign: 'center' },
+  modalCta: { backgroundColor: EDITORIAL.green, borderRadius: 32, paddingVertical: 18, width: '100%', alignItems: 'center', marginTop: 8 },
+  modalCtaTxt: { fontSize: 16, fontWeight: '600', color: EDITORIAL.cream },
+  modalSkip: { paddingVertical: 8 },
+  modalSkipTxt: { fontSize: 14, color: EDITORIAL.textSoft },
 });

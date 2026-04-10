@@ -14,7 +14,7 @@ export default function WelcomeEmailScreen() {
     password: string;
   }) {
     await registerAndStore(name ?? '', email, password);
-    router.replace('/welcome/age');
+    router.replace('/welcome/height');
   }
 
   return (

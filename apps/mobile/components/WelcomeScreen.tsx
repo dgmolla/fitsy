@@ -9,197 +9,194 @@ import {
   Text,
   View,
 } from 'react-native';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useNavigation } from 'expo-router';
 import { EDITORIAL, FONTS } from '@/lib/brand';
+import { AnimatedPress } from './AnimatedPress';
 
 interface Props {
-  step: number;
-  totalSteps: number;
-  illustration?: React.ReactNode;
+  step?: number;
+  totalSteps?: number;
   title: string;
-  subtitle: string;
+  subtitle?: string;
   children: React.ReactNode;
   onContinue: () => void;
   canContinue: boolean;
   continueLabel?: string;
+  onSkip?: () => void;
   showBack?: boolean;
   onBack?: () => void;
-  scrollable?: boolean;
   hideFooter?: boolean;
 }
 
 export function WelcomeScreen({
   step,
   totalSteps,
-  illustration,
   title,
   subtitle,
   children,
   onContinue,
   canContinue,
   continueLabel = 'Continue',
+  onSkip,
   showBack = true,
   onBack,
-  scrollable = false,
   hideFooter = false,
 }: Props) {
   const navigation = useNavigation();
-  const progress = step / totalSteps;
 
   const handleBack = onBack ?? (() => {
-    if (navigation.canGoBack()) {
-      router.back();
-    } else {
-      router.navigate('/welcome');
-    }
+    if (navigation.canGoBack()) router.back();
+    else router.navigate('/welcome');
   });
 
-  const body = (
-    <View>
-      {illustration && <View style={styles.illustrationWrap}>{illustration}</View>}
-      <Text style={styles.title}>{title}</Text>
-      <Text style={styles.subtitle}>
-        {subtitle}
-      </Text>
-      <View style={styles.childrenWrap}>{children}</View>
-    </View>
-  );
-
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: EDITORIAL.cream }}>
+    <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        {/* Header: back + progress */}
-        <View style={styles.header}>
+        {/* ── Top bar ── */}
+        <View style={styles.topBar}>
           {showBack ? (
             <Pressable
               onPress={handleBack}
-              hitSlop={12}
+              hitSlop={16}
               accessibilityRole="button"
               accessibilityLabel="Go back"
-              style={styles.backBtn}
+              style={styles.backHit}
             >
-              <Ionicons name="chevron-back" size={24} color={EDITORIAL.textSoft} />
+              <Ionicons name="chevron-back" size={22} color={EDITORIAL.textMid} />
             </Pressable>
           ) : (
-            <View style={styles.backBtn} />
+            <View style={styles.backHit} />
           )}
-          <View style={[styles.progressTrack, { backgroundColor: EDITORIAL.border }]}>
-            <View
-              style={[
-                styles.progressFill,
-                { backgroundColor: EDITORIAL.greenAccent, width: `${progress * 100}%` },
-              ]}
-            />
-          </View>
-          <View style={styles.backBtn} />
+          {step != null && totalSteps != null && (
+            <Text style={styles.stepText}>{step} / {totalSteps}</Text>
+          )}
         </View>
 
-        {/* Body + Footer */}
+        {/* ── Body ── */}
         <ScrollView
           style={styles.flex}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={styles.body}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           bounces={false}
         >
-          {body}
-          {!hideFooter && (
-            <View style={styles.footer}>
-              <Pressable
-                style={[
-                  styles.continueBtn,
-                  { backgroundColor: EDITORIAL.green },
-                  !canContinue && { opacity: 0.4 },
-                ]}
-                onPress={onContinue}
-                disabled={!canContinue}
-                accessibilityRole="button"
-                accessibilityLabel={continueLabel}
-                accessibilityState={{ disabled: !canContinue }}
-              >
-                <Text style={[styles.continueTxt, { color: EDITORIAL.cream }]}>
-                  {continueLabel}
-                </Text>
-              </Pressable>
-            </View>
+          <Animated.Text
+            entering={FadeInDown.duration(500).delay(80)}
+            style={styles.title}
+          >
+            {title}
+          </Animated.Text>
+
+          {subtitle && (
+            <Animated.Text
+              entering={FadeInDown.duration(500).delay(180)}
+              style={styles.subtitle}
+            >
+              {subtitle}
+            </Animated.Text>
           )}
+
+          <Animated.View entering={FadeIn.duration(400).delay(280)} style={styles.childWrap}>
+            {children}
+          </Animated.View>
         </ScrollView>
+
+        {/* ── Footer ── */}
+        {!hideFooter && (
+          <Animated.View entering={FadeIn.duration(300).delay(400)} style={styles.footer}>
+            {onSkip ? (
+              <Pressable
+                onPress={onSkip}
+                hitSlop={16}
+                style={styles.skipHit}
+                accessibilityRole="button"
+                accessibilityLabel="Skip"
+              >
+                <Text style={styles.skipTxt}>Skip</Text>
+              </Pressable>
+            ) : (
+              <View style={styles.skipHit} />
+            )}
+
+            <AnimatedPress
+              style={[styles.continueBtn, !canContinue ? styles.continueDim : undefined]}
+              onPress={onContinue}
+              disabled={!canContinue}
+              haptic
+              accessibilityRole="button"
+              accessibilityLabel={continueLabel}
+            >
+              <Text style={styles.continueTxt}>{continueLabel}</Text>
+              <Ionicons name="arrow-forward" size={15} color={EDITORIAL.cream} />
+            </AnimatedPress>
+          </Animated.View>
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1 },
+  safe: { flex: 1, backgroundColor: EDITORIAL.cream },
   flex: { flex: 1 },
-  header: {
+
+  topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 12,
-    gap: 12,
-  },
-  backBtn: { width: 32 },
-  progressTrack: {
-    flex: 1,
-    height: 4,
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 2,
-  },
-  scrollContent: {
-    paddingHorizontal: 24,
-    paddingBottom: 40,
-    flexGrow: 1,
     justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    height: 52,
   },
-  illustrationWrap: {
-    alignItems: 'center',
-    marginBottom: 20,
-    marginTop: 8,
+  backHit: { width: 44, height: 44, justifyContent: 'center' },
+  stepText: { fontSize: 13, fontWeight: '500', color: EDITORIAL.textSoft, letterSpacing: 0.5 },
+
+  body: {
+    paddingHorizontal: 36,
+    paddingTop: 20,
+    paddingBottom: 24,
+    flexGrow: 1,
   },
   title: {
-    fontSize: 28,
     fontFamily: FONTS.newsreaderBold,
+    fontSize: 30,
     color: EDITORIAL.text,
     letterSpacing: -0.8,
-    marginBottom: 8,
+    lineHeight: 36,
+    marginBottom: 14,
   },
   subtitle: {
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 16,
+    lineHeight: 24,
     color: EDITORIAL.textSoft,
-    marginBottom: 28,
+    marginBottom: 40,
   },
-  childrenWrap: {
-    minHeight: 280,
-  },
+  childWrap: { flex: 1 },
+
   footer: {
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    marginBottom: 24,
-  },
-  continueBtn: {
-    borderRadius: 14,
-    paddingVertical: 16,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    elevation: 3,
+    justifyContent: 'space-between',
+    paddingHorizontal: 36,
+    paddingBottom: 16,
+    paddingTop: 8,
   },
-  continueTxt: {
-    fontSize: 17,
-    fontWeight: '700',
+  skipHit: { minWidth: 44, minHeight: 44, justifyContent: 'center' },
+  skipTxt: { fontSize: 15, color: EDITORIAL.textSoft },
+
+  continueBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: EDITORIAL.green,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 32,
   },
+  continueDim: { opacity: 0.25 },
+  continueTxt: { fontSize: 15, fontWeight: '600', color: EDITORIAL.cream },
 });

@@ -1,100 +1,121 @@
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
-import { ScrollPicker, rangeValues } from '@/components/ScrollPicker';
-import { useTheme } from '@/lib/theme';
+import { AnimatedPress } from '@/components/AnimatedPress';
 import { saveOnboardingField } from '@/lib/onboardingStorage';
+import { EDITORIAL, FONTS } from '@/lib/brand';
 
-type Unit = 'cm' | 'ft';
-
-const CM_VALUES = rangeValues(100, 250);
-const FEET_VALUES = rangeValues(3, 8);
-const INCHES_VALUES = rangeValues(0, 11);
+type Unit = 'ft' | 'cm';
 
 export default function HeightScreen() {
-  const { colors } = useTheme();
-  const [unit, setUnit] = useState<Unit>('cm');
-  const [cm, setCm] = useState(170);
-  const [feet, setFeet] = useState(5);
-  const [inches, setInches] = useState(9);
+  const [unit, setUnit] = useState<Unit>('ft');
+  const [ft, setFt] = useState('');
+  const [inches, setInches] = useState('');
+  const [cm, setCm] = useState('');
+
+  function toCm(): number {
+    if (unit === 'cm') return parseInt(cm, 10) || 170;
+    const f = parseInt(ft, 10) || 5;
+    const i = parseInt(inches, 10) || 9;
+    return Math.round(f * 30.48 + i * 2.54);
+  }
 
   return (
     <WelcomeScreen
-      step={4}
-      totalSteps={8}
+      step={2}
+      totalSteps={7}
       title="How tall are you?"
-      subtitle="Used to estimate your basal metabolic rate. We keep this between us."
       onContinue={async () => {
-        const heightCm = unit === 'cm'
-          ? cm
-          : Math.round(feet * 30.48 + inches * 2.54);
-        await saveOnboardingField('heightCm', heightCm);
+        await saveOnboardingField('heightCm', toCm());
         router.push('/welcome/weight');
       }}
       canContinue={true}
+      onSkip={() => router.push('/welcome/weight')}
     >
-      {/* Unit toggle */}
-      <View style={[styles.toggle, { backgroundColor: colors.bgElevated }]}>
-        {(['cm', 'ft'] as Unit[]).map((u) => (
-          <Pressable
-            key={u}
-            style={[
-              styles.toggleOpt,
-              unit === u && [styles.toggleOptActive, { backgroundColor: colors.bgCard }],
-            ]}
-            onPress={() => setUnit(u)}
-            accessibilityRole="button"
-            accessibilityLabel={u === 'cm' ? 'Centimeters' : 'Feet and inches'}
-            accessibilityState={{ selected: unit === u }}
-          >
-            <Text
-              style={[
-                styles.toggleTxt,
-                { color: colors.textSecondary },
-                unit === u && { color: colors.textPrimary, fontWeight: '600' },
-              ]}
-            >
-              {u === 'cm' ? 'cm' : 'ft / in'}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
+      <Animated.View entering={FadeInDown.duration(400).delay(100)} style={s.wrap}>
+        {/* Unit toggle */}
+        <View style={s.toggle}>
+          <AnimatedPress style={[s.toggleBtn, unit === 'ft' && s.toggleOn]} onPress={() => setUnit('ft')} haptic>
+            <Text style={[s.toggleTxt, unit === 'ft' && s.toggleTxtOn]}>ft / in</Text>
+          </AnimatedPress>
+          <AnimatedPress style={[s.toggleBtn, unit === 'cm' && s.toggleOn]} onPress={() => setUnit('cm')} haptic>
+            <Text style={[s.toggleTxt, unit === 'cm' && s.toggleTxtOn]}>cm</Text>
+          </AnimatedPress>
+        </View>
 
-      {/* Pickers */}
-      <View style={styles.pickerRow}>
-        {unit === 'cm' ? (
-          <ScrollPicker values={CM_VALUES} value={cm} unit="cm" onChange={setCm} />
+        {unit === 'ft' ? (
+          <View style={s.ftRow}>
+            <View style={s.ftField}>
+              <Text style={s.label}>FEET</Text>
+              <View style={s.inputRow}>
+                <TextInput
+                  style={s.input}
+                  value={ft}
+                  onChangeText={setFt}
+                  keyboardType="number-pad"
+                  maxLength={1}
+                  placeholder="5"
+                  placeholderTextColor={EDITORIAL.creamDeep}
+                  autoFocus
+                />
+                <Text style={s.unit}>ft</Text>
+              </View>
+            </View>
+            <View style={s.ftField}>
+              <Text style={s.label}>INCHES</Text>
+              <View style={s.inputRow}>
+                <TextInput
+                  style={s.input}
+                  value={inches}
+                  onChangeText={setInches}
+                  keyboardType="number-pad"
+                  maxLength={2}
+                  placeholder="9"
+                  placeholderTextColor={EDITORIAL.creamDeep}
+                />
+                <Text style={s.unit}>in</Text>
+              </View>
+            </View>
+          </View>
         ) : (
-          <>
-            <ScrollPicker values={FEET_VALUES} value={feet} unit="ft" onChange={setFeet} />
-            <ScrollPicker values={INCHES_VALUES} value={inches} unit="in" onChange={setInches} />
-          </>
+          <View>
+            <Text style={s.label}>HEIGHT</Text>
+            <View style={s.inputRow}>
+              <TextInput
+                style={s.input}
+                value={cm}
+                onChangeText={setCm}
+                keyboardType="number-pad"
+                maxLength={3}
+                placeholder="170"
+                placeholderTextColor={EDITORIAL.creamDeep}
+                autoFocus
+              />
+              <Text style={s.unit}>cm</Text>
+            </View>
+          </View>
         )}
-      </View>
+      </Animated.View>
     </WelcomeScreen>
   );
 }
 
-const styles = StyleSheet.create({
-  toggle: {
-    flexDirection: 'row',
-    borderRadius: 10,
-    padding: 4,
-    marginBottom: 16,
+const s = StyleSheet.create({
+  wrap: { gap: 24 },
+  toggle: { flexDirection: 'row', backgroundColor: EDITORIAL.creamCard, borderRadius: 14, padding: 4 },
+  toggleBtn: { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 12 },
+  toggleOn: { backgroundColor: EDITORIAL.green },
+  toggleTxt: { fontSize: 14, fontWeight: '600', color: EDITORIAL.textSoft },
+  toggleTxtOn: { color: EDITORIAL.cream },
+  ftRow: { flexDirection: 'row', gap: 16 },
+  ftField: { flex: 1, gap: 10 },
+  label: { fontSize: 11, fontWeight: '700', letterSpacing: 2, color: EDITORIAL.textSoft, textTransform: 'uppercase' },
+  inputRow: {
+    flexDirection: 'row', alignItems: 'baseline',
+    backgroundColor: EDITORIAL.creamCard, borderRadius: 16, paddingHorizontal: 24, paddingVertical: 20,
   },
-  toggleOpt: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 8 },
-  toggleOptActive: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  toggleTxt: { fontSize: 14, fontWeight: '500' },
-  pickerRow: {
-    flexDirection: 'row',
-    gap: 12,
-    flex: 1,
-  },
+  input: { flex: 1, fontFamily: FONTS.newsreaderBold, fontSize: 36, color: EDITORIAL.text, letterSpacing: -1, padding: 0 },
+  unit: { fontSize: 18, color: EDITORIAL.textSoft, fontWeight: '500' },
 });

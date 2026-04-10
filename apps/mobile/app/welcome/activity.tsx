@@ -1,89 +1,52 @@
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
-import { useTheme } from '@/lib/theme';
-import { saveOnboardingField } from '@/lib/onboardingStorage';
+import { AnimatedPress } from '@/components/AnimatedPress';
+import { saveOnboardingField, type ActivityLevel } from '@/lib/onboardingStorage';
+import { EDITORIAL, FONTS } from '@/lib/brand';
 
-type ActivityLevel = 'sedentary' | 'lightly_active' | 'active' | 'very_active';
-type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
-
-const OPTIONS: {
-  id: ActivityLevel;
-  icon: IoniconsName;
-  title: string;
-  desc: string;
-}[] = [
-  { id: 'sedentary', icon: 'leaf-outline', title: 'Sedentary', desc: 'Little or no exercise, desk job' },
-  { id: 'lightly_active', icon: 'walk-outline', title: 'Lightly Active', desc: 'Light exercise 1-3 days/week' },
-  { id: 'active', icon: 'leaf', title: 'Active', desc: 'Moderate exercise 3-5 days/week' },
-  { id: 'very_active', icon: 'flash-outline', title: 'Very Active', desc: 'Hard exercise 6-7 days/week' },
+const OPTIONS: { id: ActivityLevel; label: string; desc: string }[] = [
+  { id: 'sedentary', label: 'Low', desc: 'Desk job, little exercise' },
+  { id: 'lightly_active', label: 'Light', desc: '1–3 days per week' },
+  { id: 'active', label: 'Moderate', desc: '3–5 days per week' },
+  { id: 'very_active', label: 'Intense', desc: '6–7 days per week' },
 ];
 
 export default function ActivityScreen() {
-  const { colors } = useTheme();
   const [selected, setSelected] = useState<ActivityLevel | null>(null);
 
   return (
     <WelcomeScreen
-      step={2}
-      totalSteps={8}
+      step={5}
+      totalSteps={7}
       title="How active are you?"
-      subtitle="Pick the level that best describes your typical week. Be honest!"
       onContinue={async () => {
         if (selected) await saveOnboardingField('activity', selected);
-        router.push('/welcome/age');
+        router.push('/welcome/dietary');
       }}
       canContinue={selected !== null}
+      onSkip={() => router.push('/welcome/dietary')}
     >
-      <View style={styles.cards}>
-        {OPTIONS.map((opt) => {
-          const active = selected === opt.id;
+      <View style={s.list}>
+        {OPTIONS.map((opt, i) => {
+          const on = selected === opt.id;
           return (
-            <Pressable
-              key={opt.id}
-              style={[
-                styles.card,
-                { backgroundColor: colors.bgCard, borderColor: colors.border },
-                active && { borderColor: colors.accent, backgroundColor: colors.accentBg },
-              ]}
-              onPress={() => setSelected(opt.id)}
-              accessibilityRole="button"
-              accessibilityLabel={opt.title}
-              accessibilityState={{ selected: active }}
-            >
-              <View
-                style={[
-                  styles.iconWrap,
-                  { backgroundColor: colors.bgElevated },
-                  active && { backgroundColor: colors.accent },
-                ]}
+            <Animated.View key={opt.id} entering={FadeInDown.duration(400).delay(80 + i * 50)}>
+              <AnimatedPress
+                style={[s.row, on ? s.rowOn : undefined]}
+                onPress={() => setSelected(opt.id)}
+                haptic
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
               >
-                <Ionicons
-                  name={opt.icon}
-                  size={24}
-                  color={active ? colors.accentOnAccent : colors.textSecondary}
-                />
-              </View>
-              <View style={styles.cardText}>
-                <Text
-                  style={[
-                    styles.cardTitle,
-                    { color: colors.textPrimary },
-                    active && { color: colors.accent },
-                  ]}
-                >
-                  {opt.title}
-                </Text>
-                <Text style={[styles.cardDesc, { color: colors.textSecondary }]}>
-                  {opt.desc}
-                </Text>
-              </View>
-              {active ? (
-                <Ionicons name="checkmark-circle" size={22} color={colors.accent} />
-              ) : null}
-            </Pressable>
+                <View>
+                  <Text style={[s.label, on ? s.labelOn : undefined]}>{opt.label}</Text>
+                  <Text style={[s.desc, on ? s.descOn : undefined]}>{opt.desc}</Text>
+                </View>
+              </AnimatedPress>
+            </Animated.View>
           );
         })}
       </View>
@@ -91,25 +54,17 @@ export default function ActivityScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  cards: { flex: 1, marginTop: -8 },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 10,
-    borderWidth: 2,
-    gap: 12,
+const s = StyleSheet.create({
+  list: { gap: 10 },
+  row: {
+    backgroundColor: EDITORIAL.creamCard,
+    borderRadius: 16,
+    paddingVertical: 20,
+    paddingHorizontal: 24,
   },
-  iconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardText: { flex: 1 },
-  cardTitle: { fontSize: 16, fontWeight: '600' },
-  cardDesc: { fontSize: 13, marginTop: 2 },
+  rowOn: { backgroundColor: EDITORIAL.green },
+  label: { fontFamily: FONTS.newsreaderBold, fontSize: 20, color: EDITORIAL.text, letterSpacing: -0.3 },
+  labelOn: { color: EDITORIAL.cream },
+  desc: { fontSize: 14, color: EDITORIAL.textSoft, marginTop: 2 },
+  descOn: { color: 'rgba(253,251,247,0.7)' },
 });
