@@ -48,6 +48,7 @@ import { UberEatsSource } from "../apps/api/services/menuSources/uberEatsSource.
 import { UESitemapIndex } from "../apps/api/services/menuSources/ueSitemapIndex.js";
 import { FirecrawlScraper } from "../apps/api/services/scrapers/firecrawlScraper.js";
 import { WebScraperSource } from "../apps/api/services/menuSources/webScraperSource.js";
+import { YelpSource } from "../apps/api/services/menuSources/yelpSource.js";
 import { readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { estimateMacros } from "../apps/api/services/macroEstimationService.js";
@@ -367,13 +368,13 @@ async function main(): Promise<void> {
     log(`UE URL cache: starting fresh`);
   }
 
-  // Two-path resolver: chains get official macros (FatSecret),
-  // indies get structured menus via UberEats JSON-LD (cached URL → sitemap → Firecrawl)
+  // Multi-path resolver: chains → UberEats → Yelp
   const ueSource = new UberEatsSource(undefined, sitemapIndex, scraper);
   ueSource.urlCache = urlCache;
   const resolver = new MenuSourceResolver([
-    new FatSecretSource(),  // Path 1: ~1,060 chains, official macros, $0
-    ueSource,               // Path 2: indie menus, URL cache → sitemap → Firecrawl
+    new FatSecretSource(),              // Path 1: ~1,060 chains, official macros, $0
+    ueSource,                           // Path 2: UberEats JSON-LD (cached URL → sitemap → Firecrawl)
+    new YelpSource(anthropic),          // Path 3: Yelp menu pages (Firecrawl scrape → Haiku extraction)
   ]);
 
   const stats: PipelineStats = {

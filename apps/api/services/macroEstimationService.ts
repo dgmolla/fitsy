@@ -77,6 +77,9 @@ function getClient(): Anthropic {
  *   SYSTEM_PROMPT. Pass a custom prompt to test different estimation strategies
  *   in evals without touching the production default.
  */
+// Maximum items per Haiku call — prevents output truncation on large menus
+const CHUNK_SIZE = 50;
+
 export async function estimateMacros(
   items: StructuredMenuItem[],
   client?: Anthropic,
@@ -84,6 +87,17 @@ export async function estimateMacros(
 ): Promise<(MacroData | null)[]> {
   if (items.length === 0) {
     return [];
+  }
+
+  // Chunk large menus to avoid output truncation
+  if (items.length > CHUNK_SIZE) {
+    const results: (MacroData | null)[] = [];
+    for (let i = 0; i < items.length; i += CHUNK_SIZE) {
+      const chunk = items.slice(i, i + CHUNK_SIZE);
+      const chunkResults = await estimateMacros(chunk, client, systemPrompt);
+      results.push(...chunkResults);
+    }
+    return results;
   }
 
   const anthropic = client ?? getClient();
