@@ -8,6 +8,34 @@ This spec documents every known gap and proposes fixes, prioritized by impact.
 
 ---
 
+## Design Principles
+
+### 1. Phased Pipeline
+The pipeline is a sequence of independent stages, each with its own inputs, outputs, and failure modes. Each stage can be rerun independently without re-executing upstream stages. Stages are: **discover → resolve URLs → fetch menus → estimate macros → validate → persist**. Intermediate results are checkpointed so failures don't cascade.
+
+### 2. Failure Handling & Resilience
+Every external call (Google Places, UberEats, Brave Search, Haiku, Firecrawl) can fail transiently. The pipeline retries with backoff, falls through to alternative sources, and never destroys good data because a re-fetch failed. Transactional persistence ensures partial writes don't corrupt the DB. A failed restaurant should degrade gracefully (fewer items, lower quality source) rather than crash the run.
+
+### 3. Scalability & Performance
+The pipeline must scale from 20 to 25,000 restaurants without architectural changes. API calls are parallelized with per-service concurrency limits. Rate limits are respected via semaphores and delays, not by running slowly. The target is: **25K restaurants in under 4 hours on a single machine.** URL discovery is cached so subsequent runs are 10x faster.
+
+### 4. Estimation Accuracy
+Macro estimates are the core product value. Haiku systematically underestimates restaurant portions, especially cooking fats (~23% under) and carbs (~7% under). Post-hoc calibration corrects for this. Accuracy is measured via eval-v2 (automated prompt lab with 8+ indie restaurant test cases, 50+ runs per config). Target: **<10% average calorie error**.
+
+### 5. Data Quality
+Every item in the DB must be real food with plausible macros. Non-food items (merchandise, utensils, condiments) are filtered before persistence. HTML entities are decoded. Macro math is validated (cal ≈ P×4 + C×4 + F×9 ± 20%). Items from mismatched restaurants are rejected via name validation. Source quality is tracked per item.
+
+### 6. Cost Efficiency
+External API costs are minimized through caching (URL cache, sitemap index), incremental updates (skip recently-scraped restaurants), and source prioritization (free sources first: FatSecret → UE JSON-LD → cached URLs, then paid: Brave Search → Firecrawl). Target: **<$10 per incremental refresh of 25K restaurants** after initial population.
+
+### 7. Observability
+Every pipeline run produces structured logs: per-restaurant source, item count, previous item count, errors, duration, cost. Regressions are detected by comparing current vs previous item counts. A summary report shows source breakdown, error rates, and total cost. Alerts fire when a run degrades >20% of restaurants.
+
+### 8. Evals
+Estimation accuracy is continuously measured, not assumed. The eval-v2 system tests prompt variants and calibration strategies against hand-curated indie restaurant cases with expected macros. New prompt ideas, model changes, or calibration adjustments are eval'd before shipping. Target: every accuracy change has a measured delta with 50+ run statistical significance.
+
+---
+
 ## Current Architecture
 
 ```mermaid
@@ -122,6 +150,35 @@ function validateItems(items: MenuItem[], macros: MacroData[]): { valid: Validat
 ### 2.6 UE Rate Limiting
 **Issue:** UberEats rate-limits after ~20 rapid requests. No backoff logic.
 **Fix:** Add 500ms delay between UE fetches. On 403/empty response, backoff to 2s and retry once.
+
+### 2.7 URL Discovery — Replace Firecrawl with Brave Search
+**Issue:** Firecrawl search is the primary URL discovery method for finding UberEats store pages. It's slow (10 RPM = 29 hours for 17,500 restaurants), expensive ($105), and inconsistent (returns different results across runs).
+
+**Tested alternatives:**
+
+| Service | QPS | Cost/1,000 | Free Tier | UE URL Hit Rate | Status |
+|---------|-----|-----------|-----------|----------------|--------|
+| Firecrawl (current) | 0.17 | $6 | Credits | ~70% | Slow, inconsistent |
+| Brave Search | 20 | $5 | 2,000/month | ~90% | **Validated** — 5/5 correct in testing |
+| Exa | 10 | $7 | 1,000/month | ~85% est | Not tested |
+| Serper | 50 | $5 | 2,500 credits | ~90% est | Not tested |
+| Google CSE | 100 | $5 | 100/day | N/A | **Deprecated** — closed to new customers 2025 |
+
+**Decision:** Replace Firecrawl search with **Brave Search API** for URL discovery.
+- 120x faster (20 QPS vs 0.17 QPS)
+- Slightly cheaper ($5 vs $6 per 1,000)
+- More reliable (consistent Google-quality results)
+- Validated: tested against 5 restaurants, found correct UE URL for all 4 that exist on UE, correctly returned no UE result for the 1 that doesn't
+
+**Implementation:**
+1. New `BraveSearchSource` in `apps/api/services/` — query `"{name} uber eats {city}"`, filter results for `ubereats.com/store/` URLs
+2. Replace Firecrawl `discoverUberEatsUrl()` with Brave Search in `UberEatsSource.lookup()`
+3. Fallback chain: URL cache → Brave Search → UE sitemap (exact match only)
+4. Cache discovered URLs as before
+
+**At 17,500 restaurants:**
+- Brave Search: 17,500 queries at 20 QPS = **15 minutes**, $78
+- vs Firecrawl: 29 hours, $105
 
 ---
 
@@ -238,11 +295,11 @@ Key insight: Haiku knows ingredient macros well (per 100g). The gap is **portion
 
 ```
 Stage 1: discover    → Restaurant records (Google Places)
-Stage 2: resolve-url → URL cache (sitemap, Firecrawl, Yelp)
-Stage 3: fetch-menu  → Raw menu data (JSON-LD, markdown)
-Stage 4: estimate    → Macro estimates (Haiku)
-Stage 5: validate    → Clean, validated items
-Stage 6: persist     → DB writes
+Stage 2: resolve-url → URL cache (Brave Search → UE sitemap → Yelp alias)
+Stage 3: fetch-menu  → Raw menu data (UE JSON-LD, Yelp markdown, Firecrawl)
+Stage 4: estimate    → Macro estimates (Haiku + calibration)
+Stage 5: validate    → Filter non-food, decode entities, check macro math
+Stage 6: persist     → DB writes (transactional, with regression guard)
 ```
 
 Each stage reads from previous stage's output. Can rerun any stage independently. Supports selective re-processing: "re-estimate macros for restaurant X" = rerun stages 4-6 for X only.
@@ -252,22 +309,54 @@ Each stage reads from previous stage's output. Can rerun any stage independently
 **Fix:**
 - Increase restaurant concurrency to 10-15
 - Parallelize Haiku chunks within a restaurant (3-4 concurrent)
-- Add rate limiting per API (UE: 500ms between fetches, Haiku: 20 concurrent, Firecrawl: 5 concurrent)
+- Per-API semaphores: UE fetch (5 concurrent, 500ms delay), Haiku (10-20 concurrent), Brave Search (15 concurrent), Firecrawl (3 concurrent)
 
 ### 4.4 Multi-Region Discovery
 **Current:** Hardcoded to Silver Lake/Hollywood (34.0928, -118.3086, 3km).
-**Fix:** Grid-based discovery: divide target area into overlapping circles, deduplicate by Google Places ID. Start with LA metro, expand to other cities.
+**Fix:** Hex grid tiled over restaurant-dense neighborhoods. Each hex cell = one Google Places Nearby Search call (2km radius). Dedup by `externalPlaceId` across overlapping cells.
 
-### 4.5 Cost Projections
+```
+LA metro restaurant-dense area: ~1,200 km²
+Hex cell coverage: ~12.6 km² (2km radius)
+Cells needed: ~100 (scoped to neighborhoods, skip industrial/residential)
+Google Places calls: ~100-300 (with pagination)
+Cost: ~$1.50
+```
 
-| Scale | Google Places | Firecrawl | Haiku | Total |
-|-------|-------------|-----------|-------|-------|
-| 20 restaurants | $0.15 | ~$0.20 | ~$0.50 | ~$1 |
-| 200 restaurants | $1.50 | ~$2.00 | ~$5 | ~$10 |
-| 2,000 restaurants | $15 | ~$20 | ~$50 | ~$85 |
-| 2,000 incremental | $0 | ~$2 | ~$5 | ~$7 |
+Neighborhoods defined as bounding boxes — Silver Lake, Hollywood, DTLA, Santa Monica, Koreatown, West Hollywood, Los Feliz, Echo Park, Venice, Culver City, etc. Easy to add new neighborhoods or cities.
 
-Incremental updates reduce ongoing cost by ~90%.
+### 4.5 Cost & Time Projections (25K restaurants)
+
+**First run (cold start):**
+
+| Step | Method | Volume | Cost | Time |
+|------|--------|--------|------|------|
+| Discover | Google Places hex grid | ~300 calls | $1.50 | 30 sec |
+| URL discovery | Brave Search | 17,500 queries | $78 | 15 min |
+| Menu fetch (UE) | Raw HTTP + JSON-LD | ~12,000 fetches | $0 | 40 min |
+| Menu fetch (Yelp) | Raw HTTP or Firecrawl | ~4,000 fetches | $0-12 | 13-40 min |
+| Menu fetch (Firecrawl) | Firecrawl scrape | ~1,500 fetches | $4.50 | 25 min |
+| Macro estimation | Haiku (chunked) | ~10,500 calls | $42-84 | 3 hours @ 60 RPM |
+| **Total first run** | | | **$126-180** | **~4.5 hours** |
+
+With Haiku tier 4 (4,000 RPM): **~1.5 hours total**.
+
+**Subsequent runs (URL cache populated, incremental):**
+
+| Step | Method | Volume | Cost | Time |
+|------|--------|--------|------|------|
+| Discover | Skip (< 7 days) | 0 | $0 | 0 |
+| URL discovery | **All cached** | 0 | **$0** | 0 |
+| Menu fetch | Only changed restaurants (~10%) | ~2,500 | $0-2 | 15 min |
+| Macro estimation | Only changed (~10%) | ~1,050 calls | $4-8 | 18 min |
+| **Total incremental** | | | **$4-10** | **~30 min** |
+
+**Cost comparison vs current:**
+
+| Scenario | Current (Firecrawl) | V2 (Brave + incremental) | Savings |
+|----------|--------------------|-----------------------|---------|
+| First run, 25K | $165-205, 40 hours | $126-180, 4.5 hours | 20% cost, 9x speed |
+| Weekly refresh | $58-100 | $4-10 | **90% cost reduction** |
 
 ---
 
@@ -278,6 +367,7 @@ Incremental updates reduce ongoing cost by ~90%.
 | P0 | HTML entity decode (rerun preload) | 67 items display wrong | Done, needs rerun |
 | P0 | Non-food item filter | Users see T-shirts in search | 1 hour |
 | P0 | Transaction safety on persist | Data loss on insert failure | 30 min |
+| P1 | Brave Search for URL discovery | 9x faster, more reliable | 2 hours |
 | P1 | Regression detection (item count check) | Prevents data wipes | 1 hour |
 | P1 | FatSecret min threshold (fall through if < 10) | Better Pollo Campero/Jollibee menus | 30 min |
 | P1 | Retry with backoff (UE, Haiku, Firecrawl) | Fewer failed restaurants per run | 2 hours |
@@ -285,6 +375,7 @@ Incremental updates reduce ongoing cost by ~90%.
 | P2 | Category-specific macro calibration | ~2-3% accuracy improvement | 1-2 days |
 | P2 | Incremental updates (skip recent) | 90% cost reduction at scale | 1 day |
 | P2 | Macro math validation gate | Catch FatSecret data errors | 1 hour |
-| P3 | Staged pipeline architecture | Selective reprocessing | 3-5 days |
+| P2 | Multi-region hex grid discovery | Scale to all of LA (25K restaurants) | 2-3 days |
+| P3 | Staged pipeline architecture | Selective reprocessing, checkpoints | 3-5 days |
 | P3 | Vision-based estimation eval | Unknown accuracy impact | 1-2 weeks |
-| P3 | Multi-region discovery | Scale beyond Hollywood | 2-3 days |
+| P3 | Raw Yelp fetch (replace Firecrawl) | Eliminate Yelp scraping cost | 1 day |
