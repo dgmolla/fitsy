@@ -1,9 +1,8 @@
 import { ImageSourcePropType } from 'react-native';
 
 /**
- * 72 healthy dish images bundled locally for instant display.
- * Sourced from Unsplash (Unsplash License — free commercial use).
- * w=800 q=55 (~100KB avg, ~7MB total). Crisp on 3x retina at 200ms flash.
+ * 24 curated dish images bundled locally.
+ * Sourced from Unsplash + Pexels (free commercial use).
  */
 export const DISHES: ImageSourcePropType[] = [
   require('@/assets/dishes/01.jpg'),
@@ -30,52 +29,4 @@ export const DISHES: ImageSourcePropType[] = [
   require('@/assets/dishes/22.jpg'),
   require('@/assets/dishes/23.jpg'),
   require('@/assets/dishes/24.jpg'),
-  require('@/assets/dishes/25.jpg'),
-  require('@/assets/dishes/26.jpg'),
-  require('@/assets/dishes/27.jpg'),
-  require('@/assets/dishes/28.jpg'),
-  require('@/assets/dishes/29.jpg'),
-  require('@/assets/dishes/30.jpg'),
-  require('@/assets/dishes/31.jpg'),
-  require('@/assets/dishes/32.jpg'),
-  require('@/assets/dishes/33.jpg'),
-  require('@/assets/dishes/34.jpg'),
-  require('@/assets/dishes/35.jpg'),
-  require('@/assets/dishes/36.jpg'),
-  require('@/assets/dishes/37.jpg'),
-  require('@/assets/dishes/38.jpg'),
-  require('@/assets/dishes/39.jpg'),
-  require('@/assets/dishes/40.jpg'),
-  require('@/assets/dishes/41.jpg'),
-  require('@/assets/dishes/42.jpg'),
-  require('@/assets/dishes/43.jpg'),
-  require('@/assets/dishes/44.jpg'),
-  require('@/assets/dishes/45.jpg'),
-  require('@/assets/dishes/46.jpg'),
-  require('@/assets/dishes/47.jpg'),
-  require('@/assets/dishes/48.jpg'),
-  require('@/assets/dishes/49.jpg'),
-  require('@/assets/dishes/50.jpg'),
-  require('@/assets/dishes/51.jpg'),
-  require('@/assets/dishes/52.jpg'),
-  require('@/assets/dishes/53.jpg'),
-  require('@/assets/dishes/54.jpg'),
-  require('@/assets/dishes/55.jpg'),
-  require('@/assets/dishes/56.jpg'),
-  require('@/assets/dishes/57.jpg'),
-  require('@/assets/dishes/58.jpg'),
-  require('@/assets/dishes/59.jpg'),
-  require('@/assets/dishes/60.jpg'),
-  require('@/assets/dishes/61.jpg'),
-  require('@/assets/dishes/62.jpg'),
-  require('@/assets/dishes/63.jpg'),
-  require('@/assets/dishes/64.jpg'),
-  require('@/assets/dishes/65.jpg'),
-  require('@/assets/dishes/66.jpg'),
-  require('@/assets/dishes/67.jpg'),
-  require('@/assets/dishes/68.jpg'),
-  require('@/assets/dishes/69.jpg'),
-  require('@/assets/dishes/70.jpg'),
-  require('@/assets/dishes/71.jpg'),
-  require('@/assets/dishes/72.jpg'),
 ];

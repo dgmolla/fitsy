@@ -5,7 +5,7 @@ const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
 
 async function handleUnauthorized(): Promise<never> {
   await clearToken();
-  router.replace('/welcome');
+  router.replace('/welcome/problem');
   throw new Error('Session expired');
 }
 

@@ -48,7 +48,7 @@ export function WelcomeScreen({
 
   const handleBack = onBack ?? (() => {
     if (navigation.canGoBack()) router.back();
-    else router.navigate('/welcome');
+    else router.navigate('/welcome/problem');
   });
 
   return (

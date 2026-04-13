@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Dimensions, Image, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated as RNAnimated, Dimensions, Image, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { EDITORIAL, FONTS } from '@/lib/brand';
@@ -7,115 +7,156 @@ import { AnimatedPress } from '@/components/AnimatedPress';
 import { DISHES } from '@/lib/dishImages';
 
 const { width: W, height: H } = Dimensions.get('window');
+const GAP = 8;
+const COL_W = (W - GAP * 3) / 2;
+const RADIUS = 14;
 
 type Phase = 'line1' | 'line2' | 'cta';
 
+// Build two columns of images with varying heights
+function buildColumns() {
+  const heights = [180, 220, 160, 240, 200, 180, 220, 200, 160];
+  const left: { source: any; h: number }[] = [];
+  const right: { source: any; h: number }[] = [];
+
+  DISHES.forEach((source, i) => {
+    const h = heights[i % heights.length]!;
+    if (i % 2 === 0) left.push({ source, h });
+    else right.push({ source, h });
+  });
+
+  // Duplicate for seamless loop
+  return {
+    left: [...left, ...left, ...left],
+    right: [...right, ...right, ...right],
+  };
+}
+
+const COLUMNS = buildColumns();
+
+// Total height of a column for scroll calculation
+function colHeight(items: { h: number }[]) {
+  return items.reduce((sum, item) => sum + item.h + GAP, 0);
+}
+
+function ScrollingColumn({ items, speed, offset }: { items: { source: any; h: number }[]; speed: number; offset: number }) {
+  const translateY = useRef(new RNAnimated.Value(0)).current;
+  const totalH = colHeight(items) / 3; // one set height (we tripled)
+
+  useEffect(() => {
+    translateY.setValue(-offset);
+    RNAnimated.loop(
+      RNAnimated.timing(translateY, {
+        toValue: -offset - totalH,
+        duration: totalH * speed,
+        useNativeDriver: true,
+        easing: require('react-native').Easing.linear,
+      }),
+    ).start();
+  }, [translateY, totalH, speed, offset]);
+
+  return (
+    <RNAnimated.View style={[s.column, { transform: [{ translateY }] }]}>
+      {items.map((item, i) => (
+        <View key={i} style={[s.tile, { width: COL_W, height: item.h }]}>
+          <Image source={item.source} style={s.tileImg} resizeMode="cover" />
+        </View>
+      ))}
+    </RNAnimated.View>
+  );
+}
+
 export default function ProblemScreen() {
   const [phase, setPhase] = useState<Phase>('line1');
-  const [imgIdx, setImgIdx] = useState(0);
-
-  // Accelerating flash — starts at 800ms, builds to 200ms over ~8s
-  useEffect(() => {
-    let delay = 600;
-    let timer: ReturnType<typeof setTimeout>;
-
-    function tick() {
-      setImgIdx((prev) => (prev + 1) % DISHES.length);
-      if (delay > 100) delay = Math.max(100, delay - 20);
-      timer = setTimeout(tick, delay);
-    }
-
-    timer = setTimeout(tick, delay);
-    return () => clearTimeout(timer);
-  }, []);
 
   useEffect(() => {
-    const t1 = setTimeout(() => setPhase('line2'), 5000);
-    const t2 = setTimeout(() => setPhase('cta'), 10000);
+    const t1 = setTimeout(() => setPhase('line2'), 7000);
+    const t2 = setTimeout(() => setPhase('cta'), 12000);
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, []);
 
   return (
     <View style={s.container}>
-      <Image
-        source={DISHES[imgIdx]}
-        style={[StyleSheet.absoluteFill, { width: W, height: H }]}
-        resizeMode="cover"
-      />
+      {/* Scrolling mosaic grid */}
+      <View style={s.grid}>
+        <ScrollingColumn items={COLUMNS.left} speed={80} offset={0} />
+        <ScrollingColumn items={COLUMNS.right} speed={65} offset={80} />
+      </View>
+
+      {/* Dark overlay */}
       <View style={s.overlay} />
 
       <SafeAreaView style={s.content}>
-        <View style={{ flex: 1 }} />
+        <View style={s.center}>
+          <View style={s.textArea}>
+            {phase === 'line1' && (
+              <Animated.Text entering={FadeIn.duration(400)} exiting={FadeOut.duration(300)} style={s.text}>
+                so you have{'\n'}fitness goals.
+              </Animated.Text>
+            )}
+            {(phase === 'line2' || phase === 'cta') && (
+              <Animated.Text entering={FadeIn.duration(400)} style={s.text}>
+                but are you really going{'\n'}to cook today?
+              </Animated.Text>
+            )}
+          </View>
 
-        <View style={s.textArea}>
-          {phase === 'line1' && (
-            <Animated.Text entering={FadeIn.duration(400)} exiting={FadeOut.duration(300)} style={s.text}>
-              so you have{'\n'}fitness goals...
-            </Animated.Text>
-          )}
-          {phase === 'line2' && (
-            <Animated.Text entering={FadeIn.duration(400)} exiting={FadeOut.duration(300)} style={s.text}>
-              but there's so much{'\n'}good food out there.
-            </Animated.Text>
-          )}
-          {phase === 'cta' && (
-            <Animated.Text entering={FadeIn.duration(400)} style={s.text}>
-              but there's so much{'\n'}good food out there.
-            </Animated.Text>
-          )}
+          <View style={s.ctaSlot}>
+            {phase === 'cta' && (
+              <Animated.View entering={FadeIn.duration(500).delay(200)} style={s.footerInner}>
+                <AnimatedPress
+                  style={s.cta}
+                  onPress={() => router.push('/welcome/promise')}
+                  haptic
+                  accessibilityRole="button"
+                >
+                  <Text style={s.ctaTxt}>find what fits</Text>
+                </AnimatedPress>
+                <Pressable onPress={() => router.push('/auth/login')} hitSlop={12} accessibilityRole="button">
+                  <Text style={s.login}>
+                    Have an account? <Text style={s.loginLink}>Log in</Text>
+                  </Text>
+                </Pressable>
+              </Animated.View>
+            )}
+          </View>
         </View>
-
-        <View style={s.footer}>
-          {phase === 'cta' && (
-            <Animated.View entering={FadeIn.duration(500).delay(200)} style={s.footerInner}>
-              <AnimatedPress
-                style={s.cta}
-                onPress={() => router.push('/welcome/promise')}
-                haptic
-                accessibilityRole="button"
-              >
-                <Text style={s.ctaTxt}>find what fits</Text>
-              </AnimatedPress>
-            </Animated.View>
-          )}
-        </View>
-
-        <Pressable onPress={() => router.push('/auth/login')} hitSlop={12} style={s.loginWrap} accessibilityRole="button">
-          <Text style={s.login}>
-            Have an account? <Text style={s.loginLink}>Log in</Text>
-          </Text>
-        </Pressable>
       </SafeAreaView>
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1 },
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)' },
+  container: { flex: 1, backgroundColor: '#0A0E0C', overflow: 'hidden' },
+
+  grid: {
+    ...StyleSheet.absoluteFillObject,
+    flexDirection: 'row',
+    paddingHorizontal: GAP,
+    gap: GAP,
+  },
+  column: {
+    width: COL_W,
+    gap: GAP,
+  },
+  tile: {
+    borderRadius: RADIUS,
+    overflow: 'hidden',
+  },
+  tileImg: {
+    width: '100%',
+    height: '100%',
+  },
+
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.55)' },
   content: { flex: 1, paddingHorizontal: 36, paddingBottom: 20 },
-
-  textArea: { height: 100, justifyContent: 'flex-end', alignItems: 'center', marginBottom: 32 },
-  text: {
-    fontFamily: FONTS.newsreaderBold,
-    fontSize: 28,
-    color: EDITORIAL.cream,
-    letterSpacing: -1,
-    lineHeight: 40,
-    textAlign: 'center',
-  },
-
-  footer: { height: 56, marginBottom: 16 },
-  footerInner: { alignItems: 'center' },
-  cta: {
-    backgroundColor: 'rgba(253,251,247,0.15)',
-    borderRadius: 32,
-    paddingVertical: 14,
-    paddingHorizontal: 32,
-  },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 28 },
+  textArea: { alignItems: 'center' },
+  text: { fontFamily: FONTS.newsreaderBold, fontSize: 28, color: EDITORIAL.cream, letterSpacing: -1, lineHeight: 40, textAlign: 'center' },
+  ctaSlot: { height: 90 },
+  footerInner: { alignItems: 'center', gap: 20 },
+  cta: { backgroundColor: 'rgba(253,251,247,0.15)', borderRadius: 32, paddingVertical: 14, paddingHorizontal: 32 },
   ctaTxt: { fontSize: 15, fontWeight: '500', color: EDITORIAL.cream },
-
-  loginWrap: { alignItems: 'center' },
   login: { fontSize: 13, color: 'rgba(253,251,247,0.4)' },
   loginLink: { color: 'rgba(253,251,247,0.65)', fontWeight: '600' },
 });

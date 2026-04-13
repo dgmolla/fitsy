@@ -90,7 +90,7 @@ export default function ProfileScreen() {
 
   const handleLogout = useCallback(async () => {
     await clearToken();
-    router.replace('/welcome');
+    router.replace('/welcome/problem');
   }, []);
 
   const initials = email !== '—' ? email.charAt(0).toUpperCase() : '?';
