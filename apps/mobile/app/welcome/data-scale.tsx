@@ -44,7 +44,7 @@ export default function DataScaleScreen() {
             <Ionicons name="chevron-back" size={22} color={EDITORIAL.textMid} />
           </Pressable>
           <View style={s.progressTrack}>
-            <View style={[s.progressFill, { width: `${Math.round((4 / 15) * 100)}%` }]} />
+            <View style={[s.progressFill, { width: `${Math.round((4 / 14) * 100)}%` }]} />
           </View>
         </View>
 
@@ -79,7 +79,7 @@ export default function DataScaleScreen() {
         <Animated.View entering={FadeIn.duration(400).delay(1000)}>
           <AnimatedPress
             style={s.cta}
-            onPress={() => router.push('/welcome/macros-intro')}
+            onPress={() => router.push('/welcome/macros-fitsy')}
             haptic
             accessibilityRole="button"
           >

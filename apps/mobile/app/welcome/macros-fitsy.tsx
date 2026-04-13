@@ -6,17 +6,17 @@ import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 
 const STEPS = [
-  { num: '1', title: 'Set your targets', desc: "We'll ask some questions and suggest targets, but you can tweak them too", color: '#3A7050' },
-  { num: '2', title: 'Search nearby', desc: 'Search restaurants that match your numbers', color: '#8B6914' },
-  { num: '3', title: 'Skip the cooking', desc: 'Eat out without the guilt', color: '#7A4B8A' },
+  { num: '1', title: 'You set your targets', desc: 'Tell us your goals — we suggest macros, or bring your own', color: '#3A7050' },
+  { num: '2', title: 'We scan nearby menus', desc: 'Every dish is matched against your protein, carb, and fat targets', color: '#8B6914' },
+  { num: '3', title: 'You pick and eat', desc: 'No calorie math, no guessing — just meals that fit', color: '#7A4B8A' },
 ];
 
 export default function MacrosFitsyScreen() {
   return (
     <WelcomeScreen
-      progress={6 / 15}
-      title="How do macros help me eat?"
-      subtitle="Instead of guessing, you set targets — and we find meals that fit."
+      progress={5 / 14}
+      title="How do we pick the restaurants?"
+      subtitle="Three steps — and you only have to do one of them."
       onContinue={() => router.push('/welcome/goal')}
       canContinue={true}
       continueLabel="Let's set my macros"
