@@ -21,8 +21,8 @@ export default function WeightScreen() {
 
   return (
     <WelcomeScreen
-      step={3}
-      totalSteps={7}
+      step={5}
+      totalSteps={8}
       title="What do you weigh?"
       onContinue={async () => {
         await saveOnboardingField('weightKg', toKg());

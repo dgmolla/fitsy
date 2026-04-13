@@ -11,8 +11,8 @@ export default function AgeScreen() {
 
   return (
     <WelcomeScreen
-      step={4}
-      totalSteps={7}
+      step={6}
+      totalSteps={8}
       title="How old are you?"
       onContinue={async () => {
         const age = parseInt(value, 10) || 25;

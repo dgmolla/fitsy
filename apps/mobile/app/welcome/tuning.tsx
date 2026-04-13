@@ -51,8 +51,6 @@ export default function PlanReadyScreen() {
 
   return (
     <WelcomeScreen
-      step={7}
-      totalSteps={7}
       title="Your plan."
       onContinue={() => router.push('/welcome/preview')}
       canContinue={macros !== null}

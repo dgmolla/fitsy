@@ -1,5 +1,6 @@
 import React from 'react';
-import { SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,38 +11,64 @@ export default function PromiseScreen() {
   return (
     <SafeAreaView style={s.safe}>
       <View style={s.content}>
-        <View style={s.spacer} />
+        <Pressable onPress={() => router.back()} hitSlop={16} style={s.back} accessibilityRole="button">
+          <Ionicons name="chevron-back" size={22} color={EDITORIAL.textMid} />
+        </Pressable>
 
         <Animated.Text entering={FadeInDown.duration(600)} style={s.headline}>
           We find restaurants{'\n'}with meals that hit{'\n'}your targets.
         </Animated.Text>
 
-        {/* Mock search result */}
-        <Animated.View entering={FadeInDown.duration(500).delay(200)} style={s.card}>
-          <Text style={s.cardIdx}>01</Text>
-          <Text style={s.cardName}>Pine and Crane</Text>
-          <Text style={s.cardDish}>Example meal</Text>
-          <View style={s.cardMacros}>
-            <Text style={s.cardMacro}>P 32g</Text>
-            <Text style={s.cardDot}>·</Text>
-            <Text style={s.cardMacro}>C 60g</Text>
-            <Text style={s.cardDot}>·</Text>
-            <Text style={s.cardMacro}>F 20g</Text>
-            <Text style={s.cardDot}>·</Text>
-            <Text style={s.cardCal}>580 kcal</Text>
-          </View>
-        </Animated.View>
+        <Animated.Text entering={FadeInDown.duration(500).delay(100)} style={s.sub}>
+          Filter nearby restaurant meals by macros and calories.
+        </Animated.Text>
 
-        <View style={s.spacer} />
+        <View style={s.cards}>
+          <Animated.View entering={FadeInDown.duration(500).delay(200)} style={s.card}>
+            <Image
+              source={{ uri: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=400&q=70' }}
+              style={s.cardImg}
+              resizeMode="cover"
+            />
+            <LinearGradient colors={['transparent', EDITORIAL.heroGrad]} style={s.grad} />
+            <View style={s.cardInfo}>
+              <Text style={s.cardIdx}>01</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={s.cardName}>Example Restaurant 1</Text>
+                <Text style={s.cardMeta}>Example meal · P 32g · C 60g · F 20g</Text>
+              </View>
+              <Text style={s.cardDist}>0.4 mi</Text>
+            </View>
+          </Animated.View>
+
+          <Animated.View entering={FadeInDown.duration(500).delay(320)} style={s.card}>
+            <Image
+              source={{ uri: 'https://images.unsplash.com/photo-1476224203421-9ac39bcb3327?w=400&q=70' }}
+              style={s.cardImg}
+              resizeMode="cover"
+            />
+            <LinearGradient colors={['transparent', EDITORIAL.heroGrad]} style={s.grad} />
+            <View style={s.cardInfo}>
+              <Text style={s.cardIdx}>02</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={s.cardName}>Example Restaurant 2</Text>
+                <Text style={s.cardMeta}>Example meal · P 38g · C 45g · F 18g</Text>
+              </View>
+              <Text style={s.cardDist}>0.8 mi</Text>
+            </View>
+          </Animated.View>
+        </View>
+
+        <View style={{ flex: 1 }} />
 
         <Animated.View entering={FadeInDown.duration(500).delay(400)}>
           <AnimatedPress
             style={s.cta}
-            onPress={() => router.push('/welcome/goal')}
+            onPress={() => router.push('/welcome/macros-intro')}
             haptic
             accessibilityRole="button"
           >
-            <Text style={s.ctaTxt}>Let's personalize</Text>
+            <Text style={s.ctaTxt}>How does this work?</Text>
             <Ionicons name="arrow-forward" size={16} color={EDITORIAL.cream} />
           </AnimatedPress>
         </Animated.View>
@@ -52,41 +79,37 @@ export default function PromiseScreen() {
 
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: EDITORIAL.cream },
-  content: { flex: 1, paddingHorizontal: 36, paddingBottom: 48 },
-  spacer: { flex: 1 },
+  content: { flex: 1, paddingHorizontal: 32, paddingBottom: 32 },
+  back: { width: 44, height: 48, justifyContent: 'center' },
 
   headline: {
     fontFamily: FONTS.newsreaderBold,
     fontSize: 28,
     color: EDITORIAL.text,
     letterSpacing: -1,
-    lineHeight: 40,
-    marginBottom: 36,
+    lineHeight: 36,
+    marginBottom: 12,
+  },
+  sub: {
+    fontSize: 15,
+    color: EDITORIAL.textSoft,
+    lineHeight: 22,
+    marginBottom: 28,
   },
 
-  card: {
-    backgroundColor: EDITORIAL.green,
-    borderRadius: 20,
-    paddingVertical: 24,
-    paddingHorizontal: 24,
-    gap: 4,
-  },
-  cardIdx: { fontSize: 11, fontWeight: '800', color: 'rgba(253,251,247,0.35)', letterSpacing: 1 },
-  cardName: { fontFamily: FONTS.newsreaderBold, fontSize: 22, color: EDITORIAL.cream, letterSpacing: -0.3 },
-  cardDish: { fontFamily: FONTS.newsreaderItalic, fontSize: 15, color: 'rgba(253,251,247,0.7)' },
-  cardMacros: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
-  cardMacro: { fontSize: 12, fontWeight: '600', color: 'rgba(253,251,247,0.5)' },
-  cardDot: { fontSize: 12, color: 'rgba(253,251,247,0.25)' },
-  cardCal: { fontSize: 12, fontWeight: '700', color: 'rgba(253,251,247,0.8)' },
+  cards: { gap: 12 },
+  card: { height: 100, borderRadius: 16, overflow: 'hidden', backgroundColor: EDITORIAL.creamDeep },
+  cardImg: { width: '100%', height: '100%' },
+  grad: { position: 'absolute', bottom: 0, left: 0, right: 0, height: '100%' },
+  cardInfo: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', padding: 14, gap: 10 },
+  cardIdx: { fontSize: 11, fontWeight: '800', color: 'rgba(253,251,247,0.4)', letterSpacing: 0.5 },
+  cardName: { fontFamily: FONTS.newsreaderBold, fontSize: 16, color: EDITORIAL.cream, letterSpacing: -0.3 },
+  cardMeta: { fontSize: 11, color: 'rgba(253,251,247,0.6)' },
+  cardDist: { fontSize: 11, fontWeight: '600', color: 'rgba(253,251,247,0.45)' },
 
   cta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: EDITORIAL.green,
-    borderRadius: 32,
-    paddingVertical: 18,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: EDITORIAL.green, borderRadius: 32, paddingVertical: 18,
   },
   ctaTxt: { fontSize: 16, fontWeight: '600', color: EDITORIAL.cream },
 });

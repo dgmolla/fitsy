@@ -21,9 +21,9 @@ export default function GoalScreen() {
 
   return (
     <WelcomeScreen
-      step={1}
-      totalSteps={7}
-      title="What drives you?"
+      step={3}
+      totalSteps={8}
+      title="What's your goal?"
       onContinue={async () => {
         if (selected) {
           const mapped = selected === 'explore' ? 'maintain' : selected;

@@ -19,8 +19,8 @@ export default function ActivityScreen() {
 
   return (
     <WelcomeScreen
-      step={5}
-      totalSteps={7}
+      step={7}
+      totalSteps={8}
       title="How active are you?"
       onContinue={async () => {
         if (selected) await saveOnboardingField('activity', selected);

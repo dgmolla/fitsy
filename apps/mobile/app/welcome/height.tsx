@@ -24,8 +24,8 @@ export default function HeightScreen() {
 
   return (
     <WelcomeScreen
-      step={2}
-      totalSteps={7}
+      step={4}
+      totalSteps={8}
       title="How tall are you?"
       onContinue={async () => {
         await saveOnboardingField('heightCm', toCm());
