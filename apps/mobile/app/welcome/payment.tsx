@@ -35,13 +35,19 @@ export default function PaymentScreen() {
   return (
     <>
       <WelcomeScreen
-        title={`Try Fitsy free\nfor 7 days.`}
+        title={`Try Fitsy free\nfor 3 days.`}
         subtitle="Cancel anytime. No charge until your trial ends."
         onContinue={() => handleStart(false)}
         canContinue={!loading}
         continueLabel={loading ? 'Setting up...' : 'Start Free Trial'}
         onSkip={() => setModal('discount')}
       >
+        <View style={s.features}>
+          <Text style={s.feature}>Find restaurants near you by macros</Text>
+          <Text style={s.feature}>Tweak your targets anytime</Text>
+          <Text style={s.feature}>Save meals you love</Text>
+        </View>
+
         <View style={s.plans}>
           <Animated.View entering={FadeInDown.duration(400).delay(100)}>
             <AnimatedPress
@@ -56,9 +62,9 @@ export default function PaymentScreen() {
                   <Text style={[s.planName, plan === 'yearly' && s.planNameOn]}>Annual</Text>
                   <View style={s.badge}><Text style={s.badgeTxt}>Best Value</Text></View>
                 </View>
-                <Text style={s.planSub}>$4.99 / mo</Text>
+                <Text style={s.planSub}>$2.50 / mo</Text>
               </View>
-              <Text style={[s.planPrice, plan === 'yearly' && s.planPriceOn]}>$59.99/yr</Text>
+              <Text style={[s.planPrice, plan === 'yearly' && s.planPriceOn]}>$29.99/yr</Text>
             </AnimatedPress>
           </Animated.View>
 
@@ -83,7 +89,7 @@ export default function PaymentScreen() {
           <Animated.View entering={FadeIn.duration(300)} style={s.modal}>
             <Text style={s.modalTitle}>Wait — 50% off.</Text>
             <Text style={s.modalBody}>
-              Lock in <Text style={{ fontWeight: '700' }}>$29.99/year</Text> if you start your free trial now.
+              Lock in <Text style={{ fontWeight: '700' }}>$14.99/year</Text> if you start your free trial now.
             </Text>
             <AnimatedPress style={s.modalCta} onPress={() => { setModal('none'); handleStart(true); }} haptic>
               <Text style={s.modalCtaTxt}>Claim 50% Off</Text>
@@ -117,6 +123,8 @@ export default function PaymentScreen() {
 }
 
 const s = StyleSheet.create({
+  features: { gap: 14, marginBottom: 40 },
+  feature: { fontSize: 15, color: EDITORIAL.textSoft, paddingLeft: 12, borderLeftWidth: 2, borderLeftColor: EDITORIAL.border },
   plans: { gap: 12 },
   plan: {
     flexDirection: 'row',

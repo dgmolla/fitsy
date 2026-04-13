@@ -53,7 +53,7 @@ export default function HowItWorksScreen() {
         <Animated.View entering={FadeIn.duration(400).delay(500)}>
           <AnimatedPress
             style={s.cta}
-            onPress={() => router.push('/welcome/payment')}
+            onPress={() => router.push('/welcome/trial')}
             haptic
             accessibilityRole="button"
           >
