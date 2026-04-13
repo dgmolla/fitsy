@@ -11,11 +11,12 @@ import { getOnboardingData } from '@/lib/onboardingStorage';
 import { trackOnboardingCompleted } from '@/lib/analytics';
 
 type PlanId = 'monthly' | 'yearly';
+type ModalState = 'none' | 'discount' | 'goodbye';
 
 export default function PaymentScreen() {
   const [plan, setPlan] = useState<PlanId>('yearly');
   const [loading, setLoading] = useState(false);
-  const [showDiscount, setShowDiscount] = useState(false);
+  const [modal, setModal] = useState<ModalState>('none');
 
   async function handleStart(discounted = false) {
     setLoading(true);
@@ -39,7 +40,7 @@ export default function PaymentScreen() {
         onContinue={() => handleStart(false)}
         canContinue={!loading}
         continueLabel={loading ? 'Setting up...' : 'Start Free Trial'}
-        onSkip={() => setShowDiscount(true)}
+        onSkip={() => setModal('discount')}
       >
         <View style={s.plans}>
           <Animated.View entering={FadeInDown.duration(400).delay(100)}>
@@ -55,9 +56,9 @@ export default function PaymentScreen() {
                   <Text style={[s.planName, plan === 'yearly' && s.planNameOn]}>Annual</Text>
                   <View style={s.badge}><Text style={s.badgeTxt}>Best Value</Text></View>
                 </View>
-                <Text style={s.planSub}>$2.50 / mo</Text>
+                <Text style={s.planSub}>$4.99 / mo</Text>
               </View>
-              <Text style={[s.planPrice, plan === 'yearly' && s.planPriceOn]}>$29.99/yr</Text>
+              <Text style={[s.planPrice, plan === 'yearly' && s.planPriceOn]}>$59.99/yr</Text>
             </AnimatedPress>
           </Animated.View>
 
@@ -70,25 +71,43 @@ export default function PaymentScreen() {
               accessibilityState={{ selected: plan === 'monthly' }}
             >
               <Text style={[s.planName, plan === 'monthly' && s.planNameOn]}>Monthly</Text>
-              <Text style={[s.planPrice, plan === 'monthly' && s.planPriceOn]}>$4.99/mo</Text>
+              <Text style={[s.planPrice, plan === 'monthly' && s.planPriceOn]}>$8.99/mo</Text>
             </AnimatedPress>
           </Animated.View>
         </View>
       </WelcomeScreen>
 
-      {/* Discount modal */}
-      <Modal visible={showDiscount} transparent animationType="fade" onRequestClose={() => setShowDiscount(false)}>
+      {/* Discount modal — first skip */}
+      <Modal visible={modal === 'discount'} transparent animationType="fade" onRequestClose={() => setModal('none')}>
         <View style={s.overlay}>
           <Animated.View entering={FadeIn.duration(300)} style={s.modal}>
             <Text style={s.modalTitle}>Wait — 50% off.</Text>
             <Text style={s.modalBody}>
-              Lock in <Text style={{ fontWeight: '700' }}>$14.99/year</Text> if you start your free trial now.
+              Lock in <Text style={{ fontWeight: '700' }}>$29.99/year</Text> if you start your free trial now.
             </Text>
-            <AnimatedPress style={s.modalCta} onPress={() => { setShowDiscount(false); handleStart(true); }} haptic>
+            <AnimatedPress style={s.modalCta} onPress={() => { setModal('none'); handleStart(true); }} haptic>
               <Text style={s.modalCtaTxt}>Claim 50% Off</Text>
             </AnimatedPress>
-            <AnimatedPress style={s.modalSkip} onPress={() => { setShowDiscount(false); handleStart(false); }}>
+            <AnimatedPress style={s.modalSkip} onPress={() => setModal('goodbye')}>
               <Text style={s.modalSkipTxt}>No thanks</Text>
+            </AnimatedPress>
+          </Animated.View>
+        </View>
+      </Modal>
+
+      {/* Goodbye screen — second skip */}
+      <Modal visible={modal === 'goodbye'} transparent animationType="fade" onRequestClose={() => setModal('none')}>
+        <View style={s.overlay}>
+          <Animated.View entering={FadeIn.duration(300)} style={s.modal}>
+            <Text style={s.goodbyeTitle}>We're sorry to{'\n'}see you go.</Text>
+            <Text style={s.modalBody}>
+              Fitsy requires a subscription to access personalized restaurant recommendations. You can start a free trial anytime.
+            </Text>
+            <AnimatedPress style={s.modalCta} onPress={() => { setModal('none'); handleStart(false); }} haptic>
+              <Text style={s.modalCtaTxt}>Start Free Trial</Text>
+            </AnimatedPress>
+            <AnimatedPress style={s.modalSkip} onPress={() => { setModal('none'); router.replace('/welcome/problem'); }}>
+              <Text style={s.modalSkipTxt}>Maybe later</Text>
             </AnimatedPress>
           </Animated.View>
         </View>
@@ -120,6 +139,7 @@ const s = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(15,31,21,0.55)', justifyContent: 'center', padding: 36 },
   modal: { backgroundColor: EDITORIAL.cream, borderRadius: 28, padding: 36, alignItems: 'center', gap: 16 },
   modalTitle: { fontFamily: FONTS.newsreaderBold, fontSize: 30, color: EDITORIAL.text, letterSpacing: -1 },
+  goodbyeTitle: { fontFamily: FONTS.newsreaderBold, fontSize: 28, color: EDITORIAL.text, letterSpacing: -0.8, textAlign: 'center' },
   modalBody: { fontSize: 16, lineHeight: 24, color: EDITORIAL.textSoft, textAlign: 'center' },
   modalCta: { backgroundColor: EDITORIAL.green, borderRadius: 32, paddingVertical: 18, width: '100%', alignItems: 'center', marginTop: 8 },
   modalCtaTxt: { fontSize: 16, fontWeight: '600', color: EDITORIAL.cream },

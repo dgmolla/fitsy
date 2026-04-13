@@ -57,7 +57,7 @@ export default function HowItWorksScreen() {
             haptic
             accessibilityRole="button"
           >
-            <Text style={s.ctaTxt}>Start free trial</Text>
+            <Text style={s.ctaTxt}>Continue</Text>
             <Ionicons name="arrow-forward" size={15} color={EDITORIAL.cream} />
           </AnimatedPress>
         </Animated.View>
