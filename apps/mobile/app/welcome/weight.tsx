@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
@@ -12,6 +12,12 @@ type Unit = 'lbs' | 'kg';
 export default function WeightScreen() {
   const [unit, setUnit] = useState<Unit>('lbs');
   const [value, setValue] = useState('');
+  const inputRef = useRef<TextInput>(null);
+
+  useEffect(() => {
+    const t = setTimeout(() => inputRef.current?.focus(), 500);
+    return () => clearTimeout(t);
+  }, []);
 
   function toKg(): number {
     const v = parseInt(value, 10);
@@ -21,8 +27,7 @@ export default function WeightScreen() {
 
   return (
     <WelcomeScreen
-      step={5}
-      totalSteps={8}
+      progress={9 / 15}
       title="What do you weigh?"
       onContinue={async () => {
         await saveOnboardingField('weightKg', toKg());
@@ -46,6 +51,7 @@ export default function WeightScreen() {
           <Text style={s.label}>WEIGHT</Text>
           <View style={s.inputRow}>
             <TextInput
+              ref={inputRef}
               style={s.input}
               value={value}
               onChangeText={setValue}
@@ -53,7 +59,6 @@ export default function WeightScreen() {
               maxLength={3}
               placeholder={unit === 'lbs' ? '155' : '70'}
               placeholderTextColor={EDITORIAL.creamDeep}
-              autoFocus
             />
             <Text style={s.unit}>{unit}</Text>
           </View>

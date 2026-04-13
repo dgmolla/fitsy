@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
@@ -14,6 +14,12 @@ export default function HeightScreen() {
   const [ft, setFt] = useState('');
   const [inches, setInches] = useState('');
   const [cm, setCm] = useState('');
+  const inputRef = useRef<TextInput>(null);
+
+  useEffect(() => {
+    const t = setTimeout(() => inputRef.current?.focus(), 500);
+    return () => clearTimeout(t);
+  }, []);
 
   function toCm(): number {
     if (unit === 'cm') return parseInt(cm, 10) || 170;
@@ -24,8 +30,7 @@ export default function HeightScreen() {
 
   return (
     <WelcomeScreen
-      step={4}
-      totalSteps={8}
+      progress={8 / 15}
       title="How tall are you?"
       onContinue={async () => {
         await saveOnboardingField('heightCm', toCm());
@@ -51,6 +56,7 @@ export default function HeightScreen() {
               <Text style={s.label}>FEET</Text>
               <View style={s.inputRow}>
                 <TextInput
+                  ref={inputRef}
                   style={s.input}
                   value={ft}
                   onChangeText={setFt}
@@ -58,7 +64,6 @@ export default function HeightScreen() {
                   maxLength={1}
                   placeholder="5"
                   placeholderTextColor={EDITORIAL.creamDeep}
-                  autoFocus
                 />
                 <Text style={s.unit}>ft</Text>
               </View>
@@ -91,7 +96,6 @@ export default function HeightScreen() {
                 maxLength={3}
                 placeholder="170"
                 placeholderTextColor={EDITORIAL.creamDeep}
-                autoFocus
               />
               <Text style={s.unit}>cm</Text>
             </View>

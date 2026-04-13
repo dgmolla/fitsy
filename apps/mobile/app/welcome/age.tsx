@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
@@ -8,11 +8,16 @@ import { EDITORIAL, FONTS } from '@/lib/brand';
 
 export default function AgeScreen() {
   const [value, setValue] = useState('');
+  const inputRef = useRef<TextInput>(null);
+
+  useEffect(() => {
+    const t = setTimeout(() => inputRef.current?.focus(), 500);
+    return () => clearTimeout(t);
+  }, []);
 
   return (
     <WelcomeScreen
-      step={6}
-      totalSteps={8}
+      progress={10 / 15}
       title="How old are you?"
       onContinue={async () => {
         const age = parseInt(value, 10) || 25;
@@ -26,6 +31,7 @@ export default function AgeScreen() {
         <Text style={s.label}>AGE</Text>
         <View style={s.inputRow}>
           <TextInput
+            ref={inputRef}
             style={s.input}
             value={value}
             onChangeText={setValue}
@@ -33,7 +39,6 @@ export default function AgeScreen() {
             maxLength={2}
             placeholder="28"
             placeholderTextColor={EDITORIAL.creamDeep}
-            autoFocus
           />
           <Text style={s.unit}>yrs</Text>
         </View>

@@ -18,6 +18,8 @@ import { AnimatedPress } from './AnimatedPress';
 interface Props {
   step?: number;
   totalSteps?: number;
+  /** Progress fraction 0–1. Shown as a bar. Overrides step/totalSteps display. */
+  progress?: number;
   title: string;
   subtitle?: string;
   children: React.ReactNode;
@@ -33,6 +35,7 @@ interface Props {
 export function WelcomeScreen({
   step,
   totalSteps,
+  progress,
   title,
   subtitle,
   children,
@@ -72,8 +75,10 @@ export function WelcomeScreen({
           ) : (
             <View style={styles.backHit} />
           )}
-          {step != null && totalSteps != null && (
-            <Text style={styles.stepText}>{step} / {totalSteps}</Text>
+          {progress != null && (
+            <View style={styles.progressTrack}>
+              <View style={[styles.progressFill, { width: `${Math.round(progress * 100)}%` }]} />
+            </View>
           )}
         </View>
 
@@ -153,7 +158,19 @@ const styles = StyleSheet.create({
     height: 52,
   },
   backHit: { width: 44, height: 44, justifyContent: 'center' },
-  stepText: { fontSize: 13, fontWeight: '500', color: EDITORIAL.textSoft, letterSpacing: 0.5 },
+  progressTrack: {
+    flex: 1,
+    height: 4,
+    backgroundColor: EDITORIAL.border,
+    borderRadius: 2,
+    marginLeft: 12,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: EDITORIAL.greenAccent,
+    borderRadius: 2,
+  },
 
   body: {
     paddingHorizontal: 36,

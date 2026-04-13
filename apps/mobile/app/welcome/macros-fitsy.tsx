@@ -14,8 +14,7 @@ const STEPS = [
 export default function MacrosFitsyScreen() {
   return (
     <WelcomeScreen
-      step={2}
-      totalSteps={8}
+      progress={6 / 15}
       title="How do macros help me eat?"
       subtitle="Instead of guessing, you set targets — and we find meals that fit."
       onContinue={() => router.push('/welcome/goal')}

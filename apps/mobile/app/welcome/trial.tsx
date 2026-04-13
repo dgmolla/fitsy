@@ -28,10 +28,15 @@ export default function TrialScreen() {
   return (
     <SafeAreaView style={s.safe}>
       <View style={s.content}>
-        {/* Close */}
-        <Pressable onPress={() => router.back()} hitSlop={16} style={s.close} accessibilityRole="button">
-          <Ionicons name="chevron-back" size={22} color={EDITORIAL.textMid} />
-        </Pressable>
+        {/* Top bar */}
+        <View style={s.topBar}>
+          <Pressable onPress={() => router.back()} hitSlop={16} style={s.close} accessibilityRole="button">
+            <Ionicons name="chevron-back" size={22} color={EDITORIAL.textMid} />
+          </Pressable>
+          <View style={s.progressTrack}>
+            <View style={[s.progressFill, { width: `${Math.round((14 / 15) * 100)}%` }]} />
+          </View>
+        </View>
 
         {/* Hero */}
         <Animated.Text entering={FadeInDown.duration(500)} style={s.hero}>
@@ -90,7 +95,25 @@ const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: EDITORIAL.cream },
   content: { flex: 1, paddingHorizontal: 32, paddingBottom: 20 },
 
-  close: { width: 44, height: 48, justifyContent: 'center' },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 52,
+  },
+  close: { width: 44, height: 44, justifyContent: 'center' },
+  progressTrack: {
+    flex: 1,
+    height: 4,
+    backgroundColor: EDITORIAL.border,
+    borderRadius: 2,
+    marginLeft: 12,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: EDITORIAL.greenAccent,
+    borderRadius: 2,
+  },
 
   hero: {
     fontFamily: FONTS.newsreaderBold,
