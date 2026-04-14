@@ -25,6 +25,7 @@
 import type { MenuSource, MenuSourceResult, StructuredMenuItem } from "./types";
 import type { UESitemapIndex } from "./ueSitemapIndex";
 import type { WebScraper } from "../scrapers/types";
+import { discoverUberEatsUrlViaBrave } from "../scrapers/braveSearchScraper";
 
 const FIRECRAWL_BASE = "https://api.firecrawl.dev";
 
@@ -521,7 +522,10 @@ export class UberEatsSource implements MenuSource {
    *
    * Flow:
    *   1. Try cached URL (if provided)
-   *   2. Firecrawl URL discovery → JSON-LD
+   *   2. Try persistent URL cache
+   *   3. Try UE sitemap index (free)
+   *   4. Brave Search URL discovery (S-122 — $0.005/query, 20 QPS)
+   *   5. Firecrawl URL discovery (fallback — $0.006/query, 0.17 QPS)
    */
   /** Optional URL cache — callers can set this to persist discovered URLs across runs. */
   urlCache: Map<string, string> | null = null;
@@ -552,7 +556,17 @@ export class UberEatsSource implements MenuSource {
       }
     }
 
-    // Step 4: Firecrawl URL discovery → JSON-LD (costs credits)
+    // Step 4: Brave Search URL discovery (S-122 — preferred, faster + cheaper)
+    const braveUrl = await discoverUberEatsUrlViaBrave(name, address);
+    if (braveUrl) {
+      const result = await this.tryJsonLd(braveUrl, name);
+      if (result) {
+        this.urlCache?.set(name, braveUrl);
+        return result;
+      }
+    }
+
+    // Step 5: Firecrawl URL discovery → JSON-LD (fallback)
     const discoveredUrl = await discoverUberEatsUrl(name, address);
     if (discoveredUrl) {
       const result = await this.tryJsonLd(discoveredUrl, name);
