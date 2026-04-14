@@ -261,9 +261,12 @@ async function main(): Promise<void> {
   const emitter = new PipelineEmitter();
   const hexId = "hex_single"; // Single-hex until S-125 hex grid discovery
 
-  // Create the web scraper (Firecrawl for speed + reliability)
-  const scraper = new (await import("../apps/api/services/scrapers/firecrawlScraper.js")).FirecrawlScraper();
-  const webScraperSource = new WebScraperSource(scraper, anthropic);
+  // Web scrapers: Firecrawl for known-URL scraping, Brave Search for search fallback (S-123, S-124)
+  const firecrawlScraper = new (await import("../apps/api/services/scrapers/firecrawlScraper.js")).FirecrawlScraper();
+  const { BraveSearchScraper } = await import("../apps/api/services/scrapers/braveSearchScraper.js");
+  const braveScraper = new BraveSearchScraper();
+  const firecrawlWebSource = new WebScraperSource(firecrawlScraper, anthropic);
+  const braveWebSource = new WebScraperSource(braveScraper, anthropic);
 
   // Load UE sitemap index for free URL discovery (no Firecrawl needed)
   const sitemapIndex = new UESitemapIndex();
@@ -281,12 +284,12 @@ async function main(): Promise<void> {
     log(`UE URL cache: starting fresh`);
   }
 
-  // Multi-path resolver: chains → UberEats → Yelp
-  const ueSource = new UberEatsSource(undefined, sitemapIndex, scraper);
+  // Multi-path resolver: chains → UberEats → Yelp (S-124)
+  const ueSource = new UberEatsSource(undefined, sitemapIndex, firecrawlScraper);
   ueSource.urlCache = urlCache;
   const resolver = new MenuSourceResolver([
     new FatSecretSource(),              // Path 1: ~1,060 chains, official macros, $0
-    ueSource,                           // Path 2: UberEats JSON-LD (cached URL → sitemap → Firecrawl)
+    ueSource,                           // Path 2: UberEats JSON-LD (cache → sitemap → Brave → Firecrawl)
     new YelpSource(anthropic),          // Path 3: Yelp menu pages (Firecrawl scrape → Haiku extraction)
   ]);
 
@@ -371,24 +374,24 @@ async function main(): Promise<void> {
         sourcesFailed.push("fatsecret", "ubereats", "yelp");
       }
 
-      // Phase 3a: Web scraper website scrape (with retry — S-116)
+      // Phase 3a: Website scrape via Firecrawl (with retry — S-116, S-124)
       if (!menuResult.found && place.websiteUri) {
-        log(`  [${place.name}] Trying ${scraper.id} website`);
+        log(`  [${place.name}] Trying firecrawl website scrape`);
         sourcesAttempted.push("brave_website");
         menuResult = await withRetry(
-          () => webScraperSource.lookupByUrl(place.name, place.websiteUri!),
-          { label: `${place.name}/webscraper-url` },
+          () => firecrawlWebSource.lookupByUrl(place.name, place.websiteUri!),
+          { label: `${place.name}/firecrawl-url` },
         ).then((r) => r.result);
         if (!menuResult.found) sourcesFailed.push("brave_website");
       }
 
-      // Phase 3b: Web scraper search fallback (with retry — S-116)
+      // Phase 3b: Brave Search menu fallback (S-123, S-124 — replaces Firecrawl search)
       if (!menuResult.found) {
-        log(`  [${place.name}] Trying ${scraper.id} search`);
+        log(`  [${place.name}] Trying brave_search menu fallback`);
         if (!sourcesAttempted.includes("brave_website")) sourcesAttempted.push("brave_website");
         menuResult = await withRetry(
-          () => webScraperSource.lookup(place.name, place.address),
-          { label: `${place.name}/webscraper-search` },
+          () => braveWebSource.lookup(place.name, place.address),
+          { label: `${place.name}/brave-search` },
         ).then((r) => r.result);
         if (!menuResult.found && !sourcesFailed.includes("brave_website")) sourcesFailed.push("brave_website");
       }

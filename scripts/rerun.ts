@@ -82,8 +82,9 @@ async function main(): Promise<void> {
   const prisma = new PrismaClient();
   const anthropic = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"] });
 
-  const scraper = new FirecrawlScraper();
-  const webScraperSource = new WebScraperSource(scraper, anthropic);
+  const firecrawlScraper = new FirecrawlScraper();
+  const { BraveSearchScraper } = await import("../apps/api/services/scrapers/braveSearchScraper.js");
+  const braveWebSource = new WebScraperSource(new BraveSearchScraper(), anthropic);
 
   const sitemapIndex = new UESitemapIndex();
   await sitemapIndex.load();
@@ -100,7 +101,7 @@ async function main(): Promise<void> {
     log(`UE URL cache: starting fresh`);
   }
 
-  const ueSource = new UberEatsSource(undefined, sitemapIndex, scraper);
+  const ueSource = new UberEatsSource(undefined, sitemapIndex, firecrawlScraper);
   ueSource.urlCache = urlCache;
   const resolver = new MenuSourceResolver([
     new FatSecretSource(),
@@ -152,12 +153,12 @@ async function main(): Promise<void> {
         { label: `${restaurant.name}/resolve` },
       ).then((r) => r.result);
 
-      // Web scraper fallback (with retry — S-116)
+      // Brave Search menu fallback (S-123, with retry — S-116)
       if (!menuResult.found) {
-        log(`  [${restaurant.name}] Trying ${scraper.id} search`);
+        log(`  [${restaurant.name}] Trying brave_search menu fallback`);
         menuResult = await withRetry(
-          () => webScraperSource.lookup(restaurant.name, restaurant.address),
-          { label: `${restaurant.name}/webscraper-search` },
+          () => braveWebSource.lookup(restaurant.name, restaurant.address),
+          { label: `${restaurant.name}/brave-search` },
         ).then((r) => r.result);
       }
 
