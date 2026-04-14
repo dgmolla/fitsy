@@ -2,20 +2,36 @@
 kanban-plugin: basic
 ---
 
-<!-- last-updated: 2026-04-13 -->
+<!-- last-updated: 2026-04-14 -->
 <!-- spec: docs/engineering/specs/data-pipeline-v3.md -->
 
 > **Spec:** All tasks in this sprint implement `docs/engineering/specs/data-pipeline-v3.md`. Read the full spec before starting any task. Key sections: Hex-Level Checkpointing, Failure Handling & Resilience, Scalability & Performance, Data Quality, Observability. The pipeline entry point is `scripts/preload.ts`.
 
 ## Backlog
 
-## In Progress
+### Wave 8 — Overture Maps integration (continued)
+
+- [ ] **S-137** Hex assignment from local parquet — Given a local Overture parquet cache, assign each restaurant to its H3 res-7 hex and return a `Map<hexId, OvertureRestaurant[]>`. Spec invariant: "Hexes are for processing batches and checkpointing — not for discovery." Use h3-js `latLngToCell()`. Test: fixture parquet → correct hex assignment, no restaurants lost. #backend #wave-8 ^dep-S-136
+- [ ] **S-139** Atomic hex persist + checkpoint — Wrap hex data persist + `PipelineCompletedHex` insert in a single `prisma.$transaction`. Spec invariant: "Checkpoint lives in the DB (not a file) for atomicity with data persistence." Test: transaction commits both or neither; duplicate hex insert is rejected. #backend #wave-8 ^dep-S-138
+- [ ] **S-140** Resume-by-default — On pipeline start, query `PipelineCompletedHex` for the current `runId`, skip completed hexes. Spec invariant: "Resume is the default, not a flag." Test: pre-populate completed hexes → pipeline skips them. #backend #wave-8 ^dep-S-139
+- [ ] **S-141** Remove Google Places + wire Overture into preload — Replace `discoverRestaurants()` call in `preload.ts` with Overture discovery → hex assignment → hex processing loop. Remove Google Places API key dependency. #backend #wave-8 ^dep-S-137 ^dep-S-140
+
+### Wave 9 — E2E validation
+
+- [ ] **S-142** Mini-hex E2E integration test — Run full pipeline against a single small hex (res 8 or 9, ~20 restaurants). Verify: Overture discovery returns restaurants, hex assignment correct, source fallback chain works, checkpoint persisted in DB, resume skips completed hex, Axiom events emitted. #backend #wave-9 ^dep-S-141
 
 ### Wave 6 — Source reliability
 
 - [ ] **S-133** Source reliability observability — Add per-source logging and Axiom detail so we can diagnose UE and other source failures. (1) Resolver: log source name + outcome + duration per attempt, don't swallow errors silently. (2) UberEatsSource: log which discovery step ran (cached/sitemap/brave/firecrawl) and why it failed (no URL, 403, no JSON-LD, name reject). (3) Axiom: replace bulk `sourcesFailed` with per-source `sourceResults` including status/reason/durationMs. (4) Dedup menu items by name before persist to fix unique constraint crash (Chick-fil-A). #backend #wave-6
 
+## In Progress
+
 ## Done
+
+### Wave 8 — Overture Maps integration
+
+- [x] **S-136** Overture discovery service — Implement `downloadOvertureCache(bbox)` and `queryLocalParquet(cachePath, bbox)` using DuckDB to query Overture Maps GeoParquet on S3. Cache locally at `scripts/cache/overture-discovery.parquet`. 34 food categories, dedup by overtureId. 15 tests. #backend #wave-8 @completed(2026-04-14)
+- [x] **S-138** PipelineCompletedHex migration — Add Prisma model with `@@unique([runId, hexId])` and `@@index([runId])` for DB-based hex checkpointing. Migration + 5 integration tests (skip in CI when no DB). #backend #wave-8 @completed(2026-04-14)
 
 ### Wave 5 — E2E validation (gate before LA scale run)
 
