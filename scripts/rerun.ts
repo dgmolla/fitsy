@@ -30,6 +30,7 @@ import {
   persistItems,
   computeAndStoreDietaryOptions,
 } from "./pipeline-utils.js";
+import { withRetry } from "./retry.js";
 
 // ─── CLI args ────────────────────────────────────────────────────────────────
 
@@ -145,13 +146,19 @@ async function main(): Promise<void> {
       const itemsBefore = Number(beforeCount[0]?.count ?? 0);
       log(`  Current items: ${itemsBefore}`);
 
-      // Resolve menu source
-      let menuResult = await resolver.resolve(restaurant.name, restaurant.address);
+      // Resolve menu source (with retry — S-116)
+      let menuResult = await withRetry(
+        () => resolver.resolve(restaurant.name, restaurant.address),
+        { label: `${restaurant.name}/resolve` },
+      ).then((r) => r.result);
 
-      // Web scraper fallback (no websiteUri available from DB, use search)
+      // Web scraper fallback (with retry — S-116)
       if (!menuResult.found) {
         log(`  [${restaurant.name}] Trying ${scraper.id} search`);
-        menuResult = await webScraperSource.lookup(restaurant.name, restaurant.address);
+        menuResult = await withRetry(
+          () => webScraperSource.lookup(restaurant.name, restaurant.address),
+          { label: `${restaurant.name}/webscraper-search` },
+        ).then((r) => r.result);
       }
 
       if (!menuResult.found) {
@@ -171,7 +178,11 @@ async function main(): Promise<void> {
         });
       } else {
         try {
-          macros = await estimateMacros(menuResult.items, anthropic);
+          const { result: estimated } = await withRetry(
+            () => estimateMacros(menuResult.items, anthropic),
+            { label: `${restaurant.name}/haiku` },
+          );
+          macros = estimated;
         } catch (err) {
           log(`  Haiku failed: ${String(err)}`);
           results.push({ name: restaurant.name, status: "HAIKU_FAILED", itemsBefore, itemsAfter: itemsBefore });
@@ -179,10 +190,13 @@ async function main(): Promise<void> {
         }
       }
 
-      // Validate
-      const { valid: validPairs, rejected } = validateItems(menuResult.items, macros);
+      // Validate (S-111/S-112 reject, S-121 macro mismatch flag)
+      const { valid: validPairs, rejected, macroMismatches } = validateItems(menuResult.items, macros);
       if (rejected.length > 0) {
         log(`  Rejected ${rejected.length} items: ${rejected.map((r) => `${r.name} (${r.reason})`).join(", ")}`);
+      }
+      if (macroMismatches.length > 0) {
+        log(`  Macro mismatches: ${macroMismatches.map((m) => `${m.name} (${m.calories}cal vs ${m.calculatedCalories}cal, ${m.percentDelta}%)`).join(", ")}`);
       }
 
       if (validPairs.length === 0) {

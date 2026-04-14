@@ -28,12 +28,35 @@ export interface ValidatedPair {
   macro: MacroData;
 }
 
+export interface MacroMismatchItem {
+  name: string;
+  calories: number;
+  calculatedCalories: number;
+  percentDelta: number;
+}
+
+/**
+ * Check if a macro estimate has a significant calorie mismatch (S-121).
+ * |calories - (p*4 + c*4 + f*9)| > 20% of calories.
+ */
+export function checkMacroMismatch(macro: MacroData): MacroMismatchItem | null {
+  if (macro.calories === 0) return null;
+  const calculated = macro.proteinG * 4 + macro.carbsG * 4 + macro.fatG * 9;
+  const delta = Math.abs(macro.calories - calculated);
+  const percentDelta = (delta / macro.calories) * 100;
+  if (percentDelta > 20) {
+    return { name: "", calories: macro.calories, calculatedCalories: Math.round(calculated), percentDelta: Math.round(percentDelta) };
+  }
+  return null;
+}
+
 export function validateItems(
   items: StructuredMenuItem[],
   macros: (MacroData | null)[],
-): { valid: ValidatedPair[]; rejected: RejectedItem[] } {
+): { valid: ValidatedPair[]; rejected: RejectedItem[]; macroMismatches: MacroMismatchItem[] } {
   const valid: ValidatedPair[] = [];
   const rejected: RejectedItem[] = [];
+  const macroMismatches: MacroMismatchItem[] = [];
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
@@ -64,10 +87,44 @@ export function validateItems(
       continue;
     }
 
+    // S-121: Macro math validation (flag only, do not reject)
+    const mismatch = checkMacroMismatch(macro);
+    if (mismatch) {
+      mismatch.name = name;
+      macroMismatches.push(mismatch);
+    }
+
     valid.push({ item, macro });
   }
 
-  return { valid, rejected };
+  return { valid, rejected, macroMismatches };
+}
+
+// ─── Name mismatch detection (S-118) ────────────────────────────────────────
+
+/**
+ * Fuzzy check whether two restaurant names are a match.
+ * Returns true if the names are sufficiently similar.
+ *
+ * Strategy: compare significant words (length > 2). If at least half of
+ * the expected words appear in the found name, consider it a match.
+ * Also handles exact substring containment.
+ */
+export function namesMatch(expected: string, found: string): boolean {
+  const e = expected.toLowerCase().trim();
+  const f = found.toLowerCase().trim();
+
+  // Exact match
+  if (e === f) return true;
+
+  // Substring containment
+  if (f.includes(e) || e.includes(f)) return true;
+
+  // Word overlap: at least half of significant words match
+  const expectedWords = e.split(/\s+/).filter((w) => w.length > 2);
+  if (expectedWords.length === 0) return true;
+  const matchCount = expectedWords.filter((w) => f.includes(w)).length;
+  return matchCount >= Math.ceil(expectedWords.length / 2);
 }
 
 // ─── HTML entity decode ─────────────────────────────────────────────────────

@@ -2,7 +2,7 @@ jest.mock("./constants", () => ({
   aggregateDietaryOptions: jest.fn().mockReturnValue([]),
 }));
 
-import { validateItems } from "./pipeline-utils";
+import { validateItems, checkMacroMismatch, namesMatch } from "./pipeline-utils";
 import type { MacroData, StructuredMenuItem } from "../apps/api/services/menuSources/types";
 
 function makeMacro(overrides: Partial<MacroData> = {}): MacroData {
@@ -107,5 +107,65 @@ describe("validateItems", () => {
     const { valid, rejected } = validateItems(items, macros);
     expect(valid).toHaveLength(3); // Pad Thai, Sparkling Water, Grilled Salmon
     expect(rejected).toHaveLength(2); // Tote Bag, Ketchup Packet
+  });
+
+  it("flags macro math mismatches above 20% (S-121)", () => {
+    const items = [makeItem("Suspicious Salad")];
+    // cal=500, but p*4+c*4+f*9 = 10*4+10*4+10*9 = 170 → delta=330 → 66%
+    const macros = [makeMacro({ calories: 500, proteinG: 10, carbsG: 10, fatG: 10 })];
+    const { valid, macroMismatches } = validateItems(items, macros);
+    expect(valid).toHaveLength(1); // still passes (flag only, not rejected)
+    expect(macroMismatches).toHaveLength(1);
+    expect(macroMismatches[0]!.name).toBe("Suspicious Salad");
+    expect(macroMismatches[0]!.percentDelta).toBeGreaterThan(20);
+  });
+
+  it("does not flag macro math within 20% threshold", () => {
+    const items = [makeItem("Normal Burger")];
+    // cal=500, p*4+c*4+f*9 = 30*4+50*4+20*9 = 120+200+180 = 500 → 0%
+    const macros = [makeMacro({ calories: 500, proteinG: 30, carbsG: 50, fatG: 20 })];
+    const { macroMismatches } = validateItems(items, macros);
+    expect(macroMismatches).toHaveLength(0);
+  });
+});
+
+describe("checkMacroMismatch", () => {
+  it("returns null for matching macros", () => {
+    const macro = makeMacro({ calories: 500, proteinG: 30, carbsG: 50, fatG: 20 });
+    expect(checkMacroMismatch(macro)).toBeNull();
+  });
+
+  it("returns mismatch info for divergent macros", () => {
+    const macro = makeMacro({ calories: 800, proteinG: 10, carbsG: 10, fatG: 10 });
+    const result = checkMacroMismatch(macro);
+    expect(result).not.toBeNull();
+    expect(result!.percentDelta).toBeGreaterThan(20);
+  });
+
+  it("returns null for zero calorie items", () => {
+    const macro = makeMacro({ calories: 0, proteinG: 0, carbsG: 0, fatG: 0 });
+    expect(checkMacroMismatch(macro)).toBeNull();
+  });
+});
+
+describe("namesMatch (S-118)", () => {
+  it("matches exact names", () => {
+    expect(namesMatch("Sqirl", "Sqirl")).toBe(true);
+  });
+
+  it("matches case-insensitively", () => {
+    expect(namesMatch("SQIRL", "sqirl")).toBe(true);
+  });
+
+  it("matches substring containment", () => {
+    expect(namesMatch("Pine & Crane", "Pine & Crane - Silver Lake")).toBe(true);
+  });
+
+  it("matches with word overlap", () => {
+    expect(namesMatch("Guisados Tacos", "Guisados")).toBe(true);
+  });
+
+  it("detects mismatch", () => {
+    expect(namesMatch("Sqirl", "Taoxi Asian Cuisine")).toBe(false);
   });
 });
