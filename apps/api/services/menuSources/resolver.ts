@@ -39,17 +39,19 @@ export class MenuSourceResolver {
       } catch (err) {
         const durationMs = Date.now() - start;
         const reason = err instanceof Error ? err.message : String(err);
-        console.warn(`[resolver] ${source.id} threw for "${name}": ${reason} (${durationMs}ms)`);
+        console.log(`[resolver] ${name}: ${source.id} → error (${durationMs}ms) ${reason}`); // eslint-disable-line no-console
         attempts.push({ sourceId: source.id, status: "error", reason, durationMs });
         continue;
       }
 
       const durationMs = Date.now() - start;
       if (result.found) {
+        console.log(`[resolver] ${name}: ${source.id} → ok (${durationMs}ms)`); // eslint-disable-line no-console
         attempts.push({ sourceId: source.id, status: "ok", durationMs });
         return { ...result, attempts };
       }
 
+      console.log(`[resolver] ${name}: ${source.id} → not_found (${durationMs}ms)`); // eslint-disable-line no-console
       attempts.push({ sourceId: source.id, status: "not_found", durationMs });
     }
 

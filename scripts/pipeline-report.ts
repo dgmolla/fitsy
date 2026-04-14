@@ -143,7 +143,20 @@ async function generateReport(runId: string): Promise<void> {
   }
   if (sources.length === 0) console.log("    (no data)");
 
-  // Source misses
+  // Per-source attempt breakdown (S-133)
+  console.log("\n  PER-SOURCE ATTEMPTS (from sourceAttempts)");
+  const attemptResult = await queryApl(
+    `['${DATASET}'] | where type == "restaurant" and runId == "${runId}" | mv-expand sourceAttempts | extend sa = sourceAttempts | summarize ok=countif(tostring(sa.status) == "ok"), not_found=countif(tostring(sa.status) == "not_found"), errors=countif(tostring(sa.status) == "error"), avg_ms=avg(todouble(sa.durationMs)) by tostring(sa.sourceId)`,
+  );
+  const attemptRows = extractRows(attemptResult);
+  for (const row of attemptRows) {
+    const src = row["sa_sourceId"] ?? row["sourceId"] ?? "?";
+    const avgMs = typeof row["avg_ms"] === "number" ? Math.round(row["avg_ms"] as number) : "?";
+    console.log(`    ${src}: ok=${row["ok"]} not_found=${row["not_found"]} error=${row["errors"]} avg=${avgMs}ms`);
+  }
+  if (attemptRows.length === 0) console.log("    (no data)");
+
+  // Source misses (legacy — from sourcesFailed array)
   console.log("\n  SOURCE MISS RATES");
   const missResult = await queryApl(
     `['${DATASET}'] | where type == "restaurant" and runId == "${runId}" | mv-expand sourcesFailed | summarize count=count() by tostring(sourcesFailed)`,
