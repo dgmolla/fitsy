@@ -130,6 +130,17 @@ model Subscription {
   user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+model PipelineCompletedHex {
+  id        String   @id @default(cuid())
+  runId     String
+  hexId     String
+  count     Int      // restaurants persisted in this hex
+  createdAt DateTime @default(now())
+
+  @@unique([runId, hexId])
+  @@index([runId])
+}
+
 enum GoalType {
   cut
   bulk
