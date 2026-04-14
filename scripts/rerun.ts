@@ -20,7 +20,6 @@ import { UberEatsSource } from "../apps/api/services/menuSources/uberEatsSource.
 import { UESitemapIndex } from "../apps/api/services/menuSources/ueSitemapIndex.js";
 import { FirecrawlScraper } from "../apps/api/services/scrapers/firecrawlScraper.js";
 import { WebScraperSource } from "../apps/api/services/menuSources/webScraperSource.js";
-import { YelpSource } from "../apps/api/services/menuSources/yelpSource.js";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { estimateMacros } from "../apps/api/services/macroEstimationService.js";
@@ -106,7 +105,6 @@ async function main(): Promise<void> {
   const resolver = new MenuSourceResolver([
     new FatSecretSource(),
     ueSource,
-    new YelpSource(anthropic),
   ]);
 
   // Look up target restaurants in DB

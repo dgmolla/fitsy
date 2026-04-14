@@ -56,7 +56,6 @@ import { UberEatsSource } from "../apps/api/services/menuSources/uberEatsSource.
 import { UESitemapIndex } from "../apps/api/services/menuSources/ueSitemapIndex.js";
 import { FirecrawlScraper } from "../apps/api/services/scrapers/firecrawlScraper.js";
 import { WebScraperSource } from "../apps/api/services/menuSources/webScraperSource.js";
-import { YelpSource } from "../apps/api/services/menuSources/yelpSource.js";
 import { readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { createHash } from "crypto";
@@ -330,13 +329,12 @@ async function main(): Promise<void> {
     log(`UE URL cache: starting fresh`);
   }
 
-  // Multi-path resolver: chains → UberEats → Yelp (S-124)
+  // Multi-path resolver: chains → UberEats (S-134: removed Yelp — unreliable slug guessing, Brave website fallback covers it)
   const ueSource = new UberEatsSource(undefined, sitemapIndex, firecrawlScraper);
   ueSource.urlCache = urlCache;
   const resolver = new MenuSourceResolver([
     new FatSecretSource(),              // Path 1: ~1,060 chains, official macros, $0
-    ueSource,                           // Path 2: UberEats JSON-LD (cache → sitemap → Brave → Firecrawl)
-    new YelpSource(anthropic),          // Path 3: Yelp menu pages (Firecrawl scrape → Haiku extraction)
+    ueSource,                           // Path 2: UberEats JSON-LD (raw fetch → Firecrawl fallback on bot defense)
   ]);
 
   const stats: PipelineStats = {

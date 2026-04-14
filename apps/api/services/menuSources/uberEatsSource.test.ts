@@ -13,6 +13,9 @@ import {
   parseUberEatsMarkdown,
   fetchUberEatsHtml,
   scrapeUberEatsViaFirecrawl,
+  isBotDefensePage,
+  extractMenuViaJsonLd,
+  extractMenuViaFirecrawl,
   scrapeUberEatsMarkdown,
 } from "./uberEatsSource";
 
@@ -556,6 +559,114 @@ describe("scrapeUberEatsMarkdown (function)", () => {
     mockFetch.mockRejectedValueOnce(new Error("network fail"));
     const result = await scrapeUberEatsMarkdown("https://www.ubereats.com/store/test/123");
     expect(result).toBeNull();
+    delete process.env["FIRECRAWL_API_KEY"];
+  });
+});
+
+// ─── isBotDefensePage ───────────────────────────────────────────────────────
+
+describe("isBotDefensePage", () => {
+  it("detects bot defense page", () => {
+    const html = '<html><head><link rel="preload" href="https://d3i4yxtzktqr9n.cloudfront.net/botdefense-ext-ui/client-main.js"></head></html>';
+    expect(isBotDefensePage(html)).toBe(true);
+  });
+
+  it("returns false for normal page", () => {
+    const html = fixture("ubereats-thai-place.html");
+    expect(isBotDefensePage(html)).toBe(false);
+  });
+});
+
+// ─── extractMenuViaJsonLd (bot defense detection) ──────────────────────────
+
+describe("extractMenuViaJsonLd", () => {
+  it("returns botDefense: true when page has bot defense", async () => {
+    const botHtml = '<html><head><link href="botdefense-ext-ui/main.js"></head><body>challenge</body></html>';
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: jest.fn().mockResolvedValue(botHtml),
+    });
+    const result = await extractMenuViaJsonLd("https://www.ubereats.com/store/test/123");
+    expect(result).not.toBeNull();
+    expect(result?.botDefense).toBe(true);
+    expect(result?.items).toHaveLength(0);
+  });
+
+  it("returns items when page has valid JSON-LD", async () => {
+    const html = fixture("ubereats-thai-place.html");
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: jest.fn().mockResolvedValue(html),
+    });
+    const result = await extractMenuViaJsonLd("https://www.ubereats.com/store/test/123");
+    expect(result).not.toBeNull();
+    expect(result?.botDefense).toBeUndefined();
+    expect(result!.items.length).toBeGreaterThan(0);
+  });
+});
+
+// ─── extractMenuViaFirecrawl ───────────────────────────────────────────────
+
+describe("extractMenuViaFirecrawl", () => {
+  it("returns items when Firecrawl HTML has valid JSON-LD", async () => {
+    process.env["FIRECRAWL_API_KEY"] = "test-key";
+    const html = fixture("ubereats-thai-place.html");
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: jest.fn().mockResolvedValue({ data: { html } }),
+    });
+    const result = await extractMenuViaFirecrawl("https://www.ubereats.com/store/test/123");
+    expect(result).not.toBeNull();
+    expect(result!.items.length).toBeGreaterThan(0);
+    delete process.env["FIRECRAWL_API_KEY"];
+  });
+
+  it("returns null when Firecrawl returns no HTML", async () => {
+    process.env["FIRECRAWL_API_KEY"] = "test-key";
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: jest.fn().mockResolvedValue({ data: {} }),
+    });
+    const result = await extractMenuViaFirecrawl("https://www.ubereats.com/store/test/123");
+    expect(result).toBeNull();
+    delete process.env["FIRECRAWL_API_KEY"];
+  });
+});
+
+// ─── UberEatsSource.lookup with bot defense fallback ───────────────────────
+
+describe("UberEatsSource bot defense fallback", () => {
+  it("falls back to Firecrawl when raw fetch hits bot defense", async () => {
+    const botHtml = '<html><head><link href="botdefense-ext-ui/main.js"></head></html>';
+    const jsonLdHtml = fixture("ubereats-thai-place.html");
+    const sourceWithCache = new UberEatsSource();
+    sourceWithCache.urlCache = new Map([["Thai Orchid", "https://www.ubereats.com/store/thai-orchid/AbCd"]]);
+    process.env["FIRECRAWL_API_KEY"] = "test-key";
+    delete process.env["BRAVE_SEARCH_API_KEY"];
+
+    mockFetch
+      // Step 2: url-cache raw fetch → bot defense page
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: jest.fn().mockResolvedValue(botHtml),
+      })
+      // Step 5: Firecrawl URL discovery (discoverUberEatsUrl) — no UE URL
+      .mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValue({ data: [] }),
+      })
+      // Step 6: Firecrawl HTML fallback (scrapeUberEatsViaFirecrawl) → success
+      .mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValue({ data: { html: jsonLdHtml } }),
+      });
+
+    const result = await sourceWithCache.lookup("Thai Orchid", "LA");
+    expect(result.found).toBe(true);
+    expect(result.items.length).toBeGreaterThan(0);
     delete process.env["FIRECRAWL_API_KEY"];
   });
 });
