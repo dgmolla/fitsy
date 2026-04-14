@@ -106,4 +106,56 @@ describe("MenuSourceResolver", () => {
     expect(ffn.lookup).toHaveBeenCalledWith("Nobu", "903 N La Cienega Blvd, West Hollywood");
     expect(ubereats.lookup).toHaveBeenCalledWith("Nobu", "903 N La Cienega Blvd, West Hollywood");
   });
+
+  // S-133: Verify per-source attempt tracking
+  it("returns attempts array with ok status for successful source", async () => {
+    const ffn = makeSource("ffn", FOUND("ffn"));
+    const resolver = new MenuSourceResolver([ffn]);
+
+    const result = await resolver.resolve("Test", "LA");
+    expect(result.attempts).toHaveLength(1);
+    expect(result.attempts[0]!.sourceId).toBe("ffn");
+    expect(result.attempts[0]!.status).toBe("ok");
+    expect(result.attempts[0]!.durationMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it("returns attempts with not_found then ok on fallback", async () => {
+    const ffn = makeSource("ffn", NOT_FOUND("ffn"));
+    const ubereats = makeSource("ubereats", FOUND("ubereats"));
+    const resolver = new MenuSourceResolver([ffn, ubereats]);
+
+    const result = await resolver.resolve("Test", "LA");
+    expect(result.attempts).toHaveLength(2);
+    expect(result.attempts[0]).toMatchObject({ sourceId: "ffn", status: "not_found" });
+    expect(result.attempts[1]).toMatchObject({ sourceId: "ubereats", status: "ok" });
+  });
+
+  it("returns attempts with error status when source throws", async () => {
+    const failing = makeFailingSource("ffn");
+    const ubereats = makeSource("ubereats", FOUND("ubereats"));
+    const resolver = new MenuSourceResolver([failing, ubereats]);
+
+    const result = await resolver.resolve("Test", "LA");
+    expect(result.attempts).toHaveLength(2);
+    expect(result.attempts[0]).toMatchObject({ sourceId: "ffn", status: "error", reason: "Source error" });
+    expect(result.attempts[1]).toMatchObject({ sourceId: "ubereats", status: "ok" });
+  });
+
+  it("returns attempts for all sources when none found", async () => {
+    const resolver = new MenuSourceResolver([
+      makeSource("ffn", NOT_FOUND("ffn")),
+      makeSource("ubereats", NOT_FOUND("ubereats")),
+    ]);
+
+    const result = await resolver.resolve("Ghost", "Nowhere");
+    expect(result.attempts).toHaveLength(2);
+    expect(result.attempts[0]).toMatchObject({ sourceId: "ffn", status: "not_found" });
+    expect(result.attempts[1]).toMatchObject({ sourceId: "ubereats", status: "not_found" });
+  });
+
+  it("returns empty attempts array for empty sources list", async () => {
+    const resolver = new MenuSourceResolver([]);
+    const result = await resolver.resolve("Any", "Anywhere");
+    expect(result.attempts).toHaveLength(0);
+  });
 });

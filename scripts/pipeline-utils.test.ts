@@ -2,7 +2,7 @@ jest.mock("./constants", () => ({
   aggregateDietaryOptions: jest.fn().mockReturnValue([]),
 }));
 
-import { validateItems, checkMacroMismatch, namesMatch } from "./pipeline-utils";
+import { validateItems, checkMacroMismatch, namesMatch, dedupByName } from "./pipeline-utils";
 import type { MacroData, StructuredMenuItem } from "../apps/api/services/menuSources/types";
 
 function makeMacro(overrides: Partial<MacroData> = {}): MacroData {
@@ -145,6 +145,63 @@ describe("checkMacroMismatch", () => {
   it("returns null for zero calorie items", () => {
     const macro = makeMacro({ calories: 0, proteinG: 0, carbsG: 0, fatG: 0 });
     expect(checkMacroMismatch(macro)).toBeNull();
+  });
+});
+
+describe("dedupByName (S-133)", () => {
+  it("returns all items when no duplicates", () => {
+    const pairs = [
+      { item: makeItem("Chicken Bowl"), macro: makeMacro() },
+      { item: makeItem("Beef Burrito"), macro: makeMacro() },
+    ];
+    const result = dedupByName(pairs);
+    expect(result).toHaveLength(2);
+  });
+
+  it("removes case-insensitive duplicate names, keeping first occurrence", () => {
+    const macro1 = makeMacro({ calories: 500 });
+    const macro2 = makeMacro({ calories: 700 });
+    const pairs = [
+      { item: makeItem("Chicken Bowl"), macro: macro1 },
+      { item: makeItem("chicken bowl"), macro: macro2 },
+      { item: makeItem("CHICKEN BOWL"), macro: makeMacro() },
+    ];
+    const result = dedupByName(pairs);
+    expect(result).toHaveLength(1);
+    expect(result[0]!.item.name).toBe("Chicken Bowl");
+    expect(result[0]!.macro.calories).toBe(500);
+  });
+
+  it("handles empty input", () => {
+    expect(dedupByName([])).toHaveLength(0);
+  });
+
+  it("deduplicates Chick-fil-A items from multiple sources", () => {
+    const pairs = [
+      { item: makeItem("Chick-fil-A Chicken Sandwich"), macro: makeMacro() },
+      { item: makeItem("Waffle Fries"), macro: makeMacro() },
+      { item: makeItem("chick-fil-a chicken sandwich"), macro: makeMacro() },
+      { item: makeItem("Lemonade"), macro: makeMacro() },
+      { item: makeItem("waffle fries"), macro: makeMacro() },
+    ];
+    const result = dedupByName(pairs);
+    expect(result).toHaveLength(3);
+    expect(result.map((r) => r.item.name)).toEqual([
+      "Chick-fil-A Chicken Sandwich",
+      "Waffle Fries",
+      "Lemonade",
+    ]);
+  });
+
+  it("preserves order of first occurrences", () => {
+    const pairs = [
+      { item: makeItem("Zeta"), macro: makeMacro() },
+      { item: makeItem("Alpha"), macro: makeMacro() },
+      { item: makeItem("zeta"), macro: makeMacro() },
+      { item: makeItem("Beta"), macro: makeMacro() },
+    ];
+    const result = dedupByName(pairs);
+    expect(result.map((r) => r.item.name)).toEqual(["Zeta", "Alpha", "Beta"]);
   });
 });
 

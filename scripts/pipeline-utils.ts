@@ -141,6 +141,23 @@ export function decodeHtml(s: string | null | undefined): string | null {
     .replace(/&#x2F;/g, "/");
 }
 
+// ─── Dedup (S-133) ─────────────────────────────────────────────────────────
+
+/**
+ * Deduplicate validated pairs by normalized item name (case-insensitive).
+ * Keeps the first occurrence when duplicates exist. Source data (esp. FatSecret)
+ * can have duplicate names which violate the @@unique([restaurantId, name]) constraint.
+ */
+export function dedupByName(pairs: ValidatedPair[]): ValidatedPair[] {
+  const seen = new Set<string>();
+  return pairs.filter((p) => {
+    const key = p.item.name.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 // ─── Transactional persistence (S-113) ──────────────────────────────────────
 
 /** Minimal type for Prisma interactive transaction client. */
@@ -161,16 +178,9 @@ export async function persistItemsInTx(
 
   // S-133: Dedup by item name — source data (esp. FatSecret) can have
   // duplicate names which violate the @@unique([restaurantId, name]) constraint.
-  // Keep the first occurrence.
-  const seen = new Set<string>();
-  const validPairs = inputPairs.filter((p) => {
-    const key = p.item.name.toLowerCase();
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  const validPairs = dedupByName(inputPairs);
   if (validPairs.length < inputPairs.length) {
-    console.log(`[persist] Deduped ${inputPairs.length - validPairs.length} duplicate item names for restaurant ${restaurantId}`);
+    console.log(`[persist] Deduped ${inputPairs.length - validPairs.length} duplicate item names for restaurant ${restaurantId}`); // eslint-disable-line no-console
   }
 
   // Query 1: Delete existing items (cascade deletes estimates via FK)
