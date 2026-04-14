@@ -1,8 +1,10 @@
 /**
- * Fitsy Preload Script — S-71 (refactored)
+ * Fitsy Preload Script — S-71 (refactored), S-141 (Overture Maps)
  *
  * Thin orchestrator. External API logic lives in service modules:
- *   - googlePlacesService      → restaurant discovery
+ *   - overture-discovery       → restaurant discovery via Overture Maps (S-141)
+ *   - hex-assignment           → assign restaurants to H3 hexes
+ *   - hex-resume               → DB-based hex-level resume (always on)
  *   - MenuSourceResolver       → phased menu/macro lookup (FatSecret → UberEats)
  *   - WebScraperSource         → generic web scraper fallback (Jina or Firecrawl)
  *   - UESitemapIndex           → free UberEats URL discovery via sitemaps
@@ -19,37 +21,27 @@
  *   4. fallback: skip restaurant (no name-only fallback — S-131)
  *   5. persist: chain items with official macros, indie items via Haiku estimation
  *
- * Modes:
- *   --hex          Use H3 hex grid for LA metro (S-125). Default: single-point discovery.
- *   --resume       Resume from last checkpoint (S-126). Only with --hex.
+ * Discovery: Overture Maps (free, unlimited) via DuckDB + local parquet cache.
+ * Resume: always-on via PipelineCompletedHex DB table (S-140).
+ *
+ * Flags:
  *   --force        Skip regression guard + incremental skip.
  *   --days N       Skip restaurants scraped within N days (S-127). Default: 7.
  *
  * Usage:
- *   npx tsx scripts/preload.ts                          # single-point (backward compat)
- *   npx tsx scripts/preload.ts --hex                    # full LA metro hex grid
- *   npx tsx scripts/preload.ts --hex --resume           # resume after crash
- *   npx tsx scripts/preload.ts --hex --force             # force re-scrape all
+ *   npx tsx scripts/preload.ts                # full LA metro hex grid
+ *   npx tsx scripts/preload.ts --force        # force re-scrape all
  *
  * Environment variables:
  *   POSTGRES_PRISMA_URL       — Prisma pooled connection string (required)
  *   POSTGRES_URL_NON_POOLING  — Prisma direct connection for migrations (required)
- *   GOOGLE_PLACES_API_KEY     — Google Places Nearby Search (required)
  *   ANTHROPIC_API_KEY         — Claude Haiku API (required)
  *   FIRECRAWL_API_KEY         — Firecrawl search/map/scrape (optional — used by UE discovery fallback)
- *   TARGET_LAT                — Target latitude (default: 34.0928)
- *   TARGET_LNG                — Target longitude (default: -118.3086)
- *   TARGET_RADIUS             — Search radius in meters (default: 3000)
- *   MAX_RESTAURANTS           — Max restaurants to process (default: 100)
  */
 
 import { PrismaClient } from "@prisma/client";
 import Anthropic from "@anthropic-ai/sdk";
 
-import {
-  discoverRestaurants,
-  type PlaceResult,
-} from "../apps/api/services/googlePlacesService.js";
 import { MenuSourceResolver, type SourceAttempt } from "../apps/api/services/menuSources/resolver.js";
 import { FatSecretSource } from "../apps/api/services/menuSources/fatSecretSource.js";
 import { UberEatsSource } from "../apps/api/services/menuSources/uberEatsSource.js";
@@ -72,8 +64,9 @@ import {
   type RestaurantEvent,
   type PipelineError,
 } from "./pipeline-events.js";
-import { generateHexGrid, generateSingleHex, type HexCell } from "./hex-grid.js";
-import { loadLatestCheckpoint, markHexCompleted, clearCheckpoint } from "./checkpoint.js";
+import { downloadOvertureCache, queryLocalParquet, type OvertureRestaurant, type BoundingBox } from "./overture-discovery.js";
+import { assignToHexes } from "./hex-assignment.js";
+import { filterPendingHexes } from "./hex-resume.js";
 import { API_SEMAPHORES } from "./semaphore.js";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -81,7 +74,6 @@ import { API_SEMAPHORES } from "./semaphore.js";
 const REQUIRED_ENV_VARS = [
   "POSTGRES_PRISMA_URL",
   "POSTGRES_URL_NON_POOLING",
-  "GOOGLE_PLACES_API_KEY",
   "ANTHROPIC_API_KEY",
   "FIRECRAWL_API_KEY",
 ] as const;
@@ -95,14 +87,8 @@ function parseDaysArg(): number {
 }
 
 const CONFIG = {
-  targetLat: parseFloat(process.env["TARGET_LAT"] ?? "34.0928"),
-  targetLng: parseFloat(process.env["TARGET_LNG"] ?? "-118.3086"),
-  targetRadius: parseInt(process.env["TARGET_RADIUS"] ?? "3000", 10),
-  maxRestaurants: parseInt(process.env["MAX_RESTAURANTS"] ?? "100", 10),
-  rateLimitDelayMs: 500,
+  bbox: { south: 33.95, north: 34.15, west: -118.50, east: -118.15 } as BoundingBox,
   force: process.argv.includes("--force"),
-  hexMode: process.argv.includes("--hex"),
-  resume: process.argv.includes("--resume"),
   skipDays: parseDaysArg(),
   concurrency: 10, // S-128: increased from 5
 };
@@ -119,39 +105,10 @@ interface PipelineStats {
   skippedRegression: number;
   rejectedItems: number;
   anthropicCalls: number;
-  googlePlacesCalls: number;
   sourceBreakdown: Record<string, number>; // sourceId → count
 }
 
-// ─── Cuisine tag / chain detection ────────────────────────────────────────────
-
-const CUISINE_TYPE_MAP: Record<string, string> = {
-  american_restaurant: "american",
-  asian_restaurant: "asian",
-  bakery: "bakery",
-  barbecue_restaurant: "bbq",
-  breakfast_restaurant: "breakfast",
-  brunch_restaurant: "brunch",
-  cafe: "cafe",
-  chinese_restaurant: "chinese",
-  coffee_shop: "coffee",
-  fast_food_restaurant: "fast_food",
-  french_restaurant: "french",
-  hamburger_restaurant: "burgers",
-  indian_restaurant: "indian",
-  italian_restaurant: "italian",
-  japanese_restaurant: "japanese",
-  korean_restaurant: "korean",
-  mediterranean_restaurant: "mediterranean",
-  mexican_restaurant: "mexican",
-  pizza_restaurant: "pizza",
-  sandwich_shop: "sandwiches",
-  seafood_restaurant: "seafood",
-  sushi_restaurant: "sushi",
-  thai_restaurant: "thai",
-  vegan_restaurant: "vegan",
-  vietnamese_restaurant: "vietnamese",
-};
+// ─── Chain detection ──────────────────────────────────────────────────────────
 
 const KNOWN_CHAIN_NAMES = [
   "mcdonald",
@@ -169,22 +126,17 @@ const KNOWN_CHAIN_NAMES = [
   "chick-fil-a",
 ];
 
-const CHAIN_INDICATOR_TYPES = new Set([
-  "fast_food_restaurant",
-  "hamburger_restaurant",
-  "pizza_restaurant",
+/** Overture categories that strongly indicate chain restaurants. */
+const CHAIN_INDICATOR_CATEGORIES = new Set([
+  "fast_food",
+  "burger_restaurant",
 ]);
 
-function extractCuisineTags(types: string[]): string[] {
-  const tags = types.map((t) => CUISINE_TYPE_MAP[t]).filter(Boolean) as string[];
-  return tags.length > 0 ? tags : ["restaurant"];
-}
-
-function isChain(name: string, types: string[]): boolean {
-  const hasChainType = types.some((t) => CHAIN_INDICATOR_TYPES.has(t));
+function isChain(name: string, category: string): boolean {
+  const hasCategoryIndicator = CHAIN_INDICATOR_CATEGORIES.has(category);
   const nameLower = name.toLowerCase();
   const isKnownChain = KNOWN_CHAIN_NAMES.some((chain) => nameLower.includes(chain));
-  return hasChainType || isKnownChain;
+  return hasCategoryIndicator || isKnownChain;
 }
 
 // ─── Raw SQL persistence ─────────────────────────────────────────────────────
@@ -192,13 +144,13 @@ function isChain(name: string, types: string[]): boolean {
 // Schema ref: prisma/schema.prisma — MenuItem, MacroEstimate tables.
 
 async function upsertRestaurantRaw(
-  place: PlaceResult,
+  restaurant: OvertureRestaurant,
   menuSourceId: string,
   photoUrl: string | null,
   prisma: PrismaClient,
 ): Promise<string> {
-  const cuisineTags = extractCuisineTags(place.types);
-  const chainFlag = isChain(place.name, place.types);
+  const cuisineTags = restaurant.category ? [restaurant.category] : ["restaurant"];
+  const chainFlag = isChain(restaurant.name, restaurant.category ?? "");
 
   const rows = await prisma.$queryRaw<{ id: string }[]>`
     INSERT INTO "Restaurant" (
@@ -207,10 +159,10 @@ async function upsertRestaurantRaw(
       "rating", "userRatingCount", "priceLevel", "photoUrl",
       "createdAt", "updatedAt"
     ) VALUES (
-      gen_random_uuid(), ${place.placeId}, ${place.name}, ${place.address},
-      ${place.lat}, ${place.lng}, ${cuisineTags}::text[], ${chainFlag},
-      'google_places', ${menuSourceId}, ${place.rating ?? null},
-      ${place.userRatingCount ?? null}, ${place.priceLevel ?? null},
+      gen_random_uuid(), ${restaurant.overtureId}, ${restaurant.name}, ${restaurant.address},
+      ${restaurant.lat}, ${restaurant.lng}, ${cuisineTags}::text[], ${chainFlag},
+      'overture_maps', ${menuSourceId}, ${null},
+      ${null}, ${null},
       ${photoUrl},
       now(), now()
     )
@@ -220,31 +172,11 @@ async function upsertRestaurantRaw(
       "cuisineTags" = EXCLUDED."cuisineTags",
       "chainFlag" = EXCLUDED."chainFlag",
       "menuSourceId" = EXCLUDED."menuSourceId",
-      "rating" = EXCLUDED."rating",
-      "userRatingCount" = EXCLUDED."userRatingCount",
-      "priceLevel" = EXCLUDED."priceLevel",
       "photoUrl" = COALESCE(EXCLUDED."photoUrl", "Restaurant"."photoUrl"),
       "updatedAt" = now()
     RETURNING "id"
   `;
   return rows[0]!.id;
-}
-
-// ─── Google Places Photo ────────────────────────────────────────────────────
-
-async function fetchGooglePlacesPhotoUrl(photoName: string): Promise<string | null> {
-  const apiKey = process.env["GOOGLE_PLACES_API_KEY"] ?? "";
-  try {
-    const res = await fetch(
-      `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=800&skipHttpRedirect=true`,
-      { headers: { "X-Goog-Api-Key": apiKey } },
-    );
-    if (!res.ok) return null;
-    const data = (await res.json()) as { photoUri?: string };
-    return data.photoUri ?? null;
-  } catch {
-    return null;
-  }
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -257,9 +189,6 @@ function validateEnv(): void {
   }
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 function log(message: string): void {
   console.log(`[preload] ${message}`);
@@ -302,8 +231,13 @@ async function main(): Promise<void> {
   const prisma = new PrismaClient();
   const anthropic = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"] });
 
-  // S-120: Axiom event emitter
-  const runId = new Date().toISOString();
+  // S-141: runId is date-based so re-running the same day resumes.
+  // Pass --run-id <id> to override (useful for manual retries).
+  const runIdIdx = process.argv.indexOf("--run-id");
+  const runId =
+    runIdIdx !== -1 && process.argv[runIdIdx + 1]
+      ? process.argv[runIdIdx + 1]!
+      : `run-${new Date().toISOString().slice(0, 10)}`;
   const emitter = new PipelineEmitter();
 
   // Web scrapers: Firecrawl for known-URL scraping, Brave Search for search fallback (S-123, S-124)
@@ -347,109 +281,59 @@ async function main(): Promise<void> {
     skippedRegression: 0,
     rejectedItems: 0,
     anthropicCalls: 0,
-    googlePlacesCalls: 0,
     sourceBreakdown: {},
   };
   let skippedIncremental = 0;
 
-  // S-125: Generate hex cells — either full grid or single-point
-  let hexCells: HexCell[];
-  if (CONFIG.hexMode) {
-    hexCells = generateHexGrid();
-    log(`Hex grid mode: ${hexCells.length} hexes at resolution 7 (LA metro)`);
-  } else {
-    hexCells = [generateSingleHex(CONFIG.targetLat, CONFIG.targetLng)];
-    log(`Single-point mode (lat: ${CONFIG.targetLat}, lng: ${CONFIG.targetLng}, radius: ${CONFIG.targetRadius}m)`);
-  }
+  // S-141: Stage 0 — Download Overture cache (no-op if fresh)
+  const cachePath = await downloadOvertureCache(CONFIG.bbox);
 
-  // S-126: Load checkpoint for resume
-  let completedHexes = new Set<string>();
-  if (CONFIG.resume) {
-    const checkpoint = loadLatestCheckpoint();
-    if (checkpoint) {
-      completedHexes = new Set(checkpoint.completedHexes);
-      log(`Resuming: ${completedHexes.size} hexes already completed`);
-    } else {
-      log(`No checkpoint found — starting fresh`);
-    }
-  }
+  // S-141: Stage 1 — Query all restaurants from local cache
+  const allRestaurants = await queryLocalParquet(cachePath, CONFIG.bbox);
+  log(`Discovered ${allRestaurants.length} restaurants via Overture Maps`);
+  stats.discovered = allRestaurants.length;
 
-  const hexesTotal = hexCells.length;
-  let hexesCompleted = completedHexes.size;
+  // S-141: Stage 2 — Assign restaurants to H3 hexes
+  const hexMap = assignToHexes(allRestaurants);
+  const allHexIds = Array.from(hexMap.keys());
+  log(`Assigned to ${allHexIds.length} hexes at resolution 7`);
 
-  // Track all seen placeIds for dedup across hexes (S-125)
-  const seenPlaceIds = new Set<string>();
+  // S-141: Stage 3 — Filter out already-completed hexes (resume by default, S-140)
+  const pendingHexIds = await filterPendingHexes(allHexIds, runId, prisma);
+  const hexesTotal = allHexIds.length;
+  let hexesCompleted = hexesTotal - pendingHexIds.length;
 
   try {
-    for (const hex of hexCells) {
-      // S-126: Skip completed hexes
-      if (completedHexes.has(hex.hexId)) {
-        log(`Hex ${hex.hexId}: already completed — skipping`);
-        continue;
-      }
+    for (const hexId of pendingHexIds) {
+      const hexRestaurants = hexMap.get(hexId)!;
 
-      log(`\n========== Hex ${hex.hexId} (${hex.lat.toFixed(4)}, ${hex.lng.toFixed(4)}) ==========`);
+      log(`\n========== Hex ${hexId} (${hexRestaurants.length} restaurants) ==========`);
 
-      // Stage 1: Discover restaurants for this hex
-      let places: PlaceResult[];
-      try {
-        places = await API_SEMAPHORES.googlePlaces.run(() =>
-          discoverRestaurants({
-            lat: hex.lat,
-            lng: hex.lng,
-            radiusMeters: CONFIG.hexMode ? 2000 : CONFIG.targetRadius,
-            maxRestaurants: CONFIG.maxRestaurants,
-            rateLimitDelayMs: CONFIG.rateLimitDelayMs,
-          }),
-        );
-        stats.googlePlacesCalls += Math.ceil(places.length / 20) || 1;
-      } catch (err) {
-        log(`Google Places API error for hex ${hex.hexId}: ${String(err)}`);
-        emitter.emitError({
-          type: "error", runId, hexId: hex.hexId, restaurant: "", placeId: "",
-          stage: "discovery", source: "google_places", error: String(err), retryable: true, retriesAttempted: 0,
-          _time: new Date().toISOString(),
+      if (hexRestaurants.length === 0) {
+        await prisma.pipelineCompletedHex.create({
+          data: { runId, hexId, count: 0 },
         });
-        continue; // Skip this hex, try the next one
-      }
-
-      // S-125: Dedup across hexes by externalPlaceId
-      const newPlaces = places.filter((p) => {
-        if (seenPlaceIds.has(p.placeId)) return false;
-        seenPlaceIds.add(p.placeId);
-        return true;
-      });
-      const dupeCount = places.length - newPlaces.length;
-      if (dupeCount > 0) {
-        log(`  Deduped: ${dupeCount} restaurants already seen in prior hexes`);
-      }
-
-      stats.discovered += newPlaces.length;
-      log(`  Discovered ${newPlaces.length} restaurants (${dupeCount} dupes removed)`);
-
-      if (newPlaces.length === 0) {
-        markHexCompleted(runId, hex.hexId);
         hexesCompleted++;
         continue;
       }
 
-      // Stage 2: Process restaurants in parallel batches (S-128: concurrency=10)
-      async function processRestaurant(place: PlaceResult, index: number): Promise<void> {
+      // Process restaurants in parallel batches (S-128: concurrency=10)
+      async function processRestaurant(restaurant: OvertureRestaurant, index: number): Promise<void> {
         const restaurantStart = Date.now();
         const sourcesAttempted: string[] = [];
         const sourcesFailed: string[] = [];
         let resolverAttempts: SourceAttempt[] = [];
 
-        log(`Processing ${place.name} (${index}/${newPlaces.length})...`);
+        log(`Processing ${restaurant.name} (${index}/${hexRestaurants.length})...`);
 
         // Helper: emit restaurant event and return (S-120, S-133)
         function emitRestaurantEvent(status: string, source: string, itemCount: number, rejectedCount: number, macroMismatchCount: number, nameMismatch: boolean): void {
           emitter.bufferRestaurant({
             type: "restaurant",
             runId,
-            hexId: hex.hexId,
-            name: place.name,
-            placeId: place.placeId,
+            hexId,
+            name: restaurant.name,
+            placeId: restaurant.overtureId,
             source,
             status,
             itemCount,
@@ -464,10 +348,10 @@ async function main(): Promise<void> {
           });
         }
 
-        // Resolver: FatSecret → UberEats → Yelp (with retry — S-116)
+        // Resolver: FatSecret → UberEats (with retry — S-116)
         const resolverResult = await withRetry(
-          () => resolver.resolve(place.name, place.address),
-          { label: `${place.name}/resolve` },
+          () => resolver.resolve(restaurant.name, restaurant.address),
+          { label: `${restaurant.name}/resolve` },
         ).then((r) => r.result);
         let menuResult: MenuSourceResult = resolverResult;
         resolverAttempts = resolverResult.attempts ?? [];
@@ -478,67 +362,61 @@ async function main(): Promise<void> {
         }
 
         // Phase 3a: Website scrape via Firecrawl (with retry — S-116, S-124)
-        if (!menuResult.found && place.websiteUri) {
-          log(`  [${place.name}] Trying firecrawl website scrape`);
+        if (!menuResult.found && restaurant.website) {
+          log(`  [${restaurant.name}] Trying firecrawl website scrape`);
           sourcesAttempted.push("brave_website");
           menuResult = await withRetry(
             () => API_SEMAPHORES.firecrawl.run(() =>
-              firecrawlWebSource.lookupByUrl(place.name, place.websiteUri!),
+              firecrawlWebSource.lookupByUrl(restaurant.name, restaurant.website!),
             ),
-            { label: `${place.name}/firecrawl-url` },
+            { label: `${restaurant.name}/firecrawl-url` },
           ).then((r) => r.result);
           if (!menuResult.found) sourcesFailed.push("brave_website");
         }
 
         // Phase 3b: Brave Search menu fallback (S-123, S-124 — replaces Firecrawl search)
         if (!menuResult.found) {
-          log(`  [${place.name}] Trying brave_search menu fallback`);
+          log(`  [${restaurant.name}] Trying brave_search menu fallback`);
           if (!sourcesAttempted.includes("brave_website")) sourcesAttempted.push("brave_website");
           menuResult = await withRetry(
             () => API_SEMAPHORES.braveSearch.run(() =>
-              braveWebSource.lookup(place.name, place.address),
+              braveWebSource.lookup(restaurant.name, restaurant.address),
             ),
-            { label: `${place.name}/brave-search` },
+            { label: `${restaurant.name}/brave-search` },
           ).then((r) => r.result);
           if (!menuResult.found && !sourcesFailed.includes("brave_website")) sourcesFailed.push("brave_website");
         }
 
         // S-131: Skip restaurant entirely when all sources miss — no fake items
         if (!menuResult.found) {
-          log(`  [${place.name}] All sources missed — skipping (no name-only fallback)`);
+          log(`  [${restaurant.name}] All sources missed — skipping (no name-only fallback)`);
           stats.skippedNoSource++;
           stats.sourceBreakdown["skipped_no_source"] = (stats.sourceBreakdown["skipped_no_source"] ?? 0) + 1;
           emitRestaurantEvent("skipped_no_source", "none", 0, 0, 0, false);
           return;
         }
 
-        log(`  [${place.name}] Source: ${menuResult.sourceId}, ${menuResult.items.length} items`);
+        log(`  [${restaurant.name}] Source: ${menuResult.sourceId}, ${menuResult.items.length} items`);
         stats.sourceBreakdown[menuResult.sourceId] = (stats.sourceBreakdown[menuResult.sourceId] ?? 0) + 1;
 
         // S-118: Name mismatch detection (log-only)
         const nameMismatch = menuResult.nameMismatch ?? false;
         if (nameMismatch) {
-          log(`  [${place.name}] Name mismatch detected (scraped: ${menuResult.restaurant?.name ?? "unknown"})`);
+          log(`  [${restaurant.name}] Name mismatch detected (scraped: ${menuResult.restaurant?.name ?? "unknown"})`);
         }
 
-        // Get photo: Google Places (higher res, $0.007) → UE JSON-LD fallback (free, low res)
-        let photoUrl: string | null = null;
-        if (place.photoName) {
-          photoUrl = await fetchGooglePlacesPhotoUrl(place.photoName);
-        }
-        if (!photoUrl) {
-          photoUrl = menuResult.restaurant?.imageUrl ?? null;
-        }
+        // Get photo: UE JSON-LD fallback (free)
+        const photoUrl: string | null = menuResult.restaurant?.imageUrl ?? null;
 
         // Upsert restaurant (raw SQL)
         let restaurantId: string;
         try {
-          restaurantId = await upsertRestaurantRaw(place, menuResult.sourceId, photoUrl, prisma);
+          restaurantId = await upsertRestaurantRaw(restaurant, menuResult.sourceId, photoUrl, prisma);
         } catch (err) {
-          log(`  [${place.name}] DB error: ${String(err)}`);
+          log(`  [${restaurant.name}] DB error: ${String(err)}`);
           stats.skippedDbError++;
           emitter.emitError({
-            type: "error", runId, hexId: hex.hexId, restaurant: place.name, placeId: place.placeId,
+            type: "error", runId, hexId, restaurant: restaurant.name, placeId: restaurant.overtureId,
             stage: "persistence", source: "db", error: String(err), retryable: false, retriesAttempted: 0,
             _time: new Date().toISOString(),
           });
@@ -550,7 +428,7 @@ async function main(): Promise<void> {
         if (!CONFIG.force) {
           const menuHash = computeMenuHash(menuResult.items.map((i) => i.name));
           if (await shouldSkipIncremental(restaurantId, menuHash, CONFIG.skipDays, prisma)) {
-            log(`  [${place.name}] Recently scraped (within ${CONFIG.skipDays} days), menu unchanged — skipping`);
+            log(`  [${restaurant.name}] Recently scraped (within ${CONFIG.skipDays} days), menu unchanged — skipping`);
             skippedIncremental++;
             emitRestaurantEvent("skipped_incremental", menuResult.sourceId, 0, 0, 0, nameMismatch);
             return;
@@ -573,15 +451,15 @@ async function main(): Promise<void> {
               () => API_SEMAPHORES.haiku.run(() =>
                 estimateMacros(menuResult.items, anthropic),
               ),
-              { label: `${place.name}/haiku` },
+              { label: `${restaurant.name}/haiku` },
             );
             macros = estimatedMacros;
             stats.anthropicCalls++;
           } catch (err) {
-            log(`  [${place.name}] Haiku failed: ${String(err)}`);
+            log(`  [${restaurant.name}] Haiku failed: ${String(err)}`);
             stats.skippedHaikuFailed++;
             emitter.emitError({
-              type: "error", runId, hexId: hex.hexId, restaurant: place.name, placeId: place.placeId,
+              type: "error", runId, hexId, restaurant: restaurant.name, placeId: restaurant.overtureId,
               stage: "macro_estimation", source: "haiku", error: String(err), retryable: true, retriesAttempted: 2,
               _time: new Date().toISOString(),
             });
@@ -594,15 +472,15 @@ async function main(): Promise<void> {
         // S-121: Flag macro math mismatches (log-only)
         const { valid: validPairs, rejected, macroMismatches } = validateItems(menuResult.items, macros);
         if (rejected.length > 0) {
-          log(`  [${place.name}] Rejected ${rejected.length} items: ${rejected.map((r) => `${r.name} (${r.reason})`).join(", ")}`);
+          log(`  [${restaurant.name}] Rejected ${rejected.length} items: ${rejected.map((r) => `${r.name} (${r.reason})`).join(", ")}`);
           stats.rejectedItems += rejected.length;
         }
         if (macroMismatches.length > 0) {
-          log(`  [${place.name}] Macro mismatches: ${macroMismatches.map((m) => `${m.name} (${m.calories}cal vs ${m.calculatedCalories}cal calc, ${m.percentDelta}%)`).join(", ")}`);
+          log(`  [${restaurant.name}] Macro mismatches: ${macroMismatches.map((m) => `${m.name} (${m.calories}cal vs ${m.calculatedCalories}cal calc, ${m.percentDelta}%)`).join(", ")}`);
         }
 
         if (validPairs.length === 0) {
-          log(`  [${place.name}] All items rejected by validation — skipping`);
+          log(`  [${restaurant.name}] All items rejected by validation — skipping`);
           stats.skippedNoMenu++;
           emitRestaurantEvent("skipped_validation_empty", menuResult.sourceId, 0, rejected.length, macroMismatches.length, nameMismatch);
           return;
@@ -615,7 +493,7 @@ async function main(): Promise<void> {
           `;
           const existing = Number(existingCount[0]?.count ?? 0);
           if (existing > 5 && validPairs.length < existing * 0.5) {
-            log(`  [${place.name}] Regression guard: new ${validPairs.length} items < 50% of existing ${existing} — skipping (use --force to override)`);
+            log(`  [${restaurant.name}] Regression guard: new ${validPairs.length} items < 50% of existing ${existing} — skipping (use --force to override)`);
             stats.skippedRegression++;
             emitRestaurantEvent("skipped_regression", menuResult.sourceId, 0, rejected.length, macroMismatches.length, nameMismatch);
             return;
@@ -633,7 +511,7 @@ async function main(): Promise<void> {
           WHERE "id" = ${restaurantId}
         `;
 
-        log(`  [${place.name}] Persisted ${persisted} items`);
+        log(`  [${restaurant.name}] Persisted ${persisted} items`);
         stats.persisted++;
 
         await computeAndStoreDietaryOptions(restaurantId, prisma);
@@ -641,10 +519,10 @@ async function main(): Promise<void> {
       }
 
       // Process in parallel batches (S-128: concurrency=10)
-      for (let i = 0; i < newPlaces.length; i += CONFIG.concurrency) {
-        const batch = newPlaces.slice(i, i + CONFIG.concurrency);
+      for (let i = 0; i < hexRestaurants.length; i += CONFIG.concurrency) {
+        const batch = hexRestaurants.slice(i, i + CONFIG.concurrency);
         const results = await Promise.allSettled(
-          batch.map((place, j) => processRestaurant(place, i + j + 1)),
+          batch.map((r, j) => processRestaurant(r, i + j + 1)),
         );
         for (const result of results) {
           if (result.status === "rejected") {
@@ -658,17 +536,19 @@ async function main(): Promise<void> {
       await emitter.flushHex({
         type: "cost_checkpoint",
         runId,
-        hexId: hex.hexId,
+        hexId,
         hexesCompleted,
         hexesTotal,
         cumulativeCost: 0,
-        cumulativeCostBreakdown: { googlePlaces: 0, braveSearch: 0, firecrawl: 0, haiku: 0 },
+        cumulativeCostBreakdown: { braveSearch: 0, firecrawl: 0, haiku: 0 },
         _time: new Date().toISOString(),
       });
 
-      // S-126: Mark hex as completed in checkpoint
-      markHexCompleted(runId, hex.hexId);
-      log(`Hex ${hex.hexId} complete (${hexesCompleted}/${hexesTotal})`);
+      // S-141: Record hex checkpoint in DB (Option A — per-restaurant persist already done)
+      await prisma.pipelineCompletedHex.create({
+        data: { runId, hexId, count: hexRestaurants.length },
+      });
+      log(`Hex ${hexId} complete (${hexesCompleted}/${hexesTotal})`);
     }
   } finally {
     await prisma.$disconnect();
@@ -683,10 +563,6 @@ async function main(): Promise<void> {
     writeFileSync(URL_CACHE_PATH, JSON.stringify(cacheObj, null, 2));
     log(`UE URL cache saved (${urlCache.size} entries)`);
   }
-
-  // S-126: Clear checkpoint on successful completion
-  clearCheckpoint();
-  log(`Checkpoint cleared (run complete)`);
 
   log("Done.");
   log(
@@ -703,7 +579,7 @@ async function main(): Promise<void> {
     `Source breakdown: ${Object.entries(stats.sourceBreakdown).map(([k, v]) => `${k}: ${v}`).join(", ") || "none"}`,
   );
   log(
-    `API calls: ${stats.googlePlacesCalls} Google Places / ${stats.anthropicCalls} Haiku`,
+    `API calls: ${stats.anthropicCalls} Haiku (discovery: Overture Maps — free)`,
   );
   log(`Hexes: ${hexesCompleted}/${hexesTotal}`);
   log(`Total time: ${elapsed}s`);

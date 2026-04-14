@@ -62,7 +62,6 @@ export interface CostCheckpoint {
   hexesTotal: number;
   cumulativeCost: number;
   cumulativeCostBreakdown: {
-    googlePlaces: number;
     braveSearch: number;
     firecrawl: number;
     haiku: number;
