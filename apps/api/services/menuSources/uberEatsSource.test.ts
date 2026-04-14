@@ -11,6 +11,9 @@ import {
   findRestaurantBlock,
   parseMenuItems,
   parseUberEatsMarkdown,
+  fetchUberEatsHtml,
+  scrapeUberEatsViaFirecrawl,
+  scrapeUberEatsMarkdown,
 } from "./uberEatsSource";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -342,5 +345,217 @@ describe("UberEatsSource", () => {
 
     const result = await source.lookup("Thai Orchid", "2301 Hyperion Ave, LA");
     expect(result.found).toBe(false);
+  });
+
+  it("returns items from cached URL when constructor storeUrl is provided", async () => {
+    const jsonLdHtml = fixture("ubereats-thai-place.html");
+    const sourceWithUrl = new UberEatsSource("https://www.ubereats.com/store/thai-orchid/AbCd1234");
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      text: jest.fn().mockResolvedValue(jsonLdHtml),
+    });
+
+    const result = await sourceWithUrl.lookup("Thai Orchid", "LA");
+    expect(result.found).toBe(true);
+    expect(result.items.length).toBeGreaterThan(0);
+  });
+
+  it("falls through from cached URL to later steps when JSON-LD is absent", async () => {
+    const noMenuHtml = fixture("ubereats-no-menu.html");
+    const jsonLdHtml = fixture("ubereats-thai-place.html");
+    const sourceWithUrl = new UberEatsSource("https://www.ubereats.com/store/wrong/XYZ");
+
+    mockFetch
+      // Step 1: cached URL — no JSON-LD
+      .mockResolvedValueOnce({
+        ok: true,
+        text: jest.fn().mockResolvedValue(noMenuHtml),
+      })
+      // Step 4: Brave search — no match (Firecrawl discovery)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValue({
+          data: [{ url: "https://www.ubereats.com/store/thai-orchid/AbCd1234" }],
+        }),
+      })
+      // Step 5: Raw fetch for Firecrawl-discovered URL
+      .mockResolvedValueOnce({
+        ok: true,
+        text: jest.fn().mockResolvedValue(jsonLdHtml),
+      });
+
+    const result = await sourceWithUrl.lookup("Thai Orchid", "LA");
+    expect(result.found).toBe(true);
+  });
+
+  it("resolves from urlCache when available", async () => {
+    const jsonLdHtml = fixture("ubereats-thai-place.html");
+    const sourceWithCache = new UberEatsSource();
+    sourceWithCache.urlCache = new Map([["Thai Orchid", "https://www.ubereats.com/store/thai-orchid/AbCd"]]);
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      text: jest.fn().mockResolvedValue(jsonLdHtml),
+    });
+
+    const result = await sourceWithCache.lookup("Thai Orchid", "LA");
+    expect(result.found).toBe(true);
+    expect(result.items.length).toBeGreaterThan(0);
+  });
+
+  it("resolves from sitemapIndex when available", async () => {
+    const jsonLdHtml = fixture("ubereats-thai-place.html");
+    const mockSitemapIndex = { findUrl: jest.fn().mockReturnValue("https://www.ubereats.com/store/thai-orchid/AbCd") };
+    const sourceWithSitemap = new UberEatsSource(undefined, mockSitemapIndex as unknown as import("./ueSitemapIndex").UESitemapIndex);
+    sourceWithSitemap.urlCache = new Map();
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      text: jest.fn().mockResolvedValue(jsonLdHtml),
+    });
+
+    const result = await sourceWithSitemap.lookup("Thai Orchid", "LA");
+    expect(result.found).toBe(true);
+    expect(sourceWithSitemap.urlCache.get("Thai Orchid")).toBe("https://www.ubereats.com/store/thai-orchid/AbCd");
+  });
+
+  it("logs and skips sitemap when no slug match found", async () => {
+    const mockSitemapIndex = { findUrl: jest.fn().mockReturnValue(null) };
+    const sourceWithSitemap = new UberEatsSource(undefined, mockSitemapIndex as unknown as import("./ueSitemapIndex").UESitemapIndex);
+
+    mockFetch
+      // Brave discovery — no match
+      .mockResolvedValueOnce({ ok: false, status: 500 })
+      // Firecrawl discovery — no match
+      .mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValue({ data: [] }),
+      });
+
+    const result = await sourceWithSitemap.lookup("Nonexistent", "LA");
+    expect(result.found).toBe(false);
+    expect(mockSitemapIndex.findUrl).toHaveBeenCalledWith("Nonexistent");
+  });
+});
+
+// ─── fetchUberEatsHtml ──────────────────────────────────────────────────────
+
+describe("fetchUberEatsHtml", () => {
+  it("returns HTML on successful fetch", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: jest.fn().mockResolvedValue("<html>menu</html>"),
+    });
+    const result = await fetchUberEatsHtml("https://www.ubereats.com/store/test/123");
+    expect(result).toBe("<html>menu</html>");
+  });
+
+  it("retries on 403 and returns HTML on retry success", async () => {
+    mockFetch
+      .mockResolvedValueOnce({ ok: false, status: 403 })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: jest.fn().mockResolvedValue("<html>retry-success</html>"),
+      });
+    const result = await fetchUberEatsHtml("https://www.ubereats.com/store/test/123");
+    expect(result).toBe("<html>retry-success</html>");
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns null on 403 when retry also fails", async () => {
+    mockFetch
+      .mockResolvedValueOnce({ ok: false, status: 403 })
+      .mockResolvedValueOnce({ ok: false, status: 403 });
+    const result = await fetchUberEatsHtml("https://www.ubereats.com/store/test/123");
+    expect(result).toBeNull();
+  });
+
+  it("returns null on non-403 error status", async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
+    const result = await fetchUberEatsHtml("https://www.ubereats.com/store/test/123");
+    expect(result).toBeNull();
+  });
+
+  it("returns null on network error", async () => {
+    mockFetch.mockRejectedValueOnce(new Error("ECONNREFUSED"));
+    const result = await fetchUberEatsHtml("https://www.ubereats.com/store/test/123");
+    expect(result).toBeNull();
+  });
+});
+
+// ─── scrapeUberEatsViaFirecrawl ─────────────────────────────────────────────
+
+describe("scrapeUberEatsViaFirecrawl", () => {
+  it("returns HTML when Firecrawl scrape succeeds", async () => {
+    process.env["FIRECRAWL_API_KEY"] = "test-key";
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: jest.fn().mockResolvedValue({ data: { html: "<html>menu</html>" } }),
+    });
+    const result = await scrapeUberEatsViaFirecrawl("https://www.ubereats.com/store/test/123");
+    expect(result).toBe("<html>menu</html>");
+    delete process.env["FIRECRAWL_API_KEY"];
+  });
+
+  it("returns null when API key is missing", async () => {
+    delete process.env["FIRECRAWL_API_KEY"];
+    const result = await scrapeUberEatsViaFirecrawl("https://www.ubereats.com/store/test/123");
+    expect(result).toBeNull();
+  });
+
+  it("returns null when Firecrawl returns error", async () => {
+    process.env["FIRECRAWL_API_KEY"] = "test-key";
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
+    const result = await scrapeUberEatsViaFirecrawl("https://www.ubereats.com/store/test/123");
+    expect(result).toBeNull();
+    delete process.env["FIRECRAWL_API_KEY"];
+  });
+
+  it("returns null on network error", async () => {
+    process.env["FIRECRAWL_API_KEY"] = "test-key";
+    mockFetch.mockRejectedValueOnce(new Error("network fail"));
+    const result = await scrapeUberEatsViaFirecrawl("https://www.ubereats.com/store/test/123");
+    expect(result).toBeNull();
+    delete process.env["FIRECRAWL_API_KEY"];
+  });
+});
+
+// ─── scrapeUberEatsMarkdown (function) ──────────────────────────────────────
+
+describe("scrapeUberEatsMarkdown (function)", () => {
+  it("returns markdown when Firecrawl scrape succeeds", async () => {
+    process.env["FIRECRAWL_API_KEY"] = "test-key";
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: jest.fn().mockResolvedValue({ data: { markdown: "# Menu\n- Item 1" } }),
+    });
+    const result = await scrapeUberEatsMarkdown("https://www.ubereats.com/store/test/123");
+    expect(result).toBe("# Menu\n- Item 1");
+    delete process.env["FIRECRAWL_API_KEY"];
+  });
+
+  it("returns null when API key is missing", async () => {
+    delete process.env["FIRECRAWL_API_KEY"];
+    const result = await scrapeUberEatsMarkdown("https://www.ubereats.com/store/test/123");
+    expect(result).toBeNull();
+  });
+
+  it("returns null when Firecrawl returns error", async () => {
+    process.env["FIRECRAWL_API_KEY"] = "test-key";
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
+    const result = await scrapeUberEatsMarkdown("https://www.ubereats.com/store/test/123");
+    expect(result).toBeNull();
+    delete process.env["FIRECRAWL_API_KEY"];
+  });
+
+  it("returns null on network error", async () => {
+    process.env["FIRECRAWL_API_KEY"] = "test-key";
+    mockFetch.mockRejectedValueOnce(new Error("network fail"));
+    const result = await scrapeUberEatsMarkdown("https://www.ubereats.com/store/test/123");
+    expect(result).toBeNull();
+    delete process.env["FIRECRAWL_API_KEY"];
   });
 });
