@@ -11,11 +11,11 @@ kanban-plugin: basic
 
 ## In Progress
 
+## Done
+
 ### Wave 9 — E2E validation
 
-- [ ] **S-142** Mini-hex E2E integration test — Run full pipeline against a single small hex (res 8 or 9, ~20 restaurants). Verify: Overture discovery returns restaurants, hex assignment correct, source fallback chain works, checkpoint persisted in DB, resume skips completed hex, Axiom events emitted. #backend #wave-9 ^dep-S-141
-
-## Done
+- [x] **S-142** Mini-hex E2E integration test — 5-stage test: Overture discovery, hex assignment, checkpoint persistence, resume skip, Axiom event shapes. Uses `describeIfE2E` gate (DB + DuckDB). 392 lines. #backend #wave-9 ^dep-S-141 @completed(2026-04-14)
 
 ### Wave 6 — Source reliability
 
