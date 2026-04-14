@@ -26,6 +26,8 @@ import type { MenuSource, MenuSourceResult, StructuredMenuItem } from "./types";
 import type { UESitemapIndex } from "./ueSitemapIndex";
 import type { WebScraper } from "../scrapers/types";
 import { discoverUberEatsUrlViaBrave } from "../scrapers/braveSearchScraper";
+import { writeFileSync, mkdirSync } from "fs";
+import { join } from "path";
 
 const FIRECRAWL_BASE = "https://api.firecrawl.dev";
 
@@ -410,16 +412,35 @@ export async function fetchUberEatsHtml(
   }
 }
 
-/**
- * Full JSON-LD extraction: raw fetch → parse → structured menu items.
- * Returns null if the page has no JSON-LD menu data.
- */
-export async function extractMenuViaJsonLd(
-  storeUrl: string,
-): Promise<{ items: StructuredMenuItem[]; restaurant?: { name: string; cuisine?: string[]; priceRange?: string; imageUrl?: string } } | null> {
-  const html = await fetchUberEatsHtml(storeUrl);
-  if (!html) return null;
+/** Detect UberEats bot defense challenge page. */
+export function isBotDefensePage(html: string): boolean {
+  return html.includes("botdefense-ext-ui");
+}
 
+/**
+ * Save failed UE HTML to disk for debugging transient failures.
+ * Helps diagnose whether failures are login walls, JS challenges, or empty menus.
+ */
+function saveFailedHtml(storeUrl: string, html: string, reason: string): void {
+  try {
+    const debugDir = join(process.cwd(), "scripts", "cache", "ue-debug");
+    mkdirSync(debugDir, { recursive: true });
+    const slug = storeUrl.replace(/[^a-z0-9]+/gi, "-").slice(0, 80);
+    const ts = new Date().toISOString().replace(/[:.]/g, "-");
+    const filename = `${ts}_${slug}.html`;
+    const header = `<!-- UE debug dump\n     URL: ${storeUrl}\n     Reason: ${reason}\n     Time: ${new Date().toISOString()}\n     HTML length: ${html.length}\n-->\n`;
+    writeFileSync(join(debugDir, filename), header + html);
+    console.log(`[ubereats-debug] saved failed HTML: ${filename} (${reason})`); // eslint-disable-line no-console
+  } catch {
+    // Debug dump is best-effort
+  }
+}
+
+/**
+ * Parse JSON-LD from raw HTML string (shared by raw fetch and Firecrawl paths).
+ * Returns structured items + restaurant metadata, or null.
+ */
+function parseJsonLdFromHtml(html: string): { items: StructuredMenuItem[]; restaurant?: { name: string; cuisine?: string[]; priceRange?: string; imageUrl?: string } } | null {
   const blocks = extractJsonLdBlocks(html);
   const restaurantBlock = findRestaurantBlock(blocks);
   if (!restaurantBlock) return null;
@@ -433,7 +454,6 @@ export async function extractMenuViaJsonLd(
       : [restaurantBlock.servesCuisine]
     : undefined;
 
-  // Extract hero image from JSON-LD (free)
   const imageArr = restaurantBlock.image;
   const imageUrl = Array.isArray(imageArr) ? imageArr[0] : typeof imageArr === "string" ? imageArr : undefined;
 
@@ -445,6 +465,49 @@ export async function extractMenuViaJsonLd(
   if (imageUrl) restaurant.imageUrl = imageUrl;
 
   return { items, restaurant };
+}
+
+/**
+ * Full JSON-LD extraction: raw fetch → parse → structured menu items.
+ * Returns null if the page has no JSON-LD menu data.
+ * Also returns `botDefense: true` if the page is a bot defense challenge.
+ */
+export async function extractMenuViaJsonLd(
+  storeUrl: string,
+): Promise<{ items: StructuredMenuItem[]; restaurant?: { name: string; cuisine?: string[]; priceRange?: string; imageUrl?: string }; botDefense?: boolean } | null> {
+  const html = await fetchUberEatsHtml(storeUrl);
+  if (!html) return null;
+
+  if (isBotDefensePage(html)) {
+    saveFailedHtml(storeUrl, html, "bot-defense");
+    return { items: [], botDefense: true };
+  }
+
+  const result = parseJsonLdFromHtml(html);
+  if (!result) {
+    saveFailedHtml(storeUrl, html, "no-json-ld");
+    return null;
+  }
+
+  return result;
+}
+
+/**
+ * Firecrawl HTML fallback: scrape UE page via Firecrawl (bypasses bot defense)
+ * and extract JSON-LD from the rendered HTML.
+ * Cost: $0.006 per call. Only used when raw fetch hits bot defense.
+ */
+export async function extractMenuViaFirecrawl(
+  storeUrl: string,
+): Promise<{ items: StructuredMenuItem[]; restaurant?: { name: string; cuisine?: string[]; priceRange?: string; imageUrl?: string } } | null> {
+  const html = await scrapeUberEatsViaFirecrawl(storeUrl);
+  if (!html) return null;
+
+  const result = parseJsonLdFromHtml(html);
+  if (!result) {
+    saveFailedHtml(storeUrl, html, "firecrawl-no-json-ld");
+  }
+  return result;
 }
 
 // ─── MenuSource implementation ────────────────────────────────────────────────
@@ -485,31 +548,23 @@ export class UberEatsSource implements MenuSource {
   }
 
   /**
-   * Try JSON-LD extraction from a UberEats store URL.
-   * Returns a MenuSourceResult if successful, null otherwise.
-   *
-   * S-118: Sets nameMismatch on the result if the scraped name doesn't
-   * match the expected name (log-only, does not reject).
+   * Build a MenuSourceResult from parsed JSON-LD data, with name validation.
+   * Returns null if name mismatch is too severe (wrong restaurant).
    */
-  private async tryJsonLd(storeUrl: string, expectedName: string): Promise<MenuSourceResult | null> {
-    const jsonLdResult = await extractMenuViaJsonLd(storeUrl);
-    if (!jsonLdResult || jsonLdResult.items.length === 0) return null;
-
+  private buildResult(
+    jsonLdResult: { items: StructuredMenuItem[]; restaurant?: { name: string; cuisine?: string[]; priceRange?: string; imageUrl?: string } },
+    expectedName: string,
+  ): MenuSourceResult | null {
     let nameMismatch = false;
 
-    // Validate: ensure the JSON-LD restaurant name roughly matches what we expected.
-    // Prevents caching wrong restaurants (e.g. "Taoxi Asian Cuisine" for "TAO").
     if (jsonLdResult.restaurant?.name) {
       const found = jsonLdResult.restaurant.name.toLowerCase();
       const expected = expectedName.toLowerCase();
-      // Check if either name contains a significant portion of the other
       const expectedWords = expected.split(/\s+/).filter(w => w.length > 2);
       const matchCount = expectedWords.filter(w => found.includes(w)).length;
       if (expectedWords.length > 0 && matchCount === 0) {
-        // No significant word overlap — likely wrong restaurant
         return null;
       }
-      // S-118: Flag mismatch if names don't match closely (but still accept)
       if (found !== expected && !(found.includes(expected) || expected.includes(found))) {
         nameMismatch = true;
       }
@@ -526,36 +581,62 @@ export class UberEatsSource implements MenuSource {
   }
 
   /**
+   * Try JSON-LD extraction from a UberEats store URL via raw fetch.
+   * Returns { result, botDefense } — result is null on failure,
+   * botDefense is true if UE served a bot defense challenge page.
+   */
+  private async tryJsonLd(storeUrl: string, expectedName: string): Promise<{ result: MenuSourceResult | null; botDefense: boolean }> {
+    const jsonLdResult = await extractMenuViaJsonLd(storeUrl);
+    if (!jsonLdResult) return { result: null, botDefense: false };
+    if (jsonLdResult.botDefense) return { result: null, botDefense: true };
+    if (jsonLdResult.items.length === 0) return { result: null, botDefense: false };
+    return { result: this.buildResult(jsonLdResult, expectedName), botDefense: false };
+  }
+
+  /**
+   * Try JSON-LD extraction via Firecrawl (S-134 — bypasses bot defense).
+   * Only called when raw fetch hits bot defense. Cost: $0.006.
+   */
+  private async tryFirecrawlJsonLd(storeUrl: string, expectedName: string): Promise<MenuSourceResult | null> {
+    const jsonLdResult = await extractMenuViaFirecrawl(storeUrl);
+    if (!jsonLdResult || jsonLdResult.items.length === 0) return null;
+    return this.buildResult(jsonLdResult, expectedName);
+  }
+
+  /**
    * Lookup menu data for a restaurant.
    *
-   * Flow:
-   *   1. Try cached URL (if provided)
-   *   2. Try persistent URL cache
-   *   3. Try UE sitemap index (free)
-   *   4. Brave Search URL discovery (S-122 — $0.005/query, 20 QPS)
-   *   5. Firecrawl URL discovery (fallback — $0.006/query, 0.17 QPS)
+   * Flow (S-134):
+   *   1. URL discovery: url-cache → sitemap → Brave → Firecrawl search
+   *   2. Raw fetch → JSON-LD (free, fast — works ~75% of the time)
+   *   3. If bot defense detected → Firecrawl HTML fetch → JSON-LD ($0.006)
    */
   /** Optional URL cache — callers can set this to persist discovered URLs across runs. */
   urlCache: Map<string, string> | null = null;
 
   async lookup(name: string, address: string): Promise<MenuSourceResult> {
-    const log = (step: string, msg: string) => console.log(`[ubereats] [${name}] ${step}: ${msg}`);
+    const log = (step: string, msg: string) => console.log(`[ubereats] [${name}] ${step}: ${msg}`); // eslint-disable-line no-console
+
+    // Track the best URL we've found (for Firecrawl fallback if bot defense blocks raw fetch)
+    let botDefenseUrl: string | null = null;
 
     // Step 1: Try constructor-provided URL
     if (this.cachedUrl) {
       log("cached-url", `trying ${this.cachedUrl}`);
-      const result = await this.tryJsonLd(this.cachedUrl, name);
+      const { result, botDefense } = await this.tryJsonLd(this.cachedUrl, name);
       if (result) { log("cached-url", `ok (${result.items.length} items)`); return result; }
-      log("cached-url", "no JSON-LD or name mismatch");
+      if (botDefense) { botDefenseUrl = this.cachedUrl; log("cached-url", "bot defense detected"); }
+      else { log("cached-url", "no JSON-LD or name mismatch"); }
     }
 
     // Step 2: Try persistent URL cache (survives across runs)
     const cachedDiscoveredUrl = this.urlCache?.get(name);
     if (cachedDiscoveredUrl) {
       log("url-cache", `trying ${cachedDiscoveredUrl}`);
-      const result = await this.tryJsonLd(cachedDiscoveredUrl, name);
+      const { result, botDefense } = await this.tryJsonLd(cachedDiscoveredUrl, name);
       if (result) { log("url-cache", `ok (${result.items.length} items)`); return result; }
-      log("url-cache", "no JSON-LD or name mismatch");
+      if (botDefense) { botDefenseUrl ??= cachedDiscoveredUrl; log("url-cache", "bot defense detected"); }
+      else { log("url-cache", "no JSON-LD or name mismatch"); }
     }
 
     // Step 3: Try UE sitemap index (free, local lookup → raw fetch)
@@ -563,13 +644,14 @@ export class UberEatsSource implements MenuSource {
       const sitemapUrl = this.sitemapIndex.findUrl(name);
       if (sitemapUrl) {
         log("sitemap", `trying ${sitemapUrl}`);
-        const result = await this.tryJsonLd(sitemapUrl, name);
+        const { result, botDefense } = await this.tryJsonLd(sitemapUrl, name);
         if (result) {
           log("sitemap", `ok (${result.items.length} items)`);
           this.urlCache?.set(name, sitemapUrl);
           return result;
         }
-        log("sitemap", "no JSON-LD or name mismatch");
+        if (botDefense) { botDefenseUrl ??= sitemapUrl; log("sitemap", "bot defense detected"); }
+        else { log("sitemap", "no JSON-LD or name mismatch"); }
       } else {
         log("sitemap", "no slug match");
       }
@@ -579,30 +661,44 @@ export class UberEatsSource implements MenuSource {
     const braveUrl = await discoverUberEatsUrlViaBrave(name, address);
     if (braveUrl) {
       log("brave-ue", `trying ${braveUrl}`);
-      const result = await this.tryJsonLd(braveUrl, name);
+      const { result, botDefense } = await this.tryJsonLd(braveUrl, name);
       if (result) {
         log("brave-ue", `ok (${result.items.length} items)`);
         this.urlCache?.set(name, braveUrl);
         return result;
       }
-      log("brave-ue", "no JSON-LD or name mismatch");
+      if (botDefense) { botDefenseUrl ??= braveUrl; log("brave-ue", "bot defense detected"); }
+      else { log("brave-ue", "no JSON-LD or name mismatch"); }
     } else {
       log("brave-ue", "no UE URL found");
     }
 
-    // Step 5: Firecrawl URL discovery → JSON-LD (fallback)
+    // Step 5: Firecrawl URL discovery → raw fetch (fallback)
     const discoveredUrl = await discoverUberEatsUrl(name, address);
     if (discoveredUrl) {
       log("firecrawl-ue", `trying ${discoveredUrl}`);
-      const result = await this.tryJsonLd(discoveredUrl, name);
+      const { result, botDefense } = await this.tryJsonLd(discoveredUrl, name);
       if (result) {
         log("firecrawl-ue", `ok (${result.items.length} items)`);
         this.urlCache?.set(name, discoveredUrl);
         return result;
       }
-      log("firecrawl-ue", "no JSON-LD or name mismatch");
+      if (botDefense) { botDefenseUrl ??= discoveredUrl; log("firecrawl-ue", "bot defense detected"); }
+      else { log("firecrawl-ue", "no JSON-LD or name mismatch"); }
     } else {
       log("firecrawl-ue", "no UE URL found");
+    }
+
+    // Step 6 (S-134): Firecrawl HTML fallback — bypasses bot defense
+    if (botDefenseUrl) {
+      log("firecrawl-fallback", `trying ${botDefenseUrl} via Firecrawl`);
+      const result = await this.tryFirecrawlJsonLd(botDefenseUrl, name);
+      if (result) {
+        log("firecrawl-fallback", `ok (${result.items.length} items)`);
+        this.urlCache?.set(name, botDefenseUrl);
+        return result;
+      }
+      log("firecrawl-fallback", "no JSON-LD from Firecrawl either");
     }
 
     log("result", "all steps failed — not found");

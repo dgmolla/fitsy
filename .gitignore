@@ -55,3 +55,4 @@ recordings/
 .env*.local
 scripts/cache/ue-sitemap-index.json
 scripts/cache/pipeline-checkpoint.json
+scripts/cache/ue-debug/
