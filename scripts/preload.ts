@@ -622,7 +622,8 @@ async function main(): Promise<void> {
         const persisted = await persistItems(restaurantId, validPairs, prisma);
 
         // S-127: Update menuHash + lastScrapedAt after successful persist
-        const menuHash = computeMenuHash(validPairs.map((vp) => vp.item.name));
+        // Use raw items (not validPairs) so hash matches the skip-check computation
+        const menuHash = computeMenuHash(menuResult.items.map((i) => i.name));
         await prisma.$queryRaw`
           UPDATE "Restaurant"
           SET "menuHash" = ${menuHash}, "lastScrapedAt" = now()
