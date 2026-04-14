@@ -49,12 +49,10 @@ export class Semaphore {
  * - Haiku: 20 concurrent
  * - Brave Search: 15 concurrent
  * - Firecrawl: 3 concurrent
- * - Google Places: 1 concurrent (sequential, paginated)
  */
 export const API_SEMAPHORES = {
   ubereats: new Semaphore(5),
   haiku: new Semaphore(20),
   braveSearch: new Semaphore(15),
   firecrawl: new Semaphore(3),
-  googlePlaces: new Semaphore(1),
 };

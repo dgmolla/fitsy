@@ -108,35 +108,7 @@ interface PipelineStats {
   sourceBreakdown: Record<string, number>; // sourceId → count
 }
 
-// ─── Cuisine tag / chain detection ────────────────────────────────────────────
-
-const CUISINE_TYPE_MAP: Record<string, string> = {
-  american_restaurant: "american",
-  asian_restaurant: "asian",
-  bakery: "bakery",
-  barbecue_restaurant: "bbq",
-  breakfast_restaurant: "breakfast",
-  brunch_restaurant: "brunch",
-  cafe: "cafe",
-  chinese_restaurant: "chinese",
-  coffee_shop: "coffee",
-  fast_food_restaurant: "fast_food",
-  french_restaurant: "french",
-  hamburger_restaurant: "burgers",
-  indian_restaurant: "indian",
-  italian_restaurant: "italian",
-  japanese_restaurant: "japanese",
-  korean_restaurant: "korean",
-  mediterranean_restaurant: "mediterranean",
-  mexican_restaurant: "mexican",
-  pizza_restaurant: "pizza",
-  sandwich_shop: "sandwiches",
-  seafood_restaurant: "seafood",
-  sushi_restaurant: "sushi",
-  thai_restaurant: "thai",
-  vegan_restaurant: "vegan",
-  vietnamese_restaurant: "vietnamese",
-};
+// ─── Chain detection ──────────────────────────────────────────────────────────
 
 const KNOWN_CHAIN_NAMES = [
   "mcdonald",
@@ -154,22 +126,17 @@ const KNOWN_CHAIN_NAMES = [
   "chick-fil-a",
 ];
 
-const CHAIN_INDICATOR_TYPES = new Set([
-  "fast_food_restaurant",
-  "hamburger_restaurant",
-  "pizza_restaurant",
+/** Overture categories that strongly indicate chain restaurants. */
+const CHAIN_INDICATOR_CATEGORIES = new Set([
+  "fast_food",
+  "burger_restaurant",
 ]);
 
-function extractCuisineTags(types: string[]): string[] {
-  const tags = types.map((t) => CUISINE_TYPE_MAP[t]).filter(Boolean) as string[];
-  return tags.length > 0 ? tags : ["restaurant"];
-}
-
-function isChain(name: string, types: string[]): boolean {
-  const hasChainType = types.some((t) => CHAIN_INDICATOR_TYPES.has(t));
+function isChain(name: string, category: string): boolean {
+  const hasCategoryIndicator = CHAIN_INDICATOR_CATEGORIES.has(category);
   const nameLower = name.toLowerCase();
   const isKnownChain = KNOWN_CHAIN_NAMES.some((chain) => nameLower.includes(chain));
-  return hasChainType || isKnownChain;
+  return hasCategoryIndicator || isKnownChain;
 }
 
 // ─── Raw SQL persistence ─────────────────────────────────────────────────────
@@ -183,7 +150,7 @@ async function upsertRestaurantRaw(
   prisma: PrismaClient,
 ): Promise<string> {
   const cuisineTags = restaurant.category ? [restaurant.category] : ["restaurant"];
-  const chainFlag = isChain(restaurant.name, restaurant.category ? [restaurant.category] : []);
+  const chainFlag = isChain(restaurant.name, restaurant.category ?? "");
 
   const rows = await prisma.$queryRaw<{ id: string }[]>`
     INSERT INTO "Restaurant" (
@@ -222,9 +189,6 @@ function validateEnv(): void {
   }
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 function log(message: string): void {
   console.log(`[preload] ${message}`);
@@ -267,8 +231,13 @@ async function main(): Promise<void> {
   const prisma = new PrismaClient();
   const anthropic = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"] });
 
-  // S-120: Axiom event emitter
-  const runId = new Date().toISOString();
+  // S-141: runId is date-based so re-running the same day resumes.
+  // Pass --run-id <id> to override (useful for manual retries).
+  const runIdIdx = process.argv.indexOf("--run-id");
+  const runId =
+    runIdIdx !== -1 && process.argv[runIdIdx + 1]
+      ? process.argv[runIdIdx + 1]!
+      : `run-${new Date().toISOString().slice(0, 10)}`;
   const emitter = new PipelineEmitter();
 
   // Web scrapers: Firecrawl for known-URL scraping, Brave Search for search fallback (S-123, S-124)
@@ -571,7 +540,7 @@ async function main(): Promise<void> {
         hexesCompleted,
         hexesTotal,
         cumulativeCost: 0,
-        cumulativeCostBreakdown: { googlePlaces: 0, braveSearch: 0, firecrawl: 0, haiku: 0 },
+        cumulativeCostBreakdown: { braveSearch: 0, firecrawl: 0, haiku: 0 },
         _time: new Date().toISOString(),
       });
 

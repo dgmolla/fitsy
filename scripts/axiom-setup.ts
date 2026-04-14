@@ -93,7 +93,6 @@ async function sendDummyEvents() {
         macroMismatch: { total: 35 },
       },
       cost: {
-        googlePlaces: { calls: 300, cost: 1.5 },
         braveSearch: { queries: 17500, cost: 78 },
         firecrawl: { scrapes: 1500, cost: 4.5 },
         haiku: { calls: 10500, inputTokens: 8400000, outputTokens: 4200000, cost: 63 },
