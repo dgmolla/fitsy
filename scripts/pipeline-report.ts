@@ -55,12 +55,13 @@ function parseArgs(): { runId: string | null; latest: boolean } {
 
 interface AplResult {
   tables?: Array<{
-    columns?: Array<{ name: string; values?: unknown[] }>;
+    fields?: Array<{ name: string }>;
+    columns?: unknown[][];
   }>;
 }
 
 async function queryApl(apl: string): Promise<AplResult> {
-  const res = await fetch(`${AXIOM_API_V1}/datasets/_apl?format=legacy`, {
+  const res = await fetch(`${AXIOM_API_V1}/datasets/_apl?format=tabular`, {
     method: "POST",
     headers,
     body: JSON.stringify({
@@ -79,22 +80,22 @@ async function queryApl(apl: string): Promise<AplResult> {
 }
 
 function extractCount(result: AplResult): number {
-  return (result.tables?.[0]?.columns?.[0]?.values?.[0] as number) ?? 0;
+  return (result.tables?.[0]?.columns?.[0]?.[0] as number) ?? 0;
 }
 
 function extractRows(result: AplResult): Record<string, unknown>[] {
   const table = result.tables?.[0];
-  if (!table?.columns || table.columns.length === 0) return [];
+  if (!table?.fields || !table?.columns || table.columns.length === 0) return [];
 
-  const colNames = table.columns.map((c) => c.name);
-  const colValues = table.columns.map((c) => c.values ?? []);
-  const rowCount = colValues[0]?.length ?? 0;
+  const colNames = table.fields.map((f) => f.name);
+  const colValues = table.columns;
+  const rowCount = (colValues[0] as unknown[])?.length ?? 0;
 
   const rows: Record<string, unknown>[] = [];
   for (let i = 0; i < rowCount; i++) {
     const row: Record<string, unknown> = {};
     for (let j = 0; j < colNames.length; j++) {
-      row[colNames[j]!] = colValues[j]![i];
+      row[colNames[j]!] = (colValues[j] as unknown[])?.[i];
     }
     rows.push(row);
   }
