@@ -9,14 +9,6 @@ kanban-plugin: basic
 
 ## Backlog
 
-
-### Wave 4 — Scale prep
-
-- [ ] **S-125** Hex grid discovery — Implement `polygonToCells()` at H3 res 7 for LA metro. Replace single-point discovery. Dedup by `externalPlaceId`. #backend #wave-4 ^dep-S-124
-- [ ] **S-126** Hex-level checkpointing — Checkpoint file at `scripts/cache/pipeline-checkpoint.json`. Track `completedHexes`. Skip completed hexes on restart. Batch-persist per hex. #backend #wave-4 ^dep-S-125
-- [ ] **S-127** Incremental updates — Add `lastScrapedAt` + `menuHash` to Restaurant model. Skip if scraped within N days. `--force` override. #backend #wave-4
-- [ ] **S-128** Parallelism tuning — Increase concurrency to 10-15 restaurants. Per-API semaphores (UE: 5, Haiku: 20, Brave: 15, Firecrawl: 3). #backend #wave-4
-
 ### Wave 5 — E2E validation (gate before LA scale run)
 
 - [ ] **S-132** E2E pipeline test — single hex dry run. Run full v3 pipeline against 1 hex (Silver Lake). Verify: source fallback chain works, no name-only items persisted, validation filters active, regression guard works, all 4 Axiom event types land correctly, `pipeline-report.ts` renders from Axiom data, name mismatch flags present, cost matches projections (~$1 for ~200 restaurants), selective rerun via `rerun.ts` works. Kill mid-run + restart to confirm checkpoint skip. This is the go/no-go gate before scaling to 100 hexes. #backend #wave-5 ^dep-S-126 ^dep-S-128 ^dep-S-129 ^dep-S-130
@@ -24,6 +16,13 @@ kanban-plugin: basic
 ## In Progress
 
 ## Done
+
+### Wave 4 — Scale prep
+
+- [x] **S-125** Hex grid discovery — Implement `polygonToCells()` at H3 res 7 for LA metro. Replace single-point discovery. Dedup by `externalPlaceId`. #backend #wave-4 ^dep-S-124 @completed(2026-04-13)
+- [x] **S-126** Hex-level checkpointing — Checkpoint file at `scripts/cache/pipeline-checkpoint.json`. Track `completedHexes`. Skip completed hexes on restart. Batch-persist per hex. #backend #wave-4 ^dep-S-125 @completed(2026-04-13)
+- [x] **S-127** Incremental updates — Add `lastScrapedAt` + `menuHash` to Restaurant model. Skip if scraped within N days. `--force` override. #backend #wave-4 @completed(2026-04-13)
+- [x] **S-128** Parallelism tuning — Increase concurrency to 10-15 restaurants. Per-API semaphores (UE: 5, Haiku: 20, Brave: 15, Firecrawl: 3). #backend #wave-4 @completed(2026-04-13)
 
 ### Wave 3 — Source improvements
 
