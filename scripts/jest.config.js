@@ -15,6 +15,9 @@ const config = {
     ],
   },
   testMatch: ["**/*.test.ts"],
+  moduleNameMapper: {
+    "^(\\.\\.?/.*)\\.js$": "$1",
+  },
 };
 
 module.exports = config;

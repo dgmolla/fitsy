@@ -16,7 +16,7 @@
  *   1. resolver.resolve()                      → FatSecret (direct macros) | UberEats
  *   2. fallback: webScraperSource.lookupByUrl() if website URI known
  *   3. fallback: webScraperSource.lookup()      for web search
- *   4. fallback: name-only Haiku estimation
+ *   4. fallback: skip restaurant (no name-only fallback — S-131)
  *   5. persist: chain items with official macros, indie items via Haiku estimation
  *
  * Usage:
@@ -52,11 +52,12 @@ import { YelpSource } from "../apps/api/services/menuSources/yelpSource.js";
 import { readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { estimateMacros } from "../apps/api/services/macroEstimationService.js";
-import type {
-  MacroData,
-  StructuredMenuItem,
-} from "../apps/api/services/menuSources/types.js";
-import { aggregateDietaryOptions } from "./constants.js";
+import type { MacroData } from "../apps/api/services/menuSources/types.js";
+import {
+  validateItems,
+  persistItems,
+  computeAndStoreDietaryOptions,
+} from "./pipeline-utils.js";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -74,6 +75,7 @@ const CONFIG = {
   targetRadius: parseInt(process.env["TARGET_RADIUS"] ?? "3000", 10),
   maxRestaurants: parseInt(process.env["MAX_RESTAURANTS"] ?? "100", 10),
   rateLimitDelayMs: 500,
+  force: process.argv.includes("--force"),
 };
 
 // ─── Stats ────────────────────────────────────────────────────────────────────
@@ -82,8 +84,11 @@ interface PipelineStats {
   discovered: number;
   persisted: number;
   skippedNoMenu: number;
+  skippedNoSource: number;
   skippedHaikuFailed: number;
   skippedDbError: number;
+  skippedRegression: number;
+  rejectedItems: number;
   anthropicCalls: number;
   googlePlacesCalls: number;
   sourceBreakdown: Record<string, number>; // sourceId → count
@@ -213,122 +218,6 @@ async function fetchGooglePlacesPhotoUrl(photoName: string): Promise<string | nu
   }
 }
 
-async function persistItems(
-  restaurantId: string,
-  items: StructuredMenuItem[],
-  macros: (MacroData | null)[],
-  prisma: PrismaClient,
-): Promise<number> {
-  const validPairs: { item: StructuredMenuItem; macro: MacroData }[] = [];
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i];
-    const macro = macros[i];
-    if (item && macro) validPairs.push({ item, macro });
-  }
-  if (validPairs.length === 0) return 0;
-
-  // Query 1: Delete existing items (cascade deletes estimates via FK)
-  await prisma.$executeRaw`
-    DELETE FROM "MacroEstimate" WHERE "menuItemId" IN (
-      SELECT "id" FROM "MenuItem" WHERE "restaurantId" = ${restaurantId}
-    )
-  `;
-  await prisma.$executeRaw`
-    DELETE FROM "MenuItem" WHERE "restaurantId" = ${restaurantId}
-  `;
-
-  // Decode HTML entities that leak through from source data (UE JSON-LD, FatSecret, etc.)
-  function decodeHtml(s: string | null | undefined): string | null {
-    if (!s) return s ?? null;
-    return s
-      .replace(/&amp;/g, "&")
-      .replace(/&#39;/g, "'")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      .replace(/&quot;/g, '"')
-      .replace(/&#x27;/g, "'")
-      .replace(/&#x2F;/g, "/");
-  }
-
-  // Query 2: Bulk insert menu items — build VALUES clause
-  const names = validPairs.map((p) => decodeHtml(p.item.name)!);
-  const descriptions = validPairs.map((p) => decodeHtml(p.item.description) ?? null);
-  const categories = validPairs.map((p) => decodeHtml(p.item.category) ?? null);
-  const sections = validPairs.map((p) => decodeHtml(p.item.section) ?? null);
-  const prices = validPairs.map((p) => p.item.price ?? null);
-  // Serialize dietary tags as JSON strings — Prisma can't handle text[][] in UNNEST
-  const dietaryTagsJson = validPairs.map((p) => JSON.stringify(p.macro.dietaryTags ?? []));
-
-  const menuItemRows = await prisma.$queryRaw<{ id: string }[]>`
-    INSERT INTO "MenuItem" (
-      "id", "restaurantId", "name", "description", "category", "section", "price", "dietaryTags", "createdAt", "updatedAt"
-    )
-    SELECT
-      gen_random_uuid(),
-      ${restaurantId},
-      name, description, category, section, price,
-      ARRAY(SELECT jsonb_array_elements_text(tags::jsonb)),
-      now(), now()
-    FROM UNNEST(
-      ${names}::text[],
-      ${descriptions}::text[],
-      ${categories}::text[],
-      ${sections}::text[],
-      ${prices}::float[],
-      ${dietaryTagsJson}::text[]
-    ) AS t(name, description, category, section, price, tags)
-    RETURNING "id"
-  `;
-
-  // Query 3: Bulk insert macro estimates
-  const menuItemIds = menuItemRows.map((r) => r.id);
-  const calories = validPairs.map((p) => Math.round(p.macro.calories));
-  const proteins = validPairs.map((p) => p.macro.proteinG);
-  const carbs = validPairs.map((p) => p.macro.carbsG);
-  const fats = validPairs.map((p) => p.macro.fatG);
-  const confidences = validPairs.map((p) => p.macro.confidence);
-  const sources = validPairs.map((p) => p.macro.source);
-
-  await prisma.$executeRaw`
-    INSERT INTO "MacroEstimate" (
-      "id", "menuItemId", "calories", "proteinG", "carbsG", "fatG",
-      "confidence", "source", "hadPhoto", "estimatedAt"
-    )
-    SELECT
-      gen_random_uuid(),
-      "menuItemId", calories, "proteinG", "carbsG", "fatG",
-      confidence::"ConfidenceLevel", source, false, now()
-    FROM UNNEST(
-      ${menuItemIds}::text[],
-      ${calories}::int[],
-      ${proteins}::float[],
-      ${carbs}::float[],
-      ${fats}::float[],
-      ${confidences}::text[],
-      ${sources}::text[]
-    ) AS t("menuItemId", calories, "proteinG", "carbsG", "fatG", confidence, source)
-  `;
-
-  return menuItemRows.length;
-}
-
-// ─── Dietary summary (raw SQL) ───────────────────────────────────────────────
-
-async function computeAndStoreDietaryOptions(
-  restaurantId: string,
-  prisma: PrismaClient,
-): Promise<void> {
-  const items = await prisma.$queryRaw<{ dietaryTags: string[] }[]>`
-    SELECT "dietaryTags" FROM "MenuItem" WHERE "restaurantId" = ${restaurantId}
-  `;
-  const dietaryOptions = aggregateDietaryOptions(items.map((i) => i.dietaryTags));
-
-  await prisma.$executeRaw`
-    UPDATE "Restaurant" SET "dietaryOptions" = ${dietaryOptions}::text[], "updatedAt" = now()
-    WHERE "id" = ${restaurantId}
-  `;
-}
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function validateEnv(): void {
@@ -394,8 +283,11 @@ async function main(): Promise<void> {
     discovered: 0,
     persisted: 0,
     skippedNoMenu: 0,
+    skippedNoSource: 0,
     skippedHaikuFailed: 0,
     skippedDbError: 0,
+    skippedRegression: 0,
+    rejectedItems: 0,
     anthropicCalls: 0,
     googlePlacesCalls: 0,
     sourceBreakdown: {},
@@ -433,7 +325,7 @@ async function main(): Promise<void> {
     async function processRestaurant(place: PlaceResult, index: number): Promise<void> {
       log(`Processing ${place.name} (${index}/${places.length})...`);
 
-      // Resolver: FatSecret → UberEats
+      // Resolver: FatSecret → UberEats → Yelp
       let menuResult = await resolver.resolve(place.name, place.address);
 
       // Phase 3a: Web scraper website scrape
@@ -448,14 +340,12 @@ async function main(): Promise<void> {
         menuResult = await webScraperSource.lookup(place.name, place.address);
       }
 
-      // Phase 4: Name-only Haiku estimation (last resort)
+      // S-131: Skip restaurant entirely when all sources miss — no fake items
       if (!menuResult.found) {
-        log(`  [${place.name}] Name-only Haiku`);
-        menuResult = {
-          found: true,
-          items: [{ name: `${place.name} - Popular Items` }],
-          sourceId: "name-only",
-        };
+        log(`  [${place.name}] All sources missed — skipping (no name-only fallback)`);
+        stats.skippedNoSource++;
+        stats.sourceBreakdown["skipped_no_source"] = (stats.sourceBreakdown["skipped_no_source"] ?? 0) + 1;
+        return;
       }
 
       log(`  [${place.name}] Source: ${menuResult.sourceId}, ${menuResult.items.length} items`);
@@ -501,7 +391,33 @@ async function main(): Promise<void> {
         }
       }
 
-      const persisted = await persistItems(restaurantId, menuResult.items, macros, prisma);
+      // S-111, S-112: Validate items — reject non-food, condiments
+      const { valid: validPairs, rejected } = validateItems(menuResult.items, macros);
+      if (rejected.length > 0) {
+        log(`  [${place.name}] Rejected ${rejected.length} items: ${rejected.map((r) => `${r.name} (${r.reason})`).join(", ")}`);
+        stats.rejectedItems += rejected.length;
+      }
+
+      if (validPairs.length === 0) {
+        log(`  [${place.name}] All items rejected by validation — skipping`);
+        stats.skippedNoMenu++;
+        return;
+      }
+
+      // S-115: Regression detection — don't replace good data with less data
+      if (!CONFIG.force) {
+        const existingCount = await prisma.$queryRaw<{ count: bigint }[]>`
+          SELECT COUNT(*)::bigint as count FROM "MenuItem" WHERE "restaurantId" = ${restaurantId}
+        `;
+        const existing = Number(existingCount[0]?.count ?? 0);
+        if (existing > 5 && validPairs.length < existing * 0.5) {
+          log(`  [${place.name}] Regression guard: new ${validPairs.length} items < 50% of existing ${existing} — skipping (use --force to override)`);
+          stats.skippedRegression++;
+          return;
+        }
+      }
+
+      const persisted = await persistItems(restaurantId, validPairs, prisma);
       log(`  [${place.name}] Persisted ${persisted} items`);
       stats.persisted++;
 
@@ -538,9 +454,12 @@ async function main(): Promise<void> {
   log("Done.");
   log(
     `Summary: ${stats.discovered} discovered / ${stats.persisted} persisted / ` +
+      `${stats.skippedNoSource} skipped (no source) / ` +
       `${stats.skippedNoMenu} skipped (no menu) / ` +
       `${stats.skippedHaikuFailed} skipped (Haiku failed) / ` +
-      `${stats.skippedDbError} skipped (DB error)`,
+      `${stats.skippedDbError} skipped (DB error) / ` +
+      `${stats.skippedRegression} skipped (regression guard) / ` +
+      `${stats.rejectedItems} items rejected (validation)`,
   );
   log(
     `Source breakdown: ${Object.entries(stats.sourceBreakdown).map(([k, v]) => `${k}: ${v}`).join(", ") || "none"}`,
