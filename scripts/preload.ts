@@ -225,7 +225,6 @@ async function upsertRestaurantRaw(
       "userRatingCount" = EXCLUDED."userRatingCount",
       "priceLevel" = EXCLUDED."priceLevel",
       "photoUrl" = COALESCE(EXCLUDED."photoUrl", "Restaurant"."photoUrl"),
-      "lastScrapedAt" = now(),
       "updatedAt" = now()
     RETURNING "id"
   `;
@@ -622,10 +621,12 @@ async function main(): Promise<void> {
 
         const persisted = await persistItems(restaurantId, validPairs, prisma);
 
-        // S-127: Update menuHash after successful persist
+        // S-127: Update menuHash + lastScrapedAt after successful persist
         const menuHash = computeMenuHash(validPairs.map((vp) => vp.item.name));
         await prisma.$queryRaw`
-          UPDATE "Restaurant" SET "menuHash" = ${menuHash} WHERE "id" = ${restaurantId}
+          UPDATE "Restaurant"
+          SET "menuHash" = ${menuHash}, "lastScrapedAt" = now()
+          WHERE "id" = ${restaurantId}
         `;
 
         log(`  [${place.name}] Persisted ${persisted} items`);
