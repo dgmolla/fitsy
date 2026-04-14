@@ -27,7 +27,7 @@ export default function WeightScreen() {
 
   return (
     <WelcomeScreen
-      progress={8 / 14}
+      progress={7 / 13}
       title="What do you weigh?"
       onContinue={async () => {
         await saveOnboardingField('weightKg', toKg());

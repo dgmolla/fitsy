@@ -51,7 +51,7 @@ export default function PlanReadyScreen() {
 
   return (
     <WelcomeScreen
-      progress={12 / 14}
+      progress={11 / 13}
       title="Your plan."
       onContinue={() => router.push('/welcome/trial')}
       canContinue={macros !== null}

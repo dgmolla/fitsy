@@ -21,7 +21,7 @@ export default function GoalScreen() {
 
   return (
     <WelcomeScreen
-      progress={6 / 14}
+      progress={5 / 13}
       title="What's your goal?"
       onContinue={async () => {
         if (selected) {

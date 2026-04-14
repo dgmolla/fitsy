@@ -30,7 +30,7 @@ export default function HeightScreen() {
 
   return (
     <WelcomeScreen
-      progress={7 / 14}
+      progress={6 / 13}
       title="How tall are you?"
       onContinue={async () => {
         await saveOnboardingField('heightCm', toCm());
