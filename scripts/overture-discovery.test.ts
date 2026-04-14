@@ -12,6 +12,21 @@ import {
 } from "./overture-discovery";
 
 // ---------------------------------------------------------------------------
+// DuckDB availability check — skip integration tests in CI where duckdb
+// is not installed (same pattern as pipeline-completed-hex.test.ts)
+// ---------------------------------------------------------------------------
+
+let hasDuckDB = false;
+try {
+  execSync("duckdb --version", { encoding: "utf-8", stdio: "pipe" });
+  hasDuckDB = true;
+} catch {
+  // duckdb not installed
+}
+
+const describeIfDuckDB = hasDuckDB ? describe : describe.skip;
+
+// ---------------------------------------------------------------------------
 // Test fixture: create a small parquet file with test data using DuckDB
 // ---------------------------------------------------------------------------
 
@@ -38,20 +53,22 @@ COPY (
   execSync(`duckdb -c '${sql.replace(/'/g, "'\\''")}'`, { encoding: "utf-8" });
 }
 
-beforeAll(() => {
-  createFixtureParquet();
-});
+if (hasDuckDB) {
+  beforeAll(() => {
+    createFixtureParquet();
+  });
 
-afterAll(() => {
-  try { unlinkSync(FIXTURE_PATH); } catch { /* noop */ }
-  try { unlinkSync(CACHE_TEST_PATH); } catch { /* noop */ }
-});
+  afterAll(() => {
+    try { unlinkSync(FIXTURE_PATH); } catch { /* noop */ }
+    try { unlinkSync(CACHE_TEST_PATH); } catch { /* noop */ }
+  });
+}
 
 // ---------------------------------------------------------------------------
 // queryLocalParquet
 // ---------------------------------------------------------------------------
 
-describe("queryLocalParquet", () => {
+describeIfDuckDB("queryLocalParquet", () => {
   it("returns restaurants within the bounding box", async () => {
     // Bbox covers LA downtown area (should include id-001, id-002, id-003, id-005)
     const results = await queryLocalParquet(FIXTURE_PATH, {
@@ -163,7 +180,9 @@ describe("isCacheFresh", () => {
   it("returns false when file does not exist", () => {
     expect(isCacheFresh("/tmp/nonexistent-cache.parquet")).toBe(false);
   });
+});
 
+describeIfDuckDB("isCacheFresh (with fixture)", () => {
   it("returns true when file was just created", () => {
     // Our fixture was just created — should be fresh
     expect(isCacheFresh(FIXTURE_PATH)).toBe(true);
@@ -250,7 +269,7 @@ describe("buildLocalQuerySQL", () => {
 // downloadOvertureCache — command construction (mocked)
 // ---------------------------------------------------------------------------
 
-describe("downloadOvertureCache", () => {
+describeIfDuckDB("downloadOvertureCache", () => {
   it("skips download when cache is fresh", async () => {
     // Fixture was just created — should be reused
     const result = await downloadOvertureCache(
