@@ -358,14 +358,42 @@ const BROWSER_UA =
 /**
  * Raw HTTP fetch of a UberEats store page. Returns HTML string.
  * UberEats SSRs the page with JSON-LD for Google SEO — no JS rendering needed.
+ *
+ * S-117: Rate limiting — 500ms minimum between fetches, 403 → backoff to 2s + retry once.
  */
+
+// Module-level rate limit state for UE fetches (S-117)
+let _ueLastFetchTime = 0;
+const UE_MIN_DELAY_MS = 500;
+const UE_BACKOFF_DELAY_MS = 2000;
+
 export async function fetchUberEatsHtml(
   storeUrl: string,
 ): Promise<string | null> {
+  // S-117: Enforce minimum delay between UE fetches
+  const now = Date.now();
+  const elapsed = now - _ueLastFetchTime;
+  if (elapsed < UE_MIN_DELAY_MS) {
+    await new Promise((resolve) => setTimeout(resolve, UE_MIN_DELAY_MS - elapsed));
+  }
+
   try {
+    _ueLastFetchTime = Date.now();
     const response = await fetch(storeUrl, {
       headers: { "User-Agent": BROWSER_UA, Accept: "text/html" },
     });
+
+    // S-117: On 403, backoff to 2s and retry once
+    if (response.status === 403) {
+      await new Promise((resolve) => setTimeout(resolve, UE_BACKOFF_DELAY_MS));
+      _ueLastFetchTime = Date.now();
+      const retryResponse = await fetch(storeUrl, {
+        headers: { "User-Agent": BROWSER_UA, Accept: "text/html" },
+      });
+      if (!retryResponse.ok) return null;
+      return await retryResponse.text();
+    }
+
     if (!response.ok) return null;
     return await response.text();
   } catch {
@@ -450,10 +478,15 @@ export class UberEatsSource implements MenuSource {
   /**
    * Try JSON-LD extraction from a UberEats store URL.
    * Returns a MenuSourceResult if successful, null otherwise.
+   *
+   * S-118: Sets nameMismatch on the result if the scraped name doesn't
+   * match the expected name (log-only, does not reject).
    */
   private async tryJsonLd(storeUrl: string, expectedName: string): Promise<MenuSourceResult | null> {
     const jsonLdResult = await extractMenuViaJsonLd(storeUrl);
     if (!jsonLdResult || jsonLdResult.items.length === 0) return null;
+
+    let nameMismatch = false;
 
     // Validate: ensure the JSON-LD restaurant name roughly matches what we expected.
     // Prevents caching wrong restaurants (e.g. "Taoxi Asian Cuisine" for "TAO").
@@ -467,12 +500,17 @@ export class UberEatsSource implements MenuSource {
         // No significant word overlap — likely wrong restaurant
         return null;
       }
+      // S-118: Flag mismatch if names don't match closely (but still accept)
+      if (found !== expected && !(found.includes(expected) || expected.includes(found))) {
+        nameMismatch = true;
+      }
     }
 
     const result: MenuSourceResult = {
       found: true,
       items: jsonLdResult.items,
       sourceId: this.id,
+      nameMismatch,
     };
     if (jsonLdResult.restaurant) result.restaurant = jsonLdResult.restaurant;
     return result;

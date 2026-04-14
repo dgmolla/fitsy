@@ -161,7 +161,7 @@ async function setupMonitors() {
     }
   }
 
-  // Create monitors
+  // Create monitors (S-129: Run failed, Cost overrun, Zero output use MatchEvent; cost_checkpoint added)
   const monitors = [
     {
       name: "Pipeline: Error spike",
@@ -175,29 +175,38 @@ async function setupMonitors() {
     {
       name: "Pipeline: Run failed",
       description: "Pipeline run had more failures than successes",
-      aplQuery: `['${DATASET}'] | where type == "run" and coverage.restaurantsFailed > coverage.restaurantsPersisted`,
+      aplQuery: `['${DATASET}'] | where type == "run" and restaurantsFailed > restaurantsPersisted`,
       intervalMinutes: 60,
-      operator: "Above",
-      threshold: 0,
+      operator: "MatchEvent",
+      threshold: 1,
       rangeMinutes: 300,
     },
     {
       name: "Pipeline: Cost overrun",
       description: "Pipeline run exceeded $200 budget",
-      aplQuery: `['${DATASET}'] | where type == "run" and cost.total > 200`,
+      aplQuery: `['${DATASET}'] | where type == "run" and costTotal > 200`,
       intervalMinutes: 60,
-      operator: "Above",
-      threshold: 0,
+      operator: "MatchEvent",
+      threshold: 1,
       rangeMinutes: 300,
     },
     {
       name: "Pipeline: Zero output",
       description: "Pipeline run persisted zero restaurants",
-      aplQuery: `['${DATASET}'] | where type == "run" and coverage.restaurantsPersisted == 0`,
+      aplQuery: `['${DATASET}'] | where type == "run" and restaurantsPersisted == 0`,
       intervalMinutes: 60,
-      operator: "Above",
-      threshold: 0,
+      operator: "MatchEvent",
+      threshold: 1,
       rangeMinutes: 300,
+    },
+    {
+      name: "Pipeline: Cost checkpoint spike",
+      description: "Single hex exceeded $5 cumulative cost — investigate before it scales",
+      aplQuery: `['${DATASET}'] | where type == "cost_checkpoint" and cumulativeCost > 5`,
+      intervalMinutes: 15,
+      operator: "MatchEvent",
+      threshold: 1,
+      rangeMinutes: 60,
     },
   ];
 
@@ -234,15 +243,18 @@ function logManualMonitorInstructions() {
   log("  1. Error spike:");
   log(`     Query: ['${DATASET}'] | where type == "error"`);
   log("     Trigger: count > 50 in 5 min\n");
-  log("  2. Run failed:");
-  log(`     Query: ['${DATASET}'] | where type == "run" and coverage.restaurantsFailed > coverage.restaurantsPersisted`);
-  log("     Trigger: count > 0 in 5 hours\n");
-  log("  3. Cost overrun:");
-  log(`     Query: ['${DATASET}'] | where type == "run" and cost.total > 200`);
-  log("     Trigger: count > 0 in 5 hours\n");
-  log("  4. Zero output:");
-  log(`     Query: ['${DATASET}'] | where type == "run" and coverage.restaurantsPersisted == 0`);
-  log("     Trigger: count > 0 in 5 hours\n");
+  log("  2. Run failed (MatchEvent):");
+  log(`     Query: ['${DATASET}'] | where type == "run" and restaurantsFailed > restaurantsPersisted`);
+  log("     Trigger: MatchEvent, threshold 1 in 5 hours\n");
+  log("  3. Cost overrun (MatchEvent):");
+  log(`     Query: ['${DATASET}'] | where type == "run" and costTotal > 200`);
+  log("     Trigger: MatchEvent, threshold 1 in 5 hours\n");
+  log("  4. Zero output (MatchEvent):");
+  log(`     Query: ['${DATASET}'] | where type == "run" and restaurantsPersisted == 0`);
+  log("     Trigger: MatchEvent, threshold 1 in 5 hours\n");
+  log("  5. Cost checkpoint spike (MatchEvent):");
+  log(`     Query: ['${DATASET}'] | where type == "cost_checkpoint" and cumulativeCost > 5`);
+  log("     Trigger: MatchEvent, threshold 1 in 1 hour\n");
 }
 
 // ── Test Slack ──────────────────────────────────────────────────────────────

@@ -36,6 +36,7 @@ export interface MenuSourceResult {
   items: StructuredMenuItem[];
   macros?: Map<string, MacroData>; // populated by FFN/FatSecret; key = item name (lowercased)
   sourceId: string; // "ffn" | "fatsecret" | "ubereats" | "firecrawl" | "none"
+  nameMismatch?: boolean; // S-118: true if scraped name didn't match expected name (log-only)
 }
 
 export interface MenuSource {
