@@ -356,7 +356,7 @@ describe("findNearbyRestaurants", () => {
   });
 
   // ── Test 10 ─────────────────────────────────────────────────────────────────
-  it("returns bestMatch: null when no targets", async () => {
+  it("returns bestMatch with first menu item when no targets (fallback)", async () => {
     const r = makeRestaurant({ id: "rest-1", lat: 34.0 });
     mockFindMany.mockResolvedValue([r]);
 
@@ -365,7 +365,11 @@ describe("findNearbyRestaurants", () => {
       targets: {},
     });
 
-    expect(result.data[0]?.bestMatch).toBeNull();
+    // No targets → fallback to first menu item (not null)
+    const best = result.data[0]?.bestMatch;
+    expect(best).not.toBeNull();
+    expect(best?.menuItemId).toBe("item-1");
+    expect(best?.name).toBe("Grilled Chicken");
   });
 
   // ── Test 11 ─────────────────────────────────────────────────────────────────

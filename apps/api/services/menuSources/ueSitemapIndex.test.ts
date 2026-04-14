@@ -64,7 +64,7 @@ describe("UESitemapIndex", () => {
     expect(url).toBe("https://www.ubereats.com/store/thai-orchid/abc-123");
   });
 
-  it("findUrl returns substring match when exact match fails", async () => {
+  it("findUrl returns null for substring match — exact slug only", async () => {
     mockFetch.mockImplementation(async (url: string) => {
       if (url.includes("-000.xml")) {
         return {
@@ -78,9 +78,9 @@ describe("UESitemapIndex", () => {
     const index = new UESitemapIndex();
     await index.load();
 
-    // "Panda Express" normalizes to "panda-express" which is a substring of "panda-express-la"
+    // "Panda Express" normalizes to "panda-express" but index has "panda-express-la" — no substring match
     const url = index.findUrl("Panda Express");
-    expect(url).toBe("https://www.ubereats.com/store/panda-express-la/def-456");
+    expect(url).toBeNull();
   });
 
   it("findUrl returns null when no match found", async () => {
