@@ -50,7 +50,7 @@ import {
   discoverRestaurants,
   type PlaceResult,
 } from "../apps/api/services/googlePlacesService.js";
-import { MenuSourceResolver } from "../apps/api/services/menuSources/resolver.js";
+import { MenuSourceResolver, type SourceAttempt } from "../apps/api/services/menuSources/resolver.js";
 import { FatSecretSource } from "../apps/api/services/menuSources/fatSecretSource.js";
 import { UberEatsSource } from "../apps/api/services/menuSources/uberEatsSource.js";
 import { UESitemapIndex } from "../apps/api/services/menuSources/ueSitemapIndex.js";
@@ -61,7 +61,7 @@ import { readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { createHash } from "crypto";
 import { estimateMacros } from "../apps/api/services/macroEstimationService.js";
-import type { MacroData } from "../apps/api/services/menuSources/types.js";
+import type { MacroData, MenuSourceResult } from "../apps/api/services/menuSources/types.js";
 import {
   validateItems,
   persistItems,
@@ -440,10 +440,11 @@ async function main(): Promise<void> {
         const restaurantStart = Date.now();
         const sourcesAttempted: string[] = [];
         const sourcesFailed: string[] = [];
+        let resolverAttempts: SourceAttempt[] = [];
 
         log(`Processing ${place.name} (${index}/${newPlaces.length})...`);
 
-        // Helper: emit restaurant event and return (S-120)
+        // Helper: emit restaurant event and return (S-120, S-133)
         function emitRestaurantEvent(status: string, source: string, itemCount: number, rejectedCount: number, macroMismatchCount: number, nameMismatch: boolean): void {
           emitter.bufferRestaurant({
             type: "restaurant",
@@ -458,6 +459,7 @@ async function main(): Promise<void> {
             macroMismatchCount,
             sourcesAttempted: [...sourcesAttempted],
             sourcesFailed: [...sourcesFailed],
+            sourceAttempts: [...resolverAttempts],
             nameMismatch,
             durationMs: Date.now() - restaurantStart,
             _time: new Date().toISOString(),
@@ -465,13 +467,16 @@ async function main(): Promise<void> {
         }
 
         // Resolver: FatSecret → UberEats → Yelp (with retry — S-116)
-        let menuResult = await withRetry(
+        const resolverResult = await withRetry(
           () => resolver.resolve(place.name, place.address),
           { label: `${place.name}/resolve` },
         ).then((r) => r.result);
-        sourcesAttempted.push("fatsecret", "ubereats", "yelp");
-        if (!menuResult.found) {
-          sourcesFailed.push("fatsecret", "ubereats", "yelp");
+        let menuResult: MenuSourceResult = resolverResult;
+        resolverAttempts = resolverResult.attempts ?? [];
+        // S-133: Populate per-source tracking from resolver attempts
+        for (const attempt of resolverResult.attempts) {
+          sourcesAttempted.push(attempt.sourceId);
+          if (attempt.status !== "ok") sourcesFailed.push(attempt.sourceId);
         }
 
         // Phase 3a: Website scrape via Firecrawl (with retry — S-116, S-124)

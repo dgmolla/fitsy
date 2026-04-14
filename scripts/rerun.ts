@@ -24,7 +24,7 @@ import { YelpSource } from "../apps/api/services/menuSources/yelpSource.js";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { estimateMacros } from "../apps/api/services/macroEstimationService.js";
-import type { MacroData } from "../apps/api/services/menuSources/types.js";
+import type { MacroData, MenuSourceResult } from "../apps/api/services/menuSources/types.js";
 import {
   validateItems,
   persistItems,
@@ -148,7 +148,7 @@ async function main(): Promise<void> {
       log(`  Current items: ${itemsBefore}`);
 
       // Resolve menu source (with retry — S-116)
-      let menuResult = await withRetry(
+      let menuResult: MenuSourceResult = await withRetry(
         () => resolver.resolve(restaurant.name, restaurant.address),
         { label: `${restaurant.name}/resolve` },
       ).then((r) => r.result);

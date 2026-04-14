@@ -14,6 +14,13 @@ const DATASET = "fitsy-pipeline";
 
 // ─── Event schemas ──────────────────────────────────────────────────────────
 
+export interface SourceAttemptEvent {
+  sourceId: string;
+  status: "ok" | "not_found" | "error";
+  reason?: string;
+  durationMs: number;
+}
+
 export interface RestaurantEvent {
   type: "restaurant";
   runId: string;
@@ -27,6 +34,7 @@ export interface RestaurantEvent {
   macroMismatchCount: number;
   sourcesAttempted: string[];
   sourcesFailed: string[];
+  sourceAttempts: SourceAttemptEvent[];
   nameMismatch: boolean;
   durationMs: number;
   _time: string;
