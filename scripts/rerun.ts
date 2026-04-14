@@ -24,11 +24,12 @@ import { YelpSource } from "../apps/api/services/menuSources/yelpSource.js";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { estimateMacros } from "../apps/api/services/macroEstimationService.js";
-import type {
-  MacroData,
-  StructuredMenuItem,
-} from "../apps/api/services/menuSources/types.js";
-import { aggregateDietaryOptions } from "./constants.js";
+import type { MacroData } from "../apps/api/services/menuSources/types.js";
+import {
+  validateItems,
+  persistItems,
+  computeAndStoreDietaryOptions,
+} from "./pipeline-utils.js";
 
 // ─── CLI args ────────────────────────────────────────────────────────────────
 
@@ -57,145 +58,6 @@ function parseArgs(): { restaurants: string[]; placeIds: string[]; force: boolea
   }
 
   return { restaurants, placeIds, force };
-}
-
-// ─── Item validation (same as preload.ts) ───────────────────────────────────
-
-const NON_FOOD_PATTERNS = /\b(t-?shirt|tee|hoodie|sweatshirt|hat|cap|beanie|mug|tumbler|bag|tote|merch|sticker|poster|gift\s*card|apron)\b/i;
-const UTENSIL_PATTERNS = /\b(chopstick|fork|spoon|knife|napkin|plate|bowl|straw|container|lid|cup\s*sleeve|utensil)\b/i;
-const CONDIMENT_PATTERNS = /\b(packet|sauce\s*cup|dressing\s*packet|ketchup|mustard|mayo|soy\s*sauce|hot\s*sauce|salt|pepper|sugar|cream|sweetener|butter\s*pat|jam|jelly|syrup|relish|vinegar|dipping\s*sauce)\b/i;
-
-function validateItems(
-  items: StructuredMenuItem[],
-  macros: (MacroData | null)[],
-): { valid: { item: StructuredMenuItem; macro: MacroData }[]; rejected: { name: string; reason: string }[] } {
-  const valid: { item: StructuredMenuItem; macro: MacroData }[] = [];
-  const rejected: { name: string; reason: string }[] = [];
-
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i];
-    const macro = macros[i];
-    if (!item || !macro) continue;
-
-    const name = item.name;
-
-    if (NON_FOOD_PATTERNS.test(name)) { rejected.push({ name, reason: "non-food: merchandise" }); continue; }
-    if (UTENSIL_PATTERNS.test(name)) { rejected.push({ name, reason: "non-food: utensil" }); continue; }
-
-    const isBeverage = /\b(water|soda|juice|tea|coffee|lemonade|drink|beverage|sparkling|kombucha|milk|shake|smoothie)\b/i.test(name);
-    if (macro.calories === 0 && !isBeverage) { rejected.push({ name, reason: "non-food: zero calories" }); continue; }
-    if (macro.calories < 30 && CONDIMENT_PATTERNS.test(name)) { rejected.push({ name, reason: "condiment" }); continue; }
-
-    valid.push({ item, macro });
-  }
-
-  return { valid, rejected };
-}
-
-// ─── Persistence (same as preload.ts — transactional) ───────────────────────
-
-function decodeHtml(s: string | null | undefined): string | null {
-  if (!s) return s ?? null;
-  return s
-    .replace(/&amp;/g, "&")
-    .replace(/&#39;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#x27;/g, "'")
-    .replace(/&#x2F;/g, "/");
-}
-
-async function persistItems(
-  restaurantId: string,
-  validPairs: { item: StructuredMenuItem; macro: MacroData }[],
-  prisma: PrismaClient,
-): Promise<number> {
-  if (validPairs.length === 0) return 0;
-
-  return prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`
-      DELETE FROM "MacroEstimate" WHERE "menuItemId" IN (
-        SELECT "id" FROM "MenuItem" WHERE "restaurantId" = ${restaurantId}
-      )
-    `;
-    await tx.$executeRaw`
-      DELETE FROM "MenuItem" WHERE "restaurantId" = ${restaurantId}
-    `;
-
-    const names = validPairs.map((p) => decodeHtml(p.item.name)!);
-    const descriptions = validPairs.map((p) => decodeHtml(p.item.description) ?? null);
-    const categories = validPairs.map((p) => decodeHtml(p.item.category) ?? null);
-    const sections = validPairs.map((p) => decodeHtml(p.item.section) ?? null);
-    const prices = validPairs.map((p) => p.item.price ?? null);
-    const dietaryTagsJson = validPairs.map((p) => JSON.stringify(p.macro.dietaryTags ?? []));
-
-    const menuItemRows = await tx.$queryRaw<{ id: string }[]>`
-      INSERT INTO "MenuItem" (
-        "id", "restaurantId", "name", "description", "category", "section", "price", "dietaryTags", "createdAt", "updatedAt"
-      )
-      SELECT
-        gen_random_uuid(),
-        ${restaurantId},
-        name, description, category, section, price,
-        ARRAY(SELECT jsonb_array_elements_text(tags::jsonb)),
-        now(), now()
-      FROM UNNEST(
-        ${names}::text[],
-        ${descriptions}::text[],
-        ${categories}::text[],
-        ${sections}::text[],
-        ${prices}::float[],
-        ${dietaryTagsJson}::text[]
-      ) AS t(name, description, category, section, price, tags)
-      RETURNING "id"
-    `;
-
-    const menuItemIds = menuItemRows.map((r) => r.id);
-    const calories = validPairs.map((p) => Math.round(p.macro.calories));
-    const proteins = validPairs.map((p) => p.macro.proteinG);
-    const carbs = validPairs.map((p) => p.macro.carbsG);
-    const fats = validPairs.map((p) => p.macro.fatG);
-    const confidences = validPairs.map((p) => p.macro.confidence);
-    const sources = validPairs.map((p) => p.macro.source);
-
-    await tx.$executeRaw`
-      INSERT INTO "MacroEstimate" (
-        "id", "menuItemId", "calories", "proteinG", "carbsG", "fatG",
-        "confidence", "source", "hadPhoto", "estimatedAt"
-      )
-      SELECT
-        gen_random_uuid(),
-        "menuItemId", calories, "proteinG", "carbsG", "fatG",
-        confidence::"ConfidenceLevel", source, false, now()
-      FROM UNNEST(
-        ${menuItemIds}::text[],
-        ${calories}::int[],
-        ${proteins}::float[],
-        ${carbs}::float[],
-        ${fats}::float[],
-        ${confidences}::text[],
-        ${sources}::text[]
-      ) AS t("menuItemId", calories, "proteinG", "carbsG", "fatG", confidence, source)
-    `;
-
-    return menuItemRows.length;
-  });
-}
-
-async function computeAndStoreDietaryOptions(
-  restaurantId: string,
-  prisma: PrismaClient,
-): Promise<void> {
-  const items = await prisma.$queryRaw<{ dietaryTags: string[] }[]>`
-    SELECT "dietaryTags" FROM "MenuItem" WHERE "restaurantId" = ${restaurantId}
-  `;
-  const dietaryOptions = aggregateDietaryOptions(items.map((i) => i.dietaryTags));
-
-  await prisma.$executeRaw`
-    UPDATE "Restaurant" SET "dietaryOptions" = ${dietaryOptions}::text[], "updatedAt" = now()
-    WHERE "id" = ${restaurantId}
-  `;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
