@@ -9,10 +9,6 @@ kanban-plugin: basic
 
 ## Backlog
 
-### Wave 8 — Overture Maps integration (continued)
-
-- [ ] **S-141** Remove Google Places + wire Overture into preload — Replace `discoverRestaurants()` call in `preload.ts` with Overture discovery → hex assignment → hex processing loop. Remove Google Places API key dependency. #backend #wave-8 ^dep-S-137 ^dep-S-140
-
 ### Wave 9 — E2E validation
 
 - [ ] **S-142** Mini-hex E2E integration test — Run full pipeline against a single small hex (res 8 or 9, ~20 restaurants). Verify: Overture discovery returns restaurants, hex assignment correct, source fallback chain works, checkpoint persisted in DB, resume skips completed hex, Axiom events emitted. #backend #wave-9 ^dep-S-141
@@ -32,6 +28,7 @@ kanban-plugin: basic
 - [x] **S-138** PipelineCompletedHex migration — Add Prisma model with `@@unique([runId, hexId])` and `@@index([runId])` for DB-based hex checkpointing. Migration + 5 integration tests (skip in CI when no DB). #backend #wave-8 @completed(2026-04-14)
 - [x] **S-139** Atomic hex persist + checkpoint — `persistHex()` wraps all per-restaurant persists + dietary options + checkpoint in single `prisma.$transaction` with 30s timeout. Shared helpers extracted to `pipeline-utils.ts`. 6 tests. #backend #wave-8 ^dep-S-138 @completed(2026-04-14)
 - [x] **S-140** Resume-by-default — `getCompletedHexIds()` + `filterPendingHexes()`. Single query, O(1) set lookups. No --resume flag. 8 tests. #backend #wave-8 ^dep-S-139 @completed(2026-04-14)
+- [x] **S-141** Remove Google Places + wire Overture into preload — Replaced `discoverRestaurants()` with Overture discovery → hex assignment → hex processing loop. Removed Google Places API key dependency. Date-based runId for resume. Dead code cleanup. #backend #wave-8 ^dep-S-137 ^dep-S-140 @completed(2026-04-14)
 
 ### Wave 5 — E2E validation (gate before LA scale run)
 
