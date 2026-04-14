@@ -24,11 +24,13 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.36.3",
+    "@axiomhq/js": "^1.6.0",
     "@react-native-community/datetimepicker": "8.4.4",
+    "expo": "~54.0.33",
     "expo-linear-gradient": "~15.0.8",
+    "h3-js": "^4.4.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "expo": "~54.0.33",
     "react-native": "0.81.5"
   },
   "devDependencies": {
