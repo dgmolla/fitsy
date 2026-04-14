@@ -386,18 +386,26 @@ export async function fetchUberEatsHtml(
 
     // S-117: On 403, backoff to 2s and retry once
     if (response.status === 403) {
+      console.warn(`[ubereats-fetch] 403 for ${storeUrl} — backing off ${UE_BACKOFF_DELAY_MS}ms and retrying`);
       await new Promise((resolve) => setTimeout(resolve, UE_BACKOFF_DELAY_MS));
       _ueLastFetchTime = Date.now();
       const retryResponse = await fetch(storeUrl, {
         headers: { "User-Agent": BROWSER_UA, Accept: "text/html" },
       });
-      if (!retryResponse.ok) return null;
+      if (!retryResponse.ok) {
+        console.warn(`[ubereats-fetch] retry failed with ${retryResponse.status} for ${storeUrl}`);
+        return null;
+      }
       return await retryResponse.text();
     }
 
-    if (!response.ok) return null;
+    if (!response.ok) {
+      console.warn(`[ubereats-fetch] HTTP ${response.status} for ${storeUrl}`);
+      return null;
+    }
     return await response.text();
-  } catch {
+  } catch (err) {
+    console.warn(`[ubereats-fetch] network error for ${storeUrl}: ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }
 }
@@ -531,51 +539,73 @@ export class UberEatsSource implements MenuSource {
   urlCache: Map<string, string> | null = null;
 
   async lookup(name: string, address: string): Promise<MenuSourceResult> {
+    const log = (step: string, msg: string) => console.log(`[ubereats] [${name}] ${step}: ${msg}`);
+
     // Step 1: Try constructor-provided URL
     if (this.cachedUrl) {
+      log("cached-url", `trying ${this.cachedUrl}`);
       const result = await this.tryJsonLd(this.cachedUrl, name);
-      if (result) return result;
+      if (result) { log("cached-url", `ok (${result.items.length} items)`); return result; }
+      log("cached-url", "no JSON-LD or name mismatch");
     }
 
     // Step 2: Try persistent URL cache (survives across runs)
     const cachedDiscoveredUrl = this.urlCache?.get(name);
     if (cachedDiscoveredUrl) {
+      log("url-cache", `trying ${cachedDiscoveredUrl}`);
       const result = await this.tryJsonLd(cachedDiscoveredUrl, name);
-      if (result) return result;
+      if (result) { log("url-cache", `ok (${result.items.length} items)`); return result; }
+      log("url-cache", "no JSON-LD or name mismatch");
     }
 
     // Step 3: Try UE sitemap index (free, local lookup → raw fetch)
     if (this.sitemapIndex) {
       const sitemapUrl = this.sitemapIndex.findUrl(name);
       if (sitemapUrl) {
+        log("sitemap", `trying ${sitemapUrl}`);
         const result = await this.tryJsonLd(sitemapUrl, name);
         if (result) {
+          log("sitemap", `ok (${result.items.length} items)`);
           this.urlCache?.set(name, sitemapUrl);
           return result;
         }
+        log("sitemap", "no JSON-LD or name mismatch");
+      } else {
+        log("sitemap", "no slug match");
       }
     }
 
     // Step 4: Brave Search URL discovery (S-122 — preferred, faster + cheaper)
     const braveUrl = await discoverUberEatsUrlViaBrave(name, address);
     if (braveUrl) {
+      log("brave-ue", `trying ${braveUrl}`);
       const result = await this.tryJsonLd(braveUrl, name);
       if (result) {
+        log("brave-ue", `ok (${result.items.length} items)`);
         this.urlCache?.set(name, braveUrl);
         return result;
       }
+      log("brave-ue", "no JSON-LD or name mismatch");
+    } else {
+      log("brave-ue", "no UE URL found");
     }
 
     // Step 5: Firecrawl URL discovery → JSON-LD (fallback)
     const discoveredUrl = await discoverUberEatsUrl(name, address);
     if (discoveredUrl) {
+      log("firecrawl-ue", `trying ${discoveredUrl}`);
       const result = await this.tryJsonLd(discoveredUrl, name);
       if (result) {
+        log("firecrawl-ue", `ok (${result.items.length} items)`);
         this.urlCache?.set(name, discoveredUrl);
         return result;
       }
+      log("firecrawl-ue", "no JSON-LD or name mismatch");
+    } else {
+      log("firecrawl-ue", "no UE URL found");
     }
 
+    log("result", "all steps failed — not found");
     return { found: false, items: [], sourceId: this.id };
   }
 }

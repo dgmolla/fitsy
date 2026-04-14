@@ -2,19 +2,20 @@
  * MenuSourceResolver — phased fallback orchestrator
  *
  * Tries each MenuSource in order until one returns found: true.
- * The pipeline instantiates the resolver with sources in priority order:
+ * The pipeline instantiates the resolver with sources in priority order.
  *
- *   new MenuSourceResolver([
- *     new FatSecretSource(), // Phase 1: official chain macros (~1,060 chains), $0
- *     new UberEatsSource(),  // Phase 2: structured indie menus, $0
- *     new FirecrawlSource(), // Phase 3: fallback scraping, ~$0.006
- *   ])
- *
- * The resolver returns the first successful result. sourceId on the
- * result identifies which source was used.
+ * S-133: Logs per-source outcome, duration, and error details for
+ * diagnosing source reliability issues.
  */
 
 import type { MenuSource, MenuSourceResult } from "./types";
+
+export interface SourceAttempt {
+  sourceId: string;
+  status: "ok" | "not_found" | "error";
+  reason?: string;
+  durationMs: number;
+}
 
 export class MenuSourceResolver {
   private sources: MenuSource[];
@@ -23,19 +24,35 @@ export class MenuSourceResolver {
     this.sources = sources;
   }
 
-  async resolve(name: string, address: string): Promise<MenuSourceResult> {
+  /**
+   * Resolve menu data by trying sources in order.
+   * Returns the first successful result plus a log of all attempts.
+   */
+  async resolve(name: string, address: string): Promise<MenuSourceResult & { attempts: SourceAttempt[] }> {
+    const attempts: SourceAttempt[] = [];
+
     for (const source of this.sources) {
+      const start = Date.now();
       let result: MenuSourceResult;
       try {
         result = await source.lookup(name, address);
-      } catch {
-        // Individual source failure should not abort the fallback chain
+      } catch (err) {
+        const durationMs = Date.now() - start;
+        const reason = err instanceof Error ? err.message : String(err);
+        console.warn(`[resolver] ${source.id} threw for "${name}": ${reason} (${durationMs}ms)`);
+        attempts.push({ sourceId: source.id, status: "error", reason, durationMs });
         continue;
       }
 
-      if (result.found) return result;
+      const durationMs = Date.now() - start;
+      if (result.found) {
+        attempts.push({ sourceId: source.id, status: "ok", durationMs });
+        return { ...result, attempts };
+      }
+
+      attempts.push({ sourceId: source.id, status: "not_found", durationMs });
     }
 
-    return { found: false, items: [], sourceId: "none" };
+    return { found: false, items: [], sourceId: "none", attempts };
   }
 }

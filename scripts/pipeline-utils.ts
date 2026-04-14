@@ -145,10 +145,24 @@ export function decodeHtml(s: string | null | undefined): string | null {
 
 export async function persistItems(
   restaurantId: string,
-  validPairs: ValidatedPair[],
+  inputPairs: ValidatedPair[],
   prisma: PrismaClient,
 ): Promise<number> {
-  if (validPairs.length === 0) return 0;
+  if (inputPairs.length === 0) return 0;
+
+  // S-133: Dedup by item name — source data (esp. FatSecret) can have
+  // duplicate names which violate the @@unique([restaurantId, name]) constraint.
+  // Keep the first occurrence.
+  const seen = new Set<string>();
+  const validPairs = inputPairs.filter((p) => {
+    const key = p.item.name.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  if (validPairs.length < inputPairs.length) {
+    console.log(`[persist] Deduped ${inputPairs.length - validPairs.length} duplicate item names for restaurant ${restaurantId}`);
+  }
 
   return prisma.$transaction(async (tx) => {
     // Query 1: Delete existing items (cascade deletes estimates via FK)
