@@ -11,8 +11,6 @@ kanban-plugin: basic
 
 ### Wave 8 — Overture Maps integration (continued)
 
-- [ ] **S-137** Hex assignment from local parquet — Given a local Overture parquet cache, assign each restaurant to its H3 res-7 hex and return a `Map<hexId, OvertureRestaurant[]>`. Spec invariant: "Hexes are for processing batches and checkpointing — not for discovery." Use h3-js `latLngToCell()`. Test: fixture parquet → correct hex assignment, no restaurants lost. #backend #wave-8 ^dep-S-136
-- [ ] **S-139** Atomic hex persist + checkpoint — Wrap hex data persist + `PipelineCompletedHex` insert in a single `prisma.$transaction`. Spec invariant: "Checkpoint lives in the DB (not a file) for atomicity with data persistence." Test: transaction commits both or neither; duplicate hex insert is rejected. #backend #wave-8 ^dep-S-138
 - [ ] **S-140** Resume-by-default — On pipeline start, query `PipelineCompletedHex` for the current `runId`, skip completed hexes. Spec invariant: "Resume is the default, not a flag." Test: pre-populate completed hexes → pipeline skips them. #backend #wave-8 ^dep-S-139
 - [ ] **S-141** Remove Google Places + wire Overture into preload — Replace `discoverRestaurants()` call in `preload.ts` with Overture discovery → hex assignment → hex processing loop. Remove Google Places API key dependency. #backend #wave-8 ^dep-S-137 ^dep-S-140
 
@@ -31,7 +29,9 @@ kanban-plugin: basic
 ### Wave 8 — Overture Maps integration
 
 - [x] **S-136** Overture discovery service — Implement `downloadOvertureCache(bbox)` and `queryLocalParquet(cachePath, bbox)` using DuckDB to query Overture Maps GeoParquet on S3. Cache locally at `scripts/cache/overture-discovery.parquet`. 34 food categories, dedup by overtureId. 15 tests. #backend #wave-8 @completed(2026-04-14)
+- [x] **S-137** Hex assignment from local parquet — `assignToHexes()` using h3-js `latLngToCell()`. Returns `Map<hexId, OvertureRestaurant[]>`. 6 tests. #backend #wave-8 ^dep-S-136 @completed(2026-04-14)
 - [x] **S-138** PipelineCompletedHex migration — Add Prisma model with `@@unique([runId, hexId])` and `@@index([runId])` for DB-based hex checkpointing. Migration + 5 integration tests (skip in CI when no DB). #backend #wave-8 @completed(2026-04-14)
+- [x] **S-139** Atomic hex persist + checkpoint — `persistHex()` wraps all per-restaurant persists + dietary options + checkpoint in single `prisma.$transaction` with 30s timeout. Shared helpers extracted to `pipeline-utils.ts`. 6 tests. #backend #wave-8 ^dep-S-138 @completed(2026-04-14)
 
 ### Wave 5 — E2E validation (gate before LA scale run)
 
