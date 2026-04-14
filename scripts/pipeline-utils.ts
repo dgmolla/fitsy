@@ -143,10 +143,19 @@ export function decodeHtml(s: string | null | undefined): string | null {
 
 // ─── Transactional persistence (S-113) ──────────────────────────────────────
 
-export async function persistItems(
+/** Minimal type for Prisma interactive transaction client. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type TxClient = any;
+
+/**
+ * Persist a restaurant's items inside an existing transaction context.
+ * This is the shared core — both `persistItems` (single-restaurant wrapper)
+ * and `persistHex` (hex-level wrapper in hex-persist.ts) delegate here.
+ */
+export async function persistItemsInTx(
   restaurantId: string,
   inputPairs: ValidatedPair[],
-  prisma: PrismaClient,
+  tx: TxClient,
 ): Promise<number> {
   if (inputPairs.length === 0) return 0;
 
@@ -164,92 +173,107 @@ export async function persistItems(
     console.log(`[persist] Deduped ${inputPairs.length - validPairs.length} duplicate item names for restaurant ${restaurantId}`);
   }
 
+  // Query 1: Delete existing items (cascade deletes estimates via FK)
+  await tx.$executeRaw`
+    DELETE FROM "MacroEstimate" WHERE "menuItemId" IN (
+      SELECT "id" FROM "MenuItem" WHERE "restaurantId" = ${restaurantId}
+    )
+  `;
+  await tx.$executeRaw`
+    DELETE FROM "MenuItem" WHERE "restaurantId" = ${restaurantId}
+  `;
+
+  // Query 2: Bulk insert menu items
+  const names = validPairs.map((p) => decodeHtml(p.item.name)!);
+  const descriptions = validPairs.map((p) => decodeHtml(p.item.description) ?? null);
+  const categories = validPairs.map((p) => decodeHtml(p.item.category) ?? null);
+  const sections = validPairs.map((p) => decodeHtml(p.item.section) ?? null);
+  const prices = validPairs.map((p) => p.item.price ?? null);
+  const dietaryTagsJson = validPairs.map((p) => JSON.stringify(p.macro.dietaryTags ?? []));
+
+  const menuItemRows = await tx.$queryRaw<{ id: string }[]>`
+    INSERT INTO "MenuItem" (
+      "id", "restaurantId", "name", "description", "category", "section", "price", "dietaryTags", "createdAt", "updatedAt"
+    )
+    SELECT
+      gen_random_uuid(),
+      ${restaurantId},
+      name, description, category, section, price,
+      ARRAY(SELECT jsonb_array_elements_text(tags::jsonb)),
+      now(), now()
+    FROM UNNEST(
+      ${names}::text[],
+      ${descriptions}::text[],
+      ${categories}::text[],
+      ${sections}::text[],
+      ${prices}::float[],
+      ${dietaryTagsJson}::text[]
+    ) AS t(name, description, category, section, price, tags)
+    RETURNING "id"
+  `;
+
+  // Query 3: Bulk insert macro estimates
+  const menuItemIds = menuItemRows.map((r: { id: string }) => r.id);
+  const calories = validPairs.map((p) => Math.round(p.macro.calories));
+  const proteins = validPairs.map((p) => p.macro.proteinG);
+  const carbs = validPairs.map((p) => p.macro.carbsG);
+  const fats = validPairs.map((p) => p.macro.fatG);
+  const confidences = validPairs.map((p) => p.macro.confidence);
+  const sources = validPairs.map((p) => p.macro.source);
+
+  await tx.$executeRaw`
+    INSERT INTO "MacroEstimate" (
+      "id", "menuItemId", "calories", "proteinG", "carbsG", "fatG",
+      "confidence", "source", "hadPhoto", "estimatedAt"
+    )
+    SELECT
+      gen_random_uuid(),
+      "menuItemId", calories, "proteinG", "carbsG", "fatG",
+      confidence::"ConfidenceLevel", source, false, now()
+    FROM UNNEST(
+      ${menuItemIds}::text[],
+      ${calories}::int[],
+      ${proteins}::float[],
+      ${carbs}::float[],
+      ${fats}::float[],
+      ${confidences}::text[],
+      ${sources}::text[]
+    ) AS t("menuItemId", calories, "proteinG", "carbsG", "fatG", confidence, source)
+  `;
+
+  return menuItemRows.length;
+}
+
+export async function persistItems(
+  restaurantId: string,
+  inputPairs: ValidatedPair[],
+  prisma: PrismaClient,
+): Promise<number> {
   return prisma.$transaction(async (tx) => {
-    // Query 1: Delete existing items (cascade deletes estimates via FK)
-    await tx.$executeRaw`
-      DELETE FROM "MacroEstimate" WHERE "menuItemId" IN (
-        SELECT "id" FROM "MenuItem" WHERE "restaurantId" = ${restaurantId}
-      )
-    `;
-    await tx.$executeRaw`
-      DELETE FROM "MenuItem" WHERE "restaurantId" = ${restaurantId}
-    `;
-
-    // Query 2: Bulk insert menu items
-    const names = validPairs.map((p) => decodeHtml(p.item.name)!);
-    const descriptions = validPairs.map((p) => decodeHtml(p.item.description) ?? null);
-    const categories = validPairs.map((p) => decodeHtml(p.item.category) ?? null);
-    const sections = validPairs.map((p) => decodeHtml(p.item.section) ?? null);
-    const prices = validPairs.map((p) => p.item.price ?? null);
-    const dietaryTagsJson = validPairs.map((p) => JSON.stringify(p.macro.dietaryTags ?? []));
-
-    const menuItemRows = await tx.$queryRaw<{ id: string }[]>`
-      INSERT INTO "MenuItem" (
-        "id", "restaurantId", "name", "description", "category", "section", "price", "dietaryTags", "createdAt", "updatedAt"
-      )
-      SELECT
-        gen_random_uuid(),
-        ${restaurantId},
-        name, description, category, section, price,
-        ARRAY(SELECT jsonb_array_elements_text(tags::jsonb)),
-        now(), now()
-      FROM UNNEST(
-        ${names}::text[],
-        ${descriptions}::text[],
-        ${categories}::text[],
-        ${sections}::text[],
-        ${prices}::float[],
-        ${dietaryTagsJson}::text[]
-      ) AS t(name, description, category, section, price, tags)
-      RETURNING "id"
-    `;
-
-    // Query 3: Bulk insert macro estimates
-    const menuItemIds = menuItemRows.map((r) => r.id);
-    const calories = validPairs.map((p) => Math.round(p.macro.calories));
-    const proteins = validPairs.map((p) => p.macro.proteinG);
-    const carbs = validPairs.map((p) => p.macro.carbsG);
-    const fats = validPairs.map((p) => p.macro.fatG);
-    const confidences = validPairs.map((p) => p.macro.confidence);
-    const sources = validPairs.map((p) => p.macro.source);
-
-    await tx.$executeRaw`
-      INSERT INTO "MacroEstimate" (
-        "id", "menuItemId", "calories", "proteinG", "carbsG", "fatG",
-        "confidence", "source", "hadPhoto", "estimatedAt"
-      )
-      SELECT
-        gen_random_uuid(),
-        "menuItemId", calories, "proteinG", "carbsG", "fatG",
-        confidence::"ConfidenceLevel", source, false, now()
-      FROM UNNEST(
-        ${menuItemIds}::text[],
-        ${calories}::int[],
-        ${proteins}::float[],
-        ${carbs}::float[],
-        ${fats}::float[],
-        ${confidences}::text[],
-        ${sources}::text[]
-      ) AS t("menuItemId", calories, "proteinG", "carbsG", "fatG", confidence, source)
-    `;
-
-    return menuItemRows.length;
+    return persistItemsInTx(restaurantId, inputPairs, tx);
   });
 }
 
 // ─── Dietary summary ────────────────────────────────────────────────────────
 
+export async function computeAndStoreDietaryOptionsInTx(
+  restaurantId: string,
+  tx: TxClient,
+): Promise<void> {
+  const items = await tx.$queryRaw<{ dietaryTags: string[] }[]>`
+    SELECT "dietaryTags" FROM "MenuItem" WHERE "restaurantId" = ${restaurantId}
+  `;
+  const dietaryOptions = aggregateDietaryOptions(items.map((i: { dietaryTags: string[] }) => i.dietaryTags));
+
+  await tx.$executeRaw`
+    UPDATE "Restaurant" SET "dietaryOptions" = ${dietaryOptions}::text[], "updatedAt" = now()
+    WHERE "id" = ${restaurantId}
+  `;
+}
+
 export async function computeAndStoreDietaryOptions(
   restaurantId: string,
   prisma: PrismaClient,
 ): Promise<void> {
-  const items = await prisma.$queryRaw<{ dietaryTags: string[] }[]>`
-    SELECT "dietaryTags" FROM "MenuItem" WHERE "restaurantId" = ${restaurantId}
-  `;
-  const dietaryOptions = aggregateDietaryOptions(items.map((i) => i.dietaryTags));
-
-  await prisma.$executeRaw`
-    UPDATE "Restaurant" SET "dietaryOptions" = ${dietaryOptions}::text[], "updatedAt" = now()
-    WHERE "id" = ${restaurantId}
-  `;
+  return computeAndStoreDietaryOptionsInTx(restaurantId, prisma);
 }
