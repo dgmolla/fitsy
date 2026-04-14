@@ -52,10 +52,7 @@ import { YelpSource } from "../apps/api/services/menuSources/yelpSource.js";
 import { readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { estimateMacros } from "../apps/api/services/macroEstimationService.js";
-import type {
-  MacroData,
-  StructuredMenuItem,
-} from "../apps/api/services/menuSources/types.js";
+import type { MacroData } from "../apps/api/services/menuSources/types.js";
 import {
   validateItems,
   persistItems,
