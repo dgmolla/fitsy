@@ -70,13 +70,13 @@ fi
 
 # Preload pipeline scripts (data ingestion) are backend-owned               -> backend
 # Route them before the general scripts/ rule so they don't double-count
-if echo "$CHANGED" | grep -qE '^scripts/(preload|rescrape|reestimate)'; then
+if echo "$CHANGED" | grep -qE '^scripts/(preload|rescrape|reestimate|rerun)'; then
   AGENTS="$AGENTS backend"
 fi
 
 # .github/ .claude/ scripts/ CLAUDE.md docs/engineering/adrs/ devops/       -> cto
 # Preload/rescrape/reestimate scripts already matched as backend above
-if echo "$CHANGED" | grep -vE '^scripts/(preload|rescrape|reestimate)' | grep -qE '^(\.github/|\.claude/|scripts/|CLAUDE\.md|docs/engineering/(adrs|devops)/)'; then
+if echo "$CHANGED" | grep -vE '^scripts/(preload|rescrape|reestimate|rerun)' | grep -qE '^(\.github/|\.claude/|scripts/|CLAUDE\.md|docs/engineering/(adrs|devops)/)'; then
   AGENTS="$AGENTS cto"
 fi
 # END ROUTING TABLE
