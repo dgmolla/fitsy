@@ -19,6 +19,12 @@
 import { execSync } from "child_process";
 import type { PrismaClient as PrismaClientType } from "@prisma/client";
 import type { OvertureRestaurant, BoundingBox } from "./overture-discovery";
+import type {
+  RestaurantEvent,
+  PipelineError,
+  CostCheckpoint,
+  RunEvent,
+} from "./pipeline-events";
 
 // ---------------------------------------------------------------------------
 // Environment gates — same pattern as hex-persist.test.ts / overture-discovery.test.ts
@@ -253,14 +259,19 @@ describeIfE2E("Mini-hex E2E pipeline (S-142)", () => {
   });
 
   // ── Stage 5: Axiom event shapes ──────────────────────────────────────────
+  // NOTE: Source fallback chain is not tested here because it requires live
+  // API calls (UberEats, Brave, Firecrawl, Haiku) that are expensive and
+  // flaky. S-132 (Wave 5 E2E) already validates the full fallback chain
+  // against a single hex with real APIs — this test focuses on the Overture
+  // integration path (Stages 1-4) which is the new code in Wave 8.
 
   describe("Stage 5: Axiom event shapes", () => {
-    // We don't hit the real Axiom API — just verify event constructors produce
-    // valid shapes that match the schema.
+    // Construct typed event objects — tsc will catch mismatches if the
+    // interfaces in pipeline-events.ts drift from what preload.ts emits.
 
     it("RestaurantEvent has correct shape", () => {
       const testHexId = hexMap.keys().next().value!;
-      const event = {
+      const event: RestaurantEvent = {
         type: "restaurant" as const,
         runId: RUN_ID,
         hexId: testHexId,
@@ -292,7 +303,7 @@ describeIfE2E("Mini-hex E2E pipeline (S-142)", () => {
 
     it("PipelineError has correct shape", () => {
       const testHexId = hexMap.keys().next().value!;
-      const event = {
+      const event: PipelineError = {
         type: "error" as const,
         runId: RUN_ID,
         hexId: testHexId,
@@ -314,7 +325,7 @@ describeIfE2E("Mini-hex E2E pipeline (S-142)", () => {
 
     it("CostCheckpoint has correct shape", () => {
       const testHexId = hexMap.keys().next().value!;
-      const event = {
+      const event: CostCheckpoint = {
         type: "cost_checkpoint" as const,
         runId: RUN_ID,
         hexId: testHexId,
@@ -337,7 +348,7 @@ describeIfE2E("Mini-hex E2E pipeline (S-142)", () => {
     });
 
     it("RunEvent has correct shape", () => {
-      const event = {
+      const event: RunEvent = {
         type: "run" as const,
         runId: RUN_ID,
         durationTotal: "10.5s",
