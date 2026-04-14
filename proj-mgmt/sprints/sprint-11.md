@@ -9,6 +9,8 @@ kanban-plugin: basic
 
 ## Backlog
 
+## In Progress
+
 ### Wave 9 — E2E validation
 
 - [ ] **S-142** Mini-hex E2E integration test — Run full pipeline against a single small hex (res 8 or 9, ~20 restaurants). Verify: Overture discovery returns restaurants, hex assignment correct, source fallback chain works, checkpoint persisted in DB, resume skips completed hex, Axiom events emitted. #backend #wave-9 ^dep-S-141
@@ -16,8 +18,6 @@ kanban-plugin: basic
 ### Wave 6 — Source reliability
 
 - [ ] **S-133** Source reliability observability — Add per-source logging and Axiom detail so we can diagnose UE and other source failures. (1) Resolver: log source name + outcome + duration per attempt, don't swallow errors silently. (2) UberEatsSource: log which discovery step ran (cached/sitemap/brave/firecrawl) and why it failed (no URL, 403, no JSON-LD, name reject). (3) Axiom: replace bulk `sourcesFailed` with per-source `sourceResults` including status/reason/durationMs. (4) Dedup menu items by name before persist to fix unique constraint crash (Chick-fil-A). #backend #wave-6
-
-## In Progress
 
 ## Done
 
