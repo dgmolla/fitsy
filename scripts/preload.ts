@@ -78,18 +78,20 @@ const REQUIRED_ENV_VARS = [
   "FIRECRAWL_API_KEY",
 ] as const;
 
-function parseDaysArg(): number {
-  const idx = process.argv.indexOf("--days");
+function parseIntArg(flag: string, defaultVal: number): number {
+  const idx = process.argv.indexOf(flag);
   if (idx !== -1 && process.argv[idx + 1]) {
     return parseInt(process.argv[idx + 1]!, 10);
   }
-  return 7;
+  return defaultVal;
 }
 
 const CONFIG = {
   bbox: { south: 33.95, north: 34.15, west: -118.50, east: -118.15 } as BoundingBox,
   force: process.argv.includes("--force"),
-  skipDays: parseDaysArg(),
+  dryRun: process.argv.includes("--dry-run"),
+  maxHexes: parseIntArg("--max-hexes", 0), // 0 = no limit
+  skipDays: parseIntArg("--days", 7),
   concurrency: 10, // S-128: increased from 5
 };
 
@@ -311,8 +313,30 @@ async function main(): Promise<void> {
     }
   }
 
-  // S-141: Stage 3 — Filter out already-completed hexes (resume by default, S-140)
-  const pendingHexIds = await filterPendingHexes(allHexIds, runId, prisma);
+  // --dry-run + --max-hexes: select representative hexes (sparse, medium, dense)
+  // by sorting pending hexes by restaurant count and picking evenly spaced ones.
+  let pendingHexIds: string[];
+  if (CONFIG.dryRun) {
+    // In dry-run, skip resume lookup — process fresh
+    pendingHexIds = allHexIds;
+    log(`[dry-run] Skipping resume check — processing all ${allHexIds.length} hexes`);
+  } else {
+    // S-141: Stage 3 — Filter out already-completed hexes (resume by default, S-140)
+    pendingHexIds = await filterPendingHexes(allHexIds, runId, prisma);
+  }
+
+  if (CONFIG.maxHexes > 0 && pendingHexIds.length > CONFIG.maxHexes) {
+    // Sort by restaurant count, pick evenly spaced for representative coverage
+    const sorted = [...pendingHexIds].sort(
+      (a, b) => (hexMap.get(a)?.length ?? 0) - (hexMap.get(b)?.length ?? 0),
+    );
+    const step = (sorted.length - 1) / (CONFIG.maxHexes - 1);
+    pendingHexIds = Array.from({ length: CONFIG.maxHexes }, (_, i) =>
+      sorted[Math.round(i * step)]!,
+    );
+    log(`[max-hexes] Selected ${CONFIG.maxHexes} representative hexes: ${pendingHexIds.map((h) => `${h}(${hexMap.get(h)?.length ?? 0})`).join(", ")}`);
+  }
+
   const hexesTotal = allHexIds.length;
   let hexesCompleted = hexesTotal - pendingHexIds.length;
 
@@ -323,9 +347,11 @@ async function main(): Promise<void> {
       log(`\n========== Hex ${hexId} (${hexRestaurants.length} restaurants) ==========`);
 
       if (hexRestaurants.length === 0) {
-        await prisma.pipelineCompletedHex.create({
-          data: { runId, hexId, count: 0 },
-        });
+        if (!CONFIG.dryRun) {
+          await prisma.pipelineCompletedHex.create({
+            data: { runId, hexId, count: 0 },
+          });
+        }
         hexesCompleted++;
         continue;
       }
@@ -555,7 +581,10 @@ async function main(): Promise<void> {
       // in a single DB transaction. If anything fails, everything rolls back —
       // no partial data, no phantom checkpoint. (Spec: "Nothing reaches the DB
       // until the entire hex is done.")
-      if (hexResults.length > 0) {
+      if (CONFIG.dryRun) {
+        const totalItems = hexResults.reduce((sum, r) => sum + r.items.length, 0);
+        log(`[dry-run] Would persist ${totalItems} items across ${hexResults.length} restaurants (skipped)`);
+      } else if (hexResults.length > 0) {
         const totalItems = await persistHex(runId, hexId, hexResults, prisma);
         log(`Persisted ${totalItems} items across ${hexResults.length} restaurants`);
       } else {
