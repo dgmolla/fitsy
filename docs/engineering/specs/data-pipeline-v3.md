@@ -6,18 +6,20 @@ The preload pipeline discovers restaurants, scrapes menus, estimates macros, and
 
 This spec documents every known gap and proposes fixes, prioritized by impact.
 
+**Key architecture change (April 2026):** Discovery switched from Google Places Nearby Search to **Overture Maps** (free GeoParquet on S3). Google Places had a hard cap of 20 results per API call with no pagination, making it fundamentally insufficient for data completeness at scale. Overture Maps returns every restaurant in a metro via a single DuckDB query — no API key, no rate limits, no result cap. Validated: 17K restaurants in central LA, 14.7K in Manhattan, with full address/phone/website/category data from Foursquare, Meta, Microsoft, and OSM sources.
+
 ---
 
 ## Design Principles
 
 ### 1. Hex-Level Checkpointing
-The pipeline processes restaurants in geographic hex cells. Each hex is an atomic unit: discover restaurants, process all of them in memory, then batch-persist to DB and mark the hex as completed in a local checkpoint file. **If the pipeline crashes, it resumes from the first incomplete hex — no work is repeated for completed hexes, and no partial data reaches the DB.** This is the core resilience mechanism.
+Restaurants are discovered in bulk via Overture Maps, then assigned to H3 hex cells for processing. Each hex is an atomic unit: process all restaurants in memory, then batch-persist to DB and mark the hex as completed. **If the pipeline crashes, it resumes from the first incomplete hex — no work is repeated for completed hexes, and no partial data reaches the DB.** This is the core resilience mechanism.
 
 ### 2. Failure Handling & Resilience
-Every external call (Google Places, UberEats, Brave Search, Haiku, Firecrawl) can fail transiently. The pipeline retries with backoff, falls through to alternative sources, and never destroys good data because a re-fetch failed. Transactional persistence ensures partial writes don't corrupt the DB. A failed restaurant should degrade gracefully (fewer items, lower quality source) rather than crash the run.
+Every external call (UberEats, Brave Search, Haiku, Firecrawl) can fail transiently. The pipeline retries with backoff, falls through to alternative sources, and never destroys good data because a re-fetch failed. Transactional persistence ensures partial writes don't corrupt the DB. A failed restaurant should degrade gracefully (fewer items, lower quality source) rather than crash the run.
 
 ### 3. Scalability & Performance
-The pipeline must scale from 20 to 25,000 restaurants without architectural changes. API calls are parallelized with per-service concurrency limits. Rate limits are respected via semaphores and delays, not by running slowly. The target is: **25K restaurants in under 4 hours on a single machine.** URL discovery is cached so subsequent runs are 10x faster.
+The pipeline must scale from 20 to 1,000,000 restaurants without architectural changes. Discovery scales linearly via Overture Maps bbox queries. Menu processing is parallelized with per-service concurrency limits. Rate limits are respected via semaphores and delays, not by running slowly. The target is: **25K restaurants in under 4 hours on a single machine.** URL discovery is cached so subsequent runs are 10x faster.
 
 ### 4. Estimation Accuracy
 Macro estimates are the core product value. Haiku systematically underestimates restaurant portions, especially cooking fats (~23% under) and carbs (~7% under). Post-hoc calibration corrects for this. Accuracy is measured via eval-v2 (automated prompt lab with 8+ indie restaurant test cases, 50+ runs per config). Target: **<10% average calorie error**.
@@ -26,7 +28,7 @@ Macro estimates are the core product value. Haiku systematically underestimates 
 Every item in the DB must be real food with plausible macros. Non-food items (merchandise, utensils, condiments) are filtered before persistence. HTML entities are decoded. Macro math is validated (cal ≈ P×4 + C×4 + F×9 ± 20%). Items from mismatched restaurants are rejected via name validation. Source quality is tracked per item.
 
 ### 6. Cost Efficiency
-External API costs are minimized through caching (URL cache, sitemap index), incremental updates (skip recently-scraped restaurants), and source prioritization (free sources first: FatSecret → UE JSON-LD → cached URLs, then paid: Brave Search → Firecrawl). Target: **<$10 per incremental refresh of 25K restaurants** after initial population.
+External API costs are minimized through free discovery (Overture Maps), caching (URL cache, sitemap index), incremental updates (skip recently-scraped restaurants), and source prioritization (free sources first: FatSecret → UE → cached URLs, then paid: Brave Search → Firecrawl). Target: **<$10 per incremental refresh of 25K restaurants** after initial population.
 
 ### 7. Observability
 Every pipeline run produces structured logs: per-restaurant source, item count, previous item count, errors, duration, cost. Regressions are detected by comparing current vs previous item counts. A summary report shows source breakdown, error rates, and total cost. Alerts fire when a run degrades >20% of restaurants.
@@ -40,11 +42,12 @@ Estimation accuracy is continuously measured, not assumed. The eval-v2 system te
 
 ```mermaid
 graph TD
-    GP[Google Places API] -->|discover restaurants| R[Restaurant list]
-    R --> FS[FatSecret]
-    R --> UE[UberEats JSON-LD]
-    R --> YP[Yelp scrape]
-    R --> BS[Brave Search website menu]
+    OM[Overture Maps GeoParquet] -->|bulk discover all restaurants| R[Restaurant list]
+    R -->|assign to H3 hexes| HEX[Hex batches]
+    HEX --> FS[FatSecret]
+    HEX --> UE[UberEats scrape]
+    HEX --> YP[Yelp scrape]
+    HEX --> BS[Brave Search website menu]
 
     FS -->|chain macros| DB[(PostgreSQL)]
     UE -->|structured items| H[Haiku estimation]
@@ -52,7 +55,7 @@ graph TD
     BS -->|extracted items| H
     H -->|calibrated macros| DB
 
-    R -->|all sources miss| SK[Skip restaurant]
+    HEX -->|all sources miss| SK[Skip restaurant]
     SK -.->|skipped_no_source| AX[Axiom]
     AX -.->|errors real-time| SL[Slack alerts]
     DB -.->|run report| AX
@@ -62,120 +65,230 @@ graph TD
 
 If all sources miss, the restaurant is **skipped entirely** — no fake items are persisted. The old "name-only" fallback (Haiku guessing from restaurant name alone) has been removed. A skipped restaurant is flagged as `skipped_no_source` in metrics.
 
-**Current stats (April 2026):** 21 restaurants, 1,648 items, ~13.5% avg macro estimation error on eval cases.
+**Current stats (April 2026):** 22 restaurants, 268 items, ~13.5% avg macro estimation error on eval cases.
+
+---
+
+## Deep Dive: Discovery — Overture Maps
+
+### Why Overture Maps
+
+Google Places Nearby Search has a hard cap of 20 results per API call. Testing confirmed there is no pagination support in v1. In dense areas (Hollywood, Koreatown, DTLA), a single hex can have 100-350+ restaurants — Google Places misses 80%+ of them. This is a fundamental data completeness blocker.
+
+**Overture Maps** is a free, open dataset combining POI data from Foursquare, Meta, Microsoft, and OpenStreetMap. Data is published as GeoParquet files on S3, queryable via DuckDB.
+
+### Validation results (April 2026)
+
+| Area | Bbox size | Overture restaurant POIs | Google Places cap |
+|---|---|---|---|
+| Central LA metro | ~40km × 28km | **16,998** | 20 per call |
+| NYC Manhattan | ~9km × 11km | **14,768** | 20 per call |
+| Chicago downtown | ~7km × 7km | **3,129** | 20 per call |
+| SF core | ~5km × 4.5km | **3,029** | 20 per call |
+| Hollywood (2km²) | ~2km × 2km | **359** | 20 per call |
+| Silver Lake (2km²) | ~2km × 2km | **118** | 20 per call |
+
+### Data fields available
+
+| Overture field | Maps to | Quality |
+|---|---|---|
+| `names.primary` | `name` | High — commercial sources |
+| `addresses[].freeform/locality/postcode/region` | `address` | Full street + city + zip + state |
+| `geometry` (point) | `lat`, `lng` | Precise coordinates |
+| `id` (UUID) | `externalPlaceId` | Stable across releases |
+| `categories.primary + alternate` | `cuisineTags` | Granular (28 restaurant subcategories observed) |
+| `websites[]` | used for menu discovery | Available for many POIs |
+| `phones[]` | — | Available but not currently used |
+| `brand.names.primary` | `chainFlag` | Present for chains — reliable chain detection |
+| `sources[].dataset` | `source` | Foursquare, Meta, Microsoft, OSM |
+| `confidence` | — | 0-1 score, useful for filtering |
+
+**Not available in Overture:** rating, userRatingCount, priceLevel, photos. These are deferred — not needed for core macro-aware discovery. Can be added later via Yelp Fusion API (free tier) or user-generated reviews.
+
+### Discovery query
+
+```sql
+LOAD spatial; LOAD httpfs;
+SET s3_region = 'us-west-2';
+
+SELECT
+  id,
+  names.primary as name,
+  categories.primary as category,
+  categories.alternate as alt_categories,
+  addresses[1].freeform as address,
+  addresses[1].locality as city,
+  addresses[1].postcode as zip,
+  addresses[1].region as state,
+  websites[1] as website,
+  phones[1] as phone,
+  brand.names.primary as brand_name,
+  confidence,
+  ST_Y(geometry)::DOUBLE as lat,
+  ST_X(geometry)::DOUBLE as lng
+FROM read_parquet(
+  's3://overturemaps-us-west-2/release/{LATEST}/theme=places/type=place/*',
+  filename=true, hive_partitioning=1)
+WHERE
+  bbox.xmin BETWEEN {west} AND {east}
+  AND bbox.ymin BETWEEN {south} AND {north}
+  AND categories.primary IN (
+    'restaurant', 'fast_food', 'cafe', 'pizza_restaurant',
+    'mexican_restaurant', 'chinese_restaurant', 'japanese_restaurant',
+    'thai_restaurant', 'italian_restaurant', 'indian_restaurant',
+    'korean_restaurant', 'vietnamese_restaurant', 'sushi_restaurant',
+    'burger_restaurant', 'seafood_restaurant', 'american_restaurant',
+    'mediterranean_restaurant', 'greek_restaurant', 'french_restaurant',
+    'middle_eastern_restaurant', 'asian_restaurant', 'bakery', 'bar',
+    'diner', 'steakhouse', 'barbecue_restaurant', 'noodle_restaurant',
+    'ramen_restaurant', 'taco_restaurant', 'sandwich_shop',
+    'ice_cream_shop', 'juice_bar', 'coffee_shop', 'dessert_shop'
+  );
+```
+
+### Implementation
+
+Discovery downloads Overture data to a local parquet cache, then each hex queries that cache. Only one hex of data is in memory at a time.
+
+```typescript
+// 1. Download Overture data for metro to local parquet cache
+//    LA metro: 17K rows → 1.7MB file, ~30s download
+//    National: ~1M rows → ~100MB file, ~5-10 min download
+const cachePath = "scripts/cache/overture-discovery.parquet";
+if (!existsAndFresh(cachePath, 7)) {  // reuse if < 7 days old
+  await downloadOvertureToParquet(boundingBox, cachePath);
+}
+
+// 2. Generate hex grid
+const hexIds = polygonToCells(metroPolygon, 7);  // ~100 hexes for LA
+
+// 3. Process hex by hex — only one hex in memory at a time
+for (const hexId of hexIds) {
+  if (await isHexComplete(hexId, runId)) continue;  // resume
+
+  // Query LOCAL parquet for this hex's bbox — instant (0.03s)
+  const boundary = cellToBoundary(hexId);
+  const restaurants = await queryLocalParquet(cachePath, boundary);
+
+  // Process: fetch menus → estimate macros → persist + checkpoint
+  await processHex(hexId, restaurants);
+  // All hex data freed after persist
+}
+
+// 4. Cleanup (optional — cache is reusable for subsequent runs)
+```
+
+**Memory model:** Only one hex of data in memory at any time. The local parquet file is the intermediate store — downloaded once from S3, queried per hex (instant), reused across runs, cheap to regenerate if lost.
+
+**Measured sizes:**
+
+| Scope | Parquet file | S3 download | Per-hex query |
+|---|---|---|---|
+| LA metro (17K rows) | 1.7MB | ~30s | 0.03s |
+| National (~1M rows) | ~100MB | ~5-10 min | 0.03s |
+
+**No deduplication needed** — Overture returns each POI exactly once (unlike overlapping radius queries).
 
 ---
 
 ## Deep Dive: Hex-Level Checkpointing
 
-The pipeline must survive crashes and resume without wasting completed work. At scale — 25K restaurants across 100 hex cells, ~4 hours total — a crash at hour 2 should not restart from zero.
+The pipeline must survive crashes and resume without wasting completed work. At scale — 25K restaurants across ~100 hex cells, ~4 hours total — a crash at hour 2 should not restart from zero.
 
 ### Hex grid algorithm
 
-We use [Uber's H3](https://h3geo.org/) hierarchical hex grid system (`h3-js` npm package) to tile the target area into non-overlapping hex cells.
+We use [Uber's H3](https://h3geo.org/) hierarchical hex grid system (`h3-js` npm package) to assign restaurants to processing batches.
 
 **Why H3:**
 - Deterministic — same inputs always produce same hex IDs (critical for checkpoint resumability)
 - Hierarchical — resolution can be tuned: res 7 (~5.16 km² per hex) for dense urban, res 6 (~36.13 km²) for suburban
-- No overlaps — unlike overlapping circles, H3 hexes tile perfectly so restaurants aren't discovered twice
+- Geographic locality — restaurants in the same neighborhood are processed together
 - Industry standard — well-maintained, used by Uber, Foursquare, etc.
 
-**Grid generation:**
+**Restaurant-to-hex assignment:**
 
 ```typescript
-import { latLngToCell, cellToBoundary, gridDisk, polygonToCells } from "h3-js";
+import { latLngToCell } from "h3-js";
 
-// Option A: polyfill a bounding polygon (LA metro neighborhoods)
-const laPolygon = [
-  [34.15, -118.50],  // NW corner
-  [34.15, -118.15],  // NE
-  [33.95, -118.15],  // SE
-  [33.95, -118.50],  // SW
-];
-const hexes = polygonToCells(laPolygon, 7);  // res 7 → ~100 hexes for LA metro
-
-// Option B: expand from a center point
-const centerHex = latLngToCell(34.0928, -118.3086, 7);
-const hexes = gridDisk(centerHex, 5);  // 5 rings out from center → 91 hexes
-```
-
-**Each hex → one Google Places call:**
-
-```typescript
-for (const hexId of hexes) {
-  const [lat, lng] = cellToLatLng(hexId);  // hex center
-  const restaurants = await googlePlacesNearby(lat, lng, 2000);  // 2km radius
-  // process...
+// After Overture discovery, assign each restaurant to its hex
+for (const restaurant of allRestaurants) {
+  const hexId = latLngToCell(restaurant.lat, restaurant.lng, 7);
+  // bucket into hex groups for processing
 }
 ```
 
 **Resolution choice:**
 
-| H3 Resolution | Hex area | Hex edge | Hexes for LA metro | Restaurants per hex (est.) |
-|---|---|---|---|---|
-| 6 | 36.13 km² | 3.23 km | ~15 | ~1,500 (too many, GP pagination limits) |
-| **7** | **5.16 km²** | **1.22 km** | **~100** | **~200 (good fit for GP 2km radius)** |
-| 8 | 0.74 km² | 0.46 km | ~700 | ~30 (too many API calls) |
+| H3 Resolution | Hex area | Restaurants per hex (LA dense) | Hexes for LA metro |
+|---|---|---|---|
+| 6 | 36.13 km² | ~1,500 (too much memory) | ~15 |
+| **7** | **5.16 km²** | **~150-350 (good batch size)** | **~100** |
+| 8 | 0.74 km² | ~20-50 (too many hexes) | ~700 |
 
-**Resolution 7** is the sweet spot: each hex maps to roughly one Google Places Nearby Search call with a 2km radius, returning ~200 restaurants in dense neighborhoods.
-
-**Deduplication:** H3 hexes don't overlap, but Google Places 2km radius circles around hex centers do. Restaurants near hex boundaries may appear in multiple calls. Dedup by `externalPlaceId` — the first hex to discover a restaurant "owns" it.
+**Resolution 7** is the sweet spot: each hex contains a manageable batch of restaurants (~150-350 in dense LA, fewer in suburbs), and ~100 hexes covers the LA metro.
 
 ### How it works
 
 The hex cell is the atomic unit of work. For each hex:
 
-1. **Discover** — Google Places call for this hex's center → list of restaurants
-2. **Process** — for each restaurant: resolve URL → fetch menu → estimate macros. All results held in memory (~2MB per hex).
-3. **Persist** — batch-write all restaurants + items + macros to DB in one transaction
-4. **Checkpoint** — mark hex as completed in the checkpoint file
+1. **Process** — for each restaurant in this hex: resolve URL → fetch menu → estimate macros. All results held in memory (~2MB per hex).
+2. **Persist** — batch-write all restaurants + items + macros to DB in one transaction
+3. **Checkpoint** — mark hex as completed in the same DB transaction
 
 **Nothing reaches the DB until the entire hex is done.** If the pipeline crashes mid-hex, the DB has no partial data for that hex. On restart, the hex is simply reprocessed from scratch.
 
-### Checkpoint file
+### Checkpoint storage
 
-Single JSON file at `scripts/cache/pipeline-checkpoint.json`:
+Checkpoint lives in the DB (not a file) for atomicity with data persistence:
 
-```json
-{
-  "runId": "2026-04-11T10:30:00Z",
-  "completedHexes": ["hex_001", "hex_002", "hex_049"]
+```prisma
+model PipelineCompletedHex {
+  id        String   @id @default(cuid())
+  runId     String
+  hexId     String
+  count     Int      // restaurants persisted in this hex
+  createdAt DateTime @default(now())
+
+  @@unique([runId, hexId])
 }
 ```
 
-That's it. No restaurant lists, no intermediate data. The hex grid is deterministic (generated from bounding box math), so the coordinates don't need to be stored. Google Places is re-called for any incomplete hex — one API call, ~$0.015, takes a second.
+The hex data persist and checkpoint write happen in the **same DB transaction** — either both succeed or neither does. This eliminates the gap where data is written but checkpoint isn't (or vice versa).
 
-### Restart behavior
+### Resume behavior
 
 ```
-1. Load checkpoint file (if exists)
-2. Generate hex grid (deterministic — same output every time)
-3. For each hex:
-   - In completedHexes? → skip entirely (zero API calls)
-   - Not in completedHexes? → discover → process → persist → checkpoint
-4. All hexes done → delete checkpoint file
+1. Generate new runId (timestamp-based)
+2. Discover all restaurants via Overture Maps
+3. Assign to hex cells
+4. For each hex:
+   - Has PipelineCompletedHex for this runId? → skip (already done)
+   - Otherwise → process → persist + checkpoint in one transaction
+5. All hexes done → run complete
 ```
+
+**Resume-by-default:** A new run always gets a new `runId`. To resume a crashed run, pass `--resume <runId>`. To force-reprocess everything, use `--fresh` (ignores existing checkpoints).
 
 ### Walkthrough: crash at hour 2 of a 4-hour run
 
 ```
 Setup: 100 hexes, 25K restaurants, ~2.5 min per hex
 
-Hour 0:00   Pipeline starts, no checkpoint file
-Hour 0:02   hex_001 done → checkpoint: ["hex_001"]
-Hour 0:05   hex_002 done → checkpoint: ["hex_001", "hex_002"]
+Hour 0:00   Pipeline starts, runId = "2026-04-14T10:30:00Z"
+Hour 0:02   hex_001 done → DB: data + checkpoint in one txn
+Hour 0:05   hex_002 done → DB: data + checkpoint in one txn
 ...
-Hour 1:58   hex_049 done → checkpoint: ["hex_001" ... "hex_049"]
+Hour 1:58   hex_049 done → DB: 49 checkpoints
 Hour 2:00   hex_050 processing, 140/200 restaurants done in memory → CRASH
             (nothing from hex_050 was written to DB)
 
-Checkpoint on disk: ["hex_001" ... "hex_049"]
+DB state: hex_001–049 fully persisted + checkpointed
 
-Hour 2:01   Restart
-  hex_001–049: in completedHexes → skip (instant, 0 API calls)
-  hex_050: not in completedHexes → Google Places call → process all 200 → persist → checkpoint
-  hex_051–100: not in completedHexes → process normally
-  
+Hour 2:01   Restart with --resume "2026-04-14T10:30:00Z"
+  hex_001–049: checkpointed → skip (instant, 0 API calls)
+  hex_050: no checkpoint → process all 200 → persist + checkpoint
+  hex_051–100: no checkpoint → process normally
+
 Total restart time: ~2 hours 2 min
 Wasted work: ~2 min (reprocessing hex_050)
 Wasted cost: ~$1 (API calls for 200 restaurants)
@@ -199,16 +312,11 @@ Before hex grid is implemented, the checkpoint is simpler — just a completed r
 ```json
 {
   "runId": "2026-04-13T...",
-  "discovery": {
-    "lat": 34.0928,
-    "lng": -118.3086,
-    "radius": 3000
-  },
-  "completed": ["ChIJ_001", "ChIJ_002", "ChIJ_003"]
+  "completed": ["overture_001", "overture_002", "overture_003"]
 }
 ```
 
-On restart: if checkpoint exists, re-call Google Places (cheap), skip any restaurant in `completed`, resume at first incomplete. This is per-restaurant granularity because there's only one "hex" — the single search area — and it would be wasteful to redo all ~50 restaurants for a single failure.
+On restart: if checkpoint exists, skip any restaurant in `completed`, resume at first incomplete. This is per-restaurant granularity because there's only one "hex" — the single search area — and it would be wasteful to redo all ~50 restaurants for a single failure.
 
 When hex grid is implemented, this mode is replaced by the hex-level approach above.
 
@@ -218,12 +326,12 @@ When hex grid is implemented, this mode is replaced by the hex-level approach ab
 
 ### Retry on Transient Failures
 
-**Issue:** A single failed UE fetch or Haiku call causes the restaurant to fall to name-only (1 item). Rate limits, network blips, and API hiccups are common.
+**Issue:** A single failed UE fetch or Haiku call causes the restaurant to fall to a lower-quality source. Rate limits, network blips, and API hiccups are common.
 
 **Fix:** Retry up to 2 times with exponential backoff (1s, 3s) for:
-- UE HTML fetch (rate limiting)
+- UE HTML fetch (rate limiting, bot defense)
 - Haiku API calls (rate limiting, timeout)
-- Firecrawl API calls (rate limiting)
+- Firecrawl API calls (rate limiting, credits)
 
 ### Transactional Persistence
 
@@ -249,11 +357,11 @@ function validateItems(items: MenuItem[], macros: MacroData[]): { valid: Validat
 
 ### Regression Detection
 
-**Issue:** A bad scrape can replace 55 good items with 1 name-only item. No way to detect this.
+**Issue:** A bad scrape can replace 55 good items with 1 low-quality item. No way to detect this.
 
 **Fix:** Before deleting, compare new item count to existing:
 - If new count < existing * 0.5 AND existing > 5: **skip persist**, log warning
-- If new count = 1 AND source = "name-only" AND existing > 5: **skip persist**
+- If new count = 1 AND existing > 5: **skip persist**
 - Override with `--force` flag
 
 ### Yelp Slug Validation
@@ -270,6 +378,12 @@ function validateItems(items: MenuItem[], macros: MacroData[]): { valid: Validat
 **Issue:** UberEats rate-limits after ~20 rapid requests. No backoff logic.
 
 **Fix:** Add 500ms delay between UE fetches. On 403/empty response, backoff to 2s and retry once.
+
+### Firecrawl Credit Exhaustion
+
+**Issue:** Firecrawl returns HTTP 402 when credits are exhausted. Previously this was swallowed silently (`return null` with no logging), causing the entire Firecrawl fallback path to fail without any indication.
+
+**Fix:** All Firecrawl functions log HTTP status + response body on non-OK responses. The observability report includes Firecrawl error counts. Alerts fire on sustained 402s.
 
 ---
 
@@ -290,21 +404,20 @@ function validateItems(items: MenuItem[], macros: MacroData[]): { valid: Validat
 - Parallelize Haiku chunks within a restaurant (3-4 concurrent)
 - Per-API semaphores: UE fetch (5 concurrent, 500ms delay), Haiku (10-20 concurrent), Brave Search (15 concurrent), Firecrawl (3 concurrent)
 
-### Multi-Region Discovery (Hex Grid)
+### Discovery at Scale
 
-**Current:** Hardcoded to Silver Lake/Hollywood (34.0928, -118.3086, 3km).
+**Current:** Overture Maps bulk download via DuckDB. One query per metro area returns all restaurants.
 
-**Fix:** Hex grid tiled over restaurant-dense neighborhoods. Each hex cell = one Google Places Nearby Search call (2km radius). Dedup by `externalPlaceId` across overlapping cells.
+**Scale projections:**
 
-```
-LA metro restaurant-dense area: ~1,200 km²
-Hex cell coverage: ~12.6 km² (2km radius)
-Cells needed: ~100 (scoped to neighborhoods, skip industrial/residential)
-Google Places calls: ~100-300 (with pagination)
-Cost: ~$1.50
-```
+| Metro | Overture POIs | Query time | Cost |
+|---|---|---|---|
+| LA metro | ~17,000 | ~30 sec | $0 |
+| NYC | ~15,000 | ~30 sec | $0 |
+| Top 10 US metros | ~100,000 | ~5 min | $0 |
+| National (all US) | ~1,000,000 | ~30 min | $0 |
 
-Neighborhoods defined as bounding boxes — Silver Lake, Hollywood, DTLA, Santa Monica, Koreatown, West Hollywood, Los Feliz, Echo Park, Venice, Culver City, etc. Easy to add new neighborhoods or cities.
+Discovery is no longer a bottleneck or cost center. The pipeline can discover every restaurant in America for free.
 
 ### URL Discovery — Replace Firecrawl with Brave Search
 
@@ -318,12 +431,11 @@ Neighborhoods defined as bounding boxes — Silver Lake, Hollywood, DTLA, Santa 
 | Brave Search | 20 | $5 | 2,000/month | ~90% | **Validated** — 5/5 correct in testing |
 | Exa | 10 | $7 | 1,000/month | ~85% est | Not tested |
 | Serper | 50 | $5 | 2,500 credits | ~90% est | Not tested |
-| Google CSE | 100 | $5 | 100/day | N/A | **Deprecated** — closed to new customers 2025 |
 
 **Decision:** Replace Firecrawl search with **Brave Search API** for URL discovery.
 - 120x faster (20 QPS vs 0.17 QPS)
 - Slightly cheaper ($5 vs $6 per 1,000)
-- More reliable (consistent Google-quality results)
+- More reliable (consistent results)
 - Validated: tested against 5 restaurants, found correct UE URL for all 4 that exist on UE, correctly returned no UE result for the 1 that doesn't
 
 **Implementation:**
@@ -340,7 +452,7 @@ Neighborhoods defined as bounding boxes — Silver Lake, Hollywood, DTLA, Santa 
 
 **Fallback chain (updated):**
 ```
-FatSecret → UberEats → Yelp → Brave Search (website menu) → name-only
+FatSecret → UberEats → Yelp → Brave Search (website menu) → skip
 ```
 
 Firecrawl is retained only for scraping a known URL (not for search/discovery).
@@ -355,13 +467,13 @@ Firecrawl is retained only for scraping a known URL (not for search/discovery).
 
 | Step | Method | Volume | Cost | Time |
 |------|--------|--------|------|------|
-| Discover | Google Places hex grid | ~300 calls | $1.50 | 30 sec |
+| Discover | Overture Maps (DuckDB) | 1 query | **$0** | 30 sec |
 | URL discovery | Brave Search | 17,500 queries | $78 | 15 min |
-| Menu fetch (UE) | Raw HTTP + JSON-LD | ~12,000 fetches | $0 | 40 min |
+| Menu fetch (UE) | Raw HTTP + markdown parse | ~12,000 fetches | $0 | 40 min |
 | Menu fetch (Yelp) | Raw HTTP or Firecrawl | ~4,000 fetches | $0-12 | 13-40 min |
 | Menu fetch (Firecrawl) | Firecrawl scrape | ~1,500 fetches | $4.50 | 25 min |
 | Macro estimation | Haiku (chunked) | ~10,500 calls | $42-84 | 3 hours @ 60 RPM |
-| **Total first run** | | | **$126-180** | **~4.5 hours** |
+| **Total first run** | | | **$125-179** | **~4.5 hours** |
 
 With Haiku tier 4 (4,000 RPM): **~1.5 hours total**.
 
@@ -369,18 +481,11 @@ With Haiku tier 4 (4,000 RPM): **~1.5 hours total**.
 
 | Step | Method | Volume | Cost | Time |
 |------|--------|--------|------|------|
-| Discover | Skip (< 7 days) | 0 | $0 | 0 |
+| Discover | Overture Maps | 1 query | $0 | 30 sec |
 | URL discovery | **All cached** | 0 | **$0** | 0 |
 | Menu fetch | Only changed restaurants (~10%) | ~2,500 | $0-2 | 15 min |
 | Macro estimation | Only changed (~10%) | ~1,050 calls | $4-8 | 18 min |
 | **Total incremental** | | | **$4-10** | **~30 min** |
-
-**Cost comparison vs current:**
-
-| Scenario | Current (Firecrawl) | V2 (Brave + incremental) | Savings |
-|----------|--------------------|-----------------------|---------|
-| First run, 25K | $165-205, 40 hours | $126-180, 4.5 hours | 20% cheaper, 9x faster |
-| Weekly refresh | $58-100 | $4-10 | **90% cheaper** |
 
 ---
 
@@ -430,7 +535,7 @@ Key insight: Haiku knows ingredient macros well (per 100g). The gap is **portion
 
 #### B. Vision-Based Estimation (Dish Photos)
 **Concept:** Send the dish photo to a vision model to estimate portion size, then combine with text-based estimation.
-**Data source:** UberEats, DoorDash, Yelp, Google Maps all have dish photos for many items.
+**Data source:** UberEats, DoorDash, Yelp all have dish photos for many items.
 **Challenge:** Photo availability varies. Only ~30% of indie items have photos on UE. Also, photos are styled/angled for marketing — may not represent actual portion.
 
 **Feasibility:** High for implementation, uncertain for accuracy. Anthropic's vision models can analyze food photos. The question is whether photos actually improve portion estimation vs text-only.
@@ -460,7 +565,6 @@ Key insight: Haiku knows ingredient macros well (per 100g). The gap is **portion
 
 #### E. Hybrid: Haiku Estimate + Deterministic Adjustment
 **Concept:** Haiku estimates the base dish type and composition. Code applies deterministic adjustments based on:
-- `restaurant_avg_price` (tier: casual / mid / upscale / fine)
 - `item_price / avg_price` (relative position on menu)
 - Cuisine type (Italian → +fat, Thai → +oil, etc.)
 - Cooking method keywords in name/description (fried → +fat, grilled → baseline)
@@ -489,7 +593,7 @@ Key insight: Haiku knows ingredient macros well (per 100g). The gap is **portion
 
 ### HTML Entities in Item Names
 **Status:** Fix committed, needs rerun.
-**Issue:** 67 items have `&amp;`, `&#39;` etc. in names/descriptions. Source: UE JSON-LD and FatSecret.
+**Issue:** 67 items have `&amp;`, `&#39;` etc. in names/descriptions. Source: UE and FatSecret.
 **Fix:** `decodeHtml()` added to `persistItems()`. Rerun preload to clean.
 
 ### Non-Food Items Persisted
@@ -517,7 +621,7 @@ Key insight: Haiku knows ingredient macros well (per 100g). The gap is **portion
 ### Missing Prices
 **Issue:** 577/1,648 items have null prices. FatSecret never provides prices. Yelp sometimes doesn't.
 **Impact:** Price is used for portion-size inference in some prompts. Missing prices reduce estimation quality.
-**Fix:** Flag count in observability report with breakdown by source (FatSecret vs UE vs Yelp vs website). For UE-sourced items, prices come from JSON-LD (reliable). For Yelp/Firecrawl, extract price from markdown if present. For FatSecret chains, price data isn't critical since macros are already published.
+**Fix:** Flag count in observability report with breakdown by source (FatSecret vs UE vs Yelp vs website). For UE-sourced items, prices come from scraping (reliable). For Yelp/Firecrawl, extract price from markdown if present. For FatSecret chains, price data isn't critical since macros are already published.
 
 ### Missing Descriptions
 **Issue:** 698/1,648 items missing descriptions. FatSecret (344 Chick-fil-A + 130 McDonald's) never has descriptions. Some UE items also lack them.
@@ -533,19 +637,19 @@ Key insight: Haiku knows ingredient macros well (per 100g). The gap is **portion
 Free sources are tried first, paid sources only as fallback:
 
 1. **FatSecret** — free, official chain macros, no Haiku call needed
-2. **UberEats JSON-LD** — free (raw HTTP), structured items
+2. **UberEats** — free (raw HTTP scrape), structured items
 3. **URL cache** — free, avoids re-discovery on subsequent runs
 4. **Brave Search** — $5/1,000 queries, for URL discovery
 5. **Firecrawl** — $3-6/1,000 scrapes, last resort for menu fetching
 
 ### Cost Projections by Scale
 
-| Scale | Google Places | URL Discovery | Menu Fetch | Haiku | Total |
-|-------|-------------|---------------|------------|-------|-------|
-| 20 restaurants | $0.15 | ~$0.10 | ~$0 | ~$0.50 | ~$1 |
-| 200 restaurants | $1.50 | ~$1 | ~$0 | ~$5 | ~$8 |
-| 2,000 restaurants | $1.50 | ~$9 | ~$2 | ~$17 | ~$30 |
-| 25,000 restaurants (LA) | $1.50 | ~$78 | ~$5-17 | ~$42-84 | **~$126-180** |
+| Scale | Discovery | URL Discovery | Menu Fetch | Haiku | Total |
+|-------|-----------|---------------|------------|-------|-------|
+| 20 restaurants | $0 | ~$0.10 | ~$0 | ~$0.50 | ~$1 |
+| 200 restaurants | $0 | ~$1 | ~$0 | ~$5 | ~$6 |
+| 2,000 restaurants | $0 | ~$9 | ~$2 | ~$17 | ~$28 |
+| 25,000 restaurants (LA) | $0 | ~$78 | ~$5-17 | ~$42-84 | **~$125-179** |
 | 25,000 incremental | $0 | $0 (cached) | ~$0-2 | ~$4-8 | **~$4-10** |
 
 Target: **<$200 first run, <$10 incremental refresh** for 25K restaurants. Incremental updates reduce ongoing cost by ~90%.
@@ -580,7 +684,7 @@ interface RestaurantEvent {
   runId: string;
   hexId: string;
   name: string;
-  placeId: string;
+  overtureId: string;
   source: string;              // winning source: "fatsecret" | "ubereats" | "yelp" | "brave_website" | "none"
   status: string;              // "ok" | "skipped_no_source" | "skipped_haiku_failed" | "skipped_validation_empty" | "skipped_regression" | "skipped_db_error"
   itemCount: number;           // items persisted (0 for skipped)
@@ -603,9 +707,9 @@ interface PipelineError {
   runId: string;
   hexId: string;
   restaurant: string;
-  placeId: string;
+  overtureId: string;
   stage: "discovery" | "url_resolution" | "menu_fetch" | "macro_estimation" | "validation" | "persistence";
-  source: string;              // "ubereats" | "haiku" | "firecrawl" | "google_places" | "db" | "regression_guard"
+  source: string;              // "ubereats" | "haiku" | "firecrawl" | "brave" | "db" | "regression_guard"
   error: string;
   retryable: boolean;
   retriesAttempted: number;
@@ -624,7 +728,6 @@ interface CostCheckpoint {
   hexesTotal: number;
   cumulativeCost: number;
   cumulativeCostBreakdown: {
-    googlePlaces: number;
     braveSearch: number;
     firecrawl: number;
     haiku: number;
@@ -639,6 +742,7 @@ interface CostCheckpoint {
 interface RunEvent {
   type: "run";
   runId: string;
+  discoverySource: "overture";
   durationTotal: string;
   hexesTotal: number;
   hexesCompleted: number;
@@ -793,17 +897,18 @@ await axiom.flush();
 |---|------|-----------|--------|
 | 3.1 | Brave Search for UE URL discovery | New `BraveSearchSource`. Query `"{name} uber eats {city}"`, filter for `ubereats.com/store/` URLs. Replace Firecrawl search in `UberEatsSource.lookup()`. | 2 hrs |
 | 3.2 | Brave Search for website menu fallback | Query `"{name} {city} menu"`, take top result matching restaurant domain. Replace Firecrawl search as final fallback. | 1 hr |
-| 3.3 | Update fallback chain | `FatSecret → UberEats → Yelp → Brave (website) → name-only`. Firecrawl retained for scraping known URLs only. | 30 min |
+| 3.3 | Update fallback chain | `FatSecret → UberEats → Yelp → Brave (website) → skip`. Firecrawl retained for scraping known URLs only. | 30 min |
 
 ### Wave 4 — Scale prep
 
 | # | Task | What to do | Effort |
 |---|------|-----------|--------|
-| 4.1 | Hex grid discovery | Install `h3-js`. Implement `polygonToCells()` at res 7 for LA metro. Replace single-point discovery. Dedup by `externalPlaceId`. | 1 day |
-| 4.2 | Hex-level checkpointing | Checkpoint file at `scripts/cache/pipeline-checkpoint.json`. Track `completedHexes`. Skip completed hexes on restart. Batch-persist per hex. | 1 day |
-| 4.3 | Pre-hex checkpoint (interim) | Per-restaurant checkpoint for current single-area mode. Superseded by 4.2. | 2 hrs |
+| 4.1 | Overture Maps discovery | Implement `discoverFromOverture()` using DuckDB. Bbox query → restaurant list with name, address, lat/lng, category, website, overtureId. Replace Google Places discovery. | 1 day |
+| 4.2 | Hex assignment | Assign Overture-discovered restaurants to H3 res 7 cells via `latLngToCell()`. Group into processing batches. | 2 hrs |
+| 4.3 | Hex-level checkpointing (DB) | `PipelineCompletedHex` table. Persist data + checkpoint in single DB transaction. Resume support via `--resume <runId>`. | 1 day |
 | 4.4 | Incremental updates | Add `lastScrapedAt` + `menuHash` to Restaurant. Skip if scraped within N days. `--force` override. | 1 day |
 | 4.5 | Parallelism tuning | Increase concurrency to 10-15 restaurants. Per-API semaphores (UE: 5, Haiku: 20, Brave: 15, Firecrawl: 3). | 3 hrs |
+| 4.6 | Remove Google Places | Delete `googlePlacesService.ts` + tests. Remove `GOOGLE_PLACES_API_KEY` from env vars and preload config. Update `externalPlaceId` to use Overture UUID. | 2 hrs |
 
 ### Wave 5 — Accuracy (when time permits)
 
@@ -823,3 +928,22 @@ Wave 3 → Wave 4 (need Brave before scaling, since Firecrawl can't handle 25K)
 Wave 4 → independent of Wave 5
 Wave 5 → can start any time after Wave 1
 ```
+
+---
+
+## Configuration
+
+All configuration via environment variables. No hardcoded secrets.
+
+| Variable | Purpose | Required |
+|---|---|---|
+| `POSTGRES_PRISMA_URL` | Prisma connection string (pooled) | Yes |
+| `POSTGRES_URL_NON_POOLING` | Prisma direct connection (migrations) | Yes |
+| `ANTHROPIC_API_KEY` | Claude Haiku API | Yes |
+| `FIRECRAWL_API_KEY` | Firecrawl scrape (known URLs only) | Yes |
+| `BRAVE_API_KEY` | Brave Search for URL discovery | Yes (after Wave 3) |
+| `AXIOM_TOKEN` | Pipeline observability events | Yes (after Wave 2) |
+| `FATSECRET_KEY` / `FATSECRET_SECRET` | FatSecret chain macro lookups | Yes |
+| `TARGET_BBOX` | Bounding box for Overture discovery (default: LA metro) | No |
+| `H3_RESOLUTION` | Hex resolution for processing batches (default: 7) | No |
+| `MAX_RESTAURANTS` | Max restaurants to process (default: unlimited) | No |

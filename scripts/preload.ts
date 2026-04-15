@@ -55,8 +55,7 @@ import { estimateMacros } from "../apps/api/services/macroEstimationService.js";
 import type { MacroData, MenuSourceResult } from "../apps/api/services/menuSources/types.js";
 import {
   validateItems,
-  persistItems,
-  computeAndStoreDietaryOptions,
+  type ValidatedPair,
 } from "./pipeline-utils.js";
 import { withRetry } from "./retry.js";
 import {
@@ -67,6 +66,7 @@ import {
 import { downloadOvertureCache, queryLocalParquet, type OvertureRestaurant, type BoundingBox } from "./overture-discovery.js";
 import { assignToHexes } from "./hex-assignment.js";
 import { filterPendingHexes } from "./hex-resume.js";
+import { persistHex, type HexRestaurantData } from "./hex-persist.js";
 import { API_SEMAPHORES } from "./semaphore.js";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -318,7 +318,16 @@ async function main(): Promise<void> {
       }
 
       // Process restaurants in parallel batches (S-128: concurrency=10)
-      async function processRestaurant(restaurant: OvertureRestaurant, index: number): Promise<void> {
+      // Returns persist-ready data, or null if skipped. Actual DB writes
+      // are deferred to persistHex() for atomic batch persist + checkpoint.
+      interface ProcessedRestaurant {
+        restaurantId: string;
+        items: ValidatedPair[];
+        menuHash: string;
+        itemCount: number;
+      }
+
+      async function processRestaurant(restaurant: OvertureRestaurant, index: number): Promise<ProcessedRestaurant | null> {
         const restaurantStart = Date.now();
         const sourcesAttempted: string[] = [];
         const sourcesFailed: string[] = [];
@@ -393,7 +402,7 @@ async function main(): Promise<void> {
           stats.skippedNoSource++;
           stats.sourceBreakdown["skipped_no_source"] = (stats.sourceBreakdown["skipped_no_source"] ?? 0) + 1;
           emitRestaurantEvent("skipped_no_source", "none", 0, 0, 0, false);
-          return;
+          return null;
         }
 
         log(`  [${restaurant.name}] Source: ${menuResult.sourceId}, ${menuResult.items.length} items`);
@@ -421,7 +430,7 @@ async function main(): Promise<void> {
             _time: new Date().toISOString(),
           });
           emitRestaurantEvent("skipped_db_error", menuResult.sourceId, 0, 0, 0, nameMismatch);
-          return;
+          return null;
         }
 
         // S-127: Incremental updates — skip if recently scraped and menu unchanged
@@ -431,7 +440,7 @@ async function main(): Promise<void> {
             log(`  [${restaurant.name}] Recently scraped (within ${CONFIG.skipDays} days), menu unchanged — skipping`);
             skippedIncremental++;
             emitRestaurantEvent("skipped_incremental", menuResult.sourceId, 0, 0, 0, nameMismatch);
-            return;
+            return null;
           }
         }
 
@@ -464,7 +473,7 @@ async function main(): Promise<void> {
               _time: new Date().toISOString(),
             });
             emitRestaurantEvent("skipped_haiku_failed", menuResult.sourceId, 0, 0, 0, nameMismatch);
-            return;
+            return null;
           }
         }
 
@@ -483,7 +492,7 @@ async function main(): Promise<void> {
           log(`  [${restaurant.name}] All items rejected by validation — skipping`);
           stats.skippedNoMenu++;
           emitRestaurantEvent("skipped_validation_empty", menuResult.sourceId, 0, rejected.length, macroMismatches.length, nameMismatch);
-          return;
+          return null;
         }
 
         // S-115: Regression detection — don't replace good data with less data
@@ -496,29 +505,25 @@ async function main(): Promise<void> {
             log(`  [${restaurant.name}] Regression guard: new ${validPairs.length} items < 50% of existing ${existing} — skipping (use --force to override)`);
             stats.skippedRegression++;
             emitRestaurantEvent("skipped_regression", menuResult.sourceId, 0, rejected.length, macroMismatches.length, nameMismatch);
-            return;
+            return null;
           }
         }
 
-        const persisted = await persistItems(restaurantId, validPairs, prisma);
-
-        // S-127: Update menuHash + lastScrapedAt after successful persist
-        // Use raw items (not validPairs) so hash matches the skip-check computation
+        // Compute menu hash for incremental update tracking (S-127)
+        // Uses raw items (not validPairs) so hash matches the skip-check computation
         const menuHash = computeMenuHash(menuResult.items.map((i) => i.name));
-        await prisma.$queryRaw`
-          UPDATE "Restaurant"
-          SET "menuHash" = ${menuHash}, "lastScrapedAt" = now()
-          WHERE "id" = ${restaurantId}
-        `;
 
-        log(`  [${restaurant.name}] Persisted ${persisted} items`);
+        log(`  [${restaurant.name}] Ready to persist ${validPairs.length} items`);
         stats.persisted++;
 
-        await computeAndStoreDietaryOptions(restaurantId, prisma);
-        emitRestaurantEvent("ok", menuResult.sourceId, persisted, rejected.length, macroMismatches.length, nameMismatch);
+        emitRestaurantEvent("ok", menuResult.sourceId, validPairs.length, rejected.length, macroMismatches.length, nameMismatch);
+        return { restaurantId, items: validPairs, menuHash, itemCount: validPairs.length };
       }
 
       // Process in parallel batches (S-128: concurrency=10)
+      // Collect results — actual DB writes deferred to persistHex()
+      const hexResults: HexRestaurantData[] = [];
+
       for (let i = 0; i < hexRestaurants.length; i += CONFIG.concurrency) {
         const batch = hexRestaurants.slice(i, i + CONFIG.concurrency);
         const results = await Promise.allSettled(
@@ -527,8 +532,24 @@ async function main(): Promise<void> {
         for (const result of results) {
           if (result.status === "rejected") {
             log(`  Unexpected error: ${String(result.reason)}`);
+          } else if (result.value != null) {
+            hexResults.push(result.value);
           }
         }
+      }
+
+      // Atomic batch persist: all items + dietary options + menuHash + checkpoint
+      // in a single DB transaction. If anything fails, everything rolls back —
+      // no partial data, no phantom checkpoint. (Spec: "Nothing reaches the DB
+      // until the entire hex is done.")
+      if (hexResults.length > 0) {
+        const totalItems = await persistHex(runId, hexId, hexResults, prisma);
+        log(`Persisted ${totalItems} items across ${hexResults.length} restaurants`);
+      } else {
+        // No restaurants to persist — still checkpoint the hex as done
+        await prisma.pipelineCompletedHex.create({
+          data: { runId, hexId, count: 0 },
+        });
       }
 
       // S-120: Flush hex events + cost checkpoint
@@ -544,10 +565,6 @@ async function main(): Promise<void> {
         _time: new Date().toISOString(),
       });
 
-      // S-141: Record hex checkpoint in DB (Option A — per-restaurant persist already done)
-      await prisma.pipelineCompletedHex.create({
-        data: { runId, hexId, count: hexRestaurants.length },
-      });
       log(`Hex ${hexId} complete (${hexesCompleted}/${hexesTotal})`);
     }
   } finally {

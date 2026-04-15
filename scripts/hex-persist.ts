@@ -14,6 +14,7 @@ import type { ValidatedPair } from "./pipeline-utils.js";
 import {
   persistItemsInTx,
   computeAndStoreDietaryOptionsInTx,
+  updateMenuHashInTx,
 } from "./pipeline-utils.js";
 
 // ─── Public API ─────────────────────────────────────────────────────────────
@@ -27,20 +28,28 @@ import {
  *
  * @returns Total number of menu items persisted across all restaurants.
  */
+export interface HexRestaurantData {
+  restaurantId: string;
+  items: ValidatedPair[];
+  /** Menu hash for incremental update tracking (S-127). */
+  menuHash: string;
+}
+
 export async function persistHex(
   runId: string,
   hexId: string,
-  restaurants: Array<{ restaurantId: string; items: ValidatedPair[] }>,
+  restaurants: HexRestaurantData[],
   prisma: PrismaClient,
 ): Promise<number> {
   return prisma.$transaction(
     async (tx) => {
       let totalItems = 0;
 
-      for (const { restaurantId, items } of restaurants) {
+      for (const { restaurantId, items, menuHash } of restaurants) {
         const count = await persistItemsInTx(restaurantId, items, tx);
         totalItems += count;
         await computeAndStoreDietaryOptionsInTx(restaurantId, tx);
+        await updateMenuHashInTx(restaurantId, menuHash, tx);
       }
 
       // Record the checkpoint in the same transaction
@@ -54,7 +63,7 @@ export async function persistHex(
 
       return totalItems;
     },
-    { timeout: 30_000 }, // 30s — hex may contain up to 20 restaurants
+    { timeout: 60_000 }, // 60s — dense hexes may have 200+ restaurants with items
   );
 }
 

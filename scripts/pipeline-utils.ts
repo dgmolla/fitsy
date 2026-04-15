@@ -287,3 +287,22 @@ export async function computeAndStoreDietaryOptions(
 ): Promise<void> {
   return computeAndStoreDietaryOptionsInTx(restaurantId, prisma);
 }
+
+// ─── Menu hash (S-127) ─────────────────────────────────────────────────────
+
+/**
+ * Update menuHash + lastScrapedAt inside an existing transaction.
+ * Must run in the same transaction as persistItemsInTx so a rollback
+ * prevents false "already scraped" skips on the next run.
+ */
+export async function updateMenuHashInTx(
+  restaurantId: string,
+  menuHash: string,
+  tx: TxClient,
+): Promise<void> {
+  await tx.$executeRaw`
+    UPDATE "Restaurant"
+    SET "menuHash" = ${menuHash}, "lastScrapedAt" = now()
+    WHERE "id" = ${restaurantId}
+  `;
+}
