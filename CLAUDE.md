@@ -99,7 +99,6 @@ vercel env add KEY prod    # Add/update a secret
 |----------|---------|--------|
 | `POSTGRES_PRISMA_URL` | DB connection (pooled) | Supabase integration |
 | `POSTGRES_URL_NON_POOLING` | DB migrations (direct) | Supabase integration |
-| `GOOGLE_PLACES_API_KEY` | Restaurant discovery | Google Cloud Console |
 | `FIRECRAWL_API_KEY` | Menu scraping | firecrawl.dev |
 | `ANTHROPIC_API_KEY` | Macro estimation (Haiku) | console.anthropic.com |
 
