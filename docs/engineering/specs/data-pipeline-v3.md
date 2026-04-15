@@ -81,7 +81,7 @@ Google Places Nearby Search has a hard cap of 20 results per API call. Testing c
 
 | Area | Bbox size | Overture restaurant POIs | Google Places cap |
 |---|---|---|---|
-| Central LA metro | ~40km × 28km | **16,998** | 20 per call |
+| Central LA metro | ~40km × 28km | **~19,200** (ILIKE pattern) | 20 per call |
 | NYC Manhattan | ~9km × 11km | **14,768** | 20 per call |
 | Chicago downtown | ~7km × 7km | **3,129** | 20 per call |
 | SF core | ~5km × 4.5km | **3,029** | 20 per call |
@@ -132,17 +132,19 @@ FROM read_parquet(
 WHERE
   bbox.xmin BETWEEN {west} AND {east}
   AND bbox.ymin BETWEEN {south} AND {north}
-  AND categories.primary IN (
-    'restaurant', 'fast_food', 'cafe', 'pizza_restaurant',
-    'mexican_restaurant', 'chinese_restaurant', 'japanese_restaurant',
-    'thai_restaurant', 'italian_restaurant', 'indian_restaurant',
-    'korean_restaurant', 'vietnamese_restaurant', 'sushi_restaurant',
-    'burger_restaurant', 'seafood_restaurant', 'american_restaurant',
-    'mediterranean_restaurant', 'greek_restaurant', 'french_restaurant',
-    'middle_eastern_restaurant', 'asian_restaurant', 'bakery', 'bar',
-    'diner', 'steakhouse', 'barbecue_restaurant', 'noodle_restaurant',
-    'ramen_restaurant', 'taco_restaurant', 'sandwich_shop',
-    'ice_cream_shop', 'juice_bar', 'coffee_shop', 'dessert_shop'
+  AND (
+    -- Pattern catches all *_restaurant variants automatically
+    -- (fast_food_restaurant, chicken_restaurant, vegan_restaurant, etc.)
+    (categories.primary ILIKE '%restaurant%'
+     AND categories.primary NOT LIKE '%equipment%'
+     AND categories.primary NOT LIKE '%wholesale%')
+    -- Explicit list for non-restaurant food places
+    OR categories.primary IN (
+      'cafe', 'coffee_shop', 'bakery', 'diner', 'steakhouse',
+      'sandwich_shop', 'ice_cream_shop', 'juice_bar', 'dessert_shop',
+      'donuts', 'desserts', 'food_truck', 'bubble_tea', 'tea_room',
+      'bar', 'cocktail_bar', 'wine_bar', 'gastropub', 'pub', 'lounge'
+    )
   );
 ```
 
@@ -152,11 +154,15 @@ Discovery downloads Overture data to a local parquet cache, then each hex querie
 
 ```typescript
 // 1. Download Overture data for metro to local parquet cache
-//    LA metro: 17K rows → 1.7MB file, ~30s download
+//    LA metro: ~19K rows → ~2MB file, ~30s download
 //    National: ~1M rows → ~100MB file, ~5-10 min download
 const cachePath = "scripts/cache/overture-discovery.parquet";
-if (!existsAndFresh(cachePath, 7)) {  // reuse if < 7 days old
+// Cache freshness checks: file age < 7 days AND bbox matches sidecar metadata
+// A .meta.json sidecar stores the bbox used for download — prevents
+// reusing a small test bbox cache for full LA queries
+if (!isCacheFresh(cachePath, boundingBox)) {
   await downloadOvertureToParquet(boundingBox, cachePath);
+  writeCacheMeta(cachePath, boundingBox);  // bbox sidecar
 }
 
 // 2. Generate hex grid
@@ -184,7 +190,7 @@ for (const hexId of hexIds) {
 
 | Scope | Parquet file | S3 download | Per-hex query |
 |---|---|---|---|
-| LA metro (17K rows) | 1.7MB | ~30s | 0.03s |
+| LA metro (~19K rows) | ~2MB | ~30s | 0.03s |
 | National (~1M rows) | ~100MB | ~5-10 min | 0.03s |
 
 **No deduplication needed** — Overture returns each POI exactly once (unlike overlapping radius queries).
@@ -267,7 +273,7 @@ The hex data persist and checkpoint write happen in the **same DB transaction** 
 5. All hexes done → run complete
 ```
 
-**Resume-by-default:** A new run always gets a new `runId`. To resume a crashed run, pass `--resume <runId>`. To force-reprocess everything, use `--fresh` (ignores existing checkpoints).
+**Resume-by-default:** On startup, the pipeline queries `PipelineCompletedHex` for the most recent `runId` with fewer checkpoints than total hexes. If found, it resumes that run. Otherwise, it generates a new date-based `runId` (`run-YYYY-MM-DD`). This is midnight-safe: a crash at 11:59 PM + rerun at 12:04 AM resumes the same run. Pass `--run-id <id>` to override.
 
 ### Walkthrough: crash at hour 2 of a 4-hour run
 
@@ -284,7 +290,7 @@ Hour 2:00   hex_050 processing, 140/200 restaurants done in memory → CRASH
 
 DB state: hex_001–049 fully persisted + checkpointed
 
-Hour 2:01   Restart with --resume "2026-04-14T10:30:00Z"
+Hour 2:01   Restart → auto-detects incomplete run, resumes runId
   hex_001–049: checkpointed → skip (instant, 0 API calls)
   hex_050: no checkpoint → process all 200 → persist + checkpoint
   hex_051–100: no checkpoint → process normally
@@ -304,21 +310,6 @@ Wasted cost: ~$1 (API calls for 200 restaurants)
 | Complexity | Simple — one list of done hexes | Need to track per-restaurant status + handle partial DB state |
 
 2 minutes of worst-case waste is not worth the complexity of per-restaurant tracking. The clean DB guarantee (hex either fully persisted or not at all) is a major simplification.
-
-### Pre-hex mode (current: single area, <100 restaurants)
-
-Before hex grid is implemented, the checkpoint is simpler — just a completed restaurant list:
-
-```json
-{
-  "runId": "2026-04-13T...",
-  "completed": ["overture_001", "overture_002", "overture_003"]
-}
-```
-
-On restart: if checkpoint exists, skip any restaurant in `completed`, resume at first incomplete. This is per-restaurant granularity because there's only one "hex" — the single search area — and it would be wasteful to redo all ~50 restaurants for a single failure.
-
-When hex grid is implemented, this mode is replaced by the hex-level approach above.
 
 ---
 
@@ -412,7 +403,7 @@ function validateItems(items: MenuItem[], macros: MacroData[]): { valid: Validat
 
 | Metro | Overture POIs | Query time | Cost |
 |---|---|---|---|
-| LA metro | ~17,000 | ~30 sec | $0 |
+| LA metro | ~19,000 | ~30 sec | $0 |
 | NYC | ~15,000 | ~30 sec | $0 |
 | Top 10 US metros | ~100,000 | ~5 min | $0 |
 | National (all US) | ~1,000,000 | ~30 min | $0 |
@@ -905,10 +896,10 @@ await axiom.flush();
 |---|------|-----------|--------|
 | 4.1 | Overture Maps discovery | Implement `discoverFromOverture()` using DuckDB. Bbox query → restaurant list with name, address, lat/lng, category, website, overtureId. Replace Google Places discovery. | 1 day |
 | 4.2 | Hex assignment | Assign Overture-discovered restaurants to H3 res 7 cells via `latLngToCell()`. Group into processing batches. | 2 hrs |
-| 4.3 | Hex-level checkpointing (DB) | `PipelineCompletedHex` table. Persist data + checkpoint in single DB transaction. Resume support via `--resume <runId>`. | 1 day |
+| 4.3 | Hex-level checkpointing (DB) | `PipelineCompletedHex` table. Persist data + checkpoint in single DB transaction. Auto-resume via `findIncompleteRunId()`. | 1 day |
 | 4.4 | Incremental updates | Add `lastScrapedAt` + `menuHash` to Restaurant. Skip if scraped within N days. `--force` override. | 1 day |
 | 4.5 | Parallelism tuning | Increase concurrency to 10-15 restaurants. Per-API semaphores (UE: 5, Haiku: 20, Brave: 15, Firecrawl: 3). | 3 hrs |
-| 4.6 | Remove Google Places | Delete `googlePlacesService.ts` + tests. Remove `GOOGLE_PLACES_API_KEY` from env vars and preload config. Update `externalPlaceId` to use Overture UUID. | 2 hrs |
+| 4.6 | Remove Google Places | ~~Done~~ — deleted `googlePlacesService.ts` + tests, removed `GOOGLE_PLACES_API_KEY` from env vars. | ~~2 hrs~~ |
 
 ### Wave 5 — Accuracy (when time permits)
 
