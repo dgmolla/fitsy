@@ -11,7 +11,7 @@
  */
 
 import { execSync } from "child_process";
-import { existsSync, mkdirSync, statSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "fs";
 import { dirname, resolve } from "path";
 
 // ---------------------------------------------------------------------------
@@ -53,50 +53,38 @@ const OVERTURE_RELEASE = "2026-03-18.0";
 const OVERTURE_S3_PATH =
   `s3://overturemaps-us-west-2/release/${OVERTURE_RELEASE}/theme=places/type=place/*`;
 
-/** All food-related Overture categories we care about. */
-const FOOD_CATEGORIES = [
-  "restaurant",
-  "fast_food",
-  "cafe",
-  "pizza_restaurant",
-  "mexican_restaurant",
-  "chinese_restaurant",
-  "japanese_restaurant",
-  "thai_restaurant",
-  "italian_restaurant",
-  "indian_restaurant",
-  "korean_restaurant",
-  "vietnamese_restaurant",
-  "sushi_restaurant",
-  "burger_restaurant",
-  "seafood_restaurant",
-  "american_restaurant",
-  "mediterranean_restaurant",
-  "greek_restaurant",
-  "french_restaurant",
-  "middle_eastern_restaurant",
-  "asian_restaurant",
-  "bakery",
-  "bar",
-  "diner",
-  "steakhouse",
-  "barbecue_restaurant",
-  "noodle_restaurant",
-  "ramen_restaurant",
-  "taco_restaurant",
-  "sandwich_shop",
-  "ice_cream_shop",
-  "juice_bar",
-  "coffee_shop",
-  "dessert_shop",
+/**
+ * Non-restaurant food places to include explicitly.
+ * The SQL also matches anything with '%restaurant%' via ILIKE,
+ * which auto-catches all cuisine variants (fast_food_restaurant,
+ * chicken_restaurant, vegan_restaurant, etc.) without manual updates.
+ */
+const NON_RESTAURANT_FOOD = [
+  "cafe", "coffee_shop", "bakery", "diner", "steakhouse",
+  "sandwich_shop", "ice_cream_shop", "juice_bar", "dessert_shop",
+  "donuts", "desserts", "food_truck", "bubble_tea", "tea_room",
+  "smoothie_juice_bar", "frozen_yoghurt_shop", "bagel_shop",
+  "cupcake_shop", "pie_shop", "shaved_ice_shop",
+  "patisserie_cake_shop", "pasta_shop",
+  "ice_cream_and_frozen_yoghurt", "pizza_delivery_service",
+  // Bars / lounges — many serve full menus; drink-only ones get
+  // filtered by the pipeline (skipped_no_source) at zero DB cost.
+  "bar", "cocktail_bar", "wine_bar", "gastropub", "pub",
+  "irish_pub", "dive_bar", "sports_bar", "lounge",
 ] as const;
 
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-function categoryInClause(): string {
-  return FOOD_CATEGORIES.map((c) => `'${c}'`).join(", ");
+function categoryWhereClause(): string {
+  const inList = NON_RESTAURANT_FOOD.map((c) => `'${c}'`).join(", ");
+  return `(
+      (categories.primary ILIKE '%restaurant%'
+       AND categories.primary NOT LIKE '%equipment%'
+       AND categories.primary NOT LIKE '%wholesale%')
+      OR categories.primary IN (${inList})
+    )`;
 }
 
 /**
@@ -131,7 +119,7 @@ COPY (
   WHERE
     bbox.xmin BETWEEN ${bbox.west} AND ${bbox.east}
     AND bbox.ymin BETWEEN ${bbox.south} AND ${bbox.north}
-    AND categories.primary IN (${categoryInClause()})
+    AND ${categoryWhereClause()}
 ) TO '${outputPath}' (FORMAT PARQUET);
 `.trim();
 }
@@ -164,12 +152,35 @@ WHERE
 }
 
 /**
- * Returns true if `cachePath` exists and was modified less than 7 days ago.
+ * Returns true if `cachePath` exists, was modified less than 7 days ago,
+ * AND was downloaded for the same bounding box.
+ *
+ * A sidecar file (`<cachePath>.meta.json`) stores the bbox used for
+ * the download. If the bbox doesn't match, the cache is stale.
  */
-export function isCacheFresh(cachePath: string): boolean {
+export function isCacheFresh(cachePath: string, bbox?: BoundingBox): boolean {
   if (!existsSync(cachePath)) return false;
   const mtime = statSync(cachePath).mtimeMs;
-  return Date.now() - mtime < CACHE_MAX_AGE_MS;
+  if (Date.now() - mtime >= CACHE_MAX_AGE_MS) return false;
+
+  if (bbox) {
+    const metaPath = cachePath + ".meta.json";
+    if (!existsSync(metaPath)) return false;
+    try {
+      const meta = JSON.parse(readFileSync(metaPath, "utf-8"));
+      if (meta.south !== bbox.south || meta.north !== bbox.north ||
+          meta.west !== bbox.west || meta.east !== bbox.east) return false;
+    } catch {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/** Write bbox metadata next to the cache file. */
+function writeCacheMeta(cachePath: string, bbox: BoundingBox): void {
+  writeFileSync(cachePath + ".meta.json", JSON.stringify(bbox), "utf-8");
 }
 
 /**
@@ -210,7 +221,7 @@ export async function downloadOvertureCache(
 ): Promise<string> {
   const absPath = resolve(cachePath);
 
-  if (isCacheFresh(absPath)) {
+  if (isCacheFresh(absPath, bbox)) {
     console.log(`[overture] Cache fresh, reusing: ${absPath}`);
     return absPath;
   }
@@ -225,6 +236,7 @@ export async function downloadOvertureCache(
   console.log(`[overture] Downloading Overture data for bbox…`);
   console.log(`[overture]   south=${bbox.south} north=${bbox.north} west=${bbox.west} east=${bbox.east}`);
   runDuckDB(sql);
+  writeCacheMeta(absPath, bbox);
   console.log(`[overture] Saved to: ${absPath}`);
 
   return absPath;

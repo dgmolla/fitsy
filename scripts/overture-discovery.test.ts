@@ -1,5 +1,5 @@
 import { execSync } from "child_process";
-import { existsSync, mkdirSync, unlinkSync, utimesSync } from "fs";
+import { existsSync, mkdirSync, unlinkSync, utimesSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 
@@ -60,7 +60,9 @@ if (hasDuckDB) {
 
   afterAll(() => {
     try { unlinkSync(FIXTURE_PATH); } catch { /* noop */ }
+    try { unlinkSync(FIXTURE_PATH + ".meta.json"); } catch { /* noop */ }
     try { unlinkSync(CACHE_TEST_PATH); } catch { /* noop */ }
+    try { unlinkSync(CACHE_TEST_PATH + ".meta.json"); } catch { /* noop */ }
   });
 }
 
@@ -183,8 +185,10 @@ describe("isCacheFresh", () => {
 });
 
 describeIfDuckDB("isCacheFresh (with fixture)", () => {
-  it("returns true when file was just created", () => {
-    // Our fixture was just created — should be fresh
+  const TEST_BBOX = { south: 33.9, north: 34.2, west: -118.5, east: -118.1 };
+
+  it("returns true when file was just created (no bbox check)", () => {
+    // Our fixture was just created — should be fresh without bbox check
     expect(isCacheFresh(FIXTURE_PATH)).toBe(true);
   });
 
@@ -195,6 +199,25 @@ describeIfDuckDB("isCacheFresh (with fixture)", () => {
     utimesSync(CACHE_TEST_PATH, eightDaysAgo, eightDaysAgo);
 
     expect(isCacheFresh(CACHE_TEST_PATH)).toBe(false);
+  });
+
+  it("returns false when bbox is requested but no meta file exists", () => {
+    expect(isCacheFresh(FIXTURE_PATH, TEST_BBOX)).toBe(false);
+  });
+
+  it("returns true when bbox matches meta file", () => {
+    execSync(`cp '${FIXTURE_PATH}' '${CACHE_TEST_PATH}'`);
+    writeFileSync(CACHE_TEST_PATH + ".meta.json", JSON.stringify(TEST_BBOX), "utf-8");
+
+    expect(isCacheFresh(CACHE_TEST_PATH, TEST_BBOX)).toBe(true);
+  });
+
+  it("returns false when bbox does not match meta file", () => {
+    execSync(`cp '${FIXTURE_PATH}' '${CACHE_TEST_PATH}'`);
+    writeFileSync(CACHE_TEST_PATH + ".meta.json", JSON.stringify(TEST_BBOX), "utf-8");
+
+    const differentBbox = { south: 34.0, north: 34.3, west: -118.6, east: -118.2 };
+    expect(isCacheFresh(CACHE_TEST_PATH, differentBbox)).toBe(false);
   });
 });
 
@@ -215,32 +238,35 @@ describe("buildDownloadSQL", () => {
     expect(sql).toContain("bbox.xmin BETWEEN -118.5 AND -118.1");
     expect(sql).toContain("bbox.ymin BETWEEN 33.9 AND 34.2");
     expect(sql).toContain("TO '/tmp/output.parquet' (FORMAT PARQUET)");
-    expect(sql).toContain("'restaurant'");
-    expect(sql).toContain("'fast_food'");
-    expect(sql).toContain("'dessert_shop'");
     expect(sql).toContain("s3://overturemaps-us-west-2");
   });
 
-  it("includes all 34 food categories", () => {
+  it("uses ILIKE pattern to catch all restaurant variants", () => {
     const sql = buildDownloadSQL(
       { south: 33.9, north: 34.2, west: -118.5, east: -118.1 },
       "/tmp/output.parquet",
     );
 
-    const allCategories = [
-      "restaurant", "fast_food", "cafe", "pizza_restaurant",
-      "mexican_restaurant", "chinese_restaurant", "japanese_restaurant",
-      "thai_restaurant", "italian_restaurant", "indian_restaurant",
-      "korean_restaurant", "vietnamese_restaurant", "sushi_restaurant",
-      "burger_restaurant", "seafood_restaurant", "american_restaurant",
-      "mediterranean_restaurant", "greek_restaurant", "french_restaurant",
-      "middle_eastern_restaurant", "asian_restaurant", "bakery", "bar",
-      "diner", "steakhouse", "barbecue_restaurant", "noodle_restaurant",
-      "ramen_restaurant", "taco_restaurant", "sandwich_shop",
-      "ice_cream_shop", "juice_bar", "coffee_shop", "dessert_shop",
+    // Pattern-based matching catches fast_food_restaurant, chicken_restaurant, etc.
+    expect(sql).toContain("ILIKE '%restaurant%'");
+    // Excludes non-food restaurant categories
+    expect(sql).toContain("NOT LIKE '%equipment%'");
+    expect(sql).toContain("NOT LIKE '%wholesale%'");
+  });
+
+  it("includes non-restaurant food categories explicitly", () => {
+    const sql = buildDownloadSQL(
+      { south: 33.9, north: 34.2, west: -118.5, east: -118.1 },
+      "/tmp/output.parquet",
+    );
+
+    const nonRestaurantFood = [
+      "cafe", "coffee_shop", "bakery", "diner", "steakhouse",
+      "sandwich_shop", "ice_cream_shop", "juice_bar", "dessert_shop",
+      "food_truck", "bar", "gastropub", "pub", "lounge",
     ];
 
-    for (const cat of allCategories) {
+    for (const cat of nonRestaurantFood) {
       expect(sql).toContain(`'${cat}'`);
     }
   });
@@ -270,22 +296,24 @@ describe("buildLocalQuerySQL", () => {
 // ---------------------------------------------------------------------------
 
 describeIfDuckDB("downloadOvertureCache", () => {
-  it("skips download when cache is fresh", async () => {
-    // Fixture was just created — should be reused
-    const result = await downloadOvertureCache(
-      { south: 33.9, north: 34.2, west: -118.5, east: -118.1 },
-      FIXTURE_PATH,
-    );
+  const DOWNLOAD_BBOX = { south: 33.9, north: 34.2, west: -118.5, east: -118.1 };
 
+  beforeEach(() => {
+    // Write meta file so isCacheFresh sees matching bbox
+    writeFileSync(FIXTURE_PATH + ".meta.json", JSON.stringify(DOWNLOAD_BBOX), "utf-8");
+  });
+
+  afterAll(() => {
+    try { unlinkSync(FIXTURE_PATH + ".meta.json"); } catch { /* noop */ }
+  });
+
+  it("skips download when cache is fresh", async () => {
+    const result = await downloadOvertureCache(DOWNLOAD_BBOX, FIXTURE_PATH);
     expect(result).toBe(FIXTURE_PATH);
   });
 
   it("returns absolute path", async () => {
-    const result = await downloadOvertureCache(
-      { south: 33.9, north: 34.2, west: -118.5, east: -118.1 },
-      FIXTURE_PATH,
-    );
-
+    const result = await downloadOvertureCache(DOWNLOAD_BBOX, FIXTURE_PATH);
     expect(result).toMatch(/^\//); // absolute path starts with /
   });
 });
