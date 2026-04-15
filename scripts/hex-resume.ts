@@ -48,3 +48,37 @@ export async function filterPendingHexes(
 
   return hexIds.filter((id) => !completed.has(id));
 }
+
+/**
+ * Find the most recent incomplete run ID, if any.
+ *
+ * Queries PipelineCompletedHex for the latest runId that has fewer
+ * checkpoints than `totalHexCount`. This allows resuming a run that
+ * crashed across a date boundary (e.g., started at 11:59 PM, restarted
+ * at 12:04 AM the next day).
+ *
+ * Returns null if no incomplete run exists (all previous runs finished,
+ * or no runs have ever been started).
+ */
+export async function findIncompleteRunId(
+  totalHexCount: number,
+  prisma: PrismaClient,
+): Promise<string | null> {
+  // Find the most recent runId
+  const latest = await prisma.pipelineCompletedHex.findFirst({
+    orderBy: { createdAt: "desc" },
+    select: { runId: true },
+  });
+
+  if (!latest) return null;
+
+  // Count how many hexes are checkpointed for that run
+  const count = await prisma.pipelineCompletedHex.count({
+    where: { runId: latest.runId },
+  });
+
+  // If it completed all hexes, it's not incomplete
+  if (count >= totalHexCount) return null;
+
+  return latest.runId;
+}

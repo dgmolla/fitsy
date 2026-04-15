@@ -6,7 +6,7 @@
  * DB integration tests require POSTGRES_PRISMA_URL. Skipped in CI.
  */
 
-import { getCompletedHexIds, filterPendingHexes } from "./hex-resume";
+import { getCompletedHexIds, filterPendingHexes, findIncompleteRunId } from "./hex-resume";
 
 const hasDb = !!process.env["POSTGRES_PRISMA_URL"];
 const describeIfDb = hasDb ? describe : describe.skip;
@@ -92,15 +92,56 @@ describeIfDb("filterPendingHexes", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Pure unit tests (no DB needed)
+// findIncompleteRunId — mock tests (S-140: midnight-safe resume)
 // ---------------------------------------------------------------------------
 
-describe("hex-resume module exports", () => {
-  it("exports getCompletedHexIds function", () => {
-    expect(typeof getCompletedHexIds).toBe("function");
+describe("findIncompleteRunId (mock)", () => {
+  it("returns null when no runs exist", async () => {
+    const mock = {
+      pipelineCompletedHex: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        count: jest.fn(),
+      },
+    };
+
+    const result = await findIncompleteRunId(10, mock as any);
+    expect(result).toBeNull();
+    expect(mock.pipelineCompletedHex.count).not.toHaveBeenCalled();
   });
 
-  it("exports filterPendingHexes function", () => {
-    expect(typeof filterPendingHexes).toBe("function");
+  it("returns runId when latest run is incomplete (5/10 hexes)", async () => {
+    const mock = {
+      pipelineCompletedHex: {
+        findFirst: jest.fn().mockResolvedValue({ runId: "run-2026-04-14" }),
+        count: jest.fn().mockResolvedValue(5),
+      },
+    };
+
+    const result = await findIncompleteRunId(10, mock as any);
+    expect(result).toBe("run-2026-04-14");
+  });
+
+  it("returns null when latest run is fully complete (10/10 hexes)", async () => {
+    const mock = {
+      pipelineCompletedHex: {
+        findFirst: jest.fn().mockResolvedValue({ runId: "run-2026-04-14" }),
+        count: jest.fn().mockResolvedValue(10),
+      },
+    };
+
+    const result = await findIncompleteRunId(10, mock as any);
+    expect(result).toBeNull();
+  });
+
+  it("returns null when count exceeds total (edge case)", async () => {
+    const mock = {
+      pipelineCompletedHex: {
+        findFirst: jest.fn().mockResolvedValue({ runId: "run-2026-04-14" }),
+        count: jest.fn().mockResolvedValue(15),
+      },
+    };
+
+    const result = await findIncompleteRunId(10, mock as any);
+    expect(result).toBeNull();
   });
 });

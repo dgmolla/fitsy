@@ -2,7 +2,7 @@ jest.mock("./constants", () => ({
   aggregateDietaryOptions: jest.fn().mockReturnValue([]),
 }));
 
-import { validateItems, checkMacroMismatch, namesMatch, dedupByName } from "./pipeline-utils";
+import { validateItems, checkMacroMismatch, namesMatch, dedupByName, decodeHtml } from "./pipeline-utils";
 import type { MacroData, StructuredMenuItem } from "../apps/api/services/menuSources/types";
 
 function makeMacro(overrides: Partial<MacroData> = {}): MacroData {
@@ -202,6 +202,42 @@ describe("dedupByName (S-133)", () => {
     ];
     const result = dedupByName(pairs);
     expect(result.map((r) => r.item.name)).toEqual(["Zeta", "Alpha", "Beta"]);
+  });
+});
+
+describe("decodeHtml", () => {
+  it("returns null for null input", () => {
+    expect(decodeHtml(null)).toBeNull();
+  });
+
+  it("returns null for undefined input", () => {
+    expect(decodeHtml(undefined)).toBeNull();
+  });
+
+  it("passes through plain text unchanged", () => {
+    expect(decodeHtml("Chicken Bowl")).toBe("Chicken Bowl");
+  });
+
+  it("decodes &amp;", () => {
+    expect(decodeHtml("Ben &amp; Jerry&#39;s")).toBe("Ben & Jerry's");
+  });
+
+  it("decodes &lt; and &gt;", () => {
+    expect(decodeHtml("&lt;b&gt;Bold&lt;/b&gt;")).toBe("<b>Bold</b>");
+  });
+
+  it("decodes &quot;", () => {
+    expect(decodeHtml("She said &quot;hi&quot;")).toBe('She said "hi"');
+  });
+
+  it("decodes &#x27; and &#x2F;", () => {
+    expect(decodeHtml("path&#x2F;to&#x27;file")).toBe("path/to'file");
+  });
+
+  it("decodes multiple entities in one string", () => {
+    expect(decodeHtml("Pine &amp; Crane &#39;s &quot;Best&quot;")).toBe(
+      "Pine & Crane 's \"Best\"",
+    );
   });
 });
 

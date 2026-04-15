@@ -65,7 +65,7 @@ import {
 } from "./pipeline-events.js";
 import { downloadOvertureCache, queryLocalParquet, type OvertureRestaurant, type BoundingBox } from "./overture-discovery.js";
 import { assignToHexes } from "./hex-assignment.js";
-import { filterPendingHexes } from "./hex-resume.js";
+import { filterPendingHexes, findIncompleteRunId } from "./hex-resume.js";
 import { persistHex, type HexRestaurantData } from "./hex-persist.js";
 import { API_SEMAPHORES } from "./semaphore.js";
 
@@ -231,13 +231,7 @@ async function main(): Promise<void> {
   const prisma = new PrismaClient();
   const anthropic = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"] });
 
-  // S-141: runId is date-based so re-running the same day resumes.
-  // Pass --run-id <id> to override (useful for manual retries).
-  const runIdIdx = process.argv.indexOf("--run-id");
-  const runId =
-    runIdIdx !== -1 && process.argv[runIdIdx + 1]
-      ? process.argv[runIdIdx + 1]!
-      : `run-${new Date().toISOString().slice(0, 10)}`;
+  // runId is resolved after hex assignment — see below (needs totalHexCount for midnight-safe resume)
   const emitter = new PipelineEmitter();
 
   // Web scrapers: Firecrawl for known-URL scraping, Brave Search for search fallback (S-123, S-124)
@@ -297,6 +291,25 @@ async function main(): Promise<void> {
   const hexMap = assignToHexes(allRestaurants);
   const allHexIds = Array.from(hexMap.keys());
   log(`Assigned to ${allHexIds.length} hexes at resolution 7`);
+
+  // S-140: Resolve runId. Explicit --run-id takes priority. Otherwise, check
+  // for an incomplete prior run (midnight-safe: works even if crash at 11:59 PM
+  // and rerun at 12:04 AM). Falls back to date-based ID for fresh runs.
+  const runIdIdx = process.argv.indexOf("--run-id");
+  let runId: string;
+  if (runIdIdx !== -1 && process.argv[runIdIdx + 1]) {
+    runId = process.argv[runIdIdx + 1]!;
+    log(`Using explicit run ID: ${runId}`);
+  } else {
+    const incompleteRunId = await findIncompleteRunId(allHexIds.length, prisma);
+    if (incompleteRunId) {
+      runId = incompleteRunId;
+      log(`Resuming incomplete run: ${runId}`);
+    } else {
+      runId = `run-${new Date().toISOString().slice(0, 10)}`;
+      log(`Starting fresh run: ${runId}`);
+    }
+  }
 
   // S-141: Stage 3 — Filter out already-completed hexes (resume by default, S-140)
   const pendingHexIds = await filterPendingHexes(allHexIds, runId, prisma);
