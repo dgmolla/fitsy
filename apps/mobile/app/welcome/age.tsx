@@ -17,7 +17,7 @@ export default function AgeScreen() {
 
   return (
     <WelcomeScreen
-      progress={10 / 15}
+      progress={10 / 16}
       title="How old are you?"
       onContinue={async () => {
         const age = parseInt(value, 10) || 25;

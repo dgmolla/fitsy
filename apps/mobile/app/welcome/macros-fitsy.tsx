@@ -14,7 +14,7 @@ const STEPS = [
 export default function MacrosFitsyScreen() {
   return (
     <WelcomeScreen
-      progress={6 / 15}
+      progress={6 / 16}
       title="How do we pick the restaurants?"
       subtitle="Three steps — and you only have to do one of them."
       onContinue={() => router.push('/welcome/goal')}
