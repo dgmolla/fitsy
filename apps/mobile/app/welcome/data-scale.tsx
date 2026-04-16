@@ -5,18 +5,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { AnimatedPress } from '@/components/AnimatedPress';
+import { api } from '@/lib/api';
 
-// These will eventually come from an API; hardcoded for now.
-const STATS = {
-  menuItems: 2400,
-  indiePercent: 82,
-};
+const FALLBACK = { menuItems: 2400, indiePercent: 82 };
 
 function useCountUp(target: number, duration = 1200, delay = 0) {
   const [value, setValue] = useState(0);
   const anim = useRef(new RNAnimated.Value(0)).current;
 
   useEffect(() => {
+    if (target === 0) return;
+    anim.setValue(0);
     const timeout = setTimeout(() => {
       anim.addListener(({ value: v }) => setValue(Math.round(v)));
       RNAnimated.timing(anim, {
@@ -32,9 +31,27 @@ function useCountUp(target: number, duration = 1200, delay = 0) {
   return value;
 }
 
+interface StatsResponse {
+  totalDishes: number;
+  indiePercent: number;
+}
+
 export default function DataScaleScreen() {
-  const items = useCountUp(STATS.menuItems, 1600, 400);
-  const indie = useCountUp(STATS.indiePercent, 1200, 700);
+  const [stats, setStats] = useState(FALLBACK);
+
+  useEffect(() => {
+    api.get<StatsResponse>('/api/restaurants/stats')
+      .then((res: StatsResponse) => {
+        setStats({
+          menuItems: res.totalDishes || FALLBACK.menuItems,
+          indiePercent: res.indiePercent || FALLBACK.indiePercent,
+        });
+      })
+      .catch(() => {});
+  }, []);
+
+  const items = useCountUp(stats.menuItems, 1600, 400);
+  const indie = useCountUp(stats.indiePercent, 1200, 700);
 
   return (
     <SafeAreaView style={s.safe}>

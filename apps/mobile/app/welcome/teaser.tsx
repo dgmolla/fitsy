@@ -145,7 +145,7 @@ export default function TeaserScreen() {
       title="These restaurants near you meet your goals."
       subtitle="Subscribe to see exact meals that fit your macros at each one."
       onContinue={() => router.push('/welcome/trial')}
-      onBack={() => router.navigate('/welcome/tuning')}
+      onBack={() => router.back()}
       canContinue
       continueLabel="Let's go"
     >
