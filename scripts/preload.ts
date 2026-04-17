@@ -68,6 +68,7 @@ import { assignToHexes } from "./hex-assignment.js";
 import { filterPendingHexes, findIncompleteRunId } from "./hex-resume.js";
 import { persistHex, type HexRestaurantData } from "./hex-persist.js";
 import { API_SEMAPHORES } from "./semaphore.js";
+import { fetchGooglePlacesPhoto } from "../apps/api/services/googlePlacesPhoto.js";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -398,7 +399,7 @@ async function main(): Promise<void> {
 
         // Resolver: FatSecret → UberEats (with retry — S-116)
         const resolverResult = await withRetry(
-          () => resolver.resolve(restaurant.name, restaurant.address),
+          () => resolver.resolve(restaurant.name, restaurant.address, { lat: restaurant.lat, lng: restaurant.lng }),
           { label: `${restaurant.name}/resolve` },
         ).then((r) => r.result);
         let menuResult: MenuSourceResult = resolverResult;
@@ -453,8 +454,26 @@ async function main(): Promise<void> {
           log(`  [${restaurant.name}] Name mismatch detected (scraped: ${menuResult.restaurant?.name ?? "unknown"})`);
         }
 
-        // Get photo: UE JSON-LD fallback (free)
-        const photoUrl: string | null = menuResult.restaurant?.imageUrl ?? null;
+        // Photo resolution (three-tier):
+        //   1. Primary source image (UberEats JSON-LD when UE was the menu source)
+        //   2. UberEats photo-only lookup (free — covers chains where FatSecret won)
+        //   3. Google Places photo fallback (requires GOOGLE_PLACES_API_KEY)
+        let photoUrl: string | null = menuResult.restaurant?.imageUrl ?? null;
+
+        if (!photoUrl && menuResult.sourceId !== "ubereats") {
+          // UberEats wasn't the menu source — try photo-only UE lookup
+          photoUrl = await ueSource.lookupPhoto(
+            restaurant.name,
+            restaurant.address,
+            { lat: restaurant.lat, lng: restaurant.lng },
+          );
+          if (photoUrl) log(`  [${restaurant.name}] Photo: UberEats fallback`);
+        }
+
+        if (!photoUrl) {
+          photoUrl = await fetchGooglePlacesPhoto(restaurant.name, restaurant.lat, restaurant.lng);
+          if (photoUrl) log(`  [${restaurant.name}] Photo: Google Places fallback`);
+        }
 
         // Upsert restaurant (raw SQL)
         let restaurantId: string;
