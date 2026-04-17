@@ -28,14 +28,14 @@ export class MenuSourceResolver {
    * Resolve menu data by trying sources in order.
    * Returns the first successful result plus a log of all attempts.
    */
-  async resolve(name: string, address: string): Promise<MenuSourceResult & { attempts: SourceAttempt[] }> {
+  async resolve(name: string, address: string, geo?: { lat: number; lng: number }): Promise<MenuSourceResult & { attempts: SourceAttempt[] }> {
     const attempts: SourceAttempt[] = [];
 
     for (const source of this.sources) {
       const start = Date.now();
       let result: MenuSourceResult;
       try {
-        result = await source.lookup(name, address);
+        result = await source.lookup(name, address, geo);
       } catch (err) {
         const durationMs = Date.now() - start;
         const reason = err instanceof Error ? err.message : String(err);

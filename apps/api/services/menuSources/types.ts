@@ -41,5 +41,5 @@ export interface MenuSourceResult {
 
 export interface MenuSource {
   id: string;
-  lookup(name: string, address: string): Promise<MenuSourceResult>;
+  lookup(name: string, address: string, geo?: { lat: number; lng: number }): Promise<MenuSourceResult>;
 }
