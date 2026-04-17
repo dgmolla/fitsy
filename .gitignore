@@ -57,3 +57,5 @@ scripts/cache/ue-sitemap-index.json
 scripts/cache/pipeline-checkpoint.json
 scripts/cache/ue-debug/
 scripts/cache/overture-discovery.parquet
+scripts/cache/overture-discovery.parquet.meta.json
+apps/api/scripts/cache/

@@ -122,6 +122,14 @@ vercel env add KEY prod    # Add/update a secret
 
 ---
 
+## Session Discipline
+
+**Commit before you leave.** Every session must end with all meaningful work committed — even as WIP on a branch. Stashing is not committing. If work is incomplete, commit with a `wip:` prefix on a feature branch so the next session can find it via `git log`, not `git stash list`. Stashes are invisible to future sessions and consistently cause lost work.
+
+**Check for prior work first.** At session start, check `git stash list` and `git status` for uncommitted work from prior sessions. The SessionStart hook surfaces this automatically — act on it before starting new work.
+
+---
+
 ## Pre-PR Gate
 
 CI is a safety net, not a first pass. Run everything locally BEFORE
