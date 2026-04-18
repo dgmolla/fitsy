@@ -10,17 +10,11 @@ jest.mock("./constants", () => ({
 
 // Mock pipeline-utils DB functions for unit tests.
 // DB integration tests only use empty restaurant arrays, so these mocks don't affect them.
-const mockPersistItemsInTx = jest.fn();
-const mockComputeDietaryInTx = jest.fn();
-const mockUpdateMenuHashInTx = jest.fn();
+const mockPersistHexBulkInTx = jest.fn();
 
 jest.mock("./pipeline-utils", () => ({
   ...jest.requireActual("./pipeline-utils"),
-  persistItemsInTx: (...args: unknown[]) => mockPersistItemsInTx(...args),
-  computeAndStoreDietaryOptionsInTx: (...args: unknown[]) =>
-    mockComputeDietaryInTx(...args),
-  updateMenuHashInTx: (...args: unknown[]) =>
-    mockUpdateMenuHashInTx(...args),
+  persistHexBulkInTx: (...args: unknown[]) => mockPersistHexBulkInTx(...args),
 }));
 
 import { persistHex, isHexComplete, type HexRestaurantData } from "./hex-persist";
@@ -75,9 +69,7 @@ function makeMockPrisma() {
 
 describe("persistHex transaction semantics (mock)", () => {
   beforeEach(() => {
-    mockPersistItemsInTx.mockReset().mockResolvedValue(5);
-    mockComputeDietaryInTx.mockReset().mockResolvedValue(undefined);
-    mockUpdateMenuHashInTx.mockReset().mockResolvedValue(undefined);
+    mockPersistHexBulkInTx.mockReset().mockResolvedValue(8);
   });
 
   it("calls $transaction exactly once", async () => {
@@ -90,7 +82,7 @@ describe("persistHex transaction semantics (mock)", () => {
     expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
   });
 
-  it("calls persist + dietary + menuHash for each restaurant", async () => {
+  it("calls persistHexBulkInTx exactly once with all restaurants", async () => {
     const { mockPrisma, mockTx } = makeMockPrisma();
     const restaurants: HexRestaurantData[] = [
       { restaurantId: "r1", items: [makeValidatedPair("Burger")], menuHash: "abc" },
@@ -99,14 +91,8 @@ describe("persistHex transaction semantics (mock)", () => {
 
     await persistHex("run-1", "hex-1", restaurants, mockPrisma as any);
 
-    expect(mockPersistItemsInTx).toHaveBeenCalledTimes(2);
-    expect(mockComputeDietaryInTx).toHaveBeenCalledTimes(2);
-    expect(mockUpdateMenuHashInTx).toHaveBeenCalledTimes(2);
-
-    expect(mockPersistItemsInTx).toHaveBeenCalledWith("r1", restaurants[0]!.items, mockTx);
-    expect(mockPersistItemsInTx).toHaveBeenCalledWith("r2", restaurants[1]!.items, mockTx);
-    expect(mockUpdateMenuHashInTx).toHaveBeenCalledWith("r1", "abc", mockTx);
-    expect(mockUpdateMenuHashInTx).toHaveBeenCalledWith("r2", "def", mockTx);
+    expect(mockPersistHexBulkInTx).toHaveBeenCalledTimes(1);
+    expect(mockPersistHexBulkInTx).toHaveBeenCalledWith(restaurants, mockTx);
   });
 
   it("creates checkpoint in the same transaction with correct data", async () => {
@@ -123,8 +109,8 @@ describe("persistHex transaction semantics (mock)", () => {
     });
   });
 
-  it("returns total item count across all restaurants", async () => {
-    mockPersistItemsInTx.mockResolvedValueOnce(5).mockResolvedValueOnce(3);
+  it("returns total item count from bulk persist", async () => {
+    mockPersistHexBulkInTx.mockResolvedValueOnce(42);
     const { mockPrisma } = makeMockPrisma();
     const restaurants: HexRestaurantData[] = [
       { restaurantId: "r1", items: [makeValidatedPair("Burger")], menuHash: "abc" },
@@ -132,13 +118,11 @@ describe("persistHex transaction semantics (mock)", () => {
     ];
 
     const total = await persistHex("run-1", "hex-1", restaurants, mockPrisma as any);
-    expect(total).toBe(8);
+    expect(total).toBe(42);
   });
 
-  it("rejects when a persist operation fails (no checkpoint written)", async () => {
-    mockPersistItemsInTx
-      .mockResolvedValueOnce(5)
-      .mockRejectedValueOnce(new Error("DB constraint violation"));
+  it("rejects when bulk persist fails (no checkpoint written)", async () => {
+    mockPersistHexBulkInTx.mockRejectedValueOnce(new Error("DB constraint violation"));
     const { mockPrisma, mockCreate } = makeMockPrisma();
     const restaurants: HexRestaurantData[] = [
       { restaurantId: "r1", items: [makeValidatedPair("Burger")], menuHash: "abc" },

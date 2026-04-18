@@ -4,12 +4,13 @@
  * Extracted to avoid duplication across pipeline scripts (S-130).
  */
 
+import { randomUUID } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
 import type {
   MacroData,
   StructuredMenuItem,
 } from "../apps/api/services/menuSources/types.js";
-import { aggregateDietaryOptions } from "./constants.js";
+import { aggregateDietaryOptions, DIETARY_TAG_THRESHOLD } from "./constants.js";
 
 // ─── Item validation (S-111, S-112) ─────────────────────────────────────────
 
@@ -288,21 +289,167 @@ export async function computeAndStoreDietaryOptions(
   return computeAndStoreDietaryOptionsInTx(restaurantId, prisma);
 }
 
-// ─── Menu hash (S-127) ─────────────────────────────────────────────────────
+// ─── Bulk hex-level persist (eliminates N+1 round trips) ────────────────────
+
+export interface BulkRestaurantPersist {
+  restaurantId: string;
+  items: ValidatedPair[];
+  /** Menu hash for incremental update tracking (S-127). */
+  menuHash: string;
+}
 
 /**
- * Update menuHash + lastScrapedAt inside an existing transaction.
- * Must run in the same transaction as persistItemsInTx so a rollback
- * prevents false "already scraped" skips on the next run.
+ * Persist ALL restaurants in a hex with a fixed number of SQL statements,
+ * regardless of restaurant count.
+ *
+ * Replaces the per-restaurant loop (~7 queries × N restaurants) with a
+ * bulk pattern: 2 DELETE, 2 INSERT (flattened UNNEST across restaurants),
+ * 1 dietary UPDATE (SQL-side aggregate), 1 menuHash UPDATE. Atomicity is
+ * preserved — caller must wrap in `$transaction`.
+ *
+ * Returns total items inserted.
  */
-export async function updateMenuHashInTx(
-  restaurantId: string,
-  menuHash: string,
+export async function persistHexBulkInTx(
+  restaurants: BulkRestaurantPersist[],
   tx: TxClient,
-): Promise<void> {
+): Promise<number> {
+  if (restaurants.length === 0) return 0;
+
+  const restaurantIds = restaurants.map((r) => r.restaurantId);
+  const menuHashes = restaurants.map((r) => r.menuHash);
+  const restaurantIdsWithItems: string[] = [];
+
+  // Flatten items across restaurants. Dedup by name within each restaurant
+  // (source data can have duplicate names — violates @@unique constraint).
+  const flatItemIds: string[] = [];
+  const flatRestaurantIds: string[] = [];
+  const flatNames: string[] = [];
+  const flatDescriptions: (string | null)[] = [];
+  const flatCategories: (string | null)[] = [];
+  const flatSections: (string | null)[] = [];
+  const flatPrices: (number | null)[] = [];
+  const flatDietaryTagsJson: string[] = [];
+  const flatCalories: number[] = [];
+  const flatProteins: number[] = [];
+  const flatCarbs: number[] = [];
+  const flatFats: number[] = [];
+  const flatConfidences: string[] = [];
+  const flatSources: (string | null)[] = [];
+
+  for (const { restaurantId, items } of restaurants) {
+    if (items.length === 0) continue;
+    const deduped = dedupByName(items);
+    if (deduped.length < items.length) {
+      console.log(`[persist] Deduped ${items.length - deduped.length} duplicate item names for restaurant ${restaurantId}`); // eslint-disable-line no-console
+    }
+    if (deduped.length === 0) continue;
+    restaurantIdsWithItems.push(restaurantId);
+    for (const pair of deduped) {
+      flatItemIds.push(randomUUID());
+      flatRestaurantIds.push(restaurantId);
+      flatNames.push(decodeHtml(pair.item.name)!);
+      flatDescriptions.push(decodeHtml(pair.item.description) ?? null);
+      flatCategories.push(decodeHtml(pair.item.category) ?? null);
+      flatSections.push(decodeHtml(pair.item.section) ?? null);
+      flatPrices.push(pair.item.price ?? null);
+      flatDietaryTagsJson.push(JSON.stringify(pair.macro.dietaryTags ?? []));
+      flatCalories.push(Math.round(pair.macro.calories));
+      flatProteins.push(pair.macro.proteinG);
+      flatCarbs.push(pair.macro.carbsG);
+      flatFats.push(pair.macro.fatG);
+      flatConfidences.push(pair.macro.confidence);
+      flatSources.push(pair.macro.source);
+    }
+  }
+
+  // Q1 + Q2: bulk DELETE stale rows for restaurants getting new items.
+  // Skipped when no restaurants have items (nothing to clear).
+  if (restaurantIdsWithItems.length > 0) {
+    await tx.$executeRaw`
+      DELETE FROM "MacroEstimate" WHERE "menuItemId" IN (
+        SELECT "id" FROM "MenuItem" WHERE "restaurantId" = ANY(${restaurantIdsWithItems}::text[])
+      )
+    `;
+    await tx.$executeRaw`
+      DELETE FROM "MenuItem" WHERE "restaurantId" = ANY(${restaurantIdsWithItems}::text[])
+    `;
+  }
+
+  // Q3 + Q4: bulk INSERT MenuItem + MacroEstimate across all restaurants.
+  if (flatItemIds.length > 0) {
+    await tx.$executeRaw`
+      INSERT INTO "MenuItem" (
+        "id", "restaurantId", "name", "description", "category", "section", "price", "dietaryTags", "createdAt", "updatedAt"
+      )
+      SELECT
+        id, "restaurantId", name, description, category, section, price,
+        ARRAY(SELECT jsonb_array_elements_text(tags::jsonb)),
+        now(), now()
+      FROM UNNEST(
+        ${flatItemIds}::text[],
+        ${flatRestaurantIds}::text[],
+        ${flatNames}::text[],
+        ${flatDescriptions}::text[],
+        ${flatCategories}::text[],
+        ${flatSections}::text[],
+        ${flatPrices}::float[],
+        ${flatDietaryTagsJson}::text[]
+      ) AS t(id, "restaurantId", name, description, category, section, price, tags)
+    `;
+
+    await tx.$executeRaw`
+      INSERT INTO "MacroEstimate" (
+        "id", "menuItemId", "calories", "proteinG", "carbsG", "fatG",
+        "confidence", "source", "hadPhoto", "estimatedAt"
+      )
+      SELECT
+        gen_random_uuid(),
+        "menuItemId", calories, "proteinG", "carbsG", "fatG",
+        confidence::"ConfidenceLevel", source, false, now()
+      FROM UNNEST(
+        ${flatItemIds}::text[],
+        ${flatCalories}::int[],
+        ${flatProteins}::float[],
+        ${flatCarbs}::float[],
+        ${flatFats}::float[],
+        ${flatConfidences}::text[],
+        ${flatSources}::text[]
+      ) AS t("menuItemId", calories, "proteinG", "carbsG", "fatG", confidence, source)
+    `;
+  }
+
+  // Q5: recompute dietaryOptions for every restaurant in the batch.
+  // LEFT JOIN ensures restaurants with no qualifying tags get [] (not NULL).
+  // Threshold + per-item dedup match aggregateDietaryOptions semantics.
   await tx.$executeRaw`
-    UPDATE "Restaurant"
-    SET "menuHash" = ${menuHash}, "lastScrapedAt" = now()
-    WHERE "id" = ${restaurantId}
+    UPDATE "Restaurant" r
+    SET "dietaryOptions" = COALESCE(q.options, ARRAY[]::text[]),
+        "updatedAt" = now()
+    FROM UNNEST(${restaurantIds}::text[]) AS input(id)
+    LEFT JOIN (
+      SELECT "restaurantId", ARRAY_AGG('has_' || tag) AS options
+      FROM (
+        SELECT mi."restaurantId", t.tag, COUNT(DISTINCT mi."id") AS cnt
+        FROM "MenuItem" mi
+        CROSS JOIN LATERAL UNNEST(mi."dietaryTags") AS t(tag)
+        WHERE mi."restaurantId" = ANY(${restaurantIds}::text[])
+        GROUP BY mi."restaurantId", t.tag
+      ) c
+      WHERE cnt >= ${DIETARY_TAG_THRESHOLD}
+      GROUP BY "restaurantId"
+    ) q ON q."restaurantId" = input.id
+    WHERE r.id = input.id
   `;
+
+  // Q6: bulk UPDATE menuHash + lastScrapedAt.
+  await tx.$executeRaw`
+    UPDATE "Restaurant" r
+    SET "menuHash" = u.hash,
+        "lastScrapedAt" = now(),
+        "updatedAt" = now()
+    FROM UNNEST(${restaurantIds}::text[], ${menuHashes}::text[]) AS u(id, hash)
+    WHERE r.id = u.id
+  `;
+
+  return flatItemIds.length;
 }

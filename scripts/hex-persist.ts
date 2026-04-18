@@ -11,11 +11,7 @@
 
 import type { PrismaClient } from "@prisma/client";
 import type { ValidatedPair } from "./pipeline-utils.js";
-import {
-  persistItemsInTx,
-  computeAndStoreDietaryOptionsInTx,
-  updateMenuHashInTx,
-} from "./pipeline-utils.js";
+import { persistHexBulkInTx } from "./pipeline-utils.js";
 
 // ─── Public API ─────────────────────────────────────────────────────────────
 
@@ -25,6 +21,9 @@ import {
  * Everything runs in a single `prisma.$transaction` — if any operation
  * fails the entire transaction rolls back (no partial data, no phantom
  * checkpoint).
+ *
+ * Persist path uses bulk SQL (fixed query count per hex) instead of
+ * per-restaurant round trips.
  *
  * @returns Total number of menu items persisted across all restaurants.
  */
@@ -40,31 +39,36 @@ export async function persistHex(
   hexId: string,
   restaurants: HexRestaurantData[],
   prisma: PrismaClient,
+  onTiming?: (timing: { bulkMs: number; checkpointMs: number; totalMs: number }) => void,
 ): Promise<number> {
-  return prisma.$transaction(
+  const txStart = Date.now();
+  let bulkMs = 0;
+  let checkpointMs = 0;
+
+  const result = await prisma.$transaction(
     async (tx) => {
-      let totalItems = 0;
+      const t1 = Date.now();
+      const totalItems = await persistHexBulkInTx(restaurants, tx);
+      bulkMs = Date.now() - t1;
 
-      for (const { restaurantId, items, menuHash } of restaurants) {
-        const count = await persistItemsInTx(restaurantId, items, tx);
-        totalItems += count;
-        await computeAndStoreDietaryOptionsInTx(restaurantId, tx);
-        await updateMenuHashInTx(restaurantId, menuHash, tx);
-      }
-
-      // Record the checkpoint in the same transaction
+      const t2 = Date.now();
       await tx.pipelineCompletedHex.create({
-        data: {
-          runId,
-          hexId,
-          count: restaurants.length,
-        },
+        data: { runId, hexId, count: restaurants.length },
       });
+      checkpointMs = Date.now() - t2;
 
       return totalItems;
     },
     { timeout: 60_000 }, // 60s — dense hexes may have 200+ restaurants with items
   );
+
+  onTiming?.({
+    bulkMs,
+    checkpointMs,
+    totalMs: Date.now() - txStart,
+  });
+
+  return result;
 }
 
 /**

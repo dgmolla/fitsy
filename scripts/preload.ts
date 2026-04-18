@@ -87,11 +87,20 @@ function parseIntArg(flag: string, defaultVal: number): number {
   return defaultVal;
 }
 
+function parseStringArg(flag: string): string | null {
+  const idx = process.argv.indexOf(flag);
+  if (idx !== -1 && process.argv[idx + 1]) {
+    return process.argv[idx + 1]!;
+  }
+  return null;
+}
+
 const CONFIG = {
   bbox: { south: 33.95, north: 34.15, west: -118.50, east: -118.15 } as BoundingBox,
   force: process.argv.includes("--force"),
   dryRun: process.argv.includes("--dry-run"),
   maxHexes: parseIntArg("--max-hexes", 0), // 0 = no limit
+  hexId: parseStringArg("--hex-id"), // run only this specific hex
   skipDays: parseIntArg("--days", 7),
   concurrency: 10, // S-128: increased from 5
 };
@@ -190,6 +199,116 @@ function validateEnv(): void {
     console.error(`[preload] Missing required environment variables: ${missing.join(", ")}`);
     process.exit(1);
   }
+
+  const corrupted: string[] = [];
+  for (const v of REQUIRED_ENV_VARS) {
+    const value = process.env[v] ?? "";
+    if (/[\s"']/.test(value) || /[^\x20-\x7E]/.test(value)) {
+      corrupted.push(
+        `${v}: contains whitespace/quote/non-printable char — got ${JSON.stringify(value.slice(0, 8) + "…" + value.slice(-4))}`,
+      );
+    }
+  }
+  if (corrupted.length > 0) {
+    console.error(`[preload] Corrupted env var values detected:\n  ${corrupted.join("\n  ")}`);
+    console.error(`[preload] Re-pull with: vercel env pull .env.local --environment=development --yes`);
+    process.exit(1);
+  }
+}
+
+/**
+ * Preflight check: ping each external paid API with a cheap call to verify
+ * the credential is valid before starting the pipeline.
+ *
+ * Fatal-on-auth (401/403/422) — running a full LA pipeline on a dead key
+ * produces 25K silent `skipped_no_source` events and wastes hours. This
+ * guardrail fails loudly in under 5 seconds instead.
+ *
+ * Transient errors (5xx, network) log a warning but don't block — the
+ * retry layer in preload handles those per-call.
+ *
+ * Bypass with `--skip-preflight` for offline/mocked runs.
+ */
+async function validateApiCredentials(): Promise<void> {
+  if (process.argv.includes("--skip-preflight")) {
+    log(`Skipping API credential preflight (--skip-preflight)`);
+    return;
+  }
+
+  const AUTH_FAILURE_CODES = new Set([401, 403, 422]);
+  const fatal: string[] = [];
+  const warnings: string[] = [];
+
+  async function check(
+    name: string,
+    envVar: string,
+    fn: () => Promise<Response>,
+  ): Promise<void> {
+    if (!process.env[envVar]) {
+      fatal.push(`${envVar}: not set`);
+      return;
+    }
+    try {
+      const response = await fn();
+      if (AUTH_FAILURE_CODES.has(response.status)) {
+        const body = await response.text().catch(() => "<unreadable>");
+        fatal.push(`${name} (${envVar}): HTTP ${response.status} — ${body.slice(0, 160)}`);
+      } else if (!response.ok && response.status < 500) {
+        const body = await response.text().catch(() => "<unreadable>");
+        warnings.push(`${name}: HTTP ${response.status} on preflight — ${body.slice(0, 160)}`);
+      }
+    } catch (err) {
+      warnings.push(`${name}: network error on preflight — ${String(err)}`);
+    }
+  }
+
+  await Promise.all([
+    check("Brave Search", "BRAVE_SEARCH_API_KEY", () =>
+      fetch("https://api.search.brave.com/res/v1/web/search?q=ping&count=1", {
+        headers: {
+          Accept: "application/json",
+          "X-Subscription-Token": process.env["BRAVE_SEARCH_API_KEY"]!,
+        },
+      }),
+    ),
+    check("Firecrawl", "FIRECRAWL_API_KEY", () =>
+      fetch("https://api.firecrawl.dev/v1/scrape", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env["FIRECRAWL_API_KEY"]}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ url: "https://example.com", formats: ["markdown"] }),
+      }),
+    ),
+    check("Anthropic", "ANTHROPIC_API_KEY", () =>
+      fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-api-key": process.env["ANTHROPIC_API_KEY"]!,
+          "anthropic-version": "2023-06-01",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "claude-haiku-4-5",
+          max_tokens: 1,
+          messages: [{ role: "user", content: "ping" }],
+        }),
+      }),
+    ),
+  ]);
+
+  for (const w of warnings) log(`Preflight warning: ${w}`);
+
+  if (fatal.length > 0) {
+    console.error(`[preload] Preflight FAILED — aborting before pipeline starts:`);
+    for (const f of fatal) console.error(`  ${f}`);
+    console.error(`[preload] Fix credentials (e.g. \`vercel env add <KEY> development\`) and retry.`);
+    console.error(`[preload] To bypass (e.g. offline testing), pass --skip-preflight.`);
+    process.exit(1);
+  }
+
+  log(`Preflight OK — all external APIs reachable with valid credentials`);
 }
 
 
@@ -229,9 +348,20 @@ async function shouldSkipIncremental(
 
 async function main(): Promise<void> {
   validateEnv();
+  await validateApiCredentials();
   const startTime = Date.now();
 
-  const prisma = new PrismaClient();
+  // Preload is a one-off batch job — use direct (non-pooled) connection.
+  // pgBouncer in transaction mode breaks Prisma's interactive $transaction
+  // (queries can land on different backends → transaction state lost, P2028).
+  const directUrl = process.env["POSTGRES_URL_NON_POOLING"];
+  if (!directUrl) {
+    console.error(`[preload] POSTGRES_URL_NON_POOLING not set — preload requires a direct (non-pooled) DB connection`);
+    process.exit(1);
+  }
+  const prisma = new PrismaClient({
+    datasources: { db: { url: directUrl } },
+  });
   const anthropic = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"] });
 
   // runId is resolved after hex assignment — see below (needs totalHexCount for midnight-safe resume)
@@ -326,7 +456,14 @@ async function main(): Promise<void> {
     pendingHexIds = await filterPendingHexes(allHexIds, runId, prisma);
   }
 
-  if (CONFIG.maxHexes > 0 && pendingHexIds.length > CONFIG.maxHexes) {
+  if (CONFIG.hexId) {
+    if (!hexMap.has(CONFIG.hexId)) {
+      log(`[hex-id] Hex ${CONFIG.hexId} not found in discovered hexes — exiting`);
+      process.exit(1);
+    }
+    pendingHexIds = [CONFIG.hexId];
+    log(`[hex-id] Running only hex ${CONFIG.hexId} (${hexMap.get(CONFIG.hexId)!.length} restaurants)`);
+  } else if (CONFIG.maxHexes > 0 && pendingHexIds.length > CONFIG.maxHexes) {
     // Sort by restaurant count, pick evenly spaced for representative coverage
     const sorted = [...pendingHexIds].sort(
       (a, b) => (hexMap.get(a)?.length ?? 0) - (hexMap.get(b)?.length ?? 0),
@@ -346,6 +483,21 @@ async function main(): Promise<void> {
       const hexRestaurants = hexMap.get(hexId)!;
 
       log(`\n========== Hex ${hexId} (${hexRestaurants.length} restaurants) ==========`);
+      const hexStart = Date.now();
+
+      ueSource.onSubstep = (ev) => {
+        emitter.emitSubstep({
+          type: "substep",
+          runId,
+          hexId,
+          restaurant: ev.restaurant,
+          source: "ubereats",
+          step: ev.step,
+          status: ev.status,
+          durationMs: ev.durationMs,
+          _time: new Date().toISOString(),
+        });
+      };
 
       if (hexRestaurants.length === 0) {
         if (!CONFIG.dryRun) {
@@ -415,9 +567,23 @@ async function main(): Promise<void> {
           log(`  [${restaurant.name}] Trying firecrawl website scrape`);
           sourcesAttempted.push("brave_website");
           menuResult = await withRetry(
-            () => API_SEMAPHORES.firecrawl.run(() =>
-              firecrawlWebSource.lookupByUrl(restaurant.name, restaurant.website!),
-            ),
+            async () => {
+              const { result, acquireMs, workMs } = await API_SEMAPHORES.firecrawl.runTimed(() =>
+                firecrawlWebSource.lookupByUrl(restaurant.name, restaurant.website!),
+              );
+              emitter.emitSubstep({
+                type: "substep",
+                runId, hexId,
+                restaurant: restaurant.name,
+                source: "firecrawl-website",
+                step: "scrape+haiku",
+                status: result.found ? "ok" : "miss",
+                durationMs: acquireMs + workMs,
+                acquireMs, workMs,
+                _time: new Date().toISOString(),
+              });
+              return result;
+            },
             { label: `${restaurant.name}/firecrawl-url` },
           ).then((r) => r.result);
           if (!menuResult.found) sourcesFailed.push("brave_website");
@@ -428,9 +594,23 @@ async function main(): Promise<void> {
           log(`  [${restaurant.name}] Trying brave_search menu fallback`);
           if (!sourcesAttempted.includes("brave_website")) sourcesAttempted.push("brave_website");
           menuResult = await withRetry(
-            () => API_SEMAPHORES.braveSearch.run(() =>
-              braveWebSource.lookup(restaurant.name, restaurant.address),
-            ),
+            async () => {
+              const { result, acquireMs, workMs } = await API_SEMAPHORES.braveSearch.runTimed(() =>
+                braveWebSource.lookup(restaurant.name, restaurant.address),
+              );
+              emitter.emitSubstep({
+                type: "substep",
+                runId, hexId,
+                restaurant: restaurant.name,
+                source: "brave-search",
+                step: "search+haiku",
+                status: result.found ? "ok" : "miss",
+                durationMs: acquireMs + workMs,
+                acquireMs, workMs,
+                _time: new Date().toISOString(),
+              });
+              return result;
+            },
             { label: `${restaurant.name}/brave-search` },
           ).then((r) => r.result);
           if (!menuResult.found && !sourcesFailed.includes("brave_website")) sourcesFailed.push("brave_website");
@@ -604,7 +784,19 @@ async function main(): Promise<void> {
         const totalItems = hexResults.reduce((sum, r) => sum + r.items.length, 0);
         log(`[dry-run] Would persist ${totalItems} items across ${hexResults.length} restaurants (skipped)`);
       } else if (hexResults.length > 0) {
-        const totalItems = await persistHex(runId, hexId, hexResults, prisma);
+        const totalItems = await persistHex(runId, hexId, hexResults, prisma, (timing) => {
+          log(`[persist-timing] hex=${hexId} total=${timing.totalMs}ms bulk=${timing.bulkMs}ms checkpoint=${timing.checkpointMs}ms (${hexResults.length} restaurants)`);
+          emitter.emitSubstep({
+            type: "substep",
+            runId, hexId,
+            restaurant: `<hex-${hexResults.length}>`,
+            source: "db",
+            step: "persist-hex",
+            status: "ok",
+            durationMs: timing.totalMs,
+            _time: new Date().toISOString(),
+          });
+        });
         log(`Persisted ${totalItems} items across ${hexResults.length} restaurants`);
       } else {
         // No restaurants to persist — still checkpoint the hex as done
@@ -626,7 +818,9 @@ async function main(): Promise<void> {
         _time: new Date().toISOString(),
       });
 
-      log(`Hex ${hexId} complete (${hexesCompleted}/${hexesTotal})`);
+      const hexWallMs = Date.now() - hexStart;
+      const rpm = hexRestaurants.length > 0 ? ((hexRestaurants.length / hexWallMs) * 60_000).toFixed(1) : "0";
+      log(`Hex ${hexId} complete (${hexesCompleted}/${hexesTotal}) — wall=${(hexWallMs / 1000).toFixed(1)}s throughput=${rpm} rests/min`);
     }
   } finally {
     await prisma.$disconnect();
