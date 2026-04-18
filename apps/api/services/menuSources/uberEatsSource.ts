@@ -26,10 +26,24 @@ import type { MenuSource, MenuSourceResult, StructuredMenuItem } from "./types";
 import type { UESitemapIndex } from "./ueSitemapIndex";
 import type { WebScraper } from "../scrapers/types";
 import { discoverUberEatsUrlViaBrave } from "../scrapers/braveSearchScraper";
+import { extractMenuViaApi, type UeApiResult } from "./ueApiClient";
 import { writeFileSync, mkdirSync } from "fs";
 import { join } from "path";
 
 const FIRECRAWL_BASE = "https://api.firecrawl.dev";
+
+/**
+ * UE_API_MODE controls use of the internal getStoreV1 endpoint.
+ *   disabled  (default): JSON-LD only (legacy behavior)
+ *   primary:  try API first on any URL with a decodable UUID; fall back to JSON-LD
+ *   shadow:   run JSON-LD as source of truth; run API in parallel and log deltas
+ */
+type UeApiMode = "disabled" | "primary" | "shadow";
+function ueApiMode(): UeApiMode {
+  const v = process.env["UE_API_MODE"];
+  if (v === "primary" || v === "shadow") return v;
+  return "disabled";
+}
 
 // ─── JSON-LD types ────────────────────────────────────────────────────────────
 
@@ -457,6 +471,42 @@ interface JsonLdParseResult {
 }
 
 /**
+ * Shape-convert a `UeApiResult` into the internal `JsonLdParseResult` used by
+ * `buildResult()`. API responses don't carry cuisine or priceRange, so those
+ * fields stay undefined.
+ */
+function apiResultToJsonLd(api: UeApiResult): JsonLdParseResult {
+  const restaurant: JsonLdParseResult["restaurant"] = { name: api.restaurant.name };
+  if (api.restaurant.imageUrl) restaurant.imageUrl = api.restaurant.imageUrl;
+
+  const out: JsonLdParseResult = { items: api.items, restaurant };
+  if (api.geo) out.geo = api.geo;
+  return out;
+}
+
+/**
+ * Log a parity comparison between the authoritative JSON-LD result and the
+ * parallel API result in shadow mode. Goal: quantify how often the API would
+ * win (JSON-LD missing, API has items) or lose (JSON-LD had items, API didn't).
+ */
+function logShadowDelta(
+  name: string,
+  storeUrl: string,
+  jsonLd: MenuSourceResult | null,
+  api: MenuSourceResult | null,
+): void {
+  const jl = jsonLd?.items.length ?? 0;
+  const ap = api?.items.length ?? 0;
+  let verdict: string;
+  if (!jsonLd && api) verdict = "API_WIN"; // JSON-LD missed, API hit
+  else if (jsonLd && !api) verdict = "API_LOSS"; // JSON-LD hit, API missed
+  else if (jsonLd && api) verdict = jl === ap ? "MATCH" : "ITEM_DELTA";
+  else verdict = "BOTH_MISS";
+  // eslint-disable-next-line no-console
+  console.log(`[ue-shadow] [${name}] ${verdict} jsonld=${jl} api=${ap} url=${storeUrl}`);
+}
+
+/**
  * Parse JSON-LD from raw HTML string (shared by raw fetch and Firecrawl paths).
  * Returns structured items + restaurant metadata + geo, or null.
  */
@@ -598,12 +648,25 @@ function haversineMeters(
 
 // ─── MenuSource implementation ────────────────────────────────────────────────
 
+/**
+ * Callback for emitting sub-step timing events. Optional — when set, the source
+ * calls this once per step (sitemap/brave-ue/firecrawl-ue/etc.) with wall-clock
+ * duration + outcome. Used by the preload pipeline to push to Axiom.
+ */
+export type SubstepSink = (ev: {
+  restaurant: string;
+  step: string;
+  status: "ok" | "miss" | "bot_defense" | "error";
+  durationMs: number;
+}) => void;
+
 export class UberEatsSource implements MenuSource {
   readonly id = "ubereats";
 
   private cachedUrl: string | undefined;
   private sitemapIndex: UESitemapIndex | undefined;
   private searchScraper: WebScraper | undefined;
+  onSubstep: SubstepSink | undefined;
 
   /**
    * Create a UberEatsSource.
@@ -615,6 +678,27 @@ export class UberEatsSource implements MenuSource {
     this.cachedUrl = storeUrl ?? undefined;
     this.sitemapIndex = sitemapIndex;
     this.searchScraper = searchScraper;
+  }
+
+  private async timed<T>(
+    name: string,
+    step: string,
+    fn: () => Promise<T>,
+    classify: (result: T) => "ok" | "miss" | "bot_defense" | "error",
+  ): Promise<T> {
+    const t0 = Date.now();
+    let status: "ok" | "miss" | "bot_defense" | "error" = "miss";
+    try {
+      const r = await fn();
+      status = classify(r);
+      return r;
+    } catch (err) {
+      status = "error";
+      throw err;
+    } finally {
+      const durationMs = Date.now() - t0;
+      this.onSubstep?.({ restaurant: name, step, status, durationMs });
+    }
   }
 
   /**
@@ -711,6 +795,55 @@ export class UberEatsSource implements MenuSource {
   }
 
   /**
+   * Try getStoreV1 API extraction from a UberEats store URL.
+   * Uses the same validation path as JSON-LD (geo-first, then name fallback).
+   * Returns null if the URL has no decodable UUID, the API fails, or validation rejects.
+   */
+  private async tryApi(
+    storeUrl: string,
+    expectedName: string,
+    expectedGeo?: { lat: number; lng: number },
+  ): Promise<MenuSourceResult | null> {
+    const apiResult = await extractMenuViaApi(storeUrl, { timeoutMs: 10_000 });
+    if (!apiResult) return null;
+    return this.buildResult(apiResultToJsonLd(apiResult), expectedName, expectedGeo);
+  }
+
+  /**
+   * Extract menu data from a store URL using the current UE_API_MODE.
+   *
+   *   disabled: JSON-LD only
+   *   primary:  API first, fall back to JSON-LD
+   *   shadow:   JSON-LD is authoritative; API runs in parallel for parity logging
+   *
+   * Returns the same shape as tryJsonLd so call sites stay unchanged.
+   */
+  private async tryExtract(
+    storeUrl: string,
+    expectedName: string,
+    expectedGeo?: { lat: number; lng: number },
+  ): Promise<{ result: MenuSourceResult | null; botDefense: boolean }> {
+    const mode = ueApiMode();
+
+    if (mode === "primary") {
+      const apiResult = await this.tryApi(storeUrl, expectedName, expectedGeo);
+      if (apiResult) return { result: apiResult, botDefense: false };
+      return this.tryJsonLd(storeUrl, expectedName, expectedGeo);
+    }
+
+    if (mode === "shadow") {
+      const [jsonLd, apiResult] = await Promise.all([
+        this.tryJsonLd(storeUrl, expectedName, expectedGeo),
+        this.tryApi(storeUrl, expectedName, expectedGeo),
+      ]);
+      logShadowDelta(expectedName, storeUrl, jsonLd.result, apiResult);
+      return jsonLd;
+    }
+
+    return this.tryJsonLd(storeUrl, expectedName, expectedGeo);
+  }
+
+  /**
    * Try JSON-LD extraction via Firecrawl (S-134 — bypasses bot defense).
    * Only called when raw fetch hits bot defense. Cost: $0.006.
    */
@@ -741,10 +874,14 @@ export class UberEatsSource implements MenuSource {
     // Track the best URL we've found (for Firecrawl fallback if bot defense blocks raw fetch)
     let botDefenseUrl: string | null = null;
 
+    const classifyJsonLd = (r: { result: MenuSourceResult | null; botDefense: boolean }) =>
+      r.result ? "ok" as const : r.botDefense ? "bot_defense" as const : "miss" as const;
+
     // Step 1: Try constructor-provided URL
     if (this.cachedUrl) {
       log("cached-url", `trying ${this.cachedUrl}`);
-      const { result, botDefense } = await this.tryJsonLd(this.cachedUrl, name, geo);
+      const { result, botDefense } = await this.timed(name, "cached-url",
+        () => this.tryExtract(this.cachedUrl!, name, geo), classifyJsonLd);
       if (result) { log("cached-url", `ok (${result.items.length} items)`); return result; }
       if (botDefense) { botDefenseUrl = this.cachedUrl; log("cached-url", "bot defense detected"); }
       else { log("cached-url", "no JSON-LD or geo/name mismatch"); }
@@ -754,7 +891,8 @@ export class UberEatsSource implements MenuSource {
     const cachedDiscoveredUrl = this.urlCache?.get(name);
     if (cachedDiscoveredUrl) {
       log("url-cache", `trying ${cachedDiscoveredUrl}`);
-      const { result, botDefense } = await this.tryJsonLd(cachedDiscoveredUrl, name, geo);
+      const { result, botDefense } = await this.timed(name, "url-cache",
+        () => this.tryExtract(cachedDiscoveredUrl, name, geo), classifyJsonLd);
       if (result) { log("url-cache", `ok (${result.items.length} items)`); return result; }
       if (botDefense) { botDefenseUrl ??= cachedDiscoveredUrl; log("url-cache", "bot defense detected"); }
       else { log("url-cache", "no JSON-LD or geo/name mismatch"); }
@@ -765,7 +903,8 @@ export class UberEatsSource implements MenuSource {
       const sitemapUrl = this.sitemapIndex.findUrl(name);
       if (sitemapUrl) {
         log("sitemap", `trying ${sitemapUrl}`);
-        const { result, botDefense } = await this.tryJsonLd(sitemapUrl, name, geo);
+        const { result, botDefense } = await this.timed(name, "sitemap",
+          () => this.tryExtract(sitemapUrl, name, geo), classifyJsonLd);
         if (result) {
           log("sitemap", `ok (${result.items.length} items)`);
           this.urlCache?.set(name, sitemapUrl);
@@ -779,10 +918,13 @@ export class UberEatsSource implements MenuSource {
     }
 
     // Step 4: Brave Search URL discovery (S-122 — preferred, faster + cheaper)
-    const braveUrl = await discoverUberEatsUrlViaBrave(name, address);
+    const braveUrl = await this.timed(name, "brave-ue-discover",
+      () => discoverUberEatsUrlViaBrave(name, address),
+      (u) => (u ? "ok" as const : "miss" as const));
     if (braveUrl) {
       log("brave-ue", `trying ${braveUrl}`);
-      const { result, botDefense } = await this.tryJsonLd(braveUrl, name, geo);
+      const { result, botDefense } = await this.timed(name, "brave-ue-fetch",
+        () => this.tryExtract(braveUrl, name, geo), classifyJsonLd);
       if (result) {
         log("brave-ue", `ok (${result.items.length} items)`);
         this.urlCache?.set(name, braveUrl);
@@ -795,10 +937,13 @@ export class UberEatsSource implements MenuSource {
     }
 
     // Step 5: Firecrawl URL discovery → raw fetch (fallback)
-    const discoveredUrl = await discoverUberEatsUrl(name, address);
+    const discoveredUrl = await this.timed(name, "firecrawl-ue-discover",
+      () => discoverUberEatsUrl(name, address),
+      (u) => (u ? "ok" as const : "miss" as const));
     if (discoveredUrl) {
       log("firecrawl-ue", `trying ${discoveredUrl}`);
-      const { result, botDefense } = await this.tryJsonLd(discoveredUrl, name, geo);
+      const { result, botDefense } = await this.timed(name, "firecrawl-ue-fetch",
+        () => this.tryExtract(discoveredUrl, name, geo), classifyJsonLd);
       if (result) {
         log("firecrawl-ue", `ok (${result.items.length} items)`);
         this.urlCache?.set(name, discoveredUrl);
@@ -813,7 +958,9 @@ export class UberEatsSource implements MenuSource {
     // Step 6 (S-134): Firecrawl HTML fallback — bypasses bot defense
     if (botDefenseUrl) {
       log("firecrawl-fallback", `trying ${botDefenseUrl} via Firecrawl`);
-      const result = await this.tryFirecrawlJsonLd(botDefenseUrl, name, geo);
+      const result = await this.timed(name, "firecrawl-fallback",
+        () => this.tryFirecrawlJsonLd(botDefenseUrl!, name, geo),
+        (r) => (r ? "ok" as const : "miss" as const));
       if (result) {
         log("firecrawl-fallback", `ok (${result.items.length} items)`);
         this.urlCache?.set(name, botDefenseUrl);
