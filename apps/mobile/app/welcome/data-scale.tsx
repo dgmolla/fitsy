@@ -5,9 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { AnimatedPress } from '@/components/AnimatedPress';
-import { api } from '@/lib/api';
-
-const FALLBACK = { menuItems: 2400, indiePercent: 82 };
+import { useStats } from '@/lib/useStats';
 
 function useCountUp(target: number, duration = 1200, delay = 0) {
   const [value, setValue] = useState(0);
@@ -31,26 +29,10 @@ function useCountUp(target: number, duration = 1200, delay = 0) {
   return value;
 }
 
-interface StatsResponse {
-  totalDishes: number;
-  indiePercent: number;
-}
-
 export default function DataScaleScreen() {
-  const [stats, setStats] = useState(FALLBACK);
+  const stats = useStats();
 
-  useEffect(() => {
-    api.get<StatsResponse>('/api/restaurants/stats')
-      .then((res: StatsResponse) => {
-        setStats({
-          menuItems: res.totalDishes || FALLBACK.menuItems,
-          indiePercent: res.indiePercent || FALLBACK.indiePercent,
-        });
-      })
-      .catch(() => {});
-  }, []);
-
-  const items = useCountUp(stats.menuItems, 1600, 400);
+  const items = useCountUp(stats.totalDishes, 1600, 400);
   const indie = useCountUp(stats.indiePercent, 1200, 700);
 
   return (

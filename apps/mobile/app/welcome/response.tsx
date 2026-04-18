@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { AnimatedPress } from '@/components/AnimatedPress';
+import { useStats } from '@/lib/useStats';
 
 interface ResponseConfig {
   headline: string;
@@ -12,7 +13,8 @@ interface ResponseConfig {
   callout?: string;
 }
 
-function getResponse(tried: string): ResponseConfig {
+function getResponse(tried: string, totalDishes: number): ResponseConfig {
+  const dishCount = totalDishes.toLocaleString();
   switch (tried) {
     case 'nothing':
       return {
@@ -27,9 +29,9 @@ function getResponse(tried: string): ResponseConfig {
       };
     case 'delivery':
       return {
-        headline: "Delivery services\nadd up fast.",
-        body: "Between subscriptions, per-meal costs, and the ones you forget to cancel — it's expensive for food you didn't fully choose. Fitsy works with restaurants you already eat at, for free.",
-        callout: "Same restaurants. Now with macro data.",
+        headline: "Delivery apps don't\nshow you macros.",
+        body: "You can order anything on Uber Eats or DoorDash — but none of them tell you the protein, carbs, or fat in what you're ordering. You're flying blind on nutrition. And the subscription fees add up too.",
+        callout: "Fitsy adds the macro data they're missing.",
       };
     case 'calorie_apps':
       return {
@@ -41,7 +43,7 @@ function getResponse(tried: string): ResponseConfig {
       return {
         headline: "Googling macros\nonly gets you so far.",
         body: "Chain restaurants publish nutrition data. But your favorite local spot? Good luck. Fitsy analyzes menus from local restaurants so you get macro data no one else has.",
-        callout: "We've analyzed 2,400+ dishes — most from local spots.",
+        callout: `We've analyzed ${dishCount}+ dishes — most from local spots.`,
       };
     default:
       return {
@@ -53,7 +55,8 @@ function getResponse(tried: string): ResponseConfig {
 
 export default function ResponseScreen() {
   const { tried } = useLocalSearchParams<{ tried?: string }>();
-  const config = getResponse(tried ?? '');
+  const { totalDishes } = useStats();
+  const config = getResponse(tried ?? '', totalDishes);
 
   return (
     <SafeAreaView style={s.safe}>
