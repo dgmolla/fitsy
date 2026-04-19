@@ -6,6 +6,9 @@
     "test": "jest --passWithNoTests",
     "type-check": "tsc --noEmit"
   },
+  "dependencies": {
+    "@fitsy/shared": "*"
+  },
   "devDependencies": {
     "@types/jest": "^30.0.0",
     "jest": "^29.7.0",

@@ -1,2 +1,3 @@
 export * from "./types/index";
 export * from "./utils/dateUtils";
+export * from "./env";
