@@ -83,7 +83,26 @@ export interface RunEvent {
   _time: string;
 }
 
-export type PipelineEvent = RestaurantEvent | PipelineError | CostCheckpoint | RunEvent;
+/**
+ * Sub-step timing event — emitted inside UberEatsSource (and other multi-step
+ * sources) so we can attribute time to specific sub-operations (sitemap lookup,
+ * brave-ue discovery, raw fetch, firecrawl-html, firecrawl-markdown, etc.).
+ */
+export interface SubstepEvent {
+  type: "substep";
+  runId: string;
+  hexId: string;
+  restaurant: string;
+  source: string;
+  step: string;
+  status: "ok" | "miss" | "bot_defense" | "error";
+  durationMs: number;
+  acquireMs?: number;
+  workMs?: number;
+  _time: string;
+}
+
+export type PipelineEvent = RestaurantEvent | PipelineError | CostCheckpoint | RunEvent | SubstepEvent;
 
 // ─── Emitter ────────────────────────────────────────────────────────────────
 
@@ -106,18 +125,32 @@ export class PipelineEmitter {
     }
   }
 
-  /** Buffer a restaurant event for batch emission. */
+  /**
+   * Emit a restaurant event immediately.
+   *
+   * Previously buffered until `flushHex` — but a transaction failure during
+   * persist meant an entire hex of perf data was lost (see 2026-04-18 P2028
+   * crash). Axiom SDK batches ingest() calls internally, so per-event ingest
+   * adds no network overhead but guarantees data survives process crashes.
+   */
   bufferRestaurant(event: RestaurantEvent): void {
-    this.buffer.push(event);
+    if (this.axiom) {
+      this.axiom.ingest(DATASET, [event]);
+    }
   }
 
-  /** Flush buffered restaurant events + emit a cost checkpoint (per hex). */
+  /** Emit a sub-step timing event (e.g. UE sitemap lookup, firecrawl scrape). */
+  emitSubstep(event: SubstepEvent): void {
+    if (this.axiom) {
+      this.axiom.ingest(DATASET, [event]);
+    }
+  }
+
+  /** Emit a cost checkpoint (per hex). Restaurant events already flushed inline. */
   async flushHex(costCheckpoint: CostCheckpoint): Promise<void> {
     if (this.axiom) {
-      const events = [...this.buffer, costCheckpoint];
-      this.axiom.ingest(DATASET, events);
+      this.axiom.ingest(DATASET, [costCheckpoint]);
     }
-    this.buffer = [];
   }
 
   /** Emit the final run event and flush all remaining data to Axiom. */

@@ -41,6 +41,23 @@ export class Semaphore {
       this.release();
     }
   }
+
+  /**
+   * Run a function with timing split between semaphore-wait and actual work.
+   * Use when profiling to distinguish "API is slow" from "we're queueing on the sem".
+   */
+  async runTimed<T>(fn: () => Promise<T>): Promise<{ result: T; acquireMs: number; workMs: number }> {
+    const t0 = Date.now();
+    await this.acquire();
+    const acquireMs = Date.now() - t0;
+    const t1 = Date.now();
+    try {
+      const result = await fn();
+      return { result, acquireMs, workMs: Date.now() - t1 };
+    } finally {
+      this.release();
+    }
+  }
 }
 
 /**
