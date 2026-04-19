@@ -85,16 +85,19 @@ interface BoundingBox {
   east: number;
 }
 
-function parseIntArg(flag: string, defaultVal: number): number {
-  const idx = process.argv.indexOf(flag);
-  if (idx !== -1 && process.argv[idx + 1]) return parseInt(process.argv[idx + 1]!, 10);
-  return defaultVal;
-}
-
 function parseStringArg(flag: string): string | null {
+  // Support both `--flag value` and `--flag=value` forms.
+  const eqPrefix = `${flag}=`;
+  const eqMatch = process.argv.find((a) => a.startsWith(eqPrefix));
+  if (eqMatch) return eqMatch.slice(eqPrefix.length);
   const idx = process.argv.indexOf(flag);
   if (idx !== -1 && process.argv[idx + 1]) return process.argv[idx + 1]!;
   return null;
+}
+
+function parseIntArg(flag: string, defaultVal: number): number {
+  const raw = parseStringArg(flag);
+  return raw === null ? defaultVal : parseInt(raw, 10);
 }
 
 function parsePhase(): Phase {
