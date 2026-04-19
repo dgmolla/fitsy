@@ -1,23 +1,122 @@
 /**
- * Uber Eats internal API client for `/_p/api/getStoreV1`.
+ * Uber Eats internal API client.
  *
- * UE's storefront uses an internal JSON API that returns the full menu
- * without the SSR bot-defense wall that blocks the HTML/JSON-LD path.
- * The store UUID is encoded in the URL path as the 22-char base64url
- * segment after the slug: `/store/{slug}/{b64url}` → 16-byte UUID.
+ * Two endpoints:
+ *   - getStoreV1: full menu for a known storeUuid. Works unauth with CSRF header only.
+ *   - getFeedV1:  delivery feed (list of stores) for a given lat/lng. Works unauth
+ *                 but requires a `uev2.loc` cookie captured from a browser session.
+ *                 The cookie's lat/lng fields are authoritative per-call; other
+ *                 fields (HERE reference, address) are cosmetic and reused across
+ *                 probes. See docs/engineering/plans/ue-feed-spike-findings.md.
  *
- * This module is stateless — it does not cache URLs or manage flow
- * (that's `UberEatsSource`'s job). It exposes primitives the source
- * can call when `UE_API_MODE` is `primary` or `shadow`.
+ * Cookie rotation: if `getFeedV1` starts returning empty-state at scale, the
+ * cookie has expired. Capture a fresh one from ubereats.com → DevTools →
+ * Application → Cookies → `uev2.loc` and update the `UE_LOC_COOKIE` secret.
  */
 
 import type { StructuredMenuItem } from "./types";
 
-const UE_API_ENDPOINT = "https://www.ubereats.com/_p/api/getStoreV1";
+const UE_BASE = "https://www.ubereats.com";
+const UE_STORE_ENDPOINT = `${UE_BASE}/_p/api/getStoreV1`;
+const UE_FEED_ENDPOINT = `${UE_BASE}/_p/api/getFeedV1`;
 const DEFAULT_TIMEOUT_MS = 8_000;
+const DEFAULT_MAX_RETRIES = 2;
+const DEFAULT_BASE_BACKOFF_MS = 1000;
+const ERROR_BODY_PREVIEW = 200;
+/** Statuses UE uses for soft-block / rate-limit — worth retrying. */
+const RETRY_STATUSES = new Set([403, 429, 502, 503]);
 
 const BROWSER_UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
+async function readBodyPreview(response: Response): Promise<string> {
+  try {
+    const body = await response.text();
+    return body.slice(0, ERROR_BODY_PREVIEW);
+  } catch {
+    return "<unreadable>";
+  }
+}
+
+/** Exponential backoff with ±25% jitter. baseMs=0 disables (for tests). */
+function jitteredBackoffMs(attempt: number, baseMs: number): number {
+  if (baseMs <= 0) return 0;
+  const base = baseMs * 2 ** attempt;
+  const jitter = base * 0.25 * (Math.random() * 2 - 1);
+  return Math.max(1, Math.round(base + jitter));
+}
+
+// ─── Shared POST helper ──────────────────────────────────────────────────────
+
+interface PostUeOpts {
+  timeoutMs?: number;
+  signal?: AbortSignal;
+  maxRetries?: number;
+  baseBackoffMs?: number;
+  /** Extra Cookie header value (e.g. for getFeedV1's uev2.loc). */
+  cookieHeader?: string;
+  /** Label for log lines (e.g. storeUuid or "feed:34.05,-118.24"). */
+  logLabel: string;
+}
+
+async function postUe<T>(endpoint: string, body: unknown, opts: PostUeOpts): Promise<T | null> {
+  const maxRetries = opts.maxRetries ?? DEFAULT_MAX_RETRIES;
+  const baseBackoffMs = opts.baseBackoffMs ?? DEFAULT_BASE_BACKOFF_MS;
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    if (opts.signal) {
+      if (opts.signal.aborted) controller.abort();
+      else opts.signal.addEventListener("abort", () => controller.abort(), { once: true });
+    }
+
+    const tag = `attempt ${attempt + 1}/${maxRetries + 1}`;
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "User-Agent": BROWSER_UA,
+      Accept: "application/json",
+      "x-csrf-token": "x", // required header; value not validated for unauth reads
+      Referer: `${UE_BASE}/`,
+      Origin: UE_BASE,
+    };
+    if (opts.cookieHeader) headers["Cookie"] = opts.cookieHeader;
+
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+
+      if (response.ok) return (await response.json()) as T;
+
+      const preview = await readBodyPreview(response);
+      const retriable = RETRY_STATUSES.has(response.status) && attempt < maxRetries;
+      if (retriable) {
+        console.warn(`[ue-api] HTTP ${response.status} for ${opts.logLabel} (${tag}, retrying): ${preview}`);
+      } else {
+        console.warn(`[ue-api] HTTP ${response.status} for ${opts.logLabel} (${tag}, giving up): ${preview}`);
+        return null;
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (attempt >= maxRetries) {
+        console.warn(`[ue-api] network error for ${opts.logLabel} (${tag}, giving up): ${msg}`);
+        return null;
+      }
+      console.warn(`[ue-api] network error for ${opts.logLabel} (${tag}, retrying): ${msg}`);
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    const delay = jitteredBackoffMs(attempt, baseBackoffMs);
+    if (delay > 0) await new Promise((r) => setTimeout(r, delay));
+  }
+  return null;
+}
 
 // ─── Store UUID decoding ─────────────────────────────────────────────────────
 
@@ -52,7 +151,7 @@ export function decodeStoreUuid(storeUrl: string): string | null {
   );
 }
 
-// ─── API response types ──────────────────────────────────────────────────────
+// ─── getStoreV1 types ────────────────────────────────────────────────────────
 
 interface UeCatalogItem {
   uuid?: string;
@@ -95,47 +194,36 @@ export interface UeApiResult {
   geo?: { lat: number; lng: number };
 }
 
-// ─── Fetch ───────────────────────────────────────────────────────────────────
+// ─── fetchStoreV1 ────────────────────────────────────────────────────────────
+
+export interface FetchStoreV1Opts {
+  timeoutMs?: number;
+  signal?: AbortSignal;
+  /** Max retries on retriable statuses / network errors. Default 2. */
+  maxRetries?: number;
+  /** Base ms for exp backoff (1s → 2s → 4s). 0 disables delay (tests). Default 1000. */
+  baseBackoffMs?: number;
+}
 
 /**
- * POST to UE's internal getStoreV1 endpoint. Returns parsed JSON or `null`
- * on network error, non-2xx, or malformed response. Aborts after `timeoutMs`.
+ * POST to UE's internal getStoreV1 endpoint. Returns parsed JSON or `null`.
+ *
+ * Retries with exp backoff + jitter on 403/429/502/503 and network errors
+ * (UE sometimes soft-blocks rapid unauth POSTs). Logs HTTP status + body
+ * preview on every non-ok response so rate-limit vs. block vs. empty-response
+ * failure modes are visible in pipeline logs.
  */
 export async function fetchStoreV1(
   storeUuid: string,
-  opts: { timeoutMs?: number; signal?: AbortSignal } = {},
+  opts: FetchStoreV1Opts = {},
 ): Promise<UeStoreResponse | null> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), opts.timeoutMs ?? DEFAULT_TIMEOUT_MS);
-
-  if (opts.signal) {
-    if (opts.signal.aborted) controller.abort();
-    else opts.signal.addEventListener("abort", () => controller.abort(), { once: true });
-  }
-
-  try {
-    const response = await fetch(UE_API_ENDPOINT, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "User-Agent": BROWSER_UA,
-        Accept: "application/json",
-        "x-csrf-token": "x", // UE requires this header to be present (value not validated for unauth reads)
-      },
-      body: JSON.stringify({ storeUuid }),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) return null;
-    return (await response.json()) as UeStoreResponse;
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timeout);
-  }
+  return postUe<UeStoreResponse>(UE_STORE_ENDPOINT, { storeUuid }, {
+    ...opts,
+    logLabel: storeUuid,
+  });
 }
 
-// ─── Response parsing ────────────────────────────────────────────────────────
+// ─── Response parsing (getStoreV1) ───────────────────────────────────────────
 
 /**
  * Extract structured menu items + restaurant metadata from a getStoreV1
@@ -168,7 +256,6 @@ export function parseStoreV1Response(json: UeStoreResponse): UeApiResult | null 
       const key = title.toLowerCase();
       const existingIdx = seen.get(key);
       if (existingIdx !== undefined) {
-        // Upgrade the prior entry if we now have a section name and it didn't
         if (sectionName && !items[existingIdx]!.section) {
           items[existingIdx]!.section = sectionName;
         }
@@ -202,7 +289,7 @@ export function parseStoreV1Response(json: UeStoreResponse): UeApiResult | null 
   return result;
 }
 
-// ─── Convenience wrapper ─────────────────────────────────────────────────────
+// ─── Convenience wrapper (getStoreV1) ────────────────────────────────────────
 
 /**
  * Full API path: decode storeUuid from URL → POST getStoreV1 → parse.
@@ -210,7 +297,7 @@ export function parseStoreV1Response(json: UeStoreResponse): UeApiResult | null 
  */
 export async function extractMenuViaApi(
   storeUrl: string,
-  opts: { timeoutMs?: number; signal?: AbortSignal } = {},
+  opts: FetchStoreV1Opts = {},
 ): Promise<UeApiResult | null> {
   const storeUuid = decodeStoreUuid(storeUrl);
   if (!storeUuid) return null;
@@ -219,4 +306,268 @@ export async function extractMenuViaApi(
   if (!json) return null;
 
   return parseStoreV1Response(json);
+}
+
+// ─── getFeedV1 types ─────────────────────────────────────────────────────────
+
+interface UeFeedImage {
+  url?: string;
+  width?: number;
+  height?: number;
+}
+
+interface UeFeedMapMarker {
+  latitude?: number;
+  longitude?: number;
+}
+
+interface UeFeedStore {
+  storeUuid?: string;
+  title?: { text?: string };
+  rating?: { text?: string; accessibilityText?: string };
+  actionUrl?: string;
+  image?: { items?: UeFeedImage[] };
+  mapMarker?: UeFeedMapMarker;
+  signposts?: Array<{ text?: string }>;
+  meta?: Array<{ text?: string; badgeType?: string }>;
+}
+
+interface UeFeedItem {
+  uuid?: string;
+  type?: string;
+  store?: UeFeedStore;
+}
+
+interface UeFeedData {
+  feedItems?: UeFeedItem[];
+  cityName?: string;
+  isInServiceArea?: boolean;
+  cacheKey?: string;
+}
+
+interface UeFeedResponse {
+  status?: string;
+  data?: UeFeedData;
+}
+
+/** Normalized store card yielded by paginateFeedV1. */
+export interface UeFeedStoreCard {
+  storeUuid: string;
+  name: string;
+  lat: number;
+  lng: number;
+  /** Highest-resolution image URL from `image.items[]`, if present. */
+  photoUrl?: string;
+  /** Numeric rating parsed from `rating.text`, if present. */
+  rating?: number;
+  /** Review count parsed from `rating.accessibilityText` ("…based on more than 230 reviews"). */
+  userRatingCount?: number;
+  /** Store slug extracted from `actionUrl` (`/store/<slug>/...`). */
+  slug?: string;
+  /** Short base64url ID from `actionUrl` (second path segment after slug). */
+  actionUrlId?: string;
+}
+
+// ─── getFeedV1 cookie handling ───────────────────────────────────────────────
+
+interface UeLocCookieJson {
+  latitude?: number;
+  longitude?: number;
+  [key: string]: unknown;
+}
+
+/**
+ * Build the `Cookie: uev2.loc=...` header value for a given lat/lng.
+ *
+ * Reads `UE_LOC_COOKIE` (URL-encoded JSON captured from a browser session),
+ * overrides `latitude`/`longitude` fields, re-encodes. The HERE `reference`
+ * and other fields in the cookie are kept as-is — they are cosmetic.
+ *
+ * Throws if `UE_LOC_COOKIE` is not set or cannot be decoded.
+ */
+export function buildFeedCookieHeader(lat: number, lng: number): string {
+  const raw = process.env.UE_LOC_COOKIE;
+  if (!raw) {
+    throw new Error(
+      "UE_LOC_COOKIE env var not set. Capture uev2.loc from ubereats.com DevTools → Application → Cookies.",
+    );
+  }
+  let parsed: UeLocCookieJson;
+  try {
+    parsed = JSON.parse(decodeURIComponent(raw));
+  } catch (err) {
+    throw new Error(
+      `UE_LOC_COOKIE could not be parsed as URL-encoded JSON: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+  parsed.latitude = lat;
+  parsed.longitude = lng;
+  const reEncoded = encodeURIComponent(JSON.stringify(parsed));
+  return `uev2.loc=${reEncoded}`;
+}
+
+// ─── fetchFeedV1 ─────────────────────────────────────────────────────────────
+
+export interface FetchFeedV1Opts extends FetchStoreV1Opts {
+  /** Pagination offset into feedItems. Default 0. */
+  offset?: number;
+  /** Page size. UE caps this server-side; plan assumes 80. */
+  pageSize?: number;
+}
+
+/**
+ * POST to UE's internal getFeedV1 endpoint for a given lat/lng.
+ *
+ * Reads `UE_LOC_COOKIE` to build the session cookie. Returns raw JSON or null.
+ */
+export async function fetchFeedV1(
+  lat: number,
+  lng: number,
+  opts: FetchFeedV1Opts = {},
+): Promise<UeFeedResponse | null> {
+  const offset = opts.offset ?? 0;
+  const pageSize = opts.pageSize ?? 80;
+  const cookieHeader = buildFeedCookieHeader(lat, lng);
+  const body = {
+    userQuery: "",
+    date: "",
+    startTime: 0,
+    endTime: 0,
+    cacheKey: "",
+    pageInfo: { offset, pageSize },
+    sortAndFilters: [],
+    marketingFeedType: "",
+    billboardUuid: "",
+    feedProvider: "",
+    promotionUuid: "",
+    targetingStoreTag: "",
+    venueUUID: "",
+    selectedSectionUUID: "",
+    favorites: "",
+    vertical: "ALL",
+  };
+  return postUe<UeFeedResponse>(UE_FEED_ENDPOINT, body, {
+    ...opts,
+    cookieHeader,
+    logLabel: `feed:${lat.toFixed(4)},${lng.toFixed(4)},off=${offset}`,
+  });
+}
+
+// ─── Response parsing (getFeedV1) ────────────────────────────────────────────
+
+const REVIEW_COUNT_RE = /([\d,]+)\s+reviews?/i;
+
+function extractReviewCount(accessibilityText: string | undefined): number | undefined {
+  if (!accessibilityText) return undefined;
+  const m = accessibilityText.match(REVIEW_COUNT_RE);
+  if (!m) return undefined;
+  const n = parseInt(m[1]!.replace(/,/g, ""), 10);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function extractSlugAndId(actionUrl: string | undefined): { slug?: string; actionUrlId?: string } {
+  if (!actionUrl) return {};
+  const m = actionUrl.match(/\/store\/([^/]+)\/([A-Za-z0-9_-]+)/);
+  if (!m) return {};
+  const result: { slug?: string; actionUrlId?: string } = {};
+  if (m[1]) result.slug = m[1];
+  if (m[2]) result.actionUrlId = m[2];
+  return result;
+}
+
+function pickLargestImage(items: UeFeedImage[] | undefined): string | undefined {
+  if (!items || items.length === 0) return undefined;
+  let best: UeFeedImage | undefined;
+  let bestArea = 0;
+  for (const it of items) {
+    if (!it.url) continue;
+    const area = (it.width ?? 0) * (it.height ?? 0);
+    if (area > bestArea) {
+      best = it;
+      bestArea = area;
+    }
+  }
+  return best?.url ?? items.find((i) => i.url)?.url;
+}
+
+/**
+ * Extract normalized store cards from a getFeedV1 response.
+ *
+ * Reads `data.feedItems[]` filtered by `type === "REGULAR_STORE"` — NOT the
+ * deprecated `storesMap`. Skips items without a storeUuid or valid
+ * mapMarker lat/lng (both required for Phase 1 upsert + hex assignment).
+ */
+export function parseFeedV1Response(json: UeFeedResponse): UeFeedStoreCard[] {
+  const items = json.data?.feedItems;
+  if (!items) return [];
+
+  const cards: UeFeedStoreCard[] = [];
+  for (const item of items) {
+    if (item.type !== "REGULAR_STORE") continue;
+    const s = item.store;
+    if (!s) continue;
+    const storeUuid = s.storeUuid;
+    const name = s.title?.text;
+    const lat = s.mapMarker?.latitude;
+    const lng = s.mapMarker?.longitude;
+    if (!storeUuid || !name || typeof lat !== "number" || typeof lng !== "number") continue;
+
+    const card: UeFeedStoreCard = { storeUuid, name, lat, lng };
+    const photoUrl = pickLargestImage(s.image?.items);
+    if (photoUrl) card.photoUrl = photoUrl;
+    const ratingNum = s.rating?.text ? parseFloat(s.rating.text) : NaN;
+    if (Number.isFinite(ratingNum)) card.rating = ratingNum;
+    const reviewCount = extractReviewCount(s.rating?.accessibilityText);
+    if (reviewCount !== undefined) card.userRatingCount = reviewCount;
+    const { slug, actionUrlId } = extractSlugAndId(s.actionUrl);
+    if (slug) card.slug = slug;
+    if (actionUrlId) card.actionUrlId = actionUrlId;
+    cards.push(card);
+  }
+  return cards;
+}
+
+// ─── paginateFeedV1 ──────────────────────────────────────────────────────────
+
+export interface PaginateFeedV1Opts extends FetchStoreV1Opts {
+  /** Page size per request. Default 80. */
+  pageSize?: number;
+  /** Hard cap on pages fetched (safety). Default 10. */
+  maxPages?: number;
+}
+
+/**
+ * Paginate getFeedV1 for a single probe location.
+ *
+ * Yields normalized store cards. Stops when a page returns zero new cards
+ * (terminal) or maxPages is reached. First-page-only is the common case —
+ * plan assumes most probes terminate after one page (50–100 stores).
+ */
+export async function* paginateFeedV1(
+  lat: number,
+  lng: number,
+  opts: PaginateFeedV1Opts = {},
+): AsyncIterable<UeFeedStoreCard> {
+  const pageSize = opts.pageSize ?? 80;
+  const maxPages = opts.maxPages ?? 10;
+  const seen = new Set<string>();
+
+  for (let page = 0; page < maxPages; page++) {
+    const offset = page * pageSize;
+    const json = await fetchFeedV1(lat, lng, { ...opts, offset, pageSize });
+    if (!json) return;
+
+    const cards = parseFeedV1Response(json);
+    let newCount = 0;
+    for (const card of cards) {
+      if (seen.has(card.storeUuid)) continue;
+      seen.add(card.storeUuid);
+      newCount++;
+      yield card;
+    }
+    // Terminate when the page adds no new stores. UE's pagination isn't
+    // strictly cursor-based for unauth feed — relying on "no new stores"
+    // is more robust than trusting cacheKey/hasMore.
+    if (newCount === 0) return;
+  }
 }

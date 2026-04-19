@@ -41,7 +41,9 @@ model MacroTarget {
 
 model Restaurant {
   id              String      @id @default(cuid())
-  externalPlaceId String      @unique
+  storeUuid       String      @unique
+  homeHex         String?
+  brand           String?
   name            String
   address         String
   lat             Float
@@ -51,6 +53,7 @@ model Restaurant {
   source          String
   menuSourceId    String?
   photoUrl        String?
+  photoSource     String?
   rating          Float?
   userRatingCount Int?
   priceLevel      String?
@@ -63,6 +66,7 @@ model Restaurant {
   savedItems      SavedItem[]
 
   @@index([lat, lng])
+  @@index([homeHex])
 }
 
 model MenuItem {

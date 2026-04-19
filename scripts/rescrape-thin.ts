@@ -1,4 +1,7 @@
 /**
+ * @deprecated Breaks after migration `20260419000000_ue_first_rebuild` drops
+ * `externalPlaceId`. Delete in Stage 6.
+ *
  * Rescrape Thin Restaurants
  *
  * One-off script to re-scrape menus for restaurants with suspiciously few
@@ -368,7 +371,7 @@ async function main(): Promise<void> {
       }
 
       const itemsBefore = restaurant.menuItems.length;
-      log(`  Found: id=${restaurant.id}, externalPlaceId=${restaurant.externalPlaceId}`);
+      log(`  Found: id=${restaurant.id}, storeUuid=${restaurant.storeUuid}`);
       log(`  Current menu items: ${itemsBefore}`);
 
       // 2. Re-run firecrawlSearch

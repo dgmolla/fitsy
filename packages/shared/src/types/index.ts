@@ -13,7 +13,9 @@ export type GoalType = "cut" | "bulk" | "maintain" | "custom";
 
 export interface Restaurant {
   id: string;
-  externalPlaceId: string;
+  storeUuid: string;
+  homeHex?: string;
+  brand?: string;
   name: string;
   address: string;
   lat: number;
@@ -21,6 +23,7 @@ export interface Restaurant {
   cuisineTags: string[];
   chainFlag: boolean;
   source: string;
+  photoSource?: string;
   distanceMi?: number;
   bestMacroScore?: number;
   createdAt: string;

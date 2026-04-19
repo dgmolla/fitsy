@@ -1,4 +1,8 @@
 /**
+ * @deprecated Breaks after migration `20260419000000_ue_first_rebuild` drops
+ * `externalPlaceId`. Replace with a UE-first variant in Stage 6, or delete if
+ * `scripts/preload-ue-first.ts --phase=enrich` covers the same need.
+ *
  * Selective Restaurant Rerun Script (S-130)
  *
  * Reruns the full pipeline for specific restaurants without re-running

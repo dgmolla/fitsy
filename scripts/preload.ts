@@ -1,6 +1,12 @@
 /**
  * Fitsy Preload Script — S-71 (refactored), S-141 (Overture Maps)
  *
+ * @deprecated Being replaced by `scripts/preload-ue-first.ts` (Stage 3 of the
+ * UE-first pipeline rebuild). This Overture → Google Places → Firecrawl path
+ * is retained for emergency fallback only while the UE-first orchestrator is
+ * stabilized. Do not extend — new work goes into the UE-first pipeline.
+ * See `docs/engineering/plans/ue-first-pipeline.md`.
+ *
  * Thin orchestrator. External API logic lives in service modules:
  *   - overture-discovery       → restaurant discovery via Overture Maps (S-141)
  *   - hex-assignment           → assign restaurants to H3 hexes
