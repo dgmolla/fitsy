@@ -42,6 +42,8 @@ export function parseServerEnv() {
       SUPABASE_URL: z.string().url().optional(),
       SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
       SUPABASE_ANON_KEY: z.string().min(1).optional(),
+      SLACK_BOT_TOKEN: z.string().regex(/^xoxb-\S+$/, "must be a Slack bot token starting with xoxb-").optional(),
+      SLACK_ALERT_CHANNEL: z.string().regex(/^[CG][A-Z0-9]{8,}$/, "must be a Slack channel ID (C… or G…)").optional(),
       UE_API_MODE: z.enum(UE_API_MODES).default("disabled"),
       NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
     },
@@ -87,6 +89,8 @@ export function logEnvState(env: ServerEnv, tag = "env"): void {
     "FIRECRAWL_API_KEY",
     "BRAVE_SEARCH_API_KEY",
     "AXIOM_TOKEN",
+    "SLACK_BOT_TOKEN",
+    "SLACK_ALERT_CHANNEL",
   ];
   const lines = keys.map((k) => `  ${String(k)}=${redact(String(k), env[k] as string | undefined)}`);
   console.log(`[${tag}] resolved env:\n${lines.join("\n")}`);

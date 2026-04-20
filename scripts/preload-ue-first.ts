@@ -136,29 +136,37 @@ function log(message: string): void {
 }
 
 /**
- * Best-effort Slack alert on hard failures. Silently no-ops if
- * SLACK_ALERT_WEBHOOK_URL is unset (local dev). 3s timeout so a Slack
- * outage never delays the process exit that's about to happen anyway.
+ * Best-effort Slack alert on hard failures. Posts via chat.postMessage
+ * using SLACK_BOT_TOKEN (same token the post-to-slack skill uses), to
+ * SLACK_ALERT_CHANNEL or the default ops channel. Silently no-ops if the
+ * token is unset (local dev). 3s timeout so a Slack outage never delays
+ * the process exit that's about to happen anyway.
  */
 async function notifySlack(title: string, errorDetail: string): Promise<void> {
-  const webhook = process.env.SLACK_ALERT_WEBHOOK_URL;
-  if (!webhook) return;
+  const token = process.env.SLACK_BOT_TOKEN;
+  if (!token) return;
+  const channel = process.env.SLACK_ALERT_CHANNEL ?? "C0ANF717GBC"; // #clahh
   const truncated = errorDetail.length > 2500 ? errorDetail.slice(0, 2500) + "… (truncated)" : errorDetail;
   const body = JSON.stringify({
+    channel,
     text: `:rotating_light: *[ue-first] ${title}*\n\`\`\`${truncated}\`\`\``,
   });
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 3000);
-    const res = await fetch(webhook, {
+    const res = await fetch("https://slack.com/api/chat.postMessage", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json; charset=utf-8",
+        authorization: `Bearer ${token}`,
+      },
       body,
       signal: ctrl.signal,
     });
     clearTimeout(t);
-    if (!res.ok) {
-      console.error(`[ue-first] Slack alert failed: HTTP ${res.status}`);
+    const json = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+    if (!res.ok || !json?.ok) {
+      console.error(`[ue-first] Slack alert failed: HTTP ${res.status} ${json?.error ?? ""}`);
     }
   } catch (err) {
     console.error(`[ue-first] Slack alert threw: ${err instanceof Error ? err.message : String(err)}`);
