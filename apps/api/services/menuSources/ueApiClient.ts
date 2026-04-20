@@ -26,6 +26,65 @@ const ERROR_BODY_PREVIEW = 200;
 /** Statuses UE uses for soft-block / rate-limit — worth retrying. */
 const RETRY_STATUSES = new Set([403, 429, 502, 503]);
 
+// ─── Soft-block circuit breaker ──────────────────────────────────────────────
+//
+// If UE starts returning 403 to us at volume, continuing to hammer risks
+// escalating a soft-block into a hard IP ban. Count 403s in a sliding window;
+// once the threshold trips, every further postUe call throws UeSoftBlockError
+// which propagates up through the source -> resolver -> processRestaurant,
+// where Guard 2 (strict hex atomicity in preload-ue-first.ts) catches it,
+// skips the hex checkpoint, and exits so the operator can rotate the cookie.
+//
+// 403 is the only signal tracked — see discussion in docs for rationale. 429
+// is throttle (retry-after handles it); 502/503/504 are infra noise; network
+// errors are local-side. All other responses are silent from the breaker's
+// perspective.
+
+const CB_WINDOW_MS = 60_000;
+const CB_TRIP_THRESHOLD = 10;
+const recentBlockTimestamps: number[] = [];
+let breakerTripped = false;
+
+export class UeSoftBlockError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "UeSoftBlockError";
+  }
+}
+
+function recordBlockSignal(): void {
+  const now = Date.now();
+  while (
+    recentBlockTimestamps.length > 0 &&
+    recentBlockTimestamps[0]! < now - CB_WINDOW_MS
+  ) {
+    recentBlockTimestamps.shift();
+  }
+  recentBlockTimestamps.push(now);
+  if (!breakerTripped && recentBlockTimestamps.length >= CB_TRIP_THRESHOLD) {
+    breakerTripped = true;
+    console.error(
+      `[ue-api] circuit breaker tripped — ${recentBlockTimestamps.length} UE 403s in last ${CB_WINDOW_MS / 1000}s. ` +
+        `Rotate UE_LOC_COOKIE and/or wait for the block to clear before resuming.`,
+    );
+  }
+}
+
+function checkBreaker(): void {
+  if (breakerTripped) {
+    throw new UeSoftBlockError(
+      `UE soft-block circuit breaker tripped (>=${CB_TRIP_THRESHOLD} 403s in ${CB_WINDOW_MS / 1000}s). ` +
+        `Hex aborted — pending for resume after cookie rotation.`,
+    );
+  }
+}
+
+/** Test-only: reset circuit breaker state. Do not call from production code. */
+export function __resetUeCircuitBreakerForTest(): void {
+  recentBlockTimestamps.length = 0;
+  breakerTripped = false;
+}
+
 /**
  * Rotating pool of recent Chrome UAs (desktop) paired with matching
  * `sec-ch-ua` / `sec-ch-ua-platform` client hints so the User-Agent + hints
@@ -102,6 +161,10 @@ async function postUe<T>(endpoint: string, body: unknown, opts: PostUeOpts): Pro
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    // Short-circuit once the breaker is tripped — propagates up through the
+    // resolver so Guard 2 catches it and skips the hex checkpoint.
+    checkBreaker();
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     if (opts.signal) {
@@ -138,6 +201,10 @@ async function postUe<T>(endpoint: string, body: unknown, opts: PostUeOpts): Pro
       });
 
       if (response.ok) return (await response.json()) as T;
+
+      // 403 is UE's soft-block signal — count it whether we retry or give up.
+      // Threshold + window are tuned conservatively; see CB constants above.
+      if (response.status === 403) recordBlockSignal();
 
       const preview = await readBodyPreview(response);
       const retriable = RETRY_STATUSES.has(response.status) && attempt < maxRetries;
