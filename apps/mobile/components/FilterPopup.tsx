@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { COLORS } from '@/lib/brand';
-import { useTheme } from '@/lib/theme';
 import type { MacroValues } from '@/lib/macroPresets';
 
 interface FilterPopupProps {
@@ -22,16 +21,26 @@ interface FilterPopupProps {
   onClose: () => void;
 }
 
-const MACROS: { key: keyof MacroValues; label: string; fullLabel: string; unit: string }[] = [
-  { key: 'protein', label: 'P', fullLabel: 'PROT', unit: 'g' },
-  { key: 'carbs', label: 'C', fullLabel: 'CARB', unit: 'g' },
-  { key: 'fat', label: 'F', fullLabel: 'FAT', unit: 'g' },
+const MACROS: {
+  key: keyof Pick<MacroValues, 'protein' | 'carbs' | 'fat'>;
+  label: string;
+  color: string;
+  step: number;
+}[] = [
+  { key: 'protein', label: 'Protein', color: '#5B7C6B', step: 5 },
+  { key: 'carbs', label: 'Carbs', color: '#8B7355', step: 5 },
+  { key: 'fat', label: 'Fat', color: '#7B6B8A', step: 5 },
 ];
 
-const CARD_HALF_H = 132;
+function calcCal(p: string, c: string, f: string): string {
+  const pn = parseFloat(p) || 0;
+  const cn = parseFloat(c) || 0;
+  const fn = parseFloat(f) || 0;
+  const total = pn * 4 + cn * 4 + fn * 9;
+  return total > 0 ? String(Math.round(total)) : '';
+}
 
 export function FilterPopup({ visible, values, onApply, onClose }: FilterPopupProps) {
-  const { colors } = useTheme();
   const [draft, setDraft] = useState<MacroValues>(values);
 
   const scaleAnim = useRef(new Animated.Value(0.72)).current;
@@ -90,15 +99,34 @@ export function FilterPopup({ visible, values, onApply, onClose }: FilterPopupPr
     ]).start(() => cb());
   }
 
+  function update(key: keyof MacroValues, val: string) {
+    setDraft((prev) => {
+      const next = { ...prev, [key]: val };
+      next.calories = calcCal(next.protein, next.carbs, next.fat);
+      return next;
+    });
+  }
+
+  function step(key: keyof Pick<MacroValues, 'protein' | 'carbs' | 'fat'>, delta: number) {
+    setDraft((prev) => {
+      const current = parseInt(prev[key], 10) || 0;
+      const macro = MACROS.find((m) => m.key === key)!;
+      const next = { ...prev, [key]: String(Math.max(0, current + delta * macro.step)) };
+      next.calories = calcCal(next.protein, next.carbs, next.fat);
+      return next;
+    });
+  }
+
   const translateY = scaleAnim.interpolate({
     inputRange: [0.72, 1],
-    outputRange: [-CARD_HALF_H * 0.28, 0],
+    outputRange: [-40, 0],
     extrapolate: 'clamp',
   });
 
+  const cal = calcCal(draft.protein, draft.carbs, draft.fat);
+
   return (
     <Modal visible={visible} transparent animationType="none">
-      {/* Heavy blur backdrop */}
       <Animated.View style={[StyleSheet.absoluteFill, { opacity: blurOpacity }]}>
         <BlurView
           tint="light"
@@ -125,47 +153,48 @@ export function FilterPopup({ visible, values, onApply, onClose }: FilterPopupPr
             },
           ]}
         >
-          {/* Macro boxes */}
-          <View style={s.macroRow}>
-            {MACROS.map(({ key, fullLabel }) => (
-              <View key={key} style={s.macroBox}>
+          {MACROS.map(({ key, label, color }, i) => (
+            <View key={key}>
+              {i > 0 && <View style={s.divider} />}
+              <View style={s.row}>
+                <View style={s.labelCol}>
+                  <View style={[s.dot, { backgroundColor: color }]} />
+                  <Text style={s.label}>{label}</Text>
+                </View>
+
+                <Pressable style={s.stepper} onPress={() => step(key, -1)}>
+                  <Text style={s.stepperText}>−</Text>
+                </Pressable>
+
                 <TextInput
-                  style={s.macroInput}
+                  style={s.numInput}
                   value={draft[key]}
-                  onChangeText={(t) => {
-                    setDraft((p) => {
-                      const next = { ...p, [key]: t };
-                      const protein = parseFloat(next.protein) || 0;
-                      const carbs = parseFloat(next.carbs) || 0;
-                      const fat = parseFloat(next.fat) || 0;
-                      const cal = Math.round(protein * 4 + carbs * 4 + fat * 9);
-                      next.calories = protein + carbs + fat > 0 ? String(cal) : '';
-                      return next;
-                    });
-                  }}
-                  keyboardType="numeric"
+                  onChangeText={(t) => update(key, t.replace(/[^0-9]/g, ''))}
+                  keyboardType="number-pad"
                   placeholder="—"
-                  placeholderTextColor={COLORS.textDisabled}
+                  placeholderTextColor="#C8C8C8"
                   maxLength={4}
                   textAlign="center"
-                  selectionColor={COLORS.green}
+                  selectTextOnFocus
                 />
-                <Text style={s.macroLabel}>{fullLabel}</Text>
-              </View>
-            ))}
-          </View>
+                <Text style={s.unit}>g</Text>
 
-          {/* Calories — computed, read-only */}
-          <View style={s.calBox}>
-            <Text style={s.calInput}>
-              {draft.calories || '—'}
-            </Text>
-            <Text style={s.calLabel}>KCAL</Text>
+                <Pressable style={s.stepper} onPress={() => step(key, 1)}>
+                  <Text style={s.stepperText}>+</Text>
+                </Pressable>
+              </View>
+            </View>
+          ))}
+
+          {/* Calories */}
+          <View style={s.calRow}>
+            <Text style={s.calNum}>{cal || '—'}</Text>
+            <Text style={s.calUnit}>kcal</Text>
           </View>
 
           {/* Apply */}
           <Pressable
-            style={s.applyButton}
+            style={s.applyBtn}
             onPress={() => dismiss(() => onApply(draft))}
           >
             <Text style={s.applyText}>Apply</Text>
@@ -181,100 +210,115 @@ const s = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
   },
   card: {
     width: '100%',
-    maxWidth: 360,
-    borderRadius: 24,
-    backgroundColor: COLORS.white,
+    maxWidth: 340,
+    borderRadius: 28,
+    backgroundColor: '#FDFBF7',
     borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingHorizontal: 18,
-    paddingTop: 24,
-    paddingBottom: 20,
-    gap: 16,
+    borderColor: '#E8E2D8',
+    paddingHorizontal: 24,
+    paddingTop: 28,
+    paddingBottom: 22,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 24,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.1,
+    shadowRadius: 32,
+    elevation: 10,
   },
-  title: {
-    fontFamily: 'Caslon540Italic',
-    fontSize: 26,
-    color: COLORS.text,
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  /* Macro row */
-  macroRow: {
+
+  row: {
     flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 18,
+  },
+  labelCol: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 10,
+    width: 95,
   },
-  macroBox: {
-    flex: 1,
-    alignItems: 'center',
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    paddingVertical: 14,
-    gap: 4,
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
-  macroInput: {
-    fontSize: 22,
-    fontWeight: '400',
-    color: COLORS.text,
+  label: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1B3A26',
     letterSpacing: -0.3,
-    minWidth: 52,
-    textAlign: 'center',
-    padding: 0,
   },
-  macroLabel: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: COLORS.textTertiary,
-    letterSpacing: 1.5,
-  },
-  /* Calories */
-  calBox: {
+
+  stepper: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F0EBE3',
     alignItems: 'center',
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: COLORS.green,
-    paddingVertical: 14,
-    gap: 4,
+    justifyContent: 'center',
   },
-  calInput: {
-    fontSize: 22,
-    fontWeight: '500',
-    color: COLORS.green,
-    minWidth: 60,
-    textAlign: 'center',
+  stepperText: {
+    fontSize: 20,
+    fontWeight: '300',
+    color: '#3A4F41',
+    marginTop: -1,
+  },
+
+  numInput: {
+    flex: 1,
+    fontSize: 34,
+    fontWeight: '700',
+    color: '#1B3A26',
+    letterSpacing: -1.5,
     padding: 0,
+    marginHorizontal: 4,
   },
-  calLabel: {
-    fontSize: 9,
+  unit: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#7A8C7E',
+    marginRight: 8,
+  },
+
+  divider: {
+    height: 1,
+    backgroundColor: '#E8E2D8',
+  },
+
+  calRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'center',
+    gap: 6,
+    paddingTop: 20,
+    paddingBottom: 16,
+  },
+  calNum: {
+    fontSize: 40,
     fontWeight: '800',
-    color: COLORS.greenDark,
-    letterSpacing: 1.5,
+    color: '#1B3A26',
+    letterSpacing: -2,
   },
-  /* Apply */
-  applyButton: {
+  calUnit: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#7A8C7E',
+    letterSpacing: 0.3,
+  },
+
+  applyBtn: {
     borderRadius: 16,
     paddingVertical: 16,
     alignItems: 'center',
-    backgroundColor: COLORS.green,
-    shadowColor: COLORS.green,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 6,
+    backgroundColor: '#1B3A26',
   },
   applyText: {
     fontSize: 16,
     fontWeight: '700',
-    color: COLORS.white,
+    color: '#FDFBF7',
     letterSpacing: -0.2,
   },
 });
