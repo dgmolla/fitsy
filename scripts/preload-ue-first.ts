@@ -800,7 +800,20 @@ async function processRestaurant(
     try {
       const { result } = await withRetry(
         () => API_SEMAPHORES.haiku.run(() => estimateMacros(resolverResult.items, anthropic)),
-        { label: `${r.name}/haiku` },
+        {
+          label: `${r.name}/haiku`,
+          maxRetries: 5,
+          backoffMs: [1000, 3000, 8000, 15000, 30000],
+          computeDelayMs: (err) => {
+            if (!(err instanceof Anthropic.APIError) || err.status !== 429) return null;
+            const h = err.headers;
+            if (!h || typeof (h as Headers).get !== "function") return null;
+            const ra = (h as Headers).get("retry-after");
+            if (!ra) return null;
+            const sec = parseInt(ra, 10);
+            return Number.isFinite(sec) && sec > 0 ? sec * 1000 : null;
+          },
+        },
       );
       macros = result;
       stats.anthropicCalls++;

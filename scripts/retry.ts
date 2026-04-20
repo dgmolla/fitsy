@@ -11,6 +11,19 @@ export interface RetryOptions {
   backoffMs?: number[];
   /** Whether to retry on this error (default: always retry) */
   shouldRetry?: (error: unknown) => boolean;
+  /**
+   * Optional per-attempt delay override. Return a positive number of ms to
+   * use that delay (e.g., parsed from a `retry-after` header), or null to
+   * fall through to the default `backoffMs` schedule. Called once per
+   * retry, with the caught error and zero-based attempt index.
+   */
+  computeDelayMs?: (error: unknown, attempt: number) => number | null;
+  /**
+   * Jitter fraction applied to the final delay: final = delay ± delay*jitter.
+   * Prevents thundering-herd when many concurrent callers retry together.
+   * Default 0.3 (±30%). Set 0 to disable.
+   */
+  jitter?: number;
   /** Label for logging */
   label?: string;
 }
@@ -34,6 +47,8 @@ export async function withRetry<T>(
     maxRetries = 2,
     backoffMs = [1000, 3000],
     shouldRetry = () => true,
+    computeDelayMs,
+    jitter = 0.3,
     label = "operation",
   } = options;
 
@@ -50,9 +65,19 @@ export async function withRetry<T>(
         throw err;
       }
 
-      const delayMs = backoffMs[attempt] ?? backoffMs[backoffMs.length - 1] ?? 3000;
+      const override = computeDelayMs?.(err, attempt) ?? null;
+      const baseDelay =
+        override !== null && override > 0
+          ? override
+          : (backoffMs[attempt] ?? backoffMs[backoffMs.length - 1] ?? 3000);
+      const jitterRange = baseDelay * Math.max(0, jitter);
+      const delayMs = Math.max(
+        0,
+        Math.round(baseDelay + (Math.random() * 2 - 1) * jitterRange),
+      );
+      const suffix = override !== null && override > 0 ? " (server retry-after)" : "";
       console.warn(
-        `[retry] ${label} attempt ${attempt + 1} failed, retrying in ${delayMs}ms: ${String(err)}`,
+        `[retry] ${label} attempt ${attempt + 1} failed, retrying in ${delayMs}ms${suffix}: ${String(err)}`,
       );
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
