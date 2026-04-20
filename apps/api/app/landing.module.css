@@ -228,7 +228,7 @@
 .phone {
   position: relative;
   width: 272px;
-  height: 556px;
+  height: 588px;
   background: #1a1a1a;
   border-radius: 52px;
   padding: 4px;
@@ -304,6 +304,7 @@
   object-fit: cover;
   object-position: center top;
   display: block;
+  border-radius: 49px;
 }
 
 /* ─── Stats Splash ───────────────────────────────────────────────────── */
@@ -544,7 +545,7 @@
 
   .phone {
     width: 236px;
-    height: 482px;
+    height: 510px;
     border-radius: 46px;
   }
 
@@ -584,7 +585,7 @@
 
   .phone {
     width: 216px;
-    height: 442px;
+    height: 468px;
     border-radius: 42px;
   }
 
