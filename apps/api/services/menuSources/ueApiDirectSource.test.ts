@@ -52,6 +52,24 @@ describe("UeApiDirectSource.lookup — failure-mode discrimination", () => {
     expect(result.sourceId).toBe("ue_api_direct");
   });
 
+  it("soft-skips when every section carries emptyStatePayload (closed store)", async () => {
+    mockFetch.mockResolvedValue(
+      okJson({
+        status: "success",
+        data: {
+          title: "Closed for the day",
+          catalogSectionsMap: {
+            s1: [{ payload: { emptyStatePayload: {}, type: "EMPTY_STATE" } }],
+          },
+        },
+      }),
+    );
+
+    const result = await new UeApiDirectSource(STORE_UUID, { baseBackoffMs: 0 }).lookup("x", "");
+    expect(result.found).toBe(false);
+    expect(result.sourceId).toBe("ue_api_direct");
+  });
+
   it("throws UeUnexpectedError when fetch exhausts retries", async () => {
     mockFetch.mockResolvedValue(new Response("blocked", { status: 403 }));
 

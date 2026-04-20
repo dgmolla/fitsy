@@ -356,11 +356,14 @@ export async function fetchStoreV1(
 /**
  * Why a getStoreV1 response yielded no items:
  *   - `no_data`:            response lacks a `data` block entirely
- *   - `no_sections`:        `data` present but `catalogSectionsMap` empty —
- *                           UE's signal for "this store has no active menu"
- *                           (ghost kitchen between refreshes, closed for the
- *                           day, delisted). Treated as a graceful empty.
- *   - `no_items_parsed`:    sections present but every item filtered out —
+ *   - `no_sections`:        `data` present but `catalogSectionsMap` empty,
+ *                           OR every section carries `emptyStatePayload`
+ *                           instead of `standardItemsPayload`. Both are UE's
+ *                           ways of saying "no active menu" (ghost kitchen
+ *                           between refreshes, closed for the day, delisted).
+ *                           Treated as a graceful empty.
+ *   - `no_items_parsed`:    `standardItemsPayload` sections were present with
+ *                           `catalogItems`, but every item got filtered out —
  *                           almost always schema drift on UE's side.
  */
 export type UeStoreMissReason = "no_data" | "no_sections" | "no_items_parsed";
@@ -388,10 +391,12 @@ export function classifyStoreV1Response(json: UeStoreResponse): UeStoreParseOutc
 
   const items: StructuredMenuItem[] = [];
   const seen = new Map<string, number>(); // lowered title → items[] index
+  let sawStandardItemsPayload = false;
 
   for (const section of allSections) {
     const payload = section.payload?.standardItemsPayload;
     if (!payload) continue;
+    sawStandardItemsPayload = true;
     const sectionName = payload.title?.text;
 
     for (const raw of payload.catalogItems ?? []) {
@@ -417,7 +422,12 @@ export function classifyStoreV1Response(json: UeStoreResponse): UeStoreParseOutc
     }
   }
 
-  if (items.length === 0) return { ok: false, reason: "no_items_parsed" };
+  if (items.length === 0) {
+    // No `standardItemsPayload` sections at all → UE says the menu is empty
+    // (closed store, emptyStatePayload). Soft-skip instead of hard-failing.
+    if (!sawStandardItemsPayload) return { ok: false, reason: "no_sections" };
+    return { ok: false, reason: "no_items_parsed" };
+  }
 
   const restaurant: UeApiResult["restaurant"] = { name: data.title ?? "" };
   const heroUrl = data.heroImageUrls?.[0]?.url;
