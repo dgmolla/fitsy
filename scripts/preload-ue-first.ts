@@ -366,6 +366,8 @@ interface EnrichmentStats {
   ueApiHits: number;
   photoSourceBreakdown: Record<string, number>;
   anthropicCalls: number;
+  anthropicRateLimitErrors: number;
+  anthropicApiErrors: number;
 }
 
 interface Phase2Restaurant {
@@ -385,6 +387,51 @@ interface Phase2Restaurant {
 function computeMenuHash(itemNames: string[]): string {
   const sorted = [...itemNames].sort();
   return createHash("sha256").update(sorted.join("\n")).digest("hex").slice(0, 16);
+}
+
+/**
+ * Extract structured diagnostics from an Anthropic SDK error. Iterates all
+ * response headers rather than hardcoding names — whatever Anthropic returns
+ * on the response lands in the summary, so a 429 wave shows exactly which
+ * rate-limit dimension tripped (requests, input-tokens, output-tokens) plus
+ * retry-after. Error body shape (`err.error.error.type`) comes from the SDK's
+ * shared.d.ts (`ErrorResponse`); 429 is the HTTP standard for rate-limited.
+ */
+interface AnthropicErrDiag {
+  summary: string;
+  status?: number;
+  isRateLimit: boolean;
+}
+function describeAnthropicError(err: unknown): AnthropicErrDiag {
+  if (!(err instanceof Anthropic.APIError)) {
+    return {
+      summary: err instanceof Error ? err.message : String(err),
+      isRateLimit: false,
+    };
+  }
+  const parts: string[] = [`status=${err.status ?? "?"}`];
+  const body = err.error as { error?: { type?: string; message?: string } } | undefined;
+  if (body?.error?.type) parts.push(`type=${body.error.type}`);
+
+  const h = err.headers;
+  if (h && typeof (h as Headers).forEach === "function") {
+    const relevant: Record<string, string> = {};
+    (h as Headers).forEach((value: string, name: string) => {
+      const lower = name.toLowerCase();
+      if (lower.startsWith("anthropic-ratelimit-") || lower === "retry-after" || lower === "request-id") {
+        relevant[lower] = value;
+      }
+    });
+    for (const [k, v] of Object.entries(relevant).sort(([a], [b]) => a.localeCompare(b))) {
+      parts.push(`${k}=${v}`);
+    }
+  }
+  parts.push(`msg=${err.message}`);
+  return {
+    summary: parts.join(" "),
+    status: err.status ?? undefined,
+    isRateLimit: err.status === 429,
+  };
 }
 
 async function loadRestaurantsForEnrichment(
@@ -552,6 +599,8 @@ async function runPhase2(
     ueApiHits: 0,
     photoSourceBreakdown: {},
     anthropicCalls: 0,
+    anthropicRateLimitErrors: 0,
+    anthropicApiErrors: 0,
   };
 
   const hexesTotal = allHexIds.length;
@@ -759,8 +808,12 @@ async function processRestaurant(
       // Strict: Haiku retries have already been exhausted by withRetry. A
       // macro estimation failure produces bad data, so abort the hex rather
       // than persist items without macros.
+      const diag = describeAnthropicError(err);
       const msg = err instanceof Error ? err.message : String(err);
       stats.skippedHaikuFailed++;
+      if (diag.isRateLimit) stats.anthropicRateLimitErrors++;
+      else if (diag.status !== undefined) stats.anthropicApiErrors++;
+      console.error(`[haiku-fail] ${r.name}: ${diag.summary}`);
       emitter.emitError({
         type: "error",
         runId,
@@ -769,7 +822,7 @@ async function processRestaurant(
         placeId: r.storeUuid,
         stage: "macro_estimation",
         source: "haiku",
-        error: String(err),
+        error: diag.summary,
         retryable: true,
         retriesAttempted: 2,
         _time: new Date().toISOString(),
@@ -782,12 +835,14 @@ async function processRestaurant(
   const { valid, rejected } = validateItems(resolverResult.items, macros);
   stats.rejectedItems += rejected.length;
   if (valid.length === 0) {
-    // Strict: we got items from a source but validation rejected all of them.
-    // That's a bad-data signal — likely a schema mismatch or source regression
-    // — so abort the hex rather than writing a restaurant with zero items.
+    // Soft skip: per-restaurant validation wipeout is usually a non-food
+    // storefront (floral, gift, pharmacy) that UE classifies as REGULAR_STORE.
+    // Log + drop this restaurant; the hex still commits with its other rows.
+    // Hex-level strictness is enforced by Guard 3 (validateHexInTx).
     stats.skippedValidationEmpty++;
     emitEvent("skipped_validation_empty", resolverResult.sourceId, 0, rejected.length, resolverResult.attempts);
-    throw new Error(`[${r.name}] all ${rejected.length} items rejected by validation`);
+    log(`    skipped: [${r.name}] all ${rejected.length} items rejected by validation (likely non-food storefront)`);
+    return null;
   }
 
   emitEvent("ok", resolverResult.sourceId, valid.length, rejected.length, resolverResult.attempts);
