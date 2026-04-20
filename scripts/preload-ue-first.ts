@@ -135,6 +135,36 @@ function log(message: string): void {
   console.log(`[ue-first] ${message}`);
 }
 
+/**
+ * Best-effort Slack alert on hard failures. Silently no-ops if
+ * SLACK_ALERT_WEBHOOK_URL is unset (local dev). 3s timeout so a Slack
+ * outage never delays the process exit that's about to happen anyway.
+ */
+async function notifySlack(title: string, errorDetail: string): Promise<void> {
+  const webhook = process.env.SLACK_ALERT_WEBHOOK_URL;
+  if (!webhook) return;
+  const truncated = errorDetail.length > 2500 ? errorDetail.slice(0, 2500) + "… (truncated)" : errorDetail;
+  const body = JSON.stringify({
+    text: `:rotating_light: *[ue-first] ${title}*\n\`\`\`${truncated}\`\`\``,
+  });
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 3000);
+    const res = await fetch(webhook, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body,
+      signal: ctrl.signal,
+    });
+    clearTimeout(t);
+    if (!res.ok) {
+      console.error(`[ue-first] Slack alert failed: HTTP ${res.status}`);
+    }
+  } catch (err) {
+    console.error(`[ue-first] Slack alert threw: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
 // ─── Env + preflight ─────────────────────────────────────────────────────────
 
 function validateEnv(): void {
@@ -495,9 +525,9 @@ async function assertCookieAliveForHex(hexId: string): Promise<void> {
   const [lat, lng] = cellToLatLng(hexId);
   const feed = await fetchFeedV1(lat, lng, { maxRetries: 1 });
   if (!feed?.data?.feedItems || feed.data.feedItems.length === 0) {
-    console.error(
-      `[ue-first] UE_LOC_COOKIE appears expired — cookie reprobe at hex ${hexId} (${lat.toFixed(4)}, ${lng.toFixed(4)}) returned empty. Rotate UE_LOC_COOKIE and resume.`,
-    );
+    const msg = `UE_LOC_COOKIE appears expired — cookie reprobe at hex ${hexId} (${lat.toFixed(4)}, ${lng.toFixed(4)}) returned empty. Rotate UE_LOC_COOKIE and resume.`;
+    console.error(`[ue-first] ${msg}`);
+    await notifySlack("UE cookie expired — rotate UE_LOC_COOKIE and resume", msg);
     process.exit(1);
   }
 }
@@ -646,6 +676,10 @@ async function runPhase2(
       const msg = err instanceof Error ? err.message : String(err);
       console.error(
         `[ue-first] hex ${hexId} aborted (strict): ${msg}. No persist, no checkpoint — hex remains pending for resume.`,
+      );
+      await notifySlack(
+        `hex ${hexId} aborted (strict) — resume from checkpoint after fixing`,
+        msg,
       );
       process.exit(2);
     }
@@ -975,7 +1009,9 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((err) => {
-  console.error(`[ue-first] fatal: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
+main().catch(async (err) => {
+  const detail = err instanceof Error ? err.stack ?? err.message : String(err);
+  console.error(`[ue-first] fatal: ${detail}`);
+  await notifySlack("fatal (unhandled exception)", detail);
   process.exit(1);
 });
