@@ -52,6 +52,21 @@ export class UeSoftBlockError extends Error {
   }
 }
 
+/**
+ * Thrown when UE returned something we don't know how to interpret: fetch
+ * gave up after retries, the response shape drifted, or sections exist but
+ * the parser filtered every item. The caller should hard-fail the hex so
+ * the operator can investigate before more restaurants are corrupted by the
+ * same underlying issue. A *genuinely empty* menu (no `catalogSectionsMap`)
+ * is NOT an unexpected error — callers see `found: false` for that path.
+ */
+export class UeUnexpectedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "UeUnexpectedError";
+  }
+}
+
 function recordBlockSignal(): void {
   const now = Date.now();
   while (
@@ -339,20 +354,37 @@ export async function fetchStoreV1(
 // ─── Response parsing (getStoreV1) ───────────────────────────────────────────
 
 /**
+ * Why a getStoreV1 response yielded no items:
+ *   - `no_data`:            response lacks a `data` block entirely
+ *   - `no_sections`:        `data` present but `catalogSectionsMap` empty —
+ *                           UE's signal for "this store has no active menu"
+ *                           (ghost kitchen between refreshes, closed for the
+ *                           day, delisted). Treated as a graceful empty.
+ *   - `no_items_parsed`:    sections present but every item filtered out —
+ *                           almost always schema drift on UE's side.
+ */
+export type UeStoreMissReason = "no_data" | "no_sections" | "no_items_parsed";
+
+export type UeStoreParseOutcome =
+  | { ok: true; result: UeApiResult }
+  | { ok: false; reason: UeStoreMissReason };
+
+/**
  * Extract structured menu items + restaurant metadata from a getStoreV1
- * response. Returns `null` if no items can be extracted.
+ * response. Returns a discriminated result so callers can tell an
+ * intentionally-empty menu apart from a schema-drift parse failure.
  *
  * UE duplicates items across sections (e.g. "Most Popular" repeats items
  * from the main sections), so we dedupe by lowercased title, preferring
  * the first occurrence with a non-empty section.
  */
-export function parseStoreV1Response(json: UeStoreResponse): UeApiResult | null {
+export function classifyStoreV1Response(json: UeStoreResponse): UeStoreParseOutcome {
   const data = json.data;
-  if (!data) return null;
+  if (!data) return { ok: false, reason: "no_data" };
 
   const sectionsMap = data.catalogSectionsMap ?? {};
   const allSections: UeCatalogSection[] = Object.values(sectionsMap).flat();
-  if (allSections.length === 0) return null;
+  if (allSections.length === 0) return { ok: false, reason: "no_sections" };
 
   const items: StructuredMenuItem[] = [];
   const seen = new Map<string, number>(); // lowered title → items[] index
@@ -385,7 +417,7 @@ export function parseStoreV1Response(json: UeStoreResponse): UeApiResult | null 
     }
   }
 
-  if (items.length === 0) return null;
+  if (items.length === 0) return { ok: false, reason: "no_items_parsed" };
 
   const restaurant: UeApiResult["restaurant"] = { name: data.title ?? "" };
   const heroUrl = data.heroImageUrls?.[0]?.url;
@@ -399,7 +431,17 @@ export function parseStoreV1Response(json: UeStoreResponse): UeApiResult | null 
     result.geo = { lat: data.location.latitude, lng: data.location.longitude };
   }
 
-  return result;
+  return { ok: true, result };
+}
+
+/**
+ * Backwards-compatible wrapper over `classifyStoreV1Response`. Callers that
+ * need to distinguish empty-menu from schema-drift should use the classifier
+ * directly.
+ */
+export function parseStoreV1Response(json: UeStoreResponse): UeApiResult | null {
+  const outcome = classifyStoreV1Response(json);
+  return outcome.ok ? outcome.result : null;
 }
 
 // ─── Convenience wrapper (getStoreV1) ────────────────────────────────────────

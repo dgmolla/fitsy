@@ -615,23 +615,33 @@ async function runPhase2(
     if (!CONFIG.dryRun) await assertCookieAliveForHex(hexId);
 
     // Guard 2: strict hex-level atomicity. Any systemic failure inside
-    // processRestaurant throws; Promise.all rejects fast; we log + exit(2)
+    // processRestaurant throws; the pool rejects fast; we log + exit(2)
     // without writing persist or checkpoint so the hex stays pending for a
     // future resume.
+    //
+    // Rolling worker pool instead of fixed-size batches with Promise.all:
+    // `CONFIG.concurrency` workers each pull the next restaurant off a shared
+    // cursor, so a slow-tail restaurant (Escuela Taqueria 385 items, Canter's
+    // 224, etc.) only parks *itself*, not the 19 peers in its batch. Max
+    // concurrency is identical, so the UE + Haiku semaphores still cap the
+    // outbound request rate — no change in bot-defense exposure.
     const hexResults: HexRestaurantData[] = [];
     try {
-      for (let i = 0; i < restaurants.length; i += CONFIG.concurrency) {
-        const batch = restaurants.slice(i, i + CONFIG.concurrency);
-        const results = await Promise.all(
-          batch.map((r, j) =>
-            processRestaurant(
-              r, i + j + 1, restaurants.length,
-              prisma, anthropic, emitter, runId, hexId, stats,
-            ),
-          ),
-        );
-        for (const value of results) if (value != null) hexResults.push(value);
-      }
+      let cursor = 0;
+      const workerCount = Math.min(CONFIG.concurrency, restaurants.length);
+      const workers = Array.from({ length: workerCount }, async () => {
+        while (true) {
+          const idx = cursor++;
+          if (idx >= restaurants.length) return;
+          const r = restaurants[idx]!;
+          const result = await processRestaurant(
+            r, idx + 1, restaurants.length,
+            prisma, anthropic, emitter, runId, hexId, stats,
+          );
+          if (result != null) hexResults.push(result);
+        }
+      });
+      await Promise.all(workers);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(
@@ -738,24 +748,37 @@ async function processRestaurant(
 
   const resolver = new MenuSourceResolver([
     new FatSecretSource(),
-    new UeApiDirectSource(r.storeUuid),
+    new UeApiDirectSource(r.storeUuid, {}, API_SEMAPHORES.ubereats),
   ]);
 
+  // The UE semaphore lives inside UeApiDirectSource now — it only wraps the
+  // UE getStoreV1 call. Holding it around the whole resolver wastes UE slots
+  // on FatSecret work for chain restaurants that never hit UE at all.
   const { result: resolverResult } = await withRetry(
-    () =>
-      API_SEMAPHORES.ubereats.run(() =>
-        resolver.resolve(r.name, r.address, { lat: r.lat, lng: r.lng }),
-      ),
+    () => resolver.resolve(r.name, r.address, { lat: r.lat, lng: r.lng }),
     { label: `${r.name}/resolve` },
   );
 
   if (!resolverResult.found) {
-    // Soft skip: a single restaurant missing from both FatSecret and UE
-    // doesn't prove the menu source layer is broken — ghost kitchens,
-    // delisted stores, and brand-new listings show up this way. Mass
-    // source failures (dead UE cookie, FatSecret auth down) are caught
-    // elsewhere: Guard 1 pre-probes the UE feed before each hex, and
-    // the UE 403 circuit breaker trips on systemic soft-blocks.
+    // UeApiDirectSource throws UeUnexpectedError for fetch failure / schema
+    // drift / zero-items-after-parse. The resolver catches thrown errors and
+    // records them with status: "error". Treat those as hard failures — a
+    // schema drift on UE's side will corrupt every restaurant in the hex
+    // silently if we soft-skip. Guard 2 (strict hex atomicity) catches the
+    // throw and leaves the hex unchecked-pointed for resume.
+    const ueError = resolverResult.attempts.find(
+      (a) => a.sourceId === "ue_api_direct" && a.status === "error",
+    );
+    if (ueError) {
+      throw new Error(
+        `UE lookup failed unexpectedly for ${r.name} (storeUuid=${r.storeUuid}): ${ueError.reason ?? "unknown"}`,
+      );
+    }
+
+    // Soft skip: UE explicitly returned an empty menu (no catalogSectionsMap).
+    // Ghost kitchens between refreshes, closed-for-the-day stores, and
+    // delisted storefronts land here. Mass source failures are caught by
+    // Guard 1 (pre-probe) and the UE 403 circuit breaker.
     stats.skippedNoSource++;
     emitEvent("skipped_no_source", "none", 0, 0, resolverResult.attempts);
     log(`    skipped: [${r.name}] no menu source found (FatSecret + UE both missed)`);
