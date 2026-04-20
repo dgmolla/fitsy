@@ -119,7 +119,7 @@ const CONFIG = {
   skipDays: parseIntArg("--days", 7),
   probeResolution: 7,
   hexResolution: 7,
-  concurrency: 10,
+  concurrency: 20,
 };
 
 const REQUIRED_ENV_VARS = [

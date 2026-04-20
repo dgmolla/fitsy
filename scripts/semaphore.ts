@@ -61,15 +61,16 @@ export class Semaphore {
 }
 
 /**
- * Per-API semaphore limits from the spec:
+ * Per-API semaphore limits:
  * - UE fetch: 5 concurrent, 500ms delay (delay handled in uberEatsSource)
- * - Haiku: 20 concurrent
+ * - Haiku: 40 concurrent (Tier 2 Anthropic; safe headroom vs batch
+ *   size of CONFIG.concurrency=20 in preload-ue-first.ts)
  * - Brave Search: 15 concurrent
  * - Firecrawl: 3 concurrent
  */
 export const API_SEMAPHORES = {
   ubereats: new Semaphore(5),
-  haiku: new Semaphore(20),
+  haiku: new Semaphore(40),
   braveSearch: new Semaphore(15),
   firecrawl: new Semaphore(3),
 };
