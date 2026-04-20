@@ -1,114 +1,183 @@
 import styles from "./landing.module.css";
+import { prisma } from "@/lib/restaurantService";
 
 const EARLY_ACCESS_URL = "https://testflight.apple.com/join/fitsy"; // placeholder until TestFlight live
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const [restaurantCount, menuItemCount] = await Promise.all([
+    prisma.restaurant.count(),
+    prisma.menuItem.count(),
+  ]);
   return (
     <main className={styles.page}>
-      {/* ─── Nav ─────────────────────────────────────────────────────── */}
+      {/* ─── Nav ─────────────────────────────────────────────────── */}
       <nav className={styles.nav}>
-        <span className={styles.logo}>fitsy</span>
+        <div className={styles.navInner}>
+          <span className={styles.logo}>
+            fitsy<span className={styles.logoDot}>.</span>
+          </span>
+          <a href={EARLY_ACCESS_URL} className={styles.navCta}>
+            Get Early Access
+          </a>
+        </div>
       </nav>
 
-      {/* ─── Hero ────────────────────────────────────────────────────── */}
+      {/* ─── Hero ────────────────────────────────────────────────── */}
       <section className={styles.hero}>
-        <span className={styles.badge}>Beta · Silver Lake, LA</span>
-        <h1 className={styles.headline}>
-          Find food that{" "}
-          <span className={styles.headlineAccent}>fits your macros</span>
-        </h1>
-        <p className={styles.subheadline}>
-          Fitsy finds restaurants near you with meals that match your protein,
-          carb, and fat targets — so you can eat out without blowing your plan.
-        </p>
-        <div className={styles.ctaGroup}>
-          <a href={EARLY_ACCESS_URL} className={styles.ctaPrimary}>
-            🍎 Get Early Access
-          </a>
-          <a href="#how-it-works" className={styles.ctaSecondary}>
-            How it works
-          </a>
-        </div>
-      </section>
-
-      {/* ─── Features ────────────────────────────────────────────────── */}
-      <section className={styles.features}>
-        <p className={styles.sectionLabel}>Why Fitsy</p>
-        <h2 className={styles.sectionTitle}>
-          Macro-aware restaurant discovery
-        </h2>
-        <div className={styles.grid}>
-          <div className={styles.card}>
-            <div className={styles.cardIcon}>🎯</div>
-            <h3 className={styles.cardTitle}>Search by macro target</h3>
-            <p className={styles.cardBody}>
-              Set your protein, carb, and fat goals. Fitsy ranks nearby
-              restaurants by how well their menu items match — not just by
-              rating or cuisine.
+        <div className={styles.heroContent}>
+          <div className={styles.heroText}>
+            <span className={styles.badge}>Now in Beta (Los Angeles)</span>
+            <h1 className={styles.headline}>
+              Find food that fits
+              <br />
+              <em className={styles.headlineEm}>your macros</em>
+            </h1>
+            <p className={styles.subtitle}>
+              Fitsy finds restaurants near you with meals that match your
+              protein, carb, and fat targets — so you can eat out without
+              blowing your plan.
             </p>
+            <div className={styles.heroCtas}>
+              <a href={EARLY_ACCESS_URL} className={styles.ctaPrimary}>
+                <AppleIcon />
+                Download the App
+              </a>
+              <a href="#features" className={styles.ctaGhost}>
+                Learn more
+                <span className={styles.ctaArrow}>&#8595;</span>
+              </a>
+            </div>
           </div>
-          <div className={styles.card}>
-            <div className={styles.cardIcon}>🤖</div>
-            <h3 className={styles.cardTitle}>AI-estimated nutrition</h3>
-            <p className={styles.cardBody}>
-              We scrape menus from thousands of local restaurants and use
-              Claude AI to estimate macros — even for the mom-and-pop spots
-              that have never published nutrition data.
-            </p>
-          </div>
-          <div className={styles.card}>
-            <div className={styles.cardIcon}>📍</div>
-            <h3 className={styles.cardTitle}>Local & independent</h3>
-            <p className={styles.cardBody}>
-              Chain nutrition data is already out there. Fitsy fills the gap
-              for independent restaurants — the ones worth eating at that
-              don&apos;t have a calorie counter on their website.
-            </p>
+          <div className={styles.heroPhone}>
+            <PhoneMockup />
           </div>
         </div>
       </section>
 
-      {/* ─── How It Works ────────────────────────────────────────────── */}
-      <section className={styles.how} id="how-it-works">
-        <div className={styles.howInner}>
-          <p className={styles.howLabel}>How it works</p>
-          <h2 className={styles.howTitle}>Three steps to eating on track</h2>
-          <div className={styles.steps}>
-            <div className={styles.step}>
-              <div className={styles.stepNum}>1</div>
-              <p className={styles.stepText}>
-                <strong>Set your targets.</strong> Tell Fitsy your macro goals
-                — protein first, then carbs and fat. Or pick a preset like Cut,
-                Maintain, or Bulk.
-              </p>
-            </div>
-            <div className={styles.step}>
-              <div className={styles.stepNum}>2</div>
-              <p className={styles.stepText}>
-                <strong>Browse nearby matches.</strong> Fitsy shows you
-                restaurants ranked by macro fit, with the best-matching meal
-                highlighted for each.
-              </p>
-            </div>
-            <div className={styles.step}>
-              <div className={styles.stepNum}>3</div>
-              <p className={styles.stepText}>
-                <strong>Tap to see the full breakdown.</strong> Calories,
-                protein, carbs, fat — and an AI confidence score so you know
-                how reliable the estimate is.
-              </p>
-            </div>
-          </div>
-          <a href={EARLY_ACCESS_URL} className={styles.howCta}>
-            🍎 Try the beta
+      {/* ─── Stats Splash ────────────────────────────────────────── */}
+      <section className={styles.stats} id="features">
+        <div className={styles.statsWords} aria-hidden="true">
+          <span>High Protein</span>
+          <span>Low Carb</span>
+          <span>Keto</span>
+          <span className={styles.statsWordActive}>Macro Friendly</span>
+          <span>Low Fat</span>
+          <span>Balanced</span>
+          <span>High Fiber</span>
+          <span>Bulking</span>
+          <span>Cutting</span>
+        </div>
+        <div className={styles.statsContent}>
+          <span className={styles.statNumber}>
+            {menuItemCount.toLocaleString()}
+          </span>
+          <span className={styles.statLabel}>Dishes with macro data in Los Angeles</span>
+          <span className={styles.statSub}>
+            across {restaurantCount.toLocaleString()} local restaurants
+          </span>
+          <a href={EARLY_ACCESS_URL} className={styles.statCta}>
+            Find Food For Me
           </a>
         </div>
       </section>
 
-      {/* ─── Footer ──────────────────────────────────────────────────── */}
+      {/* ─── Footer ──────────────────────────────────────────────── */}
       <footer className={styles.footer}>
-        © {new Date().getFullYear()} Fitsy · macro-aware restaurant discovery
+        <div className={styles.footerInner}>
+          <span className={styles.footerLogo}>
+            fitsy<span className={styles.logoDot}>.</span>
+          </span>
+          <span className={styles.footerCopy}>
+            &copy; {new Date().getFullYear()} Fitsy
+          </span>
+        </div>
       </footer>
     </main>
   );
 }
+
+/* ─── Phone Mockup (pure CSS) ──────────────────────────────────────── */
+
+function PhoneMockup() {
+  return (
+    <div className={styles.phone}>
+      <div className={styles.phoneDynamic} />
+      <div className={styles.phoneScreen}>
+        {/* App header */}
+        <div className={styles.appHeader}>
+          <span className={styles.appLogo}>
+            fitsy<span className={styles.appLogoDot}>.</span>
+          </span>
+          <span className={styles.appLocation}>Silver Lake</span>
+        </div>
+
+        {/* Macro strip */}
+        <div className={styles.appMacroStrip}>
+          <div className={styles.appMacro}>
+            <span className={`${styles.appMacroDot} ${styles.dotProtein}`} />
+            <span className={styles.appMacroLabel}>P</span>
+            <span className={styles.appMacroVal}>45g</span>
+          </div>
+          <div className={styles.appMacro}>
+            <span className={`${styles.appMacroDot} ${styles.dotCarbs}`} />
+            <span className={styles.appMacroLabel}>C</span>
+            <span className={styles.appMacroVal}>50g</span>
+          </div>
+          <div className={styles.appMacro}>
+            <span className={`${styles.appMacroDot} ${styles.dotFat}`} />
+            <span className={styles.appMacroLabel}>F</span>
+            <span className={styles.appMacroVal}>20g</span>
+          </div>
+          <span className={styles.appMacroEdit}>Edit</span>
+        </div>
+
+        {/* Cuisine chips */}
+        <div className={styles.appChips}>
+          <span className={`${styles.appChip} ${styles.appChipActive}`}>
+            All
+          </span>
+          <span className={styles.appChip}>Asian</span>
+          <span className={styles.appChip}>Mexican</span>
+          <span className={styles.appChip}>Healthy</span>
+        </div>
+
+        {/* Hero restaurant card */}
+        <div className={styles.appCard}>
+          <div className={styles.appCardOverlay}>
+            <span className={styles.appCardIdx}>#01</span>
+            <span className={styles.appCardName}>Botanica</span>
+            <span className={styles.appCardMeta}>0.3 mi &middot; $$</span>
+            <div className={styles.appCardDivider} />
+            <span className={styles.appCardDish}>Grilled Chicken Bowl</span>
+            <span className={styles.appCardMacros}>
+              P 42g &middot; C 35g &middot; F 12g
+            </span>
+          </div>
+        </div>
+
+        {/* Peeking second card */}
+        <div className={styles.appCardPeek}>
+          <span className={styles.appPeekIdx}>#02</span>
+          <span className={styles.appPeekName}>Sqirl</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Inline SVG Icons ─────────────────────────────────────────────── */
+
+function AppleIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path d="M12.537 8.426c-.02-1.983 1.619-2.935 1.693-2.98-.921-1.348-2.355-1.532-2.867-1.553-1.22-.124-2.382.719-3.001.719-.618 0-1.574-.7-2.586-.682-1.331.02-2.558.774-3.243 1.966-1.382 2.397-.354 5.95.993 7.896.658.952 1.443 2.021 2.474 1.983.993-.04 1.368-.642 2.568-.642 1.2 0 1.535.642 2.587.622 1.069-.019 1.743-.97 2.397-1.924.756-1.103 1.067-2.171 1.085-2.227-.024-.011-2.082-.799-2.1-3.178zM10.56 2.596c.547-.664.916-1.585.816-2.504-.789.032-1.745.525-2.311 1.189-.508.588-.952 1.527-.833 2.429.881.068 1.78-.448 2.328-1.114z" />
+    </svg>
+  );
+}
+
