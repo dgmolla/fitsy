@@ -6,6 +6,7 @@ Cross-cutting tasks that span multiple domains.
 - [ ] **AI macro source disclosure** — In restaurant detail screen, distinguish menu items with AI-estimated macros from those sourced from published nutrition data. Show a subtle indicator (e.g., confidence range or source badge) only on items where `MacroEstimate.source = "haiku"`. Do not label all items — chains with verified published data should appear clean. #frontend #backend
 - [ ] **CLI-first tooling**: Prefer Supabase, Vercel, and Stripe CLIs for agent-friendly workflows. Lock in Supabase as DB/auth, Vercel for deploy, Stripe for $30/yr + $5/mo subscriptions.
 - [ ] **Trademark**: File USPTO for "Fitsy". Search availability, submit application, track status.
+- [~] **LLC formation & operational migration** — Form Fitsy LLC (home state, via Northwest $39 + state fee, filed 2026-04-20), get EIN, open Mercury, migrate all infra billing + Apple Developer account + domain to LLC, file FinCEN BOI within 90 days. 10 invariants, 5 phases. Spec: `docs/product/specs/llc-formation.md` #cto #legal
 - [ ] **EAS Build → TestFlight** — Run EAS Build, submit to TestFlight, validate Apple/Google auth on real device. Blocked on: Apple Developer account setup. #frontend #devops #O1
 - [ ] **S-58** Recruit first 10 TestFlight testers — send invites, set up onboarding message, confirm installs #cto #O1 ^blocked-until-mvp-complete
 - [ ] **Community feedback forum** — Public in-app forum with upvotes, comments, "Founder's Voice" badge. Spec: `docs/product/specs/community-feedback-forum.md` #frontend #backend
