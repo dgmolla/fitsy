@@ -750,12 +750,16 @@ async function processRestaurant(
   );
 
   if (!resolverResult.found) {
-    // Strict: every ue_feed restaurant must resolve through FatSecret or the
-    // UE direct source. Missing both means the menu source layer is broken
-    // (dead UE cookie, FatSecret auth failure, etc.) — abort the hex.
+    // Soft skip: a single restaurant missing from both FatSecret and UE
+    // doesn't prove the menu source layer is broken — ghost kitchens,
+    // delisted stores, and brand-new listings show up this way. Mass
+    // source failures (dead UE cookie, FatSecret auth down) are caught
+    // elsewhere: Guard 1 pre-probes the UE feed before each hex, and
+    // the UE 403 circuit breaker trips on systemic soft-blocks.
     stats.skippedNoSource++;
     emitEvent("skipped_no_source", "none", 0, 0, resolverResult.attempts);
-    throw new Error(`[${r.name}] all menu sources missed`);
+    log(`    skipped: [${r.name}] no menu source found (FatSecret + UE both missed)`);
+    return null;
   }
 
   if (resolverResult.sourceId === "fatsecret") stats.fatsecretHits++;
