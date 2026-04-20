@@ -73,7 +73,13 @@ export async function persistHex(
 
       return totalItems;
     },
-    { timeout: 60_000 }, // 60s — dense hexes may have 200+ restaurants with items
+    // LA's densest hexes (Melrose, Koreatown, DTLA) have 40+ restaurants with
+    // 150+ items each — 60s was hitting the ceiling on the top decile (seen
+    // 88.97s on one hex). 300s gives headroom for the full bulk write + Guard 3
+    // validation + checkpoint insert without false-positive timeouts.
+    // maxWait raised from the 2s default so we don't fail acquiring a tx slot
+    // under sustained pipeline pressure.
+    { timeout: 300_000, maxWait: 30_000 },
   );
 
   opts.onTiming?.({
