@@ -103,63 +103,11 @@ function PhoneMockup() {
     <div className={styles.phone}>
       <div className={styles.phoneDynamic} />
       <div className={styles.phoneScreen}>
-        {/* App header */}
-        <div className={styles.appHeader}>
-          <span className={styles.appLogo}>
-            fitsy<span className={styles.appLogoDot}>.</span>
-          </span>
-          <span className={styles.appLocation}>Silver Lake</span>
-        </div>
-
-        {/* Macro strip */}
-        <div className={styles.appMacroStrip}>
-          <div className={styles.appMacro}>
-            <span className={`${styles.appMacroDot} ${styles.dotProtein}`} />
-            <span className={styles.appMacroLabel}>P</span>
-            <span className={styles.appMacroVal}>45g</span>
-          </div>
-          <div className={styles.appMacro}>
-            <span className={`${styles.appMacroDot} ${styles.dotCarbs}`} />
-            <span className={styles.appMacroLabel}>C</span>
-            <span className={styles.appMacroVal}>50g</span>
-          </div>
-          <div className={styles.appMacro}>
-            <span className={`${styles.appMacroDot} ${styles.dotFat}`} />
-            <span className={styles.appMacroLabel}>F</span>
-            <span className={styles.appMacroVal}>20g</span>
-          </div>
-          <span className={styles.appMacroEdit}>Edit</span>
-        </div>
-
-        {/* Cuisine chips */}
-        <div className={styles.appChips}>
-          <span className={`${styles.appChip} ${styles.appChipActive}`}>
-            All
-          </span>
-          <span className={styles.appChip}>Asian</span>
-          <span className={styles.appChip}>Mexican</span>
-          <span className={styles.appChip}>Healthy</span>
-        </div>
-
-        {/* Hero restaurant card */}
-        <div className={styles.appCard}>
-          <div className={styles.appCardOverlay}>
-            <span className={styles.appCardIdx}>#01</span>
-            <span className={styles.appCardName}>Botanica</span>
-            <span className={styles.appCardMeta}>0.3 mi &middot; $$</span>
-            <div className={styles.appCardDivider} />
-            <span className={styles.appCardDish}>Grilled Chicken Bowl</span>
-            <span className={styles.appCardMacros}>
-              P 42g &middot; C 35g &middot; F 12g
-            </span>
-          </div>
-        </div>
-
-        {/* Peeking second card */}
-        <div className={styles.appCardPeek}>
-          <span className={styles.appPeekIdx}>#02</span>
-          <span className={styles.appPeekName}>Sqirl</span>
-        </div>
+        <img
+          src="/app-screenshot.png"
+          alt="Fitsy app search screen"
+          className={styles.phoneImg}
+        />
       </div>
     </div>
   );
