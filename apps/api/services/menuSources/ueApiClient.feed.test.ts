@@ -148,9 +148,14 @@ describe("buildFeedCookieHeader", () => {
     else process.env.UE_LOC_COOKIE = ORIG;
   });
 
-  it("overrides latitude and longitude while preserving the cosmetic fields", () => {
+  it("overrides latitude and longitude and scrubs personal cookie fields", () => {
     const original = {
-      address: { address1: "Los Angeles" },
+      address: {
+        address1: "123 Private St",
+        eaterFormattedAddress: "123 Private St, Los Angeles, CA 90012",
+        title: "Home",
+        uuid: "user-uuid-123",
+      },
       latitude: 34.09142,
       longitude: -118.29402,
       reference: "here:af:streetsection:abc",
@@ -163,8 +168,13 @@ describe("buildFeedCookieHeader", () => {
     const decoded = JSON.parse(decodeURIComponent(header.slice("uev2.loc=".length))) as Record<string, unknown>;
     expect(decoded.latitude).toBe(40.7580);
     expect(decoded.longitude).toBe(-73.9855);
-    expect(decoded.reference).toBe("here:af:streetsection:abc");
-    expect((decoded.address as { address1: string }).address1).toBe("Los Angeles");
+    // Personal fields scrubbed (privacy): original capturer's address must not leak.
+    expect(decoded.reference).toBe("");
+    const addr = decoded.address as Record<string, string>;
+    expect(addr.address1).toBe("");
+    expect(addr.eaterFormattedAddress).toBe("");
+    expect(addr.title).toBe("");
+    expect(addr.uuid).toBe("");
   });
 
   it("throws a descriptive error when UE_LOC_COOKIE is not set", () => {

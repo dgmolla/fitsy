@@ -9,9 +9,11 @@
  * rolls back — no partial data, no phantom checkpoint.
  */
 
-import type { PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import type { ValidatedPair } from "./pipeline-utils.js";
 import { persistHexBulkInTx } from "./pipeline-utils.js";
+
+type TxClient = Prisma.TransactionClient;
 
 // ─── Public API ─────────────────────────────────────────────────────────────
 
@@ -34,12 +36,22 @@ export interface HexRestaurantData {
   menuHash: string;
 }
 
+export interface PersistHexOpts {
+  /** Timing hook (invoked after tx commits). */
+  onTiming?: (timing: { bulkMs: number; checkpointMs: number; totalMs: number }) => void;
+  /**
+   * Pre-commit validator. Runs inside the tx after bulk persist but before
+   * checkpoint + commit. Throw to roll back the tx (persist + checkpoint).
+   */
+  validateInTx?: (tx: TxClient, restaurants: HexRestaurantData[]) => Promise<void>;
+}
+
 export async function persistHex(
   runId: string,
   hexId: string,
   restaurants: HexRestaurantData[],
   prisma: PrismaClient,
-  onTiming?: (timing: { bulkMs: number; checkpointMs: number; totalMs: number }) => void,
+  opts: PersistHexOpts = {},
 ): Promise<number> {
   const txStart = Date.now();
   let bulkMs = 0;
@@ -50,6 +62,8 @@ export async function persistHex(
       const t1 = Date.now();
       const totalItems = await persistHexBulkInTx(restaurants, tx);
       bulkMs = Date.now() - t1;
+
+      if (opts.validateInTx) await opts.validateInTx(tx, restaurants);
 
       const t2 = Date.now();
       await tx.pipelineCompletedHex.create({
@@ -62,7 +76,7 @@ export async function persistHex(
     { timeout: 60_000 }, // 60s — dense hexes may have 200+ restaurants with items
   );
 
-  onTiming?.({
+  opts.onTiming?.({
     bulkMs,
     checkpointMs,
     totalMs: Date.now() - txStart,

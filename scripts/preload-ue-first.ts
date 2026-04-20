@@ -38,7 +38,7 @@
  *   AXIOM_TOKEN                 optional (pipeline telemetry)
  */
 
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import Anthropic from "@anthropic-ai/sdk";
 import { createHash } from "node:crypto";
 import {
@@ -117,7 +117,7 @@ const CONFIG = {
   maxHexes: parseIntArg("--max-hexes", 0),
   hexId: parseStringArg("--hex-id"),
   skipDays: parseIntArg("--days", 7),
-  probeResolution: 5,
+  probeResolution: 7,
   hexResolution: 7,
   concurrency: 10,
 };
@@ -288,10 +288,10 @@ async function runPhase1(prisma: PrismaClient): Promise<DiscoveryStats> {
           now(), now()
         )
         ON CONFLICT ("storeUuid") DO UPDATE SET
-          "homeHex"         = EXCLUDED."homeHex",
+          "homeHex"         = COALESCE("Restaurant"."homeHex", EXCLUDED."homeHex"),
+          "lat"             = COALESCE("Restaurant"."lat", EXCLUDED."lat"),
+          "lng"             = COALESCE("Restaurant"."lng", EXCLUDED."lng"),
           "name"            = EXCLUDED."name",
-          "lat"             = EXCLUDED."lat",
-          "lng"             = EXCLUDED."lng",
           "photoUrl"        = COALESCE(EXCLUDED."photoUrl", "Restaurant"."photoUrl"),
           "photoSource"     = COALESCE(EXCLUDED."photoSource", "Restaurant"."photoSource"),
           "rating"          = COALESCE(EXCLUDED."rating", "Restaurant"."rating"),
@@ -436,6 +436,71 @@ async function resolvePhotoUrl(
   return { url: null, source: null };
 }
 
+/**
+ * Guard 1: per-hex cookie liveness probe.
+ *
+ * Runs a single `fetchFeedV1` at the hex center before enrichment starts. An
+ * expired/corrupted UE_LOC_COOKIE returns empty feedItems at scale; if we
+ * detect that we abort the whole run rather than burning Haiku $ on a cookie
+ * that is already dead.
+ */
+async function assertCookieAliveForHex(hexId: string): Promise<void> {
+  const [lat, lng] = cellToLatLng(hexId);
+  const feed = await fetchFeedV1(lat, lng, { maxRetries: 1 });
+  if (!feed?.data?.feedItems || feed.data.feedItems.length === 0) {
+    console.error(
+      `[ue-first] UE_LOC_COOKIE appears expired — cookie reprobe at hex ${hexId} (${lat.toFixed(4)}, ${lng.toFixed(4)}) returned empty. Rotate UE_LOC_COOKIE and resume.`,
+    );
+    process.exit(1);
+  }
+}
+
+/**
+ * Guard 3: in-tx invariant check (Option A).
+ *
+ * After bulk persist but before the checkpoint is written, assert that every
+ * restaurant in this hex's hexResults actually landed with items > 0 AND a
+ * 1:1 MenuItem ↔ MacroEstimate mapping. Throws to roll back the tx if not,
+ * so we never commit half-populated restaurants or a phantom checkpoint.
+ */
+async function validateHexInTx(
+  tx: Prisma.TransactionClient,
+  restaurants: HexRestaurantData[],
+): Promise<void> {
+  if (restaurants.length === 0) return;
+  const ids = restaurants.map((r) => r.restaurantId);
+  const rows = await tx.$queryRaw<
+    { restaurantId: string; itemCount: bigint; macroCount: bigint }[]
+  >`
+    SELECT r.id AS "restaurantId",
+           COUNT(DISTINCT mi.id)::bigint AS "itemCount",
+           COUNT(DISTINCT me.id)::bigint AS "macroCount"
+    FROM "Restaurant" r
+    LEFT JOIN "MenuItem" mi ON mi."restaurantId" = r.id
+    LEFT JOIN "MacroEstimate" me ON me."menuItemId" = mi.id
+    WHERE r.id = ANY(${ids}::text[])
+    GROUP BY r.id
+  `;
+  const byId = new Map(rows.map((r) => [r.restaurantId, r]));
+  const failures: string[] = [];
+  for (const id of ids) {
+    const row = byId.get(id);
+    if (!row) {
+      failures.push(`${id}: row missing from invariant query`);
+      continue;
+    }
+    const items = Number(row.itemCount);
+    const macros = Number(row.macroCount);
+    if (items === 0) failures.push(`${id}: items=0`);
+    else if (items !== macros) failures.push(`${id}: items=${items} macros=${macros}`);
+  }
+  if (failures.length > 0) {
+    throw new Error(
+      `hex invariant check failed (${failures.length}/${ids.length} restaurants): ${failures.slice(0, 3).join("; ")}${failures.length > 3 ? "…" : ""}`,
+    );
+  }
+}
+
 async function runPhase2(
   prisma: PrismaClient,
   anthropic: Anthropic,
@@ -497,28 +562,44 @@ async function runPhase2(
     log(`\n===== Hex ${hexId} (${restaurants.length} restaurants) =====`);
     const hexStart = Date.now();
 
-    const hexResults: HexRestaurantData[] = [];
+    // Guard 1: reprobe the cookie before burning Haiku $ on this hex.
+    if (!CONFIG.dryRun) await assertCookieAliveForHex(hexId);
 
-    // Process in parallel batches, clamped by the UE semaphore inside each call.
-    for (let i = 0; i < restaurants.length; i += CONFIG.concurrency) {
-      const batch = restaurants.slice(i, i + CONFIG.concurrency);
-      const results = await Promise.allSettled(
-        batch.map((r, j) => processRestaurant(r, i + j + 1, restaurants.length, prisma, anthropic, emitter, runId, hexId, stats)),
-      );
-      for (const result of results) {
-        if (result.status === "rejected") {
-          log(`  unexpected error: ${String(result.reason)}`);
-        } else if (result.value != null) {
-          hexResults.push(result.value);
-        }
+    // Guard 2: strict hex-level atomicity. Any systemic failure inside
+    // processRestaurant throws; Promise.all rejects fast; we log + exit(2)
+    // without writing persist or checkpoint so the hex stays pending for a
+    // future resume.
+    const hexResults: HexRestaurantData[] = [];
+    try {
+      for (let i = 0; i < restaurants.length; i += CONFIG.concurrency) {
+        const batch = restaurants.slice(i, i + CONFIG.concurrency);
+        const results = await Promise.all(
+          batch.map((r, j) =>
+            processRestaurant(
+              r, i + j + 1, restaurants.length,
+              prisma, anthropic, emitter, runId, hexId, stats,
+            ),
+          ),
+        );
+        for (const value of results) if (value != null) hexResults.push(value);
       }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(
+        `[ue-first] hex ${hexId} aborted (strict): ${msg}. No persist, no checkpoint — hex remains pending for resume.`,
+      );
+      process.exit(2);
     }
 
     if (CONFIG.dryRun) {
       const totalItems = hexResults.reduce((sum, r) => sum + r.items.length, 0);
       log(`  [dry-run] would persist ${totalItems} items across ${hexResults.length} restaurants`);
     } else if (hexResults.length > 0) {
-      const totalItems = await persistHex(runId, hexId, hexResults, prisma);
+      // Guard 3: in-tx invariant validator runs before the checkpoint is
+      // written. Throws → rollback (persist + checkpoint both aborted).
+      const totalItems = await persistHex(runId, hexId, hexResults, prisma, {
+        validateInTx: validateHexInTx,
+      });
       stats.persistedRestaurants += hexResults.length;
       stats.persistedItems += totalItems;
       log(`  persisted ${totalItems} items across ${hexResults.length} restaurants`);
@@ -620,10 +701,12 @@ async function processRestaurant(
   );
 
   if (!resolverResult.found) {
-    log(`    all sources missed — skipping`);
+    // Strict: every ue_feed restaurant must resolve through FatSecret or the
+    // UE direct source. Missing both means the menu source layer is broken
+    // (dead UE cookie, FatSecret auth failure, etc.) — abort the hex.
     stats.skippedNoSource++;
     emitEvent("skipped_no_source", "none", 0, 0, resolverResult.attempts);
-    return null;
+    throw new Error(`[${r.name}] all menu sources missed`);
   }
 
   if (resolverResult.sourceId === "fatsecret") stats.fatsecretHits++;
@@ -673,7 +756,10 @@ async function processRestaurant(
       macros = result;
       stats.anthropicCalls++;
     } catch (err) {
-      log(`    haiku failed: ${err instanceof Error ? err.message : String(err)}`);
+      // Strict: Haiku retries have already been exhausted by withRetry. A
+      // macro estimation failure produces bad data, so abort the hex rather
+      // than persist items without macros.
+      const msg = err instanceof Error ? err.message : String(err);
       stats.skippedHaikuFailed++;
       emitter.emitError({
         type: "error",
@@ -689,17 +775,19 @@ async function processRestaurant(
         _time: new Date().toISOString(),
       });
       emitEvent("skipped_haiku_failed", resolverResult.sourceId, 0, 0, resolverResult.attempts);
-      return null;
+      throw new Error(`[${r.name}] haiku failed after retries: ${msg}`);
     }
   }
 
   const { valid, rejected } = validateItems(resolverResult.items, macros);
   stats.rejectedItems += rejected.length;
   if (valid.length === 0) {
-    log(`    all items rejected by validation — skipping`);
+    // Strict: we got items from a source but validation rejected all of them.
+    // That's a bad-data signal — likely a schema mismatch or source regression
+    // — so abort the hex rather than writing a restaurant with zero items.
     stats.skippedValidationEmpty++;
     emitEvent("skipped_validation_empty", resolverResult.sourceId, 0, rejected.length, resolverResult.attempts);
-    return null;
+    throw new Error(`[${r.name}] all ${rejected.length} items rejected by validation`);
   }
 
   emitEvent("ok", resolverResult.sourceId, valid.length, rejected.length, resolverResult.attempts);

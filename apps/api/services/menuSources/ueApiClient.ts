@@ -26,8 +26,45 @@ const ERROR_BODY_PREVIEW = 200;
 /** Statuses UE uses for soft-block / rate-limit — worth retrying. */
 const RETRY_STATUSES = new Set([403, 429, 502, 503]);
 
-const BROWSER_UA =
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+/**
+ * Rotating pool of recent Chrome UAs (desktop) paired with matching
+ * `sec-ch-ua` / `sec-ch-ua-platform` client hints so the User-Agent + hints
+ * agree. UE's bot-defense can flag UA/hint mismatches.
+ */
+interface ChromeProfile {
+  ua: string;
+  secChUa: string;
+  platform: '"macOS"' | '"Windows"';
+}
+const CHROME_PROFILES: ChromeProfile[] = [
+  {
+    ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    secChUa: '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+    platform: '"macOS"',
+  },
+  {
+    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    secChUa: '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+    platform: '"Windows"',
+  },
+  {
+    ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+    secChUa: '"Chromium";v="130", "Google Chrome";v="130", "Not?A_Brand";v="99"',
+    platform: '"macOS"',
+  },
+];
+
+function pickChromeProfile(): ChromeProfile {
+  return CHROME_PROFILES[Math.floor(Math.random() * CHROME_PROFILES.length)]!;
+}
+
+/** UE requires `x-csrf-token` but doesn't validate it for unauth reads. A
+ *  random-looking token avoids being a static fingerprint across requests. */
+function randomCsrfToken(): string {
+  const bytes = new Uint8Array(16);
+  for (let i = 0; i < 16; i++) bytes[i] = Math.floor(Math.random() * 256);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
 
 async function readBodyPreview(response: Response): Promise<string> {
   try {
@@ -73,13 +110,22 @@ async function postUe<T>(endpoint: string, body: unknown, opts: PostUeOpts): Pro
     }
 
     const tag = `attempt ${attempt + 1}/${maxRetries + 1}`;
+    const profile = pickChromeProfile();
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
-      "User-Agent": BROWSER_UA,
-      Accept: "application/json",
-      "x-csrf-token": "x", // required header; value not validated for unauth reads
+      "User-Agent": profile.ua,
+      Accept: "*/*",
+      "Accept-Language": "en-US,en;q=0.9",
+      "Accept-Encoding": "gzip, deflate, br",
+      "x-csrf-token": randomCsrfToken(),
       Referer: `${UE_BASE}/`,
       Origin: UE_BASE,
+      "sec-ch-ua": profile.secChUa,
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": profile.platform,
+      "sec-fetch-dest": "empty",
+      "sec-fetch-mode": "cors",
+      "sec-fetch-site": "same-origin",
     };
     if (opts.cookieHeader) headers["Cookie"] = opts.cookieHeader;
 
@@ -370,9 +416,21 @@ export interface UeFeedStoreCard {
 
 // ─── getFeedV1 cookie handling ───────────────────────────────────────────────
 
+interface UeLocCookieAddress {
+  address1?: string;
+  address2?: string;
+  aptOrSuite?: string;
+  eaterFormattedAddress?: string;
+  subtitle?: string;
+  title?: string;
+  uuid?: string;
+  [key: string]: unknown;
+}
 interface UeLocCookieJson {
   latitude?: number;
   longitude?: number;
+  address?: UeLocCookieAddress;
+  reference?: string;
   [key: string]: unknown;
 }
 
@@ -380,8 +438,11 @@ interface UeLocCookieJson {
  * Build the `Cookie: uev2.loc=...` header value for a given lat/lng.
  *
  * Reads `UE_LOC_COOKIE` (URL-encoded JSON captured from a browser session),
- * overrides `latitude`/`longitude` fields, re-encodes. The HERE `reference`
- * and other fields in the cookie are kept as-is — they are cosmetic.
+ * overrides `latitude`/`longitude`, and scrubs cosmetic personal data that
+ * would otherwise leak the captured user's street address in every request
+ * (`address.address1`, `eaterFormattedAddress`, etc.) and tie every probe
+ * back to a single HERE `reference` token. Geo-relevant components
+ * (city/state/postal) are preserved — UE infers those from lat/lng anyway.
  *
  * Throws if `UE_LOC_COOKIE` is not set or cannot be decoded.
  */
@@ -402,6 +463,16 @@ export function buildFeedCookieHeader(lat: number, lng: number): string {
   }
   parsed.latitude = lat;
   parsed.longitude = lng;
+  if (parsed.address && typeof parsed.address === "object") {
+    parsed.address.address1 = "";
+    parsed.address.address2 = "";
+    parsed.address.aptOrSuite = "";
+    parsed.address.eaterFormattedAddress = "";
+    parsed.address.subtitle = "";
+    parsed.address.title = "";
+    parsed.address.uuid = "";
+  }
+  parsed.reference = "";
   const reEncoded = encodeURIComponent(JSON.stringify(parsed));
   return `uev2.loc=${reEncoded}`;
 }

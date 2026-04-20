@@ -790,7 +790,8 @@ async function main(): Promise<void> {
         const totalItems = hexResults.reduce((sum, r) => sum + r.items.length, 0);
         log(`[dry-run] Would persist ${totalItems} items across ${hexResults.length} restaurants (skipped)`);
       } else if (hexResults.length > 0) {
-        const totalItems = await persistHex(runId, hexId, hexResults, prisma, (timing) => {
+        const totalItems = await persistHex(runId, hexId, hexResults, prisma, {
+          onTiming: (timing) => {
           log(`[persist-timing] hex=${hexId} total=${timing.totalMs}ms bulk=${timing.bulkMs}ms checkpoint=${timing.checkpointMs}ms (${hexResults.length} restaurants)`);
           emitter.emitSubstep({
             type: "substep",
@@ -802,6 +803,7 @@ async function main(): Promise<void> {
             durationMs: timing.totalMs,
             _time: new Date().toISOString(),
           });
+          },
         });
         log(`Persisted ${totalItems} items across ${hexResults.length} restaurants`);
       } else {
