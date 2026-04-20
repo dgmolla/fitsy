@@ -16,11 +16,12 @@ import { ScreenHeader } from '@/components/ScreenHeader';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { decodeEmailFromToken } from '@/lib/jwtUtils';
 import type { MacroValues } from '@/lib/macroPresets';
-import { getMacroTargets } from '@/lib/macroStorage';
+import { getMacroTargets, saveMacroTargets } from '@/lib/macroStorage';
 import { getOnboardingData, type OnboardingData } from '@/lib/onboardingStorage';
 import { calculateAge } from '@fitsy/shared';
 import { pushProfileToServer } from '@/lib/profileSync';
 import { useTheme } from '@/lib/theme';
+import { FilterPopup } from '@/components/FilterPopup';
 
 function formatBirthday(iso: string): string {
   const d = new Date(iso + 'T00:00:00');
@@ -49,6 +50,7 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState<string>('—');
   const [macroTargets, setMacroTargets] = useState<MacroValues | null>(null);
+  const [filterVisible, setFilterVisible] = useState(false);
   const [profile, setProfile] = useState<OnboardingData>({});
   const prevProfile = useRef<string>('');
 
@@ -109,6 +111,7 @@ export default function ProfileScreen() {
   }
 
   return (
+    <>
     <ScreenBackground>
       <ScreenHeader />
       <ScrollView
@@ -184,18 +187,24 @@ export default function ProfileScreen() {
           />
         </View>
 
-        {/* Per-meal macros (read-only, derived from body stats) */}
+        {/* Per-meal macros */}
         {macroTargets && (
-          <View style={[styles.section, {
-            backgroundColor: colors.bgCard,
-            borderColor: colors.border,
-            shadowColor: colors.glassShadowColor,
-            shadowOpacity: colors.glassShadowOpacity,
-            shadowRadius: colors.glassShadowRadius,
-            shadowOffset: { width: 0, height: 4 },
-            elevation: 8,
-          }]}>
-            <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>Per-Meal Targets</Text>
+          <Pressable
+            onPress={() => setFilterVisible(true)}
+            style={[styles.section, {
+              backgroundColor: colors.bgCard,
+              borderColor: colors.border,
+              shadowColor: colors.glassShadowColor,
+              shadowOpacity: colors.glassShadowOpacity,
+              shadowRadius: colors.glassShadowRadius,
+              shadowOffset: { width: 0, height: 4 },
+              elevation: 8,
+            }]}
+          >
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>Per-Meal Targets</Text>
+              <Ionicons name="pencil-outline" size={16} color={colors.textTertiary} />
+            </View>
             <View style={styles.macroGrid}>
               {[
                 { label: 'Protein', value: macroTargets.protein, unit: 'g' },
@@ -209,9 +218,9 @@ export default function ProfileScreen() {
               ))}
             </View>
             <Text style={[styles.macroHint, { color: colors.textTertiary }]}>
-              Calculated from your body stats. Adjust targets in the search tab.
+              Tap to edit your macro targets
             </Text>
-          </View>
+          </Pressable>
         )}
 
         {/* Logout */}
@@ -225,6 +234,19 @@ export default function ProfileScreen() {
         </Pressable>
       </ScrollView>
     </ScreenBackground>
+
+      <FilterPopup
+        visible={filterVisible}
+        values={macroTargets ?? { protein: '', carbs: '', fat: '', calories: '' }}
+        onApply={async (updated) => {
+          setFilterVisible(false);
+          setMacroTargets(updated);
+          await saveMacroTargets(updated);
+          pushProfileToServer();
+        }}
+        onClose={() => setFilterVisible(false)}
+      />
+    </>
   );
 }
 
@@ -252,12 +274,17 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
   sectionLabel: {
     fontSize: 11,
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.7,
-    marginBottom: 12,
   },
   accountRow: {
     flexDirection: 'row',

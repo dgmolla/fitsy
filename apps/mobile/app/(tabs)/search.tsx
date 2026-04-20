@@ -599,7 +599,7 @@ const s = StyleSheet.create({
 
   inlineEmpty: { alignItems: 'center', paddingTop: 50, paddingBottom: 30, gap: 8 },
   inlineEmptyText: { fontSize: 15, fontWeight: '600', color: EDITORIAL.textSoft },
-  inlineEmptyHint: { fontSize: 13, color: EDITORIAL.creamDeep },
+  inlineEmptyHint: { fontSize: 14, color: EDITORIAL.textSoft, textAlign: 'center', lineHeight: 20 },
   loaderWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   errorBanner: {
     marginHorizontal: 16, marginTop: 16, borderRadius: 8, padding: 12,
