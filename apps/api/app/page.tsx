@@ -1,6 +1,9 @@
 import styles from "./landing.module.css";
 import { prisma } from "@/lib/restaurantService";
 
+// Prisma calls below need runtime env — opt out of build-time prerender.
+export const dynamic = "force-dynamic";
+
 const EARLY_ACCESS_URL = "https://testflight.apple.com/join/fitsy"; // placeholder until TestFlight live
 
 export default async function LandingPage() {
