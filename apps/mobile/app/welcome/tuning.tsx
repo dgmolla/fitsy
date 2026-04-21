@@ -53,7 +53,7 @@ export default function PlanReadyScreen() {
     <WelcomeScreen
       progress={13 / 16}
       title="Your plan."
-      onContinue={() => router.push('/welcome/teaser')}
+      onContinue={() => router.push('/welcome/finding')}
       canContinue={macros !== null}
       continueLabel="See Restaurants"
     >

@@ -174,7 +174,7 @@ const styles = StyleSheet.create({
 
   body: {
     paddingHorizontal: 36,
-    paddingTop: 20,
+    paddingTop: 0,
     paddingBottom: 24,
     flexGrow: 1,
   },
@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
     color: EDITORIAL.textSoft,
-    marginBottom: 40,
+    marginBottom: 36,
   },
   childWrap: { flex: 1 },
 

@@ -15,7 +15,7 @@ export default function MacrosFitsyScreen() {
   return (
     <WelcomeScreen
       progress={6 / 16}
-      title="How do we pick the restaurants?"
+      title={"How do we pick\nthe restaurants?"}
       subtitle="Three steps — and you only have to do one of them."
       onContinue={() => router.push('/welcome/goal')}
       canContinue={true}
@@ -43,7 +43,7 @@ export default function MacrosFitsyScreen() {
 }
 
 const s = StyleSheet.create({
-  cards: { gap: 14 },
+  cards: { gap: 10 },
   card: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -8,6 +8,7 @@ import { EDITORIAL, FONTS } from '@/lib/brand';
 import { getMacroTargets } from '@/lib/macroStorage';
 import { FALLBACK_LAT, FALLBACK_LNG } from '@/lib/useLocation';
 import { api } from '@/lib/api';
+import { prefetchedRestaurants } from '@/lib/teaserCache';
 
 const CARD_H = 112;
 
@@ -110,6 +111,14 @@ export default function TeaserScreen() {
 
   useEffect(() => {
     async function load() {
+      // Use pre-fetched data from the finding screen if available
+      if (prefetchedRestaurants.data) {
+        setRestaurants(prefetchedRestaurants.data as PreviewRestaurant[]);
+        prefetchedRestaurants.data = null;
+        setLoading(false);
+        return;
+      }
+
       try {
         const macros = await getMacroTargets();
         const params = new URLSearchParams({
