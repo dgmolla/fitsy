@@ -2,5 +2,11 @@
   "buildCommand": "npm run build -w apps/api",
   "installCommand": "npm install",
   "framework": "nextjs",
-  "outputDirectory": "apps/api/.next"
+  "outputDirectory": "apps/api/.next",
+  "crons": [
+    {
+      "path": "/api/health",
+      "schedule": "*/5 * * * *"
+    }
+  ]
 }
