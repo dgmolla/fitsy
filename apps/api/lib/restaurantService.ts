@@ -1,16 +1,5 @@
-import { PrismaClient } from "@prisma/client";
-import {
-  computeMatchScore,
-  hasTargets,
-  type MacroTargets,
-  type ScoredItem,
-} from "./macroScoring";
-import {
-  geoCacheKey,
-  geoCacheGet,
-  geoCacheSet,
-  type CachedRestaurant,
-} from "./geoCache";
+import { Prisma, PrismaClient } from "@prisma/client";
+import { hasTargets, type MacroTargets } from "./macroScoring";
 import type { RestaurantResult, MenuResponse } from "@fitsy/shared";
 
 // ─── Prisma singleton ─────────────────────────────────────────────────────────
@@ -71,173 +60,29 @@ function computeBoundingBox(
   };
 }
 
-function computeDistanceMiles(
-  lat1: number,
-  lng1: number,
-  lat2: number,
-  lng2: number,
-): number {
-  const latDiff = lat2 - lat1;
-  const lngDiff = (lng2 - lng1) * Math.cos((lat1 * Math.PI) / 180);
-  return Math.sqrt(latDiff * latDiff + lngDiff * lngDiff) * 69;
-}
+// ─── Raw row shape returned by the DISTINCT ON query ──────────────────────────
 
-// ─── Layer 1: Fetch + cache restaurant data (shared across users) ────────────
-
-async function fetchGeoData(
-  lat: number,
-  lng: number,
-  radiusMiles: number,
-  cuisineType?: string,
-  chainOnly?: boolean,
-  dietary?: string,
-  maxPriceLevel?: string,
-  minRating?: number,
-): Promise<{ restaurants: CachedRestaurant[]; cacheHit: boolean }> {
-  const key = geoCacheKey(lat, lng, radiusMiles, cuisineType, chainOnly, dietary, maxPriceLevel, minRating);
-  const cached = geoCacheGet(key);
-
-  if (cached) {
-    return { restaurants: cached, cacheHit: true };
-  }
-
-  const { latMin, latMax, lngMin, lngMax } = computeBoundingBox(
-    lat,
-    lng,
-    radiusMiles,
-  );
-
-  const dbRestaurants = await prisma.restaurant.findMany({
-    where: {
-      lat: { gte: latMin, lte: latMax },
-      lng: { gte: lngMin, lte: lngMax },
-      ...(cuisineType !== undefined
-        ? { cuisineTags: { has: cuisineType } }
-        : {}),
-      ...(chainOnly !== undefined ? { chainFlag: chainOnly } : {}),
-      ...(dietary !== undefined
-        ? { dietaryOptions: { has: `has_${dietary}` } }
-        : {}),
-      ...(maxPriceLevel !== undefined
-        ? { priceLevel: { in: allowedPriceLevels(maxPriceLevel) } }
-        : {}),
-      ...(minRating !== undefined ? { rating: { gte: minRating } } : {}),
-    },
-    include: {
-      menuItems: {
-        include: {
-          macroEstimates: {
-            orderBy: { estimatedAt: "desc" },
-            take: 1,
-          },
-        },
-      },
-    },
-  });
-
-  // Filter to true radius and flatten into cache-friendly shape
-  const restaurants: CachedRestaurant[] = dbRestaurants
-    .filter((r) => computeDistanceMiles(lat, lng, r.lat, r.lng) <= radiusMiles)
-    .map((r) => ({
-      id: r.id,
-      name: r.name,
-      address: r.address,
-      lat: r.lat,
-      lng: r.lng,
-      cuisineTags: r.cuisineTags,
-      chainFlag: r.chainFlag,
-      photoUrl: r.photoUrl,
-      rating: r.rating,
-      priceLevel: r.priceLevel,
-      dietaryOptions: r.dietaryOptions,
-      menuItems: r.menuItems
-        .filter((item) => item.macroEstimates.length > 0)
-        .map((item) => {
-          const est = item.macroEstimates[0]!;
-          return {
-            menuItemId: item.id,
-            name: item.name,
-            calories: est.calories,
-            proteinG: est.proteinG,
-            carbsG: est.carbsG,
-            fatG: est.fatG,
-            confidence: est.confidence,
-          };
-        }),
-    }));
-
-  geoCacheSet(key, restaurants);
-  return { restaurants, cacheHit: false };
-}
-
-// ─── Layer 2: Per-user scoring (no DB, runs on cached data) ──────────────────
-
-function scoreRestaurant(
-  restaurant: CachedRestaurant,
-  userLat: number,
-  userLng: number,
-  targets: MacroTargets,
-): {
+interface ScoredRow {
+  restaurantId: string;
+  name: string;
+  address: string;
+  lat: number;
+  lng: number;
+  cuisineTags: string[];
+  chainFlag: boolean;
+  photoUrl: string | null;
+  rating: number | null;
+  priceLevel: string | null;
+  dietaryOptions: string[];
+  menuItemId: string;
+  itemName: string;
+  calories: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+  confidence: "HIGH" | "MEDIUM" | "LOW";
+  scoreSum: number;
   distanceMiles: number;
-  bestMatch: ScoredItem | null;
-} {
-  const distanceMiles = computeDistanceMiles(
-    userLat,
-    userLng,
-    restaurant.lat,
-    restaurant.lng,
-  );
-
-  let bestMatch: ScoredItem | null = null;
-
-  if (hasTargets(targets)) {
-    let bestScore = Infinity;
-
-    for (const item of restaurant.menuItems) {
-      const score = computeMatchScore(targets, {
-        calories: item.calories,
-        proteinG: item.proteinG,
-        carbsG: item.carbsG,
-        fatG: item.fatG,
-        confidence: item.confidence as "HIGH" | "MEDIUM" | "LOW",
-      });
-
-      if (score !== null && score < bestScore) {
-        bestScore = score;
-        bestMatch = {
-          menuItemId: item.menuItemId,
-          name: item.name,
-          macros: {
-            calories: item.calories,
-            proteinG: item.proteinG,
-            carbsG: item.carbsG,
-            fatG: item.fatG,
-            confidence: item.confidence as "HIGH" | "MEDIUM" | "LOW",
-          },
-          score,
-        };
-      }
-    }
-  }
-
-  // Fallback: if no macro-matched best match, show the first menu item
-  if (!bestMatch && restaurant.menuItems.length > 0) {
-    const first = restaurant.menuItems[0]!;
-    bestMatch = {
-      menuItemId: first.menuItemId,
-      name: first.name,
-      macros: {
-        calories: first.calories,
-        proteinG: first.proteinG,
-        carbsG: first.carbsG,
-        fatG: first.fatG,
-        confidence: first.confidence as "HIGH" | "MEDIUM" | "LOW",
-      },
-      score: Infinity,
-    };
-  }
-
-  return { distanceMiles, bestMatch };
 }
 
 // ─── Service: GET /api/restaurants ───────────────────────────────────────────
@@ -245,84 +90,164 @@ function scoreRestaurant(
 export async function findNearbyRestaurants(
   params: NearbyRestaurantsParams,
 ): Promise<{ data: RestaurantResult[]; total: number }> {
-  const { lat, lng, radiusMiles, targets, cuisineType, chainOnly, dietary, maxPriceLevel, minRating, limit } =
-    params;
-
-  const startMs = Date.now();
-
-  // Layer 1: geo cache (shared)
-  const { restaurants, cacheHit } = await fetchGeoData(
+  const {
     lat,
     lng,
     radiusMiles,
+    targets,
     cuisineType,
     chainOnly,
     dietary,
     maxPriceLevel,
     minRating,
+    limit,
+  } = params;
+
+  const startMs = Date.now();
+
+  const { latMin, latMax, lngMin, lngMax } = computeBoundingBox(
+    lat,
+    lng,
+    radiusMiles,
   );
 
-  const fetchMs = Date.now() - startMs;
+  const targetsActive = hasTargets(targets);
+  const tCal = targets.calories ?? null;
+  const tProt = targets.proteinG ?? null;
+  const tCarb = targets.carbsG ?? null;
+  const tFat = targets.fatG ?? null;
 
-  // Layer 2: per-user scoring (cheap math)
-  const scored = restaurants.map((r) => ({
-    restaurant: r,
-    ...scoreRestaurant(r, lat, lng, targets),
+  // Dynamic filter fragments — composed via Prisma.sql for safe parameter binding.
+  const filterFrags: Prisma.Sql[] = [];
+  if (cuisineType !== undefined) {
+    filterFrags.push(Prisma.sql`AND ${cuisineType} = ANY(r."cuisineTags")`);
+  }
+  if (chainOnly !== undefined) {
+    filterFrags.push(Prisma.sql`AND r."chainFlag" = ${chainOnly}`);
+  }
+  if (dietary !== undefined) {
+    filterFrags.push(
+      Prisma.sql`AND ${`has_${dietary}`} = ANY(r."dietaryOptions")`,
+    );
+  }
+  if (maxPriceLevel !== undefined) {
+    filterFrags.push(
+      Prisma.sql`AND r."priceLevel" IN (${Prisma.join(allowedPriceLevels(maxPriceLevel))})`,
+    );
+  }
+  if (minRating !== undefined) {
+    filterFrags.push(Prisma.sql`AND r.rating >= ${minRating}`);
+  }
+  const filters = filterFrags.length > 0 ? Prisma.join(filterFrags, " ") : Prisma.empty;
+
+  // Match score: sum of normalized squared diffs for each active target dimension.
+  // When a target is NULL/0, its term contributes 0 — so "no targets" falls through
+  // to sort by a tiebreaker (menu item id) inside each restaurant.
+  //
+  // DISTINCT ON (r.id) + ORDER BY r.id, scoreSum picks ONE winning item per
+  // restaurant server-side, so we ship ~N restaurants instead of N×M items.
+  //
+  // Final ORDER BY sorts by matchScore when targets are active, distance otherwise.
+  const rows = await prisma.$queryRaw<ScoredRow[]>`
+    WITH best_per_restaurant AS (
+      SELECT DISTINCT ON (r.id)
+        r.id            AS "restaurantId",
+        r.name          AS name,
+        r.address       AS address,
+        r.lat           AS lat,
+        r.lng           AS lng,
+        r."cuisineTags" AS "cuisineTags",
+        r."chainFlag"   AS "chainFlag",
+        r."photoUrl"    AS "photoUrl",
+        r.rating        AS rating,
+        r."priceLevel"  AS "priceLevel",
+        r."dietaryOptions" AS "dietaryOptions",
+        m.id            AS "menuItemId",
+        m.name          AS "itemName",
+        e.calories      AS calories,
+        e."proteinG"    AS "proteinG",
+        e."carbsG"      AS "carbsG",
+        e."fatG"        AS "fatG",
+        e.confidence    AS confidence,
+        (
+          CASE WHEN ${tCal}::double precision > 0
+               THEN power((e.calories - ${tCal}::double precision) / ${tCal}::double precision, 2)
+               ELSE 0 END
+          + CASE WHEN ${tProt}::double precision > 0
+               THEN power((e."proteinG" - ${tProt}::double precision) / ${tProt}::double precision, 2)
+               ELSE 0 END
+          + CASE WHEN ${tCarb}::double precision > 0
+               THEN power((e."carbsG" - ${tCarb}::double precision) / ${tCarb}::double precision, 2)
+               ELSE 0 END
+          + CASE WHEN ${tFat}::double precision > 0
+               THEN power((e."fatG" - ${tFat}::double precision) / ${tFat}::double precision, 2)
+               ELSE 0 END
+        )               AS "scoreSum"
+      FROM "Restaurant" r
+      JOIN "MenuItem" m ON m."restaurantId" = r.id
+      JOIN "MacroEstimate" e ON e."menuItemId" = m.id
+      WHERE r.lat BETWEEN ${latMin} AND ${latMax}
+        AND r.lng BETWEEN ${lngMin} AND ${lngMax}
+        ${filters}
+      ORDER BY r.id, "scoreSum" ASC, m.id ASC
+    )
+    SELECT
+      *,
+      (
+        sqrt(
+          power(lat - ${lat}::double precision, 2)
+          + power((lng - ${lng}::double precision) * cos(${lat}::double precision * pi() / 180), 2)
+        ) * 69
+      ) AS "distanceMiles"
+    FROM best_per_restaurant
+    WHERE (
+      sqrt(
+        power(lat - ${lat}::double precision, 2)
+        + power((lng - ${lng}::double precision) * cos(${lat}::double precision * pi() / 180), 2)
+      ) * 69
+    ) <= ${radiusMiles}::double precision
+    ORDER BY
+      CASE WHEN ${targetsActive}::boolean THEN "scoreSum" ELSE NULL END ASC NULLS LAST,
+      "distanceMiles" ASC
+  `;
+
+  const total = rows.length;
+  const paginated = rows.slice(0, limit);
+
+  const data: RestaurantResult[] = paginated.map((r) => ({
+    id: r.restaurantId,
+    name: r.name,
+    address: r.address,
+    lat: r.lat,
+    lng: r.lng,
+    distanceMiles: Math.round(r.distanceMiles * 100) / 100,
+    cuisineTags: r.cuisineTags,
+    chainFlag: r.chainFlag,
+    ...(r.photoUrl ? { photoUrl: r.photoUrl } : {}),
+    ...(r.rating !== null ? { rating: r.rating } : {}),
+    ...(r.priceLevel !== null ? { priceLevel: r.priceLevel } : {}),
+    ...(r.dietaryOptions.length > 0 ? { dietaryOptions: r.dietaryOptions } : {}),
+    bestMatch: {
+      menuItemId: r.menuItemId,
+      name: r.itemName,
+      calories: r.calories,
+      proteinG: r.proteinG,
+      carbsG: r.carbsG,
+      fatG: r.fatG,
+      confidence: r.confidence,
+      matchScore: targetsActive
+        ? Math.round(Math.sqrt(r.scoreSum) * 10000) / 10000
+        : Infinity,
+    },
   }));
-
-  // Sort: by match score if targets, else by distance
-  scored.sort((a, b) => {
-    if (hasTargets(targets)) {
-      const scoreA = a.bestMatch?.score ?? Infinity;
-      const scoreB = b.bestMatch?.score ?? Infinity;
-      if (scoreA !== scoreB) return scoreA - scoreB;
-    }
-    return a.distanceMiles - b.distanceMiles;
-  });
-
-  const total = scored.length;
-  const paginated = scored.slice(0, limit);
-
-  const data: RestaurantResult[] = paginated.map(
-    ({ restaurant: r, distanceMiles, bestMatch }) => ({
-      id: r.id,
-      name: r.name,
-      address: r.address,
-      lat: r.lat,
-      lng: r.lng,
-      distanceMiles: Math.round(distanceMiles * 100) / 100,
-      cuisineTags: r.cuisineTags,
-      chainFlag: r.chainFlag,
-      ...(r.photoUrl ? { photoUrl: r.photoUrl } : {}),
-      ...(r.rating !== null ? { rating: r.rating } : {}),
-      ...(r.priceLevel !== null ? { priceLevel: r.priceLevel } : {}),
-      ...(r.dietaryOptions.length > 0 ? { dietaryOptions: r.dietaryOptions } : {}),
-      bestMatch: bestMatch
-        ? {
-            menuItemId: bestMatch.menuItemId,
-            name: bestMatch.name,
-            calories: bestMatch.macros.calories,
-            proteinG: bestMatch.macros.proteinG,
-            carbsG: bestMatch.macros.carbsG,
-            fatG: bestMatch.macros.fatG,
-            confidence: bestMatch.macros.confidence,
-            matchScore: Math.round(bestMatch.score * 10000) / 10000,
-          }
-        : null,
-    }),
-  );
 
   const totalMs = Date.now() - startMs;
 
-  // Structured log for Axiom
   console.log(
     JSON.stringify({
-      event: "geo_cache",
-      hit: cacheHit,
-      key: geoCacheKey(lat, lng, radiusMiles, cuisineType, chainOnly, dietary, maxPriceLevel, minRating),
-      restaurants: restaurants.length,
-      fetchMs,
-      scoringMs: totalMs - fetchMs,
+      event: "search_query",
+      restaurants: total,
+      hasTargets: targetsActive,
       totalMs,
     }),
   );

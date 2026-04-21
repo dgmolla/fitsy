@@ -8,13 +8,21 @@ import type { ConfidenceLevel } from "@fitsy/shared";
 // instance. We expose module-level mock refs so individual tests can configure
 // return values without re-importing.
 
-const mockFindMany = jest.fn();
+const mockQueryRaw = jest.fn();
 const mockFindUnique = jest.fn();
 
 jest.mock("@prisma/client", () => ({
+  Prisma: {
+    sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({
+      strings,
+      values,
+    }),
+    join: (items: unknown[], sep = ",") => ({ items, sep }),
+    empty: { empty: true },
+  },
   PrismaClient: jest.fn().mockImplementation(() => ({
+    $queryRaw: mockQueryRaw,
     restaurant: {
-      findMany: mockFindMany,
       findUnique: mockFindUnique,
     },
   })),
@@ -25,17 +33,246 @@ jest.mock("@prisma/client", () => ({
 beforeEach(() => {
   const g = globalThis as unknown as { prisma?: unknown };
   delete g.prisma;
-  mockFindMany.mockReset();
+  mockQueryRaw.mockReset();
   mockFindUnique.mockReset();
-  geoCacheClear();
 });
 
 // Import AFTER jest.mock so the mock is in place when the module initialises.
 import { findNearbyRestaurants, getRestaurantMenu } from "./restaurantService";
 import type { NearbyRestaurantsParams } from "./restaurantService";
-import { geoCacheClear } from "./geoCache";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
+
+interface ScoredRowFixture {
+  restaurantId: string;
+  name: string;
+  address: string;
+  lat: number;
+  lng: number;
+  cuisineTags: string[];
+  chainFlag: boolean;
+  photoUrl: string | null;
+  rating: number | null;
+  priceLevel: string | null;
+  dietaryOptions: string[];
+  menuItemId: string;
+  itemName: string;
+  calories: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+  confidence: ConfidenceLevel;
+  scoreSum: number;
+  distanceMiles: number;
+}
+
+function makeScoredRow(overrides: Partial<ScoredRowFixture> = {}): ScoredRowFixture {
+  return {
+    restaurantId: "rest-1",
+    name: "Test Restaurant",
+    address: "123 Main St",
+    lat: 34.0,
+    lng: -118.0,
+    cuisineTags: ["american"],
+    chainFlag: false,
+    photoUrl: null,
+    rating: null,
+    priceLevel: null,
+    dietaryOptions: [],
+    menuItemId: "item-1",
+    itemName: "Grilled Chicken",
+    calories: 600,
+    proteinG: 40,
+    carbsG: 60,
+    fatG: 20,
+    confidence: "HIGH",
+    scoreSum: 0,
+    distanceMiles: 0,
+    ...overrides,
+  };
+}
+
+const BASE_PARAMS: NearbyRestaurantsParams = {
+  lat: 34.0,
+  lng: -118.0,
+  radiusMiles: 5,
+  targets: {},
+  limit: 10,
+};
+
+// ─── findNearbyRestaurants ────────────────────────────────────────────────────
+
+describe("findNearbyRestaurants", () => {
+  it("returns restaurants from the DISTINCT ON query result", async () => {
+    mockQueryRaw.mockResolvedValue([
+      makeScoredRow({ restaurantId: "rest-1", distanceMiles: 0 }),
+      makeScoredRow({ restaurantId: "rest-2", distanceMiles: 1.5 }),
+    ]);
+
+    const result = await findNearbyRestaurants(BASE_PARAMS);
+
+    expect(result.data).toHaveLength(2);
+    expect(result.data.map((r) => r.id)).toEqual(["rest-1", "rest-2"]);
+    expect(result.total).toBe(2);
+  });
+
+  it("preserves DB row order (DB already applied radius filter + scoring sort)", async () => {
+    // DB returns them in the order the SQL ORDER BY produced
+    mockQueryRaw.mockResolvedValue([
+      makeScoredRow({ restaurantId: "best", scoreSum: 0.01, distanceMiles: 2 }),
+      makeScoredRow({ restaurantId: "worse", scoreSum: 0.5, distanceMiles: 0.5 }),
+    ]);
+
+    const result = await findNearbyRestaurants({
+      ...BASE_PARAMS,
+      targets: { calories: 600 },
+    });
+
+    expect(result.data[0]?.id).toBe("best");
+    expect(result.data[1]?.id).toBe("worse");
+  });
+
+  it("respects limit — returns at most limit restaurants but reports full total", async () => {
+    const rows = Array.from({ length: 5 }, (_, i) =>
+      makeScoredRow({ restaurantId: `rest-${i}` }),
+    );
+    mockQueryRaw.mockResolvedValue(rows);
+
+    const result = await findNearbyRestaurants({ ...BASE_PARAMS, limit: 3 });
+
+    expect(result.data).toHaveLength(3);
+    expect(result.total).toBe(5);
+  });
+
+  it("returns distanceMiles rounded to 2 decimal places", async () => {
+    mockQueryRaw.mockResolvedValue([
+      makeScoredRow({ distanceMiles: 1.23456789 }),
+    ]);
+
+    const result = await findNearbyRestaurants(BASE_PARAMS);
+
+    expect(result.data[0]?.distanceMiles).toBe(1.23);
+  });
+
+  it("computes matchScore = sqrt(scoreSum) when targets are active", async () => {
+    // scoreSum of 0.04 → sqrt = 0.2
+    mockQueryRaw.mockResolvedValue([makeScoredRow({ scoreSum: 0.04 })]);
+
+    const result = await findNearbyRestaurants({
+      ...BASE_PARAMS,
+      targets: { calories: 600 },
+    });
+
+    expect(result.data[0]?.bestMatch?.matchScore).toBe(0.2);
+  });
+
+  it("sets matchScore to Infinity when no targets provided (score is meaningless)", async () => {
+    mockQueryRaw.mockResolvedValue([makeScoredRow({ scoreSum: 0 })]);
+
+    const result = await findNearbyRestaurants({
+      ...BASE_PARAMS,
+      targets: {},
+    });
+
+    expect(result.data[0]?.bestMatch?.matchScore).toBe(Infinity);
+  });
+
+  it("perfect match (scoreSum = 0) produces matchScore = 0", async () => {
+    mockQueryRaw.mockResolvedValue([makeScoredRow({ scoreSum: 0 })]);
+
+    const result = await findNearbyRestaurants({
+      ...BASE_PARAMS,
+      targets: { calories: 600, proteinG: 40 },
+    });
+
+    expect(result.data[0]?.bestMatch?.matchScore).toBe(0);
+  });
+
+  it("maps bestMatch fields from the winning row", async () => {
+    mockQueryRaw.mockResolvedValue([
+      makeScoredRow({
+        menuItemId: "item-7",
+        itemName: "Turkey Bowl",
+        calories: 550,
+        proteinG: 45,
+        carbsG: 55,
+        fatG: 18,
+        confidence: "MEDIUM",
+      }),
+    ]);
+
+    const result = await findNearbyRestaurants({
+      ...BASE_PARAMS,
+      targets: { calories: 600 },
+    });
+
+    const best = result.data[0]?.bestMatch;
+    expect(best?.menuItemId).toBe("item-7");
+    expect(best?.name).toBe("Turkey Bowl");
+    expect(best?.calories).toBe(550);
+    expect(best?.proteinG).toBe(45);
+    expect(best?.carbsG).toBe(55);
+    expect(best?.fatG).toBe(18);
+    expect(best?.confidence).toBe("MEDIUM");
+  });
+
+  it("includes optional fields (photoUrl, rating, priceLevel, dietaryOptions) when present", async () => {
+    mockQueryRaw.mockResolvedValue([
+      makeScoredRow({
+        photoUrl: "https://example.com/photo.jpg",
+        rating: 4.5,
+        priceLevel: "$$",
+        dietaryOptions: ["has_vegan"],
+      }),
+    ]);
+
+    const result = await findNearbyRestaurants(BASE_PARAMS);
+
+    const r = result.data[0]!;
+    expect(r.photoUrl).toBe("https://example.com/photo.jpg");
+    expect(r.rating).toBe(4.5);
+    expect(r.priceLevel).toBe("$$");
+    expect(r.dietaryOptions).toEqual(["has_vegan"]);
+  });
+
+  it("omits optional fields when null/empty", async () => {
+    mockQueryRaw.mockResolvedValue([
+      makeScoredRow({
+        photoUrl: null,
+        rating: null,
+        priceLevel: null,
+        dietaryOptions: [],
+      }),
+    ]);
+
+    const result = await findNearbyRestaurants(BASE_PARAMS);
+
+    const r = result.data[0]!;
+    expect(r).not.toHaveProperty("photoUrl");
+    expect(r).not.toHaveProperty("rating");
+    expect(r).not.toHaveProperty("priceLevel");
+    expect(r).not.toHaveProperty("dietaryOptions");
+  });
+
+  it("invokes $queryRaw exactly once per call", async () => {
+    mockQueryRaw.mockResolvedValue([]);
+
+    await findNearbyRestaurants(BASE_PARAMS);
+
+    expect(mockQueryRaw).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns empty result when no rows match", async () => {
+    mockQueryRaw.mockResolvedValue([]);
+
+    const result = await findNearbyRestaurants(BASE_PARAMS);
+
+    expect(result.data).toEqual([]);
+    expect(result.total).toBe(0);
+  });
+});
+
+// ─── getRestaurantMenu ────────────────────────────────────────────────────────
 
 interface MockMacroEstimate {
   id: string;
@@ -107,7 +344,6 @@ function makeRestaurant(overrides: Partial<MockRestaurant> = {}): MockRestaurant
     id: "rest-1",
     name: "Test Restaurant",
     address: "123 Main St",
-    // Default position: exactly at the user origin so distance = 0
     lat: 34.0,
     lng: -118.0,
     cuisineTags: ["american"],
@@ -121,281 +357,7 @@ function makeRestaurant(overrides: Partial<MockRestaurant> = {}): MockRestaurant
   };
 }
 
-// Default search params centred on (34.0, -118.0), 5-mile radius
-const BASE_PARAMS: NearbyRestaurantsParams = {
-  lat: 34.0,
-  lng: -118.0,
-  radiusMiles: 5,
-  targets: {},
-  limit: 10,
-};
-
-// ─── findNearbyRestaurants ────────────────────────────────────────────────────
-
-describe("findNearbyRestaurants", () => {
-  // ── Test 1 ──────────────────────────────────────────────────────────────────
-  it("returns restaurants within radius", async () => {
-    const r1 = makeRestaurant({ id: "rest-1", lat: 34.0, lng: -118.0 });
-    const r2 = makeRestaurant({ id: "rest-2", lat: 34.01, lng: -118.01 });
-    mockFindMany.mockResolvedValue([r1, r2]);
-
-    const result = await findNearbyRestaurants(BASE_PARAMS);
-
-    expect(result.data).toHaveLength(2);
-    expect(result.data.map((r) => r.id)).toEqual(
-      expect.arrayContaining(["rest-1", "rest-2"]),
-    );
-  });
-
-  // ── Test 2 ──────────────────────────────────────────────────────────────────
-  it("filters out restaurants outside true radius", async () => {
-    // Place restaurant well beyond 5 miles. At lat=34, 1 degree lat ≈ 69 miles.
-    // 6 miles north = 6/69 ≈ 0.087 degrees, which is outside a 5-mile radius
-    // even though it may be inside the bounding box square corner.
-    const inRange = makeRestaurant({ id: "in-range", lat: 34.0, lng: -118.0 });
-    const outOfRange = makeRestaurant({
-      id: "out-of-range",
-      lat: 34.09, // ~6.2 miles north — beyond 5-mile radius
-      lng: -118.0,
-    });
-    mockFindMany.mockResolvedValue([inRange, outOfRange]);
-
-    const result = await findNearbyRestaurants({
-      ...BASE_PARAMS,
-      radiusMiles: 5,
-    });
-
-    expect(result.data.map((r) => r.id)).toContain("in-range");
-    expect(result.data.map((r) => r.id)).not.toContain("out-of-range");
-  });
-
-  // ── Test 3 ──────────────────────────────────────────────────────────────────
-  it("sorts by match score when targets provided — better-scoring restaurant comes first", async () => {
-    // r1 has an item that perfectly matches the calorie target (score = 0)
-    const r1 = makeRestaurant({
-      id: "perfect-match",
-      lat: 34.04, // farther
-      menuItems: [
-        makeMenuItem({
-          id: "item-perfect",
-          macroEstimates: [makeMacroEstimate({ calories: 600 })],
-        }),
-      ],
-    });
-    // r2 has an item far from the target
-    const r2 = makeRestaurant({
-      id: "poor-match",
-      lat: 34.0, // closer
-      menuItems: [
-        makeMenuItem({
-          id: "item-poor",
-          macroEstimates: [makeMacroEstimate({ calories: 1200 })],
-        }),
-      ],
-    });
-    mockFindMany.mockResolvedValue([r1, r2]);
-
-    const result = await findNearbyRestaurants({
-      ...BASE_PARAMS,
-      targets: { calories: 600 },
-    });
-
-    expect(result.data[0]?.id).toBe("perfect-match");
-    expect(result.data[1]?.id).toBe("poor-match");
-  });
-
-  // ── Test 4 ──────────────────────────────────────────────────────────────────
-  it("sorts by distance when no targets — closer restaurant comes first", async () => {
-    const closer = makeRestaurant({ id: "closer", lat: 34.0, lng: -118.0 }); // distance = 0
-    const farther = makeRestaurant({ id: "farther", lat: 34.02, lng: -118.0 }); // ~1.4 miles
-    mockFindMany.mockResolvedValue([farther, closer]); // returned out of order by DB
-
-    const result = await findNearbyRestaurants({
-      ...BASE_PARAMS,
-      targets: {}, // no targets → sort by distance
-    });
-
-    expect(result.data[0]?.id).toBe("closer");
-    expect(result.data[1]?.id).toBe("farther");
-  });
-
-  // ── Test 5 ──────────────────────────────────────────────────────────────────
-  it("applies cuisineType filter — passes cuisineTags has-clause to Prisma", async () => {
-    mockFindMany.mockResolvedValue([]);
-
-    await findNearbyRestaurants({
-      ...BASE_PARAMS,
-      cuisineType: "italian",
-    });
-
-    expect(mockFindMany).toHaveBeenCalledTimes(1);
-    const [callArg] = mockFindMany.mock.calls[0] as [{ where: Record<string, unknown> }];
-    expect(callArg.where).toMatchObject({
-      cuisineTags: { has: "italian" },
-    });
-  });
-
-  // ── Test 6 ──────────────────────────────────────────────────────────────────
-  it("applies chainOnly filter — passes chainFlag clause to Prisma", async () => {
-    mockFindMany.mockResolvedValue([]);
-
-    await findNearbyRestaurants({
-      ...BASE_PARAMS,
-      chainOnly: true,
-    });
-
-    expect(mockFindMany).toHaveBeenCalledTimes(1);
-    const [callArg] = mockFindMany.mock.calls[0] as [{ where: Record<string, unknown> }];
-    expect(callArg.where).toMatchObject({ chainFlag: true });
-  });
-
-  // ── Test 7a ─────────────────────────────────────────────────────────────────
-  it("applies dietary filter — passes dietaryOptions has-clause to Prisma", async () => {
-    mockFindMany.mockResolvedValue([]);
-
-    await findNearbyRestaurants({ ...BASE_PARAMS, dietary: "vegan" });
-
-    const [callArg] = mockFindMany.mock.calls[0] as [{ where: Record<string, unknown> }];
-    expect(callArg.where).toMatchObject({
-      dietaryOptions: { has: "has_vegan" },
-    });
-  });
-
-  // ── Test 7b ─────────────────────────────────────────────────────────────────
-  it("applies maxPriceLevel filter — passes priceLevel in-clause to Prisma", async () => {
-    mockFindMany.mockResolvedValue([]);
-
-    await findNearbyRestaurants({ ...BASE_PARAMS, maxPriceLevel: "$$" });
-
-    const [callArg] = mockFindMany.mock.calls[0] as [{ where: Record<string, unknown> }];
-    expect(callArg.where).toMatchObject({
-      priceLevel: { in: ["$", "$$"] },
-    });
-  });
-
-  // ── Test 7c ─────────────────────────────────────────────────────────────────
-  it("applies minRating filter — passes rating gte-clause to Prisma", async () => {
-    mockFindMany.mockResolvedValue([]);
-
-    await findNearbyRestaurants({ ...BASE_PARAMS, minRating: 4 });
-
-    const [callArg] = mockFindMany.mock.calls[0] as [{ where: Record<string, unknown> }];
-    expect(callArg.where).toMatchObject({
-      rating: { gte: 4 },
-    });
-  });
-
-  // ── Test 7 ──────────────────────────────────────────────────────────────────
-  it("respects limit — returns at most limit restaurants", async () => {
-    const restaurants = Array.from({ length: 5 }, (_, i) =>
-      makeRestaurant({ id: `rest-${i}`, lat: 34.0, lng: -118.0 }),
-    );
-    mockFindMany.mockResolvedValue(restaurants);
-
-    const result = await findNearbyRestaurants({ ...BASE_PARAMS, limit: 3 });
-
-    expect(result.data).toHaveLength(3);
-    expect(result.total).toBe(5); // total reflects all in-radius, not paginated
-  });
-
-  // ── Test 8 ──────────────────────────────────────────────────────────────────
-  it("returns distanceMiles rounded to 2 decimal places", async () => {
-    // Place restaurant at a position that yields a non-integer distance
-    const r = makeRestaurant({ id: "rest-1", lat: 34.01, lng: -118.01 });
-    mockFindMany.mockResolvedValue([r]);
-
-    const result = await findNearbyRestaurants(BASE_PARAMS);
-
-    const dist = result.data[0]?.distanceMiles ?? 0;
-    // Verify it has at most 2 decimal places
-    const asString = dist.toString();
-    const decimalPart = asString.split(".")[1] ?? "";
-    expect(decimalPart.length).toBeLessThanOrEqual(2);
-  });
-
-  // ── Test 9 ──────────────────────────────────────────────────────────────────
-  it("returns bestMatch with correct fields and matchScore when targets match", async () => {
-    const r = makeRestaurant({
-      id: "rest-1",
-      lat: 34.0,
-      menuItems: [
-        makeMenuItem({
-          id: "item-1",
-          name: "Grilled Chicken",
-          macroEstimates: [
-            makeMacroEstimate({
-              calories: 600,
-              proteinG: 40,
-              carbsG: 60,
-              fatG: 20,
-              confidence: "HIGH",
-            }),
-          ],
-        }),
-      ],
-    });
-    mockFindMany.mockResolvedValue([r]);
-
-    const result = await findNearbyRestaurants({
-      ...BASE_PARAMS,
-      targets: { calories: 600, proteinG: 40 },
-    });
-
-    const best = result.data[0]?.bestMatch;
-    expect(best).not.toBeNull();
-    expect(best?.menuItemId).toBe("item-1");
-    expect(best?.name).toBe("Grilled Chicken");
-    expect(best?.calories).toBe(600);
-    expect(best?.proteinG).toBe(40);
-    expect(best?.carbsG).toBe(60);
-    expect(best?.fatG).toBe(20);
-    expect(best?.confidence).toBe("HIGH");
-    expect(typeof best?.matchScore).toBe("number");
-    // Perfect match → score should be 0
-    expect(best?.matchScore).toBe(0);
-  });
-
-  // ── Test 10 ─────────────────────────────────────────────────────────────────
-  it("returns bestMatch with first menu item when no targets (fallback)", async () => {
-    const r = makeRestaurant({ id: "rest-1", lat: 34.0 });
-    mockFindMany.mockResolvedValue([r]);
-
-    const result = await findNearbyRestaurants({
-      ...BASE_PARAMS,
-      targets: {},
-    });
-
-    // No targets → fallback to first menu item (not null)
-    const best = result.data[0]?.bestMatch;
-    expect(best).not.toBeNull();
-    expect(best?.menuItemId).toBe("item-1");
-    expect(best?.name).toBe("Grilled Chicken");
-  });
-
-  // ── Test 11 ─────────────────────────────────────────────────────────────────
-  it("returns bestMatch: null when no menu items have estimates", async () => {
-    const r = makeRestaurant({
-      id: "rest-1",
-      lat: 34.0,
-      menuItems: [
-        makeMenuItem({ id: "item-no-est", macroEstimates: [] }),
-      ],
-    });
-    mockFindMany.mockResolvedValue([r]);
-
-    const result = await findNearbyRestaurants({
-      ...BASE_PARAMS,
-      targets: { calories: 600 },
-    });
-
-    expect(result.data[0]?.bestMatch).toBeNull();
-  });
-});
-
-// ─── getRestaurantMenu ────────────────────────────────────────────────────────
-
 describe("getRestaurantMenu", () => {
-  // ── Test 12 ─────────────────────────────────────────────────────────────────
   it("returns null for unknown restaurant", async () => {
     mockFindUnique.mockResolvedValue(null);
 
@@ -404,7 +366,6 @@ describe("getRestaurantMenu", () => {
     expect(result).toBeNull();
   });
 
-  // ── Test 13 ─────────────────────────────────────────────────────────────────
   it("returns restaurant with menu items — correct shape", async () => {
     const r = makeRestaurant({
       id: "rest-1",
@@ -424,7 +385,6 @@ describe("getRestaurantMenu", () => {
     expect(result?.menuItems).toHaveLength(2);
   });
 
-  // ── Test 14 ─────────────────────────────────────────────────────────────────
   it("maps macros from the latest estimate (first element in array)", async () => {
     const estimatedAt = new Date("2025-06-15T12:00:00.000Z");
     const r = makeRestaurant({
@@ -462,7 +422,6 @@ describe("getRestaurantMenu", () => {
     expect(macros?.estimatedAt).toBe("2025-06-15T12:00:00.000Z");
   });
 
-  // ── Test 15 ─────────────────────────────────────────────────────────────────
   it("returns macros: null when item has no estimates", async () => {
     const r = makeRestaurant({
       id: "rest-1",
@@ -475,7 +434,6 @@ describe("getRestaurantMenu", () => {
     expect(result?.menuItems[0]?.macros).toBeNull();
   });
 
-  // ── Test 16 ─────────────────────────────────────────────────────────────────
   it("includes optional fields when present — description, category, price", async () => {
     const r = makeRestaurant({
       id: "rest-1",
@@ -498,7 +456,6 @@ describe("getRestaurantMenu", () => {
     expect(item?.price).toBe(12.99);
   });
 
-  // ── Test 17 ─────────────────────────────────────────────────────────────────
   it("omits optional fields when null — description, category, price absent from output", async () => {
     const r = makeRestaurant({
       id: "rest-1",
@@ -521,7 +478,6 @@ describe("getRestaurantMenu", () => {
     expect(item).not.toHaveProperty("price");
   });
 
-  // ── Test 18 ─────────────────────────────────────────────────────────────────
   it("passes orderBy name asc to Prisma for menu items", async () => {
     const r = makeRestaurant({
       id: "rest-1",
