@@ -451,5 +451,19 @@ export async function persistHexBulkInTx(
     WHERE r.id = u.id
   `;
 
+  // Q7: set chainFlag based on macro source — fatsecret means chain data.
+  if (restaurantIdsWithItems.length > 0) {
+    await tx.$executeRaw`
+      UPDATE "Restaurant" r
+      SET "chainFlag" = EXISTS (
+        SELECT 1 FROM "MenuItem" mi
+        JOIN "MacroEstimate" me ON me."menuItemId" = mi.id
+        WHERE mi."restaurantId" = r.id AND me.source = 'fatsecret'
+      ),
+      "updatedAt" = now()
+      WHERE r.id = ANY(${restaurantIdsWithItems}::text[])
+    `;
+  }
+
   return flatItemIds.length;
 }
