@@ -10,20 +10,22 @@ import { useFocusEffect } from 'expo-router';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { SavedItemResponse } from '@fitsy/shared';
 import { getSavedItems, unsaveItem } from '@/lib/apiClient';
-import { BookmarkButton, FitsyLoader, MenuItem } from '@/components';
+import { BookmarkButton, FitsyLoader } from '@/components';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { useTheme } from '@/lib/theme';
 import { trackItemSaved } from '@/lib/analytics';
+import { EDITORIAL, FONTS } from '@/lib/brand';
+import { Ionicons } from '@expo/vector-icons';
 
 type Section = {
   title: string;
   restaurantId: string;
+  itemCount: number;
   data: SavedItemResponse[];
 };
 
 function buildSections(items: SavedItemResponse[]): Section[] {
   const restaurantMap = new Map<string, { name: string; items: SavedItemResponse[] }>();
-
   for (const item of items) {
     const restaurantId = item.menuItem?.restaurant.id ?? 'unknown';
     const restaurantName = item.menuItem?.restaurant.name ?? 'Unknown Restaurant';
@@ -31,10 +33,10 @@ function buildSections(items: SavedItemResponse[]): Section[] {
     bucket.items.push(item);
     restaurantMap.set(restaurantId, bucket);
   }
-
   return Array.from(restaurantMap.entries()).map(([restaurantId, { name, items }]) => ({
     title: name,
     restaurantId,
+    itemCount: items.length,
     data: items,
   }));
 }
@@ -47,7 +49,6 @@ export default function SavedScreen() {
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
-
       async function load() {
         setLoading(true);
         const result = await getSavedItems();
@@ -56,12 +57,8 @@ export default function SavedScreen() {
           setLoading(false);
         }
       }
-
       void load();
-
-      return () => {
-        cancelled = true;
-      };
+      return () => { cancelled = true; };
     }, [])
   );
 
@@ -101,13 +98,29 @@ export default function SavedScreen() {
         <SectionList
           sections={sections}
           keyExtractor={(item) => item.id}
+          ListHeaderComponent={
+            <View style={styles.heroCard}>
+              <View style={styles.heroTop}>
+                <Text style={styles.heroNumber}>{savedItems.length}</Text>
+                <Text style={styles.heroLabel}>saved{'\n'}meals</Text>
+              </View>
+              <View style={styles.heroDivider} />
+              <Text style={styles.heroRestaurants}>
+                from {sections.length} restaurant{sections.length !== 1 ? 's' : ''} near you
+              </Text>
+            </View>
+          }
           renderSectionHeader={({ section }) => (
-            <View style={[styles.sectionHeader, { backgroundColor: colors.bgElevated, borderBottomColor: colors.border }]}>
-              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{section.title}</Text>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="restaurant-outline" size={14} color={EDITORIAL.greenAccent} />
+              <Text style={styles.sectionTitle}>{section.title}</Text>
+              <View style={styles.sectionPill}>
+                <Text style={styles.sectionPillText}>{section.itemCount} meal{section.itemCount !== 1 ? 's' : ''}</Text>
+              </View>
             </View>
           )}
           renderItem={({ item }) => (
-            <SavedItemRow item={item} onUnsave={handleUnsave} />
+            <SavedItemCompact item={item} onUnsave={handleUnsave} />
           )}
           contentContainerStyle={styles.listContent}
           stickySectionHeadersEnabled
@@ -117,37 +130,33 @@ export default function SavedScreen() {
   );
 }
 
-interface SavedItemRowProps {
-  item: SavedItemResponse;
-  onUnsave: (savedItemId: string) => void;
-}
-
-function SavedItemRow({ item, onUnsave }: SavedItemRowProps) {
+function SavedItemCompact({ item, onUnsave }: { item: SavedItemResponse; onUnsave: (id: string) => void }) {
   const menuItem = item.menuItem;
   if (!menuItem) return null;
-
-  // Adapt SavedItemResponse's menuItem shape to MenuItemResult for MenuItem
-  const menuItemResult: import('@fitsy/shared').MenuItemResult = {
-    id: menuItem.id,
-    name: menuItem.name,
-    category: menuItem.category ?? undefined,
-    price: menuItem.price ?? undefined,
-    macros: menuItem.macros,
-  };
+  const m = menuItem.macros;
 
   return (
-    <MenuItem
-      item={menuItemResult}
-      isSaved
-      onToggleSave={() => onUnsave(item.id)}
-    />
+    <View style={styles.itemRow}>
+      <View style={styles.itemLeft}>
+        <Text style={styles.itemName} numberOfLines={1}>{menuItem.name}</Text>
+        {m && (
+          <View style={styles.itemMacroRow}>
+            <Text style={styles.itemCal}>{m.calories} kcal</Text>
+            <Text style={styles.itemMacroDot}>·</Text>
+            <Text style={[styles.itemMacro, { color: '#5B7C6B' }]}>P {m.proteinG}g</Text>
+            <Text style={styles.itemMacroDot}>·</Text>
+            <Text style={[styles.itemMacro, { color: '#8B7355' }]}>C {m.carbsG}g</Text>
+            <Text style={styles.itemMacroDot}>·</Text>
+            <Text style={[styles.itemMacro, { color: '#7B6B8A' }]}>F {m.fatG}g</Text>
+          </View>
+        )}
+      </View>
+      <BookmarkButton isSaved onPress={() => onUnsave(item.id)} />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   centered: {
     flex: 1,
     alignItems: 'center',
@@ -159,16 +168,111 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
   },
+  heroCard: {
+    marginHorizontal: 16,
+    marginTop: 4,
+    marginBottom: 16,
+    backgroundColor: EDITORIAL.green,
+    borderRadius: 20,
+    padding: 24,
+  },
+  heroTop: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 8,
+  },
+  heroNumber: {
+    fontFamily: FONTS.newsreaderBold,
+    fontSize: 56,
+    color: '#FDFBF7',
+    letterSpacing: -2,
+    lineHeight: 56,
+  },
+  heroLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'rgba(253,251,247,0.6)',
+    letterSpacing: -0.2,
+    lineHeight: 18,
+  },
+  heroDivider: {
+    height: 1,
+    backgroundColor: 'rgba(253,251,247,0.15)',
+    marginVertical: 16,
+  },
+  heroRestaurants: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: 'rgba(253,251,247,0.5)',
+    letterSpacing: -0.1,
+  },
   sectionHeader: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: EDITORIAL.cream,
     borderBottomWidth: 1,
+    borderBottomColor: EDITORIAL.border,
   },
   sectionTitle: {
-    fontSize: 13,
+    flex: 1,
+    fontFamily: FONTS.newsreaderBold,
+    fontSize: 16,
+    color: EDITORIAL.text,
+    letterSpacing: -0.3,
+  },
+  sectionPill: {
+    backgroundColor: EDITORIAL.creamCard,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  sectionPillText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: EDITORIAL.textSoft,
+    letterSpacing: -0.1,
+  },
+  itemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: EDITORIAL.border,
+  },
+  itemLeft: {
+    flex: 1,
+    marginRight: 12,
+  },
+  itemName: {
+    fontFamily: FONTS.newsreaderBold,
+    fontSize: 15,
+    color: EDITORIAL.text,
+    letterSpacing: -0.2,
+  },
+  itemMacroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  itemCal: {
+    fontSize: 11,
     fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    color: EDITORIAL.text,
+    letterSpacing: -0.2,
+  },
+  itemMacroDot: {
+    fontSize: 11,
+    color: EDITORIAL.creamDeep,
+  },
+  itemMacro: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: -0.2,
   },
   listContent: {
     flexGrow: 1,
