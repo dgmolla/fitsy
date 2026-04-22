@@ -304,7 +304,6 @@
   object-fit: cover;
   object-position: center top;
   display: block;
-  border-radius: 49px;
 }
 
 /* ─── Stats Splash ───────────────────────────────────────────────────── */
@@ -551,7 +550,6 @@
 
   .phoneScreen {
     border-radius: 43px;
-    padding: 38px 10px 10px;
   }
 
   .phoneDynamic {
@@ -564,6 +562,10 @@
 
 /* Mobile */
 @media (max-width: 768px) {
+  .navInner {
+    padding: 0.75rem 1.25rem;
+  }
+
   .hero {
     padding: 6rem 1.5rem 3rem;
   }
@@ -583,6 +585,11 @@
     justify-content: center;
   }
 
+  .heroPhone {
+    justify-content: center;
+    width: 100%;
+  }
+
   .phone {
     width: 216px;
     height: 468px;
@@ -591,8 +598,6 @@
 
   .phoneScreen {
     border-radius: 39px;
-    padding: 34px 10px 10px;
-    gap: 8px;
   }
 
   .phoneDynamic {
@@ -615,20 +620,41 @@
   }
 
   .stats {
-    min-height: 80vh;
+    min-height: 100vh;
+    min-height: 100svh;
+    justify-content: center;
   }
 
   .statsWords {
-    right: 4%;
-    gap: 0;
-  }
-
-  .statsWords span {
-    font-size: clamp(1.75rem, 5vw, 2.5rem);
+    display: none;
   }
 
   .statsContent {
-    padding: 3rem 1.5rem;
+    padding: 5rem 2rem;
+    align-items: center;
+    text-align: center;
+    width: 100%;
+    gap: 0.75rem;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .statNumber {
+    font-size: clamp(3.5rem, 18vw, 4.5rem);
+    margin-bottom: 0.25rem;
+  }
+
+  .statLabel {
+    font-size: clamp(1rem, 4vw, 1.25rem);
+    margin-top: 0;
+  }
+
+  .statSub {
+    margin-top: 0;
+  }
+
+  .statCta {
+    margin-top: 1.5rem;
   }
 
   .ctaSection {
@@ -643,7 +669,47 @@
 
 /* Small mobile */
 @media (max-width: 480px) {
+  .hero {
+    padding: 5.5rem 1.25rem 2.5rem;
+  }
+
   .featuresGrid {
     grid-template-columns: 1fr;
+  }
+
+  .statsContent {
+    padding: 4rem 1.5rem;
+  }
+
+  .statNumber {
+    font-size: clamp(3rem, 18vw, 3.5rem);
+  }
+
+  .ctaSection {
+    padding: 4rem 1.25rem;
+  }
+}
+
+/* Extra small (320px–380px) */
+@media (max-width: 380px) {
+  .phone {
+    width: 188px;
+    height: 408px;
+    border-radius: 36px;
+  }
+
+  .phoneScreen {
+    border-radius: 33px;
+  }
+
+  .phoneDynamic {
+    width: 64px;
+    height: 18px;
+    top: 9px;
+  }
+
+  .heroCtas {
+    flex-direction: column;
+    align-items: center;
   }
 }

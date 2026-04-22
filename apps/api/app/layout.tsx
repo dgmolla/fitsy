@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { Newsreader, Outfit } from "next/font/google";
 import "./globals.css";
@@ -21,6 +21,11 @@ export const metadata: Metadata = {
   title: "Fitsy — Find food that fits your macros",
   description:
     "Fitsy finds restaurants near you with meals that match your protein, carb, and fat targets. Eat out without blowing your plan.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
