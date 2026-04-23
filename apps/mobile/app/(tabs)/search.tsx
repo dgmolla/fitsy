@@ -138,7 +138,7 @@ function MacroStrip({ macros, onEdit }: { macros: MacroValues; onEdit: () => voi
       <View style={s.macroDivider} />
       <View style={s.macroItem}>
         <Text style={s.macroVal}>{cal}</Text>
-        <Text style={s.macroLbl}>kcal</Text>
+        <Text style={s.macroLbl}>kcal/meal</Text>
       </View>
       <TouchableOpacity
         style={s.editBtn}

@@ -1,13 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { getOnboardingData, type Goal } from '@/lib/onboardingStorage';
 import { saveMacroTargets } from '@/lib/macroStorage';
-import { calculateMacros, macrosToStored } from '@/lib/macroCalculator';
+import { calculateMacros } from '@/lib/macroCalculator';
 
 interface Macros { protein: number; carbs: number; fat: number; calories: number }
 
@@ -22,17 +22,19 @@ export default function PlanReadyScreen() {
   const [traj, setTraj] = useState<Traj>('maintain');
   const [data, setData] = useState<Awaited<ReturnType<typeof getOnboardingData>>>({});
 
-  useEffect(() => {
-    (async () => {
-      const d = await getOnboardingData();
-      setData(d);
-      const g = (d.goal ?? 'maintain') as Traj;
-      setTraj(g);
-      const m = calcMacros(d);
-      setMacros(m);
-      await saveMacroTargets({ protein: String(m.protein), carbs: String(m.carbs), fat: String(m.fat), calories: String(m.calories) });
-    })();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        const d = await getOnboardingData();
+        setData(d);
+        const g = (d.goal ?? 'maintain') as Traj;
+        setTraj(g);
+        const m = calcMacros(d);
+        setMacros(m);
+        await saveMacroTargets({ protein: String(m.protein), carbs: String(m.carbs), fat: String(m.fat), calories: String(m.calories) });
+      })();
+    }, []),
+  );
 
   async function pick(t: Traj) {
     setTraj(t);
@@ -44,7 +46,8 @@ export default function PlanReadyScreen() {
   return (
     <WelcomeScreen
       progress={13 / 16}
-      title="Your plan."
+      title="Your per meal targets."
+      subtitle="We calculated these from your body stats and goal. Adjust the trajectory below."
       onContinue={() => router.push('/welcome/finding')}
       canContinue={macros !== null}
       continueLabel="See Restaurants"
@@ -54,7 +57,7 @@ export default function PlanReadyScreen() {
           {/* Hero food image strip */}
           <Animated.View entering={FadeIn.duration(600).delay(100)} style={s.imgStrip}>
             <Image
-              source={{ uri: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&q=75' }}
+              source={{ uri: 'https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=600&q=75' }}
               style={s.heroImg}
               resizeMode="cover"
             />

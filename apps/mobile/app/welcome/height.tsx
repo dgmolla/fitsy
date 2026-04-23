@@ -4,7 +4,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
-import { saveOnboardingField } from '@/lib/onboardingStorage';
+import { getOnboardingData, saveOnboardingField } from '@/lib/onboardingStorage';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 
 type Unit = 'ft' | 'cm';
@@ -17,6 +17,15 @@ export default function HeightScreen() {
   const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
+    (async () => {
+      const data = await getOnboardingData();
+      if (data.heightCm) {
+        setCm(String(data.heightCm));
+        const totalInches = data.heightCm / 2.54;
+        setFt(String(Math.floor(totalInches / 12)));
+        setInches(String(Math.round(totalInches % 12)));
+      }
+    })();
     const t = setTimeout(() => inputRef.current?.focus(), 500);
     return () => clearTimeout(t);
   }, []);

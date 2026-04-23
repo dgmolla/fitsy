@@ -4,7 +4,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
-import { saveOnboardingField } from '@/lib/onboardingStorage';
+import { getOnboardingData, saveOnboardingField } from '@/lib/onboardingStorage';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 
 type Unit = 'lbs' | 'kg';
@@ -15,6 +15,12 @@ export default function WeightScreen() {
   const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
+    (async () => {
+      const data = await getOnboardingData();
+      if (data.weightKg) {
+        setValue(String(Math.round(data.weightKg * 2.20462)));
+      }
+    })();
     const t = setTimeout(() => inputRef.current?.focus(), 500);
     return () => clearTimeout(t);
   }, []);

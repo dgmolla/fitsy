@@ -3,7 +3,8 @@ import { StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
-import { saveOnboardingField } from '@/lib/onboardingStorage';
+import { getOnboardingData, saveOnboardingField } from '@/lib/onboardingStorage';
+import { calculateAge } from '@fitsy/shared';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 
 export default function AgeScreen() {
@@ -11,6 +12,12 @@ export default function AgeScreen() {
   const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
+    (async () => {
+      const data = await getOnboardingData();
+      if (data.birthday) {
+        setValue(String(calculateAge(data.birthday)));
+      }
+    })();
     const t = setTimeout(() => inputRef.current?.focus(), 500);
     return () => clearTimeout(t);
   }, []);
