@@ -7,11 +7,11 @@ import { AnimatedPress } from '@/components/AnimatedPress';
 import { saveOnboardingField, type ActivityLevel } from '@/lib/onboardingStorage';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 
-const OPTIONS: { id: ActivityLevel; label: string; desc: string }[] = [
-  { id: 'sedentary', label: 'Low', desc: 'Desk job, little exercise' },
-  { id: 'lightly_active', label: 'Light', desc: '1–3 days per week' },
-  { id: 'active', label: 'Moderate', desc: '3–5 days per week' },
-  { id: 'very_active', label: 'Intense', desc: '6–7 days per week' },
+const OPTIONS: { id: ActivityLevel; label: string; desc: string; days: string }[] = [
+  { id: 'sedentary', label: 'Low', desc: 'Mostly sitting, occasional walks', days: '0–1' },
+  { id: 'lightly_active', label: 'Light', desc: 'A few workouts or active commute', days: '1–3' },
+  { id: 'active', label: 'Moderate', desc: 'Regular gym sessions or sports', days: '3–5' },
+  { id: 'very_active', label: 'Intense', desc: 'Training almost every day', days: '6–7' },
 ];
 
 export default function ActivityScreen() {
@@ -21,6 +21,7 @@ export default function ActivityScreen() {
     <WelcomeScreen
       progress={11 / 16}
       title="How active are you?"
+      subtitle="How many days per week are you active?"
       onContinue={async () => {
         if (selected) await saveOnboardingField('activity', selected);
         router.push('/welcome/dietary');
@@ -40,9 +41,12 @@ export default function ActivityScreen() {
                 accessibilityRole="button"
                 accessibilityState={{ selected: on }}
               >
-                <View>
-                  <Text style={[s.label, on ? s.labelOn : undefined]}>{opt.label}</Text>
-                  <Text style={[s.desc, on ? s.descOn : undefined]}>{opt.desc}</Text>
+                <View style={s.watermarkWrap}>
+                  <Text style={[s.watermark, on && s.watermarkOn]}>{opt.days}</Text>
+                </View>
+                <View style={{ position: 'relative', zIndex: 1 }}>
+                  <Text style={[s.label, on && s.labelOn]}>{opt.label}</Text>
+                  <Text style={[s.desc, on && s.descOn]}>{opt.desc}</Text>
                 </View>
               </AnimatedPress>
             </Animated.View>
@@ -54,16 +58,42 @@ export default function ActivityScreen() {
 }
 
 const s = StyleSheet.create({
-  list: { gap: 10 },
+  list: { gap: 12 },
   row: {
     backgroundColor: EDITORIAL.creamCard,
     borderRadius: 16,
-    paddingVertical: 20,
-    paddingHorizontal: 24,
+    paddingVertical: 22,
+    paddingHorizontal: 22,
+    position: 'relative',
+    overflow: 'hidden',
   },
   rowOn: { backgroundColor: EDITORIAL.green },
-  label: { fontFamily: FONTS.newsreaderBold, fontSize: 20, color: EDITORIAL.text, letterSpacing: -0.3 },
+  watermarkWrap: {
+    position: 'absolute',
+    right: 16,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+  },
+  watermark: {
+    fontFamily: FONTS.newsreaderBold,
+    fontSize: 42,
+    color: '#D0C7B8',
+    opacity: 0.5,
+    lineHeight: 42,
+    includeFontPadding: false,
+  },
+  watermarkOn: {
+    color: 'rgba(253,251,247,0.15)',
+    opacity: 1,
+  },
+  label: {
+    fontFamily: FONTS.newsreaderRegular,
+    fontSize: 20,
+    color: EDITORIAL.textMid,
+    letterSpacing: -0.2,
+  },
   labelOn: { color: EDITORIAL.cream },
-  desc: { fontSize: 14, color: EDITORIAL.textSoft, marginTop: 2 },
-  descOn: { color: 'rgba(253,251,247,0.7)' },
+  desc: { fontSize: 14, color: EDITORIAL.textSoft, marginTop: 3, fontWeight: '500' },
+  descOn: { color: 'rgba(253,251,247,0.5)' },
 });
