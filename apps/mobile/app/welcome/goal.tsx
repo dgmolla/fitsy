@@ -57,7 +57,7 @@ export default function GoalScreen() {
 }
 
 const s = StyleSheet.create({
-  list: { gap: 10 },
+  list: { gap: 10, marginTop: 'auto', marginBottom: 'auto', paddingBottom: 60 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -69,9 +69,9 @@ const s = StyleSheet.create({
   },
   rowOn: { backgroundColor: EDITORIAL.green },
   label: {
-    fontFamily: FONTS.newsreaderBold,
+    fontFamily: FONTS.newsreaderRegular,
     fontSize: 18,
-    color: EDITORIAL.text,
+    color: EDITORIAL.textMid,
     letterSpacing: -0.3,
   },
   labelOn: { color: EDITORIAL.cream },

@@ -8,7 +8,6 @@ import { EDITORIAL, FONTS } from '@/lib/brand';
 
 const OPTIONS = [
   { id: 'meal_prep', label: 'Meal prepping', icon: '🥦' },
-  { id: 'delivery', label: 'Meal delivery services', icon: '📦' },
   { id: 'calorie_apps', label: 'Calorie counting apps', icon: '📱' },
   { id: 'check_online', label: 'Looking up macros online', icon: '🔍' },
   { id: 'nothing', label: "Haven't really tried", icon: '🤷' },

@@ -27,12 +27,6 @@ function getResponse(tried: string, totalDishes: number): ResponseConfig {
         body: "Sunday cooking is great in theory. But life happens — meetings run late, plans change, and those containers sit in the fridge. Fitsy gives you a macro-friendly backup for every meal out.",
         callout: "No prep. No Tupperware. Just restaurants that fit.",
       };
-    case 'delivery':
-      return {
-        headline: "Delivery apps don't\nshow you macros.",
-        body: "You can order anything on Uber Eats or DoorDash — but none of them tell you the protein, carbs, or fat in what you're ordering. You're flying blind on nutrition. And the subscription fees add up too.",
-        callout: "Fitsy adds the macro data they're missing.",
-      };
     case 'calorie_apps':
       return {
         headline: "Counting calories\ngets old.",
