@@ -1,15 +1,13 @@
 import React, { useCallback, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Pressable,
-  SafeAreaView,
+  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { clearToken, getStoredToken } from '@/lib/authClient';
 import { ScreenHeader } from '@/components/ScreenHeader';
@@ -22,27 +20,19 @@ import { calculateAge } from '@fitsy/shared';
 import { pushProfileToServer } from '@/lib/profileSync';
 import { useTheme } from '@/lib/theme';
 import { FilterPopup } from '@/components/FilterPopup';
+import { EDITORIAL, FONTS } from '@/lib/brand';
 
-function formatBirthday(iso: string): string {
-  const d = new Date(iso + 'T00:00:00');
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
+const GOAL_ICONS: Record<string, string> = {
+  lose_fat: 'flame-outline',
+  build_muscle: 'barbell-outline',
+  maintain: 'shield-checkmark-outline',
+  explore: 'compass-outline',
+  eat_healthier: 'leaf-outline',
+};
 
-function ProfileRow({ label, value, onPress, colors }: {
-  label: string;
-  value?: string;
-  onPress: () => void;
-  colors: ReturnType<typeof useTheme>['colors'];
-}) {
-  return (
-    <Pressable style={styles.profileRow} onPress={onPress} accessibilityRole="button">
-      <Text style={[styles.profileLabel, { color: colors.textSecondary }]}>{label}</Text>
-      <Text style={[styles.profileValue, { color: value ? colors.textPrimary : colors.textTertiary }]}>
-        {value ?? 'Not set'}
-      </Text>
-      <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
-    </Pressable>
-  );
+function formatGoal(g?: string) {
+  if (!g) return 'Not set';
+  return g.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
 export default function ProfileScreen() {
@@ -63,25 +53,15 @@ export default function ProfileScreen() {
             getMacroTargets(),
             getOnboardingData(),
           ]);
-
-          if (token) {
-            setEmail(decodeEmailFromToken(token));
-          }
-
-          if (stored) {
-            setMacroTargets(stored as unknown as MacroValues);
-          }
-
+          if (token) setEmail(decodeEmailFromToken(token));
+          if (stored) setMacroTargets(stored as unknown as MacroValues);
           setProfile(onboarding);
-
-          // Push to server if profile data changed since last focus
           const snapshot = JSON.stringify(onboarding);
           if (prevProfile.current && prevProfile.current !== snapshot) {
             pushProfileToServer();
           }
           prevProfile.current = snapshot;
         } catch {
-          // Use defaults on storage failure
         } finally {
           setLoading(false);
         }
@@ -96,16 +76,13 @@ export default function ProfileScreen() {
   }, []);
 
   const initials = email !== '—' ? email.charAt(0).toUpperCase() : '?';
+  const age = profile.birthday ? calculateAge(profile.birthday) : null;
+  const goalIcon = GOAL_ICONS[profile.goal ?? ''] ?? 'flag-outline';
 
   if (loading) {
     return (
       <ScreenBackground>
-        <ActivityIndicator
-          size="large"
-          color={colors.spinnerColor}
-          style={styles.spinner}
-          accessibilityLabel="Loading profile"
-        />
+        <ActivityIndicator size="large" color={colors.spinnerColor} style={{ flex: 1, alignSelf: 'center' }} />
       </ScreenBackground>
     );
   }
@@ -114,252 +91,295 @@ export default function ProfileScreen() {
     <>
     <ScreenBackground>
       <ScreenHeader />
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-      >
+      <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
 
-        {/* Avatar + account section */}
-        <View style={[styles.section, {
-          backgroundColor: colors.bgCard,
-          borderColor: colors.border,
-          shadowColor: colors.glassShadowColor,
-          shadowOpacity: colors.glassShadowOpacity,
-          shadowRadius: colors.glassShadowRadius,
-          shadowOffset: { width: 0, height: 4 },
-          elevation: 8,
-        }]}>
-          <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>Account</Text>
-          <View style={styles.accountRow}>
-            <View style={[styles.avatar, { backgroundColor: colors.accentBg, borderColor: colors.accentBorder }]}>
-              <Text style={[styles.avatarText, { color: colors.accent }]}>{initials}</Text>
-            </View>
-            <Text
-              style={[styles.emailValue, { color: colors.textSecondary }]}
-              numberOfLines={1}
-              accessibilityLabel={`Email: ${email}`}
-            >
-              {email}
-            </Text>
+        {/* Hero identity card */}
+        <View style={s.heroCard}>
+          <View style={s.heroAvatar}>
+            <Text style={s.heroInitial}>{initials}</Text>
+          </View>
+          <View style={s.heroInfo}>
+            <Text style={s.heroEmail} numberOfLines={1}>{email}</Text>
           </View>
         </View>
 
-        {/* Body stats */}
-        <View style={[styles.section, {
-          backgroundColor: colors.bgCard,
-          borderColor: colors.border,
-          shadowColor: colors.glassShadowColor,
-          shadowOpacity: colors.glassShadowOpacity,
-          shadowRadius: colors.glassShadowRadius,
-          shadowOffset: { width: 0, height: 4 },
-          elevation: 8,
-        }]}>
-          <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>Body Stats</Text>
-          <ProfileRow
-            label="Birthday"
-            value={profile.birthday ? `${formatBirthday(profile.birthday)} (${calculateAge(profile.birthday)} yrs)` : undefined}
-            onPress={() => router.push('/welcome/age')}
-            colors={colors}
-          />
-          <ProfileRow
-            label="Height"
-            value={profile.heightCm ? `${profile.heightCm} cm` : undefined}
-            onPress={() => router.push('/welcome/height')}
-            colors={colors}
-          />
-          <ProfileRow
-            label="Weight"
-            value={profile.weightKg ? `${profile.weightKg} kg` : undefined}
-            onPress={() => router.push('/welcome/weight')}
-            colors={colors}
-          />
-          <ProfileRow
-            label="Activity"
-            value={profile.activity?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
-            onPress={() => router.push('/welcome/activity')}
-            colors={colors}
-          />
-          <ProfileRow
-            label="Goal"
-            value={profile.goal?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
-            onPress={() => router.push('/welcome/goal')}
-            colors={colors}
-          />
+        {/* Goal banner */}
+        <Pressable style={s.goalBanner} onPress={() => router.push('/welcome/goal')}>
+          <View style={s.goalIconCircle}>
+            <Ionicons name={goalIcon as any} size={18} color={EDITORIAL.greenAccent} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.goalBannerLabel}>YOUR GOAL</Text>
+            <Text style={s.goalBannerValue}>{formatGoal(profile.goal)}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={14} color={EDITORIAL.creamDeep} />
+        </Pressable>
+
+        {/* Body stats row */}
+        <View style={s.statsCard}>
+          <StatBlock label="Age" value={age ? `${age}` : '—'} />
+          <View style={s.statDivider} />
+          <StatBlock label="Height" value={profile.heightCm ? `${profile.heightCm}cm` : '—'} />
+          <View style={s.statDivider} />
+          <StatBlock label="Weight" value={profile.weightKg ? `${profile.weightKg}kg` : '—'} />
+          <View style={s.statDivider} />
+          <StatBlock label="Activity" value={profile.activity ? profile.activity.replace(/_/g, ' ').split(' ')[0]!.charAt(0).toUpperCase() + profile.activity.replace(/_/g, ' ').split(' ')[0]!.slice(1) : '—'} small />
         </View>
 
-        {/* Per-meal macros */}
+        {/* Per-meal targets */}
         {macroTargets && (
-          <Pressable
-            onPress={() => setFilterVisible(true)}
-            style={[styles.section, {
-              backgroundColor: colors.bgCard,
-              borderColor: colors.border,
-              shadowColor: colors.glassShadowColor,
-              shadowOpacity: colors.glassShadowOpacity,
-              shadowRadius: colors.glassShadowRadius,
-              shadowOffset: { width: 0, height: 4 },
-              elevation: 8,
-            }]}
-          >
-            <View style={styles.sectionHeader}>
-              <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>Per-Meal Targets</Text>
-              <Ionicons name="pencil-outline" size={16} color={colors.textTertiary} />
+          <Pressable onPress={() => setFilterVisible(true)} style={s.macroCard}>
+            <View style={s.macroHeader}>
+              <Text style={s.macroTitle}>Per-Meal Targets</Text>
+              <View style={s.editChip}>
+                <Ionicons name="pencil" size={10} color={EDITORIAL.greenAccent} />
+                <Text style={s.editChipText}>Edit</Text>
+              </View>
             </View>
-            <View style={styles.macroGrid}>
-              {[
-                { label: 'Protein', value: macroTargets.protein, unit: 'g' },
-                { label: 'Carbs', value: macroTargets.carbs, unit: 'g' },
-                { label: 'Fat', value: macroTargets.fat, unit: 'g' },
-              ].map(({ label, value, unit }) => (
-                <View key={label} style={styles.macroChip}>
-                  <Text style={[styles.macroChipValue, { color: colors.accent }]}>{value || '--'}{unit}</Text>
-                  <Text style={[styles.macroChipLabel, { color: colors.textTertiary }]}>{label}</Text>
-                </View>
-              ))}
+
+            <View style={s.macroRow}>
+              <MacroBlock label="Protein" value={macroTargets.protein || '—'} unit="g" color="#5B7C6B" />
+              <MacroBlock label="Carbs" value={macroTargets.carbs || '—'} unit="g" color="#8B7355" />
+              <MacroBlock label="Fat" value={macroTargets.fat || '—'} unit="g" color="#7B6B8A" />
+              <MacroBlock label="Calories" value={macroTargets.calories || '—'} unit="" color={EDITORIAL.text} />
             </View>
-            <Text style={[styles.macroHint, { color: colors.textTertiary }]}>
-              Tap to edit your macro targets
-            </Text>
           </Pressable>
         )}
 
+        {/* Edit sections */}
+        <View style={s.linksCard}>
+          <LinkRow icon="body-outline" label="Edit body stats" onPress={() => router.push('/welcome/height')} />
+          <LinkRow icon="walk-outline" label="Update activity level" onPress={() => router.push('/welcome/activity')} last />
+        </View>
+
         {/* Logout */}
-        <Pressable
-          style={[styles.logoutButton, { backgroundColor: colors.errorBg, borderColor: colors.errorBorder }]}
-          onPress={handleLogout}
-          accessibilityRole="button"
-          accessibilityLabel="Log out"
-        >
-          <Text style={[styles.logoutButtonText, { color: colors.error }]}>Log out</Text>
+        <Pressable style={s.logoutBtn} onPress={handleLogout}>
+          <Ionicons name="log-out-outline" size={16} color="#B85450" />
+          <Text style={s.logoutText}>Log out</Text>
         </Pressable>
+
       </ScrollView>
     </ScreenBackground>
 
-      <FilterPopup
-        visible={filterVisible}
-        values={macroTargets ?? { protein: '', carbs: '', fat: '', calories: '' }}
-        onApply={async (updated) => {
-          setFilterVisible(false);
-          setMacroTargets(updated);
-          await saveMacroTargets(updated);
-          pushProfileToServer();
-        }}
-        onClose={() => setFilterVisible(false)}
-      />
+    <FilterPopup
+      visible={filterVisible}
+      values={macroTargets ?? { protein: '', carbs: '', fat: '', calories: '' }}
+      onApply={async (updated) => {
+        setFilterVisible(false);
+        setMacroTargets(updated);
+        await saveMacroTargets(updated);
+        pushProfileToServer();
+      }}
+      onClose={() => setFilterVisible(false)}
+    />
     </>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  spinner: {
-    flex: 1,
-    alignSelf: 'center',
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 100,
-  },
-  screenTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    marginBottom: 20,
-    letterSpacing: -0.5,
-  },
-  section: {
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-  },
-  sectionHeader: {
+function StatBlock({ label, value, small }: { label: string; value: string; small?: boolean }) {
+  return (
+    <View style={s.statBlock}>
+      <Text style={[s.statValue, small && { fontSize: 14 }]}>{value}</Text>
+      <Text style={s.statLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function MacroBlock({ label, value, unit, color }: { label: string; value: string; unit: string; color: string }) {
+  return (
+    <View style={s.macroBlock}>
+      <View style={[s.macroDot, { backgroundColor: color }]} />
+      <Text style={[s.macroValue, { color }]}>{value}<Text style={s.macroUnit}>{unit}</Text></Text>
+      <Text style={s.macroLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function LinkRow({ icon, label, onPress, last }: { icon: string; label: string; onPress: () => void; last?: boolean }) {
+  return (
+    <Pressable style={[s.linkRow, !last && { borderBottomWidth: 1, borderBottomColor: EDITORIAL.border }]} onPress={onPress}>
+      <Ionicons name={icon as any} size={16} color={EDITORIAL.greenAccent} />
+      <Text style={s.linkText}>{label}</Text>
+      <Ionicons name="chevron-forward" size={14} color={EDITORIAL.creamDeep} />
+    </Pressable>
+  );
+}
+
+const s = StyleSheet.create({
+  scroll: { paddingHorizontal: 16, paddingBottom: 100 },
+  // Hero
+  heroCard: {
+    backgroundColor: EDITORIAL.green,
+    borderRadius: 20,
+    padding: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 14,
     marginBottom: 12,
   },
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.7,
+  heroAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(253,251,247,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  accountRow: {
+  heroInitial: {
+    fontFamily: FONTS.newsreaderBold,
+    fontSize: 22,
+    color: '#FDFBF7',
+  },
+  heroInfo: { flex: 1 },
+  heroEmail: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FDFBF7',
+    letterSpacing: -0.2,
+  },
+  // Goal banner
+  goalBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
     borderWidth: 1,
+    borderColor: EDITORIAL.border,
+    padding: 14,
+    marginBottom: 12,
+  },
+  goalIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: EDITORIAL.creamCard,
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
   },
-  avatarText: {
-    fontSize: 16,
+  goalBannerLabel: {
+    fontSize: 9,
     fontWeight: '700',
+    color: EDITORIAL.textSoft,
+    letterSpacing: 1,
+    marginBottom: 2,
   },
-  emailValue: {
-    fontSize: 14,
-    fontWeight: '500',
-    flex: 1,
+  goalBannerValue: {
+    fontFamily: FONTS.newsreaderBold,
+    fontSize: 18,
+    color: EDITORIAL.text,
+    letterSpacing: -0.4,
   },
-  profileRow: {
+  // Stats
+  statsCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    gap: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: EDITORIAL.border,
+    paddingVertical: 14,
+    paddingHorizontal: 4,
+    marginBottom: 12,
   },
-  profileLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    width: 70,
+  statBlock: { flex: 1, alignItems: 'center', gap: 2 },
+  statValue: {
+    fontFamily: FONTS.newsreaderBold,
+    fontSize: 18,
+    color: EDITORIAL.text,
+    letterSpacing: -0.5,
   },
-  profileValue: {
-    flex: 1,
-    fontSize: 14,
+  statLabel: {
+    fontSize: 9,
     fontWeight: '600',
-  },
-  macroGrid: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 8,
-  },
-  macroChip: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 2,
-  },
-  macroChipValue: {
-    fontSize: 20,
-    fontWeight: '800',
-  },
-  macroChipLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    textTransform: 'uppercase',
+    color: EDITORIAL.textSoft,
     letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
-  macroHint: {
-    fontSize: 12,
-    textAlign: 'center',
-    lineHeight: 17,
+  statDivider: { width: 1, height: 24, backgroundColor: EDITORIAL.border },
+  // Macros
+  macroCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: EDITORIAL.border,
+    padding: 16,
+    marginBottom: 12,
   },
-  logoutButton: {
-    height: 50,
-    borderRadius: 12,
+  macroHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  macroTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: EDITORIAL.textSoft,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  editChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: EDITORIAL.creamCard,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  editChipText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: EDITORIAL.greenAccent,
+  },
+  macroRow: { flexDirection: 'row' },
+  macroBlock: { flex: 1, alignItems: 'center', gap: 3 },
+  macroDot: { width: 6, height: 6, borderRadius: 3 },
+  macroValue: { fontSize: 22, fontWeight: '800', letterSpacing: -0.8 },
+  macroUnit: { fontSize: 13, fontWeight: '500', color: EDITORIAL.textSoft },
+  macroLabel: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: EDITORIAL.textSoft,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
+  // Links
+  linksCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: EDITORIAL.border,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  linkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  linkText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    color: EDITORIAL.text,
+    letterSpacing: -0.2,
+  },
+  // Logout
+  logoutBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
+    gap: 6,
+    paddingVertical: 14,
+    borderRadius: 12,
     borderWidth: 1,
+    borderColor: '#F0D4D3',
+    backgroundColor: '#FDF5F5',
+    marginTop: 4,
   },
-  logoutButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
+  logoutText: { fontSize: 14, fontWeight: '600', color: '#B85450' },
 });
