@@ -5,22 +5,14 @@ import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { EDITORIAL, FONTS } from '@/lib/brand';
-import { getOnboardingData, calculateSuggestedCalories, type Goal } from '@/lib/onboardingStorage';
+import { getOnboardingData, type Goal } from '@/lib/onboardingStorage';
 import { saveMacroTargets } from '@/lib/macroStorage';
+import { calculateMacros, macrosToStored } from '@/lib/macroCalculator';
 
 interface Macros { protein: number; carbs: number; fat: number; calories: number }
 
 function calcMacros(data: Awaited<ReturnType<typeof getOnboardingData>>, goalOverride?: Goal): Macros {
-  const cal = calculateSuggestedCalories(goalOverride ? { ...data, goal: goalOverride } : data);
-  const goal = goalOverride ?? data.goal ?? 'maintain';
-  const pPct = goal === 'build_muscle' ? 0.35 : goal === 'lose_fat' ? 0.40 : 0.30;
-  const fPct = 0.25;
-  return {
-    protein: Math.round((cal * pPct) / 4),
-    carbs: Math.round((cal * (1 - pPct - fPct)) / 4),
-    fat: Math.round((cal * fPct) / 9),
-    calories: Math.round(cal),
-  };
+  return calculateMacros(goalOverride ? { ...data, goal: goalOverride } : data);
 }
 
 type Traj = 'lose_fat' | 'maintain' | 'build_muscle';

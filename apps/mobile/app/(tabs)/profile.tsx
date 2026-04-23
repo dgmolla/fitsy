@@ -15,12 +15,28 @@ import { ScreenBackground } from '@/components/ScreenBackground';
 import { decodeEmailFromToken } from '@/lib/jwtUtils';
 import type { MacroValues } from '@/lib/macroPresets';
 import { getMacroTargets, saveMacroTargets } from '@/lib/macroStorage';
-import { getOnboardingData, type OnboardingData } from '@/lib/onboardingStorage';
+import { getOnboardingData, saveOnboardingField, type OnboardingData, type ActivityLevel, type Goal } from '@/lib/onboardingStorage';
 import { calculateAge } from '@fitsy/shared';
 import { pushProfileToServer } from '@/lib/profileSync';
 import { useTheme } from '@/lib/theme';
 import { FilterPopup } from '@/components/FilterPopup';
+import { ProfileEditSheet, type ProfileEditSheetProps } from '@/components/ProfileEditSheet';
+import { calculateMacros, macrosToStored } from '@/lib/macroCalculator';
 import { EDITORIAL, FONTS } from '@/lib/brand';
+
+const GOAL_OPTIONS = [
+  { id: 'lose_fat', label: 'Lose Weight', icon: 'flame-outline', description: 'Calorie deficit for fat loss' },
+  { id: 'build_muscle', label: 'Build Muscle', icon: 'barbell-outline', description: 'Calorie surplus for growth' },
+  { id: 'maintain', label: 'Maintain', icon: 'shield-checkmark-outline', description: 'Stay at current weight' },
+  { id: 'eat_healthier', label: 'Eat Healthier', icon: 'leaf-outline', description: 'Better food choices' },
+];
+
+const ACTIVITY_OPTIONS = [
+  { id: 'sedentary', label: 'Low', icon: 'desktop-outline', description: 'Desk job, little exercise' },
+  { id: 'lightly_active', label: 'Light', icon: 'walk-outline', description: '1-3 days per week' },
+  { id: 'active', label: 'Moderate', icon: 'bicycle-outline', description: '3-5 days per week' },
+  { id: 'very_active', label: 'Intense', icon: 'fitness-outline', description: '6-7 days per week' },
+];
 
 const GOAL_ICONS: Record<string, string> = {
   lose_fat: 'flame-outline',
@@ -35,6 +51,8 @@ function formatGoal(g?: string) {
   return g.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
+type EditField = 'goal' | 'activity' | 'height' | 'weight' | 'age' | null;
+
 export default function ProfileScreen() {
   const { colors } = useTheme();
   const [loading, setLoading] = useState(true);
@@ -42,6 +60,7 @@ export default function ProfileScreen() {
   const [macroTargets, setMacroTargets] = useState<MacroValues | null>(null);
   const [filterVisible, setFilterVisible] = useState(false);
   const [profile, setProfile] = useState<OnboardingData>({});
+  const [editField, setEditField] = useState<EditField>(null);
   const prevProfile = useRef<string>('');
 
   useFocusEffect(
@@ -75,6 +94,17 @@ export default function ProfileScreen() {
     router.replace('/welcome/problem');
   }, []);
 
+  async function updateFieldAndRecalc<K extends keyof OnboardingData>(field: K, value: OnboardingData[K]) {
+    await saveOnboardingField(field, value);
+    const updated = await getOnboardingData();
+    setProfile(updated);
+    const newMacros = calculateMacros(updated);
+    const stored = macrosToStored(newMacros);
+    await saveMacroTargets(stored);
+    setMacroTargets(stored);
+    pushProfileToServer();
+  }
+
   const initials = email !== '—' ? email.charAt(0).toUpperCase() : '?';
   const age = profile.birthday ? calculateAge(profile.birthday) : null;
   const goalIcon = GOAL_ICONS[profile.goal ?? ''] ?? 'flag-outline';
@@ -86,6 +116,71 @@ export default function ProfileScreen() {
       </ScreenBackground>
     );
   }
+
+  function getEditSheetProps(): ProfileEditSheetProps | null {
+    switch (editField) {
+      case 'goal':
+        return {
+          type: 'choice',
+          visible: true,
+          title: 'Your Goal',
+          options: GOAL_OPTIONS,
+          value: profile.goal ?? 'maintain',
+          onApply: (v) => { setEditField(null); updateFieldAndRecalc('goal', v as Goal); },
+          onClose: () => setEditField(null),
+        };
+      case 'activity':
+        return {
+          type: 'choice',
+          visible: true,
+          title: 'Activity Level',
+          options: ACTIVITY_OPTIONS,
+          value: profile.activity ?? 'lightly_active',
+          onApply: (v) => { setEditField(null); updateFieldAndRecalc('activity', v as ActivityLevel); },
+          onClose: () => setEditField(null),
+        };
+      case 'height':
+        return {
+          type: 'height',
+          visible: true,
+          title: 'Height',
+          valueCm: profile.heightCm ? String(profile.heightCm) : '',
+          onApply: (v) => { setEditField(null); updateFieldAndRecalc('heightCm', parseInt(v) || undefined); },
+          onClose: () => setEditField(null),
+        };
+      case 'weight':
+        return {
+          type: 'numeric',
+          visible: true,
+          title: 'Weight',
+          value: profile.weightKg ? String(profile.weightKg) : '',
+          unit: 'kg',
+          placeholder: '70',
+          onApply: (v) => { setEditField(null); updateFieldAndRecalc('weightKg', parseInt(v) || undefined); },
+          onClose: () => setEditField(null),
+        };
+      case 'age':
+        return {
+          type: 'numeric',
+          visible: true,
+          title: 'Age',
+          value: age ? String(age) : '',
+          unit: 'years',
+          placeholder: '25',
+          onApply: (v) => {
+            setEditField(null);
+            const ageNum = parseInt(v) || 25;
+            const year = new Date().getFullYear() - ageNum;
+            updateFieldAndRecalc('birthday', `${year}-01-01`);
+          },
+          onClose: () => setEditField(null),
+        };
+      default:
+        return null;
+    }
+  }
+
+  const sheetProps = getEditSheetProps();
 
   return (
     <>
@@ -104,7 +199,7 @@ export default function ProfileScreen() {
         </View>
 
         {/* Goal banner */}
-        <Pressable style={s.goalBanner} onPress={() => router.push('/welcome/goal')}>
+        <Pressable style={s.goalBanner} onPress={() => setEditField('goal')}>
           <View style={s.goalIconCircle}>
             <Ionicons name={goalIcon as any} size={18} color={EDITORIAL.greenAccent} />
           </View>
@@ -117,13 +212,27 @@ export default function ProfileScreen() {
 
         {/* Body stats row */}
         <View style={s.statsCard}>
-          <StatBlock label="Age" value={age ? `${age}` : '—'} />
+          <Pressable style={s.statBlock} onPress={() => setEditField('age')}>
+            <Text style={s.statValue}>{age ?? '—'}</Text>
+            <Text style={s.statLabel}>Age</Text>
+          </Pressable>
           <View style={s.statDivider} />
-          <StatBlock label="Height" value={profile.heightCm ? `${profile.heightCm}cm` : '—'} />
+          <Pressable style={s.statBlock} onPress={() => setEditField('height')}>
+            <Text style={s.statValue}>{profile.heightCm ? `${profile.heightCm}cm` : '—'}</Text>
+            <Text style={s.statLabel}>Height</Text>
+          </Pressable>
           <View style={s.statDivider} />
-          <StatBlock label="Weight" value={profile.weightKg ? `${profile.weightKg}kg` : '—'} />
+          <Pressable style={s.statBlock} onPress={() => setEditField('weight')}>
+            <Text style={s.statValue}>{profile.weightKg ? `${profile.weightKg}kg` : '—'}</Text>
+            <Text style={s.statLabel}>Weight</Text>
+          </Pressable>
           <View style={s.statDivider} />
-          <StatBlock label="Activity" value={profile.activity ? profile.activity.replace(/_/g, ' ').split(' ')[0]!.charAt(0).toUpperCase() + profile.activity.replace(/_/g, ' ').split(' ')[0]!.slice(1) : '—'} small />
+          <Pressable style={s.statBlock} onPress={() => setEditField('activity')}>
+            <Text style={[s.statValue, { fontSize: 14 }]}>
+              {profile.activity ? profile.activity.replace(/_/g, ' ').split(' ')[0]!.charAt(0).toUpperCase() + profile.activity.replace(/_/g, ' ').split(' ')[0]!.slice(1) : '—'}
+            </Text>
+            <Text style={s.statLabel}>Activity</Text>
+          </Pressable>
         </View>
 
         {/* Per-meal targets */}
@@ -146,12 +255,6 @@ export default function ProfileScreen() {
           </Pressable>
         )}
 
-        {/* Edit sections */}
-        <View style={s.linksCard}>
-          <LinkRow icon="body-outline" label="Edit body stats" onPress={() => router.push('/welcome/height')} />
-          <LinkRow icon="walk-outline" label="Update activity level" onPress={() => router.push('/welcome/activity')} last />
-        </View>
-
         {/* Logout */}
         <Pressable style={s.logoutBtn} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={16} color="#B85450" />
@@ -172,16 +275,9 @@ export default function ProfileScreen() {
       }}
       onClose={() => setFilterVisible(false)}
     />
-    </>
-  );
-}
 
-function StatBlock({ label, value, small }: { label: string; value: string; small?: boolean }) {
-  return (
-    <View style={s.statBlock}>
-      <Text style={[s.statValue, small && { fontSize: 14 }]}>{value}</Text>
-      <Text style={s.statLabel}>{label}</Text>
-    </View>
+    {sheetProps && <ProfileEditSheet {...sheetProps} />}
+    </>
   );
 }
 
@@ -192,16 +288,6 @@ function MacroBlock({ label, value, unit, color }: { label: string; value: strin
       <Text style={[s.macroValue, { color }]}>{value}<Text style={s.macroUnit}>{unit}</Text></Text>
       <Text style={s.macroLabel}>{label}</Text>
     </View>
-  );
-}
-
-function LinkRow({ icon, label, onPress, last }: { icon: string; label: string; onPress: () => void; last?: boolean }) {
-  return (
-    <Pressable style={[s.linkRow, !last && { borderBottomWidth: 1, borderBottomColor: EDITORIAL.border }]} onPress={onPress}>
-      <Ionicons name={icon as any} size={16} color={EDITORIAL.greenAccent} />
-      <Text style={s.linkText}>{label}</Text>
-      <Ionicons name="chevron-forward" size={14} color={EDITORIAL.creamDeep} />
-    </Pressable>
   );
 }
 
@@ -265,8 +351,8 @@ const s = StyleSheet.create({
     marginBottom: 2,
   },
   goalBannerValue: {
-    fontFamily: FONTS.newsreaderBold,
     fontSize: 18,
+    fontWeight: '700',
     color: EDITORIAL.text,
     letterSpacing: -0.4,
   },
@@ -284,8 +370,8 @@ const s = StyleSheet.create({
   },
   statBlock: { flex: 1, alignItems: 'center', gap: 2 },
   statValue: {
-    fontFamily: FONTS.newsreaderBold,
     fontSize: 18,
+    fontWeight: '700',
     color: EDITORIAL.text,
     letterSpacing: -0.5,
   },
@@ -344,29 +430,6 @@ const s = StyleSheet.create({
     color: EDITORIAL.textSoft,
     letterSpacing: 0.3,
     textTransform: 'uppercase',
-  },
-  // Links
-  linksCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: EDITORIAL.border,
-    overflow: 'hidden',
-    marginBottom: 12,
-  },
-  linkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  linkText: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '500',
-    color: EDITORIAL.text,
-    letterSpacing: -0.2,
   },
   // Logout
   logoutBtn: {

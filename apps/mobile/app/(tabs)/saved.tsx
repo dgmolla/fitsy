@@ -182,8 +182,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   heroNumber: {
-    fontFamily: FONTS.newsreaderBold,
     fontSize: 56,
+    fontWeight: '800',
     color: '#FDFBF7',
     letterSpacing: -2,
     lineHeight: 56,
@@ -248,8 +248,8 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   itemName: {
-    fontFamily: FONTS.newsreaderBold,
     fontSize: 15,
+    fontWeight: '700',
     color: EDITORIAL.text,
     letterSpacing: -0.2,
   },
