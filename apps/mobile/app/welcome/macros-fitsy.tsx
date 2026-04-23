@@ -6,9 +6,9 @@ import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 
 const STEPS = [
-  { num: '1', title: 'You set your targets', desc: 'Tell us your goals — we suggest macros, or bring your own', color: '#3A7050' },
-  { num: '2', title: 'We scan nearby menus', desc: 'Every dish is matched against your protein, carb, and fat targets', color: '#8B6914' },
-  { num: '3', title: 'You pick and eat', desc: 'No calorie math, no guessing — just meals that fit', color: '#7A4B8A' },
+  { num: '1', title: 'We help set your targets' },
+  { num: '2', title: 'We scan nearby menus' },
+  { num: '3', title: 'You pick and eat' },
 ];
 
 export default function MacrosFitsyScreen() {
@@ -28,13 +28,10 @@ export default function MacrosFitsyScreen() {
             entering={FadeInDown.duration(400).delay(100 + i * 80)}
             style={s.card}
           >
-            <View style={s.badge}>
-              <Text style={[s.badgeTxt, { color: step.color }]}>{step.num}</Text>
+            <View style={s.watermarkWrap}>
+              <Text style={s.watermark}>{step.num}</Text>
             </View>
-            <View style={s.cardText}>
-              <Text style={s.cardTitle}>{step.title}</Text>
-              <Text style={s.cardDesc}>{step.desc}</Text>
-            </View>
+            <Text style={s.cardTitle}>{step.title}</Text>
           </Animated.View>
         ))}
       </View>
@@ -43,32 +40,36 @@ export default function MacrosFitsyScreen() {
 }
 
 const s = StyleSheet.create({
-  cards: { gap: 10 },
+  cards: { gap: 18 },
   card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    paddingVertical: 14,
+    backgroundColor: EDITORIAL.creamCard,
+    borderRadius: 14,
+    paddingVertical: 26,
+    paddingHorizontal: 22,
+    position: 'relative',
+    overflow: 'hidden',
   },
-  badge: {
-    width: 36,
-    alignItems: 'center',
+  watermarkWrap: {
+    position: 'absolute',
+    left: 8,
+    top: 0,
+    bottom: 0,
     justifyContent: 'center',
   },
-  badgeTxt: {
+  watermark: {
     fontFamily: FONTS.newsreaderBold,
-    fontSize: 28,
+    fontSize: 72,
+    color: '#B8AD9C',
+    lineHeight: 72,
+    includeFontPadding: false,
+    opacity: 0.5,
+    marginTop: 6,
   },
-  cardText: { flex: 1 },
   cardTitle: {
-    fontFamily: FONTS.newsreaderBold,
+    fontFamily: FONTS.newsreaderRegular,
     fontSize: 18,
-    color: EDITORIAL.text,
-    letterSpacing: -0.2,
-  },
-  cardDesc: {
-    fontSize: 14,
-    color: EDITORIAL.textSoft,
-    marginTop: 2,
+    color: EDITORIAL.textMid,
+    lineHeight: 21,
+    paddingLeft: 36,
   },
 });

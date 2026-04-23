@@ -65,9 +65,9 @@ const s = StyleSheet.create({
   rowOn: { backgroundColor: EDITORIAL.green },
   icon: { fontSize: 20 },
   label: {
-    fontFamily: FONTS.newsreaderBold,
+    fontFamily: FONTS.newsreaderRegular,
     fontSize: 17,
-    color: EDITORIAL.text,
+    color: EDITORIAL.textMid,
     letterSpacing: -0.3,
     flex: 1,
   },
