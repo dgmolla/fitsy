@@ -30,6 +30,22 @@ export function priceSymbol(level: string | null | undefined): string {
   }
 }
 
+// Combines a human-readable slug with the row id so detail pages can do an
+// indexed primary-key lookup instead of a full table scan. `--` is safe as a
+// separator because slugify collapses any non-alphanumeric run to a single `-`.
+export function slugWithId(name: string, id: string): string {
+  return `${slugify(name)}--${id}`;
+}
+
+export function parseSlugId(param: string): { slug: string; id: string } | null {
+  const idx = param.lastIndexOf("--");
+  if (idx === -1) return null;
+  const slug = param.slice(0, idx);
+  const id = param.slice(idx + 2);
+  if (!slug || !id) return null;
+  return { slug, id };
+}
+
 export function formatTag(tag: string): string {
   return tag
     .split("_")

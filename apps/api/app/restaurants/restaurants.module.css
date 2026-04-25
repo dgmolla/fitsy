@@ -686,3 +686,37 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Pagination ────────────────────────────────────────────────────────── */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 32px;
+  padding: 16px 0;
+}
+.paginationLink {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: white;
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.15s, border-color 0.15s;
+}
+.paginationLink:hover {
+  background: var(--cream);
+  border-color: var(--green);
+}
+.paginationDisabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+.paginationStatus {
+  color: var(--text-muted);
+  font-size: 14px;
+}
