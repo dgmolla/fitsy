@@ -363,22 +363,29 @@ export default function SearchScreen() {
   const hasInputs =
     inputs.protein !== '' || inputs.carbs !== '' || inputs.fat !== '' || inputs.calories !== '';
 
-  // Load saved macro targets before initial fetch
+  // Load saved macro targets before initial fetch.
+  // Single useFocusEffect (mount + every tab focus) with a value-equality
+  // check so unchanged targets don't bump the inputs identity and re-trigger
+  // the fetch effect.
   const [targetsLoaded, setTargetsLoaded] = useState(false);
-  useEffect(() => {
-    getMacroTargets()
-      .then((saved) => { if (saved) setInputs(saved); })
-      .catch(() => {})
-      .finally(() => setTargetsLoaded(true));
-  }, []);
-
   useFocusEffect(
     useCallback(() => {
-      if (!targetsLoaded) return;
       getMacroTargets()
-        .then((saved) => { if (saved) setInputs(saved); })
-        .catch(() => {});
-    }, [targetsLoaded]),
+        .then((saved) => {
+          if (saved) {
+            setInputs((prev) =>
+              prev.protein === saved.protein &&
+              prev.carbs === saved.carbs &&
+              prev.fat === saved.fat &&
+              prev.calories === saved.calories
+                ? prev
+                : saved,
+            );
+          }
+        })
+        .catch(() => {})
+        .finally(() => setTargetsLoaded(true));
+    }, []),
   );
 
   const doFetch = useCallback(

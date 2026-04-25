@@ -18,7 +18,7 @@ export function useLocation(): LocationState {
     lat: FALLBACK_LAT,
     lng: FALLBACK_LNG,
     source: 'fallback',
-    loading: false,
+    loading: true,
   });
 
   useEffect(() => {
@@ -29,7 +29,11 @@ export function useLocation(): LocationState {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         console.log(`[location] permission: ${Date.now() - t0}ms`);
-        if (status !== 'granted' || cancelled) return;
+        if (cancelled) return;
+        if (status !== 'granted') {
+          setState((s) => ({ ...s, loading: false }));
+          return;
+        }
 
         const lastKnown = await Location.getLastKnownPositionAsync();
         console.log(`[location] lastKnown: ${Date.now() - t0}ms (${lastKnown ? 'hit' : 'miss'})`);
@@ -40,27 +44,29 @@ export function useLocation(): LocationState {
             source: 'gps',
             loading: false,
           });
+          return;
         }
 
         const position = await Promise.race([
           Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
           new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
         ]);
+        if (cancelled) return;
         if (!position) {
           console.log(`[location] fresh GPS timed out: ${Date.now() - t0}ms`);
+          setState((s) => ({ ...s, loading: false }));
           return;
         }
         console.log(`[location] fresh GPS: ${Date.now() - t0}ms`);
-        if (!cancelled) {
-          setState({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-            source: 'gps',
-            loading: false,
-          });
-        }
+        setState({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          source: 'gps',
+          loading: false,
+        });
       } catch {
         console.log(`[location] failed, using fallback: ${Date.now() - t0}ms`);
+        if (!cancelled) setState((s) => ({ ...s, loading: false }));
       }
     }
 

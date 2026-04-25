@@ -6,7 +6,9 @@ import type { RestaurantsApiResponse } from "@fitsy/shared";
 export async function GET(
   request: NextRequest,
 ): Promise<NextResponse<RestaurantsApiResponse>> {
+  const tEntry = Date.now();
   const auth = await requireAuth(request);
+  const tAfterAuth = Date.now();
   if (auth instanceof NextResponse) return auth as never;
 
   const { searchParams } = request.nextUrl;
@@ -106,6 +108,7 @@ export async function GET(
   // ─── Query ──────────────────────────────────────────────────────────────────
 
   try {
+    const tBeforeQuery = Date.now();
     const { data, total } = await findNearbyRestaurants({
       lat,
       lng,
@@ -118,6 +121,16 @@ export async function GET(
       ...(minRating !== undefined ? { minRating } : {}),
       limit,
     });
+    const tDone = Date.now();
+    console.log(
+      JSON.stringify({
+        event: "fitsy_search_route",
+        auth_ms: tAfterAuth - tEntry,
+        query_ms: tDone - tBeforeQuery,
+        route_total_ms: tDone - tEntry,
+        results: total,
+      }),
+    );
 
     return NextResponse.json(
       { data, meta: { total, limit } },

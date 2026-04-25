@@ -32,17 +32,25 @@ export async function fetchRestaurants(
   if (params.maxPriceLevel !== undefined) qs.set('maxPriceLevel', params.maxPriceLevel);
   if (params.minRating !== undefined) qs.set('minRating', String(params.minRating));
 
+  const reqId = Math.random().toString(36).slice(2, 8);
+  const t0 = Date.now();
+  console.log(JSON.stringify({ event: 'fitsy_search_client_start', reqId, t0 }));
   try {
     const response = await api.get<RestaurantsApiResponse>(
       `/api/restaurants?${qs.toString()}`, true
     );
+    const t1 = Date.now();
 
     if ('error' in response) {
+      console.log(JSON.stringify({ event: 'fitsy_search_client_done', reqId, ok: false, client_total_ms: t1 - t0 }));
       return [];
     }
 
+    console.log(JSON.stringify({ event: 'fitsy_search_client_done', reqId, ok: true, client_total_ms: t1 - t0, results: response.data.length }));
     return response.data;
-  } catch {
+  } catch (err) {
+    const t1 = Date.now();
+    console.log(JSON.stringify({ event: 'fitsy_search_client_done', reqId, ok: false, client_total_ms: t1 - t0, err: String(err) }));
     return [];
   }
 }
