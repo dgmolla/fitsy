@@ -79,6 +79,15 @@ model MenuItem {
   section        String?
   price          Float?
   dietaryTags    String[]        @default([])
+  // Denormalized macro snapshot from MacroEstimate. Read path queries
+  // these columns directly to avoid joining MacroEstimate per request.
+  // MacroEstimate remains the audit log (confidence, reasoning, etc.).
+  // Kept in sync via dual-write in scripts/pipeline-utils.ts and a daily
+  // drift audit cron at /api/internal/audit-macro-drift.
+  calories       Int?
+  proteinG       Float?
+  carbsG         Float?
+  fatG           Float?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   restaurant     Restaurant      @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
