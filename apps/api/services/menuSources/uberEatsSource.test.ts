@@ -635,6 +635,141 @@ describe("extractMenuViaFirecrawl", () => {
   });
 });
 
+// ─── buildResult geo + name validation (via lookup) ─────────────────────────
+
+describe("UberEatsSource geo/name validation", () => {
+  beforeEach(() => {
+    process.env["FIRECRAWL_API_KEY"] = "test-key";
+  });
+
+  afterEach(() => {
+    delete process.env["FIRECRAWL_API_KEY"];
+  });
+
+  it("accepts result when geo is within 500m", async () => {
+    const geoHtml = fixture("ubereats-thai-place-geo.html");
+    const source = new UberEatsSource();
+    source.urlCache = new Map([["Thai Orchid", "https://www.ubereats.com/store/thai-orchid/AbCd"]]);
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      text: jest.fn().mockResolvedValue(geoHtml),
+    });
+
+    // Pass geo close to fixture (34.0917, -118.2889) — ~100m away
+    const result = await source.lookup("Thai Orchid", "LA", { lat: 34.0920, lng: -118.2885 });
+    expect(result.found).toBe(true);
+  });
+
+  it("rejects result when geo is >500m away", async () => {
+    const geoHtml = fixture("ubereats-thai-place-geo.html");
+    const source = new UberEatsSource();
+    source.urlCache = new Map([["Thai Orchid", "https://www.ubereats.com/store/thai-orchid/AbCd"]]);
+
+    mockFetch
+      // url-cache hit — geo mismatch
+      .mockResolvedValueOnce({
+        ok: true,
+        text: jest.fn().mockResolvedValue(geoHtml),
+      })
+      // Brave discovery — no match
+      .mockResolvedValueOnce({ ok: false, status: 500 })
+      // Firecrawl discovery — no match
+      .mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValue({ data: [] }),
+      });
+
+    // Pass geo far from fixture (34.0917, -118.2889) — ~5km away
+    const result = await source.lookup("Thai Orchid", "LA", { lat: 34.1400, lng: -118.2889 });
+    expect(result.found).toBe(false);
+  });
+
+  it("sets nameMismatch when geo matches but name differs", async () => {
+    const geoHtml = fixture("ubereats-thai-place-geo.html");
+    const source = new UberEatsSource();
+    source.urlCache = new Map([["Orchid Thai Kitchen", "https://www.ubereats.com/store/thai-orchid/AbCd"]]);
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      text: jest.fn().mockResolvedValue(geoHtml),
+    });
+
+    // Geo is close, but name doesn't match
+    const result = await source.lookup("Orchid Thai Kitchen", "LA", { lat: 34.0917, lng: -118.2889 });
+    expect(result.found).toBe(true);
+    expect(result.nameMismatch).toBe(true);
+  });
+
+  it("falls back to name matching when no geo available", async () => {
+    // Use fixture without geo
+    const noGeoHtml = fixture("ubereats-thai-place.html");
+    const source = new UberEatsSource();
+    source.urlCache = new Map([["Thai Orchid", "https://www.ubereats.com/store/thai-orchid/AbCd"]]);
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      text: jest.fn().mockResolvedValue(noGeoHtml),
+    });
+
+    const result = await source.lookup("Thai Orchid", "LA", { lat: 34.0917, lng: -118.2889 });
+    expect(result.found).toBe(true);
+  });
+
+  it("rejects on name mismatch when no geo and words don't match", async () => {
+    const noGeoHtml = fixture("ubereats-thai-place.html");
+    const source = new UberEatsSource();
+    source.urlCache = new Map([["Totally Different Place", "https://www.ubereats.com/store/thai-orchid/AbCd"]]);
+
+    mockFetch
+      // url-cache hit — name mismatch
+      .mockResolvedValueOnce({
+        ok: true,
+        text: jest.fn().mockResolvedValue(noGeoHtml),
+      })
+      // Brave discovery — no match
+      .mockResolvedValueOnce({ ok: false, status: 500 })
+      // Firecrawl discovery — no match
+      .mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValue({ data: [] }),
+      });
+
+    const result = await source.lookup("Totally Different Place", "LA");
+    expect(result.found).toBe(false);
+  });
+});
+
+// ─── UberEatsSource API mode tests ──────────────────────────────────────────
+
+describe("UberEatsSource API modes", () => {
+  afterEach(() => {
+    delete process.env["FIRECRAWL_API_KEY"];
+    delete process.env["UE_API_MODE"];
+  });
+
+  it("uses shadow mode when UE_API_MODE=shadow", async () => {
+    process.env["UE_API_MODE"] = "shadow";
+    process.env["FIRECRAWL_API_KEY"] = "test-key";
+    const geoHtml = fixture("ubereats-thai-place-geo.html");
+    const source = new UberEatsSource();
+    source.urlCache = new Map([["Thai Orchid", "https://www.ubereats.com/store/thai-orchid/AbCd1234-5678-9012-3456"]]);
+
+    mockFetch
+      // JSON-LD raw fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        text: jest.fn().mockResolvedValue(geoHtml),
+      })
+      // API call (parallel) — return ok false (404)
+      .mockResolvedValueOnce({ ok: false, status: 404 });
+
+    const result = await source.lookup("Thai Orchid", "LA", { lat: 34.0917, lng: -118.2889 });
+    // Shadow mode: JSON-LD is authoritative, should still return found
+    expect(result.found).toBe(true);
+  });
+});
+
 // ─── UberEatsSource.lookup with bot defense fallback ───────────────────────
 
 describe("UberEatsSource bot defense fallback", () => {

@@ -50,6 +50,7 @@ const config = {
     "!services/menuSources/ueSitemapIndex.ts",
     "!services/scrapers/jinaScraper.ts",
     "!services/scrapers/firecrawlScraper.ts",
+    "!services/googlePlacesPhoto.ts",
   ],
   coverageThreshold: {
     global: {
