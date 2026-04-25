@@ -1,46 +1,53 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
+import { StatPicker } from '@/components/StatPicker';
 import { getOnboardingData, saveOnboardingField } from '@/lib/onboardingStorage';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 
 type Unit = 'ft' | 'cm';
 
+const FT_MIN_IN = 48;  // 4'0"
+const FT_MAX_IN = 84;  // 7'0"
+const FT_DEFAULT_IN = 69; // 5'9"
+const CM_MIN = 122;
+const CM_MAX = 213;
+const CM_DEFAULT = 175;
+
+function fmtFtIn(totalInches: number): string {
+  const ft = Math.floor(totalInches / 12);
+  const inch = totalInches % 12;
+  return `${ft}'${inch}"`;
+}
+
 export default function HeightScreen() {
   const [unit, setUnit] = useState<Unit>('ft');
-  const [ft, setFt] = useState('');
-  const [inches, setInches] = useState('');
-  const [cm, setCm] = useState('');
-  const inputRef = useRef<TextInput>(null);
+  const [inches, setInches] = useState(FT_DEFAULT_IN);
+  const [cm, setCm] = useState(CM_DEFAULT);
 
   useEffect(() => {
     (async () => {
       const data = await getOnboardingData();
       if (data.heightCm) {
-        setCm(String(data.heightCm));
-        const totalInches = data.heightCm / 2.54;
-        setFt(String(Math.floor(totalInches / 12)));
-        setInches(String(Math.round(totalInches % 12)));
+        setCm(Math.max(CM_MIN, Math.min(CM_MAX, data.heightCm)));
+        const totalInches = Math.round(data.heightCm / 2.54);
+        setInches(Math.max(FT_MIN_IN, Math.min(FT_MAX_IN, totalInches)));
       }
     })();
-    const t = setTimeout(() => inputRef.current?.focus(), 500);
-    return () => clearTimeout(t);
   }, []);
 
   function toCm(): number {
-    if (unit === 'cm') return parseInt(cm, 10) || 170;
-    const f = parseInt(ft, 10) || 5;
-    const i = parseInt(inches, 10) || 9;
-    return Math.round(f * 30.48 + i * 2.54);
+    return unit === 'cm' ? cm : Math.round(inches * 2.54);
   }
 
   return (
     <WelcomeScreen
-      progress={8 / 16}
+      progress={9 / 16}
       title="How tall are you?"
+      subtitle="Scroll to your height."
       onContinue={async () => {
         await saveOnboardingField('heightCm', toCm());
         router.push('/welcome/weight');
@@ -49,7 +56,6 @@ export default function HeightScreen() {
       onSkip={() => router.push('/welcome/weight')}
     >
       <Animated.View entering={FadeInDown.duration(400).delay(100)} style={s.wrap}>
-        {/* Unit toggle */}
         <View style={s.toggle}>
           <AnimatedPress style={[s.toggleBtn, unit === 'ft' && s.toggleOn]} onPress={() => setUnit('ft')} haptic>
             <Text style={[s.toggleTxt, unit === 'ft' && s.toggleTxtOn]}>ft / in</Text>
@@ -59,57 +65,35 @@ export default function HeightScreen() {
           </AnimatedPress>
         </View>
 
-        {unit === 'ft' ? (
-          <View style={s.ftRow}>
-            <View style={s.ftField}>
-              <Text style={s.label}>FEET</Text>
-              <View style={s.inputRow}>
-                <TextInput
-                  ref={inputRef}
-                  style={s.input}
-                  value={ft}
-                  onChangeText={setFt}
-                  keyboardType="number-pad"
-                  maxLength={1}
-                  placeholder="5"
-                  placeholderTextColor={EDITORIAL.creamDeep}
-                />
-                <Text style={s.unit}>ft</Text>
-              </View>
-            </View>
-            <View style={s.ftField}>
-              <Text style={s.label}>INCHES</Text>
-              <View style={s.inputRow}>
-                <TextInput
-                  style={s.input}
-                  value={inches}
-                  onChangeText={setInches}
-                  keyboardType="number-pad"
-                  maxLength={2}
-                  placeholder="9"
-                  placeholderTextColor={EDITORIAL.creamDeep}
-                />
-                <Text style={s.unit}>in</Text>
-              </View>
-            </View>
+        <View style={s.stage}>
+          {unit === 'ft' ? (
+            <StatPicker
+              min={FT_MIN_IN}
+              max={FT_MAX_IN}
+              value={inches}
+              onChange={setInches}
+              formatter={fmtFtIn}
+            />
+          ) : (
+            <StatPicker
+              min={CM_MIN}
+              max={CM_MAX}
+              value={cm}
+              onChange={setCm}
+            />
+          )}
+          <View style={s.valueBox}>
+            <Text style={s.valueLabel}>HEIGHT</Text>
+            {unit === 'ft' ? (
+              <Text style={s.valueNum}>{fmtFtIn(inches)}</Text>
+            ) : (
+              <Text style={s.valueNum}>
+                {cm}
+                <Text style={s.valueUnit}> cm</Text>
+              </Text>
+            )}
           </View>
-        ) : (
-          <View>
-            <Text style={s.label}>HEIGHT</Text>
-            <View style={s.inputRow}>
-              <TextInput
-                style={s.input}
-                value={cm}
-                onChangeText={setCm}
-                keyboardType="number-pad"
-                maxLength={3}
-                placeholder="170"
-                placeholderTextColor={EDITORIAL.creamDeep}
-              />
-              <Text style={s.unit}>cm</Text>
-            </View>
-          </View>
-        )}
+        </View>
       </Animated.View>
     </WelcomeScreen>
   );
@@ -122,13 +106,33 @@ const s = StyleSheet.create({
   toggleOn: { backgroundColor: EDITORIAL.green },
   toggleTxt: { fontSize: 14, fontWeight: '600', color: EDITORIAL.textSoft },
   toggleTxtOn: { color: EDITORIAL.cream },
-  ftRow: { flexDirection: 'row', gap: 16 },
-  ftField: { flex: 1, gap: 10 },
-  label: { fontSize: 11, fontWeight: '700', letterSpacing: 2, color: EDITORIAL.textSoft, textTransform: 'uppercase' },
-  inputRow: {
-    flexDirection: 'row', alignItems: 'baseline',
-    backgroundColor: EDITORIAL.creamCard, borderRadius: 16, paddingHorizontal: 24, paddingVertical: 20,
+
+  stage: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+    paddingTop: 8,
   },
-  input: { flex: 1, fontFamily: FONTS.newsreaderBold, fontSize: 36, color: EDITORIAL.text, letterSpacing: -1, padding: 0 },
-  unit: { fontSize: 18, color: EDITORIAL.textSoft, fontWeight: '500' },
+  valueBox: { flex: 1 },
+  valueLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 2,
+    color: EDITORIAL.textSoft,
+    marginBottom: 8,
+  },
+  valueNum: {
+    fontFamily: FONTS.newsreaderBold,
+    fontSize: 56,
+    color: EDITORIAL.text,
+    letterSpacing: -2.5,
+    lineHeight: 60,
+  },
+  valueUnit: {
+    fontFamily: FONTS.newsreaderRegular,
+    fontSize: 22,
+    color: EDITORIAL.textSoft,
+    letterSpacing: 0,
+  },
 });

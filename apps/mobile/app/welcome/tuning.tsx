@@ -45,9 +45,9 @@ export default function PlanReadyScreen() {
 
   return (
     <WelcomeScreen
-      progress={13 / 16}
-      title="Your per meal targets."
-      subtitle="We calculated these from your body stats and goal. Adjust the trajectory below."
+      progress={14 / 16}
+      title="Your daily targets."
+      subtitle="We'll suggest splitting these across 3 meals. You can adjust per-meal targets anytime in search."
       onContinue={() => router.push('/welcome/finding')}
       canContinue={macros !== null}
       continueLabel="See Restaurants"
@@ -63,12 +63,12 @@ export default function PlanReadyScreen() {
             />
           </Animated.View>
 
-          {/* Macro grid */}
+          {/* Macro grid — display daily values (stored per-meal × 3) */}
           <View style={s.grid}>
-            <MacroNum label="Protein" value={macros.protein} unit="g" delay={200} accent />
-            <MacroNum label="Carbs" value={macros.carbs} unit="g" delay={260} />
-            <MacroNum label="Fat" value={macros.fat} unit="g" delay={320} />
-            <MacroNum label="Calories" value={macros.calories} unit="" delay={380} accent />
+            <MacroNum label="Protein" value={macros.protein * 3} unit="g" delay={200} accent />
+            <MacroNum label="Carbs" value={macros.carbs * 3} unit="g" delay={260} />
+            <MacroNum label="Fat" value={macros.fat * 3} unit="g" delay={320} />
+            <MacroNum label="Calories" value={macros.calories * 3} unit="" delay={380} accent />
           </View>
 
           {/* Trajectory */}

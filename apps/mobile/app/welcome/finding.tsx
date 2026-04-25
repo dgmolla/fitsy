@@ -44,7 +44,7 @@ export default function FindingScreen() {
 
       const elapsed = Date.now() - start;
       const remaining = Math.max(0, MIN_DISPLAY_MS - elapsed);
-      setTimeout(() => router.replace('/welcome/teaser'), remaining);
+      setTimeout(() => router.replace('/welcome/trial'), remaining);
     }
 
     prefetch();
@@ -55,7 +55,7 @@ export default function FindingScreen() {
       <View style={s.content}>
         <View style={s.topBar}>
           <View style={s.progressTrack}>
-            <View style={[s.progressFill, { width: `${Math.round((14 / 16) * 100)}%` }]} />
+            <View style={[s.progressFill, { width: `${Math.round((15 / 16) * 100)}%` }]} />
           </View>
         </View>
 

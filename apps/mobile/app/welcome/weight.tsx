@@ -1,40 +1,48 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
+import { StatPicker } from '@/components/StatPicker';
 import { getOnboardingData, saveOnboardingField } from '@/lib/onboardingStorage';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 
 type Unit = 'lbs' | 'kg';
 
+const LB_MIN = 80;
+const LB_MAX = 400;
+const LB_DEFAULT = 170;
+const KG_MIN = 36;
+const KG_MAX = 180;
+const KG_DEFAULT = 77;
+
 export default function WeightScreen() {
   const [unit, setUnit] = useState<Unit>('lbs');
-  const [value, setValue] = useState('');
-  const inputRef = useRef<TextInput>(null);
+  const [lbs, setLbs] = useState(LB_DEFAULT);
+  const [kg, setKg] = useState(KG_DEFAULT);
 
   useEffect(() => {
     (async () => {
       const data = await getOnboardingData();
       if (data.weightKg) {
-        setValue(String(Math.round(data.weightKg * 2.20462)));
+        const k = Math.round(data.weightKg);
+        setKg(Math.max(KG_MIN, Math.min(KG_MAX, k)));
+        const l = Math.round(data.weightKg * 2.20462);
+        setLbs(Math.max(LB_MIN, Math.min(LB_MAX, l)));
       }
     })();
-    const t = setTimeout(() => inputRef.current?.focus(), 500);
-    return () => clearTimeout(t);
   }, []);
 
   function toKg(): number {
-    const v = parseInt(value, 10);
-    if (!v) return 70;
-    return unit === 'kg' ? v : Math.round(v * 0.453592 * 10) / 10;
+    return unit === 'kg' ? kg : Math.round(lbs * 0.453592 * 10) / 10;
   }
 
   return (
     <WelcomeScreen
-      progress={9 / 16}
+      progress={10 / 16}
       title="What do you weigh?"
+      subtitle="Roughly is fine. We'll fine-tune later."
       onContinue={async () => {
         await saveOnboardingField('weightKg', toKg());
         router.push('/welcome/age');
@@ -43,7 +51,6 @@ export default function WeightScreen() {
       onSkip={() => router.push('/welcome/age')}
     >
       <Animated.View entering={FadeInDown.duration(400).delay(100)} style={s.wrap}>
-        {/* Unit toggle */}
         <View style={s.toggle}>
           <AnimatedPress style={[s.toggleBtn, unit === 'lbs' && s.toggleOn]} onPress={() => setUnit('lbs')} haptic>
             <Text style={[s.toggleTxt, unit === 'lbs' && s.toggleTxtOn]}>lbs</Text>
@@ -53,20 +60,18 @@ export default function WeightScreen() {
           </AnimatedPress>
         </View>
 
-        <View>
-          <Text style={s.label}>WEIGHT</Text>
-          <View style={s.inputRow}>
-            <TextInput
-              ref={inputRef}
-              style={s.input}
-              value={value}
-              onChangeText={setValue}
-              keyboardType="number-pad"
-              maxLength={3}
-              placeholder={unit === 'lbs' ? '155' : '70'}
-              placeholderTextColor={EDITORIAL.creamDeep}
-            />
-            <Text style={s.unit}>{unit}</Text>
+        <View style={s.stage}>
+          {unit === 'lbs' ? (
+            <StatPicker min={LB_MIN} max={LB_MAX} value={lbs} onChange={setLbs} />
+          ) : (
+            <StatPicker min={KG_MIN} max={KG_MAX} value={kg} onChange={setKg} />
+          )}
+          <View style={s.valueBox}>
+            <Text style={s.valueLabel}>WEIGHT</Text>
+            <Text style={s.valueNum}>
+              {unit === 'lbs' ? lbs : kg}
+              <Text style={s.valueUnit}> {unit}</Text>
+            </Text>
           </View>
         </View>
       </Animated.View>
@@ -81,11 +86,33 @@ const s = StyleSheet.create({
   toggleOn: { backgroundColor: EDITORIAL.green },
   toggleTxt: { fontSize: 14, fontWeight: '600', color: EDITORIAL.textSoft },
   toggleTxtOn: { color: EDITORIAL.cream },
-  label: { fontSize: 11, fontWeight: '700', letterSpacing: 2, color: EDITORIAL.textSoft, textTransform: 'uppercase' },
-  inputRow: {
-    flexDirection: 'row', alignItems: 'baseline',
-    backgroundColor: EDITORIAL.creamCard, borderRadius: 16, paddingHorizontal: 24, paddingVertical: 20,
+
+  stage: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+    paddingTop: 8,
   },
-  input: { flex: 1, fontFamily: FONTS.newsreaderBold, fontSize: 36, color: EDITORIAL.text, letterSpacing: -1, padding: 0 },
-  unit: { fontSize: 18, color: EDITORIAL.textSoft, fontWeight: '500' },
+  valueBox: { flex: 1 },
+  valueLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 2,
+    color: EDITORIAL.textSoft,
+    marginBottom: 8,
+  },
+  valueNum: {
+    fontFamily: FONTS.newsreaderBold,
+    fontSize: 56,
+    color: EDITORIAL.text,
+    letterSpacing: -2.5,
+    lineHeight: 60,
+  },
+  valueUnit: {
+    fontFamily: FONTS.newsreaderRegular,
+    fontSize: 22,
+    color: EDITORIAL.textSoft,
+    letterSpacing: 0,
+  },
 });

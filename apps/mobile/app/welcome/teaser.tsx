@@ -5,10 +5,8 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { EDITORIAL, FONTS } from '@/lib/brand';
-import { getMacroTargets } from '@/lib/macroStorage';
 import { FALLBACK_LAT, FALLBACK_LNG } from '@/lib/useLocation';
 import { api } from '@/lib/api';
-import { prefetchedRestaurants } from '@/lib/teaserCache';
 
 const CARD_H = 112;
 
@@ -111,23 +109,10 @@ export default function TeaserScreen() {
 
   useEffect(() => {
     async function load() {
-      // Use pre-fetched data from the finding screen if available
-      if (prefetchedRestaurants.data) {
-        setRestaurants(prefetchedRestaurants.data as PreviewRestaurant[]);
-        prefetchedRestaurants.data = null;
-        setLoading(false);
-        return;
-      }
-
       try {
-        const macros = await getMacroTargets();
         const params = new URLSearchParams({
           lat: String(FALLBACK_LAT),
           lng: String(FALLBACK_LNG),
-          ...(macros?.protein ? { protein: macros.protein } : {}),
-          ...(macros?.carbs ? { carbs: macros.carbs } : {}),
-          ...(macros?.fat ? { fat: macros.fat } : {}),
-          ...(macros?.calories ? { calories: macros.calories } : {}),
         });
         const res = await api.get<PreviewResponse>(`/api/restaurants/preview?${params.toString()}`);
         setRestaurants(res.data);
@@ -150,13 +135,13 @@ export default function TeaserScreen() {
 
   return (
     <WelcomeScreen
-      progress={14 / 16}
-      title="These restaurants near you meet your goals."
-      subtitle="Subscribe to see exact meals that fit your macros at each one."
-      onContinue={() => router.push('/welcome/trial')}
+      progress={1 / 16}
+      title="We find restaurants with meals that hit your targets."
+      subtitle="Tell us a few things about you, and we'll match you to spots near you."
+      onContinue={() => router.push('/welcome/tried')}
       onBack={() => router.back()}
       canContinue
-      continueLabel="Let's go"
+      continueLabel="Continue"
     >
       <View style={s.list}>
         {showSkeletons &&
@@ -182,7 +167,7 @@ export default function TeaserScreen() {
       >
         <Text style={s.calloutEmoji}>✨</Text>
         <Text style={s.calloutTxt}>
-          The full app shows every meal at these restaurants — filtered to exactly match your targets.
+          Once we know your goals, we'll show you exactly which meals at each spot fit your macros.
         </Text>
       </Animated.View>
     </WelcomeScreen>

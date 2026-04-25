@@ -18,14 +18,13 @@ export default function TriedScreen() {
 
   return (
     <WelcomeScreen
-      progress={1 / 16}
+      progress={2 / 16}
       title={"What have you tried\nfor healthy eating?"}
       subtitle="Choose one."
       onContinue={() => {
         router.push({ pathname: '/welcome/response', params: { tried: selected! } });
       }}
       canContinue={selected !== null}
-      showBack={false}
     >
       <View style={s.list}>
         {OPTIONS.map((opt, i) => {
