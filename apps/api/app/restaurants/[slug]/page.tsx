@@ -16,10 +16,15 @@ const EARLY_ACCESS_URL = "https://testflight.apple.com/join/fitsy";
 // ─── Static params ────────────────────────────────────────────────────────────
 
 export async function generateStaticParams() {
-  const restaurants = await prisma.restaurant.findMany({
-    select: { name: true },
-  });
-  return restaurants.map((r) => ({ slug: slugify(r.name) }));
+  try {
+    const restaurants = await prisma.restaurant.findMany({
+      select: { name: true },
+    });
+    return restaurants.map((r) => ({ slug: slugify(r.name) }));
+  } catch {
+    // DB unreachable at build time (e.g. CI without DB) — fall back to on-demand ISR
+    return [];
+  }
 }
 
 // ─── Metadata ─────────────────────────────────────────────────────────────────

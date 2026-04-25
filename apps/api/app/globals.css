@@ -1,3 +1,18 @@
+:root {
+  --cream: #f8f5ef;
+  --cream-dark: #efe9df;
+  --green: #3d7a5e;
+  --green-dark: #2c5c46;
+  --green-muted: #a8c9b9;
+  --text: #1a1a14;
+  --text-muted: #6b6b5e;
+  --border: #e2ddd6;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --card-shadow: 0 2px 12px rgba(61, 122, 94, 0.08);
+  --card-shadow-hover: 0 8px 32px rgba(61, 122, 94, 0.14);
+}
+
 *,
 *::before,
 *::after {

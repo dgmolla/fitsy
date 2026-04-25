@@ -19,6 +19,9 @@ export default async function LandingPage() {
           <span className={styles.logo}>
             fitsy<span className={styles.logoDot}>.</span>
           </span>
+          <a href="/restaurants" className={styles.navCta} style={{ background: "transparent", color: "var(--text)", border: "1px solid var(--border)", marginRight: 8 }}>
+            Browse Restaurants
+          </a>
           <a href={EARLY_ACCESS_URL} className={styles.navCta}>
             Get Early Access
           </a>
