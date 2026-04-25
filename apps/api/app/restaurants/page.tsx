@@ -21,12 +21,17 @@ const EARLY_ACCESS_URL = "https://testflight.apple.com/join/fitsy";
 
 type RestaurantCard = Awaited<ReturnType<typeof loadRestaurants>>[number];
 
+// Cap matches Vercel's 19 MB ISR fallback limit — full catalog renders to
+// ~28 MB. Followup: add pagination / search rather than rendering all rows.
+const MAX_RESTAURANTS_PER_PAGE = 500;
+
 async function loadRestaurants() {
   return prisma.restaurant.findMany({
     orderBy: [{ rating: "desc" }, { name: "asc" }],
     include: {
       _count: { select: { menuItems: true } },
     },
+    take: MAX_RESTAURANTS_PER_PAGE,
   });
 }
 
