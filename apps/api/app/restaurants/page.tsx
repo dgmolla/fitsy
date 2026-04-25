@@ -1,54 +1,91 @@
 import type { Metadata } from "next";
 import styles from "./restaurants.module.css";
 import { prisma } from "@/lib/restaurantService";
-import { slugify, priceSymbol, formatTag } from "@/lib/seoUtils";
+import { slugWithId, priceSymbol, formatTag } from "@/lib/seoUtils";
 
 export const revalidate = 86400;
 
-export const metadata: Metadata = {
-  title: "Restaurants with Macro Data | Fitsy",
-  description:
-    "Browse restaurants in Los Angeles with detailed macro data for every menu item. Find high-protein, low-carb, and macro-friendly meals near you.",
-  openGraph: {
-    title: "Restaurants with Macro Data | Fitsy",
-    description:
-      "Browse restaurants in Los Angeles with detailed macro data for every menu item.",
-    type: "website",
-  },
-};
-
 const EARLY_ACCESS_URL = "https://testflight.apple.com/join/fitsy";
+const PAGE_SIZE = 20;
 
-type RestaurantCard = Awaited<ReturnType<typeof loadRestaurants>>[number];
+type RestaurantCard = Awaited<ReturnType<typeof loadRestaurants>>["rows"][number];
 
-// Cap matches Vercel's 19 MB ISR fallback limit — full catalog renders to
-// ~28 MB. Followup: add pagination / search rather than rendering all rows.
-const MAX_RESTAURANTS_PER_PAGE = 500;
-
-async function loadRestaurants() {
-  return prisma.restaurant.findMany({
-    orderBy: [{ rating: "desc" }, { name: "asc" }],
-    include: {
-      _count: { select: { menuItems: true } },
-    },
-    take: MAX_RESTAURANTS_PER_PAGE,
-  });
+function parsePage(value: string | string[] | undefined): number {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const n = parseInt(raw ?? "1", 10);
+  return Number.isFinite(n) && n >= 1 ? n : 1;
 }
 
-export default async function RestaurantsPage() {
-  let restaurants: RestaurantCard[] = [];
+async function loadRestaurants(page: number) {
+  const [rows, total] = await Promise.all([
+    prisma.restaurant.findMany({
+      orderBy: [{ rating: "desc" }, { name: "asc" }],
+      include: { _count: { select: { menuItems: true } } },
+      take: PAGE_SIZE,
+      skip: (page - 1) * PAGE_SIZE,
+    }),
+    prisma.restaurant.count(),
+  ]);
+  return { rows, total };
+}
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string | string[] }>;
+}): Promise<Metadata> {
+  const { page: rawPage } = await searchParams;
+  const page = parsePage(rawPage);
+  const canonical = page === 1 ? "/restaurants" : `/restaurants?page=${page}`;
+  const title =
+    page === 1
+      ? "Restaurants with Macro Data | Fitsy"
+      : `Restaurants with Macro Data — Page ${page} | Fitsy`;
+  return {
+    title,
+    description:
+      "Browse restaurants in Los Angeles with detailed macro data for every menu item. Find high-protein, low-carb, and macro-friendly meals near you.",
+    alternates: { canonical },
+    openGraph: {
+      title,
+      description:
+        "Browse restaurants in Los Angeles with detailed macro data for every menu item.",
+      type: "website",
+    },
+  };
+}
+
+export default async function RestaurantsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string | string[] }>;
+}) {
+  const { page: rawPage } = await searchParams;
+  const page = parsePage(rawPage);
+
+  let rows: RestaurantCard[] = [];
+  let total = 0;
   try {
-    restaurants = await loadRestaurants();
+    const data = await loadRestaurants(page);
+    rows = data.rows;
+    total = data.total;
   } catch {
     // DB unreachable at build time — render empty shell, ISR will repopulate
   }
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const hasPrev = page > 1;
+  const hasNext = page < totalPages;
+  const pageHref = (n: number) => (n === 1 ? "/restaurants" : `/restaurants?page=${n}`);
 
   return (
     <div className={styles.page}>
       <Nav />
 
       <section className={styles.hero}>
-        <span className={styles.heroEyebrow}>Los Angeles · {restaurants.length} restaurants</span>
+        <span className={styles.heroEyebrow}>
+          Los Angeles · {total.toLocaleString()} restaurants{totalPages > 1 ? ` · page ${page} of ${totalPages}` : ""}
+        </span>
         <h1 className={styles.heroTitle}>
           Find restaurants that fit{" "}
           <em className={styles.heroEm}>your macros</em>
@@ -63,13 +100,13 @@ export default async function RestaurantsPage() {
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>All Restaurants</h2>
         <div className={styles.grid}>
-          {restaurants.map((r) => {
-            const slug = slugify(r.name);
+          {rows.map((r) => {
+            const href = `/restaurants/${slugWithId(r.name, r.id)}`;
             const price = priceSymbol(r.priceLevel);
             return (
               <a
                 key={r.id}
-                href={`/restaurants/${slug}`}
+                href={href}
                 className={styles.card}
               >
                 {r.photoUrl ? (
@@ -130,6 +167,28 @@ export default async function RestaurantsPage() {
             );
           })}
         </div>
+
+        {totalPages > 1 && (
+          <nav className={styles.pagination} aria-label="Pagination">
+            {hasPrev ? (
+              <a href={pageHref(page - 1)} rel="prev" className={styles.paginationLink}>
+                ← Previous
+              </a>
+            ) : (
+              <span className={`${styles.paginationLink} ${styles.paginationDisabled}`}>← Previous</span>
+            )}
+            <span className={styles.paginationStatus}>
+              Page {page} of {totalPages}
+            </span>
+            {hasNext ? (
+              <a href={pageHref(page + 1)} rel="next" className={styles.paginationLink}>
+                Next →
+              </a>
+            ) : (
+              <span className={`${styles.paginationLink} ${styles.paginationDisabled}`}>Next →</span>
+            )}
+          </nav>
+        )}
       </section>
 
       <CtaBanner />

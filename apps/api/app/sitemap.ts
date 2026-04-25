@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 import { prisma } from "@/lib/restaurantService";
-import { slugify } from "@/lib/seoUtils";
+import { slugWithId } from "@/lib/seoUtils";
 
 export const revalidate = 86400;
 
@@ -15,17 +15,19 @@ const MAX_ITEMS_PER_RESTAURANT = 20;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   let restaurants: {
+    id: string;
     name: string;
     updatedAt: Date;
-    menuItems: { name: string; updatedAt: Date }[];
+    menuItems: { id: string; name: string; updatedAt: Date }[];
   }[] = [];
   try {
     restaurants = await prisma.restaurant.findMany({
       select: {
+        id: true,
         name: true,
         updatedAt: true,
         menuItems: {
-          select: { name: true, updatedAt: true },
+          select: { id: true, name: true, updatedAt: true },
           take: MAX_ITEMS_PER_RESTAURANT,
         },
       },
@@ -52,7 +54,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
 
   const restaurantRoutes: MetadataRoute.Sitemap = restaurants.map((r) => ({
-    url: `${BASE_URL}/restaurants/${slugify(r.name)}`,
+    url: `${BASE_URL}/restaurants/${slugWithId(r.name, r.id)}`,
     lastModified: r.updatedAt,
     changeFrequency: "weekly" as const,
     priority: 0.8,
@@ -60,7 +62,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const itemRoutes: MetadataRoute.Sitemap = restaurants.flatMap((r) =>
     r.menuItems.map((item) => ({
-      url: `${BASE_URL}/restaurants/${slugify(r.name)}/${slugify(item.name)}`,
+      url: `${BASE_URL}/restaurants/${slugWithId(r.name, r.id)}/${slugWithId(item.name, item.id)}`,
       lastModified: item.updatedAt,
       changeFrequency: "monthly" as const,
       priority: 0.6,

@@ -1,5 +1,7 @@
 import {
   slugify,
+  slugWithId,
+  parseSlugId,
   calcCalories,
   confidenceLabel,
   priceSymbol,
@@ -56,6 +58,37 @@ describe("priceSymbol", () => {
     expect(priceSymbol(null)).toBe("");
     expect(priceSymbol(undefined)).toBe("");
     expect(priceSymbol("PRICE_LEVEL_UNSPECIFIED")).toBe("");
+  });
+});
+
+describe("slugWithId", () => {
+  it("joins slugified name and id with `--`", () => {
+    expect(slugWithId("Sushi Park", "abc-123")).toBe("sushi-park--abc-123");
+  });
+  it("works with UUID ids that contain dashes", () => {
+    expect(slugWithId("Joe's Diner", "4b18fb32-6118-4e42-9967-54baf75fc39c")).toBe(
+      "joe-s-diner--4b18fb32-6118-4e42-9967-54baf75fc39c",
+    );
+  });
+});
+
+describe("parseSlugId", () => {
+  it("splits on the last `--` so UUID dashes in the id stay intact", () => {
+    expect(parseSlugId("joe-s-diner--4b18fb32-6118-4e42-9967-54baf75fc39c")).toEqual({
+      slug: "joe-s-diner",
+      id: "4b18fb32-6118-4e42-9967-54baf75fc39c",
+    });
+  });
+  it("returns null when separator is missing", () => {
+    expect(parseSlugId("just-a-slug")).toBeNull();
+  });
+  it("returns null when slug or id is empty", () => {
+    expect(parseSlugId("--abc")).toBeNull();
+    expect(parseSlugId("abc--")).toBeNull();
+  });
+  it("round-trips with slugWithId", () => {
+    const built = slugWithId("Spicy Tuna Roll", "abc-def-123");
+    expect(parseSlugId(built)).toEqual({ slug: "spicy-tuna-roll", id: "abc-def-123" });
   });
 });
 

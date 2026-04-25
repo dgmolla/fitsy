@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import styles from "../restaurants.module.css";
 import { prisma } from "@/lib/restaurantService";
 import {
   slugify,
+  slugWithId,
+  parseSlugId,
   calcCalories,
   priceSymbol,
   formatTag,
@@ -15,10 +17,9 @@ const EARLY_ACCESS_URL = "https://testflight.apple.com/join/fitsy";
 
 // ─── Static params ────────────────────────────────────────────────────────────
 
-// Skip pre-rendering at build — getRestaurantBySlug fires multiple queries
-// per page, and 5000+ restaurants × build-time concurrency exhausts the
-// Supabase connection pool. Pages are still generated on first request and
-// cached per `revalidate` (86400s).
+// Pages render on first request via ISR (cached per `revalidate`). We don't
+// pre-render at build because the catalog has thousands of restaurants and
+// fanning out at build time exhausts the Supabase connection pool.
 export async function generateStaticParams() {
   return [];
 }
@@ -31,11 +32,13 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const restaurant = await getRestaurantBySlug(slug);
+  const restaurant = await getRestaurantById(slug);
   if (!restaurant) return {};
+  const canonical = `/restaurants/${slugWithId(restaurant.name, restaurant.id)}`;
   return {
     title: `${restaurant.name} Macros & Menu | Fitsy`,
     description: `Full macro breakdown for every menu item at ${restaurant.name}. Find protein, carbs, fat, and calories for each dish — powered by Fitsy.`,
+    alternates: { canonical },
     openGraph: {
       title: `${restaurant.name} — Macro-Friendly Menu`,
       description: `Browse the full menu at ${restaurant.name} with macros for every item.`,
@@ -46,12 +49,11 @@ export async function generateMetadata({
 
 // ─── Data fetching ────────────────────────────────────────────────────────────
 
-async function getRestaurantBySlug(slug: string) {
-  const all = await prisma.restaurant.findMany({ select: { id: true, name: true } });
-  const match = all.find((r) => slugify(r.name) === slug);
-  if (!match) return null;
+async function getRestaurantById(slugParam: string) {
+  const parsed = parseSlugId(slugParam);
+  if (!parsed) return null;
   return prisma.restaurant.findUnique({
-    where: { id: match.id },
+    where: { id: parsed.id },
     include: {
       menuItems: {
         orderBy: [{ category: "asc" }, { name: "asc" }],
@@ -71,8 +73,17 @@ export default async function RestaurantPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const restaurant = await getRestaurantBySlug(slug);
+  const parsed = parseSlugId(slug);
+  if (!parsed) notFound();
+  const restaurant = await getRestaurantById(slug);
   if (!restaurant) notFound();
+
+  // 301 to canonical slug if the human-readable part is stale (e.g. restaurant
+  // was renamed). Keeps inbound links working while consolidating SEO weight.
+  const canonical = slugWithId(restaurant.name, restaurant.id);
+  if (parsed.slug !== slugify(restaurant.name)) {
+    redirect(`/restaurants/${canonical}`);
+  }
 
   // Group menu items by category
   const byCategory = new Map<string, typeof restaurant.menuItems>();
@@ -205,14 +216,14 @@ export default async function RestaurantPage({
             <div className={styles.menuGrid}>
               {items.map((item) => {
                 const m = item.macroEstimates[0];
-                const itemSlug = slugify(item.name);
+                const itemHref = `/restaurants/${canonical}/${slugWithId(item.name, item.id)}`;
                 const kcal = m
                   ? Math.round(m.calories ?? calcCalories(m.proteinG, m.carbsG, m.fatG))
                   : null;
                 return (
                   <a
                     key={item.id}
-                    href={`/restaurants/${slug}/${itemSlug}`}
+                    href={itemHref}
                     className={styles.menuCard}
                   >
                     <div className={styles.menuItemName}>{item.name}</div>

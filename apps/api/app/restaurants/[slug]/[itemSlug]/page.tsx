@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import styles from "../../restaurants.module.css";
 import { prisma } from "@/lib/restaurantService";
 import {
-  slugify,
+  slugWithId,
+  parseSlugId,
   calcCalories,
   confidenceLabel,
   formatTag,
@@ -25,27 +26,22 @@ export async function generateStaticParams() {
 
 // ─── Data fetching ────────────────────────────────────────────────────────────
 
-async function getItemBySlug(slug: string, itemSlug: string) {
-  const allRestaurants = await prisma.restaurant.findMany({
-    select: { id: true, name: true },
-  });
-  const restaurant = allRestaurants.find((r) => slugify(r.name) === slug);
-  if (!restaurant) return null;
-
-  const allItems = await prisma.menuItem.findMany({
-    where: { restaurantId: restaurant.id },
-    select: { id: true, name: true },
-  });
-  const matchItem = allItems.find((i) => slugify(i.name) === itemSlug);
-  if (!matchItem) return null;
-
+// Single indexed lookup by primary key. The outer `slug` param is used only
+// to validate that the item belongs to the expected restaurant — if someone
+// hands us /restaurants/{wrong}--{rid}/{item}--{iid}, we'll still resolve and
+// 301-redirect to the canonical URL.
+async function getItemById(itemSlugParam: string) {
+  const parsedItem = parseSlugId(itemSlugParam);
+  if (!parsedItem) return null;
   const item = await prisma.menuItem.findUnique({
-    where: { id: matchItem.id },
-    include: { macroEstimates: { orderBy: { id: "desc" }, take: 1 } },
+    where: { id: parsedItem.id },
+    include: {
+      restaurant: { select: { id: true, name: true } },
+      macroEstimates: { orderBy: { id: "desc" }, take: 1 },
+    },
   });
   if (!item) return null;
-
-  return { item, restaurantName: restaurant.name };
+  return { item, restaurant: item.restaurant };
 }
 
 // ─── Metadata ─────────────────────────────────────────────────────────────────
@@ -55,11 +51,11 @@ export async function generateMetadata({
 }: {
   params: Promise<{ slug: string; itemSlug: string }>;
 }): Promise<Metadata> {
-  const { slug, itemSlug } = await params;
-  const data = await getItemBySlug(slug, itemSlug);
+  const { itemSlug } = await params;
+  const data = await getItemById(itemSlug);
   if (!data) return {};
 
-  const { item, restaurantName } = data;
+  const { item, restaurant } = data;
   const m = item.macroEstimates[0];
   const kcal = m
     ? Math.round(m.calories ?? calcCalories(m.proteinG, m.carbsG, m.fatG))
@@ -69,12 +65,14 @@ export async function generateMetadata({
     ? `${Math.round(m.proteinG)}g protein, ${Math.round(m.carbsG)}g carbs, ${Math.round(m.fatG)}g fat${kcal ? ` (${kcal} cal)` : ""}`
     : "macro data available";
 
+  const canonical = `/restaurants/${slugWithId(restaurant.name, restaurant.id)}/${slugWithId(item.name, item.id)}`;
   return {
-    title: `${item.name} Macros — ${restaurantName} | Fitsy`,
-    description: `The ${item.name} at ${restaurantName} contains ${macroSummary}. Full nutrition breakdown powered by Fitsy.`,
+    title: `${item.name} Macros — ${restaurant.name} | Fitsy`,
+    description: `The ${item.name} at ${restaurant.name} contains ${macroSummary}. Full nutrition breakdown powered by Fitsy.`,
+    alternates: { canonical },
     openGraph: {
-      title: `${item.name} — ${restaurantName} Macros`,
-      description: `Nutrition breakdown for ${item.name} at ${restaurantName}: ${macroSummary}.`,
+      title: `${item.name} — ${restaurant.name} Macros`,
+      description: `Nutrition breakdown for ${item.name} at ${restaurant.name}: ${macroSummary}.`,
     },
   };
 }
@@ -87,10 +85,21 @@ export default async function MenuItemPage({
   params: Promise<{ slug: string; itemSlug: string }>;
 }) {
   const { slug, itemSlug } = await params;
-  const data = await getItemBySlug(slug, itemSlug);
+  const data = await getItemById(itemSlug);
   if (!data) notFound();
 
-  const { item, restaurantName } = data;
+  const { item, restaurant } = data;
+  const restaurantName = restaurant.name;
+  const restaurantHref = `/restaurants/${slugWithId(restaurant.name, restaurant.id)}`;
+
+  // 301 to canonical if either segment's slug part is stale or the item is
+  // accessed under the wrong restaurant prefix.
+  const canonicalRestaurantSlug = slugWithId(restaurant.name, restaurant.id);
+  const canonicalItemSlug = slugWithId(item.name, item.id);
+  if (slug !== canonicalRestaurantSlug || itemSlug !== canonicalItemSlug) {
+    redirect(`/restaurants/${canonicalRestaurantSlug}/${canonicalItemSlug}`);
+  }
+
   const m = item.macroEstimates[0];
   const kcal = m
     ? Math.round(m.calories ?? calcCalories(m.proteinG, m.carbsG, m.fatG))
@@ -149,7 +158,7 @@ export default async function MenuItemPage({
         <span className={styles.breadcrumbSep}>›</span>
         <a href="/restaurants">Restaurants</a>
         <span className={styles.breadcrumbSep}>›</span>
-        <a href={`/restaurants/${slug}`}>{restaurantName}</a>
+        <a href={restaurantHref}>{restaurantName}</a>
         <span className={styles.breadcrumbSep}>›</span>
         <span>{item.name}</span>
       </nav>
@@ -158,7 +167,7 @@ export default async function MenuItemPage({
       <div className={styles.itemHero}>
         <h1 className={styles.itemName}>{item.name}</h1>
         <p className={styles.itemRestaurant}>
-          at <a href={`/restaurants/${slug}`}>{restaurantName}</a>
+          at <a href={restaurantHref}>{restaurantName}</a>
           {item.category && <> · {item.category}</>}
           {item.price != null && <> · ${item.price.toFixed(2)}</>}
         </p>
