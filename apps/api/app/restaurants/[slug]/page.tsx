@@ -15,11 +15,12 @@ const EARLY_ACCESS_URL = "https://testflight.apple.com/join/fitsy";
 
 // ─── Static params ────────────────────────────────────────────────────────────
 
+// Skip pre-rendering at build — getRestaurantBySlug fires multiple queries
+// per page, and 5000+ restaurants × build-time concurrency exhausts the
+// Supabase connection pool. Pages are still generated on first request and
+// cached per `revalidate` (86400s).
 export async function generateStaticParams() {
-  const restaurants = await prisma.restaurant.findMany({
-    select: { name: true },
-  });
-  return restaurants.map((r) => ({ slug: slugify(r.name) }));
+  return [];
 }
 
 // ─── Metadata ─────────────────────────────────────────────────────────────────
