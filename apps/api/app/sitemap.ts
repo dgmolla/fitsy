@@ -6,6 +6,13 @@ export const revalidate = 86400;
 
 const BASE_URL = "https://fitsy.app";
 
+// Sitemap caps. Vercel's per-page ISR fallback limit is ~19 MB, and the
+// sitemap.xml protocol caps each file at 50k URLs / 50 MB. Followup:
+// migrate to a sitemap index (`generateSitemaps` + sharded `sitemap()`)
+// once the catalog grows past these caps in earnest.
+const MAX_RESTAURANTS = 1000;
+const MAX_ITEMS_PER_RESTAURANT = 20;
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   let restaurants: {
     name: string;
@@ -19,8 +26,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         updatedAt: true,
         menuItems: {
           select: { name: true, updatedAt: true },
+          take: MAX_ITEMS_PER_RESTAURANT,
         },
       },
+      orderBy: [{ rating: "desc" }, { name: "asc" }],
+      take: MAX_RESTAURANTS,
     });
   } catch {
     // DB unreachable at build time — emit static routes only
