@@ -194,37 +194,15 @@ export async function persistItemsInTx(
     DELETE FROM "MenuItem" WHERE "restaurantId" = ${restaurantId}
   `;
 
-  // Query 2: Bulk insert menu items
+  // Build all input arrays upfront so the MenuItem INSERT can carry the
+  // denormalized macro columns alongside the MacroEstimate insert. Both
+  // tables stay in lockstep within this transaction.
   const names = validPairs.map((p) => decodeHtml(p.item.name)!);
   const descriptions = validPairs.map((p) => decodeHtml(p.item.description) ?? null);
   const categories = validPairs.map((p) => decodeHtml(p.item.category) ?? null);
   const sections = validPairs.map((p) => decodeHtml(p.item.section) ?? null);
   const prices = validPairs.map((p) => p.item.price ?? null);
   const dietaryTagsJson = validPairs.map((p) => JSON.stringify(p.macro.dietaryTags ?? []));
-
-  const menuItemRows = await tx.$queryRaw<{ id: string }[]>`
-    INSERT INTO "MenuItem" (
-      "id", "restaurantId", "name", "description", "category", "section", "price", "dietaryTags", "createdAt", "updatedAt"
-    )
-    SELECT
-      gen_random_uuid(),
-      ${restaurantId},
-      name, description, category, section, price,
-      ARRAY(SELECT jsonb_array_elements_text(tags::jsonb)),
-      now(), now()
-    FROM UNNEST(
-      ${names}::text[],
-      ${descriptions}::text[],
-      ${categories}::text[],
-      ${sections}::text[],
-      ${prices}::float[],
-      ${dietaryTagsJson}::text[]
-    ) AS t(name, description, category, section, price, tags)
-    RETURNING "id"
-  `;
-
-  // Query 3: Bulk insert macro estimates
-  const menuItemIds = menuItemRows.map((r: { id: string }) => r.id);
   const calories = validPairs.map((p) => Math.round(p.macro.calories));
   const proteins = validPairs.map((p) => p.macro.proteinG);
   const carbs = validPairs.map((p) => p.macro.carbsG);
@@ -232,6 +210,37 @@ export async function persistItemsInTx(
   const confidences = validPairs.map((p) => p.macro.confidence);
   const sources = validPairs.map((p) => p.macro.source);
 
+  // Query 2: Bulk insert menu items WITH denormalized macros
+  const menuItemRows = await tx.$queryRaw<{ id: string }[]>`
+    INSERT INTO "MenuItem" (
+      "id", "restaurantId", "name", "description", "category", "section",
+      "price", "dietaryTags", "calories", "proteinG", "carbsG", "fatG",
+      "createdAt", "updatedAt"
+    )
+    SELECT
+      gen_random_uuid(),
+      ${restaurantId},
+      name, description, category, section, price,
+      ARRAY(SELECT jsonb_array_elements_text(tags::jsonb)),
+      calories, "proteinG", "carbsG", "fatG",
+      now(), now()
+    FROM UNNEST(
+      ${names}::text[],
+      ${descriptions}::text[],
+      ${categories}::text[],
+      ${sections}::text[],
+      ${prices}::float[],
+      ${dietaryTagsJson}::text[],
+      ${calories}::int[],
+      ${proteins}::float[],
+      ${carbs}::float[],
+      ${fats}::float[]
+    ) AS t(name, description, category, section, price, tags, calories, "proteinG", "carbsG", "fatG")
+    RETURNING "id"
+  `;
+
+  // Query 3: Bulk insert macro estimates (audit log)
+  const menuItemIds = menuItemRows.map((r: { id: string }) => r.id);
   await tx.$executeRaw`
     INSERT INTO "MacroEstimate" (
       "id", "menuItemId", "calories", "proteinG", "carbsG", "fatG",
@@ -377,13 +386,18 @@ export async function persistHexBulkInTx(
 
   // Q3 + Q4: bulk INSERT MenuItem + MacroEstimate across all restaurants.
   if (flatItemIds.length > 0) {
+    // Insert MenuItem with denormalized macros so the read path can skip
+    // the MacroEstimate join. MacroEstimate stays as the audit log.
     await tx.$executeRaw`
       INSERT INTO "MenuItem" (
-        "id", "restaurantId", "name", "description", "category", "section", "price", "dietaryTags", "createdAt", "updatedAt"
+        "id", "restaurantId", "name", "description", "category", "section",
+        "price", "dietaryTags", "calories", "proteinG", "carbsG", "fatG",
+        "createdAt", "updatedAt"
       )
       SELECT
         id, "restaurantId", name, description, category, section, price,
         ARRAY(SELECT jsonb_array_elements_text(tags::jsonb)),
+        calories, "proteinG", "carbsG", "fatG",
         now(), now()
       FROM UNNEST(
         ${flatItemIds}::text[],
@@ -393,8 +407,12 @@ export async function persistHexBulkInTx(
         ${flatCategories}::text[],
         ${flatSections}::text[],
         ${flatPrices}::float[],
-        ${flatDietaryTagsJson}::text[]
-      ) AS t(id, "restaurantId", name, description, category, section, price, tags)
+        ${flatDietaryTagsJson}::text[],
+        ${flatCalories}::int[],
+        ${flatProteins}::float[],
+        ${flatCarbs}::float[],
+        ${flatFats}::float[]
+      ) AS t(id, "restaurantId", name, description, category, section, price, tags, calories, "proteinG", "carbsG", "fatG")
     `;
 
     await tx.$executeRaw`
