@@ -153,10 +153,10 @@ export default function ProfileScreen() {
           type: 'numeric',
           visible: true,
           title: 'Weight',
-          value: profile.weightKg ? String(profile.weightKg) : '',
-          unit: 'kg',
+          value: profile.weightKg ? String(Math.round(profile.weightKg * 2.20462)) : '',
+          unit: 'lbs',
           placeholder: '70',
-          onApply: (v) => { setEditField(null); updateFieldAndRecalc('weightKg', parseInt(v) || undefined); },
+          onApply: (v) => { setEditField(null); updateFieldAndRecalc('weightKg', Math.round(((parseInt(v) || 0) * 0.453592) * 10) / 10 || undefined); },
           onClose: () => setEditField(null),
         };
       case 'age':
@@ -218,12 +218,12 @@ export default function ProfileScreen() {
           </Pressable>
           <View style={s.statDivider} />
           <Pressable style={s.statBlock} onPress={() => setEditField('height')}>
-            <Text style={s.statValue}>{profile.heightCm ? `${profile.heightCm}cm` : '—'}</Text>
+            <Text style={s.statValue}>{profile.heightCm ? `${Math.floor(profile.heightCm / 2.54 / 12)}'${Math.round(profile.heightCm / 2.54 % 12)}"` : '—'}</Text>
             <Text style={s.statLabel}>Height</Text>
           </Pressable>
           <View style={s.statDivider} />
           <Pressable style={s.statBlock} onPress={() => setEditField('weight')}>
-            <Text style={s.statValue}>{profile.weightKg ? `${profile.weightKg}kg` : '—'}</Text>
+            <Text style={s.statValue}>{profile.weightKg ? `${Math.round(profile.weightKg * 2.20462)}lbs` : '—'}</Text>
             <Text style={s.statLabel}>Weight</Text>
           </Pressable>
           <View style={s.statDivider} />
