@@ -144,11 +144,12 @@ export async function findNearbyRestaurants(
   // When a target is NULL/0, its term contributes 0 — so "no targets" falls through
   // to sort by a tiebreaker (menu item id) inside each restaurant.
   //
-  // CROSS JOIN LATERAL picks ONE winning item per restaurant directly: for each
-  // bbox-passing restaurant, the inner subquery scores its menu items and returns
-  // the top-1. Avoids materializing the full Restaurant×MenuItem×MacroEstimate
-  // join, and frees the planner to use Restaurant_lat_lng_idx for the bbox
-  // filter (DISTINCT ON forced a pkey walk to preserve r.id ordering).
+  // The inner LATERAL reads macros directly from MenuItem (denormalized in
+  // pipeline-utils.ts and audited daily by /api/internal/audit-macro-drift),
+  // so it never joins MacroEstimate at the per-item level — a ~100× saving
+  // on the hot path. MacroEstimate is joined once per result via a single
+  // LEFT JOIN on best."menuItemId" to surface confidence, which still lives
+  // on MacroEstimate as part of the audit metadata.
   const rows = await prisma.$queryRaw<ScoredRow[]>`
     SELECT
       r.id            AS "restaurantId",
@@ -168,7 +169,7 @@ export async function findNearbyRestaurants(
       best."proteinG",
       best."carbsG",
       best."fatG",
-      best.confidence,
+      e.confidence    AS confidence,
       best."scoreSum",
       (
         sqrt(
@@ -181,31 +182,31 @@ export async function findNearbyRestaurants(
       SELECT
         m.id            AS "menuItemId",
         m.name          AS "itemName",
-        e.calories      AS calories,
-        e."proteinG"    AS "proteinG",
-        e."carbsG"      AS "carbsG",
-        e."fatG"        AS "fatG",
-        e.confidence    AS confidence,
+        m.calories      AS calories,
+        m."proteinG"    AS "proteinG",
+        m."carbsG"      AS "carbsG",
+        m."fatG"        AS "fatG",
         (
           CASE WHEN ${tCal}::double precision > 0
-               THEN power((e.calories - ${tCal}::double precision) / ${tCal}::double precision, 2)
+               THEN power((m.calories - ${tCal}::double precision) / ${tCal}::double precision, 2)
                ELSE 0 END
           + CASE WHEN ${tProt}::double precision > 0
-               THEN power((e."proteinG" - ${tProt}::double precision) / ${tProt}::double precision, 2)
+               THEN power((m."proteinG" - ${tProt}::double precision) / ${tProt}::double precision, 2)
                ELSE 0 END
           + CASE WHEN ${tCarb}::double precision > 0
-               THEN power((e."carbsG" - ${tCarb}::double precision) / ${tCarb}::double precision, 2)
+               THEN power((m."carbsG" - ${tCarb}::double precision) / ${tCarb}::double precision, 2)
                ELSE 0 END
           + CASE WHEN ${tFat}::double precision > 0
-               THEN power((e."fatG" - ${tFat}::double precision) / ${tFat}::double precision, 2)
+               THEN power((m."fatG" - ${tFat}::double precision) / ${tFat}::double precision, 2)
                ELSE 0 END
         )               AS "scoreSum"
       FROM "MenuItem" m
-      JOIN "MacroEstimate" e ON e."menuItemId" = m.id
       WHERE m."restaurantId" = r.id
+        AND m.calories IS NOT NULL
       ORDER BY "scoreSum" ASC, m.id ASC
       LIMIT 1
     ) AS best
+    LEFT JOIN "MacroEstimate" e ON e."menuItemId" = best."menuItemId"
     WHERE r.lat BETWEEN ${latMin} AND ${latMax}
       AND r.lng BETWEEN ${lngMin} AND ${lngMax}
       ${filters}
@@ -270,6 +271,9 @@ export async function findNearbyRestaurants(
 export async function getRestaurantMenu(
   restaurantId: string,
 ): Promise<MenuResponse | null> {
+  // Macros (calories/proteinG/carbsG/fatG) live on MenuItem itself.
+  // MacroEstimate stays as the audit log — we still pull confidence,
+  // hadPhoto, and estimatedAt from it for the menu detail screen.
   const restaurant = await prisma.restaurant.findUnique({
     where: { id: restaurantId },
     include: {
@@ -279,6 +283,11 @@ export async function getRestaurantMenu(
           macroEstimates: {
             orderBy: { estimatedAt: "desc" },
             take: 1,
+            select: {
+              confidence: true,
+              hadPhoto: true,
+              estimatedAt: true,
+            },
           },
         },
       },
@@ -292,6 +301,11 @@ export async function getRestaurantMenu(
     restaurantName: restaurant.name,
     menuItems: restaurant.menuItems.map((item) => {
       const estimate = item.macroEstimates[0] ?? null;
+      const hasMacros =
+        item.calories !== null &&
+        item.proteinG !== null &&
+        item.carbsG !== null &&
+        item.fatG !== null;
       return {
         id: item.id,
         name: item.name,
@@ -300,17 +314,18 @@ export async function getRestaurantMenu(
           : {}),
         ...(item.category !== null ? { category: item.category } : {}),
         ...(item.price !== null ? { price: item.price } : {}),
-        macros: estimate
-          ? {
-              calories: estimate.calories,
-              proteinG: estimate.proteinG,
-              carbsG: estimate.carbsG,
-              fatG: estimate.fatG,
-              confidence: estimate.confidence,
-              hadPhoto: estimate.hadPhoto,
-              estimatedAt: estimate.estimatedAt.toISOString(),
-            }
-          : null,
+        macros:
+          hasMacros && estimate
+            ? {
+                calories: item.calories!,
+                proteinG: item.proteinG!,
+                carbsG: item.carbsG!,
+                fatG: item.fatG!,
+                confidence: estimate.confidence,
+                hadPhoto: estimate.hadPhoto,
+                estimatedAt: estimate.estimatedAt.toISOString(),
+              }
+            : null,
       };
     }),
   };

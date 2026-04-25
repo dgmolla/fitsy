@@ -295,6 +295,10 @@ interface MockMenuItem {
   description: string | null;
   category: string | null;
   price: number | null;
+  calories: number | null;
+  proteinG: number | null;
+  carbsG: number | null;
+  fatG: number | null;
   macroEstimates: MockMacroEstimate[];
 }
 
@@ -329,6 +333,10 @@ function makeMacroEstimate(overrides: Partial<MockMacroEstimate> = {}): MockMacr
 }
 
 function makeMenuItem(overrides: Partial<MockMenuItem> = {}): MockMenuItem {
+  // Default macros mirror the default MacroEstimate so getRestaurantMenu
+  // serves them from MenuItem.* (production reads after Step 6 backfill).
+  // Override either side to test mismatched / missing scenarios.
+  const defaultEstimate = makeMacroEstimate();
   return {
     id: "item-1",
     restaurantId: "rest-1",
@@ -336,7 +344,11 @@ function makeMenuItem(overrides: Partial<MockMenuItem> = {}): MockMenuItem {
     description: null,
     category: null,
     price: null,
-    macroEstimates: [makeMacroEstimate()],
+    calories: defaultEstimate.calories,
+    proteinG: defaultEstimate.proteinG,
+    carbsG: defaultEstimate.carbsG,
+    fatG: defaultEstimate.fatG,
+    macroEstimates: [defaultEstimate],
     ...overrides,
   };
 }
@@ -387,7 +399,7 @@ describe("getRestaurantMenu", () => {
     expect(result?.menuItems).toHaveLength(2);
   });
 
-  it("maps macros from the latest estimate (first element in array)", async () => {
+  it("maps macros from MenuItem (denormalized) plus confidence/hadPhoto/estimatedAt from MacroEstimate", async () => {
     const estimatedAt = new Date("2025-06-15T12:00:00.000Z");
     const r = makeRestaurant({
       id: "rest-1",
@@ -395,6 +407,12 @@ describe("getRestaurantMenu", () => {
         makeMenuItem({
           id: "item-1",
           name: "Salad",
+          // Macros now live on MenuItem itself; MacroEstimate retains
+          // confidence/hadPhoto/estimatedAt as audit metadata.
+          calories: 450,
+          proteinG: 30,
+          carbsG: 40,
+          fatG: 15,
           macroEstimates: [
             makeMacroEstimate({
               calories: 450,
