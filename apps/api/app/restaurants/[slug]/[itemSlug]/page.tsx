@@ -15,19 +15,26 @@ const EARLY_ACCESS_URL = "https://testflight.apple.com/join/fitsy";
 
 // ─── Static params ────────────────────────────────────────────────────────────
 
+// Cap pre-rendered pages — full restaurants × items cross-product overflows
+// Next.js page collection on large catalogs. Uncapped params are still
+// reachable via on-demand ISR.
+const MAX_STATIC_ITEM_PAGES = 500;
+
 export async function generateStaticParams() {
   try {
     const restaurants = await prisma.restaurant.findMany({
       select: {
         name: true,
-        menuItems: { select: { name: true } },
+        menuItems: { select: { name: true }, take: 25 },
       },
+      take: 50,
     });
     const params: { slug: string; itemSlug: string }[] = [];
-    for (const r of restaurants) {
+    outer: for (const r of restaurants) {
       const slug = slugify(r.name);
       for (const item of r.menuItems) {
         params.push({ slug, itemSlug: slugify(item.name) });
+        if (params.length >= MAX_STATIC_ITEM_PAGES) break outer;
       }
     }
     return params;
