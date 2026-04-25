@@ -41,7 +41,7 @@ describe("MenuSourceResolver", () => {
     const result = await resolver.resolve("McDonald's", "LA");
     expect(result.found).toBe(true);
     expect(result.sourceId).toBe("ffn");
-    expect(ffn.lookup).toHaveBeenCalledWith("McDonald's", "LA");
+    expect(ffn.lookup).toHaveBeenCalledWith("McDonald's", "LA", undefined);
     expect(ubereats.lookup).not.toHaveBeenCalled();
   });
 
@@ -103,8 +103,8 @@ describe("MenuSourceResolver", () => {
     const resolver = new MenuSourceResolver([ffn, ubereats]);
 
     await resolver.resolve("Nobu", "903 N La Cienega Blvd, West Hollywood");
-    expect(ffn.lookup).toHaveBeenCalledWith("Nobu", "903 N La Cienega Blvd, West Hollywood");
-    expect(ubereats.lookup).toHaveBeenCalledWith("Nobu", "903 N La Cienega Blvd, West Hollywood");
+    expect(ffn.lookup).toHaveBeenCalledWith("Nobu", "903 N La Cienega Blvd, West Hollywood", undefined);
+    expect(ubereats.lookup).toHaveBeenCalledWith("Nobu", "903 N La Cienega Blvd, West Hollywood", undefined);
   });
 
   // S-133: Verify per-source attempt tracking

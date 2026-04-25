@@ -21,7 +21,22 @@ const config = {
         },
       },
     ],
+    "^.+\\.jsx?$": [
+      "ts-jest",
+      {
+        tsconfig: {
+          module: "CommonJS",
+          moduleResolution: "node",
+          allowJs: true,
+          paths: {},
+          strict: false,
+        },
+      },
+    ],
   },
+  transformIgnorePatterns: [
+    "node_modules/(?!@t3-oss/)",
+  ],
   testMatch: ["**/*.test.ts", "**/*.test.tsx"],
   collectCoverageFrom: [
     "lib/**/*.ts",

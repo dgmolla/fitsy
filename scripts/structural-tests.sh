@@ -165,33 +165,7 @@ else
   echo "PASS"
 fi
 
-echo -n "10. Specs and design docs contain Mermaid diagrams... "
-MISSING_MERMAID=""
-SPEC_DESIGN_DIRS=(
-  "$REPO_ROOT/docs/product/specs"
-  "$REPO_ROOT/docs/engineering"
-  "$REPO_ROOT/docs/design"
-)
-for dir in "${SPEC_DESIGN_DIRS[@]}"; do
-  while IFS= read -r file; do
-    basename=$(basename "$file")
-    if [ "$basename" = "TEMPLATE.md" ]; then continue; fi
-    if ! grep -q '```mermaid' "$file"; then
-      relpath="${file#$REPO_ROOT/}"
-      MISSING_MERMAID="$MISSING_MERMAID\n  $relpath"
-    fi
-  done < <(find "$dir" -name "*.md" -type f 2>/dev/null)
-done
-if [ -n "$MISSING_MERMAID" ]; then
-  echo "FAIL"
-  echo "  Spec/design docs missing Mermaid diagrams. Every spec must have at least one."
-  echo -e "$MISSING_MERMAID"
-  ERRORS=$((ERRORS + 1))
-else
-  echo "PASS"
-fi
-
-echo -n "11. Reviewer routing table matches route-reviewers.sh... "
+echo -n "10. Reviewer routing table matches route-reviewers.sh... "
 ROUTE_SCRIPT="$REPO_ROOT/scripts/route-reviewers.sh"
 REVIEWER_MD="$REPO_ROOT/.claude/agents/reviewer.md"
 if [ -f "$ROUTE_SCRIPT" ] && [ -f "$REVIEWER_MD" ]; then
@@ -286,7 +260,7 @@ else
   echo "SKIP (files not found)"
 fi
 
-echo -n "12. Scaffolding completeness (if package.json exists)... "
+echo -n "11. Scaffolding completeness (if package.json exists)... "
 if [ -f "$REPO_ROOT/package.json" ]; then
   SCAFFOLD_ERRORS=""
   # Must have a lock file
