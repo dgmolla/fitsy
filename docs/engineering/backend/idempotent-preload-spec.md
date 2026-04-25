@@ -54,10 +54,14 @@ change. However:
 - It is inconsistent with `preload.ts`, so operators may choose the wrong
   script for a re-run.
 
-### `scripts/rescrape-thin.ts` — correct pattern
+### Targeted re-scrape — historical pattern
 
-Uses `findFirst` + `update` (or `create`), never deletes. This is the safe
-pattern. It exists only for targeted re-scraping of specific restaurants.
+A previous `scripts/rescrape-thin.ts` used `findFirst` + `update` (or
+`create`) without ever deleting — the safe pattern for targeted re-scraping
+of specific restaurants. The script was removed when the macro denormalization
+work consolidated all writes through `persistItemsInTx` / `persistHexBulkInTx`
+to keep `MenuItem.calories/proteinG/carbsG/fatG` in sync with `MacroEstimate`.
+Re-scraping today goes through the bulk path.
 
 ---
 
@@ -146,9 +150,11 @@ multiple estimates per item (see `MacroEstimate[]` relation). For the preload
 pipeline specifically, we want exactly one active estimate per item. We add the
 constraint on `menuItemId` and keep `ON CONFLICT DO UPDATE`.
 
-> **Note:** The `reestimate-low.ts` script uses `findFirst` + `update` and will
-> continue to work correctly after adding this constraint — it updates the
-> existing estimate in place.
+> **Note:** A previous `reestimate-low.ts` script used `findFirst` + `update`
+> to re-score low-confidence estimates. It was removed when macros were
+> denormalized onto `MenuItem` — re-estimation now needs to update both
+> tables atomically and should be reintroduced through the bulk persist path
+> if needed.
 
 ### 3. Unique constraint on `MacroEstimate(menuItemId)`
 
@@ -296,7 +302,7 @@ WHERE id NOT IN (
 | 3 | Refactor `persistItems` in `preload.ts` — upsert instead of delete+insert | `scripts/preload.ts` |
 | 4 | Wrap per-restaurant work in transaction | `scripts/preload.ts` |
 | 5 | Refactor `upsertMacroEstimate` in `preload-rest.ts` — remove delete step | `scripts/preload-rest.ts` |
-| 6 | Verify `rescrape-thin.ts` already follows correct pattern | `scripts/rescrape-thin.ts` |
+| 6 | (removed) `rescrape-thin.ts` deleted as part of macro denormalization — re-scrapes go through `persistItemsInTx` | — |
 | 7 | Update `preload-runbook.md` — remove the "wipe and re-preload" truncate step | `docs/engineering/backend/preload-runbook.md` |
 
 ---
@@ -321,4 +327,4 @@ unit test in the backend test suite (`apps/api/` or `scripts/`) that:
   broken saved-item references. Deferred to a future sprint.
 - Multi-estimate-per-item history — not needed for MVP. The `@unique` on
   `MacroEstimate(menuItemId)` explicitly removes this option for now.
-- Idempotency of `reestimate-low.ts` — already correct; no changes needed.
+- (removed) `reestimate-low.ts` was deleted with the macro denormalization work; re-introducing LLM re-scoring is deferred and must update both `MenuItem` and `MacroEstimate` atomically.
