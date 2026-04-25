@@ -15,33 +15,12 @@ const EARLY_ACCESS_URL = "https://testflight.apple.com/join/fitsy";
 
 // ─── Static params ────────────────────────────────────────────────────────────
 
-// Cap pre-rendered pages — full restaurants × items cross-product overflows
-// Next.js page collection on large catalogs. Uncapped params are still
-// reachable via on-demand ISR.
-const MAX_STATIC_ITEM_PAGES = 500;
-
+// Skip pre-rendering at build — same reason as [slug]/page: per-page DB
+// fan-out exhausts the connection pool when generating thousands of pages
+// in parallel. Pages are still generated on first request and cached per
+// `revalidate` (86400s).
 export async function generateStaticParams() {
-  try {
-    const restaurants = await prisma.restaurant.findMany({
-      select: {
-        name: true,
-        menuItems: { select: { name: true }, take: 25 },
-      },
-      take: 50,
-    });
-    const params: { slug: string; itemSlug: string }[] = [];
-    outer: for (const r of restaurants) {
-      const slug = slugify(r.name);
-      for (const item of r.menuItems) {
-        params.push({ slug, itemSlug: slugify(item.name) });
-        if (params.length >= MAX_STATIC_ITEM_PAGES) break outer;
-      }
-    }
-    return params;
-  } catch {
-    // DB unreachable at build time (e.g. CI without DB) — fall back to on-demand ISR
-    return [];
-  }
+  return [];
 }
 
 // ─── Data fetching ────────────────────────────────────────────────────────────
