@@ -144,24 +144,41 @@ export async function findNearbyRestaurants(
   // When a target is NULL/0, its term contributes 0 — so "no targets" falls through
   // to sort by a tiebreaker (menu item id) inside each restaurant.
   //
-  // DISTINCT ON (r.id) + ORDER BY r.id, scoreSum picks ONE winning item per
-  // restaurant server-side, so we ship ~N restaurants instead of N×M items.
-  //
-  // Final ORDER BY sorts by matchScore when targets are active, distance otherwise.
+  // CROSS JOIN LATERAL picks ONE winning item per restaurant directly: for each
+  // bbox-passing restaurant, the inner subquery scores its menu items and returns
+  // the top-1. Avoids materializing the full Restaurant×MenuItem×MacroEstimate
+  // join, and frees the planner to use Restaurant_lat_lng_idx for the bbox
+  // filter (DISTINCT ON forced a pkey walk to preserve r.id ordering).
   const rows = await prisma.$queryRaw<ScoredRow[]>`
-    WITH best_per_restaurant AS (
-      SELECT DISTINCT ON (r.id)
-        r.id            AS "restaurantId",
-        r.name          AS name,
-        r.address       AS address,
-        r.lat           AS lat,
-        r.lng           AS lng,
-        r."cuisineTags" AS "cuisineTags",
-        r."chainFlag"   AS "chainFlag",
-        r."photoUrl"    AS "photoUrl",
-        r.rating        AS rating,
-        r."priceLevel"  AS "priceLevel",
-        r."dietaryOptions" AS "dietaryOptions",
+    SELECT
+      r.id            AS "restaurantId",
+      r.name          AS name,
+      r.address       AS address,
+      r.lat           AS lat,
+      r.lng           AS lng,
+      r."cuisineTags" AS "cuisineTags",
+      r."chainFlag"   AS "chainFlag",
+      r."photoUrl"    AS "photoUrl",
+      r.rating        AS rating,
+      r."priceLevel"  AS "priceLevel",
+      r."dietaryOptions" AS "dietaryOptions",
+      best."menuItemId",
+      best."itemName",
+      best.calories,
+      best."proteinG",
+      best."carbsG",
+      best."fatG",
+      best.confidence,
+      best."scoreSum",
+      (
+        sqrt(
+          power(r.lat - ${lat}::double precision, 2)
+          + power((r.lng - ${lng}::double precision) * cos(${lat}::double precision * pi() / 180), 2)
+        ) * 69
+      ) AS "distanceMiles"
+    FROM "Restaurant" r
+    CROSS JOIN LATERAL (
+      SELECT
         m.id            AS "menuItemId",
         m.name          AS "itemName",
         e.calories      AS calories,
@@ -183,36 +200,29 @@ export async function findNearbyRestaurants(
                THEN power((e."fatG" - ${tFat}::double precision) / ${tFat}::double precision, 2)
                ELSE 0 END
         )               AS "scoreSum"
-      FROM "Restaurant" r
-      JOIN "MenuItem" m ON m."restaurantId" = r.id
+      FROM "MenuItem" m
       JOIN "MacroEstimate" e ON e."menuItemId" = m.id
-      WHERE r.lat BETWEEN ${latMin} AND ${latMax}
-        AND r.lng BETWEEN ${lngMin} AND ${lngMax}
-        ${filters}
-      ORDER BY r.id, "scoreSum" ASC, m.id ASC
-    )
-    SELECT
-      *,
-      (
+      WHERE m."restaurantId" = r.id
+      ORDER BY "scoreSum" ASC, m.id ASC
+      LIMIT 1
+    ) AS best
+    WHERE r.lat BETWEEN ${latMin} AND ${latMax}
+      AND r.lng BETWEEN ${lngMin} AND ${lngMax}
+      ${filters}
+      AND (
         sqrt(
-          power(lat - ${lat}::double precision, 2)
-          + power((lng - ${lng}::double precision) * cos(${lat}::double precision * pi() / 180), 2)
+          power(r.lat - ${lat}::double precision, 2)
+          + power((r.lng - ${lng}::double precision) * cos(${lat}::double precision * pi() / 180), 2)
         ) * 69
-      ) AS "distanceMiles"
-    FROM best_per_restaurant
-    WHERE (
-      sqrt(
-        power(lat - ${lat}::double precision, 2)
-        + power((lng - ${lng}::double precision) * cos(${lat}::double precision * pi() / 180), 2)
-      ) * 69
-    ) <= ${radiusMiles}::double precision
+      ) <= ${radiusMiles}::double precision
     ORDER BY
-      CASE WHEN ${targetsActive}::boolean THEN "scoreSum" ELSE NULL END ASC NULLS LAST,
+      CASE WHEN ${targetsActive}::boolean THEN best."scoreSum" ELSE NULL END ASC NULLS LAST,
       "distanceMiles" ASC
+    LIMIT ${limit}
   `;
 
   const total = rows.length;
-  const paginated = rows.slice(0, limit);
+  const paginated = rows;
 
   const data: RestaurantResult[] = paginated.map((r) => ({
     id: r.restaurantId,

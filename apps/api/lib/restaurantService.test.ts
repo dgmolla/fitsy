@@ -132,8 +132,10 @@ describe("findNearbyRestaurants", () => {
     expect(result.data[1]?.id).toBe("worse");
   });
 
-  it("respects limit — returns at most limit restaurants but reports full total", async () => {
-    const rows = Array.from({ length: 5 }, (_, i) =>
+  it("respects limit — SQL pushes LIMIT down so data and total reflect the bounded result", async () => {
+    // With LIMIT pushed into SQL, the DB returns at most `limit` rows.
+    // Both `data.length` and `total` reflect that bounded result.
+    const rows = Array.from({ length: 3 }, (_, i) =>
       makeScoredRow({ restaurantId: `rest-${i}` }),
     );
     mockQueryRaw.mockResolvedValue(rows);
@@ -141,7 +143,7 @@ describe("findNearbyRestaurants", () => {
     const result = await findNearbyRestaurants({ ...BASE_PARAMS, limit: 3 });
 
     expect(result.data).toHaveLength(3);
-    expect(result.total).toBe(5);
+    expect(result.total).toBe(3);
   });
 
   it("returns distanceMiles rounded to 2 decimal places", async () => {
