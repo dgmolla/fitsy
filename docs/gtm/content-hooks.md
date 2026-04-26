@@ -40,6 +40,16 @@ Multi-part content that builds a following.
 
 ---
 
+## Food-First / Soft Plug Format
+
+Inverts the hook structure — lead with the meal, plug the app at the end. Best for indie/mom-and-pop spots where the food itself is the hook.
+
+- Creator opens at an indie restaurant with a healthy-looking plate already in front of them
+- Talk through the meal — what's in it, why it hits macros, why it actually tastes good
+- Close with the plug: "I only found this place because of Fitsy" → quick app screen showing how it surfaced
+
+---
+
 ## Research / Inspiration
 
 - Copy Cal AI content formats/hooks. Study top-liked Cal AI UGC content and adapt to Fitsy — same "scan and reveal" energy but applied to restaurant discovery instead of plate scanning.
