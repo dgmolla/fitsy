@@ -215,7 +215,7 @@ function HeroCard({ result }: { result: RestaurantResult }) {
         });
         router.push({
           pathname: `/restaurant/${result.id}`,
-          params: { address: result.address, distance: result.distanceMiles?.toFixed(1), photoUrl: result.photoUrl },
+          params: { address: result.address, distance: result.distanceMiles?.toFixed(1), photoUrl: result.photoUrl, cuisine: result.cuisineTags?.[0] },
         });
       }}
       accessibilityLabel={`${result.name}${result.bestMatch ? `, best match: ${result.bestMatch.name}` : ''}`}
@@ -267,7 +267,7 @@ function DishCard({ result, onPress }: { result: RestaurantResult; onPress?: () 
         } else {
           router.push({
             pathname: `/restaurant/${result.id}`,
-            params: { address: result.address, distance: result.distanceMiles?.toFixed(1), photoUrl: result.photoUrl },
+            params: { address: result.address, distance: result.distanceMiles?.toFixed(1), photoUrl: result.photoUrl, cuisine: result.cuisineTags?.[0] },
           });
         }
       }}
@@ -293,7 +293,7 @@ function RestaurantSection({ result, index }: { result: RestaurantResult; index:
   function navigateToRestaurant() {
     router.push({
       pathname: `/restaurant/${result.id}`,
-      params: { address: result.address, distance: result.distanceMiles?.toFixed(1), photoUrl: result.photoUrl },
+      params: { address: result.address, distance: result.distanceMiles?.toFixed(1), photoUrl: result.photoUrl, cuisine: result.cuisineTags?.[0] },
     });
   }
 
