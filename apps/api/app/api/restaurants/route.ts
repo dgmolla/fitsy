@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { findNearbyRestaurants } from "@/lib/restaurantService";
 import { requireAuth } from "@/lib/auth";
+import { getApiEmitter } from "@/lib/apiEmitter";
 import type { RestaurantsApiResponse } from "@fitsy/shared";
 
 export async function GET(
@@ -122,15 +123,18 @@ export async function GET(
       limit,
     });
     const tDone = Date.now();
-    console.log(
-      JSON.stringify({
-        event: "fitsy_search_route",
-        auth_ms: tAfterAuth - tEntry,
-        query_ms: tDone - tBeforeQuery,
-        route_total_ms: tDone - tEntry,
-        results: total,
-      }),
-    );
+    const emitter = getApiEmitter();
+    emitter.emitSearchRoute({
+      route: "/api/restaurants",
+      auth_ms: tAfterAuth - tEntry,
+      query_ms: tDone - tBeforeQuery,
+      duration_ms: tDone - tEntry,
+      result_count: total,
+      has_targets: Object.keys(targets).length > 0,
+      ...(cuisineTypeRaw !== null ? { cuisine_filter: cuisineTypeRaw } : {}),
+      status: 200,
+    });
+    after(() => emitter.flush());
 
     return NextResponse.json(
       { data, meta: { total, limit } },
