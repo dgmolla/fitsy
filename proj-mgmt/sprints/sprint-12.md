@@ -33,7 +33,7 @@ kanban-plugin: basic
 
 - [ ] **S-216 Age rating form (4+)** — App Store Connect age rating questionnaire. 30 min. #cto #wave-5
 
-- [ ] **S-217 RevenueCat paywall wiring** — full launch-plan.md:66-92 section. Deprecate Stripe, create products in App Store Connect (`fitsy_monthly` $4.99/mo, `fitsy_annual` $29.99/yr, 7-day trial), install `react-native-purchases`, wire welcome/payment screen, server-side entitlement verification. IAP only testable on EAS build. Defer until Wave 4 go/no-go is green. #frontend #backend #wave-5
+- [ ] **S-217 RevenueCat paywall wiring (hard-wall model)** — full launch-plan.md:66-92 section + product decision: trial is the only path into the app. Deprecate Stripe, create products in App Store Connect (`fitsy_monthly` $4.99/mo, `fitsy_annual` $29.99/yr, 7-day trial), install `react-native-purchases`, wire welcome/payment screen, server-side entitlement verification. **Hard-wall requirements**: (a) `welcome/payment.tsx` is terminal for non-subscribers — no "Skip" / "Continue without signing up" / "Try later" affordance; (b) decline path returns to the same screen with a clarifying value-prop sub-screen, never to the app proper; (c) returning users who tap "Already have account?" still go through entitlement check — expired sub = bounced to trial screen, no app access; (d) every protected route checks RevenueCat entitlement, not just login state. IAP only testable on EAS build. Defer impl until Wave 4 go/no-go is green; the hard-wall product decision is locked now. #frontend #backend #wave-5
 
 ## In Progress
 
