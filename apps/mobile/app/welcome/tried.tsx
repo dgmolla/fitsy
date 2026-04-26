@@ -18,7 +18,7 @@ export default function TriedScreen() {
 
   return (
     <WelcomeScreen
-      progress={2 / 16}
+      progress={2 / 15}
       title={"What have you tried\nfor healthy eating?"}
       subtitle="Choose one."
       onContinue={() => {

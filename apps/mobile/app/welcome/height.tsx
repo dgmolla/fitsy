@@ -45,7 +45,7 @@ export default function HeightScreen() {
 
   return (
     <WelcomeScreen
-      progress={9 / 16}
+      progress={8 / 15}
       title="How tall are you?"
       subtitle="Scroll to your height."
       onContinue={async () => {

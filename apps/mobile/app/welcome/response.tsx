@@ -60,7 +60,7 @@ export default function ResponseScreen() {
             <Ionicons name="chevron-back" size={22} color={EDITORIAL.textMid} />
           </Pressable>
           <View style={s.progressTrack}>
-            <View style={[s.progressFill, { width: `${Math.round((3 / 16) * 100)}%` }]} />
+            <View style={[s.progressFill, { width: `${Math.round((3 / 15) * 100)}%` }]} />
           </View>
         </View>
 
@@ -83,7 +83,7 @@ export default function ResponseScreen() {
         <Animated.View entering={FadeIn.duration(400).delay(400)}>
           <AnimatedPress
             style={s.cta}
-            onPress={() => router.push('/welcome/promise')}
+            onPress={() => router.push('/welcome/how-it-works')}
             haptic
             accessibilityRole="button"
           >

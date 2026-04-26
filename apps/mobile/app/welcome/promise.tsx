@@ -16,7 +16,7 @@ export default function PromiseScreen() {
             <Ionicons name="chevron-back" size={22} color={EDITORIAL.textMid} />
           </Pressable>
           <View style={s.progressTrack}>
-            <View style={[s.progressFill, { width: `${Math.round((4 / 16) * 100)}%` }]} />
+            <View style={[s.progressFill, { width: `${Math.round((1 / 15) * 100)}%` }]} />
           </View>
         </View>
 
@@ -69,7 +69,7 @@ export default function PromiseScreen() {
         <Animated.View entering={FadeInDown.duration(500).delay(400)}>
           <AnimatedPress
             style={s.cta}
-            onPress={() => router.push('/welcome/how-it-works')}
+            onPress={() => router.push('/welcome/tried')}
             haptic
             accessibilityRole="button"
           >

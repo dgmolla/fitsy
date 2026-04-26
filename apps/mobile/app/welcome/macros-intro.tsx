@@ -14,7 +14,7 @@ const MACROS = [
 export default function MacrosIntroScreen() {
   return (
     <WelcomeScreen
-      progress={5 / 15}
+      progress={6 / 15}
       title="What are macros?"
       subtitle="Every meal breaks down into three macronutrients. Knowing yours helps you eat smarter."
       onContinue={() => router.push('/welcome/macros-fitsy')}

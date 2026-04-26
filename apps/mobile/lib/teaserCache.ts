@@ -1,2 +1,4 @@
-/** Shared cache so the finding screen can pre-fetch for the teaser screen. */
-export const prefetchedRestaurants: { data: unknown[] | null } = { data: null };
+import type { PreviewRestaurant } from './previewSearch';
+
+/** Shared cache so the finding screen can pre-fetch for the results screen. */
+export const prefetchedRestaurants: { data: PreviewRestaurant[] | null } = { data: null };

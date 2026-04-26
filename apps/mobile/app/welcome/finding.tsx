@@ -4,9 +4,7 @@ import AnimatedRN, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { EDITORIAL, FONTS } from '@/lib/brand';
-import { getMacroTargets } from '@/lib/macroStorage';
-import { FALLBACK_LAT, FALLBACK_LNG } from '@/lib/useLocation';
-import { api } from '@/lib/api';
+import { fetchPreviewRestaurants } from '@/lib/previewSearch';
 import { prefetchedRestaurants } from '@/lib/teaserCache';
 
 const MIN_DISPLAY_MS = 2200;
@@ -27,24 +25,15 @@ export default function FindingScreen() {
 
     async function prefetch() {
       try {
-        const macros = await getMacroTargets();
-        const params = new URLSearchParams({
-          lat: String(FALLBACK_LAT),
-          lng: String(FALLBACK_LNG),
-          ...(macros?.protein ? { protein: macros.protein } : {}),
-          ...(macros?.carbs ? { carbs: macros.carbs } : {}),
-          ...(macros?.fat ? { fat: macros.fat } : {}),
-          ...(macros?.calories ? { calories: macros.calories } : {}),
-        });
-        const res = await api.get<{ data: unknown[] }>(`/api/restaurants/preview?${params.toString()}`);
-        prefetchedRestaurants.data = res.data;
+        const data = await fetchPreviewRestaurants();
+        prefetchedRestaurants.data = data;
       } catch {
-        // teaser has its own fallback
+        // results screen has its own fallback
       }
 
       const elapsed = Date.now() - start;
       const remaining = Math.max(0, MIN_DISPLAY_MS - elapsed);
-      setTimeout(() => router.replace('/welcome/trial'), remaining);
+      setTimeout(() => router.replace('/welcome/results'), remaining);
     }
 
     prefetch();
@@ -55,7 +44,7 @@ export default function FindingScreen() {
       <View style={s.content}>
         <View style={s.topBar}>
           <View style={s.progressTrack}>
-            <View style={[s.progressFill, { width: `${Math.round((15 / 16) * 100)}%` }]} />
+            <View style={[s.progressFill, { width: `${Math.round((14 / 15) * 100)}%` }]} />
           </View>
         </View>
 

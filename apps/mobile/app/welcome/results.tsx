@@ -5,8 +5,8 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { EDITORIAL, FONTS } from '@/lib/brand';
-import { FALLBACK_LAT, FALLBACK_LNG } from '@/lib/useLocation';
-import { api } from '@/lib/api';
+import { prefetchedRestaurants } from '@/lib/teaserCache';
+import { fetchPreviewRestaurants, type PreviewRestaurant } from '@/lib/previewSearch';
 
 const CARD_H = 112;
 
@@ -25,18 +25,6 @@ function getMockImage(name: string): string {
   return MOCK_IMAGES[h % MOCK_IMAGES.length]!;
 }
 
-interface PreviewRestaurant {
-  id: string;
-  name: string;
-  cuisineTags: string[];
-  distanceMiles: number;
-  photoUrl?: string;
-}
-
-interface PreviewResponse {
-  data: PreviewRestaurant[];
-}
-
 function formatCuisine(tags: string[]): string {
   if (tags.length === 0) return 'Restaurant';
   const tag = tags[0]!;
@@ -48,7 +36,6 @@ function formatDistance(miles: number): string {
 }
 
 function imageSource(uri: string) {
-  // UberEats CDN requires Referer header or it returns 403
   if (uri.includes('uber.com')) {
     return { uri, headers: { Referer: 'https://www.ubereats.com' } };
   }
@@ -81,9 +68,6 @@ function RestaurantCard({ restaurant, delay }: { restaurant: PreviewRestaurant; 
           </View>
           <View style={s.cardBottom}>
             <Text style={s.cardName} numberOfLines={1}>{restaurant.name}</Text>
-            <View style={s.lockedPill}>
-              <Text style={s.lockedPillTxt}>🔒 meals that fit your macros</Text>
-            </View>
           </View>
         </View>
       </ImageBackground>
@@ -103,25 +87,25 @@ function SkeletonCard({ delay }: { delay: number }) {
   );
 }
 
-export default function TeaserScreen() {
+export default function ResultsScreen() {
   const [restaurants, setRestaurants] = useState<PreviewRestaurant[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
+      // Use prefetched data from finding screen if available
+      if (prefetchedRestaurants.data && prefetchedRestaurants.data.length > 0) {
+        setRestaurants(prefetchedRestaurants.data);
+        setLoading(false);
+        return;
+      }
+
+      // Fallback: fetch directly
       try {
-        const params = new URLSearchParams({
-          lat: String(FALLBACK_LAT),
-          lng: String(FALLBACK_LNG),
-        });
-        const res = await api.get<PreviewResponse>(`/api/restaurants/preview?${params.toString()}`);
-        setRestaurants(res.data);
+        const data = await fetchPreviewRestaurants();
+        setRestaurants(data);
       } catch {
-        // Fall back to visually-rich mock cards so the teaser is never blank
-        setRestaurants([
-          { id: 'm1', name: 'Sweetgreen', cuisineTags: ['salads', 'healthy'], distanceMiles: 0.4, photoUrl: MOCK_IMAGES[0]! },
-          { id: 'm2', name: 'Chipotle', cuisineTags: ['mexican'], distanceMiles: 0.9, photoUrl: MOCK_IMAGES[1]! },
-        ]);
+        setRestaurants([]);
       } finally {
         setLoading(false);
       }
@@ -135,28 +119,27 @@ export default function TeaserScreen() {
 
   return (
     <WelcomeScreen
-      progress={1 / 16}
-      title="We find restaurants with meals that hit your targets."
-      subtitle="Tell us a few things about you, and we'll match you to spots near you."
-      onContinue={() => router.push('/welcome/tried')}
-      onBack={() => router.back()}
+      progress={14 / 15}
+      title="Restaurants that fit your macros."
+      subtitle="These spots near you have meals that match your targets."
+      onContinue={() => router.push('/welcome/trial')}
       canContinue
       continueLabel="Continue"
     >
       <View style={s.list}>
         {showSkeletons &&
-          [0, 1].map((i) => <SkeletonCard key={i} delay={i * 60} />)
+          [0, 1, 2].map((i) => <SkeletonCard key={i} delay={i * 60} />)
         }
 
         {showRestaurants &&
-          restaurants.slice(0, 2).map((r, i) => (
+          restaurants.slice(0, 3).map((r, i) => (
             <RestaurantCard key={r.id} restaurant={r} delay={i * 80} />
           ))
         }
 
         {showEmpty && (
           <Animated.View entering={FadeInDown.duration(400)} style={s.emptyWrap}>
-            <Text style={s.emptyTxt}>Ready to find your restaurants.</Text>
+            <Text style={s.emptyTxt}>We're still adding restaurants in your area.</Text>
           </Animated.View>
         )}
       </View>
@@ -165,9 +148,9 @@ export default function TeaserScreen() {
         entering={FadeInDown.duration(400).delay(500)}
         style={s.callout}
       >
-        <Text style={s.calloutEmoji}>✨</Text>
+        <Text style={s.calloutEmoji}>🔓</Text>
         <Text style={s.calloutTxt}>
-          Once we know your goals, we'll show you exactly which meals at each spot fit your macros.
+          Subscribe to see exactly which meals at each spot fit your macros.
         </Text>
       </Animated.View>
     </WelcomeScreen>
@@ -177,7 +160,6 @@ export default function TeaserScreen() {
 const s = StyleSheet.create({
   list: { gap: 10, marginBottom: 24 },
 
-  // Image card
   card: {
     height: CARD_H,
     borderRadius: 16,
@@ -220,16 +202,7 @@ const s = StyleSheet.create({
     color: '#fff',
     letterSpacing: -0.4,
   },
-  lockedPill: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  lockedPillTxt: { fontSize: 11, color: 'rgba(255,255,255,0.8)', letterSpacing: 0.1 },
 
-  // Skeleton card
   skelCard: { justifyContent: 'flex-start', padding: 14 },
   skelTopRow: { flexDirection: 'row', justifyContent: 'space-between' },
   skelLine: {

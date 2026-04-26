@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  FlatList,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -31,14 +31,14 @@ export function StatPicker({ min, max, value, onChange, formatter = String }: Pr
     return arr;
   }, [min, max]);
 
-  const listRef = useRef<FlatList<number>>(null);
+  const scrollRef = useRef<ScrollView>(null);
   const lastIdxRef = useRef(value - min);
   const [selectedIdx, setSelectedIdx] = useState(value - min);
 
   // Re-center when min/value change (e.g., unit toggle).
   useEffect(() => {
     const idx = Math.max(0, Math.min(data.length - 1, value - min));
-    listRef.current?.scrollToOffset({ offset: idx * ROW_H, animated: false });
+    scrollRef.current?.scrollTo({ y: idx * ROW_H, animated: false });
     lastIdxRef.current = idx;
     setSelectedIdx(idx);
   }, [data.length, value, min]);
@@ -58,25 +58,23 @@ export function StatPicker({ min, max, value, onChange, formatter = String }: Pr
     <View style={s.col}>
       <View pointerEvents="none" style={s.indicator} />
 
-      <FlatList
-        ref={listRef}
-        data={data}
-        keyExtractor={(item) => String(item)}
+      <ScrollView
+        ref={scrollRef}
         showsVerticalScrollIndicator={false}
         snapToInterval={ROW_H}
         decelerationRate="fast"
-        getItemLayout={(_, index) => ({ length: ROW_H, offset: ROW_H * index, index })}
         contentContainerStyle={s.listContent}
         onScroll={handleScroll}
         scrollEventThrottle={16}
-        renderItem={({ item, index }) => (
-          <View style={s.row}>
+      >
+        {data.map((item, index) => (
+          <View key={item} style={s.row}>
             <Text style={[s.num, index === selectedIdx && s.numOn]}>
               {formatter(item)}
             </Text>
           </View>
-        )}
-      />
+        ))}
+      </ScrollView>
 
       <LinearGradient
         pointerEvents="none"
