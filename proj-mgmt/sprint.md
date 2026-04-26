@@ -28,9 +28,15 @@
 
 ## Conventions
 
-- Each sprint file uses Obsidian Kanban format (`kanban-plugin: basic`)
-- Cards: `- [ ] **S-XX** Description #role #OKR ^dep-S-YY`
-- Dependencies: `^dep-S-XX`
-- Completion: `@completed(YYYY-MM-DD)`
-- Wave membership: `#wave-N` tag on each card
-- `CURRENT_SPRINT` HTML comment points to the active sprint
+- Each sprint file uses Obsidian Kanban format (`kanban-plugin: basic`).
+- Sections: `## Backlog`, `## In Progress`, `## Done`. Do **not** add wave subheaders inside them — wave context comes from `#wave-N` tags on each card so Obsidian filters still work.
+- Cards: `- [ ] **S-XX Title** — description #role #OKR #wave-N ^dep-S-YY`
+  - The S-id and short title go inside one bold span so the eye lands on the topic when scanning.
+  - Description is one to two lines after an em-dash. Keep the entry-point file path (`apps/.../foo.ts:42`) inline if the agent will need it. Detailed notes live in the commit message, not the card.
+  - When marking done, replace `[ ]` with `[x]` and append `@completed(YYYY-MM-DD)` to the line.
+- Dependencies: `^dep-S-XX` tag on the dependent card.
+- Completion: `@completed(YYYY-MM-DD)`.
+- Wave membership: `#wave-N` tag on each card.
+- `CURRENT_SPRINT` HTML comment points to the active sprint.
+
+Reference template: `sprints/sprint-12.md` (the canonical example of this format).
