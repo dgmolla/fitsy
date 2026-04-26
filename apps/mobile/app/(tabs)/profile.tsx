@@ -1,5 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react';
 import {
+  Alert,
   Pressable,
   ActivityIndicator,
   ScrollView,
@@ -10,6 +11,7 @@ import {
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { clearToken, getStoredToken } from '@/lib/authClient';
+import { api } from '@/lib/api';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { decodeEmailFromToken } from '@/lib/jwtUtils';
@@ -93,6 +95,27 @@ export default function ProfileScreen() {
     await clearToken();
     router.replace('/welcome/problem');
   }, []);
+
+  const handleDelete = useCallback(async () => {
+    try {
+      await api.del('/api/user');
+      await clearToken();
+      router.replace('/welcome/problem');
+    } catch {
+      Alert.alert('Error', 'Could not delete your account. Please try again.');
+    }
+  }, []);
+
+  const confirmDelete = useCallback(() => {
+    Alert.alert(
+      'Delete account?',
+      'This permanently removes your account, saved items, and subscription. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: handleDelete },
+      ],
+    );
+  }, [handleDelete]);
 
   async function updateFieldAndRecalc<K extends keyof OnboardingData>(field: K, value: OnboardingData[K]) {
     await saveOnboardingField(field, value);
@@ -259,6 +282,11 @@ export default function ProfileScreen() {
         <Pressable style={s.logoutBtn} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={16} color="#B85450" />
           <Text style={s.logoutText}>Log out</Text>
+        </Pressable>
+
+        {/* Delete account — subtle, destructive */}
+        <Pressable style={s.deleteBtn} onPress={confirmDelete}>
+          <Text style={s.deleteText}>Delete account</Text>
         </Pressable>
 
       </ScrollView>
@@ -445,4 +473,12 @@ const s = StyleSheet.create({
     marginTop: 4,
   },
   logoutText: { fontSize: 14, fontWeight: '600', color: '#B85450' },
+  // Delete account — subtle text-only, no background
+  deleteBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    marginTop: 8,
+  },
+  deleteText: { fontSize: 13, fontWeight: '500', color: '#B85450' },
 });
