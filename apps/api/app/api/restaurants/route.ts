@@ -126,15 +126,16 @@ export async function GET(
     const emitter = getApiEmitter();
     emitter.emitSearchRoute({
       route: "/api/restaurants",
-      auth_ms: tAfterAuth - tEntry,
-      query_ms: tDone - tBeforeQuery,
-      duration_ms: tDone - tEntry,
-      result_count: total,
-      has_targets: Object.keys(targets).length > 0,
-      ...(cuisineTypeRaw !== null ? { cuisine_filter: cuisineTypeRaw } : {}),
+      authMs: tAfterAuth - tEntry,
+      queryMs: tDone - tBeforeQuery,
+      durationMs: tDone - tEntry,
+      resultCount: total,
+      hasTargets: Object.keys(targets).length > 0,
+      ...(cuisineTypeRaw !== null ? { cuisineFilter: cuisineTypeRaw } : {}),
       status: 200,
     });
-    after(() => emitter.flush());
+    // after() defers flush past response; only valid inside Next.js request runtime.
+    try { after(() => emitter.flush()); } catch { /* test env or non-runtime */ }
 
     return NextResponse.json(
       { data, meta: { total, limit } },

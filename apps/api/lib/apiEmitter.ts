@@ -1,16 +1,16 @@
 import { Axiom } from "@axiomhq/js";
 
-const DATASET = "fitsy-api";
+const DATASET = "fitsy-pipeline";
 
 export interface SearchRouteEvent {
   type: "search_route";
   route: string;
-  auth_ms: number;
-  query_ms: number;
-  duration_ms: number;
-  result_count: number;
-  has_targets: boolean;
-  cuisine_filter?: string;
+  authMs: number;
+  queryMs: number;
+  durationMs: number;
+  resultCount: number;
+  hasTargets: boolean;
+  cuisineFilter?: string;
   status: number;
   _time: string;
 }
