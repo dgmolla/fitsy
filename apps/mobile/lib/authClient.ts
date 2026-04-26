@@ -4,7 +4,8 @@ import * as SecureStore from 'expo-secure-store';
 import type { AppleAuthResponse, AuthApiResponse, AuthResponse } from '@fitsy/shared';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
-const TOKEN_KEY = 'fitsy:authToken';
+// SecureStore keys must contain only alphanumeric, '.', '-', '_' (no ':')
+const TOKEN_KEY = 'fitsy_authToken';
 
 // ─── Token storage ────────────────────────────────────────────────────────────
 
