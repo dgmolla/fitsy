@@ -43,7 +43,7 @@ export default function HowItWorksScreen() {
             <View style={s.panelLightContent}>
               <Text style={s.badgeDark}>AI ESTIMATED</Text>
               <Text style={s.titleDark}>Local{'\n'}restaurants</Text>
-              <Text style={s.descDark}>AI-analyzed menus. Confidence scores.</Text>
+              <Text style={s.descDark}>AI-analyzed menus. Approximate — not medical advice.</Text>
             </View>
             <Image
               source={{ uri: 'https://images.unsplash.com/photo-1559314809-0d155014e29e?w=300&q=70' }}

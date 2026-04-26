@@ -76,7 +76,7 @@ These steps must be completed in external systems and cannot be automated here.
    APIs & Services → Credentials
 2. Look for the iOS OAuth 2.0 client for Fitsy (or create one):
    - Application type: iOS
-   - Bundle ID: `com.fitsy.app` (matches S-104)
+   - Bundle ID: `app.fitsy.mobile` (matches S-104)
    - This gives you the **iOS Client ID** (format: `XXXX.apps.googleusercontent.com`)
 3. Look for the Web OAuth 2.0 client (or create one):
    - Application type: Web application

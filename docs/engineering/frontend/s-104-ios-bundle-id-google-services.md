@@ -39,7 +39,7 @@ for no actual benefit.
 
 ```mermaid
 graph LR
-    A[app.config.ts<br/>ios.bundleIdentifier: com.fitsy.app] --> B[EAS Build]
+    A[app.config.ts<br/>ios.bundleIdentifier: app.fitsy.mobile] --> B[EAS Build]
     B --> C[Correctly signed IPA]
     C --> D[TestFlight submit]
 
@@ -58,7 +58,7 @@ Add `ios` block with `bundleIdentifier`:
 
 ```ts
 ios: {
-  bundleIdentifier: 'com.fitsy.app',
+  bundleIdentifier: 'app.fitsy.mobile',
   supportsTablet: false,
 },
 ```
@@ -83,12 +83,12 @@ TestFlight build can complete Google Sign-In:
 | Step | Who | What |
 |------|-----|------|
 | G-2 | devops | Add `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` and `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` to EAS build profiles — tracked as **S-105** |
-| G-3 | developer | In Google Cloud Console: verify the iOS OAuth client's "Bundle ID" matches `com.fitsy.app`, and that the authorized redirect URI includes `com.googleusercontent.apps.<ios-client-id>:/` |
+| G-3 | developer | In Google Cloud Console: verify the iOS OAuth client's "Bundle ID" matches `app.fitsy.mobile`, and that the authorized redirect URI includes `com.googleusercontent.apps.<ios-client-id>:/` |
 
 ---
 
 ## 6. Test Plan
 
 1. `npx tsc --noEmit` in `apps/mobile/` — no type errors
-2. `eas build --platform ios --profile development-simulator` — EAS picks up `com.fitsy.app` as the bundle ID
+2. `eas build --platform ios --profile development-simulator` — EAS picks up `app.fitsy.mobile` as the bundle ID
 3. App launches in simulator — no regression on existing auth flows

@@ -25,7 +25,7 @@ flowchart LR
 
 ### Apple Developer Account
 - Active Apple Developer Program membership ($99/yr)
-- App ID registered: `com.fitsy.app`
+- App ID registered: `app.fitsy.mobile`
 - App created in App Store Connect: **Fitsy**
 
 ### EAS CLI (local setup)
@@ -98,7 +98,7 @@ Add explicit bundle identifier and iOS config:
 ```typescript
 // In the config object:
 ios: {
-  bundleIdentifier: "com.fitsy.app",
+  bundleIdentifier: "app.fitsy.mobile",
   buildNumber: "1",
   supportsTablet: false,
 },

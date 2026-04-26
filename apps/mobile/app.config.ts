@@ -12,7 +12,7 @@ const config: ExpoConfig = {
     resizeMode: "contain",
   },
   ios: {
-    bundleIdentifier: "com.fitsy.app",
+    bundleIdentifier: "app.fitsy.mobile",
     supportsTablet: false,
     splash: {
       backgroundColor: "#FDFBF7",

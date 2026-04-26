@@ -91,7 +91,7 @@ sequenceDiagram
 
 | ID | Gap | File | Fix |
 |----|-----|------|-----|
-| G-1 | `ios.bundleIdentifier` missing from `app.config.ts` | `apps/mobile/app.config.ts` | Add `ios: { bundleIdentifier: 'com.fitsy.app' }` (or actual bundle ID) |
+| G-1 | `ios.bundleIdentifier` missing from `app.config.ts` | `apps/mobile/app.config.ts` | Add `ios: { bundleIdentifier: 'app.fitsy.mobile' }` (or actual bundle ID) |
 | G-2 | `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` and `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` not in EAS build env | `apps/mobile/eas.json` | Add env vars to `production` and `preview` build profiles in `eas.json`; set values in EAS dashboard |
 | G-3 | Google OAuth redirect URI for production bundle ID not verified in Google Cloud Console | External | After G-1, register `com.googleusercontent.apps.<client-id>:/` as an authorized redirect URI in Google Cloud Console |
 

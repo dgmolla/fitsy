@@ -1,17 +1,18 @@
 # Sprint Index
 
-**Last updated**: 2026-04-13
+**Last updated**: 2026-04-25
 
-<!-- CURRENT_SPRINT: sprints/sprint-11 -->
+<!-- CURRENT_SPRINT: sprints/sprint-12 -->
 
 ## Active
 
-- [[sprints/sprint-11|Sprint 11: Data Pipeline V3 — Quality, Observability, Scale]]
+- [[sprints/sprint-12|Sprint 12: Beta Readiness — TestFlight Round 1+2 + App Store Prep]]
 
 ## Upcoming
 
 ## Completed
 
+- [[sprints/sprint-11|Sprint 11: Data Pipeline V3 — Quality, Observability, Scale]] — @completed(2026-04-14)
 - [[sprints/sprint-10|Sprint 10: MVP Beta Readiness — Auth + Security + Analytics]] — @completed(2026-04-08)
 - [[sprints/sprint-9|Sprint 9: Get Users — Data Enrichment + Filters]] — @completed(2026-04-08)
 - [[sprints/sprint-8|Sprint 8: Get Users — Mobile Polish + TestFlight]] — @completed(2026-04-06)
