@@ -1,12 +1,17 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Image, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { AnimatedPress } from '@/components/AnimatedPress';
+import { trackOnboardingScreenView } from '@/lib/analytics';
 
 export default function HowItWorksScreen() {
+  useEffect(() => {
+    trackOnboardingScreenView('how_it_works');
+  }, []);
+
   return (
     <SafeAreaView style={s.safe}>
       <View style={s.content}>

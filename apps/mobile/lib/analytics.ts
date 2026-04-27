@@ -16,13 +16,34 @@ const API_KEY =
 const HOST =
   process.env.EXPO_PUBLIC_POSTHOG_HOST ?? 'https://us.i.posthog.com';
 
+if (API_KEY.startsWith('phc_placeholder')) {
+  // Loud warning rather than silent fallback — the previous silent fallback
+  // shipped to production and PostHog appeared "not working" until we noticed.
+  // eslint-disable-next-line no-console
+  console.warn('[analytics] EXPO_PUBLIC_POSTHOG_API_KEY missing; using placeholder. Events will not reach PostHog.');
+}
+
 let _client: PostHog | null = null;
 
 export function getPostHogClient(): PostHog {
   if (!_client) {
-    _client = new PostHog(API_KEY, { host: HOST });
+    _client = new PostHog(API_KEY, {
+      host: HOST,
+      // Aggressive flush during pre-launch testing so events land in PostHog
+      // within seconds, not 30s. Revert to defaults (flushAt: 20, flushInterval:
+      // 30000) before public launch — frequent flushes increase battery use.
+      flushAt: 1,
+      flushInterval: 5000,
+    });
   }
   return _client;
+}
+
+function logCaptureError(eventName: string, err: unknown): void {
+  // Replaces the silent `catch {}` pattern from before — surface analytics
+  // failures so we don't ship another "PostHog isn't tracking anything" mystery.
+  // eslint-disable-next-line no-console
+  console.warn(`[analytics] capture(${eventName}) failed:`, err);
 }
 
 export interface UserProperties {
@@ -43,16 +64,29 @@ export function identifyUser(userId: string, props: UserProperties): void {
       if (v !== undefined) cleanProps[k] = v;
     }
     getPostHogClient().identify(userId, cleanProps);
-  } catch {
-    // swallow
+  } catch (err) {
+    logCaptureError('identify', err);
   }
 }
 
 export function resetAnalyticsSession(): void {
   try {
     getPostHogClient().reset();
-  } catch {
-    // swallow
+  } catch (err) {
+    logCaptureError('reset', err);
+  }
+}
+
+// ─── Onboarding screen views ─────────────────────────────────────────────────
+// Add `useTrackOnboardingScreenView('screen_name')` to each welcome/* screen
+// to measure per-step drop-off. Without this we only see onboarding_completed
+// and can't tell where users quit during the 15-screen flow.
+
+export function trackOnboardingScreenView(screenName: string): void {
+  try {
+    getPostHogClient().capture('onboarding_screen_view', { screen_name: screenName });
+  } catch (err) {
+    logCaptureError('onboarding_screen_view', err);
   }
 }
 
@@ -70,8 +104,8 @@ export interface SearchPerformedProps {
 export function trackSearchPerformed(props: SearchPerformedProps): void {
   try {
     getPostHogClient().capture('search_performed', props as unknown as Record<string, JsonType>);
-  } catch {
-    // swallow
+  } catch (err) {
+    logCaptureError('search_performed', err);
   }
 }
 
@@ -93,8 +127,8 @@ export function trackRestaurantTapped(props: RestaurantTappedProps): void {
     };
     if (props.best_match_calories !== undefined) p['best_match_calories'] = props.best_match_calories;
     getPostHogClient().capture('restaurant_tapped', p);
-  } catch {
-    // swallow
+  } catch (err) {
+    logCaptureError('restaurant_tapped', err);
   }
 }
 
@@ -108,8 +142,8 @@ export interface ItemSavedProps {
 export function trackItemSaved(props: ItemSavedProps): void {
   try {
     getPostHogClient().capture('item_saved', props as unknown as Record<string, JsonType>);
-  } catch {
-    // swallow
+  } catch (err) {
+    logCaptureError('item_saved', err);
   }
 }
 
@@ -129,8 +163,8 @@ export function trackOnboardingCompleted(props: OnboardingCompletedProps): void 
     if (props.goal !== undefined) p['goal'] = props.goal;
     if (props.activity_level !== undefined) p['activity_level'] = props.activity_level;
     getPostHogClient().capture('onboarding_completed', p);
-  } catch {
-    // swallow
+  } catch (err) {
+    logCaptureError('onboarding_completed', err);
   }
 }
 
@@ -142,8 +176,8 @@ export interface AuthSuccessProps {
 export function trackAuthSuccess(props: AuthSuccessProps): void {
   try {
     getPostHogClient().capture('auth_success', props as unknown as Record<string, JsonType>);
-  } catch {
-    // swallow
+  } catch (err) {
+    logCaptureError('auth_success', err);
   }
 }
 
@@ -157,8 +191,8 @@ export function trackAuthFailure(props: AuthFailureProps): void {
     const p: Record<string, JsonType> = { provider: props.provider };
     if (props.error_message !== undefined) p['error_message'] = props.error_message;
     getPostHogClient().capture('auth_failure', p);
-  } catch {
-    // swallow
+  } catch (err) {
+    logCaptureError('auth_failure', err);
   }
 }
 

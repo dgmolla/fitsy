@@ -6,11 +6,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { fetchPreviewRestaurants } from '@/lib/previewSearch';
 import { prefetchedRestaurants } from '@/lib/teaserCache';
+import { trackOnboardingScreenView } from '@/lib/analytics';
 
 const MIN_DISPLAY_MS = 2200;
 
 export default function FindingScreen() {
   const pulse = useRef(new RNAnimated.Value(0.3)).current;
+
+  useEffect(() => {
+    trackOnboardingScreenView('finding');
+  }, []);
 
   useEffect(() => {
     // Pulsing dot animation

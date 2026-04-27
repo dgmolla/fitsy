@@ -12,7 +12,7 @@ import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { getMacroTargets } from '@/lib/macroStorage';
 import { getOnboardingData } from '@/lib/onboardingStorage';
-import { identifyUser, trackAuthFailure, trackAuthSuccess } from '@/lib/analytics';
+import { identifyUser, trackAuthFailure, trackAuthSuccess, trackOnboardingScreenView } from '@/lib/analytics';
 import { EDITORIAL } from '@/lib/brand';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -41,6 +41,10 @@ export default function SignInScreen() {
     iosClientId: GOOGLE_IOS_CLIENT_ID ?? 'not-configured',
     clientId: GOOGLE_WEB_CLIENT_ID,
   });
+
+  useEffect(() => {
+    trackOnboardingScreenView('signin');
+  }, []);
 
   useEffect(() => {
     if (response?.type === 'success') {

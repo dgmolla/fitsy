@@ -6,6 +6,7 @@ import { router } from 'expo-router';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { useStats } from '@/lib/useStats';
+import { trackOnboardingScreenView } from '@/lib/analytics';
 
 function useCountUp(target: number, duration = 1200, delay = 0) {
   const [value, setValue] = useState(0);
@@ -34,6 +35,10 @@ export default function DataScaleScreen() {
 
   const items = useCountUp(stats.totalDishes, 1600, 400);
   const indie = useCountUp(stats.indiePercent, 1200, 700);
+
+  useEffect(() => {
+    trackOnboardingScreenView('data_scale');
+  }, []);
 
   return (
     <SafeAreaView style={s.safe}>

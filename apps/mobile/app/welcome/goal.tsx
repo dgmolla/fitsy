@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { saveOnboardingField } from '@/lib/onboardingStorage';
+import { trackOnboardingScreenView } from '@/lib/analytics';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 
 type Goal = 'lose_fat' | 'maintain' | 'build_muscle' | 'explore';
@@ -18,6 +19,10 @@ const GOALS: { id: Goal; label: string }[] = [
 
 export default function GoalScreen() {
   const [selected, setSelected] = useState<Goal | null>(null);
+
+  useEffect(() => {
+    trackOnboardingScreenView('goal');
+  }, []);
 
   return (
     <WelcomeScreen

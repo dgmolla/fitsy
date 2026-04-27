@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,6 +6,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { useStats } from '@/lib/useStats';
+import { trackOnboardingScreenView } from '@/lib/analytics';
 
 interface ResponseConfig {
   headline: string;
@@ -51,6 +52,10 @@ export default function ResponseScreen() {
   const { tried } = useLocalSearchParams<{ tried?: string }>();
   const { totalDishes } = useStats();
   const config = getResponse(tried ?? '', totalDishes);
+
+  useEffect(() => {
+    trackOnboardingScreenView('response');
+  }, []);
 
   return (
     <SafeAreaView style={s.safe}>

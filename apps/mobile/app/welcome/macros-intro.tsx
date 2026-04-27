@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
+import { trackOnboardingScreenView } from '@/lib/analytics';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 
 const MACROS = [
@@ -12,6 +13,10 @@ const MACROS = [
 ];
 
 export default function MacrosIntroScreen() {
+  useEffect(() => {
+    trackOnboardingScreenView('macros_intro');
+  }, []);
+
   return (
     <WelcomeScreen
       progress={6 / 15}

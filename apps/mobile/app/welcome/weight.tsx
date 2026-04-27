@@ -6,6 +6,7 @@ import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { StatPicker } from '@/components/StatPicker';
 import { getOnboardingData, saveOnboardingField } from '@/lib/onboardingStorage';
+import { trackOnboardingScreenView } from '@/lib/analytics';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 
 type Unit = 'lbs' | 'kg';
@@ -21,6 +22,10 @@ export default function WeightScreen() {
   const [unit, setUnit] = useState<Unit>('lbs');
   const [lbs, setLbs] = useState(LB_DEFAULT);
   const [kg, setKg] = useState(KG_DEFAULT);
+
+  useEffect(() => {
+    trackOnboardingScreenView('weight');
+  }, []);
 
   useEffect(() => {
     (async () => {

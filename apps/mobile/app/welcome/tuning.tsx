@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { router, useFocusEffect } from 'expo-router';
@@ -8,6 +8,7 @@ import { EDITORIAL, FONTS } from '@/lib/brand';
 import { getOnboardingData, type Goal } from '@/lib/onboardingStorage';
 import { saveMacroTargets } from '@/lib/macroStorage';
 import { calculateMacros } from '@/lib/macroCalculator';
+import { trackOnboardingScreenView } from '@/lib/analytics';
 
 interface Macros { protein: number; carbs: number; fat: number; calories: number }
 
@@ -21,6 +22,10 @@ export default function PlanReadyScreen() {
   const [macros, setMacros] = useState<Macros | null>(null);
   const [traj, setTraj] = useState<Traj>('maintain');
   const [data, setData] = useState<Awaited<ReturnType<typeof getOnboardingData>>>({});
+
+  useEffect(() => {
+    trackOnboardingScreenView('tuning');
+  }, []);
 
   useFocusEffect(
     useCallback(() => {

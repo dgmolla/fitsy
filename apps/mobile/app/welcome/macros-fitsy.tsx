@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
+import { trackOnboardingScreenView } from '@/lib/analytics';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 
 const STEPS = [
@@ -12,6 +13,10 @@ const STEPS = [
 ];
 
 export default function MacrosFitsyScreen() {
+  useEffect(() => {
+    trackOnboardingScreenView('macros_fitsy');
+  }, []);
+
   return (
     <WelcomeScreen
       progress={6 / 15}

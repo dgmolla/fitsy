@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
+import { trackOnboardingScreenView } from '@/lib/analytics';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 
 const OPTIONS = [
@@ -15,6 +16,10 @@ const OPTIONS = [
 
 export default function TriedScreen() {
   const [selected, setSelected] = useState<string | null>(null);
+
+  useEffect(() => {
+    trackOnboardingScreenView('tried');
+  }, []);
 
   return (
     <WelcomeScreen

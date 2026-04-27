@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { saveOnboardingField } from '@/lib/onboardingStorage';
+import { trackOnboardingScreenView } from '@/lib/analytics';
 import { EDITORIAL } from '@/lib/brand';
 
 const OPTIONS = [
@@ -14,6 +15,10 @@ const OPTIONS = [
 
 export default function DietaryScreen() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    trackOnboardingScreenView('dietary');
+  }, []);
 
   function toggle(tag: string) {
     setSelected((prev) => {

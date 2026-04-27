@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { DISHES } from '@/lib/dishImages';
+import { trackOnboardingScreenView } from '@/lib/analytics';
 
 const { width: W, height: H } = Dimensions.get('window');
 const GAP = 8;
@@ -65,6 +66,10 @@ function ScrollingColumn({ items, speed, offset }: { items: { source: any; h: nu
 }
 
 export default function ProblemScreen() {
+  useEffect(() => {
+    trackOnboardingScreenView('problem');
+  }, []);
+
   return (
     <View style={s.container}>
       {/* Scrolling mosaic grid */}

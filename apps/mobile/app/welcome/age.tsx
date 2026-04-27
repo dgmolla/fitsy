@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { StatPicker } from '@/components/StatPicker';
 import { getOnboardingData, saveOnboardingField } from '@/lib/onboardingStorage';
+import { trackOnboardingScreenView } from '@/lib/analytics';
 import { calculateAge } from '@fitsy/shared';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 
@@ -14,6 +15,10 @@ const AGE_DEFAULT = 28;
 
 export default function AgeScreen() {
   const [age, setAge] = useState(AGE_DEFAULT);
+
+  useEffect(() => {
+    trackOnboardingScreenView('age');
+  }, []);
 
   useEffect(() => {
     (async () => {

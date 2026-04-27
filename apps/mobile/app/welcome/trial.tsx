@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { AnimatedPress } from '@/components/AnimatedPress';
+import { trackOnboardingScreenView } from '@/lib/analytics';
 
 const STEPS = [
   {
@@ -25,6 +26,10 @@ const STEPS = [
 ];
 
 export default function TrialScreen() {
+  useEffect(() => {
+    trackOnboardingScreenView('trial');
+  }, []);
+
   return (
     <SafeAreaView style={s.safe}>
       <View style={s.content}>

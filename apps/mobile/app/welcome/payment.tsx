@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Modal, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
@@ -8,7 +8,7 @@ import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { getOnboardingData } from '@/lib/onboardingStorage';
-import { trackOnboardingCompleted } from '@/lib/analytics';
+import { trackOnboardingCompleted, trackOnboardingScreenView } from '@/lib/analytics';
 
 type PlanId = 'monthly' | 'yearly';
 type ModalState = 'none' | 'discount' | 'goodbye';
@@ -17,6 +17,10 @@ export default function PaymentScreen() {
   const [plan, setPlan] = useState<PlanId>('yearly');
   const [loading, setLoading] = useState(false);
   const [modal, setModal] = useState<ModalState>('none');
+
+  useEffect(() => {
+    trackOnboardingScreenView('payment');
+  }, []);
 
   async function handleStart(discounted = false) {
     setLoading(true);

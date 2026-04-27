@@ -6,6 +6,7 @@ import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { StatPicker } from '@/components/StatPicker';
 import { getOnboardingData, saveOnboardingField } from '@/lib/onboardingStorage';
+import { trackOnboardingScreenView } from '@/lib/analytics';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 
 type Unit = 'ft' | 'cm';
@@ -27,6 +28,10 @@ export default function HeightScreen() {
   const [unit, setUnit] = useState<Unit>('ft');
   const [inches, setInches] = useState(FT_DEFAULT_IN);
   const [cm, setCm] = useState(CM_DEFAULT);
+
+  useEffect(() => {
+    trackOnboardingScreenView('height');
+  }, []);
 
   useEffect(() => {
     (async () => {

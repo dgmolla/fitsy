@@ -7,6 +7,7 @@ import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { prefetchedRestaurants } from '@/lib/teaserCache';
 import { fetchPreviewRestaurants, type PreviewRestaurant } from '@/lib/previewSearch';
+import { trackOnboardingScreenView } from '@/lib/analytics';
 
 const CARD_H = 112;
 
@@ -90,6 +91,10 @@ function SkeletonCard({ delay }: { delay: number }) {
 export default function ResultsScreen() {
   const [restaurants, setRestaurants] = useState<PreviewRestaurant[]>([]);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    trackOnboardingScreenView('results');
+  }, []);
 
   useEffect(() => {
     async function load() {

@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { saveOnboardingField, type ActivityLevel } from '@/lib/onboardingStorage';
+import { trackOnboardingScreenView } from '@/lib/analytics';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 
 const OPTIONS: { id: ActivityLevel; label: string; desc: string; days: string }[] = [
@@ -16,6 +17,10 @@ const OPTIONS: { id: ActivityLevel; label: string; desc: string; days: string }[
 
 export default function ActivityScreen() {
   const [selected, setSelected] = useState<ActivityLevel | null>(null);
+
+  useEffect(() => {
+    trackOnboardingScreenView('activity');
+  }, []);
 
   return (
     <WelcomeScreen
