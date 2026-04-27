@@ -6,7 +6,11 @@ export interface Stats {
   indiePercent: number;
 }
 
-const FALLBACK: Stats = { totalDishes: 2400, indiePercent: 82 };
+// Defaults match the last known prod values from /api/restaurants/stats so a
+// failed or in-flight fetch shows a believable number on the data-scale screen
+// instead of a dramatically-stale 2,400. Refresh whenever the real numbers
+// shift materially (next time you do an eas update or rebuild).
+const FALLBACK: Stats = { totalDishes: 676137, indiePercent: 85 };
 
 let cached: Stats | null = null;
 
