@@ -158,7 +158,7 @@ export interface RestaurantsMeta {
    * The cursor is base64(JSON({ id, distanceMiles })) so the server can
    * resume from a stable (distance, id) tie-break across equal distances.
    */
-  nextCursor: string | null;
+  nextCursor?: string | null;
 }
 
 export interface RestaurantsResponse {
