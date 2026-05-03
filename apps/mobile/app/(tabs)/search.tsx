@@ -17,12 +17,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { RestaurantResult } from '@fitsy/shared';
 import { FitsyLoader } from '@/components/FitsyLoader';
 import { FilterPopup } from '@/components/FilterPopup';
+import { LocationPickerSheet } from '@/components/LocationPickerSheet';
 import type { MacroValues } from '@/lib/macroPresets';
 import { fetchRestaurantsPage } from '@/lib/apiClient';
 import { useLocation, type LocationState } from '@/lib/useLocation';
+import type { PresetLocation } from '@/lib/locations';
 import { getMacroTargets, saveMacroTargets } from '@/lib/macroStorage';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import {
+  trackLocationManualOverrideCleared,
+  trackLocationManualOverrideOpened,
+  trackLocationManualOverridePicked,
   trackRestaurantTapped,
   trackSearchPerformed,
   trackSearchPageLoaded,
@@ -92,7 +97,13 @@ function getSelectionLabel(): string {
   return 'THE EVENING SELECTION';
 }
 
-function Masthead({ locationLabel }: { locationLabel: string }) {
+function Masthead({
+  locationLabel,
+  onLocationPress,
+}: {
+  locationLabel: string;
+  onLocationPress: () => void;
+}) {
   return (
     <View style={s.masthead}>
       <View style={s.mastheadTop}>
@@ -100,10 +111,18 @@ function Masthead({ locationLabel }: { locationLabel: string }) {
           <View style={s.logoDot} />
           <Text style={s.logo}>fitsy</Text>
         </View>
-        <View style={s.locationChip}>
+        <TouchableOpacity
+          style={s.locationChip}
+          onPress={onLocationPress}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={`Location: ${locationLabel}`}
+          accessibilityHint="Double-tap to change location"
+        >
           <Ionicons name="location" size={11} color={EDITORIAL.greenAccent} />
           <Text style={s.locationText}>{locationLabel}</Text>
-        </View>
+          <Ionicons name="chevron-down" size={10} color={EDITORIAL.textSoft} />
+        </TouchableOpacity>
       </View>
       <Text style={s.issueLabel}>{getSelectionLabel()}</Text>
     </View>
@@ -359,6 +378,7 @@ export default function SearchScreen() {
   const [error, setError] = useState<string | null>(null);
   const initialFetch = useRef(true);
   const [filterVisible, setFilterVisible] = useState(false);
+  const [locationPickerVisible, setLocationPickerVisible] = useState(false);
   const [cuisineFilter, setCuisineFilter] = useState('all');
 
   // `pagesLoadedRef` counts how many pages have been appended (initial + each
@@ -375,6 +395,23 @@ export default function SearchScreen() {
 
   const location = useLocation();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function handleOpenLocationPicker() {
+    trackLocationManualOverrideOpened();
+    setLocationPickerVisible(true);
+  }
+
+  function handlePickLocation(loc: PresetLocation) {
+    trackLocationManualOverridePicked({ neighborhood: loc.name });
+    // Fire-and-forget — useLocation updates state synchronously, so we don't
+    // need to await SecureStore.setItemAsync before the search re-fires.
+    location.setManualLocation(loc).catch(() => {});
+  }
+
+  function handleUseCurrentLocation() {
+    trackLocationManualOverrideCleared();
+    location.clearManualLocation().catch(() => {});
+  }
 
   const hasInputs =
     inputs.protein !== '' || inputs.carbs !== '' || inputs.fat !== '' || inputs.calories !== '';
@@ -603,7 +640,9 @@ export default function SearchScreen() {
     ? 'Locating...'
     : location.source === 'gps'
       ? 'Near You'
-      : 'Silver Lake, LA';
+      : location.source === 'manual'
+        ? location.name ?? 'Manual'
+        : 'Silver Lake, LA';
 
   const [heroResult, ...listResults] = results;
 
@@ -612,7 +651,7 @@ export default function SearchScreen() {
   // once at the top and only the `listResults` tail virtualizes/paginates.
   const renderHeader = useCallback(() => (
     <>
-      <Masthead locationLabel={locationLabel} />
+      <Masthead locationLabel={locationLabel} onLocationPress={handleOpenLocationPicker} />
       <MacroStrip macros={inputs} onEdit={() => setFilterVisible(true)} />
       <CuisineRow selected={cuisineFilter} onSelect={setCuisineFilter} />
 
@@ -681,6 +720,19 @@ export default function SearchScreen() {
         values={inputs}
         onApply={handleApplyFilters}
         onClose={() => setFilterVisible(false)}
+      />
+      <LocationPickerSheet
+        visible={locationPickerVisible}
+        activeName={location.source === 'manual' ? location.name : undefined}
+        onPick={(loc) => {
+          handlePickLocation(loc);
+          setLocationPickerVisible(false);
+        }}
+        onUseCurrent={() => {
+          handleUseCurrentLocation();
+          setLocationPickerVisible(false);
+        }}
+        onClose={() => setLocationPickerVisible(false)}
       />
     </SafeAreaView>
   );

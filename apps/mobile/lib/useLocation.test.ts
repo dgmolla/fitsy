@@ -4,12 +4,18 @@
  * Uses renderHook from @testing-library/react-native to exercise the real
  * hook lifecycle (mount → effect → state updates) against the expo-location
  * mock, covering GPS success, the three fallback variants (denied, timeout,
- * error), and loading state transitions. PostHog tracker calls are asserted
- * via the mocked `@/lib/analytics` module.
+ * error), manual override hydration / set / clear (S-227), and loading
+ * state transitions. PostHog tracker calls are asserted via the mocked
+ * `@/lib/analytics` module.
  */
-import { renderHook, waitFor } from '@testing-library/react-native';
+import { act, renderHook, waitFor } from '@testing-library/react-native';
 import * as Location from 'expo-location';
-import { FALLBACK_LAT, FALLBACK_LNG, useLocation } from './useLocation';
+import {
+  FALLBACK_LAT,
+  FALLBACK_LNG,
+  MANUAL_LOCATION_KEY,
+  useLocation,
+} from './useLocation';
 import {
   trackLocationError,
   trackLocationPermissionDenied,
@@ -22,6 +28,19 @@ jest.mock('./analytics', () => ({
   trackLocationError: jest.fn(),
 }));
 
+jest.mock('expo-secure-store', () => ({
+  __esModule: true,
+  getItemAsync: jest.fn().mockResolvedValue(null),
+  setItemAsync: jest.fn().mockResolvedValue(undefined),
+  deleteItemAsync: jest.fn().mockResolvedValue(undefined),
+}));
+
+const SecureStore = jest.requireMock('expo-secure-store') as {
+  getItemAsync: jest.Mock;
+  setItemAsync: jest.Mock;
+  deleteItemAsync: jest.Mock;
+};
+
 const mockRequestPermissions = Location.requestForegroundPermissionsAsync as jest.Mock;
 const mockGetPosition = Location.getCurrentPositionAsync as jest.Mock;
 const mockGetLastKnown = Location.getLastKnownPositionAsync as jest.Mock;
@@ -31,6 +50,9 @@ const GPS_COORDS = { latitude: 37.7749, longitude: -122.4194 };
 beforeEach(() => {
   jest.clearAllMocks();
   mockGetLastKnown.mockResolvedValue(null);
+  SecureStore.getItemAsync.mockResolvedValue(null);
+  SecureStore.setItemAsync.mockResolvedValue(undefined);
+  SecureStore.deleteItemAsync.mockResolvedValue(undefined);
 });
 
 describe('useLocation', () => {
@@ -124,7 +146,12 @@ describe('useLocation', () => {
 
     const { result } = renderHook(() => useLocation());
 
-    // Advance past the 3000ms timeout.
+    // Flush SecureStore hydration + permission + lastKnown promises so the
+    // GPS-vs-setTimeout race is actually armed before we advance the clock.
+    // Without this, the 3001ms advance happens before the setTimeout(3000)
+    // is installed, and the test sees 'fallback-denied' from the initial state.
+    await jest.advanceTimersByTimeAsync(0);
+    await jest.advanceTimersByTimeAsync(0);
     await jest.advanceTimersByTimeAsync(3001);
     jest.useRealTimers();
 
@@ -188,5 +215,105 @@ describe('useLocation', () => {
     expect(mockGetPosition).toHaveBeenCalledWith({
       accuracy: Location.Accuracy.Balanced,
     });
+  });
+
+  // ─── Manual override (S-227) ───────────────────────────────────────────────
+  // Three behaviors to lock in: (1) a persisted override hydrates on cold
+  // start and short-circuits GPS; (2) setManualLocation writes to SecureStore
+  // and updates state immediately; (3) clearManualLocation deletes from
+  // SecureStore and re-runs GPS.
+
+  it('hydrates manual override from SecureStore on mount and skips GPS', async () => {
+    SecureStore.getItemAsync.mockResolvedValue(
+      JSON.stringify({ name: 'Hollywood', lat: 34.0928, lng: -118.3287 }),
+    );
+    mockRequestPermissions.mockResolvedValue({ status: 'granted' });
+
+    const { result } = renderHook(() => useLocation());
+
+    await waitFor(() => {
+      expect(result.current.source).toBe('manual');
+    });
+
+    expect(result.current.lat).toBe(34.0928);
+    expect(result.current.lng).toBe(-118.3287);
+    expect(result.current.name).toBe('Hollywood');
+    expect(SecureStore.getItemAsync).toHaveBeenCalledWith(MANUAL_LOCATION_KEY);
+    // GPS path must not run while a manual override is active.
+    expect(mockRequestPermissions).not.toHaveBeenCalled();
+  });
+
+  it('ignores corrupt SecureStore payloads and falls through to GPS', async () => {
+    SecureStore.getItemAsync.mockResolvedValue('not-json{');
+    mockRequestPermissions.mockResolvedValue({ status: 'granted' });
+    mockGetPosition.mockResolvedValue({
+      coords: { ...GPS_COORDS },
+      timestamp: Date.now(),
+    });
+
+    const { result } = renderHook(() => useLocation());
+
+    await waitFor(() => {
+      expect(result.current.source).toBe('gps');
+    });
+  });
+
+  it('setManualLocation persists the override and switches state to manual', async () => {
+    mockRequestPermissions.mockResolvedValue({ status: 'granted' });
+    mockGetPosition.mockResolvedValue({
+      coords: { ...GPS_COORDS },
+      timestamp: Date.now(),
+    });
+
+    const { result } = renderHook(() => useLocation());
+
+    await waitFor(() => {
+      expect(result.current.source).toBe('gps');
+    });
+
+    await act(async () => {
+      await result.current.setManualLocation({
+        name: 'Echo Park',
+        lat: 34.0782,
+        lng: -118.2606,
+      });
+    });
+
+    expect(result.current.source).toBe('manual');
+    expect(result.current.name).toBe('Echo Park');
+    expect(result.current.lat).toBe(34.0782);
+    expect(result.current.lng).toBe(-118.2606);
+    expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
+      MANUAL_LOCATION_KEY,
+      JSON.stringify({ name: 'Echo Park', lat: 34.0782, lng: -118.2606 }),
+    );
+  });
+
+  it('clearManualLocation deletes the override and re-runs GPS', async () => {
+    SecureStore.getItemAsync.mockResolvedValue(
+      JSON.stringify({ name: 'Hollywood', lat: 34.0928, lng: -118.3287 }),
+    );
+    mockRequestPermissions.mockResolvedValue({ status: 'granted' });
+    mockGetPosition.mockResolvedValue({
+      coords: { ...GPS_COORDS },
+      timestamp: Date.now(),
+    });
+
+    const { result } = renderHook(() => useLocation());
+
+    await waitFor(() => {
+      expect(result.current.source).toBe('manual');
+    });
+
+    await act(async () => {
+      await result.current.clearManualLocation();
+    });
+
+    await waitFor(() => {
+      expect(result.current.source).toBe('gps');
+    });
+
+    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith(MANUAL_LOCATION_KEY);
+    expect(mockRequestPermissions).toHaveBeenCalled();
   });
 });
