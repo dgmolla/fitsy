@@ -45,7 +45,7 @@ describe('fetchRestaurants', () => {
   it('builds correct URL with all four macro params', async () => {
     const mockBody: RestaurantsResponse = {
       data: [sampleRestaurant],
-      meta: { total: 1, limit: 20 },
+      meta: { total: 1, limit: 20, nextCursor: null },
     };
     global.fetch = makeMockFetch({ ok: true, body: mockBody });
 
@@ -72,7 +72,7 @@ describe('fetchRestaurants', () => {
   it('omits undefined macro params from query string', async () => {
     const mockBody: RestaurantsResponse = {
       data: [],
-      meta: { total: 0, limit: 20 },
+      meta: { total: 0, limit: 20, nextCursor: null },
     };
     global.fetch = makeMockFetch({ ok: true, body: mockBody });
 
@@ -98,7 +98,7 @@ describe('fetchRestaurants', () => {
   it('returns parsed RestaurantResult[] on success', async () => {
     const mockBody: RestaurantsResponse = {
       data: [sampleRestaurant],
-      meta: { total: 1, limit: 20 },
+      meta: { total: 1, limit: 20, nextCursor: null },
     };
     global.fetch = makeMockFetch({ ok: true, body: mockBody });
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse, after } from "next/server";
-import { findNearbyRestaurants } from "@/lib/restaurantService";
+import { findNearbyRestaurants, decodeCursor } from "@/lib/restaurantService";
 import { requireAuth } from "@/lib/auth";
 import { getApiEmitter } from "@/lib/apiEmitter";
 import type { RestaurantsApiResponse } from "@fitsy/shared";
@@ -106,11 +106,27 @@ export async function GET(
     );
   }
 
+  // Optional opaque pagination cursor from the previous page's `nextCursor`.
+  // Decode + validate before hitting the DB so a malformed cursor returns 400
+  // instead of producing silently-wrong pagination.
+  const cursorRaw = searchParams.get("cursor");
+  let decodedCursor: { id: string; distanceMiles: number } | undefined;
+  if (cursorRaw !== null) {
+    const decoded = decodeCursor(cursorRaw);
+    if (decoded === null) {
+      return NextResponse.json(
+        { error: "Invalid cursor" } as never,
+        { status: 400 },
+      );
+    }
+    decodedCursor = decoded;
+  }
+
   // ─── Query ──────────────────────────────────────────────────────────────────
 
   try {
     const tBeforeQuery = Date.now();
-    const { data, total } = await findNearbyRestaurants({
+    const { data, total, nextCursor } = await findNearbyRestaurants({
       lat,
       lng,
       radiusMiles,
@@ -121,6 +137,7 @@ export async function GET(
       ...(maxPriceLevelRaw !== null ? { maxPriceLevel: maxPriceLevelRaw } : {}),
       ...(minRating !== undefined ? { minRating } : {}),
       limit,
+      ...(decodedCursor !== undefined ? { cursor: decodedCursor } : {}),
     });
     const tDone = Date.now();
     const emitter = getApiEmitter();
@@ -138,7 +155,7 @@ export async function GET(
     try { after(() => emitter.flush()); } catch { /* test env or non-runtime */ }
 
     return NextResponse.json(
-      { data, meta: { total, limit } },
+      { data, meta: { total, limit, nextCursor } },
       { status: 200 },
     );
   } catch (err) {

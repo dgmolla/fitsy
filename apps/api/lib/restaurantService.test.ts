@@ -38,7 +38,12 @@ beforeEach(() => {
 });
 
 // Import AFTER jest.mock so the mock is in place when the module initialises.
-import { findNearbyRestaurants, getRestaurantMenu } from "./restaurantService";
+import {
+  findNearbyRestaurants,
+  getRestaurantMenu,
+  encodeCursor,
+  decodeCursor,
+} from "./restaurantService";
 import type { NearbyRestaurantsParams } from "./restaurantService";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -271,6 +276,119 @@ describe("findNearbyRestaurants", () => {
 
     expect(result.data).toEqual([]);
     expect(result.total).toBe(0);
+  });
+
+  // ─── Cursor pagination ──────────────────────────────────────────────────────
+
+  it("returns nextCursor: null when fewer rows came back than the requested limit (last page)", async () => {
+    // Asked for 10, DB returned 3 → exhausted, no more pages.
+    mockQueryRaw.mockResolvedValue([
+      makeScoredRow({ restaurantId: "rest-1", distanceMiles: 0.1 }),
+      makeScoredRow({ restaurantId: "rest-2", distanceMiles: 0.5 }),
+      makeScoredRow({ restaurantId: "rest-3", distanceMiles: 1.0 }),
+    ]);
+
+    const result = await findNearbyRestaurants({ ...BASE_PARAMS, limit: 10 });
+
+    expect(result.nextCursor).toBeNull();
+  });
+
+  it("returns nextCursor: null when zero rows match", async () => {
+    mockQueryRaw.mockResolvedValue([]);
+
+    const result = await findNearbyRestaurants(BASE_PARAMS);
+
+    expect(result.nextCursor).toBeNull();
+  });
+
+  it("returns an encoded nextCursor when the page is full — decodes to last row's { id, distanceMiles }", async () => {
+    // Asked for 2, DB returned 2 → could be more, emit a cursor.
+    mockQueryRaw.mockResolvedValue([
+      makeScoredRow({ restaurantId: "rest-1", distanceMiles: 0.5 }),
+      makeScoredRow({ restaurantId: "rest-2", distanceMiles: 1.25 }),
+    ]);
+
+    const result = await findNearbyRestaurants({ ...BASE_PARAMS, limit: 2 });
+
+    expect(result.nextCursor).not.toBeNull();
+    const decoded = decodeCursor(result.nextCursor as string);
+    expect(decoded).toEqual({ id: "rest-2", distanceMiles: 1.25 });
+  });
+
+  it("paginates stably across two restaurants at the same lat/lng (equal distances)", async () => {
+    // Page 1: two restaurants at the same coords → equal distanceMiles. Sort
+    // tie-break is by id ASC, so rest-A precedes rest-B. Cursor must capture
+    // the last row's id so page 2 strictly starts after rest-B.
+    mockQueryRaw.mockResolvedValueOnce([
+      makeScoredRow({
+        restaurantId: "rest-A",
+        lat: 34.05,
+        lng: -118.24,
+        distanceMiles: 1.0,
+      }),
+      makeScoredRow({
+        restaurantId: "rest-B",
+        lat: 34.05,
+        lng: -118.24,
+        distanceMiles: 1.0,
+      }),
+    ]);
+
+    const page1 = await findNearbyRestaurants({ ...BASE_PARAMS, limit: 2 });
+
+    expect(page1.data.map((r) => r.id)).toEqual(["rest-A", "rest-B"]);
+    expect(page1.nextCursor).not.toBeNull();
+    const cursor = decodeCursor(page1.nextCursor as string);
+    expect(cursor).toEqual({ id: "rest-B", distanceMiles: 1.0 });
+
+    // Page 2: with the cursor forwarded, only rest-C (further out) survives.
+    mockQueryRaw.mockResolvedValueOnce([
+      makeScoredRow({
+        restaurantId: "rest-C",
+        lat: 34.06,
+        lng: -118.25,
+        distanceMiles: 1.5,
+      }),
+    ]);
+
+    const page2 = await findNearbyRestaurants({
+      ...BASE_PARAMS,
+      limit: 2,
+      cursor: cursor!,
+    });
+
+    expect(page2.data.map((r) => r.id)).toEqual(["rest-C"]);
+    expect(page2.nextCursor).toBeNull();
+  });
+});
+
+// ─── Cursor encoding ──────────────────────────────────────────────────────────
+
+describe("encodeCursor / decodeCursor", () => {
+  it("round-trips { id, distanceMiles }", () => {
+    const original = { id: "rest-42", distanceMiles: 2.5 };
+    const encoded = encodeCursor(original);
+    const decoded = decodeCursor(encoded);
+    expect(decoded).toEqual(original);
+  });
+
+  it("returns null for non-base64 input", () => {
+    expect(decodeCursor("not-base64-!!!")).toBeNull();
+  });
+
+  it("returns null when JSON is missing required fields", () => {
+    const partial = Buffer.from(JSON.stringify({ id: "rest-1" }), "utf8").toString(
+      "base64",
+    );
+    expect(decodeCursor(partial)).toBeNull();
+  });
+
+  it("returns null when distanceMiles is not finite", () => {
+    const bad = Buffer.from(
+      JSON.stringify({ id: "rest-1", distanceMiles: "nope" }),
+      "utf8",
+    ).toString("base64");
+    expect(decodeCursor(bad)).toBeNull();
   });
 });
 
