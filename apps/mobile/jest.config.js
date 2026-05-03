@@ -16,6 +16,9 @@ const config = {
         '^expo-web-browser$': '<rootDir>/__mocks__/expo-web-browser.ts',
         '^expo-router$': '<rootDir>/__mocks__/expo-router.ts',
         '^expo-crypto$': '<rootDir>/__mocks__/expo-crypto.ts',
+        '^@supabase/supabase-js$': '<rootDir>/__mocks__/supabase-js.ts',
+        '^react-native-url-polyfill/auto$': '<rootDir>/__mocks__/react-native-url-polyfill-auto.ts',
+        '^expo-secure-store$': '<rootDir>/__mocks__/expo-secure-store.ts',
       },
       transform: {
         '^.+\\.tsx?$': [

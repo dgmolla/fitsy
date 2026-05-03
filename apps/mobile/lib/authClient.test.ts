@@ -12,8 +12,24 @@ jest.mock('expo-secure-store', () => ({
   deleteItemAsync: jest.fn().mockResolvedValue(undefined),
 }));
 
+// Mock Supabase client — adoptSession() calls supabase.auth.setSession()
+// after every auth response (S-228). The real client requires native polyfills
+// and would flake in node test env, so stub it here with the minimum surface.
+jest.mock('./supabase', () => ({
+  supabase: {
+    auth: {
+      setSession: jest.fn().mockResolvedValue({ data: {}, error: null }),
+      getSession: jest.fn().mockResolvedValue({ data: { session: null } }),
+      signOut: jest.fn().mockResolvedValue({ error: null }),
+    },
+  },
+}));
+
 const SecureStore = jest.requireMock('expo-secure-store') as {
   setItemAsync: jest.Mock;
+};
+const SupabaseMock = jest.requireMock('./supabase') as {
+  supabase: { auth: { setSession: jest.Mock } };
 };
 
 function makeMockFetch(options: { ok: boolean; status?: number; body?: unknown }) {
@@ -26,6 +42,7 @@ function makeMockFetch(options: { ok: boolean; status?: number; body?: unknown }
 
 const sampleAuthResponse: AuthApiResponse = {
   token: 'jwt-token-abc',
+  refreshToken: 'refresh-token-xyz',
   user: { id: 'u1', email: 'jane@example.com', name: 'Jane' },
 };
 
@@ -64,6 +81,17 @@ describe('loginAndStore', () => {
       'fitsy_authToken',
       'jwt-token-abc',
     );
+  });
+
+  it('hands the session (access + refresh) to Supabase SDK on success', async () => {
+    global.fetch = makeMockFetch({ ok: true, body: sampleAuthResponse });
+
+    await loginAndStore('jane@example.com', 'secret');
+
+    expect(SupabaseMock.supabase.auth.setSession).toHaveBeenCalledWith({
+      access_token: 'jwt-token-abc',
+      refresh_token: 'refresh-token-xyz',
+    });
   });
 
   it('throws on API error shape (200 with error body)', async () => {
