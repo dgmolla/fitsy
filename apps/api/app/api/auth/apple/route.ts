@@ -131,6 +131,7 @@ export async function POST(
   return NextResponse.json(
     {
       token: data.session.access_token,
+      refreshToken: data.session.refresh_token,
       user: { id: user.id, email: user.email, name: user.name },
       isNewUser,
     },

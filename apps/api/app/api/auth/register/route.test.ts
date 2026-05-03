@@ -29,7 +29,10 @@ const mockSignInWithPassword = jest.fn();
 
 const SUPABASE_USER = { id: "supa-uuid-1", email: "alice@example.com" };
 const DB_USER = { id: "supa-uuid-1", email: "alice@example.com", name: "Alice" };
-const SUPABASE_SESSION = { access_token: "supa-jwt-token" };
+const SUPABASE_SESSION = {
+  access_token: "supa-jwt-token",
+  refresh_token: "supa-refresh-token",
+};
 
 beforeEach(() => {
   jest.resetAllMocks();
@@ -74,6 +77,7 @@ describe("POST /api/auth/register — success", () => {
     expect(res.status).toBe(201);
     const body = await res.json();
     expect(body.token).toBe("supa-jwt-token");
+    expect(body.refreshToken).toBe("supa-refresh-token");
     expect(body.user.email).toBe("alice@example.com");
   });
 

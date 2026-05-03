@@ -2,12 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/restaurantService";
 import { getSupabaseClient } from "@/lib/supabase";
 import { authLimiter } from "@/lib/rateLimit";
-
-interface GoogleAuthResponse {
-  token: string;
-  user: { id: string; email: string; name: string | null };
-  isNewUser: boolean;
-}
+import type { GoogleAuthResponse } from "@fitsy/shared";
 
 export async function POST(
   request: NextRequest,
@@ -122,6 +117,7 @@ export async function POST(
   return NextResponse.json(
     {
       token: data.session.access_token,
+      refreshToken: data.session.refresh_token,
       user: { id: user.id, email: user.email, name: user.name },
       isNewUser,
     },

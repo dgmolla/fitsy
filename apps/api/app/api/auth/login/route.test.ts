@@ -24,7 +24,10 @@ const SUPABASE_USER = {
   email: "alice@example.com",
   user_metadata: { name: "Alice" },
 };
-const SUPABASE_SESSION = { access_token: "supa-jwt-token" };
+const SUPABASE_SESSION = {
+  access_token: "supa-jwt-token",
+  refresh_token: "supa-refresh-token",
+};
 const DB_USER = { id: "supa-uuid-1", email: "alice@example.com", name: "Alice" };
 
 beforeEach(() => {
@@ -59,6 +62,7 @@ describe("POST /api/auth/login — success", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.token).toBe("supa-jwt-token");
+    expect(body.refreshToken).toBe("supa-refresh-token");
     expect(body.user.email).toBe("alice@example.com");
     expect(body.user.passwordHash).toBeUndefined();
   });

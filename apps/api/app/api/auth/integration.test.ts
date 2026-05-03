@@ -89,7 +89,10 @@ const SUPABASE_USER = {
   email: USER_EMAIL,
   user_metadata: { name: USER_NAME },
 };
-const SUPABASE_SESSION = { access_token: SUPABASE_JWT };
+const SUPABASE_SESSION = {
+  access_token: SUPABASE_JWT,
+  refresh_token: "supabase.refresh.token.xyz",
+};
 const DB_USER = { id: USER_ID, email: USER_EMAIL, name: USER_NAME };
 const JWT_PAYLOAD = { sub: USER_ID, email: USER_EMAIL };
 
@@ -410,7 +413,10 @@ describe("Integration: Google Sign-In → Protected Route", () => {
 describe("Integration: Email/Password Register + Login → Protected Route", () => {
   it("3.1 — register new user: token from register accepted on GET /api/user/profile", async () => {
     const REGISTER_JWT = "register.supa.token";
-    const REGISTER_SESSION = { access_token: REGISTER_JWT };
+    const REGISTER_SESSION = {
+      access_token: REGISTER_JWT,
+      refresh_token: "register.refresh.token",
+    };
 
     mockAdminCreateUser.mockResolvedValue({
       data: { user: SUPABASE_USER },
@@ -453,7 +459,10 @@ describe("Integration: Email/Password Register + Login → Protected Route", () 
     const LOGIN_JWT = "login.supa.token";
 
     mockSignInWithPassword.mockResolvedValue({
-      data: { session: { access_token: LOGIN_JWT }, user: SUPABASE_USER },
+      data: {
+        session: { access_token: LOGIN_JWT, refresh_token: "login.refresh.token" },
+        user: SUPABASE_USER,
+      },
       error: null,
     });
     (prisma.user.upsert as jest.Mock).mockResolvedValue(DB_USER);
