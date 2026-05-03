@@ -233,6 +233,28 @@ export function trackAuthFailure(props: AuthFailureProps): void {
   }
 }
 
+// ─── Session lifecycle (S-228) ────────────────────────────────────────────────
+// Emitted from the supabase.auth.onAuthStateChange subscription wired in
+// app/_layout.tsx. `session_refreshed` fires every time the SDK rotates the
+// access token in the background; `session_refresh_failed` fires when the
+// refresh token has expired or was reused, forcing a SIGNED_OUT.
+
+export function trackSessionRefreshed(props: { user_id: string }): void {
+  try {
+    getPostHogClient().capture('session_refreshed', props as unknown as Record<string, JsonType>);
+  } catch (err) {
+    logCaptureError('session_refreshed', err);
+  }
+}
+
+export function trackSessionRefreshFailed(props: { user_id: string }): void {
+  try {
+    getPostHogClient().capture('session_refresh_failed', props as unknown as Record<string, JsonType>);
+  } catch (err) {
+    logCaptureError('session_refresh_failed', err);
+  }
+}
+
 export function __resetForTesting(): void {
   _client = null;
 }

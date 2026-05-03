@@ -1,9 +1,22 @@
-import { getStoredToken, clearToken } from './authClient';
 import { router } from 'expo-router';
+import { supabase } from './supabase';
+import { clearToken } from './authClient';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
 
+/**
+ * Source the access token from the Supabase SDK rather than the legacy
+ * SecureStore key. The SDK proactively refreshes ~5 min before expiry and
+ * `getSession()` returns the current (possibly just-refreshed) access token.
+ */
+async function getAccessToken(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token ?? null;
+}
+
 async function handleUnauthorized(): Promise<never> {
+  // Sign out clears the Supabase session blob in SecureStore. clearToken also
+  // wipes the legacy fitsy_authToken key for users mid-upgrade.
   await clearToken();
   router.replace('/welcome/problem');
   throw new Error('Session expired');
@@ -13,7 +26,7 @@ async function get<T>(path: string, authenticated = false): Promise<T> {
   const headers: Record<string, string> = {};
 
   if (authenticated) {
-    const token = await getStoredToken();
+    const token = await getAccessToken();
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
@@ -41,7 +54,7 @@ async function post<T>(path: string, body: unknown, authenticated = true): Promi
   };
 
   if (authenticated) {
-    const token = await getStoredToken();
+    const token = await getAccessToken();
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
@@ -68,7 +81,7 @@ async function del(path: string, authenticated = true): Promise<void> {
   const headers: Record<string, string> = {};
 
   if (authenticated) {
-    const token = await getStoredToken();
+    const token = await getAccessToken();
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
@@ -96,7 +109,7 @@ async function patch<T>(path: string, body: unknown, authenticated = true): Prom
   };
 
   if (authenticated) {
-    const token = await getStoredToken();
+    const token = await getAccessToken();
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
