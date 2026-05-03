@@ -127,7 +127,11 @@ export async function POST(
   sendWelcomeEmail(user.email, user.name ?? undefined).catch(console.error);
 
   return NextResponse.json(
-    { token: signInData.session.access_token, user },
+    {
+      token: signInData.session.access_token,
+      refreshToken: signInData.session.refresh_token,
+      user,
+    },
     { status: 201 },
   );
 }

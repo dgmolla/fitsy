@@ -36,7 +36,10 @@ const SUPABASE_USER = {
   email: "user@icloud.com",
   user_metadata: { name: "Jane" },
 };
-const SUPABASE_SESSION = { access_token: "supa-jwt-token" };
+const SUPABASE_SESSION = {
+  access_token: "supa-jwt-token",
+  refresh_token: "supa-refresh-token",
+};
 const DB_USER = { id: "supa-uuid-1", email: "user@icloud.com", name: "Jane" };
 
 beforeEach(() => {
@@ -122,6 +125,7 @@ describe("POST /api/auth/apple — new user", () => {
     const body = await res.json();
     expect(body.isNewUser).toBe(true);
     expect(body.token).toBe("supa-jwt-token");
+    expect(body.refreshToken).toBe("supa-refresh-token");
     expect(body.user.id).toBe(DB_USER.id);
     expect(mockSignInWithIdToken).toHaveBeenCalledWith(
       expect.objectContaining({ provider: "apple", nonce: "raw-nonce" }),
