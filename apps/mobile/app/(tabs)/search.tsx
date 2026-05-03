@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   FlatList,
   Image,
@@ -29,6 +30,7 @@ import {
   trackLocationManualOverrideOpened,
   trackLocationManualOverridePicked,
   trackRestaurantTapped,
+  trackSaveMacroTargetsFailed,
   trackSearchPerformed,
   trackSearchPageLoaded,
   trackSearchPaginationEndReached,
@@ -436,7 +438,14 @@ export default function SearchScreen() {
             );
           }
         })
-        .catch(() => {})
+        .catch((err: unknown) => {
+          // Loading saved targets is non-critical (the user can re-enter via
+          // the Edit panel) so don't block the screen, but a silent failure
+          // here previously hid AsyncStorage corruption from us. Surface it
+          // in dev console at minimum.
+          // eslint-disable-next-line no-console
+          console.warn('[search] getMacroTargets failed:', err);
+        })
         .finally(() => setTargetsLoaded(true));
     }, []),
   );
@@ -630,10 +639,33 @@ export default function SearchScreen() {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [inputs, location.lat, location.lng, location.loading, cuisineFilter, doFetch, targetsLoaded]);
 
+  const persistMacroTargets = useCallback((values: MacroValues) => {
+    saveMacroTargets(values).catch((err: unknown) => {
+      // Previously a silent catch — users thought their targets saved when
+      // they hadn't, then opened the app the next day to a fresh-install
+      // experience. Surface a retry dialog + fire a PostHog event so we can
+      // see how often this happens and trigger the retry path manually.
+      // eslint-disable-next-line no-console
+      console.warn('[search] saveMacroTargets failed:', err);
+      trackSaveMacroTargetsFailed(err);
+      Alert.alert(
+        "Couldn't save targets",
+        "We couldn't save your macro targets. Check your connection and try again.",
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Retry',
+            onPress: () => persistMacroTargets(values),
+          },
+        ],
+      );
+    });
+  }, []);
+
   function handleApplyFilters(newValues: MacroValues) {
     setFilterVisible(false);
     setInputs(newValues);
-    saveMacroTargets(newValues).catch(() => {});
+    persistMacroTargets(newValues);
   }
 
   const locationLabel = location.loading

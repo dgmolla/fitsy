@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { fetchPreviewRestaurants } from '@/lib/previewSearch';
 import { prefetchedRestaurants } from '@/lib/teaserCache';
-import { trackOnboardingScreenView } from '@/lib/analytics';
+import { trackOnboardingScreenView, trackPreviewFetchFailed } from '@/lib/analytics';
 
 const MIN_DISPLAY_MS = 2200;
 
@@ -32,8 +32,17 @@ export default function FindingScreen() {
       try {
         const data = await fetchPreviewRestaurants();
         prefetchedRestaurants.data = data;
-      } catch {
-        // results screen has its own fallback
+        prefetchedRestaurants.error = false;
+      } catch (err) {
+        // Flag the cache so the results screen can render an explicit
+        // "network problem, retry" UI rather than conflating this with the
+        // empty-DB state. Also surface the failure in PostHog + console so
+        // we can see how often this fires in the field.
+        prefetchedRestaurants.data = null;
+        prefetchedRestaurants.error = true;
+        // eslint-disable-next-line no-console
+        console.warn('[finding] /api/restaurants/preview prefetch failed:', err);
+        trackPreviewFetchFailed(err);
       }
 
       const elapsed = Date.now() - start;
