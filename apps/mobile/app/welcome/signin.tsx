@@ -57,7 +57,15 @@ export default function SignInScreen() {
             await captureIdentity(r.user.id, r.user.email);
             if (!r.isNewUser) await pullProfileFromServer();
             setGoogleLoading(false);
-            router.replace('/(tabs)/search');
+            // Onboarding redirect chain (post sign-in):
+            //   → /welcome/location-permission   (S-225, when merged)
+            //   → /welcome/notification-permission (S-226b)
+            //   → /(tabs)/search
+            // S-225 swaps this redirect to location-permission and that screen
+            // chains here. Until S-225 lands, signin jumps straight to the
+            // notification priming screen so this branch is testable
+            // standalone.
+            router.replace('/welcome/notification-permission');
           })
           .catch((err: Error) => {
             trackAuthFailure({ provider: 'google', error_message: err.message });

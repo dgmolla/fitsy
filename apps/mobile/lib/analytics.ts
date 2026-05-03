@@ -183,6 +183,53 @@ export function trackSearchPaginationEndReached(props: SearchPaginationEndReache
   }
 }
 
+// ─── Notification priming screen (S-226b) ───────────────────────────────────
+// Mirrors the location-priming events: a single shot at framing *why* push
+// notifications matter before the OS dialog appears. The granted/denied pair
+// is emitted from the priming screen since that's where the OS prompt fires;
+// downstream surfaces (e.g. a re-prompt deep-link in Profile) can re-use the
+// same events when wired up.
+
+export function trackNotificationPrimingShown(): void {
+  try {
+    getPostHogClient().capture('notification_priming_shown');
+  } catch (err) {
+    logCaptureError('notification_priming_shown', err);
+  }
+}
+
+export function trackNotificationPrimingAllowTapped(): void {
+  try {
+    getPostHogClient().capture('notification_priming_allow_tapped');
+  } catch (err) {
+    logCaptureError('notification_priming_allow_tapped', err);
+  }
+}
+
+export function trackNotificationPrimingSkipTapped(): void {
+  try {
+    getPostHogClient().capture('notification_priming_skip_tapped');
+  } catch (err) {
+    logCaptureError('notification_priming_skip_tapped', err);
+  }
+}
+
+export function trackNotificationPermissionGranted(): void {
+  try {
+    getPostHogClient().capture('notification_permission_granted');
+  } catch (err) {
+    logCaptureError('notification_permission_granted', err);
+  }
+}
+
+export function trackNotificationPermissionDenied(): void {
+  try {
+    getPostHogClient().capture('notification_permission_denied');
+  } catch (err) {
+    logCaptureError('notification_permission_denied', err);
+  }
+}
+
 export interface RestaurantTappedProps {
   restaurant_id: string;
   restaurant_name: string;

@@ -63,7 +63,7 @@ export async function fetchRestaurantsPage(
 
     // eslint-disable-next-line no-console
     console.log(JSON.stringify({ event: 'fitsy_search_client_done', reqId, ok: true, client_total_ms: t1 - t0, results: response.data.length }));
-    return { data: response.data, nextCursor: response.meta.nextCursor };
+    return { data: response.data, nextCursor: response.meta.nextCursor ?? null };
   } catch (err) {
     const t1 = Date.now();
     // eslint-disable-next-line no-console

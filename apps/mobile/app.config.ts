@@ -30,6 +30,7 @@ const config: ExpoConfig = {
     ],
     "expo-apple-authentication",
     "expo-web-browser",
+    "expo-notifications",
   ],
   updates: {
     url: "https://u.expo.dev/a204190c-0b71-4c31-b126-f3bc62d1c4ee",
