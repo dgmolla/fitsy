@@ -92,6 +92,7 @@ export function trackOnboardingScreenView(screenName: string): void {
 
 export type LocationSourceTag =
   | 'gps'
+  | 'manual'
   | 'fallback-denied'
   | 'fallback-timeout'
   | 'fallback-error';
@@ -227,6 +228,40 @@ export function trackNotificationPermissionDenied(): void {
     getPostHogClient().capture('notification_permission_denied');
   } catch (err) {
     logCaptureError('notification_permission_denied', err);
+  }
+}
+
+// ─── Manual location override (S-227) ────────────────────────────────────────
+// Pairs with the truthful fallback labels (S-224) — together they form the
+// deny-path escape hatch. We track three discrete moments so the funnel is
+// readable in PostHog: (a) sheet opened → discoverability of the feature,
+// (b) neighborhood picked → which presets actually get used, (c) cleared →
+// how often users return to GPS once they've overridden.
+
+export function trackLocationManualOverrideOpened(): void {
+  try {
+    getPostHogClient().capture('location_manual_override_opened', {});
+  } catch (err) {
+    logCaptureError('location_manual_override_opened', err);
+  }
+}
+
+export function trackLocationManualOverridePicked(props: { neighborhood: string }): void {
+  try {
+    getPostHogClient().capture(
+      'location_manual_override_picked',
+      props as unknown as Record<string, JsonType>,
+    );
+  } catch (err) {
+    logCaptureError('location_manual_override_picked', err);
+  }
+}
+
+export function trackLocationManualOverrideCleared(): void {
+  try {
+    getPostHogClient().capture('location_manual_override_cleared', {});
+  } catch (err) {
+    logCaptureError('location_manual_override_cleared', err);
   }
 }
 
