@@ -146,6 +146,43 @@ export function trackLocationError(props: { error_message?: string }): void {
   }
 }
 
+// ─── Search pagination ───────────────────────────────────────────────────────
+// Per-page telemetry for the FlatList infinite scroll. `pageIndex` is 0 for
+// the initial load. `cursor` is the cursor used to *fetch* this page (null on
+// the first page). `result_count` is the count appended on this page (not the
+// running total) so PostHog funnels can spot pages that came back smaller than
+// expected without re-deriving from totals.
+
+export interface SearchPageLoadedProps {
+  page_index: number;
+  result_count: number;
+  cursor: string | null;
+}
+
+export function trackSearchPageLoaded(props: SearchPageLoadedProps): void {
+  try {
+    getPostHogClient().capture('search_page_loaded', props as unknown as Record<string, JsonType>);
+  } catch (err) {
+    logCaptureError('search_page_loaded', err);
+  }
+}
+
+export interface SearchPaginationEndReachedProps {
+  total_results: number;
+  pages_loaded: number;
+}
+
+export function trackSearchPaginationEndReached(props: SearchPaginationEndReachedProps): void {
+  try {
+    getPostHogClient().capture(
+      'search_pagination_end_reached',
+      props as unknown as Record<string, JsonType>,
+    );
+  } catch (err) {
+    logCaptureError('search_pagination_end_reached', err);
+  }
+}
+
 export interface RestaurantTappedProps {
   restaurant_id: string;
   restaurant_name: string;
