@@ -1,15 +1,36 @@
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
-import type { AppleAuthResponse, AuthApiResponse, AuthResponse } from '@fitsy/shared';
+import type {
+  AppleAuthResponse,
+  AuthApiResponse,
+  AuthResponse,
+  GoogleAuthResponse,
+} from '@fitsy/shared';
+import { supabase } from './supabase';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
 // SecureStore keys must contain only alphanumeric, '.', '-', '_' (no ':')
+//
+// Legacy key — used pre-S-228 to store ONLY the access token. We still write
+// to it on auth success so older callers (api.ts, profileSync.ts, profile.tsx)
+// continue to function until they migrate to `supabase.auth.getSession()`.
+// Refresh logic does NOT depend on this key — Supabase persists the full
+// session blob (access + refresh tokens) under its own key via the SecureStore
+// adapter in lib/supabase.ts.
 const TOKEN_KEY = 'fitsy_authToken';
 
 // ─── Token storage ────────────────────────────────────────────────────────────
 
+/**
+ * Returns the current access token from the Supabase session.
+ * Falls back to the legacy SecureStore key if the SDK has no session — covers
+ * the upgrade window where users had a token stored before S-228 shipped.
+ */
 export async function getStoredToken(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession();
+  if (data.session?.access_token) return data.session.access_token;
+  // Legacy fallback: pre-S-228 token still in SecureStore.
   return SecureStore.getItemAsync(TOKEN_KEY);
 }
 
@@ -17,8 +38,28 @@ export async function storeToken(token: string): Promise<void> {
   await SecureStore.setItemAsync(TOKEN_KEY, token);
 }
 
+/**
+ * Clear all auth state — Supabase session AND legacy token. Used by logout,
+ * account deletion, and the 401 unauthorized handler in api.ts.
+ */
 export async function clearToken(): Promise<void> {
+  // Supabase's signOut clears its own SecureStore key (the session blob).
+  await supabase.auth.signOut().catch(() => {
+    // signOut may fail offline — don't let that block local cleanup.
+  });
   await SecureStore.deleteItemAsync(TOKEN_KEY);
+}
+
+/**
+ * Hand a server-issued session over to the Supabase SDK so it can take over
+ * proactive refresh (~5 min before expiry), refresh-token rotation, and
+ * reuse detection. Called after every successful auth response.
+ */
+async function adoptSession(token: string, refreshToken: string): Promise<void> {
+  await supabase.auth.setSession({
+    access_token: token,
+    refresh_token: refreshToken,
+  });
 }
 
 // ─── Auth API calls ───────────────────────────────────────────────────────────
@@ -61,6 +102,7 @@ export async function loginAndStore(
     throw new Error(result.error);
   }
   await storeToken(result.token);
+  await adoptSession(result.token, result.refreshToken);
   return result;
 }
 
@@ -74,6 +116,7 @@ export async function registerAndStore(
     throw new Error(result.error);
   }
   await storeToken(result.token);
+  await adoptSession(result.token, result.refreshToken);
   return result;
 }
 
@@ -119,16 +162,15 @@ export async function appleSignIn(): Promise<AppleAuthResponse> {
   });
 
   await storeToken(result.token);
+  await adoptSession(result.token, result.refreshToken);
   return result;
 }
 
 // ─── Google Sign In ───────────────────────────────────────────────────────────
 
-export interface GoogleAuthResponse {
-  token: string;
-  user: { id: string; email: string; name: string | null };
-  isNewUser: boolean;
-}
+// Re-export the canonical type from @fitsy/shared. We previously had a local
+// declaration here that diverged from the server response shape.
+export type { GoogleAuthResponse };
 
 /**
  * Exchange a Google ID token (obtained via expo-auth-session) for a Fitsy JWT.
@@ -137,6 +179,7 @@ export interface GoogleAuthResponse {
 export async function completeGoogleSignIn(idToken: string): Promise<GoogleAuthResponse> {
   const result = await postJson<GoogleAuthResponse>('/api/auth/google', { idToken });
   await storeToken(result.token);
+  await adoptSession(result.token, result.refreshToken);
   return result;
 }
 
