@@ -184,6 +184,8 @@ export interface MenuItemResult {
 export interface MenuResponse {
   restaurantId: string;
   restaurantName: string;
+  rating?: number;
+  userRatingCount?: number;
   menuItems: MenuItemResult[];
 }
 

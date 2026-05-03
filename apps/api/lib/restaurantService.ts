@@ -299,6 +299,8 @@ export async function getRestaurantMenu(
   return {
     restaurantId: restaurant.id,
     restaurantName: restaurant.name,
+    ...(restaurant.rating !== null ? { rating: restaurant.rating } : {}),
+    ...(restaurant.userRatingCount !== null ? { userRatingCount: restaurant.userRatingCount } : {}),
     menuItems: restaurant.menuItems.map((item) => {
       const estimate = item.macroEstimates[0] ?? null;
       const hasMacros =

@@ -3,6 +3,7 @@ import {
   FlatList,
   Image,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -49,23 +50,24 @@ function computeMatchPct(item: MenuItemResult, targets: MacroValues | null): num
   return Math.max(0, Math.round((1 - avgError) * 100));
 }
 
-function getTopItems(items: MenuItemResult[], targets: MacroValues | null, count: number): ScoredItem[] {
+function getRankedItems(items: MenuItemResult[], targets: MacroValues | null): ScoredItem[] {
   return items
     .map((item) => ({ item, pct: computeMatchPct(item, targets) }))
-    .sort((a, b) => b.pct - a.pct)
-    .slice(0, count);
+    .sort((a, b) => b.pct - a.pct);
 }
 
 /* ── Constants ───────────────────────────────────────────────────────────── */
 
 const HERO_HEIGHT = 320;
-const TOP_MATCHES_COUNT = 5;
-const CONF_HIGH = '#2F8F5B';
-const CONF_MED = '#F59E0B';
+const HIGH_MATCH_THRESHOLD = 80;
+// Macro accents tuned to read on the green Top Pick gradient.
+const PICK_PROTEIN = '#A8C5B3';
+const PICK_CARBS = '#CBB494';
+const PICK_FAT = '#BCADC7';
 
-type Tab = 'forYou' | 'fullMenu';
+type ViewMode = 'forYou' | 'fullMenu';
 
-/* ── Hero ─────────────────────────────────────────────────────────────────── */
+/* ── Hero (unchanged) ─────────────────────────────────────────────────────── */
 
 function Hero({ name, distance, cuisine, itemCount, photoUrl, insetTop }: {
   name: string; distance?: string; cuisine?: string; itemCount: number; photoUrl?: string; insetTop: number;
@@ -121,186 +123,220 @@ const hS = StyleSheet.create({
   meta: { fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.5)' },
 });
 
-/* ── Tab Bar (pill switcher) ──────────────────────────────────────────────── */
+/* ── Top Pick Tile ───────────────────────────────────────────────────────── */
 
-function TabBar({ activeTab, onTabChange }: { activeTab: Tab; onTabChange: (t: Tab) => void }) {
-  return (
-    <View style={tS.bar}>
-      <Pressable
-        onPress={() => onTabChange('forYou')}
-        style={[tS.tab, activeTab === 'forYou' && tS.tabOn]}
-      >
-        <Text style={[tS.label, activeTab === 'forYou' && tS.labelOn]}>For You</Text>
-      </Pressable>
-      <Pressable
-        onPress={() => onTabChange('fullMenu')}
-        style={[tS.tab, activeTab === 'fullMenu' && tS.tabOn]}
-      >
-        <Text style={[tS.label, activeTab === 'fullMenu' && tS.labelOn]}>Full Menu</Text>
-      </Pressable>
-    </View>
-  );
-}
-
-const tS = StyleSheet.create({
-  bar: {
-    flexDirection: 'row', gap: 4,
-    marginHorizontal: 20, marginTop: 18, marginBottom: 18,
-    backgroundColor: EDITORIAL.creamCard, borderRadius: 12, padding: 4,
-  },
-  tab: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 10 },
-  tabOn: {
-    backgroundColor: EDITORIAL.cream,
-    shadowColor: EDITORIAL.green, shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06, shadowRadius: 6, elevation: 2,
-  },
-  label: { fontSize: 13, fontWeight: '700', color: EDITORIAL.textSoft, letterSpacing: 0.2 },
-  labelOn: { color: EDITORIAL.green },
-});
-
-/* ── #1 Expanded Card ─────────────────────────────────────────────────────── */
-
-function TopPickCard({ scored, isSaved, onToggleSave }: {
-  scored: ScoredItem; isSaved: boolean; onToggleSave: (id: string) => void;
+function TopPickTile({ scored, isSaved, onToggleSave, onShowFullMenu }: {
+  scored: ScoredItem; isSaved: boolean;
+  onToggleSave: (id: string) => void;
+  onShowFullMenu: () => void;
 }) {
   const { item, pct } = scored;
   const m = item.macros;
   return (
-    <View style={tpS.wrap}>
-      <View style={tpS.card}>
-        <View style={tpS.topRow}>
-          <Text style={tpS.rankIdx}>01</Text>
-          <Text style={tpS.pct}>{pct}% match</Text>
-          <Text style={tpS.topLabel}>Top Pick</Text>
+    <LinearGradient
+      colors={[EDITORIAL.green, EDITORIAL.greenMid]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={tpS.card}
+    >
+      <View style={tpS.topRow}>
+        <View style={tpS.badge}>
+          <Text style={tpS.badgeTxt}>TOP PICK · BEST MEAL FOR YOU</Text>
         </View>
-        <Text style={tpS.name} numberOfLines={2}>{item.name}</Text>
-        {item.description ? (
-          <Text style={tpS.desc} numberOfLines={2}>{item.description}</Text>
-        ) : null}
-        {m ? (
-          <View style={tpS.macros}>
-            <MacroBlock label="cals" value={m.calories} color={EDITORIAL.text} />
-            <MacroBlock label="protein" value={m.proteinG} unit="g" color={MACRO_COLORS.protein} />
-            <MacroBlock label="carbs" value={m.carbsG} unit="g" color={MACRO_COLORS.carbs} />
-            <MacroBlock label="fat" value={m.fatG} unit="g" color={MACRO_COLORS.fat} />
-          </View>
-        ) : null}
+        <Text style={tpS.pct}>{pct}<Text style={tpS.pctSmall}>%</Text></Text>
+      </View>
+      <Text style={tpS.name} numberOfLines={2}>{item.name}</Text>
+      {item.description ? (
+        <Text style={tpS.desc} numberOfLines={2}>{item.description}</Text>
+      ) : null}
+      {m ? (
+        <View style={tpS.macros}>
+          <MacroChip value={String(m.calories)} label="cal" color={EDITORIAL.cream} />
+          <MacroChip value={`${m.proteinG}g`} label="pro" color={PICK_PROTEIN} />
+          <MacroChip value={`${m.carbsG}g`} label="carb" color={PICK_CARBS} />
+          <MacroChip value={`${m.fatG}g`} label="fat" color={PICK_FAT} />
+        </View>
+      ) : null}
+      <View style={tpS.actionRow}>
         <Pressable
           onPress={() => onToggleSave(item.id)}
-          style={tpS.saveBtn}
+          style={tpS.iconBtn}
           accessibilityRole="button"
           accessibilityLabel={isSaved ? 'Remove from saved' : 'Save to meals'}
+          hitSlop={8}
         >
-          <Ionicons name={isSaved ? 'bookmark' : 'bookmark-outline'} size={14} color={EDITORIAL.cream} />
-          <Text style={tpS.saveText}>{isSaved ? 'Saved' : 'Save to Meals'}</Text>
+          <Ionicons name={isSaved ? 'bookmark' : 'bookmark-outline'} size={18} color={EDITORIAL.cream} />
+        </Pressable>
+        <Pressable
+          onPress={onShowFullMenu}
+          style={tpS.fullMenuLink}
+          accessibilityRole="button"
+          accessibilityLabel="See full menu"
+          hitSlop={8}
+        >
+          <Text style={tpS.fullMenuTxt}>Full menu</Text>
+          <Ionicons name="arrow-forward" size={14} color={EDITORIAL.cream} />
         </Pressable>
       </View>
-    </View>
+    </LinearGradient>
   );
 }
 
-function MacroBlock({ label, value, unit, color }: { label: string; value: number; unit?: string; color: string }) {
+function MacroChip({ value, label, color }: { value: string; label: string; color: string }) {
   return (
-    <View style={tpS.mBlock}>
-      <Text style={[tpS.mVal, { color }]}>{value}{unit ?? ''}</Text>
-      <Text style={tpS.mLabel}>{label}</Text>
+    <View style={tpS.chip}>
+      <Text style={[tpS.chipVal, { color }]}>{value}</Text>
+      <Text style={tpS.chipLab}>{label}</Text>
     </View>
   );
 }
 
 const tpS = StyleSheet.create({
-  wrap: { paddingHorizontal: 16, marginBottom: 6 },
-  card: { backgroundColor: EDITORIAL.creamCard, borderRadius: 18, padding: 18 },
-  topRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
-  rankIdx: {
-    fontFamily: FONTS.newsreaderItalic, fontSize: 28, color: EDITORIAL.creamDeep,
-    lineHeight: 30, letterSpacing: -1,
+  card: { borderRadius: 20, padding: 18, gap: 10 },
+  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  badge: {
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999,
   },
-  pct: { fontSize: 12, fontWeight: '800', color: CONF_HIGH },
-  topLabel: {
-    fontSize: 10, fontWeight: '700', letterSpacing: 0.4, textTransform: 'uppercase',
-    color: EDITORIAL.textSoft, marginLeft: 'auto',
+  badgeTxt: { color: EDITORIAL.cream, fontSize: 9.5, fontWeight: '700', letterSpacing: 1.6 },
+  pct: { fontFamily: FONTS.newsreaderBold, fontSize: 36, color: EDITORIAL.cream, letterSpacing: -1, lineHeight: 36 },
+  pctSmall: { fontSize: 14, color: 'rgba(255,255,255,0.7)', fontWeight: '600' },
+  name: { fontFamily: FONTS.newsreaderBold, fontSize: 23, color: EDITORIAL.cream, letterSpacing: -0.4, lineHeight: 25 },
+  desc: { fontSize: 11.5, lineHeight: 16, color: 'rgba(255,255,255,0.78)' },
+  macros: { flexDirection: 'row', gap: 5, marginTop: 4 },
+  chip: { flex: 1, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 10, paddingVertical: 8, paddingHorizontal: 4, alignItems: 'center' },
+  chipVal: { fontSize: 14, fontWeight: '800', letterSpacing: -0.3 },
+  chipLab: { fontSize: 8, fontWeight: '700', letterSpacing: 1.1, color: 'rgba(255,255,255,0.65)', marginTop: 2, textTransform: 'uppercase' },
+  actionRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginTop: 6, paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.18)',
   },
-  name: {
-    fontFamily: FONTS.newsreaderBold, fontSize: 20, color: EDITORIAL.text,
-    letterSpacing: -0.3, lineHeight: 24, marginBottom: 4,
+  iconBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    alignItems: 'center', justifyContent: 'center',
   },
-  desc: { fontSize: 12, fontWeight: '500', color: EDITORIAL.textSoft, lineHeight: 17, marginBottom: 16 },
-  macros: { flexDirection: 'row', gap: 6, marginBottom: 14 },
-  mBlock: { flex: 1, backgroundColor: EDITORIAL.cream, borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
-  mVal: { fontSize: 16, fontWeight: '800', letterSpacing: -0.3 },
-  mLabel: { fontSize: 8, fontWeight: '700', letterSpacing: 0.3, textTransform: 'uppercase', color: EDITORIAL.textSoft, marginTop: 1 },
-  saveBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 7,
-    backgroundColor: EDITORIAL.green, borderRadius: 12,
-    paddingHorizontal: 20, paddingVertical: 11, alignSelf: 'flex-start',
-  },
-  saveText: { fontSize: 13, fontWeight: '700', color: EDITORIAL.cream },
+  fullMenuLink: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, paddingHorizontal: 4 },
+  fullMenuTxt: { fontSize: 13, fontWeight: '700', color: EDITORIAL.cream, letterSpacing: 0.4 },
 });
 
-/* ── Compact ranked row (#2–5) ────────────────────────────────────────────── */
+/* ── Stat Tile ───────────────────────────────────────────────────────────── */
 
-function RankedRow({ scored, rank, isSaved, onToggleSave }: {
-  scored: ScoredItem; rank: number; isSaved: boolean; onToggleSave: (id: string) => void;
+function StatTile({ icon, label, value, valueSuffix, subtext, variant = 'light' }: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: string | number;
+  valueSuffix?: string;
+  subtext: string;
+  variant?: 'light' | 'dark';
 }) {
-  const { item, pct } = scored;
-  const m = item.macros;
+  const isDark = variant === 'dark';
+  const bg = isDark ? EDITORIAL.text : EDITORIAL.creamCard;
+  const fg = isDark ? EDITORIAL.cream : EDITORIAL.text;
+  const labelColor = isDark ? 'rgba(255,255,255,0.55)' : EDITORIAL.textSoft;
+  const subColor = isDark ? 'rgba(255,255,255,0.65)' : EDITORIAL.textSoft;
+  const suffixColor = isDark ? 'rgba(255,255,255,0.5)' : EDITORIAL.textSoft;
   return (
-    <View style={rS.card}>
-      <Text style={rS.rankIdx}>{String(rank).padStart(2, '0')}</Text>
-      <View style={rS.body}>
-        <View style={rS.nameRow}>
-          <Text style={rS.name} numberOfLines={1}>{item.name}</Text>
-          <Text style={[rS.pct, { color: pct >= 80 ? CONF_HIGH : CONF_MED }]}>{pct}%</Text>
-        </View>
-        {m ? (
-          <View style={rS.macros}>
-            <InlineMacro value={m.calories} unit="cal" color={EDITORIAL.text} />
-            <InlineMacro value={m.proteinG} unit="g pro" color={MACRO_COLORS.protein} />
-            <InlineMacro value={m.carbsG} unit="g carb" color={MACRO_COLORS.carbs} />
-            <InlineMacro value={m.fatG} unit="g fat" color={MACRO_COLORS.fat} />
-          </View>
-        ) : null}
+    <View style={[stS.tile, { backgroundColor: bg }]}>
+      <View style={stS.labelRow}>
+        <Ionicons name={icon} size={11} color={labelColor} />
+        <Text style={[stS.label, { color: labelColor }]}>{label}</Text>
       </View>
-      <BookmarkButton isSaved={isSaved} onPress={() => onToggleSave(item.id)} />
+      <View>
+        <Text style={[stS.value, { color: fg }]}>
+          {value}
+          {valueSuffix ? <Text style={[stS.valueSuffix, { color: suffixColor }]}>{valueSuffix}</Text> : null}
+        </Text>
+        <Text style={[stS.sub, { color: subColor }]} numberOfLines={1}>{subtext}</Text>
+      </View>
     </View>
   );
 }
 
-function InlineMacro({ value, unit, color }: { value: number; unit: string; color: string }) {
-  return (
-    <View style={rS.macro}>
-      <Text style={[rS.macroVal, { color }]}>{value}</Text>
-      <Text style={rS.macroUnit}>{unit}</Text>
-    </View>
-  );
-}
-
-const rS = StyleSheet.create({
-  card: {
-    marginHorizontal: 16, marginBottom: 6,
-    backgroundColor: EDITORIAL.creamCard, borderRadius: 14,
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingHorizontal: 16, paddingVertical: 14,
+const stS = StyleSheet.create({
+  tile: {
+    flex: 1, borderRadius: 18, padding: 14,
+    minHeight: 104, justifyContent: 'space-between',
   },
-  rankIdx: {
-    fontFamily: FONTS.newsreaderItalic, fontSize: 24, color: EDITORIAL.creamDeep,
-    lineHeight: 26, letterSpacing: -1, width: 28, flexShrink: 0,
-  },
-  body: { flex: 1, minWidth: 0 },
-  nameRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 3 },
-  name: {
-    fontFamily: FONTS.newsreaderRegular, fontSize: 16, color: EDITORIAL.text,
-    letterSpacing: -0.15, flex: 1,
-  },
-  pct: { fontSize: 12, fontWeight: '800', flexShrink: 0 },
-  macros: { flexDirection: 'row', gap: 10 },
-  macro: { flexDirection: 'row', alignItems: 'baseline', gap: 2 },
-  macroVal: { fontSize: 13, fontWeight: '800' },
-  macroUnit: { fontSize: 9, fontWeight: '600', color: EDITORIAL.textSoft },
+  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  label: { fontSize: 9.5, fontWeight: '700', letterSpacing: 1.6, textTransform: 'uppercase' },
+  value: { fontFamily: FONTS.newsreaderBold, fontSize: 30, letterSpacing: -1, lineHeight: 32 },
+  valueSuffix: { fontSize: 14, fontFamily: undefined, fontWeight: '500', letterSpacing: 0 },
+  sub: { fontSize: 11, fontWeight: '500', marginTop: 4 },
 });
 
-/* ── Full Menu Item ───────────────────────────────────────────────────────── */
+/* ── Match Ring Tile ─────────────────────────────────────────────────────── */
+// Decorative ring (no progress arc — we don't have react-native-svg).
+// The percent text inside carries the data.
+
+function MatchRingTile({ percent }: { percent: number | null }) {
+  return (
+    <View style={[stS.tile, { backgroundColor: EDITORIAL.creamDeep, alignItems: 'center', justifyContent: 'center', gap: 8 }]}>
+      <View style={ringS.ring}>
+        <View style={ringS.inner}>
+          <Text style={ringS.pct}>{percent !== null ? `${percent}%` : '—'}</Text>
+        </View>
+      </View>
+      <Text style={[stS.label, { color: EDITORIAL.textSoft }]}>AVG MATCH</Text>
+    </View>
+  );
+}
+
+const ringS = StyleSheet.create({
+  ring: {
+    width: 56, height: 56, borderRadius: 28,
+    borderWidth: 5, borderColor: EDITORIAL.greenAccent,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: EDITORIAL.creamCard,
+  },
+  inner: { alignItems: 'center', justifyContent: 'center' },
+  pct: { fontFamily: FONTS.newsreaderBold, fontSize: 15, color: EDITORIAL.text, letterSpacing: -0.4 },
+});
+
+/* ── Saved Tile ──────────────────────────────────────────────────────────── */
+// TODO(social): wire `count` and avatar colors to real follow-graph data.
+// For now this is a static placeholder — same shape as the 05a mockup.
+
+function SavedTile({ count }: { count: number }) {
+  return (
+    <View style={savS.tile}>
+      <View style={savS.left}>
+        <Text style={savS.label}>★ SAVED BY</Text>
+        <Text style={savS.big}>{count}</Text>
+        <Text style={savS.sub}>people you follow</Text>
+      </View>
+      <View style={savS.avatars}>
+        <View style={[savS.av, { backgroundColor: '#C84B31' }]} />
+        <View style={[savS.av, { backgroundColor: '#CBB494', marginLeft: -6 }]} />
+        <View style={[savS.av, { backgroundColor: '#A8C5B3', marginLeft: -6 }]} />
+        <View style={[savS.av, savS.avMore, { marginLeft: -6 }]}>
+          <Text style={savS.avMoreTxt}>+{Math.max(0, count - 3)}</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const savS = StyleSheet.create({
+  tile: {
+    backgroundColor: EDITORIAL.green, borderRadius: 18, padding: 16,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+  },
+  left: { flex: 1 },
+  label: { fontSize: 9.5, fontWeight: '700', letterSpacing: 1.6, color: 'rgba(255,255,255,0.55)' },
+  big: { fontFamily: FONTS.newsreaderBold, fontSize: 30, color: EDITORIAL.cream, letterSpacing: -1, lineHeight: 32, marginTop: 4 },
+  sub: { fontSize: 11, color: 'rgba(255,255,255,0.7)', fontWeight: '500', marginTop: 4 },
+  avatars: { flexDirection: 'row' },
+  av: { width: 30, height: 30, borderRadius: 15, borderWidth: 2, borderColor: EDITORIAL.green },
+  avMore: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  avMoreTxt: { fontSize: 10, fontWeight: '700', color: EDITORIAL.cream },
+});
+
+/* ── Full Menu Item (unchanged behavior) ─────────────────────────────────── */
 
 function FullMenuItem({ item, isSaved, onToggleSave }: {
   item: MenuItemResult; isSaved: boolean; onToggleSave: (id: string) => void;
@@ -368,7 +404,7 @@ export default function RestaurantDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [savedMap, setSavedMap] = useState<Map<string, string>>(new Map());
-  const [activeTab, setActiveTab] = useState<Tab>('forYou');
+  const [view, setView] = useState<ViewMode>('forYou');
 
   useEffect(() => {
     let cancelled = false;
@@ -412,104 +448,163 @@ export default function RestaurantDetailScreen() {
     }
   }, [savedMap, id]);
 
-  const topItems = useMemo(() => {
-    if (!menu) return [];
-    return getTopItems(menu.menuItems, targets, TOP_MATCHES_COUNT);
-  }, [menu, targets]);
+  const ranked = useMemo(
+    () => (menu ? getRankedItems(menu.menuItems, targets) : []),
+    [menu, targets],
+  );
+  const bestMatch = ranked.length > 0 && ranked[0].pct > 0 ? ranked[0] : null;
+  const overEightyCount = ranked.filter((r) => r.pct >= HIGH_MATCH_THRESHOLD).length;
 
-  const bestMatch = topItems.length > 0 ? topItems[0] : null;
-  const forYouRest = topItems.slice(1);
+  const avgMatch = useMemo(() => {
+    const valid = ranked.filter((r) => r.pct >= 0).map((r) => r.pct);
+    if (valid.length === 0) return null;
+    return Math.round(valid.reduce((a, b) => a + b, 0) / valid.length);
+  }, [ranked]);
+
+  const avgCal = useMemo(() => {
+    const cals = (menu?.menuItems ?? []).filter((i) => i.macros).map((i) => i.macros!.calories);
+    if (cals.length === 0) return null;
+    return Math.round(cals.reduce((a, b) => a + b, 0) / cals.length);
+  }, [menu]);
+
+  const avgProtein = useMemo(() => {
+    const pros = (menu?.menuItems ?? []).filter((i) => i.macros).map((i) => i.macros!.proteinG);
+    if (pros.length === 0) return null;
+    return Math.round(pros.reduce((a, b) => a + b, 0) / pros.length);
+  }, [menu]);
+
   const restaurantName = menu?.restaurantName ?? 'Restaurant';
+  const itemCount = menu?.menuItems.length ?? 0;
 
-  const forYouHeader = (
-    <View style={s.heroPanel}>
-      <Hero
-        name={restaurantName}
-        distance={params.distance}
-        cuisine={params.cuisine}
-        itemCount={menu?.menuItems.length ?? 0}
-        photoUrl={params.photoUrl}
-        insetTop={insets.top}
-      />
-      <View style={s.panel}>
-        <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
-        {bestMatch && bestMatch.pct > 0 ? (
-          <TopPickCard
-            scored={bestMatch}
-            isSaved={savedMap.has(bestMatch.item.id)}
-            onToggleSave={handleToggleSave}
-          />
-        ) : null}
-      </View>
-    </View>
+  const heroEl = (
+    <Hero
+      name={restaurantName}
+      distance={params.distance}
+      cuisine={params.cuisine}
+      itemCount={itemCount}
+      photoUrl={params.photoUrl}
+      insetTop={insets.top}
+    />
   );
 
-  const fullMenuHeader = (
-    <View style={s.heroPanel}>
-      <Hero
-        name={restaurantName}
-        distance={params.distance}
-        cuisine={params.cuisine}
-        itemCount={menu?.menuItems.length ?? 0}
-        photoUrl={params.photoUrl}
-        insetTop={insets.top}
-      />
-      <View style={s.panel}>
-        <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
-      </View>
-    </View>
-  );
+  if (loading) {
+    return (
+      <>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View style={[s.container, s.centered]}><FitsyLoader size="md" /></View>
+      </>
+    );
+  }
 
-  return (
-    <>
-      <Stack.Screen options={{ headerShown: false }} />
-      <View style={s.container}>
-        {loading && <View style={s.centered}><FitsyLoader size="md" /></View>}
-        {!loading && error !== null && (
+  if (error) {
+    return (
+      <>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View style={s.container}>
           <View style={[s.errorBanner, { backgroundColor: colors.errorBg }]}>
             <Ionicons name="alert-circle" size={16} color={colors.error} />
             <Text style={[s.errorText, { color: colors.error }]}>{error}</Text>
           </View>
-        )}
-        {!loading && !error && menu && (
-          menu.menuItems.length === 0 ? (
-            <View style={s.centered}>
-              <Text style={s.emptyText}>No menu items available</Text>
-            </View>
-          ) : activeTab === 'forYou' ? (
-            <FlatList
-              data={forYouRest}
-              keyExtractor={(sc) => sc.item.id}
-              renderItem={({ item: scored, index }) => (
-                <RankedRow
-                  scored={scored}
-                  rank={index + 2}
-                  isSaved={savedMap.has(scored.item.id)}
+        </View>
+      </>
+    );
+  }
+
+  if (!menu || menu.menuItems.length === 0) {
+    return (
+      <>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View style={s.container}>
+          {heroEl}
+          <View style={s.centered}><Text style={s.emptyText}>No menu items available</Text></View>
+        </View>
+      </>
+    );
+  }
+
+  if (view === 'forYou') {
+    const ratingValue = menu.rating !== undefined ? menu.rating.toFixed(1) : '—';
+    const ratingSubtext = menu.userRatingCount !== undefined
+      ? `${menu.userRatingCount.toLocaleString()} reviews`
+      : 'No ratings yet';
+    return (
+      <>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View style={s.container}>
+          <ScrollView style={s.listBg} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
+            {heroEl}
+            <View style={s.bento}>
+              {bestMatch ? (
+                <TopPickTile
+                  scored={bestMatch}
+                  isSaved={savedMap.has(bestMatch.item.id)}
                   onToggleSave={handleToggleSave}
+                  onShowFullMenu={() => setView('fullMenu')}
                 />
-              )}
-              ListHeaderComponent={forYouHeader}
-              contentContainerStyle={s.listContent}
-              style={s.listBg}
-              ListEmptyComponent={
-                <View style={s.centeredPadded}>
+              ) : (
+                <View style={s.emptyBanner}>
                   <Text style={s.emptyText}>Set your macro targets to see personalized matches</Text>
                 </View>
-              }
-            />
-          ) : (
-            <FlatList
-              data={menu.menuItems}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <FullMenuItem item={item} isSaved={savedMap.has(item.id)} onToggleSave={handleToggleSave} />
               )}
-              ListHeaderComponent={fullMenuHeader}
-              contentContainerStyle={s.listContent}
-              style={s.listBg}
-            />
-          )
-        )}
+
+              <View style={s.row}>
+                <StatTile
+                  icon="star"
+                  label="RATING"
+                  value={ratingValue}
+                  subtext={ratingSubtext}
+                />
+                <StatTile
+                  icon="flash-outline"
+                  label="AVG MEAL"
+                  value={avgCal ?? '—'}
+                  valueSuffix=" kcal"
+                  subtext={avgProtein !== null ? `${avgProtein}g protein` : 'No macro data'}
+                  variant="dark"
+                />
+              </View>
+
+              <View style={s.row}>
+                <StatTile
+                  icon="restaurant-outline"
+                  label="ITEMS"
+                  value={itemCount}
+                  subtext={`${overEightyCount} over 80% match`}
+                />
+                <MatchRingTile percent={avgMatch} />
+              </View>
+
+              <SavedTile count={12} />
+            </View>
+          </ScrollView>
+        </View>
+      </>
+    );
+  }
+
+  // Full menu view
+  return (
+    <>
+      <Stack.Screen options={{ headerShown: false }} />
+      <View style={s.container}>
+        <FlatList
+          data={menu.menuItems}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <FullMenuItem item={item} isSaved={savedMap.has(item.id)} onToggleSave={handleToggleSave} />
+          )}
+          ListHeaderComponent={
+            <View>
+              {heroEl}
+              <Pressable onPress={() => setView('forYou')} style={s.backRow} accessibilityRole="button">
+                <Ionicons name="arrow-back" size={14} color={EDITORIAL.greenMid} />
+                <Text style={s.backTxt}>Back to picks</Text>
+              </Pressable>
+            </View>
+          }
+          contentContainerStyle={s.listContent}
+          style={s.listBg}
+        />
       </View>
     </>
   );
@@ -518,12 +613,19 @@ export default function RestaurantDetailScreen() {
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: EDITORIAL.text },
   listBg: { backgroundColor: EDITORIAL.cream },
+  scrollContent: { paddingBottom: 36, backgroundColor: EDITORIAL.cream },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, backgroundColor: EDITORIAL.cream },
-  centeredPadded: { alignItems: 'center', paddingHorizontal: 32, paddingTop: 40 },
   emptyText: { fontSize: 14, color: EDITORIAL.textSoft, textAlign: 'center' },
+  emptyBanner: { backgroundColor: EDITORIAL.creamCard, borderRadius: 18, padding: 22, alignItems: 'center' },
   errorBanner: { margin: 16, borderRadius: 10, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
   errorText: { fontSize: 14, flex: 1 },
-  heroPanel: {},
-  panel: { backgroundColor: EDITORIAL.cream },
+  bento: { paddingHorizontal: 14, paddingTop: 14, gap: 10 },
+  row: { flexDirection: 'row', gap: 10 },
+  backRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 22, paddingTop: 16, paddingBottom: 8,
+    backgroundColor: EDITORIAL.cream,
+  },
+  backTxt: { fontSize: 12, fontWeight: '700', color: EDITORIAL.greenMid, letterSpacing: 0.4 },
   listContent: { flexGrow: 1, paddingBottom: 32, backgroundColor: EDITORIAL.cream },
 });
