@@ -10,6 +10,7 @@ import {
   priceSymbol,
   formatTag,
 } from "@/lib/seoUtils";
+import { Nav } from "@/components/Nav";
 
 export const revalidate = 86400;
 
@@ -362,24 +363,6 @@ export default async function RestaurantPage({
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
-
-function Nav() {
-  return (
-    <nav className={styles.nav}>
-      <div className={styles.navInner}>
-        <a href="/" className={styles.logo}>
-          fitsy<span className={styles.logoDot}>.</span>
-        </a>
-        <div className={styles.editorialNavLinks}>
-          <a href="/restaurants">Discover</a>
-          <a href="#">Saved</a>
-          <a href="#">Today&rsquo;s Macros</a>
-          <a href={EARLY_ACCESS_URL}>Get the app</a>
-        </div>
-      </div>
-    </nav>
-  );
-}
 
 function FaqItem({ q, a }: { q: string; a: string }) {
   return (

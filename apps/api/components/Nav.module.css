@@ -1,0 +1,87 @@
+/* Shared site nav. Visual treatment is the home page's nav verbatim
+   (translucent blur, deep-green logo, ghost + solid pill buttons grouped
+   top-right). Color values are hard-coded so the bar reads identically no
+   matter what palette the parent page sets. */
+
+.nav {
+  /* Sticky (not fixed) so the bar takes flow space and pages don't need to
+     reserve top padding to keep content from rendering underneath. Visual
+     treatment matches the landing page bar exactly. */
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  background: rgba(253, 251, 247, 0.82);
+  border-bottom: 1px solid #e8e2d8;
+}
+
+.navInner {
+  /* Full-width with 56px gutters so the logo lands at the same x as the
+     editorial content (hero/grid/footer all use 56px gutters). On a wide
+     viewport this puts the logo flush left rather than tucked into a
+     centered 1200px box. */
+  max-width: none;
+  margin: 0;
+  padding: 0.875rem 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.logo {
+  font-family: var(--font-newsreader), Georgia, serif;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1b3a26;
+  letter-spacing: -0.04em;
+  text-decoration: none;
+}
+
+.logoDot {
+  color: #3a7050;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cta {
+  /* Pin font explicitly — without this, the button inherits whatever
+     `.page` sets (Outfit on /, Nunito Sans on /restaurants/[slug]) and the
+     buttons read with different weight on different pages. */
+  font-family: var(--font-body), -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #fdfbf7;
+  background: #1b3a26;
+  padding: 0.5rem 1.125rem;
+  border-radius: 999px;
+  text-decoration: none;
+  letter-spacing: -0.01em;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.cta:hover {
+  background: #2a5438;
+  transform: translateY(-1px);
+}
+
+.ctaGhost {
+  background: transparent;
+  color: #0f1f15;
+  border: 1px solid #e8e2d8;
+}
+
+.ctaGhost:hover {
+  background: rgba(15, 31, 21, 0.04);
+  transform: translateY(-1px);
+}
+
+@media (max-width: 768px) {
+  .navInner {
+    padding: 0.75rem 1.25rem;
+  }
+}

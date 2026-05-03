@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import styles from "./restaurants.module.css";
 import { prisma } from "@/lib/restaurantService";
 import { slugWithId, priceSymbol, formatTag } from "@/lib/seoUtils";
+import { Nav } from "@/components/Nav";
 
 export const revalidate = 86400;
 
@@ -79,136 +80,137 @@ export default async function RestaurantsPage({
   const pageHref = (n: number) => (n === 1 ? "/restaurants" : `/restaurants?page=${n}`);
 
   return (
-    <div className={styles.page}>
+    <div className={`${styles.page} ${styles.editorial} ${styles.directory}`}>
       <Nav />
 
-      <section className={styles.hero}>
-        <span className={styles.heroEyebrow}>
-          Los Angeles · {total.toLocaleString()} restaurants{totalPages > 1 ? ` · page ${page} of ${totalPages}` : ""}
-        </span>
-        <h1 className={styles.heroTitle}>
-          Find restaurants that fit{" "}
-          <em className={styles.heroEm}>your macros</em>
+      {/* Compact directory header — small italic title, no display-size hero */}
+      <header className={styles.dirHeader}>
+        <div className={styles.dirEyebrow}>
+          Fitsy &middot; The directory &middot; {total.toLocaleString()} restaurants
+          {totalPages > 1 ? ` · page ${page} of ${totalPages}` : ""}
+        </div>
+        <h1 className={styles.dirTitle}>
+          Los Angeles, <em>eaten well.</em>
         </h1>
-        <p className={styles.heroSub}>
-          Every restaurant below has full macro data for its entire menu —
-          protein, carbs, fat, and calories for each dish. Stop guessing, start
-          eating out with confidence.
+        <p className={styles.dirSub}>
+          Every place on this list has full macro data for its entire menu —
+          protein, carbs, fat, calories per dish. Pick one and dig in.
         </p>
-      </section>
+      </header>
 
-      <section className={styles.section}>
-        <h2 className={styles.sectionTitle}>All Restaurants</h2>
-        <div className={styles.grid}>
-          {rows.map((r) => {
-            const href = `/restaurants/${slugWithId(r.name, r.id)}`;
-            const price = priceSymbol(r.priceLevel);
-            return (
-              <a
-                key={r.id}
-                href={href}
-                className={styles.card}
-              >
+      <div className={styles.dirToolbar}>
+        <div className={styles.dirCount}>
+          <span className={styles.dirCountNum}>
+            {total.toLocaleString()}
+          </span>{" "}
+          <span className={styles.dirCountLabel}>restaurants in Los Angeles</span>
+        </div>
+        <div className={styles.dirSort}>
+          <span className={styles.dirSortLabel}>Sorted by</span>{" "}
+          <em>★ rating</em>
+        </div>
+      </div>
+
+      <ol className={styles.dirList}>
+        {rows.map((r, idx) => {
+          const href = `/restaurants/${slugWithId(r.name, r.id)}`;
+          const price = priceSymbol(r.priceLevel);
+          const num = (page - 1) * PAGE_SIZE + idx + 1;
+          const tagBits: string[] = [];
+          if (r.cuisineTags.length > 0)
+            tagBits.push(r.cuisineTags.slice(0, 2).map(formatTag).join(", "));
+          tagBits.push(r.chainFlag ? "Chain" : "Independent");
+          if (price) tagBits.push(price);
+          if (r.dietaryOptions.length > 0)
+            tagBits.push(r.dietaryOptions.slice(0, 2).map(formatTag).join(", "));
+          return (
+            <li key={r.id} className={styles.dirRow}>
+              <a href={href} className={styles.dirRowLink}>
+                <span className={styles.dirNum}>
+                  № {String(num).padStart(2, "0")}
+                </span>
                 {r.photoUrl ? (
                   <img
                     src={r.photoUrl}
-                    alt={`${r.name} restaurant`}
-                    className={styles.cardPhoto}
+                    alt={`${r.name} photo`}
+                    className={styles.dirThumb}
                   />
                 ) : (
-                  <div className={styles.cardPhotoPlaceholder}>🍽️</div>
-                )}
-                <div className={styles.cardBody}>
-                  <div className={styles.cardName}>{r.name}</div>
-                  <div className={styles.cardMeta}>
-                    {r.rating != null && (
-                      <span className={styles.cardRating}>
-                        ★ {r.rating.toFixed(1)}
-                        {r.userRatingCount != null && (
-                          <span style={{ fontWeight: 400 }}>
-                            {" "}({r.userRatingCount.toLocaleString()})
-                          </span>
-                        )}
-                      </span>
-                    )}
-                    {price && <span>{price}</span>}
-                    {r.chainFlag && <span>Chain</span>}
-                  </div>
-                  <div className={styles.cardAddress}>{r.address}</div>
-                  {r.cuisineTags.length > 0 && (
-                    <div className={styles.tagRow}>
-                      {r.cuisineTags.slice(0, 3).map((t) => (
-                        <span key={t} className={styles.tag}>
-                          {formatTag(t)}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  {r.dietaryOptions.length > 0 && (
-                    <div className={styles.tagRow}>
-                      {r.dietaryOptions.slice(0, 3).map((t) => (
-                        <span key={t} className={`${styles.tag} ${styles.tagGreen}`}>
-                          {formatTag(t)}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className={styles.cardFooter}>
-                  <span>
-                    <span className={styles.cardItemCount}>
-                      {r._count.menuItems}
-                    </span>{" "}
-                    dishes with macro data
+                  <span className={styles.dirThumbPlaceholder} aria-hidden>
+                    {r.name.charAt(0).toUpperCase()}
                   </span>
-                  <span>View menu →</span>
+                )}
+                <div className={styles.dirInfo}>
+                  <h3 className={styles.dirName}>{r.name}</h3>
+                  {r.address && (
+                    <div className={styles.dirAddress}>{r.address}</div>
+                  )}
+                  <div className={styles.dirTags}>
+                    {tagBits.map((bit, i) => (
+                      <span key={i} className={styles.dirTagBit}>
+                        {bit}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className={styles.dirStats}>
+                  {r.rating != null && (
+                    <span className={styles.dirRating}>
+                      ★ {r.rating.toFixed(1)}
+                    </span>
+                  )}
+                  <span className={styles.dirDishes}>
+                    <em>{r._count.menuItems}</em> dishes
+                  </span>
+                  <span className={styles.dirArrow}>View menu →</span>
                 </div>
               </a>
-            );
-          })}
-        </div>
+            </li>
+          );
+        })}
+      </ol>
 
-        {totalPages > 1 && (
-          <nav className={styles.pagination} aria-label="Pagination">
-            {hasPrev ? (
-              <a href={pageHref(page - 1)} rel="prev" className={styles.paginationLink}>
-                ← Previous
-              </a>
-            ) : (
-              <span className={`${styles.paginationLink} ${styles.paginationDisabled}`}>← Previous</span>
-            )}
-            <span className={styles.paginationStatus}>
-              Page {page} of {totalPages}
+      {totalPages > 1 && (
+        <nav className={styles.pagination} aria-label="Pagination">
+          {hasPrev ? (
+            <a
+              href={pageHref(page - 1)}
+              rel="prev"
+              className={styles.paginationLink}
+            >
+              ← Previous
+            </a>
+          ) : (
+            <span
+              className={`${styles.paginationLink} ${styles.paginationDisabled}`}
+            >
+              ← Previous
             </span>
-            {hasNext ? (
-              <a href={pageHref(page + 1)} rel="next" className={styles.paginationLink}>
-                Next →
-              </a>
-            ) : (
-              <span className={`${styles.paginationLink} ${styles.paginationDisabled}`}>Next →</span>
-            )}
-          </nav>
-        )}
-      </section>
+          )}
+          <span className={styles.paginationStatus}>
+            Page {page} of {totalPages}
+          </span>
+          {hasNext ? (
+            <a
+              href={pageHref(page + 1)}
+              rel="next"
+              className={styles.paginationLink}
+            >
+              Next →
+            </a>
+          ) : (
+            <span
+              className={`${styles.paginationLink} ${styles.paginationDisabled}`}
+            >
+              Next →
+            </span>
+          )}
+        </nav>
+      )}
 
       <CtaBanner />
       <Footer />
     </div>
-  );
-}
-
-function Nav() {
-  return (
-    <nav className={styles.nav}>
-      <div className={styles.navInner}>
-        <a href="/" className={styles.logo}>
-          fitsy<span className={styles.logoDot}>.</span>
-        </a>
-        <a href={EARLY_ACCESS_URL} className={styles.navCta}>
-          Get Early Access
-        </a>
-      </div>
-    </nav>
   );
 }
 

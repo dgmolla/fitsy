@@ -9,6 +9,7 @@ import {
   confidenceLabel,
   formatTag,
 } from "@/lib/seoUtils";
+import { Nav } from "@/components/Nav";
 
 export const revalidate = 86400;
 
@@ -288,21 +289,6 @@ export default async function MenuItemPage({
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
-
-function Nav() {
-  return (
-    <nav className={styles.nav}>
-      <div className={styles.navInner}>
-        <a href="/" className={styles.logo}>
-          fitsy<span className={styles.logoDot}>.</span>
-        </a>
-        <a href={EARLY_ACCESS_URL} className={styles.navCta}>
-          Get Early Access
-        </a>
-      </div>
-    </nav>
-  );
-}
 
 function FaqItem({ q, a }: { q: string; a: string }) {
   return (

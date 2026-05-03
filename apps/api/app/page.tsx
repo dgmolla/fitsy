@@ -1,5 +1,6 @@
 import styles from "./landing.module.css";
 import { prisma } from "@/lib/restaurantService";
+import { Nav } from "@/components/Nav";
 
 // Prisma calls below need runtime env — opt out of build-time prerender.
 export const dynamic = "force-dynamic";
@@ -13,20 +14,7 @@ export default async function LandingPage() {
   ]);
   return (
     <main className={styles.page}>
-      {/* ─── Nav ─────────────────────────────────────────────────── */}
-      <nav className={styles.nav}>
-        <div className={styles.navInner}>
-          <span className={styles.logo}>
-            fitsy<span className={styles.logoDot}>.</span>
-          </span>
-          <a href="/restaurants" className={styles.navCta} style={{ background: "transparent", color: "var(--text)", border: "1px solid var(--border)", marginRight: 8 }}>
-            Browse Restaurants
-          </a>
-          <a href={EARLY_ACCESS_URL} className={styles.navCta}>
-            Get Early Access
-          </a>
-        </div>
-      </nav>
+      <Nav />
 
       {/* ─── Hero ────────────────────────────────────────────────── */}
       <section className={styles.hero}>

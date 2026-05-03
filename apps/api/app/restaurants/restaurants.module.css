@@ -1,59 +1,30 @@
-/* Design tokens live in app/globals.css */
+/* Design tokens live in app/globals.css. The restaurant pages override the
+   subset that needs to match the landing page's palette (warmer cream,
+   deeper green) so the nav buttons and page chrome read identically across
+   /, /restaurants, and /restaurants/[slug]. */
 
 /* ── Layout shell ───────────────────────────────────────────────────────── */
 .page {
+  /* Mirror landing.module.css `.page` palette — kept in sync intentionally. */
+  --cream: #fdfbf7;
+  --cream-dark: #ede6de;
+  --green: #1b3a26;
+  --green-dark: #2a5438;
+  --green-muted: #3a7050;
+  --green-accent: #3a7050;
+  --text: #0f1f15;
+  --text-muted: #3a4f41;
+  --border: #e8e2d8;
+
   min-height: 100vh;
   background: var(--cream);
   font-family: var(--font-outfit), system-ui, sans-serif;
   color: var(--text);
 }
 
-/* ── Nav (shared) ───────────────────────────────────────────────────────── */
-.nav {
-  position: sticky;
-  top: 0;
-  z-index: 50;
-  background: rgba(248, 245, 239, 0.92);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border);
-}
-
-.navInner {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 0 24px;
-  height: 56px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.logo {
-  font-family: var(--font-newsreader), Georgia, serif;
-  font-size: 1.4rem;
-  font-weight: 600;
-  color: var(--text);
-  text-decoration: none;
-  letter-spacing: -0.02em;
-}
-
+/* ── Footer logo dot (footer mark uses .footerLogo + .logoDot) ──────────── */
 .logoDot {
-  color: var(--green);
-}
-
-.navCta {
-  background: var(--green);
-  color: #fff;
-  padding: 8px 18px;
-  border-radius: 100px;
-  text-decoration: none;
-  font-size: 0.875rem;
-  font-weight: 500;
-  transition: background 0.15s;
-}
-
-.navCta:hover {
-  background: var(--green-dark);
+  color: var(--green-accent);
 }
 
 /* ── Hero section ───────────────────────────────────────────────────────── */
@@ -809,36 +780,6 @@
   color: var(--ed-ink);
 }
 
-/* Nav — mockup styling, but the fitsy.<dot> logo is preserved verbatim. */
-.editorial .nav {
-  background: var(--cream);
-  backdrop-filter: none;
-  border-bottom: 1px solid var(--ed-rule-soft);
-}
-
-.editorial .navInner {
-  max-width: none;
-  padding: 0 56px;
-  height: 72px;
-}
-
-.editorialNavLinks {
-  display: flex;
-  gap: 28px;
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.editorialNavLinks a {
-  color: var(--ed-ink-soft);
-  text-decoration: none;
-}
-
-.editorialNavLinks a:hover {
-  color: var(--ed-ink);
-}
-
 /* Hero */
 .editorialHero {
   padding: 64px 56px 48px;
@@ -1059,23 +1000,343 @@
   color: var(--ed-ink-soft);
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+   Listing / directory — different rhythm from the detail page so the two
+   screens don't read as the same template. Type stays editorial; layout
+   becomes a horizontal directory of rows with thumbnails, hairline rules
+   between, and a quieter header.
+   ───────────────────────────────────────────────────────────────────────── */
+.dirHeader {
+  padding: 56px 56px 28px;
+}
+
+.dirEyebrow {
+  font-size: 11px;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--ed-moss);
+  margin-bottom: 18px;
+  font-weight: 600;
+}
+
+.dirTitle {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-weight: 400;
+  font-size: clamp(40px, 5.2vw, 72px);
+  line-height: 1;
+  letter-spacing: -0.025em;
+  color: var(--ed-ink);
+  margin: 0;
+}
+
+.dirTitle em {
+  font-style: italic;
+  font-weight: 300;
+  color: var(--ed-leaf);
+}
+
+.dirSub {
+  font-size: 16px;
+  color: var(--ed-ink-soft);
+  line-height: 1.55;
+  margin: 18px 0 0;
+  max-width: 60ch;
+}
+
+.dirToolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 22px 56px 14px;
+  border-top: 1px solid var(--ed-rule);
+  border-bottom: 1px solid var(--ed-rule-soft);
+  margin: 24px 0 0;
+}
+
+.dirCount {
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: var(--ed-ink-soft);
+}
+
+.dirCountNum {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-weight: 500;
+  font-size: 22px;
+  color: var(--ed-ink);
+  letter-spacing: -0.01em;
+  margin-right: 4px;
+}
+
+.dirCountLabel {
+  font-size: 13px;
+  color: var(--ed-ink-soft);
+}
+
+.dirSort {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--ed-ink-soft);
+}
+
+.dirSortLabel {
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.dirSort em {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-style: italic;
+  font-weight: 500;
+  color: var(--ed-ink);
+  font-size: 14px;
+  margin-left: 4px;
+}
+
+/* Directory list */
+.dirList {
+  list-style: none;
+  margin: 0;
+  padding: 0 56px 56px;
+}
+
+.dirRow {
+  border-bottom: 1px solid var(--ed-rule-soft);
+}
+
+.dirRow:first-child {
+  border-top: 0;
+}
+
+.dirRowLink {
+  display: grid;
+  grid-template-columns: 56px 96px 1fr auto;
+  gap: 28px;
+  align-items: center;
+  padding: 22px 16px;
+  margin: 0 -16px;
+  border-radius: 6px;
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.18s, transform 0.18s;
+}
+
+.dirRowLink:hover {
+  background: #ffffff;
+  transform: translateX(2px);
+  box-shadow: 0 1px 0 rgba(27, 26, 23, 0.04), 0 16px 32px -28px rgba(27, 26, 23, 0.2);
+}
+
+.dirNum {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-weight: 300;
+  font-size: 14px;
+  color: var(--ed-ink-soft);
+  letter-spacing: 0.1em;
+}
+
+.dirThumb {
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: var(--cream-dark);
+  display: block;
+}
+
+.dirThumbPlaceholder {
+  width: 96px;
+  height: 96px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, var(--cream-dark), rgba(47, 74, 42, 0.15));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: 44px;
+  color: var(--ed-leaf);
+  letter-spacing: -0.02em;
+}
+
+.dirInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.dirName {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-weight: 500;
+  font-size: 26px;
+  line-height: 1.1;
+  letter-spacing: -0.018em;
+  color: var(--ed-ink);
+  margin: 0;
+}
+
+.dirAddress {
+  font-size: 13.5px;
+  color: var(--ed-ink-soft);
+  line-height: 1.45;
+}
+
+.dirTags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--ed-ink-soft);
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.dirTagBit {
+  display: inline-flex;
+  align-items: center;
+}
+
+.dirTagBit + .dirTagBit::before {
+  content: "·";
+  margin: 0 12px;
+  color: var(--ed-rule);
+  font-weight: 400;
+}
+
+.dirStats {
+  display: grid;
+  grid-template-columns: auto auto auto;
+  gap: 36px;
+  align-items: baseline;
+  font-family: var(--font-fraunces), Georgia, serif;
+}
+
+.dirRating {
+  font-weight: 500;
+  font-size: 18px;
+  color: var(--ed-ink);
+  letter-spacing: -0.01em;
+}
+
+.dirDishes {
+  font-size: 13px;
+  color: var(--ed-ink-soft);
+  font-family: var(--font-nunito), sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+}
+
+.dirDishes em {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-style: italic;
+  font-weight: 500;
+  font-size: 22px;
+  color: var(--ed-leaf);
+  letter-spacing: -0.01em;
+  margin-right: 4px;
+}
+
+.dirArrow {
+  font-style: italic;
+  font-weight: 400;
+  font-size: 17px;
+  color: var(--ed-ink);
+  letter-spacing: -0.01em;
+  transition: color 0.18s;
+}
+
+.dirRowLink:hover .dirArrow {
+  color: var(--ed-leaf);
+}
+
+/* Pagination — editorial, italic Fraunces with hairline rule */
+.directory .pagination {
+  margin: 0 56px 56px;
+  padding: 28px 0;
+  gap: 32px;
+  border-top: 1px solid var(--ed-rule-soft);
+}
+
+.editorial .paginationLink {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: 22px;
+  color: var(--ed-ink);
+  letter-spacing: -0.01em;
+  border-radius: 0;
+  transition: color 0.2s;
+}
+
+.editorial .paginationLink:hover {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ed-leaf);
+}
+
+.editorial .paginationStatus {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ed-ink-soft);
+  font-weight: 600;
+}
+
+.editorial .paginationDisabled {
+  opacity: 0.35;
+}
+
+
 /* Responsive */
 @media (max-width: 900px) {
-  .editorial .navInner {
-    padding: 0 24px;
-    height: 60px;
-  }
-  .editorialNavLinks { gap: 16px; font-size: 11.5px; }
   .editorialHero {
     grid-template-columns: 1fr;
     padding: 40px 24px 28px;
     gap: 28px;
   }
   .editorialMetaLabel { width: 90px; }
-  .editorialRule { padding: 0 24px; margin: 24px auto 28px; }
+  .editorialRule { padding: 0; margin: 24px 24px 28px; }
   .editorial .section,
   .editorial .faqSection { padding-left: 24px; padding-right: 24px; }
   .editorial .footer { padding: 24px; }
+
+  /* Directory mobile */
+  .dirHeader { padding: 36px 24px 22px; }
+  .dirToolbar { padding: 18px 24px 12px; }
+  .dirList { padding: 0 24px 40px; }
+  .directory .pagination { margin: 0 24px 40px; }
+  .dirRowLink {
+    grid-template-columns: 72px 1fr;
+    grid-template-areas:
+      "thumb info"
+      "thumb stats";
+    gap: 16px;
+    padding: 18px 12px;
+    margin: 0 -12px;
+  }
+  .dirNum { display: none; }
+  .dirThumb,
+  .dirThumbPlaceholder { grid-area: thumb; width: 72px; height: 72px; }
+  .dirThumbPlaceholder { font-size: 32px; }
+  .dirInfo { grid-area: info; gap: 4px; }
+  .dirName { font-size: 20px; }
+  .dirStats {
+    grid-area: stats;
+    grid-template-columns: auto auto 1fr;
+    gap: 16px;
+    margin-top: 4px;
+  }
+  .dirArrow { text-align: right; }
 }
 
 /* ── Pagination ────────────────────────────────────────────────────────── */
