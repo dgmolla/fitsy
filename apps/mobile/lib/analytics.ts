@@ -441,6 +441,50 @@ export function trackSessionRefreshFailed(props: { user_id: string }): void {
   }
 }
 
+// ─── Onboarding API failure events (S-221) ──────────────────────────────────
+// Each event corresponds to a previously-silent `catch(() => {})` that masked a
+// real onboarding API failure. Capture lets us see the failure in PostHog and
+// quantify conversion impact instead of guessing from drop-off curves.
+
+function extractMessage(err: unknown): string | undefined {
+  if (err instanceof Error) return err.message;
+  if (typeof err === 'string') return err;
+  return undefined;
+}
+
+export function trackStatsFetchFailed(err: unknown): void {
+  try {
+    const p: Record<string, JsonType> = {};
+    const msg = extractMessage(err);
+    if (msg !== undefined) p['error_message'] = msg;
+    getPostHogClient().capture('stats_fetch_failed', p);
+  } catch (capErr) {
+    logCaptureError('stats_fetch_failed', capErr);
+  }
+}
+
+export function trackPreviewFetchFailed(err: unknown): void {
+  try {
+    const p: Record<string, JsonType> = {};
+    const msg = extractMessage(err);
+    if (msg !== undefined) p['error_message'] = msg;
+    getPostHogClient().capture('preview_fetch_failed', p);
+  } catch (capErr) {
+    logCaptureError('preview_fetch_failed', capErr);
+  }
+}
+
+export function trackSaveMacroTargetsFailed(err: unknown): void {
+  try {
+    const p: Record<string, JsonType> = {};
+    const msg = extractMessage(err);
+    if (msg !== undefined) p['error_message'] = msg;
+    getPostHogClient().capture('save_macro_targets_failed', p);
+  } catch (capErr) {
+    logCaptureError('save_macro_targets_failed', capErr);
+  }
+}
+
 export function __resetForTesting(): void {
   _client = null;
 }

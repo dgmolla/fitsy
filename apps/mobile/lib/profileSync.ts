@@ -14,14 +14,16 @@ const ONBOARDING_KEY = '@fitsy/onboarding';
 export async function fetchProfile(): Promise<ProfileResponse | null> {
   try {
     return await api.get<ProfileResponse>('/api/user/profile', true);
-  } catch {
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[profileSync] fetchProfile failed:', err);
     return null;
   }
 }
 
 /**
  * Push local profile + macro targets to the server.
- * Fire-and-forget — silently swallows errors.
+ * Fire-and-forget — data stays local on failure (next push retries).
  */
 export async function pushProfileToServer(): Promise<void> {
   try {
@@ -60,8 +62,12 @@ export async function pushProfileToServer(): Promise<void> {
     if (Object.keys(body).length === 0) return;
 
     await api.patch('/api/user/profile', body, true);
-  } catch {
-    // Silent failure — data stays local
+  } catch (err) {
+    // Data stays local; the next pushProfileToServer call retries. Surface in
+    // console so we don't silently lose the entire profile sync silently
+    // during onboarding the way we did before S-221.
+    // eslint-disable-next-line no-console
+    console.warn('[profileSync] pushProfileToServer failed:', err);
   }
 }
 
@@ -96,7 +102,10 @@ export async function pullProfileFromServer(): Promise<void> {
       };
       await saveMacroTargets(perMeal);
     }
-  } catch {
-    // Silent failure — use whatever is in local storage
+  } catch (err) {
+    // Use whatever is in local storage; surface in dev console so we can spot
+    // post-login profile-pull regressions instead of silently falling back.
+    // eslint-disable-next-line no-console
+    console.warn('[profileSync] pullProfileFromServer failed:', err);
   }
 }

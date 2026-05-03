@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { ImageBackground, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ImageBackground, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
@@ -7,7 +7,7 @@ import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { prefetchedRestaurants } from '@/lib/teaserCache';
 import { fetchPreviewRestaurants, type PreviewRestaurant } from '@/lib/previewSearch';
-import { trackOnboardingScreenView } from '@/lib/analytics';
+import { trackOnboardingScreenView, trackPreviewFetchFailed } from '@/lib/analytics';
 
 const CARD_H = 112;
 
@@ -91,36 +91,62 @@ function SkeletonCard({ delay }: { delay: number }) {
 export default function ResultsScreen() {
   const [restaurants, setRestaurants] = useState<PreviewRestaurant[]>([]);
   const [loading, setLoading] = useState(true);
+  const [networkError, setNetworkError] = useState(false);
 
   useEffect(() => {
     trackOnboardingScreenView('results');
   }, []);
 
-  useEffect(() => {
-    async function load() {
-      // Use prefetched data from finding screen if available
-      if (prefetchedRestaurants.data && prefetchedRestaurants.data.length > 0) {
-        setRestaurants(prefetchedRestaurants.data);
-        setLoading(false);
-        return;
-      }
+  const load = useCallback(async () => {
+    setLoading(true);
 
-      // Fallback: fetch directly
-      try {
-        const data = await fetchPreviewRestaurants();
-        setRestaurants(data);
-      } catch {
-        setRestaurants([]);
-      } finally {
-        setLoading(false);
-      }
+    // Use prefetched data from finding screen if available
+    if (prefetchedRestaurants.data && prefetchedRestaurants.data.length > 0) {
+      setRestaurants(prefetchedRestaurants.data);
+      setNetworkError(false);
+      setLoading(false);
+      return;
     }
-    load();
+
+    // If the finding-screen prefetch errored, render the network-error state
+    // immediately rather than re-fetching here — the results screen renders
+    // ~2s after `finding` resolved, so a fresh attempt is unlikely to succeed
+    // and the extra wait makes the failure feel slower. The retry button
+    // covers the case where the user's connectivity recovers.
+    if (prefetchedRestaurants.error) {
+      setRestaurants([]);
+      setNetworkError(true);
+      setLoading(false);
+      return;
+    }
+
+    // Fallback: fetch directly (e.g. user navigated back to this screen).
+    try {
+      const data = await fetchPreviewRestaurants();
+      setRestaurants(data);
+      setNetworkError(false);
+      prefetchedRestaurants.data = data;
+      prefetchedRestaurants.error = false;
+    } catch (err) {
+      setRestaurants([]);
+      setNetworkError(true);
+      prefetchedRestaurants.error = true;
+      // eslint-disable-next-line no-console
+      console.warn('[results] preview fetch failed:', err);
+      trackPreviewFetchFailed(err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
+  useEffect(() => {
+    load();
+  }, [load]);
+
   const showSkeletons = loading;
-  const showRestaurants = !loading && restaurants.length > 0;
-  const showEmpty = !loading && restaurants.length === 0;
+  const showError = !loading && networkError;
+  const showRestaurants = !loading && !networkError && restaurants.length > 0;
+  const showEmpty = !loading && !networkError && restaurants.length === 0;
 
   return (
     <WelcomeScreen
@@ -141,6 +167,24 @@ export default function ResultsScreen() {
             <RestaurantCard key={r.id} restaurant={r} delay={i * 80} />
           ))
         }
+
+        {showError && (
+          <Animated.View entering={FadeInDown.duration(400)} style={s.errorWrap}>
+            <Text style={s.errorTitle}>Network problem</Text>
+            <Text style={s.errorTxt}>
+              We couldn't reach Fitsy. Check your connection and try again.
+            </Text>
+            <TouchableOpacity
+              style={s.retryBtn}
+              onPress={load}
+              activeOpacity={0.85}
+              accessibilityLabel="Retry loading restaurants"
+              accessibilityRole="button"
+            >
+              <Text style={s.retryTxt}>Retry</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        )}
 
         {showEmpty && (
           <Animated.View entering={FadeInDown.duration(400)} style={s.emptyWrap}>
@@ -223,6 +267,40 @@ const s = StyleSheet.create({
 
   emptyWrap: { alignItems: 'center', paddingVertical: 32 },
   emptyTxt: { fontSize: 16, color: EDITORIAL.textSoft, textAlign: 'center' },
+
+  errorWrap: {
+    alignItems: 'center',
+    paddingVertical: 28,
+    paddingHorizontal: 16,
+    gap: 10,
+    backgroundColor: EDITORIAL.creamDeep,
+    borderRadius: 14,
+  },
+  errorTitle: {
+    fontFamily: FONTS.newsreaderBold,
+    fontSize: 18,
+    color: EDITORIAL.text,
+    letterSpacing: -0.3,
+  },
+  errorTxt: {
+    fontSize: 14,
+    color: EDITORIAL.textSoft,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  retryBtn: {
+    marginTop: 6,
+    backgroundColor: EDITORIAL.text,
+    borderRadius: 10,
+    paddingHorizontal: 22,
+    paddingVertical: 10,
+  },
+  retryTxt: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: EDITORIAL.cream,
+    letterSpacing: 0.2,
+  },
 
   callout: {
     flexDirection: 'row',

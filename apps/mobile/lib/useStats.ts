@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from './api';
+import { trackStatsFetchFailed } from './analytics';
 
 export interface Stats {
   totalDishes: number;
@@ -29,7 +30,15 @@ export function useStats(): Stats {
         cached = resolved;
         setStats(resolved);
       })
-      .catch(() => {});
+      .catch((err: unknown) => {
+        // No UI change — FALLBACK numbers are believable enough that we'd
+        // rather ship them than block the data-scale screen. But silence is
+        // not acceptable: instrument the failure so we can see it in PostHog
+        // and the dev console instead of inferring from stale numbers.
+        // eslint-disable-next-line no-console
+        console.warn('[useStats] /api/restaurants/stats failed:', err);
+        trackStatsFetchFailed(err);
+      });
   }, []);
 
   return stats;
