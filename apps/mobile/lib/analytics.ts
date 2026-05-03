@@ -265,6 +265,49 @@ export function trackLocationManualOverrideCleared(): void {
   }
 }
 
+// ─── Location priming screen (S-225) ─────────────────────────────────────────
+// iOS only allows requesting `Location.requestForegroundPermissionsAsync()` once
+// per install, so the priming screen between sign-in and search is our single
+// shot at framing *why* we need location before the OS dialog appears. These
+// events let us observe the priming → grant/deny funnel in PostHog.
+//
+// The `location_permission_granted` / `location_permission_denied` pair is
+// emitted from the priming screen (where the OS prompt actually fires for new
+// users); `useLocation`'s own `location_permission_denied` event covers the
+// backstop case where a user reaches search without going through priming.
+
+export function trackLocationPrimingShown(): void {
+  try {
+    getPostHogClient().capture('location_priming_shown');
+  } catch (err) {
+    logCaptureError('location_priming_shown', err);
+  }
+}
+
+export function trackLocationPrimingAllowTapped(): void {
+  try {
+    getPostHogClient().capture('location_priming_allow_tapped');
+  } catch (err) {
+    logCaptureError('location_priming_allow_tapped', err);
+  }
+}
+
+export function trackLocationPrimingSkipTapped(): void {
+  try {
+    getPostHogClient().capture('location_priming_skip_tapped');
+  } catch (err) {
+    logCaptureError('location_priming_skip_tapped', err);
+  }
+}
+
+export function trackLocationPermissionGranted(): void {
+  try {
+    getPostHogClient().capture('location_permission_granted');
+  } catch (err) {
+    logCaptureError('location_permission_granted', err);
+  }
+}
+
 export interface RestaurantTappedProps {
   restaurant_id: string;
   restaurant_name: string;
