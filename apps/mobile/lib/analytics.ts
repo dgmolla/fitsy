@@ -255,6 +255,73 @@ export function trackAuthSuccess(props: AuthSuccessProps): void {
   }
 }
 
+// ─── Restaurant detail (S-229 Filter First) ──────────────────────────────────
+// Five events scoped to the redesigned detail screen. We keep them granular so
+// we can tell whether testers hit the filter chips, search the menu, or just
+// scroll the list — each behaviour informs a different polish pass.
+
+export function trackRestaurantDetailViewed(props: {
+  restaurant_id: string;
+  item_count: number;
+}): void {
+  try {
+    getPostHogClient().capture(
+      'restaurant_detail_viewed',
+      props as unknown as Record<string, JsonType>,
+    );
+  } catch (err) {
+    logCaptureError('restaurant_detail_viewed', err);
+  }
+}
+
+export function trackMenuSearchTyped(props: { query_length: number }): void {
+  try {
+    getPostHogClient().capture(
+      'menu_search_typed',
+      props as unknown as Record<string, JsonType>,
+    );
+  } catch (err) {
+    logCaptureError('menu_search_typed', err);
+  }
+}
+
+export function trackMenuFilterChipToggled(props: { chip: string; on: boolean }): void {
+  try {
+    getPostHogClient().capture(
+      'menu_filter_chip_toggled',
+      props as unknown as Record<string, JsonType>,
+    );
+  } catch (err) {
+    logCaptureError('menu_filter_chip_toggled', err);
+  }
+}
+
+export function trackMenuSortChanged(props: { sort: string }): void {
+  try {
+    getPostHogClient().capture(
+      'menu_sort_changed',
+      props as unknown as Record<string, JsonType>,
+    );
+  } catch (err) {
+    logCaptureError('menu_sort_changed', err);
+  }
+}
+
+export function trackMenuItemTapped(props: {
+  menu_item_id: string;
+  restaurant_id: string;
+  position: number;
+}): void {
+  try {
+    getPostHogClient().capture(
+      'menu_item_tapped',
+      props as unknown as Record<string, JsonType>,
+    );
+  } catch (err) {
+    logCaptureError('menu_item_tapped', err);
+  }
+}
+
 export interface AuthFailureProps {
   provider: 'apple' | 'google' | 'dev';
   error_message?: string;
