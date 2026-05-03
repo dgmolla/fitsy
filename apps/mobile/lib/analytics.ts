@@ -269,7 +269,7 @@ export interface RestaurantTappedProps {
   restaurant_id: string;
   restaurant_name: string;
   position: number;
-  entry_point: 'hero' | 'dish_card' | 'section';
+  entry_point: 'hero' | 'dish_card' | 'section' | 'saved_screen';
   best_match_calories?: number;
 }
 
@@ -482,6 +482,205 @@ export function trackSaveMacroTargetsFailed(err: unknown): void {
     getPostHogClient().capture('save_macro_targets_failed', p);
   } catch (capErr) {
     logCaptureError('save_macro_targets_failed', capErr);
+  }
+}
+
+// ─── Tab navigation (S-222) ─────────────────────────────────────────────────
+// Captures every tab switch in the bottom bar so we can read top-level
+// engagement (saved vs search vs profile) without inferring from screen views.
+// `tab` is the destination tab id. `from_tab` is null on cold start.
+
+export type TabId = 'saved' | 'search' | 'profile';
+
+export function trackTabSwitched(props: { tab: TabId; from_tab: TabId | null }): void {
+  try {
+    getPostHogClient().capture(
+      'tab_switched',
+      props as unknown as Record<string, JsonType>,
+    );
+  } catch (err) {
+    logCaptureError('tab_switched', err);
+  }
+}
+
+// ─── Search filters (S-222) ─────────────────────────────────────────────────
+// `cuisine_selected` fires every time the user picks a cuisine chip on the
+// search masthead — separated from `search_performed` so we can see chip
+// usage independently of the debounced fetch that follows. `macro_targets_edited`
+// fires when the FilterPopup is applied; this is the canonical "user touched
+// macros" event regardless of whether it's reached from search or profile.
+
+export function trackCuisineSelected(props: { cuisine: string }): void {
+  try {
+    getPostHogClient().capture(
+      'cuisine_selected',
+      props as unknown as Record<string, JsonType>,
+    );
+  } catch (err) {
+    logCaptureError('cuisine_selected', err);
+  }
+}
+
+export interface MacroTargetsEditedProps {
+  entry_point: 'search' | 'profile';
+  has_protein: boolean;
+  has_carbs: boolean;
+  has_fat: boolean;
+  has_calories: boolean;
+}
+
+export function trackMacroTargetsEdited(props: MacroTargetsEditedProps): void {
+  try {
+    getPostHogClient().capture(
+      'macro_targets_edited',
+      props as unknown as Record<string, JsonType>,
+    );
+  } catch (err) {
+    logCaptureError('macro_targets_edited', err);
+  }
+}
+
+// ─── Search outcome events (S-222) ──────────────────────────────────────────
+// `search_empty_results` is the distinct "filters returned zero matches" state
+// — separate from "we're still adding restaurants" (no GPS yet) and from
+// `search_failed` (network/API error). The three states answer different
+// product questions: empty = filter is too aggressive, failed = backend
+// reliability, no-results = catalog coverage.
+
+export interface SearchEmptyResultsProps {
+  cuisine_filter: string;
+  has_protein_target: boolean;
+  has_carbs_target: boolean;
+  has_fat_target: boolean;
+  has_calories_target: boolean;
+}
+
+export function trackSearchEmptyResults(props: SearchEmptyResultsProps): void {
+  try {
+    getPostHogClient().capture(
+      'search_empty_results',
+      props as unknown as Record<string, JsonType>,
+    );
+  } catch (err) {
+    logCaptureError('search_empty_results', err);
+  }
+}
+
+export function trackSearchFailed(props: {
+  cuisine_filter: string;
+  error_message?: string;
+}): void {
+  try {
+    const p: Record<string, JsonType> = { cuisine_filter: props.cuisine_filter };
+    if (props.error_message !== undefined) p['error_message'] = props.error_message;
+    getPostHogClient().capture('search_failed', p);
+  } catch (err) {
+    logCaptureError('search_failed', err);
+  }
+}
+
+// ─── Restaurant detail failure (S-222) ──────────────────────────────────────
+// Fires when /api/menu/[id] returns null/throws on the detail screen. Pairs
+// with `restaurant_detail_viewed` (success) — together they let us read a
+// detail-screen reliability ratio.
+
+export function trackRestaurantDetailFailed(props: {
+  restaurant_id: string;
+  error_message?: string;
+}): void {
+  try {
+    const p: Record<string, JsonType> = { restaurant_id: props.restaurant_id };
+    if (props.error_message !== undefined) p['error_message'] = props.error_message;
+    getPostHogClient().capture('restaurant_detail_failed', p);
+  } catch (err) {
+    logCaptureError('restaurant_detail_failed', err);
+  }
+}
+
+// ─── Save failure (S-222) ──────────────────────────────────────────────────
+// Pairs with `item_saved` — when the create/delete request fails the success
+// event never fires, so we'd previously have no signal at all. `action`
+// matches `item_saved.action` so PostHog can compute a per-action failure
+// rate.
+
+export function trackSaveFailed(props: {
+  menu_item_id: string;
+  restaurant_id: string;
+  action: 'save' | 'unsave';
+  entry_point: 'restaurant_detail' | 'saved_screen';
+  error_message?: string;
+}): void {
+  try {
+    const p: Record<string, JsonType> = {
+      menu_item_id: props.menu_item_id,
+      restaurant_id: props.restaurant_id,
+      action: props.action,
+      entry_point: props.entry_point,
+    };
+    if (props.error_message !== undefined) p['error_message'] = props.error_message;
+    getPostHogClient().capture('save_failed', p);
+  } catch (err) {
+    logCaptureError('save_failed', err);
+  }
+}
+
+// ─── Onboarding choice selection (S-222) ────────────────────────────────────
+// Generic event for the "user picked an option" moment on choice-style
+// onboarding screens (goal, activity, dietary, tried, response). `screen` is
+// the same snake_case key as `trackOnboardingScreenView`; `value` is the
+// chosen option id. We fold these into one event rather than `goal_selected`
+// + `activity_selected` + … so PostHog dashboards can group by `screen`
+// instead of unioning N events.
+
+export function trackOnboardingChoiceSelected(props: {
+  screen: string;
+  value: string;
+}): void {
+  try {
+    getPostHogClient().capture(
+      'onboarding_choice_selected',
+      props as unknown as Record<string, JsonType>,
+    );
+  } catch (err) {
+    logCaptureError('onboarding_choice_selected', err);
+  }
+}
+
+// ─── Profile screen actions (S-222) ─────────────────────────────────────────
+// Profile is a high-intent surface — every interaction signals an active user.
+// We track field edits separately from log out / delete because the cohorts
+// answer different questions: field edits = "do users tune their inputs after
+// onboarding?", log out / delete = churn signals.
+
+export type ProfileField = 'goal' | 'activity' | 'height' | 'weight' | 'age';
+
+export function trackProfileFieldEdited(props: { field: ProfileField }): void {
+  try {
+    getPostHogClient().capture(
+      'profile_field_edited',
+      props as unknown as Record<string, JsonType>,
+    );
+  } catch (err) {
+    logCaptureError('profile_field_edited', err);
+  }
+}
+
+export function trackProfileLogoutTapped(): void {
+  try {
+    getPostHogClient().capture('profile_logout_tapped', {});
+  } catch (err) {
+    logCaptureError('profile_logout_tapped', err);
+  }
+}
+
+export function trackProfileAccountDeleted(props: { success: boolean }): void {
+  try {
+    getPostHogClient().capture(
+      'profile_account_deleted',
+      props as unknown as Record<string, JsonType>,
+    );
+  } catch (err) {
+    logCaptureError('profile_account_deleted', err);
   }
 }
 

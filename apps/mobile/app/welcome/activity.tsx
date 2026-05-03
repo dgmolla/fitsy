@@ -5,7 +5,7 @@ import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { saveOnboardingField, type ActivityLevel } from '@/lib/onboardingStorage';
-import { trackOnboardingScreenView } from '@/lib/analytics';
+import { trackOnboardingChoiceSelected, trackOnboardingScreenView } from '@/lib/analytics';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 
 const OPTIONS: { id: ActivityLevel; label: string; desc: string; days: string }[] = [
@@ -41,7 +41,10 @@ export default function ActivityScreen() {
             <Animated.View key={opt.id} entering={FadeInDown.duration(400).delay(80 + i * 50)}>
               <AnimatedPress
                 style={[s.row, on ? s.rowOn : undefined]}
-                onPress={() => setSelected(opt.id)}
+                onPress={() => {
+                  setSelected(opt.id);
+                  trackOnboardingChoiceSelected({ screen: 'activity', value: opt.id });
+                }}
                 haptic
                 accessibilityRole="button"
                 accessibilityState={{ selected: on }}

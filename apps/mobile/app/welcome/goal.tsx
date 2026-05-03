@@ -5,7 +5,7 @@ import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { saveOnboardingField } from '@/lib/onboardingStorage';
-import { trackOnboardingScreenView } from '@/lib/analytics';
+import { trackOnboardingChoiceSelected, trackOnboardingScreenView } from '@/lib/analytics';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 
 type Goal = 'lose_fat' | 'maintain' | 'build_muscle' | 'explore';
@@ -45,7 +45,10 @@ export default function GoalScreen() {
             <Animated.View key={g.id} entering={FadeInDown.duration(400).delay(100 + i * 60)}>
               <AnimatedPress
                 style={[s.row, on ? s.rowOn : undefined]}
-                onPress={() => setSelected(g.id)}
+                onPress={() => {
+                  setSelected(g.id);
+                  trackOnboardingChoiceSelected({ screen: 'goal', value: g.id });
+                }}
                 haptic
                 accessibilityRole="button"
                 accessibilityState={{ selected: on }}

@@ -1,19 +1,19 @@
 import React, { useCallback, useState } from 'react';
 import {
-  SafeAreaView,
+  Pressable,
   SectionList,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { SavedItemResponse } from '@fitsy/shared';
 import { getSavedItems, unsaveItem } from '@/lib/apiClient';
 import { BookmarkButton, FitsyLoader } from '@/components';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { useTheme } from '@/lib/theme';
-import { trackItemSaved } from '@/lib/analytics';
+import { trackItemSaved, trackRestaurantTapped, trackSaveFailed } from '@/lib/analytics';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -63,20 +63,39 @@ export default function SavedScreen() {
   );
 
   const handleUnsave = useCallback(async (savedItemId: string) => {
+    const target = savedItems.find((item) => item.id === savedItemId);
     const success = await unsaveItem(savedItemId);
     if (success) {
-      const removed = savedItems.find((item) => item.id === savedItemId);
       setSavedItems((prev) => prev.filter((item) => item.id !== savedItemId));
-      if (removed?.menuItemId) {
+      if (target?.menuItemId) {
         trackItemSaved({
-          menu_item_id: removed.menuItemId,
-          restaurant_id: removed.menuItem?.restaurant.id ?? '',
+          menu_item_id: target.menuItemId,
+          restaurant_id: target.menuItem?.restaurant.id ?? '',
           action: 'unsave',
           entry_point: 'saved_screen',
         });
       }
+    } else if (target?.menuItemId) {
+      // Pairs with `item_saved` — when the API request fails the success
+      // event never fires, so `save_failed` is the only signal we get.
+      trackSaveFailed({
+        menu_item_id: target.menuItemId,
+        restaurant_id: target.menuItem?.restaurant.id ?? '',
+        action: 'unsave',
+        entry_point: 'saved_screen',
+      });
     }
   }, [savedItems]);
+
+  const handleRestaurantTap = useCallback((section: Section, position: number) => {
+    trackRestaurantTapped({
+      restaurant_id: section.restaurantId,
+      restaurant_name: section.title,
+      position,
+      entry_point: 'saved_screen',
+    });
+    router.push({ pathname: `/restaurant/${section.restaurantId}` });
+  }, []);
 
   const sections = buildSections(savedItems);
 
@@ -110,15 +129,23 @@ export default function SavedScreen() {
               </Text>
             </View>
           }
-          renderSectionHeader={({ section }) => (
-            <View style={styles.sectionHeader}>
-              <Ionicons name="restaurant-outline" size={14} color={EDITORIAL.greenAccent} />
-              <Text style={styles.sectionTitle}>{section.title}</Text>
-              <View style={styles.sectionPill}>
-                <Text style={styles.sectionPillText}>{section.itemCount} meal{section.itemCount !== 1 ? 's' : ''}</Text>
-              </View>
-            </View>
-          )}
+          renderSectionHeader={({ section }) => {
+            const sectionIndex = sections.findIndex((s) => s.restaurantId === section.restaurantId);
+            return (
+              <Pressable
+                style={styles.sectionHeader}
+                onPress={() => handleRestaurantTap(section, sectionIndex)}
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${section.title}`}
+              >
+                <Ionicons name="restaurant-outline" size={14} color={EDITORIAL.greenAccent} />
+                <Text style={styles.sectionTitle}>{section.title}</Text>
+                <View style={styles.sectionPill}>
+                  <Text style={styles.sectionPillText}>{section.itemCount} meal{section.itemCount !== 1 ? 's' : ''}</Text>
+                </View>
+              </Pressable>
+            );
+          }}
           renderItem={({ item }) => (
             <SavedItemCompact item={item} onUnsave={handleUnsave} />
           )}
