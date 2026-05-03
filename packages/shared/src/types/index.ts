@@ -151,6 +151,14 @@ export interface RestaurantResult {
 export interface RestaurantsMeta {
   total: number;
   limit: number;
+  /**
+   * Opaque cursor for the next page. `null` when this page exhausted the
+   * result set — callers must stop paginating once they see `null`.
+   *
+   * The cursor is base64(JSON({ id, distanceMiles })) so the server can
+   * resume from a stable (distance, id) tie-break across equal distances.
+   */
+  nextCursor?: string | null;
 }
 
 export interface RestaurantsResponse {

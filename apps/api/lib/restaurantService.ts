@@ -28,6 +28,46 @@ export interface NearbyRestaurantsParams {
   maxPriceLevel?: string | undefined;
   minRating?: number | undefined;
   limit: number;
+  /**
+   * Decoded cursor — { id, distanceMiles } from the last item on the previous
+   * page. The query then filters to rows where (distanceMiles, id) is strictly
+   * after the cursor under the distance-asc, id-asc tie-break, so paging is
+   * stable across equal distances.
+   */
+  cursor?: { id: string; distanceMiles: number } | undefined;
+}
+
+// ─── Cursor encoding ──────────────────────────────────────────────────────────
+
+export interface PaginationCursor {
+  id: string;
+  distanceMiles: number;
+}
+
+export function encodeCursor(cursor: PaginationCursor): string {
+  return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64");
+}
+
+export function decodeCursor(raw: string): PaginationCursor | null {
+  try {
+    const json = Buffer.from(raw, "base64").toString("utf8");
+    const parsed = JSON.parse(json) as unknown;
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      typeof (parsed as { id?: unknown }).id === "string" &&
+      typeof (parsed as { distanceMiles?: unknown }).distanceMiles === "number" &&
+      isFinite((parsed as { distanceMiles: number }).distanceMiles)
+    ) {
+      return {
+        id: (parsed as { id: string }).id,
+        distanceMiles: (parsed as { distanceMiles: number }).distanceMiles,
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 // ─── Price level helpers ──────────────────────────────────────────────────────
@@ -89,7 +129,7 @@ interface ScoredRow {
 
 export async function findNearbyRestaurants(
   params: NearbyRestaurantsParams,
-): Promise<{ data: RestaurantResult[]; total: number }> {
+): Promise<{ data: RestaurantResult[]; total: number; nextCursor: string | null }> {
   const {
     lat,
     lng,
@@ -101,6 +141,7 @@ export async function findNearbyRestaurants(
     maxPriceLevel,
     minRating,
     limit,
+    cursor,
   } = params;
 
   const startMs = Date.now();
@@ -137,6 +178,29 @@ export async function findNearbyRestaurants(
   }
   if (minRating !== undefined) {
     filterFrags.push(Prisma.sql`AND r.rating >= ${minRating}`);
+  }
+  // Cursor tie-break: page by (distanceMiles ASC, id ASC). When a cursor is
+  // present, only rows strictly after (cursorDistance, cursorId) pass.
+  // The distance expression is duplicated here because the SELECT alias
+  // `distanceMiles` isn't available in WHERE.
+  if (cursor !== undefined) {
+    filterFrags.push(Prisma.sql`AND (
+      (
+        sqrt(
+          power(r.lat - ${lat}::double precision, 2)
+          + power((r.lng - ${lng}::double precision) * cos(${lat}::double precision * pi() / 180), 2)
+        ) * 69
+      ) > ${cursor.distanceMiles}::double precision
+      OR (
+        (
+          sqrt(
+            power(r.lat - ${lat}::double precision, 2)
+            + power((r.lng - ${lng}::double precision) * cos(${lat}::double precision * pi() / 180), 2)
+          ) * 69
+        ) = ${cursor.distanceMiles}::double precision
+        AND r.id > ${cursor.id}
+      )
+    )`);
   }
   const filters = filterFrags.length > 0 ? Prisma.join(filterFrags, " ") : Prisma.empty;
 
@@ -217,13 +281,26 @@ export async function findNearbyRestaurants(
         ) * 69
       ) <= ${radiusMiles}::double precision
     ORDER BY
+      "distanceMiles" ASC,
       CASE WHEN ${targetsActive}::boolean THEN best."scoreSum" ELSE NULL END ASC NULLS LAST,
-      "distanceMiles" ASC
+      r.id ASC
     LIMIT ${limit}
   `;
 
   const total = rows.length;
   const paginated = rows;
+
+  // Compute nextCursor from the final row when this page was full. A partial
+  // page (fewer rows than the requested limit) means we've exhausted the
+  // result set — emit null so the client stops paginating.
+  const lastRow = paginated[paginated.length - 1];
+  const nextCursor =
+    paginated.length === limit && lastRow !== undefined
+      ? encodeCursor({
+          id: lastRow.restaurantId,
+          distanceMiles: lastRow.distanceMiles,
+        })
+      : null;
 
   const data: RestaurantResult[] = paginated.map((r) => ({
     id: r.restaurantId,
@@ -260,10 +337,11 @@ export async function findNearbyRestaurants(
       restaurants: total,
       hasTargets: targetsActive,
       totalMs,
+      paginated: cursor !== undefined,
     }),
   );
 
-  return { data, total };
+  return { data, total, nextCursor };
 }
 
 // ─── Service: GET /api/restaurants/[id]/menu ──────────────────────────────────

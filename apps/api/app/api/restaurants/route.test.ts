@@ -7,12 +7,19 @@ jest.mock("@/lib/auth", () => ({
   requireAuth: mockRequireAuth,
 }));
 
-jest.mock("@/lib/restaurantService", () => ({
-  findNearbyRestaurants: mockFindNearbyRestaurants,
-}));
+// Use the real cursor encode/decode but mock the DB-touching service entry.
+jest.mock("@/lib/restaurantService", () => {
+  const actual = jest.requireActual("@/lib/restaurantService");
+  return {
+    findNearbyRestaurants: mockFindNearbyRestaurants,
+    encodeCursor: actual.encodeCursor,
+    decodeCursor: actual.decodeCursor,
+  };
+});
 
 import { GET } from "./route";
 import { NextRequest, NextResponse } from "next/server";
+import { encodeCursor } from "@/lib/restaurantService";
 
 const VALID_PAYLOAD = { sub: "user-1", email: "alice@example.com" };
 
@@ -66,7 +73,7 @@ describe("GET /api/restaurants — auth guard", () => {
 describe("GET /api/restaurants — success", () => {
   it("returns 200 with data when authenticated and lat/lng provided", async () => {
     mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
-    mockFindNearbyRestaurants.mockResolvedValue({ data: [], total: 0 });
+    mockFindNearbyRestaurants.mockResolvedValue({ data: [], total: 0, nextCursor: null });
 
     const res = await GET(
       makeRequest({ lat: "34.05", lng: "-118.24" }, "Bearer valid.token"),
@@ -74,8 +81,122 @@ describe("GET /api/restaurants — success", () => {
 
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toMatchObject({ data: [], meta: { total: 0, limit: 20 } });
+    expect(body).toMatchObject({
+      data: [],
+      meta: { total: 0, limit: 20, nextCursor: null },
+    });
     expect(mockFindNearbyRestaurants).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ─── Cursor pagination ────────────────────────────────────────────────────────
+
+describe("GET /api/restaurants — cursor pagination", () => {
+  it("forwards nextCursor in meta when the service returns one (full page)", async () => {
+    const fakeCursor = encodeCursor({ id: "rest-9", distanceMiles: 1.5 });
+    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+    mockFindNearbyRestaurants.mockResolvedValue({
+      data: [],
+      total: 0,
+      nextCursor: fakeCursor,
+    });
+
+    const res = await GET(
+      makeRequest({ lat: "34.0", lng: "-118.0" }, "Bearer valid.token"),
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.meta.nextCursor).toBe(fakeCursor);
+  });
+
+  it("returns nextCursor: null when the service signals end of results (partial page)", async () => {
+    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+    mockFindNearbyRestaurants.mockResolvedValue({
+      data: [],
+      total: 0,
+      nextCursor: null,
+    });
+
+    const res = await GET(
+      makeRequest({ lat: "34.0", lng: "-118.0" }, "Bearer valid.token"),
+    );
+
+    const body = await res.json();
+    expect(body.meta.nextCursor).toBeNull();
+  });
+
+  it("decodes a valid cursor and forwards { id, distanceMiles } to the service", async () => {
+    const inputCursor = encodeCursor({ id: "rest-42", distanceMiles: 2.4 });
+    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+    mockFindNearbyRestaurants.mockResolvedValue({
+      data: [],
+      total: 0,
+      nextCursor: null,
+    });
+
+    const res = await GET(
+      makeRequest(
+        { lat: "34.0", lng: "-118.0", cursor: inputCursor },
+        "Bearer valid.token",
+      ),
+    );
+
+    expect(res.status).toBe(200);
+    const callArg = mockFindNearbyRestaurants.mock.calls[0]?.[0] as {
+      cursor?: { id: string; distanceMiles: number };
+    };
+    expect(callArg.cursor).toEqual({ id: "rest-42", distanceMiles: 2.4 });
+  });
+
+  it("does not pass a cursor field when omitted from the request", async () => {
+    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+    mockFindNearbyRestaurants.mockResolvedValue({
+      data: [],
+      total: 0,
+      nextCursor: null,
+    });
+
+    await GET(makeRequest({ lat: "34.0", lng: "-118.0" }, "Bearer valid.token"));
+
+    const callArg = mockFindNearbyRestaurants.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
+    expect(callArg).not.toHaveProperty("cursor");
+  });
+
+  it("returns 400 when cursor is malformed (not base64-encoded JSON)", async () => {
+    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+
+    const res = await GET(
+      makeRequest(
+        { lat: "34.0", lng: "-118.0", cursor: "not-valid-base64-!!!" },
+        "Bearer valid.token",
+      ),
+    );
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/cursor/i);
+    expect(mockFindNearbyRestaurants).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 when cursor decodes to a missing-field shape", async () => {
+    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+    const badCursor = Buffer.from(JSON.stringify({ id: "x" }), "utf8").toString(
+      "base64",
+    );
+
+    const res = await GET(
+      makeRequest(
+        { lat: "34.0", lng: "-118.0", cursor: badCursor },
+        "Bearer valid.token",
+      ),
+    );
+
+    expect(res.status).toBe(400);
+    expect(mockFindNearbyRestaurants).not.toHaveBeenCalled();
   });
 });
 
