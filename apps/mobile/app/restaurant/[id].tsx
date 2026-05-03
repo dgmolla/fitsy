@@ -149,14 +149,14 @@ export default function RestaurantDetailScreen() {
   const ratingLabel = menu?.rating !== undefined ? menu.rating.toFixed(1) : null;
 
   const toggleChip = useCallback((chip: ChipId) => {
-    setActiveChips((prev) => {
-      const next = new Set(prev);
-      const isOn = !next.has(chip);
-      if (isOn) next.add(chip); else next.delete(chip);
-      trackMenuFilterChipToggled({ chip, on: isOn });
-      return next;
-    });
-  }, []);
+    // Compute next state outside the updater so telemetry fires exactly once
+    // even when React StrictMode double-invokes setState callbacks in dev.
+    const next = new Set(activeChips);
+    const isOn = !next.has(chip);
+    if (isOn) next.add(chip); else next.delete(chip);
+    setActiveChips(next);
+    trackMenuFilterChipToggled({ chip, on: isOn });
+  }, [activeChips]);
 
   const onChangeQuery = useCallback((q: string) => {
     setQuery(q);
@@ -381,7 +381,7 @@ const s = StyleSheet.create({
   sortBar: { marginHorizontal: 18, marginTop: 14, marginBottom: 8, backgroundColor: EDITORIAL.text, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   sortBarTitle: { fontFamily: FONTS.newsreaderBold, fontSize: 18, color: EDITORIAL.cream },
   sortBarSub: { fontSize: 11, color: EDITORIAL.cream, opacity: 0.6, letterSpacing: 0.4, marginTop: 2 },
-  sortBtn: { backgroundColor: 'rgba(255,255,255,0.12)', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8 },
+  sortBtn: { backgroundColor: EDITORIAL.whiteTintLow, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8 },
   sortBtnTxt: { fontSize: 12, fontWeight: '600', color: EDITORIAL.cream },
 
   sortMenu: { marginHorizontal: 18, marginBottom: 8, backgroundColor: EDITORIAL.creamCard, borderRadius: 12, padding: 4, gap: 2, borderWidth: 1, borderColor: EDITORIAL.border },

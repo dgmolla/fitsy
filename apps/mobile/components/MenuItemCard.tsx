@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { MenuItemResult } from '@fitsy/shared';
 import { BookmarkButton } from './BookmarkButton';
 import { EDITORIAL, FONTS } from '@/lib/brand';
-import { MACRO_COLORS } from '@/lib/macroColors';
+import { MACRO_COLORS, MACRO_TINTS } from '@/lib/macroColors';
 import { deriveTags } from '@/lib/menuFilters';
 
 const HIGH_MATCH_THRESHOLD = 80;
@@ -118,8 +118,8 @@ const s = StyleSheet.create({
   desc: { fontSize: 11.5, lineHeight: 16, color: EDITORIAL.textSoft, marginTop: 3 },
   badges: { flexDirection: 'row', gap: 6, marginTop: 9, flexWrap: 'wrap' },
   badge: { backgroundColor: EDITORIAL.creamCard, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 },
-  badgePro: { backgroundColor: 'rgba(91,124,107,0.15)' },
-  badgeMatch: { backgroundColor: 'rgba(58,112,80,0.12)' },
+  badgePro: { backgroundColor: MACRO_TINTS.proteinTint },
+  badgeMatch: { backgroundColor: EDITORIAL.greenAccentTint },
   badgeTxt: { fontSize: 9.5, letterSpacing: 0.8, fontWeight: '700', color: EDITORIAL.textMid },
   bookmarkSlot: { marginLeft: 4, marginTop: -2 },
 });

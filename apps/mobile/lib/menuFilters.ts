@@ -76,7 +76,7 @@ export function chipMatches(
     case 'high_protein': {
       // Prefer user's own target if set; otherwise fall back to a sane floor.
       const target = targets?.protein ? Number(targets.protein) : 0;
-      const threshold = target > 0 ? Math.min(target * 0.6, HIGH_PROTEIN_FLOOR) : HIGH_PROTEIN_FLOOR;
+      const threshold = target > 0 ? Math.max(target * 0.6, HIGH_PROTEIN_FLOOR) : HIGH_PROTEIN_FLOOR;
       return (item.macros?.proteinG ?? 0) >= threshold;
     }
     case 'under_700_cal':

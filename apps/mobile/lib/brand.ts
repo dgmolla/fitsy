@@ -63,6 +63,9 @@ export const EDITORIAL = {
   // Gradients (on hero/cards)
   heroGrad:  'rgba(20,44,28,0.95)' as string,
   cardGrad:  'rgba(20,44,28,0.88)' as string,
+  // Alpha-tinted accents — used for subtle washes on cream and dark surfaces.
+  greenAccentTint: 'rgba(58,112,80,0.12)' as string,   // greenAccent @ 12% — badge wash on cream
+  whiteTintLow:    'rgba(255,255,255,0.12)' as string, // white @ 12% — button on dark sort bar
 } as const;
 
 // ─── Fonts ───────────────────────────────────────────────────────────────────
