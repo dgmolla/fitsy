@@ -85,13 +85,42 @@ export default async function RestaurantPage({
     redirect(`/restaurants/${canonical}`);
   }
 
-  // Group menu items by category
+  // Group menu items by category — kept for the Schema.org payload below
+  // (search engines benefit from MenuSection / hasMenuItem nesting).
   const byCategory = new Map<string, typeof restaurant.menuItems>();
   for (const item of restaurant.menuItems) {
     const cat = item.category ?? "Menu";
     if (!byCategory.has(cat)) byCategory.set(cat, []);
     byCategory.get(cat)!.push(item);
   }
+
+  // Editorial layout: a single grid of items sorted by protein, descending.
+  // Items without macro estimates fall to the back.
+  const sortedItems = [...restaurant.menuItems].sort((a, b) => {
+    const ap = a.macroEstimates[0]?.proteinG ?? -1;
+    const bp = b.macroEstimates[0]?.proteinG ?? -1;
+    return bp - ap;
+  });
+
+  // Aggregate stats for the meta column.
+  const itemsWithMacros = restaurant.menuItems.filter((i) => i.macroEstimates.length > 0);
+  const avgKcal = itemsWithMacros.length
+    ? Math.round(
+        itemsWithMacros.reduce((sum, i) => {
+          const m = i.macroEstimates[0]!;
+          return sum + (m.calories ?? calcCalories(m.proteinG, m.carbsG, m.fatG));
+        }, 0) / itemsWithMacros.length,
+      )
+    : null;
+  const avgProtein = itemsWithMacros.length
+    ? Math.round(itemsWithMacros.reduce((sum, i) => sum + i.macroEstimates[0]!.proteinG, 0) / itemsWithMacros.length)
+    : null;
+
+  // Title: italicize the last word in green, like the mockup's wordplay
+  // ("Sweet[em]green[/em]"). For one-word names, italicize the whole thing.
+  const nameWords = restaurant.name.trim().split(/\s+/);
+  const titleHead = nameWords.length > 1 ? nameWords.slice(0, -1).join(" ") + " " : "";
+  const titleTail = nameWords[nameWords.length - 1] ?? restaurant.name;
 
   const price = priceSymbol(restaurant.priceLevel);
 
@@ -145,126 +174,154 @@ export default async function RestaurantPage({
     },
   };
 
+  const eyebrowParts: string[] = [];
+  if (restaurant.cuisineTags.length > 0) {
+    eyebrowParts.push(restaurant.cuisineTags.slice(0, 2).map(formatTag).join(" & "));
+  }
+  eyebrowParts.push(restaurant.chainFlag ? "Chain" : "Independent");
+  if (restaurant.menuItems.length > 0) {
+    eyebrowParts.push(`${restaurant.menuItems.length} items on the menu`);
+  }
+
   return (
-    <div className={styles.page}>
+    <div className={`${styles.page} ${styles.editorial}`}>
       <Nav />
 
-      {/* Breadcrumb */}
-      <nav className={styles.breadcrumb} aria-label="Breadcrumb">
-        <a href="/">Home</a>
-        <span className={styles.breadcrumbSep}>›</span>
-        <a href="/restaurants">Restaurants</a>
-        <span className={styles.breadcrumbSep}>›</span>
-        <span>{restaurant.name}</span>
-      </nav>
-
-      {/* Restaurant header */}
-      <header className={styles.restaurantHeader}>
-        {restaurant.photoUrl ? (
-          <img
-            src={restaurant.photoUrl}
-            alt={`${restaurant.name} exterior`}
-            className={styles.restaurantPhoto}
-          />
-        ) : (
-          <div className={styles.restaurantPhotoPlaceholder}>🍽️</div>
-        )}
-        <div className={styles.restaurantInfo}>
-          <h1 className={styles.restaurantName}>{restaurant.name}</h1>
-          <div className={styles.restaurantMeta}>
-            {restaurant.rating != null && (
-              <span className={styles.ratingBadge}>
+      {/* Hero — eyebrow + display title with last-word italic accent + meta column */}
+      <header className={styles.editorialHero}>
+        <div>
+          <div className={styles.editorialEyebrow}>{eyebrowParts.join(" · ")}</div>
+          <h1 className={styles.editorialTitle}>
+            {titleHead}
+            <em>{titleTail}</em>
+          </h1>
+        </div>
+        <div className={styles.editorialMeta}>
+          <div className={styles.editorialMetaRow}>
+            <span className={styles.editorialMetaLabel}>Address</span>
+            <span className={styles.editorialMetaVal}>{restaurant.address}</span>
+          </div>
+          {restaurant.cuisineTags.length > 0 && (
+            <div className={styles.editorialMetaRow}>
+              <span className={styles.editorialMetaLabel}>Cuisine</span>
+              <span className={styles.editorialMetaVal}>
+                {restaurant.cuisineTags.map(formatTag).join(", ")}
+              </span>
+            </div>
+          )}
+          {(avgKcal != null || avgProtein != null) && (
+            <div className={styles.editorialMetaRow}>
+              <span className={styles.editorialMetaLabel}>Avg macros</span>
+              <span className={styles.editorialMetaVal}>
+                {avgKcal != null && `${avgKcal} kcal`}
+                {avgKcal != null && avgProtein != null && " · "}
+                {avgProtein != null && `${avgProtein}g protein`}
+              </span>
+            </div>
+          )}
+          {restaurant.rating != null && (
+            <div className={styles.editorialMetaRow}>
+              <span className={styles.editorialMetaLabel}>Rating</span>
+              <span className={styles.editorialMetaVal}>
                 ★ {restaurant.rating.toFixed(1)}
                 {restaurant.userRatingCount != null && (
-                  <span style={{ fontWeight: 400, marginLeft: 3 }}>
+                  <span style={{ color: "var(--ed-ink-soft)", fontSize: 14, marginLeft: 8 }}>
                     ({restaurant.userRatingCount.toLocaleString()} reviews)
                   </span>
                 )}
+                {price && (
+                  <span style={{ color: "var(--ed-ink-soft)", fontSize: 14, marginLeft: 12 }}>
+                    {price}
+                  </span>
+                )}
               </span>
-            )}
-            {price && <span>{price}</span>}
-            <span>{restaurant.chainFlag ? "Chain" : "Independent"}</span>
-          </div>
-          <div>{restaurant.address}</div>
-          {restaurant.cuisineTags.length > 0 && (
-            <div className={styles.tagRow}>
-              {restaurant.cuisineTags.map((t) => (
-                <span key={t} className={styles.tag}>{formatTag(t)}</span>
-              ))}
             </div>
           )}
           {restaurant.dietaryOptions.length > 0 && (
-            <div className={styles.tagRow}>
-              {restaurant.dietaryOptions.map((t) => (
-                <span key={t} className={`${styles.tag} ${styles.tagGreen}`}>
-                  {formatTag(t)}
-                </span>
-              ))}
+            <div className={styles.editorialMetaRow}>
+              <span className={styles.editorialMetaLabel}>Dietary</span>
+              <span className={styles.editorialMetaVal}>
+                {restaurant.dietaryOptions.map(formatTag).join(", ")}
+              </span>
             </div>
           )}
         </div>
       </header>
 
-      {/* Menu */}
+      <div className={styles.editorialRule} />
+
+      {/* Menu — single grid sorted by protein, mockup-faithful */}
       <section className={styles.section}>
-        <h2 className={styles.sectionTitle}>
-          Full Menu with Macros ({restaurant.menuItems.length} items)
-        </h2>
-        {Array.from(byCategory.entries()).map(([cat, items]) => (
-          <div key={cat} className={styles.menuSection}>
-            <div className={styles.menuCategory}>{cat}</div>
-            <div className={styles.menuGrid}>
-              {items.map((item) => {
-                const m = item.macroEstimates[0];
-                const itemHref = `/restaurants/${canonical}/${slugWithId(item.name, item.id)}`;
-                const kcal = m
-                  ? Math.round(m.calories ?? calcCalories(m.proteinG, m.carbsG, m.fatG))
-                  : null;
-                return (
-                  <a
-                    key={item.id}
-                    href={itemHref}
-                    className={styles.menuCard}
-                  >
-                    <div className={styles.menuItemName}>{item.name}</div>
-                    {item.description && (
-                      <div className={styles.menuItemDesc}>{item.description}</div>
-                    )}
-                    {m && (
-                      <div className={styles.macroStrip}>
-                        <div className={`${styles.macro} ${styles.macroCalories}`}>
-                          <span className={styles.macroValue}>{kcal}</span>
-                          <span className={styles.macroUnit}>cal</span>
-                        </div>
-                        <div className={`${styles.macro} ${styles.macroProtein}`}>
-                          <span className={styles.macroValue}>{Math.round(m.proteinG)}g</span>
-                          <span className={styles.macroUnit}>protein</span>
-                        </div>
-                        <div className={`${styles.macro} ${styles.macroCarbs}`}>
-                          <span className={styles.macroValue}>{Math.round(m.carbsG)}g</span>
-                          <span className={styles.macroUnit}>carbs</span>
-                        </div>
-                        <div className={`${styles.macro} ${styles.macroFat}`}>
-                          <span className={styles.macroValue}>{Math.round(m.fatG)}g</span>
-                          <span className={styles.macroUnit}>fat</span>
-                        </div>
+        <div className={styles.sectionHead}>
+          <h2 className={styles.sectionTitle}>The full menu</h2>
+          <span className={styles.sectionMeta}>
+            {restaurant.menuItems.length}{" "}
+            {restaurant.menuItems.length === 1 ? "item" : "items"}
+          </span>
+        </div>
+        <div className={styles.menuGrid}>
+          {sortedItems.map((item, idx) => {
+            const m = item.macroEstimates[0];
+            const itemHref = `/restaurants/${canonical}/${slugWithId(item.name, item.id)}`;
+            const kcal = m
+              ? Math.round(m.calories ?? calcCalories(m.proteinG, m.carbsG, m.fatG))
+              : null;
+            return (
+              <a key={item.id} href={itemHref} className={styles.menuCard}>
+                <span className={styles.menuCardNum}>
+                  № {String(idx + 1).padStart(2, "0")}
+                </span>
+                {item.category && (
+                  <div className={styles.menuCardCat}>{item.category}</div>
+                )}
+                <h3 className={styles.menuItemName}>{item.name}</h3>
+                {item.description && (
+                  <p className={styles.menuItemDesc}>{item.description}</p>
+                )}
+                {item.dietaryTags.length > 0 && (
+                  <div className={styles.tagRow}>
+                    {item.dietaryTags.slice(0, 3).map((t) => (
+                      <span
+                        key={t}
+                        className={`${styles.tag} ${styles.tagGreen}`}
+                      >
+                        {formatTag(t)}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {m && (
+                  <div className={styles.menuCardFoot}>
+                    <div className={styles.macroStrip}>
+                      <div className={`${styles.macro} ${styles.macroCalories}`}>
+                        <span className={styles.macroValue}>{kcal}</span>
+                        <span className={styles.macroUnit}>Cal</span>
                       </div>
-                    )}
-                    {item.dietaryTags.length > 0 && (
-                      <div className={styles.tagRow}>
-                        {item.dietaryTags.slice(0, 3).map((t) => (
-                          <span key={t} className={`${styles.tag} ${styles.tagGreen}`}>
-                            {formatTag(t)}
-                          </span>
-                        ))}
+                      <div className={`${styles.macro} ${styles.macroProtein}`}>
+                        <span className={styles.macroValue}>
+                          {Math.round(m.proteinG)}
+                        </span>
+                        <span className={styles.macroUnit}>Pro&nbsp;g</span>
                       </div>
-                    )}
-                  </a>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+                      <div className={`${styles.macro} ${styles.macroCarbs}`}>
+                        <span className={styles.macroValue}>
+                          {Math.round(m.carbsG)}
+                        </span>
+                        <span className={styles.macroUnit}>Carb&nbsp;g</span>
+                      </div>
+                      <div className={`${styles.macro} ${styles.macroFat}`}>
+                        <span className={styles.macroValue}>
+                          {Math.round(m.fatG)}
+                        </span>
+                        <span className={styles.macroUnit}>Fat&nbsp;g</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </a>
+            );
+          })}
+        </div>
       </section>
 
       {/* FAQ */}
@@ -313,9 +370,12 @@ function Nav() {
         <a href="/" className={styles.logo}>
           fitsy<span className={styles.logoDot}>.</span>
         </a>
-        <a href={EARLY_ACCESS_URL} className={styles.navCta}>
-          Get Early Access
-        </a>
+        <div className={styles.editorialNavLinks}>
+          <a href="/restaurants">Discover</a>
+          <a href="#">Saved</a>
+          <a href="#">Today&rsquo;s Macros</a>
+          <a href={EARLY_ACCESS_URL}>Get the app</a>
+        </div>
       </div>
     </nav>
   );

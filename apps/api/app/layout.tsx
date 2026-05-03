@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
-import { Newsreader, Outfit } from "next/font/google";
+import { Newsreader, Outfit, Fraunces, Nunito_Sans } from "next/font/google";
 import "./globals.css";
 
 const newsreader = Newsreader({
@@ -17,6 +17,24 @@ const outfit = Outfit({
   variable: "--font-body",
 });
 
+const fraunces = Fraunces({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-fraunces",
+  // Variable font + optical size axis — without `opsz`, Fraunces renders large
+  // headings using its body cut, which looks chunky and over-sized.
+  weight: "variable",
+  style: ["normal", "italic"],
+  axes: ["opsz"],
+});
+
+const nunito = Nunito_Sans({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-nunito",
+  weight: ["300", "400", "600", "700"],
+});
+
 export const metadata: Metadata = {
   title: "Fitsy — Find food that fits your macros",
   description:
@@ -30,7 +48,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${newsreader.variable} ${outfit.variable}`}>
+    <html lang="en" className={`${newsreader.variable} ${outfit.variable} ${fraunces.variable} ${nunito.variable}`}>
       <body>{children}</body>
     </html>
   );

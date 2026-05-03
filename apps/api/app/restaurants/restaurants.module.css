@@ -142,6 +142,24 @@
   color: var(--text);
 }
 
+/* Editorial section head — italic title left, meta right */
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.sectionMeta {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 /* ── Restaurant grid ────────────────────────────────────────────────────── */
 .grid {
   display: grid;
@@ -330,100 +348,165 @@
   color: var(--text);
 }
 
-/* ── Menu list ──────────────────────────────────────────────────────────── */
+/* ── Menu list (editorial — mockup-faithful) ──────────────────────────── */
 .menuSection {
-  margin-bottom: 40px;
+  margin-bottom: 56px;
 }
 
 .menuCategory {
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.26em;
   text-transform: uppercase;
-  color: var(--text-muted);
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 8px;
-  margin-bottom: 16px;
+  color: var(--ed-moss, #5C7A4F);
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(27, 26, 23, 0.12);
+  margin-bottom: 28px;
+}
+
+.menuCategoryCount {
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  color: var(--ed-ink-soft, #46443D);
+  margin-left: 14px;
 }
 
 .menuGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 28px;
 }
 
 .menuCard {
+  position: relative;
+  overflow: hidden;
   background: #fff;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 16px;
+  border: 0;
+  border-radius: 6px;
+  padding: 36px 36px 30px;
   text-decoration: none;
   color: inherit;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  transition: box-shadow 0.15s, transform 0.15s;
+  gap: 0;
+  box-shadow: 0 1px 0 rgba(27, 26, 23, 0.04), 0 16px 40px -28px rgba(27, 26, 23, 0.18);
+  transition: transform 0.25s, box-shadow 0.25s;
+}
+
+.menuCard::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--ed-leaf, #2F4A2A);
+  opacity: 0;
+  transition: opacity 0.25s;
 }
 
 .menuCard:hover {
-  box-shadow: var(--card-shadow-hover);
-  transform: translateY(-1px);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 0 rgba(27, 26, 23, 0.04), 0 24px 48px -28px rgba(27, 26, 23, 0.24);
+}
+
+.menuCard:hover::before {
+  opacity: 1;
+}
+
+.menuCardNum {
+  position: absolute;
+  top: 22px;
+  right: 28px;
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-weight: 300;
+  font-size: 13px;
+  color: var(--ed-ink-soft, #46443D);
+  letter-spacing: 0.1em;
+}
+
+.menuCardCat {
+  font-size: 10px;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--ed-moss, #5C7A4F);
+  margin-bottom: 14px;
+  font-weight: 600;
 }
 
 .menuItemName {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--text);
-  line-height: 1.35;
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-style: normal;
+  font-weight: 500;
+  font-size: 30px;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  margin-bottom: 12px;
+  padding-right: 56px;
+  color: var(--ed-ink, #1B1A17);
 }
 
 .menuItemDesc {
-  font-size: 0.82rem;
-  color: var(--text-muted);
-  line-height: 1.5;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ed-ink-soft, #46443D);
+  margin-bottom: 26px;
+  max-width: 38ch;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
-/* ── Macro strip ────────────────────────────────────────────────────────── */
+.menuCardFoot {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  padding-top: 22px;
+  border-top: 1px dashed rgba(27, 26, 23, 0.16);
+  margin-top: auto;
+}
+
 .macroStrip {
   display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
+  gap: 22px;
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 
 .macro {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  background: var(--cream-dark);
-  border-radius: var(--radius-sm);
-  padding: 8px 12px;
-  min-width: 60px;
+  align-items: flex-start;
+  background: transparent;
+  padding: 0;
+  min-width: 0;
   gap: 2px;
 }
 
 .macroValue {
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--text);
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-weight: 600;
+  font-size: 22px;
   letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--ed-ink, #1B1A17);
 }
 
 .macroUnit {
-  font-size: 0.65rem;
-  font-weight: 600;
-  color: var(--text-muted);
+  font-size: 9.5px;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  color: var(--ed-ink-soft, #46443D);
+  font-weight: 600;
 }
 
-.macroProtein .macroValue { color: #2563eb; }
-.macroCarbs .macroValue   { color: #d97706; }
-.macroFat .macroValue     { color: #9333ea; }
-.macroCalories .macroValue { color: var(--green); }
+.macroCalories .macroValue { color: var(--ed-tomato, #C84B31); }
+.macroProtein .macroValue,
+.macroCarbs .macroValue,
+.macroFat .macroValue { color: var(--ed-ink, #1B1A17); }
 
 /* ── Item detail page ───────────────────────────────────────────────────── */
 .itemHero {
@@ -684,7 +767,315 @@
   }
   .menuGrid {
     grid-template-columns: 1fr;
+    gap: 14px;
   }
+  .menuCard {
+    padding: 22px 20px 18px;
+  }
+  .menuCardNum {
+    top: 16px;
+    right: 18px;
+  }
+  .menuItemName {
+    font-size: 1.3rem;
+    padding-right: 40px;
+  }
+  .macroStrip {
+    gap: 16px;
+  }
+  .sectionHead {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Editorial wrapper — applied only to the restaurant detail page so the
+   listing and item-detail pages keep their existing look. The cream bg
+   and the fitsy logo are intentionally preserved; everything else is the
+   "editorial grid" mockup ported into the live app.
+   ───────────────────────────────────────────────────────────────────────── */
+.editorial {
+  --ed-ink: #1B1A17;
+  --ed-ink-soft: #46443D;
+  --ed-leaf: #2F4A2A;
+  --ed-moss: #5C7A4F;
+  --ed-tomato: #C84B31;
+  --ed-rule: rgba(27, 26, 23, 0.18);
+  --ed-rule-soft: rgba(27, 26, 23, 0.08);
+
+  font-family: var(--font-nunito), -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  color: var(--ed-ink);
+}
+
+/* Nav — mockup styling, but the fitsy.<dot> logo is preserved verbatim. */
+.editorial .nav {
+  background: var(--cream);
+  backdrop-filter: none;
+  border-bottom: 1px solid var(--ed-rule-soft);
+}
+
+.editorial .navInner {
+  max-width: none;
+  padding: 0 56px;
+  height: 72px;
+}
+
+.editorialNavLinks {
+  display: flex;
+  gap: 28px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.editorialNavLinks a {
+  color: var(--ed-ink-soft);
+  text-decoration: none;
+}
+
+.editorialNavLinks a:hover {
+  color: var(--ed-ink);
+}
+
+/* Hero */
+.editorialHero {
+  padding: 64px 56px 48px;
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 48px;
+  align-items: end;
+}
+
+.editorialEyebrow {
+  font-size: 11px;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--ed-moss);
+  margin-bottom: 18px;
+  font-weight: 600;
+}
+
+.editorialTitle {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-weight: 400;
+  font-size: clamp(56px, 8vw, 124px);
+  line-height: 0.92;
+  letter-spacing: -0.035em;
+  color: var(--ed-ink);
+  margin: 0;
+}
+
+.editorialTitle em {
+  font-style: italic;
+  font-weight: 300;
+  color: var(--ed-leaf);
+}
+
+.editorialMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-bottom: 12px;
+}
+
+.editorialMetaRow {
+  display: flex;
+  gap: 32px;
+  align-items: baseline;
+  font-size: 14px;
+  border-bottom: 1px dashed var(--ed-rule-soft);
+  padding-bottom: 12px;
+}
+
+.editorialMetaRow:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.editorialMetaLabel {
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ed-ink-soft);
+  width: 110px;
+  flex-shrink: 0;
+  font-weight: 600;
+}
+
+.editorialMetaVal {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-size: 17px;
+  font-weight: 400;
+  color: var(--ed-ink);
+  line-height: 1.4;
+}
+
+/* Big rule between hero and menu */
+.editorialRule {
+  margin: 32px 56px 40px;
+}
+
+.editorialRule::before {
+  content: "";
+  display: block;
+  height: 1px;
+  background: var(--ed-rule);
+}
+
+/* Editorial section uses wide gutters */
+.editorial .section {
+  max-width: none;
+  margin: 0;
+  padding: 0 56px 64px;
+}
+
+.editorial .sectionHead {
+  margin-bottom: 40px;
+}
+
+.editorial .sectionTitle {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: 32px;
+  letter-spacing: -0.02em;
+  color: var(--ed-ink);
+  margin: 0;
+}
+
+.editorial .sectionMeta {
+  font-family: var(--font-nunito), system-ui, sans-serif;
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ed-ink-soft);
+}
+
+/* Tag row inside cards (dietary tags) — pull them under the description so
+   the dashed-rule footer stays clean and the card reads top-down. */
+.editorial .menuCard .tagRow {
+  margin-top: -14px;
+  margin-bottom: 22px;
+}
+
+.editorial .menuCard .tag {
+  background: transparent;
+  border: 1px solid var(--ed-rule-soft);
+  color: var(--ed-ink-soft);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 3px 10px;
+}
+
+.editorial .menuCard .tagGreen {
+  border-color: rgba(47, 74, 42, 0.25);
+  color: var(--ed-leaf);
+  background: rgba(47, 74, 42, 0.04);
+}
+
+/* FAQ */
+.editorial .faqSection {
+  max-width: none;
+  margin: 0;
+  padding: 0 56px 64px;
+}
+
+.editorial .faqTitle {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: 32px;
+  letter-spacing: -0.02em;
+  color: var(--ed-ink);
+  margin-bottom: 24px;
+}
+
+.editorial .faqItem {
+  border-top: 1px solid var(--ed-rule-soft);
+}
+
+.editorial .faqQ {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-weight: 500;
+  font-size: 18px;
+  letter-spacing: -0.01em;
+  color: var(--ed-ink);
+}
+
+.editorial .faqA {
+  color: var(--ed-ink-soft);
+}
+
+/* CTA — keep cream + ink, mockup style (not the green pill) */
+.editorial .ctaBanner {
+  background: #fff;
+  color: var(--ed-ink);
+  border: 0;
+  border-radius: 6px;
+  padding: 32px 36px;
+  box-shadow: 0 16px 40px -28px rgba(27, 26, 23, 0.2);
+  max-width: none;
+  margin: 0 0 32px;
+}
+
+.editorial .ctaBannerText h3 {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: 24px;
+  color: var(--ed-ink);
+  letter-spacing: -0.01em;
+  margin-bottom: 6px;
+}
+
+.editorial .ctaBannerText p {
+  color: var(--ed-ink-soft);
+}
+
+.editorial .ctaButton {
+  background: var(--ed-ink);
+  color: var(--cream);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 600;
+  padding: 12px 22px;
+}
+
+/* Footer */
+.editorial .footer {
+  border-top: 1px solid var(--ed-rule-soft);
+  padding: 28px 56px;
+}
+
+.editorial .footerInner {
+  max-width: none;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ed-ink-soft);
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .editorial .navInner {
+    padding: 0 24px;
+    height: 60px;
+  }
+  .editorialNavLinks { gap: 16px; font-size: 11.5px; }
+  .editorialHero {
+    grid-template-columns: 1fr;
+    padding: 40px 24px 28px;
+    gap: 28px;
+  }
+  .editorialMetaLabel { width: 90px; }
+  .editorialRule { padding: 0 24px; margin: 24px auto 28px; }
+  .editorial .section,
+  .editorial .faqSection { padding-left: 24px; padding-right: 24px; }
+  .editorial .footer { padding: 24px; }
 }
 
 /* ── Pagination ────────────────────────────────────────────────────────── */
