@@ -19,7 +19,7 @@ import { FitsyLoader } from '@/components/FitsyLoader';
 import { FilterPopup } from '@/components/FilterPopup';
 import type { MacroValues } from '@/lib/macroPresets';
 import { fetchRestaurants } from '@/lib/apiClient';
-import { useLocation } from '@/lib/useLocation';
+import { useLocation, type LocationState } from '@/lib/useLocation';
 import { getMacroTargets, saveMacroTargets } from '@/lib/macroStorage';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import {
@@ -389,7 +389,13 @@ export default function SearchScreen() {
   );
 
   const doFetch = useCallback(
-    async (current: MacroValues, lat: number, lng: number, cuisine: string, locationSource: 'gps' | 'fallback') => {
+    async (
+      current: MacroValues,
+      lat: number,
+      lng: number,
+      cuisine: string,
+      locationSource: LocationState['source'],
+    ) => {
       setLoading(true);
       setError(null);
 
@@ -443,7 +449,7 @@ export default function SearchScreen() {
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
-    const locSource: 'gps' | 'fallback' = location.source === 'gps' ? 'gps' : 'fallback';
+    const locSource: LocationState['source'] = location.source;
 
     if (initialFetch.current) {
       initialFetch.current = false;

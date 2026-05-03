@@ -90,6 +90,12 @@ export function trackOnboardingScreenView(screenName: string): void {
   }
 }
 
+export type LocationSourceTag =
+  | 'gps'
+  | 'fallback-denied'
+  | 'fallback-timeout'
+  | 'fallback-error';
+
 export interface SearchPerformedProps {
   has_protein_target: boolean;
   has_carbs_target: boolean;
@@ -97,7 +103,7 @@ export interface SearchPerformedProps {
   has_calories_target: boolean;
   cuisine_filter: string;
   result_count: number;
-  location_source: 'gps' | 'fallback';
+  location_source: LocationSourceTag;
   success: boolean;
 }
 
@@ -106,6 +112,37 @@ export function trackSearchPerformed(props: SearchPerformedProps): void {
     getPostHogClient().capture('search_performed', props as unknown as Record<string, JsonType>);
   } catch (err) {
     logCaptureError('search_performed', err);
+  }
+}
+
+// ─── Location resolution outcomes ────────────────────────────────────────────
+// Fired from `useLocation` whenever GPS resolution falls back. Splitting by
+// reason lets us tell "denied permission" from "timed out" from "errored" in
+// PostHog without inferring it from screen-level `search_performed` events.
+
+export function trackLocationPermissionDenied(props: { had_last_known: boolean }): void {
+  try {
+    getPostHogClient().capture('location_permission_denied', props as unknown as Record<string, JsonType>);
+  } catch (err) {
+    logCaptureError('location_permission_denied', err);
+  }
+}
+
+export function trackLocationTimeout(props: { had_last_known: boolean }): void {
+  try {
+    getPostHogClient().capture('location_timeout', props as unknown as Record<string, JsonType>);
+  } catch (err) {
+    logCaptureError('location_timeout', err);
+  }
+}
+
+export function trackLocationError(props: { error_message?: string }): void {
+  try {
+    const p: Record<string, JsonType> = {};
+    if (props.error_message !== undefined) p['error_message'] = props.error_message;
+    getPostHogClient().capture('location_error', p);
+  } catch (err) {
+    logCaptureError('location_error', err);
   }
 }
 

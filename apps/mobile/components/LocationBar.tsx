@@ -11,8 +11,8 @@ export function LocationBar({ location }: LocationBarProps) {
   const { colors } = useTheme();
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  const isFallback = !location.loading && location.source === 'fallback';
   const isGps = !location.loading && location.source === 'gps';
+  const isFallback = !location.loading && !isGps;
 
   useEffect(() => {
     if (isGps) {
@@ -28,16 +28,34 @@ export function LocationBar({ location }: LocationBarProps) {
     pulseAnim.setValue(1);
   }, [isGps, pulseAnim]);
 
-  const label = location.loading
-    ? 'Locating\u2026'
-    : location.source === 'gps'
-    ? 'Near your location'
-    : 'Near Silver Lake, LA';
-
-  const accessibilityLabel =
-    location.source === 'gps'
-      ? 'Searching near your current location'
-      : 'Location unavailable — searching near Silver Lake, Los Angeles';
+  let label: string;
+  let accessibilityLabel: string;
+  if (location.loading) {
+    label = 'Locating…';
+    accessibilityLabel = 'Resolving your location';
+  } else {
+    switch (location.source) {
+      case 'gps':
+        label = 'Near your location';
+        accessibilityLabel = 'Searching near your current location';
+        break;
+      case 'fallback-denied':
+        label = 'Location off — showing Silver Lake';
+        accessibilityLabel =
+          'Location permission denied — searching near Silver Lake, Los Angeles';
+        break;
+      case 'fallback-timeout':
+        label = 'GPS slow — showing Silver Lake';
+        accessibilityLabel =
+          'GPS timed out — searching near Silver Lake, Los Angeles';
+        break;
+      case 'fallback-error':
+        label = 'Location unavailable — showing Silver Lake';
+        accessibilityLabel =
+          'Location unavailable — searching near Silver Lake, Los Angeles';
+        break;
+    }
+  }
 
   const dotColor = location.loading ? colors.textTertiary : isFallback ? colors.warning : colors.accent;
 
