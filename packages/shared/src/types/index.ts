@@ -205,7 +205,7 @@ export interface AuthUser {
 
 export interface AuthResponse {
   token: string;
-  refreshToken: string;
+  refreshToken?: string;
   user: AuthUser;
 }
 
@@ -259,14 +259,14 @@ export interface AppleAuthRequest {
 
 export interface AppleAuthResponse {
   token: string;
-  refreshToken: string;
+  refreshToken?: string;
   user: AuthUser;
   isNewUser: boolean;
 }
 
 export interface GoogleAuthResponse {
   token: string;
-  refreshToken: string;
+  refreshToken?: string;
   user: AuthUser;
   isNewUser: boolean;
 }
