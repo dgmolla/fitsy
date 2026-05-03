@@ -12,11 +12,22 @@ export interface FetchRestaurantsParams {
   dietary?: string;
   maxPriceLevel?: string;
   minRating?: number;
+  /**
+   * Opaque cursor returned by a previous call as `meta.nextCursor`. When
+   * supplied, the API resumes paging strictly after the last row of the
+   * previous page (tie-broken by id within equal distances).
+   */
+  cursor?: string;
 }
 
-export async function fetchRestaurants(
-  params: FetchRestaurantsParams
-): Promise<RestaurantResult[]> {
+/**
+ * Fetches a single page. Returns both the data and the encoded cursor for
+ * the next page (or `null` if this page exhausted the result set). Callers
+ * driving infinite-scroll lists should prefer this over `fetchRestaurants`.
+ */
+export async function fetchRestaurantsPage(
+  params: FetchRestaurantsParams,
+): Promise<{ data: RestaurantResult[]; nextCursor: string | null }> {
   const { lat, lng } = params;
 
   const qs = new URLSearchParams();
@@ -31,28 +42,46 @@ export async function fetchRestaurants(
   if (params.dietary !== undefined) qs.set('dietary', params.dietary);
   if (params.maxPriceLevel !== undefined) qs.set('maxPriceLevel', params.maxPriceLevel);
   if (params.minRating !== undefined) qs.set('minRating', String(params.minRating));
+  if (params.cursor !== undefined) qs.set('cursor', params.cursor);
 
   const reqId = Math.random().toString(36).slice(2, 8);
   const t0 = Date.now();
-  console.log(JSON.stringify({ event: 'fitsy_search_client_start', reqId, t0 }));
+  // eslint-disable-next-line no-console
+  console.log(JSON.stringify({ event: 'fitsy_search_client_start', reqId, t0, paginated: params.cursor !== undefined }));
   try {
     const response = await api.get<RestaurantsApiResponse>(
-      `/api/restaurants?${qs.toString()}`, true
+      `/api/restaurants?${qs.toString()}`,
+      true,
     );
     const t1 = Date.now();
 
     if ('error' in response) {
+      // eslint-disable-next-line no-console
       console.log(JSON.stringify({ event: 'fitsy_search_client_done', reqId, ok: false, client_total_ms: t1 - t0 }));
-      return [];
+      return { data: [], nextCursor: null };
     }
 
+    // eslint-disable-next-line no-console
     console.log(JSON.stringify({ event: 'fitsy_search_client_done', reqId, ok: true, client_total_ms: t1 - t0, results: response.data.length }));
-    return response.data;
+    return { data: response.data, nextCursor: response.meta.nextCursor };
   } catch (err) {
     const t1 = Date.now();
+    // eslint-disable-next-line no-console
     console.log(JSON.stringify({ event: 'fitsy_search_client_done', reqId, ok: false, client_total_ms: t1 - t0, err: String(err) }));
-    return [];
+    return { data: [], nextCursor: null };
   }
+}
+
+/**
+ * @deprecated Prefer `fetchRestaurantsPage` for new callers — it surfaces
+ * `nextCursor` so the list can paginate. Retained for callers that only
+ * need the first page and don't paginate.
+ */
+export async function fetchRestaurants(
+  params: FetchRestaurantsParams,
+): Promise<RestaurantResult[]> {
+  const { data } = await fetchRestaurantsPage(params);
+  return data;
 }
 
 export async function fetchMenu(restaurantId: string): Promise<MenuResponse | null> {

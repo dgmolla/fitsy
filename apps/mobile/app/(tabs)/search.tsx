@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Dimensions,
   FlatList,
   Image,
@@ -14,17 +15,18 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { RestaurantResult } from '@fitsy/shared';
-import { EmptyState } from '@/components';
 import { FitsyLoader } from '@/components/FitsyLoader';
 import { FilterPopup } from '@/components/FilterPopup';
 import type { MacroValues } from '@/lib/macroPresets';
-import { fetchRestaurants } from '@/lib/apiClient';
+import { fetchRestaurantsPage } from '@/lib/apiClient';
 import { useLocation, type LocationState } from '@/lib/useLocation';
 import { getMacroTargets, saveMacroTargets } from '@/lib/macroStorage';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import {
   trackRestaurantTapped,
   trackSearchPerformed,
+  trackSearchPageLoaded,
+  trackSearchPaginationEndReached,
 } from '@/lib/analytics';
 
 const DEBOUNCE_MS = 600;
@@ -351,11 +353,25 @@ function RestaurantSection({ result, index }: { result: RestaurantResult; index:
 export default function SearchScreen() {
   const [inputs, setInputs] = useState<MacroValues>(DEFAULT_INPUTS);
   const [results, setResults] = useState<RestaurantResult[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const initialFetch = useRef(true);
   const [filterVisible, setFilterVisible] = useState(false);
   const [cuisineFilter, setCuisineFilter] = useState('all');
+
+  // `pagesLoadedRef` counts how many pages have been appended (initial + each
+  // onEndReached append). We track it on a ref so the value is current inside
+  // async callbacks without forcing a re-render. `isLoadingMoreRef` is the
+  // double-fire guard for onEndReached — FlatList will fire it repeatedly while
+  // the fetch is in flight if we don't lock.
+  const pagesLoadedRef = useRef(0);
+  const isLoadingMoreRef = useRef(false);
+  // Track whether we've already emitted `search_pagination_end_reached` for
+  // the current search so we don't fire it on every subsequent re-render once
+  // nextCursor flips to null.
+  const endReachedFiredRef = useRef(false);
 
   const location = useLocation();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -388,18 +404,16 @@ export default function SearchScreen() {
     }, []),
   );
 
-  const doFetch = useCallback(
-    async (
+  // Build the query params shared between the first-page fetch and the
+  // onEndReached page-N fetch. The cursor is the only difference.
+  const buildParams = useCallback(
+    (
       current: MacroValues,
       lat: number,
       lng: number,
       cuisine: string,
-      locationSource: LocationState['source'],
-    ) => {
-      setLoading(true);
-      setError(null);
-
-      const params: Parameters<typeof fetchRestaurants>[0] = { lat, lng };
+    ): Parameters<typeof fetchRestaurantsPage>[0] => {
+      const params: Parameters<typeof fetchRestaurantsPage>[0] = { lat, lng };
       const protein = parseFloat(current.protein);
       const carbs = parseFloat(current.carbs);
       const fat = parseFloat(current.fat);
@@ -410,10 +424,50 @@ export default function SearchScreen() {
       if (!isNaN(fat)) params.fat = fat;
       if (!isNaN(calories)) params.calories = calories;
       if (cuisine !== 'all') params.cuisineType = cuisine;
+      return params;
+    },
+    [],
+  );
+
+  const doFetch = useCallback(
+    async (
+      current: MacroValues,
+      lat: number,
+      lng: number,
+      cuisine: string,
+      locationSource: LocationState['source'],
+    ) => {
+      setLoading(true);
+      setError(null);
+      // New search → reset pagination bookkeeping.
+      pagesLoadedRef.current = 0;
+      isLoadingMoreRef.current = false;
+      endReachedFiredRef.current = false;
+      setNextCursor(null);
+
+      const params = buildParams(current, lat, lng, cuisine);
+      const protein = parseFloat(current.protein);
+      const carbs = parseFloat(current.carbs);
+      const fat = parseFloat(current.fat);
+      const calories = parseFloat(current.calories);
 
       try {
-        const data = await fetchRestaurants(params);
+        const { data, nextCursor: cursor } = await fetchRestaurantsPage(params);
         setResults(data);
+        setNextCursor(cursor);
+        pagesLoadedRef.current = 1;
+        trackSearchPageLoaded({
+          page_index: 0,
+          result_count: data.length,
+          cursor: null,
+        });
+        if (cursor === null) {
+          endReachedFiredRef.current = true;
+          trackSearchPaginationEndReached({
+            total_results: data.length,
+            pages_loaded: 1,
+          });
+        }
         trackSearchPerformed({
           has_protein_target: !isNaN(protein),
           has_carbs_target: !isNaN(carbs),
@@ -426,6 +480,7 @@ export default function SearchScreen() {
         });
       } catch {
         setResults([]);
+        setNextCursor(null);
         trackSearchPerformed({
           has_protein_target: !isNaN(protein),
           has_carbs_target: !isNaN(carbs),
@@ -440,8 +495,82 @@ export default function SearchScreen() {
         setLoading(false);
       }
     },
-    [],
+    [buildParams],
   );
+
+  // onEndReached handler — fires when the user scrolls within
+  // `onEndReachedThreshold` of the bottom. Halts silently when nextCursor is
+  // null (end of results) or when a load is already in flight.
+  const handleEndReached = useCallback(async () => {
+    if (!hasInputs) return;
+    if (nextCursor === null) return;
+    if (isLoadingMoreRef.current) return;
+
+    isLoadingMoreRef.current = true;
+    setLoadingMore(true);
+
+    const cursorBeingFetched = nextCursor;
+    const pageIndex = pagesLoadedRef.current;
+    const params = buildParams(inputs, location.lat, location.lng, cuisineFilter);
+    params.cursor = cursorBeingFetched;
+
+    try {
+      const { data, nextCursor: cursor } = await fetchRestaurantsPage(params);
+
+      // Dedupe on id — defends against a server-side equal-distance edge case
+      // where a row could (in principle) overlap the cursor boundary. Cheap
+      // and defensive.
+      setResults((prev) => {
+        const seen = new Set(prev.map((r) => r.id));
+        const merged = [...prev];
+        for (const r of data) {
+          if (!seen.has(r.id)) {
+            merged.push(r);
+            seen.add(r.id);
+          }
+        }
+        return merged;
+      });
+      setNextCursor(cursor);
+      pagesLoadedRef.current = pageIndex + 1;
+
+      trackSearchPageLoaded({
+        page_index: pageIndex,
+        result_count: data.length,
+        cursor: cursorBeingFetched,
+      });
+
+      if (cursor === null && !endReachedFiredRef.current) {
+        endReachedFiredRef.current = true;
+        // Defer reading the running total: setResults runs before us in the
+        // microtask queue, but reading state synchronously here would still
+        // be stale. The total_results for this event is computed from
+        // prev.length + data.length captured here.
+        setResults((prev) => {
+          trackSearchPaginationEndReached({
+            total_results: prev.length,
+            pages_loaded: pagesLoadedRef.current,
+          });
+          return prev;
+        });
+      }
+    } catch {
+      // Silent — the next scroll will retry. Don't surface a banner here:
+      // the user already has a populated list and a transient page-N error
+      // shouldn't disrupt browsing.
+    } finally {
+      isLoadingMoreRef.current = false;
+      setLoadingMore(false);
+    }
+  }, [
+    buildParams,
+    cuisineFilter,
+    hasInputs,
+    inputs,
+    location.lat,
+    location.lng,
+    nextCursor,
+  ]);
 
   useEffect(() => {
     if (!targetsLoaded || location.loading) return;
@@ -478,6 +607,47 @@ export default function SearchScreen() {
 
   const [heroResult, ...listResults] = results;
 
+  // The header bundles all non-paginated chrome — masthead, macro strip,
+  // cuisine row, hero card, and inline empty states. FlatList renders it
+  // once at the top and only the `listResults` tail virtualizes/paginates.
+  const renderHeader = useCallback(() => (
+    <>
+      <Masthead locationLabel={locationLabel} />
+      <MacroStrip macros={inputs} onEdit={() => setFilterVisible(true)} />
+      <CuisineRow selected={cuisineFilter} onSelect={setCuisineFilter} />
+
+      {!hasInputs && (
+        <View style={s.inlineEmpty}>
+          <Ionicons name="nutrition-outline" size={32} color={EDITORIAL.greenAccent} />
+          <Text style={s.inlineEmptyText}>Set your macro targets</Text>
+          <Text style={s.inlineEmptyHint}>Tap Edit above to enter your protein, carb, fat, and calorie goals</Text>
+        </View>
+      )}
+
+      {hasInputs && results.length === 0 && (
+        <View style={s.inlineEmpty}>
+          <Ionicons name="search-outline" size={32} color={EDITORIAL.creamDeep} />
+          <Text style={s.inlineEmptyText}>No restaurants match this filter</Text>
+          <Text style={s.inlineEmptyHint}>Try adjusting your macros or cuisine</Text>
+        </View>
+      )}
+
+      {hasInputs && heroResult && <HeroCard result={heroResult} />}
+    </>
+  ), [cuisineFilter, hasInputs, heroResult, inputs, locationLabel, results.length]);
+
+  // Footer is the loading spinner during onEndReached fetches. When
+  // nextCursor is null (no more pages) the footer renders nothing — per
+  // spec, we halt silently with no terminal label.
+  const renderFooter = useCallback(() => {
+    if (!loadingMore) return null;
+    return (
+      <View style={s.footerSpinner}>
+        <ActivityIndicator size="small" color={EDITORIAL.greenAccent} />
+      </View>
+    );
+  }, [loadingMore]);
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: EDITORIAL.cream }}>
       {loading && (
@@ -491,37 +661,20 @@ export default function SearchScreen() {
         </View>
       )}
       {!loading && (
-        <ScrollView
+        <FlatList
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingBottom: 110 }}
           showsVerticalScrollIndicator={false}
-        >
-          <Masthead locationLabel={locationLabel} />
-          <MacroStrip macros={inputs} onEdit={() => setFilterVisible(true)} />
-          <CuisineRow selected={cuisineFilter} onSelect={setCuisineFilter} />
-
-          {!hasInputs && (
-            <View style={s.inlineEmpty}>
-              <Ionicons name="nutrition-outline" size={32} color={EDITORIAL.greenAccent} />
-              <Text style={s.inlineEmptyText}>Set your macro targets</Text>
-              <Text style={s.inlineEmptyHint}>Tap Edit above to enter your protein, carb, fat, and calorie goals</Text>
-            </View>
+          data={hasInputs ? listResults : []}
+          keyExtractor={(r) => r.id}
+          renderItem={({ item, index }) => (
+            <RestaurantSection result={item} index={index} />
           )}
-
-          {hasInputs && results.length === 0 && (
-            <View style={s.inlineEmpty}>
-              <Ionicons name="search-outline" size={32} color={EDITORIAL.creamDeep} />
-              <Text style={s.inlineEmptyText}>No restaurants match this filter</Text>
-              <Text style={s.inlineEmptyHint}>Try adjusting your macros or cuisine</Text>
-            </View>
-          )}
-
-          {hasInputs && heroResult && <HeroCard result={heroResult} />}
-
-          {hasInputs && listResults.map((r, i) => (
-            <RestaurantSection key={r.id} result={r} index={i} />
-          ))}
-        </ScrollView>
+          ListHeaderComponent={renderHeader}
+          ListFooterComponent={renderFooter}
+          onEndReached={handleEndReached}
+          onEndReachedThreshold={0.5}
+        />
       )}
       <FilterPopup
         visible={filterVisible}
@@ -613,6 +766,7 @@ const s = StyleSheet.create({
   inlineEmpty: { alignItems: 'center', paddingTop: 50, paddingBottom: 30, gap: 8 },
   inlineEmptyText: { fontSize: 15, fontWeight: '600', color: EDITORIAL.textSoft },
   inlineEmptyHint: { fontSize: 14, color: EDITORIAL.textSoft, textAlign: 'center', lineHeight: 20 },
+  footerSpinner: { paddingVertical: 24, alignItems: 'center', justifyContent: 'center' },
   loaderWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   errorBanner: {
     marginHorizontal: 16, marginTop: 16, borderRadius: 8, padding: 12,
