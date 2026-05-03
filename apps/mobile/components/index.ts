@@ -17,6 +17,7 @@ export { MacroScrollPicker } from './MacroScrollPicker';
 export { MacroInputBar } from './MacroInputBar';
 export { MacroTargetsSection } from './MacroTargetsSection';
 export { MenuItem } from './MenuItem';
+export { MenuItemCard } from './MenuItemCard';
 export { ProgressDots } from './ProgressDots';
 export { RestaurantCard } from './RestaurantCard';
 export { SearchHeader } from './SearchHeader';
