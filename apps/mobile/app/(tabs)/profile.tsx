@@ -24,6 +24,13 @@ import { useTheme } from '@/lib/theme';
 import { FilterPopup } from '@/components/FilterPopup';
 import { ProfileEditSheet, type ProfileEditSheetProps } from '@/components/ProfileEditSheet';
 import { calculateMacros, macrosToStored } from '@/lib/macroCalculator';
+import {
+  trackMacroTargetsEdited,
+  trackProfileAccountDeleted,
+  trackProfileFieldEdited,
+  trackProfileLogoutTapped,
+  type ProfileField,
+} from '@/lib/analytics';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 
 const GOAL_OPTIONS = [
@@ -92,6 +99,7 @@ export default function ProfileScreen() {
   );
 
   const handleLogout = useCallback(async () => {
+    trackProfileLogoutTapped();
     await clearToken();
     router.replace('/welcome/problem');
   }, []);
@@ -99,9 +107,11 @@ export default function ProfileScreen() {
   const handleDelete = useCallback(async () => {
     try {
       await api.del('/api/user');
+      trackProfileAccountDeleted({ success: true });
       await clearToken();
       router.replace('/welcome/problem');
     } catch {
+      trackProfileAccountDeleted({ success: false });
       Alert.alert('Error', 'Could not delete your account. Please try again.');
     }
   }, []);
@@ -126,6 +136,14 @@ export default function ProfileScreen() {
     await saveMacroTargets(stored);
     setMacroTargets(stored);
     pushProfileToServer();
+  }
+
+  // `editField` is the key used internally by ProfileEditSheet, but the
+  // `birthday` field is exposed in the UI as "age". We map back to the UI
+  // label for the analytics event so dashboards group by what users see.
+  function openEditField(field: ProfileField) {
+    trackProfileFieldEdited({ field });
+    setEditField(field);
   }
 
   const initials = email !== '—' ? email.charAt(0).toUpperCase() : '?';
@@ -222,7 +240,7 @@ export default function ProfileScreen() {
         </View>
 
         {/* Goal banner */}
-        <Pressable style={s.goalBanner} onPress={() => setEditField('goal')}>
+        <Pressable style={s.goalBanner} onPress={() => openEditField('goal')}>
           <View style={s.goalIconCircle}>
             <Ionicons name={goalIcon as any} size={18} color={EDITORIAL.greenAccent} />
           </View>
@@ -235,22 +253,22 @@ export default function ProfileScreen() {
 
         {/* Body stats row */}
         <View style={s.statsCard}>
-          <Pressable style={s.statBlock} onPress={() => setEditField('age')}>
+          <Pressable style={s.statBlock} onPress={() => openEditField('age')}>
             <Text style={s.statValue}>{age ?? '—'}</Text>
             <Text style={s.statLabel}>Age</Text>
           </Pressable>
           <View style={s.statDivider} />
-          <Pressable style={s.statBlock} onPress={() => setEditField('height')}>
+          <Pressable style={s.statBlock} onPress={() => openEditField('height')}>
             <Text style={s.statValue}>{profile.heightCm ? `${Math.floor(profile.heightCm / 2.54 / 12)}'${Math.round(profile.heightCm / 2.54 % 12)}"` : '—'}</Text>
             <Text style={s.statLabel}>Height</Text>
           </Pressable>
           <View style={s.statDivider} />
-          <Pressable style={s.statBlock} onPress={() => setEditField('weight')}>
+          <Pressable style={s.statBlock} onPress={() => openEditField('weight')}>
             <Text style={s.statValue}>{profile.weightKg ? `${Math.round(profile.weightKg * 2.20462)}lbs` : '—'}</Text>
             <Text style={s.statLabel}>Weight</Text>
           </Pressable>
           <View style={s.statDivider} />
-          <Pressable style={s.statBlock} onPress={() => setEditField('activity')}>
+          <Pressable style={s.statBlock} onPress={() => openEditField('activity')}>
             <Text style={[s.statValue, { fontSize: 14 }]}>
               {profile.activity ? profile.activity.replace(/_/g, ' ').split(' ')[0]!.charAt(0).toUpperCase() + profile.activity.replace(/_/g, ' ').split(' ')[0]!.slice(1) : '—'}
             </Text>
@@ -300,6 +318,13 @@ export default function ProfileScreen() {
         setMacroTargets(updated);
         await saveMacroTargets(updated);
         pushProfileToServer();
+        trackMacroTargetsEdited({
+          entry_point: 'profile',
+          has_protein: updated.protein !== '',
+          has_carbs: updated.carbs !== '',
+          has_fat: updated.fat !== '',
+          has_calories: updated.calories !== '',
+        });
       }}
       onClose={() => setFilterVisible(false)}
     />

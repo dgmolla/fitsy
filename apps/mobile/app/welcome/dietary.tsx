@@ -5,7 +5,7 @@ import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { saveOnboardingField } from '@/lib/onboardingStorage';
-import { trackOnboardingScreenView } from '@/lib/analytics';
+import { trackOnboardingChoiceSelected, trackOnboardingScreenView } from '@/lib/analytics';
 import { EDITORIAL } from '@/lib/brand';
 
 const OPTIONS = [
@@ -23,8 +23,12 @@ export default function DietaryScreen() {
   function toggle(tag: string) {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(tag)) next.delete(tag);
-      else next.add(tag);
+      const isOn = !next.has(tag);
+      if (isOn) next.add(tag);
+      else next.delete(tag);
+      // Fire only on adds — toggling off the same chip would otherwise
+      // double the per-tag click rate without telling us anything new.
+      if (isOn) trackOnboardingChoiceSelected({ screen: 'dietary', value: tag });
       return next;
     });
   }

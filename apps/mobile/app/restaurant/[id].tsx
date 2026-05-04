@@ -24,7 +24,9 @@ import {
   trackMenuItemTapped,
   trackMenuSearchTyped,
   trackMenuSortChanged,
+  trackRestaurantDetailFailed,
   trackRestaurantDetailViewed,
+  trackSaveFailed,
 } from '@/lib/analytics';
 import {
   CHIP_DEFS,
@@ -84,7 +86,14 @@ export default function RestaurantDetailScreen() {
         fetchMenu(id), getSavedItems(), getMacroTargets(),
       ]);
       if (cancelled) return;
-      if (result === null) { setError('Could not load menu.'); }
+      if (result === null) {
+        setError('Could not load menu.');
+        // `fetchMenu` swallows errors and returns null on any failure (network
+        // error, non-2xx response). We can't distinguish failure modes from
+        // here, but the event itself is enough to monitor detail-screen
+        // reliability without server-side log diving.
+        trackRestaurantDetailFailed({ restaurant_id: id });
+      }
       else {
         setMenu(result);
         trackRestaurantDetailViewed({ restaurant_id: id, item_count: result.menuItems.length });
@@ -108,12 +117,16 @@ export default function RestaurantDetailScreen() {
       if (ok) {
         setSavedMap((p) => { const n = new Map(p); n.delete(menuItemId); return n; });
         trackItemSaved({ menu_item_id: menuItemId, restaurant_id: id ?? '', action: 'unsave', entry_point: 'restaurant_detail' });
+      } else {
+        trackSaveFailed({ menu_item_id: menuItemId, restaurant_id: id ?? '', action: 'unsave', entry_point: 'restaurant_detail' });
       }
     } else {
       const saved = await saveItem(menuItemId);
       if (saved) {
         setSavedMap((p) => new Map(p).set(menuItemId, saved.id));
         trackItemSaved({ menu_item_id: menuItemId, restaurant_id: id ?? '', action: 'save', entry_point: 'restaurant_detail' });
+      } else {
+        trackSaveFailed({ menu_item_id: menuItemId, restaurant_id: id ?? '', action: 'save', entry_point: 'restaurant_detail' });
       }
     }
   }, [savedMap, id]);

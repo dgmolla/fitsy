@@ -1,9 +1,22 @@
+import { useRef } from 'react';
 import { View } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, EDITORIAL } from '@/lib/brand';
+import { trackTabSwitched, type TabId } from '@/lib/analytics';
 
 export default function TabLayout() {
+  // We track tab switches at the layout level so the event fires once per
+  // navigation regardless of which screen renders first. The previous tab is
+  // null on cold start so PostHog can distinguish "first tab opened after
+  // sign-in" from a mid-session switch.
+  const lastTabRef = useRef<TabId | null>(null);
+
+  function emitTabSwitched(next: TabId) {
+    if (lastTabRef.current === next) return;
+    trackTabSwitched({ tab: next, from_tab: lastTabRef.current });
+    lastTabRef.current = next;
+  }
 
   return (
     <Tabs
@@ -34,6 +47,7 @@ export default function TabLayout() {
             <Ionicons name={focused ? 'bookmark' : 'bookmark-outline'} size={22} color={color} />
           ),
         }}
+        listeners={{ tabPress: () => emitTabSwitched('saved') }}
       />
       <Tabs.Screen
         name="search"
@@ -58,6 +72,7 @@ export default function TabLayout() {
             </View>
           ),
         }}
+        listeners={{ tabPress: () => emitTabSwitched('search') }}
       />
       <Tabs.Screen
         name="profile"
@@ -67,6 +82,7 @@ export default function TabLayout() {
             <Ionicons name={focused ? 'person' : 'person-outline'} size={22} color={color} />
           ),
         }}
+        listeners={{ tabPress: () => emitTabSwitched('profile') }}
       />
     </Tabs>
   );

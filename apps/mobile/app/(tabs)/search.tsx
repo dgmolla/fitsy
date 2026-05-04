@@ -26,11 +26,15 @@ import type { PresetLocation } from '@/lib/locations';
 import { getMacroTargets, saveMacroTargets } from '@/lib/macroStorage';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import {
+  trackCuisineSelected,
   trackLocationManualOverrideCleared,
   trackLocationManualOverrideOpened,
   trackLocationManualOverridePicked,
+  trackMacroTargetsEdited,
   trackRestaurantTapped,
   trackSaveMacroTargetsFailed,
+  trackSearchEmptyResults,
+  trackSearchFailed,
   trackSearchPerformed,
   trackSearchPageLoaded,
   trackSearchPaginationEndReached,
@@ -524,7 +528,21 @@ export default function SearchScreen() {
           location_source: locationSource,
           success: true,
         });
-      } catch {
+        if (data.length === 0) {
+          // Distinct from `search_failed` (network) and from "no inputs"
+          // (which never reaches this code path because the effect skips
+          // the fetch). This is the "filter returned zero" branch — useful
+          // for tracking when user-set macro/cuisine combos exclude the
+          // entire catalog.
+          trackSearchEmptyResults({
+            cuisine_filter: cuisine,
+            has_protein_target: !isNaN(protein),
+            has_carbs_target: !isNaN(carbs),
+            has_fat_target: !isNaN(fat),
+            has_calories_target: !isNaN(calories),
+          });
+        }
+      } catch (err) {
         setResults([]);
         setNextCursor(null);
         trackSearchPerformed({
@@ -536,6 +554,10 @@ export default function SearchScreen() {
           result_count: 0,
           location_source: locationSource,
           success: false,
+        });
+        trackSearchFailed({
+          cuisine_filter: cuisine,
+          error_message: err instanceof Error ? err.message : undefined,
         });
       } finally {
         setLoading(false);
@@ -666,6 +688,18 @@ export default function SearchScreen() {
     setFilterVisible(false);
     setInputs(newValues);
     persistMacroTargets(newValues);
+    trackMacroTargetsEdited({
+      entry_point: 'search',
+      has_protein: newValues.protein !== '',
+      has_carbs: newValues.carbs !== '',
+      has_fat: newValues.fat !== '',
+      has_calories: newValues.calories !== '',
+    });
+  }
+
+  function handleCuisineSelect(id: string) {
+    setCuisineFilter(id);
+    trackCuisineSelected({ cuisine: id });
   }
 
   const locationLabel = location.loading
@@ -685,7 +719,7 @@ export default function SearchScreen() {
     <>
       <Masthead locationLabel={locationLabel} onLocationPress={handleOpenLocationPicker} />
       <MacroStrip macros={inputs} onEdit={() => setFilterVisible(true)} />
-      <CuisineRow selected={cuisineFilter} onSelect={setCuisineFilter} />
+      <CuisineRow selected={cuisineFilter} onSelect={handleCuisineSelect} />
 
       {!hasInputs && (
         <View style={s.inlineEmpty}>
