@@ -89,7 +89,9 @@ export default function ProfileScreen() {
             pushProfileToServer();
           }
           prevProfile.current = snapshot;
-        } catch {
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.warn('profile load failed', err);
         } finally {
           setLoading(false);
         }
