@@ -2,7 +2,7 @@
 kanban-plugin: basic
 ---
 
-<!-- last-updated: 2026-05-03 -->
+<!-- last-updated: 2026-05-04 -->
 <!-- spec: docs/product/launch-plan.md -->
 
 > **Goal:** Ship to TestFlight, run a 1-week / 2-round beta, clear all launch-gating items so we can submit to the App Store.
@@ -32,6 +32,10 @@ kanban-plugin: basic
 - [ ] **S-215 App Store Connect metadata** — title, subtitle, description, keywords, screenshots (5 sizes), promotional text. Copy in `docs/product/app-store-listing.md` and `app-store-listing-spec.md`. #cto #design #wave-5
 
 - [ ] **S-216 Age rating form (4+)** — App Store Connect age rating questionnaire. 30 min. #cto #wave-5
+
+- [ ] **S-231 Apple sign-in: fire trackAuthSuccess + captureIdentity** — `apps/mobile/app/auth/login.tsx` Apple branch is missing `trackAuthSuccess({ provider: 'apple', is_new_user })` + `captureIdentity(...)` calls that the Google branch wires. Result: Apple sign-ins aren't pinned to a PostHog identity and don't show up in the auth-success funnel. Same surface area as the existing Google handler — copy the pattern. Surfaced during S-222 review. #frontend #wave-5
+
+- [ ] **S-232 Profile.tsx stale comment cleanup** — `apps/mobile/app/(tabs)/profile.tsx:94-100` has a stale comment from before the S-222 instrumentation pass that no longer reflects the surrounding code. Delete it. Surfaced during S-222 reviewer audit. #frontend #wave-5
 
 - [ ] **S-219 RLS guardrails — block careless permissive policies** — three layers: (1) **structural test** (`scripts/structural-tests.sh`) queries `pg_policies` and fails CI if any policy on `User`/`MacroTarget`/`SavedItem`/`Subscription` is `PERMISSIVE` for `anon` or has `qual = true` / missing `auth.uid()` clause; (2) **live canary** Vercel cron (model on `audit-macro-drift`) that curls `<project>.supabase.co/rest/v1/<table>` with the anon key against each user table, pages Slack `C0ASM3865AA` on any non-empty response — catches dashboard edits that bypass migrations; (3) **CODEOWNERS / PR template rule** requiring `#backend` review on any file matching `prisma/migrations/**/*rls*` or containing `CREATE POLICY` (no auto-merge). Context: RLS is enabled on all 9 public tables but 0 policies exist; default-deny is the only thing keeping anon-key direct-Supabase reads from leaking user data (per `docs/engineering/backend/perf-and-security-handoff-2026-04-25.md`). #backend #security #wave-5
 
