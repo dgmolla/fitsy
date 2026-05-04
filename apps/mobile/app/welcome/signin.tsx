@@ -58,14 +58,10 @@ export default function SignInScreen() {
             if (!r.isNewUser) await pullProfileFromServer();
             setGoogleLoading(false);
             // Onboarding redirect chain (post sign-in):
-            //   → /welcome/location-permission   (S-225, when merged)
+            //   → /welcome/location-permission   (S-225)
             //   → /welcome/notification-permission (S-226b)
             //   → /(tabs)/search
-            // S-225 swaps this redirect to location-permission and that screen
-            // chains here. Until S-225 lands, signin jumps straight to the
-            // notification priming screen so this branch is testable
-            // standalone.
-            router.replace('/welcome/notification-permission');
+            router.replace('/welcome/location-permission');
           })
           .catch((err: Error) => {
             trackAuthFailure({ provider: 'google', error_message: err.message });
@@ -86,7 +82,9 @@ export default function SignInScreen() {
       trackAuthSuccess({ provider: 'apple', is_new_user: r.isNewUser });
       await captureIdentity(r.user.id, r.user.email);
       if (!r.isNewUser) await pullProfileFromServer();
-      router.replace('/(tabs)/search');
+      // Route through priming screen so we frame *why* before iOS fires its
+      // one-shot location prompt (S-225).
+      router.replace('/welcome/location-permission');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Apple Sign In failed';
       if (!msg.includes('canceled')) {
