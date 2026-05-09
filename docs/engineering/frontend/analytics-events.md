@@ -27,7 +27,7 @@ flowchart TD
     C -->|onboarding_choice_selected: activity| D[activity / dietary]
     D -->|onboarding_screen_view: tuning| Tu[tuning — daily targets]
     Tu -->|location_priming_shown| G[location_priming]
-    G -->|onboarding_screen_view: finding| Fi[finding — teaser prefetch]
+    G -->|location_priming_allow_tapped / skip_tapped| Fi[finding — teaser prefetch]
     Fi -->|trial / payment| E[onboarding_completed]
     E -->|signin tap| F{auth}
     F -->|auth_success| H[notification_priming]

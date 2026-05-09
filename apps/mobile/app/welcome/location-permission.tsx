@@ -58,14 +58,20 @@ export default function LocationPermissionScreen() {
         // Cache coords now so the next screen's teaser prefetch can use them
         // instead of the Silver Lake fallback. Prefer last-known for speed
         // (often instant); fall back to a fresh fix only if there's nothing
-        // cached yet. Failures here are non-fatal — the teaser will just
-        // render Silver Lake content as before.
+        // cached yet. Race the fresh fix against a 3s timeout so cold-install
+        // / simulator / slow-GPS users aren't stuck on "Asking..." — mirrors
+        // the pattern used by lib/useLocation.ts. Failures and timeouts are
+        // non-fatal; teaser just renders Silver Lake content as before.
         try {
+          const lastKnown = await Location.getLastKnownPositionAsync();
           const fix =
-            (await Location.getLastKnownPositionAsync()) ??
-            (await Location.getCurrentPositionAsync({
-              accuracy: Location.Accuracy.Balanced,
-            }));
+            lastKnown ??
+            (await Promise.race([
+              Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.Balanced,
+              }),
+              new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
+            ]));
           if (fix?.coords) {
             await setCachedCoords({
               lat: fix.coords.latitude,
@@ -73,8 +79,8 @@ export default function LocationPermissionScreen() {
             });
           }
         } catch {
-          // Coord lookup failed (timeout, hardware off, etc.) — proceed
-          // without a cached fix; teaser falls back to Silver Lake.
+          // Coord lookup failed (hardware off, etc.) — proceed without a
+          // cached fix; teaser falls back to Silver Lake.
         }
       } else {
         // Mirrors useLocation's denied event so the funnel reads as a single
