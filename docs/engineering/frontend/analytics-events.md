@@ -1,6 +1,6 @@
 # Analytics event taxonomy
 
-Last updated: 2026-05-03 (Sprint 12, S-222).
+Last updated: 2026-05-09 (Sprint 12, S-222 + post-S-225 priming reorder).
 
 This is the canonical list of every PostHog event the Fitsy mobile client
 fires. The runtime contract lives in
@@ -25,11 +25,13 @@ flowchart TD
     A[App opens] -->|onboarding_screen_view: problem| B[Onboarding flow]
     B -->|onboarding_choice_selected: goal| C[goal screen]
     C -->|onboarding_choice_selected: activity| D[activity / dietary]
-    D -->|trial / payment| E[onboarding_completed]
+    D -->|onboarding_screen_view: tuning| Tu[tuning — daily targets]
+    Tu -->|location_priming_shown| G[location_priming]
+    G -->|onboarding_screen_view: finding| Fi[finding — teaser prefetch]
+    Fi -->|trial / payment| E[onboarding_completed]
     E -->|signin tap| F{auth}
-    F -->|auth_success| G[location_priming]
+    F -->|auth_success| H[notification_priming]
     F -->|auth_failure| Fexit((retry))
-    G -->|notification_priming_shown| H[notification permission]
     H -->|tab_switched: search| I[search]
     I -->|search_performed → search_page_loaded| J{results?}
     J -->|0 hits| Jx[search_empty_results]

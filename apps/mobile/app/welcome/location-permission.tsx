@@ -6,6 +6,7 @@ import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { AnimatedPress } from '@/components/AnimatedPress';
+import { setCachedCoords } from '@/lib/locationCache';
 import {
   trackLocationPermissionDenied,
   trackLocationPermissionGranted,
@@ -17,16 +18,17 @@ import {
 /**
  * Location-permission priming screen (S-225).
  *
- * Inserted between sign-in success and `(tabs)/search` to frame *why* Fitsy
- * needs location before the OS dialog appears. iOS only allows calling
- * `Location.requestForegroundPermissionsAsync()` once per install, so this
- * screen is the only opportunity to lift grant rate above the cold-prompt
- * baseline.
+ * Inserted between the macro-tuning screen and `welcome/finding` so the OS
+ * prompt fires before the teaser prefetch — the teaser uses the granted
+ * coords to surface restaurants actually near the user, not the Silver Lake
+ * fallback. iOS only allows calling `requestForegroundPermissionsAsync()`
+ * once per install, so this priming screen is the only opportunity to lift
+ * grant rate above the cold-prompt baseline.
  *
  * Critical: the OS prompt is NOT triggered on mount — only on the explicit
  * "Allow location" CTA. "Maybe later" advances without consuming the one-shot
- * prompt; `useLocation` will then fall back to Silver Lake on the search
- * screen until the user grants permission via Settings.
+ * prompt; the teaser then falls back to Silver Lake until the user grants
+ * permission via Settings.
  */
 export default function LocationPermissionScreen() {
   const [busy, setBusy] = useState(false);
@@ -53,6 +55,27 @@ export default function LocationPermissionScreen() {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status === 'granted') {
         trackLocationPermissionGranted();
+        // Cache coords now so the next screen's teaser prefetch can use them
+        // instead of the Silver Lake fallback. Prefer last-known for speed
+        // (often instant); fall back to a fresh fix only if there's nothing
+        // cached yet. Failures here are non-fatal — the teaser will just
+        // render Silver Lake content as before.
+        try {
+          const fix =
+            (await Location.getLastKnownPositionAsync()) ??
+            (await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Balanced,
+            }));
+          if (fix?.coords) {
+            await setCachedCoords({
+              lat: fix.coords.latitude,
+              lng: fix.coords.longitude,
+            });
+          }
+        } catch {
+          // Coord lookup failed (timeout, hardware off, etc.) — proceed
+          // without a cached fix; teaser falls back to Silver Lake.
+        }
       } else {
         // Mirrors useLocation's denied event so the funnel reads as a single
         // permission_denied tally regardless of which surface fired the prompt.
@@ -62,14 +85,14 @@ export default function LocationPermissionScreen() {
       // OS prompt failures are rare and non-actionable here — let useLocation's
       // error path on the search screen handle telemetry on the next attempt.
     } finally {
-      router.replace('/welcome/notification-permission');
+      router.replace('/welcome/finding');
     }
   }
 
   function handleSkip() {
     if (busy) return;
     trackLocationPrimingSkipTapped();
-    router.replace('/welcome/notification-permission');
+    router.replace('/welcome/finding');
   }
 
   return (

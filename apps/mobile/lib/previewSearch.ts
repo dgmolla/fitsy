@@ -1,5 +1,6 @@
 import { getMacroTargets } from './macroStorage';
 import { FALLBACK_LAT, FALLBACK_LNG } from './useLocation';
+import { getCachedCoords } from './locationCache';
 import { api } from './api';
 
 export interface PreviewRestaurant {
@@ -14,12 +15,17 @@ export interface PreviewRestaurant {
  * Fetch nearby restaurants matching the user's macro targets via the
  * preview endpoint (no auth required). Used by both the finding screen
  * (prefetch) and the results screen (display).
+ *
+ * Uses the granted coords cached by `welcome/location-permission` when
+ * available; otherwise falls back to Silver Lake. The priming screen runs
+ * before this in the onboarding chain, so a granted user gets a teaser
+ * targeted at their actual area.
  */
 export async function fetchPreviewRestaurants(): Promise<PreviewRestaurant[]> {
-  const macros = await getMacroTargets();
+  const [macros, cached] = await Promise.all([getMacroTargets(), getCachedCoords()]);
   const params = new URLSearchParams({
-    lat: String(FALLBACK_LAT),
-    lng: String(FALLBACK_LNG),
+    lat: String(cached?.lat ?? FALLBACK_LAT),
+    lng: String(cached?.lng ?? FALLBACK_LNG),
     ...(macros?.protein ? { protein: macros.protein } : {}),
     ...(macros?.carbs ? { carbs: macros.carbs } : {}),
     ...(macros?.fat ? { fat: macros.fat } : {}),

@@ -53,7 +53,7 @@ export default function PlanReadyScreen() {
       progress={13 / 15}
       title="Your daily targets."
       subtitle="We'll suggest splitting these across 3 meals. You can adjust per-meal targets anytime in search."
-      onContinue={() => router.push('/welcome/finding')}
+      onContinue={() => router.push('/welcome/location-permission')}
       canContinue={macros !== null}
       continueLabel="See Restaurants"
     >
