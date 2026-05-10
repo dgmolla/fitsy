@@ -367,7 +367,7 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   heroInitial: {
-    fontFamily: FONTS.newsreaderBold,
+    fontFamily: FONTS.frauncesBold,
     fontSize: 22,
     color: '#FDFBF7',
   },

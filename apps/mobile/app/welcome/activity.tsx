@@ -84,7 +84,7 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   watermark: {
-    fontFamily: FONTS.newsreaderBold,
+    fontFamily: FONTS.frauncesBold,
     fontSize: 42,
     color: '#D0C7B8',
     opacity: 0.5,

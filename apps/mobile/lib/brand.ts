@@ -69,15 +69,20 @@ export const EDITORIAL = {
 } as const;
 
 // ─── Fonts ───────────────────────────────────────────────────────────────────
+// Aligned with the webapp font stack (apps/api/app/layout.tsx):
+// Fraunces is the display/headline serif, Newsreader regular/italic carry the
+// body-weight serif voice. System font handles everything else (no fontFamily
+// needed).
 
 export const FONTS = {
-  headline: 'PlayfairDisplay-BoldItalic',
-  body: 'Manrope-Bold',
-  accent: 'Caslon540Italic',
-  newsreaderBold: 'Newsreader-Bold',
+  // Display / headline — replaces former `newsreaderBold` and `headline`
+  // (PlayfairDisplay-BoldItalic), so existing 28pt+ marquee titles resolve
+  // to the webapp's Fraunces 700 with optical-size axis at the load step.
+  frauncesBold: 'Fraunces-Bold',
+  frauncesBoldItalic: 'Fraunces-BoldItalic',
+  // Body serif — kept for any non-headline serif text and italic accents.
   newsreaderItalic: 'Newsreader-Italic',
   newsreaderRegular: 'Newsreader-Regular',
-  // System font is used for everything else (no fontFamily needed)
 } as const;
 
 // ─── Brand Identity ──────────────────────────────────────────────────────────

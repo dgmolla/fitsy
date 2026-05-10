@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   title: {
-    fontFamily: FONTS.newsreaderBold,
+    fontFamily: FONTS.frauncesBold,
     fontSize: 30,
     color: EDITORIAL.text,
     letterSpacing: -0.8,

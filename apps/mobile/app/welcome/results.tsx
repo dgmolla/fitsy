@@ -246,7 +246,7 @@ const s = StyleSheet.create({
   distTxt: { fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.85)' },
   cardBottom: { gap: 6 },
   cardName: {
-    fontFamily: FONTS.newsreaderBold,
+    fontFamily: FONTS.frauncesBold,
     fontSize: 18,
     color: '#fff',
     letterSpacing: -0.4,
@@ -277,7 +277,7 @@ const s = StyleSheet.create({
     borderRadius: 14,
   },
   errorTitle: {
-    fontFamily: FONTS.newsreaderBold,
+    fontFamily: FONTS.frauncesBold,
     fontSize: 18,
     color: EDITORIAL.text,
     letterSpacing: -0.3,

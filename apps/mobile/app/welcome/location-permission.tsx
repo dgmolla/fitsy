@@ -167,7 +167,7 @@ const s = StyleSheet.create({
     marginBottom: 32,
   },
   title: {
-    fontFamily: FONTS.newsreaderBold,
+    fontFamily: FONTS.frauncesBold,
     fontSize: 32,
     color: EDITORIAL.text,
     letterSpacing: -1,

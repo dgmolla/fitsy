@@ -102,7 +102,7 @@ const s = StyleSheet.create({
     borderWidth: 1.5, borderColor: EDITORIAL.greenAccent,
   },
   pctTxt: {
-    fontFamily: FONTS.newsreaderBold, fontSize: 14, letterSpacing: -0.3,
+    fontFamily: FONTS.frauncesBold, fontSize: 14, letterSpacing: -0.3,
     color: EDITORIAL.greenAccent,
   },
   info: { flex: 1, minWidth: 0 },

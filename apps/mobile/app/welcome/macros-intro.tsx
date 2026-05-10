@@ -60,12 +60,12 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   badgeTxt: {
-    fontFamily: FONTS.newsreaderBold,
+    fontFamily: FONTS.frauncesBold,
     fontSize: 28,
   },
   cardText: { flex: 1 },
   cardTitle: {
-    fontFamily: FONTS.newsreaderBold,
+    fontFamily: FONTS.frauncesBold,
     fontSize: 18,
     color: EDITORIAL.text,
     letterSpacing: -0.2,

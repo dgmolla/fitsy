@@ -14,12 +14,12 @@ import {
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
-    'Caslon540Italic': require('@/assets/fonts/Caslon540Italic.ttf'),
-    'PlayfairDisplay-BoldItalic': require('@expo-google-fonts/playfair-display/700Bold_Italic/PlayfairDisplay_700Bold_Italic.ttf'),
-    'Manrope-Bold': require('@expo-google-fonts/manrope/700Bold/Manrope_700Bold.ttf'),
+    // Display / headline serif — matches the webapp's Fraunces 700.
+    'Fraunces-Bold': require('@expo-google-fonts/fraunces/700Bold/Fraunces_700Bold.ttf'),
+    'Fraunces-BoldItalic': require('@expo-google-fonts/fraunces/700Bold_Italic/Fraunces_700Bold_Italic.ttf'),
+    // Body serif — kept for non-headline serif text.
     'Newsreader-Regular': require('@expo-google-fonts/newsreader/400Regular/Newsreader_400Regular.ttf'),
     'Newsreader-Italic': require('@expo-google-fonts/newsreader/400Regular_Italic/Newsreader_400Regular_Italic.ttf'),
-    'Newsreader-Bold': require('@expo-google-fonts/newsreader/700Bold/Newsreader_700Bold.ttf'),
   });
 
   // ─── Supabase auto-refresh wiring (S-228) ───────────────────────────────────

@@ -245,7 +245,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     flex: 1,
-    fontFamily: FONTS.newsreaderBold,
+    fontFamily: FONTS.frauncesBold,
     fontSize: 16,
     color: EDITORIAL.text,
     letterSpacing: -0.3,

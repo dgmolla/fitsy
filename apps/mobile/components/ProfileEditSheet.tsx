@@ -311,7 +311,7 @@ const s = StyleSheet.create({
     elevation: 10,
   },
   title: {
-    fontFamily: FONTS.newsreaderBold,
+    fontFamily: FONTS.frauncesBold,
     fontSize: 22,
     color: EDITORIAL.text,
     letterSpacing: -0.5,

@@ -99,7 +99,7 @@ const s = StyleSheet.create({
     borderRadius: 2,
   },
   title: {
-    fontFamily: FONTS.newsreaderBold,
+    fontFamily: FONTS.frauncesBold,
     fontSize: 30,
     color: EDITORIAL.text,
     letterSpacing: -1.2,
@@ -118,7 +118,7 @@ const s = StyleSheet.create({
   },
   panelDarkContent: { flex: 1, padding: 24, gap: 6, justifyContent: 'center' },
   badgeLight: { fontSize: 10, fontWeight: '800', color: 'rgba(253,251,247,0.5)', letterSpacing: 2 },
-  titleLight: { fontFamily: FONTS.newsreaderBold, fontSize: 24, color: EDITORIAL.cream, letterSpacing: -0.3, lineHeight: 28 },
+  titleLight: { fontFamily: FONTS.frauncesBold, fontSize: 24, color: EDITORIAL.cream, letterSpacing: -0.3, lineHeight: 28 },
   descLight: { fontSize: 14, lineHeight: 20, color: 'rgba(253,251,247,0.6)', marginTop: 4 },
 
   /* Light panel */
@@ -131,7 +131,7 @@ const s = StyleSheet.create({
   },
   panelLightContent: { flex: 1, padding: 24, gap: 6, justifyContent: 'center' },
   badgeDark: { fontSize: 10, fontWeight: '800', color: EDITORIAL.greenAccent, letterSpacing: 2 },
-  titleDark: { fontFamily: FONTS.newsreaderBold, fontSize: 24, color: EDITORIAL.text, letterSpacing: -0.3, lineHeight: 28 },
+  titleDark: { fontFamily: FONTS.frauncesBold, fontSize: 24, color: EDITORIAL.text, letterSpacing: -0.3, lineHeight: 28 },
   descDark: { fontSize: 14, lineHeight: 20, color: EDITORIAL.textSoft, marginTop: 4 },
 
   panelImg: { width: 110, height: '100%' },

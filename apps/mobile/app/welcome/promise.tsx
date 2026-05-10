@@ -111,7 +111,7 @@ const s = StyleSheet.create({
   },
 
   headline: {
-    fontFamily: FONTS.newsreaderBold,
+    fontFamily: FONTS.frauncesBold,
     fontSize: 28,
     color: EDITORIAL.text,
     letterSpacing: -1,
@@ -131,7 +131,7 @@ const s = StyleSheet.create({
   grad: { position: 'absolute', bottom: 0, left: 0, right: 0, height: '100%' },
   cardInfo: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', padding: 14, gap: 10 },
   cardIdx: { fontSize: 11, fontWeight: '800', color: 'rgba(253,251,247,0.4)', letterSpacing: 0.5 },
-  cardName: { fontFamily: FONTS.newsreaderBold, fontSize: 16, color: EDITORIAL.cream, letterSpacing: -0.3 },
+  cardName: { fontFamily: FONTS.frauncesBold, fontSize: 16, color: EDITORIAL.cream, letterSpacing: -0.3 },
   cardMeta: { fontSize: 11, color: 'rgba(253,251,247,0.6)' },
   cardDist: { fontSize: 11, fontWeight: '600', color: 'rgba(253,251,247,0.45)' },
 

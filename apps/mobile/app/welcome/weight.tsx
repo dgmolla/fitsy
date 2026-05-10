@@ -108,7 +108,7 @@ const s = StyleSheet.create({
     marginBottom: 8,
   },
   valueNum: {
-    fontFamily: FONTS.newsreaderBold,
+    fontFamily: FONTS.frauncesBold,
     fontSize: 56,
     color: EDITORIAL.text,
     letterSpacing: -2.5,
