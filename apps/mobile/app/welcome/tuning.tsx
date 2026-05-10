@@ -137,7 +137,7 @@ const s = StyleSheet.create({
     textTransform: 'uppercase',
   },
   macroValue: {
-    fontFamily: FONTS.newsreaderBold,
+    fontFamily: FONTS.frauncesBold,
     fontSize: 44,
     color: EDITORIAL.text,
     letterSpacing: -2,

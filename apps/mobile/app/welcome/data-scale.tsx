@@ -120,7 +120,7 @@ const s = StyleSheet.create({
   },
 
   title: {
-    fontFamily: FONTS.newsreaderBold,
+    fontFamily: FONTS.frauncesBold,
     fontSize: 30,
     color: EDITORIAL.text,
     letterSpacing: -1.2,
@@ -149,7 +149,7 @@ const s = StyleSheet.create({
   },
 
   statNum: {
-    fontFamily: FONTS.newsreaderBold,
+    fontFamily: FONTS.frauncesBold,
     fontSize: 48,
     color: EDITORIAL.text,
     letterSpacing: -2,

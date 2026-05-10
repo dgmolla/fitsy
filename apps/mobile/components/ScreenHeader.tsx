@@ -33,7 +33,7 @@ const styles = StyleSheet.create({
   },
   logo: {
     fontSize: 20,
-    fontFamily: FONTS.newsreaderBold,
+    fontFamily: FONTS.frauncesBold,
     color: EDITORIAL.green,
     letterSpacing: -0.5,
   },

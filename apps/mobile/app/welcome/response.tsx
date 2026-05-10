@@ -126,7 +126,7 @@ const s = StyleSheet.create({
   },
 
   headline: {
-    fontFamily: FONTS.newsreaderBold,
+    fontFamily: FONTS.frauncesBold,
     fontSize: 30,
     color: EDITORIAL.text,
     letterSpacing: -1.2,
@@ -148,7 +148,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 24,
   },
   calloutText: {
-    fontFamily: FONTS.newsreaderBold,
+    fontFamily: FONTS.frauncesBold,
     fontSize: 18,
     color: EDITORIAL.cream,
     letterSpacing: -0.3,

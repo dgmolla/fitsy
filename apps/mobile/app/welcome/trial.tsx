@@ -121,7 +121,7 @@ const s = StyleSheet.create({
   },
 
   hero: {
-    fontFamily: FONTS.newsreaderBold,
+    fontFamily: FONTS.frauncesBold,
     fontSize: 36,
     color: EDITORIAL.text,
     letterSpacing: -1.2,
@@ -155,7 +155,7 @@ const s = StyleSheet.create({
   },
   stepContent: { flex: 1, paddingBottom: 28 },
   stepTitle: {
-    fontFamily: FONTS.newsreaderBold,
+    fontFamily: FONTS.frauncesBold,
     fontSize: 17,
     color: EDITORIAL.text,
     letterSpacing: -0.2,

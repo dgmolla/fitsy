@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   content: { flex: 1, paddingHorizontal: 24, justifyContent: 'center', gap: 40 },
   header: { gap: 8 },
-  logo: { fontFamily: FONTS.newsreaderBold, fontSize: 42, color: EDITORIAL.green, letterSpacing: -2, marginBottom: 8 },
+  logo: { fontFamily: FONTS.frauncesBold, fontSize: 42, color: EDITORIAL.green, letterSpacing: -2, marginBottom: 8 },
   title: { fontSize: 28, fontWeight: '700' },
   subtitle: { fontSize: 15, lineHeight: 22 },
   buttons: { gap: 12 },

@@ -69,7 +69,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    fontFamily: FONTS.newsreaderBold,
+    fontFamily: FONTS.frauncesBold,
     fontSize: 16,
     color: EDITORIAL.text,
   },

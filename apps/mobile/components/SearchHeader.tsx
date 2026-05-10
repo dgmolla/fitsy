@@ -118,7 +118,7 @@ const h = StyleSheet.create({
     justifyContent: 'space-between',
   },
   headline: {
-    fontFamily: FONTS.headline,
+    fontFamily: FONTS.frauncesBold,
     fontSize: 28,
     color: COLORS.text,
   },
@@ -147,8 +147,8 @@ const h = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   macroValue: {
-    fontFamily: FONTS.body,
     fontSize: 18,
+    fontWeight: '700',
     color: COLORS.text,
     letterSpacing: -0.3,
   },

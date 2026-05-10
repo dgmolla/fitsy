@@ -819,7 +819,7 @@ const s = StyleSheet.create({
   logoDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: EDITORIAL.green },
   logo: {
     fontSize: 20,
-    fontFamily: FONTS.newsreaderBold,
+    fontFamily: FONTS.frauncesBold,
     color: EDITORIAL.green,
     letterSpacing: -0.5,
   },
@@ -875,7 +875,7 @@ const s = StyleSheet.create({
   },
   sectionTitleBlock: { flex: 1, paddingTop: 4 },
   sectionRestName: {
-    fontFamily: FONTS.newsreaderBold,
+    fontFamily: FONTS.frauncesBold,
     fontSize: 20, color: EDITORIAL.text, letterSpacing: -0.5,
   },
   sectionSub: { fontSize: 11, fontWeight: '500', color: EDITORIAL.textSoft, marginTop: 1 },
@@ -923,7 +923,7 @@ const hero = StyleSheet.create({
   badgeText: { fontSize: 9, fontWeight: '700', color: 'rgba(253,251,247,0.9)', letterSpacing: 1 },
   distText: { fontSize: 11, fontWeight: '600', color: 'rgba(253,251,247,0.65)', marginLeft: 'auto' },
   restName: {
-    fontFamily: FONTS.newsreaderBold,
+    fontFamily: FONTS.frauncesBold,
     fontSize: 28, color: EDITORIAL.cream, letterSpacing: -0.8, lineHeight: 30,
   },
   dishName: {
@@ -946,7 +946,7 @@ const dc = StyleSheet.create({
   gradient: { position: 'absolute', bottom: 0, left: 0, right: 0, height: DISH_CARD_H * 0.8 },
   info: { position: 'absolute', bottom: 10, left: 10, right: 10 },
   dishName: {
-    fontSize: 13, fontFamily: FONTS.newsreaderBold,
+    fontSize: 13, fontFamily: FONTS.frauncesBold,
     color: EDITORIAL.cream, letterSpacing: -0.2, lineHeight: 16,
   },
   cal: { fontSize: 9, fontWeight: '600', color: 'rgba(253,251,247,0.65)', marginTop: 2 },

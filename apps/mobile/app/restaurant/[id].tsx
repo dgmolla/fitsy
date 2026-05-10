@@ -372,7 +372,7 @@ const s = StyleSheet.create({
   navTitle: { flex: 1, textAlign: 'center', fontSize: 13, fontWeight: '600', color: EDITORIAL.text, paddingHorizontal: 8 },
 
   head: { paddingHorizontal: 18, paddingTop: 6, paddingBottom: 14 },
-  headLine: { fontFamily: FONTS.newsreaderBold, fontSize: 28, letterSpacing: -0.6, lineHeight: 30, color: EDITORIAL.text },
+  headLine: { fontFamily: FONTS.frauncesBold, fontSize: 28, letterSpacing: -0.6, lineHeight: 30, color: EDITORIAL.text },
   headLineEm: { fontFamily: FONTS.newsreaderItalic, fontStyle: 'italic', fontWeight: '500', color: EDITORIAL.greenMid },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' },
   metaB: { fontSize: 11.5, fontWeight: '700', color: EDITORIAL.text },
@@ -392,7 +392,7 @@ const s = StyleSheet.create({
   chipX: { fontSize: 12, color: EDITORIAL.cream, opacity: 0.8 },
 
   sortBar: { marginHorizontal: 18, marginTop: 14, marginBottom: 8, backgroundColor: EDITORIAL.text, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  sortBarTitle: { fontFamily: FONTS.newsreaderBold, fontSize: 18, color: EDITORIAL.cream },
+  sortBarTitle: { fontFamily: FONTS.frauncesBold, fontSize: 18, color: EDITORIAL.cream },
   sortBarSub: { fontSize: 11, color: EDITORIAL.cream, opacity: 0.6, letterSpacing: 0.4, marginTop: 2 },
   sortBtn: { backgroundColor: EDITORIAL.whiteTintLow, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8 },
   sortBtnTxt: { fontSize: 12, fontWeight: '600', color: EDITORIAL.cream },

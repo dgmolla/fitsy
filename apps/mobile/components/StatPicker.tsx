@@ -112,7 +112,7 @@ const s = StyleSheet.create({
     letterSpacing: -0.3,
   },
   numOn: {
-    fontFamily: FONTS.newsreaderBold,
+    fontFamily: FONTS.frauncesBold,
     fontSize: 22,
     color: EDITORIAL.text,
   },
