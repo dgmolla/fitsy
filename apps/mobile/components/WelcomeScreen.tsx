@@ -179,7 +179,11 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   title: {
-    fontFamily: FONTS.frauncesBold,
+    // Display cut at the webapp's hero settings: opsz=144 + wght=400 are baked
+    // into the .ttf (instanced from the variable source). This selects the
+    // high-contrast display letterforms instead of the chunky body cut that
+    // `frauncesBold` produced at headline sizes.
+    fontFamily: FONTS.frauncesDisplay,
     fontSize: 30,
     color: EDITORIAL.text,
     letterSpacing: -0.8,

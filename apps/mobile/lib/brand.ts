@@ -80,6 +80,10 @@ export const FONTS = {
   // to the webapp's Fraunces 700 with optical-size axis at the load step.
   frauncesBold: 'Fraunces-Bold',
   frauncesBoldItalic: 'Fraunces-BoldItalic',
+  // Display cut — Fraunces variable instanced with opsz=144 + wght=400 baked
+  // in. Use for hero/marquee titles to match the webapp's elegant headline
+  // style (font-weight: 400 + opsz=auto in apps/api/app/landing.module.css).
+  frauncesDisplay: 'Fraunces-DisplayRegular',
   // Body serif — kept for any non-headline serif text and italic accents.
   newsreaderItalic: 'Newsreader-Italic',
   newsreaderRegular: 'Newsreader-Regular',
