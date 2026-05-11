@@ -5,7 +5,7 @@ import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { trackOnboardingScreenView } from '@/lib/analytics';
-import { EDITORIAL, FONTS } from '@/lib/brand';
+import { EDITORIAL, TEXT } from '@/lib/brand';
 
 const OPTIONS = [
   { id: 'meal_prep', label: 'Meal prepping', icon: '🥦' },
@@ -67,12 +67,6 @@ const s = StyleSheet.create({
   },
   rowOn: { backgroundColor: EDITORIAL.green },
   icon: { fontSize: 20 },
-  label: {
-    fontFamily: FONTS.newsreaderRegular,
-    fontSize: 17,
-    color: EDITORIAL.textMid,
-    letterSpacing: -0.3,
-    flex: 1,
-  },
+  label: { ...TEXT.optionLabel, flex: 1 },
   labelOn: { color: EDITORIAL.cream },
 });

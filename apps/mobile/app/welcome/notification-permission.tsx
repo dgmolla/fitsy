@@ -152,7 +152,7 @@ const s = StyleSheet.create({
     marginBottom: 32,
   },
   title: {
-    fontFamily: FONTS.frauncesBold,
+    fontFamily: FONTS.frauncesDisplay,
     fontSize: 32,
     color: EDITORIAL.text,
     letterSpacing: -1,
@@ -161,6 +161,7 @@ const s = StyleSheet.create({
     marginBottom: 16,
   },
   subtitle: {
+    fontFamily: FONTS.nunitoSans,
     fontSize: 15,
     lineHeight: 22,
     color: EDITORIAL.textSoft,
@@ -177,12 +178,12 @@ const s = StyleSheet.create({
     borderRadius: 32,
     paddingVertical: 18,
   },
-  allowTxt: { fontSize: 16, fontWeight: '600', color: EDITORIAL.cream },
+  allowTxt: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 16, fontWeight: '600', color: EDITORIAL.cream },
   dim: { opacity: 0.4 },
   skip: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 14,
   },
-  skipTxt: { fontSize: 15, fontWeight: '500', color: EDITORIAL.textSoft },
+  skipTxt: { fontFamily: FONTS.nunitoSans, fontSize: 15, fontWeight: '500', color: EDITORIAL.textSoft },
 });

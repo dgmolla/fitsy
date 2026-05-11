@@ -119,7 +119,7 @@ const s = StyleSheet.create({
     marginBottom: 28,
   },
   title: {
-    fontFamily: FONTS.frauncesBold,
+    fontFamily: FONTS.frauncesDisplay,
     fontSize: 28,
     color: EDITORIAL.text,
     letterSpacing: -0.8,
@@ -128,6 +128,7 @@ const s = StyleSheet.create({
     marginBottom: 12,
   },
   subtitle: {
+    fontFamily: FONTS.nunitoSans,
     fontSize: 15,
     color: EDITORIAL.textSoft,
     textAlign: 'center',

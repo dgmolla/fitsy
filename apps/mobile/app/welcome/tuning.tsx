@@ -118,18 +118,19 @@ const s = StyleSheet.create({
   imgStrip: {
     borderRadius: 20,
     overflow: 'hidden',
-    marginBottom: 32,
+    marginBottom: 20,
   },
-  heroImg: { width: '100%', height: 160, borderRadius: 20 },
+  heroImg: { width: '100%', height: 110, borderRadius: 20 },
 
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    rowGap: 28,
-    marginBottom: 40,
+    rowGap: 16,
+    marginBottom: 20,
   },
-  macroCell: { width: '50%', gap: 4 },
+  macroCell: { width: '50%', gap: 2 },
   macroLabel: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 2,
@@ -137,15 +138,16 @@ const s = StyleSheet.create({
     textTransform: 'uppercase',
   },
   macroValue: {
-    fontFamily: FONTS.frauncesBold,
-    fontSize: 44,
-    color: EDITORIAL.text,
-    letterSpacing: -2,
+    fontFamily: FONTS.frauncesDisplay,
+    fontSize: 36,
+    color: EDITORIAL.green,
+    letterSpacing: -1.5,
   },
-  macroUnit: { fontSize: 20, color: EDITORIAL.textSoft, letterSpacing: 0 },
+  macroUnit: { fontFamily: FONTS.nunitoSans, fontSize: 20, color: EDITORIAL.textSoft, letterSpacing: 0 },
 
   trajWrap: { gap: 14 },
   trajLabel: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 2,
@@ -158,8 +160,8 @@ const s = StyleSheet.create({
     borderRadius: 16,
     padding: 4,
   },
-  trajBtn: { flex: 1, alignItems: 'center', paddingVertical: 16, borderRadius: 14 },
+  trajBtn: { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 14 },
   trajOn: { backgroundColor: EDITORIAL.green },
-  trajTxt: { fontSize: 15, fontWeight: '600', color: EDITORIAL.textSoft },
+  trajTxt: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 15, fontWeight: '600', color: EDITORIAL.textSoft },
   trajTxtOn: { color: EDITORIAL.cream },
 });

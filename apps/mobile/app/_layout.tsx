@@ -17,12 +17,21 @@ export default function RootLayout() {
     // Display / headline serif — matches the webapp's Fraunces 700.
     'Fraunces-Bold': require('@expo-google-fonts/fraunces/700Bold/Fraunces_700Bold.ttf'),
     'Fraunces-BoldItalic': require('@expo-google-fonts/fraunces/700Bold_Italic/Fraunces_700Bold_Italic.ttf'),
-    // Display cut, instanced from Fraunces variable with opsz=144 + wght=400
-    // baked in. Matches the webapp's hero typography (font-weight: 400 +
-    // opsz=auto picking the display cut). React Native 0.81 doesn't yet expose
-    // `fontVariationSettings` as a style prop, so we ship a pre-instanced
-    // static .ttf instead of the raw variable font.
-    'Fraunces-DisplayRegular': require('@/assets/fonts/Fraunces-DisplayRegular.ttf'),
+    // Fraunces display cut — pre-instanced from the variable source at
+    // opsz=144, wght=450, WONK=1. Mirrors the webapp's hero rendering
+    // (Fraunces variable with `font-optical-sizing: auto` engaging the display
+    // cut at large sizes). React Native 0.81 can't drive variable axes at
+    // runtime, so we ship the baked static. Re-bake via
+    // `apps/mobile/scripts/bake-fraunces-display.py` if axes need to change.
+    'FrauncesDisplayWonk': require('@/assets/fonts/Fraunces-Display144-450-Wonk.ttf'),
+    // Static body cuts from Google Fonts — used for sub-headline serif text
+    // and card titles where the display cut would render too fragile.
+    'Fraunces-Regular': require('@expo-google-fonts/fraunces/400Regular/Fraunces_400Regular.ttf'),
+    'Fraunces-SemiBold': require('@expo-google-fonts/fraunces/600SemiBold/Fraunces_600SemiBold.ttf'),
+    // Body sans — matches the webapp's Nunito Sans body voice
+    // (--font-nunito in apps/api/app/layout.tsx).
+    'NunitoSans-Regular': require('@expo-google-fonts/nunito-sans/400Regular/NunitoSans_400Regular.ttf'),
+    'NunitoSans-SemiBold': require('@expo-google-fonts/nunito-sans/600SemiBold/NunitoSans_600SemiBold.ttf'),
     // Body serif — kept for non-headline serif text.
     'Newsreader-Regular': require('@expo-google-fonts/newsreader/400Regular/Newsreader_400Regular.ttf'),
     'Newsreader-Italic': require('@expo-google-fonts/newsreader/400Regular_Italic/Newsreader_400Regular_Italic.ttf'),

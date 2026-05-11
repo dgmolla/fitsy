@@ -77,7 +77,7 @@ const s = StyleSheet.create({
   },
   rowOn: { backgroundColor: EDITORIAL.green },
   label: {
-    fontFamily: FONTS.newsreaderRegular,
+    fontFamily: FONTS.nunitoSans,
     fontSize: 18,
     color: EDITORIAL.textMid,
     letterSpacing: -0.3,

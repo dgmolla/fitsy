@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { EDITORIAL, FONTS } from '@/lib/brand';
+import { EDITORIAL, FONTS, TEXT } from '@/lib/brand';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { trackOnboardingScreenView } from '@/lib/analytics';
 
@@ -26,7 +26,7 @@ export default function PromiseScreen() {
         </View>
 
         <Animated.Text entering={FadeInDown.duration(600)} style={s.headline}>
-          We find restaurants{'\n'}with meals that hit{'\n'}your targets.
+          Healthy meals{'\n'}near you
         </Animated.Text>
 
         <Animated.Text entering={FadeInDown.duration(500).delay(100)} style={s.sub}>
@@ -110,34 +110,22 @@ const s = StyleSheet.create({
     borderRadius: 2,
   },
 
-  headline: {
-    fontFamily: FONTS.frauncesBold,
-    fontSize: 28,
-    color: EDITORIAL.text,
-    letterSpacing: -1,
-    lineHeight: 36,
-    marginBottom: 12,
-  },
-  sub: {
-    fontSize: 15,
-    color: EDITORIAL.textSoft,
-    lineHeight: 22,
-    marginBottom: 28,
-  },
+  headline: { ...TEXT.headline, marginBottom: 14 },
+  sub: { ...TEXT.subtitle, fontSize: 15, lineHeight: 26, marginBottom: 28 },
 
   cards: { gap: 12 },
   card: { height: 100, borderRadius: 16, overflow: 'hidden', backgroundColor: EDITORIAL.creamDeep },
   cardImg: { width: '100%', height: '100%' },
   grad: { position: 'absolute', bottom: 0, left: 0, right: 0, height: '100%' },
   cardInfo: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', padding: 14, gap: 10 },
-  cardIdx: { fontSize: 11, fontWeight: '800', color: 'rgba(253,251,247,0.4)', letterSpacing: 0.5 },
-  cardName: { fontFamily: FONTS.frauncesBold, fontSize: 16, color: EDITORIAL.cream, letterSpacing: -0.3 },
-  cardMeta: { fontSize: 11, color: 'rgba(253,251,247,0.6)' },
-  cardDist: { fontSize: 11, fontWeight: '600', color: 'rgba(253,251,247,0.45)' },
+  cardIdx: { ...TEXT.caption, color: 'rgba(253,251,247,0.4)' },
+  cardName: TEXT.cardTitle,
+  cardMeta: { ...TEXT.cardMeta, color: 'rgba(253,251,247,0.6)' },
+  cardDist: { ...TEXT.caption, letterSpacing: 0, color: 'rgba(253,251,247,0.45)' },
 
   cta: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     backgroundColor: EDITORIAL.green, borderRadius: 32, paddingVertical: 18,
   },
-  ctaTxt: { fontSize: 16, fontWeight: '600', color: EDITORIAL.cream },
+  ctaTxt: { ...TEXT.cta, fontSize: 16 },
 });

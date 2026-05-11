@@ -242,11 +242,11 @@ const s = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
   },
-  chipTxt: { fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.9)', letterSpacing: 0.2 },
-  distTxt: { fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.85)' },
+  chipTxt: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.9)', letterSpacing: 0.2 },
+  distTxt: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.85)' },
   cardBottom: { gap: 6 },
   cardName: {
-    fontFamily: FONTS.frauncesBold,
+    fontFamily: FONTS.frauncesDisplay,
     fontSize: 18,
     color: '#fff',
     letterSpacing: -0.4,
@@ -266,7 +266,7 @@ const s = StyleSheet.create({
   },
 
   emptyWrap: { alignItems: 'center', paddingVertical: 32 },
-  emptyTxt: { fontSize: 16, color: EDITORIAL.textSoft, textAlign: 'center' },
+  emptyTxt: { fontFamily: FONTS.nunitoSans, fontSize: 16, color: EDITORIAL.textSoft, textAlign: 'center' },
 
   errorWrap: {
     alignItems: 'center',
@@ -277,12 +277,13 @@ const s = StyleSheet.create({
     borderRadius: 14,
   },
   errorTitle: {
-    fontFamily: FONTS.frauncesBold,
+    fontFamily: FONTS.frauncesDisplay,
     fontSize: 18,
     color: EDITORIAL.text,
     letterSpacing: -0.3,
   },
   errorTxt: {
+    fontFamily: FONTS.nunitoSans,
     fontSize: 14,
     color: EDITORIAL.textSoft,
     textAlign: 'center',
@@ -296,6 +297,7 @@ const s = StyleSheet.create({
     paddingVertical: 10,
   },
   retryTxt: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 14,
     fontWeight: '700',
     color: EDITORIAL.cream,
@@ -311,8 +313,9 @@ const s = StyleSheet.create({
     padding: 14,
     marginBottom: 8,
   },
-  calloutEmoji: { fontSize: 18, lineHeight: 22 },
+  calloutEmoji: { fontFamily: FONTS.nunitoSans, fontSize: 18, lineHeight: 22 },
   calloutTxt: {
+    fontFamily: FONTS.nunitoSans,
     flex: 1,
     fontSize: 13,
     color: EDITORIAL.text,

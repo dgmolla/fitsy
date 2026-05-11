@@ -4,7 +4,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { trackOnboardingScreenView } from '@/lib/analytics';
-import { EDITORIAL, FONTS } from '@/lib/brand';
+import { EDITORIAL, FONTS, TEXT } from '@/lib/brand';
 
 const STEPS = [
   { num: '1', title: 'We help set your targets' },
@@ -62,17 +62,12 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   watermark: {
-    fontFamily: FONTS.frauncesBold,
+    fontFamily: FONTS.frauncesDisplay,
     fontSize: 42,
     color: '#D0C7B8',
     lineHeight: 42,
     includeFontPadding: false,
     opacity: 0.5,
   },
-  cardTitle: {
-    fontFamily: FONTS.newsreaderRegular,
-    fontSize: 18,
-    color: EDITORIAL.textMid,
-    lineHeight: 21,
-  },
+  cardTitle: TEXT.optionLabel,
 });

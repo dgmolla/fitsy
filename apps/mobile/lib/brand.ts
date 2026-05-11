@@ -83,11 +83,98 @@ export const FONTS = {
   // Display cut — Fraunces variable instanced with opsz=144 + wght=400 baked
   // in. Use for hero/marquee titles to match the webapp's elegant headline
   // style (font-weight: 400 + opsz=auto in apps/api/app/landing.module.css).
-  frauncesDisplay: 'Fraunces-DisplayRegular',
+  frauncesDisplay: 'FrauncesDisplayWonk',
+  // Static Light/Regular cuts. RN can't read the variable `opsz` axis, so the
+  // DisplayRegular file falls back to the chunky body cut at headline sizes.
+  // These static instances render predictably thin.
+  frauncesLight: 'Fraunces-Light',
+  frauncesLightItalic: 'Fraunces-LightItalic',
+  frauncesRegular: 'Fraunces-Regular',
+  frauncesMedium: 'Fraunces-Medium',
+  frauncesSemiBold: 'Fraunces-SemiBold',
   // Body serif — kept for any non-headline serif text and italic accents.
   newsreaderItalic: 'Newsreader-Italic',
   newsreaderRegular: 'Newsreader-Regular',
+  // Body sans — matches the webapp's Nunito Sans voice (subtitles, body copy).
+  nunitoSans: 'NunitoSans-Regular',
+  nunitoSansSemiBold: 'NunitoSans-SemiBold',
 } as const;
+
+// ─── Text Styles ─────────────────────────────────────────────────────────────
+// Centralized typographic tokens. Anchor for all onboarding/marketing surfaces
+// so changes propagate. Mirror the webapp pairing (Fraunces display for hero
+// headlines, Nunito Sans for body voice).
+
+export const TEXT = {
+  /** Onboarding hero headlines. Fraunces display cut, baked at opsz=144 wght=450 WONK=1. */
+  headline: {
+    fontFamily: FONTS.frauncesDisplay,
+    fontSize: 32,
+    color: EDITORIAL.green,
+    letterSpacing: -1,
+    lineHeight: 38,
+  },
+  /** Mid-size editorial title (e.g. inner-card titles, sheet headers). */
+  title: {
+    fontFamily: FONTS.frauncesDisplay,
+    fontSize: 24,
+    color: EDITORIAL.green,
+    letterSpacing: -0.6,
+    lineHeight: 28,
+  },
+  /** Subtitle directly under a headline. */
+  subtitle: {
+    fontFamily: FONTS.nunitoSans,
+    fontSize: 16,
+    color: EDITORIAL.textMid,
+    lineHeight: 24,
+  },
+  /** Default body copy. */
+  body: {
+    fontFamily: FONTS.nunitoSans,
+    fontSize: 15,
+    color: EDITORIAL.textMid,
+    lineHeight: 22,
+  },
+  /** Smaller body / supporting copy. */
+  bodySmall: {
+    fontFamily: FONTS.nunitoSans,
+    fontSize: 13,
+    color: EDITORIAL.textMid,
+    lineHeight: 18,
+  },
+  /** Selectable option labels (e.g. onboarding choice pills). */
+  optionLabel: {
+    fontFamily: FONTS.nunitoSans,
+    fontSize: 16,
+    color: EDITORIAL.textMid,
+    letterSpacing: -0.2,
+  },
+  /** Card / list-item title (lighter than headline, still serif). */
+  cardTitle: {
+    fontFamily: FONTS.frauncesSemiBold,
+    fontSize: 17,
+    color: EDITORIAL.cream,
+    letterSpacing: -0.3,
+  },
+  /** Card / list-item supporting meta line. */
+  cardMeta: {
+    fontFamily: FONTS.nunitoSans,
+    fontSize: 11,
+  },
+  /** Eyebrow / numeric index caption. */
+  caption: {
+    fontFamily: FONTS.nunitoSansSemiBold,
+    fontSize: 11,
+    letterSpacing: 0.5,
+  },
+  /** Primary CTA button label. */
+  cta: {
+    fontFamily: FONTS.nunitoSansSemiBold,
+    fontSize: 15,
+    color: EDITORIAL.cream,
+  },
+} as const satisfies Record<string, TextStyle>;
 
 // ─── Brand Identity ──────────────────────────────────────────────────────────
 

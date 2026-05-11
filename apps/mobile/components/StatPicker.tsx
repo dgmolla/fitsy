@@ -106,15 +106,15 @@ const s = StyleSheet.create({
     paddingRight: 14,
   },
   num: {
-    fontFamily: FONTS.newsreaderRegular,
+    fontFamily: FONTS.frauncesDisplay,
     fontSize: 18,
     color: EDITORIAL.textSoft,
     letterSpacing: -0.3,
   },
   numOn: {
-    fontFamily: FONTS.frauncesBold,
+    fontFamily: FONTS.frauncesDisplay,
     fontSize: 22,
-    color: EDITORIAL.text,
+    color: EDITORIAL.green,
   },
   indicator: {
     position: 'absolute',

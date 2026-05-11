@@ -120,7 +120,7 @@ const s = StyleSheet.create({
   },
 
   title: {
-    fontFamily: FONTS.frauncesBold,
+    fontFamily: FONTS.frauncesDisplay,
     fontSize: 30,
     color: EDITORIAL.text,
     letterSpacing: -1.2,
@@ -128,6 +128,7 @@ const s = StyleSheet.create({
     marginBottom: 12,
   },
   subtitle: {
+    fontFamily: FONTS.nunitoSans,
     fontSize: 15,
     lineHeight: 22,
     color: EDITORIAL.textSoft,
@@ -149,7 +150,7 @@ const s = StyleSheet.create({
   },
 
   statNum: {
-    fontFamily: FONTS.frauncesBold,
+    fontFamily: FONTS.frauncesDisplay,
     fontSize: 48,
     color: EDITORIAL.text,
     letterSpacing: -2,
@@ -160,6 +161,7 @@ const s = StyleSheet.create({
   },
 
   statLabel: {
+    fontFamily: FONTS.nunitoSans,
     fontSize: 15,
     color: EDITORIAL.textSoft,
     marginTop: 4,
@@ -177,6 +179,7 @@ const s = StyleSheet.create({
     marginBottom: 16,
   },
   footnoteTxt: {
+    fontFamily: FONTS.nunitoSans,
     fontSize: 13,
     color: EDITORIAL.textSoft,
   },
@@ -190,5 +193,5 @@ const s = StyleSheet.create({
     borderRadius: 32,
     paddingVertical: 18,
   },
-  ctaTxt: { fontSize: 16, fontWeight: '600', color: EDITORIAL.cream },
+  ctaTxt: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 16, fontWeight: '600', color: EDITORIAL.cream },
 });

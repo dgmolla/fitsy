@@ -12,7 +12,7 @@ import {
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useNavigation } from 'expo-router';
-import { EDITORIAL, FONTS } from '@/lib/brand';
+import { EDITORIAL, FONTS, TEXT } from '@/lib/brand';
 import { AnimatedPress } from './AnimatedPress';
 
 interface Props {
@@ -179,21 +179,11 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   title: {
-    // Display cut at the webapp's hero settings: opsz=144 + wght=400 are baked
-    // into the .ttf (instanced from the variable source). This selects the
-    // high-contrast display letterforms instead of the chunky body cut that
-    // `frauncesBold` produced at headline sizes.
-    fontFamily: FONTS.frauncesDisplay,
-    fontSize: 30,
-    color: EDITORIAL.text,
-    letterSpacing: -0.8,
-    lineHeight: 36,
+    ...TEXT.headline,
     marginBottom: 14,
   },
   subtitle: {
-    fontSize: 16,
-    lineHeight: 24,
-    color: EDITORIAL.textSoft,
+    ...TEXT.subtitle,
     marginBottom: 36,
   },
   childWrap: { flex: 1 },
@@ -207,7 +197,7 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   skipHit: { minWidth: 44, minHeight: 44, justifyContent: 'center' },
-  skipTxt: { fontSize: 15, color: EDITORIAL.textSoft },
+  skipTxt: { ...TEXT.body, color: EDITORIAL.textSoft },
 
   continueBtn: {
     flexDirection: 'row',
@@ -219,5 +209,5 @@ const styles = StyleSheet.create({
     borderRadius: 32,
   },
   continueDim: { opacity: 0.25 },
-  continueTxt: { fontSize: 15, fontWeight: '600', color: EDITORIAL.cream },
+  continueTxt: TEXT.cta,
 });

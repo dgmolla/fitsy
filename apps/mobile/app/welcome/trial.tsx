@@ -3,7 +3,7 @@ import { Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { EDITORIAL, FONTS } from '@/lib/brand';
+import { EDITORIAL, FONTS, TEXT } from '@/lib/brand';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { trackOnboardingScreenView } from '@/lib/analytics';
 
@@ -120,20 +120,8 @@ const s = StyleSheet.create({
     borderRadius: 2,
   },
 
-  hero: {
-    fontFamily: FONTS.frauncesBold,
-    fontSize: 36,
-    color: EDITORIAL.text,
-    letterSpacing: -1.2,
-    lineHeight: 42,
-    marginTop: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: EDITORIAL.textSoft,
-    marginTop: 10,
-    marginBottom: 40,
-  },
+  hero: { ...TEXT.headline, marginTop: 8 },
+  subtitle: { ...TEXT.subtitle, marginTop: 10, marginBottom: 40 },
 
   timeline: { gap: 0 },
   step: { flexDirection: 'row', gap: 16 },
@@ -155,19 +143,15 @@ const s = StyleSheet.create({
   },
   stepContent: { flex: 1, paddingBottom: 28 },
   stepTitle: {
-    fontFamily: FONTS.frauncesBold,
-    fontSize: 17,
+    fontFamily: FONTS.nunitoSansSemiBold,
+    fontSize: 16,
     color: EDITORIAL.text,
-    letterSpacing: -0.2,
     marginBottom: 4,
   },
-  stepDesc: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: EDITORIAL.textSoft,
-  },
+  stepDesc: { ...TEXT.bodySmall, color: EDITORIAL.textSoft },
 
   legal: {
+    ...TEXT.bodySmall,
     fontSize: 12,
     lineHeight: 18,
     color: EDITORIAL.textSoft,
@@ -186,5 +170,5 @@ const s = StyleSheet.create({
     paddingVertical: 18,
     width: '100%',
   },
-  ctaTxt: { fontSize: 16, fontWeight: '600', color: EDITORIAL.cream },
+  ctaTxt: { ...TEXT.cta, fontSize: 16 },
 });

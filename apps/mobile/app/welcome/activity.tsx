@@ -84,7 +84,7 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   watermark: {
-    fontFamily: FONTS.frauncesBold,
+    fontFamily: FONTS.frauncesDisplay,
     fontSize: 42,
     color: '#D0C7B8',
     opacity: 0.5,
@@ -96,12 +96,12 @@ const s = StyleSheet.create({
     opacity: 1,
   },
   label: {
-    fontFamily: FONTS.newsreaderRegular,
+    fontFamily: FONTS.nunitoSans,
     fontSize: 20,
     color: EDITORIAL.textMid,
     letterSpacing: -0.2,
   },
   labelOn: { color: EDITORIAL.cream },
-  desc: { fontSize: 14, color: EDITORIAL.textSoft, marginTop: 3, fontWeight: '500' },
+  desc: { fontFamily: FONTS.nunitoSans, fontSize: 14, color: EDITORIAL.textSoft, marginTop: 3, fontWeight: '500' },
   descOn: { color: 'rgba(253,251,247,0.5)' },
 });

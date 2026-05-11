@@ -25,25 +25,25 @@ function getResponse(tried: string, totalDishes: number): ResponseConfig {
     case 'meal_prep':
       return {
         headline: "Meal prep works.\nUntil it doesn't.",
-        body: "Sunday cooking is great in theory. But life happens — meetings run late, plans change, and those containers sit in the fridge. Fitsy gives you a macro-friendly backup for every meal out.",
+        body: "Sunday cooking works — until life doesn't.",
         callout: "No prep. No Tupperware. Just restaurants that fit.",
       };
     case 'calorie_apps':
       return {
         headline: "Counting calories\ngets old.",
-        body: "Scanning barcodes, estimating portions, logging every snack — it works until you burn out. Fitsy flips it: instead of tracking what you ate, we show you what to eat before you order.",
+        body: "Tracking every bite burns you out. Fitsy shows you what to eat before you order.",
         callout: "No logging. No scanning. Just results.",
       };
     case 'check_online':
       return {
         headline: "Googling macros\nonly gets you so far.",
-        body: "Chain restaurants publish nutrition data. But your favorite local spot? Good luck. Fitsy analyzes menus from local restaurants so you get macro data no one else has.",
+        body: "Chains publish their macros. Local spots don't. We do.",
         callout: `We've analyzed ${dishCount}+ dishes — most from local spots.`,
       };
     default:
       return {
         headline: "You've put in\nthe work.",
-        body: "Fitsy takes a different approach — instead of changing how you eat, we find restaurants that already fit your targets.",
+        body: "Instead of changing how you eat, we find restaurants that already fit your targets.",
       };
   }
 }
@@ -126,7 +126,7 @@ const s = StyleSheet.create({
   },
 
   headline: {
-    fontFamily: FONTS.frauncesBold,
+    fontFamily: FONTS.frauncesDisplay,
     fontSize: 30,
     color: EDITORIAL.text,
     letterSpacing: -1.2,
@@ -135,6 +135,7 @@ const s = StyleSheet.create({
     marginTop: 8,
   },
   body: {
+    fontFamily: FONTS.nunitoSans,
     fontSize: 16,
     lineHeight: 24,
     color: EDITORIAL.textSoft,
@@ -148,7 +149,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 24,
   },
   calloutText: {
-    fontFamily: FONTS.frauncesBold,
+    fontFamily: FONTS.frauncesDisplay,
     fontSize: 18,
     color: EDITORIAL.cream,
     letterSpacing: -0.3,
@@ -164,5 +165,5 @@ const s = StyleSheet.create({
     borderRadius: 32,
     paddingVertical: 18,
   },
-  ctaTxt: { fontSize: 16, fontWeight: '600', color: EDITORIAL.cream },
+  ctaTxt: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 16, fontWeight: '600', color: EDITORIAL.cream },
 });

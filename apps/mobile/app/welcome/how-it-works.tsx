@@ -99,7 +99,7 @@ const s = StyleSheet.create({
     borderRadius: 2,
   },
   title: {
-    fontFamily: FONTS.frauncesBold,
+    fontFamily: FONTS.frauncesDisplay,
     fontSize: 30,
     color: EDITORIAL.text,
     letterSpacing: -1.2,
@@ -117,9 +117,9 @@ const s = StyleSheet.create({
     minHeight: 160,
   },
   panelDarkContent: { flex: 1, padding: 24, gap: 6, justifyContent: 'center' },
-  badgeLight: { fontSize: 10, fontWeight: '800', color: 'rgba(253,251,247,0.5)', letterSpacing: 2 },
-  titleLight: { fontFamily: FONTS.frauncesBold, fontSize: 24, color: EDITORIAL.cream, letterSpacing: -0.3, lineHeight: 28 },
-  descLight: { fontSize: 14, lineHeight: 20, color: 'rgba(253,251,247,0.6)', marginTop: 4 },
+  badgeLight: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 10, fontWeight: '800', color: 'rgba(253,251,247,0.5)', letterSpacing: 2 },
+  titleLight: { fontFamily: FONTS.frauncesDisplay, fontSize: 24, color: EDITORIAL.cream, letterSpacing: -0.3, lineHeight: 28 },
+  descLight: { fontFamily: FONTS.nunitoSans, fontSize: 14, lineHeight: 20, color: 'rgba(253,251,247,0.6)', marginTop: 4 },
 
   /* Light panel */
   panelLight: {
@@ -130,9 +130,9 @@ const s = StyleSheet.create({
     minHeight: 160,
   },
   panelLightContent: { flex: 1, padding: 24, gap: 6, justifyContent: 'center' },
-  badgeDark: { fontSize: 10, fontWeight: '800', color: EDITORIAL.greenAccent, letterSpacing: 2 },
-  titleDark: { fontFamily: FONTS.frauncesBold, fontSize: 24, color: EDITORIAL.text, letterSpacing: -0.3, lineHeight: 28 },
-  descDark: { fontSize: 14, lineHeight: 20, color: EDITORIAL.textSoft, marginTop: 4 },
+  badgeDark: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 10, fontWeight: '800', color: EDITORIAL.greenAccent, letterSpacing: 2 },
+  titleDark: { fontFamily: FONTS.frauncesDisplay, fontSize: 24, color: EDITORIAL.text, letterSpacing: -0.3, lineHeight: 28 },
+  descDark: { fontFamily: FONTS.nunitoSans, fontSize: 14, lineHeight: 20, color: EDITORIAL.textSoft, marginTop: 4 },
 
   panelImg: { width: 110, height: '100%' },
 
@@ -140,5 +140,5 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     backgroundColor: EDITORIAL.green, borderRadius: 32, paddingVertical: 18,
   },
-  ctaTxt: { fontSize: 16, fontWeight: '600', color: EDITORIAL.cream },
+  ctaTxt: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 16, fontWeight: '600', color: EDITORIAL.cream },
 });

@@ -69,6 +69,7 @@ const s = StyleSheet.create({
   },
   valueBox: { flex: 1 },
   valueLabel: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 2,
@@ -76,14 +77,14 @@ const s = StyleSheet.create({
     marginBottom: 8,
   },
   valueNum: {
-    fontFamily: FONTS.frauncesBold,
+    fontFamily: FONTS.frauncesDisplay,
     fontSize: 56,
-    color: EDITORIAL.text,
+    color: EDITORIAL.green,
     letterSpacing: -2.5,
     lineHeight: 60,
   },
   valueUnit: {
-    fontFamily: FONTS.newsreaderRegular,
+    fontFamily: FONTS.nunitoSans,
     fontSize: 22,
     color: EDITORIAL.textSoft,
     letterSpacing: 0,
