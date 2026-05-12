@@ -24,6 +24,9 @@ export default function RootLayout() {
     // runtime, so we ship the baked static. Re-bake via
     // `apps/mobile/scripts/bake-fraunces-display.py` if axes need to change.
     'FrauncesDisplayWonk': require('@/assets/fonts/Fraunces-Display144-450-Wonk.ttf'),
+    // Heavier display variant (wght=600) for overlay text where the 450
+    // weight reads too thin against busy backgrounds.
+    'FrauncesDisplayWonkBold': require('@/assets/fonts/Fraunces-Display144-600-Wonk.ttf'),
     // Static body cuts from Google Fonts — used for sub-headline serif text
     // and card titles where the display cut would render too fragile.
     'Fraunces-Regular': require('@expo-google-fonts/fraunces/400Regular/Fraunces_400Regular.ttf'),

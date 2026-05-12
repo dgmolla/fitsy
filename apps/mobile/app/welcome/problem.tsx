@@ -133,7 +133,7 @@ const s = StyleSheet.create({
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.55)' },
   content: { flex: 1, paddingHorizontal: 36, paddingBottom: 20 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 28 },
-  text: { fontFamily: FONTS.frauncesDisplay, fontSize: 28, color: EDITORIAL.cream, letterSpacing: -1, lineHeight: 40, textAlign: 'center' },
+  text: { fontFamily: FONTS.frauncesDisplayBold, fontSize: 28, color: EDITORIAL.cream, letterSpacing: -1, lineHeight: 40, textAlign: 'center' },
   footerInner: { alignItems: 'center', gap: 20 },
   cta: { backgroundColor: 'rgba(253,251,247,0.15)', borderRadius: 32, paddingVertical: 14, paddingHorizontal: 32 },
   ctaTxt: { fontFamily: FONTS.nunitoSans, fontSize: 15, fontWeight: '500', color: EDITORIAL.cream },

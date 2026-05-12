@@ -84,6 +84,8 @@ export const FONTS = {
   // in. Use for hero/marquee titles to match the webapp's elegant headline
   // style (font-weight: 400 + opsz=auto in apps/api/app/landing.module.css).
   frauncesDisplay: 'FrauncesDisplayWonk',
+  /** Heavier display cut (opsz=144, wght=600) — use on dark/photo overlays. */
+  frauncesDisplayBold: 'FrauncesDisplayWonkBold',
   // Static Light/Regular cuts. RN can't read the variable `opsz` axis, so the
   // DisplayRegular file falls back to the chunky body cut at headline sizes.
   // These static instances render predictably thin.
