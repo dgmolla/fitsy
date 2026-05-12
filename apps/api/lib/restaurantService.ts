@@ -15,6 +15,28 @@ if (process.env["NODE_ENV"] !== "production") {
   globalForPrisma.prisma = prisma;
 }
 
+// ─── Ranking config ───────────────────────────────────────────────────────────
+
+/**
+ * Weight applied to `distanceMiles` when combining macro-fit score with
+ * proximity. When unset (env var absent), ranking is pure distance-asc (the
+ * historical behavior). When set, the ORDER BY becomes
+ * `scoreSum + DISTANCE_WEIGHT * distanceMiles` whenever the user has targets
+ * — so a restaurant whose best item fits better can out-rank a closer one
+ * whose best item misses.
+ *
+ * `scoreSum` is a sum of normalized squared diffs (typical range 0–2 within
+ * the radius); `distanceMiles` ranges 0–`radiusMiles`. A weight of `0.15`
+ * means moving from 0 → 2 miles adds 0.3 to the composite, equivalent to the
+ * macro error from being ~17% off on one macro dimension — close items still
+ * win all else equal, but macro fit can overcome a couple of miles.
+ */
+const RAW_DISTANCE_WEIGHT = process.env["SEARCH_DISTANCE_WEIGHT"];
+const DISTANCE_WEIGHT: number | null =
+  RAW_DISTANCE_WEIGHT !== undefined && !Number.isNaN(Number(RAW_DISTANCE_WEIGHT))
+    ? Number(RAW_DISTANCE_WEIGHT)
+    : null;
+
 // ─── Query params ─────────────────────────────────────────────────────────────
 
 export interface NearbyRestaurantsParams {
@@ -29,19 +51,23 @@ export interface NearbyRestaurantsParams {
   minRating?: number | undefined;
   limit: number;
   /**
-   * Decoded cursor — { id, distanceMiles } from the last item on the previous
-   * page. The query then filters to rows where (distanceMiles, id) is strictly
-   * after the cursor under the distance-asc, id-asc tie-break, so paging is
-   * stable across equal distances.
+   * Decoded cursor — { id, orderKey } from the last item on the previous
+   * page. `orderKey` matches whatever sort expression is active (composite
+   * when SEARCH_DISTANCE_WEIGHT is set, else distance-only). Legacy cursors
+   * encoded as { id, distanceMiles } still decode correctly — see
+   * decodeCursor.
    */
-  cursor?: { id: string; distanceMiles: number } | undefined;
+  cursor?: { id: string; orderKey: number } | undefined;
 }
 
 // ─── Cursor encoding ──────────────────────────────────────────────────────────
 
 export interface PaginationCursor {
   id: string;
-  distanceMiles: number;
+  /** The active sort key for the row (composite or distance, depending on mode). */
+  orderKey: number;
+  /** Kept for backward compat with cursors encoded before composite ranking. */
+  distanceMiles?: number;
 }
 
 export function encodeCursor(cursor: PaginationCursor): string {
@@ -55,14 +81,22 @@ export function decodeCursor(raw: string): PaginationCursor | null {
     if (
       typeof parsed === "object" &&
       parsed !== null &&
-      typeof (parsed as { id?: unknown }).id === "string" &&
-      typeof (parsed as { distanceMiles?: unknown }).distanceMiles === "number" &&
-      isFinite((parsed as { distanceMiles: number }).distanceMiles)
+      typeof (parsed as { id?: unknown }).id === "string"
     ) {
-      return {
-        id: (parsed as { id: string }).id,
-        distanceMiles: (parsed as { distanceMiles: number }).distanceMiles,
-      };
+      const obj = parsed as { id: string; orderKey?: unknown; distanceMiles?: unknown };
+      // Prefer `orderKey`; fall back to legacy `distanceMiles`.
+      const rawKey =
+        typeof obj.orderKey === "number" && isFinite(obj.orderKey)
+          ? obj.orderKey
+          : typeof obj.distanceMiles === "number" && isFinite(obj.distanceMiles)
+            ? obj.distanceMiles
+            : null;
+      if (rawKey === null) return null;
+      const out: PaginationCursor = { id: obj.id, orderKey: rawKey };
+      if (typeof obj.distanceMiles === "number" && isFinite(obj.distanceMiles)) {
+        out.distanceMiles = obj.distanceMiles;
+      }
+      return out;
     }
     return null;
   } catch {
@@ -123,6 +157,8 @@ interface ScoredRow {
   confidence: "HIGH" | "MEDIUM" | "LOW";
   scoreSum: number;
   distanceMiles: number;
+  /** Active sort key — composite (scoreSum + w·distance) or distance-only. */
+  orderKey: number;
 }
 
 // ─── Service: GET /api/restaurants ───────────────────────────────────────────
@@ -179,25 +215,37 @@ export async function findNearbyRestaurants(
   if (minRating !== undefined) {
     filterFrags.push(Prisma.sql`AND r.rating >= ${minRating}`);
   }
-  // Cursor tie-break: page by (distanceMiles ASC, id ASC). When a cursor is
-  // present, only rows strictly after (cursorDistance, cursorId) pass.
-  // The distance expression is duplicated here because the SELECT alias
-  // `distanceMiles` isn't available in WHERE.
+  // Shared distance expression — reused in SELECT, ORDER BY, and the cursor
+  // WHERE filter so all three agree exactly.
+  const distanceExpr = Prisma.sql`(
+    sqrt(
+      power(r.lat - ${lat}::double precision, 2)
+      + power((r.lng - ${lng}::double precision) * cos(${lat}::double precision * pi() / 180), 2)
+    ) * 69
+  )`;
+
+  // Composite ranking expression. When SEARCH_DISTANCE_WEIGHT is unset, this
+  // is pure distance (historical behavior). When set, and the user has
+  // targets, restaurant ordering becomes `scoreSum + weight * distance` so
+  // good macro matches a bit farther away can beat a worse match next door.
+  // With no active targets, falls back to distance so we don't tie every row
+  // on scoreSum=0.
+  const orderKeyExpr: Prisma.Sql =
+    DISTANCE_WEIGHT !== null
+      ? Prisma.sql`(CASE WHEN ${targetsActive}::boolean
+            THEN best."scoreSum" + ${DISTANCE_WEIGHT}::double precision * ${distanceExpr}
+            ELSE ${distanceExpr}
+          END)`
+      : distanceExpr;
+
+  // Cursor tie-break: page by (orderKey ASC, id ASC). Only rows strictly
+  // after the cursor's (orderKey, id) pass. Aliases from SELECT aren't
+  // visible in WHERE, so the expression is repeated here.
   if (cursor !== undefined) {
     filterFrags.push(Prisma.sql`AND (
-      (
-        sqrt(
-          power(r.lat - ${lat}::double precision, 2)
-          + power((r.lng - ${lng}::double precision) * cos(${lat}::double precision * pi() / 180), 2)
-        ) * 69
-      ) > ${cursor.distanceMiles}::double precision
+      ${orderKeyExpr} > ${cursor.orderKey}::double precision
       OR (
-        (
-          sqrt(
-            power(r.lat - ${lat}::double precision, 2)
-            + power((r.lng - ${lng}::double precision) * cos(${lat}::double precision * pi() / 180), 2)
-          ) * 69
-        ) = ${cursor.distanceMiles}::double precision
+        ${orderKeyExpr} = ${cursor.orderKey}::double precision
         AND r.id > ${cursor.id}
       )
     )`);
@@ -235,12 +283,8 @@ export async function findNearbyRestaurants(
       best."fatG",
       e.confidence    AS confidence,
       best."scoreSum",
-      (
-        sqrt(
-          power(r.lat - ${lat}::double precision, 2)
-          + power((r.lng - ${lng}::double precision) * cos(${lat}::double precision * pi() / 180), 2)
-        ) * 69
-      ) AS "distanceMiles"
+      ${distanceExpr} AS "distanceMiles",
+      ${orderKeyExpr} AS "orderKey"
     FROM "Restaurant" r
     CROSS JOIN LATERAL (
       SELECT
@@ -274,16 +318,8 @@ export async function findNearbyRestaurants(
     WHERE r.lat BETWEEN ${latMin} AND ${latMax}
       AND r.lng BETWEEN ${lngMin} AND ${lngMax}
       ${filters}
-      AND (
-        sqrt(
-          power(r.lat - ${lat}::double precision, 2)
-          + power((r.lng - ${lng}::double precision) * cos(${lat}::double precision * pi() / 180), 2)
-        ) * 69
-      ) <= ${radiusMiles}::double precision
-    ORDER BY
-      "distanceMiles" ASC,
-      CASE WHEN ${targetsActive}::boolean THEN best."scoreSum" ELSE NULL END ASC NULLS LAST,
-      r.id ASC
+      AND ${distanceExpr} <= ${radiusMiles}::double precision
+    ORDER BY "orderKey" ASC, r.id ASC
     LIMIT ${limit}
   `;
 
@@ -298,6 +334,7 @@ export async function findNearbyRestaurants(
     paginated.length === limit && lastRow !== undefined
       ? encodeCursor({
           id: lastRow.restaurantId,
+          orderKey: lastRow.orderKey,
           distanceMiles: lastRow.distanceMiles,
         })
       : null;

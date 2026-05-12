@@ -93,7 +93,7 @@ describe("GET /api/restaurants — success", () => {
 
 describe("GET /api/restaurants — cursor pagination", () => {
   it("forwards nextCursor in meta when the service returns one (full page)", async () => {
-    const fakeCursor = encodeCursor({ id: "rest-9", distanceMiles: 1.5 });
+    const fakeCursor = encodeCursor({ id: "rest-9", orderKey: 1.5, distanceMiles: 1.5 });
     mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
     mockFindNearbyRestaurants.mockResolvedValue({
       data: [],
@@ -126,8 +126,8 @@ describe("GET /api/restaurants — cursor pagination", () => {
     expect(body.meta.nextCursor).toBeNull();
   });
 
-  it("decodes a valid cursor and forwards { id, distanceMiles } to the service", async () => {
-    const inputCursor = encodeCursor({ id: "rest-42", distanceMiles: 2.4 });
+  it("decodes a valid cursor and forwards { id, orderKey } to the service", async () => {
+    const inputCursor = encodeCursor({ id: "rest-42", orderKey: 2.4, distanceMiles: 2.4 });
     mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
     mockFindNearbyRestaurants.mockResolvedValue({
       data: [],
@@ -144,9 +144,9 @@ describe("GET /api/restaurants — cursor pagination", () => {
 
     expect(res.status).toBe(200);
     const callArg = mockFindNearbyRestaurants.mock.calls[0]?.[0] as {
-      cursor?: { id: string; distanceMiles: number };
+      cursor?: { id: string; orderKey: number };
     };
-    expect(callArg.cursor).toEqual({ id: "rest-42", distanceMiles: 2.4 });
+    expect(callArg.cursor).toEqual({ id: "rest-42", orderKey: 2.4, distanceMiles: 2.4 });
   });
 
   it("does not pass a cursor field when omitted from the request", async () => {

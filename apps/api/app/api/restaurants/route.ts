@@ -110,7 +110,7 @@ export async function GET(
   // Decode + validate before hitting the DB so a malformed cursor returns 400
   // instead of producing silently-wrong pagination.
   const cursorRaw = searchParams.get("cursor");
-  let decodedCursor: { id: string; distanceMiles: number } | undefined;
+  let decodedCursor: { id: string; orderKey: number } | undefined;
   if (cursorRaw !== null) {
     const decoded = decodeCursor(cursorRaw);
     if (decoded === null) {

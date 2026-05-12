@@ -69,10 +69,11 @@ interface ScoredRowFixture {
   confidence: ConfidenceLevel;
   scoreSum: number;
   distanceMiles: number;
+  orderKey: number;
 }
 
 function makeScoredRow(overrides: Partial<ScoredRowFixture> = {}): ScoredRowFixture {
-  return {
+  const base = {
     restaurantId: "rest-1",
     name: "Test Restaurant",
     address: "123 Main St",
@@ -90,11 +91,15 @@ function makeScoredRow(overrides: Partial<ScoredRowFixture> = {}): ScoredRowFixt
     proteinG: 40,
     carbsG: 60,
     fatG: 20,
-    confidence: "HIGH",
+    confidence: "HIGH" as ConfidenceLevel,
     scoreSum: 0,
     distanceMiles: 0,
     ...overrides,
   };
+  // Default orderKey to the distanceMiles unless explicitly overridden — tests
+  // that don't care about composite ranking get the historical behavior for
+  // free.
+  return { ...base, orderKey: overrides.orderKey ?? base.distanceMiles };
 }
 
 const BASE_PARAMS: NearbyRestaurantsParams = {
@@ -301,7 +306,7 @@ describe("findNearbyRestaurants", () => {
     expect(result.nextCursor).toBeNull();
   });
 
-  it("returns an encoded nextCursor when the page is full — decodes to last row's { id, distanceMiles }", async () => {
+  it("returns an encoded nextCursor when the page is full — decodes to last row's { id, orderKey, distanceMiles }", async () => {
     // Asked for 2, DB returned 2 → could be more, emit a cursor.
     mockQueryRaw.mockResolvedValue([
       makeScoredRow({ restaurantId: "rest-1", distanceMiles: 0.5 }),
@@ -312,7 +317,7 @@ describe("findNearbyRestaurants", () => {
 
     expect(result.nextCursor).not.toBeNull();
     const decoded = decodeCursor(result.nextCursor as string);
-    expect(decoded).toEqual({ id: "rest-2", distanceMiles: 1.25 });
+    expect(decoded).toEqual({ id: "rest-2", orderKey: 1.25, distanceMiles: 1.25 });
   });
 
   it("paginates stably across two restaurants at the same lat/lng (equal distances)", async () => {
@@ -339,7 +344,7 @@ describe("findNearbyRestaurants", () => {
     expect(page1.data.map((r) => r.id)).toEqual(["rest-A", "rest-B"]);
     expect(page1.nextCursor).not.toBeNull();
     const cursor = decodeCursor(page1.nextCursor as string);
-    expect(cursor).toEqual({ id: "rest-B", distanceMiles: 1.0 });
+    expect(cursor).toEqual({ id: "rest-B", orderKey: 1.0, distanceMiles: 1.0 });
 
     // Page 2: with the cursor forwarded, only rest-C (further out) survives.
     mockQueryRaw.mockResolvedValueOnce([
@@ -365,11 +370,26 @@ describe("findNearbyRestaurants", () => {
 // ─── Cursor encoding ──────────────────────────────────────────────────────────
 
 describe("encodeCursor / decodeCursor", () => {
-  it("round-trips { id, distanceMiles }", () => {
-    const original = { id: "rest-42", distanceMiles: 2.5 };
+  it("round-trips { id, orderKey, distanceMiles }", () => {
+    const original = { id: "rest-42", orderKey: 2.5, distanceMiles: 2.5 };
     const encoded = encodeCursor(original);
     const decoded = decodeCursor(encoded);
     expect(decoded).toEqual(original);
+  });
+
+  it("accepts legacy { id, distanceMiles } cursors and treats distance as orderKey", () => {
+    // Cursors encoded before composite ranking shipped only carried
+    // distanceMiles. The decoder must still accept them so in-flight cursors
+    // don't 400 the user mid-pagination on rollout.
+    const legacy = Buffer.from(
+      JSON.stringify({ id: "rest-1", distanceMiles: 1.25 }),
+      "utf8",
+    ).toString("base64");
+    expect(decodeCursor(legacy)).toEqual({
+      id: "rest-1",
+      orderKey: 1.25,
+      distanceMiles: 1.25,
+    });
   });
 
   it("returns null for non-base64 input", () => {
@@ -383,7 +403,7 @@ describe("encodeCursor / decodeCursor", () => {
     expect(decodeCursor(partial)).toBeNull();
   });
 
-  it("returns null when distanceMiles is not finite", () => {
+  it("returns null when neither orderKey nor distanceMiles is finite", () => {
     const bad = Buffer.from(
       JSON.stringify({ id: "rest-1", distanceMiles: "nope" }),
       "utf8",
