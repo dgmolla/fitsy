@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { useTheme } from '@/lib/theme';
-import { BRAND } from '@/lib/brand';
+import { BRAND, FONTS } from '@/lib/brand';
 
 export interface AuthFormProps {
   mode: 'login' | 'register';
@@ -218,11 +218,13 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   title: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 28,
     fontWeight: '700',
     marginBottom: 8,
   },
   subtitle: {
+    fontFamily: FONTS.nunitoSans,
     fontSize: 15,
     lineHeight: 22,
   },
@@ -233,10 +235,12 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   label: {
+    fontFamily: FONTS.nunitoSans,
     fontSize: 14,
     fontWeight: '500',
   },
   input: {
+    fontFamily: FONTS.nunitoSans,
     height: 48,
     borderWidth: 1,
     borderRadius: 8,
@@ -248,6 +252,7 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   errorText: {
+    fontFamily: FONTS.nunitoSans,
     fontSize: 14,
     textAlign: 'center',
   },
@@ -262,6 +267,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   buttonText: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -271,9 +277,11 @@ const styles = StyleSheet.create({
     marginTop: 32,
   },
   footerText: {
+    fontFamily: FONTS.nunitoSans,
     fontSize: 14,
   },
   footerLink: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 14,
     fontWeight: '600',
   },

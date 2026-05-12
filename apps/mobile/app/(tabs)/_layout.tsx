@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import { View } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, EDITORIAL } from '@/lib/brand';
+import { COLORS, EDITORIAL, FONTS } from '@/lib/brand';
 import { trackTabSwitched, type TabId } from '@/lib/analytics';
 
 export default function TabLayout() {
@@ -33,6 +33,7 @@ export default function TabLayout() {
         tabBarActiveTintColor: EDITORIAL.green,
         tabBarInactiveTintColor: EDITORIAL.textSoft,
         tabBarLabelStyle: {
+          fontFamily: FONTS.nunitoSansSemiBold,
           fontSize: 10,
           fontWeight: '600',
           marginTop: 4,

@@ -204,12 +204,13 @@ const s = StyleSheet.create({
     elevation: 10,
   },
   title: {
-    fontFamily: FONTS.frauncesBold,
+    fontFamily: FONTS.frauncesDisplay,
     fontSize: 22,
     color: EDITORIAL.text,
     letterSpacing: -0.5,
   },
   subtitle: {
+    fontFamily: FONTS.nunitoSans,
     fontSize: 13,
     color: EDITORIAL.textSoft,
     marginTop: 4,
@@ -228,6 +229,7 @@ const s = StyleSheet.create({
     borderColor: EDITORIAL.border,
   },
   currentLabel: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 14,
     fontWeight: '600',
     color: EDITORIAL.greenAccent,
@@ -261,6 +263,7 @@ const s = StyleSheet.create({
     borderColor: EDITORIAL.green,
   },
   rowLabel: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 15,
     fontWeight: '600',
     color: EDITORIAL.text,

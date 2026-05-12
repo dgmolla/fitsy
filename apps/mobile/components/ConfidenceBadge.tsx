@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { ConfidenceLevel } from '@fitsy/shared';
-import { COLORS } from '@/lib/brand';
+import { COLORS, FONTS } from '@/lib/brand';
 
 interface Props {
   confidence: ConfidenceLevel;
@@ -45,6 +45,7 @@ const styles = StyleSheet.create({
     borderRadius: 2.5,
   },
   text: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.2,

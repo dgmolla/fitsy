@@ -8,6 +8,7 @@ import { ScrollPicker, rangeValues } from '@/components/ScrollPicker';
 import { useTheme, type ThemeColors } from '@/lib/theme';
 import { applySuggestionFilter, type SuggestionFilter } from '@/lib/macroSuggestions';
 import { getOnboardingData, calculateSuggestedCalories } from '@/lib/onboardingStorage';
+import { FONTS } from '@/lib/brand';
 
 interface MacroValues {
   protein: number;
@@ -235,8 +236,8 @@ function createStyles(colors: ThemeColors) {
     inner: { flex: 1, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 16 },
     contentWrap: { flex: 1, gap: 16 },
     header: { gap: 6 },
-    title: { fontSize: 26, fontWeight: '700', color: colors.textPrimary },
-    subtitle: { fontSize: 14, color: colors.textSecondary, lineHeight: 20 },
+    title: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 26, fontWeight: '700', color: colors.textPrimary },
+    subtitle: { fontFamily: FONTS.nunitoSans, fontSize: 14, color: colors.textSecondary, lineHeight: 20 },
 
     pickerSection: { gap: 20 },
 
@@ -251,12 +252,12 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.bgCard,
     },
     dietPillActive: { borderColor: colors.accent, backgroundColor: colors.accentBg },
-    dietLabel: { fontSize: 12, fontWeight: '600', color: colors.textPrimary },
+    dietLabel: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 12, fontWeight: '600', color: colors.textPrimary },
     dietLabelActive: { color: colors.accent },
 
     pickerRow: { flexDirection: 'row', gap: 4, height: 40 * 5 + 16, marginTop: 12, marginBottom: 20 },
     pickerCol: { flex: 1, alignItems: 'center', gap: 4 },
-    pickerLabel: { fontSize: 11, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.8 },
+    pickerLabel: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 11, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.8 },
 
     calorieBar: {
       flexDirection: 'row',
@@ -267,8 +268,8 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: 12,
       paddingHorizontal: 20,
     },
-    calorieLabel: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
-    calorieValue: { fontSize: 22, fontWeight: '800', color: colors.accent },
+    calorieLabel: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 15, fontWeight: '600', color: colors.textPrimary },
+    calorieValue: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 22, fontWeight: '800', color: colors.accent },
 
     actions: { gap: 10, alignItems: 'center' },
     saveButton: {
@@ -279,8 +280,8 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center',
     },
-    saveText: { fontSize: 17, fontWeight: '700', color: colors.accentOnAccent },
+    saveText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 17, fontWeight: '700', color: colors.accentOnAccent },
     skipButton: { paddingVertical: 6 },
-    skipText: { fontSize: 15, color: colors.textTertiary },
+    skipText: { fontFamily: FONTS.nunitoSans, fontSize: 15, color: colors.textTertiary },
   });
 }

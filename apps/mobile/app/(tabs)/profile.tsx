@@ -271,7 +271,7 @@ export default function ProfileScreen() {
           </Pressable>
           <View style={s.statDivider} />
           <Pressable style={s.statBlock} onPress={() => openEditField('activity')}>
-            <Text style={[s.statValue, { fontSize: 14 }]}>
+            <Text style={[s.statValue, { fontFamily: FONTS.nunitoSans, fontSize: 14 }]}>
               {profile.activity ? profile.activity.replace(/_/g, ' ').split(' ')[0]!.charAt(0).toUpperCase() + profile.activity.replace(/_/g, ' ').split(' ')[0]!.slice(1) : '—'}
             </Text>
             <Text style={s.statLabel}>Activity</Text>
@@ -367,12 +367,13 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   heroInitial: {
-    fontFamily: FONTS.frauncesBold,
+    fontFamily: FONTS.frauncesDisplay,
     fontSize: 22,
     color: '#FDFBF7',
   },
   heroInfo: { flex: 1 },
   heroEmail: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 14,
     fontWeight: '600',
     color: '#FDFBF7',
@@ -399,6 +400,7 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   goalBannerLabel: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 9,
     fontWeight: '700',
     color: EDITORIAL.textSoft,
@@ -406,6 +408,7 @@ const s = StyleSheet.create({
     marginBottom: 2,
   },
   goalBannerValue: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 18,
     fontWeight: '700',
     color: EDITORIAL.text,
@@ -425,12 +428,14 @@ const s = StyleSheet.create({
   },
   statBlock: { flex: 1, alignItems: 'center', gap: 2 },
   statValue: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 18,
     fontWeight: '700',
     color: EDITORIAL.text,
     letterSpacing: -0.5,
   },
   statLabel: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 9,
     fontWeight: '600',
     color: EDITORIAL.textSoft,
@@ -454,6 +459,7 @@ const s = StyleSheet.create({
     marginBottom: 14,
   },
   macroTitle: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 11,
     fontWeight: '700',
     color: EDITORIAL.textSoft,
@@ -470,6 +476,7 @@ const s = StyleSheet.create({
     paddingVertical: 4,
   },
   editChipText: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 10,
     fontWeight: '600',
     color: EDITORIAL.greenAccent,
@@ -477,9 +484,10 @@ const s = StyleSheet.create({
   macroRow: { flexDirection: 'row' },
   macroBlock: { flex: 1, alignItems: 'center', gap: 3 },
   macroDot: { width: 6, height: 6, borderRadius: 3 },
-  macroValue: { fontSize: 22, fontWeight: '800', letterSpacing: -0.8 },
-  macroUnit: { fontSize: 13, fontWeight: '500', color: EDITORIAL.textSoft },
+  macroValue: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 22, fontWeight: '800', letterSpacing: -0.8 },
+  macroUnit: { fontFamily: FONTS.nunitoSans, fontSize: 13, fontWeight: '500', color: EDITORIAL.textSoft },
   macroLabel: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 9,
     fontWeight: '600',
     color: EDITORIAL.textSoft,
@@ -499,7 +507,7 @@ const s = StyleSheet.create({
     backgroundColor: '#FDF5F5',
     marginTop: 4,
   },
-  logoutText: { fontSize: 14, fontWeight: '600', color: '#B85450' },
+  logoutText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 14, fontWeight: '600', color: '#B85450' },
   // Delete account — subtle text-only, no background
   deleteBtn: {
     alignItems: 'center',
@@ -507,5 +515,5 @@ const s = StyleSheet.create({
     paddingVertical: 14,
     marginTop: 8,
   },
-  deleteText: { fontSize: 13, fontWeight: '500', color: '#B85450' },
+  deleteText: { fontFamily: FONTS.nunitoSans, fontSize: 13, fontWeight: '500', color: '#B85450' },
 });

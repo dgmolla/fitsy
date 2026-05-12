@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import type { MacroValues } from '@/lib/macroPresets';
 import { useTheme } from '@/lib/theme';
+import { FONTS } from '@/lib/brand';
 
 export interface MacroTargetsSectionProps {
   targets: MacroValues | null;
@@ -177,6 +178,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sectionTitle: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 13,
     fontWeight: '600',
     marginBottom: 12,
@@ -195,11 +197,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   macroValue: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 20,
     fontWeight: '800',
     letterSpacing: -0.3,
   },
   macroLabel: {
+    fontFamily: FONTS.nunitoSans,
     fontSize: 10,
     marginTop: 3,
     textAlign: 'center',
@@ -208,6 +212,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
   editLink: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -218,6 +223,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   editLabel: {
+    fontFamily: FONTS.nunitoSans,
     flex: 1,
     fontSize: 14,
     fontWeight: '500',
@@ -232,10 +238,12 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(0,0,0,0.06)',
   },
   calorieValue: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 16,
     fontWeight: '800',
   },
   editInput: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     width: 80,
     height: 42,
     borderWidth: 1,
@@ -258,6 +266,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   saveButtonText: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 15,
     fontWeight: '700',
   },
@@ -270,10 +279,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   cancelButtonText: {
+    fontFamily: FONTS.nunitoSans,
     fontSize: 15,
     fontWeight: '500',
   },
   emptyText: {
+    fontFamily: FONTS.nunitoSans,
     fontSize: 14,
     marginBottom: 12,
   },
@@ -284,10 +295,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   ctaButtonText: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 15,
     fontWeight: '700',
   },
   errorText: {
+    fontFamily: FONTS.nunitoSans,
     fontSize: 13,
     marginBottom: 8,
   },

@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { PRESETS, type MacroValues, type Preset } from '@/lib/macroPresets';
+import { FONTS } from '@/lib/brand';
 
 export type { MacroValues, Preset };
 export { PRESETS };
@@ -120,6 +121,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   macroLabel: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 10,
     color: '#6B7280',
     fontWeight: '600',
@@ -128,6 +130,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   macroInput: {
+    fontFamily: FONTS.nunitoSans,
     width: '100%',
     borderWidth: 1,
     borderColor: '#D1D5DB',
@@ -148,6 +151,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   clearButtonText: {
+    fontFamily: FONTS.nunitoSans,
     fontSize: 13,
     color: '#6B7280',
     fontWeight: '500',
@@ -170,6 +174,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   presetPillText: {
+    fontFamily: FONTS.nunitoSans,
     fontSize: 12,
     color: '#374151',
     fontWeight: '500',

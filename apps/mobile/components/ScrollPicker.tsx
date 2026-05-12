@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
+import { FONTS } from '@/lib/brand';
 
 const DEFAULT_ITEM_HEIGHT = 44;
 const DEFAULT_VISIBLE_ITEMS = 5;
@@ -161,10 +162,12 @@ const styles = StyleSheet.create({
     pointerEvents: 'none',
   },
   itemText: {
+    fontFamily: FONTS.nunitoSans,
     fontSize: 16,
     fontWeight: '400',
   },
   itemTextSelected: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 20,
     fontWeight: '700',
   },

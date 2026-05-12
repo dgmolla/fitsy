@@ -1,5 +1,6 @@
 import React from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { FONTS } from '@/lib/brand';
 
 import { Ionicons } from '@expo/vector-icons';
 import { RestaurantResult } from '@fitsy/shared';
@@ -187,6 +188,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   placeholderInitials: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 40,
     fontWeight: '800',
     color: 'rgba(255,255,255,0.35)',
@@ -203,6 +205,7 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   fitPillText: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 12,
     fontWeight: '700',
     color: '#FFFFFF',
@@ -241,6 +244,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   imageOverlayDistance: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 12,
     fontWeight: '600',
     color: 'rgba(255,255,255,0.75)',
@@ -256,6 +260,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   address: {
+    fontFamily: FONTS.nunitoSans,
     flex: 1,
     fontSize: 12,
     fontWeight: '400',
@@ -273,6 +278,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   cuisineTagText: {
+    fontFamily: FONTS.nunitoSans,
     fontSize: 11,
     fontWeight: '500',
   },
@@ -284,6 +290,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   bestMatchName: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     flex: 1,
     fontSize: 14,
     fontWeight: '600',
@@ -291,6 +298,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
   noMacro: {
+    fontFamily: FONTS.nunitoSans,
     fontSize: 13,
     fontStyle: 'italic',
   },

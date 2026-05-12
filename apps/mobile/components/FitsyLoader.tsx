@@ -67,7 +67,7 @@ const styles = StyleSheet.create({
   },
   letter: {
     color: ACCENT_COLOR,
-    fontFamily: FONTS.frauncesBold,
+    fontFamily: FONTS.frauncesDisplay,
     letterSpacing: -1,
   },
 });

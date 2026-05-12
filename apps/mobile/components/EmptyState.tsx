@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/lib/theme';
+import { FONTS } from '@/lib/brand';
 
 interface EmptyStateProps {
   hasInputs: boolean;
@@ -69,12 +70,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headline: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 20,
     fontWeight: '700',
     textAlign: 'center',
     letterSpacing: -0.4,
   },
   subtext: {
+    fontFamily: FONTS.nunitoSans,
     fontSize: 15,
     textAlign: 'center',
     lineHeight: 23,

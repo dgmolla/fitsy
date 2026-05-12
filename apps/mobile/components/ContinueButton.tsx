@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { FONTS } from '@/lib/brand';
 
 interface Props {
   label?: string;
@@ -36,6 +37,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#D1D5DB',
   },
   label: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',

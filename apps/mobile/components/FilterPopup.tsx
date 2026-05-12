@@ -11,7 +11,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { COLORS } from '@/lib/brand';
+import { COLORS, FONTS } from '@/lib/brand';
 import type { MacroValues } from '@/lib/macroPresets';
 
 interface FilterPopupProps {
@@ -246,6 +246,7 @@ const s = StyleSheet.create({
     borderRadius: 5,
   },
   label: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 15,
     fontWeight: '600',
     color: '#1B3A26',
@@ -261,6 +262,7 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   stepperText: {
+    fontFamily: FONTS.nunitoSans,
     fontSize: 20,
     fontWeight: '300',
     color: '#3A4F41',
@@ -268,6 +270,7 @@ const s = StyleSheet.create({
   },
 
   numInput: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     flex: 1,
     fontSize: 34,
     fontWeight: '700',
@@ -277,6 +280,7 @@ const s = StyleSheet.create({
     marginHorizontal: 4,
   },
   unit: {
+    fontFamily: FONTS.nunitoSans,
     fontSize: 16,
     fontWeight: '500',
     color: '#7A8C7E',
@@ -297,12 +301,14 @@ const s = StyleSheet.create({
     paddingBottom: 16,
   },
   calNum: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 40,
     fontWeight: '800',
     color: '#1B3A26',
     letterSpacing: -2,
   },
   calUnit: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 15,
     fontWeight: '600',
     color: '#7A8C7E',
@@ -316,6 +322,7 @@ const s = StyleSheet.create({
     backgroundColor: '#1B3A26',
   },
   applyText: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 16,
     fontWeight: '700',
     color: '#FDFBF7',

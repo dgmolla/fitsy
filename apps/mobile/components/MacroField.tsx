@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { FONTS } from '@/lib/brand';
 
 export interface MacroFieldProps {
   label: string;
@@ -51,11 +52,13 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   label: {
+    fontFamily: FONTS.nunitoSans,
     fontSize: 14,
     fontWeight: '500',
     color: '#374151',
   },
   input: {
+    fontFamily: FONTS.nunitoSans,
     height: 48,
     borderWidth: 1,
     borderColor: '#D1D5DB',
@@ -69,6 +72,7 @@ const styles = StyleSheet.create({
     borderColor: '#DC2626',
   },
   errorText: {
+    fontFamily: FONTS.nunitoSans,
     fontSize: 13,
     color: '#DC2626',
   },

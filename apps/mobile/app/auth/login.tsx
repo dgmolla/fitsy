@@ -204,9 +204,9 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   content: { flex: 1, paddingHorizontal: 24, justifyContent: 'center', gap: 40 },
   header: { gap: 8 },
-  logo: { fontFamily: FONTS.frauncesBold, fontSize: 42, color: EDITORIAL.green, letterSpacing: -2, marginBottom: 8 },
-  title: { fontSize: 28, fontWeight: '700' },
-  subtitle: { fontSize: 15, lineHeight: 22 },
+  logo: { fontFamily: FONTS.frauncesDisplay, fontSize: 42, color: EDITORIAL.green, letterSpacing: -2, marginBottom: 8 },
+  title: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 28, fontWeight: '700' },
+  subtitle: { fontFamily: FONTS.nunitoSans, fontSize: 15, lineHeight: 22 },
   buttons: { gap: 12 },
   appleBtn: {
     flexDirection: 'row',
@@ -216,7 +216,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 16,
   },
-  appleTxt: { fontSize: 16, fontWeight: '600' },
+  appleTxt: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 16, fontWeight: '600' },
   googleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -226,6 +226,6 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderWidth: 1.5,
   },
-  googleTxt: { fontSize: 16, fontWeight: '600' },
+  googleTxt: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 16, fontWeight: '600' },
   disabled: { opacity: 0.5 },
 });

@@ -819,7 +819,7 @@ const s = StyleSheet.create({
   logoDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: EDITORIAL.green },
   logo: {
     fontSize: 20,
-    fontFamily: FONTS.frauncesBold,
+    fontFamily: FONTS.frauncesDisplay,
     color: EDITORIAL.green,
     letterSpacing: -0.5,
   },
@@ -829,8 +829,9 @@ const s = StyleSheet.create({
     paddingHorizontal: 10, paddingVertical: 5,
     borderWidth: 1, borderColor: EDITORIAL.border,
   },
-  locationText: { fontSize: 11, fontWeight: '600', color: EDITORIAL.textSoft },
+  locationText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 11, fontWeight: '600', color: EDITORIAL.textSoft },
   issueLabel: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 10, fontWeight: '700', color: EDITORIAL.textSoft,
     letterSpacing: 2.5, textTransform: 'uppercase',
   },
@@ -843,14 +844,14 @@ const s = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 10,
   },
   macroItem: { flex: 1, alignItems: 'center', gap: 1 },
-  macroVal: { fontSize: 12, fontWeight: '700', color: EDITORIAL.text },
-  macroLbl: { fontSize: 8, fontWeight: '600', color: EDITORIAL.textSoft, letterSpacing: 0.3 },
+  macroVal: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 12, fontWeight: '700', color: EDITORIAL.text },
+  macroLbl: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 8, fontWeight: '600', color: EDITORIAL.textSoft, letterSpacing: 0.3 },
   macroDivider: { width: 1, height: 22, backgroundColor: EDITORIAL.creamDeep },
   editBtn: {
     backgroundColor: EDITORIAL.green, borderRadius: 8,
     paddingHorizontal: 10, paddingVertical: 7, marginLeft: 8,
   },
-  editBtnText: { fontSize: 11, fontWeight: '700', color: EDITORIAL.cream, letterSpacing: 0.2 },
+  editBtnText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 11, fontWeight: '700', color: EDITORIAL.cream, letterSpacing: 0.2 },
 
   filterRow: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 10, gap: 7 },
   filterBubble: {
@@ -860,7 +861,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 8,
   },
   filterBubbleActive: { backgroundColor: EDITORIAL.green, borderColor: EDITORIAL.green },
-  filterLabel: { fontSize: 12, fontWeight: '600', color: EDITORIAL.textSoft },
+  filterLabel: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 12, fontWeight: '600', color: EDITORIAL.textSoft },
   filterLabelActive: { color: EDITORIAL.cream },
 
   restSection: { marginTop: 22 },
@@ -869,30 +870,30 @@ const s = StyleSheet.create({
     paddingHorizontal: 20, marginBottom: 10,
   },
   sectionIndex: {
-    fontFamily: FONTS.newsreaderItalic,
+    fontFamily: FONTS.nunitoSans,
     fontSize: 32, color: EDITORIAL.creamDeep,
     lineHeight: 34, letterSpacing: -1,
   },
   sectionTitleBlock: { flex: 1, paddingTop: 4 },
   sectionRestName: {
-    fontFamily: FONTS.frauncesBold,
+    fontFamily: FONTS.frauncesDisplay,
     fontSize: 20, color: EDITORIAL.text, letterSpacing: -0.5,
   },
-  sectionSub: { fontSize: 11, fontWeight: '500', color: EDITORIAL.textSoft, marginTop: 1 },
-  viewMenu: { fontSize: 12, fontWeight: '600', color: EDITORIAL.greenAccent, paddingHorizontal: 20, marginTop: 6 },
+  sectionSub: { fontFamily: FONTS.nunitoSans, fontSize: 11, fontWeight: '500', color: EDITORIAL.textSoft, marginTop: 1 },
+  viewMenu: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 12, fontWeight: '600', color: EDITORIAL.greenAccent, paddingHorizontal: 20, marginTop: 6 },
 
   inlineEmpty: { alignItems: 'center', paddingTop: 50, paddingBottom: 30, gap: 8 },
-  inlineEmptyText: { fontSize: 15, fontWeight: '600', color: EDITORIAL.textSoft },
-  inlineEmptyHint: { fontSize: 14, color: EDITORIAL.textSoft, textAlign: 'center', lineHeight: 20 },
+  inlineEmptyText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 15, fontWeight: '600', color: EDITORIAL.textSoft },
+  inlineEmptyHint: { fontFamily: FONTS.nunitoSans, fontSize: 14, color: EDITORIAL.textSoft, textAlign: 'center', lineHeight: 20 },
   footerSpinner: { paddingVertical: 24, alignItems: 'center', justifyContent: 'center' },
   loaderWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   errorBanner: {
     marginHorizontal: 16, marginTop: 16, borderRadius: 8, padding: 12,
     backgroundColor: '#FEF2F2',
   },
-  errorText: { fontSize: 14, textAlign: 'center', color: '#DC2626' },
+  errorText: { fontFamily: FONTS.nunitoSans, fontSize: 14, textAlign: 'center', color: '#DC2626' },
   emptyState: { alignItems: 'center', justifyContent: 'center', paddingTop: 60, gap: 12 },
-  emptyText: { fontSize: 16, fontWeight: '500', color: EDITORIAL.textSoft },
+  emptyText: { fontFamily: FONTS.nunitoSans, fontSize: 16, fontWeight: '500', color: EDITORIAL.textSoft },
 });
 
 const hero = StyleSheet.create({
@@ -914,26 +915,26 @@ const hero = StyleSheet.create({
     backgroundColor: 'rgba(253,251,247,0.22)', borderRadius: 6,
     paddingHorizontal: 7, paddingVertical: 3,
   },
-  indexText: { fontSize: 11, fontWeight: '800', color: 'rgba(253,251,247,0.95)', letterSpacing: 0.5 },
+  indexText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 11, fontWeight: '800', color: 'rgba(253,251,247,0.95)', letterSpacing: 0.5 },
   badgeRow: { flexDirection: 'row', gap: 4 },
   badge: {
     backgroundColor: 'rgba(253,251,247,0.18)', borderRadius: 6,
     paddingHorizontal: 7, paddingVertical: 3,
   },
-  badgeText: { fontSize: 9, fontWeight: '700', color: 'rgba(253,251,247,0.9)', letterSpacing: 1 },
-  distText: { fontSize: 11, fontWeight: '600', color: 'rgba(253,251,247,0.65)', marginLeft: 'auto' },
+  badgeText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 9, fontWeight: '700', color: 'rgba(253,251,247,0.9)', letterSpacing: 1 },
+  distText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 11, fontWeight: '600', color: 'rgba(253,251,247,0.65)', marginLeft: 'auto' },
   restName: {
-    fontFamily: FONTS.frauncesBold,
+    fontFamily: FONTS.frauncesDisplay,
     fontSize: 28, color: EDITORIAL.cream, letterSpacing: -0.8, lineHeight: 30,
   },
   dishName: {
-    fontFamily: FONTS.newsreaderItalic,
+    fontFamily: FONTS.nunitoSans,
     fontSize: 18, color: 'rgba(253,251,247,0.85)', letterSpacing: -0.3,
   },
   macroRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 },
-  macroText: { fontSize: 11, fontWeight: '600', color: 'rgba(253,251,247,0.6)' },
-  dot: { fontSize: 11, color: 'rgba(253,251,247,0.3)' },
-  calText: { fontSize: 11, fontWeight: '700', color: 'rgba(253,251,247,0.88)' },
+  macroText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 11, fontWeight: '600', color: 'rgba(253,251,247,0.6)' },
+  dot: { fontFamily: FONTS.nunitoSans, fontSize: 11, color: 'rgba(253,251,247,0.3)' },
+  calText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 11, fontWeight: '700', color: 'rgba(253,251,247,0.88)' },
 });
 
 const dc = StyleSheet.create({
@@ -946,8 +947,8 @@ const dc = StyleSheet.create({
   gradient: { position: 'absolute', bottom: 0, left: 0, right: 0, height: DISH_CARD_H * 0.8 },
   info: { position: 'absolute', bottom: 10, left: 10, right: 10 },
   dishName: {
-    fontSize: 13, fontFamily: FONTS.frauncesBold,
+    fontSize: 13, fontFamily: FONTS.frauncesDisplay,
     color: EDITORIAL.cream, letterSpacing: -0.2, lineHeight: 16,
   },
-  cal: { fontSize: 9, fontWeight: '600', color: 'rgba(253,251,247,0.65)', marginTop: 2 },
+  cal: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 9, fontWeight: '600', color: 'rgba(253,251,247,0.65)', marginTop: 2 },
 });

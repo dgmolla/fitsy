@@ -191,6 +191,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
   },
   emptyText: {
+    fontFamily: FONTS.nunitoSans,
     fontSize: 15,
     textAlign: 'center',
     lineHeight: 22,
@@ -209,6 +210,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   heroNumber: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 56,
     fontWeight: '800',
     color: '#FDFBF7',
@@ -216,6 +218,7 @@ const styles = StyleSheet.create({
     lineHeight: 56,
   },
   heroLabel: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 14,
     fontWeight: '600',
     color: 'rgba(253,251,247,0.6)',
@@ -228,6 +231,7 @@ const styles = StyleSheet.create({
     marginVertical: 16,
   },
   heroRestaurants: {
+    fontFamily: FONTS.nunitoSans,
     fontSize: 13,
     fontWeight: '500',
     color: 'rgba(253,251,247,0.5)',
@@ -245,7 +249,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     flex: 1,
-    fontFamily: FONTS.frauncesBold,
+    fontFamily: FONTS.frauncesDisplay,
     fontSize: 16,
     color: EDITORIAL.text,
     letterSpacing: -0.3,
@@ -257,6 +261,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   sectionPillText: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 10,
     fontWeight: '600',
     color: EDITORIAL.textSoft,
@@ -275,6 +280,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   itemName: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 15,
     fontWeight: '700',
     color: EDITORIAL.text,
@@ -287,16 +293,19 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   itemCal: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 11,
     fontWeight: '700',
     color: EDITORIAL.text,
     letterSpacing: -0.2,
   },
   itemMacroDot: {
+    fontFamily: FONTS.nunitoSans,
     fontSize: 11,
     color: EDITORIAL.creamDeep,
   },
   itemMacro: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 11,
     fontWeight: '600',
     letterSpacing: -0.2,

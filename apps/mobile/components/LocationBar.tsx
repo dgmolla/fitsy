@@ -3,6 +3,7 @@ import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { LocationState } from '@/lib/useLocation';
 import { useTheme } from '@/lib/theme';
+import { FONTS } from '@/lib/brand';
 
 interface LocationBarProps {
   location: LocationState;
@@ -181,6 +182,7 @@ const styles = StyleSheet.create({
     borderRadius: 3.5,
   },
   text: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 12,
     fontWeight: '600',
     letterSpacing: 0.1,

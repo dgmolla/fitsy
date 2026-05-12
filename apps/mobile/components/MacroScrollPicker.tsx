@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
+import { FONTS } from '@/lib/brand';
 
 const ITEM_HEIGHT = 42;
 const VISIBLE_ITEMS = 5; // 2 above + selected + 2 below
@@ -159,6 +160,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   label: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -185,14 +187,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   itemText: {
+    fontFamily: FONTS.nunitoSans,
     fontSize: 18,
     fontWeight: '400',
   },
   itemTextSelected: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 26,
     fontWeight: '700',
   },
   unit: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 13,
     fontWeight: '600',
     marginTop: 6,

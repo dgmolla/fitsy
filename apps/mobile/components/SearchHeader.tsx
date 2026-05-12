@@ -85,6 +85,7 @@ const h = StyleSheet.create({
     gap: 6,
   },
   logo: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 22,
     fontWeight: '800',
     color: COLORS.green,
@@ -108,6 +109,7 @@ const h = StyleSheet.create({
     backgroundColor: COLORS.green,
   },
   locationText: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 11,
     fontWeight: '600',
     color: COLORS.textSecondary,
@@ -118,11 +120,12 @@ const h = StyleSheet.create({
     justifyContent: 'space-between',
   },
   headline: {
-    fontFamily: FONTS.frauncesBold,
+    fontFamily: FONTS.frauncesDisplay,
     fontSize: 28,
     color: COLORS.text,
   },
   reset: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 11,
     fontWeight: '600',
     color: COLORS.textTertiary,
@@ -147,6 +150,7 @@ const h = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   macroValue: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 18,
     fontWeight: '700',
     color: COLORS.text,
@@ -157,6 +161,7 @@ const h = StyleSheet.create({
     fontWeight: '500',
   },
   macroLabel: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 9,
     fontWeight: '800',
     color: COLORS.textTertiary,

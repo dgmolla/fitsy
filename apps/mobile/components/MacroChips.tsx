@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { EDITORIAL } from '@/lib/brand';
+import { EDITORIAL, FONTS } from '@/lib/brand';
 import { MACRO_COLORS } from '@/lib/macroColors';
 
 interface MacroChipsProps {
@@ -55,12 +55,14 @@ const styles = StyleSheet.create({
     borderColor: EDITORIAL.border,
   },
   label: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 9,
     fontWeight: '700',
     letterSpacing: 0.5,
     color: EDITORIAL.textSoft,
   },
   value: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 15,
     fontWeight: '800',
     letterSpacing: -0.3,

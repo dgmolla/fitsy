@@ -311,7 +311,7 @@ const s = StyleSheet.create({
     elevation: 10,
   },
   title: {
-    fontFamily: FONTS.frauncesBold,
+    fontFamily: FONTS.frauncesDisplay,
     fontSize: 22,
     color: EDITORIAL.text,
     letterSpacing: -0.5,
@@ -336,6 +336,7 @@ const s = StyleSheet.create({
     borderColor: EDITORIAL.green,
   },
   choiceLabel: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 15,
     fontWeight: '600',
     color: EDITORIAL.text,
@@ -343,6 +344,7 @@ const s = StyleSheet.create({
   },
   choiceLabelActive: { color: '#FDFBF7' },
   choiceDesc: {
+    fontFamily: FONTS.nunitoSans,
     fontSize: 12,
     color: EDITORIAL.textSoft,
     marginTop: 1,
@@ -365,12 +367,14 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   stepperText: {
+    fontFamily: FONTS.nunitoSans,
     fontSize: 22,
     fontWeight: '300',
     color: '#3A4F41',
     marginTop: -1,
   },
   numInput: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     flex: 1,
     fontSize: 40,
     fontWeight: '700',
@@ -381,6 +385,7 @@ const s = StyleSheet.create({
     maxWidth: 140,
   },
   numUnit: {
+    fontFamily: FONTS.nunitoSans,
     fontSize: 18,
     fontWeight: '500',
     color: '#7A8C7E',
@@ -416,6 +421,7 @@ const s = StyleSheet.create({
   },
   toggleActive: { backgroundColor: EDITORIAL.green },
   toggleText: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 13,
     fontWeight: '600',
     color: EDITORIAL.textSoft,
@@ -430,6 +436,7 @@ const s = StyleSheet.create({
     backgroundColor: '#1B3A26',
   },
   applyText: {
+    fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 16,
     fontWeight: '700',
     color: '#FDFBF7',

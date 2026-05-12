@@ -69,7 +69,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    fontFamily: FONTS.frauncesBold,
+    fontFamily: FONTS.frauncesDisplay,
     fontSize: 16,
     color: EDITORIAL.text,
   },
@@ -77,6 +77,7 @@ const styles = StyleSheet.create({
     color: EDITORIAL.green,
   },
   subtitle: {
+    fontFamily: FONTS.nunitoSans,
     fontSize: 13,
     color: EDITORIAL.textSoft,
     marginTop: 2,
