@@ -58,10 +58,11 @@ export default function SignInScreen() {
             if (!r.isNewUser) await pullProfileFromServer();
             setGoogleLoading(false);
             // Onboarding redirect chain (post sign-in):
-            //   → /welcome/notification-permission (S-226b — needs auth for push-token POST)
-            //   → /(tabs)/search
-            // (location-permission runs upstream, after welcome/tuning, so the
-            //  teaser prefetch in welcome/finding can use granted coords.)
+            //   → /welcome/notification-permission (needs auth for push-token POST)
+            //   → /welcome/trial (paywall)
+            //   → /welcome/payment → /(tabs)/search
+            // location-permission runs upstream after tuning so the teaser
+            // prefetch in welcome/finding can use granted coords.
             router.replace('/welcome/notification-permission');
           })
           .catch((err: Error) => {
@@ -83,9 +84,8 @@ export default function SignInScreen() {
       trackAuthSuccess({ provider: 'apple', is_new_user: r.isNewUser });
       await captureIdentity(r.user.id, r.user.email);
       if (!r.isNewUser) await pullProfileFromServer();
-      // location-permission runs upstream now (after welcome/tuning); after
-      // signin we go straight to the notification priming screen, which needs
-      // an authed user for the push-token POST.
+      // After signin: notification priming (needs auth for push-token POST),
+      // then the paywall. location-permission ran upstream after tuning.
       router.replace('/welcome/notification-permission');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Apple Sign In failed';

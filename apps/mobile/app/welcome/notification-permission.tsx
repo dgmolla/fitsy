@@ -74,16 +74,16 @@ export default function NotificationPermissionScreen() {
         trackNotificationPermissionDenied();
       }
     } catch {
-      // OS prompt failures are rare and non-actionable — proceed to search.
+      // OS prompt failures are rare and non-actionable — proceed to paywall.
     } finally {
-      router.replace('/(tabs)/search');
+      router.replace('/welcome/trial');
     }
   }
 
   function handleSkip() {
     if (busy) return;
     trackNotificationPrimingSkipTapped();
-    router.replace('/(tabs)/search');
+    router.replace('/welcome/trial');
   }
 
   return (

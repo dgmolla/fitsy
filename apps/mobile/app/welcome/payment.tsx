@@ -30,7 +30,7 @@ export default function PaymentScreen() {
       pushProfileToServer();
       const d = await getOnboardingData();
       trackOnboardingCompleted({ goal: d.goal, activity_level: d.activity, has_weight: d.weightKg !== undefined, has_height: d.heightCm !== undefined });
-      router.push('/welcome/signin');
+      router.replace('/(tabs)/search');
     } finally {
       setLoading(false);
     }

@@ -153,7 +153,7 @@ export default function ResultsScreen() {
       progress={14 / 15}
       title="Restaurants that fit your macros."
       subtitle="These spots near you have meals that match your targets."
-      onContinue={() => router.push('/welcome/trial')}
+      onContinue={() => router.push('/welcome/signin')}
       canContinue
       continueLabel="Continue"
     >
