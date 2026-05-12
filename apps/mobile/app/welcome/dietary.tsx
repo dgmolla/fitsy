@@ -6,7 +6,7 @@ import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { saveOnboardingField } from '@/lib/onboardingStorage';
 import { trackOnboardingChoiceSelected, trackOnboardingScreenView } from '@/lib/analytics';
-import { EDITORIAL } from '@/lib/brand';
+import { EDITORIAL, FONTS } from '@/lib/brand';
 
 const OPTIONS = [
   'Vegan', 'Keto', 'Paleo', 'Vegetarian', 'Pescatarian',
@@ -76,6 +76,6 @@ const s = StyleSheet.create({
     backgroundColor: EDITORIAL.creamCard,
   },
   chipOn: { backgroundColor: EDITORIAL.green },
-  chipTxt: { fontSize: 15, fontWeight: '600', color: EDITORIAL.textMid },
+  chipTxt: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 15, fontWeight: '600', color: EDITORIAL.textMid },
   chipTxtOn: { color: EDITORIAL.cream },
 });

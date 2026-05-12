@@ -13,7 +13,7 @@ import { AnimatedPress } from '@/components/AnimatedPress';
 import { getMacroTargets } from '@/lib/macroStorage';
 import { getOnboardingData } from '@/lib/onboardingStorage';
 import { identifyUser, trackAuthFailure, trackAuthSuccess, trackOnboardingScreenView } from '@/lib/analytics';
-import { EDITORIAL } from '@/lib/brand';
+import { EDITORIAL, FONTS } from '@/lib/brand';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -152,12 +152,12 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
     backgroundColor: EDITORIAL.text, borderRadius: 32, paddingVertical: 18,
   },
-  appleTxt: { fontSize: 16, fontWeight: '600', color: EDITORIAL.cream },
+  appleTxt: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 16, fontWeight: '600', color: EDITORIAL.cream },
   google: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
     backgroundColor: EDITORIAL.creamCard, borderRadius: 32, paddingVertical: 18,
   },
-  googleTxt: { fontSize: 16, fontWeight: '600', color: EDITORIAL.text },
+  googleTxt: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 16, fontWeight: '600', color: EDITORIAL.text },
   dim: { opacity: 0.4 },
-  legal: { fontSize: 12, textAlign: 'center', lineHeight: 18, color: EDITORIAL.textSoft },
+  legal: { fontFamily: FONTS.nunitoSans, fontSize: 12, textAlign: 'center', lineHeight: 18, color: EDITORIAL.textSoft },
 });
