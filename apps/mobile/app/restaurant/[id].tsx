@@ -373,7 +373,7 @@ const s = StyleSheet.create({
 
   head: { paddingHorizontal: 18, paddingTop: 6, paddingBottom: 14 },
   headLine: { fontFamily: FONTS.frauncesDisplay, fontSize: 28, letterSpacing: -0.6, lineHeight: 30, color: EDITORIAL.text },
-  headLineEm: { fontFamily: FONTS.nunitoSans, fontStyle: 'italic', fontWeight: '500', color: EDITORIAL.greenMid },
+  headLineEm: { fontFamily: FONTS.frauncesLightItalic, color: EDITORIAL.greenMid },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' },
   metaB: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 11.5, fontWeight: '700', color: EDITORIAL.text },
   metaDot: { fontFamily: FONTS.nunitoSans, color: EDITORIAL.border, fontSize: 11.5 },

@@ -92,6 +92,7 @@ export const FONTS = {
   frauncesLight: 'Fraunces-Light',
   frauncesLightItalic: 'Fraunces-LightItalic',
   frauncesRegular: 'Fraunces-Regular',
+  frauncesItalic: 'Fraunces-Italic',
   frauncesMedium: 'Fraunces-Medium',
   frauncesSemiBold: 'Fraunces-SemiBold',
   // Body serif — kept for any non-headline serif text and italic accents.

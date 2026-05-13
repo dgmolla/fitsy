@@ -852,54 +852,32 @@ const s = StyleSheet.create({
   // (column = val+lbl ≈ 28pt; Edit pill matches via explicit padding). Strip
   // padding adds a uniform 6pt breathing room on all sides.
   macroStrip: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'row', alignItems: 'center',
     backgroundColor: EDITORIAL.creamCard,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: EDITORIAL.border,
-    marginHorizontal: 16,
-    marginBottom: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 6,
+    borderRadius: 10, borderWidth: 1, borderColor: EDITORIAL.border,
+    marginHorizontal: 16, marginBottom: 8,
+    paddingHorizontal: 12, paddingVertical: 8,
   },
-  macroItem: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 1,
-  },
+  macroItem: { flex: 1, alignItems: 'center', gap: 0 },
   macroVal: {
     fontFamily: FONTS.nunitoSansSemiBold,
-    fontSize: 13,
-    lineHeight: 16,
+    fontSize: 12,
     color: EDITORIAL.text,
   },
   macroLbl: {
     fontFamily: FONTS.nunitoSans,
     fontSize: 9,
-    lineHeight: 11,
     color: EDITORIAL.textSoft,
-    letterSpacing: 0.2,
+    letterSpacing: 0.3,
   },
-  macroDivider: {
-    width: StyleSheet.hairlineWidth,
-    height: 22,
-    backgroundColor: EDITORIAL.border,
-  },
-  // Edit pill: paddingVertical 6 with 14pt text line-height yields ~26pt —
-  // a near-match to the column's 28pt height so the pill sits flush with the
-  // value/label block instead of overhanging.
+  macroDivider: { width: 1, height: 20, backgroundColor: EDITORIAL.creamDeep },
   editBtn: {
-    backgroundColor: EDITORIAL.green,
-    borderRadius: 7,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginLeft: 4,
+    backgroundColor: EDITORIAL.green, borderRadius: 8,
+    paddingHorizontal: 10, paddingVertical: 5, marginLeft: 8,
   },
   editBtnText: {
     fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 11,
-    lineHeight: 14,
     color: EDITORIAL.cream,
     letterSpacing: 0.2,
   },
@@ -917,16 +895,15 @@ const s = StyleSheet.create({
 
   restSection: { marginTop: 22 },
   sectionHeader: {
-    flexDirection: 'row', alignItems: 'baseline', gap: 10,
+    flexDirection: 'row', alignItems: 'flex-start', gap: 12,
     paddingHorizontal: 20, marginBottom: 10,
   },
   sectionIndex: {
     fontFamily: FONTS.frauncesDisplay,
-    fontSize: 20, color: EDITORIAL.textSoft,
-    lineHeight: 24, letterSpacing: -0.5,
-    minWidth: 24,
+    fontSize: 32, color: EDITORIAL.creamDeep,
+    lineHeight: 34, letterSpacing: -1,
   },
-  sectionTitleBlock: { flex: 1 },
+  sectionTitleBlock: { flex: 1, paddingTop: 4 },
   sectionRestName: {
     fontFamily: FONTS.frauncesDisplayBold,
     fontSize: 20, color: EDITORIAL.text, letterSpacing: -0.5, lineHeight: 24,

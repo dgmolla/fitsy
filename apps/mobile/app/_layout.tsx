@@ -17,6 +17,10 @@ export default function RootLayout() {
     // Display / headline serif — matches the webapp's Fraunces 700.
     'Fraunces-Bold': require('@expo-google-fonts/fraunces/700Bold/Fraunces_700Bold.ttf'),
     'Fraunces-BoldItalic': require('@expo-google-fonts/fraunces/700Bold_Italic/Fraunces_700Bold_Italic.ttf'),
+    'Fraunces-Light': require('@expo-google-fonts/fraunces/300Light/Fraunces_300Light.ttf'),
+    'Fraunces-LightItalic': require('@expo-google-fonts/fraunces/300Light_Italic/Fraunces_300Light_Italic.ttf'),
+    'Fraunces-Italic': require('@expo-google-fonts/fraunces/400Regular_Italic/Fraunces_400Regular_Italic.ttf'),
+    'Fraunces-Medium': require('@expo-google-fonts/fraunces/500Medium/Fraunces_500Medium.ttf'),
     // Fraunces display cut — pre-instanced from the variable source at
     // opsz=144, wght=450, WONK=1. Mirrors the webapp's hero rendering
     // (Fraunces variable with `font-optical-sizing: auto` engaging the display
