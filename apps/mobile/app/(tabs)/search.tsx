@@ -818,10 +818,10 @@ const s = StyleSheet.create({
   logoRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   logoDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: EDITORIAL.green },
   logo: {
-    fontSize: 20,
-    fontFamily: FONTS.frauncesDisplay,
+    fontSize: 24,
+    fontFamily: FONTS.frauncesDisplayBold,
     color: EDITORIAL.green,
-    letterSpacing: -0.5,
+    letterSpacing: -0.6,
   },
   locationChip: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
@@ -866,21 +866,21 @@ const s = StyleSheet.create({
 
   restSection: { marginTop: 22 },
   sectionHeader: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
+    flexDirection: 'row', alignItems: 'baseline', gap: 10,
     paddingHorizontal: 20, marginBottom: 10,
   },
   sectionIndex: {
     fontFamily: FONTS.frauncesDisplay,
-    fontSize: 26, color: EDITORIAL.creamDeep,
-    lineHeight: 30, letterSpacing: -1,
-    width: 32,
+    fontSize: 20, color: EDITORIAL.creamDeep,
+    lineHeight: 24, letterSpacing: -0.5,
+    minWidth: 24,
   },
   sectionTitleBlock: { flex: 1 },
   sectionRestName: {
-    fontFamily: FONTS.frauncesDisplay,
+    fontFamily: FONTS.frauncesDisplayBold,
     fontSize: 20, color: EDITORIAL.text, letterSpacing: -0.5, lineHeight: 24,
   },
-  sectionSub: { fontFamily: FONTS.nunitoSans, fontSize: 11, fontWeight: '500', color: EDITORIAL.textSoft, marginTop: 1 },
+  sectionSub: { fontFamily: FONTS.nunitoSans, fontSize: 11, fontWeight: '500', color: EDITORIAL.textSoft, marginTop: 2 },
   viewMenu: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 12, fontWeight: '600', color: EDITORIAL.greenAccent, paddingHorizontal: 20, marginTop: 6 },
 
   inlineEmpty: { alignItems: 'center', paddingTop: 50, paddingBottom: 30, gap: 8 },
@@ -952,11 +952,22 @@ const dc = StyleSheet.create({
     marginHorizontal: 16,
   },
   image: { width: '100%', height: '100%' },
-  gradient: { position: 'absolute', bottom: 0, left: 0, right: 0, height: DISH_CARD_H * 0.8 },
-  info: { position: 'absolute', bottom: 10, left: 10, right: 10 },
+  gradient: { position: 'absolute', bottom: 0, left: 0, right: 0, height: DISH_CARD_H * 0.9 },
+  info: { position: 'absolute', bottom: 12, left: 14, right: 14 },
   dishName: {
-    fontSize: 13, fontFamily: FONTS.frauncesDisplay,
-    color: EDITORIAL.cream, letterSpacing: -0.2, lineHeight: 16,
+    // Heavier display cut + slight shadow so dish copy stays readable against
+    // busy food photos.
+    fontFamily: FONTS.frauncesDisplayBold,
+    fontSize: 16, color: EDITORIAL.cream, letterSpacing: -0.3, lineHeight: 20,
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
-  cal: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 9, fontWeight: '600', color: 'rgba(253,251,247,0.65)', marginTop: 2 },
+  cal: {
+    fontFamily: FONTS.nunitoSansSemiBold,
+    fontSize: 11, color: 'rgba(253,251,247,0.85)', marginTop: 3,
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
 });
