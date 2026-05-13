@@ -871,7 +871,7 @@ const s = StyleSheet.create({
   },
   sectionIndex: {
     fontFamily: FONTS.frauncesDisplay,
-    fontSize: 20, color: EDITORIAL.creamDeep,
+    fontSize: 20, color: EDITORIAL.textSoft,
     lineHeight: 24, letterSpacing: -0.5,
     minWidth: 24,
   },

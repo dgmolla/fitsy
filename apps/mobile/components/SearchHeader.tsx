@@ -85,11 +85,10 @@ const h = StyleSheet.create({
     gap: 6,
   },
   logo: {
-    fontFamily: FONTS.nunitoSansSemiBold,
-    fontSize: 22,
-    fontWeight: '800',
+    fontFamily: FONTS.frauncesDisplayBold,
+    fontSize: 24,
     color: COLORS.green,
-    letterSpacing: -0.8,
+    letterSpacing: -0.6,
   },
   locationPill: {
     flexDirection: 'row',

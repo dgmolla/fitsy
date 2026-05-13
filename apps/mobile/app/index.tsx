@@ -49,7 +49,7 @@ const s = StyleSheet.create({
     backgroundColor: EDITORIAL.cream,
   },
   wordmark: {
-    fontFamily: FONTS.frauncesDisplay,
+    fontFamily: FONTS.frauncesDisplayBold,
     fontSize: 52,
     color: EDITORIAL.green,
     letterSpacing: -2,

@@ -32,9 +32,9 @@ const styles = StyleSheet.create({
     backgroundColor: EDITORIAL.green,
   },
   logo: {
-    fontSize: 20,
-    fontFamily: FONTS.frauncesDisplay,
+    fontSize: 24,
+    fontFamily: FONTS.frauncesDisplayBold,
     color: EDITORIAL.green,
-    letterSpacing: -0.5,
+    letterSpacing: -0.6,
   },
 });
