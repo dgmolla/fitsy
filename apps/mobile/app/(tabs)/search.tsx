@@ -836,22 +836,71 @@ const s = StyleSheet.create({
     letterSpacing: 2.5, textTransform: 'uppercase',
   },
 
+  // Macro target strip: a row of `value / label` columns separated by hairlines,
+  // capped on the right by an Edit pill. Layout principles:
+  //  - The whole row is `alignItems: 'stretch'` so dividers can fill the
+  //    available height without hard-coded numbers — the strip's intrinsic
+  //    height comes from the tallest child (the Edit pill).
+  //  - Each column is its own flex unit; `justifyContent: 'center'` keeps the
+  //    value+label pair vertically centered against the pill.
+  //  - Edit pill height is set via paddingVertical so it dictates strip height.
+  // Macro target strip — value + label per macro, hairline dividers, Edit
+  // pill on the right. Mirrors the original v3 layout: substantial values,
+  // readable labels, tall dividers that frame each column, Edit button
+  // sized as a proper pill rather than a chip.
   macroStrip: {
-    flexDirection: 'row', alignItems: 'center',
+    flexDirection: 'row',
+    alignItems: 'stretch',
     backgroundColor: EDITORIAL.creamCard,
-    borderRadius: 10, borderWidth: 1, borderColor: EDITORIAL.border,
-    marginHorizontal: 16, marginBottom: 8,
-    paddingHorizontal: 10, paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: EDITORIAL.border,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    paddingLeft: 4,
+    paddingRight: 4,
+    paddingVertical: 4,
   },
-  macroItem: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 1 },
-  macroVal: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 11, lineHeight: 13, color: EDITORIAL.text },
-  macroLbl: { fontFamily: FONTS.nunitoSans, fontSize: 8, lineHeight: 10, color: EDITORIAL.textSoft, letterSpacing: 0.3 },
-  macroDivider: { width: 1, height: 18, backgroundColor: EDITORIAL.creamDeep },
+  macroItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    gap: 2,
+  },
+  macroVal: {
+    fontFamily: FONTS.nunitoSansSemiBold,
+    fontSize: 17,
+    lineHeight: 20,
+    color: EDITORIAL.text,
+  },
+  macroLbl: {
+    fontFamily: FONTS.nunitoSans,
+    fontSize: 11,
+    lineHeight: 13,
+    color: EDITORIAL.textSoft,
+    letterSpacing: 0.2,
+  },
+  macroDivider: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: 'stretch',
+    backgroundColor: EDITORIAL.border,
+    marginVertical: 10,
+  },
   editBtn: {
-    backgroundColor: EDITORIAL.green, borderRadius: 6,
-    paddingHorizontal: 9, paddingVertical: 5, marginLeft: 6,
+    backgroundColor: EDITORIAL.green,
+    borderRadius: 10,
+    paddingHorizontal: 18,
+    marginLeft: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  editBtnText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 10, color: EDITORIAL.cream, letterSpacing: 0.2 },
+  editBtnText: {
+    fontFamily: FONTS.nunitoSansSemiBold,
+    fontSize: 14,
+    color: EDITORIAL.cream,
+    letterSpacing: 0.2,
+  },
 
   filterRow: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 10, gap: 7 },
   filterBubble: {
