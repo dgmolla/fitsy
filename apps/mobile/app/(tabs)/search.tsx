@@ -841,17 +841,17 @@ const s = StyleSheet.create({
     backgroundColor: EDITORIAL.creamCard,
     borderRadius: 10, borderWidth: 1, borderColor: EDITORIAL.border,
     marginHorizontal: 16, marginBottom: 8,
-    paddingHorizontal: 12, paddingVertical: 10,
+    paddingHorizontal: 10, paddingVertical: 6,
   },
-  macroItem: { flex: 1, alignItems: 'center', gap: 1 },
-  macroVal: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 12, fontWeight: '700', color: EDITORIAL.text },
-  macroLbl: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 8, fontWeight: '600', color: EDITORIAL.textSoft, letterSpacing: 0.3 },
-  macroDivider: { width: 1, height: 22, backgroundColor: EDITORIAL.creamDeep },
+  macroItem: { flex: 1, alignItems: 'center', gap: 0 },
+  macroVal: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 11, color: EDITORIAL.text },
+  macroLbl: { fontFamily: FONTS.nunitoSans, fontSize: 8, color: EDITORIAL.textSoft, letterSpacing: 0.3 },
+  macroDivider: { width: 1, height: 18, backgroundColor: EDITORIAL.creamDeep },
   editBtn: {
-    backgroundColor: EDITORIAL.green, borderRadius: 8,
-    paddingHorizontal: 10, paddingVertical: 7, marginLeft: 8,
+    backgroundColor: EDITORIAL.green, borderRadius: 6,
+    paddingHorizontal: 9, paddingVertical: 5, marginLeft: 6,
   },
-  editBtnText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 11, fontWeight: '700', color: EDITORIAL.cream, letterSpacing: 0.2 },
+  editBtnText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 10, color: EDITORIAL.cream, letterSpacing: 0.2 },
 
   filterRow: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 10, gap: 7 },
   filterBubble: {
@@ -866,18 +866,19 @@ const s = StyleSheet.create({
 
   restSection: { marginTop: 22 },
   sectionHeader: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 12,
+    flexDirection: 'row', alignItems: 'center', gap: 12,
     paddingHorizontal: 20, marginBottom: 10,
   },
   sectionIndex: {
-    fontFamily: FONTS.nunitoSans,
-    fontSize: 32, color: EDITORIAL.creamDeep,
-    lineHeight: 34, letterSpacing: -1,
+    fontFamily: FONTS.frauncesDisplay,
+    fontSize: 26, color: EDITORIAL.creamDeep,
+    lineHeight: 30, letterSpacing: -1,
+    width: 32,
   },
-  sectionTitleBlock: { flex: 1, paddingTop: 4 },
+  sectionTitleBlock: { flex: 1 },
   sectionRestName: {
     fontFamily: FONTS.frauncesDisplay,
-    fontSize: 20, color: EDITORIAL.text, letterSpacing: -0.5,
+    fontSize: 20, color: EDITORIAL.text, letterSpacing: -0.5, lineHeight: 24,
   },
   sectionSub: { fontFamily: FONTS.nunitoSans, fontSize: 11, fontWeight: '500', color: EDITORIAL.textSoft, marginTop: 1 },
   viewMenu: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 12, fontWeight: '600', color: EDITORIAL.greenAccent, paddingHorizontal: 20, marginTop: 6 },
@@ -924,12 +925,19 @@ const hero = StyleSheet.create({
   badgeText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 9, fontWeight: '700', color: 'rgba(253,251,247,0.9)', letterSpacing: 1 },
   distText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 11, fontWeight: '600', color: 'rgba(253,251,247,0.65)', marginLeft: 'auto' },
   restName: {
-    fontFamily: FONTS.frauncesDisplay,
-    fontSize: 28, color: EDITORIAL.cream, letterSpacing: -0.8, lineHeight: 30,
+    // Heavier display cut on the photo overlay — the 450 weight reads thin
+    // against busy hero images, so use the 600 we already bake for splashes.
+    fontFamily: FONTS.frauncesDisplayBold,
+    fontSize: 28, color: EDITORIAL.cream, letterSpacing: -0.8, lineHeight: 32,
+    textShadowColor: 'rgba(0,0,0,0.35)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   dishName: {
-    fontFamily: FONTS.nunitoSans,
-    fontSize: 18, color: 'rgba(253,251,247,0.85)', letterSpacing: -0.3,
+    // Italic serif gives the editorial accent the webapp uses for the dish.
+    fontFamily: FONTS.newsreaderItalic,
+    fontSize: 17, color: 'rgba(253,251,247,0.92)', letterSpacing: -0.2,
+    fontStyle: 'italic',
   },
   macroRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 },
   macroText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 11, fontWeight: '600', color: 'rgba(253,251,247,0.6)' },
