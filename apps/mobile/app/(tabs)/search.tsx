@@ -848,24 +848,24 @@ const s = StyleSheet.create({
   // pill on the right. Mirrors the original v3 layout: substantial values,
   // readable labels, tall dividers that frame each column, Edit button
   // sized as a proper pill rather than a chip.
+  // Macro strip: row aligned center so each child takes its natural height
+  // (column = val+lbl ≈ 28pt; Edit pill matches via explicit padding). Strip
+  // padding adds a uniform 6pt breathing room on all sides.
   macroStrip: {
     flexDirection: 'row',
-    alignItems: 'stretch',
+    alignItems: 'center',
     backgroundColor: EDITORIAL.creamCard,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: EDITORIAL.border,
     marginHorizontal: 16,
     marginBottom: 8,
-    paddingLeft: 4,
-    paddingRight: 3,
-    paddingVertical: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 6,
   },
   macroItem: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 5,
     gap: 1,
   },
   macroVal: {
@@ -883,21 +883,23 @@ const s = StyleSheet.create({
   },
   macroDivider: {
     width: StyleSheet.hairlineWidth,
-    alignSelf: 'stretch',
+    height: 22,
     backgroundColor: EDITORIAL.border,
-    marginVertical: 6,
   },
+  // Edit pill: paddingVertical 6 with 14pt text line-height yields ~26pt —
+  // a near-match to the column's 28pt height so the pill sits flush with the
+  // value/label block instead of overhanging.
   editBtn: {
     backgroundColor: EDITORIAL.green,
     borderRadius: 7,
     paddingHorizontal: 12,
+    paddingVertical: 6,
     marginLeft: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   editBtnText: {
     fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 11,
+    lineHeight: 14,
     color: EDITORIAL.cream,
     letterSpacing: 0.2,
   },
