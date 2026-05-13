@@ -843,9 +843,9 @@ const s = StyleSheet.create({
     marginHorizontal: 16, marginBottom: 8,
     paddingHorizontal: 10, paddingVertical: 6,
   },
-  macroItem: { flex: 1, alignItems: 'center', gap: 0 },
-  macroVal: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 11, color: EDITORIAL.text },
-  macroLbl: { fontFamily: FONTS.nunitoSans, fontSize: 8, color: EDITORIAL.textSoft, letterSpacing: 0.3 },
+  macroItem: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 1 },
+  macroVal: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 11, lineHeight: 13, color: EDITORIAL.text },
+  macroLbl: { fontFamily: FONTS.nunitoSans, fontSize: 8, lineHeight: 10, color: EDITORIAL.textSoft, letterSpacing: 0.3 },
   macroDivider: { width: 1, height: 18, backgroundColor: EDITORIAL.creamDeep },
   editBtn: {
     backgroundColor: EDITORIAL.green, borderRadius: 6,
