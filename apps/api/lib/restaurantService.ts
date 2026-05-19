@@ -19,23 +19,21 @@ if (process.env["NODE_ENV"] !== "production") {
 
 /**
  * Weight applied to `distanceMiles` when combining macro-fit score with
- * proximity. When unset (env var absent), ranking is pure distance-asc (the
- * historical behavior). When set, the ORDER BY becomes
- * `scoreSum + DISTANCE_WEIGHT * distanceMiles` whenever the user has targets
- * — so a restaurant whose best item fits better can out-rank a closer one
- * whose best item misses.
+ * proximity. When the user has targets the ORDER BY is
+ * `scoreSum + DISTANCE_WEIGHT * distanceMiles` — so macro fit drives the
+ * ranking and distance only breaks near-ties.
  *
  * `scoreSum` is a sum of normalized squared diffs (typical range 0–2 within
- * the radius); `distanceMiles` ranges 0–`radiusMiles`. A weight of `0.15`
- * means moving from 0 → 2 miles adds 0.3 to the composite, equivalent to the
- * macro error from being ~17% off on one macro dimension — close items still
- * win all else equal, but macro fit can overcome a couple of miles.
+ * the radius); `distanceMiles` ranges 0–`radiusMiles`. At the default `0.05`,
+ * a full 3-mi traversal adds 0.15 to the composite — enough to break ties
+ * between similarly-fitting items, but far less than the gap between a real
+ * macro match and a wildly-off item (which sits at scoreSum ~2+).
  */
 const RAW_DISTANCE_WEIGHT = process.env["SEARCH_DISTANCE_WEIGHT"];
-const DISTANCE_WEIGHT: number | null =
+const DISTANCE_WEIGHT: number =
   RAW_DISTANCE_WEIGHT !== undefined && !Number.isNaN(Number(RAW_DISTANCE_WEIGHT))
     ? Number(RAW_DISTANCE_WEIGHT)
-    : null;
+    : 0.05;
 
 // ─── Query params ─────────────────────────────────────────────────────────────
 
@@ -52,10 +50,10 @@ export interface NearbyRestaurantsParams {
   limit: number;
   /**
    * Decoded cursor — { id, orderKey } from the last item on the previous
-   * page. `orderKey` matches whatever sort expression is active (composite
-   * when SEARCH_DISTANCE_WEIGHT is set, else distance-only). Legacy cursors
-   * encoded as { id, distanceMiles } still decode correctly — see
-   * decodeCursor.
+   * page. `orderKey` matches the composite sort expression
+   * (`scoreSum + DISTANCE_WEIGHT * distance` with targets, distance-only
+   * without). Legacy cursors encoded as { id, distanceMiles } still decode
+   * correctly — see decodeCursor.
    */
   cursor?: { id: string; orderKey: number } | undefined;
 }
@@ -224,19 +222,14 @@ export async function findNearbyRestaurants(
     ) * 69
   )`;
 
-  // Composite ranking expression. When SEARCH_DISTANCE_WEIGHT is unset, this
-  // is pure distance (historical behavior). When set, and the user has
-  // targets, restaurant ordering becomes `scoreSum + weight * distance` so
-  // good macro matches a bit farther away can beat a worse match next door.
-  // With no active targets, falls back to distance so we don't tie every row
-  // on scoreSum=0.
-  const orderKeyExpr: Prisma.Sql =
-    DISTANCE_WEIGHT !== null
-      ? Prisma.sql`(CASE WHEN ${targetsActive}::boolean
-            THEN best."scoreSum" + ${DISTANCE_WEIGHT}::double precision * ${distanceExpr}
-            ELSE ${distanceExpr}
-          END)`
-      : distanceExpr;
+  // Composite ranking expression. When the user has targets, ordering is
+  // `scoreSum + DISTANCE_WEIGHT * distance` so good macro matches a bit
+  // farther away beat poor matches next door. With no active targets, falls
+  // back to distance so we don't tie every row on scoreSum=0.
+  const orderKeyExpr: Prisma.Sql = Prisma.sql`(CASE WHEN ${targetsActive}::boolean
+        THEN best."scoreSum" + ${DISTANCE_WEIGHT}::double precision * ${distanceExpr}
+        ELSE ${distanceExpr}
+      END)`;
 
   // Cursor tie-break: page by (orderKey ASC, id ASC). Only rows strictly
   // after the cursor's (orderKey, id) pass. Aliases from SELECT aren't
