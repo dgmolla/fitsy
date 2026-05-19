@@ -6,7 +6,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable } from 'react-native';
-import { appleSignIn, completeGoogleSignIn } from '@/lib/authClient';
+import { adoptSession, appleSignIn, completeGoogleSignIn } from '@/lib/authClient';
 import { pullProfileFromServer } from '@/lib/profileSync';
 import { useTheme } from '@/lib/theme';
 import { BRAND, EDITORIAL, FONTS } from '@/lib/brand';
@@ -109,7 +109,7 @@ export default function LoginScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(creds),
       });
-      let data = await res.json() as { token?: string; error?: string; user?: { id: string; email: string } };
+      let data = await res.json() as { token?: string; refreshToken?: string; error?: string; user?: { id: string; email: string } };
 
       if (!data.token) {
         res = await fetch(`${baseUrl}/api/auth/register`, {
@@ -117,12 +117,13 @@ export default function LoginScreen() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(creds),
         });
-        data = await res.json() as { token?: string; error?: string; user?: { id: string; email: string } };
+        data = await res.json() as { token?: string; refreshToken?: string; error?: string; user?: { id: string; email: string } };
       }
 
       if (data.token) {
         const { storeToken } = await import('@/lib/authClient');
         await storeToken(data.token);
+        await adoptSession(data.token, data.refreshToken);
         if (data.user) {
           trackAuthSuccess({ provider: 'dev', is_new_user: false });
           await captureIdentity(data.user.id, data.user.email);

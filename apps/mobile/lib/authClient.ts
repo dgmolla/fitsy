@@ -55,7 +55,7 @@ export async function clearToken(): Promise<void> {
  * proactive refresh (~5 min before expiry), refresh-token rotation, and
  * reuse detection. Called after every successful auth response.
  */
-async function adoptSession(token: string, refreshToken: string | undefined): Promise<void> {
+export async function adoptSession(token: string, refreshToken: string | undefined): Promise<void> {
   if (!refreshToken) {
     throw new Error('auth response missing refreshToken');
   }
