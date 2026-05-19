@@ -215,7 +215,6 @@ export default function RestaurantDetailScreen() {
           <Pressable onPress={() => router.back()} style={s.navBtn} hitSlop={8} accessibilityRole="button" accessibilityLabel="Go back">
             <Ionicons name="chevron-back" size={18} color={EDITORIAL.text} />
           </Pressable>
-          <Text style={s.navTitle} numberOfLines={1}>{restaurantName}</Text>
           <View style={s.navBtn}>
             {topPickId ? (
               <BookmarkButton
@@ -253,7 +252,18 @@ export default function RestaurantDetailScreen() {
               {/* Editorial header */}
               <View style={s.head}>
                 <Text style={s.headLine}>
-                  What can I eat <Text style={s.headLineEm}>here</Text>?
+                  {(() => {
+                    const words = restaurantName.trim().split(/\s+/);
+                    if (words.length <= 1) return restaurantName;
+                    const lead = words.slice(0, -1).join(' ');
+                    const last = words[words.length - 1];
+                    return (
+                      <>
+                        {lead}{' '}
+                        <Text style={s.headLineEm}>{last}</Text>
+                      </>
+                    );
+                  })()}
                 </Text>
                 <View style={s.metaRow}>
                   <Text style={s.metaB}>{totalCount} items</Text>

@@ -215,7 +215,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#FDFBF7',
     letterSpacing: -2,
-    lineHeight: 56,
+    lineHeight: 68,
   },
   heroLabel: {
     fontFamily: FONTS.nunitoSansSemiBold,

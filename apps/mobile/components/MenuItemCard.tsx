@@ -8,13 +8,24 @@ import { deriveTags } from '@/lib/menuFilters';
 
 const HIGH_MATCH_THRESHOLD = 80;
 
+// Linear-interpolate between greenAccent (#3A7050) at 0% and green (#1B3A26) at
+// 100% so a higher match reads as deeper green and a weaker match fades to a
+// lighter green — replaces the prior binary high/low threshold coloring.
+function matchColor(pct: number): string {
+  const t = Math.max(0, Math.min(1, pct / 100));
+  const lerp = (a: number, b: number) => Math.round(a + (b - a) * t);
+  const r = lerp(0x3A, 0x1B);
+  const g = lerp(0x70, 0x3A);
+  const b = lerp(0x50, 0x26);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
 /**
  * Dense menu item card used by the Filter First detail screen.
  * Layout: 48px circular match-% badge · title + italic price · description ·
  * macro/dietary badge row · BookmarkButton.
  *
- * Items below HIGH_MATCH_THRESHOLD render with a dimmed badge border and
- * 0.55 card opacity per mockup 08.
+ * Match-% badge color scales with pct: deeper green = stronger fit.
  */
 export function MenuItemCard({
   item, pct, isTopPick, isSaved, onPress, onToggleSave,
@@ -29,13 +40,13 @@ export function MenuItemCard({
   const tags = deriveTags(item);
   const m = item.macros;
   const hasMatch = pct >= 0;
-  const isHigh = pct >= HIGH_MATCH_THRESHOLD;
-  const dim = hasMatch && !isHigh;
+  const dim = hasMatch && pct < HIGH_MATCH_THRESHOLD;
+  const badgeColor = hasMatch ? matchColor(pct) : undefined;
 
   return (
     <Pressable onPress={onPress} style={[s.card, dim && s.cardDim]} accessibilityRole="button">
-      <View style={[s.pct, !isHigh && hasMatch && { borderColor: EDITORIAL.greenMid }]}>
-        <Text style={[s.pctTxt, !isHigh && hasMatch && { color: EDITORIAL.greenMid }]}>
+      <View style={[s.pct, badgeColor ? { borderColor: badgeColor } : null]}>
+        <Text style={[s.pctTxt, badgeColor ? { color: badgeColor } : null]}>
           {hasMatch ? `${pct}%` : '—'}
         </Text>
       </View>
