@@ -895,7 +895,7 @@ const s = StyleSheet.create({
 
   restSection: { marginTop: 22 },
   sectionHeader: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 12,
+    flexDirection: 'row', alignItems: 'center', gap: 12,
     paddingHorizontal: 20, marginBottom: 10,
   },
   sectionIndex: {
@@ -903,7 +903,7 @@ const s = StyleSheet.create({
     fontSize: 32, color: EDITORIAL.creamDeep,
     lineHeight: 34, letterSpacing: -1,
   },
-  sectionTitleBlock: { flex: 1, paddingTop: 4 },
+  sectionTitleBlock: { flex: 1 },
   sectionRestName: {
     fontFamily: FONTS.frauncesDisplayBold,
     fontSize: 20, color: EDITORIAL.text, letterSpacing: -0.5, lineHeight: 24,
