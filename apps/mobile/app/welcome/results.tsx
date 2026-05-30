@@ -1,13 +1,14 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ImageBackground, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { prefetchedRestaurants } from '@/lib/teaserCache';
 import { fetchPreviewRestaurants, type PreviewRestaurant } from '@/lib/previewSearch';
-import { trackOnboardingScreenView, trackPreviewFetchFailed } from '@/lib/analytics';
+import { trackOnboardingScreenView, trackPreviewFetchFailed, trackPreviewOutOfArea } from '@/lib/analytics';
 
 const CARD_H = 112;
 
@@ -148,14 +149,25 @@ export default function ResultsScreen() {
   const showRestaurants = !loading && !networkError && restaurants.length > 0;
   const showEmpty = !loading && !networkError && restaurants.length === 0;
 
+  // The user granted location but we have no restaurants near them — expected
+  // pre-expansion, since launch coverage is LA-only. Track it so we can size
+  // out-of-area demand by geography.
+  useEffect(() => {
+    if (showEmpty) trackPreviewOutOfArea();
+  }, [showEmpty]);
+
   return (
     <WelcomeScreen
       progress={14 / 15}
-      title="Restaurants that fit your macros."
-      subtitle="These spots near you have meals that match your targets."
+      title={showEmpty ? "We're not in your area yet" : 'Restaurants that fit your macros.'}
+      subtitle={
+        showEmpty
+          ? 'Fitsy is launching in Los Angeles first — your city is next on the list.'
+          : 'These spots near you have meals that match your targets.'
+      }
       onContinue={() => router.push('/welcome/signin')}
       canContinue
-      continueLabel="Continue"
+      continueLabel={showEmpty ? 'Notify me at launch' : 'Continue'}
     >
       <View style={s.list}>
         {showSkeletons &&
@@ -187,21 +199,30 @@ export default function ResultsScreen() {
         )}
 
         {showEmpty && (
-          <Animated.View entering={FadeInDown.duration(400)} style={s.emptyWrap}>
-            <Text style={s.emptyTxt}>We're still adding restaurants in your area.</Text>
+          <Animated.View entering={FadeInDown.duration(400)} style={s.outWrap}>
+            <View style={s.outIconCircle}>
+              <Ionicons name="navigate-outline" size={28} color={EDITORIAL.green} />
+            </View>
+            <Text style={s.outHeading}>We're starting in Los Angeles</Text>
+            <Text style={s.outBody}>
+              Fitsy isn't live in your neighborhood yet — but we're expanding fast.
+              We'll notify you the moment we launch near you. Stay tuned.
+            </Text>
           </Animated.View>
         )}
       </View>
 
-      <Animated.View
-        entering={FadeInDown.duration(400).delay(500)}
-        style={s.callout}
-      >
-        <Text style={s.calloutEmoji}>🔓</Text>
-        <Text style={s.calloutTxt}>
-          Subscribe to see exactly which meals at each spot fit your macros.
-        </Text>
-      </Animated.View>
+      {!showEmpty && (
+        <Animated.View
+          entering={FadeInDown.duration(400).delay(500)}
+          style={s.callout}
+        >
+          <Text style={s.calloutEmoji}>🔓</Text>
+          <Text style={s.calloutTxt}>
+            Subscribe to see exactly which meals at each spot fit your macros.
+          </Text>
+        </Animated.View>
+      )}
     </WelcomeScreen>
   );
 }
@@ -265,8 +286,36 @@ const s = StyleSheet.create({
     borderRadius: 6,
   },
 
-  emptyWrap: { alignItems: 'center', paddingVertical: 32 },
-  emptyTxt: { fontFamily: FONTS.nunitoSans, fontSize: 16, color: EDITORIAL.textSoft, textAlign: 'center' },
+  outWrap: {
+    alignItems: 'center',
+    paddingVertical: 28,
+    paddingHorizontal: 18,
+    gap: 12,
+    backgroundColor: EDITORIAL.creamDeep,
+    borderRadius: 16,
+  },
+  outIconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: EDITORIAL.cream,
+  },
+  outHeading: {
+    fontFamily: FONTS.frauncesDisplay,
+    fontSize: 19,
+    color: EDITORIAL.text,
+    letterSpacing: -0.3,
+    textAlign: 'center',
+  },
+  outBody: {
+    fontFamily: FONTS.nunitoSans,
+    fontSize: 14,
+    color: EDITORIAL.textSoft,
+    textAlign: 'center',
+    lineHeight: 21,
+  },
 
   errorWrap: {
     alignItems: 'center',

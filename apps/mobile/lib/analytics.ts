@@ -517,6 +517,18 @@ export function trackPreviewFetchFailed(err: unknown): void {
   }
 }
 
+// Fired on the onboarding results screen when the preview returns zero
+// restaurants — i.e. the user granted location but is outside our seeded
+// coverage (LA-only at launch). Lets us measure demand by geography and
+// prioritise which metro to expand to next.
+export function trackPreviewOutOfArea(): void {
+  try {
+    getPostHogClient().capture('preview_out_of_area', {});
+  } catch (capErr) {
+    logCaptureError('preview_out_of_area', capErr);
+  }
+}
+
 export function trackSaveMacroTargetsFailed(err: unknown): void {
   try {
     const p: Record<string, JsonType> = {};
