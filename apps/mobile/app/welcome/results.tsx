@@ -150,9 +150,11 @@ export default function ResultsScreen() {
   const showEmpty = !loading && !networkError && restaurants.length === 0;
 
   // The user granted location but we have no restaurants near them — expected
-  // pre-expansion, since launch coverage is LA-only. Track it so we can size
-  // out-of-area demand by geography.
+  // pre-expansion, since launch coverage is LA-only. Flag it so downstream
+  // screens route into the launch-waitlist branch (not the paywall), and
+  // track it so we can size out-of-area demand by geography.
   useEffect(() => {
+    prefetchedRestaurants.outOfArea = showEmpty;
     if (showEmpty) trackPreviewOutOfArea();
   }, [showEmpty]);
 

@@ -8,8 +8,14 @@ import type { PreviewRestaurant } from './previewSearch';
  * of the empty-DB state ("We're still adding restaurants…") — the latter is
  * a *lie* when the fetch actually errored, and tells prospects we have no
  * inventory in their area when really we just couldn't reach the API.
+ *
+ * `outOfArea` is set by the results screen when the preview resolves to zero
+ * restaurants — i.e. the user is outside our seeded LA coverage. Downstream
+ * screens (notification-permission) read it to route the user into the
+ * launch-waitlist branch instead of the paywall.
  */
 export const prefetchedRestaurants: {
   data: PreviewRestaurant[] | null;
   error: boolean;
-} = { data: null, error: false };
+  outOfArea: boolean;
+} = { data: null, error: false, outOfArea: false };

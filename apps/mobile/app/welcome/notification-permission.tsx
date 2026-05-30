@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { api } from '@/lib/api';
+import { prefetchedRestaurants } from '@/lib/teaserCache';
 import { getExpoPushTokenAsync, requestPermissionsAsync } from '@/lib/useNotifications';
 import {
   trackNotificationPermissionDenied,
@@ -36,6 +37,17 @@ import {
 export default function NotificationPermissionScreen() {
   const [busy, setBusy] = useState(false);
   const pulse = useRef(new RNAnimated.Value(0.45)).current;
+
+  // Out-of-area users (empty teaser preview) reach this screen to opt into a
+  // launch alert — they have no inventory yet, so they branch to the waitlist
+  // confirmation instead of the paywall. The flag is read once on mount; it's
+  // set on the results screen earlier in this same session.
+  const outOfArea = useRef(prefetchedRestaurants.outOfArea).current;
+
+  function goNext() {
+    if (outOfArea) router.replace('/welcome/waitlist-confirmation');
+    else router.replace('/welcome/trial');
+  }
 
   useEffect(() => {
     trackNotificationPrimingShown();
@@ -74,16 +86,16 @@ export default function NotificationPermissionScreen() {
         trackNotificationPermissionDenied();
       }
     } catch {
-      // OS prompt failures are rare and non-actionable — proceed to paywall.
+      // OS prompt failures are rare and non-actionable — proceed regardless.
     } finally {
-      router.replace('/welcome/trial');
+      goNext();
     }
   }
 
   function handleSkip() {
     if (busy) return;
     trackNotificationPrimingSkipTapped();
-    router.replace('/welcome/trial');
+    goNext();
   }
 
   return (
@@ -97,12 +109,13 @@ export default function NotificationPermissionScreen() {
           </Animated.View>
 
           <Animated.Text entering={FadeInDown.duration(500).delay(120)} style={s.title}>
-            Stay on{'\n'}your macros.
+            {outOfArea ? <>Be the first{'\n'}to know.</> : <>Stay on{'\n'}your macros.</>}
           </Animated.Text>
 
           <Animated.Text entering={FadeInDown.duration(500).delay(240)} style={s.subtitle}>
-            Get reminders to log meals and nudges when you&apos;re near a
-            high-protein spot. Off by default — turn on anytime.
+            {outOfArea
+              ? "We'll send one notification the moment Fitsy goes live in your area. That's it — no spam."
+              : "Get reminders to log meals and nudges when you're near a high-protein spot. Off by default — turn on anytime."}
           </Animated.Text>
         </View>
 
