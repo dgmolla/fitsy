@@ -45,7 +45,7 @@ export default function WeightScreen() {
 
   return (
     <WelcomeScreen
-      progress={9 / 15}
+      progress={12 / 18}
       title="What do you weigh?"
       subtitle="Roughly is fine. We'll fine-tune later."
       onContinue={async () => {

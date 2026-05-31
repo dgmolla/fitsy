@@ -19,7 +19,7 @@ export default function MacrosFitsyScreen() {
 
   return (
     <WelcomeScreen
-      progress={6 / 15}
+      progress={9 / 18}
       title={"How do we pick\nthe restaurants?"}
       subtitle="Three steps — and you only have to do one of them."
       onContinue={() => router.push('/welcome/goal')}
