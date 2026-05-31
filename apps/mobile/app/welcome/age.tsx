@@ -32,7 +32,7 @@ export default function AgeScreen() {
 
   return (
     <WelcomeScreen
-      progress={10 / 15}
+      progress={13 / 18}
       title="How old are you?"
       subtitle="Used to set your baseline metabolic rate."
       onContinue={async () => {

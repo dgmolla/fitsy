@@ -160,7 +160,7 @@ export default function ResultsScreen() {
 
   return (
     <WelcomeScreen
-      progress={14 / 15}
+      progress={17 / 18}
       title={showEmpty ? "We're not in your area yet" : 'Restaurants that fit your macros.'}
       subtitle={
         showEmpty

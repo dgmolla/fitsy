@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Fitsy · final value-prop flow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,300;1,9..144,400&family=Nunito+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --cream:#FDFBF7; --creamCard:#F5EFE8; --creamDeep:#EDE6DE;
+    --green:#1B3A26; --greenMid:#2A5438; --greenAccent:#3A7050; --mint:#9fe0b8;
+    --text:#0F1F15; --textMid:#3A4F41; --textSoft:#7A8C7E;
+    --border:#E8E2D8; --cardGrad:rgba(20,44,28,0.88);
+    --display:'Fraunces',Georgia,serif; --body:'Nunito Sans',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:#cfc7ba;font-family:var(--body);color:var(--text);padding:48px 24px 100px;-webkit-font-smoothing:antialiased;}
+  .page-head{max-width:1280px;margin:0 auto 4px;text-align:center;}
+  .page-head h1{font-family:var(--display);font-weight:400;font-size:32px;color:var(--green);letter-spacing:-1px;}
+  .page-head p{color:#5d6b5e;margin-top:8px;font-size:15px;}
+
+  .flow{display:flex;flex-wrap:wrap;gap:32px;justify-content:center;align-items:flex-start;max-width:1280px;margin:44px auto 0;}
+  .frame-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;width:340px;}
+  .frame-label{font-family:var(--body);font-weight:800;font-size:12px;color:#2f3e31;letter-spacing:.4px;text-transform:uppercase;}
+  .frame-tag{font-size:13px;color:#6f7d71;text-align:center;line-height:18px;}
+  .arrow-between{display:flex;align-items:center;font-size:30px;color:#7d8a7f;align-self:center;padding-top:330px;}
+
+  .phone{width:340px;height:736px;border-radius:46px;background:#1c1c1e;padding:11px;box-shadow:0 26px 52px -20px rgba(20,30,22,.45),0 0 0 2px rgba(0,0,0,.06);position:relative;}
+  .screen{width:100%;height:100%;border-radius:36px;background:var(--cream);overflow:hidden;position:relative;display:flex;flex-direction:column;}
+  .notch{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:108px;height:29px;background:#1c1c1e;border-radius:18px;z-index:20;}
+  .statusbar{height:46px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 26px 5px;font-size:13px;font-weight:700;color:var(--text);}
+  .statusbar .icons{font-size:12px;letter-spacing:1px;}
+
+  .content{flex:1;display:flex;flex-direction:column;padding-bottom:26px;}
+  .pad{padding:0 28px;}
+  .topbar{display:flex;align-items:center;height:46px;}
+  .back{width:26px;height:40px;display:flex;align-items:center;color:var(--textMid);font-size:21px;}
+  .track{flex:1;height:4px;background:var(--border);border-radius:2px;margin-left:10px;overflow:hidden;}
+  .fill{height:100%;background:var(--greenAccent);border-radius:2px;}
+  .headline{font-family:var(--display);font-weight:400;font-size:26px;color:var(--text);letter-spacing:-1px;line-height:32px;margin:6px 0 12px;}
+  .sub{font-size:14.5px;line-height:21px;color:var(--textSoft);margin-bottom:20px;}
+  .sub em{font-style:italic;color:var(--textMid);}
+  .spacer{flex:1;}
+  .cta{display:flex;align-items:center;justify-content:center;gap:8px;background:var(--green);border-radius:30px;padding:16px;font-weight:600;font-size:15px;color:var(--cream);}
+
+  /* S1 stat + callout */
+  .statbig{background:var(--creamCard);border-radius:20px;padding:26px 24px;text-align:center;margin-bottom:18px;}
+  .statbig .num{font-family:var(--display);font-weight:400;font-size:58px;color:var(--green);letter-spacing:-2px;line-height:1;}
+  .statbig .unit{font-size:14px;color:var(--textMid);margin-top:8px;font-weight:600;}
+  .statbig .src{font-size:11px;color:var(--textSoft);margin-top:4px;}
+  .callout{background:var(--green);border-radius:18px;padding:20px;}
+  .callout p{font-family:var(--display);font-weight:400;font-size:17px;color:var(--cream);letter-spacing:-.3px;line-height:24px;}
+  .callout p em{font-style:italic;color:var(--mint);}
+
+  /* S2 editorial list */
+  .restSection{margin-bottom:14px;}
+  .secHeader{display:flex;align-items:center;gap:11px;padding:0 18px;margin-bottom:9px;}
+  .secIndex{font-family:var(--display);font-weight:400;font-size:31px;color:var(--creamDeep);line-height:33px;letter-spacing:-1px;}
+  .secTitle{flex:1;min-width:0;}
+  .secName{font-family:var(--display);font-weight:700;font-size:19px;color:var(--text);letter-spacing:-.5px;line-height:23px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .secSub{font-size:11px;font-weight:500;color:var(--textSoft);margin-top:2px;}
+  .dish{position:relative;height:132px;border-radius:16px;overflow:hidden;background:var(--creamDeep);margin:0 14px;background-size:cover;background-position:center;}
+  .dish .grad{position:absolute;left:0;right:0;bottom:0;height:90%;background:linear-gradient(transparent,var(--cardGrad));}
+  .dish .dinfo{position:absolute;bottom:11px;left:14px;right:14px;}
+  .dish .dname{font-family:var(--display);font-weight:700;font-size:16px;color:var(--cream);letter-spacing:-.3px;line-height:20px;text-shadow:0 1px 4px rgba(0,0,0,.45);}
+  .dish .dcal{font-weight:600;font-size:11px;color:rgba(253,251,247,.85);margin-top:3px;text-shadow:0 1px 4px rgba(0,0,0,.45);}
+  .viewMenu{font-weight:600;font-size:12px;color:var(--greenAccent);padding:0 18px;margin-top:6px;}
+
+  /* S2 meal mosaic */
+  .mosaic{height:318px;display:grid;grid-template-columns:repeat(3,1fr);gap:7px;grid-auto-rows:101px;grid-auto-flow:dense;padding:0 14px;overflow:hidden;position:relative;margin:4px 0 0;}
+  .tile{position:relative;border-radius:12px;overflow:hidden;background:var(--creamDeep);}
+  .tile.tall{grid-row:span 2;}
+  .tile img{width:100%;height:100%!important;object-fit:cover;display:block;}
+  .tile .chip{position:absolute;left:7px;bottom:7px;display:flex;align-items:center;gap:4px;background:rgba(27,58,38,0.92);color:var(--mint);font-weight:800;font-size:9px;letter-spacing:.5px;padding:4px 7px;border-radius:7px;}
+  .tile .chip.macro{color:#fff;}
+  .mosaic .fade{position:absolute;left:0;right:0;bottom:0;height:46px;background:linear-gradient(transparent,var(--cream));pointer-events:none;}
+
+  /* S3 M2 skip/get */
+  .io{display:flex;border-radius:18px;overflow:hidden;background:var(--creamCard);margin-bottom:14px;}
+  .iocol{flex:1;padding:18px 15px;}
+  .iocol.out{background:var(--green);}
+  .iocol .h{font-size:10px;font-weight:800;letter-spacing:1.3px;margin-bottom:12px;}
+  .iocol.in .h{color:var(--textSoft);} .iocol.out .h{color:rgba(253,251,247,.55);}
+  .iocol .li{display:flex;gap:8px;align-items:flex-start;font-size:13px;line-height:18px;margin-bottom:9px;}
+  .iocol .li:last-child{margin-bottom:0;}
+  .iocol.in .li{color:var(--textSoft);}
+  .iocol.in .li .t{text-decoration:line-through;text-decoration-color:#c9b8a8;}
+  .iocol.out .li{color:var(--cream);}
+  .iocol .b{flex:none;} .iocol.out .b{color:var(--mint);}
+  .resultline{display:flex;align-items:center;gap:10px;padding:14px 16px;background:var(--creamCard);border-radius:14px;}
+  .resultline .dot{width:8px;height:8px;border-radius:50%;background:var(--greenAccent);flex:none;}
+  .resultline p{font-size:13.5px;color:var(--textMid);line-height:19px;}
+  .resultline b{font-family:var(--display);font-weight:500;color:var(--green);}
+
+  .note{max-width:1100px;margin:60px auto 0;background:#f7f4ee;border:1px solid #e2dccf;border-radius:16px;padding:24px 28px;}
+  .note h2{font-family:var(--display);font-weight:500;font-size:19px;color:var(--green);margin-bottom:12px;}
+  .note ul{margin-left:18px;color:#46524a;font-size:14px;line-height:23px;}
+  .note code{background:#ece7dd;padding:1px 6px;border-radius:5px;font-size:12px;}
+</style>
+</head>
+<body>
+  <div class="page-head">
+    <h1>Final value-prop flow</h1>
+    <p>Inserted between <code style="background:#ddd6c8;padding:1px 6px;border-radius:5px;font-size:13px">response</code> and <code style="background:#ddd6c8;padding:1px 6px;border-radius:5px;font-size:13px">how-it-works</code> · reframe → discovery → payoff</p>
+  </div>
+
+  <div class="flow">
+
+    <!-- ───── Screen 1 ───── -->
+    <div class="frame-wrap"><div class="frame-label">1 · Reframe</div><div class="frame-tag">eating out isn't the problem</div>
+      <div class="phone"><div class="notch"></div><div class="screen">
+        <div class="statusbar"><span>9:41</span><span class="icons">●●● ✦ ▮</span></div>
+        <div class="content"><div class="pad" style="display:flex;flex-direction:column;flex:1;">
+          <div class="topbar"><div class="back">‹</div><div class="track"><div class="fill" style="width:25%"></div></div></div>
+          <div class="headline">Eating out<br/>isn't the problem.</div>
+          <div class="sub">We all eat out — <em>4–5×</em> a week, on average. The hard part has never been the eating. It's not knowing what's actually in the food.</div>
+          <div class="statbig"><div class="num">4–5×</div><div class="unit">meals out, every week</div><div class="src">— and that's not changing</div></div>
+          <div class="callout"><p>You're not making bad choices. You're making <em>blind</em> ones.</p></div>
+          <div class="spacer"></div><div class="cta">Continue <span>→</span></div>
+        </div></div>
+      </div></div>
+    </div>
+
+    <div class="arrow-between">→</div>
+
+    <!-- ───── Screen 2 ───── -->
+    <div class="frame-wrap"><div class="frame-label">2 · Abundance</div><div class="frame-tag">so much fits — you just don't know it</div>
+      <div class="phone"><div class="notch"></div><div class="screen">
+        <div class="statusbar"><span>9:41</span><span class="icons">●●● ✦ ▮</span></div>
+        <div class="content">
+          <div class="pad"><div class="topbar"><div class="back">‹</div><div class="track"><div class="fill" style="width:31%"></div></div></div>
+            <div class="headline">So much of it<br/>already fits.</div>
+            <div class="sub">There's way more food around you that hits your goals than you'd ever guess — you just can't see it yet.</div>
+          </div>
+          <div class="mosaic">
+            <div class="tile tall"><img src="https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&q=70"><span class="chip">✓ FITS</span></div>
+            <div class="tile"><img src="https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&q=70" style="height:92px"></div>
+            <div class="tile"><img src="https://images.unsplash.com/photo-1565557623262-b51c2513a641?w=400&q=70" style="height:108px"><span class="chip macro">52g P</span></div>
+            <div class="tile"><img src="https://images.unsplash.com/photo-1559314809-0d155014e29e?w=400&q=70" style="height:104px"></div>
+            <div class="tile"><img src="https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=400&q=70" style="height:118px"><span class="chip">✓ FITS</span></div>
+            <div class="tile"><img src="https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&q=70" style="height:96px"></div>
+            <div class="tile"><img src="https://images.unsplash.com/photo-1528735602780-2552fd46c7af?w=400&q=70" style="height:100px"></div>
+            <div class="tile tall"><img src="https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?w=400&q=70"><span class="chip macro">48g P</span></div>
+            <div class="tile"><img src="https://images.unsplash.com/photo-1496116218417-1a781b1c416c?w=400&q=70" style="height:90px"></div>
+            <div class="tile"><img src="https://images.unsplash.com/photo-1455619452474-d2be8b1e70cd?w=400&q=70" style="height:106px"></div>
+            <div class="tile"><img src="https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=400&q=70" style="height:98px"><span class="chip">✓ FITS</span></div>
+            <div class="tile"><img src="https://images.unsplash.com/photo-1540420773420-3366772f4999?w=400&q=70" style="height:110px"></div>
+            <div class="fade"></div>
+          </div>
+          <div class="spacer"></div>
+          <div class="pad"><div class="cta">Show me <span>→</span></div></div>
+        </div>
+      </div></div>
+    </div>
+
+    <div class="arrow-between">→</div>
+
+    <!-- ───── Screen 3 (M2) ───── -->
+    <div class="frame-wrap"><div class="frame-label">3 · Payoff (M2)</div><div class="frame-tag">Fitsy finds it, you just eat</div>
+      <div class="phone"><div class="notch"></div><div class="screen">
+        <div class="statusbar"><span>9:41</span><span class="icons">●●● ✦ ▮</span></div>
+        <div class="content"><div class="pad" style="display:flex;flex-direction:column;flex:1;">
+          <div class="topbar"><div class="back">‹</div><div class="track"><div class="fill" style="width:37%"></div></div></div>
+          <div class="headline">Fitsy finds it.<br/>You just eat.</div>
+          <div class="sub">We surface the meals that fit, so you skip the busywork — and still get everything you're after.</div>
+          <div class="io">
+            <div class="iocol in"><div class="h">SKIP</div>
+              <div class="li"><span class="b">✕</span><span class="t">Food logging</span></div>
+              <div class="li"><span class="b">✕</span><span class="t">Meal prep</span></div>
+              <div class="li"><span class="b">✕</span><span class="t">Macro math</span></div>
+              <div class="li"><span class="b">✕</span><span class="t">Sad salads</span></div>
+            </div>
+            <div class="iocol out"><div class="h">STILL GET</div>
+              <div class="li"><span class="b">✓</span>Protein hit</div>
+              <div class="li"><span class="b">✓</span>Calories in check</div>
+              <div class="li"><span class="b">✓</span>Food you love</div>
+              <div class="li"><span class="b">✓</span>Zero guilt</div>
+            </div>
+          </div>
+          <div class="resultline"><span class="dot"></span><p>All of the payoff. <b>None of the chore.</b></p></div>
+          <div class="spacer"></div><div class="cta">Continue <span>→</span></div>
+        </div></div>
+      </div></div>
+    </div>
+
+  </div>
+
+  <div class="note">
+    <h2>Locked flow — ready to build</h2>
+    <ul>
+      <li><b>Sequence:</b> <code>response</code> → <b>1 Reframe</b> (value-eating-out) → <b>2 Abundance</b> (value-abundance) → <b>3 Payoff/M2</b> (value-payoff) → <code>how-it-works</code>.</li>
+      <li><b>Components:</b> all three use shared <code>WelcomeScreen</code>. Screen 2 is a static meal mosaic (masonry grid of food photos with a few "✓ FITS" / macro chips) — no app data, just bundled/remote images. Use real food photography here, not stock, before ship.</li>
+      <li><b>Progress:</b> adding 3 screens bumps every screen after <code>tried</code> from <code>/15</code> → <code>/18</code> (placeholders shown: 25% / 31% / 37%).</li>
+      <li><b>Analytics:</b> <code>value_eating_out</code>, <code>value_abundance</code>, <code>value_payoff</code>.</li>
+      <li><b>Numbers:</b> <code>4–5×</code> + dish counts are placeholders — wire to live area-preview or soften before ship (no false precision). Outcome copy stays macro/target-level, never weight/medical (CLAUDE.md danger zone).</li>
+    </ul>
+  </div>
+</body>
+</html>
