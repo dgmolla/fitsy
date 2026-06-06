@@ -137,3 +137,22 @@ export async function unsaveItem(savedItemId: string): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Sends free-text feedback to the team inbox. Returns true on success; on
+ * failure returns the server-provided error message (or a generic fallback)
+ * so the caller can surface it to the user.
+ */
+export async function sendFeedback(
+  message: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await api.post('/api/feedback', { message }, true);
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : 'Could not send feedback',
+    };
+  }
+}

@@ -729,6 +729,34 @@ export function trackProfileAccountDeleted(props: { success: boolean }): void {
   }
 }
 
+// ─── Feedback ────────────────────────────────────────────────────────────────
+// `feedback_opened` measures intent (how many users open the sheet) and
+// `feedback_submitted` measures completion, so PostHog can compute an
+// open→submit funnel. We log `message_length` (PII-safe) but never the raw
+// text — the message itself lives in the Feedback DB table, not analytics.
+
+export function trackFeedbackOpened(): void {
+  try {
+    getPostHogClient().capture('feedback_opened', {});
+  } catch (err) {
+    logCaptureError('feedback_opened', err);
+  }
+}
+
+export function trackFeedbackSubmitted(props: {
+  message_length: number;
+  success: boolean;
+}): void {
+  try {
+    getPostHogClient().capture(
+      'feedback_submitted',
+      props as unknown as Record<string, JsonType>,
+    );
+  } catch (err) {
+    logCaptureError('feedback_submitted', err);
+  }
+}
+
 export function __resetForTesting(): void {
   _client = null;
 }
