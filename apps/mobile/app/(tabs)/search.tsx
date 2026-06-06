@@ -5,8 +5,8 @@ import {
   Dimensions,
   FlatList,
   Image,
+  Pressable,
   SafeAreaView,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -28,7 +28,6 @@ import type { PresetLocation } from '@/lib/locations';
 import { getMacroTargets, saveMacroTargets } from '@/lib/macroStorage';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import {
-  trackCuisineSelected,
   trackLocationManualOverrideCleared,
   trackLocationManualOverrideOpened,
   trackLocationManualOverridePicked,
@@ -47,22 +46,6 @@ const { width: SCREEN_W } = Dimensions.get('window');
 const HERO_H = 320;
 const DISH_CARD_W = SCREEN_W * 0.44;
 const DISH_CARD_H = 138;
-
-// ─── Search suggestions ───────────────────────────────────────────────────────
-//
-// Tap-to-fill shortcuts that sit under the search bar. Each writes its `term`
-// into the free-text query — the API matches it against restaurant name,
-// cuisineTags, and menu items, so "mexican" or "vegan" still narrows results
-// the way the old cuisine chips did, but the bar is now the single source of
-// truth. A pill renders active when the current query equals its term.
-
-const SEARCH_SUGGESTIONS = [
-  { term: 'asian', label: 'Asian', icon: 'restaurant-outline' },
-  { term: 'mexican', label: 'Mexican', icon: 'flame-outline' },
-  { term: 'healthy', label: 'Healthy', icon: 'leaf-outline' },
-  { term: 'salad', label: 'Salad', icon: 'leaf-outline' },
-  { term: 'vegan', label: 'Vegan', icon: 'nutrition-outline' },
-] as const;
 
 // ─── Dietary badge labels ─────────────────────────────────────────────────────
 
@@ -189,49 +172,25 @@ function MacroStrip({ macros, onEdit }: { macros: MacroValues; onEdit: () => voi
 
 // ─── Search bar ───────────────────────────────────────────────────────────────
 
-// Collapsed affordance — a compact icon pill. Tapping it expands the full
-// input (see SearchScreen's searchExpanded state).
-function SearchPill({ onPress }: { onPress: () => void }) {
-  return (
-    <TouchableOpacity
-      style={s.searchPill}
-      onPress={onPress}
-      activeOpacity={0.7}
-      accessibilityRole="button"
-      accessibilityLabel="Search restaurants or dishes"
-    >
-      <Ionicons name="search-outline" size={16} color={EDITORIAL.textSoft} />
-      <Text style={s.searchPillText}>Search</Text>
-    </TouchableOpacity>
-  );
-}
-
-// Expanded full-width input. `autoFocus` is driven by an explicit tap on the
-// pill (not by a suggestion filling the query) so cuisine shortcuts don't
-// pop the keyboard. `onClear` collapses back to the pill; `onBlur` collapses
-// only when the query is empty.
+// Persistent horizontal search row. Styled to match the restaurant detail
+// screen's menu search input (⌕ glyph + × clear, creamCard pill, see
+// app/restaurant/[id].tsx).
 function SearchBar({
   value,
   onChangeText,
   onClear,
-  onBlur,
-  autoFocus,
 }: {
   value: string;
   onChangeText: (text: string) => void;
   onClear: () => void;
-  onBlur: () => void;
-  autoFocus: boolean;
 }) {
   return (
-    <View style={s.searchBar}>
-      <Ionicons name="search-outline" size={18} color={EDITORIAL.textSoft} />
+    <View style={s.search}>
+      <Text style={s.searchIco}>⌕</Text>
       <TextInput
         style={s.searchInput}
         value={value}
         onChangeText={onChangeText}
-        onBlur={onBlur}
-        autoFocus={autoFocus}
         placeholder="Search restaurants or dishes"
         placeholderTextColor={EDITORIAL.textSoft}
         returnKeyType="search"
@@ -240,42 +199,12 @@ function SearchBar({
         clearButtonMode="never"
         accessibilityLabel="Search restaurants or dishes"
       />
-      <TouchableOpacity
-        onPress={onClear}
-        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        accessibilityRole="button"
-        accessibilityLabel={value !== '' ? 'Clear search' : 'Close search'}
-      >
-        <Ionicons name="close-circle" size={18} color={EDITORIAL.textSoft} />
-      </TouchableOpacity>
+      {value !== '' && (
+        <Pressable onPress={onClear} hitSlop={8} accessibilityRole="button" accessibilityLabel="Clear search">
+          <Text style={s.searchClear}>×</Text>
+        </Pressable>
+      )}
     </View>
-  );
-}
-
-// ─── Suggestion pills ─────────────────────────────────────────────────────────
-
-function SuggestionPills({ query, onPick }: { query: string; onPick: (term: string) => void }) {
-  const current = query.trim().toLowerCase();
-  return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterRow}>
-      {SEARCH_SUGGESTIONS.map((sug) => {
-        const active = sug.term === current;
-        return (
-          <TouchableOpacity
-            key={sug.term}
-            style={[s.filterBubble, active && s.filterBubbleActive]}
-            onPress={() => onPick(active ? '' : sug.term)}
-            activeOpacity={0.7}
-            accessibilityLabel={`Search ${sug.label}`}
-            accessibilityRole="button"
-            accessibilityState={{ selected: active }}
-          >
-            <Ionicons name={sug.icon as any} size={15} color={active ? EDITORIAL.cream : EDITORIAL.textSoft} />
-            <Text style={[s.filterLabel, active && s.filterLabelActive]}>{sug.label}</Text>
-          </TouchableOpacity>
-        );
-      })}
-    </ScrollView>
   );
 }
 
@@ -459,10 +388,6 @@ export default function SearchScreen() {
   const [filterVisible, setFilterVisible] = useState(false);
   const [locationPickerVisible, setLocationPickerVisible] = useState(false);
   const [query, setQuery] = useState('');
-  // The search input is collapsed to an icon pill by default and expands on
-  // tap. `searchActive` tracks an explicit expand (which also autofocuses);
-  // an active query keeps it expanded regardless so results stay searchable.
-  const [searchActive, setSearchActive] = useState(false);
 
   // `pagesLoadedRef` counts how many pages have been appended (initial + each
   // onEndReached append). We track it on a ref so the value is current inside
@@ -499,8 +424,6 @@ export default function SearchScreen() {
   const hasInputs =
     inputs.protein !== '' || inputs.carbs !== '' || inputs.fat !== '' || inputs.calories !== '';
   const hasQuery = query.trim() !== '';
-  // Expanded = explicitly tapped open, or there's a query to keep visible.
-  const searchExpanded = searchActive || hasQuery;
   // A search fires when the user has set macro targets OR typed a query. With a
   // query but no macros the API ranks by distance (no macro targets active).
   const canSearch = hasInputs || hasQuery;
@@ -782,23 +705,7 @@ export default function SearchScreen() {
     });
   }
 
-  // Tapping the icon pill opens + autofocuses the input.
-  const handleExpandSearch = useCallback(() => setSearchActive(true), []);
-
-  // Clear (✕) empties the query and collapses back to the pill.
-  const handleClearQuery = useCallback(() => {
-    setQuery('');
-    setSearchActive(false);
-  }, []);
-
-  // Blurring an empty field collapses to the pill; a non-empty query stays
-  // expanded (searchExpanded is kept true by hasQuery).
-  const handleSearchBlur = useCallback(() => setSearchActive(false), []);
-
-  function handlePickSuggestion(term: string) {
-    setQuery(term);
-    if (term !== '') trackCuisineSelected({ cuisine: term });
-  }
+  const handleClearQuery = useCallback(() => setQuery(''), []);
 
   const locationLabel = location.loading
     ? 'Locating...'
@@ -821,18 +728,7 @@ export default function SearchScreen() {
     <>
       <Masthead locationLabel={locationLabel} onLocationPress={handleOpenLocationPicker} />
       <MacroStrip macros={inputs} onEdit={() => setFilterVisible(true)} />
-      {searchExpanded ? (
-        <SearchBar
-          value={query}
-          onChangeText={setQuery}
-          onClear={handleClearQuery}
-          onBlur={handleSearchBlur}
-          autoFocus={searchActive}
-        />
-      ) : (
-        <SearchPill onPress={handleExpandSearch} />
-      )}
-      <SuggestionPills query={query} onPick={handlePickSuggestion} />
+      <SearchBar value={query} onChangeText={setQuery} onClear={handleClearQuery} />
 
       {!canSearch && (
         <View style={s.inlineEmpty}>
@@ -1010,42 +906,18 @@ const s = StyleSheet.create({
   },
 
   // Collapsed icon pill — compact, left-aligned (auto width, not a full row).
-  searchPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    alignSelf: 'flex-start',
+  // Search row — matches the restaurant detail screen's menu search input
+  // (app/restaurant/[id].tsx): ⌕ glyph + × clear, creamCard pill, radius 14.
+  search: {
+    marginHorizontal: 18, marginBottom: 8,
     backgroundColor: EDITORIAL.creamCard,
-    borderRadius: 20, borderWidth: 1, borderColor: EDITORIAL.border,
-    marginHorizontal: 16, marginBottom: 8,
-    paddingHorizontal: 14, paddingVertical: 9,
+    borderWidth: 1, borderColor: EDITORIAL.border, borderRadius: 14,
+    paddingHorizontal: 14, paddingVertical: 10,
+    flexDirection: 'row', alignItems: 'center', gap: 10,
   },
-  searchPillText: {
-    fontFamily: FONTS.nunitoSansSemiBold, fontSize: 13, fontWeight: '600',
-    color: EDITORIAL.textSoft,
-  },
-  searchBar: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: EDITORIAL.creamCard,
-    borderRadius: 12, borderWidth: 1, borderColor: EDITORIAL.border,
-    marginHorizontal: 16, marginBottom: 8,
-    paddingHorizontal: 12, paddingVertical: 10,
-  },
-  searchInput: {
-    flex: 1,
-    fontFamily: FONTS.nunitoSans,
-    fontSize: 15,
-    color: EDITORIAL.text,
-    padding: 0,
-  },
-  filterRow: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 10, gap: 7 },
-  filterBubble: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: EDITORIAL.creamCard,
-    borderRadius: 18, borderWidth: 1, borderColor: EDITORIAL.border,
-    paddingHorizontal: 12, paddingVertical: 8,
-  },
-  filterBubbleActive: { backgroundColor: EDITORIAL.green, borderColor: EDITORIAL.green },
-  filterLabel: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 12, fontWeight: '600', color: EDITORIAL.textSoft },
-  filterLabelActive: { color: EDITORIAL.cream },
+  searchIco: { fontFamily: FONTS.nunitoSans, fontSize: 16, color: EDITORIAL.textSoft },
+  searchInput: { fontFamily: FONTS.nunitoSans, flex: 1, fontSize: 13.5, color: EDITORIAL.text, padding: 0 },
+  searchClear: { fontFamily: FONTS.nunitoSans, fontSize: 18, color: EDITORIAL.textSoft, paddingHorizontal: 4 },
 
   restSection: { marginTop: 22 },
   sectionHeader: {
