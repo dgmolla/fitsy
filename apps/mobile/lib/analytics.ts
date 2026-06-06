@@ -103,6 +103,8 @@ export interface SearchPerformedProps {
   has_fat_target: boolean;
   has_calories_target: boolean;
   cuisine_filter: string;
+  /** Length of the free-text query (0 when none). PII-safe — raw text omitted. */
+  query_length: number;
   result_count: number;
   location_source: LocationSourceTag;
   success: boolean;

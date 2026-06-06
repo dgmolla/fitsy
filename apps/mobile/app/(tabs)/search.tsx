@@ -9,6 +9,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -46,15 +47,20 @@ const HERO_H = 320;
 const DISH_CARD_W = SCREEN_W * 0.44;
 const DISH_CARD_H = 138;
 
-// ─── Cuisine filters ──────────────────────────────────────────────────────────
+// ─── Search suggestions ───────────────────────────────────────────────────────
+//
+// Tap-to-fill shortcuts that sit under the search bar. Each writes its `term`
+// into the free-text query — the API matches it against restaurant name,
+// cuisineTags, and menu items, so "mexican" or "vegan" still narrows results
+// the way the old cuisine chips did, but the bar is now the single source of
+// truth. A pill renders active when the current query equals its term.
 
-const CUISINE_FILTERS = [
-  { id: 'all', label: 'All', icon: 'grid-outline' },
-  { id: 'asian', label: 'Asian', icon: 'restaurant-outline' },
-  { id: 'mexican', label: 'Mexican', icon: 'flame-outline' },
-  { id: 'healthy', label: 'Healthy', icon: 'leaf-outline' },
-  { id: 'fast_food', label: 'Fast Food', icon: 'fast-food-outline' },
-  { id: 'vegan', label: 'Vegan', icon: 'nutrition-outline' },
+const SEARCH_SUGGESTIONS = [
+  { term: 'asian', label: 'Asian', icon: 'restaurant-outline' },
+  { term: 'mexican', label: 'Mexican', icon: 'flame-outline' },
+  { term: 'healthy', label: 'Healthy', icon: 'leaf-outline' },
+  { term: 'salad', label: 'Salad', icon: 'leaf-outline' },
+  { term: 'vegan', label: 'Vegan', icon: 'nutrition-outline' },
 ] as const;
 
 // ─── Dietary badge labels ─────────────────────────────────────────────────────
@@ -180,25 +186,66 @@ function MacroStrip({ macros, onEdit }: { macros: MacroValues; onEdit: () => voi
   );
 }
 
-// ─── Cuisine chips ────────────────────────────────────────────────────────────
+// ─── Search bar ───────────────────────────────────────────────────────────────
 
-function CuisineRow({ selected, onSelect }: { selected: string; onSelect: (id: string) => void }) {
+function SearchBar({
+  value,
+  onChangeText,
+  onClear,
+}: {
+  value: string;
+  onChangeText: (text: string) => void;
+  onClear: () => void;
+}) {
+  return (
+    <View style={s.searchBar}>
+      <Ionicons name="search-outline" size={18} color={EDITORIAL.textSoft} />
+      <TextInput
+        style={s.searchInput}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder="Search restaurants or dishes"
+        placeholderTextColor={EDITORIAL.textSoft}
+        returnKeyType="search"
+        autoCorrect={false}
+        autoCapitalize="none"
+        clearButtonMode="never"
+        accessibilityLabel="Search restaurants or dishes"
+      />
+      {value !== '' && (
+        <TouchableOpacity
+          onPress={onClear}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityRole="button"
+          accessibilityLabel="Clear search"
+        >
+          <Ionicons name="close-circle" size={18} color={EDITORIAL.textSoft} />
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+}
+
+// ─── Suggestion pills ─────────────────────────────────────────────────────────
+
+function SuggestionPills({ query, onPick }: { query: string; onPick: (term: string) => void }) {
+  const current = query.trim().toLowerCase();
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterRow}>
-      {CUISINE_FILTERS.map((f) => {
-        const active = f.id === selected;
+      {SEARCH_SUGGESTIONS.map((sug) => {
+        const active = sug.term === current;
         return (
           <TouchableOpacity
-            key={f.id}
+            key={sug.term}
             style={[s.filterBubble, active && s.filterBubbleActive]}
-            onPress={() => onSelect(f.id)}
+            onPress={() => onPick(active ? '' : sug.term)}
             activeOpacity={0.7}
-            accessibilityLabel={`Filter by ${f.label}`}
+            accessibilityLabel={`Search ${sug.label}`}
             accessibilityRole="button"
             accessibilityState={{ selected: active }}
           >
-            <Ionicons name={f.icon as any} size={15} color={active ? EDITORIAL.cream : EDITORIAL.textSoft} />
-            <Text style={[s.filterLabel, active && s.filterLabelActive]}>{f.label}</Text>
+            <Ionicons name={sug.icon as any} size={15} color={active ? EDITORIAL.cream : EDITORIAL.textSoft} />
+            <Text style={[s.filterLabel, active && s.filterLabelActive]}>{sug.label}</Text>
           </TouchableOpacity>
         );
       })}
@@ -385,7 +432,7 @@ export default function SearchScreen() {
   const initialFetch = useRef(true);
   const [filterVisible, setFilterVisible] = useState(false);
   const [locationPickerVisible, setLocationPickerVisible] = useState(false);
-  const [cuisineFilter, setCuisineFilter] = useState('all');
+  const [query, setQuery] = useState('');
 
   // `pagesLoadedRef` counts how many pages have been appended (initial + each
   // onEndReached append). We track it on a ref so the value is current inside
@@ -421,6 +468,10 @@ export default function SearchScreen() {
 
   const hasInputs =
     inputs.protein !== '' || inputs.carbs !== '' || inputs.fat !== '' || inputs.calories !== '';
+  const hasQuery = query.trim() !== '';
+  // A search fires when the user has set macro targets OR typed a query. With a
+  // query but no macros the API ranks by distance (no macro targets active).
+  const canSearch = hasInputs || hasQuery;
 
   // Load saved macro targets before initial fetch.
   // Single useFocusEffect (mount + every tab focus) with a value-equality
@@ -461,7 +512,7 @@ export default function SearchScreen() {
       current: MacroValues,
       lat: number,
       lng: number,
-      cuisine: string,
+      q: string,
     ): Parameters<typeof fetchRestaurantsPage>[0] => {
       const params: Parameters<typeof fetchRestaurantsPage>[0] = { lat, lng };
       const protein = parseFloat(current.protein);
@@ -473,7 +524,7 @@ export default function SearchScreen() {
       if (!isNaN(carbs)) params.carbs = carbs;
       if (!isNaN(fat)) params.fat = fat;
       if (!isNaN(calories)) params.calories = calories;
-      if (cuisine !== 'all') params.cuisineType = cuisine;
+      if (q.trim() !== '') params.query = q.trim();
       return params;
     },
     [],
@@ -484,7 +535,7 @@ export default function SearchScreen() {
       current: MacroValues,
       lat: number,
       lng: number,
-      cuisine: string,
+      q: string,
       locationSource: LocationState['source'],
     ) => {
       setLoading(true);
@@ -495,7 +546,7 @@ export default function SearchScreen() {
       endReachedFiredRef.current = false;
       setNextCursor(null);
 
-      const params = buildParams(current, lat, lng, cuisine);
+      const params = buildParams(current, lat, lng, q);
       const protein = parseFloat(current.protein);
       const carbs = parseFloat(current.carbs);
       const fat = parseFloat(current.fat);
@@ -523,7 +574,8 @@ export default function SearchScreen() {
           has_carbs_target: !isNaN(carbs),
           has_fat_target: !isNaN(fat),
           has_calories_target: !isNaN(calories),
-          cuisine_filter: cuisine,
+          cuisine_filter: 'all',
+          query_length: q.trim().length,
           result_count: data.length,
           location_source: locationSource,
           success: true,
@@ -532,10 +584,10 @@ export default function SearchScreen() {
           // Distinct from `search_failed` (network) and from "no inputs"
           // (which never reaches this code path because the effect skips
           // the fetch). This is the "filter returned zero" branch — useful
-          // for tracking when user-set macro/cuisine combos exclude the
+          // for tracking when user-set macro/query combos exclude the
           // entire catalog.
           trackSearchEmptyResults({
-            cuisine_filter: cuisine,
+            cuisine_filter: 'all',
             has_protein_target: !isNaN(protein),
             has_carbs_target: !isNaN(carbs),
             has_fat_target: !isNaN(fat),
@@ -550,13 +602,14 @@ export default function SearchScreen() {
           has_carbs_target: !isNaN(carbs),
           has_fat_target: !isNaN(fat),
           has_calories_target: !isNaN(calories),
-          cuisine_filter: cuisine,
+          cuisine_filter: 'all',
+          query_length: q.trim().length,
           result_count: 0,
           location_source: locationSource,
           success: false,
         });
         trackSearchFailed({
-          cuisine_filter: cuisine,
+          cuisine_filter: 'all',
           error_message: err instanceof Error ? err.message : undefined,
         });
       } finally {
@@ -570,7 +623,7 @@ export default function SearchScreen() {
   // `onEndReachedThreshold` of the bottom. Halts silently when nextCursor is
   // null (end of results) or when a load is already in flight.
   const handleEndReached = useCallback(async () => {
-    if (!hasInputs) return;
+    if (!canSearch) return;
     if (nextCursor === null) return;
     if (isLoadingMoreRef.current) return;
 
@@ -579,7 +632,7 @@ export default function SearchScreen() {
 
     const cursorBeingFetched = nextCursor;
     const pageIndex = pagesLoadedRef.current;
-    const params = buildParams(inputs, location.lat, location.lng, cuisineFilter);
+    const params = buildParams(inputs, location.lat, location.lng, query);
     params.cursor = cursorBeingFetched;
 
     try {
@@ -632,8 +685,8 @@ export default function SearchScreen() {
     }
   }, [
     buildParams,
-    cuisineFilter,
-    hasInputs,
+    query,
+    canSearch,
     inputs,
     location.lat,
     location.lng,
@@ -642,7 +695,7 @@ export default function SearchScreen() {
 
   useEffect(() => {
     if (!targetsLoaded || location.loading) return;
-    if (!hasInputs) { setLoading(false); return; }
+    if (!canSearch) { setResults([]); setNextCursor(null); setLoading(false); return; }
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
@@ -650,16 +703,16 @@ export default function SearchScreen() {
 
     if (initialFetch.current) {
       initialFetch.current = false;
-      doFetch(inputs, location.lat, location.lng, cuisineFilter, locSource);
+      doFetch(inputs, location.lat, location.lng, query, locSource);
       return;
     }
 
     debounceRef.current = setTimeout(() => {
-      doFetch(inputs, location.lat, location.lng, cuisineFilter, locSource);
+      doFetch(inputs, location.lat, location.lng, query, locSource);
     }, DEBOUNCE_MS);
 
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [inputs, location.lat, location.lng, location.loading, cuisineFilter, doFetch, targetsLoaded]);
+  }, [inputs, location.lat, location.lng, location.loading, query, canSearch, doFetch, targetsLoaded]);
 
   const persistMacroTargets = useCallback((values: MacroValues) => {
     saveMacroTargets(values).catch((err: unknown) => {
@@ -697,9 +750,11 @@ export default function SearchScreen() {
     });
   }
 
-  function handleCuisineSelect(id: string) {
-    setCuisineFilter(id);
-    trackCuisineSelected({ cuisine: id });
+  const handleClearQuery = useCallback(() => setQuery(''), []);
+
+  function handlePickSuggestion(term: string) {
+    setQuery(term);
+    if (term !== '') trackCuisineSelected({ cuisine: term });
   }
 
   const locationLabel = location.loading
@@ -713,33 +768,40 @@ export default function SearchScreen() {
   const [heroResult, ...listResults] = results;
 
   // The header bundles all non-paginated chrome — masthead, macro strip,
-  // cuisine row, hero card, and inline empty states. FlatList renders it
-  // once at the top and only the `listResults` tail virtualizes/paginates.
-  const renderHeader = useCallback(() => (
+  // search bar, suggestion pills, hero card, and inline empty states. FlatList
+  // renders it once at the top and only the `listResults` tail virtualizes.
+  //
+  // Built as an ELEMENT (not a function/component) so that re-rendering on each
+  // keystroke reconciles in place rather than remounting — otherwise the search
+  // TextInput would lose focus and dismiss the keyboard every character.
+  const header = (
     <>
       <Masthead locationLabel={locationLabel} onLocationPress={handleOpenLocationPicker} />
       <MacroStrip macros={inputs} onEdit={() => setFilterVisible(true)} />
-      <CuisineRow selected={cuisineFilter} onSelect={handleCuisineSelect} />
+      <SearchBar value={query} onChangeText={setQuery} onClear={handleClearQuery} />
+      <SuggestionPills query={query} onPick={handlePickSuggestion} />
 
-      {!hasInputs && (
+      {!canSearch && (
         <View style={s.inlineEmpty}>
-          <Ionicons name="nutrition-outline" size={32} color={EDITORIAL.greenAccent} />
-          <Text style={s.inlineEmptyText}>Set your macro targets</Text>
-          <Text style={s.inlineEmptyHint}>Tap Edit above to enter your protein, carb, fat, and calorie goals</Text>
+          <Ionicons name="search-outline" size={32} color={EDITORIAL.greenAccent} />
+          <Text style={s.inlineEmptyText}>Find your next meal</Text>
+          <Text style={s.inlineEmptyHint}>Search a restaurant or dish above, or tap Edit to set macro targets</Text>
         </View>
       )}
 
-      {hasInputs && results.length === 0 && (
+      {canSearch && results.length === 0 && (
         <View style={s.inlineEmpty}>
           <Ionicons name="search-outline" size={32} color={EDITORIAL.creamDeep} />
-          <Text style={s.inlineEmptyText}>No restaurants match this filter</Text>
-          <Text style={s.inlineEmptyHint}>Try adjusting your macros or cuisine</Text>
+          <Text style={s.inlineEmptyText}>No matches nearby</Text>
+          <Text style={s.inlineEmptyHint}>
+            {hasQuery ? `Nothing matched "${query.trim()}" — try different terms or a wider area` : 'Try adjusting your macro targets'}
+          </Text>
         </View>
       )}
 
-      {hasInputs && heroResult && <HeroCard result={heroResult} />}
+      {canSearch && heroResult && <HeroCard result={heroResult} />}
     </>
-  ), [cuisineFilter, hasInputs, heroResult, inputs, locationLabel, results.length]);
+  );
 
   // Footer is the loading spinner during onEndReached fetches. When
   // nextCursor is null (no more pages) the footer renders nothing — per
@@ -770,12 +832,12 @@ export default function SearchScreen() {
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingBottom: 110 }}
           showsVerticalScrollIndicator={false}
-          data={hasInputs ? listResults : []}
+          data={canSearch ? listResults : []}
           keyExtractor={(r) => r.id}
           renderItem={({ item, index }) => (
             <RestaurantSection result={item} index={index} />
           )}
-          ListHeaderComponent={renderHeader}
+          ListHeaderComponent={header}
           ListFooterComponent={renderFooter}
           onEndReached={handleEndReached}
           onEndReachedThreshold={0.5}
@@ -882,6 +944,20 @@ const s = StyleSheet.create({
     letterSpacing: 0.2,
   },
 
+  searchBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: EDITORIAL.creamCard,
+    borderRadius: 12, borderWidth: 1, borderColor: EDITORIAL.border,
+    marginHorizontal: 16, marginBottom: 8,
+    paddingHorizontal: 12, paddingVertical: 10,
+  },
+  searchInput: {
+    flex: 1,
+    fontFamily: FONTS.nunitoSans,
+    fontSize: 15,
+    color: EDITORIAL.text,
+    padding: 0,
+  },
   filterRow: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 10, gap: 7 },
   filterBubble: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
