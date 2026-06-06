@@ -13,6 +13,12 @@ export interface FetchRestaurantsParams {
   maxPriceLevel?: string;
   minRating?: number;
   /**
+   * Free-text query. Sent as `q`; the API matches it against restaurant name,
+   * cuisineTags, and menu item names/descriptions. Filters results without
+   * changing the macro+distance ranking.
+   */
+  query?: string;
+  /**
    * Opaque cursor returned by a previous call as `meta.nextCursor`. When
    * supplied, the API resumes paging strictly after the last row of the
    * previous page (tie-broken by id within equal distances).
@@ -42,6 +48,7 @@ export async function fetchRestaurantsPage(
   if (params.dietary !== undefined) qs.set('dietary', params.dietary);
   if (params.maxPriceLevel !== undefined) qs.set('maxPriceLevel', params.maxPriceLevel);
   if (params.minRating !== undefined) qs.set('minRating', String(params.minRating));
+  if (params.query !== undefined && params.query.trim() !== '') qs.set('q', params.query.trim());
   if (params.cursor !== undefined) qs.set('cursor', params.cursor);
 
   const reqId = Math.random().toString(36).slice(2, 8);

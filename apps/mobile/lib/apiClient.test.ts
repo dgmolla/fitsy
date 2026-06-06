@@ -87,6 +87,28 @@ describe('fetchRestaurants', () => {
     expect(url.searchParams.has('calories')).toBe(false);
   });
 
+  it('sends a trimmed query as the `q` param', async () => {
+    const mockBody: RestaurantsResponse = { data: [], meta: { total: 0, limit: 20 } };
+    global.fetch = makeMockFetch({ ok: true, body: mockBody });
+
+    await fetchRestaurants({ lat: 34.0868, lng: -118.3273, query: '  poke bowl  ' });
+
+    const calledUrl: string = (global.fetch as jest.Mock).mock.calls[0][0];
+    const url = new URL(calledUrl);
+    expect(url.searchParams.get('q')).toBe('poke bowl');
+  });
+
+  it('omits the `q` param when query is empty or whitespace-only', async () => {
+    const mockBody: RestaurantsResponse = { data: [], meta: { total: 0, limit: 20 } };
+    global.fetch = makeMockFetch({ ok: true, body: mockBody });
+
+    await fetchRestaurants({ lat: 34.0868, lng: -118.3273, query: '   ' });
+
+    const calledUrl: string = (global.fetch as jest.Mock).mock.calls[0][0];
+    const url = new URL(calledUrl);
+    expect(url.searchParams.has('q')).toBe(false);
+  });
+
   it('returns empty array on API error response (non-ok)', async () => {
     global.fetch = makeMockFetch({ ok: false, status: 500, body: { error: 'Server error' } });
 
