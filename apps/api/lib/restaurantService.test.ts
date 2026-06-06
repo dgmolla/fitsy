@@ -369,8 +369,8 @@ describe("findNearbyRestaurants", () => {
 
   // The Prisma mock turns every Prisma.sql`...` into { strings, values } and
   // Prisma.join into { items, sep }, so the composed query is a tree. Collect
-  // every primitive string value so we can assert the ILIKE pattern was wired
-  // in with the right escaping, without depending on fragment nesting.
+  // every primitive string value so we can assert how the text filter was
+  // wired in without depending on fragment nesting.
   function collectStrings(node: unknown, out: string[] = []): string[] {
     if (typeof node === "string") {
       out.push(node);
@@ -387,24 +387,30 @@ describe("findNearbyRestaurants", () => {
     return collectStrings(call);
   }
 
-  it("wires an ILIKE pattern into the query when `query` is provided", async () => {
+  it("matches via full-text search, binding the raw query text", async () => {
     mockQueryRaw.mockResolvedValue([]);
 
     await findNearbyRestaurants({ ...BASE_PARAMS, query: "poke" });
 
-    expect(capturedSqlStrings()).toContain("%poke%");
+    const strings = capturedSqlStrings();
+    // Raw query text is bound as a parameter; plainto_tsquery parses it safely.
+    expect(strings).toContain("poke");
+    const sql = strings.join("");
+    expect(sql).toContain("to_tsvector");
+    expect(sql).toContain("plainto_tsquery");
   });
 
-  it("matches menu item names but NOT descriptions (avoids substring noise)", async () => {
+  it("matches name, cuisine, and menu item names — NOT descriptions", async () => {
     mockQueryRaw.mockResolvedValue([]);
 
     await findNearbyRestaurants({ ...BASE_PARAMS, query: "ramen" });
 
     const sql = capturedSqlStrings().join("");
-    expect(sql).toContain('mi.name ILIKE');
-    // Descriptions are long prose; an unanchored substring match there produced
-    // false positives ("ramen" inside "Sacramento"). Must not be referenced.
-    expect(sql).not.toContain('description');
+    expect(sql).toContain("r.name");
+    expect(sql).toContain("mi.name");
+    expect(sql).toContain('"cuisineTags"');
+    // Descriptions are long prose — low precision; must not be referenced.
+    expect(sql).not.toContain("description");
   });
 
   it("scopes the macro-scored dish (LATERAL alias m) to query-matching items", async () => {
@@ -414,55 +420,34 @@ describe("findNearbyRestaurants", () => {
 
     // The dish we display + macro-rank must come from the query-relevant set,
     // so a "ramen" search highlights the ramen dish, not an unrelated
-    // best-macro item. The LATERAL item filter references alias `m`.
-    expect(capturedSqlStrings().join("")).toContain("m.name ILIKE");
+    // best-macro item. The LATERAL item filter matches alias `m`.
+    expect(capturedSqlStrings().join("")).toContain("m.name");
   });
 
-  it("does not constrain the macro LATERAL when no query is present", async () => {
+  it("does not wire the text filter when no query is present", async () => {
     mockQueryRaw.mockResolvedValue([]);
 
     await findNearbyRestaurants(BASE_PARAMS);
 
-    expect(capturedSqlStrings().join("")).not.toContain("m.name ILIKE");
+    expect(capturedSqlStrings().join("")).not.toContain("to_tsvector");
   });
 
-  it("pairs each ILIKE with an explicit ESCAPE '\\' clause", async () => {
-    mockQueryRaw.mockResolvedValue([]);
-
-    await findNearbyRestaurants({ ...BASE_PARAMS, query: "poke" });
-
-    // The static SQL chunks (TemplateStringsArray) are captured too; assert the
-    // cooked SQL carries the literal `ESCAPE '\'` so backslash-escaping is
-    // unambiguous regardless of session settings.
-    const sql = capturedSqlStrings().join("");
-    expect(sql).toContain("ESCAPE '\\'");
-  });
-
-  it("treats an empty-string query as absent (no ILIKE pattern)", async () => {
+  it("treats an empty-string query as absent (no text filter)", async () => {
     mockQueryRaw.mockResolvedValue([]);
 
     await findNearbyRestaurants({ ...BASE_PARAMS, query: "" });
 
-    const patterns = capturedSqlStrings().filter((s) => s.startsWith("%") && s.endsWith("%"));
-    expect(patterns).toHaveLength(0);
+    expect(capturedSqlStrings().join("")).not.toContain("to_tsvector");
   });
 
-  it("does not wire any ILIKE pattern when `query` is absent", async () => {
+  it("binds arbitrary query text verbatim (plainto_tsquery handles parsing)", async () => {
     mockQueryRaw.mockResolvedValue([]);
 
-    await findNearbyRestaurants(BASE_PARAMS);
+    await findNearbyRestaurants({ ...BASE_PARAMS, query: "mac & cheese!" });
 
-    const patterns = capturedSqlStrings().filter((s) => s.startsWith("%") && s.endsWith("%"));
-    expect(patterns).toHaveLength(0);
-  });
-
-  it("escapes LIKE wildcards in the query so they match literally", async () => {
-    mockQueryRaw.mockResolvedValue([]);
-
-    await findNearbyRestaurants({ ...BASE_PARAMS, query: "mac_n 50%" });
-
-    // _ and % are escaped with a backslash; the surrounding %...% stays.
-    expect(capturedSqlStrings()).toContain("%mac\\_n 50\\%%");
+    // No escaping/sanitizing in our code — the raw text is bound and
+    // plainto_tsquery turns it into a safe lexeme query.
+    expect(capturedSqlStrings()).toContain("mac & cheese!");
   });
 });
 

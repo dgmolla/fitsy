@@ -123,20 +123,23 @@ function allowedPriceLevels(maxPriceLevel: string): string[] {
     : (PRICE_LEVEL_ORDER as unknown as string[]);
 }
 
-// ─── Text search helpers ──────────────────────────────────────────────────────
+// ─── Text search config ───────────────────────────────────────────────────────
 
 /**
- * Escape LIKE/ILIKE wildcards so user input is matched literally. Without this,
- * a query like "50%" or "mac_n_cheese" would be interpreted as a pattern.
+ * Postgres full-text-search dictionary for free-text matching.
  *
- * Backslash is Postgres's documented default LIKE escape character, but every
- * ILIKE below pairs this with an explicit `ESCAPE '\'` clause so the behavior
- * is unambiguous regardless of session settings. Backslashes are escaped first
- * (the char class includes `\\`) so a trailing backslash can't dangle.
+ * We match with `to_tsvector(config, target) @@ plainto_tsquery(config, query)`.
+ * FTS tokenizes both sides into lexemes and requires *all* query lexemes to be
+ * present (AND semantics), which is precise for multi-word queries and immune
+ * to substring-in-word noise — validated against prod data:
+ *   "chick fil a" → Chick-fil-A ✓ (tokenizes the hyphenated name)
+ *                   but NOT "Lil' Chick Bowl" / "Chick'n Wrap" ✓
+ *   "ramen" → "Birria Ramen" ✓ but NOT "Sacramento" / "Rama Thai" ✓
+ * The `english` dictionary also stems, so "tacos"→taco, "burritos"→burrito.
+ * (FTS does not do typo correction; that's a future trigram-assist job.)
+ * Override via SEARCH_TS_CONFIG.
  */
-function escapeLike(s: string): string {
-  return s.replace(/[\\%_]/g, (c) => `\\${c}`);
-}
+const TEXT_SEARCH_CONFIG = process.env["SEARCH_TS_CONFIG"] ?? "english";
 
 // ─── Distance helpers ─────────────────────────────────────────────────────────
 
@@ -242,33 +245,34 @@ export async function findNearbyRestaurants(
   // runs. Matching is bounded to the geographic candidate set, so cost tracks
   // restaurants-in-radius rather than total table size.
   //
-  // Matches restaurant name, cuisineTags, and menu item *names* only — NOT
-  // descriptions. Descriptions are long marketing prose where an unanchored
-  // substring match produces false positives (e.g. "ramen" inside
-  // "Sac-ramen-to", or a pantry item that merely name-drops a dish). Dish
-  // names are short and high-signal. (Word-level recall over descriptions is
-  // a future full-text-search job, not a substring match.)
-  const queryLike =
-    query !== undefined && query !== "" ? `%${escapeLike(query)}%` : null;
+  // Full-text matches restaurant name, cuisineTags, and menu item *names* —
+  // NOT descriptions (long prose, low precision). FTS tokenization handles
+  // spacing/punctuation ("chick fil a" → "Chick-fil-A") and its AND-of-lexemes
+  // semantics keep multi-word queries precise (no "Lil' Chick Bowl" noise).
+  const queryText = query !== undefined && query !== "" ? query : null;
+
+  // to_tsvector(config, target) @@ plainto_tsquery(config, query). plainto_tsquery
+  // safely parses arbitrary user text into a lexeme AND-query (no escaping/
+  // injection concerns). Reused for name / cuisine / dish.
+  const fts = (target: Prisma.Sql): Prisma.Sql =>
+    Prisma.sql`to_tsvector(${TEXT_SEARCH_CONFIG}::regconfig, ${target}) @@ plainto_tsquery(${TEXT_SEARCH_CONFIG}::regconfig, ${queryText})`;
 
   // True (per row) when the restaurant *itself* is on-topic for the query
   // (name or cuisine matches) — in which case every one of its dishes is
   // relevant. Reused by the outer gate and the macro LATERAL's item filter so
   // both agree on what "relevant" means.
   const restaurantMatchesQuery = Prisma.sql`(
-    r.name ILIKE ${queryLike} ESCAPE '\\'
-    OR EXISTS (
-      SELECT 1 FROM unnest(r."cuisineTags") AS ct WHERE ct ILIKE ${queryLike} ESCAPE '\\'
-    )
+    ${fts(Prisma.sql`r.name`)}
+    OR ${fts(Prisma.sql`array_to_string(r."cuisineTags", ' ')`)}
   )`;
 
-  if (queryLike !== null) {
+  if (queryText !== null) {
     filterFrags.push(Prisma.sql`AND (
       ${restaurantMatchesQuery}
       OR EXISTS (
         SELECT 1 FROM "MenuItem" mi
         WHERE mi."restaurantId" = r.id
-          AND mi.name ILIKE ${queryLike} ESCAPE '\\'
+          AND ${fts(Prisma.sql`mi.name`)}
       )
     )`);
   }
@@ -281,10 +285,10 @@ export async function findNearbyRestaurants(
   // So `best` becomes "the query-matching dish that best fits the user's
   // macros," and the restaurant's rank reflects that dish.
   const menuQueryFilter: Prisma.Sql =
-    queryLike !== null
+    queryText !== null
       ? Prisma.sql`AND (
           ${restaurantMatchesQuery}
-          OR m.name ILIKE ${queryLike} ESCAPE '\\'
+          OR ${fts(Prisma.sql`m.name`)}
         )`
       : Prisma.empty;
   // Shared distance expression — reused in SELECT, ORDER BY, and the cursor
