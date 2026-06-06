@@ -15,6 +15,7 @@ import { MenuItemResult, MenuResponse } from '@fitsy/shared';
 import { BookmarkButton, FitsyLoader, MenuItemCard } from '@/components';
 import { fetchMenu, getSavedItems, saveItem, unsaveItem } from '@/lib/apiClient';
 import { getMacroTargets } from '@/lib/macroStorage';
+import { recordSaveAndMaybePrompt } from '@/lib/ratingPrompt';
 import type { MacroValues } from '@/lib/macroPresets';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { useTheme } from '@/lib/theme';
@@ -125,6 +126,8 @@ export default function RestaurantDetailScreen() {
       if (saved) {
         setSavedMap((p) => new Map(p).set(menuItemId, saved.id));
         trackItemSaved({ menu_item_id: menuItemId, restaurant_id: id ?? '', action: 'save', entry_point: 'restaurant_detail' });
+        // A save is a moment of delight — maybe ask for an App Store rating.
+        void recordSaveAndMaybePrompt();
       } else {
         trackSaveFailed({ menu_item_id: menuItemId, restaurant_id: id ?? '', action: 'save', entry_point: 'restaurant_detail' });
       }

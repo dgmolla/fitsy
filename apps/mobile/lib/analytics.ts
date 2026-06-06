@@ -729,6 +729,25 @@ export function trackProfileAccountDeleted(props: { success: boolean }): void {
   }
 }
 
+// ─── App Store rating prompt ─────────────────────────────────────────────────
+// Fired when we ask the OS to surface the native rating prompt (StoreReview).
+// Note: the OS may or may not actually show it (Apple throttles to 3/365 days);
+// this tracks our *request*, which is the signal we control.
+export function trackRatingPromptRequested(props: {
+  session_count: number;
+  save_count: number;
+  search_count: number;
+}): void {
+  try {
+    getPostHogClient().capture(
+      'rating_prompt_requested',
+      props as unknown as Record<string, JsonType>,
+    );
+  } catch (err) {
+    logCaptureError('rating_prompt_requested', err);
+  }
+}
+
 export function __resetForTesting(): void {
   _client = null;
 }

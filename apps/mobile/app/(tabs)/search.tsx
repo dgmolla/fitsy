@@ -22,6 +22,7 @@ import { FilterPopup } from '@/components/FilterPopup';
 import { LocationPickerSheet } from '@/components/LocationPickerSheet';
 import type { MacroValues } from '@/lib/macroPresets';
 import { fetchRestaurantsPage } from '@/lib/apiClient';
+import { recordSearchAndMaybePrompt } from '@/lib/ratingPrompt';
 import { shouldShowInitialLoader } from '@/lib/searchLoading';
 import { useLocation, type LocationState } from '@/lib/useLocation';
 import type { PresetLocation } from '@/lib/locations';
@@ -548,6 +549,10 @@ export default function SearchScreen() {
             has_fat_target: !isNaN(fat),
             has_calories_target: !isNaN(calories),
           });
+        } else {
+          // A successful, non-empty search is an engagement signal — maybe ask
+          // for an App Store rating (gated to return sessions, asked once ever).
+          void recordSearchAndMaybePrompt();
         }
       } catch (err) {
         setResults([]);
