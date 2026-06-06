@@ -68,3 +68,9 @@ export function createRateLimiter(opts: RateLimiterOptions) {
  * Covers both login (brute-force) and register (account spam).
  */
 export const authLimiter = createRateLimiter({ windowMs: 60_000, max: 10 });
+
+/**
+ * Feedback endpoint: 5 submissions per user per 5 minutes.
+ * Deters spamming the team inbox while leaving room for genuine follow-ups.
+ */
+export const feedbackLimiter = createRateLimiter({ windowMs: 300_000, max: 5 });

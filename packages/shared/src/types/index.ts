@@ -333,3 +333,20 @@ export interface SubscriptionVerifyResponse {
   };
 }
 
+// ─── Feedback ────────────────────────────────────────────────────────────────
+
+/** Max length of a free-text feedback message, enforced client- and server-side. */
+export const FEEDBACK_MAX_LENGTH = 5000;
+
+export interface FeedbackRequest {
+  /** Free-form feedback text from the user. */
+  message: string;
+}
+
+export interface FeedbackResponse {
+  id: string;
+  createdAt: string;
+}
+
+export type FeedbackApiResponse = { data: FeedbackResponse } | ApiError;
+
