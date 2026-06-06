@@ -6,6 +6,7 @@ import { useFonts } from 'expo-font';
 import { PostHogProvider } from 'posthog-react-native';
 import { ThemeProvider } from '@/lib/theme';
 import { getPostHogClient } from '@/lib/analytics';
+import { recordSession } from '@/lib/ratingPrompt';
 import { supabase } from '@/lib/supabase';
 import {
   trackSessionRefreshed,
@@ -43,6 +44,13 @@ export default function RootLayout() {
     'Newsreader-Regular': require('@expo-google-fonts/newsreader/400Regular/Newsreader_400Regular.ttf'),
     'Newsreader-Italic': require('@expo-google-fonts/newsreader/400Regular_Italic/Newsreader_400Regular_Italic.ttf'),
   });
+
+  // ─── Rating prompt: count this cold-start as a session ──────────────────────
+  // Used to gate the App Store rating prompt to return-session users. Runs once
+  // per app launch (this layout mounts once on cold start).
+  useEffect(() => {
+    void recordSession();
+  }, []);
 
   // ─── Supabase auto-refresh wiring (S-228) ───────────────────────────────────
   // Per Supabase RN docs: only run the refresh timer while the app is in the
