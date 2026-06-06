@@ -241,6 +241,13 @@ export async function findNearbyRestaurants(
   // r.id), so the planner can prune Restaurant rows before the macro LATERAL
   // runs. Matching is bounded to the geographic candidate set, so cost tracks
   // restaurants-in-radius rather than total table size.
+  //
+  // Matches restaurant name, cuisineTags, and menu item *names* only — NOT
+  // descriptions. Descriptions are long marketing prose where an unanchored
+  // substring match produces false positives (e.g. "ramen" inside
+  // "Sac-ramen-to", or a pantry item that merely name-drops a dish). Dish
+  // names are short and high-signal. (Word-level recall over descriptions is
+  // a future full-text-search job, not a substring match.)
   if (query !== undefined && query !== "") {
     const like = `%${escapeLike(query)}%`;
     filterFrags.push(Prisma.sql`AND (
@@ -251,7 +258,7 @@ export async function findNearbyRestaurants(
       OR EXISTS (
         SELECT 1 FROM "MenuItem" mi
         WHERE mi."restaurantId" = r.id
-          AND (mi.name ILIKE ${like} ESCAPE '\\' OR mi.description ILIKE ${like} ESCAPE '\\')
+          AND mi.name ILIKE ${like} ESCAPE '\\'
       )
     )`);
   }
