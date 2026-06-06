@@ -876,7 +876,10 @@ const s = StyleSheet.create({
   // padding adds a uniform 6pt breathing room on all sides.
   macroStrip: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: EDITORIAL.creamCard,
+    // Lighter than the search bar (creamCard) so the two stacked rows don't
+    // read as one redundant block — the strip's border + dividers keep it
+    // delineated against the page.
+    backgroundColor: EDITORIAL.cream,
     borderRadius: 10, borderWidth: 1, borderColor: EDITORIAL.border,
     marginHorizontal: 16, marginBottom: 8,
     paddingHorizontal: 12, paddingVertical: 8,
