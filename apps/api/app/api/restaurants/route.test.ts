@@ -259,3 +259,52 @@ describe("GET /api/restaurants — validation", () => {
     expect(res.status).toBe(400);
   });
 });
+
+// ─── Free-text query (q) ──────────────────────────────────────────────────────
+
+describe("GET /api/restaurants — free-text query", () => {
+  it("forwards a trimmed q to the service as `query`", async () => {
+    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+    mockFindNearbyRestaurants.mockResolvedValue({ data: [], total: 0, nextCursor: null });
+
+    await GET(
+      makeRequest({ lat: "34.0", lng: "-118.0", q: "  poke bowl  " }, "Bearer valid.token"),
+    );
+
+    const callArg = mockFindNearbyRestaurants.mock.calls[0]?.[0] as { query?: string };
+    expect(callArg.query).toBe("poke bowl");
+  });
+
+  it("does not pass `query` when q is omitted", async () => {
+    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+    mockFindNearbyRestaurants.mockResolvedValue({ data: [], total: 0, nextCursor: null });
+
+    await GET(makeRequest({ lat: "34.0", lng: "-118.0" }, "Bearer valid.token"));
+
+    const callArg = mockFindNearbyRestaurants.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(callArg).not.toHaveProperty("query");
+  });
+
+  it("does not pass `query` when q is empty or whitespace-only", async () => {
+    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+    mockFindNearbyRestaurants.mockResolvedValue({ data: [], total: 0, nextCursor: null });
+
+    await GET(makeRequest({ lat: "34.0", lng: "-118.0", q: "   " }, "Bearer valid.token"));
+
+    const callArg = mockFindNearbyRestaurants.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(callArg).not.toHaveProperty("query");
+  });
+
+  it("returns 400 when q exceeds the max length", async () => {
+    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+
+    const res = await GET(
+      makeRequest({ lat: "34.0", lng: "-118.0", q: "x".repeat(101) }, "Bearer valid.token"),
+    );
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/q /i);
+    expect(mockFindNearbyRestaurants).not.toHaveBeenCalled();
+  });
+});
