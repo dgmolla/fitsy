@@ -407,6 +407,25 @@ describe("findNearbyRestaurants", () => {
     expect(sql).not.toContain('description');
   });
 
+  it("scopes the macro-scored dish (LATERAL alias m) to query-matching items", async () => {
+    mockQueryRaw.mockResolvedValue([]);
+
+    await findNearbyRestaurants({ ...BASE_PARAMS, query: "ramen" });
+
+    // The dish we display + macro-rank must come from the query-relevant set,
+    // so a "ramen" search highlights the ramen dish, not an unrelated
+    // best-macro item. The LATERAL item filter references alias `m`.
+    expect(capturedSqlStrings().join("")).toContain("m.name ILIKE");
+  });
+
+  it("does not constrain the macro LATERAL when no query is present", async () => {
+    mockQueryRaw.mockResolvedValue([]);
+
+    await findNearbyRestaurants(BASE_PARAMS);
+
+    expect(capturedSqlStrings().join("")).not.toContain("m.name ILIKE");
+  });
+
   it("pairs each ILIKE with an explicit ESCAPE '\\' clause", async () => {
     mockQueryRaw.mockResolvedValue([]);
 

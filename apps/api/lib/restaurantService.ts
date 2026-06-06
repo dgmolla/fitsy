@@ -248,20 +248,45 @@ export async function findNearbyRestaurants(
   // "Sac-ramen-to", or a pantry item that merely name-drops a dish). Dish
   // names are short and high-signal. (Word-level recall over descriptions is
   // a future full-text-search job, not a substring match.)
-  if (query !== undefined && query !== "") {
-    const like = `%${escapeLike(query)}%`;
+  const queryLike =
+    query !== undefined && query !== "" ? `%${escapeLike(query)}%` : null;
+
+  // True (per row) when the restaurant *itself* is on-topic for the query
+  // (name or cuisine matches) — in which case every one of its dishes is
+  // relevant. Reused by the outer gate and the macro LATERAL's item filter so
+  // both agree on what "relevant" means.
+  const restaurantMatchesQuery = Prisma.sql`(
+    r.name ILIKE ${queryLike} ESCAPE '\\'
+    OR EXISTS (
+      SELECT 1 FROM unnest(r."cuisineTags") AS ct WHERE ct ILIKE ${queryLike} ESCAPE '\\'
+    )
+  )`;
+
+  if (queryLike !== null) {
     filterFrags.push(Prisma.sql`AND (
-      r.name ILIKE ${like} ESCAPE '\\'
-      OR EXISTS (
-        SELECT 1 FROM unnest(r."cuisineTags") AS ct WHERE ct ILIKE ${like} ESCAPE '\\'
-      )
+      ${restaurantMatchesQuery}
       OR EXISTS (
         SELECT 1 FROM "MenuItem" mi
         WHERE mi."restaurantId" = r.id
-          AND mi.name ILIKE ${like} ESCAPE '\\'
+          AND mi.name ILIKE ${queryLike} ESCAPE '\\'
       )
     )`);
   }
+
+  // When a text query is active, the dish we display and macro-score for each
+  // restaurant must come from the query-relevant set — otherwise a "ramen"
+  // search can surface a restaurant for its Birria Ramen but show (and rank by)
+  // an unrelated best-macro kabob. If the restaurant itself matches (name /
+  // cuisine) every dish is relevant; otherwise only dishes whose name matches.
+  // So `best` becomes "the query-matching dish that best fits the user's
+  // macros," and the restaurant's rank reflects that dish.
+  const menuQueryFilter: Prisma.Sql =
+    queryLike !== null
+      ? Prisma.sql`AND (
+          ${restaurantMatchesQuery}
+          OR m.name ILIKE ${queryLike} ESCAPE '\\'
+        )`
+      : Prisma.empty;
   // Shared distance expression — reused in SELECT, ORDER BY, and the cursor
   // WHERE filter so all three agree exactly.
   const distanceExpr = Prisma.sql`(
@@ -353,6 +378,7 @@ export async function findNearbyRestaurants(
       FROM "MenuItem" m
       WHERE m."restaurantId" = r.id
         AND m.calories IS NOT NULL
+        ${menuQueryFilter}
       ORDER BY "scoreSum" ASC, m.id ASC
       LIMIT 1
     ) AS best
