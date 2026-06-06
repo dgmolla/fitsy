@@ -22,6 +22,7 @@ import { FilterPopup } from '@/components/FilterPopup';
 import { LocationPickerSheet } from '@/components/LocationPickerSheet';
 import type { MacroValues } from '@/lib/macroPresets';
 import { fetchRestaurantsPage } from '@/lib/apiClient';
+import { shouldShowInitialLoader } from '@/lib/searchLoading';
 import { useLocation, type LocationState } from '@/lib/useLocation';
 import type { PresetLocation } from '@/lib/locations';
 import { getMacroTargets, saveMacroTargets } from '@/lib/macroStorage';
@@ -815,9 +816,21 @@ export default function SearchScreen() {
     );
   }, [loadingMore]);
 
+  // Only the very first load (before any query interaction, nothing to show
+  // yet) gets the full-screen brand loader. Query-driven refetches keep the
+  // list — and the SearchBar in its header — mounted, so a debounced fetch
+  // mid-typing can't unmount the TextInput and dismiss the keyboard. Stale
+  // results stay visible under the new results until they arrive. See
+  // shouldShowInitialLoader for the invariant + its regression test.
+  const initialLoading = shouldShowInitialLoader({
+    loading,
+    resultCount: results.length,
+    hasQuery,
+  });
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: EDITORIAL.cream }}>
-      {loading && (
+      {initialLoading && (
         <View style={s.loaderWrap}>
           <FitsyLoader size="md" />
         </View>
@@ -827,7 +840,7 @@ export default function SearchScreen() {
           <Text style={s.errorText}>{error}</Text>
         </View>
       )}
-      {!loading && (
+      {!initialLoading && (
         <FlatList
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingBottom: 110 }}
