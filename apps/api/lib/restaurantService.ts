@@ -128,7 +128,11 @@ function allowedPriceLevels(maxPriceLevel: string): string[] {
 /**
  * Escape LIKE/ILIKE wildcards so user input is matched literally. Without this,
  * a query like "50%" or "mac_n_cheese" would be interpreted as a pattern.
- * Backslash is Postgres's default ILIKE escape char.
+ *
+ * Backslash is Postgres's documented default LIKE escape character, but every
+ * ILIKE below pairs this with an explicit `ESCAPE '\'` clause so the behavior
+ * is unambiguous regardless of session settings. Backslashes are escaped first
+ * (the char class includes `\\`) so a trailing backslash can't dangle.
  */
 function escapeLike(s: string): string {
   return s.replace(/[\\%_]/g, (c) => `\\${c}`);
@@ -237,17 +241,17 @@ export async function findNearbyRestaurants(
   // r.id), so the planner can prune Restaurant rows before the macro LATERAL
   // runs. Matching is bounded to the geographic candidate set, so cost tracks
   // restaurants-in-radius rather than total table size.
-  if (query !== undefined) {
+  if (query !== undefined && query !== "") {
     const like = `%${escapeLike(query)}%`;
     filterFrags.push(Prisma.sql`AND (
-      r.name ILIKE ${like}
+      r.name ILIKE ${like} ESCAPE '\\'
       OR EXISTS (
-        SELECT 1 FROM unnest(r."cuisineTags") AS ct WHERE ct ILIKE ${like}
+        SELECT 1 FROM unnest(r."cuisineTags") AS ct WHERE ct ILIKE ${like} ESCAPE '\\'
       )
       OR EXISTS (
         SELECT 1 FROM "MenuItem" mi
         WHERE mi."restaurantId" = r.id
-          AND (mi.name ILIKE ${like} OR mi.description ILIKE ${like})
+          AND (mi.name ILIKE ${like} ESCAPE '\\' OR mi.description ILIKE ${like} ESCAPE '\\')
       )
     )`);
   }

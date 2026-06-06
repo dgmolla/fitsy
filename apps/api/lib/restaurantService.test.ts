@@ -395,6 +395,27 @@ describe("findNearbyRestaurants", () => {
     expect(capturedSqlStrings()).toContain("%poke%");
   });
 
+  it("pairs each ILIKE with an explicit ESCAPE '\\' clause", async () => {
+    mockQueryRaw.mockResolvedValue([]);
+
+    await findNearbyRestaurants({ ...BASE_PARAMS, query: "poke" });
+
+    // The static SQL chunks (TemplateStringsArray) are captured too; assert the
+    // cooked SQL carries the literal `ESCAPE '\'` so backslash-escaping is
+    // unambiguous regardless of session settings.
+    const sql = capturedSqlStrings().join("");
+    expect(sql).toContain("ESCAPE '\\'");
+  });
+
+  it("treats an empty-string query as absent (no ILIKE pattern)", async () => {
+    mockQueryRaw.mockResolvedValue([]);
+
+    await findNearbyRestaurants({ ...BASE_PARAMS, query: "" });
+
+    const patterns = capturedSqlStrings().filter((s) => s.startsWith("%") && s.endsWith("%"));
+    expect(patterns).toHaveLength(0);
+  });
+
   it("does not wire any ILIKE pattern when `query` is absent", async () => {
     mockQueryRaw.mockResolvedValue([]);
 
