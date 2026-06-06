@@ -106,6 +106,19 @@ export async function GET(
     );
   }
 
+  // Free-text query. Trim and treat empty/whitespace as absent; cap length to
+  // bound the ILIKE pattern. Reject overlong input rather than silently
+  // truncating so the client surfaces a clear error.
+  const MAX_QUERY_LENGTH = 100;
+  const queryRaw = searchParams.get("q");
+  const query = queryRaw !== null ? queryRaw.trim() : "";
+  if (query.length > MAX_QUERY_LENGTH) {
+    return NextResponse.json(
+      { error: `q must be ${MAX_QUERY_LENGTH} characters or fewer` } as never,
+      { status: 400 },
+    );
+  }
+
   // Optional opaque pagination cursor from the previous page's `nextCursor`.
   // Decode + validate before hitting the DB so a malformed cursor returns 400
   // instead of producing silently-wrong pagination.
@@ -136,6 +149,7 @@ export async function GET(
       ...(dietaryRaw !== null ? { dietary: dietaryRaw } : {}),
       ...(maxPriceLevelRaw !== null ? { maxPriceLevel: maxPriceLevelRaw } : {}),
       ...(minRating !== undefined ? { minRating } : {}),
+      ...(query !== "" ? { query } : {}),
       limit,
       ...(decodedCursor !== undefined ? { cursor: decodedCursor } : {}),
     });
@@ -149,6 +163,7 @@ export async function GET(
       resultCount: total,
       hasTargets: Object.keys(targets).length > 0,
       ...(cuisineTypeRaw !== null ? { cuisineFilter: cuisineTypeRaw } : {}),
+      ...(query !== "" ? { hasQuery: true, queryLength: query.length } : {}),
       status: 200,
     });
     // after() defers flush past response; only valid inside Next.js request runtime.

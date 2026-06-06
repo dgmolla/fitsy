@@ -47,6 +47,14 @@ export interface NearbyRestaurantsParams {
   dietary?: string | undefined;
   maxPriceLevel?: string | undefined;
   minRating?: number | undefined;
+  /**
+   * Free-text query. Matched (case-insensitive substring) against the
+   * restaurant name, its cuisineTags, and its menu item names/descriptions.
+   * Acts as a filter only — results are still ranked by the macro+distance
+   * composite. All matching is correlated to the geographically-bounded
+   * candidate set, so cost scales with restaurants-in-radius, not table size.
+   */
+  query?: string | undefined;
   limit: number;
   /**
    * Decoded cursor — { id, orderKey } from the last item on the previous
@@ -115,6 +123,17 @@ function allowedPriceLevels(maxPriceLevel: string): string[] {
     : (PRICE_LEVEL_ORDER as unknown as string[]);
 }
 
+// ─── Text search helpers ──────────────────────────────────────────────────────
+
+/**
+ * Escape LIKE/ILIKE wildcards so user input is matched literally. Without this,
+ * a query like "50%" or "mac_n_cheese" would be interpreted as a pattern.
+ * Backslash is Postgres's default ILIKE escape char.
+ */
+function escapeLike(s: string): string {
+  return s.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
 // ─── Distance helpers ─────────────────────────────────────────────────────────
 
 function computeBoundingBox(
@@ -174,6 +193,7 @@ export async function findNearbyRestaurants(
     dietary,
     maxPriceLevel,
     minRating,
+    query,
     limit,
     cursor,
   } = params;
@@ -212,6 +232,24 @@ export async function findNearbyRestaurants(
   }
   if (minRating !== undefined) {
     filterFrags.push(Prisma.sql`AND r.rating >= ${minRating}`);
+  }
+  // Free-text filter. References only `r` (plus correlated subqueries on
+  // r.id), so the planner can prune Restaurant rows before the macro LATERAL
+  // runs. Matching is bounded to the geographic candidate set, so cost tracks
+  // restaurants-in-radius rather than total table size.
+  if (query !== undefined) {
+    const like = `%${escapeLike(query)}%`;
+    filterFrags.push(Prisma.sql`AND (
+      r.name ILIKE ${like}
+      OR EXISTS (
+        SELECT 1 FROM unnest(r."cuisineTags") AS ct WHERE ct ILIKE ${like}
+      )
+      OR EXISTS (
+        SELECT 1 FROM "MenuItem" mi
+        WHERE mi."restaurantId" = r.id
+          AND (mi.name ILIKE ${like} OR mi.description ILIKE ${like})
+      )
+    )`);
   }
   // Shared distance expression — reused in SELECT, ORDER BY, and the cursor
   // WHERE filter so all three agree exactly.
