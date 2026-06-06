@@ -24,24 +24,25 @@ export interface NotifySlackOptions {
   source?: string;
 }
 
-export async function notifySlack(
-  title: string,
-  detail: string,
-  options: NotifySlackOptions = {},
-): Promise<void> {
+/**
+ * Post a pre-formatted Slack message (mrkdwn) via chat.postMessage. Reads
+ * SLACK_BOT_TOKEN and SLACK_ALERT_CHANNEL from process.env. Returns false
+ * (no-op) when the token is unset — local dev / dry runs — and on any failure,
+ * never throws. 3s timeout so a Slack outage never blocks the caller.
+ *
+ * Prefer `notifySlack` for alerts (adds a 🚨 + code fence). Use this directly
+ * for digests/round-ups that need their own formatting.
+ */
+export async function postSlackMessage(
+  text: string,
+  options: { channel?: string } = {},
+): Promise<boolean> {
   const token = process.env["SLACK_BOT_TOKEN"];
-  if (!token) return;
+  if (!token) return false;
 
-  const channel = process.env["SLACK_ALERT_CHANNEL"] ?? DEFAULT_CHANNEL;
-  const truncated =
-    detail.length > DETAIL_TRUNCATE_AT
-      ? detail.slice(0, DETAIL_TRUNCATE_AT) + "… (truncated)"
-      : detail;
-  const prefix = options.source ? `[${options.source}] ` : "";
-  const body = JSON.stringify({
-    channel,
-    text: `:rotating_light: *${prefix}${title}*\n\`\`\`${truncated}\`\`\``,
-  });
+  const channel =
+    options.channel ?? process.env["SLACK_ALERT_CHANNEL"] ?? DEFAULT_CHANNEL;
+  const body = JSON.stringify({ channel, text });
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
@@ -61,15 +62,33 @@ export async function notifySlack(
     if (!res.ok || !json?.ok) {
       // eslint-disable-next-line no-console
       console.error(
-        `[notifySlack] alert failed: HTTP ${res.status} ${json?.error ?? ""}`,
+        `[postSlackMessage] post failed: HTTP ${res.status} ${json?.error ?? ""}`,
       );
+      return false;
     }
+    return true;
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error(
-      `[notifySlack] alert threw: ${err instanceof Error ? err.message : String(err)}`,
+      `[postSlackMessage] post threw: ${err instanceof Error ? err.message : String(err)}`,
     );
+    return false;
   } finally {
     clearTimeout(timer);
   }
+}
+
+export async function notifySlack(
+  title: string,
+  detail: string,
+  options: NotifySlackOptions = {},
+): Promise<void> {
+  const truncated =
+    detail.length > DETAIL_TRUNCATE_AT
+      ? detail.slice(0, DETAIL_TRUNCATE_AT) + "… (truncated)"
+      : detail;
+  const prefix = options.source ? `[${options.source}] ` : "";
+  await postSlackMessage(
+    `:rotating_light: *${prefix}${title}*\n\`\`\`${truncated}\`\`\``,
+  );
 }

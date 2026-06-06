@@ -27,6 +27,7 @@ model User {
   macroTarget     MacroTarget?
   savedItems      SavedItem[]
   subscription    Subscription?
+  feedback        Feedback[]
 }
 
 model MacroTarget {
@@ -142,6 +143,20 @@ model Subscription {
   expiresAt            DateTime?
   createdAt            DateTime  @default(now())
   user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Feedback {
+  id        String   @id @default(cuid())
+  userId    String
+  // Denormalized at write time so the inbox is readable without a User join
+  // and survives if the account is later deleted-then-recreated.
+  userEmail String
+  message   String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
 }
 
 model PipelineCompletedHex {
