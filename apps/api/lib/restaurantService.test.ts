@@ -395,6 +395,18 @@ describe("findNearbyRestaurants", () => {
     expect(capturedSqlStrings()).toContain("%poke%");
   });
 
+  it("matches menu item names but NOT descriptions (avoids substring noise)", async () => {
+    mockQueryRaw.mockResolvedValue([]);
+
+    await findNearbyRestaurants({ ...BASE_PARAMS, query: "ramen" });
+
+    const sql = capturedSqlStrings().join("");
+    expect(sql).toContain('mi.name ILIKE');
+    // Descriptions are long prose; an unanchored substring match there produced
+    // false positives ("ramen" inside "Sacramento"). Must not be referenced.
+    expect(sql).not.toContain('description');
+  });
+
   it("pairs each ILIKE with an explicit ESCAPE '\\' clause", async () => {
     mockQueryRaw.mockResolvedValue([]);
 
