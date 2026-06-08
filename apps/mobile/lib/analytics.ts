@@ -729,6 +729,21 @@ export function trackProfileAccountDeleted(props: { success: boolean }): void {
   }
 }
 
+// ─── Legal / support links ───────────────────────────────────────────────────
+// Fired when a user opens a privacy / terms / support page from Profile.
+// Tracks which legal surface gets traffic (and confirms the links work in the
+// field) without capturing any PII.
+export function trackLegalLinkOpened(props: { link: 'privacy' | 'terms' | 'support' }): void {
+  try {
+    getPostHogClient().capture(
+      'legal_link_opened',
+      props as unknown as Record<string, JsonType>,
+    );
+  } catch (err) {
+    logCaptureError('legal_link_opened', err);
+  }
+}
+
 // ─── App Store rating prompt ─────────────────────────────────────────────────
 // Fired when we ask the OS to surface the native rating prompt (StoreReview).
 // Note: the OS may or may not actually show it (Apple throttles to 3/365 days);
