@@ -1,0 +1,149 @@
+/* ─── Shared layout for legal / support pages ───────────────────────────
+   Cream + forest-green brand, matching the landing page. Prose-first:
+   readable measure, generous spacing, no marketing chrome. */
+
+.page {
+  --cream: #fdfbf7;
+  --cream-card: #f5efe8;
+  --green: #1b3a26;
+  --green-accent: #3a7050;
+  --text: #0f1f15;
+  --text-mid: #3a4f41;
+  --text-soft: #7a8c7e;
+  --border: #e8e2d8;
+
+  font-family: var(--font-nunito), system-ui, sans-serif;
+  color: var(--text);
+  background: var(--cream);
+  min-height: 100vh;
+}
+
+.container {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 7rem 1.5rem 5rem;
+}
+
+.kicker {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--green-accent);
+  margin-bottom: 0.75rem;
+}
+
+.title {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-size: clamp(2rem, 5vw, 2.75rem);
+  line-height: 1.1;
+  color: var(--green);
+  margin-bottom: 0.5rem;
+}
+
+.updated {
+  font-size: 0.875rem;
+  color: var(--text-soft);
+  margin-bottom: 2.5rem;
+}
+
+.lede {
+  font-size: 1.125rem;
+  line-height: 1.6;
+  color: var(--text-mid);
+  margin-bottom: 2.5rem;
+}
+
+.section {
+  margin-bottom: 2.25rem;
+}
+
+.section h2 {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-size: 1.375rem;
+  color: var(--green);
+  margin-bottom: 0.75rem;
+}
+
+.section h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 1.25rem 0 0.5rem;
+}
+
+.section p,
+.section li {
+  font-size: 1rem;
+  line-height: 1.65;
+  color: var(--text-mid);
+}
+
+.section p {
+  margin-bottom: 0.9rem;
+}
+
+.section ul {
+  margin: 0 0 0.9rem 1.25rem;
+}
+
+.section li {
+  margin-bottom: 0.4rem;
+}
+
+.section a {
+  color: var(--green-accent);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.callout {
+  background: var(--cream-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  margin: 1.5rem 0;
+}
+
+.callout p {
+  margin: 0;
+  color: var(--text-mid);
+}
+
+.footer {
+  border-top: 1px solid var(--border);
+  padding: 2rem 1.5rem;
+  text-align: center;
+}
+
+.footerInner {
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.footerLinks {
+  display: flex;
+  gap: 1.25rem;
+  font-size: 0.875rem;
+}
+
+.footerLinks a {
+  color: var(--text-soft);
+  text-decoration: none;
+}
+
+.footerLinks a:hover {
+  color: var(--green-accent);
+}
+
+.footerCopy {
+  font-size: 0.8125rem;
+  color: var(--text-soft);
+}
