@@ -26,6 +26,7 @@ import { ProfileEditSheet, type ProfileEditSheetProps } from '@/components/Profi
 import { FeedbackSheet } from '@/components/FeedbackSheet';
 import { sendFeedback } from '@/lib/apiClient';
 import { calculateMacros, macrosToStored } from '@/lib/macroCalculator';
+import { openLegalLink } from '@/lib/legalLinks';
 import {
   trackMacroTargetsEdited,
   trackProfileAccountDeleted,
@@ -342,6 +343,21 @@ export default function ProfileScreen() {
           <Text style={s.deleteText}>Delete account</Text>
         </Pressable>
 
+        {/* Legal / support — quiet footer */}
+        <View style={s.legalRow}>
+          <Pressable hitSlop={8} onPress={() => openLegalLink('privacy')}>
+            <Text style={s.legalLink}>Privacy</Text>
+          </Pressable>
+          <Text style={s.legalDot}>·</Text>
+          <Pressable hitSlop={8} onPress={() => openLegalLink('terms')}>
+            <Text style={s.legalLink}>Terms</Text>
+          </Pressable>
+          <Text style={s.legalDot}>·</Text>
+          <Pressable hitSlop={8} onPress={() => openLegalLink('support')}>
+            <Text style={s.legalLink}>Support</Text>
+          </Pressable>
+        </View>
+
       </ScrollView>
     </ScreenBackground>
 
@@ -574,4 +590,19 @@ const s = StyleSheet.create({
     marginTop: 8,
   },
   deleteText: { fontFamily: FONTS.nunitoSans, fontSize: 13, fontWeight: '500', color: '#B85450' },
+  // Legal / support footer — quiet, centered, well below the primary actions
+  legalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 16,
+  },
+  legalLink: {
+    fontFamily: FONTS.nunitoSans,
+    fontSize: 12,
+    fontWeight: '500',
+    color: EDITORIAL.textSoft,
+  },
+  legalDot: { fontSize: 12, color: EDITORIAL.creamDeep },
 });
