@@ -12,7 +12,8 @@ const config: ExpoConfig = {
     resizeMode: "contain",
   },
   ios: {
-    bundleIdentifier: "app.fitsy.mobile",
+    // Must match App Store Connect (and the RevenueCat App Store app) exactly.
+    bundleIdentifier: "com.fitsy.mobile",
     supportsTablet: false,
     splash: {
       backgroundColor: "#FDFBF7",
