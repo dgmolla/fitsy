@@ -8,6 +8,7 @@ import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { getOnboardingData } from '@/lib/onboardingStorage';
+import { usePurchases } from '@/lib/usePurchases';
 import { trackOnboardingCompleted, trackOnboardingScreenView } from '@/lib/analytics';
 
 type PlanId = 'monthly' | 'yearly';
@@ -17,14 +18,25 @@ export default function PaymentScreen() {
   const [plan, setPlan] = useState<PlanId>('yearly');
   const [loading, setLoading] = useState(false);
   const [modal, setModal] = useState<ModalState>('none');
+  const { presentPaywall } = usePurchases();
 
   useEffect(() => {
     trackOnboardingScreenView('payment');
   }, []);
 
+  // The plan cards below are a styled preview of the offer; the actual
+  // transaction (and authoritative store pricing / plan choice) happens in the
+  // RevenueCat-hosted paywall, so pricing and A/B tests change server-side
+  // without an app release. We only complete onboarding once the user actually
+  // holds the Pro entitlement.
   async function handleStart(discounted = false) {
     setLoading(true);
     try {
+      const isPro = await presentPaywall('onboarding');
+      if (!isPro) {
+        // Cancelled or errored — keep the user on this screen to try again.
+        return;
+      }
       await AsyncStorage.setItem('onboardingComplete', 'true');
       if (discounted) await AsyncStorage.setItem('discountApplied', 'true');
       pushProfileToServer();

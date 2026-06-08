@@ -20,6 +20,7 @@ import { getMacroTargets, saveMacroTargets } from '@/lib/macroStorage';
 import { getOnboardingData, saveOnboardingField, type OnboardingData, type ActivityLevel, type Goal } from '@/lib/onboardingStorage';
 import { calculateAge } from '@fitsy/shared';
 import { pushProfileToServer } from '@/lib/profileSync';
+import { usePurchases } from '@/lib/usePurchases';
 import { useTheme } from '@/lib/theme';
 import { FilterPopup } from '@/components/FilterPopup';
 import { ProfileEditSheet, type ProfileEditSheetProps } from '@/components/ProfileEditSheet';
@@ -69,6 +70,7 @@ type EditField = 'goal' | 'activity' | 'height' | 'weight' | 'age' | null;
 
 export default function ProfileScreen() {
   const { colors } = useTheme();
+  const { isPro, presentCustomerCenter, presentPaywall } = usePurchases();
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState<string>('—');
   const [macroTargets, setMacroTargets] = useState<MacroValues | null>(null);
@@ -320,6 +322,31 @@ export default function ProfileScreen() {
           </Pressable>
         )}
 
+        {/* Subscription — Customer Center when Pro, paywall upsell otherwise */}
+        {isPro ? (
+          <Pressable style={s.proBanner} onPress={() => { void presentCustomerCenter(); }}>
+            <View style={s.proIconCircle}>
+              <Ionicons name="sparkles" size={18} color={EDITORIAL.cream} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.proLabel}>FITSY PRO</Text>
+              <Text style={s.proValue}>Manage subscription</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={14} color="rgba(253,251,247,0.7)" />
+          </Pressable>
+        ) : (
+          <Pressable style={s.feedbackBanner} onPress={() => { void presentPaywall('profile'); }}>
+            <View style={s.goalIconCircle}>
+              <Ionicons name="sparkles-outline" size={18} color={EDITORIAL.greenAccent} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.goalBannerLabel}>UPGRADE</Text>
+              <Text style={s.feedbackValue}>Get Fitsy Pro</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={14} color={EDITORIAL.creamDeep} />
+          </Pressable>
+        )}
+
         {/* Feedback */}
         <Pressable style={s.feedbackBanner} onPress={openFeedback}>
           <View style={s.goalIconCircle}>
@@ -548,6 +575,39 @@ const s = StyleSheet.create({
     color: EDITORIAL.textSoft,
     letterSpacing: 0.3,
     textTransform: 'uppercase',
+  },
+  // Subscription — Pro (active) banner uses the green identity treatment
+  proBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: EDITORIAL.green,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 12,
+  },
+  proIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(253,251,247,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  proLabel: {
+    fontFamily: FONTS.nunitoSansSemiBold,
+    fontSize: 9,
+    fontWeight: '700',
+    color: 'rgba(253,251,247,0.7)',
+    letterSpacing: 1,
+    marginBottom: 2,
+  },
+  proValue: {
+    fontFamily: FONTS.nunitoSansSemiBold,
+    fontSize: 16,
+    fontWeight: '700',
+    color: EDITORIAL.cream,
+    letterSpacing: -0.3,
   },
   // Feedback
   feedbackBanner: {
