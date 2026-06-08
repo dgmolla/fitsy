@@ -35,13 +35,35 @@ export const ENTITLEMENT_ID = 'pro';
 export interface RevenueCatKeys {
   ios?: string;
   android?: string;
+  /**
+   * RevenueCat Test Store key (`test_…`). Used in dev builds ONLY: it drives the
+   * simulate-purchase modal in the simulator with no App Store Connect needed,
+   * and entitlements update just like production. A RELEASE build that configures
+   * with a `test_` key intentionally crashes (RevenueCat hard-stop to keep test
+   * purchases out of prod), so we must never select it outside `__DEV__`.
+   */
+  test?: string;
 }
 
-/** Pure key selection — extracted so it's unit-testable without the SDK. */
+/** Pure per-platform store-key selection — unit-testable without the SDK. */
 export function pickApiKey(os: typeof Platform.OS, keys: RevenueCatKeys): string | undefined {
   if (os === 'ios') return keys.ios;
   if (os === 'android') return keys.android;
   return undefined;
+}
+
+/**
+ * Resolve which key to configure with: the Test Store key in dev (so purchases
+ * are testable in the simulator), the real per-platform store key otherwise
+ * (TestFlight/sandbox + production both use the store key). Pure + unit-testable.
+ */
+export function resolveApiKey(
+  os: typeof Platform.OS,
+  isDev: boolean,
+  keys: RevenueCatKeys,
+): string | undefined {
+  if (isDev && keys.test) return keys.test;
+  return pickApiKey(os, keys);
 }
 
 function readKeys(): RevenueCatKeys {
@@ -62,7 +84,7 @@ export function isPurchasesConfigured(): boolean {
  */
 export function configurePurchases(): boolean {
   if (configured) return true;
-  const apiKey = pickApiKey(Platform.OS, readKeys());
+  const apiKey = resolveApiKey(Platform.OS, __DEV__, readKeys());
   if (!apiKey) {
     // eslint-disable-next-line no-console
     console.warn(

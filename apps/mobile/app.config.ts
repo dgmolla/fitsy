@@ -46,6 +46,8 @@ const config: ExpoConfig = {
     revenueCat: {
       ios: process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY,
       android: process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY,
+      // Test Store key — selected automatically in dev builds (see lib/purchases.ts).
+      test: process.env.EXPO_PUBLIC_REVENUECAT_TEST_KEY,
     },
     eas: {
       projectId: "a204190c-0b71-4c31-b126-f3bc62d1c4ee",

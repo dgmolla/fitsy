@@ -5,6 +5,7 @@ import {
   isProActive,
   mapPaywallResult,
   pickApiKey,
+  resolveApiKey,
 } from './purchases';
 
 // Build a CustomerInfo-shaped object with the given active entitlement ids.
@@ -33,6 +34,28 @@ describe('pickApiKey', () => {
 
   it('returns undefined when the platform key is missing', () => {
     expect(pickApiKey('ios', { android: 'goog_yyy' })).toBeUndefined();
+  });
+});
+
+describe('resolveApiKey', () => {
+  const keys = { ios: 'appl_ios', android: 'goog_and', test: 'test_store' };
+
+  it('uses the Test Store key in dev when present', () => {
+    expect(resolveApiKey('ios', true, keys)).toBe('test_store');
+    expect(resolveApiKey('android', true, keys)).toBe('test_store');
+  });
+
+  it('uses the real per-platform store key outside dev', () => {
+    expect(resolveApiKey('ios', false, keys)).toBe('appl_ios');
+    expect(resolveApiKey('android', false, keys)).toBe('goog_and');
+  });
+
+  it('falls back to the platform key in dev when no test key is set', () => {
+    expect(resolveApiKey('ios', true, { ios: 'appl_ios' })).toBe('appl_ios');
+  });
+
+  it('returns undefined when nothing is configured for the platform', () => {
+    expect(resolveApiKey('ios', false, { android: 'goog_and' })).toBeUndefined();
   });
 });
 
