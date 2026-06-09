@@ -28,6 +28,12 @@ const config: ExpoConfig = {
     splash: {
       backgroundColor: "#FDFBF7",
     },
+    infoPlist: {
+      // We use only exempt encryption (HTTPS/standard crypto). Declaring this
+      // auto-answers App Store Connect's export-compliance question on every
+      // TestFlight/App Store upload instead of prompting each time.
+      ITSAppUsesNonExemptEncryption: false,
+    },
   },
 
   plugins: [
