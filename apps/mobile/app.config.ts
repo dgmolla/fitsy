@@ -1,9 +1,19 @@
 import type { ExpoConfig } from "expo/config";
 
+// Google Sign-In (expo-auth-session) redirects to the iOS OAuth client's
+// reversed-client-id custom scheme. It must be a registered URL scheme or the
+// redirect can't route back into the app. Derived from the env client id so it
+// stays in sync; registered alongside "fitsy" via the scheme array (Expo
+// appends each on prebuild, so the app + dev-client schemes are preserved).
+const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+const reversedGoogleScheme = googleIosClientId
+  ? `com.googleusercontent.apps.${googleIosClientId.replace(/\.apps\.googleusercontent\.com$/, "")}`
+  : undefined;
+
 const config: ExpoConfig = {
   name: "Fitsy",
   slug: "fitsy",
-  scheme: "fitsy",
+  scheme: reversedGoogleScheme ? ["fitsy", reversedGoogleScheme] : "fitsy",
   version: "1.0.0",
   orientation: "portrait",
   platforms: ["ios", "android"],

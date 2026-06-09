@@ -6,7 +6,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 
 import { Ionicons } from '@expo/vector-icons';
-import { appleSignIn, completeGoogleSignIn } from '@/lib/authClient';
+import { adoptSession, appleSignIn, completeGoogleSignIn, storeToken } from '@/lib/authClient';
 import { pullProfileFromServer } from '@/lib/profileSync';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
@@ -36,6 +36,7 @@ async function captureIdentity(userId: string, email?: string | null): Promise<v
 export default function SignInScreen() {
   const [appleLoading, setAppleLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [devLoading, setDevLoading] = useState(false);
 
   const [, response, promptGoogleAsync] = Google.useIdTokenAuthRequest({
     iosClientId: GOOGLE_IOS_CLIENT_ID ?? 'not-configured',
@@ -101,7 +102,46 @@ export default function SignInScreen() {
     await promptGoogleAsync();
   }
 
-  const busy = appleLoading || googleLoading;
+  // Dev-only: skip Apple/Google (which need real OAuth config / a signed build)
+  // and authenticate with a throwaway account so onboarding can be exercised on
+  // the simulator. Continues the normal post-signin onboarding chain.
+  async function handleDevLogin() {
+    setDevLoading(true);
+    const baseUrl = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
+    const creds = { email: 'dev@fitsy.local', password: 'dev12345' };
+    try {
+      let res = await fetch(`${baseUrl}/api/auth/login`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(creds),
+      });
+      let data = await res.json() as { token?: string; refreshToken?: string; error?: string; user?: { id: string; email: string } };
+      if (!data.token) {
+        res = await fetch(`${baseUrl}/api/auth/register`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(creds),
+        });
+        data = await res.json() as { token?: string; refreshToken?: string; error?: string; user?: { id: string; email: string } };
+      }
+      if (data.token) {
+        await storeToken(data.token);
+        await adoptSession(data.token, data.refreshToken);
+        if (data.user) {
+          trackAuthSuccess({ provider: 'dev', is_new_user: false });
+          await captureIdentity(data.user.id, data.user.email);
+        }
+        router.replace('/welcome/notification-permission');
+      } else {
+        trackAuthFailure({ provider: 'dev', error_message: data.error });
+        Alert.alert('Dev Login Failed', data.error ?? 'Unknown error');
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Network error';
+      trackAuthFailure({ provider: 'dev', error_message: msg });
+      Alert.alert('Dev Login Failed', msg);
+    } finally {
+      setDevLoading(false);
+    }
+  }
+
+  const busy = appleLoading || googleLoading || devLoading;
 
   return (
     <WelcomeScreen
@@ -137,6 +177,20 @@ export default function SignInScreen() {
             <Ionicons name="logo-google" size={20} color={EDITORIAL.text} />
             <Text style={s.googleTxt}>{googleLoading ? 'Signing in...' : 'Continue with Google'}</Text>
           </AnimatedPress>
+
+          {__DEV__ && (
+            <AnimatedPress
+              style={[s.google, busy ? s.dim : undefined]}
+              onPress={handleDevLogin}
+              disabled={busy}
+              haptic
+              accessibilityRole="button"
+              accessibilityLabel="Dev login"
+            >
+              <Ionicons name="code-slash" size={20} color={EDITORIAL.textSoft} />
+              <Text style={s.googleTxt}>{devLoading ? 'Signing in...' : 'Dev Login (skip auth)'}</Text>
+            </AnimatedPress>
+          )}
         </Animated.View>
 
         <Text style={s.legal}>By continuing you agree to our Terms of Service and Privacy Policy.</Text>
