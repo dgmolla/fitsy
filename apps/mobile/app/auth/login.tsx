@@ -6,7 +6,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable } from 'react-native';
-import { adoptSession, appleSignIn, completeGoogleSignIn } from '@/lib/authClient';
+import { appleSignIn, completeGoogleSignIn, devLogin } from '@/lib/authClient';
 import { pullProfileFromServer } from '@/lib/profileSync';
 import { useTheme } from '@/lib/theme';
 import { BRAND, EDITORIAL, FONTS } from '@/lib/brand';
@@ -101,40 +101,13 @@ export default function LoginScreen() {
 
   async function handleDevLogin() {
     setDevLoading(true);
-    const baseUrl = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
-    const creds = { email: 'dev@fitsy.local', password: 'dev12345' };
     try {
-      let res = await fetch(`${baseUrl}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(creds),
-      });
-      let data = await res.json() as { token?: string; refreshToken?: string; error?: string; user?: { id: string; email: string } };
-
-      if (!data.token) {
-        res = await fetch(`${baseUrl}/api/auth/register`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(creds),
-        });
-        data = await res.json() as { token?: string; refreshToken?: string; error?: string; user?: { id: string; email: string } };
-      }
-
-      if (data.token) {
-        const { storeToken } = await import('@/lib/authClient');
-        await storeToken(data.token);
-        await adoptSession(data.token, data.refreshToken);
-        if (data.user) {
-          trackAuthSuccess({ provider: 'dev', is_new_user: false });
-          await captureIdentity(data.user.id, data.user.email);
-        }
-        router.replace('/(tabs)/search');
-      } else {
-        trackAuthFailure({ provider: 'dev', error_message: data.error });
-        Alert.alert('Dev Login Failed', data.error ?? 'Unknown error');
-      }
+      const r = await devLogin();
+      trackAuthSuccess({ provider: 'dev', is_new_user: false });
+      await captureIdentity(r.user.id, r.user.email);
+      router.replace('/(tabs)/search');
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Network error';
+      const msg = err instanceof Error ? err.message : 'Dev login failed';
       trackAuthFailure({ provider: 'dev', error_message: msg });
       Alert.alert('Dev Login Failed', msg);
     } finally {
