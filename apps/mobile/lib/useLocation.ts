@@ -51,6 +51,13 @@ export interface UseLocationResult extends LocationState {
    * Clear any manual override and re-run GPS resolution.
    */
   clearManualLocation: () => Promise<void>;
+  /**
+   * Re-acquire a fresh GPS fix and apply it (pull-to-refresh). No-op when a
+   * manual override is active — the user's chosen neighborhood wins. Resolves
+   * to the applied {@link LocationState}, or `null` when nothing changed
+   * (manual override, permission denied with no move, or a transient timeout).
+   */
+  refreshLocation: () => Promise<LocationState | null>;
 }
 
 /**
@@ -227,9 +234,59 @@ export function useLocation(): UseLocationResult {
     setManualOverride(null);
   }, []);
 
+  const refreshLocation = useCallback(async (): Promise<LocationState | null> => {
+    // A manual override is an explicit user choice — pull-to-refresh must not
+    // silently replace it with GPS.
+    if (manualOverride) return null;
+
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        trackLocationPermissionDenied({ had_last_known: false });
+        const next: LocationState = {
+          lat: FALLBACK_LAT,
+          lng: FALLBACK_LNG,
+          source: 'fallback-denied',
+          loading: false,
+        };
+        setState(next);
+        return next;
+      }
+
+      // Unlike the mount path, refresh deliberately skips
+      // getLastKnownPositionAsync — the whole point of a manual refresh is a
+      // *current* fix, e.g. after the user has physically moved.
+      const position = await Promise.race([
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
+      ]);
+      if (!position) {
+        trackLocationTimeout({ had_last_known: false });
+        // Keep the coordinates we're already showing rather than bouncing to
+        // the fallback on a transient timeout mid-refresh.
+        return null;
+      }
+
+      const next: LocationState = {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+        source: 'gps',
+        loading: false,
+      };
+      setState(next);
+      return next;
+    } catch (err) {
+      trackLocationError({
+        error_message: err instanceof Error ? err.message : String(err),
+      });
+      return null;
+    }
+  }, [manualOverride]);
+
   return {
     ...state,
     setManualLocation,
     clearManualLocation,
+    refreshLocation,
   };
 }
