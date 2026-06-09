@@ -6,6 +6,7 @@ import {
   FlatList,
   Image,
   Pressable,
+  RefreshControl,
   SafeAreaView,
   StyleSheet,
   Text,
@@ -384,6 +385,7 @@ export default function SearchScreen() {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const initialFetch = useRef(true);
   const [filterVisible, setFilterVisible] = useState(false);
@@ -401,6 +403,11 @@ export default function SearchScreen() {
   // the current search so we don't fire it on every subsequent re-render once
   // nextCursor flips to null.
   const endReachedFiredRef = useRef(false);
+  // Set by pull-to-refresh when re-acquiring GPS moves the coordinates: the
+  // coordinate change would otherwise re-trigger the search effect below and
+  // double-fetch (with a full-screen loader flash) on top of the refresh
+  // fetch we fire directly. Consumed-and-cleared on the next effect run.
+  const skipLocationFetchRef = useRef(false);
 
   const location = useLocation();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -493,8 +500,13 @@ export default function SearchScreen() {
       lng: number,
       q: string,
       locationSource: LocationState['source'],
+      isRefresh = false,
     ) => {
-      setLoading(true);
+      // Pull-to-refresh keeps the list mounted and drives the platform
+      // RefreshControl spinner; the initial/filter-change fetch shows the
+      // full-screen loader (which unmounts the list).
+      if (isRefresh) setRefreshing(true);
+      else setLoading(true);
       setError(null);
       // New search → reset pagination bookkeeping.
       pagesLoadedRef.current = 0;
@@ -573,11 +585,51 @@ export default function SearchScreen() {
           error_message: err instanceof Error ? err.message : undefined,
         });
       } finally {
-        setLoading(false);
+        if (isRefresh) setRefreshing(false);
+        else setLoading(false);
       }
     },
     [buildParams],
   );
+
+  // Pull-to-refresh: re-fire a fresh API call against the current location.
+  // Resets pagination (handled inside doFetch) so the user gets a clean
+  // first page of location-based suggestions. No-op without macro inputs,
+  // since there's nothing to query.
+  const handleRefresh = useCallback(async () => {
+    if (!canSearch) return;
+    setRefreshing(true);
+
+    // Re-acquire a fresh GPS fix first so suggestions reflect where the user
+    // actually is now. Falls back to the current coordinates when refresh is a
+    // no-op (manual override active, permission denied, or a timeout).
+    let lat = location.lat;
+    let lng = location.lng;
+    let source = location.source;
+    try {
+      const fresh = await location.refreshLocation();
+      if (fresh) {
+        if (fresh.lat !== location.lat || fresh.lng !== location.lng) {
+          // Coordinates moved — suppress the search effect's reaction to the
+          // change since we fetch with the fresh coords directly just below.
+          skipLocationFetchRef.current = true;
+        }
+        lat = fresh.lat;
+        lng = fresh.lng;
+        source = fresh.source;
+      }
+    } catch {
+      // Keep current coordinates — doFetch below still refreshes suggestions.
+    }
+
+    await doFetch(inputs, lat, lng, query, source, true);
+  }, [
+    doFetch,
+    canSearch,
+    inputs,
+    location,
+    query,
+  ]);
 
   // onEndReached handler — fires when the user scrolls within
   // `onEndReachedThreshold` of the bottom. Halts silently when nextCursor is
@@ -654,6 +706,12 @@ export default function SearchScreen() {
   ]);
 
   useEffect(() => {
+    // Pull-to-refresh already fetched with the freshly-acquired coordinates;
+    // skip the duplicate fetch this coordinate change would otherwise trigger.
+    if (skipLocationFetchRef.current) {
+      skipLocationFetchRef.current = false;
+      return;
+    }
     if (!targetsLoaded || location.loading) return;
     if (!canSearch) { setResults([]); setNextCursor(null); setLoading(false); return; }
 
@@ -722,16 +780,16 @@ export default function SearchScreen() {
 
   const [heroResult, ...listResults] = results;
 
-  // The header bundles all non-paginated chrome — masthead, macro strip,
-  // search bar, suggestion pills, hero card, and inline empty states. FlatList
-  // renders it once at the top and only the `listResults` tail virtualizes.
+  // The header bundles the non-paginated chrome that scrolls with the list —
+  // macro strip, search bar, hero card, and inline empty states. The Masthead
+  // is rendered as a pinned sibling above the FlatList (see return below) so the
+  // logo + location pill stay fixed while the rest scrolls and pull-to-refresh.
   //
   // Built as an ELEMENT (not a function/component) so that re-rendering on each
   // keystroke reconciles in place rather than remounting — otherwise the search
   // TextInput would lose focus and dismiss the keyboard every character.
   const header = (
     <>
-      <Masthead locationLabel={locationLabel} onLocationPress={handleOpenLocationPicker} />
       <MacroStrip macros={inputs} onEdit={() => setFilterVisible(true)} />
       <SearchBar value={query} onChangeText={setQuery} onClear={handleClearQuery} />
 
@@ -783,6 +841,7 @@ export default function SearchScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: EDITORIAL.cream }}>
+      <Masthead locationLabel={locationLabel} onLocationPress={handleOpenLocationPicker} />
       {initialLoading && (
         <View style={s.loaderWrap}>
           <FitsyLoader size="md" />
@@ -807,6 +866,14 @@ export default function SearchScreen() {
           ListFooterComponent={renderFooter}
           onEndReached={handleEndReached}
           onEndReachedThreshold={0.5}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={EDITORIAL.greenAccent}
+              colors={[EDITORIAL.greenAccent]}
+            />
+          }
         />
       )}
       <FilterPopup

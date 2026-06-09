@@ -316,4 +316,143 @@ describe('useLocation', () => {
     expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith(MANUAL_LOCATION_KEY);
     expect(mockRequestPermissions).toHaveBeenCalled();
   });
+
+  // ─── refreshLocation (pull-to-refresh) ─────────────────────────────────────
+  // Four behaviors: (1) a fresh fix replaces the current coordinates and
+  // returns the applied state, deliberately skipping the lastKnown shortcut
+  // the mount path uses; (2) a manual override makes it a no-op; (3) a
+  // transient timeout returns null and keeps the current coordinates rather
+  // than bouncing to the fallback; (4) a hard permission denial applies the
+  // fallback.
+
+  it('refreshLocation acquires a fresh fix, skips lastKnown, and applies it', async () => {
+    // Mount via a lastKnown hit so getCurrentPositionAsync is untouched until
+    // refresh — lets us assert the refresh path reads the *fresh* position.
+    mockRequestPermissions.mockResolvedValue({ status: 'granted' });
+    mockGetLastKnown.mockResolvedValue({
+      coords: { ...GPS_COORDS },
+      timestamp: Date.now(),
+    });
+
+    const { result } = renderHook(() => useLocation());
+
+    await waitFor(() => {
+      expect(result.current.source).toBe('gps');
+    });
+
+    const FRESH = { latitude: 40.7128, longitude: -74.006 };
+    mockGetLastKnown.mockClear();
+    mockGetPosition.mockResolvedValue({ coords: { ...FRESH }, timestamp: Date.now() });
+
+    let returned: unknown;
+    await act(async () => {
+      returned = await result.current.refreshLocation();
+    });
+
+    expect(returned).toEqual({
+      lat: FRESH.latitude,
+      lng: FRESH.longitude,
+      source: 'gps',
+      loading: false,
+    });
+    expect(result.current.lat).toBe(FRESH.latitude);
+    expect(result.current.lng).toBe(FRESH.longitude);
+    // Refresh wants a current fix — it must NOT take the lastKnown shortcut.
+    expect(mockGetLastKnown).not.toHaveBeenCalled();
+    expect(mockGetPosition).toHaveBeenCalledWith({ accuracy: Location.Accuracy.Balanced });
+  });
+
+  it('refreshLocation is a no-op when a manual override is active', async () => {
+    SecureStore.getItemAsync.mockResolvedValue(
+      JSON.stringify({ name: 'Hollywood', lat: 34.0928, lng: -118.3287 }),
+    );
+    mockRequestPermissions.mockResolvedValue({ status: 'granted' });
+
+    const { result } = renderHook(() => useLocation());
+
+    await waitFor(() => {
+      expect(result.current.source).toBe('manual');
+    });
+
+    let returned: unknown;
+    await act(async () => {
+      returned = await result.current.refreshLocation();
+    });
+
+    expect(returned).toBeNull();
+    // Manual coords untouched, GPS path never engaged.
+    expect(result.current.source).toBe('manual');
+    expect(result.current.lat).toBe(34.0928);
+    expect(result.current.lng).toBe(-118.3287);
+    expect(mockRequestPermissions).not.toHaveBeenCalled();
+    expect(mockGetPosition).not.toHaveBeenCalled();
+  });
+
+  it('refreshLocation returns null and keeps current coords on timeout', async () => {
+    mockRequestPermissions.mockResolvedValue({ status: 'granted' });
+    mockGetLastKnown.mockResolvedValue({
+      coords: { ...GPS_COORDS },
+      timestamp: Date.now(),
+    });
+
+    const { result } = renderHook(() => useLocation());
+
+    await waitFor(() => {
+      expect(result.current.source).toBe('gps');
+    });
+
+    // Fresh position never resolves — the 3s timeout race wins.
+    jest.useFakeTimers();
+    mockGetPosition.mockReturnValue(new Promise(() => {}));
+
+    let refreshPromise: Promise<unknown>;
+    await act(async () => {
+      refreshPromise = result.current.refreshLocation();
+      // Flush the permission promise so the timeout race is armed before we
+      // advance the clock.
+      await jest.advanceTimersByTimeAsync(0);
+      await jest.advanceTimersByTimeAsync(3001);
+    });
+    jest.useRealTimers();
+
+    await expect(refreshPromise!).resolves.toBeNull();
+    // Coordinates from before the refresh are preserved.
+    expect(result.current.source).toBe('gps');
+    expect(result.current.lat).toBe(GPS_COORDS.latitude);
+    expect(result.current.lng).toBe(GPS_COORDS.longitude);
+    expect(trackLocationTimeout).toHaveBeenCalledWith({ had_last_known: false });
+  });
+
+  it('refreshLocation applies the denied fallback when permission is denied', async () => {
+    // Mount in a manual override so the initial render doesn't trip the deny
+    // path; then clear it isn't needed — instead mount via GPS granted, then
+    // flip permissions to denied for the refresh call.
+    mockRequestPermissions.mockResolvedValue({ status: 'granted' });
+    mockGetLastKnown.mockResolvedValue({
+      coords: { ...GPS_COORDS },
+      timestamp: Date.now(),
+    });
+
+    const { result } = renderHook(() => useLocation());
+
+    await waitFor(() => {
+      expect(result.current.source).toBe('gps');
+    });
+
+    mockRequestPermissions.mockResolvedValue({ status: 'denied' });
+
+    let returned: unknown;
+    await act(async () => {
+      returned = await result.current.refreshLocation();
+    });
+
+    expect(returned).toEqual({
+      lat: FALLBACK_LAT,
+      lng: FALLBACK_LNG,
+      source: 'fallback-denied',
+      loading: false,
+    });
+    expect(result.current.source).toBe('fallback-denied');
+    expect(trackLocationPermissionDenied).toHaveBeenCalledWith({ had_last_known: false });
+  });
 });
