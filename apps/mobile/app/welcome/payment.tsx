@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Modal, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { pushProfileToServer } from '@/lib/profileSync';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
@@ -17,12 +17,9 @@ type ModalState = 'none' | 'discount' | 'goodbye';
 export default function PaymentScreen() {
   const [plan, setPlan] = useState<PlanId>('yearly');
   const [loading, setLoading] = useState(false);
+  const [restoring, setRestoring] = useState(false);
   const [modal, setModal] = useState<ModalState>('none');
-  const { offering, purchase } = usePurchases();
-  // Reused as an upsell from Profile (`?from=profile`); there we just dismiss on
-  // success instead of completing onboarding / routing into the app.
-  const { from } = useLocalSearchParams<{ from?: string }>();
-  const fromProfile = from === 'profile';
+  const { offering, purchase, restore } = usePurchases();
 
   // Live, store-localized prices from the current RevenueCat offering, with the
   // designed copy as a fallback while offerings load (or in Expo Go / no key).
@@ -33,9 +30,20 @@ export default function PaymentScreen() {
     trackOnboardingScreenView('payment');
   }, []);
 
+  // Onboarding completes once the user holds Pro — whether freshly purchased or
+  // restored. Shared by handleStart and handleRestore.
+  async function completeOnboarding(discounted = false) {
+    await AsyncStorage.setItem('onboardingComplete', 'true');
+    if (discounted) await AsyncStorage.setItem('discountApplied', 'true');
+    pushProfileToServer();
+    const d = await getOnboardingData();
+    trackOnboardingCompleted({ goal: d.goal, activity_level: d.activity, has_weight: d.weightKg !== undefined, has_height: d.heightCm !== undefined });
+    router.replace('/(tabs)/search');
+  }
+
   // This screen IS the paywall — it renders Fitsy's own design and buys the
   // selected package directly through the RevenueCat SDK (no dashboard-designed
-  // hosted paywall). Onboarding only completes once the user holds Pro.
+  // hosted paywall).
   async function handleStart(discounted = false) {
     const pkg = plan === 'yearly' ? offering?.annual : offering?.monthly;
     if (!pkg) {
@@ -44,23 +52,27 @@ export default function PaymentScreen() {
     }
     setLoading(true);
     try {
-      const isPro = await purchase(pkg, fromProfile ? 'profile' : 'onboarding');
-      if (!isPro) {
-        // Cancelled or errored — keep the user on this screen to try again.
-        return;
-      }
-      if (fromProfile) {
-        router.back();
-        return;
-      }
-      await AsyncStorage.setItem('onboardingComplete', 'true');
-      if (discounted) await AsyncStorage.setItem('discountApplied', 'true');
-      pushProfileToServer();
-      const d = await getOnboardingData();
-      trackOnboardingCompleted({ goal: d.goal, activity_level: d.activity, has_weight: d.weightKg !== undefined, has_height: d.heightCm !== undefined });
-      router.replace('/(tabs)/search');
+      const isPro = await purchase(pkg, 'onboarding');
+      if (!isPro) return; // cancelled or errored — stay on screen
+      await completeOnboarding(discounted);
     } finally {
       setLoading(false);
+    }
+  }
+
+  // Apple requires a Restore Purchases path. It lives here (the paywall) rather
+  // than in-app, since a reinstalled subscriber re-runs onboarding.
+  async function handleRestore() {
+    setRestoring(true);
+    try {
+      const isPro = await restore();
+      if (isPro) {
+        await completeOnboarding();
+      } else {
+        Alert.alert('Nothing to restore', "We couldn't find an active subscription for this account.");
+      }
+    } finally {
+      setRestoring(false);
     }
   }
 
@@ -72,7 +84,7 @@ export default function PaymentScreen() {
         onContinue={() => handleStart(false)}
         canContinue={!loading}
         continueLabel={loading ? 'Setting up...' : 'Start Free Trial'}
-        onSkip={() => (fromProfile ? router.back() : setModal('discount'))}
+        onSkip={() => setModal('discount')}
       >
         <View style={s.features}>
           <Text style={s.feature}>Find restaurants near you by macros</Text>
@@ -113,6 +125,15 @@ export default function PaymentScreen() {
             </AnimatedPress>
           </Animated.View>
         </View>
+
+        <AnimatedPress
+          style={s.restore}
+          onPress={handleRestore}
+          disabled={restoring}
+          accessibilityRole="button"
+        >
+          <Text style={s.restoreTxt}>{restoring ? 'Restoring…' : 'Restore purchases'}</Text>
+        </AnimatedPress>
       </WelcomeScreen>
 
       {/* Discount modal — first skip */}
@@ -167,6 +188,8 @@ const s = StyleSheet.create({
     padding: 22,
   },
   planOn: { backgroundColor: EDITORIAL.green },
+  restore: { alignItems: 'center', paddingVertical: 14, marginTop: 4 },
+  restoreTxt: { fontFamily: FONTS.nunitoSans, fontSize: 14, color: EDITORIAL.textSoft },
   planRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   planName: { fontFamily: FONTS.frauncesDisplay, fontSize: 18, color: EDITORIAL.text },
   planNameOn: { color: EDITORIAL.cream },
