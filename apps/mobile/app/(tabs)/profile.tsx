@@ -70,7 +70,7 @@ type EditField = 'goal' | 'activity' | 'height' | 'weight' | 'age' | null;
 
 export default function ProfileScreen() {
   const { colors } = useTheme();
-  const { isPro, presentCustomerCenter, presentPaywall } = usePurchases();
+  const { isPro, presentCustomerCenter } = usePurchases();
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState<string>('—');
   const [macroTargets, setMacroTargets] = useState<MacroValues | null>(null);
@@ -335,7 +335,7 @@ export default function ProfileScreen() {
             <Ionicons name="chevron-forward" size={14} color="rgba(253,251,247,0.7)" />
           </Pressable>
         ) : (
-          <Pressable style={s.feedbackBanner} onPress={() => { void presentPaywall('profile'); }}>
+          <Pressable style={s.feedbackBanner} onPress={() => router.push('/welcome/payment?from=profile')}>
             <View style={s.goalIconCircle}>
               <Ionicons name="sparkles-outline" size={18} color={EDITORIAL.greenAccent} />
             </View>

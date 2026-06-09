@@ -2,6 +2,7 @@ import type { CustomerInfo } from 'react-native-purchases';
 import { PAYWALL_RESULT } from 'react-native-purchases-ui';
 import {
   ENTITLEMENT_ID,
+  interpretPurchaseError,
   isProActive,
   mapPaywallResult,
   pickApiKey,
@@ -77,6 +78,20 @@ describe('isProActive', () => {
   it('honours a custom entitlement id', () => {
     expect(isProActive(infoWithEntitlements('vip'), 'vip')).toBe(true);
     expect(isProActive(infoWithEntitlements('vip'))).toBe(false);
+  });
+});
+
+describe('interpretPurchaseError', () => {
+  it('treats userCancelled as a cancel, not an error', () => {
+    expect(interpretPurchaseError({ userCancelled: true })).toBe('cancelled');
+  });
+
+  it('treats everything else as an error', () => {
+    expect(interpretPurchaseError({ userCancelled: false })).toBe('error');
+    expect(interpretPurchaseError({ code: '23', message: 'config' })).toBe('error');
+    expect(interpretPurchaseError(new Error('network'))).toBe('error');
+    expect(interpretPurchaseError(null)).toBe('error');
+    expect(interpretPurchaseError(undefined)).toBe('error');
   });
 });
 

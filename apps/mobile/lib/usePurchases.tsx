@@ -19,17 +19,23 @@ import React, {
   useEffect,
   useState,
 } from 'react';
-import type { CustomerInfo } from 'react-native-purchases';
+import type {
+  CustomerInfo,
+  PurchasesOffering,
+  PurchasesPackage,
+} from 'react-native-purchases';
 import { supabase } from './supabase';
 import {
   addCustomerInfoListener,
   configurePurchases,
+  fetchCurrentOffering,
   fetchCustomerInfo,
   identifyPurchasesUser,
   isProActive,
   logoutPurchasesUser,
   presentCustomerCenter as rcPresentCustomerCenter,
   presentPaywall as rcPresentPaywall,
+  purchasePackage as rcPurchasePackage,
   restorePurchases as rcRestore,
 } from './purchases';
 import {
@@ -45,8 +51,15 @@ export interface PurchasesContextValue {
   /** True when the `pro` entitlement is active. */
   isPro: boolean;
   customerInfo: CustomerInfo | null;
+  /** Current offering — its `.annual`/`.monthly` packages back the in-app paywall. */
+  offering: PurchasesOffering | null;
   /** Re-fetch CustomerInfo from RevenueCat. */
   refresh: () => Promise<void>;
+  /**
+   * Buy a package from our own paywall UI. `source` tags analytics
+   * (e.g. 'onboarding', 'profile'). Resolves to the Pro state afterwards.
+   */
+  purchase: (pkg: PurchasesPackage, source: string) => Promise<boolean>;
   /**
    * Present the RevenueCat paywall. `source` tags the analytics event
    * (e.g. 'onboarding', 'profile'). Resolves to the Pro state afterwards.
@@ -63,6 +76,7 @@ const PurchasesContext = createContext<PurchasesContextValue | undefined>(undefi
 export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
+  const [offering, setOffering] = useState<PurchasesOffering | null>(null);
 
   // Configure once, align identity to the current session, wire the listener.
   useEffect(() => {
@@ -78,11 +92,13 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       const { data } = await supabase.auth.getSession();
       const userId = data.session?.user.id;
-      const info = userId
-        ? await identifyPurchasesUser(userId)
-        : await fetchCustomerInfo();
+      const [info, off] = await Promise.all([
+        userId ? identifyPurchasesUser(userId) : fetchCustomerInfo(),
+        fetchCurrentOffering(),
+      ]);
       if (cancelled) return;
       setCustomerInfo(info);
+      setOffering(off);
       unsubscribe = addCustomerInfoListener(setCustomerInfo);
       setReady(true);
     })();
@@ -110,6 +126,16 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
 
   const refresh = useCallback(async () => {
     setCustomerInfo(await fetchCustomerInfo());
+  }, []);
+
+  const purchase = useCallback(async (pkg: PurchasesPackage, source: string): Promise<boolean> => {
+    const { outcome, customerInfo: info } = await rcPurchasePackage(pkg);
+    trackPaywallResult({ source, outcome });
+    if (info) {
+      setCustomerInfo(info);
+      return isProActive(info);
+    }
+    return false;
   }, []);
 
   const presentPaywall = useCallback(async (source: string): Promise<boolean> => {
@@ -140,7 +166,9 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     ready,
     isPro: isProActive(customerInfo),
     customerInfo,
+    offering,
     refresh,
+    purchase,
     presentPaywall,
     presentCustomerCenter,
     restore,

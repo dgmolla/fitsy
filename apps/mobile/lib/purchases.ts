@@ -21,7 +21,9 @@ import Constants from 'expo-constants';
 import Purchases, {
   LOG_LEVEL,
   type CustomerInfo,
+  type PurchasesOffering,
   type PurchasesOfferings,
+  type PurchasesPackage,
 } from 'react-native-purchases';
 import RevenueCatUI, { PAYWALL_RESULT } from 'react-native-purchases-ui';
 
@@ -167,6 +169,53 @@ export async function restorePurchases(): Promise<CustomerInfo | null> {
     // eslint-disable-next-line no-console
     console.warn('[purchases] restorePurchases failed', err);
     return null;
+  }
+}
+
+/**
+ * The current offering (the one marked current in the dashboard). Its
+ * `.annual` / `.monthly` packages back our in-app paywall (apps render their
+ * own UI and call purchasePackage, rather than using a RevenueCat-hosted
+ * paywall — keeps the paywall on Fitsy's design system, no dashboard design).
+ */
+export async function fetchCurrentOffering(): Promise<PurchasesOffering | null> {
+  const offerings = await fetchOfferings();
+  return offerings?.current ?? null;
+}
+
+export type PurchaseOutcome = 'purchased' | 'cancelled' | 'error';
+
+/** Pure: classify a purchase exception as a user-cancel vs a real error. */
+export function interpretPurchaseError(err: unknown): Exclude<PurchaseOutcome, 'purchased'> {
+  if (
+    err &&
+    typeof err === 'object' &&
+    (err as { userCancelled?: boolean | null }).userCancelled
+  ) {
+    return 'cancelled';
+  }
+  return 'error';
+}
+
+/**
+ * Buy a package. Returns the outcome plus fresh CustomerInfo on success so the
+ * caller can immediately re-derive entitlement state. Never throws — a user
+ * cancel is a normal 'cancelled' outcome, not an error.
+ */
+export async function purchasePackage(
+  pkg: PurchasesPackage,
+): Promise<{ outcome: PurchaseOutcome; customerInfo: CustomerInfo | null }> {
+  if (!configured) return { outcome: 'error', customerInfo: null };
+  try {
+    const { customerInfo } = await Purchases.purchasePackage(pkg);
+    return { outcome: 'purchased', customerInfo };
+  } catch (err) {
+    const outcome = interpretPurchaseError(err);
+    if (outcome === 'error') {
+      // eslint-disable-next-line no-console
+      console.warn('[purchases] purchasePackage failed', err);
+    }
+    return { outcome, customerInfo: null };
   }
 }
 

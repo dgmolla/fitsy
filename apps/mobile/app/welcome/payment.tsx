@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Modal, StyleSheet, Text, View } from 'react-native';
+import { Alert, Modal, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { pushProfileToServer } from '@/lib/profileSync';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
@@ -18,23 +18,39 @@ export default function PaymentScreen() {
   const [plan, setPlan] = useState<PlanId>('yearly');
   const [loading, setLoading] = useState(false);
   const [modal, setModal] = useState<ModalState>('none');
-  const { presentPaywall } = usePurchases();
+  const { offering, purchase } = usePurchases();
+  // Reused as an upsell from Profile (`?from=profile`); there we just dismiss on
+  // success instead of completing onboarding / routing into the app.
+  const { from } = useLocalSearchParams<{ from?: string }>();
+  const fromProfile = from === 'profile';
+
+  // Live, store-localized prices from the current RevenueCat offering, with the
+  // designed copy as a fallback while offerings load (or in Expo Go / no key).
+  const annualPrice = offering?.annual?.product.priceString ?? '$29.99/yr';
+  const monthlyPrice = offering?.monthly?.product.priceString ?? '$8.99/mo';
 
   useEffect(() => {
     trackOnboardingScreenView('payment');
   }, []);
 
-  // The plan cards below are a styled preview of the offer; the actual
-  // transaction (and authoritative store pricing / plan choice) happens in the
-  // RevenueCat-hosted paywall, so pricing and A/B tests change server-side
-  // without an app release. We only complete onboarding once the user actually
-  // holds the Pro entitlement.
+  // This screen IS the paywall — it renders Fitsy's own design and buys the
+  // selected package directly through the RevenueCat SDK (no dashboard-designed
+  // hosted paywall). Onboarding only completes once the user holds Pro.
   async function handleStart(discounted = false) {
+    const pkg = plan === 'yearly' ? offering?.annual : offering?.monthly;
+    if (!pkg) {
+      Alert.alert('Just a moment', 'Plans are still loading — please try again.');
+      return;
+    }
     setLoading(true);
     try {
-      const isPro = await presentPaywall('onboarding');
+      const isPro = await purchase(pkg, fromProfile ? 'profile' : 'onboarding');
       if (!isPro) {
         // Cancelled or errored — keep the user on this screen to try again.
+        return;
+      }
+      if (fromProfile) {
+        router.back();
         return;
       }
       await AsyncStorage.setItem('onboardingComplete', 'true');
@@ -56,7 +72,7 @@ export default function PaymentScreen() {
         onContinue={() => handleStart(false)}
         canContinue={!loading}
         continueLabel={loading ? 'Setting up...' : 'Start Free Trial'}
-        onSkip={() => setModal('discount')}
+        onSkip={() => (fromProfile ? router.back() : setModal('discount'))}
       >
         <View style={s.features}>
           <Text style={s.feature}>Find restaurants near you by macros</Text>
@@ -78,9 +94,9 @@ export default function PaymentScreen() {
                   <Text style={[s.planName, plan === 'yearly' && s.planNameOn]}>Annual</Text>
                   <View style={s.badge}><Text style={s.badgeTxt}>Best Value</Text></View>
                 </View>
-                <Text style={s.planSub}>$2.50 / mo</Text>
+                <Text style={s.planSub}>Billed yearly</Text>
               </View>
-              <Text style={[s.planPrice, plan === 'yearly' && s.planPriceOn]}>$29.99/yr</Text>
+              <Text style={[s.planPrice, plan === 'yearly' && s.planPriceOn]}>{annualPrice}</Text>
             </AnimatedPress>
           </Animated.View>
 
@@ -93,7 +109,7 @@ export default function PaymentScreen() {
               accessibilityState={{ selected: plan === 'monthly' }}
             >
               <Text style={[s.planName, plan === 'monthly' && s.planNameOn]}>Monthly</Text>
-              <Text style={[s.planPrice, plan === 'monthly' && s.planPriceOn]}>$8.99/mo</Text>
+              <Text style={[s.planPrice, plan === 'monthly' && s.planPriceOn]}>{monthlyPrice}</Text>
             </AnimatedPress>
           </Animated.View>
         </View>
