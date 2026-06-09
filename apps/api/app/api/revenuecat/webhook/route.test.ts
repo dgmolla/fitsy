@@ -81,6 +81,14 @@ describe("POST /api/revenuecat/webhook — parsing", () => {
     expect(mockSubscriptionUpsert).not.toHaveBeenCalled();
   });
 
+  it("acknowledges UNKNOWN event types without writing (no accidental grant)", async () => {
+    const res = await POST(
+      makeRequest(event({ type: "SOME_FUTURE_PAUSE_EVENT" }), AUTH),
+    );
+    expect(res.status).toBe(200);
+    expect(mockSubscriptionUpsert).not.toHaveBeenCalled();
+  });
+
   it("acknowledges anonymous app_user_id without writing", async () => {
     const res = await POST(
       makeRequest(event({ app_user_id: "$RCAnonymousID:abc" }), AUTH),

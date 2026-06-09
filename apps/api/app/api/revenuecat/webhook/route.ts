@@ -1,5 +1,14 @@
+import { timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/restaurantService";
+
+/** Constant-time compare for the webhook auth header (avoids timing leaks). */
+function safeEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ab.length !== bb.length) return false;
+  return timingSafeEqual(ab, bb);
+}
 
 /**
  * RevenueCat webhook — server-side source of truth for subscription state.
@@ -34,6 +43,15 @@ const ACTIVE_EVENT_TYPES = new Set([
   "CANCELLATION",
 ]);
 
+// Every lifecycle type we model. Unknown types are acknowledged but NOT
+// persisted, so a future RevenueCat event we don't recognize can never
+// accidentally flip a subscription to "active".
+const HANDLED_EVENT_TYPES = new Set([
+  ...ACTIVE_EVENT_TYPES,
+  "EXPIRATION",
+  "BILLING_ISSUE",
+]);
+
 interface RevenueCatEvent {
   type?: string;
   app_user_id?: string;
@@ -43,17 +61,13 @@ interface RevenueCatEvent {
   original_transaction_id?: string | null;
 }
 
+// Precondition: `type` is in HANDLED_EVENT_TYPES (callers ack unknown types).
 function statusForEvent(type: string, expiresAt: Date | null): string {
   if (type === "EXPIRATION") return "expired";
   if (type === "BILLING_ISSUE") return "billing_issue";
-  if (ACTIVE_EVENT_TYPES.has(type)) {
-    // Defensive: if RevenueCat says active but the period already lapsed,
-    // reflect that rather than reporting a stale "active".
-    if (expiresAt && expiresAt.getTime() < Date.now()) return "expired";
-    return "active";
-  }
-  // TEST events and anything we don't model explicitly: acknowledge without
-  // changing entitlement semantics.
+  // Active event, but if RevenueCat says active while the period already lapsed,
+  // reflect that rather than reporting a stale "active".
+  if (expiresAt && expiresAt.getTime() < Date.now()) return "expired";
   return "active";
 }
 
@@ -67,7 +81,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       { status: 503 },
     );
   }
-  if (request.headers.get("authorization") !== expected) {
+  const authHeader = request.headers.get("authorization");
+  if (!authHeader || !safeEqual(authHeader, expected)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -84,8 +99,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Missing event" }, { status: 400 });
   }
 
-  // TEST events from the dashboard have no real user — just acknowledge.
-  if (event.type === "TEST") {
+  // TEST events (dashboard) and any lifecycle type we don't model: acknowledge
+  // without persisting, so an unrecognized event can't change entitlement state.
+  if (!HANDLED_EVENT_TYPES.has(event.type)) {
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
@@ -96,8 +112,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
+  // Only accept a sane positive epoch-ms; ignore 0/negative/garbage.
   const expiresAt =
-    typeof event.expiration_at_ms === "number"
+    typeof event.expiration_at_ms === "number" && event.expiration_at_ms > 0
       ? new Date(event.expiration_at_ms)
       : null;
   const status = statusForEvent(event.type, expiresAt);
