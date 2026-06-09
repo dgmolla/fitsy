@@ -791,6 +791,45 @@ export function trackFeedbackSubmitted(props: {
   }
 }
 
+// ─── Subscriptions / RevenueCat ──────────────────────────────────────────────
+// `paywall_shown` measures intent, `paywall_result` measures the outcome of the
+// RevenueCat-hosted paywall (purchased / restored / cancelled / not_presented /
+// error) — together they give a present→purchase funnel split by `source`
+// (onboarding vs profile upsell). No pricing/receipt data is logged; that lives
+// in RevenueCat + the Subscription table.
+
+export function trackPaywallShown(props: { source: string }): void {
+  try {
+    getPostHogClient().capture('paywall_shown', props as unknown as Record<string, JsonType>);
+  } catch (err) {
+    logCaptureError('paywall_shown', err);
+  }
+}
+
+export function trackPaywallResult(props: { source: string; outcome: string }): void {
+  try {
+    getPostHogClient().capture('paywall_result', props as unknown as Record<string, JsonType>);
+  } catch (err) {
+    logCaptureError('paywall_result', err);
+  }
+}
+
+export function trackPurchasesRestored(props: { is_pro: boolean }): void {
+  try {
+    getPostHogClient().capture('purchases_restored', props as unknown as Record<string, JsonType>);
+  } catch (err) {
+    logCaptureError('purchases_restored', err);
+  }
+}
+
+export function trackCustomerCenterOpened(): void {
+  try {
+    getPostHogClient().capture('customer_center_opened', {});
+  } catch (err) {
+    logCaptureError('customer_center_opened', err);
+  }
+}
+
 export function __resetForTesting(): void {
   _client = null;
 }

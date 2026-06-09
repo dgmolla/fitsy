@@ -123,6 +123,31 @@ export async function registerAndStore(
   return result;
 }
 
+// ─── Dev login ──────────────────────────────────────────────────────────────
+// Dev-only throwaway account so onboarding/auth can be exercised without
+// Apple/Google OAuth (which need real config + a signed build). Logs in, or
+// registers on first run, then stores the token + adopts the session. Shared by
+// app/auth/login.tsx and app/welcome/signin.tsx — callers handle nav/analytics.
+export async function devLogin(): Promise<AuthResponse> {
+  const creds = { email: 'dev@fitsy.local', password: 'dev12345' };
+  const attempt = async (path: string) => {
+    const res = await fetch(`${BASE_URL}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(creds),
+    });
+    return res.json() as Promise<Partial<AuthResponse> & { error?: string }>;
+  };
+  let data = await attempt('/api/auth/login');
+  if (!data.token) data = await attempt('/api/auth/register');
+  if (!data.token || !data.refreshToken || !data.user) {
+    throw new Error(data.error ?? 'Dev login failed');
+  }
+  await storeToken(data.token);
+  await adoptSession(data.token, data.refreshToken);
+  return data as AuthResponse;
+}
+
 // ─── Apple Sign In ────────────────────────────────────────────────────────────
 
 async function generateNonce(): Promise<{ rawNonce: string; hashedNonce: string }> {

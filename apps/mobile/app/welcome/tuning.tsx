@@ -50,7 +50,7 @@ export default function PlanReadyScreen() {
 
   return (
     <WelcomeScreen
-      progress={13 / 15}
+      progress={16 / 18}
       title="Your daily targets."
       subtitle="We'll suggest splitting these across 3 meals. You can adjust per-meal targets anytime in search."
       onContinue={() => router.push('/welcome/location-permission')}

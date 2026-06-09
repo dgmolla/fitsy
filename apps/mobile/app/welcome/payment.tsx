@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Modal, StyleSheet, Text, View } from 'react-native';
+import { Alert, Modal, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -8,6 +8,7 @@ import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { getOnboardingData } from '@/lib/onboardingStorage';
+import { usePurchases } from '@/lib/usePurchases';
 import { trackOnboardingCompleted, trackOnboardingScreenView } from '@/lib/analytics';
 
 type PlanId = 'monthly' | 'yearly';
@@ -16,23 +17,62 @@ type ModalState = 'none' | 'discount' | 'goodbye';
 export default function PaymentScreen() {
   const [plan, setPlan] = useState<PlanId>('yearly');
   const [loading, setLoading] = useState(false);
+  const [restoring, setRestoring] = useState(false);
   const [modal, setModal] = useState<ModalState>('none');
+  const { offering, purchase, restore } = usePurchases();
+
+  // Live, store-localized prices from the current RevenueCat offering, with the
+  // designed copy as a fallback while offerings load (or in Expo Go / no key).
+  const annualPrice = offering?.annual?.product.priceString ?? '$29.99/yr';
+  const monthlyPrice = offering?.monthly?.product.priceString ?? '$8.99/mo';
 
   useEffect(() => {
     trackOnboardingScreenView('payment');
   }, []);
 
+  // Onboarding completes once the user holds Pro — whether freshly purchased or
+  // restored. Shared by handleStart and handleRestore.
+  async function completeOnboarding(discounted = false) {
+    await AsyncStorage.setItem('onboardingComplete', 'true');
+    if (discounted) await AsyncStorage.setItem('discountApplied', 'true');
+    pushProfileToServer();
+    const d = await getOnboardingData();
+    trackOnboardingCompleted({ goal: d.goal, activity_level: d.activity, has_weight: d.weightKg !== undefined, has_height: d.heightCm !== undefined });
+    router.replace('/(tabs)/search');
+  }
+
+  // This screen IS the paywall — it renders Fitsy's own design and buys the
+  // selected package directly through the RevenueCat SDK (no dashboard-designed
+  // hosted paywall).
   async function handleStart(discounted = false) {
+    const pkg = plan === 'yearly' ? offering?.annual : offering?.monthly;
+    if (!pkg) {
+      Alert.alert('Just a moment', 'Plans are still loading — please try again.');
+      return;
+    }
     setLoading(true);
     try {
-      await AsyncStorage.setItem('onboardingComplete', 'true');
-      if (discounted) await AsyncStorage.setItem('discountApplied', 'true');
-      pushProfileToServer();
-      const d = await getOnboardingData();
-      trackOnboardingCompleted({ goal: d.goal, activity_level: d.activity, has_weight: d.weightKg !== undefined, has_height: d.heightCm !== undefined });
-      router.replace('/(tabs)/search');
+      const isPro = await purchase(pkg, 'onboarding');
+      if (!isPro) return; // cancelled or errored — stay on screen
+      await completeOnboarding(discounted);
     } finally {
       setLoading(false);
+    }
+  }
+
+  // Apple requires a Restore Purchases path. It lives here (the paywall) rather
+  // than in-app, since a reinstalled subscriber re-runs onboarding.
+  async function handleRestore() {
+    setRestoring(true);
+    try {
+      const isPro = await restore();
+      if (isPro) {
+        await completeOnboarding();
+      } else {
+        Alert.alert('Nothing to restore', "We couldn't find an active subscription for this account.");
+      }
+    } finally {
+      setRestoring(false);
     }
   }
 
@@ -66,9 +106,9 @@ export default function PaymentScreen() {
                   <Text style={[s.planName, plan === 'yearly' && s.planNameOn]}>Annual</Text>
                   <View style={s.badge}><Text style={s.badgeTxt}>Best Value</Text></View>
                 </View>
-                <Text style={s.planSub}>$2.50 / mo</Text>
+                <Text style={s.planSub}>Billed yearly</Text>
               </View>
-              <Text style={[s.planPrice, plan === 'yearly' && s.planPriceOn]}>$29.99/yr</Text>
+              <Text style={[s.planPrice, plan === 'yearly' && s.planPriceOn]}>{annualPrice}</Text>
             </AnimatedPress>
           </Animated.View>
 
@@ -81,10 +121,19 @@ export default function PaymentScreen() {
               accessibilityState={{ selected: plan === 'monthly' }}
             >
               <Text style={[s.planName, plan === 'monthly' && s.planNameOn]}>Monthly</Text>
-              <Text style={[s.planPrice, plan === 'monthly' && s.planPriceOn]}>$8.99/mo</Text>
+              <Text style={[s.planPrice, plan === 'monthly' && s.planPriceOn]}>{monthlyPrice}</Text>
             </AnimatedPress>
           </Animated.View>
         </View>
+
+        <AnimatedPress
+          style={s.restore}
+          onPress={handleRestore}
+          disabled={restoring}
+          accessibilityRole="button"
+        >
+          <Text style={s.restoreTxt}>{restoring ? 'Restoring…' : 'Restore purchases'}</Text>
+        </AnimatedPress>
       </WelcomeScreen>
 
       {/* Discount modal — first skip */}
@@ -139,6 +188,8 @@ const s = StyleSheet.create({
     padding: 22,
   },
   planOn: { backgroundColor: EDITORIAL.green },
+  restore: { alignItems: 'center', paddingVertical: 14, marginTop: 4 },
+  restoreTxt: { fontFamily: FONTS.nunitoSans, fontSize: 14, color: EDITORIAL.textSoft },
   planRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   planName: { fontFamily: FONTS.frauncesDisplay, fontSize: 18, color: EDITORIAL.text },
   planNameOn: { color: EDITORIAL.cream },

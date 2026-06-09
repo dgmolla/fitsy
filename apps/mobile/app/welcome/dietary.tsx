@@ -35,7 +35,7 @@ export default function DietaryScreen() {
 
   return (
     <WelcomeScreen
-      progress={12 / 15}
+      progress={15 / 18}
       title="Your rules."
       subtitle="Any dietary preferences? Select all that apply, or skip."
       onContinue={async () => {

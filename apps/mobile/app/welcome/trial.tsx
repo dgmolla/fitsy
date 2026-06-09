@@ -39,7 +39,7 @@ export default function TrialScreen() {
             <Ionicons name="chevron-back" size={22} color={EDITORIAL.textMid} />
           </Pressable>
           <View style={s.progressTrack}>
-            <View style={[s.progressFill, { width: `${Math.round((14 / 15) * 100)}%` }]} />
+            <View style={[s.progressFill, { width: `${Math.round((17 / 18) * 100)}%` }]} />
           </View>
         </View>
 

@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
 import { PostHogProvider } from 'posthog-react-native';
 import { ThemeProvider } from '@/lib/theme';
+import { PurchasesProvider } from '@/lib/usePurchases';
 import { getPostHogClient } from '@/lib/analytics';
 import { recordSession } from '@/lib/ratingPrompt';
 import { supabase } from '@/lib/supabase';
@@ -98,7 +99,9 @@ export default function RootLayout() {
     <PostHogProvider client={getPostHogClient()}>
       <SafeAreaProvider>
         <ThemeProvider>
-          <Stack screenOptions={{ headerShown: false }} />
+          <PurchasesProvider>
+            <Stack screenOptions={{ headerShown: false }} />
+          </PurchasesProvider>
         </ThemeProvider>
       </SafeAreaProvider>
     </PostHogProvider>

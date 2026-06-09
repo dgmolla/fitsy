@@ -150,9 +150,13 @@ export default function ResultsScreen() {
 
   return (
     <WelcomeScreen
-      progress={14 / 15}
-      title="Restaurants that fit your macros."
-      subtitle="These spots near you have meals that match your targets."
+      progress={17 / 18}
+      title={showEmpty ? "We're not in your area yet" : 'Restaurants that fit your macros.'}
+      subtitle={
+        showEmpty
+          ? 'Fitsy is launching in Los Angeles first — your city is next on the list.'
+          : 'These spots near you have meals that match your targets.'
+      }
       onContinue={() => router.push('/welcome/signin')}
       canContinue
       continueLabel="Continue"

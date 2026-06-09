@@ -19,6 +19,10 @@ const config = {
         '^@supabase/supabase-js$': '<rootDir>/__mocks__/supabase-js.ts',
         '^react-native-url-polyfill/auto$': '<rootDir>/__mocks__/react-native-url-polyfill-auto.ts',
         '^expo-secure-store$': '<rootDir>/__mocks__/expo-secure-store.ts',
+        '^react-native$': '<rootDir>/__mocks__/react-native.ts',
+        '^react-native-purchases$': '<rootDir>/__mocks__/react-native-purchases.ts',
+        '^react-native-purchases-ui$': '<rootDir>/__mocks__/react-native-purchases-ui.ts',
+        '^expo-constants$': '<rootDir>/__mocks__/expo-constants.ts',
       },
       transform: {
         '^.+\\.tsx?$': [
