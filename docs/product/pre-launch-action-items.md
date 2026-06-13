@@ -127,6 +127,26 @@ screenshots, metadata, and the demo account feed the final ASC submission.
 
 ---
 
+## Infra / environments
+
+- [ ] **Give Preview deploys a DB connection** `#infra`
+  The Supabase↔Vercel integration populates `POSTGRES_PRISMA_URL`,
+  `POSTGRES_URL_NON_POOLING`, `POSTGRES_URL`, `POSTGRES_PASSWORD` for
+  Production + Development only — Preview has none, so per-PR previews can't
+  exercise data routes. Fix via Vercel dashboard → Integrations → Supabase →
+  enable Preview (preferred; survives credential rotation). See
+  `docs/engineering/devops/staging-environment.md` §Giving Preview the DB connection.
+- [ ] **Rotate the Postgres password** `#infra` `#human`
+  Reset in Supabase (Vercel env auto-syncs). Hygiene — a connection string was
+  surfaced in a local session transcript on 2026-06-12. Do alongside the
+  Preview wiring so both pick up the new value.
+- [ ] **Ephemeral-branch workflow for destructive testing** `#infra` (post-launch, document-only now)
+  We intentionally run one Supabase DB and isolate destructive ops (schema
+  migrations, full pipeline `TRUNCATE` rebuilds) onto an on-demand Supabase
+  branch rather than a duplicate environment. Documented in
+  `docs/engineering/devops/staging-environment.md` §Ephemeral branch. No setup
+  needed until the first post-launch migration/rebuild against real-scale data.
+
 ## Harness / follow-ups (non-blocking)
 
 - [ ] **Structural test guarding legal-page presence** `#cto`
