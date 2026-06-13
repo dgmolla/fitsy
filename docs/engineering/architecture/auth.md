@@ -52,11 +52,11 @@ graph TD
 
 The welcome screen (`app/welcome/signin.tsx` and `app/welcome/login.tsx`) shows two buttons: **Continue with Apple** and **Continue with Google**. There is no email/password input in the production UI — see [Legacy note](#legacy-emailpassword-deprecated) below.
 
-### Token Storage (SEC-01 open item)
+### Token Storage (SEC-01 — resolved)
 
-After a successful auth flow, the Supabase `access_token` (JWT) is stored in `AsyncStorage` under the key `fitsy:authToken` (`apps/mobile/lib/authClient.ts`).
+After a successful auth flow, the Supabase session (access + refresh tokens) is persisted in the device keychain via `expo-secure-store` (`apps/mobile/lib/authClient.ts`, key `fitsy_authToken`), managed by the Supabase SDK's SecureStore adapter.
 
-> **SEC-01 (open, S-103):** `AsyncStorage` is an unencrypted key-value store. On a jailbroken or rooted device any process can read its contents. This token should be migrated to `expo-secure-store` (iOS Keychain / Android Keystore). Tracked as S-103. Until S-103 ships, this is an accepted P0 risk for TestFlight beta (trusted testers only).
+> **SEC-01 (resolved by S-200, 2026-04-26):** the original design stored the JWT in unencrypted `AsyncStorage`. It was migrated to `expo-secure-store` (iOS Keychain / Android Keystore); no auth token is held in AsyncStorage. This is no longer an open risk — relevant because Fitsy ships direct to the public App Store (no trusted-tester beta).
 
 ---
 

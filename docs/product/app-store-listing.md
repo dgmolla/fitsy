@@ -231,4 +231,4 @@ is for real fitness goals, not casual calorie counting.
 5. Paste all metadata fields from this document into App Store Connect
 6. Upload screenshots in the correct order (Screenshot 1 first)
 7. Complete content declarations
-8. Submit for TestFlight review first — do not skip TestFlight
+8. Submit for App Store review (no TestFlight beta — light user testing was sufficient)

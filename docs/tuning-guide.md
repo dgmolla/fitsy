@@ -100,7 +100,7 @@ Controls how the sprint machinery advances from one wave of tasks to the next.
 | `blocked` | Wave progression is paused. The harness will not advance regardless of task completion. Use when a dependency outside the codebase (e.g., App Store review, external API provisioning) must be resolved before work can continue. |
 
 **When to change:**
-- Switch to `manual` during high-stakes sprints (e.g., the TestFlight submission sprint) where you want to review each wave before proceeding.
+- Switch to `manual` during high-stakes sprints (e.g., the App Store submission sprint) where you want to review each wave before proceeding.
 - Set to `blocked` when a known external blocker (e.g., S-207 Apple Developer account setup) prevents any wave from proceeding usefully.
 - Keep at `auto` for normal development velocity.
 

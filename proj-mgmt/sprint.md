@@ -6,7 +6,7 @@
 
 ## Active
 
-- [[sprints/sprint-12|Sprint 12: Beta Readiness — TestFlight Round 1+2 + App Store Prep]]
+- [[sprints/sprint-12|Sprint 12: Launch Readiness — App Store Submission]]
 
 ## Upcoming
 

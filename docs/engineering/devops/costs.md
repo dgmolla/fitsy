@@ -62,7 +62,7 @@ graph LR
 | Item | Cost | Date | Notes |
 |------|------|------|-------|
 | Anthropic API credits | ~$50 | 2026-03 | Initial pipeline + CI reviewer experiments |
-| Apple Developer Program | $99/yr | confirm | Required for TestFlight and App Store submission (S-207 blocker) |
+| Apple Developer Program | $99/yr | confirm | Required for App Store submission (S-207 blocker) |
 | Domain (fitsy.org) | ~$12/yr | confirm | Current domain; confirm renewal date |
 
 ---
@@ -79,7 +79,7 @@ graph LR
 | Vercel (`fitsy-api`) | API backend hosting (Next.js) |
 | Supabase | Managed PostgreSQL + PostGIS |
 | EAS / Expo | Mobile builds and OTA updates |
-| Apple Developer | TestFlight distribution, App Store submission |
+| Apple Developer | App Store submission |
 | RevenueCat | Subscription entitlement management (`pro` entitlement, Apple IAP) |
 | PostHog | Mobile analytics (30+ events as of Sprint 12) |
 

@@ -147,8 +147,7 @@ Pagination: cursor-based, 20 posts per page.
 
 ### Rollout
 
-Ship behind a feature flag (`FORUM_ENABLED`). Enable for TestFlight
-testers first, then all users after one week with no critical bugs.
+Ship behind a feature flag (`FORUM_ENABLED`). Enable for an initial launch cohort first, then all users after one week with no critical bugs.
 
 ## Interface
 

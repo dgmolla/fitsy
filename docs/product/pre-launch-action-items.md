@@ -1,4 +1,4 @@
-# Pre-Launch Action Items — App Store
+# Pre-Launch Action Items â App Store
 
 > **Status:** Active tracker
 > **Created:** 2026-06-07
@@ -8,9 +8,9 @@
 Single checklist of everything still required before Fitsy can ship to the
 App Store. Derived from the launch-readiness audit. Items are tagged with the
 owning domain (`#backend`, `#frontend`, `#product`, `#design`, `#cto`,
-`#infra`, `#human`) — cross-domain work must be split per CLAUDE.md.
+`#infra`, `#human`) â cross-domain work must be split per CLAUDE.md.
 
-Legend: 🔴 hard blocker · 🟡 needs attention · ✅ done
+Legend: ð´ hard blocker Â· ð¡ needs attention Â· â done
 
 ---
 
@@ -23,7 +23,7 @@ graph TD
     C --> D[RevenueCat + IAP wiring #frontend]
     D --> E[Real receipt validation #backend]
     E --> F[Server-side subscription gate #backend]
-    B --> G[EAS Build → TestFlight]
+    B --> G[EAS Build → App Store submission]
     L[buildNumber #frontend] --> G
     M[Legal pages live PR #195 #backend] --> H[ASC metadata + App Privacy #product]
     N[Screenshots x2 sizes #design] --> H
@@ -42,12 +42,12 @@ graph TD
 
 The two long poles are **(1) payments** (Apple Developer account → ASC
 products → RevenueCat → validation → server gate) and **(2) the build/submit
-chain** (account → EAS submit + buildNumber → EAS Build → TestFlight). Legal,
+chain** (account → EAS submit + buildNumber → EAS Build → App Store submission). Legal,
 screenshots, metadata, and the demo account feed the final ASC submission.
 
 ---
 
-## 🔴 Blockers — must ship before submission
+## ð´ Blockers â must ship before submission
 
 ### Payments / subscriptions
 
@@ -66,7 +66,7 @@ screenshots, metadata, and the demo account feed the final ASC submission.
   prod behind `ALLOW_STUB_SUBSCRIPTIONS`; `TODO (S-103b)`). Validate against
   Apple App Store Server API or RevenueCat REST; persist real `expiresAt`.
 - [ ] **Server-side subscription gate** `#backend`
-  No `requireSubscription()` guard today — `/api/restaurants` checks auth but
+  No `requireSubscription()` guard today â `/api/restaurants` checks auth but
   not entitlement, so the paywall can be bypassed by setting a local flag. Gate
   protected routes on active/non-expired subscription.
 
@@ -76,29 +76,29 @@ screenshots, metadata, and the demo account feed the final ASC submission.
   `apps/mobile/app.config.ts` has `version: "1.0.0"` but no build number.
 - [ ] **EAS submit configuration** `#frontend`
   `eas.json` has build profiles but no `submit` block (no `ascAppId`,
-  `appleId`, ASC API key / team). Required to push to TestFlight / App Store.
-- [ ] **EAS Build → TestFlight** `#human` + `#frontend`
+  `appleId`, ASC API key / team). Required to push to the App Store.
+- [ ] **EAS Build → App Store submission** `#human` + `#frontend`
   Run the production build and upload. Runbooks already exist:
-  `docs/engineering/devops/testflight-runbook.md`.
+  `docs/engineering/devops/ios-release-runbook.md`.
 
 ### Store listing assets
 
 - [ ] **App Store screenshots** `#design` / `#product`
-  5 screens × 2 sizes (6.7" 1290×2796, 6.1" 1179×2556) with the marketing
-  caption overlays specified in `app-store-listing.md` §Screenshots. Requires
+  5 screens Ã 2 sizes (6.7" 1290Ã2796, 6.1" 1179Ã2556) with the marketing
+  caption overlays specified in `app-store-listing.md` Â§Screenshots. Requires
   the app running with Silver Lake demo data. Raw simulator grabs are a
   starting point, not submission-ready.
 
 ### Auth
 
-- [ ] **Configure Google Sign-In credentials — or remove it** `#frontend` + `#infra`
+- [ ] **Configure Google Sign-In credentials â or remove it** `#frontend` + `#infra`
   `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` is missing; the app shows a "Not
   Configured" alert. Either provision the OAuth client or pull the button
   before review. (Sign in with Apple is already implemented.)
 
 ---
 
-## 🟡 Needs attention before submission
+## ð¡ Needs attention before submission
 
 - [ ] **Merge PR #195 to deploy legal pages to production** `#backend`
   Approved (backend + CTO), CI green. Until merged, `/privacy`, `/terms`,
@@ -107,15 +107,15 @@ screenshots, metadata, and the demo account feed the final ASC submission.
   `support@fitsy.app` + `privacy@fitsy.app` must deliver (or alias both to
   `admin@fitsy.app`). Apple email-tests the support URL during review.
 - [ ] **App Privacy "nutrition label" in App Store Connect** `#product`
-  Enter disclosures from `app-store-listing.md` §Content Declarations
+  Enter disclosures from `app-store-listing.md` Â§Content Declarations
   (location: precise/foreground; tracking: no; IDFA: no). Confirm whether
   PostHog analytics requires `NSUserTrackingUsageDescription` in `app.config.ts`. `#frontend`
 - [ ] **Demo / review account** `#backend` + `#infra`
   Create `review@fitsy.app` with an active subscription pre-loaded so reviewers
-  bypass the paywall (per `app-store-listing.md` §App Review Information).
-- [ ] **Finalize pricing — single source of truth** `#product`
-  Inconsistent today: listing says $30/yr · $5/mo; `payment.tsx` shows
-  $29.99/yr · $8.99/mo; launch plan mentions $4.99/mo. Pick final numbers; they
+  bypass the paywall (per `app-store-listing.md` Â§App Review Information).
+- [ ] **Finalize pricing â single source of truth** `#product`
+  Inconsistent today: listing says $30/yr Â· $5/mo; `payment.tsx` shows
+  $29.99/yr Â· $8.99/mo; launch plan mentions $4.99/mo. Pick final numbers; they
   must match the ASC products exactly.
 - [ ] **Link legal pages from the mobile app** `#frontend`
   Mobile doesn't reference `/privacy`, `/terms`, or `/support` yet. Add links
@@ -135,17 +135,17 @@ screenshots, metadata, and the demo account feed the final ASC submission.
 
 ---
 
-## ✅ Already done
+## â Already done
 
-- ✅ Legal pages built — `/privacy`, `/terms`, `/support` (PR #195, approved, CI green) `#backend`
-- ✅ Account deletion — `DELETE /api/user` (transactional) + Profile UI `#backend` `#frontend`
-- ✅ Sign in with Apple — implemented end-to-end `#frontend`
-- ✅ App icon — 1024×1024 + adaptive icon + iOS asset catalog `#design`
-- ✅ Listing copy — name, subtitle, description, keywords, age rating (4+), health disclaimer `#product`
-- ✅ Location permission — `NSLocationWhenInUseUsageDescription` + priming screen `#frontend`
-- ✅ Bundle ID `app.fitsy.mobile` + EAS project configured `#frontend`
-- ✅ Marketing site / landing page live at `fitsy.app` `#backend`
-- ✅ TestFlight runbooks written `#cto`
+- â Legal pages built â `/privacy`, `/terms`, `/support` (PR #195, approved, CI green) `#backend`
+- â Account deletion â `DELETE /api/user` (transactional) + Profile UI `#backend` `#frontend`
+- â Sign in with Apple â implemented end-to-end `#frontend`
+- â App icon â 1024Ã1024 + adaptive icon + iOS asset catalog `#design`
+- â Listing copy â name, subtitle, description, keywords, age rating (4+), health disclaimer `#product`
+- â Location permission â `NSLocationWhenInUseUsageDescription` + priming screen `#frontend`
+- â Bundle ID `app.fitsy.mobile` + EAS project configured `#frontend`
+- â Marketing site / landing page live at `fitsy.app` `#backend`
+- ✅ iOS build/release runbooks written `#cto`
 
 ---
 
@@ -157,5 +157,5 @@ screenshots, metadata, and the demo account feed the final ASC submission.
 | Build & submit | 3 |
 | Assets | 1 (screenshots) |
 | Auth | 1 (Google or remove) |
-| Listing / compliance | 7 (🟡) |
+| Listing / compliance | 7 (ð¡) |
 | **Total open** | **17** |

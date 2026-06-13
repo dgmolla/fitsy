@@ -3,30 +3,20 @@ kanban-plugin: basic
 ---
 
 <!-- last-updated: 2026-05-09 -->
-<!-- wave-2: complete on code (13 PRs merged 2026-05-03..04). Only S-207 TestFlight build remains in wave-2; everything after is wave-3+. -->
+<!-- wave-2: complete on code (13 PRs merged 2026-05-03..04). Only S-207 App Store build remains in wave-2; everything after is wave-3+. -->
 <!-- spec: docs/product/archive/launch-plan.md -->
 
-> **Goal:** Ship to TestFlight, run a 1-week / 2-round beta, clear all launch-gating items so we can submit to the App Store.
+> **Goal:** Clear all launch-gating items and submit to the App Store. **TestFlight beta dropped 2026-06-12** — light user testing was sufficient; going direct to App Store (S-208–S-212 cancelled).
 >
 > **Spec:** `docs/product/archive/launch-plan.md` (Phase 1 checklist) + cross-session punch list (2026-04-25). Apple Developer account approved 2026-04-25.
 >
-> **Schedule:** Day 0 code fixes + first build → Day 1–3 Round 1 (5–8 testers) → Day 3 rebuild → Day 4–7 Round 2 (5–8 fresh testers) → Day 7–8 go/no-go + App Store submit.
+> **Schedule:** Day 0 code fixes + production build → submit to App Store → respond to review → launch.
 
 ## Backlog
 
-- [ ] **S-207 EAS production build → TestFlight** — `eas build --profile production --platform ios && eas submit --platform ios`. Upload to App Store Connect, enable internal TestFlight group, invite 5–8 testers. ~24h Apple internal review window. Comes last — every other Wave-2 ticket must be green first. #devops #cto #wave-2 ^dep-S-200 ^dep-S-201 ^dep-S-202 ^dep-S-203 ^dep-S-205c ^dep-S-206 ^dep-S-221 ^dep-S-222 ^dep-S-225 ^dep-S-226a ^dep-S-226b ^dep-S-227 ^dep-S-228a ^dep-S-228b ^dep-S-229 ^dep-S-230a ^dep-S-230b
+- [ ] **S-207 EAS production build → App Store submission** — `eas build --profile production --platform ios && eas submit --platform ios`. Upload to App Store Connect and submit for App Store review (~24–48h). No TestFlight beta — light user testing was sufficient. Comes last — every other Wave-2 ticket must be green first. #devops #cto #wave-2 ^dep-S-200 ^dep-S-201 ^dep-S-202 ^dep-S-203 ^dep-S-205c ^dep-S-206 ^dep-S-221 ^dep-S-222 ^dep-S-225 ^dep-S-226a ^dep-S-226b ^dep-S-227 ^dep-S-228a ^dep-S-228b ^dep-S-229 ^dep-S-230a ^dep-S-230b
 
-- [ ] **S-208 Round 1 recruit + onboard** — 5–8 testers from Hollywood/Silver Lake gyms. Onboard in person via TestFlight QR. Capture name + contact. Send Google Form link. #cto #wave-3 ^dep-S-207
-
-- [ ] **S-209 Round 1 daily triage + hotfix loop** — daily PostHog funnels + crash reports + tester messages. Same-day P0 hotfix via `eas update`. Exit: 4/5 completed ≥1 search; no P0 crashes. #cto #frontend #wave-3 ^dep-S-208
-
-- [ ] **S-210 Round 1 → Round 2 build cut** — bundle Round 1 fixes; native code → new TestFlight build, JS-only → `eas update`. #devops #wave-3 ^dep-S-209
-
-- [ ] **S-211 Round 2 recruit + onboard** — 5–8 fresh testers (no Round 1 overlap). #cto #wave-4 ^dep-S-210
-
-- [ ] **S-212 Round 2 feedback + LLM analysis** — collect Google Form responses; run Claude analysis per launch-plan.md template. Save to `docs/product/feedback/round-2-insights.md`. Exit: 5/8 used 3+ times unprompted; ≥2 say "would pay $4/mo". #cto #wave-4 ^dep-S-211
-
-- [ ] **S-213 Go/no-go + App Store submit prep** — review Round 2 exit criteria; if green, kick off App Store submission (Wave 5). If red, Sprint 13 plans Round 3. #cto #wave-4 ^dep-S-212
+- [ ] **S-213 App Store review + launch** — monitor the review (S-207 submitted it), respond to any reviewer feedback, then release to the App Store. #cto #wave-4 ^dep-S-207
 
 - [ ] **S-214 /privacy + /support pages** — copy in `docs/product/app-store-listing.md`. Host on landing; link from app welcome + App Store listing. #frontend #legal #wave-5
 
@@ -44,6 +34,16 @@ kanban-plugin: basic
 
 
 ## In Progress
+
+## Cancelled
+
+> **TestFlight beta program descoped 2026-06-12** — light user testing was deemed sufficient; shipping direct to the App Store. Kept here as a record of the decision.
+
+- [ ] **S-208 Round 1 recruit + onboard** — ~~5–8 testers from Hollywood/Silver Lake gyms via TestFlight QR.~~ **DESCOPED** — no beta cohort. #cto #cancelled
+- [ ] **S-209 Round 1 daily triage + hotfix loop** — ~~daily PostHog funnels + crash reports + tester messages.~~ **DESCOPED**. #cto #cancelled
+- [ ] **S-210 Round 1 → Round 2 build cut** — ~~bundle Round 1 fixes into a new build.~~ **DESCOPED**. #cancelled
+- [ ] **S-211 Round 2 recruit + onboard** — ~~5–8 fresh testers.~~ **DESCOPED**. #cancelled
+- [ ] **S-212 Round 2 feedback + LLM analysis** — ~~Google Form responses + Claude analysis.~~ **DESCOPED**. (The `docs/product/feedback/round-2-insights.md` artifact will not be produced.) #cancelled
 
 ## Done
 

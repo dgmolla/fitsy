@@ -11,7 +11,6 @@ during the MVP phase. Run this playbook once per sprint (weekly).
 |---------|----------|
 | In-app "Send Feedback" | `feedback@fitsy.app` inbox |
 | App Store reviews (post-launch) | App Store Connect → Reviews |
-| TestFlight beta feedback | App Store Connect → TestFlight → Feedback |
 | Direct messages / social | Founder's discretion; copy paste into email thread |
 
 For MVP, the primary source is the email inbox. All other channels are

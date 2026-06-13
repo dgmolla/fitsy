@@ -75,11 +75,11 @@ flowchart LR
 
 ## Sequencing for a Solo Founder at Pre-Launch
 
-**Now (pre-TestFlight):**
+**Now (pre-launch):**
 1. Build SEO infrastructure passively — `llms.txt`, programmatic pages, JSON-LD. This is a one-time build with compounding returns. Do it once, right. (See `docs/gtm/seo-discovery.md`.)
-2. Warm 3 branded IG accounts; hire one VA on OnlineJobs.ph. Don't start outreach until app is on TestFlight — you need a real App Store link to convert.
+2. Warm 3 branded IG accounts; hire one VA on OnlineJobs.ph. Don't start outreach until the app is live on the App Store — you need a real, public download link to convert. (No TestFlight beta gate — light user testing was sufficient; the next milestone is the public App Store release.)
 
-**Month 1 (post-TestFlight / App Store launch):**
+**Month 1 (post-App Store launch):**
 3. Begin VA outreach at 100–150 DMs/day across 3 accounts.
 4. Founder personally DMs the top 10% of targets from their real account.
 5. Close first 3–5 UGC deals using MVC structure.

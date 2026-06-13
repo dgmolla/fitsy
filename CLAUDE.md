@@ -13,11 +13,11 @@ Last audited: 2026-06-12. Full docs audit + refactor: `docs/docs-refactor-propos
 
 **Built and shipped**: Prisma schema + all API routes (filter expansion + `requireAuth` JWT middleware on reads), full mobile auth (Apple + Google Sign-In via Supabase, JWKS-verified — no local secret), 15-screen onboarding, GPS via `expo-location` (wired into search), search/detail/saved/profile screens (editorial cream palette), UE-first preload pipeline (Uber Eats discovery → FatSecret/Brave menus → Haiku macros), search 60× faster (LATERAL + denormalized MenuItem macros), PostHog analytics, security hardening, RevenueCat subscriptions wired on Test Store, EAS build config.
 
-**DB state**: Staging populated — 22+ restaurants, 268+ items (source: fatsecret), 0 duplicates.
+**DB state**: Staging populated (verified 2026-06-12) — 9,327 restaurants, 676,137 menu items, 676,137 MacroEstimates (haiku ~85%, fatsecret ~15%; 0 NULL source, 0 NULL denormalized macros), 0 duplicates.
 
-**Blocked on human**: EAS Build → TestFlight submission (Apple Developer account + ASC products); RevenueCat production (ASC products, paywall, bundle-id, webhook deploy). No real users yet.
+**Blocked on human**: EAS Build → App Store submission (Apple Developer account + ASC products); RevenueCat production (ASC products, paywall, bundle-id, webhook deploy). No real users yet.
 
-**Next**: TestFlight → first 10 users.
+**Next**: App Store submission → launch → first 10 users.
 
 ---
 
@@ -190,7 +190,7 @@ See `docs/tuning-guide.md` for what each knob does and when to change it.
 
 - **API**: Vercel project `fitsy-api` (Next.js). **Landing**: Vercel project `fitsy` (fitsy.org).
 - **Database**: Supabase managed PostgreSQL.
-- **Mobile**: Expo EAS Build → TestFlight.
+- **Mobile**: Expo EAS Build → App Store.
 - **Preload**: `scripts/preload-ue-first.ts`, run locally or on CI — not a production service.
 
 ## Project Management

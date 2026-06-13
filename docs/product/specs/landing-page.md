@@ -11,7 +11,7 @@
 Fitsy needs a public-facing web page that:
 1. Explains what Fitsy is in 10 seconds
 2. Drives downloads when the app is live on the App Store
-3. Gives the project a credible URL for TestFlight beta invites
+3. Gives the project a credible URL for launch announcements and early-access signups
 
 Currently the root URL (`fitsy-api.vercel.app`) returns a 404. Any link to Fitsy lands nowhere.
 
@@ -36,7 +36,7 @@ flowchart LR
     LandingPage --> Hero["Hero: what Fitsy does + CTA"]
     LandingPage --> Features["Features: macro search, LLM estimation, discovery"]
     LandingPage --> Footer["Footer: copyright"]
-    Hero --> CTA["App Store button (TestFlight until live)"]
+    Hero --> CTA["App Store button (email capture until live)"]
 ```
 
 ---
@@ -57,7 +57,7 @@ flowchart LR
 ### Copy
 - **Headline**: "Find food that fits your macros"
 - **Sub-headline**: "Fitsy finds restaurants near you with meals that match your protein, carb, and fat targets — so you can eat out without blowing your plan."
-- **CTA**: "Get Early Access" → TestFlight link (placeholder until live)
+- **CTA**: "Get Early Access" → App Store link (email capture placeholder until live)
 
 ---
 

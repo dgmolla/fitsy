@@ -148,15 +148,15 @@ Next.js default behavior allows all origins to call API routes. This is acceptab
 
 ### SEC-11 — P3 — Email verification skipped
 
-`email_confirm: true` in `register/route.ts` means users can register with any email address without proving ownership. Acceptable for a closed beta / TestFlight. Track for GA.
+`email_confirm: true` in `register/route.ts` means users can register with any email address without proving ownership. This was rated acceptable for a closed beta; since Fitsy now ships **direct to the public App Store (no TestFlight beta — decision 2026-06-12)**, re-evaluate before launch. Still low severity (P3), but the "closed beta / trusted testers" rationale no longer applies.
 
 ---
 
 ## Cross-Domain Tickets Created
 
-### S-103a — Migrate JWT storage from AsyncStorage to SecureStore (frontend)
+### S-103a — Migrate JWT storage from AsyncStorage to SecureStore (frontend) — ✅ RESOLVED (S-200, 2026-04-26)
 - **Owner**: frontend agent
-- **Priority**: P0 — block TestFlight
+- **Priority**: ~~P0 — block TestFlight~~ → **DONE.** Shipped as S-200: `authClient.ts` uses `expo-secure-store`; no token in AsyncStorage.
 - **File**: `apps/mobile/lib/authClient.ts`
 - **Action**: Replace `AsyncStorage` with `expo-secure-store` for `TOKEN_KEY = 'fitsy:authToken'`. Run `npx expo install expo-secure-store`. Update all three helpers (`getStoredToken`, `storeToken`, `clearToken`).
 
