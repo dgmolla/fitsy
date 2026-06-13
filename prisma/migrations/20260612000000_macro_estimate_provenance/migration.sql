@@ -24,8 +24,11 @@ UPDATE "MacroEstimate" SET "source" = 'llm' WHERE "source" IS NULL;
 ALTER TABLE "MacroEstimate" ALTER COLUMN "source" SET DEFAULT 'llm';
 ALTER TABLE "MacroEstimate" ALTER COLUMN "source" SET NOT NULL;
 
--- 3. Drop the old per-item unique index (Prisma named it <Table>_<col>_key).
-DROP INDEX IF EXISTS "MacroEstimate_menuItemId_key";
+-- 3. Drop the old per-item uniqueness. It was added as a CONSTRAINT (see
+--    20260408000000_add_preload_unique_constraints), so it must be dropped as a
+--    constraint, not an index — Postgres refuses DROP INDEX on a constraint-owned
+--    index. DROP CONSTRAINT also removes the underlying index.
+ALTER TABLE "MacroEstimate" DROP CONSTRAINT IF EXISTS "MacroEstimate_menuItemId_key";
 
 -- 4. Create the composite unique index: one estimate per (item, source).
 CREATE UNIQUE INDEX "MacroEstimate_menuItemId_source_key" ON "MacroEstimate"("menuItemId","source");
