@@ -303,7 +303,7 @@ WHERE id NOT IN (
 | 4 | Wrap per-restaurant work in transaction | `scripts/preload.ts` |
 | 5 | Refactor `upsertMacroEstimate` in `preload-rest.ts` — remove delete step | `scripts/preload-rest.ts` |
 | 6 | (removed) `rescrape-thin.ts` deleted as part of macro denormalization — re-scrapes go through `persistItemsInTx` | — |
-| 7 | Update `preload-runbook.md` — remove the "wipe and re-preload" truncate step | `docs/engineering/backend/preload-runbook.md` |
+| 7 | Update `preload-runbook.md` — remove the "wipe and re-preload" truncate step | `docs/engineering/pipeline/runbook.md` |
 
 ---
 

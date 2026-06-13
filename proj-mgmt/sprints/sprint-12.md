@@ -4,11 +4,11 @@ kanban-plugin: basic
 
 <!-- last-updated: 2026-05-09 -->
 <!-- wave-2: complete on code (13 PRs merged 2026-05-03..04). Only S-207 TestFlight build remains in wave-2; everything after is wave-3+. -->
-<!-- spec: docs/product/launch-plan.md -->
+<!-- spec: docs/product/archive/launch-plan.md -->
 
 > **Goal:** Ship to TestFlight, run a 1-week / 2-round beta, clear all launch-gating items so we can submit to the App Store.
 >
-> **Spec:** `docs/product/launch-plan.md` (Phase 1 checklist) + cross-session punch list (2026-04-25). Apple Developer account approved 2026-04-25.
+> **Spec:** `docs/product/archive/launch-plan.md` (Phase 1 checklist) + cross-session punch list (2026-04-25). Apple Developer account approved 2026-04-25.
 >
 > **Schedule:** Day 0 code fixes + first build → Day 1–3 Round 1 (5–8 testers) → Day 3 rebuild → Day 4–7 Round 2 (5–8 fresh testers) → Day 7–8 go/no-go + App Store submit.
 
@@ -53,7 +53,7 @@ kanban-plugin: basic
 
 - [x] **S-225 Onboarding screen — location permission prompt** — `welcome/location-permission.tsx` between signin success and `/(tabs)/search`; primary CTA fires `Location.requestForegroundPermissionsAsync()`, secondary "Maybe later" falls through to Silver Lake fallback. PostHog priming + grant/deny events. Shipped via PR #164. #frontend #wave-2 ^dep-S-224 @completed(2026-05-03)
 
-- [x] **S-222 Comprehensive PostHog instrumentation — measure every meaningful action** — pass over every screen in `app/welcome/*`, `app/(tabs)/*`, `app/restaurant/[id].tsx`; standardized snake_case event/property naming; instrumented failure paths alongside successes; taxonomy doc at `docs/engineering/frontend/analytics-events.md`. Shipped via PR #175. #frontend #analytics #wave-2 @completed(2026-05-03)
+- [x] **S-222 Comprehensive PostHog instrumentation — measure every meaningful action** — pass over every screen in `app/welcome/*`, `app/(tabs)/*`, `app/restaurant/[id].tsx`; standardized snake_case event/property naming; instrumented failure paths alongside successes; taxonomy doc at `docs/engineering/architecture/analytics-events.md`. Shipped via PR #175. #frontend #analytics #wave-2 @completed(2026-05-03)
 
 - [x] **S-221 Onboarding API reliability sweep — surface and mitigate silent failures** — replaced silent `catch(() => {})` swallows in `lib/useStats.ts`, `app/welcome/finding.tsx`, `app/(tabs)/search.tsx` with PostHog event capture + console.warn; added explicit retry UI for preview prefetch and macro-targets save failures. Shipped via PR #163. #frontend #wave-2 @completed(2026-05-03)
 

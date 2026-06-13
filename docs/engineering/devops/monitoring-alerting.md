@@ -1,8 +1,8 @@
 # Monitoring and Alerting
 
-> **Status:** Draft — Sprint 5 S-33
+> **Status:** Living · **Last verified:** 2026-06-12
 > **Author:** CTO
-> **Date:** 2026-03-24
+> **Originally drafted:** 2026-03-24 (Sprint 5 — S-33) · refreshed 2026-06-12
 
 ---
 
@@ -11,8 +11,9 @@
 Production Fitsy needs observable signals to detect problems before users notice:
 1. **API health** — is the backend responding?
 2. **Error rates** — are requests failing unexpectedly?
-3. **API costs** — are Anthropic + Google Places costs within expected ranges?
-4. **Vercel analytics** — basic traffic and performance telemetry
+3. **Pipeline telemetry** — did the preload run succeed, how many restaurants/items, and what did it cost?
+4. **Pipeline alerts** — proactive Slack notifications on failures and completions
+5. **Vercel analytics** — basic traffic and performance telemetry
 
 With no monitoring, production incidents are invisible until a user reports them.
 
@@ -20,7 +21,7 @@ With no monitoring, production incidents are invisible until a user reports them
 
 ## Solution
 
-MVP monitoring stack using Vercel-native tooling (free tier, no additional services):
+Monitoring stack combining Vercel-native tooling with Axiom pipeline telemetry and Slack alerting:
 
 | Signal | Tool | How |
 |--------|------|-----|
@@ -28,7 +29,10 @@ MVP monitoring stack using Vercel-native tooling (free tier, no additional servi
 | Error rates | Vercel function logs | `console.error` captured automatically |
 | Error alerts | Vercel Alerts | Email on function error spike |
 | Analytics | Vercel Analytics | `@vercel/analytics` + Speed Insights |
-| API costs | Preload script cost log | Structured JSON summary at end of run |
+| Pipeline telemetry | Axiom dataset `fitsy-pipeline` | `AXIOM_TOKEN` env var; emitted by `PipelineEmitter` in `scripts/preload-ue-first.ts` |
+| Pipeline alerts | Slack channel `C0ASM3865AA` | `notifySlack()` helper in `scripts/preload-ue-first.ts` via `SLACK_BOT_TOKEN` |
+
+> **Note:** stdout cost summary is no longer the only or primary signal for pipeline runs. Axiom is the authoritative source for run history, per-hex telemetry, and cost totals. Slack alerts provide real-time visibility on failure and completion without requiring manual log review.
 
 ---
 
@@ -36,17 +40,25 @@ MVP monitoring stack using Vercel-native tooling (free tier, no additional servi
 
 ```mermaid
 graph TD
-    subgraph "Runtime Monitoring (Vercel)"
+    subgraph "Runtime Monitoring (Vercel — fitsy-api project)"
         Client[Mobile App] --> API[API Routes]
         API --> Health[/api/health]
         API --> Logs[Vercel Function Logs]
-        Logs --> Alerts[Vercel Email Alerts]
+        Logs --> EmailAlerts[Vercel Email Alerts]
         Analytics[Vercel Analytics] --> Dashboard[Analytics Dashboard]
     end
 
-    subgraph "Offline Cost Tracking (Preload Script)"
-        Preload[scripts/preload.ts] --> CostLog[Cost summary JSON]
-        CostLog --> Manual[Manual review post-run]
+    subgraph "Pipeline Telemetry (Axiom + Slack)"
+        Preload[scripts/preload-ue-first.ts] --> PipelineEmitter[PipelineEmitter]
+        PipelineEmitter --> Axiom[(Axiom dataset: fitsy-pipeline)]
+        Preload --> notifySlack[notifySlack helper]
+        notifySlack --> SlackChannel[Slack channel C0ASM3865AA]
+        Preload --> Stdout[stdout cost summary]
+    end
+
+    subgraph "Credentials"
+        AXIOM_TOKEN[AXIOM_TOKEN env var] -.-> Axiom
+        SLACK_BOT_TOKEN[SLACK_BOT_TOKEN env var] -.-> notifySlack
     end
 ```
 
@@ -78,29 +90,33 @@ Add `@vercel/analytics` and `@vercel/speed-insights` to the Next.js API project.
 
 Enable in Vercel Dashboard → Project → Analytics → Enable.
 
-### 3. API cost tracking in preload script
+### 3. Pipeline telemetry — Axiom dataset `fitsy-pipeline`
 
-The preload pipeline calls Anthropic (Haiku) and Google Places. It logs a cost summary at the end of each run. The summary is printed to stdout and can be captured by CI or manual operators.
+The UE-first preload script emits structured telemetry via `PipelineEmitter` to the Axiom dataset **`fitsy-pipeline`**. This is the authoritative source for:
 
-Format:
-```
-[preload:costs] {
-  "restaurants_discovered": 180,
-  "restaurants_scraped": 153,
-  "anthropic_calls": 153,
-  "anthropic_tokens_in": 210000,
-  "anthropic_tokens_out": 48000,
-  "anthropic_cost_usd": 0.042,
-  "google_places_calls": 4,
-  "google_places_cost_usd": 0.032,
-  "firecrawl_pages": 183,
-  "total_cost_usd": 0.074
-}
-```
+- Per-run and per-hex completion status
+- Restaurant and item counts written per hex
+- Haiku token usage and estimated API cost
+- Discovery statistics (hexes probed, UE feed hits, dedup counts)
 
-Stored nowhere at MVP — operators review stdout after each preload run. Sprint 6 can add DB persistence if needed.
+**Setup:** Set `AXIOM_TOKEN` in the Vercel/local environment. The pipeline emits automatically when the token is present; if absent, telemetry is silently skipped (runs still succeed, but no Axiom record is written).
 
-### 4. Vercel error alerts
+**Querying:** Use the Axiom dashboard or APL queries on the `fitsy-pipeline` dataset. Example: filter `runId` to inspect a specific pipeline run.
+
+The stdout cost summary is still emitted at end-of-run for quick inspection, but is not the primary record — it is lost when the terminal session ends.
+
+### 4. Pipeline alerts — Slack channel `C0ASM3865AA`
+
+The preload script calls `notifySlack()` (defined in `scripts/preload-ue-first.ts`) to post run-level notifications to the Fitsy engineering Slack channel `C0ASM3865AA`.
+
+**When alerts fire:**
+- Pipeline run completion (success or partial)
+- Enrichment errors above a threshold
+- Preflight failures (UE probe or Anthropic connectivity)
+
+**Setup:** Set `SLACK_BOT_TOKEN` in the environment. If absent, Slack notifications are skipped; no error is raised.
+
+### 5. Vercel error alerts
 
 Configure in Vercel Dashboard → Project → Alerts:
 - **Metric**: Function Error Rate
@@ -121,20 +137,21 @@ Response 200: { status: "ok", db: "connected", version: string, timestamp: strin
 Response 503: { status: "error", db: "unreachable", error: string }
 ```
 
-### Preload script additions
+### Pipeline telemetry additions (already implemented in `preload-ue-first.ts`)
 
-- Track token usage per Claude call, accumulate totals
-- Track Google Places API call count
-- Print `[preload:costs]` JSON at end of run
+- `PipelineEmitter` emits per-hex and per-run events to Axiom (`fitsy-pipeline` dataset) when `AXIOM_TOKEN` is set
+- `notifySlack()` posts run summaries to Slack channel `C0ASM3865AA` when `SLACK_BOT_TOKEN` is set
+- stdout still prints a cost summary at end-of-run for manual inspection
 
 ---
 
 ## Constraints
 
 - Health check DB query must complete in <500ms — use `SELECT 1`, not a table count or complex query
-- No external monitoring services (DataDog, Sentry, etc.) at MVP — Vercel-native only
-- Cost tracking is manual/stdout at MVP — no dashboards or DB persistence
+- Axiom and Slack are optional dependencies in the pipeline — missing env vars cause silent skip, not a crash
+- `AXIOM_TOKEN` and `SLACK_BOT_TOKEN` are pipeline-side secrets; they do not need to be in the Vercel API project (they are only used by `scripts/preload-ue-first.ts`, which runs locally or on a CI runner)
 - Analytics requires `@vercel/analytics` ≥2.0 for Next.js App Router compatibility
+- There are **two** Vercel projects: `fitsy` (marketing site, fitsy.org) and `fitsy-api` (real API). Configure alerts and analytics on `fitsy-api`
 
 ## Deployment behavior
 
@@ -155,7 +172,7 @@ Rationale: The API project has no meaningful UI to preview in a branch deploy, a
 
 ## Out of Scope
 
-- Automated cost budget alerts (post-MVP — needs DB cost persistence first)
-- Distributed tracing / OpenTelemetry
-- Custom metrics dashboards
-- Slack/PagerDuty alerting (Vercel email is sufficient for MVP)
+- Automated cost budget alerts from Axiom (post-MVP — Axiom monitors can trigger this)
+- Distributed tracing / OpenTelemetry on API routes
+- Custom metrics dashboards beyond Axiom pipeline dataset
+- PagerDuty or on-call rotation (Vercel email + Slack is sufficient at current scale)

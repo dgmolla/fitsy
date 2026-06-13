@@ -9,15 +9,15 @@ and more.
 
 ## Current State
 
-Last audited: 2026-04-08 (Sprint 10). Full findings: `docs/engineering/audit-2026-03-25.md`.
+Last audited: 2026-06-12. Full docs audit + refactor: `docs/docs-refactor-proposal-2026-06-11.md`.
 
-**Built and passing**: Prisma schema (3 migrations, 5 models + rating/priceLevel/userRatingCount on Restaurant, dietaryTags on MenuItem), all 5 API routes with filter expansion (`dietary`, `maxPriceLevel`, `minRating`) + JWT auth middleware on all routes, full mobile auth flow (Apple Sign-In + Google Sign-In implemented), 15-screen editorial onboarding, search screen (editorial cream V3-C layout, macro strip, cuisine chips, filter panel), restaurant detail + saved + profile screens (all on editorial cream palette), dietary tag extraction pipeline, preload script with ratings/price/dietary enrichment (idempotent with unique constraints), CI/CD, PostHog analytics (5 events), security hardening (rate limiting, security headers, TOCTOU fix, subscription guard, lat/lng validation), EAS build config (bundle ID + Google OAuth env vars in eas.json).
+**Built and shipped**: Prisma schema + all API routes (filter expansion + `requireAuth` JWT middleware on reads), full mobile auth (Apple + Google Sign-In via Supabase, JWKS-verified — no local secret), 15-screen onboarding, GPS via `expo-location` (wired into search), search/detail/saved/profile screens (editorial cream palette), UE-first preload pipeline (Uber Eats discovery → FatSecret/Brave menus → Haiku macros), search 60× faster (LATERAL + denormalized MenuItem macros), PostHog analytics, security hardening, RevenueCat subscriptions wired on Test Store, EAS build config.
 
-**DB state**: Staging populated — 22+ restaurants, 268+ items, 268 MacroEstimates (source: fatsecret), 0 duplicates.
+**DB state**: Staging populated — 22+ restaurants, 268+ items (source: fatsecret), 0 duplicates.
 
-**Not working**: (1) Search uses hardcoded Silver Lake coordinates — no GPS yet (deferred post-MVP). (2) Apple auth not validated on real device — needs TestFlight. (3) Not on TestFlight — blocked on human: requires Apple Developer account setup + EAS Build run.
+**Blocked on human**: EAS Build → TestFlight submission (Apple Developer account + ASC products); RevenueCat production (ASC products, paywall, bundle-id, webhook deploy). No real users yet.
 
-**Next**: EAS Build → TestFlight → first 10 users.
+**Next**: TestFlight → first 10 users.
 
 ---
 
@@ -48,10 +48,10 @@ fitsy/
 ├── prisma/            # Database schema and migrations
 ├── scripts/           # Structural tests, harness metrics
 ├── docs/
-│   ├── product/       # Vision, specs, feedback
-│   ├── engineering/   # ADRs, backend, frontend, devops
-│   ├── design/        # Design brief, component specs
-│   └── gtm/           # GTM strategy, launch plans
+│   ├── product/       # vision, roadmap, business-model, specs/, archive/
+│   ├── engineering/   # architecture/, pipeline/, backend/, devops/, archive/
+│   ├── design/        # design brief, component library
+│   └── gtm/           # strategy, ugc-playbook, seo-discovery
 ├── proj-mgmt/         # OKRs, sprint boards
 └── .claude/
     └── agents/        # Role definitions
@@ -63,10 +63,10 @@ fitsy/
 
 | System | Location | What it does |
 |--------|----------|-------------|
-| Preload pipeline | `scripts/` | Google Places → Firecrawl → Claude Haiku → PostgreSQL |
+| Preload pipeline (UE-first) | `scripts/preload-ue-first.ts` | Uber Eats discovery → FatSecret/Brave menus → Claude Haiku macros → PostgreSQL (H3 hex checkpoints, Axiom telemetry) |
 | API backend | `apps/api/` | Query + filter preloaded data; no external API calls |
 
-Full details — pipeline steps, cost, endpoints, service boundaries, confidence tiers, DB schema, auth, and external services: `docs/engineering/backend/system-design.md`.
+Architecture: `docs/engineering/architecture/system-design.md` (+ `auth.md`, `api-reference.md`). Pipeline: `docs/engineering/pipeline/` (runbook, status, data-pipeline-v3).
 ---
 
 ## Development Commands
@@ -99,8 +99,10 @@ vercel env add KEY prod    # Add/update a secret
 |----------|---------|--------|
 | `POSTGRES_PRISMA_URL` | DB connection (pooled) | Supabase integration |
 | `POSTGRES_URL_NON_POOLING` | DB migrations (direct) | Supabase integration |
-| `FIRECRAWL_API_KEY` | Menu scraping | firecrawl.dev |
 | `ANTHROPIC_API_KEY` | Macro estimation (Haiku) | console.anthropic.com |
+| `UE_LOC_COOKIE` | Uber Eats discovery (preload) | captured cookie |
+| `BRAVE_API_KEY` | Indie menu URL discovery (preload) | brave.com/search/api |
+| `AXIOM_TOKEN` / `SLACK_BOT_TOKEN` | Pipeline telemetry + alerts | Axiom / Slack |
 
 ---
 
@@ -113,20 +115,15 @@ vercel env add KEY prod    # Add/update a secret
 - **Error responses**: `{ "error": "message" }` with appropriate HTTP status codes
 - **Tests**: Write tests for new endpoints. Mock only external services, never your own code.
 - **API calls**: All external API calls go through service wrappers in `apps/api/services/`
-- **Docs structure**: `docs/` children are domains (product, engineering, design, gtm). Domain-specific subdirs are grandchildren. No domain-specific dirs directly under `docs/`.
-- **Diagrams**: Every spec and design doc must include at least one Mermaid diagram (```mermaid code block) illustrating the primary data/control flow or architecture. Use Mermaid in markdown — GitHub and Obsidian render it natively.
-- **Single-domain ownership**: Each agent only modifies files it owns (listed in its `.claude/agents/<role>.md` under "You Own"). If your task requires changes in another domain, do NOT make those changes yourself — create a separate ticket for that domain's agent. This applies at every level:
-  - **Tickets**: one `#role` tag per sprint card. Cross-domain tasks must be split into subtasks before work begins.
-  - **Implementation**: only edit files in your domain. If you discover a needed change outside your domain, note it and move on.
-  - **PRs**: every PR must route to exactly one reviewer. Enforced by CI — PRs touching multiple domains will fail.
+- **Docs structure**: `docs/` children are domains (product, engineering, design, gtm); subdirs are grandchildren. Superseded/historical docs live in each domain's `archive/`. Index + conventions: `docs/README.md`.
+- **Diagrams**: Every spec and design doc must include at least one Mermaid diagram (```mermaid block) of the primary flow/architecture. GitHub and Obsidian render it natively.
+- **Single-domain ownership**: Each agent only modifies files it owns (its `.claude/agents/<role>.md` "You Own"). Needed change in another domain → file a ticket for that domain, don't make it yourself. One `#role` tag per card; one reviewer per PR (CI fails multi-domain PRs).
 
 ---
 
 ## Session Discipline
 
-**Commit before you leave.** Every session must end with all meaningful work committed — even as WIP on a branch. Stashing is not committing. If work is incomplete, commit with a `wip:` prefix on a feature branch so the next session can find it via `git log`, not `git stash list`. Stashes are invisible to future sessions and consistently cause lost work.
-
-**Check for prior work first.** At session start, check `git stash list` and `git status` for uncommitted work from prior sessions. The SessionStart hook surfaces this automatically — act on it before starting new work.
+**Commit before you leave** — every session ends with meaningful work committed, even as `wip:` on a branch. Stashes are invisible to future sessions and cause lost work; never rely on them. **Check for prior work first** — at session start, check `git status` (the SessionStart hook surfaces it) before starting new work.
 
 ---
 
@@ -137,37 +134,19 @@ committing. Fix all failures in your session. Do not open a PR that
 you haven't verified passes locally.
 
 ```bash
-# 1. Structural tests (seconds)
-bash scripts/structural-tests.sh
-
-# 2. Type check (seconds)
-npx tsc --noEmit
-
-# 3. Unit + integration tests (seconds-minutes)
-npm test
-
-# 4. Build (catches issues tests miss)
-npm run build
-
-# 5. No build output committed
-git diff --cached --name-only | grep -E '\.(js|js\.map)$' # should be empty
-
-# 6. E2E smoke tests (local — via mobile MCP + Expo Go simulator)
-# Use mobile MCP tools to verify critical flows in the simulator
+bash scripts/structural-tests.sh                              # structural tests
+npx tsc --noEmit                                              # type check
+npm test                                                     # unit + integration
+npm run build                                                # build (catches what tests miss)
+git diff --cached --name-only | grep -E '\.(js|js\.map)$'    # must be empty (no build output)
+# E2E: use mobile MCP tools to verify critical flows in the Expo Go simulator
 ```
 
 **The rule**: if CI would catch it, you should have caught it first.
 
 ## Post-PR Gate
 
-You are not done when you push. You are done when CI and deploy are green.
-
-1. After pushing, poll `gh pr checks <PR-NUMBER>` until all checks complete
-2. If any check fails, read the failure logs and fix the issue
-   - CI failures: check the GitHub Actions log URL from `gh pr checks`
-   - Vercel deploy failures: `npx vercel inspect <deployment-id> --logs`
-3. Push the fix and repeat until all checks pass
-4. Only hand off to the reviewer once everything is green
+You are done when CI and deploy are green, not when you push. After pushing, poll `gh pr checks <PR-NUMBER>` until complete; on failure read the logs (GitHub Actions URL, or `npx vercel inspect <id> --logs` for deploys), push the fix, repeat. Only hand off to the reviewer once everything is green.
 
 ## Harness Principles
 
@@ -189,8 +168,9 @@ You are not done when you push. You are done when CI and deploy are green.
 - **Data integrity (nutrition estimates)** — LLM-estimated macros are
   approximate; users may make health decisions based on this data.
   Always show confidence ranges, never false precision.
-- **External APIs** — Google Places + Firecrawl + Claude are core
-  dependencies. Handle rate limits, failures, and caching.
+- **External APIs** — Uber Eats (discovery), FatSecret/Brave (menus), and
+  Claude Haiku (macros) are core preload dependencies. Handle rate limits,
+  failures, and resume. The runtime API makes no external calls.
 
 ---
 
@@ -205,17 +185,14 @@ You are not done when you push. You are done when CI and deploy are green.
 | wave-progression | auto |
 
 See `docs/tuning-guide.md` for what each knob does and when to change it.
----
 
 ## Deployment
 
-- **API**: Vercel or Railway (Next.js). Free tier for MVP.
-- **Database**: Neon or Supabase managed PostgreSQL with PostGIS (pick before first migration).
-- **Mobile**: Expo EAS Build. TestFlight for beta.
-- **Preload script**: Run locally or on CI runner — not a production service.
-
----
+- **API**: Vercel project `fitsy-api` (Next.js). **Landing**: Vercel project `fitsy` (fitsy.org).
+- **Database**: Supabase managed PostgreSQL.
+- **Mobile**: Expo EAS Build → TestFlight.
+- **Preload**: `scripts/preload-ue-first.ts`, run locally or on CI — not a production service.
 
 ## Project Management
 
-- **OKR board**: `proj-mgmt/okrs.md` | **Sprint board**: `proj-mgmt/sprint.md`
+- **OKR board**: `proj-mgmt/okrs.md` | **Sprint board**: `proj-mgmt/sprint.md` | **Backlog**: `proj-mgmt/backlog.md`

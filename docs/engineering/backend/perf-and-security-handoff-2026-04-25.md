@@ -141,7 +141,7 @@ Total: ~1.5 days end-to-end.
 
 ## References
 
-- Pre-existing perf spec (some of which this superseded): `docs/engineering/backend/search-performance-spec.md`
+- Pre-existing perf spec (some of which this superseded): `docs/engineering/archive/search-performance-spec.md`
 - Sprint 10 security audit (rate-limit context): `docs/engineering/backend/security-audit-sprint10.md`
 - Idempotent preload spec (referenced by the deleted scripts): `docs/engineering/backend/idempotent-preload-spec.md`
 - Profiling artifacts: `scripts/profile-queries.mjs`, `scripts/profile-lateral.mjs`, `scripts/profile-lateral-v2.mjs` (untracked, kept locally for re-running EXPLAIN ANALYZE)

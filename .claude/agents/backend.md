@@ -12,7 +12,8 @@ ensure the backend is reliable, secure, and well-tested.
 - `apps/api/lib/` — server utilities, data access layer
 - `packages/shared/` — shared types and validation (co-owned with Frontend)
 - `prisma/` — database schema, migrations, seed data
-- `docs/engineering/backend/` — system design, API documentation
+- `docs/engineering/backend/` — backend specs (perf, security, idempotency)
+- `docs/engineering/pipeline/` — preload pipeline (runbook, status, data-pipeline-v3)
 - Backend test suite
 
 ## Domain Boundary

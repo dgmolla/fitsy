@@ -1,8 +1,8 @@
 # OKRs
 
 **Cadence**: Review after every sprint.
-**Last reviewed**: 2026-04-08
-**Current phase**: Get Users (transitioned after Sprint 5)
+**Last reviewed**: 2026-06-12
+**Current phase**: Get Users (transitioned after Sprint 5; currently on ~Sprint 12)
 
 ---
 
@@ -64,10 +64,10 @@ Production deployment with monitoring, ready for real users.
 
 | # | Key Result | Status | Notes |
 |---|------------|--------|-------|
-| KR1 | Deployed to production with auth and data pipeline operational | **Done** | S-30 merged; runbook + verify-prod.sh shipped |
-| KR2 | Business Model and pricing strategy finalized | **Done** | S-31 merged; $30/yr + $5/mo Stripe spec complete |
-| KR3 | GTM materials complete (landing page, CTA to App Store) | **Done** | S-32 merged; Next.js marketing site with hero, features, CTA |
-| KR4 | Monitoring and alerting operational (API costs, rate limits, accuracy) | **Done** | S-33 merged; health endpoint + Vercel analytics |
+| KR1 | Deployed to production with auth and data pipeline operational | **Done** | S-30 merged; runbook + verify-prod.sh shipped; UE-first pipeline (preload-ue-first.ts) now live |
+| KR2 | Business Model and pricing strategy finalized | **Partial** | S-31 merged; pricing spec was Stripe-based. Reality: RevenueCat + Apple IAP (`pro` entitlement) wired on Test Store; prod blocked on ASC products. Pricing TBD (decide before App Store submission). |
+| KR3 | GTM materials complete (landing page, CTA to App Store) | **Done** | S-32 merged; Next.js marketing site on fitsy.org with hero, features, CTA |
+| KR4 | Monitoring and alerting operational (API costs, rate limits, accuracy) | **Done** | S-33 merged; health endpoint + Vercel analytics + Axiom pipeline telemetry (`fitsy-pipeline`) + Slack alerts (C0ASM3865AA) |
 
 ---
 
@@ -78,9 +78,9 @@ Real users validate whether macro-aware restaurant discovery solves a real probl
 
 | # | Key Result | Status | Notes |
 |---|------------|--------|-------|
-| KR1 | 10 users signed up and using the app | In progress | Auth fully implemented: Apple Sign-In + JWT middleware on all routes (S-94), Google Sign-In validated (S-99), security audit complete (S-103), PostHog analytics live (S-102), EAS build config ready (S-104/S-105). Blocker: EAS Build + TestFlight submission blocked on human — needs Apple Developer account + provisioning profiles. |
+| KR1 | 10 users signed up and using the app | **Blocked** | Auth shipped (Apple Sign-In S-94, Google Sign-In S-99), GPS live, PostHog analytics live (S-102), onboarding shipped (~Sprint 10–12), EAS build config ready (S-104/S-105). **0 real users as of 2026-06-12 — pre-TestFlight.** Blocker: S-207 EAS Build → TestFlight submission is human-gated (requires Apple Developer account setup, provisioning profiles, ASC products). No user numbers to report yet. |
 | KR2 | Users completing at least 3 searches per week | Not started | Measurable only after KR1 — needs active users first |
-| KR3 | 2 rounds of user testing completed with findings triaged | Not started | |
+| KR3 | 2 rounds of user testing completed with findings triaged | Not started | Cannot start until TestFlight track is open (depends on KR1 blocker) |
 | KR4 | Feedback loop operational (capture → triage → spec → ship) | **Done** | S-38 merged; feedback triage playbook + P0–P4 priority matrix in `docs/product/feedback-triage.md` |
 
 ---

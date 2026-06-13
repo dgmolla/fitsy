@@ -1,8 +1,9 @@
 # Fitsy Component Library Spec
 
-> **Status**: Draft
+> **Status**: Living — partly a design-debt tracker. The spec below defines the original intended components; the Implementation Status section maps each to what actually shipped in `apps/mobile/components/`. Several spec components were renamed or replaced with ad-hoc equivalents during MVP development; gaps are marked as design debt.
+> **Last verified:** 2026-06-12
 > **Author**: Designer
-> **Date**: 2026-03-23
+> **Originally drafted**: 2026-03-23
 
 ---
 
@@ -614,3 +615,60 @@ graph TD
 - All skeleton states use a shared `Skeleton` primitive (shimmer animation)
 - Fonts: load `Inter` and `SpaceMono` via `expo-font` in the app root
 - **Dark mode:** The token file above defines light-mode values only. Dark mode support is deferred to a follow-up spec. When implemented, introduce a semantic alias layer (e.g., `colors.text.primary`, `colors.surface.card`) that resolves to different hex values per color scheme via `useColorScheme()`. All components must reference semantic aliases — never raw hex — so the single token swap covers the entire component set. No hardcoded light-mode hex values should appear in component `StyleSheet.create()` calls.
+
+---
+
+## Implementation Status
+
+> This section tracks how the 8 spec'd components map to what actually shipped in `apps/mobile/components/`. The app shipped ~11 ad-hoc components during MVP development. Mismatches between spec names and shipped names are design debt — tracked here to inform the next design system pass.
+
+### Spec → Actual Mapping
+
+| Spec component | Status | Actual file(s) in `apps/mobile/components/` | Notes |
+|----------------|--------|---------------------------------------------|-------|
+| `MacroPill` | Renamed | `MacroChips.tsx` | Ships P/C/F inline chips; no `variant` prop; covers compact + full use cases |
+| `MacroChart` | Not built | — | Ring/bar visualization not implemented; detail screen shows MacroChips instead |
+| `ConfidenceBadge` | Built | `ConfidenceBadge.tsx` | Matches spec closely |
+| `RestaurantCard` | Built | `RestaurantCard.tsx` | Matches spec; uses `MenuItemCard` for item rows within it |
+| `MealRow` | Renamed | `MenuItemCard.tsx` | Menu item row with macros; renamed to reflect broader menu-item use |
+| `FilterChip` / `FilterSheet` | Renamed | `FilterPopup.tsx` | Combines chip trigger + popup; no dedicated `FilterChip` primitive |
+| `TargetBar` | Split | `MacroInputBar.tsx`, `MacroTargetsSection.tsx` | Target display/edit split across two components; no single `TargetBar` |
+| `MatchScore` | Not built | — | Match percentage not displayed as a standalone bar/badge component |
+
+### Ad-hoc components shipped (not in original spec)
+
+| Component | File | What it does |
+|-----------|------|-------------|
+| AnimatedPress | `AnimatedPress.tsx` | Pressable with scale animation |
+| AuthForm | `AuthForm.tsx` | OAuth sign-in form (Apple + Google) |
+| BookmarkButton | `BookmarkButton.tsx` | Save/unsave restaurant toggle |
+| ContinueButton | `ContinueButton.tsx` | Onboarding continue CTA |
+| EmptyState | `EmptyState.tsx` | Empty results / no-data placeholder |
+| FeedbackSheet | `FeedbackSheet.tsx` | In-app feedback submission |
+| FitsyLoader | `FitsyLoader.tsx` | Loading spinner with brand mark |
+| LocationBar | `LocationBar.tsx` | GPS location display bar |
+| LocationPickerSheet | `LocationPickerSheet.tsx` | Manual location picker bottom sheet |
+| MacroField | `MacroField.tsx` | Single macro value input field |
+| MacroScrollPicker | `MacroScrollPicker.tsx` | Scroll-wheel macro value selector |
+| ProfileEditSheet | `ProfileEditSheet.tsx` | Profile editing bottom sheet |
+| ProgressDots | `ProgressDots.tsx` | Onboarding step indicator |
+| ScreenBackground | `ScreenBackground.tsx` | Cream editorial background wrapper |
+| ScreenHeader | `ScreenHeader.tsx` | Screen-level header with back/actions |
+| ScrollPicker | `ScrollPicker.tsx` | Generic scroll-wheel picker primitive |
+| SearchHeader | `SearchHeader.tsx` | Search screen header with filters |
+| SelectionCard | `SelectionCard.tsx` | Single-select card (onboarding goals) |
+| StatPicker | `StatPicker.tsx` | Onboarding stat entry (height, weight, age) |
+| WelcomeScreen | `WelcomeScreen.tsx` | Onboarding welcome screen component |
+
+### Design debt summary
+
+```mermaid
+pie title Spec Component Build Status
+    "Built (matches spec)" : 2
+    "Renamed / restructured" : 4
+    "Not built" : 2
+```
+
+- **2 not built:** `MacroChart` (ring/bar visualization) and `MatchScore` (bar/badge). These would improve the detail screen UX but were deferred.
+- **4 renamed/restructured:** naming drift happened organically during MVP sprints. A future design system pass should decide whether to align names to spec or update the spec to match shipped reality.
+- **20 ad-hoc components:** the shipped component set is 2.5× larger than the spec anticipated. Most are UI infrastructure (onboarding, navigation, forms) that the spec didn't cover. These should be added to the spec as the design system matures.

@@ -1,8 +1,8 @@
 # Landing Page
 
-> **Status:** Draft — Sprint 5 S-32
+> **Status:** Shipped — live · **Last verified:** 2026-06-12
 > **Author:** Frontend
-> **Date:** 2026-03-24
+> **Date:** 2026-03-24 (spec); shipped ~Sprint 8
 
 ---
 
