@@ -195,81 +195,85 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    // ─── Update user profile ─────────────────────────────────────────────────
+    const updatedUser = await prisma.$transaction(async (tx) => {
+      // ─── Update user profile ───────────────────────────────────────────────
 
-    const updatedUser = await prisma.user.update({
-      where: { id: auth.sub },
-      data: {
-        ...(update.birthday !== undefined && {
-          birthday: new Date(update.birthday),
-        }),
-        ...(update.heightCm !== undefined && { heightCm: update.heightCm }),
-        ...(update.weightKg !== undefined && { weightKg: update.weightKg }),
-        ...(update.activityLevel !== undefined && {
-          activityLevel: update.activityLevel,
-        }),
-        ...(update.goal !== undefined && { goal: update.goal }),
-        ...(update.onboardingStep !== undefined && {
-          onboardingStep: update.onboardingStep,
-        }),
-      },
-      select: USER_SELECT,
+      const user = await tx.user.update({
+        where: { id: auth.sub },
+        data: {
+          ...(update.birthday !== undefined && {
+            birthday: new Date(update.birthday),
+          }),
+          ...(update.heightCm !== undefined && { heightCm: update.heightCm }),
+          ...(update.weightKg !== undefined && { weightKg: update.weightKg }),
+          ...(update.activityLevel !== undefined && {
+            activityLevel: update.activityLevel,
+          }),
+          ...(update.goal !== undefined && { goal: update.goal }),
+          ...(update.onboardingStep !== undefined && {
+            onboardingStep: update.onboardingStep,
+          }),
+        },
+        select: USER_SELECT,
+      });
+
+      // ─── Explicit macro targets override auto-calc ─────────────────────────
+
+      if (update.macroTarget) {
+        await tx.macroTarget.upsert({
+          where: { userId: auth.sub },
+          create: {
+            userId: auth.sub,
+            calories: update.macroTarget.calories,
+            proteinG: update.macroTarget.proteinG,
+            carbsG: update.macroTarget.carbsG,
+            fatG: update.macroTarget.fatG,
+            goalType: "maintain",
+          },
+          update: {
+            calories: update.macroTarget.calories,
+            proteinG: update.macroTarget.proteinG,
+            carbsG: update.macroTarget.carbsG,
+            fatG: update.macroTarget.fatG,
+          },
+        });
+      } else if (
+        user.birthday !== null &&
+        user.heightCm !== null &&
+        user.weightKg !== null &&
+        user.activityLevel !== null &&
+        user.goal !== null
+      ) {
+        // Auto-calculate TDEE only when no explicit macros provided
+        const tdee = calculateTdee(
+          calculateAge(user.birthday),
+          user.heightCm,
+          user.weightKg,
+          user.activityLevel as ActivityLevel,
+          user.goal as UserGoal,
+        );
+
+        await tx.macroTarget.upsert({
+          where: { userId: auth.sub },
+          create: {
+            userId: auth.sub,
+            calories: tdee.calories,
+            proteinG: tdee.proteinG,
+            carbsG: tdee.carbsG,
+            fatG: tdee.fatG,
+            goalType: "maintain",
+          },
+          update: {
+            calories: tdee.calories,
+            proteinG: tdee.proteinG,
+            carbsG: tdee.carbsG,
+            fatG: tdee.fatG,
+          },
+        });
+      }
+
+      return user;
     });
-
-    // ─── Explicit macro targets override auto-calc ───────────────────────────
-
-    if (update.macroTarget) {
-      await prisma.macroTarget.upsert({
-        where: { userId: auth.sub },
-        create: {
-          userId: auth.sub,
-          calories: update.macroTarget.calories,
-          proteinG: update.macroTarget.proteinG,
-          carbsG: update.macroTarget.carbsG,
-          fatG: update.macroTarget.fatG,
-          goalType: "maintain",
-        },
-        update: {
-          calories: update.macroTarget.calories,
-          proteinG: update.macroTarget.proteinG,
-          carbsG: update.macroTarget.carbsG,
-          fatG: update.macroTarget.fatG,
-        },
-      });
-    } else if (
-      updatedUser.birthday !== null &&
-      updatedUser.heightCm !== null &&
-      updatedUser.weightKg !== null &&
-      updatedUser.activityLevel !== null &&
-      updatedUser.goal !== null
-    ) {
-      // Auto-calculate TDEE only when no explicit macros provided
-      const tdee = calculateTdee(
-        calculateAge(updatedUser.birthday),
-        updatedUser.heightCm,
-        updatedUser.weightKg,
-        updatedUser.activityLevel as ActivityLevel,
-        updatedUser.goal as UserGoal,
-      );
-
-      await prisma.macroTarget.upsert({
-        where: { userId: auth.sub },
-        create: {
-          userId: auth.sub,
-          calories: tdee.calories,
-          proteinG: tdee.proteinG,
-          carbsG: tdee.carbsG,
-          fatG: tdee.fatG,
-          goalType: "maintain",
-        },
-        update: {
-          calories: tdee.calories,
-          proteinG: tdee.proteinG,
-          carbsG: tdee.carbsG,
-          fatG: tdee.fatG,
-        },
-      });
-    }
 
     return NextResponse.json(
       {

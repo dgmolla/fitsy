@@ -5,12 +5,13 @@
  */
 
 import { randomUUID } from "node:crypto";
-import type { PrismaClient } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
 import type {
   MacroData,
   StructuredMenuItem,
 } from "../apps/api/services/menuSources/types.js";
 import { aggregateDietaryOptions, DIETARY_TAG_THRESHOLD } from "./constants.js";
+import { macroWinnerSqlOrder } from "@fitsy/shared";
 
 // ─── Item validation (S-111, S-112) ─────────────────────────────────────────
 
@@ -169,6 +170,14 @@ export type TxClient = any;
  * Persist a restaurant's items inside an existing transaction context.
  * This is the shared core — both `persistItems` (single-restaurant wrapper)
  * and `persistHex` (hex-level wrapper in hex-persist.ts) delegate here.
+ *
+ * Change 1 (stable IDs): upsert MenuItem by (restaurantId, name) so existing
+ * rows keep their id (SavedItem.menuItemId never orphaned). Stale items absent
+ * from the incoming set are deleted afterward.
+ * Change 2 (provenance): upsert MacroEstimate by (menuItemId, source) so each
+ * source keeps its own row. After upserting, recompute MenuItem macro columns
+ * from the winning estimate so a lower-trust run never clobbers a higher-trust
+ * one.
  */
 export async function persistItemsInTx(
   restaurantId: string,
@@ -184,19 +193,7 @@ export async function persistItemsInTx(
     console.log(`[persist] Deduped ${inputPairs.length - validPairs.length} duplicate item names for restaurant ${restaurantId}`); // eslint-disable-line no-console
   }
 
-  // Query 1: Delete existing items (cascade deletes estimates via FK)
-  await tx.$executeRaw`
-    DELETE FROM "MacroEstimate" WHERE "menuItemId" IN (
-      SELECT "id" FROM "MenuItem" WHERE "restaurantId" = ${restaurantId}
-    )
-  `;
-  await tx.$executeRaw`
-    DELETE FROM "MenuItem" WHERE "restaurantId" = ${restaurantId}
-  `;
-
-  // Build all input arrays upfront so the MenuItem INSERT can carry the
-  // denormalized macro columns alongside the MacroEstimate insert. Both
-  // tables stay in lockstep within this transaction.
+  // Build all input arrays upfront.
   const names = validPairs.map((p) => decodeHtml(p.item.name)!);
   const descriptions = validPairs.map((p) => decodeHtml(p.item.description) ?? null);
   const categories = validPairs.map((p) => decodeHtml(p.item.category) ?? null);
@@ -208,23 +205,29 @@ export async function persistItemsInTx(
   const carbs = validPairs.map((p) => p.macro.carbsG);
   const fats = validPairs.map((p) => p.macro.fatG);
   const confidences = validPairs.map((p) => p.macro.confidence);
-  const sources = validPairs.map((p) => p.macro.source);
+  // COALESCE source to 'llm' defensively for any legacy NULL values.
+  const sources = validPairs.map((p) => p.macro.source ?? "llm");
+  // Candidate IDs for new rows — on conflict the existing id is preserved.
+  const candidateIds = validPairs.map(() => randomUUID());
 
-  // Query 2: Bulk insert menu items WITH denormalized macros
-  const menuItemRows = await tx.$queryRaw<{ id: string }[]>`
+  // Query 1: UPSERT MenuItem by (restaurantId, name). New rows get a fresh
+  // UUID; existing rows keep their id (stable for SavedItem FK). Macro columns
+  // are written here for brand-new rows; the winner-recompute step (Query 3)
+  // will correct them for existing rows regardless of trust order.
+  const menuItemRows = await tx.$queryRaw<{ id: string; name: string }[]>`
     INSERT INTO "MenuItem" (
       "id", "restaurantId", "name", "description", "category", "section",
       "price", "dietaryTags", "calories", "proteinG", "carbsG", "fatG",
       "createdAt", "updatedAt"
     )
     SELECT
-      gen_random_uuid(),
-      ${restaurantId},
+      id, ${restaurantId},
       name, description, category, section, price,
       ARRAY(SELECT jsonb_array_elements_text(tags::jsonb)),
       calories, "proteinG", "carbsG", "fatG",
       now(), now()
     FROM UNNEST(
+      ${candidateIds}::text[],
       ${names}::text[],
       ${descriptions}::text[],
       ${categories}::text[],
@@ -235,12 +238,44 @@ export async function persistItemsInTx(
       ${proteins}::float[],
       ${carbs}::float[],
       ${fats}::float[]
-    ) AS t(name, description, category, section, price, tags, calories, "proteinG", "carbsG", "fatG")
-    RETURNING "id"
+    ) AS t(id, name, description, category, section, price, tags, calories, "proteinG", "carbsG", "fatG")
+    ON CONFLICT ("restaurantId", "name") DO UPDATE SET
+      "description" = EXCLUDED."description",
+      "category"    = EXCLUDED."category",
+      "section"     = EXCLUDED."section",
+      "price"       = EXCLUDED."price",
+      "dietaryTags" = EXCLUDED."dietaryTags",
+      "calories"    = EXCLUDED."calories",
+      "proteinG"    = EXCLUDED."proteinG",
+      "carbsG"      = EXCLUDED."carbsG",
+      "fatG"        = EXCLUDED."fatG",
+      "updatedAt"   = now()
+    RETURNING "id", "name"
   `;
 
-  // Query 3: Bulk insert macro estimates (audit log)
-  const menuItemIds = menuItemRows.map((r: { id: string }) => r.id);
+  // Build (restaurantId,name) → stable persisted id map.
+  // RETURNING order is NOT guaranteed to match input order, so map by name.
+  const idByName = new Map<string, string>(
+    (menuItemRows as { id: string; name: string }[]).map((r) => [r.name, r.id]),
+  );
+
+  // Resolve the stable persisted id for each pair (fall back to a fresh UUID
+  // if somehow the row is missing — should never happen but is safe).
+  const menuItemIds = validPairs.map((p) => {
+    const decodedName = decodeHtml(p.item.name)!;
+    return idByName.get(decodedName) ?? randomUUID();
+  });
+
+  // Query 2: Delete stale items for this restaurant — those whose name is NOT
+  // in the incoming set. Cascades drop their MacroEstimates via FK.
+  await tx.$executeRaw`
+    DELETE FROM "MenuItem"
+    WHERE "restaurantId" = ${restaurantId}
+      AND "name" <> ALL(${names}::text[])
+  `;
+
+  // Query 3: UPSERT MacroEstimate by (menuItemId, source). Each source gets
+  // its own row; re-running the pipeline for the same source updates macros.
   await tx.$executeRaw`
     INSERT INTO "MacroEstimate" (
       "id", "menuItemId", "calories", "proteinG", "carbsG", "fatG",
@@ -249,7 +284,7 @@ export async function persistItemsInTx(
     SELECT
       gen_random_uuid(),
       "menuItemId", calories, "proteinG", "carbsG", "fatG",
-      confidence::"ConfidenceLevel", source, false, now()
+      confidence::"ConfidenceLevel", COALESCE(source, 'llm'), false, now()
     FROM UNNEST(
       ${menuItemIds}::text[],
       ${calories}::int[],
@@ -259,6 +294,34 @@ export async function persistItemsInTx(
       ${confidences}::text[],
       ${sources}::text[]
     ) AS t("menuItemId", calories, "proteinG", "carbsG", "fatG", confidence, source)
+    ON CONFLICT ("menuItemId", "source") DO UPDATE SET
+      "calories"    = EXCLUDED."calories",
+      "proteinG"    = EXCLUDED."proteinG",
+      "carbsG"      = EXCLUDED."carbsG",
+      "fatG"        = EXCLUDED."fatG",
+      "confidence"  = EXCLUDED."confidence",
+      "hadPhoto"    = EXCLUDED."hadPhoto",
+      "estimatedAt" = now()
+  `;
+
+  // Query 4: Recompute denormalized MenuItem macro columns from the WINNING
+  // estimate so a lower-trust pipeline run never clobbers a higher-trust one.
+  // DISTINCT ON requires the leading ORDER BY column to be menuItemId.
+  await tx.$queryRaw`
+    UPDATE "MenuItem" m
+    SET "calories"  = w.calories,
+        "proteinG"  = w."proteinG",
+        "carbsG"    = w."carbsG",
+        "fatG"      = w."fatG",
+        "updatedAt" = now()
+    FROM (
+      SELECT DISTINCT ON (e."menuItemId")
+        e."menuItemId", e.calories, e."proteinG", e."carbsG", e."fatG"
+      FROM "MacroEstimate" e
+      WHERE e."menuItemId" = ANY(${menuItemIds}::text[])
+      ORDER BY e."menuItemId", ${Prisma.raw(macroWinnerSqlOrder("e"))}
+    ) w
+    WHERE m.id = w."menuItemId"
   `;
 
   return menuItemRows.length;
@@ -311,12 +374,16 @@ export interface BulkRestaurantPersist {
  * Persist ALL restaurants in a hex with a fixed number of SQL statements,
  * regardless of restaurant count.
  *
- * Replaces the per-restaurant loop (~7 queries × N restaurants) with a
- * bulk pattern: 2 DELETE, 2 INSERT (flattened UNNEST across restaurants),
- * 1 dietary UPDATE (SQL-side aggregate), 1 menuHash UPDATE. Atomicity is
- * preserved — caller must wrap in `$transaction`.
+ * Change 1 (stable IDs): UPSERT MenuItem by (restaurantId, name) so existing
+ * rows keep their id (SavedItem.menuItemId never orphaned). Delete stale items
+ * (absent from incoming set) at the end. RETURNING is mapped by (restaurantId,
+ * name) — NOT by array position — to build a stable id lookup.
+ * Change 2 (provenance): UPSERT MacroEstimate by (menuItemId, source). After
+ * upserting estimates, recompute MenuItem macro columns from the winning
+ * estimate so a lower-trust run never clobbers a higher-trust one.
  *
- * Returns total items inserted.
+ * Atomicity is preserved — caller must wrap in `$transaction`.
+ * Returns total items upserted.
  */
 export async function persistHexBulkInTx(
   restaurants: BulkRestaurantPersist[],
@@ -330,7 +397,8 @@ export async function persistHexBulkInTx(
 
   // Flatten items across restaurants. Dedup by name within each restaurant
   // (source data can have duplicate names — violates @@unique constraint).
-  const flatItemIds: string[] = [];
+  // candidateIds are used for new rows; on conflict the existing id is kept.
+  const flatCandidateIds: string[] = [];
   const flatRestaurantIds: string[] = [];
   const flatNames: string[] = [];
   const flatDescriptions: (string | null)[] = [];
@@ -343,7 +411,10 @@ export async function persistHexBulkInTx(
   const flatCarbs: number[] = [];
   const flatFats: number[] = [];
   const flatConfidences: string[] = [];
-  const flatSources: (string | null)[] = [];
+  const flatSources: string[] = [];
+
+  // Keep track of per-restaurant incoming names for stale-item deletion.
+  const incomingNamesByRestaurant = new Map<string, string[]>();
 
   for (const { restaurantId, items } of restaurants) {
     if (items.length === 0) continue;
@@ -353,10 +424,12 @@ export async function persistHexBulkInTx(
     }
     if (deduped.length === 0) continue;
     restaurantIdsWithItems.push(restaurantId);
+    const namesForRestaurant: string[] = [];
     for (const pair of deduped) {
-      flatItemIds.push(randomUUID());
+      const name = decodeHtml(pair.item.name)!;
+      flatCandidateIds.push(randomUUID());
       flatRestaurantIds.push(restaurantId);
-      flatNames.push(decodeHtml(pair.item.name)!);
+      flatNames.push(name);
       flatDescriptions.push(decodeHtml(pair.item.description) ?? null);
       flatCategories.push(decodeHtml(pair.item.category) ?? null);
       flatSections.push(decodeHtml(pair.item.section) ?? null);
@@ -367,28 +440,21 @@ export async function persistHexBulkInTx(
       flatCarbs.push(pair.macro.carbsG);
       flatFats.push(pair.macro.fatG);
       flatConfidences.push(pair.macro.confidence);
-      flatSources.push(pair.macro.source);
+      // COALESCE source to 'llm' defensively for any legacy NULL values.
+      flatSources.push(pair.macro.source ?? "llm");
+      namesForRestaurant.push(name);
     }
+    incomingNamesByRestaurant.set(restaurantId, namesForRestaurant);
   }
 
-  // Q1 + Q2: bulk DELETE stale rows for restaurants getting new items.
-  // Skipped when no restaurants have items (nothing to clear).
-  if (restaurantIdsWithItems.length > 0) {
-    await tx.$executeRaw`
-      DELETE FROM "MacroEstimate" WHERE "menuItemId" IN (
-        SELECT "id" FROM "MenuItem" WHERE "restaurantId" = ANY(${restaurantIdsWithItems}::text[])
-      )
-    `;
-    await tx.$executeRaw`
-      DELETE FROM "MenuItem" WHERE "restaurantId" = ANY(${restaurantIdsWithItems}::text[])
-    `;
-  }
+  // Q1: UPSERT MenuItem by (restaurantId, name). New rows get a fresh UUID
+  // (candidateId); existing rows keep their id. Macro columns are written for
+  // brand-new rows; the winner-recompute step (Q4) corrects existing rows.
+  // RETURNING includes restaurantId + name so we can map to stable ids.
+  let flatMenuItemIds: string[] = [];
 
-  // Q3 + Q4: bulk INSERT MenuItem + MacroEstimate across all restaurants.
-  if (flatItemIds.length > 0) {
-    // Insert MenuItem with denormalized macros so the read path can skip
-    // the MacroEstimate join. MacroEstimate stays as the audit log.
-    await tx.$executeRaw`
+  if (flatCandidateIds.length > 0) {
+    const menuItemRows = await tx.$queryRaw<{ id: string; restaurantId: string; name: string }[]>`
       INSERT INTO "MenuItem" (
         "id", "restaurantId", "name", "description", "category", "section",
         "price", "dietaryTags", "calories", "proteinG", "carbsG", "fatG",
@@ -400,7 +466,7 @@ export async function persistHexBulkInTx(
         calories, "proteinG", "carbsG", "fatG",
         now(), now()
       FROM UNNEST(
-        ${flatItemIds}::text[],
+        ${flatCandidateIds}::text[],
         ${flatRestaurantIds}::text[],
         ${flatNames}::text[],
         ${flatDescriptions}::text[],
@@ -413,8 +479,54 @@ export async function persistHexBulkInTx(
         ${flatCarbs}::float[],
         ${flatFats}::float[]
       ) AS t(id, "restaurantId", name, description, category, section, price, tags, calories, "proteinG", "carbsG", "fatG")
+      ON CONFLICT ("restaurantId", "name") DO UPDATE SET
+        "description" = EXCLUDED."description",
+        "category"    = EXCLUDED."category",
+        "section"     = EXCLUDED."section",
+        "price"       = EXCLUDED."price",
+        "dietaryTags" = EXCLUDED."dietaryTags",
+        "calories"    = EXCLUDED."calories",
+        "proteinG"    = EXCLUDED."proteinG",
+        "carbsG"      = EXCLUDED."carbsG",
+        "fatG"        = EXCLUDED."fatG",
+        "updatedAt"   = now()
+      RETURNING "id", "restaurantId", "name"
     `;
 
+    // Build (restaurantId, name) → stable persisted id map.
+    // RETURNING order is NOT guaranteed to match input order.
+    const idByRestaurantAndName = new Map<string, string>(
+      (menuItemRows as { id: string; restaurantId: string; name: string }[]).map(
+        (r) => [`${r.restaurantId}\0${r.name}`, r.id],
+      ),
+    );
+
+    // Resolve stable persisted ids for each flat item, in input order.
+    flatMenuItemIds = flatRestaurantIds.map((rid, i) => {
+      const key = `${rid}\0${flatNames[i]}`;
+      return idByRestaurantAndName.get(key) ?? randomUUID();
+    });
+  }
+
+  // Q2: Delete stale items — MenuItems for touched restaurants whose name is
+  // NOT in the incoming set. Uses NOT EXISTS against (restaurantId, name) pairs.
+  // Cascades drop their MacroEstimates via FK.
+  if (restaurantIdsWithItems.length > 0 && flatCandidateIds.length > 0) {
+    await tx.$executeRaw`
+      DELETE FROM "MenuItem" mi
+      WHERE mi."restaurantId" = ANY(${restaurantIdsWithItems}::text[])
+        AND NOT EXISTS (
+          SELECT 1
+          FROM UNNEST(${flatRestaurantIds}::text[], ${flatNames}::text[]) AS incoming(rid, nm)
+          WHERE incoming.rid = mi."restaurantId"
+            AND incoming.nm  = mi.name
+        )
+    `;
+  }
+
+  // Q3: UPSERT MacroEstimate by (menuItemId, source). Each source gets its own
+  // row; re-running the pipeline for the same source updates macros in-place.
+  if (flatMenuItemIds.length > 0) {
     await tx.$executeRaw`
       INSERT INTO "MacroEstimate" (
         "id", "menuItemId", "calories", "proteinG", "carbsG", "fatG",
@@ -423,9 +535,9 @@ export async function persistHexBulkInTx(
       SELECT
         gen_random_uuid(),
         "menuItemId", calories, "proteinG", "carbsG", "fatG",
-        confidence::"ConfidenceLevel", source, false, now()
+        confidence::"ConfidenceLevel", COALESCE(source, 'llm'), false, now()
       FROM UNNEST(
-        ${flatItemIds}::text[],
+        ${flatMenuItemIds}::text[],
         ${flatCalories}::int[],
         ${flatProteins}::float[],
         ${flatCarbs}::float[],
@@ -433,6 +545,34 @@ export async function persistHexBulkInTx(
         ${flatConfidences}::text[],
         ${flatSources}::text[]
       ) AS t("menuItemId", calories, "proteinG", "carbsG", "fatG", confidence, source)
+      ON CONFLICT ("menuItemId", "source") DO UPDATE SET
+        "calories"    = EXCLUDED."calories",
+        "proteinG"    = EXCLUDED."proteinG",
+        "carbsG"      = EXCLUDED."carbsG",
+        "fatG"        = EXCLUDED."fatG",
+        "confidence"  = EXCLUDED."confidence",
+        "hadPhoto"    = EXCLUDED."hadPhoto",
+        "estimatedAt" = now()
+    `;
+
+    // Q4: Recompute denormalized MenuItem macro columns from the WINNING
+    // estimate so a lower-trust pipeline run never clobbers a higher-trust one.
+    // DISTINCT ON requires the leading ORDER BY column to be menuItemId.
+    await tx.$queryRaw`
+      UPDATE "MenuItem" m
+      SET "calories"  = w.calories,
+          "proteinG"  = w."proteinG",
+          "carbsG"    = w."carbsG",
+          "fatG"      = w."fatG",
+          "updatedAt" = now()
+      FROM (
+        SELECT DISTINCT ON (e."menuItemId")
+          e."menuItemId", e.calories, e."proteinG", e."carbsG", e."fatG"
+        FROM "MacroEstimate" e
+        WHERE e."menuItemId" = ANY(${flatMenuItemIds}::text[])
+        ORDER BY e."menuItemId", ${Prisma.raw(macroWinnerSqlOrder("e"))}
+      ) w
+      WHERE m.id = w."menuItemId"
     `;
   }
 
@@ -483,5 +623,5 @@ export async function persistHexBulkInTx(
     `;
   }
 
-  return flatItemIds.length;
+  return flatCandidateIds.length;
 }

@@ -2,6 +2,13 @@ jest.mock("./constants", () => ({
   aggregateDietaryOptions: jest.fn().mockReturnValue([]),
 }));
 
+// pipeline-utils.ts imports @fitsy/shared which pulls in env.ts
+// (@t3-oss/env-core). Mock the package so scripts tests stay self-contained.
+jest.mock("@fitsy/shared", () => ({
+  macroWinnerSqlOrder: (alias = "e") =>
+    `CASE ${alias}.source WHEN 'merchant' THEN 0 WHEN 'fatsecret' THEN 1 WHEN 'ffn' THEN 2 WHEN 'haiku' THEN 3 ELSE 99 END ASC, ${alias}."estimatedAt" DESC`,
+}));
+
 import { validateItems, checkMacroMismatch, namesMatch, dedupByName, decodeHtml } from "./pipeline-utils";
 import type { MacroData, StructuredMenuItem } from "../apps/api/services/menuSources/types";
 

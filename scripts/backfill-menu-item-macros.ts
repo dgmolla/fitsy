@@ -11,7 +11,8 @@
  *   set -a && source .env.local && set +a && npx tsx scripts/backfill-menu-item-macros.ts
  */
 
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
+import { macroWinnerSqlOrder } from "@fitsy/shared";
 
 const CHUNK_SIZE = 10_000;
 
@@ -36,6 +37,8 @@ async function main(): Promise<void> {
   let chunk = 1;
   // eslint-disable-next-line no-constant-condition
   while (true) {
+    // Pick the WINNING estimate per item (lowest trust-rank, most recent tiebreak)
+    // so a lower-trust row never clobbers a higher-trust one during backfill.
     const result = await prisma.$queryRaw<{ updated: number; max_id: string | null }[]>`
       WITH batch AS (
         SELECT id FROM "MenuItem"
@@ -43,15 +46,21 @@ async function main(): Promise<void> {
         ORDER BY id
         LIMIT ${CHUNK_SIZE}
       ),
+      winners AS (
+        SELECT DISTINCT ON (e."menuItemId")
+          e."menuItemId", e.calories, e."proteinG", e."carbsG", e."fatG"
+        FROM "MacroEstimate" e
+        WHERE e."menuItemId" IN (SELECT id FROM batch)
+        ORDER BY e."menuItemId", ${Prisma.raw(macroWinnerSqlOrder("e"))}
+      ),
       upd AS (
         UPDATE "MenuItem" m
-        SET calories   = e.calories,
-            "proteinG" = e."proteinG",
-            "carbsG"   = e."carbsG",
-            "fatG"     = e."fatG"
-        FROM "MacroEstimate" e
-        WHERE m.id IN (SELECT id FROM batch)
-          AND e."menuItemId" = m.id
+        SET calories   = w.calories,
+            "proteinG" = w."proteinG",
+            "carbsG"   = w."carbsG",
+            "fatG"     = w."fatG"
+        FROM winners w
+        WHERE m.id = w."menuItemId"
         RETURNING m.id
       )
       SELECT (SELECT count(*)::int FROM upd) AS updated,
@@ -68,16 +77,23 @@ async function main(): Promise<void> {
 
   console.log(`[backfill] backfill done: ${total} rows updated in ${Date.now() - startMs}ms`); // eslint-disable-line no-console
 
-  // Verify — every MenuItem with a MacroEstimate must agree on macros.
+  // Verify — every MenuItem must agree with its WINNING estimate.
   // Uses IS DISTINCT FROM so NULLs on either side count as drift.
+  // macroWinnerSqlOrder ensures we pick the same winner as the pipeline.
   const driftRows = await prisma.$queryRaw<{ drift_count: bigint }[]>`
     SELECT count(*)::bigint AS drift_count
     FROM "MenuItem" m
-    JOIN "MacroEstimate" e ON e."menuItemId" = m.id
-    WHERE m.calories   IS DISTINCT FROM e.calories
-       OR m."proteinG" IS DISTINCT FROM e."proteinG"
-       OR m."carbsG"   IS DISTINCT FROM e."carbsG"
-       OR m."fatG"     IS DISTINCT FROM e."fatG"
+    JOIN LATERAL (
+      SELECT e.calories, e."proteinG", e."carbsG", e."fatG"
+      FROM "MacroEstimate" e
+      WHERE e."menuItemId" = m.id
+      ORDER BY ${Prisma.raw(macroWinnerSqlOrder("e"))}
+      LIMIT 1
+    ) winner ON true
+    WHERE m.calories   IS DISTINCT FROM winner.calories
+       OR m."proteinG" IS DISTINCT FROM winner."proteinG"
+       OR m."carbsG"   IS DISTINCT FROM winner."carbsG"
+       OR m."fatG"     IS DISTINCT FROM winner."fatG"
   `;
   const drift = Number(driftRows[0]?.drift_count ?? 0n);
 

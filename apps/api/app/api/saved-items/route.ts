@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/restaurantService";
+import { Prisma } from "@prisma/client";
+import { pickWinningEstimate } from "@fitsy/shared";
 import type { SavedItemsResponse, SavedItemResponse } from "@fitsy/shared";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -29,12 +31,15 @@ function toSavedItemResponse(item: {
       carbsG: number;
       fatG: number;
       confidence: string;
+      source: string | null;
       hadPhoto: boolean;
       estimatedAt: Date;
     }[];
   } | null;
 }): SavedItemResponse {
-  const macroEstimate = item.menuItem?.macroEstimates[0] ?? null;
+  const macroEstimate = item.menuItem
+    ? pickWinningEstimate(item.menuItem.macroEstimates)
+    : null;
 
   return {
     id: item.id,
@@ -107,8 +112,17 @@ export async function GET(
               select: { id: true, name: true, address: true },
             },
             macroEstimates: {
-              orderBy: { estimatedAt: "desc" },
-              take: 1,
+              select: {
+                id: true,
+                calories: true,
+                proteinG: true,
+                carbsG: true,
+                fatG: true,
+                confidence: true,
+                source: true,
+                hadPhoto: true,
+                estimatedAt: true,
+              },
             },
           },
         },
@@ -173,40 +187,60 @@ export async function POST(
       );
     }
 
-    // Check if already exists to determine response code
-    const existing = await prisma.savedItem.findUnique({
-      where: { userId_menuItemId: { userId, menuItemId } },
-    });
-
-    const savedItem = await prisma.savedItem.upsert({
-      where: { userId_menuItemId: { userId, menuItemId } },
-      create: {
-        userId,
-        menuItemId,
-        restaurantId: menuItem.restaurantId,
-        itemType: "menu_item",
-      },
-      update: {},
-      include: {
-        menuItem: {
-          include: {
-            restaurant: {
-              select: { id: true, name: true, address: true },
-            },
-            macroEstimates: {
-              orderBy: { estimatedAt: "desc" },
-              take: 1,
+    const include = {
+      menuItem: {
+        include: {
+          restaurant: {
+            select: { id: true, name: true, address: true },
+          },
+          macroEstimates: {
+            select: {
+              id: true,
+              calories: true,
+              proteinG: true,
+              carbsG: true,
+              fatG: true,
+              confidence: true,
+              source: true,
+              hadPhoto: true,
+              estimatedAt: true,
             },
           },
         },
       },
-    });
+    } as const;
 
-    const status = existing ? 200 : 201;
-    return NextResponse.json(
-      { data: toSavedItemResponse(savedItem) },
-      { status },
-    );
+    try {
+      const savedItem = await prisma.savedItem.create({
+        data: {
+          userId,
+          menuItemId,
+          restaurantId: menuItem.restaurantId,
+          itemType: "menu_item",
+        },
+        include,
+      });
+      return NextResponse.json(
+        { data: toSavedItemResponse(savedItem) },
+        { status: 201 },
+      );
+    } catch (err) {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === "P2002"
+      ) {
+        // Already saved — fetch and return existing row
+        const existing = await prisma.savedItem.findUniqueOrThrow({
+          where: { userId_menuItemId: { userId, menuItemId } },
+          include,
+        });
+        return NextResponse.json(
+          { data: toSavedItemResponse(existing) },
+          { status: 200 },
+        );
+      }
+      throw err;
+    }
   } catch {
     return NextResponse.json(
       { error: "Internal server error" },
