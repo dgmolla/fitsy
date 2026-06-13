@@ -7,11 +7,17 @@ jest.mock("@prisma/client", () => ({
   PrismaClient: jest.fn().mockImplementation(() => ({
     $queryRaw: mockQueryRaw,
   })),
+  // Prisma.raw is used inside the route to embed macroWinnerSqlOrder fragment.
+  // Return a simple tagged object so the template-literal interpolation works.
+  Prisma: {
+    raw: (sql: string) => ({ sql }),
+  },
 }));
 
 jest.mock("@fitsy/shared", () => ({
   __esModule: true,
   notifySlack: (...args: unknown[]) => mockNotifySlack(...args),
+  macroWinnerSqlOrder: () => "CASE e.source WHEN 'merchant' THEN 0 ELSE 99 END ASC, e.\"estimatedAt\" DESC",
 }));
 
 beforeEach(() => {

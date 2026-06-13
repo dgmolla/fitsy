@@ -11,8 +11,8 @@ jest.mock("@/lib/auth", () => ({
   requireAuth: mockRequireAuth,
 }));
 
-jest.mock("@/lib/restaurantService", () => ({
-  prisma: {
+jest.mock("@/lib/restaurantService", () => {
+  const tx = {
     user: {
       update: mockPrismaUserUpdate,
       findUnique: mockPrismaUserFindUnique,
@@ -21,8 +21,16 @@ jest.mock("@/lib/restaurantService", () => ({
     macroTarget: {
       upsert: mockPrismaMacroTargetUpsert,
     },
-  },
-}));
+  };
+  return {
+    prisma: {
+      ...tx,
+      // PATCH now wraps the user update + macroTarget upsert in a single
+      // interactive transaction — run the callback against the mocked tx client.
+      $transaction: (cb) => cb(tx),
+    },
+  };
+});
 
 jest.mock("@/lib/tdeeCalculator", () => ({
   calculateTdee: mockCalculateTdee,

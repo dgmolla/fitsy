@@ -2,8 +2,8 @@
 
 const mockRequireAuth = jest.fn();
 const mockSavedItemFindMany = jest.fn();
-const mockSavedItemFindUnique = jest.fn();
-const mockSavedItemUpsert = jest.fn();
+const mockSavedItemCreate = jest.fn();
+const mockSavedItemFindUniqueOrThrow = jest.fn();
 const mockMenuItemFindUnique = jest.fn();
 
 jest.mock("@/lib/auth", () => ({
@@ -14,8 +14,9 @@ jest.mock("@/lib/restaurantService", () => ({
   prisma: {
     savedItem: {
       findMany: mockSavedItemFindMany,
-      findUnique: mockSavedItemFindUnique,
-      upsert: mockSavedItemUpsert,
+      // POST now create-first, catch P2002 → findUniqueOrThrow (no upsert).
+      create: mockSavedItemCreate,
+      findUniqueOrThrow: mockSavedItemFindUniqueOrThrow,
     },
     menuItem: {
       findUnique: mockMenuItemFindUnique,
@@ -25,6 +26,7 @@ jest.mock("@/lib/restaurantService", () => ({
 
 import { GET, POST } from "./route";
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 
 const VALID_PAYLOAD = { sub: "user-1", email: "alice@example.com" };
 
@@ -35,6 +37,7 @@ const MOCK_MACRO = {
   carbsG: 60,
   fatG: 15,
   confidence: "HIGH",
+  source: "fatsecret",
   hadPhoto: true,
   estimatedAt: new Date("2024-01-01T00:00:00Z"),
 };
@@ -71,8 +74,8 @@ function makeSavedItem(overrides: Partial<Record<string, unknown>> = {}) {
 beforeEach(() => {
   mockRequireAuth.mockReset();
   mockSavedItemFindMany.mockReset();
-  mockSavedItemFindUnique.mockReset();
-  mockSavedItemUpsert.mockReset();
+  mockSavedItemCreate.mockReset();
+  mockSavedItemFindUniqueOrThrow.mockReset();
   mockMenuItemFindUnique.mockReset();
 });
 
@@ -277,8 +280,7 @@ describe("POST /api/saved-items — success", () => {
       id: "item-1",
       restaurantId: "rest-1",
     });
-    mockSavedItemFindUnique.mockResolvedValue(null); // not already saved
-    mockSavedItemUpsert.mockResolvedValue(makeSavedItem());
+    mockSavedItemCreate.mockResolvedValue(makeSavedItem());
 
     const res = await POST(
       makePostRequest({ menuItemId: "item-1" }, "Bearer valid.token"),
@@ -287,10 +289,9 @@ describe("POST /api/saved-items — success", () => {
     expect(res.status).toBe(201);
     const body = await res.json();
     expect(body.data).toMatchObject({ id: "saved-1", menuItemId: "item-1" });
-    expect(mockSavedItemUpsert).toHaveBeenCalledWith(
+    expect(mockSavedItemCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { userId_menuItemId: { userId: "user-1", menuItemId: "item-1" } },
-        create: expect.objectContaining({
+        data: expect.objectContaining({
           userId: "user-1",
           menuItemId: "item-1",
           restaurantId: "rest-1",
@@ -298,6 +299,7 @@ describe("POST /api/saved-items — success", () => {
         }),
       }),
     );
+    expect(mockSavedItemFindUniqueOrThrow).not.toHaveBeenCalled();
   });
 
   it("returns 200 when item already saved (idempotent)", async () => {
@@ -306,8 +308,14 @@ describe("POST /api/saved-items — success", () => {
       id: "item-1",
       restaurantId: "rest-1",
     });
-    mockSavedItemFindUnique.mockResolvedValue(makeSavedItem()); // already exists
-    mockSavedItemUpsert.mockResolvedValue(makeSavedItem());
+    // create hits the unique constraint → P2002 → fall back to fetch existing.
+    mockSavedItemCreate.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
+        code: "P2002",
+        clientVersion: "test",
+      }),
+    );
+    mockSavedItemFindUniqueOrThrow.mockResolvedValue(makeSavedItem());
 
     const res = await POST(
       makePostRequest({ menuItemId: "item-1" }, "Bearer valid.token"),
@@ -316,6 +324,13 @@ describe("POST /api/saved-items — success", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.data).toMatchObject({ id: "saved-1" });
+    expect(mockSavedItemFindUniqueOrThrow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          userId_menuItemId: { userId: "user-1", menuItemId: "item-1" },
+        },
+      }),
+    );
   });
 
   it("returns 500 on Prisma error", async () => {

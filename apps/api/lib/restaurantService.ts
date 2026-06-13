@@ -1,6 +1,6 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { hasTargets, type MacroTargets } from "./macroScoring";
-import type { RestaurantResult, MenuResponse } from "@fitsy/shared";
+import { pickWinningEstimate, type RestaurantResult, type MenuResponse } from "@fitsy/shared";
 
 // ─── Prisma singleton ─────────────────────────────────────────────────────────
 
@@ -460,20 +460,24 @@ export async function getRestaurantMenu(
 ): Promise<MenuResponse | null> {
   // Macros (calories/proteinG/carbsG/fatG) live on MenuItem itself.
   // MacroEstimate stays as the audit log — we still pull confidence,
-  // hadPhoto, and estimatedAt from it for the menu detail screen.
+  // hadPhoto, estimatedAt, and source from it for the menu detail screen.
+  // With provenance, an item can have multiple estimates (one per source);
+  // we fetch all and use pickWinningEstimate() to surface the right one.
   const restaurant = await prisma.restaurant.findUnique({
     where: { id: restaurantId },
     include: {
       menuItems: {
         orderBy: { name: "asc" },
+        // Safety bound: menus are expected well under 200 items; this cap
+        // prevents unbounded reads if a restaurant has malformed data.
+        take: 200,
         include: {
           macroEstimates: {
-            orderBy: { estimatedAt: "desc" },
-            take: 1,
             select: {
               confidence: true,
               hadPhoto: true,
               estimatedAt: true,
+              source: true,
             },
           },
         },
@@ -489,7 +493,10 @@ export async function getRestaurantMenu(
     ...(restaurant.rating !== null ? { rating: restaurant.rating } : {}),
     ...(restaurant.userRatingCount !== null ? { userRatingCount: restaurant.userRatingCount } : {}),
     menuItems: restaurant.menuItems.map((item) => {
-      const estimate = item.macroEstimates[0] ?? null;
+      // Pick the winning estimate by trust order (merchant > fatsecret > ffn
+      // > haiku > llm/unknown) so confidence/hadPhoto/estimatedAt match the
+      // macros that were denormalized onto the MenuItem.
+      const estimate = pickWinningEstimate(item.macroEstimates);
       const hasMacros =
         item.calories !== null &&
         item.proteinG !== null &&
