@@ -3,7 +3,7 @@
 > **Status:** Ready for submission
 > **Author:** Product Manager
 > **Date:** 2026-03-24
-> **Spec:** `docs/product/app-store-listing-spec.md`
+> **Spec:** `docs/product/archive/app-store-listing-spec.md`
 
 This document is the single source of truth for all App Store Connect
 metadata. Paste each field verbatim into App Store Connect. Do not edit
@@ -75,7 +75,9 @@ We scrape menus from thousands of local restaurants and use Claude AI to estimat
 
 ─── Subscription ──────────────────────────────
 
-Fitsy is a paid subscription app — $30/year or $5/month. Both plans include a 7-day free trial. No ads. No freemium. No feature limits.
+Fitsy is a paid subscription app with a 7-day free trial. No ads. No freemium. No feature limits.
+
+Pricing: see docs/product/business-model.md#pricing-decision-record — pending final founder confirmation. Do not hard-code a price in this copy until ASC products are created and the decision record is resolved.
 
 ─── Data & privacy ────────────────────────────
 
@@ -120,7 +122,7 @@ Character count: 94
 | **Marketing URL** | https://fitsy.app |
 
 > These pages must be live before App Store Connect submission.
-> See `docs/product/app-store-listing-spec.md` Cross-Domain Tickets
+> See `docs/product/archive/app-store-listing-spec.md` Cross-Domain Tickets
 > for the backend PR requirements.
 
 ---

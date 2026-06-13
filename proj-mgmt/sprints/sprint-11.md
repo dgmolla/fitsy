@@ -3,9 +3,9 @@ kanban-plugin: basic
 ---
 
 <!-- last-updated: 2026-04-14 -->
-<!-- spec: docs/engineering/specs/data-pipeline-v3.md -->
+<!-- spec: docs/engineering/pipeline/data-pipeline-v3.md -->
 
-> **Spec:** All tasks in this sprint implement `docs/engineering/specs/data-pipeline-v3.md`. Read the full spec before starting any task. Key sections: Hex-Level Checkpointing, Failure Handling & Resilience, Scalability & Performance, Data Quality, Observability. The pipeline entry point is `scripts/preload.ts`.
+> **Spec:** All tasks in this sprint implement `docs/engineering/pipeline/data-pipeline-v3.md`. Read the full spec before starting any task. Key sections: Hex-Level Checkpointing, Failure Handling & Resilience, Scalability & Performance, Data Quality, Observability. The pipeline entry point is `scripts/preload.ts`.
 
 ## Backlog
 

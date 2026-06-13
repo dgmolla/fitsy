@@ -35,7 +35,7 @@ graph LR
 |-------|---------|
 | **Name** | LeanBites |
 | **Category** | Macro/nutrition restaurant finder |
-| **Notes** | TBD — add app store link, key differentiators, pricing, weaknesses |
+| **Notes** | (deferred — not yet researched) Add App Store link, revenue estimate, data quality assessment, and key differentiators before next competitive review. |
 
 ---
 

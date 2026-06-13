@@ -12,7 +12,7 @@ app to the backend API.
 - `apps/mobile/components/` — React Native components, design system implementation
 - `packages/shared/` — shared types and validation (co-owned with Backend)
 - Client-side navigation and state management
-- `docs/engineering/frontend/` — component integration docs
+- `docs/engineering/frontend/` — new frontend specs (historical ones archived in `docs/engineering/archive/`; living analytics taxonomy is `docs/engineering/architecture/analytics-events.md`)
 - Mobile test suite
 
 ## Domain Boundary
