@@ -39,7 +39,7 @@ Index of all documentation. Restructured 2026-06-12 (see [`docs-refactor-proposa
 
 **`backend/`** — [perf-and-security-handoff](engineering/backend/perf-and-security-handoff-2026-04-25.md) · [api-perf-followups-spec](engineering/backend/api-perf-followups-spec.md) · [idempotent-preload-spec](engineering/backend/idempotent-preload-spec.md) · [security-audit-sprint10](engineering/backend/security-audit-sprint10.md) · [rls-policies-parked.sql](engineering/backend/rls-policies-parked.sql)
 
-**`devops/`** — [production-deployment](engineering/devops/production-deployment.md) · [staging-environment](engineering/devops/staging-environment.md) · [monitoring-alerting](engineering/devops/monitoring-alerting.md) · [costs](engineering/devops/costs.md) · [testflight-runbook](engineering/devops/testflight-runbook.md) · [testflight-recruiting-runbook](engineering/devops/testflight-recruiting-runbook.md)
+**`devops/`** — [production-deployment](engineering/devops/production-deployment.md) · [staging-environment](engineering/devops/staging-environment.md) · [monitoring-alerting](engineering/devops/monitoring-alerting.md) · [costs](engineering/devops/costs.md) · [ios-release-runbook](engineering/devops/ios-release-runbook.md)
 
 **`archive/`** — historical ticket specs, spikes, and superseded specs.
 

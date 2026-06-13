@@ -1,3 +1,5 @@
+> **🗄️ ARCHIVED 2026-06-12 — DESCOPED.** The TestFlight beta recruitment program was eliminated; light user testing was deemed sufficient and Fitsy ships direct to the App Store. Kept for context if a beta is ever revived. Release process: `docs/engineering/devops/ios-release-runbook.md`.
+
 # TestFlight Recruiting Runbook
 
 **Task**: S-58

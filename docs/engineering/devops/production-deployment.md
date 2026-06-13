@@ -155,7 +155,7 @@ curl -sf "$PROD_URL/api/restaurants?lat=34.0928&lng=-118.3086&protein=40&calorie
   | jq '{count: (.results | length), first: .results[0].name}'
 
 # Note: authenticated endpoints require a Supabase-signed JWT from Apple/Google
-# Sign in via the mobile app (TestFlight) and copy the token from AsyncStorage
+# Sign in via the mobile app (EAS dev build) and copy the token from the keychain (SecureStore)
 # to test protected routes manually.
 ```
 

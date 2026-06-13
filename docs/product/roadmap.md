@@ -51,7 +51,7 @@ gantt
 
 ## Phase 1 — Foundation (shipped)
 
-These features are live on TestFlight. The App Store submission is in progress.
+These features are built and shipping. App Store submission is in progress.
 
 | Feature | Spec / Reference | Status |
 |---------|-----------------|--------|

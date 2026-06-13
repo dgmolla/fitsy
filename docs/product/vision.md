@@ -110,7 +110,7 @@ flowchart TD
 | Landing page at fitsy.app | Shipped |
 | Out-of-area screen (returns 0 restaurants) | Shipped |
 
-**Distribution:** TestFlight track, LA-only (Silver Lake / 90029 seed data).
+**Distribution:** App Store (LA-only launch); Silver Lake / 90029 seed data.
 
 ---
 

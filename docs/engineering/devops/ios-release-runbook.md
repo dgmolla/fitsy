@@ -1,22 +1,26 @@
-# TestFlight Beta Build Runbook
+# iOS Build & App Store Release Runbook
 
-**Task**: S-51
+**Task**: S-51 · S-207
 **Owner**: CTO
-**Last updated**: 2026-03-25
+**Last updated**: 2026-06-12
+
+> **Status:** living · **Last verified:** 2026-06-12
+>
+> **No TestFlight beta.** Light user testing was deemed sufficient (decision 2026-06-12), so the release path goes straight from an EAS production build to App Store submission. This runbook covers EAS Build → App Store Connect → App Store review.
 
 ## Overview
 
-This runbook covers the full EAS Build + TestFlight distribution setup for Fitsy iOS beta.
+This runbook covers the full EAS Build + App Store submission setup for Fitsy iOS.
 
 ```mermaid
 flowchart LR
     A[git tag v*] --> B[eas-build.yml triggered]
-    B --> C[eas build --platform ios]
+    B --> C[eas build --profile production --platform ios]
     C --> D[EAS Cloud Build]
     D --> E[.ipa artifact]
     E --> F[eas submit --platform ios]
-    F --> G[TestFlight processing]
-    G --> H[Internal test group notified]
+    F --> G[App Store Connect processing]
+    G --> H[Submit for App Store review]
 ```
 
 ---
@@ -111,7 +115,7 @@ ios: {
 The workflow triggers on version tags (`v*.*.*`). It:
 1. Installs EAS CLI
 2. Runs `eas build --platform ios --profile production --non-interactive`
-3. Uploads the build to TestFlight via `eas submit`
+3. Uploads the build to App Store Connect via `eas submit`
 
 See `.github/workflows/eas-build.yml` for the full workflow definition.
 
@@ -122,10 +126,10 @@ See `.github/workflows/eas-build.yml` for the full workflow definition.
 ```bash
 cd apps/mobile
 
-# Build for TestFlight (internal distribution)
-eas build --platform ios --profile preview
+# Build for App Store (production distribution)
+eas build --platform ios --profile production
 
-# Submit to TestFlight (after build completes)
+# Submit to App Store Connect (after build completes)
 eas submit --platform ios --latest
 ```
 
@@ -133,15 +137,17 @@ Monitor build at: https://expo.dev/accounts/[username]/projects/fitsy/builds
 
 ---
 
-## TestFlight Internal Test Group Setup
+## App Store Submission
 
-1. Go to App Store Connect → TestFlight → Internal Testing
-2. Create group: **Fitsy Beta**
-3. Add testers by Apple ID (up to 100 internal testers)
-4. Once EAS submits the build, it appears under TestFlight builds
-5. Apple processes the build (~5–15 min for internal)
-6. Assign the build to the **Fitsy Beta** group
-7. Testers receive TestFlight invite email
+1. Once `eas submit` uploads the build, it appears in App Store Connect → your app → the build list (Apple processes it, ~5–15 min).
+2. Complete the App Store listing (metadata, screenshots, description, keywords) — see `docs/product/app-store-listing.md` (tickets S-214/S-215/S-216).
+3. Select the processed build for the version.
+4. Answer the export-compliance / encryption prompt (see Troubleshooting for the `ITSAppUsesNonExemptEncryption` shortcut).
+5. Provide the demo review account so Apple can bypass the subscription paywall.
+6. **Submit for review.** Apple review typically takes ~24–48h.
+7. On approval, release (manual or automatic). Track in `proj-mgmt/sprints/sprint-12.md` (S-207 → S-213).
+
+> TestFlight is skipped intentionally — uploading to App Store Connect technically also makes the build available on TestFlight, but no external beta tester group is recruited (light user testing was sufficient).
 
 ---
 
@@ -159,7 +165,7 @@ eas secret:list
 ### Build queued but not starting
 EAS free tier has limited concurrent builds. Check queue at expo.dev.
 
-### TestFlight shows "Missing Compliance"
+### App Store Connect shows "Missing Compliance"
 Add to `apps/mobile/app.config.ts`:
 ```typescript
 ios: {

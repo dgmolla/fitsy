@@ -78,9 +78,9 @@ Real users validate whether macro-aware restaurant discovery solves a real probl
 
 | # | Key Result | Status | Notes |
 |---|------------|--------|-------|
-| KR1 | 10 users signed up and using the app | **Blocked** | Auth shipped (Apple Sign-In S-94, Google Sign-In S-99), GPS live, PostHog analytics live (S-102), onboarding shipped (~Sprint 10–12), EAS build config ready (S-104/S-105). **0 real users as of 2026-06-12 — pre-TestFlight.** Blocker: S-207 EAS Build → TestFlight submission is human-gated (requires Apple Developer account setup, provisioning profiles, ASC products). No user numbers to report yet. |
+| KR1 | 10 users signed up and using the app | **Blocked** | Auth shipped (Apple Sign-In S-94, Google Sign-In S-99), GPS live, PostHog analytics live (S-102), onboarding shipped (~Sprint 10–12), EAS build config ready (S-104/S-105). **0 real users as of 2026-06-12 — pre-launch.** Blocker: S-207 EAS Build → App Store submission is human-gated (requires Apple Developer account setup, provisioning profiles, ASC products). No TestFlight beta — light user testing was sufficient; going direct to the App Store. No user numbers to report yet. |
 | KR2 | Users completing at least 3 searches per week | Not started | Measurable only after KR1 — needs active users first |
-| KR3 | 2 rounds of user testing completed with findings triaged | Not started | Cannot start until TestFlight track is open (depends on KR1 blocker) |
+| KR3 | User testing informs launch | **Descoped → light testing** | The formal 2-round TestFlight beta (S-208–S-212) was cancelled 2026-06-12 — light user testing was deemed sufficient. Findings folded into the launch build; no further beta rounds gate the App Store submission. |
 | KR4 | Feedback loop operational (capture → triage → spec → ship) | **Done** | S-38 merged; feedback triage playbook + P0–P4 priority matrix in `docs/product/feedback-triage.md` |
 
 ---
