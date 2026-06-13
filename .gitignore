@@ -60,3 +60,6 @@ scripts/cache/ue-debug/
 scripts/cache/overture-discovery.parquet
 scripts/cache/overture-discovery.parquet.meta.json
 apps/api/scripts/cache/
+
+# Local docs-refactor planning scratch — not committed
+docs/docs-refactor-proposal-2026-06-11.md

@@ -43,6 +43,8 @@ Index of all documentation. Restructured 2026-06-12 (see [`docs-refactor-proposa
 
 **`archive/`** — historical ticket specs, spikes, and superseded specs.
 
+[tuning-guide.md](engineering/tuning-guide.md) — Shipyard Settings knobs (referenced by `CLAUDE.md`)
+
 ## Design — `design/`
 
 [design-brief.md](design/design-brief.md) · [component-library.md](design/component-library.md) (+ implementation-status / design-debt tracker)
@@ -53,6 +55,3 @@ Index of all documentation. Restructured 2026-06-12 (see [`docs-refactor-proposa
 - [ugc-playbook.md](gtm/ugc-playbook.md) — end-to-end UGC creator pipeline + content hook library
 - [seo-discovery.md](gtm/seo-discovery.md) — organic / LLM discovery (llms.txt, programmatic SEO, JSON-LD)
 
-## Root
-
-- [tuning-guide.md](tuning-guide.md) — Shipyard Settings knobs (referenced by `CLAUDE.md`)

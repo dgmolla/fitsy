@@ -14,7 +14,7 @@ into tasks, assign them to roles, and manage the sprint.
 - `docs/engineering/adrs/` — architecture decision records
 - `docs/engineering/architecture/` — system design, auth, api-reference, analytics-events, testing-strategy
 - `docs/engineering/devops/` — CI/CD, deployment, infrastructure docs
-- `docs/README.md`, `docs/tuning-guide.md` — docs index + harness tuning
+- `docs/README.md`, `docs/engineering/tuning-guide.md` — docs index + harness tuning
 - Harness improvement and calibration
 
 ## Domain Boundary

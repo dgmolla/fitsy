@@ -184,7 +184,7 @@ You are done when CI and deploy are green, not when you push. After pushing, pol
 | active-roles | all |
 | wave-progression | auto |
 
-See `docs/tuning-guide.md` for what each knob does and when to change it.
+See `docs/engineering/tuning-guide.md` for what each knob does and when to change it.
 
 ## Deployment
 

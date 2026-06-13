@@ -151,9 +151,16 @@ if [ -d "$REPO_ROOT/docs" ]; then
       BAD_DOCS="$BAD_DOCS\n  docs/$dirname/ is not an allowed domain (allowed: $ALLOWED_DOCS_DOMAINS)"
     fi
   done
-  # Check no files directly in docs/ (only dirs)
+  # Check no files directly in docs/ (only dirs). Two exceptions:
+  #   - README.md: the docs index (referenced by CLAUDE.md) is allowed at root.
+  #   - untracked files: local scratch/planning docs aren't committed, so the
+  #     gate only enforces structure on tracked files.
   for entry in "$REPO_ROOT/docs"/*; do
-    [ -f "$entry" ] && BAD_DOCS="$BAD_DOCS\n  $(basename "$entry") is a file directly in docs/ — move it under a domain"
+    [ -f "$entry" ] || continue
+    fname=$(basename "$entry")
+    [ "$fname" = "README.md" ] && continue
+    git -C "$REPO_ROOT" ls-files --error-unmatch "docs/$fname" >/dev/null 2>&1 || continue
+    BAD_DOCS="$BAD_DOCS\n  $fname is a file directly in docs/ — move it under a domain"
   done
 fi
 if [ -n "$BAD_DOCS" ]; then
