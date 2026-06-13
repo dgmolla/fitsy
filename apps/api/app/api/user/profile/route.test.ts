@@ -27,7 +27,7 @@ jest.mock("@/lib/restaurantService", () => {
       ...tx,
       // PATCH now wraps the user update + macroTarget upsert in a single
       // interactive transaction — run the callback against the mocked tx client.
-      $transaction: (cb) => cb(tx),
+      $transaction: (cb: (client: typeof tx) => unknown) => cb(tx),
     },
   };
 });
