@@ -129,17 +129,19 @@ screenshots, metadata, and the demo account feed the final ASC submission.
 
 ## Infra / environments
 
-- [ ] **Give Preview deploys a DB connection** `#infra`
-  The Supabase↔Vercel integration populates `POSTGRES_PRISMA_URL`,
-  `POSTGRES_URL_NON_POOLING`, `POSTGRES_URL`, `POSTGRES_PASSWORD` for
-  Production + Development only — Preview has none, so per-PR previews can't
-  exercise data routes. Fix via Vercel dashboard → Integrations → Supabase →
-  enable Preview (preferred; survives credential rotation). See
-  `docs/engineering/devops/staging-environment.md` §Giving Preview the DB connection.
+- [x] **Give Preview deploys a DB connection** `#infra` — done 2026-06-12
+  `POSTGRES_PRISMA_URL`, `POSTGRES_URL_NON_POOLING`, `POSTGRES_URL`,
+  `POSTGRES_PASSWORD` were scoped to Production + Development only (added
+  manually 48d ago — NOT the Supabase integration, whose managed set already
+  covers all 3 envs). Added them to Preview via the Vercel API (same prod
+  values). Takes effect on the next Preview build. Note: these four are
+  **manually managed**, so a password rotation must re-update Preview by hand
+  (see rotation item).
 - [ ] **Rotate the Postgres password** `#infra` `#human`
-  Reset in Supabase (Vercel env auto-syncs). Hygiene — a connection string was
-  surfaced in a local session transcript on 2026-06-12. Do alongside the
-  Preview wiring so both pick up the new value.
+  Reset in Supabase. A connection string was surfaced in a local session
+  transcript on 2026-06-12. The integration-managed vars auto-sync, but the
+  four manual `POSTGRES_*` connection vars (incl. the new Preview ones) must be
+  re-set by hand for all of Production + Preview + Development after rotating.
 - [ ] **Ephemeral-branch workflow for destructive testing** `#infra` (post-launch, document-only now)
   We intentionally run one Supabase DB and isolate destructive ops (schema
   migrations, full pipeline `TRUNCATE` rebuilds) onto an on-demand Supabase
