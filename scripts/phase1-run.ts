@@ -21,7 +21,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { cost, extractPdf, extractStaticHtml, reconcileKey, BROWSER_HEADERS, type ChainItemRow } from "./phase1-extract";
+import { cost, extractPdf, extractStaticHtml, reconcileKey, curlBytes, type ChainItemRow } from "./phase1-extract";
 
 const DISCOVER = process.argv[2] ?? "scripts/phase1-discover-sample.json";
 const MAX_BRANDS = Number(process.argv[3] ?? 20);
@@ -34,9 +34,8 @@ type Status = "official" | "deferred-spa" | "deferred-empty" | "deferred-no-offi
 interface BrandResult { slug: string; display: string; status: Status; route: string; rows: number; valid: number; official: string | null; note?: string }
 
 async function downloadPdf(url: string): Promise<string> {
-  const res = await fetch(url, { headers: { ...BROWSER_HEADERS, Referer: new URL(url).origin } });
-  if (!res.ok) throw new Error(`download HTTP ${res.status}`);
-  const buf = Buffer.from(await res.arrayBuffer());
+  const buf = curlBytes(url); // curl beats node-fetch TLS bot-blocks
+  if (buf.length < 1000 || !buf.subarray(0, 5).toString().includes("%PDF")) throw new Error(`not a PDF (${buf.length}b)`);
   const p = join(tmpdir(), `p1-${reconcileKey(url).slice(-40)}.pdf`);
   writeFileSync(p, buf);
   return p;

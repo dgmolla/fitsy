@@ -174,8 +174,12 @@ M7 (wire into live pipeline / Phase 3) is **design-only** here — separate phas
   capture found no real nutrition JSON (Wingstop → only SEO/router metadata; El Pollo Loco →
   none). Calculator SPAs need per-site interaction scripting → **defer to fallback tier**
   (guardrail-sanctioned). Future: per-site XHR/interaction for the top ~10 national SPAs.
-- **2026-06-14** Richer browser headers (`BROWSER_HEADERS`) added to `fetchHtml`/`downloadPdf`
-  to beat HTTP 403 bot-blocks (4 brands 403'd in the first run, incl. Boba Time's PDF).
+- **2026-06-14** Fetcher: node `fetch` → **bare `curl`** (`curlBytes`). Two layers of bot-blocking
+  beat: (1) node-fetch's TLS fingerprint 403s on Akamai/Cloudflare sites; (2) some WAFs
+  paradoxically block *browser-spoofing* UAs but allow default curl (itsbobatime.com 403s a
+  Chrome UA, 200s bare curl). Bare `curl -sL --compressed` is the most robust single profile;
+  recovered 7-Eleven/Panda/IHOP (→ correctly SPA) and Boba Time's PDF. `BROWSER_HEADERS` kept
+  for reference but unused by the fetch path.
 
 ## Escalation log
 - **2026-06-14 — FLAG (not blocking phase1):** the pre-commit hook's workspace `tsc` fails on

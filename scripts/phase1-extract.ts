@@ -22,7 +22,6 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync, mkdtempSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 
 // ---- config / guardrails ----
@@ -180,14 +179,15 @@ export const BROWSER_HEADERS: Record<string, string> = {
   "Upgrade-Insecure-Requests": "1",
   "Sec-Fetch-Dest": "document", "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Site": "none",
 };
+// Fetch via curl — node's fetch TLS fingerprint is bot-blocked (403) by Akamai/Cloudflare
+// on several chain sites; curl passes. Returns raw bytes (callers decode/write as needed).
+export function curlBytes(url: string): Buffer {
+  // Bare curl (default UA): beats node-fetch's TLS-fingerprint block AND avoids WAFs that
+  // paradoxically block browser-spoofing UAs (e.g. itsbobatime.com 403s a Chrome UA, 200s curl).
+  return execFileSync("curl", ["-sL", "--compressed", "--max-time", "20", url], { maxBuffer: 64 * 1024 * 1024 });
+}
 export async function fetchHtml(url: string): Promise<string> {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 12_000);
-  try {
-    const res = await fetch(url, { signal: ctrl.signal, headers: { ...BROWSER_HEADERS, Referer: new URL(url).origin } });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.text();
-  } finally { clearTimeout(t); }
+  return curlBytes(url).toString("utf8");
 }
 export function stripHtml(html: string): string {
   return html
@@ -281,6 +281,7 @@ async function main() {
 }
 
 // Run the CLI only when invoked directly (not when imported by phase1-run.ts).
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+// Filename check (CommonJS-safe — avoids import.meta under the scripts tsconfig).
+if (process.argv[1] && /phase1-extract\.[tj]s$/.test(process.argv[1])) {
   main().catch((e) => { console.error("ERROR:", e.message); process.exit(1); });
 }
