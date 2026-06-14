@@ -63,3 +63,6 @@ apps/api/scripts/cache/
 
 # Local docs-refactor planning scratch — not committed
 docs/docs-refactor-proposal-2026-06-11.md
+
+# Phase 1 extraction scratch output (local artifacts, not committed)
+scripts/phase1-out/
