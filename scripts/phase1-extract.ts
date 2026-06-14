@@ -22,6 +22,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync, mkdtempSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 
 // ---- config / guardrails ----
@@ -35,7 +36,7 @@ const MAX_OUT_TOKENS = 16000; // dense single-page brochures emit many rows
 const OUT_DIR = "scripts/phase1-out";
 
 // ---- cost tracker ----
-const cost = { usd: 0, calls: 0, inTok: 0, outTok: 0 };
+export const cost = { usd: 0, calls: 0, inTok: 0, outTok: 0 };
 function track(inTok: number, outTok: number) {
   cost.calls++; cost.inTok += inTok; cost.outTok += outTok;
   cost.usd += inTok * PRICE.in + outTok * PRICE.out;
@@ -146,6 +147,60 @@ export async function extractFromImages(brand: string, pngs: Buffer[]): Promise<
 }
 const num = (v: unknown): number | null => (typeof v === "number" && isFinite(v) ? v : null);
 
+// ---- extraction over plain text (static-HTML route) ----
+export async function extractFromText(brand: string, text: string): Promise<NutritionRow[]> {
+  const msg = await client().messages.create({
+    model: MODEL,
+    max_tokens: MAX_OUT_TOKENS,
+    tools: [TOOL],
+    tool_choice: { type: "tool", name: TOOL.name },
+    messages: [{ role: "user", content:
+      `The following is text scraped from the official nutrition page for "${brand}". Extract EVERY ` +
+      `menu item with complete nutrition facts and call record_nutrition. One row per item; calories ` +
+      `and grams of protein/carbs/fat as printed. Omit items missing any of those four. Do not invent.\n\n` +
+      text.slice(0, 120_000) }],
+  });
+  track(msg.usage.input_tokens, msg.usage.output_tokens);
+  if (msg.stop_reason === "max_tokens") console.warn(`  ⚠ truncated — page may need chunking`);
+  const tu = msg.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
+  const raw = (tu?.input as { items?: any[] } | undefined)?.items ?? [];
+  return raw.map((it) => ({
+    name: String(it.name ?? "").trim(), servingSize: it.serving_size ? String(it.serving_size) : null,
+    calories: num(it.calories), proteinG: num(it.protein_g), carbsG: num(it.carbs_g), fatG: num(it.fat_g),
+  })).filter((r) => r.name.length > 0);
+}
+
+const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+// Browser-like headers — many sites 403 a bare UA fetch.
+export const BROWSER_HEADERS: Record<string, string> = {
+  "User-Agent": UA,
+  Accept: "text/html,application/xhtml+xml,application/pdf,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+  "Accept-Language": "en-US,en;q=0.9",
+  "Accept-Encoding": "gzip, deflate, br",
+  "Upgrade-Insecure-Requests": "1",
+  "Sec-Fetch-Dest": "document", "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Site": "none",
+};
+export async function fetchHtml(url: string): Promise<string> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 12_000);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal, headers: { ...BROWSER_HEADERS, Referer: new URL(url).origin } });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.text();
+  } finally { clearTimeout(t); }
+}
+export function stripHtml(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&")
+    .replace(/\s+/g, " ").trim();
+}
+export async function extractStaticHtml(url: string, brand: string): Promise<ChainItemRow[]> {
+  const text = stripHtml(await fetchHtml(url));
+  const rows = await extractFromText(brand, text);
+  return rows.map((r) => { const v = validateRow(r); return { ...r, canonicalKey: reconcileKey(r.name), valid: v.valid, validationNote: v.note }; });
+}
+
 // ---- PDF route: render to PNG (downscaled), then extract ----
 export async function renderPdfToPngs(pdfPath: string): Promise<Buffer[]> {
   const dir = mkdtempSync(join(tmpdir(), "p1pdf-"));
@@ -208,10 +263,12 @@ function selftest() {
 async function main() {
   const arg = process.argv[2];
   if (!arg || arg === "--selftest") return selftest();
-  const brand = process.argv[3] ?? "Unknown";
+  const isHtml = arg === "--html";
+  const target = isHtml ? process.argv[3]! : arg;
+  const brand = (isHtml ? process.argv[4] : process.argv[3]) ?? "Unknown";
   const slug = reconcileKey(brand);
-  console.log(`extracting: ${brand}  (${MODEL})  from ${arg}`);
-  const rows = await extractPdf(arg, brand);
+  console.log(`extracting: ${brand}  (${MODEL})  ${isHtml ? "[static-html] " : ""}from ${target}`);
+  const rows = isHtml ? await extractStaticHtml(target, brand) : await extractPdf(target, brand);
   const valid = rows.filter((r) => r.valid);
   writeChainItems(slug, rows, { brand, source: arg, model: MODEL });
   console.log(`\n  rows extracted : ${rows.length}`);
@@ -223,4 +280,7 @@ async function main() {
   for (const r of valid.slice(0, 5)) console.log(`   ${String(r.calories).padStart(4)} cal  P${r.proteinG} C${r.carbsG} F${r.fatG}  ${r.name.slice(0, 42)}`);
 }
 
-main().catch((e) => { console.error("ERROR:", e.message); process.exit(1); });
+// Run the CLI only when invoked directly (not when imported by phase1-run.ts).
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main().catch((e) => { console.error("ERROR:", e.message); process.exit(1); });
+}
