@@ -7,7 +7,7 @@ import { AnimatedPress } from '@/components/AnimatedPress';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { getOnboardingData, type Goal } from '@/lib/onboardingStorage';
 import { saveMacroTargets } from '@/lib/macroStorage';
-import { calculateMacros } from '@/lib/macroCalculator';
+import { calculateMacros, MEALS_PER_DAY } from '@/lib/macroCalculator';
 import { trackOnboardingScreenView } from '@/lib/analytics';
 
 interface Macros { protein: number; carbs: number; fat: number; calories: number }
@@ -52,7 +52,7 @@ export default function PlanReadyScreen() {
     <WelcomeScreen
       progress={16 / 18}
       title="Your daily targets."
-      subtitle="We'll suggest splitting these across 3 meals. You can adjust per-meal targets anytime in search."
+      subtitle="We've set per-meal targets based on your goals. You can adjust them anytime in search."
       onContinue={() => router.push('/welcome/location-permission')}
       canContinue={macros !== null}
       continueLabel="See Restaurants"
@@ -68,12 +68,12 @@ export default function PlanReadyScreen() {
             />
           </Animated.View>
 
-          {/* Macro grid — display daily values (stored per-meal × 3) */}
+          {/* Macro grid — display daily values (stored per-meal × MEALS_PER_DAY) */}
           <View style={s.grid}>
-            <MacroNum label="Protein" value={macros.protein * 3} unit="g" delay={200} accent />
-            <MacroNum label="Carbs" value={macros.carbs * 3} unit="g" delay={260} />
-            <MacroNum label="Fat" value={macros.fat * 3} unit="g" delay={320} />
-            <MacroNum label="Calories" value={macros.calories * 3} unit="" delay={380} accent />
+            <MacroNum label="Protein" value={macros.protein * MEALS_PER_DAY} unit="g" delay={200} accent />
+            <MacroNum label="Carbs" value={macros.carbs * MEALS_PER_DAY} unit="g" delay={260} />
+            <MacroNum label="Fat" value={macros.fat * MEALS_PER_DAY} unit="g" delay={320} />
+            <MacroNum label="Calories" value={macros.calories * MEALS_PER_DAY} unit="" delay={380} accent />
           </View>
 
           {/* Trajectory */}

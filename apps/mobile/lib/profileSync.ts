@@ -2,6 +2,7 @@ import { api } from './api';
 import { getStoredToken } from './authClient';
 import { getOnboardingData, type OnboardingData } from './onboardingStorage';
 import { getMacroTargets, saveMacroTargets, type StoredMacroTargets } from './macroStorage';
+import { MEALS_PER_DAY } from './macroCalculator';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { ProfileResponse } from '@fitsy/shared';
 
@@ -43,7 +44,7 @@ export async function pushProfileToServer(): Promise<void> {
     if (onboarding.activity) body.activityLevel = onboarding.activity;
     if (onboarding.goal) body.goal = onboarding.goal;
 
-    // Convert per-meal → daily (×3)
+    // Convert per-meal → daily (×MEALS_PER_DAY)
     if (macros) {
       const p = parseFloat(macros.protein);
       const c = parseFloat(macros.carbs);
@@ -51,10 +52,10 @@ export async function pushProfileToServer(): Promise<void> {
       const cal = parseFloat(macros.calories);
       if (!isNaN(p) && !isNaN(c) && !isNaN(f) && !isNaN(cal)) {
         body.macroTarget = {
-          calories: Math.round(cal * 3),
-          proteinG: Math.round(p * 3),
-          carbsG: Math.round(c * 3),
-          fatG: Math.round(f * 3),
+          calories: Math.round(cal * MEALS_PER_DAY),
+          proteinG: Math.round(p * MEALS_PER_DAY),
+          carbsG: Math.round(c * MEALS_PER_DAY),
+          fatG: Math.round(f * MEALS_PER_DAY),
         };
       }
     }
@@ -92,13 +93,13 @@ export async function pullProfileFromServer(): Promise<void> {
       await AsyncStorage.setItem(ONBOARDING_KEY, JSON.stringify(onboarding));
     }
 
-    // Convert daily → per-meal (÷3) and write to macro storage
+    // Convert daily → per-meal (÷MEALS_PER_DAY) and write to macro storage
     if (profile.macroTarget) {
       const perMeal: StoredMacroTargets = {
-        protein: String(Math.round(profile.macroTarget.proteinG / 3)),
-        carbs: String(Math.round(profile.macroTarget.carbsG / 3)),
-        fat: String(Math.round(profile.macroTarget.fatG / 3)),
-        calories: String(Math.round(profile.macroTarget.calories / 3)),
+        protein: String(Math.round(profile.macroTarget.proteinG / MEALS_PER_DAY)),
+        carbs: String(Math.round(profile.macroTarget.carbsG / MEALS_PER_DAY)),
+        fat: String(Math.round(profile.macroTarget.fatG / MEALS_PER_DAY)),
+        calories: String(Math.round(profile.macroTarget.calories / MEALS_PER_DAY)),
       };
       await saveMacroTargets(perMeal);
     }

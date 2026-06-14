@@ -7,6 +7,7 @@ import { pushProfileToServer } from '@/lib/profileSync';
 import { ScrollPicker, rangeValues } from '@/components/ScrollPicker';
 import { useTheme, type ThemeColors } from '@/lib/theme';
 import { applySuggestionFilter, type SuggestionFilter } from '@/lib/macroSuggestions';
+import { MEALS_PER_DAY } from '@/lib/macroCalculator';
 import { getOnboardingData, calculateSuggestedCalories } from '@/lib/onboardingStorage';
 import { FONTS } from '@/lib/brand';
 
@@ -97,10 +98,10 @@ export default function MacroSetupScreen() {
     try {
       const cal = computeCalories(values);
       const mealTargets = {
-        protein: String(Math.round(values.protein / 3)),
-        carbs: String(Math.round(values.carbs / 3)),
-        fat: String(Math.round(values.fat / 3)),
-        calories: String(Math.round(cal / 3)),
+        protein: String(Math.round(values.protein / MEALS_PER_DAY)),
+        carbs: String(Math.round(values.carbs / MEALS_PER_DAY)),
+        fat: String(Math.round(values.fat / MEALS_PER_DAY)),
+        calories: String(Math.round(cal / MEALS_PER_DAY)),
       };
       await saveMacroTargets(mealTargets);
       if (!fromOnboarding) pushProfileToServer(); // sync to server (onboarding syncs at payment)

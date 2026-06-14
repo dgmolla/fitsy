@@ -35,8 +35,9 @@ export interface MacroSplit {
 /**
  * Computes daily macro splits for the given diet style filter.
  * Uses the provided daily calorie value, falling back to 2000 kcal/day if missing or invalid.
- * The resulting values fill the daily-target form; they are divided by 3 on save to produce
- * per-meal targets stored in and used by the search screen.
+ * The resulting values fill the daily-target form; on save they are divided by
+ * MEALS_PER_DAY (see macroCalculator) to produce the per-meal targets stored in
+ * and used by the search screen.
  *
  * Protein dense: protein ≈ 10% of calories in grams (= 40% of kcal from protein)
  *   Remaining kcal: 55% carbs, 45% fat.
