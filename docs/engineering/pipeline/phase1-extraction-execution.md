@@ -144,6 +144,29 @@ M7 (wire into live pipeline / Phase 3) is **design-only** here — separate phas
 
 ---
 
+## M6 — DB landing, ready-to-execute (🔴 awaiting human go)
+
+Everything below is staged; the **apply** steps are the only RED actions. Reversible (new
+additive table on **staging**; rollback = drop). Steps, in order:
+
+1. **Schema** — add the `ChainItem` model (defined in design doc → Phase 1) to
+   `prisma/schema.prisma` + a `chainItems ChainItem[]` relation on `Brand`. Additive only.
+2. **Migration** — `npx prisma migrate dev --name add_chain_item` (this APPLIES to the dev/
+   staging DB → **gated**). Review the generated SQL is a single `CREATE TABLE "ChainItem"` +
+   indexes before running.
+3. **Landing script** `scripts/phase1-land.ts` (to write) — reads `scripts/phase1-out/run/*.json`,
+   keeps `valid` rows, resolves `Brand.id` by slug, upserts `ChainItem` on
+   `(brandId, canonicalKey)` with `source='official'`, `confidence` from validation,
+   `officialUrl`, `retrievedAt`. **Dry-run by default** (`--apply` to write); respects
+   provenance (never overwrites a higher tier). Run dry-run first, eyeball counts, then `--apply`.
+4. **Verify** — `SELECT count(*), source FROM "ChainItem" GROUP BY source;` matches the local
+   coverage totals; spot-check 3 brands.
+5. **Rollback** — `DROP TABLE "ChainItem";` + `npx prisma migrate resolve --rolled-back <name>`
+   (or restore from the pre-migration point). Document the exact commands before applying.
+
+**Gate:** I will prepare 1+3 (schema text + landing script), run the landing **dry-run**, post
+the planned counts to Slack, and stop for a one-word go before the apply (steps 2 + 3-`--apply`).
+
 ## Decision log
 - **2026-06-14** Use installed SDK v0.36 with image-blocks + forced-tool structured output;
   do **not** bump `@anthropic-ai/sdk` (RED — touches macro pipeline). Native-PDF doc blocks
@@ -216,3 +239,8 @@ M7 (wire into live pipeline / Phase 3) is **design-only** here — separate phas
   JIB gave 24 rows here vs 40 standalone — Haiku under-extracts dense single pages
   nondeterministically (validator ensures *correctness*, not *completeness*); follow-up =
   tile/re-extract dense pages. Output: `scripts/phase1-out/run/_coverage.json`.
+- **2026-06-14 — head-20 FINAL (after curl + 403 fixes):** **5 official-extracted = 571
+  validated items** (Domino's, Jack-in-the-Box, Yoshinoya, Baskin-Robbins, Boba Time), **14
+  deferred-SPA** (→ fallback tier), **0 errors**. Cumulative spend ~$0.6 / $15.
+- **2026-06-14 — EXPANDING:** kicked off discovery over **top 80 gated brands**, then the router
+  over them (resumable). M6 (ChainItem migration + DB landing) remains the gated finale.
