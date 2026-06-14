@@ -137,7 +137,8 @@ export async function extractFromImages(brand: string, pngs: Buffer[]): Promise<
   }
 
   const tu = msg.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
-  const raw = (tu?.input as { items?: any[] } | undefined)?.items ?? [];
+  const _items = (tu?.input as { items?: unknown }) || {};
+  const raw = Array.isArray(_items.items) ? _items.items : [];
   return raw.map((it) => ({
     name: String(it.name ?? "").trim(),
     servingSize: it.serving_size ? String(it.serving_size) : null,
@@ -162,7 +163,8 @@ export async function extractFromText(brand: string, text: string): Promise<Nutr
   track(msg.usage.input_tokens, msg.usage.output_tokens);
   if (msg.stop_reason === "max_tokens") console.warn(`  ⚠ truncated — page may need chunking`);
   const tu = msg.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
-  const raw = (tu?.input as { items?: any[] } | undefined)?.items ?? [];
+  const _items = (tu?.input as { items?: unknown }) || {};
+  const raw = Array.isArray(_items.items) ? _items.items : [];
   return raw.map((it) => ({
     name: String(it.name ?? "").trim(), servingSize: it.serving_size ? String(it.serving_size) : null,
     calories: num(it.calories), proteinG: num(it.protein_g), carbsG: num(it.carbs_g), fatG: num(it.fat_g),
