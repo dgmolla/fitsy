@@ -148,26 +148,47 @@ M7 (wire into live pipeline / Phase 3) is **design-only** here — separate phas
 
 ## M6 — DB landing, ready-to-execute (🔴 awaiting human go)
 
-Everything below is staged; the **apply** steps are the only RED actions. Reversible (new
-additive table on **staging**; rollback = drop). Steps, in order:
+Everything is staged; the **apply** (step 3) is the only RED action. Reversible (new additive
+table on **staging**; rollback = drop).
 
-1. **Schema** — add the `ChainItem` model (defined in design doc → Phase 1) to
-   `prisma/schema.prisma` + a `chainItems ChainItem[]` relation on `Brand`. Additive only.
-2. **Migration** — `npx prisma migrate dev --name add_chain_item` (this APPLIES to the dev/
-   staging DB → **gated**). Review the generated SQL is a single `CREATE TABLE "ChainItem"` +
-   indexes before running.
-3. **Landing script** `scripts/phase1-land.ts` (to write) — reads `scripts/phase1-out/run/*.json`,
-   keeps `valid` rows, resolves `Brand.id` by slug, upserts `ChainItem` on
-   `(brandId, canonicalKey)` with `source='official'`, `confidence` from validation,
-   `officialUrl`, `retrievedAt`. **Dry-run by default** (`--apply` to write); respects
-   provenance (never overwrites a higher tier). Run dry-run first, eyeball counts, then `--apply`.
-4. **Verify** — `SELECT count(*), source FROM "ChainItem" GROUP BY source;` matches the local
-   coverage totals; spot-check 3 brands.
-5. **Rollback** — `DROP TABLE "ChainItem";` + `npx prisma migrate resolve --rolled-back <name>`
-   (or restore from the pre-migration point). Document the exact commands before applying.
+> **⚠ Migration-state caution (verified 2026-06-14):** the Brand migration is applied, but
+> `_prisma_migrations` has **drift** — duplicate `(pending)` rows for `ue_first_rebuild` and
+> `macro_estimate_provenance` that are already applied. So **do NOT use `prisma migrate dev`**
+> (it would flag the drift and may offer a destructive reset). Use the **surgical raw-SQL**
+> path below — it creates only `ChainItem` and touches nothing else.
 
-**Gate:** I will prepare 1+3 (schema text + landing script), run the landing **dry-run**, post
-the planned counts to Slack, and stop for a one-word go before the apply (steps 2 + 3-`--apply`).
+Steps, in order:
+1. **Schema** *(done)* — `ChainItem` model + `chainItems ChainItem[]` on `Brand` added to
+   `prisma/schema.prisma` (additive). Not committed (sits with the brand-table working changes).
+2. **Generate client** — `npx prisma generate` (DB-agnostic; gives the client a typed
+   `chainItem` delegate so the landing upsert runs cleanly). Safe, no DB write.
+3. **Create the table (🔴 the one gated DB write)** — run the additive SQL surgically (avoids
+   migrate-dev drift): `CREATE TABLE "ChainItem" (...)` + unique index `(brandId, canonicalKey)`
+   + index `(brandId)` + FK → `Brand(id)`. Exec via a tiny script (`$executeRawUnsafe`) or psql.
+   Idempotent guard: `CREATE TABLE IF NOT EXISTS`.
+4. **Land** — `npx tsx --env-file=.env.local scripts/phase1-land.ts --apply` → upserts 4,909
+   `ChainItem` rows on `(brandId, canonicalKey)`, `source='official'`, `confidence='HIGH'`,
+   `officialUrl`, `retrievedAt`.
+5. **Verify** — `SELECT source, count(*) FROM "ChainItem" GROUP BY source;` = 4,909 official;
+   spot-check 3 brands; later wire the divergence query (Phase 2).
+6. **Rollback** — `DROP TABLE "ChainItem";` (no migration-history entanglement since we used
+   raw SQL, not migrate dev).
+
+**Gate:** schema + landing script staged, dry-run = 4,909 items. Awaiting one-word go to run
+steps 2–4.
+
+## Follow-ups / backlog
+
+- **Nutritionix buy for the SPA head** *(in progress — Dawit, waiting on Nutritionix customer
+  support 2026-06-14)*: license the top ~8 national SPA chains (Subway, McDonald's, Starbucks,
+  Panda Express, El Pollo Loco, Wingstop, Taco Bell, Little Caesars — ~500+ locations) that the
+  agent can't extract (calculator SPAs; cost probe confirmed build-not-worth-it). Map their
+  brand IDs → our `Brand`, ingest as `source='official'` ChainItems via the same landing path.
+- **Phase 2 backfill**: propagate landed ChainItem macros → the 40,200 location MenuItems for
+  the 52 official brands (respecting provenance); run the divergence detector as the regression.
+- **phase0 type errors**: owner to fix before this branch opens a clean PR.
+- **Completeness re-extract** for dense PDFs (Haiku under-extracts nondeterministically).
+- **10 environmental errors** (curl timeouts / non-PDF URLs) — retriable.
 
 ## Decision log
 - **2026-06-14** Use installed SDK v0.36 with image-blocks + forced-tool structured output;
