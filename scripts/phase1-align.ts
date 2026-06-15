@@ -13,7 +13,7 @@
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { PrismaClient } from "@prisma/client";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
 
 const MODEL = "claude-haiku-4-5" as const;
 const p = new PrismaClient();
@@ -61,12 +61,15 @@ async function main() {
   const slugs = argSlugs.length ? argSlugs : [...officialByBrand.keys()]; // default: ALL 52 official brands
   const brands = await p.brand.findMany({ where: { slug: { in: slugs } }, select: { id: true, slug: true, displayName: true } });
 
-  console.log(`aligning ${brands.length} brands...\n`);
+  const ALIAS_FILE = "scripts/phase1-out/aliases.json";
+  // resumable: keep already-aligned brands, skip them
+  const aliasesOut: Record<string, Record<string, string[]>> = existsSync(ALIAS_FILE) ? JSON.parse(readFileSync(ALIAS_FILE, "utf8")) : {};
+  console.log(`aligning ${brands.length} brands (${Object.keys(aliasesOut).length} already done, skipping)...\n`);
   console.log("brand                     UE-items  naive%  ALIGNED%  (Δ)");
   let tUE = 0, tNaive = 0, tAligned = 0;
-  const aliasesOut: Record<string, Record<string, string[]>> = {}; // brandSlug -> canonicalKey -> [alias slugs]
   for (const b of brands) {
     const official = officialByBrand.get(b.slug); if (!official) continue;
+    if (aliasesOut[b.slug]) continue; // already aligned
     const keys = new Set(official.map((o) => o.canonicalKey));
     const items = await p.menuItem.findMany({ where: { restaurant: { brandId: b.id } }, select: { name: true }, take: 5000 });
     const ueNames = [...new Set(items.map((i) => i.name))].filter(Boolean);
@@ -79,11 +82,11 @@ async function main() {
     const byKey: Record<string, Set<string>> = {};
     for (const n of ueNames) { const k = keys.has(slug(n)) ? slug(n) : aligned.get(n); if (k) (byKey[k] ??= new Set()).add(slug(n)); }
     aliasesOut[b.slug] = Object.fromEntries(Object.entries(byKey).map(([k, s]) => [k, [...s]]));
+    writeFileSync(ALIAS_FILE, JSON.stringify(aliasesOut, null, 2)); // incremental → crash-safe + resumable
     tUE += ueNames.length; tNaive += naive; tAligned += matched;
     const pct = (x: number) => Math.round((100 * x) / ueNames.length);
     console.log(`  ${b.displayName.slice(0, 24).padEnd(24)} ${String(ueNames.length).padStart(5)}   ${String(pct(naive)).padStart(3)}%    ${String(pct(matched)).padStart(3)}%   +${pct(matched) - pct(naive)}`);
   }
-  writeFileSync("scripts/phase1-out/aliases.json", JSON.stringify(aliasesOut, null, 2));
   console.log(`\n  OVERALL: naive ${Math.round(100 * tNaive / tUE)}% → aligned ${Math.round(100 * tAligned / tUE)}%  (${tAligned}/${tUE} UE items resolve to canon)`);
   console.log(`  → wrote scripts/phase1-out/aliases.json (canonicalKey → UE-name-slug aliases) for ChainItem.aliases[] / runtime canon-first lookup.`);
 }
