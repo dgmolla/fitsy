@@ -216,20 +216,39 @@ export async function renderPdfToPngs(pdfPath: string): Promise<Buffer[]> {
   return out;
 }
 
-const CHUNK_PAGES = 2; // pages per API call — bounds output tokens so tool JSON never truncates
+const TILE_BANDS = 2;   // split each page into N horizontal bands → fewer items/image → model enumerates more completely
+const TILE_OVERLAP = 0.06; // band overlap so rows straddling a cut aren't lost (dedup handles the double)
+const CHUNK_TILES = 2;  // tiles per API call — bounds output tokens
+
+// Split a page PNG into TILE_BANDS overlapping horizontal bands.
+async function tilePng(buf: Buffer): Promise<Buffer[]> {
+  if (TILE_BANDS <= 1) return [buf];
+  const img = sharp(buf); const meta = await img.metadata();
+  const W = meta.width ?? 0, H = meta.height ?? 0;
+  if (!W || !H) return [buf];
+  const band = Math.ceil(H / TILE_BANDS), ov = Math.round(band * TILE_OVERLAP);
+  const out: Buffer[] = [];
+  for (let i = 0; i < TILE_BANDS; i++) {
+    const top = Math.max(0, i * band - ov);
+    const height = Math.min(H - top, band + 2 * ov);
+    out.push(await sharp(buf).extract({ left: 0, top, width: W, height }).png().toBuffer());
+  }
+  return out;
+}
 
 export async function extractPdf(pdfPath: string, brand: string): Promise<ChainItemRow[]> {
   const pngs = await renderPdfToPngs(pdfPath);
-  // chunk pages so each call's output stays well under the token cap
+  const tiles: Buffer[] = [];
+  for (const pg of pngs) tiles.push(...(await tilePng(pg)));
   const merged = new Map<string, NutritionRow>(); // dedupe by canonicalKey, keep first
-  for (let i = 0; i < pngs.length; i += CHUNK_PAGES) {
-    const chunk = pngs.slice(i, i + CHUNK_PAGES);
+  for (let i = 0; i < tiles.length; i += CHUNK_TILES) {
+    const chunk = tiles.slice(i, i + CHUNK_TILES);
     const rows = await extractFromImages(brand, chunk);
     for (const r of rows) {
       const k = reconcileKey(r.name);
       if (k && !merged.has(k)) merged.set(k, r);
     }
-    if (pngs.length > CHUNK_PAGES) console.log(`    pages ${i + 1}-${Math.min(i + CHUNK_PAGES, pngs.length)}/${pngs.length}: ${rows.length} rows (running unique ${merged.size})`);
+    if (tiles.length > CHUNK_TILES) console.log(`    tiles ${i + 1}-${Math.min(i + CHUNK_TILES, tiles.length)}/${tiles.length} (${pngs.length}pg×${TILE_BANDS}): ${rows.length} rows (running unique ${merged.size})`);
   }
   return [...merged.values()].map((r) => {
     const v = validateRow(r);
