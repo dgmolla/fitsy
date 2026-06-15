@@ -241,6 +241,23 @@ steps 2–4.
   keep the agent on the regional tail (already 52 brands / 40,200 location-items).** Probe used
   `playwright-core` installed `--no-save` (not in package.json).
 
+- **2026-06-14 — RESOLVER is the real prod-readiness gate (not extraction).** Challenged on
+  ROI: measured the match between extracted official names and the **UE** location-item names
+  (the names the prod canon-first pipeline will actually see). Naive slug = **11%** — so as-built
+  the canon-check would miss 89% and fall to Haiku. Built the fix the schema already anticipated:
+  **per-brand LLM alignment** (`phase1-align.ts`) maps UE-name → canonicalKey; those become
+  `ChainItem.aliases[]`, and runtime matches incoming UE item against `canonicalKey ∪ aliases`
+  (no per-item LLM at runtime). POC (5 brands incl. 0% cases): **10% → 47%** match. Ceiling is
+  bounded mostly by (a) extraction completeness and (b) UE being a combinatorial superset
+  (size×flavor×topping, LTOs, combos) that legitimately has no official match → correct
+  fallthrough. So 47% = 47% get official + clean fallthrough for the rest (no regression vs today).
+- **2026-06-14** Completeness pass: **page tiling** (split dense pages into overlapping bands)
+  → Boba 300→346 valid (+15%). Modest; UE-superset is the bigger ceiling, so tiling stays ON for
+  future runs but not a blanket re-extraction now. Aligner folded into landing → `aliases[]`
+  populated; full 52-brand alignment + final match rate in progress.
+- **2026-06-14** Caught + fixed: aligner missing `writeFileSync` import would've crashed after
+  spending on all API calls; added it + **incremental crash-safe/resumable** `aliases.json`.
+
 ## Escalation log
 - **2026-06-14 — FLAG (not blocking phase1):** the pre-commit hook's workspace `tsc` fails on
   pre-existing untracked phase0 scripts (`phase0-detect-chains.ts`, `phase0-llm-tiebreak.ts`,
