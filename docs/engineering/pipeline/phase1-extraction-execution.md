@@ -140,7 +140,8 @@ M7 (wire into live pipeline / Phase 3) is **design-only** here — separate phas
 - [x] **M4** SPA route — **DEFERRED to fallback** (documented): cheap headless insufficient for
   calculator-style chains; per-site XHR/interaction is future high-effort work
 - [x] **M5** router + batch driver — **PASSED** (20 head brands routed; coverage report below)
-- [ ] **M6** DB landing (gated — awaiting human go)
+- [~] **M6** DB landing — **STAGED, awaiting human go**: ChainItem model added to schema,
+  landing dry-run = 1,654 items / 18 brands; apply (migrate + land --apply) is the one RED step
 
 ---
 
@@ -244,3 +245,14 @@ the planned counts to Slack, and stop for a one-word go before the apply (steps 
   deferred-SPA** (→ fallback tier), **0 errors**. Cumulative spend ~$0.6 / $15.
 - **2026-06-14 — EXPANDING:** kicked off discovery over **top 80 gated brands**, then the router
   over them (resumable). M6 (ChainItem migration + DB landing) remains the gated finale.
+- **2026-06-14 — 80-brand batch FINAL:** discovery 70/80 official domain. Router: **18
+  official-extracted = 1,654 validated items** (Boba Time, Dunkin', Yoshinoya, Shake Shack,
+  Habit Burger, Domino's, bb.q Chicken, Fatburger, WaBa Grill, Fresh Brothers, Silverlake
+  Ramen, JIB, Philz, Banda Burrito, Five Guys, Baskin-Robbins, Ono Hawaiian BBQ, Calif Chicken
+  Cafe); **47 deferred-SPA**; **4 errors** (curl timeouts on sweetgreen/Raising Cane's/Sushi-
+  from-Ralphs + Mendocino non-PDF — environmental, low-value). Fixed `raw.map` crash (non-array
+  tool output) → recovered 4 brands. Consolidated to `chainitems.json`: 18 brands, 1,654 items,
+  1,594 unique keys, all resolve to Brand rows. Cumulative spend ~$1.8 / $15.
+- **2026-06-14 — M6 GATE REACHED.** ChainItem model staged in schema.prisma; `phase1-land.ts`
+  dry-run = 1,654 items. Migration is additive (CREATE TABLE ChainItem + FK→Brand; rollback =
+  DROP TABLE). **STOPPED for human go before applying to staging** (the one RED action).
