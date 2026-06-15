@@ -19,12 +19,16 @@ import { PrismaClient } from "@prisma/client";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
+// aliases.json: brandSlug -> canonicalKey -> [UE-name-slug aliases] (built by phase1-align.ts)
+const ALIASES: Record<string, Record<string, string[]>> = existsSync("scripts/phase1-out/aliases.json")
+  ? JSON.parse(readFileSync("scripts/phase1-out/aliases.json", "utf8")) : {};
+
 const RUN_DIR = "scripts/phase1-out/run";
 const APPLY = process.argv.includes("--apply");
 const p = new PrismaClient();
 
 interface Row { name: string; servingSize: string | null; calories: number | null; proteinG: number | null; carbsG: number | null; fatG: number | null; canonicalKey: string; valid: boolean }
-interface ChainItemOut { brandSlug: string; brandId: string | null; canonicalKey: string; name: string; servingSize: string | null; calories: number; proteinG: number; carbsG: number; fatG: number; source: "official"; confidence: "HIGH"; officialUrl: string | null }
+interface ChainItemOut { brandSlug: string; brandId: string | null; canonicalKey: string; aliases: string[]; name: string; servingSize: string | null; calories: number; proteinG: number; carbsG: number; fatG: number; source: "official"; confidence: "HIGH"; officialUrl: string | null }
 
 async function main() {
   const cov = JSON.parse(readFileSync(join(RUN_DIR, "_coverage.json"), "utf8"));
@@ -43,7 +47,8 @@ async function main() {
     if (!brandId) missingBrand++;
     for (const r of rows) {
       if (!r.valid || r.calories == null || r.proteinG == null || r.carbsG == null || r.fatG == null) continue;
-      out.push({ brandSlug: b.slug, brandId, canonicalKey: r.canonicalKey, name: r.name, servingSize: r.servingSize,
+      const aliases = ALIASES[b.slug]?.[r.canonicalKey] ?? [];
+      out.push({ brandSlug: b.slug, brandId, canonicalKey: r.canonicalKey, aliases, name: r.name, servingSize: r.servingSize,
         calories: r.calories, proteinG: r.proteinG, carbsG: r.carbsG, fatG: r.fatG, source: "official", confidence: "HIGH", officialUrl: b.official });
     }
   }
@@ -54,6 +59,7 @@ async function main() {
   console.log(`  validated items     : ${out.length}`);
   console.log(`  brands w/o Brand row: ${missingBrand}`);
   console.log(`  unique canonicalKeys: ${new Set(out.map((o) => o.brandSlug + "|" + o.canonicalKey)).size}`);
+  console.log(`  total UE aliases    : ${out.reduce((a, o) => a + o.aliases.length, 0)} (runtime canon-first lookup keys)`);
   console.log(`  → scripts/phase1-out/chainitems.json`);
 
   if (APPLY) {
@@ -67,8 +73,8 @@ async function main() {
         if (!o.brandId) continue;
         await client.chainItem.upsert({
           where: { brandId_canonicalKey: { brandId: o.brandId, canonicalKey: o.canonicalKey } },
-          create: { brandId: o.brandId, canonicalKey: o.canonicalKey, calories: Math.round(o.calories), proteinG: o.proteinG, carbsG: o.carbsG, fatG: o.fatG, servingSize: o.servingSize, source: o.source, confidence: o.confidence, officialUrl: o.officialUrl, retrievedAt: new Date() },
-          update: { calories: Math.round(o.calories), proteinG: o.proteinG, carbsG: o.carbsG, fatG: o.fatG, source: o.source, confidence: o.confidence, officialUrl: o.officialUrl, retrievedAt: new Date() },
+          create: { brandId: o.brandId, canonicalKey: o.canonicalKey, aliases: o.aliases, calories: Math.round(o.calories), proteinG: o.proteinG, carbsG: o.carbsG, fatG: o.fatG, servingSize: o.servingSize, source: o.source, confidence: o.confidence, officialUrl: o.officialUrl, retrievedAt: new Date() },
+          update: { aliases: o.aliases, calories: Math.round(o.calories), proteinG: o.proteinG, carbsG: o.carbsG, fatG: o.fatG, source: o.source, confidence: o.confidence, officialUrl: o.officialUrl, retrievedAt: new Date() },
         });
         n++;
       }
