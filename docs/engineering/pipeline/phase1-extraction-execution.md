@@ -206,6 +206,20 @@ the planned counts to Slack, and stop for a one-word go before the apply (steps 
   recovered 7-Eleven/Panda/IHOP (→ correctly SPA) and Boba Time's PDF. `BROWSER_HEADERS` kept
   for reference but unused by the fetch path.
 
+- **2026-06-14 — SPA adapter COST PROBE (Wingstop, the reachable best-case).** Measured the
+  real cost of self-building one per-site adapter: headless capture → no clean endpoint (data
+  in a 2 MB minified bundle / behind calculator interaction); downloaded the bundle → `calories`
+  appears only as model *field names* (`basecalories`/`maxcalories`), data fetched at runtime;
+  grepped bundle → found host `api.wingstop.com` + `/menu /nutrition /products` paths + a
+  Firebase/Olo backend (`wingstop-olo-production.firebaseio.com`); probed `api.wingstop.com/menu`
+  → 404 (reachable, wrong path — real path needs store-context/auth still buried in the bundle).
+  **Verdict:** even the *reachable* best case is multi-hour per-site reverse-engineering with a
+  likely auth wall, zero reuse across chains (Popeyes=Expo, Taco Bell/Pizza Hut=connection-
+  refused, each a different stack), and brittle to every redesign. **Confirms buy-vs-build:
+  buy the top-~8 national SPAs (Nutritionix/MenuStat) or leave on FatSecret/Haiku fallback;
+  keep the agent on the regional tail (already 52 brands / 40,200 location-items).** Probe used
+  `playwright-core` installed `--no-save` (not in package.json).
+
 ## Escalation log
 - **2026-06-14 — FLAG (not blocking phase1):** the pre-commit hook's workspace `tsc` fails on
   pre-existing untracked phase0 scripts (`phase0-detect-chains.ts`, `phase0-llm-tiebreak.ts`,
