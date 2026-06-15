@@ -139,7 +139,8 @@ M7 (wire into live pipeline / Phase 3) is **design-only** here — separate phas
 - [x] **M3** static-HTML route — **PASSED** (Yoshinoya 172/174 valid; clean HTML = highest pass rate)
 - [x] **M4** SPA route — **DEFERRED to fallback** (documented): cheap headless insufficient for
   calculator-style chains; per-site XHR/interaction is future high-effort work
-- [x] **M5** router + batch driver — **PASSED** (20 head brands routed; coverage report below)
+- [x] **M5** router + batch driver — **PASSED**, scaled to **all gated brands** (290 with
+  official artifacts): **52 official-extracted = 4,909 validated items**; rest → fallback tier
 - [~] **M6** DB landing — **STAGED, awaiting human go**: ChainItem model added to schema,
   landing dry-run = 1,654 items / 18 brands; apply (migrate + land --apply) is the one RED step
 
@@ -256,3 +257,13 @@ the planned counts to Slack, and stop for a one-word go before the apply (steps 
 - **2026-06-14 — M6 GATE REACHED.** ChainItem model staged in schema.prisma; `phase1-land.ts`
   dry-run = 1,654 items. Migration is additive (CREATE TABLE ChainItem + FK→Brand; rollback =
   DROP TABLE). **STOPPED for human go before applying to staging** (the one RED action).
+- **2026-06-14 — FULL-SCALE run (ALL gated brands, discovery@400 → router).** 290 brands with
+  official artifacts. **52 official-extracted = 4,909 validated items** (Boba Time, Dunkin',
+  Paris Baguette, Chuck E. Cheese, Gyu-Kaku, Stonefire, Randy's Donuts, Sbarro, Jamba, Corner
+  Bakery, MOD Pizza, Shake Shack, Yoshinoya, WaBa Grill, …); route split 30 PDF / 21 static /
+  1 site. 219 deferred-SPA, 9 empty, 10 errors → all to fallback tier. Consolidated:
+  4,909 items, 4,667 unique keys, all resolve to Brand rows. Cumulative spend ~$4.3 / $15.
+  **Extraction goal complete:** every gated brand with a parseable official artifact is
+  extracted; the rest (SPA head + no-official tail) fall to the existing FatSecret/Haiku
+  fallback — i.e. **all brands enriched, best-source-per-brand.** M6 apply (the full 4,909-item
+  set) awaits human go.
