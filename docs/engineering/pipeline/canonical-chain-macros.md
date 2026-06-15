@@ -366,6 +366,30 @@ entirely Step B (extraction across SPA/PDF), exactly where the multimodal-LLM-as
 4/4/9 validator are aimed. Next: run the spike over a mid-tail sample (3–10 locations) to see
 where official availability falls off, then build the extraction half.
 
+### Coverage achieved (measured 2026-06-14, item-level)
+
+Extraction ran over all gated brands; here is where the **676,137** menu items actually sit and
+what each bucket's macro source is. This is the empirical justification for the whole effort —
+**chains are half the catalog, and the big national chains alone are 27% of all items.**
+
+| Bucket | Items | % of all | Macro source |
+|---|---:|---:|---|
+| **All chain items** (brandId set) | 336,492 | 50% | — |
+| All indie items (no brand) | 339,645 | 50% | FatSecret/Haiku (out of scope for chains) |
+| ↳ **52 official-extracted brands** (regional mid-tail) | 40,200 | 6% | **official** (agent — PDFs/static) |
+| ↳ **SPA/deferred big chains** (Subway, McDonald's, Starbucks…) | 179,788 | 27% | → **Nutritionix** (buy) / fallback |
+| ↳ other detected chains (no official artifact found) | 116,504 | 17% | FatSecret/Haiku |
+
+The agent reached the **tractable 6%** (mid-tail brands that publish PDFs/HTML). The **27%
+big-chain prize** (calculator SPAs) is the Nutritionix buy — and it lands into the **same**
+`ChainItem` table under the same runtime canon-first lookup. The canonical layer is the shared
+substrate both feed; the agent's 6% is the bootstrap that proves the pipeline.
+
+**Runtime match (the canon-first short-circuit):** with `aliases[]` populated by the LLM
+resolver (`phase1-align.ts`), incoming UE items resolve to a canonical macro **41%** of the time
+across the 52 official brands (vs 11% naive-slug), zero per-item LLM at runtime; the rest fall
+through to FatSecret/Haiku (UE is a combinatorial superset, so much of that miss is correct).
+
 ### Build-vs-buy on the head
 
 The agent is the right *general* mechanism, but for the top ~100 national chains a licensed
