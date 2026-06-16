@@ -19,9 +19,12 @@ import { PrismaClient } from "@prisma/client";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
-// aliases.json: brandSlug -> canonicalKey -> [UE-name-slug aliases] (built by phase1-align.ts)
-const ALIASES: Record<string, Record<string, string[]>> = existsSync("scripts/phase1-out/aliases.json")
-  ? JSON.parse(readFileSync("scripts/phase1-out/aliases.json", "utf8")) : {};
+// aliases: prefer the VERIFIED, high-precision set (phase1-verify-aliases.ts) so what lands is
+// safe to backfill; fall back to the raw aligner output only if verification hasn't run.
+const ALIAS_PATH = existsSync("scripts/phase1-out/aliases-verified.json") ? "scripts/phase1-out/aliases-verified.json"
+  : existsSync("scripts/phase1-out/aliases.json") ? "scripts/phase1-out/aliases.json" : null;
+const ALIASES: Record<string, Record<string, string[]>> = ALIAS_PATH ? JSON.parse(readFileSync(ALIAS_PATH, "utf8")) : {};
+if (ALIAS_PATH) console.log(`(aliases from ${ALIAS_PATH})`);
 
 const RUN_DIR = "scripts/phase1-out/run";
 const APPLY = process.argv.includes("--apply");

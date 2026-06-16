@@ -258,6 +258,19 @@ steps 2–4.
 - **2026-06-14** Caught + fixed: aligner missing `writeFileSync` import would've crashed after
   spending on all API calls; added it + **incremental crash-safe/resumable** `aliases.json`.
 
+- **2026-06-15 — M6 LANDED + precision-gated.** Created `ChainItem` (surgical additive SQL,
+  avoided migrate-dev drift), landed **4,667 rows** (4,909→4,667 via unique key collapse),
+  `source=official`, 52 brands. **Precision safety gate (the key Phase 2/3 finding):**
+  independent LLM judge on a 150-pair sample → **blind aliases 74% precision (26% WRONG** —
+  combos vs base, size/variant/base mismatches). A blind backfill = 41% match × 74% = ~30%
+  correct but **~11% confidently-wrong nutrition** (Danger Zone) → **Phase 2/3 NOT safe blind.**
+  Built verified resolver (`phase1-verify-aliases.ts`): combo/size guard + adversarial skeptic
+  (default-reject) → kept 833 of 2,246 aliases; re-measured **92% precision (~1% wrong)** at
+  **~14% match**. Tradeoff: conservative matching cuts wrong 11%→1% but correct coverage 30%→13%
+  — UE names diverge from official names so much only ~14% match safely. Landed the **verified**
+  aliases (safe set). Backfill the 92% tier; Nutritionix (27% big chains, licensed=high
+  precision) is the volume play. Future: confidence *tiers* (HIGH backfill / MEDIUM store-only).
+
 ## Escalation log
 - **2026-06-14 — FLAG (not blocking phase1):** the pre-commit hook's workspace `tsc` fails on
   pre-existing untracked phase0 scripts (`phase0-detect-chains.ts`, `phase0-llm-tiebreak.ts`,
