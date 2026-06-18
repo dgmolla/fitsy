@@ -1,10 +1,12 @@
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
-const mockRequireAuth = jest.fn();
+const mockRequireSubscription = jest.fn();
 const mockGetRestaurantMenu = jest.fn();
 
-jest.mock("@/lib/auth", () => ({
-  requireAuth: mockRequireAuth,
+// Route gates on requireSubscription; entitlement logic is unit-tested in
+// lib/subscription.test.ts. Mock the gate to focus on route behavior.
+jest.mock("@/lib/subscription", () => ({
+  requireSubscription: mockRequireSubscription,
 }));
 
 jest.mock("@/lib/restaurantService", () => ({
@@ -23,7 +25,7 @@ const SAMPLE_MENU = {
 };
 
 beforeEach(() => {
-  mockRequireAuth.mockReset();
+  mockRequireSubscription.mockReset();
   mockGetRestaurantMenu.mockReset();
 });
 
@@ -46,7 +48,7 @@ function makeParams(id: string): { params: Promise<{ id: string }> } {
 
 describe("GET /api/restaurants/[id]/menu — auth guard", () => {
   it("returns 401 when Authorization header is missing", async () => {
-    mockRequireAuth.mockResolvedValue(
+    mockRequireSubscription.mockResolvedValue(
       NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
     );
 
@@ -59,7 +61,7 @@ describe("GET /api/restaurants/[id]/menu — auth guard", () => {
   });
 
   it("returns 401 when token is invalid", async () => {
-    mockRequireAuth.mockResolvedValue(
+    mockRequireSubscription.mockResolvedValue(
       NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
     );
 
@@ -77,7 +79,7 @@ describe("GET /api/restaurants/[id]/menu — auth guard", () => {
 
 describe("GET /api/restaurants/[id]/menu — success", () => {
   it("returns 200 with menu data when authenticated", async () => {
-    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+    mockRequireSubscription.mockResolvedValue(VALID_PAYLOAD);
     mockGetRestaurantMenu.mockResolvedValue(SAMPLE_MENU);
 
     const res = await GET(
@@ -96,7 +98,7 @@ describe("GET /api/restaurants/[id]/menu — success", () => {
 
 describe("GET /api/restaurants/[id]/menu — not found", () => {
   it("returns 404 when restaurant does not exist", async () => {
-    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+    mockRequireSubscription.mockResolvedValue(VALID_PAYLOAD);
     mockGetRestaurantMenu.mockResolvedValue(null);
 
     const res = await GET(
