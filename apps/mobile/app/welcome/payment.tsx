@@ -25,6 +25,14 @@ export default function PaymentScreen() {
   // designed copy as a fallback while offerings load (or in Expo Go / no key).
   const annualPrice = offering?.annual?.product.priceString ?? '$39.99/yr';
   const monthlyPrice = offering?.monthly?.product.priceString ?? '$7.99/mo';
+  // Exit-intent discount: a dedicated, lower-priced annual package (RevenueCat
+  // package id `annual_discount`, backed by a separate ASC product
+  // `fitsy_annual_discount` — 25% off, same 3-day trial). Live price with the
+  // designed copy as fallback; if the package isn't configured the discount CTA
+  // says so rather than silently charging full price (see handleStart).
+  const discountedAnnual =
+    offering?.availablePackages.find((p) => p.identifier === 'annual_discount') ?? null;
+  const discountPrice = discountedAnnual?.product.priceString ?? '$29.99/yr';
 
   useEffect(() => {
     trackOnboardingScreenView('payment');
@@ -45,14 +53,27 @@ export default function PaymentScreen() {
   // selected package directly through the RevenueCat SDK (no dashboard-designed
   // hosted paywall).
   async function handleStart(discounted = false) {
-    const pkg = plan === 'yearly' ? offering?.annual : offering?.monthly;
+    // The discount CTA buys the dedicated discounted annual package; the normal
+    // CTA buys the selected plan. Buying the regular annual here would charge
+    // full price despite the "25% off" promise, so a missing discount package
+    // is surfaced, not silently substituted.
+    const pkg = discounted
+      ? discountedAnnual
+      : plan === 'yearly'
+        ? offering?.annual
+        : offering?.monthly;
     if (!pkg) {
-      Alert.alert('Just a moment', 'Plans are still loading — please try again.');
+      Alert.alert(
+        'Just a moment',
+        discounted
+          ? "This offer isn't available right now — you can still start your free trial."
+          : 'Plans are still loading — please try again.',
+      );
       return;
     }
     setLoading(true);
     try {
-      const isPro = await purchase(pkg, 'onboarding');
+      const isPro = await purchase(pkg, discounted ? 'onboarding_discount' : 'onboarding');
       if (!isPro) return; // cancelled or errored — stay on screen
       await completeOnboarding(discounted);
     } finally {
@@ -140,12 +161,12 @@ export default function PaymentScreen() {
       <Modal visible={modal === 'discount'} transparent animationType="fade" onRequestClose={() => setModal('none')}>
         <View style={s.overlay}>
           <Animated.View entering={FadeIn.duration(300)} style={s.modal}>
-            <Text style={s.modalTitle}>Wait — 50% off.</Text>
+            <Text style={s.modalTitle}>Wait — 25% off.</Text>
             <Text style={s.modalBody}>
-              Lock in <Text style={{ fontWeight: '700' }}>$14.99/year</Text> if you start your free trial now.
+              Lock in <Text style={{ fontWeight: '700' }}>{discountPrice}</Text> if you start your free trial now.
             </Text>
             <AnimatedPress style={s.modalCta} onPress={() => { setModal('none'); handleStart(true); }} haptic>
-              <Text style={s.modalCtaTxt}>Claim 50% Off</Text>
+              <Text style={s.modalCtaTxt}>Claim 25% Off</Text>
             </AnimatedPress>
             <AnimatedPress style={s.modalSkip} onPress={() => setModal('goodbye')}>
               <Text style={s.modalSkipTxt}>No thanks</Text>
