@@ -126,7 +126,7 @@ RevenueCat is wired and ASC products are created. Remaining items:
 | `requireSubscription()` server gate | `#backend` | ✅ done — guards `/api/restaurants` + menu; `(tabs)` guard + 402-retry on client |
 | RevenueCat webhook in production | `#backend` | Endpoint `POST /api/revenuecat/webhook` is live — **confirm URL + `REVENUECAT_WEBHOOK_AUTH` are set in the RC dashboard + Vercel** |
 | `EXPO_PUBLIC_REVENUECAT_IOS_KEY` in the production EAS build | `#frontend` | Verify it's set (test key only works in dev) |
-| Discount offer price | `#product` | $14.99 modal vs 50%-off-$39.99 ($19.99) — reconcile + back with an ASC promotional offer |
+| Exit-intent discount product | `#human` | Create `fitsy_annual_discount` ($29.99/yr, 3-day trial) in the same subscription group + RevenueCat package `annual_discount`; paywall already wired |
 | Paywall design sign-off | `#design` | `payment.tsx` functional; optional polish |
 
 See `docs/product/pre-launch-action-items.md` for the full critical path.
@@ -173,7 +173,7 @@ exist in ASC, no number is "real."
 - [x] `payment.tsx` fallback strings updated to `$7.99/mo` · `$39.99/yr`
 - [x] `app-store-listing.md` trial copy set to 3 days; price now references this record
 - [x] Paywall title "Try Fitsy free for 3 days" matches the trial length
-- [ ] **Discount offer — NEEDS A DECISION.** The exit-intent modal says "$14.99/year (50% off)". 50% off $39.99 is **$19.99**, so the copy/number is now inconsistent. Either (a) change the modal to $19.99 + keep "50% off", (b) keep $14.99 and reword (it's ~63% off), or (c) drop the promo. Whichever you pick must be backed by a real ASC **promotional offer** on `fitsy_annual`, or the purchase will fail.
+- [x] **Exit-intent discount — decided 2026-06-18: 25% off annual → $29.99/yr.** Paywall copy + purchase wiring updated. To charge it, create a **separate annual product `fitsy_annual_discount`** ($29.99/yr, same 3-day trial) in the **same subscription group**, and expose it in the RevenueCat offering as package **`annual_discount`**. The "Claim 25% Off" CTA buys that package; until it exists the CTA shows "offer isn't available" rather than charging full price. (Alternative to a second product: an Apple **promotional offer** on `fitsy_annual` — avoids the extra product but needs a subscription key uploaded to RevenueCat for offer signing.)
 
 ---
 
