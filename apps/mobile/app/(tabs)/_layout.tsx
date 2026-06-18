@@ -4,6 +4,7 @@ import { Tabs, Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, EDITORIAL, FONTS } from '@/lib/brand';
 import { usePurchases } from '@/lib/usePurchases';
+import { useIsReviewer } from '@/lib/reviewAccess';
 import { trackTabSwitched, type TabId } from '@/lib/analytics';
 
 export default function TabLayout() {
@@ -17,12 +18,14 @@ export default function TabLayout() {
   // on-device (a just-purchased user enters immediately), so this is the UX
   // gate; the API independently enforces entitlement server-side
   // (requireSubscription), which is the real security boundary. `__DEV__`
-  // bypasses local development; the demo review account holds a granted
-  // RevenueCat entitlement, so it passes `isPro` in production review.
+  // bypasses local development; App Review demo accounts (`useIsReviewer`,
+  // mirroring the server `DEMO_REVIEW_EMAILS` allowlist) skip the paywall so the
+  // reviewer can see the app without a subscription — the API still gates data.
   const { ready, isPro } = usePurchases();
+  const reviewer = useIsReviewer();
   if (!__DEV__) {
-    if (!ready) return null; // brief hold while RevenueCat settles, avoids a flash
-    if (!isPro) return <Redirect href="/welcome/payment" />;
+    if (!ready || !reviewer.ready) return null; // hold while entitlement/session settle, avoids a flash
+    if (!isPro && !reviewer.isReviewer) return <Redirect href="/welcome/payment" />;
   }
 
   function emitTabSwitched(next: TabId) {
