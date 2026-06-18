@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRestaurantMenu } from "@/lib/restaurantService";
-import { requireAuth } from "@/lib/auth";
+import { requireSubscription } from "@/lib/subscription";
 import type { MenuApiResponse } from "@fitsy/shared";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse<MenuApiResponse>> {
-  const auth = await requireAuth(request);
+  const auth = await requireSubscription(request);
   if (auth instanceof NextResponse) return auth as never;
 
   const { id } = await params;

@@ -165,7 +165,7 @@ screenshots, metadata, and the demo account feed the final ASC submission.
 - â App icon â 1024Ã1024 + adaptive icon + iOS asset catalog `#design`
 - â Listing copy â name, subtitle, description, keywords, age rating (4+), health disclaimer `#product`
 - â Location permission â `NSLocationWhenInUseUsageDescription` + priming screen `#frontend`
-- â Bundle ID `app.fitsy.mobile` + EAS project configured `#frontend`
+- â Bundle ID `com.fitsy.mobile` + EAS project configured `#frontend`
 - â Marketing site / landing page live at `fitsy.app` `#backend`
 - ✅ iOS build/release runbooks written `#cto`
 

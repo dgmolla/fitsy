@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { findNearbyRestaurants, decodeCursor } from "@/lib/restaurantService";
-import { requireAuth } from "@/lib/auth";
+import { requireSubscription } from "@/lib/subscription";
 import { getApiEmitter } from "@/lib/apiEmitter";
 import type { RestaurantsApiResponse } from "@fitsy/shared";
 
@@ -8,7 +8,7 @@ export async function GET(
   request: NextRequest,
 ): Promise<NextResponse<RestaurantsApiResponse>> {
   const tEntry = Date.now();
-  const auth = await requireAuth(request);
+  const auth = await requireSubscription(request);
   const tAfterAuth = Date.now();
   if (auth instanceof NextResponse) return auth as never;
 
