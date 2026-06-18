@@ -8,15 +8,23 @@ import { deriveTags } from '@/lib/menuFilters';
 
 const HIGH_MATCH_THRESHOLD = 80;
 
-// Linear-interpolate between greenAccent (#3A7050) at 0% and green (#1B3A26) at
-// 100% so a higher match reads as deeper green and a weaker match fades to a
-// lighter green — replaces the prior binary high/low threshold coloring.
+// Below this match %, the badge reads as neutral gray instead of green — a weak
+// fit shouldn't wear the brand color at all.
+const GRAY_MATCH_THRESHOLD = 40;
+// Neutral the low-match badge fades to. Sits a touch warm so it reads on cream.
+const MATCH_GRAY = 'rgb(155, 163, 156)'; // #9BA39C
+
+// Match-% → badge color. From GRAY_MATCH_THRESHOLD up to 100 the hue stays green
+// but deepens as the match strengthens: pale sage at the threshold, deep forest
+// green at a perfect fit. Anything below the threshold collapses to neutral gray.
 function matchColor(pct: number): string {
-  const t = Math.max(0, Math.min(1, pct / 100));
+  if (pct < GRAY_MATCH_THRESHOLD) return MATCH_GRAY;
+  const t = (pct - GRAY_MATCH_THRESHOLD) / (100 - GRAY_MATCH_THRESHOLD);
   const lerp = (a: number, b: number) => Math.round(a + (b - a) * t);
-  const r = lerp(0x3A, 0x1B);
-  const g = lerp(0x70, 0x3A);
-  const b = lerp(0x50, 0x26);
+  // pale sage #8FA896 (low) → deep green #1B3A26 (high)
+  const r = lerp(0x8F, 0x1B);
+  const g = lerp(0xA8, 0x3A);
+  const b = lerp(0x96, 0x26);
   return `rgb(${r}, ${g}, ${b})`;
 }
 
