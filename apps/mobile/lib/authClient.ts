@@ -221,10 +221,6 @@ export interface UserProfileData {
   goal?: string;
 }
 
-export interface SubscriptionData {
-  plan: 'monthly' | 'yearly';
-  receiptData?: string;
-}
 
 export async function updateProfile(data: UserProfileData): Promise<void> {
   const token = await getStoredToken();
@@ -243,19 +239,9 @@ export async function updateProfile(data: UserProfileData): Promise<void> {
   }
 }
 
-export async function verifySubscription(data: SubscriptionData): Promise<void> {
-  const token = await getStoredToken();
-  const res = await fetch(`${BASE_URL}/api/subscriptions/verify`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    const message = (body as { error?: string }).error ?? `HTTP ${res.status}`;
-    throw new Error(message);
-  }
-}
+// Subscription state is owned by RevenueCat (client SDK) + the RevenueCat
+// webhook (server). The mobile app no longer POSTs receipts to the API; the
+// old verifySubscription() was removed when the stub /api/subscriptions/verify
+// route was deleted. Server-trusted status is available at
+// GET /api/subscriptions/status, and protected routes enforce it via
+// requireSubscription.

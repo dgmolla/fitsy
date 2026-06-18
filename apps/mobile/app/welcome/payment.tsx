@@ -23,8 +23,8 @@ export default function PaymentScreen() {
 
   // Live, store-localized prices from the current RevenueCat offering, with the
   // designed copy as a fallback while offerings load (or in Expo Go / no key).
-  const annualPrice = offering?.annual?.product.priceString ?? '$29.99/yr';
-  const monthlyPrice = offering?.monthly?.product.priceString ?? '$8.99/mo';
+  const annualPrice = offering?.annual?.product.priceString ?? '$39.99/yr';
+  const monthlyPrice = offering?.monthly?.product.priceString ?? '$7.99/mo';
 
   useEffect(() => {
     trackOnboardingScreenView('payment');

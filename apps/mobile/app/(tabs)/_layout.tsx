@@ -1,8 +1,9 @@
 import { useRef } from 'react';
 import { View } from 'react-native';
-import { Tabs } from 'expo-router';
+import { Tabs, Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, EDITORIAL, FONTS } from '@/lib/brand';
+import { usePurchases } from '@/lib/usePurchases';
 import { trackTabSwitched, type TabId } from '@/lib/analytics';
 
 export default function TabLayout() {
@@ -11,6 +12,18 @@ export default function TabLayout() {
   // null on cold start so PostHog can distinguish "first tab opened after
   // sign-in" from a mid-session switch.
   const lastTabRef = useRef<TabId | null>(null);
+
+  // Subscription hard-wall: the tabbed app is Pro-only. `isPro` is instant and
+  // on-device (a just-purchased user enters immediately), so this is the UX
+  // gate; the API independently enforces entitlement server-side
+  // (requireSubscription), which is the real security boundary. `__DEV__`
+  // bypasses local development; the demo review account holds a granted
+  // RevenueCat entitlement, so it passes `isPro` in production review.
+  const { ready, isPro } = usePurchases();
+  if (!__DEV__) {
+    if (!ready) return null; // brief hold while RevenueCat settles, avoids a flash
+    if (!isPro) return <Redirect href="/welcome/payment" />;
+  }
 
   function emitTabSwitched(next: TabId) {
     if (lastTabRef.current === next) return;
