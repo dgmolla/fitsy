@@ -17,7 +17,7 @@ deprecated.
 
 - **Entitlement:** `pro` (single entitlement; all features require it)
 - **Plans:** Annual and Monthly (see Pricing Decision Record below for exact prices)
-- **Trial:** 7-day free trial on both plans — configured in App Store Connect,
+- **Trial:** 3-day free trial on both plans — configured in App Store Connect,
   surfaced by RevenueCat; no charge until trial ends
 - **SDK:** `react-native-purchases` (RevenueCat React Native SDK)
 - **Paywall:** `apps/mobile/app/welcome/payment.tsx` — Fitsy's own designed
@@ -51,15 +51,12 @@ sequenceDiagram
     RC->>ASC: IAP purchase sheet
     ASC-->>RC: Purchase receipt
     RC-->>App: CustomerInfo { entitlements: { pro: active } }
-    App->>API: POST /api/subscriptions/verify (RevenueCat userId / receipt)
-    API->>RC: GET /v1/subscribers/:userId (RevenueCat REST API)
-    RC-->>API: Subscriber object (entitlements, expiresAt)
-    API->>DB: Upsert user subscription state (expiresAt, status)
-    API-->>App: 200 { subscribed: true, expiresAt }
+    RC->>API: Webhook INITIAL_PURCHASE (app_user_id = Supabase UUID, expiresAt)
+    API->>DB: Upsert Subscription { userId, status: active, expiresAt }
     App->>App: completeOnboarding() → navigate to /(tabs)/search
 
-    Note over App,ASC: On renewal: Apple charges silently;<br/>RevenueCat fires webhook → API updates DB
-    Note over App,API: Every protected API request: middleware checks<br/>subscriptionStatus / expiresAt in DB
+    Note over App,ASC: On renewal: Apple charges silently;<br/>RevenueCat fires RENEWAL webhook → API updates DB
+    Note over App,API: Every protected request: requireSubscription()<br/>reads the Subscription row → 402 if not active
 ```
 
 ---
@@ -72,30 +69,33 @@ Fitsy does **not** use Stripe webhooks. Subscription state is kept current via:
    `EXPIRATION`, `BILLING_ISSUE`, and other events to a Fitsy API endpoint.
    The handler upserts the user's subscription record in PostgreSQL.
 
-2. **RevenueCat REST API** (on-demand) — `GET /v1/subscribers/:app_user_id`
-   used in `POST /api/subscriptions/verify` on each login / app launch to
-   pull current entitlement state.
+2. **`GET /api/subscriptions/status`** — server-trusted entitlement read the
+   client uses to make the "must subscribe" decision server-side. (The old
+   `POST /api/subscriptions/verify` receipt stub was removed 2026-06-16 —
+   clients no longer send receipts.)
 
-3. **API middleware** — `requireSubscription()` guard on protected routes
-   checks `expiresAt` in DB. Returns `402` for expired or unentitled users.
-   Mobile shows the paywall on `402`.
+3. **API middleware** — `requireSubscription()` (`apps/api/lib/subscription.ts`)
+   guards `/api/restaurants` and `/api/restaurants/[id]/menu`, reading the
+   webhook-synced `Subscription` row. Returns `402 subscription_required` for
+   unentitled users; the mobile `(tabs)` guard redirects to the paywall and a
+   one-shot 402 retry covers the post-purchase webhook lag. Bypass:
+   `ALLOW_STUB_SUBSCRIPTIONS` (dev) and `DEMO_REVIEW_EMAILS` (App Store reviewer).
 
-### Database fields (Prisma User model additions)
+### Database model (Prisma)
+
+Subscription state lives in its own `Subscription` table (1:1 with `User`),
+written **only** by the RevenueCat webhook:
 
 ```prisma
-revenuecatUserId      String?   @unique
-subscriptionStatus    SubStatus @default(TRIALING)
-subscriptionExpiresAt DateTime?
-```
-
-```prisma
-enum SubStatus {
-  TRIALING
-  ACTIVE
-  GRACE_PERIOD
-  PAST_DUE
-  CANCELED
-  EXPIRED
+model Subscription {
+  id                 String    @id @default(cuid())
+  userId             String    @unique
+  plan               String
+  status             String    // "active" | "expired" | "billing_issue"
+  appleTransactionId String?
+  expiresAt          DateTime?
+  createdAt          DateTime  @default(now())
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 ```
 
@@ -108,26 +108,26 @@ enum SubStatus {
 | Monthly → Annual | Apple handles proration; RevenueCat reflects new plan; webhook updates DB |
 | Annual → Monthly | Takes effect at next renewal; user stays `ACTIVE` until then |
 | Cancel | Access until period end, then `EXPIRED` |
-| Reactivate after cancel | New subscription; 7-day trial does NOT restart |
+| Reactivate after cancel | New subscription; 3-day trial does NOT restart |
 | Payment failure | Apple retries (Smart Retries); RevenueCat sets `GRACE_PERIOD`, then `PAST_DUE`; after ~16 days `EXPIRED` |
 | Restore purchases | `restore()` via RC SDK; re-checks entitlements; completes onboarding if `pro` active |
 
 ---
 
-## Production blockers (as of 2026-06-12)
+## Production blockers (as of 2026-06-16)
 
-The RevenueCat integration is wired on the **Test Store**. The following items
-block production:
+RevenueCat is wired and ASC products are created. Remaining items:
 
-| Blocker | Owner | Notes |
-|---------|-------|-------|
-| Apple Developer Program account + signing | `#human` | Prerequisite for all IAP |
-| Create subscription products in App Store Connect (`fitsy_annual`, `fitsy_monthly`) | `#human` | Prices must match final decision (see below) |
-| Bundle ID mismatch | `#frontend` | `app.fitsy.mobile` must match ASC |
-| Paywall design finalization | `#design` | Current `payment.tsx` is functional but needs design sign-off |
-| RevenueCat webhook endpoint deployed to production | `#backend` | `POST /api/subscriptions/webhook` must be live and configured in RC dashboard |
-| `POST /api/subscriptions/verify` stub → real validation | `#backend` | Currently returns 503 in prod behind `ALLOW_STUB_SUBSCRIPTIONS` |
-| Server-side `requireSubscription()` guard on `/api/restaurants` | `#backend` | Currently not enforced; paywall can be bypassed |
+| Blocker | Owner | Status |
+|---------|-------|--------|
+| Apple Developer account + ASC app record | `#human` | ✅ done (Apple ID 6763851364) |
+| ASC subscription products (`fitsy_monthly`, `fitsy_annual`) | `#human` | ✅ created 2026-06-16 ($7.99 / $39.99, 3-day trial) |
+| Bundle ID | `#frontend` | ✅ resolved — code + ASC agree on `com.fitsy.mobile` |
+| `requireSubscription()` server gate | `#backend` | ✅ done — guards `/api/restaurants` + menu; `(tabs)` guard + 402-retry on client |
+| RevenueCat webhook in production | `#backend` | Endpoint `POST /api/revenuecat/webhook` is live — **confirm URL + `REVENUECAT_WEBHOOK_AUTH` are set in the RC dashboard + Vercel** |
+| `EXPO_PUBLIC_REVENUECAT_IOS_KEY` in the production EAS build | `#frontend` | Verify it's set (test key only works in dev) |
+| Exit-intent discount product | `#human` | Create `fitsy_annual_discount` ($29.99/yr, 3-day trial) in the same subscription group + RevenueCat package `annual_discount`; paywall already wired |
+| Paywall design sign-off | `#design` | `payment.tsx` functional; optional polish |
 
 See `docs/product/pre-launch-action-items.md` for the full critical path.
 
@@ -135,12 +135,13 @@ See `docs/product/pre-launch-action-items.md` for the full critical path.
 
 ## Pricing Decision Record
 
-> **Status: PENDING FOUNDER CONFIRMATION**
+> **Status: CONFIRMED 2026-06-16 — $7.99/month · $39.99/year · 3-day free trial.**
 
 The true source of truth for prices is the **RevenueCat offering**, which maps
-to the **App Store Connect subscription products**. Neither is configured yet
-for production. Prices must be set once, deliberately, and aligned everywhere
-before submission.
+to the **App Store Connect subscription products** (`fitsy_monthly` $7.99,
+`fitsy_annual` $39.99, both with a 3-day introductory free trial), created
+2026-06-16. The app reads prices live from the offering; `payment.tsx` fallback
+strings mirror them for display only.
 
 ### All observed price points and their sources
 
@@ -158,34 +159,21 @@ different roles without a shared canonical decision. No ASC product has ever
 been created. The RevenueCat offering has not been configured. Until products
 exist in ASC, no number is "real."
 
-### Recommendation (PENDING FOUNDER CONFIRMATION)
+### Decision (confirmed 2026-06-16)
 
-Align to the **live paywall fallback values**: **$29.99/year + $8.99/month**.
+| Plan | Price | ASC product |
+|------|-------|-------------|
+| Monthly | **$7.99/mo** | `fitsy_monthly` |
+| Annual | **$39.99/yr** | `fitsy_annual` |
+| Free trial | **3 days** (both plans) | introductory offer in ASC |
 
-Rationale:
-- These are the numbers a user would see today if offerings fail to load — they
-  already represent the designed UX copy and set an implicit expectation.
-- $29.99/yr ≈ $2.50/mo effective rate — competitive with MFP ($10–$20/yr) and
-  Cal.ai; low enough to remove cost as an objection.
-- $8.99/mo is higher than the old $5/mo (increases LTV for monthly subscribers);
-  still below Noom/MacroFactor; reasonable for a specialized tool.
-- The $14.99/yr promo in the exit-intent modal is ~50% off $29.99/yr — clean
-  marketing math that works.
+### Alignment status
 
-**This is a recommendation only. The founder must confirm before ASC products
-are created.**
-
-### What must be aligned once pricing is confirmed
-
-- [ ] Create ASC subscription products (`fitsy_annual` at confirmed price,
-  `fitsy_monthly` at confirmed price, both with 7-day trial)
-- [ ] Update `docs/product/app-store-listing.md` §Subscription copy (currently
-  says "$30/year or $5/month" — see edit note in that file)
-- [ ] Verify `payment.tsx` fallback strings match ASC prices exactly
-- [ ] Confirm the `$14.99/yr` promo modal price in `payment.tsx` is valid (must
-  correspond to a real discounted ASC product or promotional offer code)
-- [ ] Update the paywall title (currently says "Try Fitsy free for 3 days" but
-  the intended trial is 7 days — verify against ASC product config)
+- [x] ASC subscription products created (`fitsy_monthly` $7.99, `fitsy_annual` $39.99, 3-day trial) — 2026-06-16
+- [x] `payment.tsx` fallback strings updated to `$7.99/mo` · `$39.99/yr`
+- [x] `app-store-listing.md` trial copy set to 3 days; price now references this record
+- [x] Paywall title "Try Fitsy free for 3 days" matches the trial length
+- [x] **Exit-intent discount — decided 2026-06-18: 25% off annual → $29.99/yr.** Paywall copy + purchase wiring updated. To charge it, create a **separate annual product `fitsy_annual_discount`** ($29.99/yr, same 3-day trial) in the **same subscription group**, and expose it in the RevenueCat offering as package **`annual_discount`**. The "Claim 25% Off" CTA buys that package; until it exists the CTA shows "offer isn't available" rather than charging full price. (Alternative to a second product: an Apple **promotional offer** on `fitsy_annual` — avoids the extra product but needs a subscription key uploaded to RevenueCat for offer signing.)
 
 ---
 

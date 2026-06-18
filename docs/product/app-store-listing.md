@@ -75,7 +75,7 @@ We scrape menus from thousands of local restaurants and use Claude AI to estimat
 
 ─── Subscription ──────────────────────────────
 
-Fitsy is a paid subscription app with a 7-day free trial. No ads. No freemium. No feature limits.
+Fitsy is a paid subscription app with a 3-day free trial. No ads. No freemium. No feature limits.
 
 Pricing: see docs/product/business-model.md#pricing-decision-record — pending final founder confirmation. Do not hard-code a price in this copy until ASC products are created and the decision record is resolved.
 
@@ -205,7 +205,7 @@ is for real fitness goals, not casual calorie counting.
 |-------|-------|
 | **Demo account email** | review@fitsy.app (create before submission) |
 | **Demo account password** | (set before submission — do not store in this doc) |
-| **Notes for reviewer** | Fitsy is a macro-aware restaurant discovery app. The app requires a subscription (7-day free trial). Use the demo account to bypass payment for review. The demo account has an active subscription pre-loaded. Location permission is required to show nearby restaurants — approve when prompted. Test data is pre-loaded for the Silver Lake, Los Angeles area (90029). |
+| **Notes for reviewer** | Fitsy is a macro-aware restaurant discovery app. The app requires a subscription (3-day free trial). Use the demo account to bypass payment for review. The demo account has an active subscription pre-loaded. Location permission is required to show nearby restaurants — approve when prompted. Test data is pre-loaded for the Silver Lake, Los Angeles area (90029). |
 
 ---
 
