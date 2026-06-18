@@ -1,10 +1,14 @@
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
-const mockRequireAuth = jest.fn();
+const mockRequireSubscription = jest.fn();
 const mockFindNearbyRestaurants = jest.fn();
 
-jest.mock("@/lib/auth", () => ({
-  requireAuth: mockRequireAuth,
+// The route gates on requireSubscription (auth + active subscription). The
+// entitlement logic itself is unit-tested in lib/subscription.test.ts; here we
+// mock the gate so these tests focus on route behavior (happy path =
+// authenticated AND entitled).
+jest.mock("@/lib/subscription", () => ({
+  requireSubscription: mockRequireSubscription,
 }));
 
 // Use the real cursor encode/decode but mock the DB-touching service entry.
@@ -24,7 +28,7 @@ import { encodeCursor } from "@/lib/restaurantService";
 const VALID_PAYLOAD = { sub: "user-1", email: "alice@example.com" };
 
 beforeEach(() => {
-  mockRequireAuth.mockReset();
+  mockRequireSubscription.mockReset();
   mockFindNearbyRestaurants.mockReset();
 });
 
@@ -44,7 +48,7 @@ function makeRequest(query: Record<string, string> = {}, authHeader?: string): N
 
 describe("GET /api/restaurants — auth guard", () => {
   it("returns 401 when Authorization header is missing", async () => {
-    mockRequireAuth.mockResolvedValue(
+    mockRequireSubscription.mockResolvedValue(
       NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
     );
 
@@ -57,7 +61,7 @@ describe("GET /api/restaurants — auth guard", () => {
   });
 
   it("returns 401 when token is invalid", async () => {
-    mockRequireAuth.mockResolvedValue(
+    mockRequireSubscription.mockResolvedValue(
       NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
     );
 
@@ -72,7 +76,7 @@ describe("GET /api/restaurants — auth guard", () => {
 
 describe("GET /api/restaurants — success", () => {
   it("returns 200 with data when authenticated and lat/lng provided", async () => {
-    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+    mockRequireSubscription.mockResolvedValue(VALID_PAYLOAD);
     mockFindNearbyRestaurants.mockResolvedValue({ data: [], total: 0, nextCursor: null });
 
     const res = await GET(
@@ -94,7 +98,7 @@ describe("GET /api/restaurants — success", () => {
 describe("GET /api/restaurants — cursor pagination", () => {
   it("forwards nextCursor in meta when the service returns one (full page)", async () => {
     const fakeCursor = encodeCursor({ id: "rest-9", orderKey: 1.5, distanceMiles: 1.5 });
-    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+    mockRequireSubscription.mockResolvedValue(VALID_PAYLOAD);
     mockFindNearbyRestaurants.mockResolvedValue({
       data: [],
       total: 0,
@@ -111,7 +115,7 @@ describe("GET /api/restaurants — cursor pagination", () => {
   });
 
   it("returns nextCursor: null when the service signals end of results (partial page)", async () => {
-    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+    mockRequireSubscription.mockResolvedValue(VALID_PAYLOAD);
     mockFindNearbyRestaurants.mockResolvedValue({
       data: [],
       total: 0,
@@ -128,7 +132,7 @@ describe("GET /api/restaurants — cursor pagination", () => {
 
   it("decodes a valid cursor and forwards { id, orderKey } to the service", async () => {
     const inputCursor = encodeCursor({ id: "rest-42", orderKey: 2.4, distanceMiles: 2.4 });
-    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+    mockRequireSubscription.mockResolvedValue(VALID_PAYLOAD);
     mockFindNearbyRestaurants.mockResolvedValue({
       data: [],
       total: 0,
@@ -150,7 +154,7 @@ describe("GET /api/restaurants — cursor pagination", () => {
   });
 
   it("does not pass a cursor field when omitted from the request", async () => {
-    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+    mockRequireSubscription.mockResolvedValue(VALID_PAYLOAD);
     mockFindNearbyRestaurants.mockResolvedValue({
       data: [],
       total: 0,
@@ -167,7 +171,7 @@ describe("GET /api/restaurants — cursor pagination", () => {
   });
 
   it("returns 400 when cursor is malformed (not base64-encoded JSON)", async () => {
-    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+    mockRequireSubscription.mockResolvedValue(VALID_PAYLOAD);
 
     const res = await GET(
       makeRequest(
@@ -183,7 +187,7 @@ describe("GET /api/restaurants — cursor pagination", () => {
   });
 
   it("returns 400 when cursor decodes to a missing-field shape", async () => {
-    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+    mockRequireSubscription.mockResolvedValue(VALID_PAYLOAD);
     const badCursor = Buffer.from(JSON.stringify({ id: "x" }), "utf8").toString(
       "base64",
     );
@@ -204,7 +208,7 @@ describe("GET /api/restaurants — cursor pagination", () => {
 
 describe("GET /api/restaurants — validation", () => {
   it("returns 400 when lat is missing", async () => {
-    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+    mockRequireSubscription.mockResolvedValue(VALID_PAYLOAD);
 
     const res = await GET(makeRequest({ lng: "-118.0" }, "Bearer valid.token"));
 
@@ -214,7 +218,7 @@ describe("GET /api/restaurants — validation", () => {
   });
 
   it("returns 400 when lng is missing", async () => {
-    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+    mockRequireSubscription.mockResolvedValue(VALID_PAYLOAD);
 
     const res = await GET(makeRequest({ lat: "34.0" }, "Bearer valid.token"));
 
@@ -222,7 +226,7 @@ describe("GET /api/restaurants — validation", () => {
   });
 
   it("returns 400 when lat is out of range (>90)", async () => {
-    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+    mockRequireSubscription.mockResolvedValue(VALID_PAYLOAD);
 
     const res = await GET(makeRequest({ lat: "91", lng: "-118.0" }, "Bearer valid.token"));
 
@@ -232,7 +236,7 @@ describe("GET /api/restaurants — validation", () => {
   });
 
   it("returns 400 when lng is out of range (<-180)", async () => {
-    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+    mockRequireSubscription.mockResolvedValue(VALID_PAYLOAD);
 
     const res = await GET(makeRequest({ lat: "34.0", lng: "-181" }, "Bearer valid.token"));
 
@@ -242,7 +246,7 @@ describe("GET /api/restaurants — validation", () => {
   });
 
   it("returns 400 when radius is too large (>50)", async () => {
-    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+    mockRequireSubscription.mockResolvedValue(VALID_PAYLOAD);
 
     const res = await GET(makeRequest({ lat: "34.0", lng: "-118.0", radius: "99" }, "Bearer valid.token"));
 
@@ -252,7 +256,7 @@ describe("GET /api/restaurants — validation", () => {
   });
 
   it("returns 400 when radius is zero or negative", async () => {
-    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+    mockRequireSubscription.mockResolvedValue(VALID_PAYLOAD);
 
     const res = await GET(makeRequest({ lat: "34.0", lng: "-118.0", radius: "0" }, "Bearer valid.token"));
 
@@ -264,7 +268,7 @@ describe("GET /api/restaurants — validation", () => {
 
 describe("GET /api/restaurants — free-text query", () => {
   it("forwards a trimmed q to the service as `query`", async () => {
-    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+    mockRequireSubscription.mockResolvedValue(VALID_PAYLOAD);
     mockFindNearbyRestaurants.mockResolvedValue({ data: [], total: 0, nextCursor: null });
 
     await GET(
@@ -276,7 +280,7 @@ describe("GET /api/restaurants — free-text query", () => {
   });
 
   it("does not pass `query` when q is omitted", async () => {
-    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+    mockRequireSubscription.mockResolvedValue(VALID_PAYLOAD);
     mockFindNearbyRestaurants.mockResolvedValue({ data: [], total: 0, nextCursor: null });
 
     await GET(makeRequest({ lat: "34.0", lng: "-118.0" }, "Bearer valid.token"));
@@ -286,7 +290,7 @@ describe("GET /api/restaurants — free-text query", () => {
   });
 
   it("does not pass `query` when q is empty or whitespace-only", async () => {
-    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+    mockRequireSubscription.mockResolvedValue(VALID_PAYLOAD);
     mockFindNearbyRestaurants.mockResolvedValue({ data: [], total: 0, nextCursor: null });
 
     await GET(makeRequest({ lat: "34.0", lng: "-118.0", q: "   " }, "Bearer valid.token"));
@@ -296,7 +300,7 @@ describe("GET /api/restaurants — free-text query", () => {
   });
 
   it("returns 400 when q exceeds the max length", async () => {
-    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+    mockRequireSubscription.mockResolvedValue(VALID_PAYLOAD);
 
     const res = await GET(
       makeRequest({ lat: "34.0", lng: "-118.0", q: "x".repeat(101) }, "Bearer valid.token"),
