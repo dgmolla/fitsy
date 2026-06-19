@@ -1,5 +1,5 @@
 import { MenuApiResponse, MenuResponse, RestaurantResult, RestaurantsApiResponse, SavedItemResponse, SavedItemsResponse } from '@fitsy/shared';
-import { api } from './api';
+import { api, SubscriptionRequiredError } from './api';
 
 export interface FetchRestaurantsParams {
   protein?: number;
@@ -75,6 +75,10 @@ export async function fetchRestaurantsPage(
     const t1 = Date.now();
     // eslint-disable-next-line no-console
     console.log(JSON.stringify({ event: 'fitsy_search_client_done', reqId, ok: false, client_total_ms: t1 - t0, err: String(err) }));
+    // Let the paywall signal reach the screen so it can show the upsell instead
+    // of a generic "no matches" empty state. Other errors stay swallowed as an
+    // empty page (network blips read as "nothing nearby", not a crash).
+    if (err instanceof SubscriptionRequiredError) throw err;
     return { data: [], nextCursor: null };
   }
 }
