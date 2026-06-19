@@ -6,6 +6,7 @@ jest.mock('./authClient', () => ({
 }));
 
 import { fetchMenu, fetchRestaurants } from './apiClient';
+import { SubscriptionRequiredError } from './api';
 import type { MenuApiResponseBody, MenuResponse, RestaurantsResponse } from '@fitsy/shared';
 
 const BASE_URL = 'http://localhost:3000';
@@ -115,6 +116,18 @@ describe('fetchRestaurants', () => {
     const result = await fetchRestaurants({ protein: 30, lat: 34.0868, lng: -118.3273 });
 
     expect(result).toEqual([]);
+  });
+
+  it('propagates SubscriptionRequiredError on a 402 (paywall) so the screen can upsell', async () => {
+    // 402 on both the initial call and the single retry → paywall, not "no results".
+    global.fetch = makeMockFetch({ ok: false, status: 402, body: { error: 'subscription_required' } });
+
+    await expect(
+      fetchRestaurants({ lat: 34.0868, lng: -118.3273 }),
+    ).rejects.toBeInstanceOf(SubscriptionRequiredError);
+
+    // Initial request + one in-flight retry before giving up.
+    expect(global.fetch).toHaveBeenCalledTimes(2);
   });
 
   it('returns parsed RestaurantResult[] on success', async () => {

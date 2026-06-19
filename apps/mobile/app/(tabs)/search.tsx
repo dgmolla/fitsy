@@ -23,6 +23,7 @@ import { FilterPopup } from '@/components/FilterPopup';
 import { LocationPickerSheet } from '@/components/LocationPickerSheet';
 import type { MacroValues } from '@/lib/macroPresets';
 import { fetchRestaurantsPage } from '@/lib/apiClient';
+import { SubscriptionRequiredError } from '@/lib/api';
 import { recordSearchAndMaybePrompt } from '@/lib/ratingPrompt';
 import { shouldShowInitialLoader } from '@/lib/searchLoading';
 import { useLocation, type LocationState } from '@/lib/useLocation';
@@ -387,6 +388,10 @@ export default function SearchScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The API gates restaurant data behind an active subscription (402). When that
+  // happens we show a paywall upsell in place of the empty state rather than a
+  // misleading "no matches nearby".
+  const [needsSubscription, setNeedsSubscription] = useState(false);
   const initialFetch = useRef(true);
   const [filterVisible, setFilterVisible] = useState(false);
   const [locationPickerVisible, setLocationPickerVisible] = useState(false);
@@ -508,6 +513,7 @@ export default function SearchScreen() {
       if (isRefresh) setRefreshing(true);
       else setLoading(true);
       setError(null);
+      setNeedsSubscription(false);
       // New search → reset pagination bookkeeping.
       pagesLoadedRef.current = 0;
       isLoadingMoreRef.current = false;
@@ -569,6 +575,12 @@ export default function SearchScreen() {
       } catch (err) {
         setResults([]);
         setNextCursor(null);
+        // Subscription gate isn't a search failure — show the paywall upsell and
+        // skip the failure analytics (it would pollute the search-error rate).
+        if (err instanceof SubscriptionRequiredError) {
+          setNeedsSubscription(true);
+          return;
+        }
         trackSearchPerformed({
           has_protein_target: !isNaN(protein),
           has_carbs_target: !isNaN(carbs),
@@ -770,6 +782,13 @@ export default function SearchScreen() {
 
   const handleClearQuery = useCallback(() => setQuery(''), []);
 
+  // Send the user to the paywall when search is locked behind a subscription.
+  // The paywall returns to /(tabs)/search on purchase/restore, so they land
+  // back here entitled and the next fetch succeeds.
+  const handleGoToPaywall = useCallback(() => {
+    router.push('/welcome/payment');
+  }, []);
+
   const locationLabel = location.loading
     ? 'Locating...'
     : location.source === 'gps'
@@ -801,7 +820,25 @@ export default function SearchScreen() {
         </View>
       )}
 
-      {canSearch && results.length === 0 && (
+      {canSearch && needsSubscription && (
+        <View style={s.inlineEmpty}>
+          <Ionicons name="lock-closed-outline" size={32} color={EDITORIAL.greenAccent} />
+          <Text style={s.inlineEmptyText}>Subscribe to unlock search</Text>
+          <Text style={s.inlineEmptyHint}>
+            Fitsy Pro unlocks macro-matched restaurant search near you. Start your free trial to find your next meal.
+          </Text>
+          <Pressable
+            style={({ pressed }) => [s.upsellBtn, pressed && s.upsellBtnPressed]}
+            onPress={handleGoToPaywall}
+            accessibilityRole="button"
+            accessibilityLabel="Subscribe now"
+          >
+            <Text style={s.upsellBtnText}>Subscribe now</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {canSearch && !needsSubscription && results.length === 0 && (
         <View style={s.inlineEmpty}>
           <Ionicons name="search-outline" size={32} color={EDITORIAL.creamDeep} />
           <Text style={s.inlineEmptyText}>No matches nearby</Text>
@@ -811,7 +848,7 @@ export default function SearchScreen() {
         </View>
       )}
 
-      {canSearch && heroResult && <HeroCard result={heroResult} />}
+      {canSearch && !needsSubscription && heroResult && <HeroCard result={heroResult} />}
     </>
   );
 
@@ -1015,6 +1052,15 @@ const s = StyleSheet.create({
   inlineEmpty: { alignItems: 'center', paddingTop: 50, paddingBottom: 30, gap: 8 },
   inlineEmptyText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 15, fontWeight: '600', color: EDITORIAL.textSoft },
   inlineEmptyHint: { fontFamily: FONTS.nunitoSans, fontSize: 14, color: EDITORIAL.textSoft, textAlign: 'center', lineHeight: 20 },
+  upsellBtn: {
+    marginTop: 12,
+    backgroundColor: EDITORIAL.green,
+    borderRadius: 12,
+    paddingVertical: 13,
+    paddingHorizontal: 28,
+  },
+  upsellBtnPressed: { opacity: 0.85 },
+  upsellBtnText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 15, fontWeight: '700', color: EDITORIAL.cream },
   footerSpinner: { paddingVertical: 24, alignItems: 'center', justifyContent: 'center' },
   loaderWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   errorBanner: {
