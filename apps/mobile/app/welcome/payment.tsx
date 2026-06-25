@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Modal, StyleSheet, Text, View } from 'react-native';
+import { Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -9,6 +9,7 @@ import { AnimatedPress } from '@/components/AnimatedPress';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { getOnboardingData } from '@/lib/onboardingStorage';
 import { usePurchases } from '@/lib/usePurchases';
+import { openLegalLink } from '@/lib/legalLinks';
 import { trackOnboardingCompleted, trackOnboardingScreenView } from '@/lib/analytics';
 
 type PlanId = 'monthly' | 'yearly';
@@ -155,6 +156,26 @@ export default function PaymentScreen() {
         >
           <Text style={s.restoreTxt}>{restoring ? 'Restoring…' : 'Restore purchases'}</Text>
         </AnimatedPress>
+
+        {/* Subscription disclosure + legal links — required by App Store
+            Guideline 3.1.2(c). Title, length, and price of the auto-renewing
+            subscription, plus functional Terms of Use (EULA) and Privacy
+            Policy links, must appear in the purchase flow. */}
+        <Text style={s.disclosure}>
+          Fitsy Pro is an auto-renewing subscription ({annualPrice} or {monthlyPrice} after a
+          3-day free trial). Payment is charged to your Apple ID at confirmation. It renews
+          automatically unless cancelled at least 24 hours before the period ends. Manage or
+          cancel in your App Store account settings.
+        </Text>
+        <View style={s.legalRow}>
+          <Pressable hitSlop={8} onPress={() => openLegalLink('terms')} accessibilityRole="link">
+            <Text style={s.legalLink}>Terms of Use</Text>
+          </Pressable>
+          <Text style={s.legalDot}>·</Text>
+          <Pressable hitSlop={8} onPress={() => openLegalLink('privacy')} accessibilityRole="link">
+            <Text style={s.legalLink}>Privacy Policy</Text>
+          </Pressable>
+        </View>
       </WelcomeScreen>
 
       {/* Discount modal — first skip */}
@@ -211,6 +232,17 @@ const s = StyleSheet.create({
   planOn: { backgroundColor: EDITORIAL.green },
   restore: { alignItems: 'center', paddingVertical: 14, marginTop: 4 },
   restoreTxt: { fontFamily: FONTS.nunitoSans, fontSize: 14, color: EDITORIAL.textSoft },
+  disclosure: {
+    fontFamily: FONTS.nunitoSans,
+    fontSize: 11,
+    lineHeight: 16,
+    color: EDITORIAL.textSoft,
+    textAlign: 'center',
+    marginTop: 12,
+  },
+  legalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 10 },
+  legalLink: { fontFamily: FONTS.nunitoSans, fontSize: 12, fontWeight: '500', color: EDITORIAL.text, textDecorationLine: 'underline' },
+  legalDot: { fontSize: 12, color: EDITORIAL.creamDeep },
   planRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   planName: { fontFamily: FONTS.frauncesDisplay, fontSize: 18, color: EDITORIAL.text },
   planNameOn: { color: EDITORIAL.cream },
