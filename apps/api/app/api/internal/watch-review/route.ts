@@ -120,14 +120,20 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ ok: true, notified: false, state: chosen.state, deduped: true });
   }
 
-  await postSlackMessage(
+  // Only record the dedup signature once Slack actually accepted the message.
+  // postSlackMessage returns false (never throws) on a missing token or API
+  // error — recording dedup on a failed post would suppress this result's ping
+  // forever, so a transient Slack hiccup must leave us to retry next run.
+  const posted = await postSlackMessage(
     `${chosen.result.emoji} ${chosen.result.text}  _(v${chosen.version} · ${chosen.state})_  https://appstoreconnect.apple.com/apps/${appId}/distribution`,
   );
-  await prisma.$executeRawUnsafe(
-    `INSERT INTO "_review_watch" (key, value, updated_at) VALUES ('last_result', $1, now())
-     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
-    signature,
-  );
+  if (posted) {
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "_review_watch" (key, value, updated_at) VALUES ('last_result', $1, now())
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      signature,
+    );
+  }
 
-  return NextResponse.json({ ok: true, notified: true, state: chosen.state, version: chosen.version });
+  return NextResponse.json({ ok: true, notified: posted, state: chosen.state, version: chosen.version });
 }
