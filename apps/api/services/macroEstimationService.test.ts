@@ -308,3 +308,111 @@ describe("estimateMacros", () => {
     expect(result[1]?.dietaryTags).toEqual([]);
   });
 });
+
+// ─── Response hardening: control chars + name-based reconciliation ────────────
+//
+// Covers the two failure modes found in the 2026-07-20 open-model spike
+// (docs/engineering/pipeline/open-model-spike-2026-07-20.md):
+//   1. a single stray control char aborting a whole batch
+//   2. count drift silently shifting macros onto the wrong dish
+
+const NAMED_ESTIMATES = [
+  { name: "Grilled Chicken", cal: 320, p: 42, c: 2, f: 14, conf: "HIGH", tags: [] },
+  { name: "Caesar Salad", cal: 380, p: 8, c: 30, f: 24, conf: "MEDIUM", tags: ["vegetarian"] },
+];
+
+describe("estimateMacros — malformed response hardening", () => {
+  let client: Anthropic;
+
+  beforeEach(() => {
+    mockCreate.mockReset();
+    client = makeAnthropicClient();
+  });
+
+  it("survives a stray control character mid-array", async () => {
+    // Observed in the wild: a lone 0x08 (backspace) emitted between two objects
+    // in an otherwise well-formed array. JSON.parse throws on it, which
+    // previously discarded every item in the batch.
+    const BACKSPACE = String.fromCharCode(8);
+    const poisoned = JSON.stringify(NAMED_ESTIMATES).replace("},{", "}," + BACKSPACE + "{");
+    expect(() => JSON.parse(poisoned)).toThrow(); // precondition: genuinely unparseable
+    mockCreate.mockResolvedValue(makeTextResponse(poisoned));
+
+    const result = await estimateMacros(ITEMS, client);
+
+    expect(result).toHaveLength(2);
+    expect(result[0]?.proteinG).toBe(42);
+    expect(result[1]?.proteinG).toBe(8);
+  });
+
+  it("keeps macros on the right dish when the model DROPS an item", async () => {
+    // Model omits the first item. Positional matching would hand Caesar Salad's
+    // macros to Grilled Chicken; name matching must null the missing one instead.
+    mockCreate.mockResolvedValue(makeTextResponse(JSON.stringify([NAMED_ESTIMATES[1]])));
+
+    const result = await estimateMacros(ITEMS, client);
+
+    expect(result).toHaveLength(2);
+    expect(result[0]).toBeNull(); // absent — a null beats wrong macros
+    expect(result[1]?.proteinG).toBe(8); // Caesar Salad keeps its own
+  });
+
+  it("keeps macros on the right dish when the model INSERTS an extra item", async () => {
+    mockCreate.mockResolvedValue(
+      makeTextResponse(
+        JSON.stringify([
+          { name: "Bread Basket", cal: 200, p: 5, c: 35, f: 4, conf: "LOW", tags: [] },
+          ...NAMED_ESTIMATES,
+        ]),
+      ),
+    );
+
+    const result = await estimateMacros(ITEMS, client);
+
+    expect(result).toHaveLength(2);
+    expect(result[0]?.proteinG).toBe(42); // not the interloper's 5
+    expect(result[1]?.proteinG).toBe(8);
+  });
+
+  it("matches names case- and whitespace-insensitively", async () => {
+    mockCreate.mockResolvedValue(
+      makeTextResponse(
+        JSON.stringify([
+          { name: "  grilled   CHICKEN ", cal: 320, p: 42, c: 2, f: 14, conf: "HIGH", tags: [] },
+          { name: "caesar salad", cal: 380, p: 8, c: 30, f: 24, conf: "MEDIUM", tags: [] },
+        ]),
+      ),
+    );
+
+    const result = await estimateMacros(ITEMS, client);
+
+    expect(result[0]?.proteinG).toBe(42);
+    expect(result[1]?.proteinG).toBe(8);
+  });
+
+  it("falls back to positional matching when the response carries no names", async () => {
+    // Backward compatibility: older prompt, or a model that ignores the field.
+    mockCreate.mockResolvedValue(makeTextResponse(JSON.stringify(HAIKU_ESTIMATES)));
+
+    const result = await estimateMacros(ITEMS, client);
+
+    expect(result[0]?.proteinG).toBe(42);
+    expect(result[1]?.proteinG).toBe(8);
+  });
+
+  it("nulls an item whose name the model never returned", async () => {
+    mockCreate.mockResolvedValue(
+      makeTextResponse(
+        JSON.stringify([
+          NAMED_ESTIMATES[0],
+          { name: "Something Else Entirely", cal: 380, p: 8, c: 30, f: 24, conf: "MEDIUM", tags: [] },
+        ]),
+      ),
+    );
+
+    const result = await estimateMacros(ITEMS, client);
+
+    expect(result[0]?.proteinG).toBe(42);
+    expect(result[1]).toBeNull();
+  });
+});

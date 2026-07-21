@@ -19,6 +19,12 @@ import type { MacroData, StructuredMenuItem } from "./menuSources/types";
 
 /** The shape Haiku returns per item. */
 interface HaikuEstimate {
+  /**
+   * Echo of the input item name. Requested so results can be matched back to
+   * inputs by identity instead of array position — see reconcile() below.
+   * Optional so that a response from an older prompt still parses.
+   */
+  name?: string;
   cal: number;
   p: number;
   c: number;
@@ -37,6 +43,7 @@ const VALID_TAGS = new Set(["vegan", "vegetarian", "gluten-free", "keto", "dairy
 const SYSTEM_PROMPT = `You are a nutrition expert. You will receive a JSON array of restaurant menu items that have already been identified. For each item, estimate its macronutrient content and dietary tags.
 
 Return ONLY valid JSON (no markdown fences, no explanation) as an array of objects in the SAME ORDER as the input, with these exact fields:
+- name: the item name, copied EXACTLY from the input
 - cal: calories (integer)
 - p: protein in grams (number)
 - c: carbohydrates in grams (number)
@@ -50,6 +57,82 @@ Confidence levels:
 - LOW: vague name, no description, or unusual item
 
 The output array must have exactly the same number of elements as the input array, in the same order.`;
+
+// ─── Response hardening ────────────────────────────────────────────────────────
+
+/**
+ * C0 control characters are illegal in JSON outside string literals, and models
+ * occasionally emit one — a single stray 0x08 (backspace) in an otherwise
+ * well-formed 46-object array was observed killing a whole 100-item menu, since
+ * JSON.parse throws and the caller loses every item in the batch.
+ *
+ * Tab / newline / carriage return are left alone: they are legal as whitespace
+ * between tokens, and JSON.parse rejects them inside strings anyway, so
+ * stripping them would mask a genuinely malformed response.
+ */
+export function stripControlChars(text: string): string {
+  // eslint-disable-next-line no-control-regex
+  return text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "");
+}
+
+/**
+ * Maps model output back onto the input items.
+ *
+ * The model is asked to echo each item's name. When it does, we match on that
+ * name rather than array position, because position is not a reliable contract:
+ * on 50-item batches the model returns the wrong number of objects ~15% of the
+ * time (measured on claude-haiku-4-5 over 2,708 items; other models are worse).
+ * Under positional matching a single dropped or duplicated entry silently
+ * shifts every subsequent item's macros onto the wrong dish, with nothing able
+ * to detect it. Nutrition data is a documented Danger Zone — a null is
+ * recoverable, macros attached to the wrong food are not.
+ *
+ * Falls back to positional matching when the response carries no names at all,
+ * so an older prompt or a model that ignores the field still works as before.
+ *
+ * @returns entries aligned to `items`, plus how the alignment was achieved.
+ */
+export function reconcile(
+  items: StructuredMenuItem[],
+  parsed: unknown[],
+): { aligned: (unknown | null)[]; strategy: "name" | "position"; unmatched: number } {
+  const norm = (s: string): string => s.trim().toLowerCase().replace(/\s+/g, " ");
+
+  const named = parsed.filter(
+    (p): p is Record<string, unknown> =>
+      p !== null && typeof p === "object" && typeof (p as Record<string, unknown>)["name"] === "string",
+  );
+
+  // Require most of the response to carry names before trusting name matching;
+  // a handful of stray name fields is not a reliable index.
+  if (named.length < parsed.length * 0.8 || named.length === 0) {
+    return {
+      aligned: Array.from({ length: items.length }, (_, i) => parsed[i] ?? null),
+      strategy: "position",
+      unmatched: 0,
+    };
+  }
+
+  const byName = new Map<string, unknown>();
+  for (const p of named) {
+    const key = norm(String(p["name"]));
+    // First write wins: if the model duplicated a name, prefer its first answer
+    // rather than letting a later duplicate overwrite a correct earlier one.
+    if (!byName.has(key)) byName.set(key, p);
+  }
+
+  let unmatched = 0;
+  const aligned = items.map((item) => {
+    const hit = byName.get(norm(item.name));
+    if (hit === undefined) {
+      unmatched++;
+      return null;
+    }
+    return hit;
+  });
+
+  return { aligned, strategy: "name", unmatched };
+}
 
 // ─── Singleton client ──────────────────────────────────────────────────────────
 
@@ -125,10 +208,11 @@ export async function estimateMacros(
   }
 
   const raw = contentBlock.text.trim();
-  // Strip markdown fences if model wraps response despite instructions
-  const text = raw
-    .replace(/^```(?:json)?\s*\n?/, "")
-    .replace(/\n?```\s*$/, "");
+  // Strip markdown fences if model wraps response despite instructions,
+  // then drop stray control characters (see stripControlChars).
+  const text = stripControlChars(
+    raw.replace(/^```(?:json)?\s*\n?/, "").replace(/\n?```\s*$/, ""),
+  );
 
   let parsed: unknown;
   try {
@@ -141,17 +225,29 @@ export async function estimateMacros(
     throw new Error("macroEstimationService: Haiku response is not an array");
   }
 
-  // Lenient: if Haiku returned fewer/more items, pad with nulls or truncate
-  // (Haiku sometimes merges duplicates or skips items it can't estimate)
+  // Count drift is common on full-size batches, so this is expected rather than
+  // exceptional — reconcile() is what makes it safe.
   if (parsed.length !== items.length) {
     console.warn(
-      `[macroEstimation] Haiku returned ${parsed.length} items for ${items.length} inputs — padding/truncating`,
+      `[macroEstimation] Haiku returned ${parsed.length} items for ${items.length} inputs`,
     );
   }
 
-  // Preserve positional contract: one entry per input item, null for invalid estimates
-  const paddedParsed = Array.from({ length: items.length }, (_, i) => parsed[i] ?? null);
-  return paddedParsed.map((item: unknown): MacroData | null => {
+  const { aligned, strategy, unmatched } = reconcile(items, parsed);
+  if (strategy === "position" && parsed.length !== items.length) {
+    // No usable names AND a count mismatch: entries after the first drift are
+    // very likely attributed to the wrong dish, and we cannot tell which.
+    console.warn(
+      "[macroEstimation] positional fallback on a mismatched batch — alignment is unverified",
+    );
+  }
+  if (unmatched > 0) {
+    console.warn(
+      `[macroEstimation] ${unmatched}/${items.length} items had no matching name in the response`,
+    );
+  }
+
+  return aligned.map((item: unknown): MacroData | null => {
     if (
       item === null ||
       typeof item !== "object" ||
