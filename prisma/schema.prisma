@@ -18,6 +18,7 @@ model User {
   birthday        DateTime?
   heightCm        Float?
   weightKg        Float?
+  sex             String?       // 'female' | 'male' — Mifflin-St Jeor BMR term
   activityLevel   String?
   goal            String?
   onboardingStep  Int           @default(0)

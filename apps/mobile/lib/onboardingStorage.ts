@@ -5,11 +5,13 @@ const KEY = '@fitsy/onboarding';
 
 export type ActivityLevel = 'sedentary' | 'lightly_active' | 'active' | 'very_active';
 export type Goal = 'lose_fat' | 'maintain' | 'build_muscle';
+export type Sex = 'female' | 'male';
 
 export interface OnboardingData {
   birthday?: string;
   heightCm?: number;
   weightKg?: number;
+  sex?: Sex;
   activity?: ActivityLevel;
   goal?: Goal;
   dietary?: string[];
@@ -46,15 +48,17 @@ const GOAL_ADJUSTMENTS: Record<Goal, number> = {
   build_muscle: 250,
 };
 
-// Mifflin-St Jeor BMR averaged across sexes (no sex field collected)
-function calcBMR(weightKg: number, heightCm: number, age: number): number {
-  return Math.round(10 * weightKg + 6.25 * heightCm - 5 * age - 78);
+// Mifflin-St Jeor BMR. The sex term is +5 (male) / −161 (female); when sex is
+// unknown we use −78, the midpoint, so the estimate degrades gracefully.
+function calcBMR(weightKg: number, heightCm: number, age: number, sex?: Sex): number {
+  const sexTerm = sex === 'male' ? 5 : sex === 'female' ? -161 : -78;
+  return Math.round(10 * weightKg + 6.25 * heightCm - 5 * age + sexTerm);
 }
 
 export function calculateSuggestedCalories(data: OnboardingData): number {
-  const { birthday, heightCm = 170, weightKg = 75, activity = 'lightly_active', goal = 'maintain' } = data;
+  const { birthday, heightCm = 170, weightKg = 75, sex, activity = 'lightly_active', goal = 'maintain' } = data;
   const age = birthday ? calculateAge(birthday) : 25;
-  const bmr = calcBMR(weightKg, heightCm, age);
+  const bmr = calcBMR(weightKg, heightCm, age, sex);
   const tdee = Math.round(bmr * ACTIVITY_MULTIPLIERS[activity]);
   const adjusted = tdee + GOAL_ADJUSTMENTS[goal];
   return Math.max(1200, Math.min(3500, adjusted));

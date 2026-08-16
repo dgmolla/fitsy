@@ -1,4 +1,4 @@
-import type { ActivityLevel, UserGoal } from "@fitsy/shared";
+import type { ActivityLevel, UserGoal, Sex } from "@fitsy/shared";
 
 // ─── TDEE Calculator ──────────────────────────────────────────────────────────
 
@@ -23,9 +23,11 @@ const GOAL_OFFSETS: Record<UserGoal, number> = {
 };
 
 /**
- * Calculates TDEE and macro split using Mifflin-St Jeor (unisex).
+ * Calculates TDEE and macro split using Mifflin-St Jeor.
  *
- * BMR = 10 * weightKg + 6.25 * heightCm - 5 * age + 5
+ * BMR = 10 * weightKg + 6.25 * heightCm - 5 * age + sexTerm
+ *   sexTerm = +5 (male) / -161 (female) / -78 (unknown → the midpoint, so the
+ *   estimate degrades gracefully when sex wasn't collected).
  * TDEE = BMR * activityMultiplier + goalOffset
  *
  * Macro split: protein 30% / carbs 40% / fat 30%
@@ -36,8 +38,10 @@ export function calculateTdee(
   weightKg: number,
   activityLevel: ActivityLevel,
   goal: UserGoal,
+  sex?: Sex | null,
 ): TdeeResult {
-  const bmr = 10 * weightKg + 6.25 * heightCm - 5 * age + 5;
+  const sexTerm = sex === "male" ? 5 : sex === "female" ? -161 : -78;
+  const bmr = 10 * weightKg + 6.25 * heightCm - 5 * age + sexTerm;
   const tdee = bmr * ACTIVITY_MULTIPLIERS[activityLevel];
   const calories = Math.round(tdee + GOAL_OFFSETS[goal]);
 

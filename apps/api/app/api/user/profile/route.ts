@@ -8,6 +8,7 @@ import type {
   ProfileResponse,
   ActivityLevel,
   UserGoal,
+  Sex,
 } from "@fitsy/shared";
 
 // ─── Validation constants ────────────────────────────────────────────────────
@@ -21,6 +22,8 @@ const VALID_ACTIVITY_LEVELS: ActivityLevel[] = [
 
 const VALID_GOALS: UserGoal[] = ["lose_fat", "maintain", "build_muscle"];
 
+const VALID_SEXES: Sex[] = ["female", "male"];
+
 const USER_SELECT = {
   id: true,
   email: true,
@@ -28,6 +31,7 @@ const USER_SELECT = {
   birthday: true,
   heightCm: true,
   weightKg: true,
+  sex: true,
   activityLevel: true,
   goal: true,
   onboardingStep: true,
@@ -68,6 +72,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         age: user.birthday ? calculateAge(user.birthday) : null,
         heightCm: user.heightCm,
         weightKg: user.weightKg,
+        sex: user.sex as Sex | null,
         activityLevel: user.activityLevel as ActivityLevel | null,
         goal: user.goal as UserGoal | null,
         onboardingStep: user.onboardingStep,
@@ -181,6 +186,15 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     }
   }
 
+  if (update.sex !== undefined) {
+    if (!VALID_SEXES.includes(update.sex as Sex)) {
+      return NextResponse.json(
+        { error: `sex must be one of: ${VALID_SEXES.join(", ")}` },
+        { status: 400 },
+      );
+    }
+  }
+
   if (update.onboardingStep !== undefined) {
     if (
       typeof update.onboardingStep !== "number" ||
@@ -206,6 +220,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
           }),
           ...(update.heightCm !== undefined && { heightCm: update.heightCm }),
           ...(update.weightKg !== undefined && { weightKg: update.weightKg }),
+          ...(update.sex !== undefined && { sex: update.sex }),
           ...(update.activityLevel !== undefined && {
             activityLevel: update.activityLevel,
           }),
@@ -251,6 +266,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
           user.weightKg,
           user.activityLevel as ActivityLevel,
           user.goal as UserGoal,
+          user.sex as Sex | null,
         );
 
         await tx.macroTarget.upsert({

@@ -37,10 +37,10 @@ export default function AgeScreen() {
       subtitle="Used to set your baseline metabolic rate."
       onContinue={async () => {
         await saveOnboardingField('birthday', `${new Date().getFullYear() - age}-01-01`);
-        router.push('/welcome/activity');
+        router.push('/welcome/sex');
       }}
       canContinue={true}
-      onSkip={() => router.push('/welcome/activity')}
+      onSkip={() => router.push('/welcome/sex')}
     >
       <Animated.View entering={FadeInDown.duration(400).delay(100)} style={s.wrap}>
         <View style={s.stage}>
