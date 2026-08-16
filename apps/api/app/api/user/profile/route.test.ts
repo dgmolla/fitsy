@@ -232,6 +232,7 @@ describe("PATCH /api/user/profile — success", () => {
       70,
       "active",
       "maintain",
+      undefined, // sex not set on this mock user
     );
     expect(mockPrismaMacroTargetUpsert).toHaveBeenCalledTimes(1);
   });
