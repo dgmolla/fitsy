@@ -309,6 +309,10 @@ dd74849 feat(eval): expand hero-eval fixture (160 -> 2708)
 - `stripControlChars()` (line ~73) drops C0 controls before parse
 - 6 new tests in `macroEstimationService.test.ts`; full suite 485 passing
 
+> **This is production code, not eval code, and it is NOT on main.** It lives only on `spike/open-model-macro-eval` as commit `be92d2b`.
+> It fixes a bug that is **live on main today**: `estimateMacros` matches model output to input dishes by array position, but the model returns the wrong item count on ~15% of 50-item Haiku batches (78% for Qwen), so macros silently attach to the wrong dish; and a single stray control character can discard a whole 100-item menu.
+> **Next-session decision:** cherry-pick this one file + its tests to main as a standalone PR now (it stands alone, 485 tests pass, independent of the model choice), or land it with the model decision. It is not eval scaffolding - leaving it on the branch leaves the production bug live.
+
 **To reproduce the comparison:**
 ```bash
 # from apps root, env from .env.local (needs OPENROUTER_API_KEY + ANTHROPIC_API_KEY)
