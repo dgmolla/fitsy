@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { Alert, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { saveMacroTargets } from '@/lib/macroStorage';
 import { pushProfileToServer } from '@/lib/profileSync';
 import { ScrollPicker, rangeValues } from '@/components/ScrollPicker';
@@ -41,6 +41,17 @@ function computeCalories(v: MacroValues): number {
   return v.protein * 4 + v.carbs * 4 + v.fat * 9;
 }
 
+// Canonical 30/45/25 protein/carb/fat split for a given daily calorie target,
+// snapped + clamped to the picker ranges. Single source of truth so the
+// on-focus recompute and the "Recommended" pill can't drift apart.
+function recommendedSplit(cal: number): MacroValues {
+  return {
+    protein: clamp(snapToStep(Math.round((cal * 0.3) / 4), 5), 50, 300),
+    carbs: clamp(snapToStep(Math.round((cal * 0.45) / 4), 5), 50, 500),
+    fat: clamp(snapToStep(Math.round((cal * 0.25) / 9), 2), 20, 150),
+  };
+}
+
 export default function MacroSetupScreen() {
   const { colors } = useTheme();
   const { fromOnboarding } = useLocalSearchParams<{ fromOnboarding?: string }>();
@@ -49,38 +60,50 @@ export default function MacroSetupScreen() {
   const [suggestedCal, setSuggestedCal] = useState(2000);
   const [activeFilter, setActiveFilter] = useState<DietStyleId>('recommended');
   const [loaded, setLoaded] = useState(false);
+  // True once the user has hand-edited a macro (or picked Custom). Guards the
+  // on-focus recompute from clobbering their manual targets. A ref, not state,
+  // so the focus callback reads the latest value without re-registering.
+  const customizedRef = useRef(false);
 
   const totalCalories = computeCalories(values);
 
-  useEffect(() => {
-    getOnboardingData().then((data) => {
-      const suggested = calculateSuggestedCalories(data);
-      const cal = snapToStep(suggested, 25);
-      setSuggestedCal(cal);
-      const protein = clamp(snapToStep(Math.round((cal * 0.3) / 4), 5), 50, 300);
-      const carbs = clamp(snapToStep(Math.round((cal * 0.45) / 4), 5), 50, 500);
-      const fat = clamp(snapToStep(Math.round((cal * 0.25) / 9), 2), 20, 150);
-      setValues({ protein, carbs, fat });
-      setLoaded(true);
-    });
-  }, []);
+  // Recompute the suggestion every time the screen regains focus — not just on
+  // first mount. Onboarding inputs upstream (weight, sex, age, activity, goal)
+  // can change after this screen first rendered (e.g. the user taps back, edits
+  // weight, returns); a mount-only effect left the targets stale. We always
+  // refresh the displayed suggested kcal, and re-apply the recommended split
+  // unless the user has customized their macros.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      getOnboardingData().then((data) => {
+        if (!active) return;
+        const cal = snapToStep(calculateSuggestedCalories(data), 25);
+        setSuggestedCal(cal);
+        if (!customizedRef.current) setValues(recommendedSplit(cal));
+        setLoaded(true);
+      });
+      return () => {
+        active = false;
+      };
+    }, []),
+  );
 
   function applyDietStyle(filterId: DietStyleId) {
     if (filterId === 'custom') {
+      customizedRef.current = true;
       setActiveFilter('custom');
       return;
     }
 
     if (filterId === 'recommended') {
-      const cal = suggestedCal;
-      const protein = clamp(snapToStep(Math.round((cal * 0.3) / 4), 5), 50, 300);
-      const carbs = clamp(snapToStep(Math.round((cal * 0.45) / 4), 5), 50, 500);
-      const fat = clamp(snapToStep(Math.round((cal * 0.25) / 9), 2), 20, 150);
-      setValues({ protein, carbs, fat });
+      customizedRef.current = false;
+      setValues(recommendedSplit(suggestedCal));
       setActiveFilter('recommended');
       return;
     }
 
+    customizedRef.current = false;
     const split = applySuggestionFilter(filterId, String(suggestedCal));
     const protein = clamp(snapToStep(parseInt(split.protein, 10), 5), 50, 300);
     const carbs = clamp(snapToStep(parseInt(split.carbs, 10), 5), 50, 500);
@@ -90,6 +113,7 @@ export default function MacroSetupScreen() {
   }
 
   function updateMacro(key: keyof MacroValues, v: number) {
+    customizedRef.current = true;
     setValues((prev) => ({ ...prev, [key]: v }));
     setActiveFilter('custom');
   }
