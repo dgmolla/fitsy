@@ -157,9 +157,11 @@ export default function ResultsScreen() {
           ? 'Fitsy is launching in Los Angeles first — your city is next on the list.'
           : 'These spots near you have meals that match your targets.'
       }
-      onContinue={() => router.push('/welcome/signin')}
+      onContinue={() =>
+        router.push(showEmpty ? '/welcome/out-of-area' : '/welcome/notification-permission')
+      }
       canContinue
-      continueLabel="Continue"
+      continueLabel={showEmpty ? 'Keep me posted' : 'Continue'}
     >
       <View style={s.list}>
         {showSkeletons &&

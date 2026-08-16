@@ -58,13 +58,10 @@ export default function SignInScreen() {
             await captureIdentity(r.user.id, r.user.email);
             if (!r.isNewUser) await pullProfileFromServer();
             setGoogleLoading(false);
-            // Onboarding redirect chain (post sign-in):
-            //   → /welcome/notification-permission (needs auth for push-token POST)
-            //   → /welcome/trial (paywall)
-            //   → /welcome/payment → /(tabs)/search
-            // location-permission runs upstream after tuning so the teaser
-            // prefetch in welcome/finding can use granted coords.
-            router.replace('/welcome/notification-permission');
+            // Account creation now happens early (2nd screen), so a NEW user
+            // continues into the onboarding narrative; a RETURNING user already
+            // has a profile and skips straight to the app.
+            router.replace(r.isNewUser ? '/welcome/promise' : '/(tabs)/search');
           })
           .catch((err: Error) => {
             trackAuthFailure({ provider: 'google', error_message: err.message });
@@ -85,9 +82,8 @@ export default function SignInScreen() {
       trackAuthSuccess({ provider: 'apple', is_new_user: r.isNewUser });
       await captureIdentity(r.user.id, r.user.email);
       if (!r.isNewUser) await pullProfileFromServer();
-      // After signin: notification priming (needs auth for push-token POST),
-      // then the paywall. location-permission ran upstream after tuning.
-      router.replace('/welcome/notification-permission');
+      // New user → continue onboarding; returning user → straight to the app.
+      router.replace(r.isNewUser ? '/welcome/promise' : '/(tabs)/search');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Apple Sign In failed';
       if (!msg.includes('canceled')) {
@@ -111,7 +107,8 @@ export default function SignInScreen() {
       const r = await devLogin();
       trackAuthSuccess({ provider: 'dev', is_new_user: false });
       await captureIdentity(r.user.id, r.user.email);
-      router.replace('/welcome/notification-permission');
+      // Continue into onboarding so the full flow is testable on the sim.
+      router.replace('/welcome/promise');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Dev login failed';
       trackAuthFailure({ provider: 'dev', error_message: msg });
@@ -125,8 +122,8 @@ export default function SignInScreen() {
 
   return (
     <WelcomeScreen
-      title="Almost there."
-      subtitle="Create an account to save your targets."
+      title="Create an account"
+      subtitle="One tap with Apple or Google — no password to remember."
       onContinue={() => {}}
       canContinue={false}
       hideFooter
