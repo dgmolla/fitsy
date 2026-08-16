@@ -57,6 +57,11 @@ export function MenuItemCard({
         <Text style={[s.pctTxt, badgeColor ? { color: badgeColor } : null]}>
           {hasMatch ? `${pct}%` : '—'}
         </Text>
+        {/* Only the top match spells out what the number is — labeling every
+            row is noise. The tutorial card (detail screen) explains the rest. */}
+        {isTopPick && hasMatch ? (
+          <Text style={[s.pctMatch, badgeColor ? { color: badgeColor } : null]}>MATCH</Text>
+        ) : null}
       </View>
       <View style={s.info}>
         <View style={s.topRow}>
@@ -137,6 +142,10 @@ const s = StyleSheet.create({
   pctTxt: {
     fontFamily: FONTS.frauncesDisplayBold, fontSize: 16, letterSpacing: -0.3,
     color: EDITORIAL.green,
+  },
+  pctMatch: {
+    fontFamily: FONTS.nunitoSansSemiBold, fontSize: 7, fontWeight: '800',
+    letterSpacing: 0.5, color: EDITORIAL.greenAccent, marginTop: -1,
   },
   info: { flex: 1, minWidth: 0 },
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 },

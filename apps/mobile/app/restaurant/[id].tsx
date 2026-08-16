@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { MenuItemResult, MenuResponse } from '@fitsy/shared';
 import { BookmarkButton, FitsyLoader, MenuItemCard } from '@/components';
@@ -62,6 +63,8 @@ function computeMatchPct(item: MenuItemResult, targets: MacroValues | null): num
 
 /* ── Main Screen ───────────────────────────────────────────────────────── */
 
+const PCT_TIP_KEY = '@fitsy/pctTipDismissed';
+
 export default function RestaurantDetailScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -77,6 +80,21 @@ export default function RestaurantDetailScreen() {
   const [activeChips, setActiveChips] = useState<Set<ChipId>>(new Set());
   const [sort, setSort] = useState<SortId>('match');
   const [sortOpen, setSortOpen] = useState(false);
+  // One-time tutorial explaining the match %. Shown until the user taps "Got
+  // it", then never again (persisted flag). Starts hidden so it can't flash
+  // before the flag is read.
+  const [showPctTip, setShowPctTip] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem(PCT_TIP_KEY).then((seen) => {
+      if (!seen) setShowPctTip(true);
+    });
+  }, []);
+
+  const dismissPctTip = useCallback(() => {
+    setShowPctTip(false);
+    AsyncStorage.setItem(PCT_TIP_KEY, '1');
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -346,6 +364,20 @@ export default function RestaurantDetailScreen() {
                   <Text style={s.sortBtnTxt}>Sort ↓</Text>
                 </Pressable>
               </View>
+              {showPctTip ? (
+                <View style={s.pctTip}>
+                  <View style={s.pctTipIcon}><Text style={s.pctTipIconTxt}>%</Text></View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.pctTipText}>
+                      The <Text style={s.pctTipStrong}>%</Text> is each dish's macro fit — how closely it
+                      matches your daily targets. 100% is a perfect fit.
+                    </Text>
+                    <Pressable onPress={dismissPctTip} hitSlop={8} accessibilityRole="button">
+                      <Text style={s.pctTipDismiss}>Got it</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ) : null}
               {sortOpen ? (
                 <View style={s.sortMenu}>
                   {SORT_DEFS.map((def) => (
@@ -407,6 +439,12 @@ const s = StyleSheet.create({
   sortBar: { marginHorizontal: 18, marginTop: 14, marginBottom: 8, backgroundColor: EDITORIAL.text, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   sortBarTitle: { fontFamily: FONTS.frauncesDisplay, fontSize: 18, color: EDITORIAL.cream },
   sortBarSub: { fontFamily: FONTS.nunitoSans, fontSize: 11, color: EDITORIAL.cream, opacity: 0.6, letterSpacing: 0.4, marginTop: 2 },
+  pctTip: { marginHorizontal: 18, marginBottom: 8, backgroundColor: EDITORIAL.creamCard, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+  pctTipIcon: { width: 24, height: 24, borderRadius: 12, backgroundColor: EDITORIAL.green, alignItems: 'center', justifyContent: 'center' },
+  pctTipIconTxt: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 13, fontWeight: '800', color: EDITORIAL.cream },
+  pctTipText: { fontFamily: FONTS.nunitoSans, fontSize: 12.5, lineHeight: 18, color: EDITORIAL.textMid },
+  pctTipStrong: { fontFamily: FONTS.nunitoSansSemiBold, fontWeight: '800', color: EDITORIAL.greenAccent },
+  pctTipDismiss: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 12.5, fontWeight: '700', color: EDITORIAL.greenAccent, marginTop: 8 },
   sortBtn: { backgroundColor: EDITORIAL.whiteTintLow, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8 },
   sortBtnTxt: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 12, fontWeight: '600', color: EDITORIAL.cream },
 
