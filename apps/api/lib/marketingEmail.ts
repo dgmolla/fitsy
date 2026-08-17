@@ -4,12 +4,13 @@
  * sendMarketingEmail is FAIL-CLOSED: it checks every compliance requirement
  * before sending and returns false if any gate fails.  It never throws.
  *
- * launchEmailContent generates the subject + body for a city-launch blast;
- * sendMarketingEmail appends the required footer before sending.
+ * launchEmailContent has moved to emailTemplates.ts and is re-exported here
+ * for backward compatibility.
  */
 import { prisma } from "@/lib/restaurantService";
 import { Prisma } from "@prisma/client";
 import { unsubscribeUrl } from "@/lib/unsubscribe";
+export { launchEmailContent } from "@/lib/emailTemplates";
 
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 const TIMEOUT_MS = 8000;
@@ -89,21 +90,3 @@ export async function sendMarketingEmail(opts: {
   }
 }
 
-/**
- * Generates the subject and HTML body for a city-launch notification.
- * No footer — sendMarketingEmail appends it.
- */
-export function launchEmailContent(city: string | null): {
-  subject: string;
-  html: string;
-} {
-  const where = city ? `in ${city}` : "in your city";
-  const subject = `Fitsy just launched ${where}`;
-  const html = [
-    `<p>Great news — Fitsy is now live ${where}.</p>`,
-    `<p>You asked us to let you know when we launched near you, so here we are.</p>`,
-    `<p>Open the app to find restaurants near you with meals that fit your macros.</p>`,
-    `<p><a href="https://fitsy.org" style="color:#1B3A26;font-weight:600;">Open Fitsy</a></p>`,
-  ].join("");
-  return { subject, html };
-}

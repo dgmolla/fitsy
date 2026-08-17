@@ -9,8 +9,7 @@ import { trackOnboardingScreenView } from '@/lib/analytics';
 import { api } from '@/lib/api';
 import { getCachedCoords } from '@/lib/locationCache';
 
-// TODO(marketing): confirm the real Instagram handle before launch.
-const FITSY_INSTAGRAM = 'https://instagram.com/fitsy';
+const FITSY_INSTAGRAM = 'https://instagram.com/fitsy.lyfe';
 
 /**
  * Shown when the location preview comes back empty — the user is outside
