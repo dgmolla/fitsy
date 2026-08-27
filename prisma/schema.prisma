@@ -18,16 +18,39 @@ model User {
   birthday        DateTime?
   heightCm        Float?
   weightKg        Float?
+  sex             String?       // 'female' | 'male' — Mifflin-St Jeor BMR term
   activityLevel   String?
   goal            String?
   onboardingStep  Int           @default(0)
   pushToken       String?
+  emailOptOutAt   DateTime?     // set via /unsubscribe; suppresses ALL marketing email (transactional unaffected)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   macroTarget     MacroTarget?
   savedItems      SavedItem[]
   subscription    Subscription?
   feedback        Feedback[]
+  launchWaitlist  LaunchWaitlist?
+}
+
+// Users who hit "we're not in your area yet" during onboarding. We hold their
+// email + a COARSE (city-level, rounded) location so we can email them once
+// Fitsy launches near them. Email is denormalized so the notify job needs no
+// User join and the record survives account changes. See
+// docs/engineering/backend/launch-waitlist.md for the ASC privacy disclosures.
+model LaunchWaitlist {
+  id         String    @id @default(cuid())
+  userId     String    @unique
+  email      String
+  lat        Float     // rounded to ~city precision (1 decimal) at write time
+  lng        Float
+  city       String?   // optional human label, best-effort
+  createdAt  DateTime  @default(now())
+  notifiedAt DateTime? // set when we email them about their city launching
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([notifiedAt])
+  @@index([lat, lng])
 }
 
 model MacroTarget {

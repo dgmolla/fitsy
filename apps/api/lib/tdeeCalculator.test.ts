@@ -1,9 +1,10 @@
 import { calculateTdee } from "./tdeeCalculator";
 
 describe("calculateTdee", () => {
-  // Reference: age=30, height=175cm, weight=75kg, sedentary, maintain
-  // BMR = 10*75 + 6.25*175 - 5*30 + 5 = 750 + 1093.75 - 150 + 5 = 1698.75
-  // TDEE = 1698.75 * 1.2 = 2038.5 -> 2039 (rounded) + 0 = 2039
+  // Reference: age=30, height=175cm, weight=75kg, sedentary, maintain, no sex.
+  // With no sex we use the neutral -78 term:
+  // BMR = 10*75 + 6.25*175 - 5*30 - 78 = 750 + 1093.75 - 150 - 78 = 1615.75
+  // TDEE = 1615.75 * 1.2 = 1938.9 -> 1939 (rounded) + 0 = 1939
   const BASE_CASE = {
     age: 30,
     heightCm: 175,
@@ -12,7 +13,7 @@ describe("calculateTdee", () => {
     goal: "maintain" as const,
   };
 
-  it("calculates BMR and TDEE for maintain + sedentary", () => {
+  it("calculates BMR and TDEE for maintain + sedentary (no sex → neutral)", () => {
     const result = calculateTdee(
       BASE_CASE.age,
       BASE_CASE.heightCm,
@@ -20,7 +21,16 @@ describe("calculateTdee", () => {
       BASE_CASE.activityLevel,
       BASE_CASE.goal,
     );
-    expect(result.calories).toBe(2039);
+    expect(result.calories).toBe(1939);
+  });
+
+  it("applies the sex term: +5 male / -161 female / -78 unknown", () => {
+    const male = calculateTdee(30, 175, 75, "sedentary", "maintain", "male");
+    const female = calculateTdee(30, 175, 75, "sedentary", "maintain", "female");
+    const unknown = calculateTdee(30, 175, 75, "sedentary", "maintain");
+    expect(male.calories).toBe(2039); // +5  → 1698.75 * 1.2
+    expect(female.calories).toBe(1839); // -161 → 1532.75 * 1.2
+    expect(unknown.calories).toBe(1939); // -78 midpoint
   });
 
   it("applies -500 offset for lose_fat goal", () => {

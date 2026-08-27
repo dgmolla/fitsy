@@ -41,6 +41,7 @@ export async function pushProfileToServer(): Promise<void> {
     if (onboarding.birthday) body.birthday = onboarding.birthday;
     if (onboarding.heightCm) body.heightCm = onboarding.heightCm;
     if (onboarding.weightKg) body.weightKg = onboarding.weightKg;
+    if (onboarding.sex) body.sex = onboarding.sex;
     if (onboarding.activity) body.activityLevel = onboarding.activity;
     if (onboarding.goal) body.goal = onboarding.goal;
 
@@ -86,6 +87,7 @@ export async function pullProfileFromServer(): Promise<void> {
     if (profile.user.birthday !== null) onboarding.birthday = profile.user.birthday;
     if (profile.user.heightCm !== null) onboarding.heightCm = profile.user.heightCm;
     if (profile.user.weightKg !== null) onboarding.weightKg = profile.user.weightKg;
+    if (profile.user.sex !== null) onboarding.sex = profile.user.sex;
     if (profile.user.activityLevel !== null) onboarding.activity = profile.user.activityLevel;
     if (profile.user.goal !== null) onboarding.goal = profile.user.goal;
 

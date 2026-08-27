@@ -257,6 +257,9 @@ export type ActivityLevel =
 
 export type UserGoal = "lose_fat" | "maintain" | "build_muscle";
 
+// Biological sex — used only for the Mifflin-St Jeor BMR term.
+export type Sex = "female" | "male";
+
 export interface AppleAuthRequest {
   identityToken: string;
   authorizationCode?: string;
@@ -283,6 +286,7 @@ export interface ProfileUpdateRequest {
   birthday?: string;
   heightCm?: number;
   weightKg?: number;
+  sex?: Sex;
   activityLevel?: ActivityLevel;
   goal?: UserGoal;
   onboardingStep?: number;
@@ -303,6 +307,7 @@ export interface ProfileResponse {
     age: number | null;
     heightCm: number | null;
     weightKg: number | null;
+    sex: Sex | null;
     activityLevel: ActivityLevel | null;
     goal: UserGoal | null;
     onboardingStep: number;

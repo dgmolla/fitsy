@@ -90,7 +90,7 @@ export default function ProblemScreen() {
           <Animated.View entering={FadeIn.duration(500).delay(400)} style={s.footerInner}>
             <AnimatedPress
               style={s.cta}
-              onPress={() => router.push('/welcome/promise')}
+              onPress={() => router.push('/welcome/signin')}
               haptic
               accessibilityRole="button"
             >

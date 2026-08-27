@@ -49,6 +49,20 @@ export default function PrivacyPage() {
             device&rsquo;s Settings.
           </p>
 
+          <h3>Launch waitlist</h3>
+          <p>
+            Fitsy launches city by city. If your area isn&rsquo;t covered yet
+            and you tap &ldquo;Notify me at launch,&rdquo; we save your email
+            and a <strong>coarse, city-level</strong> location so we can let
+            you know when Fitsy goes live near you &mdash; by push notification
+            and email. We may also send you occasional Fitsy updates by email.
+            Every marketing email includes an unsubscribe link; you can also
+            email <a href={`mailto:${PRIVACY_EMAIL}`}>{PRIVACY_EMAIL}</a> to be
+            removed. Unsubscribing stops marketing email but does not affect
+            account or service messages. We keep that location only for this
+            purpose, and only if you opt in.
+          </p>
+
           <h3>Macro targets and saved items</h3>
           <p>
             Your protein, carb, and fat targets and your saved restaurants are
