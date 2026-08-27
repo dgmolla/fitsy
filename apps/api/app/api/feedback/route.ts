@@ -2,13 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { feedbackLimiter } from "@/lib/rateLimit";
 import { prisma } from "@/lib/restaurantService";
-import { FEEDBACK_MAX_LENGTH, type FeedbackApiResponse } from "@fitsy/shared";
+import {
+  FEEDBACK_MAX_LENGTH,
+  postSlackMessage,
+  type FeedbackApiResponse,
+} from "@fitsy/shared";
+import { buildFeedbackAlert } from "@/lib/feedbackDigest";
 
 // ─── POST /api/feedback ───────────────────────────────────────────────────────
 //
-// Persists a user's free-text feedback to the Feedback table so it can be read
-// and triaged directly from the DB (e.g. via the Supabase CLI). Requires a
-// valid Bearer JWT.
+// Persists a user's free-text feedback to the Feedback table, then posts it to
+// Slack immediately with a one-click reply link (the daily digest cron is the
+// safety net). The Slack post is best-effort: it never fails the request.
+// Requires a valid Bearer JWT.
 //
 // Throttling is two-layered and conservative:
 //   1. In-process limiter — cheap per-instance burst guard.
@@ -75,6 +81,16 @@ export async function POST(
       data: { userId: auth.sub, userEmail: auth.email, message: trimmed },
       select: { id: true, createdAt: true },
     });
+
+    // Real-time nudge so the 24h personal-reply rule is actually met.
+    // postSlackMessage never throws and no-ops without SLACK_BOT_TOKEN.
+    await postSlackMessage(
+      buildFeedbackAlert({
+        userEmail: auth.email,
+        message: trimmed,
+        createdAt: feedback.createdAt,
+      }),
+    );
 
     return NextResponse.json(
       { data: { id: feedback.id, createdAt: feedback.createdAt.toISOString() } },

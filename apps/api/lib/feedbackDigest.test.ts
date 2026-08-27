@@ -1,4 +1,9 @@
-import { buildFeedbackDigest, type FeedbackDigestRow } from "./feedbackDigest";
+import {
+  buildFeedbackAlert,
+  buildFeedbackDigest,
+  buildReplyMailto,
+  type FeedbackDigestRow,
+} from "./feedbackDigest";
 
 const ROW = (over: Partial<FeedbackDigestRow> = {}): FeedbackDigestRow => ({
   userEmail: "alice@example.com",
@@ -43,5 +48,30 @@ describe("buildFeedbackDigest", () => {
 
   it("honors a custom window size in the header", () => {
     expect(buildFeedbackDigest([], { windowHours: 48 })).toContain("last 48h");
+  });
+});
+
+describe("buildFeedbackAlert / reply links", () => {
+  it("posts one real-time message with a pre-filled mailto reply", () => {
+    const text = buildFeedbackAlert(
+      ROW({ userEmail: "bob@x.com", message: "macros for Sweetgreen look off" }),
+    );
+    expect(text).toContain("*New feedback* from _bob@x.com_");
+    expect(text).toContain("> macros for Sweetgreen look off");
+    expect(text).toContain("<mailto:bob%40x.com?subject=");
+    expect(text).toContain("|Reply>");
+    expect(text).toContain("within 24h");
+  });
+
+  it("quotes the user's note and asks for a call in the reply body", () => {
+    const url = buildReplyMailto("bob@x.com", "the  search   is slow");
+    const body = decodeURIComponent(url.split("&body=")[1] ?? "");
+    expect(body).toContain("> the search is slow");
+    expect(body).toContain("10-minute call");
+  });
+
+  it("adds a Reply link to every digest entry", () => {
+    const text = buildFeedbackDigest([ROW({ userEmail: "a@x.com" }), ROW({ userEmail: "b@x.com" })]);
+    expect(text.match(/\|Reply>/g)).toHaveLength(2);
   });
 });

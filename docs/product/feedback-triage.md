@@ -9,12 +9,18 @@ during the MVP phase. Run this playbook once per sprint (weekly).
 
 | Channel | Location |
 |---------|----------|
-| In-app "Send Feedback" | `feedback@fitsy.app` inbox |
-| App Store reviews (post-launch) | App Store Connect → Reviews |
-| Direct messages / social | Founder's discretion; copy paste into email thread |
+| In-app "Send feedback" (Profile) | `Feedback` table via `POST /api/feedback`; each note is posted to Slack instantly with a one-click `Reply` link; the daily digest cron (`/api/internal/feedback-digest`, 7:05am PT) is the safety net |
+| App Store reviews (post-launch) | App Store Connect → Reviews; the review watcher cron pings Slack on new reviews |
+| Direct messages / social / trainer partners | Founder's discretion; paste into the Slack feedback thread so it is counted |
 
-For MVP, the primary source is the email inbox. All other channels are
-reviewed opportunistically during triage.
+The `feedback@fitsy.app` inbox is not the intake; Slack is.
+
+### Step 0: reply within 24h, ask for a call
+
+Every note gets a personal reply within 24h, before triage.
+The Slack `Reply` link opens a pre-filled email that quotes the note and asks for a 10-minute call; edit it, send it.
+During the LA-only phase, aim for 3 user calls a week.
+See `docs/gtm/la-rollout.md` § Feedback loop.
 
 ---
 
