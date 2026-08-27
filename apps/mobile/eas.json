@@ -21,6 +21,14 @@
       "distribution": "internal",
       "channel": "preview"
     },
+    "preview-simulator": {
+      "distribution": "internal",
+      "channel": "production",
+      "environment": "production",
+      "ios": {
+        "simulator": true
+      }
+    },
     "production": {
       "channel": "production"
     }
@@ -28,7 +36,10 @@
   "submit": {
     "production": {
       "ios": {
-        "ascAppId": "6763851364"
+        "ascAppId": "6763851364",
+        "ascApiKeyPath": "/Users/dawitmolla/.appstoreconnect/AuthKey_FS4J3M92D4.p8",
+        "ascApiKeyId": "FS4J3M92D4",
+        "ascApiKeyIssuerId": "9255e624-837a-4d0d-bb82-aa8e6f880535"
       }
     }
   }
