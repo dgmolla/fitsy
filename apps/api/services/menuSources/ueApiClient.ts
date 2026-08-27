@@ -500,7 +500,10 @@ interface UeFeedStore {
 interface UeFeedItem {
   uuid?: string;
   type?: string;
+  /** Present on `REGULAR_STORE` items. */
   store?: UeFeedStore;
+  /** Present on `REGULAR_CAROUSEL` items — nested stores share `UeFeedStore` shape. */
+  carousel?: { stores?: UeFeedStore[] };
 }
 
 interface UeFeedData {
@@ -681,38 +684,63 @@ function pickLargestImage(items: UeFeedImage[] | undefined): string | undefined 
 }
 
 /**
+ * Normalize a single feed store object into a card, or `null` if it lacks the
+ * fields required for Phase 1 upsert + hex assignment (storeUuid, name,
+ * mapMarker lat/lng). Shared by `REGULAR_STORE` and `REGULAR_CAROUSEL` parsing
+ * since both carry the identical store shape.
+ */
+function feedStoreToCard(s: UeFeedStore | undefined): UeFeedStoreCard | null {
+  if (!s) return null;
+  const storeUuid = s.storeUuid;
+  const name = s.title?.text;
+  const lat = s.mapMarker?.latitude;
+  const lng = s.mapMarker?.longitude;
+  if (!storeUuid || !name || typeof lat !== "number" || typeof lng !== "number") return null;
+
+  const card: UeFeedStoreCard = { storeUuid, name, lat, lng };
+  const photoUrl = pickLargestImage(s.image?.items);
+  if (photoUrl) card.photoUrl = photoUrl;
+  const ratingNum = s.rating?.text ? parseFloat(s.rating.text) : NaN;
+  if (Number.isFinite(ratingNum)) card.rating = ratingNum;
+  const reviewCount = extractReviewCount(s.rating?.accessibilityText);
+  if (reviewCount !== undefined) card.userRatingCount = reviewCount;
+  const { slug, actionUrlId } = extractSlugAndId(s.actionUrl);
+  if (slug) card.slug = slug;
+  if (actionUrlId) card.actionUrlId = actionUrlId;
+  return card;
+}
+
+/**
  * Extract normalized store cards from a getFeedV1 response.
  *
- * Reads `data.feedItems[]` filtered by `type === "REGULAR_STORE"` — NOT the
- * deprecated `storesMap`. Skips items without a storeUuid or valid
- * mapMarker lat/lng (both required for Phase 1 upsert + hex assignment).
+ * Reads `data.feedItems[]` from BOTH `REGULAR_STORE` (`item.store`) and
+ * `REGULAR_CAROUSEL` (`item.carousel.stores[]`) items — NOT the deprecated
+ * `storesMap`. Carousels carry a large share of the feed (~40% of stores at a
+ * given probe) and are where chains like Chick-fil-A surface; ignoring them
+ * silently dropped them from discovery. Stores are deduped by storeUuid (a
+ * store often appears both as a `REGULAR_STORE` and inside a carousel); the
+ * first occurrence wins. Stores without a storeUuid or valid mapMarker lat/lng
+ * are skipped.
  */
 export function parseFeedV1Response(json: UeFeedResponse): UeFeedStoreCard[] {
   const items = json.data?.feedItems;
   if (!items) return [];
 
   const cards: UeFeedStoreCard[] = [];
-  for (const item of items) {
-    if (item.type !== "REGULAR_STORE") continue;
-    const s = item.store;
-    if (!s) continue;
-    const storeUuid = s.storeUuid;
-    const name = s.title?.text;
-    const lat = s.mapMarker?.latitude;
-    const lng = s.mapMarker?.longitude;
-    if (!storeUuid || !name || typeof lat !== "number" || typeof lng !== "number") continue;
-
-    const card: UeFeedStoreCard = { storeUuid, name, lat, lng };
-    const photoUrl = pickLargestImage(s.image?.items);
-    if (photoUrl) card.photoUrl = photoUrl;
-    const ratingNum = s.rating?.text ? parseFloat(s.rating.text) : NaN;
-    if (Number.isFinite(ratingNum)) card.rating = ratingNum;
-    const reviewCount = extractReviewCount(s.rating?.accessibilityText);
-    if (reviewCount !== undefined) card.userRatingCount = reviewCount;
-    const { slug, actionUrlId } = extractSlugAndId(s.actionUrl);
-    if (slug) card.slug = slug;
-    if (actionUrlId) card.actionUrlId = actionUrlId;
+  const seen = new Set<string>();
+  const add = (s: UeFeedStore | undefined): void => {
+    const card = feedStoreToCard(s);
+    if (!card || seen.has(card.storeUuid)) return;
+    seen.add(card.storeUuid);
     cards.push(card);
+  };
+
+  for (const item of items) {
+    if (item.type === "REGULAR_STORE") {
+      add(item.store);
+    } else if (item.type === "REGULAR_CAROUSEL") {
+      for (const s of item.carousel?.stores ?? []) add(s);
+    }
   }
   return cards;
 }

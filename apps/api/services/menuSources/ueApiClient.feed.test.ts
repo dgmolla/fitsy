@@ -112,6 +112,110 @@ describe("parseFeedV1Response", () => {
     ).toEqual([]);
   });
 
+  it("extracts stores from REGULAR_CAROUSEL items (e.g. chains like Chick-fil-A)", () => {
+    const json = {
+      status: "success",
+      data: {
+        feedItems: [
+          {
+            type: "REGULAR_STORE",
+            store: {
+              storeUuid: "11111111-1111-1111-1111-111111111111",
+              title: { text: "Local Diner" },
+              mapMarker: { latitude: 34.05, longitude: -118.25 },
+            },
+          },
+          {
+            type: "REGULAR_CAROUSEL",
+            uuid: "carousel-1",
+            carousel: {
+              header: { title: { text: "National brands" } },
+              stores: [
+                {
+                  storeUuid: "22222222-2222-2222-2222-222222222222",
+                  title: { text: "Chick-fil-A" },
+                  mapMarker: { latitude: 34.0578, longitude: -118.4185 },
+                  actionUrl: "/store/chick-fil-a-x/abc",
+                },
+                {
+                  storeUuid: "33333333-3333-3333-3333-333333333333",
+                  title: { text: "In-N-Out Burger" },
+                  mapMarker: { latitude: 34.06, longitude: -118.42 },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    };
+    const cards = parseFeedV1Response(
+      json as Parameters<typeof parseFeedV1Response>[0],
+    );
+    const names = cards.map((c) => c.name);
+    expect(names).toContain("Local Diner");
+    expect(names).toContain("Chick-fil-A");
+    expect(names).toContain("In-N-Out Burger");
+  });
+
+  it("dedupes a store that appears both as a REGULAR_STORE and inside a carousel", () => {
+    const dupUuid = "44444444-4444-4444-4444-444444444444";
+    const json = {
+      status: "success",
+      data: {
+        feedItems: [
+          {
+            type: "REGULAR_STORE",
+            store: {
+              storeUuid: dupUuid,
+              title: { text: "Chick-fil-A" },
+              mapMarker: { latitude: 34.0578, longitude: -118.4185 },
+            },
+          },
+          {
+            type: "REGULAR_CAROUSEL",
+            carousel: {
+              stores: [
+                {
+                  storeUuid: dupUuid,
+                  title: { text: "Chick-fil-A" },
+                  mapMarker: { latitude: 34.0578, longitude: -118.4185 },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    };
+    const cards = parseFeedV1Response(
+      json as Parameters<typeof parseFeedV1Response>[0],
+    );
+    expect(cards.filter((c) => c.storeUuid === dupUuid)).toHaveLength(1);
+  });
+
+  it("skips carousel stores missing required fields", () => {
+    const json = {
+      status: "success",
+      data: {
+        feedItems: [
+          {
+            type: "REGULAR_CAROUSEL",
+            carousel: {
+              stores: [
+                { title: { text: "No UUID" }, mapMarker: { latitude: 1, longitude: 2 } },
+                { storeUuid: "u", mapMarker: { latitude: 1, longitude: 2 } },
+                { storeUuid: "u2", title: { text: "No Map" } },
+              ],
+            },
+          },
+          { type: "REGULAR_CAROUSEL" },
+        ],
+      },
+    };
+    expect(
+      parseFeedV1Response(json as Parameters<typeof parseFeedV1Response>[0]),
+    ).toEqual([]);
+  });
+
   it("parses review count from accessibilityText", () => {
     const json = {
       status: "success",
