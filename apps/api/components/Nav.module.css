@@ -30,11 +30,16 @@
 }
 
 .logo {
-  font-family: var(--font-newsreader), Georgia, serif;
+  /* Fraunces display cut — matches the mobile app wordmark (apps/mobile/lib/brand.ts,
+     FONTS.frauncesDisplayBold = opsz 144 / wght 600). At 1.5rem the `opsz` axis would
+     otherwise auto-pick Fraunces's chunky text cut (reads like the old serif), so we
+     pin opsz 144 to force the high-contrast display letterforms the app uses. */
+  font-family: var(--font-fraunces), Georgia, serif;
   font-size: 1.5rem;
   font-weight: 700;
+  font-variation-settings: "opsz" 144, "wght" 700;
   color: #1b3a26;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.025em;
   text-decoration: none;
 }
 
@@ -42,46 +47,96 @@
   color: #3a7050;
 }
 
-.actions {
+/* ── Hamburger menu (all viewports) ─────────────────────────────────────── */
+
+.hamburger {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
-}
-
-.cta {
-  /* Pin font explicitly — without this, the button inherits whatever
-     `.page` sets (Outfit on /, Nunito Sans on /restaurants/[slug]) and the
-     buttons read with different weight on different pages. */
-  font-family: var(--font-body), -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  font-size: 0.8125rem;
-  font-weight: 700;
-  color: #fdfbf7;
-  background: #1b3a26;
-  padding: 0.5rem 1.125rem;
-  border-radius: 999px;
-  text-decoration: none;
-  letter-spacing: -0.01em;
-  transition: background 0.2s ease, transform 0.2s ease;
-}
-
-.cta:hover {
-  background: #2a5438;
-  transform: translateY(-1px);
-}
-
-.ctaGhost {
+  justify-content: center;
+  gap: 5px;
+  width: 44px;
+  height: 44px;
+  margin-right: -8px; /* optical-align the bars to the gutter edge */
+  padding: 0;
   background: transparent;
-  color: #0f1f15;
-  border: 1px solid #e8e2d8;
+  border: none;
+  cursor: pointer;
 }
 
-.ctaGhost:hover {
-  background: rgba(15, 31, 21, 0.04);
-  transform: translateY(-1px);
+.hamburgerBar {
+  display: block;
+  width: 22px;
+  height: 2px;
+  border-radius: 2px;
+  background: #1b3a26;
+  transition: transform 0.25s ease, opacity 0.2s ease;
+}
+
+/* Animate to an X when open. gap 5px + bar 2px → 7px center-to-center. */
+.hamburgerOpen .hamburgerBar:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+.hamburgerOpen .hamburgerBar:nth-child(2) {
+  opacity: 0;
+}
+.hamburgerOpen .hamburgerBar:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
+/* Transparent click-catcher so tapping outside closes the menu. */
+.menuBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90; /* below the nav bar (100); the panel lives inside the nav */
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: default;
+}
+
+/* Regular dropdown menu, anchored under the hamburger at the right gutter. */
+.menuPanel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 56px;
+  min-width: 196px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  background: rgba(253, 251, 247, 0.98);
+  border: 1px solid #e8e2d8;
+  border-radius: 14px;
+  box-shadow: 0 14px 36px rgba(20, 44, 28, 0.14);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.menuItem {
+  font-family: var(--font-body), -apple-system, BlinkMacSystemFont, system-ui,
+    sans-serif;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #0f1f15;
+  letter-spacing: -0.01em;
+  padding: 0.7rem 0.85rem;
+  border-radius: 9px;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.15s ease;
+}
+
+.menuItem:hover {
+  background: rgba(15, 31, 21, 0.05);
 }
 
 @media (max-width: 768px) {
   .navInner {
     padding: 0.75rem 1.25rem;
+  }
+
+  .menuPanel {
+    right: 1.25rem;
+    left: 1.25rem;
   }
 }

@@ -77,13 +77,14 @@
 
 .logo,
 .footerLogo {
-  /* Logo stays Newsreader — brand mark untouched even when other display
-     copy moves to Fraunces. */
-  font-family: var(--font-newsreader), Georgia, serif;
+  /* Fraunces display cut — matches the mobile app wordmark
+     (apps/mobile/lib/brand.ts, FONTS.frauncesDisplayBold). */
+  font-family: var(--font-fraunces), Georgia, serif;
   font-size: 1.5rem;
   font-weight: 700;
+  font-variation-settings: "opsz" 144, "wght" 700;
   color: var(--green);
-  letter-spacing: -0.04em;
+  letter-spacing: -0.025em;
 }
 
 .logoDot {

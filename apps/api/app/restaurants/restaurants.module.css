@@ -704,9 +704,13 @@
 }
 
 .footerLogo {
-  font-family: var(--font-newsreader), Georgia, serif;
+  /* Fraunces display cut — matches the mobile app wordmark
+     (apps/mobile/lib/brand.ts, FONTS.frauncesDisplayBold). */
+  font-family: var(--font-fraunces), Georgia, serif;
   font-size: 1.2rem;
-  font-weight: 600;
+  font-weight: 700;
+  font-variation-settings: "opsz" 144, "wght" 700;
+  letter-spacing: -0.025em;
   color: var(--text);
 }
 
