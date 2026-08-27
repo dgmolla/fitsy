@@ -15,6 +15,20 @@ export { launchEmailContent } from "@/lib/emailTemplates";
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 const TIMEOUT_MS = 8000;
 
+// RFC 2606 and RFC 6762 reserve these TLDs; no address under them can receive
+// mail. Seeded test accounts use them, and every send would hard-bounce —
+// bounce rate is what sending reputation is scored on, so one blast to them
+// would degrade delivery for real users.
+const UNDELIVERABLE_TLDS = new Set(["test", "example", "invalid", "localhost", "local"]);
+
+/** True when `email` is malformed or sits under a reserved, unroutable TLD. */
+export function isUndeliverableAddress(email: string | null | undefined): boolean {
+  const domain = email?.split("@")[1]?.toLowerCase();
+  if (!domain) return true;
+  const tld = domain.split(".").pop();
+  return !tld || UNDELIVERABLE_TLDS.has(tld);
+}
+
 export async function sendMarketingEmail(opts: {
   userId: string;
   to: string;
@@ -27,6 +41,8 @@ export async function sendMarketingEmail(opts: {
 
   const apiKey = process.env["RESEND_API_KEY"];
   if (!apiKey) return false;
+
+  if (isUndeliverableAddress(to)) return false;
 
   const unsubSecret = process.env["UNSUBSCRIBE_SECRET"];
   if (!unsubSecret) return false;

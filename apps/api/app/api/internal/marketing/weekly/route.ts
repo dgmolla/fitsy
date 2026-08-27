@@ -18,7 +18,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/restaurantService";
-import { sendMarketingEmail } from "@/lib/marketingEmail";
+import { sendMarketingEmail, isUndeliverableAddress } from "@/lib/marketingEmail";
 import { editionForDate } from "@/lib/emailTemplates";
 
 export const runtime = "nodejs";
@@ -55,9 +55,14 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   // --- Audience: all users who have not opted out ---
   // PRE-GENERATE CONSTRAINT: emailOptOutAt is not in the Prisma client type,
   // so we must use $queryRawUnsafe with an explicit row type.
-  const rows = await prisma.$queryRawUnsafe<{ id: string; email: string }[]>(
-    'SELECT id, email FROM "User" WHERE "emailOptOutAt" IS NULL',
-  );
+  // Reserved-TLD addresses are excluded here as well as in sendMarketingEmail so
+  // `eligible` reflects the real audience instead of counting seeded test
+  // accounts that could only ever bounce.
+  const rows = (
+    await prisma.$queryRawUnsafe<{ id: string; email: string }[]>(
+      'SELECT id, email FROM "User" WHERE "emailOptOutAt" IS NULL',
+    )
+  ).filter((r) => !isUndeliverableAddress(r.email));
 
   const eligible = rows.length;
 
