@@ -27,6 +27,7 @@ Three motions, in priority order for a solo founder at pre-launch:
 | Channel | Type | When to run | Flywheel role |
 |---|---|---|---|
 | **UGC creators** | Paid-ish (MVC-gated) | Run now — first dollars should go here | Drives installs → users → in-app UGC |
+| **In-person / field** | Free, founder-led | Run now — cheap, high-intent, LA-only | Free nutrition advice → qualify eaters → seed installs |
 | **Organic / LLM SEO** | Free, compounding | Build now (passive infrastructure), harvest over 6–18 months | Programmatic pages + llms.txt → long-tail installs |
 | **Merchant partnerships** | Revenue + distribution | Phase 2–3, post product–market fit | Verified data + promoted placement → merchant revenue |
 
@@ -103,6 +104,31 @@ flowchart LR
 | UGC creator deals (end-to-end) | `docs/gtm/ugc-playbook.md` | Draft — ready to run at App Store launch |
 | Organic + LLM SEO discovery | `docs/gtm/seo-discovery.md` | Draft — unimplemented; build pre-launch |
 | Merchant partnerships | TBD (`docs/product/specs/merchant-dashboard.md`) | Future — Phase 2–3 |
+
+---
+
+## In-Person / Field Motion (Founder-Led)
+
+The cheapest, highest-intent channel at pre-launch: talk to gym-goers where they already are.
+LA-only, founder-led, no ad spend.
+
+**The pitch — lead with free value, not the app.**
+Position yourself as *free nutrition advice* for gym-goers, not as someone selling an app.
+The app never comes up first; the conversation does.
+
+**The funnel:**
+1. **Free nutrition advice** — approach gym-goers (gyms, supplement shops, protein-shake bars, run clubs, fitness meetups) offering genuinely useful macro/eating-out advice.
+2. **Qualify — "do you eat out?"** — the natural bridge question. Eaters who track macros *and* eat out are the exact target user; non-eaters self-select out.
+3. **"Try Fitsy"** — for qualified eaters, hand off the App Store link as the tool that solves the problem you were just discussing.
+
+**Why it works:**
+- The advice is real value first, so the app recommendation lands as help, not a sales pitch.
+- "Do you eat out?" filters to high-intent users before you spend any breath on the app — no wasted installs.
+- Face-to-face conversions convert far above cold DMs and seed the earliest reviews/photos that feed the flywheel.
+
+**How it feeds the flywheel:**
+Field installs become the first active users (check-ins, photos, reviews), which are the social proof that makes UGC creator pitches credible.
+See the Growth Flywheel above — this motion is a second seed source alongside UGC.
 
 ---
 
