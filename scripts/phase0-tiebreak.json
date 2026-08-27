@@ -1,0 +1,2650 @@
+{
+  "results": [
+    {
+      "slug": "louisiana-fried-chicken",
+      "display": "Louisiana Fried Chicken",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.3142857142857143,
+      "llm": {
+        "same_brand": false,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Louisiana Fried Chicken",
+        "confidence": "medium",
+        "reason": "All three locations share core fried chicken/seafood items and Louisiana-themed sides (dirty rice, sweet potato pie) suggesting a common brand, but significant menu variation (Location 3's Asian items like wonton soup and chow mein, Location 2's gumbo) and different pack naming conventions suggest either different franchise operators with menu autonomy or separate regional brands using the same name."
+      }
+    },
+    {
+      "slug": "cali-pho-nia",
+      "display": "CALI PHO NIA",
+      "why": "place-name",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.7647058823529411,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Cali Pho Nia",
+        "confidence": "high",
+        "reason": "Both locations share identical core menu items (Brisket Pho, Steak and Brisket Pho, Seafood Pho, Combo Roll, Bun Cha, Fried Rice variants, Tendon Pho) with consistent Vietnamese pho and fried rice offerings, indicating a single pho restaurant chain."
+      }
+    },
+    {
+      "slug": "holy-basil",
+      "display": "Holy Basil",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.4,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Holy Basil",
+        "confidence": "high",
+        "reason": "Identical menu items (Por pia tod, Gra Pow Wagyu, Eggplant & Kabocha Squash, Bangkok Crab Fried Rice, Pad See Ew, Hom Mali Jasmine Rice) and consistent Thai cuisine signature strongly indicate the same restaurant brand with multiple locations."
+      }
+    },
+    {
+      "slug": "the-ice-cream-shop",
+      "display": "The Ice Cream Shop",
+      "why": "odd-duck",
+      "algo": "chain",
+      "algoKind": "grocery/convenience",
+      "distinctive": false,
+      "bestPair": 0.9473684210526315,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": false,
+        "is_retail": true,
+        "retail_kind": "convenience",
+        "canonical_name": "The Ice Cream Shop",
+        "confidence": "high",
+        "reason": "All three locations share identical or near-identical convenience store inventory (Ben & Jerry's, energy drinks, candy, snacks, water) with no prepared food or restaurant operations, indicating a single convenience retail chain."
+      }
+    },
+    {
+      "slug": "grocery-outlet",
+      "display": "Grocery Outlet",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "grocery/convenience",
+      "distinctive": true,
+      "bestPair": 0.43137254901960786,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": false,
+        "is_retail": true,
+        "retail_kind": "grocery",
+        "canonical_name": "Grocery Outlet",
+        "confidence": "high",
+        "reason": "All three locations show identical product assortments (Health-Ade Kombucha, Crystal Geyser, Rockview milk, El Monterey frozen burritos, Love Beets) consistent with Grocery Outlet's discount grocery chain model, not a restaurant."
+      }
+    },
+    {
+      "slug": "fresh-grill-mediterranean",
+      "display": "Fresh Grill Mediterranean",
+      "why": "generic-admit",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": false,
+      "bestPair": 0.9797979797979798,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Fresh Grill Mediterranean",
+        "confidence": "high",
+        "reason": "All three locations share identical core menu items (falafel salad, tabouli, spicy boneless chicken, kebabs, wraps, yogurt dips) with Mediterranean/Persian cuisine patterns, consistent vegan options, and overlapping specialty ingredients indicating a single restaurant chain."
+      }
+    },
+    {
+      "slug": "chimmelier",
+      "display": "Chimmelier",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.5102040816326531,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Chimmelier",
+        "confidence": "high",
+        "reason": "Both locations share nearly identical menu items (K-chicken burger, wings, tenders, mala, coleslaw, Starry drinks, Korean beverage brands like Milkis/Kace) indicating the same Korean fried chicken chain with multiple locations."
+      }
+    },
+    {
+      "slug": "burritos-la-palma",
+      "display": "Burritos La Palma",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.36363636363636365,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Burritos La Palma",
+        "confidence": "high",
+        "reason": "Both locations share identical menu items (Libra De Birria, Birria Burrito, Frijoles y Queso Burrito, Mix and Match Tray, Tortillas Mejorado, Con Todo Burrito) and nearly identical preparation styles, indicating they are the same burrito restaurant brand."
+      }
+    },
+    {
+      "slug": "pelicana-chicken",
+      "display": "Pelicana Chicken",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.6530612244897959,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Pelicana Chicken",
+        "confidence": "high",
+        "reason": "Both locations share identical signature items (Original Fried Wings, BAN BAN chicken, Chicken Gizzard Stir Fried, Peli-branded products), menu structure, and sauce options characteristic of the Korean fried chicken chain Pelicana."
+      }
+    },
+    {
+      "slug": "rocket",
+      "display": "Rocket #618",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.38181818181818183,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": false,
+        "is_retail": true,
+        "retail_kind": "convenience",
+        "canonical_name": "Rocket (convenience store chain)",
+        "confidence": "high",
+        "reason": "All 10 locations share identical menu samples consisting exclusively of packaged snacks, beverages, and convenience items typical of a convenience store chain, not a restaurant."
+      }
+    },
+    {
+      "slug": "church-s-texas-chicken",
+      "display": "Church's Texas Chicken",
+      "why": "place-name",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 1,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Church's Texas Chicken",
+        "confidence": "high",
+        "reason": "All three locations share identical signature items (Jalapeño Cheese Bombers®, Texas 2PC Feast, Church's branded beverages, boneless wings, tenders) and menu structure consistent with the Church's Texas Chicken fried chicken chain."
+      }
+    },
+    {
+      "slug": "taqueria-el-atacor",
+      "display": "Taqueria El Atacor",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.3448275862068966,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": false,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Taqueria El Atacor",
+        "confidence": "high",
+        "reason": "Both locations share identical normalized name and nearly identical Mexican/Latin cuisine menus with overlapping signature dishes (pozole, quesadilla con carne, huevos variations, seafood), indicating the same independent restaurant brand at different locations."
+      }
+    },
+    {
+      "slug": "poke-me",
+      "display": "Poke Me",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.5416666666666666,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Poke Me",
+        "confidence": "high",
+        "reason": "Both locations share identical menu items (Macaron Ice Cream, Salmon Hand Roll, Seaweed Salad, Miso Soup, Coconut Water, Mexican Coke, Mango Creamy Soda) and offer the same poke bowl customization format (Build Your Own), indicating a consistent restaurant chain."
+      }
+    },
+    {
+      "slug": "killer-kabab",
+      "display": "Killer Kabab",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.6578947368421053,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Killer Kabab",
+        "confidence": "high",
+        "reason": "Both locations share identical core menu items (Chicken Shawarma Plate, Lamb Chops Plate, Chicken Kabab Deal 10-12 persons, Shawarma Fries, Falafel) with consistent Mediterranean/Middle Eastern cuisine, indicating a single restaurant chain brand."
+      }
+    },
+    {
+      "slug": "hibachi-papi",
+      "display": "Hibachi Papi",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.5441176470588235,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Hibachi Papi",
+        "confidence": "high",
+        "reason": "Both locations share identical hibachi restaurant menu structure with matching protein combinations (salmon, filet, shrimp, scallops, lobster), fried rice options, and signature drinks (Cactus Cooler/Orange Crush, Yum Yum/Squirt indicating house beverages), consistent with a single casual hibachi chain brand."
+      }
+    },
+    {
+      "slug": "the-heights-deli-bottle-shop",
+      "display": "The Heights Deli & Bottle Shop #2",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.6,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "The Heights Deli & Bottle Shop",
+        "confidence": "high",
+        "reason": "Both locations share identical normalized name, overlapping Italian/deli menus (pasta, pizzas, sandwiches, wings), and are clearly numbered locations (#2) of the same multi-location restaurant brand."
+      }
+    },
+    {
+      "slug": "wacky-wok",
+      "display": "Wacky Wok",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.42105263157894735,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Wacky Wok",
+        "confidence": "high",
+        "reason": "Both locations share signature dishes (Wacky's Lo Mein, Orange Chicken variants, Pineapple Fried Rice) and house-made sauces with consistent Chinese cuisine offerings, indicating the same restaurant brand/chain."
+      }
+    },
+    {
+      "slug": "body-energy-club",
+      "display": "Body Energy Club",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.38461538461538464,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Body Energy Club",
+        "confidence": "high",
+        "reason": "Both locations share identical signature items (Blueberry Thrill Smoothie, Catalina Crunch Keto Cereal, CELSIUS drinks, Cymbiotika supplements) and specialized health-focused menus characteristic of a single smoothie/wellness bowl chain."
+      }
+    },
+    {
+      "slug": "california-wok",
+      "display": "California Wok",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": false,
+      "bestPair": 0.5555555555555556,
+      "llm": {
+        "same_brand": false,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "California Wok",
+        "confidence": "medium",
+        "reason": "Both are Chinese restaurants with overlapping core dishes (Kung Pao Shrimp, Szechwan preparations, chicken dishes) but Location 1 emphasizes lunch specials and steamed items while Location 2 features noodle dishes and dim sum items, suggesting different independent establishments or branches with different menu strategies rather than a single chain."
+      }
+    },
+    {
+      "slug": "twozone-chicken",
+      "display": "TwoZone Chicken",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.4523809523809524,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "TwoZone Chicken",
+        "confidence": "high",
+        "reason": "Both locations share identical Korean fried chicken menu structure with signature sauce varieties (Spicy Soy, Honey Butter, Bulgogi), Korean side dishes (Tteokbokki, Tempura), and the '[Twozone]' branded item in Location 1 confirming brand identity."
+      }
+    },
+    {
+      "slug": "new-york-chicken-gyro",
+      "display": "New York Chicken & Gyro",
+      "why": "place-name",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 1,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "New York Chicken & Gyro",
+        "confidence": "high",
+        "reason": "All 5 locations share identical normalized name, consistent menu structure (gyros, platters, chicken, fried fish, signature items like Buffalo Chicken Rolls and Fudge Brownies), and similar sauce/beverage offerings indicating a single regional chain."
+      }
+    },
+    {
+      "slug": "phorage",
+      "display": "Phorage",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.6923076923076923,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Phorage",
+        "confidence": "high",
+        "reason": "Both locations share nearly identical Vietnamese cuisine menus with signature dishes (jidori chicken vermicelli, caramelized shrimp rice, papaya salad, bok choy, side egg) and specialized items (curry waffle fries, 5-spice donuts, claypots), indicating a single restaurant brand with consistent concept and sourcing."
+      }
+    },
+    {
+      "slug": "rabano",
+      "display": "Rabano",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.6172839506172839,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Rabano",
+        "confidence": "high",
+        "reason": "Both locations share identical menu items (El Koreano, Thai offerings, diverse global cuisine) and Location 2 explicitly features 'Rabano Fries', indicating these are the same fast-casual restaurant chain with multiple locations."
+      }
+    },
+    {
+      "slug": "katsu-ya-delivery",
+      "display": "Katsu-ya Delivery",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.6419753086419753,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Katsu-Ya",
+        "confidence": "high",
+        "reason": "Both menus feature sushi/Japanese cuisine with identical signature items (salmon skin hand roll, spicy tuna variations, siracha/eel sauce) and Katsu brand beverages, consistent with Katsu-Ya's known menu across multiple LA-area locations."
+      }
+    },
+    {
+      "slug": "heavy-handed",
+      "display": "Heavy Handed",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.6428571428571429,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Heavy Handed",
+        "confidence": "high",
+        "reason": "Both locations share identical core menu items (Heavy Fries, Grilled Cheese, Side Pickles, Side Chilis, Sodas, Nomadica beverages) and feature curated craft beer selections, indicating they are the same restaurant brand with consistent offerings across locations."
+      }
+    },
+    {
+      "slug": "lenzini-s-pizza",
+      "display": "Lenzini's Pizza",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.4791666666666667,
+      "llm": {
+        "same_brand": false,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Lenzini's Pizza",
+        "confidence": "medium",
+        "reason": "All three locations serve pizza with some shared menu items (Lenzini's Special Pizza, Antipasto Salad, Cheesecake variants), but Location 2's prominent Greek items (gyro, tzatziki, Greek salad) and significantly different pizza varieties suggest either different franchise locations with regional menu variations or separate independent establishments using the same name."
+      }
+    },
+    {
+      "slug": "la-monarca-bakery",
+      "display": "La Monarca Bakery",
+      "why": "place-name",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 1,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "La Monarca Bakery",
+        "confidence": "high",
+        "reason": "All three locations share distinctive signature items (Conchas, Champurrado, Cafe Del Carmen, Cafe Oaxaca, Horchata Lattes, Mexican pastries) and identical menu structure patterns indicating a unified bakery-café chain with consistent product offerings across locations."
+      }
+    },
+    {
+      "slug": "california-pizza-kitchen",
+      "display": "California Pizza Kitchen",
+      "why": "generic-admit",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": false,
+      "bestPair": 1,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "California Pizza Kitchen",
+        "confidence": "high",
+        "reason": "All three locations share distinctive menu items (CPK Lemonade, Mini Butter Cake variants, Chicken Tequila Fettuccine, The Original BBQ Chicken Pizza, similar wine selections) consistent with California Pizza Kitchen, a well-known casual dining restaurant chain."
+      }
+    },
+    {
+      "slug": "baja-cali-fish-tacos",
+      "display": "Baja Cali Fish & Tacos",
+      "why": "place-name",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 1,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Baja Cali Fish & Tacos",
+        "confidence": "high",
+        "reason": "All three locations share identical menu structure (Combo #1, Combo #2, signature items like Mixed Ceviche and Fish & Chips) and specialize in the same Baja California seafood cuisine, indicating a single restaurant chain with consistent branding and offerings."
+      }
+    },
+    {
+      "slug": "chubby-curry",
+      "display": "Chubby Curry",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.38181818181818183,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Chubby Curry",
+        "confidence": "high",
+        "reason": "Both locations share identical signature dishes (Tonkatsu Kare, Udon Know Me, Level 5 Vegetarian, Wagyu items, Just Udon) with Location 2 showing Chinese translations indicating the same chain operating in different markets."
+      }
+    },
+    {
+      "slug": "yummy-com",
+      "display": "Yummy.com",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "grocery/convenience",
+      "distinctive": true,
+      "bestPair": 0.6222222222222222,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": false,
+        "is_retail": true,
+        "retail_kind": "grocery",
+        "canonical_name": "Yummy",
+        "confidence": "high",
+        "reason": "All three locations have identical inventory patterns (fresh produce, branded packaged goods, frozen items) with overlapping products like aidells meatballs, Lean Cuisine, Driscoll's berries, and 'Yummy' branded items, indicating they are the same grocery store chain rather than restaurants."
+      }
+    },
+    {
+      "slug": "the-kluckin-chicken",
+      "display": "The Kluckin Chicken",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.48484848484848486,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "The Kluckin Chicken",
+        "confidence": "high",
+        "reason": "All three locations share identical core menu items (Kluckin Tenders, Wings, Waffles, Quesadillas, Smashed Burgers, Sauce) with consistent branding and product naming, indicating a unified restaurant chain."
+      }
+    },
+    {
+      "slug": "go-go-acai",
+      "display": "Go Go Açaí",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.6666666666666666,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Go Go Açaí",
+        "confidence": "high",
+        "reason": "Nearly identical menu items including signature bowls (Santa's Berry Bowl, Special Vitamin C Bowl, Ho-Ho-Go Smoothie) and drinks (Go Go Smoothies, Berry Christmas Bliss, Super Berry Smoothies) across both locations indicate the same açaí bowl chain."
+      }
+    },
+    {
+      "slug": "vons-flash",
+      "display": "Vons Flash",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "grocery/convenience",
+      "distinctive": true,
+      "bestPair": 0.5476190476190477,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": false,
+        "is_retail": true,
+        "retail_kind": "grocery",
+        "canonical_name": "Safeway",
+        "confidence": "high",
+        "reason": "Both locations are Safeway supermarket locations; menus contain identical private-label brands (Lucerne, Signature Select, O Organics), store bakery items, and grocery products characteristic of Safeway's inventory."
+      }
+    },
+    {
+      "slug": "mama-hong-s-vietnamese-kitchen",
+      "display": "Mama Hong's Vietnamese Kitchen",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.6875,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Mama Hong's Vietnamese Kitchen",
+        "confidence": "high",
+        "reason": "Both locations share identical Vietnamese restaurant cuisine, signature dishes (Pho varieties, Thang Long Fish, Banh Mi, Fried Rice, Spring Rolls), beverage offerings (Limeade Iced Tea, Jasmine Tea, Mineral Water), and premium protein options (Wagyu, Shaken Beef), indicating the same restaurant brand operating multiple locations."
+      }
+    },
+    {
+      "slug": "la-cocina-by-vallarta",
+      "display": "La Cocina by Vallarta #17",
+      "why": "place-name",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 1,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "La Cocina by Vallarta",
+        "confidence": "high",
+        "reason": "All locations share identical menu items (Albondigas de Pollo, Cheesecake Casero, Tres Leches desserts, Carnitas/Carne Asada trays, Tacos Al Gusto) and consistent Latin American cuisine focus with Vallarta brand markers, indicating a unified restaurant chain."
+      }
+    },
+    {
+      "slug": "tacos-1986",
+      "display": "Tacos 1986",
+      "why": "generic-admit",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": false,
+      "bestPair": 0.975609756097561,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Tacos 1986",
+        "confidence": "high",
+        "reason": "All locations share identical core menu items (Adobada Bowl, Bacon Egg & Cheese Taco, Adobada Burrito, Asada items, Perron variants, La Macha, BOGO Breakfast Tacos) with consistent preparation methods and branded bulk items (1LB portions dated 2026), indicating a unified restaurant chain with standardized operations."
+      }
+    },
+    {
+      "slug": "china-express",
+      "display": "China Express",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.40476190476190477,
+      "llm": {
+        "same_brand": false,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "China Express",
+        "confidence": "medium",
+        "reason": "All three are Chinese-American casual restaurants with similar core dishes, but Location 2's distinct menu featuring boba, udon, and Thai iced tea suggests different ownership/sourcing despite the shared name."
+      }
+    },
+    {
+      "slug": "malibu-eatery",
+      "display": "Malibu Eatery",
+      "why": "place-name",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.9344262295081968,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Malibu Eatery",
+        "confidence": "high",
+        "reason": "Both locations share nearly identical signature items (Shredded Caesar Salad, California Bowl, Keto Bonsai Bowl, Quesadillas, Chicken Skewers, Gourmet Oatmeal Raisin Cookie) with consistent coastal/health-conscious menu positioning indicating a unified restaurant chain."
+      }
+    },
+    {
+      "slug": "cafe-86",
+      "display": "Cafe 86 Glendale",
+      "why": "generic-admit",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": false,
+      "bestPair": 0.8363636363636363,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Cafe 86",
+        "confidence": "high",
+        "reason": "All locations share distinctive signature items (Kouki Monster Milkshake, Zebra Blended Latte, Ube products, Cali-mango drinks, Thai Tea variants) indicating a unified cafe chain with consistent branding and menu DNA."
+      }
+    },
+    {
+      "slug": "ramen-izakaya",
+      "display": "Ramen Izakaya",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.43157894736842106,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Ramen Izakaya",
+        "confidence": "high",
+        "reason": "Both locations share nearly identical core menu items (Chicken Yakisoba, Chicken Wings, Miso/OG Ramen, Pork Katsu Curry variants, Chicken Skewers) with consistent Japanese izakaya-ramen fusion offerings, indicating the same restaurant brand operating multiple locations."
+      }
+    },
+    {
+      "slug": "banh-mi-che-cali",
+      "display": "Banh Mi & Che Cali",
+      "why": "place-name",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.8846153846153846,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Banh Mi & Che Cali",
+        "confidence": "high",
+        "reason": "All three locations share identical core menu items (BBQ Pork Banh Mi, Special Combination Pho, Vietnamese Coffee, spring rolls) with consistent pricing patterns and party tray offerings typical of a Vietnamese restaurant chain."
+      }
+    },
+    {
+      "slug": "the-poke-wings",
+      "display": "The Poke Co & Wings",
+      "why": "generic-admit",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": false,
+      "bestPair": 1,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "The Poke Co & Wings",
+        "confidence": "high",
+        "reason": "Both locations share identical menu items (poke bowls, wings, taro smoothies, special offers, sushi rice sides) with consistent naming and pricing structure indicating a unified restaurant chain."
+      }
+    },
+    {
+      "slug": "sharetea",
+      "display": "Sharetea",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.6410256410256411,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "ShareTea",
+        "confidence": "high",
+        "reason": "All three locations share identical core menu items (Mango & Passion Fruit Tea, Matcha with Fresh Milk, Thai Tea Ice Blended, Pearl Milk Tea variants, Strawberry Coconut, Peach Tea with Jelly) and numbered menu formatting, consistent with ShareTea, a major Taiwanese bubble tea chain operating across multiple countries."
+      }
+    },
+    {
+      "slug": "krispy-krunchy-chicken",
+      "display": "Krispy Krunchy Chicken",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.4166666666666667,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Krispy Krunchy Chicken",
+        "confidence": "high",
+        "reason": "All three locations share signature menu items (Signature Chicken, Honey Butter Shrimp, Wings, tenders, biscuits, red beans & rice, mac-n-cheese) and consistent branding language (Krunch Box, Family Meals) characteristic of the Krispy Krunchy Chicken chain."
+      }
+    },
+    {
+      "slug": "vons-beer-wine-spirits",
+      "display": "Vons Beer, Wine & Spirits",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "pet",
+      "distinctive": true,
+      "bestPair": 0.46153846153846156,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": false,
+        "is_retail": true,
+        "retail_kind": "liquor",
+        "canonical_name": "Vons Beer, Wine & Spirits",
+        "confidence": "high",
+        "reason": "All 21 locations share identical normalized name and menus contain alcohol (vodka, hard seltzer) alongside grocery/convenience items typical of liquor store chains, not restaurants."
+      }
+    },
+    {
+      "slug": "la-garita",
+      "display": "La Garita",
+      "why": "place-name",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 1,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "La Garita",
+        "confidence": "high",
+        "reason": "Both locations have nearly identical menus with the same specialized birria dishes, drinks, and combo options in the same order, indicating they are the same restaurant chain or franchise."
+      }
+    },
+    {
+      "slug": "gopuff",
+      "display": "Gopuff",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "grocery/convenience",
+      "distinctive": true,
+      "bestPair": 0.46938775510204084,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": false,
+        "is_retail": true,
+        "retail_kind": "convenience",
+        "canonical_name": "Gopuff",
+        "confidence": "high",
+        "reason": "Gopuff is a convenience delivery service selling packaged consumer goods (snacks, beverages, frozen foods, household items) across multiple locations, not a restaurant chain."
+      }
+    },
+    {
+      "slug": "shiraz-restaurant",
+      "display": "Shiraz Restaurant",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.47435897435897434,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Shiraz Restaurant",
+        "confidence": "high",
+        "reason": "Both locations share identical Persian/Iranian cuisine menus with signature dishes (Koobideh, Ghormeh Sabzi, Mast o Moosir, Polo varieties) and nearly identical item listings, indicating the same restaurant brand operating multiple locations."
+      }
+    },
+    {
+      "slug": "motto-tea-cafe",
+      "display": "Motto Tea Cafe",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.45161290322580644,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Motto Tea Cafe",
+        "confidence": "high",
+        "reason": "Both locations share distinctive signature items (Brûlée Matcha Yuki, Tiger Boba Tea, Japanese Genmai Brown Rice Tea, Cheesy Strawberry Yogurt, soufflé pancakes) and consistent Asian-fusion tea cafe concept indicating the same brand chain."
+      }
+    },
+    {
+      "slug": "gelati",
+      "display": "GELATI",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.4954128440366973,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Gelati",
+        "confidence": "high",
+        "reason": "Both locations share identical signature items (Cleopatra Crepe, Baklava variants, Raspberry Milkshake, gelato/ice cream focus) and distinctive menu combinations indicating the same gelato/dessert chain brand."
+      }
+    },
+    {
+      "slug": "target",
+      "display": "Target",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "grocery/convenience",
+      "distinctive": true,
+      "bestPair": 0.4117647058823529,
+      "llm": {
+        "same_brand": false,
+        "is_restaurant_chain": false,
+        "is_retail": true,
+        "retail_kind": "grocery",
+        "canonical_name": "Target",
+        "confidence": "high",
+        "reason": "Target is a major retail grocery/general merchandise chain, not a restaurant; the identical menus across locations are likely from Target's food service/deli counters rather than separate restaurant brands."
+      }
+    },
+    {
+      "slug": "bay-poke",
+      "display": "Bay Poke",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.6875,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Bay Poke",
+        "confidence": "high",
+        "reason": "Both locations have nearly identical poke bowl/plate offerings with same protein scoop structure, overlapping beverage menus (Jasmine Green Tea, Thai Tea with Oat Milk, Strawberry Green Tea, Miso Soup), and consistent pricing tiers, indicating a single unified restaurant chain."
+      }
+    },
+    {
+      "slug": "pho-ever",
+      "display": "Pho Ever",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.4918032786885246,
+      "llm": {
+        "same_brand": false,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Pho Ever",
+        "confidence": "medium",
+        "reason": "Both are Vietnamese restaurants with pho and similar appetizers, but Location 1 emphasizes pho varieties and Thai items (Thai Milk Tea, Ube Frostie) while Location 2 focuses on rice dishes and lacks pho items entirely, suggesting different menus or unrelated locations using the same normalized name."
+      }
+    },
+    {
+      "slug": "la-pizza-loca",
+      "display": "La Pizza Loca",
+      "why": "place-name",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 1,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "La Pizza Loca",
+        "confidence": "high",
+        "reason": "Locations 1-3 have identical menus with distinctive signature items (La Gigante Pizza, La Mexicana Pizza, Loca Supreme Pizza), indicating they are the same pizza restaurant chain."
+      }
+    },
+    {
+      "slug": "yu-cake",
+      "display": "YU CAKE",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.3103448275862069,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Yu Cake",
+        "confidence": "high",
+        "reason": "Both locations share identical signature items (Coconut Coffee Snowflake Cubes, Durian Mille Crepe, Taro Pork Sung Babe, Dark Chocolate French Mousse) and nearly identical product categories (box cakes, mille crepes, cheesecakes, mousse), indicating the same bakery/dessert chain with consistent recipes across locations."
+      }
+    },
+    {
+      "slug": "soup-shop",
+      "display": "Soup Shop",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.5769230769230769,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Soup Shop",
+        "confidence": "high",
+        "reason": "Both locations share identical signature dishes (Truffled Garlic Fries, Pho Rib Bones, Pho Shrimp, Pho Veggie and Tofu, Shrimp Fried Rice) and consistent Vietnamese pho-focused menu with modern fusion items, indicating the same restaurant chain."
+      }
+    },
+    {
+      "slug": "jim-s-burgers",
+      "display": "Jim's Burgers",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.3181818181818182,
+      "llm": {
+        "same_brand": false,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Jim's Burgers",
+        "confidence": "high",
+        "reason": "While all three locations serve burgers and have overlapping menu items, Location 1's heavy emphasis on Mexican cuisine (carne asada, huevos rancheros, chorizo) and breakfast items differs significantly from Location 2's chili-cheese focus and Location 3's steakhouse orientation, suggesting independent franchise variations or unrelated establishments using the same name."
+      }
+    },
+    {
+      "slug": "el-pescador",
+      "display": "El Pescador",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.43902439024390244,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "El Pescador",
+        "confidence": "high",
+        "reason": "All three locations share consistent Mexican seafood and traditional Mexican cuisine with signature dishes like Camarones al Pescador, Pollo Norteño, and seafood-focused preparations across menus, indicating a unified restaurant chain."
+      }
+    },
+    {
+      "slug": "tacos-y-birria-la-unica",
+      "display": "Tacos y Birria La Unica",
+      "why": "place-name",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.9722222222222222,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Tacos y Birria La Unica",
+        "confidence": "high",
+        "reason": "Both locations share identical normalized name, nearly identical menus with distinctive items (Birria Nachos, Lemonade with Chia, Chili Oil), and consistent Mexican street food offerings, indicating a single restaurant chain."
+      }
+    },
+    {
+      "slug": "nano-cafe",
+      "display": "Nano Cafe",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.4666666666666667,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Nano Cafe",
+        "confidence": "high",
+        "reason": "Both locations share distinctive menu items (7 Grain Granola Pancakes, breakfast-focused menus with similar egg dishes) and branded items (Nano's Sangria, Nano Cafe Omelette) indicating the same restaurant brand/chain."
+      }
+    },
+    {
+      "slug": "summer-buffalo",
+      "display": "Summer Buffalo",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.5217391304347826,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Summer Buffalo",
+        "confidence": "high",
+        "reason": "Both locations serve Thai cuisine with signature dishes like Green Curry, Panang Curry, Grapow, and shared menu items (Iced Green Tea, Chicken Satay, Tom Yum), indicating they are the same Thai restaurant chain."
+      }
+    },
+    {
+      "slug": "fresh-ready-from-ralphs",
+      "display": "Fresh & Ready From Ralphs",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "grocery/convenience",
+      "distinctive": true,
+      "bestPair": 0.4603174603174603,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": false,
+        "is_retail": true,
+        "retail_kind": "grocery",
+        "canonical_name": "Ralphs",
+        "confidence": "high",
+        "reason": "All 17 locations are Ralphs grocery store locations selling packaged foods, fresh produce, and beverages with consistent private label brands (Private Selection, Kroger) and supplier overlap, not independent restaurants."
+      }
+    },
+    {
+      "slug": "woon",
+      "display": "Woon",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.6615384615384615,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Woon",
+        "confidence": "high",
+        "reason": "Both locations share identical menu items (Kace Jasmine Tea & Apple, Stir Fry Sauce, Maloof wines, Woon-branded products), distinctive cross-category offerings (Asian cuisine with natural wines), and house-brand products (Woon Chili Crisp, Woon Chewy Noodles, Woon Genmaicha Tea) indicating a unified restaurant concept."
+      }
+    },
+    {
+      "slug": "lan-noodle",
+      "display": "LAN Noodle",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.5581395348837209,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "LAN Noodle",
+        "confidence": "high",
+        "reason": "Both menus share numerous identical dishes (braised beef noodle, pig ear in chili oil, pan baked bun, kelp salad, beef burger) with matching Chinese names, indicating the same restaurant chain specializing in Chinese noodles and regional comfort food."
+      }
+    },
+    {
+      "slug": "kaijin-sushi",
+      "display": "Kaijin Sushi",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.5818181818181818,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Kaijin Sushi",
+        "confidence": "high",
+        "reason": "Both locations share identical normalized name, nearly identical sushi-focused menus with overlapping signature dishes (Seared Albacore Sushi, Salmon Belly Sushi, Miso Soup), and consistent Japanese cuisine type indicating a single restaurant chain with multiple locations."
+      }
+    },
+    {
+      "slug": "california-pita-grill",
+      "display": "California Pita & Grill",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.5797101449275363,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "California Pita & Grill",
+        "confidence": "high",
+        "reason": "All three locations share consistent Mediterranean/Middle Eastern cuisine with signature items (house kabob, baklava, lemon chicken pita, gyros) and similar menu structure across regions, indicating a unified restaurant chain."
+      }
+    },
+    {
+      "slug": "walgreens",
+      "display": "Walgreens",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "grocery/convenience",
+      "distinctive": true,
+      "bestPair": 0.4523809523809524,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": false,
+        "is_retail": true,
+        "retail_kind": "pharmacy",
+        "canonical_name": "Walgreens",
+        "confidence": "high",
+        "reason": "All locations match Walgreens pharmacy chain inventory patterns: packaged snacks, candy, beverages, health supplements, and branded consumer products typical of drugstore convenience sections."
+      }
+    },
+    {
+      "slug": "corner-bakery-cafe",
+      "display": "Corner Bakery Cafe",
+      "why": "generic-admit",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": false,
+      "bestPair": 1,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Corner Bakery Cafe",
+        "confidence": "high",
+        "reason": "All three locations share nearly identical menus with signature items like Anaheim Scrambler, Pesto Cavatappi, and Mac & Three Cheese, confirming they are the same established restaurant chain."
+      }
+    },
+    {
+      "slug": "pho-hue-oi",
+      "display": "Pho Hue Oi",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.375,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Pho Hue Oi",
+        "confidence": "high",
+        "reason": "Both locations share identical menu items (M1 Banh Mi Hue Oi, P4 Pho Ga, P5 Pho Tom, A1 Goi Cuon, B5 Bun Cha Gio) with matching codes and descriptions, plus signature dishes branded with 'Hue Oi' name, indicating a single restaurant chain with multiple locations."
+      }
+    },
+    {
+      "slug": "american-deli",
+      "display": "American Deli",
+      "why": "generic-admit",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": false,
+      "bestPair": 1,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "American Deli",
+        "confidence": "high",
+        "reason": "All three locations share nearly identical menu structures with consistent offerings of subs, fried rice, wings combos, and signature items like Reubens and Philly sandwiches, indicating a unified restaurant chain."
+      }
+    },
+    {
+      "slug": "california-fish-grill",
+      "display": "California Fish Grill",
+      "why": "generic-admit",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": false,
+      "bestPair": 1,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "California Fish Grill",
+        "confidence": "high",
+        "reason": "All three locations share identical or nearly identical menu items (ahi tuna, salmon, tilapia, shrimp, white rice, salads) consistent with a seafood-focused casual dining chain."
+      }
+    },
+    {
+      "slug": "the-green-olive",
+      "display": "The Green Olive",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.32142857142857145,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "The Green Olive",
+        "confidence": "high",
+        "reason": "Both locations have nearly identical Mediterranean/Middle Eastern menus featuring gyros, kebabs, shawarma, falafel, and Greek salads with matching item numbering systems and pricing structure, indicating they are the same restaurant chain."
+      }
+    },
+    {
+      "slug": "golden-bowl",
+      "display": "Golden Bowl",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.4,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Golden Bowl",
+        "confidence": "high",
+        "reason": "All three locations share nearly identical menus featuring teriyaki bowls, plates, burgers, and Asian-fusion items with consistent naming patterns and pricing structure, indicating a single restaurant chain."
+      }
+    },
+    {
+      "slug": "mr-fries-man",
+      "display": "Mr Fries Man",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.45454545454545453,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Mr Fries Man",
+        "confidence": "high",
+        "reason": "Both locations share identical signature dishes (Lemon Garlic Crab & Shrimp, Chicken Bacon Parmesan, wings in various quantities, Kool-Aid beverages) and nearly identical menu structure, indicating the same casual fast-food chain."
+      }
+    },
+    {
+      "slug": "albertsons-beer-wine-spirits",
+      "display": "Albertsons Beer, Wine & Spirits",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "grocery/convenience",
+      "distinctive": true,
+      "bestPair": 0.36363636363636365,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": false,
+        "is_retail": true,
+        "retail_kind": "liquor",
+        "canonical_name": "Albertsons Beer, Wine & Spirits",
+        "confidence": "high",
+        "reason": "All 6 locations share identical normalized name and menu samples contain grocery/household items typical of Albertsons supermarket locations, not specialty liquor stores, indicating these are Albertsons store locations with a liquor department designation."
+      }
+    },
+    {
+      "slug": "brooklyn-square",
+      "display": "Brooklyn Square",
+      "why": "place-name",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.8194444444444444,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Brooklyn Square",
+        "confidence": "high",
+        "reason": "Both locations share identical signature items (Penne alla vodka, BBQ Chicken Pizza 18', Club Sandwich, square/grandma-style pizzas) and nearly identical menu structure (sandwiches, calzones, pizzas, salads), indicating the same restaurant brand operating multiple locations."
+      }
+    },
+    {
+      "slug": "la-pizza-del-sol",
+      "display": "La Pizza Del Sol",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.5,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "La Pizza Del Sol",
+        "confidence": "high",
+        "reason": "All three locations share identical signature items (La Familiar one topping, Fiesta Meal Deal Pizza, Meat Lover, Supreme Pizza, Mexicana Pizza) and beverage selections, indicating a cohesive pizza chain with consistent branding and menu across multiple locations."
+      }
+    },
+    {
+      "slug": "la-cocina-de-gala-by-amapola-market",
+      "display": "La Cocina de Gala by Amapola Market",
+      "why": "place-name",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.9,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "La Cocina de Gala by Amapola Market",
+        "confidence": "high",
+        "reason": "Both locations share identical normalized name, nearly overlapping menus with signature items (carnitas, tortas, tacos, quesadillas), and consistent Mexican cuisine indicating same restaurant brand with multiple locations."
+      }
+    },
+    {
+      "slug": "la-michoacana-premier",
+      "display": "La Michoacana Premier",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.5882352941176471,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "La Michoacana Premier",
+        "confidence": "high",
+        "reason": "Both locations share identical menu items (Tostilocos, Manzana Locas, Esquite, Tostitos Con Queso, Double Scoop) and represent the same Mexican frozen treats/ice cream chain brand with consistent offerings across locations."
+      }
+    },
+    {
+      "slug": "la-michoacana",
+      "display": "La Michoacana",
+      "why": "place-name",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.5526315789473685,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "La Michoacana",
+        "confidence": "high",
+        "reason": "All four locations share distinctive menu items (Chocobanana, Raspado, Tostilocos, Cheetos con Queso, Mangoneada) characteristic of La Michoacana, a Mexican frozen treat and street food chain with multiple independent franchises."
+      }
+    },
+    {
+      "slug": "lucky-star-cafe",
+      "display": "Lucky Star Cafe",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.5,
+      "llm": {
+        "same_brand": false,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Lucky Star Cafe",
+        "confidence": "medium",
+        "reason": "Location 1 is American diner/breakfast-focused while Location 2 is Mexican cuisine-focused; different menus suggest different establishments despite same normalized name."
+      }
+    },
+    {
+      "slug": "shin-sen-gumi-hakata-ramen",
+      "display": "Shin-Sen-Gumi Hakata Ramen",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.3333333333333333,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Shin-Sen-Gumi Hakata Ramen",
+        "confidence": "high",
+        "reason": "Both locations share identical normalized name, Hakata ramen specialization, and significant menu overlap (Spicy Miso, Crispy Onion, Spinach, Corn, Cheese Egg Roll) consistent with a single ramen chain operating multiple locations."
+      }
+    },
+    {
+      "slug": "123-pho",
+      "display": "123 Pho",
+      "why": "generic-admit",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": false,
+      "bestPair": 0.9821428571428571,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "123 Pho",
+        "confidence": "high",
+        "reason": "Both locations share identical or near-identical signature items (Shaken Beef, Mango Rushie, Lychee Freezie, Beachie Lychee Slushie, Iced Vietnamese Coffee, Wide Noodles) with distinctive naming conventions, indicating the same Vietnamese casual dining chain."
+      }
+    },
+    {
+      "slug": "los-3-pollos",
+      "display": "Los 3 Pollos #1",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.3191489361702128,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Los 3 Pollos",
+        "confidence": "high",
+        "reason": "Both locations share identical normalized name, feature chicken-centric Mexican cuisine (whole chickens, tacos, burritos, chilaquiles), and overlapping menu items indicating same restaurant brand with regional menu variations."
+      }
+    },
+    {
+      "slug": "monster-burger",
+      "display": "Monster Burger No. 2",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.5645161290322581,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Monster Burger",
+        "confidence": "high",
+        "reason": "Both locations share identical core menu items (Monster Burger, omelettes, burritos, fries) and are numbered locations of the same casual burger/Mexican food chain."
+      }
+    },
+    {
+      "slug": "churrito-loco",
+      "display": "Churrito Loco",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.5952380952380952,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Churrito Loco",
+        "confidence": "high",
+        "reason": "Both locations share identical signature items (Chicken BBQ Ranch, Strawberry Lemonade, horchata varieties, churros, elote dogs, tostilocos) indicating they are the same regional chain operating with consistent menu standards."
+      }
+    },
+    {
+      "slug": "pavilions-beer-wine-spirits",
+      "display": "Pavilions Beer, Wine & Spirits",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "pet",
+      "distinctive": true,
+      "bestPair": 0.3333333333333333,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": false,
+        "is_retail": true,
+        "retail_kind": "grocery",
+        "canonical_name": "Pavilions",
+        "confidence": "high",
+        "reason": "All 11 locations are Pavilions supermarket stores (Albertsons-owned grocery chain in Southern California) selling packaged groceries, pet food, beverages, and household items—not restaurants."
+      }
+    },
+    {
+      "slug": "santouka-ramen",
+      "display": "Santouka Ramen",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.3333333333333333,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Santouka Ramen",
+        "confidence": "high",
+        "reason": "Both menus feature identical signature dishes (Toroniku, Char Siu, Miso/Shio/Soy variants, rice bowls) that are characteristic of Santouka, a well-known Japanese ramen chain with multiple international locations."
+      }
+    },
+    {
+      "slug": "pet-food-express",
+      "display": "Pet Food Express",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "pet",
+      "distinctive": true,
+      "bestPair": 0.47058823529411764,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": false,
+        "is_retail": true,
+        "retail_kind": "pet",
+        "canonical_name": "Pet Food Express",
+        "confidence": "high",
+        "reason": "All locations have identical pet supply product inventories (pet food, toys, treats, litter, supplements) consistent with a pet store chain, not a restaurant."
+      }
+    },
+    {
+      "slug": "scooter-s-jungle-south-bay",
+      "display": "Scooter’s Jungle, South Bay",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.6,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Scooter's Jungle",
+        "confidence": "high",
+        "reason": "Both locations share identical core menu items (Mini Corn Dogs, Chicken Tenders, pizzas with variable toppings) with consistent naming patterns, indicating the same restaurant brand with Location 2 showing expanded menu detail."
+      }
+    },
+    {
+      "slug": "tom-s-jr",
+      "display": "Tom's Jr.",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.3125,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Tom's Jr.",
+        "confidence": "high",
+        "reason": "Both locations share signature items (Pastrami Sandwich, Chili Dog, various combos) and overlapping menus typical of a casual burger/diner chain, with consistent naming convention and product offerings."
+      }
+    },
+    {
+      "slug": "lobster-guys",
+      "display": "Lobster Guys",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.5,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Lobster Guys",
+        "confidence": "high",
+        "reason": "Both menus feature signature lobster dishes (quesadilla, rolls, grilled cheese), shared side items (sweet potato fries, caesar salad), and calamari, indicating the same casual seafood-focused restaurant brand with consistent offerings across locations."
+      }
+    },
+    {
+      "slug": "ginger-s-divine-ice-cream",
+      "display": "Ginger's Divine Ice Cream",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.5833333333333334,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Ginger's Divine Ice Cream",
+        "confidence": "high",
+        "reason": "Both locations share multiple distinctive proprietary flavors (Vegan Gingers Almond Joy, Chocolate Peanut Butter Crack, Pickled Strawberry & Blueberry Pie) with identical or near-identical names, indicating a unified brand with consistent menu curation across locations."
+      }
+    },
+    {
+      "slug": "kai-ramen",
+      "display": "Kai Ramen",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.38333333333333336,
+      "llm": {
+        "same_brand": false,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Kai Ramen",
+        "confidence": "medium",
+        "reason": "Both are ramen restaurants with overlapping core items (tonkatsu ramen, calpico, tofu dishes) but Location 2's menu has distinctly different signature dishes (Popeye Ramen, Buttercorn Ramen, Black Ramen) and more curry/rice-focused items suggesting different culinary focus or regional franchise variations that warrant separate entities."
+      }
+    },
+    {
+      "slug": "ospi",
+      "display": "Ospi",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.6190476190476191,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Jemma x Ospi",
+        "confidence": "high",
+        "reason": "Both locations share identical branded product ('Jemma x Ospi Vodka Sauce'), similar Italian/Mediterranean menus with fett'unta dishes, and beverages, indicating they are locations of the same restaurant brand."
+      }
+    },
+    {
+      "slug": "ara-s-shawarma",
+      "display": "Ara’s Shawarma",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.6,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Ara's Shawarma",
+        "confidence": "high",
+        "reason": "Both locations share identical core menu items (beef/chicken shawarma plates, family packs, pita wraps) with consistent Middle Eastern cuisine, same pricing structure indicators, and nearly identical dessert offerings (chocolate strawberries/baklava), indicating a single restaurant chain with standardized menu."
+      }
+    },
+    {
+      "slug": "los-tres-hermanos",
+      "display": "Los Tres Hermanos",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.5783132530120482,
+      "llm": {
+        "same_brand": false,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Los Tres Hermanos",
+        "confidence": "medium",
+        "reason": "Both are Mexican restaurants with similar core menus (seafood, burritos, enchiladas), but different enough item selections and preparation styles (e.g., mojarra frita vs. mojara a la diabla) suggest independent locations or loosely affiliated franchises rather than the same unified brand."
+      }
+    },
+    {
+      "slug": "karas",
+      "display": "Karas",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.36363636363636365,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Kara's",
+        "confidence": "high",
+        "reason": "Both locations share identical signature dishes (Beef/Chicken Lula, BBQ plates, Pork Ribs) and Armenian/Mediterranean cuisine style, indicating the same restaurant chain."
+      }
+    },
+    {
+      "slug": "alessandro-s-pizza",
+      "display": "Alessandro's Pizza",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.5428571428571428,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Alessandro's Pizza",
+        "confidence": "high",
+        "reason": "Both menus show identical signature items (Create Your Own King 28\", Fettuccine Alfredo, Margherita Pizza, pesto items) and nearly identical Italian-American pizza restaurant offerings with consistent product naming conventions."
+      }
+    },
+    {
+      "slug": "la-sorted-s",
+      "display": "La Sorted's",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.625,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "La Sorted's",
+        "confidence": "high",
+        "reason": "Both locations share identical signature items (Daisy Pizza, The Ina Pizza, Zuccs, Mike's Hot Honey packets, Club Frills sandwich) and similar pizza-focused menus with creative named dishes, indicating the same restaurant brand."
+      }
+    },
+    {
+      "slug": "simpang-asia",
+      "display": "Simpang Asia",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.5151515151515151,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Simpang Asia",
+        "confidence": "high",
+        "reason": "Both locations share substantial menu overlap (Chicken Sate, Rendang, Kalio, Steamed Rice, Nasi Goreng) featuring Southeast Asian cuisine, consistent with a single restaurant chain operating multiple locations."
+      }
+    },
+    {
+      "slug": "crepes-de-paris",
+      "display": "Crêpes de Paris",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.6533333333333333,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Crêpes de Paris",
+        "confidence": "high",
+        "reason": "Both locations share identical signature items (Dulce De Leche crepe, French Onion Soup, Mocha Smoothie), French-named crepes (La Bastille, D'Anjou, Normandie, Paris Salad), and nearly identical beverage/food categories indicating the same restaurant brand."
+      }
+    },
+    {
+      "slug": "tsengfa-hainan-chicken-rice",
+      "display": "Tsengfa Hainan Chicken Rice",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.48,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Tsengfa Hainan Chicken Rice",
+        "confidence": "high",
+        "reason": "Both locations share identical signature dishes (Hainan Chicken Rice, Glutinous Rice Chicken, Wonton Noodle Soup, Teriyaki Chicken Rice), beverages (Thai Milk Tea, various teas), and signature items (Tiramisu, 'Tsengfa' Cucumber Salad), indicating they are the same restaurant chain with consistent menu identity."
+      }
+    },
+    {
+      "slug": "mediterranea-rice-bowls",
+      "display": "Mediterranea Rice Bowls",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.5652173913043478,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Mediterranea Rice Bowls",
+        "confidence": "high",
+        "reason": "Both locations share nearly identical Mediterranean/Middle Eastern menus with signature rice bowl and hummus bowl combinations, indicating a cohesive restaurant chain."
+      }
+    },
+    {
+      "slug": "pregio-pizza",
+      "display": "Pregio Pizza",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.6875,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Pregio Pizza",
+        "confidence": "high",
+        "reason": "Both locations share identical normalized name, nearly identical pizza-focused menus with signature items (Pineapple Pizza, Chili Bean Pizza, Hot Wings, Cheese Bread/Breadsticks), and consistent beverage/sauce offerings typical of a pizza chain."
+      }
+    },
+    {
+      "slug": "lazy-acres",
+      "display": "Lazy Acres",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "grocery/convenience",
+      "distinctive": true,
+      "bestPair": 0.42,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": false,
+        "is_retail": true,
+        "retail_kind": "grocery",
+        "canonical_name": "Lazy Acres",
+        "confidence": "high",
+        "reason": "Both locations feature identical organic grocery products (Muir Glen tomatoes, Kenter Canyon chives, Woodstock items) and prepared foods typical of a natural/organic grocery chain, not a restaurant."
+      }
+    },
+    {
+      "slug": "kings-liquor-and-market",
+      "display": "Kings Liquor And Market",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "liquor",
+      "distinctive": true,
+      "bestPair": 0.5882352941176471,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": false,
+        "is_retail": true,
+        "retail_kind": "liquor",
+        "canonical_name": "Kings Liquor and Market",
+        "confidence": "high",
+        "reason": "Identical menu items with identical formatting and emoji usage across both locations indicates the same liquor retail business operating multiple locations."
+      }
+    },
+    {
+      "slug": "panda-inn",
+      "display": "Panda Inn",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.6515151515151515,
+      "llm": {
+        "same_brand": false,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Panda Inn",
+        "confidence": "high",
+        "reason": "Location 1 features upscale Asian fusion with Japanese sushi/nigiri and premium cuts (A5 Wagyu, hamachi tacos), while Location 2 is traditional Chinese-American casual dining with wonton soup and lo-mein, representing different restaurant concepts despite the same normalized name."
+      }
+    },
+    {
+      "slug": "juice-it-up",
+      "display": "Juice It Up!",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "grocery/convenience",
+      "distinctive": true,
+      "bestPair": 0.6666666666666666,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Juice It Up!",
+        "confidence": "high",
+        "reason": "Both locations share identical signature items (Immunizer, Detoxifier, açaí bowls, smoothies) with matching branded names (®), consistent juice-bar menu structure, and are part of the real Juice It Up! chain operating across multiple US locations."
+      }
+    },
+    {
+      "slug": "sichuan-impression",
+      "display": "Sichuan Impression",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.6,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Sichuan Impression",
+        "confidence": "high",
+        "reason": "Both menus feature identical Sichuan regional specialties (dry pot dishes, rattan pepper preparations, charred chili sauces) with overlapping signature items (Spicy Fried Shrimp Dry Pot, Shredded Potatoes, Wok-Fried preparations) and matching beverage styles, indicating a single restaurant chain with consistent cuisine concept."
+      }
+    },
+    {
+      "slug": "pine-and-crane",
+      "display": "Pine and Crane",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.3018867924528302,
+      "llm": {
+        "same_brand": false,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Pine and Crane",
+        "confidence": "high",
+        "reason": "Location 1 is a Taiwanese noodle/beverage bar with Eastern Asian specialties and craft beverages, while Location 2 is a Southeast Asian (likely Vietnamese/Thai) noodle and broth-based restaurant with completely different cuisines and no menu overlap."
+      }
+    },
+    {
+      "slug": "royce-chocolate",
+      "display": "ROYCE Chocolate",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.5555555555555556,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": false,
+        "is_retail": true,
+        "retail_kind": "grocery",
+        "canonical_name": "ROYCE' Chocolate",
+        "confidence": "high",
+        "reason": "Both locations feature identical proprietary product lines (Nama Chocolate, Prafeuille Chocolat, Potatochip Chocolate) and overlapping menu items indicating the same premium Japanese chocolate retail brand with multiple store locations."
+      }
+    },
+    {
+      "slug": "lokal-sandwich-shop",
+      "display": "Lokal Sandwich Shop",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.6025641025641025,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Lokal Sandwich Shop",
+        "confidence": "high",
+        "reason": "Both menus feature distinctive signature items (Banh Mi variants, breakfast burritos, avocado toast) with identical or near-identical naming patterns, indicating the same restaurant brand operating multiple locations."
+      }
+    },
+    {
+      "slug": "la-vaca-brazilian-grill",
+      "display": "La Vaca Brazilian Grill",
+      "why": "place-name",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.9024390243902439,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "La Vaca Brazilian Grill",
+        "confidence": "high",
+        "reason": "All three locations share identical signature menu items (Chicken Breast Stroganoff, Garlic Chicken Leg Bowl, multiple BBQ meat platters, Brazilian sides like farofa and collard greens) with consistent Brazilian churrascaria formatting, indicating a single restaurant chain."
+      }
+    },
+    {
+      "slug": "kiku-sushi",
+      "display": "Kiku Sushi",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.324468085106383,
+      "llm": {
+        "same_brand": false,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Kiku Sushi",
+        "confidence": "medium",
+        "reason": "Both are sushi restaurants with similar Japanese cuisine but distinct menu items, naming conventions, and roll styles suggest different independent locations or unaffiliated establishments using the same normalized name."
+      }
+    },
+    {
+      "slug": "indian-summer-grill",
+      "display": "Indian Summer Grill",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.3333333333333333,
+      "llm": {
+        "same_brand": false,
+        "is_restaurant_chain": false,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Indian Summer Grill",
+        "confidence": "high",
+        "reason": "Location 1 features curry-focused entrees with specific protein/sauce combinations and portion sizes, while Location 2 offers basic Indian appetizers and sides with a la carte proteins, indicating different restaurant concepts despite the shared normalized name."
+      }
+    },
+    {
+      "slug": "bengong-s-tea",
+      "display": "BenGong’s Tea 本宮的茶",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.4358974358974359,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "BenGong's Tea",
+        "confidence": "high",
+        "reason": "Both locations share identical signature items (Special Boba Milk Tea, Da Hong Pao Boba Milk Tea, Jasmine Green Tea, Mango Pomelo, Burnt-Brown Sugar Boba Milk) and consistent menu structure indicating the same bubble tea chain with multiple locations."
+      }
+    },
+    {
+      "slug": "stater-bros-markets",
+      "display": "Stater Bros. Markets",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "grocery/convenience",
+      "distinctive": true,
+      "bestPair": 0.4791666666666667,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": false,
+        "is_retail": true,
+        "retail_kind": "grocery",
+        "canonical_name": "Stater Bros. Markets",
+        "confidence": "high",
+        "reason": "All three locations are the same grocery chain with identical product catalogs featuring produce, dairy, snacks, and branded 'Sb' house products across Southern California."
+      }
+    },
+    {
+      "slug": "the-kebab-shop",
+      "display": "The Kebab Shop",
+      "why": "generic-admit",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": false,
+      "bestPair": 1,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "The Kebab Shop",
+        "confidence": "high",
+        "reason": "All three locations share distinctive menu items (Saffron Caesar Crunch, Tzatziki Dip, Truffle Brown Rice, Get Greeky, Poppi beverages) and naming patterns (PLATE, THE WRAP, GRAINS BOWL) indicating a single restaurant chain."
+      }
+    },
+    {
+      "slug": "melrose-burgers-n-fries-glatt-kosher-grill",
+      "display": "Melrose Burgers ‘N Fries Glatt Kosher Grill",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.6923076923076923,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Melrose Burgers 'N Fries Glatt Kosher Grill",
+        "confidence": "high",
+        "reason": "Both locations share identical normalized name, nearly identical menu items (Buffalo Chicken Sandwich, Southwest Chicken Sandwich, chicken quesadilla, Raspberry tea snapple), and consistent glatt kosher casual dining concept."
+      }
+    },
+    {
+      "slug": "coral-tree-cafe",
+      "display": "Coral Tree Cafe",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.5327868852459017,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Coral Tree Cafe",
+        "confidence": "high",
+        "reason": "Both locations share distinctive menu items (Moroccan Mint Latte, Red Eye, Green Juice) and similar upscale café menus with organic/healthy positioning, indicating a unified restaurant chain brand."
+      }
+    },
+    {
+      "slug": "crazy-rock-n-sushi",
+      "display": "Crazy Rock'n Sushi",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.6872037914691943,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Crazy Rock'n Sushi",
+        "confidence": "high",
+        "reason": "Both locations share identical signature dishes (Amberjack Sunrise, Mackerel preparations) and nearly identical sushi-focused menus with Japanese specialties, indicating the same restaurant brand."
+      }
+    },
+    {
+      "slug": "china-bowl",
+      "display": "China Bowl",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.375,
+      "llm": {
+        "same_brand": false,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "China Bowl",
+        "confidence": "high",
+        "reason": "Location 1 focuses on fried chicken with Asian sides (Chowmein, Teriyaki, BBQ Chicken, individual pieces), while Location 2 emphasizes Thai and Pan-Asian cuisine (Tom Yum, Coconut soups, Hibachi, Kung Pao); distinct culinary profiles suggest different restaurants despite shared name."
+      }
+    },
+    {
+      "slug": "nong-la-vietnamese-cafe",
+      "display": "Nong Lá Vietnamese Cafe",
+      "why": "place-name",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 1,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Nong Lá Vietnamese Cafe",
+        "confidence": "high",
+        "reason": "Both locations share identical Vietnamese menu items (Pho, Banh Mi, Com Ga, Tra Dac Biet) with nearly identical pricing structure and side offerings, indicating they are the same restaurant chain/brand."
+      }
+    },
+    {
+      "slug": "cali-s-teriyaki",
+      "display": "Cali's Teriyaki",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.6444444444444445,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Cali's Teriyaki",
+        "confidence": "high",
+        "reason": "Both locations share identical core menu items (Chicken Teriyaki Bowl, Pineapple Teriyaki Bowl, Orange Chicken Bowl, wings, sriracha, water) with consistent Asian fusion branding, indicating the same restaurant chain with slight regional variations."
+      }
+    },
+    {
+      "slug": "brooklyn-calzones",
+      "display": "Brooklyn Calzones",
+      "why": "place-name",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 1,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Brooklyn Calzones",
+        "confidence": "high",
+        "reason": "All three locations share nearly identical menus featuring neighborhood-themed calzones (Red Hook, Williamsburg, Barclays, etc.), signature items (garlic knots, Caesar salad), and sauce options, indicating a unified restaurant chain operating in Brooklyn."
+      }
+    },
+    {
+      "slug": "uncle-sharkii-poke-bar",
+      "display": "Uncle Sharkii Poke Bar",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.4827586206896552,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Uncle Sharkii Poke Bar",
+        "confidence": "high",
+        "reason": "Both locations share identical signature items (#6 Uncle Sharkii, #1 Ahi Tuna And Salmon), nearly identical beverage menus, and consistent poke bowl format indicating a unified restaurant chain."
+      }
+    },
+    {
+      "slug": "original-taco-pete",
+      "display": "Original Taco Pete #1",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.37142857142857144,
+      "llm": {
+        "same_brand": false,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Original Taco Pete",
+        "confidence": "high",
+        "reason": "Location 1 emphasizes burgers, sandwiches, and American fare (pastrami fries, turkey burger, patty melt) while Location 2 focuses on Mexican items (burritos, tamales, enchiladas); different enough menus suggest either different franchise operators or distinct concepts despite the shared normalized name."
+      }
+    },
+    {
+      "slug": "cake-slice",
+      "display": "Cake Slice Co.",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.4,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Cake Slice Co.",
+        "confidence": "high",
+        "reason": "Both locations share identical or near-identical signature items (Chocolate Mousse Cake, Strawberry Cheesecake, Mexican Soda Bottle, Jarritos, Water Bottle) and focus on dessert-forward menus with cakes and beverages, indicating the same casual bakery-cafe chain."
+      }
+    },
+    {
+      "slug": "fat-tomato-pizza",
+      "display": "Fat Tomato Pizza",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.32608695652173914,
+      "llm": {
+        "same_brand": false,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Fat Tomato Pizza",
+        "confidence": "medium",
+        "reason": "Both are pizza restaurants with similar Italian-American menus, but Location 2 emphasizes 'Fat Garlic Knots' as signature item while Location 1 features Asian items (dumplings, angioletti) and desserts suggesting different concepts or franchisees with distinct menu strategies."
+      }
+    },
+    {
+      "slug": "taqueria-zavala",
+      "display": "Taqueria Zavala #1",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.6481481481481481,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Taqueria Zavala",
+        "confidence": "high",
+        "reason": "Both menus feature signature items like 'Wet Burritos', 'Bean and Cheese Burrito', and location-specific dishes ('Zavala Nachos', 'Zavala Fries'), consistent with a multi-location Mexican taqueria chain with a recognizable brand identity."
+      }
+    },
+    {
+      "slug": "osteria-la-buca",
+      "display": "Osteria La Buca",
+      "why": "place-name",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.7875,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Osteria La Buca",
+        "confidence": "high",
+        "reason": "Both locations share identical signature items (Buca Farm Lettuces, Einstok White Ale, Giardiniera, Rigatoni Bolognese) and Italian cuisine style, indicating the same restaurant brand with multiple locations."
+      }
+    },
+    {
+      "slug": "sweet-thang-cookies",
+      "display": "Sweet Thang Cookies",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.5,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Sweet Thang Cookies",
+        "confidence": "high",
+        "reason": "Identical normalized name with highly overlapping menu items (6 exact matches: Campfire S'more's, Classic Chocolate Chip, Snickerdoodle, Sea Salt Caramel Brownie, Chocolate & Peanut Butter, Strawberry Cheesecake Cookie) indicating same brand operating multiple locations."
+      }
+    },
+    {
+      "slug": "la-bufadora-baja-grill",
+      "display": "La Bufadora Baja Grill",
+      "why": "place-name",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.9864864864864865,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "La Bufadora Baja Grill",
+        "confidence": "high",
+        "reason": "Both locations share identical signature dishes (Cali Burrito, Diablito Burrito, Combo 7 Birria, Date Cookie, ceviche platters, agua fresca) and consistent Baja California seafood/Mexican cuisine positioning, indicating a single restaurant brand with multiple locations."
+      }
+    },
+    {
+      "slug": "teriyaki-house-grill",
+      "display": "Teriyaki House Grill",
+      "why": "generic-admit",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": false,
+      "bestPair": 1,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Teriyaki House Grill",
+        "confidence": "high",
+        "reason": "Both locations share identical signature items (Massive Teriyaki Chicken Burger, Tofu Burger, Beef & Veggie Bowl, Teriyaki bowls, burritos) and nearly identical menu structures indicating the same restaurant chain."
+      }
+    },
+    {
+      "slug": "viva-la-vida-crepes",
+      "display": "Viva La Vida Crepes",
+      "why": "place-name",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.7058823529411765,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Viva La Vida Crepes",
+        "confidence": "high",
+        "reason": "Identical normalized name with highly overlapping signature menu items (Signature Crepes #3/#4, MAZAPÁN MATCHA LATTE, ICED SPANISH LATTE, TRIPPLE CHOCOLATE BERRY CREPE, MINI PANCAKES BISCOFF, LEMON BUTTER CREPE, WHITE HAZENUT MANGO CREPE) indicating same restaurant chain."
+      }
+    },
+    {
+      "slug": "naturewell",
+      "display": "Naturewell",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.39622641509433965,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Nature Well",
+        "confidence": "high",
+        "reason": "Both locations share identical or nearly identical menu items (Purification, Cleanse and Rehydrate, G-Immunity, Lavender Smoothie, Wake Up, Energizer Tonic, Chocolate Thunderbolt, Super Acai) with consistent wellness/juice-focused positioning, indicating the same juice bar chain."
+      }
+    },
+    {
+      "slug": "india-s-clay-pit",
+      "display": "India's Clay Pit",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.6974789915966386,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "India's Clay Pit",
+        "confidence": "high",
+        "reason": "Both locations share identical normalized name, nearly identical Indian cuisine menus with overlapping signature dishes (Karahi Chicken, Matar Paneer, Tomato Feta Salad, Fish/Shrimp Korma), and consistent regional Indian cooking style indicating same restaurant brand/chain."
+      }
+    },
+    {
+      "slug": "la-la-land",
+      "display": "La La Land",
+      "why": "place-name",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.9591836734693877,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "La La Land",
+        "confidence": "high",
+        "reason": "Consistent signature items (La La Latte, lululemon chai latte, Iced White Himalayan, italian press, tuna press, avocado toast variants, Matcha Chai Latte) across all three locations indicate same coffee/brunch chain brand."
+      }
+    },
+    {
+      "slug": "michelina",
+      "display": "Michelina",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.4358974358974359,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Michelina",
+        "confidence": "high",
+        "reason": "Both menus feature French-inspired bakery/café items (croissants, tartines, omelets, French breads) with premium ingredients (Isigny butter, Alain Milliat jam) and similar French pastry/sandwich offerings consistent with a single upscale bakery chain."
+      }
+    },
+    {
+      "slug": "brian-s-shave-ice",
+      "display": "Brian's Shave Ice  ",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.6,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Brian's Shave Ice",
+        "confidence": "high",
+        "reason": "Identical normalized name with nearly identical menu items (Shave Ice, Root Beer Float, Rainbow Shave Ice, Waiakea Water, Fosselman's, Hawaiian Sun, Sour Face, Dole Soft Serve) indicating same shave ice chain operating multiple locations."
+      }
+    },
+    {
+      "slug": "millet-crepe",
+      "display": "Millet Crepe",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.625,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Millet Crepe",
+        "confidence": "high",
+        "reason": "Nearly identical menu items (Strawberry Shortcake, Creme Brûlée crepe, Nutella Crepe, Cookies 'N Cream, Banana Foster, Custom Crepe) with minor variations suggest the same crepe restaurant chain operating multiple locations."
+      }
+    },
+    {
+      "slug": "thai-original-bbq-restaurant",
+      "display": "Thai Original BBQ & Restaurant",
+      "why": "generic-admit",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": false,
+      "bestPair": 0.6055045871559633,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Thai Original BBQ & Restaurant",
+        "confidence": "high",
+        "reason": "Both locations share identical signature dishes (S-11 Chicken Ruby Dinner, Vegetable Curry) and consistent Thai cuisine with BBQ offerings, indicating the same restaurant chain with standardized menu items across locations."
+      }
+    },
+    {
+      "slug": "amandine-patisserie-cafe",
+      "display": "Amandine Patisserie Cafe",
+      "why": "review",
+      "algo": "review",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.43902439024390244,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Amandine Patisserie Cafe",
+        "confidence": "high",
+        "reason": "Both locations share identical normalized name, serve similar French pastry/cafe menus with croissants, quiches, rice bowls, and specialty lattes consistent with a single upscale patisserie chain."
+      }
+    },
+    {
+      "slug": "breakfast-beauties",
+      "display": "Breakfast Beauties",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.6923076923076923,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Breakfast Beauties",
+        "confidence": "high",
+        "reason": "Both locations share identical core menu items (Cali Breakfast Sandwich, House Breakfast Sandwich, Breakfast Sandwich Combo, and multiple egg/cheese sandwich variations) indicating they are the same breakfast sandwich chain with consistent offerings across locations."
+      }
+    },
+    {
+      "slug": "mariscos-choix",
+      "display": "Mariscos Choix",
+      "why": "small-low-overlap",
+      "algo": "chain",
+      "algoKind": "restaurant",
+      "distinctive": true,
+      "bestPair": 0.5339805825242718,
+      "llm": {
+        "same_brand": true,
+        "is_restaurant_chain": true,
+        "is_retail": false,
+        "retail_kind": null,
+        "canonical_name": "Mariscos Choix",
+        "confidence": "high",
+        "reason": "Both locations share identical seafood-focused menus with signature dishes (aguachiles, ceviches, camarones preparations) and the 'Choix' branded item (Filete Choix) appearing in Location 2, indicating a cohesive restaurant brand with multiple locations."
+      }
+    }
+  ]
+}

@@ -62,13 +62,62 @@ model Restaurant {
   dietaryOptions  String[]    @default([])
   lastScrapedAt   DateTime?
   menuHash        String?
+  brandId         String?
+  menuKind        String      @default("restaurant")
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
   menuItems       MenuItem[]
   savedItems      SavedItem[]
+  brandRef        Brand?      @relation(fields: [brandId], references: [id])
 
   @@index([lat, lng])
   @@index([homeHex])
+  @@index([brandId])
+}
+
+// Canonical chain/brand identity. Locations of the same chain share a brandId.
+// Populated by scripts/phase0-detect-chains.ts + the LLM tiebreaker. See
+// docs/engineering/pipeline/canonical-chain-macros.md.
+model Brand {
+  id            String       @id @default(cuid())
+  slug          String       @unique          // normalized brandSlug, e.g. "waba-grill"
+  displayName   String                          // canonical name, "WaBa Grill"
+  aliases       String[]     @default([])       // alt slugs that map to this brand
+  locationCount Int          @default(0)
+  menuKind      String       @default("restaurant") // restaurant|grocery|convenience|pharmacy|liquor|pet
+  bestPair      Float?                          // detection score (max pairwise containment)
+  distinctive   Boolean      @default(false)
+  detectionConf String?                         // 'high' | 'review' | 'llm-confirmed'
+  macroSource   String?                         // 'official'|'fatsecret'|'haiku'|null (unsourced)
+  officialUrl   String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  restaurants   Restaurant[]
+  chainItems    ChainItem[]
+}
+
+// Canonical per-brand macro table (Phase 1). Macros resolved once per (brand, item) from the
+// best source and reused across every location. See canonical-chain-macros.md → Phase 1.
+model ChainItem {
+  id           String   @id @default(cuid())
+  brandId      String
+  canonicalKey String                       // normalized resolver key, e.g. "chicken-bowl"
+  aliases      String[] @default([])         // per-location name variants that map here
+  calories     Int?
+  proteinG     Float?
+  carbsG       Float?
+  fatG         Float?
+  servingSize  String?
+  source       String                        // 'official' | 'fatsecret' | 'haiku'
+  confidence   String                        // 'HIGH' | 'MEDIUM' | 'LOW'
+  officialUrl  String?
+  retrievedAt  DateTime?                      // staleness tracking
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  brand        Brand    @relation(fields: [brandId], references: [id])
+
+  @@unique([brandId, canonicalKey])
+  @@index([brandId])
 }
 
 model MenuItem {

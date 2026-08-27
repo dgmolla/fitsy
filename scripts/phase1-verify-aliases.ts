@@ -65,42 +65,46 @@ async function main() {
   const guarded = cands.filter((c) => comboGuard(c.ue, c.off));
   const droppedGuard = cands.length - guarded.length;
 
-  // step 2: adversarial verify (chunked)
-  const kept = new Set<number>();
-  for (let i = 0; i < guarded.length; i += 50) {
-    const chunk = guarded.slice(i, i + 50);
-    const msg = await anthropic.messages.create({ model: MODEL, max_tokens: 4000, tools: [VERIFY], tool_choice: { type: "tool", name: VERIFY.name },
-      messages: [{ role: "user", content:
-        `You are a STRICT reviewer guarding a nutrition database. For each pair decide keep=true ONLY if the Uber Eats item ` +
-        `is the SAME menu item as the official item AND would have essentially the same nutrition. REJECT if: one is a combo/meal ` +
-        `and the other isn't; sizes differ; one has extra components (club, deluxe, loaded); different base (smoothie vs tea, ` +
-        `deep-dish vs thin); or you are unsure. Calorie values are given — a large gap usually means different items.\n\n` +
-        chunk.map((c, j) => `${j}. [${c.brand}] UE="${c.ue}" (${c.estCal ?? "?"} cal)  OFFICIAL="${c.off}" (${c.offCal ?? "?"} cal)`).join("\n") }] });
-    const rs = (msg.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use")?.input as any)?.results ?? [];
-    for (const r of rs) if (r.keep && guarded[i + r.i]) kept.add(i + r.i);
-  }
-
-  // rebuild verified aliases: exact-slug matches always kept; non-exact kept only if verified
-  const verified: Record<string, Record<string, string[]>> = {};
-  // exact matches (ueSlug === slug(officialName)) were excluded from cands; re-add them from aliases where alias===slug(name)
-  for (const b of brands) {
-    const out: Record<string, Set<string>> = {};
-    for (const [k, al] of Object.entries(aliases[b.slug] ?? {})) {
-      const oi = offInfo.get(b.slug + "|" + k); const offSlug = oi ? slug(oi.name) : "";
-      for (const a of al) if (a === offSlug) (out[k] ??= new Set()).add(a); // exact name match → trust
+  // step 2: adversarial verify, TWO independent skeptic votes → confidence tier
+  const votes = new Array(guarded.length).fill(0);
+  for (let pass = 0; pass < 2; pass++) {
+    for (let i = 0; i < guarded.length; i += 50) {
+      const chunk = guarded.slice(i, i + 50);
+      const msg = await anthropic.messages.create({ model: MODEL, max_tokens: 4000, tools: [VERIFY], tool_choice: { type: "tool", name: VERIFY.name },
+        messages: [{ role: "user", content:
+          `You are a STRICT reviewer guarding a nutrition database. For each pair decide keep=true ONLY if the Uber Eats item ` +
+          `is the SAME menu item as the official item AND would have essentially the same nutrition. REJECT if: one is a combo/meal ` +
+          `and the other isn't; sizes differ; one has extra components (club, deluxe, loaded); different base (smoothie vs tea, ` +
+          `deep-dish vs thin); one is a composed dish (bowl/plate) and the other a bare ingredient; a dietary variant (vegan/skinny) ` +
+          `vs regular; or you are unsure.\n\n` +
+          chunk.map((c, j) => `${j}. [${c.brand}] UE="${c.ue}"  OFFICIAL="${c.off}"`).join("\n") }] });
+      const rs = (msg.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use")?.input as any)?.results ?? [];
+      for (const r of rs) if (r.keep && guarded[i + r.i]) votes[i + r.i]++;
     }
-    if (Object.keys(out).length) verified[b.slug] = Object.fromEntries(Object.entries(out).map(([k, s]) => [k, [...s]]));
   }
-  guarded.forEach((c, idx) => { if (kept.has(idx)) { (verified[c.brandSlug] ??= {}); (verified[c.brandSlug]![c.key] ??= []); if (!verified[c.brandSlug]![c.key]!.includes(c.ueSlug)) verified[c.brandSlug]![c.key]!.push(c.ueSlug); } });
 
-  writeFileSync("scripts/phase1-out/aliases-verified.json", JSON.stringify(verified, null, 2));
-  const candN = cands.length, keptN = kept.size, exact = Object.values(verified).reduce((a, b) => a + Object.values(b).reduce((x, y) => x + y.length, 0), 0) - keptN;
-  console.log(`=== alias verification ===`);
-  console.log(`  non-exact candidate matches : ${candN}`);
-  console.log(`    dropped by combo/size guard: ${droppedGuard}`);
-  console.log(`    sent to skeptic            : ${guarded.length}  → kept ${keptN}, rejected ${guarded.length - keptN}`);
-  console.log(`  exact-name matches (trusted) : ${exact}`);
-  console.log(`  → aliases-verified.json: ${exact + keptN} total alias slugs (was ${candN + exact} candidate)`);
-  console.log(`  re-measure: npx tsx --env-file=.env.local scripts/phase1-precision.ts 150 aliases-verified.json`);
+  // tier: exact name = HIGH; 2/2 skeptic votes = HIGH; 1/2 = MEDIUM; else dropped
+  const high: Record<string, Record<string, string[]>> = {};
+  const medium: Record<string, Record<string, string[]>> = {};
+  const add = (m: Record<string, Record<string, string[]>>, bs: string, k: string, s: string) => { (m[bs] ??= {}); (m[bs]![k] ??= []); if (!m[bs]![k]!.includes(s)) m[bs]![k]!.push(s); };
+  // exact matches → HIGH
+  for (const b of brands) for (const [k, al] of Object.entries(aliases[b.slug] ?? {})) {
+    const oi = offInfo.get(b.slug + "|" + k); const offSlug = oi ? slug(oi.name) : "";
+    for (const a of al) if (a === offSlug) add(high, b.slug, k, a);
+  }
+  let nHigh2 = 0, nMed = 0;
+  guarded.forEach((c, idx) => { if (votes[idx] === 2) { add(high, c.brandSlug, c.key, c.ueSlug); nHigh2++; } else if (votes[idx] === 1) { add(medium, c.brandSlug, c.key, c.ueSlug); nMed++; } });
+
+  writeFileSync("scripts/phase1-out/aliases-high.json", JSON.stringify(high, null, 2));
+  writeFileSync("scripts/phase1-out/aliases-medium.json", JSON.stringify(medium, null, 2));
+  const exact = Object.values(high).reduce((a, b) => a + Object.values(b).reduce((x, y) => x + y.length, 0), 0) - nHigh2;
+  console.log(`=== alias verification (confidence tiers) ===`);
+  console.log(`  non-exact candidates        : ${cands.length}   (dropped by combo/size guard: ${droppedGuard})`);
+  console.log(`  2-vote skeptic on ${guarded.length}:`);
+  console.log(`    HIGH (exact + 2/2 votes)  : ${exact + nHigh2}  (exact ${exact} + unanimous ${nHigh2})   → OVERRIDES`);
+  console.log(`    MEDIUM (1/2 votes)        : ${nMed}   → store-only, never overrides`);
+  console.log(`    dropped (0/2 or guard)    : ${cands.length - nHigh2 - nMed}`);
+  console.log(`  → aliases-high.json (override tier) + aliases-medium.json (store-only)`);
+  console.log(`  measure HIGH precision: npx tsx --env-file=.env.local scripts/phase1-precision.ts 150 aliases-high.json`);
 }
 main().catch((e) => { console.error("VERIFY ERROR:", e.message); process.exit(1); }).finally(() => p.$disconnect());
