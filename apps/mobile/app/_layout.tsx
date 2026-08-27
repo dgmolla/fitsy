@@ -7,12 +7,17 @@ import { PostHogProvider } from 'posthog-react-native';
 import { ThemeProvider } from '@/lib/theme';
 import { PurchasesProvider } from '@/lib/usePurchases';
 import { getPostHogClient } from '@/lib/analytics';
+import { installGlobalErrorReporting } from '@/lib/errorReporting';
+import { AppErrorBoundary } from '@/components/AppErrorBoundary';
 import { recordSession } from '@/lib/ratingPrompt';
 import { supabase } from '@/lib/supabase';
 import {
   trackSessionRefreshed,
   trackSessionRefreshFailed,
 } from '@/lib/analytics';
+
+// Module scope so uncaught errors during the very first render are captured.
+installGlobalErrorReporting();
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -97,13 +102,15 @@ export default function RootLayout() {
 
   return (
     <PostHogProvider client={getPostHogClient()}>
-      <SafeAreaProvider>
-        <ThemeProvider>
-          <PurchasesProvider>
-            <Stack screenOptions={{ headerShown: false }} />
-          </PurchasesProvider>
-        </ThemeProvider>
-      </SafeAreaProvider>
+      <AppErrorBoundary>
+        <SafeAreaProvider>
+          <ThemeProvider>
+            <PurchasesProvider>
+              <Stack screenOptions={{ headerShown: false }} />
+            </PurchasesProvider>
+          </ThemeProvider>
+        </SafeAreaProvider>
+      </AppErrorBoundary>
     </PostHogProvider>
   );
 }
