@@ -31,7 +31,7 @@ PostHog numbers need `POSTHOG_PERSONAL_API_KEY` + `POSTHOG_PROJECT_ID` in the `f
 
 ## Feedback loop
 
-### Built (2026-08-26)
+### Built (live in prod since 2026-08-28, #207)
 
 - Every in-app feedback note posts to Slack instantly with a one-click `Reply` link.
   The link opens a pre-filled email that quotes their note and asks for a 10-minute call.
@@ -165,7 +165,7 @@ That means the loop isn't working and another city won't fix it.
 ## Before the release click
 
 - [ ] App Store subtitle and first description line say "Los Angeles".
-- [ ] Set `POSTHOG_PERSONAL_API_KEY` + `POSTHOG_PROJECT_ID` in `fitsy-api` (Vercel) so the scoreboard has retention.
+- [x] Set `POSTHOG_PERSONAL_API_KEY` + `POSTHOG_PROJECT_ID` in `fitsy-api` (Vercel) so the scoreboard has retention. Done 2026-08-26, verified in prod.
 - [ ] Trainer sheet with 60 names; first 20 pitches sent the day of release.
 - [ ] Three Meta creatives recorded; campaign built and paused, ready to start day 3.
 - [ ] Release on a Tuesday or Wednesday morning, not a Friday.
