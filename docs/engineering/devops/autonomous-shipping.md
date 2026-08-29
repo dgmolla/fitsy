@@ -131,6 +131,25 @@ Tier decides which layers run, whether shadow checks block, and which model revi
 Classification is deterministic (glob match), with a Haiku pass only to catch semantic danger (a "medium" file that starts calling an auth helper, for example).
 Haiku's output can raise a tier, never lower it.
 
+### Environments
+
+Today there is one Supabase project shared by production, local dev, the preload pipeline, and (via Preview env vars) Vercel previews.
+That was acceptable as a read-only query layer with no users; with real users and E2E writes (accounts, saved items, feedback) it is not, and it already cost a 224-test-user purge.
+The pipeline uses three environments with distinct jobs.
+
+| Env | What it is | Data | Schema | Used by |
+|---|---|---|---|---|
+| **ephemeral** | Postgres/PostGIS container in CI, or `scripts/dev/db.sh up` locally | `prisma/seed.ts`: deterministic fixture, ~50 restaurants in one LA hex, 3 test users, known macros | all migrations applied fresh on every run | L2, L3 |
+| **dev** | second Supabase project `fitsy-dev` (own auth, own JWKS, own RevenueCat sandbox, PostHog dev project, Slack alerts to a dev channel) | `scripts/dev/snapshot.sh`: monthly `pg_dump` of a ~500-restaurant subset from prod, plus the seed's test users; `scripts/dev/reset.sh` nightly restores user-data tables to seed state and keeps the restaurant subset | `prisma migrate deploy` runs in the Vercel preview build command, so every preview carries its PR's schema | L6, L7, local sessions, sim work, routines that reproduce bugs |
+| **prod** | the existing project | real | `deploy.yml` migrates before Vercel promotes (L8) | L9 only, with the review demo account |
+
+Wiring: Vercel `Preview` env vars point at `fitsy-dev` (today they point at prod); `EXPO_PUBLIC_API_URL` for the `development` and `preview` EAS channels points at the PR's preview URL when driven by L7, and at a stable `dev` alias (`fitsy-api-dev.vercel.app`, deployed from `main` alongside prod) for local simulator work.
+Local `npm run dev:api` defaults to `fitsy-dev`; pointing local at prod requires an explicit `--prod` flag that prints a banner.
+
+Maintenance is scripted, not manual: `snapshot.sh` (monthly, Vercel cron or routine), `reset.sh` (nightly), and a `dev-drift` check that fails when `fitsy-dev`'s applied migrations lag `main` or when a seed table is empty.
+Known limit: two open PRs with conflicting migrations share one dev schema; the ephemeral container catches the correctness problem, and at current volume the collision is rare.
+If it starts biting, move to Supabase per-PR branching (Pro plan) with the same scripts.
+
 ## 4. Layers
 
 Each layer: what it catches, tools we have and need, cost, where it lives, and how today's process changes.
@@ -269,13 +288,29 @@ Review happens in CI for every PR, whoever opened it.
 `.claude/agents/reviewer.md` shrinks to the routing table and a pointer to `REVIEW.md` and lenses.
 Role files keep their "review lens" sections only as input to the lens files, then drop them.
 
+**Runners.** The pipeline requires a check-run on the PR named `lens/<name>`; it does not care which process posts it.
+`scripts/review/run-lens.sh <pr> <lens>` is the single implementation: reads the lens file and `REVIEW.md`, runs `claude -p` with the restricted tool set, writes `.evidence/review-<lens>.json`, posts the check-run via `gh api`.
+Callers, in the order we adopt them:
+
+| Runner | Mechanism | Cost | When |
+|---|---|---|---|
+| `local` (**default now**) | launchd job on Dawit's Mac (same pattern as the daily-memo job) polls `gh pr list` every 2 minutes for open PRs missing a lens check-run and runs them; also reachable by hand as `npm run review -- <pr>` | covered by the Max subscription | from rollout step 4 |
+| `cloud-routine` | Claude Code routine on PR-open events runs the same script | subscription usage, no Mac | once lenses are trusted, so PRs merge while the Mac is asleep |
+| `actions-oauth` | `claude-code-action@v1` with `CLAUDE_CODE_OAUTH_TOKEN` | subscription usage | alternative to routines; note Anthropic announced and then paused (2026-06) moving `claude -p` and Actions off subscription pools, so this may become per-token with notice |
+| `actions-api` | same action with `ANTHROPIC_API_KEY` | per token (§9) | fallback if subscription paths are cut off |
+| `open-model` | same script with `ANTHROPIC_BASE_URL` pointing at a proxy (Qwen3-Coder via OpenRouter or self-hosted) | ~10-30x cheaper than Sonnet per token | shadow only: L4 classify and `docs-sanity` first; `correctness` only if its recall on the incident corpus matches Sonnet's; never `tier:high` |
+
+A `runner` field per lens in the registry selects the caller; changing runner is a config edit, not a redesign.
+A `stale-review` timeout (30 min without a lens check-run) posts a PR comment and, if configured, falls through to the next runner in the list.
+Local-runner security: a dedicated macOS user with only `gh` auth and the Claude login, no Vercel/EAS/Supabase credentials, and the same `--allowedTools` restriction as CI.
+
 ### L6. API E2E on the Vercel preview
 
 **Catches:** what only a deployed Next.js build catches: env wiring, edge runtime differences, cron auth, cold-start regressions, real Supabase connectivity against staging.
 
 | Check | Status | Notes |
 |---|---|---|
-| preview smoke | **new** | on `repository_dispatch: vercel.deployment.success` for preview URLs, run `scripts/verify/api-e2e.sh --base=$URL`: health, register/login with the review demo account, search in the seeded LA hex, saved items round trip, subscription gate 402, each `affected_route` from L4 with schema-valid input |
+| preview smoke | **new** | on `repository_dispatch: vercel.deployment.success` for preview URLs, run `scripts/verify/api-e2e.sh --base=$URL` against the **dev** environment: health, register/login with a seed test user, search in the snapshot's LA hex, saved items round trip, subscription gate 402, each `affected_route` from L4 with schema-valid input. Writes are real and are wiped by the nightly reset. |
 | cold-start budget | **new**, shadow | p50 of 5 cold hits under a budget; the 3-10s search cold start is a known issue (memory: search cold start) and this is where it becomes a number |
 | protection bypass | **new** | `x-vercel-protection-bypass` token in Actions secrets, scoped to this job |
 
@@ -290,7 +325,7 @@ Role files keep their "review lens" sections only as input to the lens files, th
 
 Two modes, deliberately separated for cost:
 
-1. **Deterministic flows (Maestro)**: `apps/mobile/e2e/flows/*.yaml` for onboarding, search, detail, save, paywall, sign-in stub. Runs on every `surface:mobile` PR. No model involved. Screenshots at named steps are the visual baseline; a pixel diff over threshold on a touched screen is a finding for the `mobile-ui` lens, not an automatic failure (fonts and dates cause noise).
+1. **Deterministic flows (Maestro)**: `apps/mobile/e2e/flows/*.yaml` for onboarding, search, detail, save, paywall, sign-in stub, run against the PR's preview API on the dev environment (`EXPO_PUBLIC_API_URL` injected at run time). Runs on every `surface:mobile` PR. No model involved. Screenshots at named steps are the visual baseline; a pixel diff over threshold on a touched screen is a finding for the `mobile-ui` lens, not an automatic failure (fonts and dates cause noise).
 2. **Agent-driven verification**: only for `affected_screens` without a Maestro flow, or when the PR body asks for it. A Sonnet agent uses the simulator CLI (below) and the feature map to drive the changed flow, saves screenshots and the Metro log excerpt to `.evidence/`, and writes a pass/fail JSON. This is the "verification skill" pattern from the talk.
 
 | Tool | Status | Notes |
@@ -513,6 +548,7 @@ Anything without a mechanism is deleted rather than documented.
 
 Structural, not discretionary (T12).
 
+- The local runner uses a dedicated macOS user (see L5 Runners); everything below applies when a lens runs in Actions.
 - `review.yml` and any agent workflow: `permissions: contents: read, pull-requests: write, checks: write` and nothing else; never `id-token: write`; never `pull_request_target` with a checkout of the PR head.
 - Trigger only on PRs from branches in this repo by collaborators; forks and bots do not trigger agent jobs.
 - The agent step's env contains `ANTHROPIC_API_KEY` and `GITHUB_TOKEN` only. Supabase, Vercel, EAS, RevenueCat, Slack, PostHog tokens live in the deploy workflows, which run no model.
@@ -536,7 +572,8 @@ Volume today: 5 PRs/month, expected 20-60 once routines dispatch work.
 | L7 agent mode | $1-2 when triggered | same | only for screens without a flow |
 | L9 canary | pennies | same | API calls |
 
-At 40 PRs/month, roughly $80-200/month in model spend plus EAS minutes.
+At 40 PRs/month, roughly $80-200/month in model spend at API rates plus EAS minutes; with the `local` or subscription runners the marginal model cost is zero and the constraint is the plan's usage window instead.
+Dev environment: a second Supabase project at the free or $25 tier, plus Vercel preview minutes already spent.
 The levers if it grows: once-per-PR review mode (already), tier routing (already), and the T6 rule that recurring agent findings become free deterministic checks.
 Never run a frontier model on a `low` or `medium` PR.
 
@@ -548,7 +585,8 @@ Steps 1-4 are the foundation and should land before any routine dispatches work.
 1. **Gate** (an hour): ruleset on `main`: PR required, required checks = current CI jobs, squash only, no direct push, admins included. Auto-merge on. `sprint.md` §3b-d and `ship-branch` 3.5-6 deleted the same day, since they would now conflict with the ruleset.
 2. **One implementation** (a day): `scripts/verify/` with `run.sh`, `registry.yml`, and the existing checks moved in unchanged. `verify.yml` replaces `ci.yml` + `reviewer.yml`. Pre-push calls `run.sh --layer=0`. Husky removed. `--passWithNoTests` removed. Structural 3 and 5 fixed to `--scope=changed`. Nested `CLAUDE.md` per app with commands only; root `CLAUDE.md` trimmed; `context-freshness` check.
 3. **Static completeness** (a day): mobile lint, mobile tests in CI, dependency-cruiser with the T3 graph, size check, gitleaks, actionlint, structural 4-8 to FAIL with a shrink-only allowlist, `docs/` and `proj-mgmt/` exempt from domain count.
-4. **Review in CI** (a day): `review.yml` with `correctness` and `docs-sanity` lenses, `REVIEW.md`, classify job with tier labels, budget guard, security posture from §8. Blocking from day one for `correctness` CONFIRMED; everything else shadow.
+4. **Review lenses, local runner** (a day): `scripts/review/run-lens.sh`, `REVIEW.md`, `correctness` and `docs-sanity` lenses, launchd poller on Dawit's Mac, classify job in CI with tier labels, `stale-review` timeout. Blocking from day one for `correctness` CONFIRMED; everything else shadow.
+4b. **Dev environment** (half a day plus a data snapshot): `fitsy-dev` Supabase project, Vercel Preview env vars repointed, `seed.ts`, `snapshot.sh`, `reset.sh`, `dev-drift` check, local dev defaults to dev. `staging-environment.md` rewritten to the Environments table above.
 5. **Deploy and rollback** (a day): `deploy.yml` with migrate-then-Vercel, `eas update` at 10%, deploy record, `rollback.sh`, `api-e2e.sh` on prod. Fix `eas.json` submit path.
 6. **Contracts and DB tests** (a few days, incremental): `packages/shared/src/contracts/`, generator for routes, contract tests, seed, first DB tests for search and subscription, migration safety. Own-code-mock lint in shadow.
 7. **Mobile E2E** (a few days): `sim` CLI, FEATURE_MAP, testID lint, six Maestro flows, EAS workflow, `mobile-ui` lens. Dev-client decision documented.
