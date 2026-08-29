@@ -51,7 +51,7 @@ Aim for 3 calls a week during the LA phase.
 2. **Search-miss capture**: `search_performed` already carries `result_count`; add coarse lat/lng and the cuisine filter so zero-result searches become the coverage backlog and the exit-criteria denominator.
 3. **Native review prompt** (`StoreReview.requestReview`) on a positive moment: third saved item or second session.
    Reviews drive ASO, the only free channel with compounding returns.
-4. **Install source attribution**: a `source` person property in PostHog set from the referral or offer code entered at onboarding, so CAC per channel is measurable.
+4. **Install source attribution**: a `source` person property in PostHog set from a referral code or "how did you hear about us" step at onboarding, so CAC per channel is measurable.
 
 ## First users: three channels, in order
 
@@ -93,28 +93,40 @@ Fitsy's own IG needs a few real posts before outreach starts; an active sender p
 **The offer.**
 
 - Free Fitsy Pro for the trainer, permanently.
-- A trainer-specific code that gives each client 30 days free (App Store custom offer codes, one per trainer, so redemptions attribute to the trainer; confirm the RevenueCat webhook exposes the offer identifier before relying on it).
 - Their name on a "recommended by" line in the app later if they want it (not built; do not promise a date).
 - A monthly note back to them: "12 of your clients are on Fitsy, top searches were X and Y."
   This is what makes them keep recommending it.
+- Clients install the normal way and get the standard 3-day trial; per-trainer client codes are out of scope for the LA phase (decided 2026-08-29).
+
+**How free Pro is granted (RevenueCat Granted Entitlements, no code).**
+
+1. Trainer installs Fitsy and signs in (any method); they will hit the paywall, that is expected.
+2. In the RevenueCat dashboard, find the customer (search by email or app user ID), Customer history → Grant entitlement → `pro`, duration Lifetime.
+3. Access lifts on their next app open: the SDK sees `entitlements.active.pro` and the paywall gate clears (`apps/mobile/lib/purchases.ts`).
+4. RevenueCat sends a `NON_RENEWING_PURCHASE` webhook with `store: PROMOTIONAL`; our webhook marks the `Subscription` row active, so the server gate (`requireSubscription`) passes too. `plan` records as `unknown` for grants; cosmetic.
+5. Track it in `trainer-prospects.csv` (status → `granted`).
+
+Grants never touch Apple billing, never charge, and can be revoked in the same screen.
+Verify the whole path once on a test account before the first trainer grant; the `PROMOTIONAL` webhook path has not been exercised in prod.
+Do not use `DEMO_REVIEW_EMAILS` for trainers; it needs a Vercel env edit plus a mobile OTA per person and exists for App Review only.
 
 Do not offer cash or revenue share in the first round; it changes the relationship from "tool I recommend" to "thing I'm paid to push" and clients can tell.
-This matches how coach-specific programs already work (MacroFactor steers coaches away from its cash affiliate; HRV4Training gives coaches free Pro plus free client seats); our 30-day client code is more generous than the usual 7-day trial extension.
+This matches how coach-specific programs already work (MacroFactor steers coaches away from its cash affiliate; HRV4Training gives coaches free Pro plus free client seats).
 
 **The pitch (DM or email, 4 lines).**
 
 > I built an app that shows LA restaurant meals filtered by protein and calories, including the indie spots.
 > Your clients probably ask you what to order when they eat out; this is the tool for that moment.
-> Free for you, 30 days free for any of your clients with your code, and I'll send you a monthly note on how they use it.
+> Free for you for life, and I'll send you a monthly note on how your clients use it.
 > 15 minutes on a call to show you? I'm in LA and happy to come to the studio.
 
 **Mechanics.**
 
 - 60 outreach → expect ~15 replies → ~8 calls → 4-5 active partners in the first month.
-- Each partner sends the code to 20-50 clients; expect 30-50% to install and 60% of those to activate.
+- Each partner sends the link to 20-50 clients; expect 30-50% to install and 60% of those to activate.
 - 5 partners ≈ 60-100 activated users, all of whom have a coach reminding them to use it.
-- Give each partner a client-facing text they can paste (three sentences plus the code) and a 60-second screen recording.
-- Track in a sheet: trainer, date pitched, call held, code, clients sent, redemptions, active at D30.
+- Give each partner a client-facing text they can paste (three sentences plus the App Store link) and a 60-second screen recording.
+- Track in `docs/gtm/trainer-prospects.csv`: tier, name, handle, status (cold → warmed → pitched → call → granted → active).
 
 **Why this beats gym-floor cold approach.**
 One conversation reaches 20-50 people with a trusted recommender attached, the recipients already track macros, and we get a feedback channel (the trainer hears complaints before we do).
