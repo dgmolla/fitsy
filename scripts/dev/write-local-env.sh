@@ -12,7 +12,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$REPO_ROOT"
 
-DEV_API_URL="${DEV_API_URL:-https://fitsy-git-dev-dawits-projects-74b6e00f.vercel.app}"
+DEV_API_URL="${DEV_API_URL:-https://fitsy-api-git-dev-dawits-projects-74b6e00f.vercel.app}"
 
 vercel env pull --environment=development apps/api/.env.local --yes >/dev/null
 vercel env pull --environment=preview .env.dev --yes >/dev/null

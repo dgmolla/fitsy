@@ -41,7 +41,7 @@ graph LR
 ## Wiring
 
 - **Vercel env**: `Preview` and `Development` environments hold the dev credentials; `Production` holds prod. `scripts/dev/provision-supabase.sh` writes them. Nothing in the repo references a dev secret.
-- **Stable dev API**: `.github/workflows/mirror-dev-branch.yml` force-pushes `main` to a `dev` branch on every merge; Vercel builds it as a preview against the dev DB at `https://fitsy-git-dev-dawits-projects-74b6e00f.vercel.app`.
+- **Stable dev API**: `.github/workflows/mirror-dev-branch.yml` force-pushes `main` to a `dev` branch on every merge; Vercel builds it as a preview against the dev DB at `https://fitsy-api-git-dev-dawits-projects-74b6e00f.vercel.app`.
 - **Local API**: `npm run dev:env` pulls the Development env into `apps/api/.env.local`, so `npm run dev:api` talks to dev by default. Pointing local at prod is explicit: `vercel env pull --environment=production .env.prod.local` and load it yourself.
 - **Mobile**: `npm run dev:env` also writes `apps/mobile/.env.development.local` (`EXPO_PUBLIC_API_URL` = stable dev API, dev Supabase URL and anon key). Expo reads it ahead of `.env` in dev mode; release builds keep the production `.env`.
 - **Scripts**: `set -a; source .env.dev; set +a` loads the dev set for `scripts/dev/*` and `scripts/verify/dev-drift.sh`.
