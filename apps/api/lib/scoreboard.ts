@@ -21,9 +21,11 @@ export interface DbMetrics {
   signups: WeekOverWeek;
   /** Users who finished onboarding (have a MacroTarget row). */
   activated: WeekOverWeek;
-  /** Subscription rows created (trial starts; trial vs paid lives in RevenueCat). */
+  /** Subscription rows created (first-time only; trial->paid and resubscribes live in RevenueCat). */
   subscriptionsStarted: WeekOverWeek;
+  /** status = "active" AND (expiresAt is null OR expiresAt > now) - matches lib/subscription.ts. */
   activeSubscriptions: number;
+  billingIssueSubscriptions: number;
   expiredSubscriptions: number;
   itemsSaved: WeekOverWeek;
   feedback: WeekOverWeek;
@@ -32,11 +34,12 @@ export interface DbMetrics {
 }
 
 export interface PostHogMetrics {
-  wau: WeekOverWeek;
-  searches: WeekOverWeek;
-  zeroResultSearches: WeekOverWeek;
+  /** null when this individual query failed; rendered as "n/a". */
+  wau: WeekOverWeek | null;
+  searches: WeekOverWeek | null;
+  zeroResultSearches: WeekOverWeek | null;
   /** Users whose first event was 7-21 days ago and who came back on/after day 7. */
-  d7: { cohort: number; returned: number };
+  d7: { cohort: number; returned: number } | null;
 }
 
 export interface ScoreboardInput {
@@ -55,6 +58,7 @@ function delta(w: WeekOverWeek): string {
   if (w.thisWeek === w.lastWeek) return "(no change)";
   if (w.lastWeek === 0) return "(new)";
   const pct = Math.round(((w.thisWeek - w.lastWeek) / w.lastWeek) * 100);
+  if (pct === 0) return "(no change)";
   const sign = pct > 0 ? "+" : "";
   return `(${sign}${pct}% vs ${w.lastWeek})`;
 }
@@ -72,7 +76,7 @@ export function buildScoreboard(input: ScoreboardInput): string {
   const { db, posthog } = input;
   const out: string[] = [];
 
-  out.push(`:bar_chart: *Weekly scoreboard — week ending ${isoDate(input.weekEnding)}*`);
+  out.push(`:bar_chart: *Weekly scoreboard - week ending ${isoDate(input.weekEnding)}*`);
   out.push("");
   out.push("*Acquisition*");
   out.push(line("Signups", db.signups));
@@ -87,20 +91,31 @@ export function buildScoreboard(input: ScoreboardInput): string {
   out.push(line("Items saved", db.itemsSaved));
   out.push("");
   out.push("*Monetization*");
-  out.push(line("Subscriptions started", db.subscriptionsStarted));
   out.push(
-    `• Active: *${db.activeSubscriptions}* · expired: ${db.expiredSubscriptions} · _trial→paid: check RevenueCat_`,
+    line("Subscription rows created", db.subscriptionsStarted) +
+      " · (first-time only; trial->paid and resubscribes: RevenueCat)",
+  );
+  out.push(
+    `• Active: *${db.activeSubscriptions}* · billing issue: ${db.billingIssueSubscriptions} · expired: ${db.expiredSubscriptions}`,
   );
   out.push("");
   out.push("*Engagement & retention*");
   if (posthog) {
-    out.push(line("Weekly active users", posthog.wau));
     out.push(
-      line("Searches", posthog.searches) +
-        ` · zero-result ${pct(posthog.zeroResultSearches.thisWeek, posthog.searches.thisWeek)}`,
+      posthog.wau ? line("Weekly active users", posthog.wau) : "• Weekly active users: n/a",
     );
+    if (posthog.searches) {
+      const zeroResult = posthog.zeroResultSearches
+        ? pct(posthog.zeroResultSearches.thisWeek, posthog.searches.thisWeek)
+        : "n/a";
+      out.push(line("Searches", posthog.searches) + ` · zero-result ${zeroResult}`);
+    } else {
+      out.push("• Searches: n/a");
+    }
     out.push(
-      `• D7 return rate: *${pct(posthog.d7.returned, posthog.d7.cohort)}* (${posthog.d7.returned}/${posthog.d7.cohort} of users who joined 7-21d ago)`,
+      posthog.d7
+        ? `• D7 return rate: *${pct(posthog.d7.returned, posthog.d7.cohort)}* (${posthog.d7.returned}/${posthog.d7.cohort} of users who joined 7-21d ago)`
+        : "• D7 return rate: n/a",
     );
   } else {
     out.push(`• _PostHog metrics unavailable: ${input.posthogNote ?? "not configured"}_`);

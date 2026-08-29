@@ -12,6 +12,30 @@ jest.mock("@/lib/restaurantService", () => ({
   prisma: { feedback: { count: jest.fn(), create: jest.fn() } },
 }));
 
+const mockPostSlackMessage = jest.fn();
+
+jest.mock("@fitsy/shared", () => {
+  const actual = jest.requireActual("@fitsy/shared");
+  return {
+    __esModule: true,
+    ...actual,
+    postSlackMessage: (...args: unknown[]) => mockPostSlackMessage(...args),
+  };
+});
+
+// after() requires the Next.js request-context runtime, which jest doesn't
+// provide. Mock it to invoke the callback immediately so the deferred Slack
+// post is observable in tests.
+jest.mock("next/server", () => {
+  const actual = jest.requireActual("next/server");
+  return {
+    ...actual,
+    after: (cb: () => unknown) => {
+      void cb();
+    },
+  };
+});
+
 import { POST } from "./route";
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
@@ -31,6 +55,7 @@ beforeEach(() => {
   });
   (prisma.feedback.count as jest.Mock).mockResolvedValue(0);
   (prisma.feedback.create as jest.Mock).mockResolvedValue(CREATED);
+  mockPostSlackMessage.mockResolvedValue(true);
 });
 
 function makeRequest(body: unknown): NextRequest {
@@ -54,6 +79,16 @@ describe("POST /api/feedback — success", () => {
       data: { userId: "user-1", userEmail: "alice@example.com", message: "love the app" },
       select: { id: true, createdAt: true },
     });
+  });
+
+  it("posts the feedback alert to Slack with the user's email and message", async () => {
+    const res = await POST(makeRequest({ message: "love the app" }));
+
+    expect(res.status).toBe(201);
+    expect(mockPostSlackMessage).toHaveBeenCalledTimes(1);
+    const text = mockPostSlackMessage.mock.calls[0]![0] as string;
+    expect(text).toContain("alice@example.com");
+    expect(text).toContain("love the app");
   });
 });
 
@@ -118,6 +153,12 @@ describe("POST /api/feedback — validation", () => {
     const res = await POST(makeRequest({ message: "x".repeat(5001) }));
     expect(res.status).toBe(400);
     expect(prisma.feedback.create).not.toHaveBeenCalled();
+  });
+
+  it("does not post to Slack on validation failure", async () => {
+    const res = await POST(makeRequest({}));
+    expect(res.status).toBe(400);
+    expect(mockPostSlackMessage).not.toHaveBeenCalled();
   });
 });
 

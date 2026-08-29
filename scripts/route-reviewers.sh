@@ -13,6 +13,11 @@ CHANGED=$(cat)
 CHANGED=$(echo "$CHANGED" | grep -v 'package-lock\.json$' || true)
 CHANGED=$(echo "$CHANGED" | grep -v '^proj-mgmt/sprints/' || true)
 AGENTS=""
+# Documentation-only agents. Docs that ship alongside code are reviewed with
+# that code (the reviewer reads the docs as part of the diff); they only route
+# to their own domain when the PR is docs-only. See
+# docs/engineering/devops/autonomous-shipping.md, Layer 1.
+DOC_AGENTS=""
 
 # Root-level config files are CTO infrastructure
 if echo "$CHANGED" | grep -qE '^(package\.json|tsconfig\.json|\.nvmrc|\.env[^/]*)$'; then
@@ -50,22 +55,25 @@ fi
 
 # docs/design/                                                                -> designer
 if echo "$CHANGED" | grep -qE '^docs/design/'; then
-  AGENTS="$AGENTS designer"
+  DOC_AGENTS="$DOC_AGENTS designer"
 fi
 
 # docs/product/ proj-mgmt/                                                   -> product-manager
-if echo "$CHANGED" | grep -qE '^(docs/product/|proj-mgmt/)'; then
+if echo "$CHANGED" | grep -qE '^proj-mgmt/'; then
   AGENTS="$AGENTS product-manager"
+fi
+if echo "$CHANGED" | grep -qE '^docs/product/'; then
+  DOC_AGENTS="$DOC_AGENTS product-manager"
 fi
 
 # docs/gtm/                                                                   -> gtm
 if echo "$CHANGED" | grep -qE '^docs/gtm/'; then
-  AGENTS="$AGENTS gtm"
+  DOC_AGENTS="$DOC_AGENTS gtm"
 fi
 
 # docs/engineering/backend/ is backend-owned spec territory                  -> backend
 if echo "$CHANGED" | grep -qE '^docs/engineering/backend/'; then
-  AGENTS="$AGENTS backend"
+  DOC_AGENTS="$DOC_AGENTS backend"
 fi
 
 # Preload pipeline scripts (data ingestion) are backend-owned               -> backend
@@ -76,10 +84,18 @@ fi
 
 # .github/ .claude/ scripts/ CLAUDE.md docs/engineering/adrs/ devops/       -> cto
 # Pipeline scripts already matched as backend above
-if echo "$CHANGED" | grep -vE '^scripts/(preload|rescrape|reestimate|rerun|pipeline-utils|pipeline-events|pipeline-report|pipeline-completed-hex|retry|axiom-setup|hex-grid|hex-assignment|hex-persist|hex-resume|checkpoint|semaphore|overture-discovery|mini-hex-e2e|jest\.config)' | grep -qE '^(\.github/|\.claude/|scripts/|CLAUDE\.md|docs/engineering/(adrs|devops)/)'; then
+if echo "$CHANGED" | grep -vE '^scripts/(preload|rescrape|reestimate|rerun|pipeline-utils|pipeline-events|pipeline-report|pipeline-completed-hex|retry|axiom-setup|hex-grid|hex-assignment|hex-persist|hex-resume|checkpoint|semaphore|overture-discovery|mini-hex-e2e|jest\.config)' | grep -qE '^(\.github/|\.claude/|scripts/|CLAUDE\.md)'; then
   AGENTS="$AGENTS cto"
 fi
+if echo "$CHANGED" | grep -qE '^docs/engineering/(adrs|devops)/'; then
+  DOC_AGENTS="$DOC_AGENTS cto"
+fi
 # END ROUTING TABLE
+
+# Docs-only agents count only when nothing else matched.
+if [ -z "$(echo "$AGENTS" | xargs)" ]; then
+  AGENTS="$DOC_AGENTS"
+fi
 
 # Fallback: if no specific agent matched, CTO reviews
 if [ -z "$AGENTS" ]; then

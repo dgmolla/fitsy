@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { postSlackMessage } from "@fitsy/shared";
 import { prisma } from "@/lib/restaurantService";
+import { loadPostHogMetrics } from "@/services/posthogService";
 import {
   buildScoreboard,
   type DbMetrics,
@@ -20,9 +21,10 @@ import {
  * message says so; the DB half always posts.
  */
 
+export const maxDuration = 60;
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 const WEEK_MS = 7 * DAY_MS;
-const POSTHOG_TIMEOUT_MS = 15_000;
 
 async function weekOverWeek(
   count: (from: Date, to: Date) => Promise<number>,
@@ -45,6 +47,7 @@ async function loadDbMetrics(now: Date): Promise<DbMetrics> {
     activated,
     subscriptionsStarted,
     activeSubscriptions,
+    billingIssueSubscriptions,
     expiredSubscriptions,
     itemsSaved,
     feedback,
@@ -66,7 +69,14 @@ async function loadDbMetrics(now: Date): Promise<DbMetrics> {
       (f, t) => prisma.subscription.count({ where: { createdAt: range(f, t) } }),
       now,
     ),
-    prisma.subscription.count({ where: { status: "active" } }),
+    // Matches lib/subscription.ts's isEntitled semantics: active AND not lapsed.
+    prisma.subscription.count({
+      where: {
+        status: "active",
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      },
+    }),
+    prisma.subscription.count({ where: { status: "billing_issue" } }),
     prisma.subscription.count({ where: { status: "expired" } }),
     weekOverWeek((f, t) => prisma.savedItem.count({ where: { createdAt: range(f, t) } }), now),
     weekOverWeek((f, t) => prisma.feedback.count({ where: { createdAt: range(f, t) } }), now),
@@ -82,6 +92,7 @@ async function loadDbMetrics(now: Date): Promise<DbMetrics> {
     activated,
     subscriptionsStarted,
     activeSubscriptions,
+    billingIssueSubscriptions,
     expiredSubscriptions,
     itemsSaved,
     feedback,
@@ -90,79 +101,25 @@ async function loadDbMetrics(now: Date): Promise<DbMetrics> {
   };
 }
 
-// ─── PostHog (HogQL) ──────────────────────────────────────────────────────────
+// ─── Route ────────────────────────────────────────────────────────────────────
 
-type HogRow = Array<number | string | null>;
+interface PostHogResult {
+  posthog: PostHogMetrics | null;
+  posthogNote: string | undefined;
+}
 
-async function hogql(query: string): Promise<HogRow[]> {
-  const key = process.env["POSTHOG_PERSONAL_API_KEY"];
-  const project = process.env["POSTHOG_PROJECT_ID"];
-  const host = process.env["POSTHOG_HOST"] ?? "https://us.posthog.com";
-  if (!key || !project) throw new Error("not configured");
-
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), POSTHOG_TIMEOUT_MS);
+async function loadPostHogResult(): Promise<PostHogResult> {
   try {
-    const res = await fetch(`${host}/api/projects/${project}/query/`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${key}`,
-      },
-      body: JSON.stringify({ query: { kind: "HogQLQuery", query } }),
-      signal: ctrl.signal,
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json = (await res.json()) as { results?: HogRow[] };
-    return json.results ?? [];
-  } finally {
-    clearTimeout(timer);
+    const posthog = await loadPostHogMetrics();
+    return { posthog, posthogNote: undefined };
+  } catch (err) {
+    const posthogNote =
+      err instanceof Error && err.message === "not configured"
+        ? "set POSTHOG_PERSONAL_API_KEY + POSTHOG_PROJECT_ID"
+        : `query failed (${err instanceof Error ? err.message : "unknown"})`;
+    return { posthog: null, posthogNote };
   }
 }
-
-function num(v: number | string | null | undefined): number {
-  return typeof v === "number" ? v : Number(v ?? 0) || 0;
-}
-
-/** One row: [thisWeek, lastWeek]. */
-async function hogWeekOverWeek(expr: string, where = "1"): Promise<WeekOverWeek> {
-  const rows = await hogql(
-    `select
-       ${expr.replace("__RANGE__", "timestamp >= now() - interval 7 day")} as this_week,
-       ${expr.replace("__RANGE__", "timestamp >= now() - interval 14 day and timestamp < now() - interval 7 day")} as last_week
-     from events where timestamp >= now() - interval 14 day and ${where}`,
-  );
-  const row = rows[0] ?? [];
-  return { thisWeek: num(row[0]), lastWeek: num(row[1]) };
-}
-
-async function loadPostHogMetrics(): Promise<PostHogMetrics> {
-  const [wau, searches, zeroResultSearches, d7rows] = await Promise.all([
-    hogWeekOverWeek("uniqIf(person_id, __RANGE__)"),
-    hogWeekOverWeek("countIf(__RANGE__)", "event = 'search_performed'"),
-    hogWeekOverWeek(
-      "countIf(__RANGE__ and toInt(properties.result_count) = 0)",
-      "event = 'search_performed'",
-    ),
-    hogql(
-      `select count() as cohort, countIf(last_seen >= first_seen + interval 7 day) as returned
-       from (
-         select person_id, min(timestamp) as first_seen, max(timestamp) as last_seen
-         from events group by person_id
-       )
-       where first_seen >= now() - interval 21 day and first_seen < now() - interval 7 day`,
-    ),
-  ]);
-  const d7row = d7rows[0] ?? [];
-  return {
-    wau,
-    searches,
-    zeroResultSearches,
-    d7: { cohort: num(d7row[0]), returned: num(d7row[1]) },
-  };
-}
-
-// ─── Route ────────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const expected = process.env["CRON_SECRET"];
@@ -172,18 +129,10 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   }
 
   const now = new Date();
-  const db = await loadDbMetrics(now);
-
-  let posthog: PostHogMetrics | null = null;
-  let posthogNote: string | undefined;
-  try {
-    posthog = await loadPostHogMetrics();
-  } catch (err) {
-    posthogNote =
-      err instanceof Error && err.message === "not configured"
-        ? "set POSTHOG_PERSONAL_API_KEY + POSTHOG_PROJECT_ID"
-        : `query failed (${err instanceof Error ? err.message : "unknown"})`;
-  }
+  const [db, { posthog, posthogNote }] = await Promise.all([
+    loadDbMetrics(now),
+    loadPostHogResult(),
+  ]);
 
   const text = buildScoreboard({ weekEnding: now, db, posthog, posthogNote });
 
