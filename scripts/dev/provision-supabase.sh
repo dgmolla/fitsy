@@ -67,8 +67,12 @@ SERVICE_KEY="$(echo "$KEYS_JSON" | jq -r '.[] | select(.name=="service_role") | 
 [ -n "$ANON_KEY" ] && [ -n "$SERVICE_KEY" ] || { log "could not read API keys"; exit 1; }
 
 SUPABASE_URL="https://${REF}.supabase.co"
-DIRECT_URL="postgresql://postgres:${DB_PASS}@db.${REF}.supabase.co:5432/postgres"
-POOLED_URL="postgresql://postgres.${REF}:${DB_PASS}@aws-0-${REGION}.pooler.supabase.com:6543/postgres?pgbouncer=true"
+# The direct host db.<ref>.supabase.co is IPv6-only on the free tier and Vercel
+# builders are IPv4, so both URLs go through Supavisor: session mode (5432)
+# for migrations, transaction mode (6543) for the app. Same shape as prod.
+POOLER_HOST="${SUPABASE_POOLER_HOST:-aws-0-${REGION}.pooler.supabase.com}"
+DIRECT_URL="postgresql://postgres.${REF}:${DB_PASS}@${POOLER_HOST}:5432/postgres"
+POOLED_URL="postgresql://postgres.${REF}:${DB_PASS}@${POOLER_HOST}:6543/postgres?pgbouncer=true"
 
 log "verifying direct connection"
 POSTGRES_URL_NON_POOLING="$DIRECT_URL" npx prisma migrate status --schema prisma/schema.prisma >/dev/null 2>&1 || true
@@ -82,7 +86,7 @@ push() { # KEY VALUE  (REST API; never touches Production, see vercel-env-set.sh
 push POSTGRES_PRISMA_URL "$POOLED_URL"
 push POSTGRES_URL "$POOLED_URL"
 push POSTGRES_URL_NON_POOLING "$DIRECT_URL"
-push POSTGRES_HOST "db.${REF}.supabase.co"
+push POSTGRES_HOST "$POOLER_HOST"
 push POSTGRES_PASSWORD "$DB_PASS"
 push SUPABASE_URL "$SUPABASE_URL"
 push NEXT_PUBLIC_SUPABASE_URL "$SUPABASE_URL"
