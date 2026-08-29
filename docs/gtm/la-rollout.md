@@ -74,9 +74,21 @@ Target instead:
   Best fit: they already prescribe the numbers Fitsy filters by.
 - Coaches attached to CrossFit boxes, run clubs, and F45/Barry's-style communities, where the coach is the community's food authority.
 
-**Where to find them.**
-Instagram search on "online coach" + "Los Angeles", location tags at boutique studios, hashtags like #macrocoach #lapersonaltrainer; Trainerize and Everfit public profiles; r/personaltraining and r/LosAngeles for coaches who post; ClassPass and Mindbody studio pages for names.
-Build a sheet of 60.
+**Where to find them (manual list-building; Yelp, Instagram, and Thumbtack prohibit scraping).**
+
+1. Precision Nutrition certified coach directory, LA filter: the highest-fit list, these coaches prescribe macros.
+2. TrueCoach public profiles and IDEA FitnessConnect (location search; profiles carry IG and website).
+3. Yelp "personal trainers Los Angeles": solo trainers usually list their IG as the website.
+4. Trainer-rent gyms, where independents cluster and the host owner is a partner in their own right: Body Builders Gym (Silver Lake, explicitly independent-trainer based), Lift Silverlake, Indigo Fitness, The Compound (Woodland Hills), Nela CrossFit (Eagle Rock). One owner conversation can introduce 5-15 trainers.
+5. Run clubs (48+ free ones: Venice, Koreatown, Midnight Runners, Track Club LA); their coaches are the group's food authority.
+6. Health, Fitness & Wellness Business Networking Mixer, Tue 2026-09-01, 7-10pm, 2536 Lincoln Blvd: built for trainers and online fitness founders, 1-minute pitches. The only trainer-focused LA event before Fit Expo (2027-01-23).
+
+Pool size for context: ~8,300 W-2 fitness trainers in the LA/OC metro (BLS), plus an estimated 5-9k independents in LA County. Sixty names is not a sourcing problem; fit is.
+
+**Sequence.**
+Mixer first (warm handles), then host-gym owners (warm intros), then PN/TrueCoach names.
+Engage with 2-3 of a trainer's posts over a week before the DM; warm DMs reply at 30-50% vs 5-15% cold.
+Fitsy's own IG needs a few real posts before outreach starts; an active sender profile converts 3-4x better.
 
 **The offer.**
 
@@ -87,6 +99,7 @@ Build a sheet of 60.
   This is what makes them keep recommending it.
 
 Do not offer cash or revenue share in the first round; it changes the relationship from "tool I recommend" to "thing I'm paid to push" and clients can tell.
+This matches how coach-specific programs already work (MacroFactor steers coaches away from its cash affiliate; HRV4Training gives coaches free Pro plus free client seats); our 30-day client code is more generous than the usual 7-day trial extension.
 
 **The pitch (DM or email, 4 lines).**
 
@@ -121,14 +134,22 @@ Run them.
 They are easy, and the LA-only constraint is what Meta's radius targeting is built for.
 But treat the first run as buying a CAC number and a creative read, not as the acquisition engine.
 
-- Budget: $25-30/day for 3 weeks, roughly $500-600, then stop and decide.
-- Targeting: 12-15 mile radius around the densest coverage, interests around macro tracking, MyFitnessPal, bodybuilding, meal prep, ages 22-40.
-- Creatives: three angles, one video each, vertical, under 20 seconds: "the 800-calorie salad" (hidden calories), "50g protein at 5 LA spots you know" (local proof), and a straight screen demo of the protein filter.
-- Attribution: iOS SKAdNetwork will under-report; also compare signups during the run against the two prior weeks on the scoreboard, and use a dedicated App Store campaign link so ASC shows the campaign's downloads.
-- Decision rule after 3 weeks: continue only if blended CAC (spend ÷ activated users from the lift) is under $15, which is roughly first-year revenue on the annual plan after Apple's cut.
+**Paid is not influencer content.**
+Cal AI found that reusing subtle influencer integrations as paid ads underperformed; their paid creative went explicit (app on screen in the first seconds, text overlays, fast walkthrough, trial CTA).
+Fitbod and ZOE spend the same way: screen recordings and demos dominate.
+So: creator-style production (phone-shot, lo-fi), product explicit inside the first 1-3 seconds.
+
+- Budget: **$60/day for 10 days** (~$600). $25-30/day sits under Meta's learning floor (~$50/day, ~10 installs/day) and yields ~2 installs/day at LA CPMs ($20-30), which is no signal at all.
+- Targeting: 12-15 mile radius around the densest coverage, ages 22-40, manual audience (for tight geo it beats Advantage+ Audience), and tick "Don't expand audience" or Meta silently widens the radius.
+- Optimize to Install or Trial Start, never Purchase; iOS purchase signal lags too long for a 10-day test.
+- Creatives: 5-6 variants, all 9:16, 6-15s, plus one static for FB Feed. Angles: "the 800-calorie salad" (hidden calories), "50g protein at 5 LA spots you know" (local proof), a straight screen demo of the protein filter, and one founder-face version of the demo.
+- Attribution: SKAdNetwork is useless at this volume. Give each creative its own App Store custom product page and read installs, trial starts, and paid from RevenueCat and PostHog against the two prior weeks on the scoreboard.
+- Benchmarks to judge against: iOS nutrition-app CPI $3-8, trial start 18-28% of installs, trial->paid 40-55%.
+- Decision rule after 10 days: continue only if blended CAC (spend / activated users from the lift) is under $15, roughly first-year revenue on the annual plan after Apple's cut.
   Otherwise stop and spend the money on trainer partners instead.
 
-Apple Search Ads on "macro tracker", "restaurant calories", "high protein near me" with LA geo is worth $100-200 in parallel; intent is explicit and CPI is usually lower than Meta for this kind of query.
+Apple Search Ads on "macro tracker", "restaurant calories", "high protein near me" is worth $20-30/day in parallel if the Apple Ads console offers LA metro targeting (it supports states and some metros; confirm before spending).
+Category CPI runs $2-7 with the best install->paid of any channel (5-15%).
 
 ### Not doing during the LA phase
 
@@ -167,5 +188,6 @@ That means the loop isn't working and another city won't fix it.
 - [ ] App Store subtitle and first description line say "Los Angeles".
 - [x] Set `POSTHOG_PERSONAL_API_KEY` + `POSTHOG_PROJECT_ID` in `fitsy-api` (Vercel) so the scoreboard has retention. Done 2026-08-26, verified in prod.
 - [ ] Trainer sheet with 60 names; first 20 pitches sent the day of release.
-- [ ] Three Meta creatives recorded; campaign built and paused, ready to start day 3.
+- [ ] Five or six Meta creatives recorded (product on screen by second 3); campaign at $60/day built and paused, "Don't expand audience" ticked; one custom product page per creative.
+- [ ] Tue 2026-09-01: Health/Fitness/Wellness mixer, 2536 Lincoln Blvd, 7-10pm; bring QR cards.
 - [ ] Release on a Tuesday or Wednesday morning, not a Friday.
