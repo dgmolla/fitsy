@@ -2,7 +2,11 @@
 # preview deployment of main against the DEV database:
 #   https://fitsy-git-dev-dawits-projects-74b6e00f.vercel.app
 # The mobile dev client and local simulator work point at that URL.
-# No Vercel token is needed: Vercel builds every branch as a preview.
+#
+# Vercel skips a git-triggered build when the commit SHA was already deployed
+# (it always was, for main), so the build is kicked via a project deploy hook
+# bound to the `dev` branch. The hook URL is the only secret; it carries no
+# account permissions beyond "build this branch".
 name: Mirror main to dev
 on:
   push:
@@ -17,3 +21,5 @@ jobs:
         with:
           fetch-depth: 0
       - run: git push --force origin main:dev
+      - name: Trigger Vercel build of dev
+        run: curl -sf -X POST "${{ secrets.VERCEL_DEV_DEPLOY_HOOK }}" | head -c 300
