@@ -2,6 +2,7 @@ import type { CustomerInfo } from 'react-native-purchases';
 import { PAYWALL_RESULT } from 'react-native-purchases-ui';
 import {
   ENTITLEMENT_ID,
+  hasLapsedEntitlement,
   interpretPurchaseError,
   isProActive,
   mapPaywallResult,
@@ -16,6 +17,17 @@ function infoWithEntitlements(...active: string[]): CustomerInfo {
   const map: Record<string, unknown> = {};
   for (const id of active) map[id] = { identifier: id, isActive: true };
   return { entitlements: { active: map, all: map } } as unknown as CustomerInfo;
+}
+
+// Build a CustomerInfo-shaped object where `active` and `all` differ, so a
+// past-but-lapsed entitlement (present in `all`, absent from `active`) can be
+// distinguished from one that was never granted at all (absent from both).
+function infoWithHistory(activeIds: string[], allIds: string[]): CustomerInfo {
+  const active: Record<string, unknown> = {};
+  for (const id of activeIds) active[id] = { identifier: id, isActive: true };
+  const all: Record<string, unknown> = {};
+  for (const id of allIds) all[id] = { identifier: id, isActive: activeIds.includes(id) };
+  return { entitlements: { active, all } } as unknown as CustomerInfo;
 }
 
 describe('pickApiKey', () => {
@@ -78,6 +90,30 @@ describe('isProActive', () => {
   it('honours a custom entitlement id', () => {
     expect(isProActive(infoWithEntitlements('vip'), 'vip')).toBe(true);
     expect(isProActive(infoWithEntitlements('vip'))).toBe(false);
+  });
+});
+
+describe('hasLapsedEntitlement', () => {
+  it('is false for null/undefined customer info', () => {
+    expect(hasLapsedEntitlement(null)).toBe(false);
+    expect(hasLapsedEntitlement(undefined)).toBe(false);
+  });
+
+  it('is false when the user never had the entitlement', () => {
+    expect(hasLapsedEntitlement(infoWithHistory([], []))).toBe(false);
+  });
+
+  it('is false when the entitlement is currently active', () => {
+    expect(hasLapsedEntitlement(infoWithHistory([ENTITLEMENT_ID], [ENTITLEMENT_ID]))).toBe(false);
+  });
+
+  it('is true when the entitlement is in history but not active — the lapsed case', () => {
+    expect(hasLapsedEntitlement(infoWithHistory([], [ENTITLEMENT_ID]))).toBe(true);
+  });
+
+  it('honours a custom entitlement id', () => {
+    expect(hasLapsedEntitlement(infoWithHistory([], ['vip']), 'vip')).toBe(true);
+    expect(hasLapsedEntitlement(infoWithHistory([], ['vip']))).toBe(false);
   });
 });
 

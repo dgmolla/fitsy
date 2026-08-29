@@ -111,6 +111,24 @@ export function isProActive(
   return info.entitlements.active[entitlementId] !== undefined;
 }
 
+/**
+ * True when the user has a past record of this entitlement (RevenueCat keeps
+ * expired/cancelled entitlements in `entitlements.all`) but it isn't active
+ * now — i.e. they subscribed before and lapsed, as opposed to never having
+ * subscribed at all (no record in `.all`). Used to route lapsed users to a
+ * dedicated win-back screen instead of the generic first-time paywall, since
+ * that paywall promises a free trial Apple won't grant a second time to the
+ * same Apple ID.
+ */
+export function hasLapsedEntitlement(
+  info: CustomerInfo | null | undefined,
+  entitlementId: string = ENTITLEMENT_ID,
+): boolean {
+  if (!info) return false;
+  if (info.entitlements.active[entitlementId] !== undefined) return false;
+  return info.entitlements.all[entitlementId] !== undefined;
+}
+
 // ─── Identity ───────────────────────────────────────────────────────────────
 // We alias the RevenueCat app-user-id to the Supabase user id so entitlements
 // follow the account across devices and reinstalls (rather than living on an

@@ -30,6 +30,7 @@ import {
   configurePurchases,
   fetchCurrentOffering,
   fetchCustomerInfo,
+  hasLapsedEntitlement,
   identifyPurchasesUser,
   isProActive,
   logoutPurchasesUser,
@@ -50,6 +51,8 @@ export interface PurchasesContextValue {
   ready: boolean;
   /** True when the `pro` entitlement is active. */
   isPro: boolean;
+  /** True when `pro` was active before but has lapsed (cancelled/expired) — see `hasLapsedEntitlement`. */
+  isLapsed: boolean;
   customerInfo: CustomerInfo | null;
   /** Current offering — its `.annual`/`.monthly` packages back the in-app paywall. */
   offering: PurchasesOffering | null;
@@ -165,6 +168,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   const value: PurchasesContextValue = {
     ready,
     isPro: isProActive(customerInfo),
+    isLapsed: hasLapsedEntitlement(customerInfo),
     customerInfo,
     offering,
     refresh,
