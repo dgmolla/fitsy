@@ -1,6 +1,7 @@
 # GTM Strategy — Fitsy
 
-> **Status:** Active · **Last verified:** 2026-06-12
+> **Status:** Active · **Last verified:** 2026-08-26
+> **Launch phase:** LA-only, 12-16 week test. Channels, first-user plan, feedback loop, and exit criteria live in `la-rollout.md`; this doc is the long-run positioning and portfolio.
 
 ---
 

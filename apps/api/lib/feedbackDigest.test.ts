@@ -1,4 +1,10 @@
-import { buildFeedbackDigest, type FeedbackDigestRow } from "./feedbackDigest";
+import {
+  buildFeedbackAlert,
+  buildFeedbackDigest,
+  buildReplyMailto,
+  escapeSlackText,
+  type FeedbackDigestRow,
+} from "./feedbackDigest";
 
 const ROW = (over: Partial<FeedbackDigestRow> = {}): FeedbackDigestRow => ({
   userEmail: "alice@example.com",
@@ -43,5 +49,64 @@ describe("buildFeedbackDigest", () => {
 
   it("honors a custom window size in the header", () => {
     expect(buildFeedbackDigest([], { windowHours: 48 })).toContain("last 48h");
+  });
+
+  it("escapes Slack mrkdwn control characters in the message", () => {
+    const text = buildFeedbackDigest([ROW({ message: "please ping <!channel> about this" })]);
+    expect(text).toContain("&lt;!channel&gt;");
+    expect(text).not.toContain("<!channel>");
+  });
+
+  it("stays under Slack's 4000-char limit and summarizes the rest", () => {
+    const rows = Array.from({ length: 20 }, (_, i) =>
+      ROW({
+        userEmail: `user${i}@example.com`,
+        message: `feedback number ${i} `.repeat(20),
+      }),
+    );
+    const text = buildFeedbackDigest(rows);
+    expect(text.length).toBeLessThan(4000);
+    expect(text).toMatch(/\.\.\. and \d+ more; see the Feedback table/);
+  });
+});
+
+describe("buildFeedbackAlert / reply links", () => {
+  it("posts one real-time message with a pre-filled mailto reply", () => {
+    const text = buildFeedbackAlert(
+      ROW({ userEmail: "bob@x.com", message: "macros for Sweetgreen look off" }),
+    );
+    expect(text).toContain("*New feedback* from _bob@x.com_");
+    expect(text).toContain("> macros for Sweetgreen look off");
+    expect(text).toContain("<mailto:bob%40x.com?subject=");
+    expect(text).toContain("|Reply>");
+    expect(text).toContain("within 24h");
+  });
+
+  it("quotes the user's note and asks for a call in the reply body", () => {
+    const url = buildReplyMailto("bob@x.com", "the  search   is slow");
+    const body = decodeURIComponent(url.split("&body=")[1] ?? "");
+    expect(body).toContain("> the search is slow");
+    expect(body).toContain("10-minute call");
+  });
+
+  it("adds a Reply link to every digest entry", () => {
+    const text = buildFeedbackDigest([ROW({ userEmail: "a@x.com" }), ROW({ userEmail: "b@x.com" })]);
+    expect(text.match(/\|Reply>/g)).toHaveLength(2);
+  });
+
+  it("escapes Slack mrkdwn control characters in the message", () => {
+    const text = buildFeedbackAlert(ROW({ message: "please ping <!channel> about this" }));
+    expect(text).toContain("&lt;!channel&gt;");
+    expect(text).not.toContain("<!channel>");
+  });
+});
+
+describe("escapeSlackText", () => {
+  it("escapes &, <, and > in that order", () => {
+    expect(escapeSlackText("a & b < c > d")).toBe("a &amp; b &lt; c &gt; d");
+  });
+
+  it("leaves plain text untouched", () => {
+    expect(escapeSlackText("no special chars here")).toBe("no special chars here");
   });
 });

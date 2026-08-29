@@ -51,6 +51,7 @@ Index of all documentation. Restructured 2026-06-12 (see [`docs-refactor-proposa
 
 ## GTM — `gtm/`
 
+- [la-rollout.md](gtm/la-rollout.md) — LA-only launch: trainer program, Meta test, feedback loop, weekly ritual, exit criteria
 - [strategy.md](gtm/strategy.md) — positioning, channel portfolio, growth flywheel
 - [ugc-playbook.md](gtm/ugc-playbook.md) — end-to-end UGC creator pipeline + content hook library
 - [seo-discovery.md](gtm/seo-discovery.md) — organic / LLM discovery (llms.txt, programmatic SEO, JSON-LD)

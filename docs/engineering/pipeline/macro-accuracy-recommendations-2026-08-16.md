@@ -182,6 +182,8 @@ The metro direction promotes two items that were previously deferred: the Batch 
 
 ## Decision 5 - Launch and metro rollout
 
+> **Superseded 2026-08-26.** Decided against onboarding more cities for now: LA-only, 12-16 week test with explicit exit criteria in `docs/gtm/la-rollout.md`. The gates below (D10 coverage audit, D1 certification before paid spend) still apply whenever expansion resumes.
+
 **Recommendation: launch LA now (the button exists - press it), then roll out the top ~10 metros one at a time, each gated on the D10 coverage audit and D1 certification, with Meta geo-targeted ads following each metro as it goes live.**
 
 *(This section was revised twice on 2026-08-16: first when App Store approval + the Meta-ads channel landed, then when the metro direction was settled.

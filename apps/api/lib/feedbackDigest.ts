@@ -1,9 +1,16 @@
 /**
- * Formats a daily feedback round-up into a Slack mrkdwn message.
+ * Formats user feedback for Slack, in two shapes:
+ *
+ *   - `buildFeedbackAlert`  - one message per submission, posted the moment a
+ *     user hits "Send" (from POST /api/feedback). Carries a one-click
+ *     `mailto:` reply pre-filled with the "can I call you for 10 min?" ask, so
+ *     the 24h personal-reply rule in docs/product/feedback-triage.md costs one
+ *     click, not a context switch.
+ *   - `buildFeedbackDigest` - the daily round-up (cron), the safety net for
+ *     anything missed in real time. Same reply links.
  *
  * Kept pure (no DB / no network) so it's trivially testable and reusable by
- * both the cron route and the dry-run script. The route supplies rows already
- * filtered to the digest window and sorted newest-first.
+ * both routes and the dry-run script.
  */
 
 export interface FeedbackDigestRow {
@@ -21,8 +28,15 @@ export interface FeedbackDigestOptions {
 
 const DEFAULT_WINDOW_HOURS = 24;
 const DEFAULT_PER_ITEM_MAX = 280;
+/** Keep the quoted excerpt in the reply short enough for a sane mailto URL. */
+const REPLY_QUOTE_MAX = 200;
+/**
+ * Slack messages must stay under 4000 chars. Render digest rows until the
+ * next one would push us past this budget, then summarize the rest.
+ */
+const DIGEST_CHAR_BUDGET = 3800;
 
-/** "2026-06-06 14:23 UTC" — deterministic, locale-independent, testable. */
+/** "2026-06-06 14:23 UTC" - deterministic, locale-independent, testable. */
 function formatTimestamp(d: Date): string {
   const iso = d.toISOString(); // 2026-06-06T14:23:05.000Z
   return `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`;
@@ -33,6 +47,62 @@ function truncate(s: string, max: number): string {
   return collapsed.length > max ? collapsed.slice(0, max - 1) + "…" : collapsed;
 }
 
+/**
+ * Escapes Slack mrkdwn's three reserved characters so user-supplied text
+ * (email, message) can't be mistaken for mrkdwn control sequences - most
+ * importantly `<!channel>` / `<!here>` / `<@user>` style broadcasts, which
+ * start with `<`. Apply to any user-supplied text interpolated into a Slack
+ * message; do not apply to the mailto URL, which is separately encoded via
+ * `encodeURIComponent`.
+ */
+export function escapeSlackText(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/**
+ * Pre-filled reply. The body quotes their note back (so they remember what
+ * they said) and asks for a 10-minute call: at <100 users, calls are where
+ * the real product insight is. Founder edits before sending, this is a draft.
+ */
+export function buildReplyMailto(userEmail: string, message: string): string {
+  const subject = "Re: your Fitsy feedback";
+  const body = [
+    "Hi,",
+    "",
+    "Thanks for the note, I read every one personally:",
+    "",
+    `> ${truncate(message, REPLY_QUOTE_MAX)}`,
+    "",
+    "Would you be up for a 10-minute call this week? I'd love to hear how you're using Fitsy and what's getting in the way. Reply with a couple of times that work and I'll send an invite.",
+    "",
+    "Dawit",
+    "Founder, Fitsy",
+  ].join("\n");
+  return `mailto:${encodeURIComponent(userEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+/** Slack mrkdwn link: `<url|label>`. */
+function replyLink(userEmail: string, message: string): string {
+  return `<${buildReplyMailto(userEmail, message)}|Reply>`;
+}
+
+/** Real-time, one message per submission. */
+export function buildFeedbackAlert(row: FeedbackDigestRow): string {
+  const when = formatTimestamp(row.createdAt);
+  const msg = escapeSlackText(truncate(row.message, DEFAULT_PER_ITEM_MAX));
+  return [
+    `:speech_balloon: *New feedback* from _${escapeSlackText(row.userEmail)}_ · ${when}`,
+    `> ${msg}`,
+    `${replyLink(row.userEmail, row.message)} within 24h · ask for a 10-min call`,
+  ].join("\n");
+}
+
+function digestItem(row: FeedbackDigestRow, index: number, perItemMax: number): string {
+  const when = formatTimestamp(row.createdAt);
+  const msg = escapeSlackText(truncate(row.message, perItemMax));
+  return `*${index}.* _${escapeSlackText(row.userEmail)}_ · ${when} · ${replyLink(row.userEmail, row.message)}\n> ${msg}`;
+}
+
 export function buildFeedbackDigest(
   rows: FeedbackDigestRow[],
   options: FeedbackDigestOptions = {},
@@ -41,15 +111,26 @@ export function buildFeedbackDigest(
   const perItemMax = options.perItemMaxChars ?? DEFAULT_PER_ITEM_MAX;
 
   if (rows.length === 0) {
-    return `:inbox_tray: *Feedback round-up — last ${windowHours}h*\nNo new feedback. :sparkles:`;
+    return `:inbox_tray: *Feedback round-up - last ${windowHours}h*\nNo new feedback. :sparkles:`;
   }
 
-  const header = `:inbox_tray: *Feedback round-up — last ${windowHours}h (${rows.length})*`;
-  const items = rows.map((r, i) => {
-    const when = formatTimestamp(r.createdAt);
-    const msg = truncate(r.message, perItemMax);
-    return `*${i + 1}.* _${r.userEmail}_ · ${when}\n> ${msg}`;
-  });
+  const header = `:inbox_tray: *Feedback round-up - last ${windowHours}h (${rows.length})*\n_Every item below should already have a personal reply. If not, click Reply._`;
 
-  return `${header}\n\n${items.join("\n\n")}`;
+  // Render rows until the next one would push us past the char budget, then
+  // summarize the rest instead of overflowing Slack's 4000-char limit.
+  const sections: string[] = [];
+  let used = header.length;
+  let shown = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const item = digestItem(rows[i]!, i + 1, perItemMax);
+    if (sections.length > 0 && used + 2 + item.length > DIGEST_CHAR_BUDGET) break;
+    sections.push(item);
+    used += 2 + item.length;
+    shown = i + 1;
+  }
+  if (shown < rows.length) {
+    sections.push(`... and ${rows.length - shown} more; see the Feedback table`);
+  }
+
+  return `${header}\n\n${sections.join("\n\n")}`;
 }
