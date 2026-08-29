@@ -1,0 +1,17 @@
+# Registry of verification checks. See README.md for the contract.
+# layer: L0-L10 per docs/engineering/devops/autonomous-shipping.md
+# tier: all | medium+ | high      (risk tier of the PR that triggers it)
+# blocking: true | shadow          (shadow = reported, never fails the PR)
+# runs: ci | local | scheduled     (where it is invoked from)
+checks:
+  - name: dev-drift
+    script: dev-drift.sh
+    layer: L3
+    tier: all
+    paths: ["prisma/**"]
+    blocking: shadow
+    runs: [scheduled, local]
+    why: >
+      The dev environment must track main's schema and keep seed data so E2E
+      (L6, L7) runs against a known state. Added with the dev environment,
+      2026-08-29 (autonomous-shipping rollout step 4b).

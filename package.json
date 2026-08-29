@@ -7,6 +7,9 @@
     "packages/*",
     "scripts"
   ],
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
   "scripts": {
     "dev:api": "npm run dev -w apps/api",
     "dev:mobile": "npm run start -w apps/mobile",
@@ -18,6 +21,10 @@
     "lint": "npm run lint --workspaces --if-present",
     "type-check": "npm run type-check --workspaces --if-present",
     "prepare": "husky",
+    "dev:env": "bash scripts/dev/write-local-env.sh",
+    "dev:reset": "tsx scripts/dev/reset.ts",
+    "dev:snapshot": "tsx scripts/dev/snapshot.ts",
+    "verify:dev-drift": "bash scripts/verify/dev-drift.sh",
     "android": "expo run:android",
     "ios": "expo run:ios"
   },

@@ -73,11 +73,14 @@ Architecture: `docs/engineering/architecture/system-design.md` (+ `auth.md`, `ap
 
 ### Commands
 ```bash
-npm run dev:api        # API dev server
+npm run dev:env        # Pull DEV env creds (api .env.local, mobile .env.development.local, .env.dev)
+npm run dev:api        # API dev server (talks to the dev DB by default)
 npm run dev:mobile     # Expo dev client
 npm test               # Run tests
 npx prisma migrate dev # Run migrations
 ```
+
+Environments: ephemeral (CI + `prisma/seed.ts`), **dev** (`fitsy-dev` Supabase: previews, local, simulator), prod. `docs/engineering/devops/staging-environment.md`; `scripts/dev/` refuses prod.
 
 ### Git Hooks Setup (one-time, per clone)
 ```bash
@@ -89,7 +92,7 @@ substitute for the full Pre-PR Gate above (which also requires `npm test` and
 `npm run build`). Catches the most common CI failures in seconds.
 
 ### Environment Variables
-Managed via Vercel CLI. All secrets live in Vercel → auto-synced to deploys.
+Managed via Vercel CLI. All secrets live in Vercel → auto-synced to deploys. `Production` holds prod creds; `Preview` and `Development` hold the dev environment's.
 ```bash
 vercel env ls              # List all env vars
 vercel env pull .env.local # Pull to local dev

@@ -1,0 +1,19 @@
+# Keep a `dev` branch identical to `main` so Vercel maintains a stable
+# preview deployment of main against the DEV database:
+#   https://fitsy-git-dev-dawits-projects-74b6e00f.vercel.app
+# The mobile dev client and local simulator work point at that URL.
+# No Vercel token is needed: Vercel builds every branch as a preview.
+name: Mirror main to dev
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: git push --force origin main:dev
