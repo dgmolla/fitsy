@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 
@@ -38,6 +38,14 @@ export default function SignInScreen() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [devLoading, setDevLoading] = useState(false);
 
+  // Sign-in now happens AFTER the anonymous onboarding narrative + the "restaurants
+  // that fit your macros" teaser (welcome/results.tsx), so a new user continues
+  // straight into location/notification setup rather than restarting the
+  // narrative. `outOfArea` carries results.tsx's empty-preview determination
+  // forward so an out-of-area user lands on the waitlist screen instead.
+  const { outOfArea } = useLocalSearchParams<{ outOfArea?: string }>();
+  const newUserDestination = outOfArea === '1' ? '/welcome/out-of-area' : '/welcome/notification-permission';
+
   const [, response, promptGoogleAsync] = Google.useIdTokenAuthRequest({
     iosClientId: GOOGLE_IOS_CLIENT_ID ?? 'not-configured',
     clientId: GOOGLE_WEB_CLIENT_ID,
@@ -58,10 +66,10 @@ export default function SignInScreen() {
             await captureIdentity(r.user.id, r.user.email);
             if (!r.isNewUser) await pullProfileFromServer();
             setGoogleLoading(false);
-            // Account creation now happens early (2nd screen), so a NEW user
-            // continues into the onboarding narrative; a RETURNING user already
+            // A NEW user just finished the anonymous narrative + teaser, so they
+            // continue into location/notification setup; a RETURNING user already
             // has a profile and skips straight to the app.
-            router.replace(r.isNewUser ? '/welcome/promise' : '/(tabs)/search');
+            router.replace(r.isNewUser ? newUserDestination : '/(tabs)/search');
           })
           .catch((err: Error) => {
             trackAuthFailure({ provider: 'google', error_message: err.message });
@@ -82,8 +90,8 @@ export default function SignInScreen() {
       trackAuthSuccess({ provider: 'apple', is_new_user: r.isNewUser });
       await captureIdentity(r.user.id, r.user.email);
       if (!r.isNewUser) await pullProfileFromServer();
-      // New user → continue onboarding; returning user → straight to the app.
-      router.replace(r.isNewUser ? '/welcome/promise' : '/(tabs)/search');
+      // New user → continue into location/notification setup; returning user → straight to the app.
+      router.replace(r.isNewUser ? newUserDestination : '/(tabs)/search');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Apple Sign In failed';
       if (!msg.includes('canceled')) {
@@ -107,8 +115,8 @@ export default function SignInScreen() {
       const r = await devLogin();
       trackAuthSuccess({ provider: 'dev', is_new_user: false });
       await captureIdentity(r.user.id, r.user.email);
-      // Continue into onboarding so the full flow is testable on the sim.
-      router.replace('/welcome/promise');
+      // Continue where a new user would land, so the full flow is testable on the sim.
+      router.replace(newUserDestination);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Dev login failed';
       trackAuthFailure({ provider: 'dev', error_message: msg });
