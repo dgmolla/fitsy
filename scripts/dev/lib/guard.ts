@@ -31,7 +31,12 @@ export function assertNotProd(url: string | undefined, label: string): string {
   return url;
 }
 
-/** Direct (non-pooled) prod URL with the session forced read-only. */
+/**
+ * Prod URL pinned to a single connection so `applyReadOnly` covers every query.
+ * (Supabase's "non-pooling" URL is a Supavisor session-mode pooler; a
+ * `?options=` startup parameter breaks its tenant lookup, so read-only is set
+ * per session instead of at connect time.)
+ */
 export function prodReadOnlyUrl(url: string | undefined): string {
   if (!url) {
     throw new Error(
@@ -43,7 +48,12 @@ export function prodReadOnlyUrl(url: string | undefined): string {
     throw new Error(`PROD_DATABASE_URL does not look like the prod project (${PROD_PROJECT_REF}).`);
   }
   const sep = url.includes("?") ? "&" : "?";
-  return `${url}${sep}options=-c%20default_transaction_read_only%3Don`;
+  return `${url}${sep}connection_limit=1`;
+}
+
+/** Make the (single) session read-only. Call right after constructing the client. */
+export async function applyReadOnly(client: { $executeRawUnsafe(q: string): Promise<unknown> }): Promise<void> {
+  await client.$executeRawUnsafe("SET default_transaction_read_only = on");
 }
 
 export function hostOf(url: string): string {

@@ -31,7 +31,7 @@ describe("guard", () => {
   });
 
   it("forces prod source connections read-only", () => {
-    expect(prodReadOnlyUrl(PROD)).toContain("default_transaction_read_only");
+    expect(prodReadOnlyUrl(PROD)).toContain("connection_limit=1");
     expect(() => prodReadOnlyUrl(DEV)).toThrow(/prod project/);
   });
 });

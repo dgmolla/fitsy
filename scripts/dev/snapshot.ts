@@ -20,7 +20,7 @@
  */
 
 import { Prisma, PrismaClient } from "@prisma/client";
-import { assertNotProd, prodReadOnlyUrl, hostOf } from "./lib/guard";
+import { assertNotProd, prodReadOnlyUrl, applyReadOnly, hostOf } from "./lib/guard";
 
 function flag(name: string, dflt: number): number {
   const m = process.argv.find((a) => a.startsWith(`--${name}=`));
@@ -39,6 +39,7 @@ async function main(): Promise<void> {
   console.error(`snapshot prod -> ${hostOf(dstUrl)} | ${limit} restaurants within ${radiusMi}mi of ${lat},${lng}`);
 
   try {
+    await applyReadOnly(src);
     const latDelta = radiusMi / 69;
     const lngDelta = radiusMi / (69 * Math.cos((lat * Math.PI) / 180));
     const restaurants = await src.restaurant.findMany({
