@@ -21,7 +21,7 @@ PROD_REF="zaxkmjqozvmbifiwbxps"
 
 log() { echo "[provision] $*" >&2; }
 need() { command -v "$1" >/dev/null || { log "missing: $1"; exit 1; }; }
-need npx; need vercel; need jq
+need npx; need vercel; need jq; need curl
 
 sb() { npx --yes supabase "$@"; }
 
@@ -76,12 +76,8 @@ POSTGRES_URL_NON_POOLING="$DIRECT_URL" npx prisma migrate status --schema prisma
 # ---------------------------------------------------------------------------
 # 3. Push to Vercel Preview + Development (source of truth for dev creds)
 # ---------------------------------------------------------------------------
-push() { # KEY VALUE
-  for env in preview development; do
-    printf '%s' "$2" | vercel env add "$1" "$env" --force >/dev/null 2>&1 \
-      || printf '%s' "$2" | vercel env add "$1" "$env" >/dev/null
-  done
-  log "  vercel env: $1 -> preview, development"
+push() { # KEY VALUE  (REST API; never touches Production, see vercel-env-set.sh)
+  bash "$REPO_ROOT/scripts/dev/vercel-env-set.sh" "$1" "$2"
 }
 push POSTGRES_PRISMA_URL "$POOLED_URL"
 push POSTGRES_URL "$POOLED_URL"
@@ -117,5 +113,5 @@ bash scripts/verify/dev-drift.sh || true
 # ---------------------------------------------------------------------------
 # 5. Local env files
 # ---------------------------------------------------------------------------
-bash scripts/dev/write-local-env.sh
+if [ "${SKIP_LOCAL_ENV:-}" = "1" ]; then log "SKIP_LOCAL_ENV=1: not touching local env files (run: npm run dev:env)"; else bash scripts/dev/write-local-env.sh; fi
 log "done. Next: enable Apple/Google providers in the dev Supabase dashboard only if you need social sign-in in dev (email/password seed users cover E2E)."
