@@ -1,6 +1,6 @@
 # Keep a `dev` branch identical to `main` so Vercel maintains a stable
 # preview deployment of main against the DEV database:
-#   https://fitsy-api-git-dev-dawits-projects-74b6e00f.vercel.app
+#   https://dev.fitsy.org
 # The mobile dev client and local simulator work point at that URL.
 #
 # Vercel skips a git-triggered build when the commit SHA was already deployed

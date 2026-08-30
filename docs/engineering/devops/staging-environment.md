@@ -19,7 +19,7 @@ graph LR
     subgraph dev["dev (fitsy-dev Supabase)"]
         D[(dev DB + dev auth)]
         P[Vercel preview per PR] --> D
-        DA[stable dev API<br/>fitsy-git-dev-*.vercel.app] --> D
+        DA[stable dev API<br/>dev.fitsy.org] --> D
         L[local npm run dev:api] --> D
         SIM[simulator / dev client] --> DA
     end
@@ -41,7 +41,7 @@ graph LR
 ## Wiring
 
 - **Vercel env**: `Preview` and `Development` environments hold the dev credentials; `Production` holds prod. `scripts/dev/provision-supabase.sh` writes them. Nothing in the repo references a dev secret.
-- **Stable dev API**: `.github/workflows/mirror-dev-branch.yml` force-pushes `main` to a `dev` branch on every merge; Vercel builds it as a preview against the dev DB at `https://fitsy-api-git-dev-dawits-projects-74b6e00f.vercel.app`.
+- **Stable dev API**: `.github/workflows/mirror-dev-branch.yml` force-pushes `main` to a `dev` branch on every merge and fires a Vercel deploy hook (git pushes of an already-deployed SHA are deduped). Vercel builds it against the dev DB and serves it at `https://dev.fitsy.org`, a custom domain bound to the `dev` branch. Vercel Deployment Protection (SSO) is **off** for this project's previews (decided 2026-08-29): the branch-bound custom domain was still SSO-gated, and the mobile dev client cannot send a bypass header without a code change. Previews run against dev data and the API enforces its own auth, so the exposure is dev-only. If protection is ever wanted back, use a Protection Bypass for Automation secret and add the `x-vercel-protection-bypass` header to `apps/mobile/lib/api.ts` in dev builds.
 - **Local API**: `npm run dev:env` pulls the Development env into `apps/api/.env.local`, so `npm run dev:api` talks to dev by default. Pointing local at prod is explicit: `vercel env pull --environment=production .env.prod.local` and load it yourself.
 - **Mobile**: `npm run dev:env` also writes `apps/mobile/.env.development.local` (`EXPO_PUBLIC_API_URL` = stable dev API, dev Supabase URL and anon key). Expo reads it ahead of `.env` in dev mode; release builds keep the production `.env`.
 - **Scripts**: `set -a; source .env.dev; set +a` loads the dev set for `scripts/dev/*` and `scripts/verify/dev-drift.sh`.
