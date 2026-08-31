@@ -30,6 +30,7 @@ model User {
   savedItems      SavedItem[]
   subscription    Subscription?
   feedback        Feedback[]
+  feedbackVotes   FeedbackVote[]
   launchWaitlist  LaunchWaitlist?
 }
 
@@ -219,17 +220,39 @@ model Subscription {
 }
 
 model Feedback {
-  id        String   @id @default(cuid())
-  userId    String
+  id          String         @id @default(cuid())
+  userId      String
   // Denormalized at write time so the inbox is readable without a User join
   // and survives if the account is later deleted-then-recreated.
-  userEmail String
-  message   String
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userEmail   String
+  // Denormalized public-facing name (user.name, or the email local-part, or
+  // "Anonymous") so the board never has to expose userEmail to other users.
+  displayName String
+  message     String
+  status      FeedbackStatus @default(published)
+  voteCount   Int            @default(0)
+  createdAt   DateTime       @default(now())
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  votes       FeedbackVote[]
 
   @@index([userId, createdAt])
   @@index([createdAt])
+  @@index([status, voteCount])
+}
+
+// One row per (feedback, user) upvote. The unique constraint is the actual
+// enforcement of "one vote per person per post" — app logic alone can't
+// prevent a double-vote race, the DB constraint can.
+model FeedbackVote {
+  id         String   @id @default(cuid())
+  feedbackId String
+  userId     String
+  createdAt  DateTime @default(now())
+  feedback   Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([feedbackId, userId])
+  @@index([feedbackId])
 }
 
 model PipelineCompletedHex {
@@ -259,4 +282,9 @@ enum ConfidenceLevel {
 enum SavedItemType {
   restaurant
   menu_item
+}
+
+enum FeedbackStatus {
+  published
+  hidden
 }

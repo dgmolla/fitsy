@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { feedbackLimiter } from "@/lib/rateLimit";
+import { containsProfanity } from "@/lib/moderation";
 import { prisma } from "@/lib/restaurantService";
 import {
   FEEDBACK_MAX_LENGTH,
   postSlackMessage,
   type FeedbackApiResponse,
+  type FeedbackBoardApiResponse,
+  type FeedbackBoardPost,
 } from "@fitsy/shared";
 import { buildFeedbackAlert } from "@/lib/feedbackDigest";
 
@@ -15,6 +18,10 @@ import { buildFeedbackAlert } from "@/lib/feedbackDigest";
 // Slack (deferred via after(), after the response is sent) with a one-click
 // reply link (the daily digest cron is the safety net). The Slack post is
 // best-effort: it never fails the request. Requires a valid Bearer JWT.
+//
+// Every submission is also a public board post (status defaults to
+// "published"), so it's moderated up front with a basic profanity gate
+// instead of after the fact.
 //
 // Throttling is two-layered and conservative:
 //   1. In-process limiter — cheap per-instance burst guard.
@@ -65,6 +72,13 @@ export async function POST(
     );
   }
 
+  if (containsProfanity(trimmed)) {
+    return NextResponse.json(
+      { error: "Please remove inappropriate language and try again" },
+      { status: 400 },
+    );
+  }
+
   try {
     // Layer 2: cold-start-proof daily cap.
     const recentCount = await prisma.feedback.count({
@@ -77,8 +91,19 @@ export async function POST(
       );
     }
 
+    const user = await prisma.user.findUnique({
+      where: { id: auth.sub },
+      select: { name: true },
+    });
+    const displayName = user?.name?.trim() || auth.email.split("@")[0]!;
+
     const feedback = await prisma.feedback.create({
-      data: { userId: auth.sub, userEmail: auth.email, message: trimmed },
+      data: {
+        userId: auth.sub,
+        userEmail: auth.email,
+        displayName,
+        message: trimmed,
+      },
       select: { id: true, createdAt: true },
     });
 
@@ -100,6 +125,64 @@ export async function POST(
     return NextResponse.json(
       { data: { id: feedback.id, createdAt: feedback.createdAt.toISOString() } },
       { status: 201 },
+    );
+  } catch {
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
+  }
+}
+
+// ─── GET /api/feedback ────────────────────────────────────────────────────────
+//
+// Public feedback board: published posts, most-upvoted first (ties broken by
+// newest). Requires auth only so `hasVoted` can be computed per requester —
+// every signed-in user sees every published post.
+
+export async function GET(
+  request: NextRequest,
+): Promise<NextResponse<FeedbackBoardApiResponse>> {
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth as never;
+
+  const { searchParams } = request.nextUrl;
+  const cursor = searchParams.get("cursor") ?? undefined;
+  const limitRaw = searchParams.get("limit");
+  const limit = limitRaw !== null ? Math.min(Number(limitRaw), 50) : 20;
+
+  try {
+    const posts = await prisma.feedback.findMany({
+      where: { status: "published" },
+      take: limit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      orderBy: [{ voteCount: "desc" }, { createdAt: "desc" }, { id: "desc" }],
+      select: {
+        id: true,
+        displayName: true,
+        message: true,
+        voteCount: true,
+        createdAt: true,
+        votes: { where: { userId: auth.sub }, select: { id: true } },
+      },
+    });
+
+    const hasMore = posts.length > limit;
+    const page = hasMore ? posts.slice(0, limit) : posts;
+    const nextCursor = hasMore ? page[page.length - 1]?.id : undefined;
+
+    const data: FeedbackBoardPost[] = page.map((post) => ({
+      id: post.id,
+      displayName: post.displayName,
+      message: post.message,
+      voteCount: post.voteCount,
+      createdAt: post.createdAt.toISOString(),
+      hasVoted: post.votes.length > 0,
+    }));
+
+    return NextResponse.json(
+      { data, meta: { hasMore, ...(nextCursor ? { cursor: nextCursor } : {}) } },
+      { status: 200 },
     );
   } catch {
     return NextResponse.json(

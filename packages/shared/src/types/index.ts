@@ -355,3 +355,31 @@ export interface FeedbackResponse {
 
 export type FeedbackApiResponse = { data: FeedbackResponse } | ApiError;
 
+// ─── Feedback Board ──────────────────────────────────────────────────────────
+// Public, upvotable view of published feedback. Distinct from FeedbackResponse
+// above (the private submission receipt) — the board never exposes userEmail.
+
+export interface FeedbackBoardPost {
+  id: string;
+  displayName: string;
+  message: string;
+  voteCount: number;
+  createdAt: string;
+  /** Whether the requesting user has already upvoted this post. */
+  hasVoted: boolean;
+}
+
+export interface FeedbackBoardResponse {
+  data: FeedbackBoardPost[];
+  meta: PaginationMeta;
+}
+
+export type FeedbackBoardApiResponse = FeedbackBoardResponse | ApiError;
+
+export interface FeedbackVoteResponse {
+  voteCount: number;
+  hasVoted: boolean;
+}
+
+export type FeedbackVoteApiResponse = { data: FeedbackVoteResponse } | ApiError;
+
