@@ -79,6 +79,7 @@ async function maybePrompt(): Promise<void> {
   // Mark prompted BEFORE requesting so a thrown requestReview() can't loop us.
   await patchState({ promptedAt: new Date().toISOString() });
   trackRatingPromptRequested({
+    source: 'engagement',
     session_count: state.sessionCount,
     save_count: state.saveCount,
     search_count: state.searchCount,

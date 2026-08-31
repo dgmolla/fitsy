@@ -40,11 +40,12 @@ export default function SignInScreen() {
 
   // Sign-in now happens AFTER the anonymous onboarding narrative + the "restaurants
   // that fit your macros" teaser (welcome/results.tsx), so a new user continues
-  // straight into location/notification setup rather than restarting the
-  // narrative. `outOfArea` carries results.tsx's empty-preview determination
-  // forward so an out-of-area user lands on the waitlist screen instead.
+  // into a forced review ask (welcome/leave-review) right after account
+  // creation, then into location/notification setup. `outOfArea` carries
+  // results.tsx's empty-preview determination through both hops so an
+  // out-of-area user still lands on the waitlist screen at the end.
   const { outOfArea } = useLocalSearchParams<{ outOfArea?: string }>();
-  const newUserDestination = outOfArea === '1' ? '/welcome/out-of-area' : '/welcome/notification-permission';
+  const newUserDestination = outOfArea === '1' ? '/welcome/leave-review?outOfArea=1' : '/welcome/leave-review';
 
   const [, response, promptGoogleAsync] = Google.useIdTokenAuthRequest({
     iosClientId: GOOGLE_IOS_CLIENT_ID ?? 'not-configured',

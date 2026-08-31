@@ -747,11 +747,14 @@ export function trackLegalLinkOpened(props: { link: 'privacy' | 'terms' | 'suppo
 // ─── App Store rating prompt ─────────────────────────────────────────────────
 // Fired when we ask the OS to surface the native rating prompt (StoreReview).
 // Note: the OS may or may not actually show it (Apple throttles to 3/365 days);
-// this tracks our *request*, which is the signal we control.
+// this tracks our *request*, which is the signal we control. `source` tells
+// the two independent triggers apart: 'onboarding' (the forced post-signup
+// ask) vs. 'engagement' (the gated, once-ever prompt after real usage).
 export function trackRatingPromptRequested(props: {
-  session_count: number;
-  save_count: number;
-  search_count: number;
+  source: 'onboarding' | 'engagement';
+  session_count?: number;
+  save_count?: number;
+  search_count?: number;
 }): void {
   try {
     getPostHogClient().capture(
