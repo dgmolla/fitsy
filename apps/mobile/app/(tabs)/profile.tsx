@@ -23,8 +23,6 @@ import { pushProfileToServer } from '@/lib/profileSync';
 import { useTheme } from '@/lib/theme';
 import { FilterPopup } from '@/components/FilterPopup';
 import { ProfileEditSheet, type ProfileEditSheetProps } from '@/components/ProfileEditSheet';
-import { FeedbackSheet } from '@/components/FeedbackSheet';
-import { sendFeedback } from '@/lib/apiClient';
 import { calculateMacros, macrosToStored } from '@/lib/macroCalculator';
 import { openLegalLink } from '@/lib/legalLinks';
 import {
@@ -32,8 +30,6 @@ import {
   trackProfileAccountDeleted,
   trackProfileFieldEdited,
   trackProfileLogoutTapped,
-  trackFeedbackOpened,
-  trackFeedbackSubmitted,
   type ProfileField,
 } from '@/lib/analytics';
 import { EDITORIAL, FONTS } from '@/lib/brand';
@@ -73,7 +69,6 @@ export default function ProfileScreen() {
   const [email, setEmail] = useState<string>('—');
   const [macroTargets, setMacroTargets] = useState<MacroValues | null>(null);
   const [filterVisible, setFilterVisible] = useState(false);
-  const [feedbackVisible, setFeedbackVisible] = useState(false);
   const [profile, setProfile] = useState<OnboardingData>({});
   const [editField, setEditField] = useState<EditField>(null);
   const prevProfile = useRef<string>('');
@@ -122,22 +117,6 @@ export default function ProfileScreen() {
       trackProfileAccountDeleted({ success: false });
       Alert.alert('Error', 'Could not delete your account. Please try again.');
     }
-  }, []);
-
-  const openFeedback = useCallback(() => {
-    trackFeedbackOpened();
-    setFeedbackVisible(true);
-  }, []);
-
-  const handleSendFeedback = useCallback(async (message: string): Promise<boolean> => {
-    const result = await sendFeedback(message);
-    trackFeedbackSubmitted({ message_length: message.length, success: result.ok });
-    if (result.ok) {
-      Alert.alert('Thanks!', 'Your feedback was sent. We read every message.');
-      return true;
-    }
-    Alert.alert('Could not send', result.error);
-    return false;
   }, []);
 
   const confirmDelete = useCallback(() => {
@@ -321,13 +300,13 @@ export default function ProfileScreen() {
         )}
 
         {/* Feedback */}
-        <Pressable style={s.feedbackBanner} onPress={openFeedback}>
+        <Pressable style={s.feedbackBanner} onPress={() => router.push('/feedback-board')}>
           <View style={s.goalIconCircle}>
             <Ionicons name="chatbubble-ellipses-outline" size={18} color={EDITORIAL.greenAccent} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={s.goalBannerLabel}>FEEDBACK</Text>
-            <Text style={s.feedbackValue}>Send us a note</Text>
+            <Text style={s.feedbackValue}>Leave us your feedback</Text>
           </View>
           <Ionicons name="chevron-forward" size={14} color={EDITORIAL.creamDeep} />
         </Pressable>
@@ -381,12 +360,6 @@ export default function ProfileScreen() {
     />
 
     {sheetProps && <ProfileEditSheet {...sheetProps} />}
-
-    <FeedbackSheet
-      visible={feedbackVisible}
-      onClose={() => setFeedbackVisible(false)}
-      onSubmit={handleSendFeedback}
-    />
     </>
   );
 }

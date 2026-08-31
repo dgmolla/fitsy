@@ -794,6 +794,20 @@ export function trackFeedbackSubmitted(props: {
   }
 }
 
+export function trackFeedbackUpvoted(props: {
+  feedback_id: string;
+  action: 'upvote' | 'unvote';
+}): void {
+  try {
+    getPostHogClient().capture(
+      'feedback_upvoted',
+      props as unknown as Record<string, JsonType>,
+    );
+  } catch (err) {
+    logCaptureError('feedback_upvoted', err);
+  }
+}
+
 // ─── Subscriptions / RevenueCat ──────────────────────────────────────────────
 // `paywall_shown` measures intent, `paywall_result` measures the outcome of the
 // RevenueCat-hosted paywall (purchased / restored / cancelled / not_presented /

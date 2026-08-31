@@ -1,4 +1,4 @@
-import { MenuApiResponse, MenuResponse, RestaurantResult, RestaurantsApiResponse, SavedItemResponse, SavedItemsResponse } from '@fitsy/shared';
+import { FeedbackBoardPost, FeedbackBoardResponse, FeedbackVoteResponse, MenuApiResponse, MenuResponse, RestaurantResult, RestaurantsApiResponse, SavedItemResponse, SavedItemsResponse } from '@fitsy/shared';
 import { api, SubscriptionRequiredError } from './api';
 
 export interface FetchRestaurantsParams {
@@ -158,5 +158,31 @@ export async function sendFeedback(
       ok: false,
       error: err instanceof Error ? err.message : 'Could not send feedback',
     };
+  }
+}
+
+/** Fetches a page of the public feedback board, most-upvoted first. */
+export async function getFeedbackBoard(cursor?: string): Promise<FeedbackBoardResponse | null> {
+  try {
+    const qs = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+    return await api.get<FeedbackBoardResponse>(`/api/feedback${qs}`, true);
+  } catch {
+    return null;
+  }
+}
+
+/** Toggles the current user's upvote on a board post. */
+export async function voteFeedback(
+  feedbackId: string,
+): Promise<Pick<FeedbackBoardPost, 'voteCount' | 'hasVoted'> | null> {
+  try {
+    const response = await api.post<{ data: FeedbackVoteResponse }>(
+      `/api/feedback/${feedbackId}/vote`,
+      {},
+      true,
+    );
+    return response.data;
+  } catch {
+    return null;
   }
 }
