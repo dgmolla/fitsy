@@ -105,9 +105,9 @@ export function FeedbackSheet({ visible, onClose, onSubmit }: FeedbackSheetProps
         pointerEvents="box-none"
       >
         <Animated.View style={[s.card, { opacity: opacityAnim, transform: [{ scale: scaleAnim }, { translateY }] }]}>
-          <Text style={s.title}>Send feedback</Text>
+          <Text style={s.title}>Share feedback</Text>
           <Text style={s.subtitle}>
-            Found a bug or have an idea? Tell us anything — it goes straight to the team.
+            Found a bug or have an idea? Post it to the board — everyone can see it and upvote it.
           </Text>
 
           <TextInput
@@ -127,6 +127,8 @@ export function FeedbackSheet({ visible, onClose, onSubmit }: FeedbackSheetProps
             style={[s.submitBtn, !canSubmit && s.submitBtnDisabled]}
             onPress={handleSubmit}
             disabled={!canSubmit}
+            accessibilityRole="button"
+            accessibilityLabel="Send"
           >
             {submitting ? (
               <ActivityIndicator size="small" color="#FDFBF7" />
