@@ -37,7 +37,12 @@ async function main(): Promise<void> {
     ];
     for (const message of samples) {
       const row = await prisma.feedback.create({
-        data: { userId: user.id, userEmail: user.email, message },
+        data: {
+          userId: user.id,
+          userEmail: user.email,
+          displayName: user.email.split("@")[0]!,
+          message,
+        },
         select: { id: true },
       });
       seededIds.push(row.id);
