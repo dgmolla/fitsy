@@ -20,7 +20,7 @@ export default function PaymentScreen() {
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [modal, setModal] = useState<ModalState>('none');
-  const { offering, purchase, restore } = usePurchases();
+  const { offering, refreshOffering, purchase, restore } = usePurchases();
 
   // Live, store-localized prices from the current RevenueCat offering, with the
   // designed copy as a fallback while offerings load (or in Expo Go / no key).
@@ -38,6 +38,12 @@ export default function PaymentScreen() {
   useEffect(() => {
     trackOnboardingScreenView('payment');
   }, []);
+
+  // The boot-time offering fetch can fail (offline at launch, StoreKit hiccup).
+  // Retry when this screen opens without one so the CTA isn't dead on arrival.
+  useEffect(() => {
+    if (!offering) void refreshOffering();
+  }, [offering, refreshOffering]);
 
   // Onboarding completes once the user holds Pro — whether freshly purchased or
   // restored. Shared by handleStart and handleRestore.
@@ -58,11 +64,14 @@ export default function PaymentScreen() {
     // CTA buys the selected plan. Buying the regular annual here would charge
     // full price despite the "25% off" promise, so a missing discount package
     // is surfaced, not silently substituted.
-    const pkg = discounted
-      ? discountedAnnual
-      : plan === 'yearly'
-        ? offering?.annual
-        : offering?.monthly;
+    const pick = (off: typeof offering) =>
+      discounted
+        ? off?.availablePackages.find((p) => p.identifier === 'annual_discount') ?? null
+        : plan === 'yearly'
+          ? off?.annual
+          : off?.monthly;
+    // One live retry before giving up: the boot-time fetch may have failed.
+    const pkg = pick(offering) ?? pick(await refreshOffering());
     if (!pkg) {
       Alert.alert(
         'Just a moment',
