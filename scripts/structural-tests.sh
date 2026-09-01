@@ -305,8 +305,11 @@ else
 fi
 
 echo -n "12. Subscriber-data routes are subscription-gated... "
-# Routes under /api/restaurants/ serve subscriber-only data and MUST gate on
-# requireSubscription, so the paywall can't be bypassed by hitting the API.
+# Routes under /api/restaurants/ serve subscriber-only data and MUST check
+# entitlement via requireSubscription (reject outright) or optionalSubscription
+# (never reject, but redact/truncate for an unentitled caller — see
+# GET /api/restaurants and [id]/menu, which power the locked search-screen
+# teaser) — either way, the route must not skip the entitlement check.
 # EXCEPTION — these are intentionally public (used during onboarding, before the
 # user subscribes); over-gating them would break the onboarding flow:
 RESTAURANTS_API="$REPO_ROOT/apps/api/app/api/restaurants"
@@ -320,12 +323,12 @@ if [ -d "$RESTAURANTS_API" ]; then
       if [ "$rel" = "$pub" ]; then is_public=true; break; fi
     done
     if $is_public; then
-      if grep -q 'requireSubscription' "$route"; then
-        GATE_ERRORS="$GATE_ERRORS\n  $rel is public (onboarding) but calls requireSubscription — remove the gate or it breaks onboarding"
+      if grep -qE 'requireSubscription|optionalSubscription' "$route"; then
+        GATE_ERRORS="$GATE_ERRORS\n  $rel is public (onboarding) but calls requireSubscription/optionalSubscription — remove the gate or it breaks onboarding"
       fi
     else
-      if ! grep -q 'requireSubscription' "$route"; then
-        GATE_ERRORS="$GATE_ERRORS\n  $rel serves restaurant data but does NOT call requireSubscription — gate it (or add to PUBLIC_ALLOWLIST if intentionally public)"
+      if ! grep -qE 'requireSubscription|optionalSubscription' "$route"; then
+        GATE_ERRORS="$GATE_ERRORS\n  $rel serves restaurant data but does NOT call requireSubscription or optionalSubscription — gate it (or add to PUBLIC_ALLOWLIST if intentionally public)"
       fi
     fi
   done < <(find "$RESTAURANTS_API" -name "route.ts" -not -path "*/node_modules/*" -not -path "*/.next/*" 2>/dev/null)
