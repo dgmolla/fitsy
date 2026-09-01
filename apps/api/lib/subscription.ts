@@ -66,3 +66,25 @@ export async function requireSubscription(
   if (await isEntitled(auth.sub, auth.email)) return auth;
   return NextResponse.json({ error: "subscription_required" }, { status: 402 });
 }
+
+export interface OptionalSubscriptionResult {
+  payload: JwtPayload | null;
+  entitled: boolean;
+}
+
+/**
+ * Like `requireSubscription`, but never rejects the request — an
+ * unauthenticated or unentitled caller gets `entitled: false` instead of a
+ * 401/402, so the route can degrade to a locked/truncated response (the
+ * onboarding teaser and the lapsed-subscriber browse-then-paywall flow)
+ * rather than blocking access outright. Callers MUST check `entitled` before
+ * returning any data gated behind the subscription.
+ */
+export async function optionalSubscription(
+  request: NextRequest,
+): Promise<OptionalSubscriptionResult> {
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return { payload: null, entitled: false };
+  const entitled = await isEntitled(auth.sub, auth.email);
+  return { payload: auth, entitled };
+}

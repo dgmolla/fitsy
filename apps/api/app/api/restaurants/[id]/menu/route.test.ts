@@ -1,12 +1,12 @@
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
-const mockRequireSubscription = jest.fn();
+const mockOptionalSubscription = jest.fn();
 const mockGetRestaurantMenu = jest.fn();
 
-// Route gates on requireSubscription; entitlement logic is unit-tested in
+// Route gates on optionalSubscription; entitlement logic is unit-tested in
 // lib/subscription.test.ts. Mock the gate to focus on route behavior.
 jest.mock("@/lib/subscription", () => ({
-  requireSubscription: mockRequireSubscription,
+  optionalSubscription: mockOptionalSubscription,
 }));
 
 jest.mock("@/lib/restaurantService", () => ({
@@ -14,18 +14,28 @@ jest.mock("@/lib/restaurantService", () => ({
 }));
 
 import { GET } from "./route";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 
 const VALID_PAYLOAD = { sub: "user-1", email: "alice@example.com" };
+const ENTITLED = { payload: VALID_PAYLOAD, entitled: true };
+const UNENTITLED = { payload: null, entitled: false };
 
 const SAMPLE_MENU = {
   restaurantId: "rest-1",
   restaurantName: "Acme Eats",
-  menuItems: [],
+  locked: false,
+  totalItemCount: 5,
+  menuItems: [
+    { id: "mi-1", name: "Item 1", macros: null },
+    { id: "mi-2", name: "Item 2", macros: null },
+    { id: "mi-3", name: "Item 3", macros: null },
+    { id: "mi-4", name: "Item 4", macros: null },
+    { id: "mi-5", name: "Item 5", macros: null },
+  ],
 };
 
 beforeEach(() => {
-  mockRequireSubscription.mockReset();
+  mockOptionalSubscription.mockReset();
   mockGetRestaurantMenu.mockReset();
 });
 
@@ -44,42 +54,62 @@ function makeParams(id: string): { params: Promise<{ id: string }> } {
   return { params: Promise.resolve({ id }) };
 }
 
-// ─── Auth guard ───────────────────────────────────────────────────────────────
+// ─── Unentitled callers get a truncated, not a blocked, response ──────────────
 
-describe("GET /api/restaurants/[id]/menu — auth guard", () => {
-  it("returns 401 when Authorization header is missing", async () => {
-    mockRequireSubscription.mockResolvedValue(
-      NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
-    );
+describe("GET /api/restaurants/[id]/menu — unentitled callers", () => {
+  it("returns 200 with a truncated menu and no Authorization header", async () => {
+    mockOptionalSubscription.mockResolvedValue(UNENTITLED);
+    mockGetRestaurantMenu.mockResolvedValue(SAMPLE_MENU);
 
     const res = await GET(makeRequest("rest-1"), makeParams("rest-1"));
 
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toEqual({ error: "Unauthorized" });
-    expect(mockGetRestaurantMenu).not.toHaveBeenCalled();
+    expect(body.data.locked).toBe(true);
+    expect(body.data.menuItems).toHaveLength(3);
+    expect(body.data.menuItems.map((i: { id: string }) => i.id)).toEqual([
+      "mi-1",
+      "mi-2",
+      "mi-3",
+    ]);
   });
 
-  it("returns 401 when token is invalid", async () => {
-    mockRequireSubscription.mockResolvedValue(
-      NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
-    );
+  it("truncates the menu when authenticated but not subscribed", async () => {
+    mockOptionalSubscription.mockResolvedValue(UNENTITLED);
+    mockGetRestaurantMenu.mockResolvedValue(SAMPLE_MENU);
 
     const res = await GET(
-      makeRequest("rest-1", "Bearer bad.token"),
+      makeRequest("rest-1", "Bearer valid.token"),
       makeParams("rest-1"),
     );
 
-    expect(res.status).toBe(401);
-    expect(mockGetRestaurantMenu).not.toHaveBeenCalled();
+    const body = await res.json();
+    expect(body.data.locked).toBe(true);
+    expect(body.data.menuItems).toHaveLength(3);
+  });
+
+  it("keeps real macro data on the sampled items — never fakes precision", async () => {
+    const menuWithMacros = {
+      ...SAMPLE_MENU,
+      menuItems: [
+        { id: "mi-1", name: "Bowl", macros: { calories: 500, proteinG: 40, carbsG: 30, fatG: 10, confidence: "HIGH", hadPhoto: true, estimatedAt: "2026-01-01T00:00:00.000Z" } },
+      ],
+    };
+    mockOptionalSubscription.mockResolvedValue(UNENTITLED);
+    mockGetRestaurantMenu.mockResolvedValue(menuWithMacros);
+
+    const res = await GET(makeRequest("rest-1"), makeParams("rest-1"));
+
+    const body = await res.json();
+    expect(body.data.menuItems[0].macros).toEqual(menuWithMacros.menuItems[0]!.macros);
   });
 });
 
 // ─── Success ──────────────────────────────────────────────────────────────────
 
 describe("GET /api/restaurants/[id]/menu — success", () => {
-  it("returns 200 with menu data when authenticated", async () => {
-    mockRequireSubscription.mockResolvedValue(VALID_PAYLOAD);
+  it("returns 200 with the full, unlocked menu when entitled", async () => {
+    mockOptionalSubscription.mockResolvedValue(ENTITLED);
     mockGetRestaurantMenu.mockResolvedValue(SAMPLE_MENU);
 
     const res = await GET(
@@ -90,6 +120,7 @@ describe("GET /api/restaurants/[id]/menu — success", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toEqual({ data: SAMPLE_MENU });
+    expect(body.data.menuItems).toHaveLength(5);
     expect(mockGetRestaurantMenu).toHaveBeenCalledWith("rest-1");
   });
 });
@@ -98,7 +129,7 @@ describe("GET /api/restaurants/[id]/menu — success", () => {
 
 describe("GET /api/restaurants/[id]/menu — not found", () => {
   it("returns 404 when restaurant does not exist", async () => {
-    mockRequireSubscription.mockResolvedValue(VALID_PAYLOAD);
+    mockOptionalSubscription.mockResolvedValue(ENTITLED);
     mockGetRestaurantMenu.mockResolvedValue(null);
 
     const res = await GET(
@@ -109,5 +140,14 @@ describe("GET /api/restaurants/[id]/menu — not found", () => {
     expect(res.status).toBe(404);
     const body = await res.json();
     expect(body.error).toMatch(/not found/i);
+  });
+
+  it("returns 404 for an unentitled caller too (no restaurant existence leak either way)", async () => {
+    mockOptionalSubscription.mockResolvedValue(UNENTITLED);
+    mockGetRestaurantMenu.mockResolvedValue(null);
+
+    const res = await GET(makeRequest("unknown-id"), makeParams("unknown-id"));
+
+    expect(res.status).toBe(404);
   });
 });
