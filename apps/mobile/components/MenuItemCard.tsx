@@ -1,7 +1,9 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import type { MenuItemResult } from '@fitsy/shared';
 import { BookmarkButton } from './BookmarkButton';
+import { BlurFallback } from '@/lib/BlurFallback';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { MACRO_COLORS } from '@/lib/macroColors';
 import { deriveTags } from '@/lib/menuFilters';
@@ -36,7 +38,7 @@ function matchColor(pct: number): string {
  * Match-% badge color scales with pct: deeper green = stronger fit.
  */
 export function MenuItemCard({
-  item, pct, isTopPick, isSaved, onPress, onToggleSave,
+  item, pct, isTopPick, isSaved, onPress, onToggleSave, nameLocked,
 }: {
   item: MenuItemResult;
   pct: number;
@@ -44,6 +46,10 @@ export function MenuItemCard({
   isSaved: boolean;
   onPress: () => void;
   onToggleSave: () => void;
+  /** True for the free-sample items on a locked (unentitled) menu - the name
+   * itself is the thing being teased, so it renders blurred (real text
+   * underneath, not blanked) with a "Subscribe to unlock" caption. */
+  nameLocked?: boolean;
 }) {
   const tags = deriveTags(item);
   const m = item.macros;
@@ -65,11 +71,29 @@ export function MenuItemCard({
       </View>
       <View style={s.info}>
         <View style={s.topRow}>
-          <Text style={s.name} numberOfLines={3}>{item.name}</Text>
+          {nameLocked ? (
+            <View style={s.nameLockedWrap}>
+              <Text style={s.name} numberOfLines={3}>{item.name}</Text>
+              <BlurFallback
+                tint="light"
+                intensity={40}
+                fallbackColor="rgba(253,251,247,0.78)"
+                style={StyleSheet.absoluteFillObject as ViewStyle}
+              />
+            </View>
+          ) : (
+            <Text style={s.name} numberOfLines={3}>{item.name}</Text>
+          )}
           {item.price !== undefined ? (
             <Text style={s.price}>${item.price.toFixed(2)}</Text>
           ) : null}
         </View>
+        {nameLocked ? (
+          <View style={s.nameLockedTooltip}>
+            <Ionicons name="lock-closed" size={10} color={EDITORIAL.greenAccent} />
+            <Text style={s.nameLockedTooltipText}>Subscribe to unlock</Text>
+          </View>
+        ) : null}
         {item.description ? (
           <Text style={s.desc} numberOfLines={2}>{item.description}</Text>
         ) : null}
@@ -156,6 +180,12 @@ const s = StyleSheet.create({
   price: {
     fontFamily: FONTS.frauncesLightItalic,
     fontSize: 15, color: EDITORIAL.greenMid,
+  },
+  nameLockedWrap: { flex: 1, borderRadius: 6, overflow: 'hidden' },
+  nameLockedTooltip: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  nameLockedTooltipText: {
+    fontFamily: FONTS.nunitoSansSemiBold, fontSize: 10.5, fontWeight: '700',
+    color: EDITORIAL.greenAccent, letterSpacing: 0.2,
   },
   desc: { fontFamily: FONTS.nunitoSans, fontSize: 11.5, lineHeight: 16, color: EDITORIAL.textSoft, marginTop: 3 },
   badges: { flexDirection: 'row', gap: 6, marginTop: 9, flexWrap: 'wrap' },

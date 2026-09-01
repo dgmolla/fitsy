@@ -207,7 +207,14 @@ export default function PaymentScreen() {
             <AnimatedPress style={s.modalCta} onPress={() => { setModal('none'); handleStart(false); }} haptic>
               <Text style={s.modalCtaTxt}>Start Free Trial</Text>
             </AnimatedPress>
-            <AnimatedPress style={s.modalSkip} onPress={() => { setModal('none'); router.replace('/welcome/problem'); }}>
+            <AnimatedPress
+              style={s.modalSkip}
+              // Declining every offer still gets the locked search teaser -
+              // real browsing with macro-match data blurred - rather than a
+              // dead end. Same mechanic a first-time visitor gets before
+              // signing up, and what resubscribe.tsx's skip does too.
+              onPress={() => { setModal('none'); router.replace('/(tabs)/search?preview=1'); }}
+            >
               <Text style={s.modalSkipTxt}>Maybe later</Text>
             </AnimatedPress>
           </Animated.View>

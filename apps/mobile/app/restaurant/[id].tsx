@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   Pressable,
@@ -11,12 +11,14 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Stack, router, useLocalSearchParams } from 'expo-router';
+import { Stack, router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { MenuItemResult, MenuResponse } from '@fitsy/shared';
 import { BookmarkButton, FitsyLoader, MenuItemCard } from '@/components';
 import { fetchMenu, getSavedItems, saveItem, unsaveItem } from '@/lib/apiClient';
 import { getMacroTargets } from '@/lib/macroStorage';
 import { recordSaveAndMaybePrompt } from '@/lib/ratingPrompt';
+import { markPreviewSampleUsed, routeToPaywall } from '@/lib/teaserGate';
+import { supabase } from '@/lib/supabase';
 import type { MacroValues } from '@/lib/macroPresets';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { useTheme } from '@/lib/theme';
@@ -68,6 +70,7 @@ const PCT_TIP_KEY = '@fitsy/pctTipDismissed';
 export default function RestaurantDetailScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
   const params = useLocalSearchParams<{ id: string; distance?: string }>();
   const id = params.id;
 
@@ -101,9 +104,17 @@ export default function RestaurantDetailScreen() {
     async function load() {
       if (!id) { setError('Invalid restaurant ID'); setLoading(false); return; }
       setLoading(true); setError(null);
-      const [result, savedResult, macroTargets] = await Promise.all([
-        fetchMenu(id), getSavedItems(), getMacroTargets(),
+      // Saves require a real account - for a session-less caller (the
+      // onboarding/lapsed-subscriber teaser), skip the call entirely rather
+      // than letting it 401: `/api/saved-items` isn't optional-auth like the
+      // menu endpoint, so a 401 here would sign the client out and bounce it
+      // to /welcome/problem the instant this screen opens. The session check
+      // runs inside the same Promise.all as the menu fetch (rather than
+      // ahead of it) so it doesn't add latency to every detail-screen open.
+      const [result, session, macroTargets] = await Promise.all([
+        fetchMenu(id), supabase.auth.getSession().then((r) => r.data.session), getMacroTargets(),
       ]);
+      const savedResult = session ? await getSavedItems() : null;
       if (cancelled) return;
       if (result === null) {
         setError('Could not load menu.');
@@ -129,7 +140,42 @@ export default function RestaurantDetailScreen() {
     return () => { cancelled = true; };
   }, [id]);
 
+  const isLocked = menu?.locked === true;
+  // `beforeRemove` closures capture whatever `isLocked` was when the
+  // listener was registered - mirrored into a ref, read fresh inside the
+  // handler, so the listener can be registered once on mount (covering a
+  // back-out during the menu's own loading window, before `isLocked` is
+  // known) rather than only after the fetch resolves locked.
+  const isLockedRef = useRef(isLocked);
+  useEffect(() => { isLockedRef.current = isLocked; }, [isLocked]);
+
+  // A locked (truncated, unentitled) menu is the "one free look" teaser - the
+  // API never sends more than a small real sample. Leaving this screen (back
+  // button, hardware back, or swipe-back gesture all funnel through
+  // `beforeRemove`) spends that sample and sends the user to the paywall
+  // instead of back to the search list. `leftRef` guards the async
+  // mark-and-redirect work itself (fires once); `e.preventDefault()` still
+  // runs on every attempt while locked, regardless of `leftRef`, so a fast
+  // repeated back doesn't slip through the default action while the first
+  // attempt's redirect is still in flight.
+  const leftRef = useRef(false);
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      if (!isLockedRef.current) return;
+      e.preventDefault();
+      if (leftRef.current) return;
+      leftRef.current = true;
+      markPreviewSampleUsed().finally(() => { void routeToPaywall({ replace: true }); });
+    });
+    return unsubscribe;
+  }, [navigation]);
+
   const handleToggleSave = useCallback(async (menuItemId: string) => {
+    // Saving requires a real account. A session-less caller tapping the
+    // bookmark is really asking to unlock, not save - send them there instead
+    // of letting the request 401.
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { void routeToPaywall(); return; }
     const existingId = savedMap.get(menuItemId);
     if (existingId) {
       const ok = await unsaveItem(existingId);
@@ -176,7 +222,13 @@ export default function RestaurantDetailScreen() {
       .sort((a, b) => compareBySort(a, b, sort));
   }, [scored, query, activeChips, sort, targets]);
 
+  // `totalCount` is the loaded set (the free sample, when locked) - used for
+  // the sort bar's "filtered from N" math, which only ever operates over what's
+  // actually loaded. `fullMenuCount` is the true menu size, shown in the header
+  // so a locked restaurant with 50 dishes doesn't read as having only 3.
   const totalCount = menu?.menuItems.length ?? 0;
+  const fullMenuCount = menu?.totalItemCount ?? totalCount;
+  const hiddenItemCount = Math.max(fullMenuCount - totalCount, 0);
   const matchCount = filtered.length;
   const restaurantName = menu?.restaurantName ?? 'Restaurant';
   const distanceLabel = params.distance ? `${params.distance} mi` : null;
@@ -258,6 +310,7 @@ export default function RestaurantDetailScreen() {
               pct={scoredItem.pct}
               isTopPick={scoredItem.item.id === topPickId}
               isSaved={savedMap.has(scoredItem.item.id)}
+              nameLocked={isLocked}
               onPress={() => {
                 trackMenuItemTapped({
                   menu_item_id: scoredItem.item.id,
@@ -287,7 +340,7 @@ export default function RestaurantDetailScreen() {
                   })()}
                 </Text>
                 <View style={s.metaRow}>
-                  <Text style={s.metaB}>{totalCount} items</Text>
+                  <Text style={s.metaB}>{fullMenuCount} items</Text>
                   <Text style={s.metaDot}>·</Text>
                   {distanceLabel ? (
                     <>
@@ -396,6 +449,27 @@ export default function RestaurantDetailScreen() {
           ListEmptyComponent={
             <Text style={s.empty}>No dishes match these filters.</Text>
           }
+          ListFooterComponent={
+            // Only worth showing when there's actually more menu behind the
+            // lock - a restaurant with <= the free-sample size has nothing
+            // left to promise, and "+0 more dishes" would be a broken CTA.
+            isLocked && menu && hiddenItemCount > 0 ? (
+              <Pressable
+                style={s.lockedFooter}
+                onPress={() => { void routeToPaywall(); }}
+                accessibilityRole="button"
+                accessibilityLabel="Subscribe to unlock the full menu"
+              >
+                <View style={s.lockedFooterIcon}>
+                  <Ionicons name="lock-closed" size={18} color={EDITORIAL.cream} />
+                </View>
+                <Text style={s.lockedFooterTitle}>
+                  +{hiddenItemCount} more dishes
+                </Text>
+                <Text style={s.lockedFooterSub}>Subscribe to unlock the full menu, with macros for every item.</Text>
+              </Pressable>
+            ) : null
+          }
           contentContainerStyle={s.listContent}
           showsVerticalScrollIndicator={false}
         />
@@ -456,4 +530,18 @@ const s = StyleSheet.create({
 
   listContent: { paddingBottom: 36 },
   empty: { paddingHorizontal: 18, paddingVertical: 28, fontSize: 12, fontStyle: 'italic', color: EDITORIAL.textSoft, textAlign: 'center', fontFamily: FONTS.nunitoSans },
+
+  lockedFooter: {
+    marginHorizontal: 18, marginTop: 8, marginBottom: 12,
+    backgroundColor: EDITORIAL.text, borderRadius: 16,
+    paddingVertical: 22, paddingHorizontal: 20,
+    alignItems: 'center', gap: 4,
+  },
+  lockedFooterIcon: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: EDITORIAL.greenAccent,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 6,
+  },
+  lockedFooterTitle: { fontFamily: FONTS.frauncesDisplay, fontSize: 18, color: EDITORIAL.cream },
+  lockedFooterSub: { fontFamily: FONTS.nunitoSans, fontSize: 12.5, color: 'rgba(253,251,247,0.7)', textAlign: 'center', lineHeight: 18, marginTop: 2 },
 });

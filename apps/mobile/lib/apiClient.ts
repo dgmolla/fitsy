@@ -33,7 +33,7 @@ export interface FetchRestaurantsParams {
  */
 export async function fetchRestaurantsPage(
   params: FetchRestaurantsParams,
-): Promise<{ data: RestaurantResult[]; nextCursor: string | null }> {
+): Promise<{ data: RestaurantResult[]; nextCursor: string | null; locked: boolean; networkError: boolean }> {
   const { lat, lng } = params;
 
   const qs = new URLSearchParams();
@@ -65,21 +65,25 @@ export async function fetchRestaurantsPage(
     if ('error' in response) {
       // eslint-disable-next-line no-console
       console.log(JSON.stringify({ event: 'fitsy_search_client_done', reqId, ok: false, client_total_ms: t1 - t0 }));
-      return { data: [], nextCursor: null };
+      return { data: [], nextCursor: null, locked: false, networkError: true };
     }
 
     // eslint-disable-next-line no-console
     console.log(JSON.stringify({ event: 'fitsy_search_client_done', reqId, ok: true, client_total_ms: t1 - t0, results: response.data.length }));
-    return { data: response.data, nextCursor: response.meta.nextCursor ?? null };
+    return { data: response.data, nextCursor: response.meta.nextCursor ?? null, locked: response.meta.locked ?? false, networkError: false };
   } catch (err) {
     const t1 = Date.now();
     // eslint-disable-next-line no-console
     console.log(JSON.stringify({ event: 'fitsy_search_client_done', reqId, ok: false, client_total_ms: t1 - t0, err: String(err) }));
-    // Let the paywall signal reach the screen so it can show the upsell instead
-    // of a generic "no matches" empty state. Other errors stay swallowed as an
-    // empty page (network blips read as "nothing nearby", not a crash).
+    // Other errors stay swallowed as an empty page (network blips read as
+    // "nothing nearby" in the list itself, not a crash) - but `networkError:
+    // true` lets callers that need to tell "no matches" apart from "couldn't
+    // reach the API" (e.g. the onboarding out-of-area check) still do so.
+    // `/api/restaurants` no longer 402s (an unentitled caller gets a locked
+    // 200 instead), but SubscriptionRequiredError stays defined for other
+    // authenticated routes that still gate this way.
     if (err instanceof SubscriptionRequiredError) throw err;
-    return { data: [], nextCursor: null };
+    return { data: [], nextCursor: null, locked: false, networkError: true };
   }
 }
 

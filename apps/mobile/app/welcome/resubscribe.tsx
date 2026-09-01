@@ -75,7 +75,10 @@ export default function ResubscribeScreen() {
       onContinue={handleResubscribe}
       canContinue={!loading}
       continueLabel={loading ? 'Resubscribing…' : `Resubscribe — ${annualPrice}/yr`}
-      onSkip={() => router.replace('/(tabs)/search')}
+      // Declining resubscribe still gets the locked search teaser (real
+      // browsing, blurred macro-match data) rather than a dead end - same
+      // mechanic as a first-time visitor who hasn't paid yet.
+      onSkip={() => router.replace('/(tabs)/search?preview=1')}
       showBack={false}
     >
       {(teaserLoading || restaurants.length > 0) && (

@@ -13,17 +13,20 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  type ViewStyle,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { RestaurantResult } from '@fitsy/shared';
 import { FitsyLoader } from '@/components/FitsyLoader';
 import { FilterPopup } from '@/components/FilterPopup';
 import { LocationPickerSheet } from '@/components/LocationPickerSheet';
+import { BlurFallback } from '@/lib/BlurFallback';
 import type { MacroValues } from '@/lib/macroPresets';
 import { fetchRestaurantsPage } from '@/lib/apiClient';
 import { SubscriptionRequiredError } from '@/lib/api';
+import { routeToPaywall } from '@/lib/teaserGate';
 import { recordSearchAndMaybePrompt } from '@/lib/ratingPrompt';
 import { shouldShowInitialLoader } from '@/lib/searchLoading';
 import { useLocation, type LocationState } from '@/lib/useLocation';
@@ -35,6 +38,8 @@ import {
   trackLocationManualOverrideOpened,
   trackLocationManualOverridePicked,
   trackMacroTargetsEdited,
+  trackOnboardingScreenView,
+  trackPreviewFetchFailed,
   trackRestaurantTapped,
   trackSaveMacroTargetsFailed,
   trackSearchEmptyResults,
@@ -228,9 +233,33 @@ function DietaryBadges({ options }: { options?: string[] }) {
   );
 }
 
+// ─── Locked dish teaser ───────────────────────────────────────────────────────
+
+// Shown in place of the real dish name/macros when the caller isn't
+// entitled (`meta.locked`). The API never sends the real bestMatch in that
+// case, so this is greeked placeholder content under a blur, not real data -
+// the lock is enforced server-side, this is just the visual for it.
+function LockedDishTeaser({ variant }: { variant: 'hero' | 'card' }) {
+  const wrap = variant === 'hero' ? hero.lockedWrap : dc.lockedWrap;
+  const barWide = variant === 'hero' ? hero.lockedBarWide : dc.lockedBarWide;
+  const barNarrow = variant === 'hero' ? hero.lockedBarNarrow : dc.lockedBarNarrow;
+  return (
+    <View style={wrap}>
+      <View style={barWide} />
+      <View style={barNarrow} />
+      <BlurFallback
+        tint="light"
+        intensity={35}
+        fallbackColor="rgba(253,251,247,0.4)"
+        style={StyleSheet.absoluteFillObject as ViewStyle}
+      />
+    </View>
+  );
+}
+
 // ─── Hero card (#01) ──────────────────────────────────────────────────────────
 
-function HeroCard({ result }: { result: RestaurantResult }) {
+function HeroCard({ result, locked }: { result: RestaurantResult; locked: boolean }) {
   const bm = result.bestMatch;
   const imgUri = result.photoUrl || getMockImage(result.name);
   return (
@@ -267,8 +296,9 @@ function HeroCard({ result }: { result: RestaurantResult }) {
           <Text style={hero.distText}>{result.distanceMiles?.toFixed(1)} mi</Text>
         </View>
         <Text style={hero.restName} numberOfLines={1}>{result.name}</Text>
-        {bm && <Text style={hero.dishName} numberOfLines={1}>{bm.name}</Text>}
-        {bm && (
+        {locked && <LockedDishTeaser variant="hero" />}
+        {!locked && bm && <Text style={hero.dishName} numberOfLines={1}>{bm.name}</Text>}
+        {!locked && bm && (
           <View style={hero.macroRow}>
             <Text style={hero.macroText}>P {bm.proteinG}g</Text>
             <Text style={hero.dot}>·</Text>
@@ -286,7 +316,7 @@ function HeroCard({ result }: { result: RestaurantResult }) {
 
 // ─── Dish carousel card ───────────────────────────────────────────────────────
 
-function DishCard({ result, onPress }: { result: RestaurantResult; onPress?: () => void }) {
+function DishCard({ result, locked, onPress }: { result: RestaurantResult; locked: boolean; onPress?: () => void }) {
   const bm = result.bestMatch;
   const imgUri = result.photoUrl || getMockImage(result.name);
   return (
@@ -309,16 +339,66 @@ function DishCard({ result, onPress }: { result: RestaurantResult; onPress?: () 
       <Image source={{ uri: imgUri }} style={dc.image} resizeMode="cover" />
       <LinearGradient colors={['transparent', EDITORIAL.cardGrad]} style={dc.gradient} />
       <View style={dc.info}>
-        {bm && <Text style={dc.dishName} numberOfLines={2}>{bm.name}</Text>}
-        {bm && <Text style={dc.cal}>{bm.calories} kcal · P {bm.proteinG}g · C {bm.carbsG}g · F {bm.fatG}g</Text>}
+        {locked && <LockedDishTeaser variant="card" />}
+        {!locked && bm && <Text style={dc.dishName} numberOfLines={2}>{bm.name}</Text>}
+        {!locked && bm && <Text style={dc.cal}>{bm.calories} kcal · P {bm.proteinG}g · C {bm.carbsG}g · F {bm.fatG}g</Text>}
       </View>
     </TouchableOpacity>
   );
 }
 
+// ─── Fully-locked restaurant section (#04+) ──────────────────────────────────
+
+// Rows beyond the top 3: the real name/photo/dish ARE rendered - the server
+// already sends them (only bestMatch is stripped) - but blurred, so the row
+// reads as "something real is here, locked" rather than a blank placeholder.
+// The row isn't navigable; tapping it goes straight to the paywall rather
+// than a restaurant detail page.
+function LockedRestaurantSection({ result, index }: { result: RestaurantResult; index: number }) {
+  const indexStr = String(index + 2).padStart(2, '0');
+  const imgUri = result.photoUrl || getMockImage(result.name);
+  return (
+    <Pressable
+      style={s.restSection}
+      onPress={() => { void routeToPaywall(); }}
+      accessibilityLabel={`${result.name}, subscribe to unlock`}
+      accessibilityRole="button"
+    >
+      <View style={s.sectionHeader}>
+        <Text style={s.sectionIndex}>{indexStr}</Text>
+        <View style={s.lockedNameWrap}>
+          <Text style={s.sectionRestName} numberOfLines={1}>{result.name}</Text>
+          <Text style={s.sectionSub}>{result.distanceMiles?.toFixed(1)} mi</Text>
+          <BlurFallback
+            tint="light"
+            intensity={40}
+            fallbackColor="rgba(253,251,247,0.78)"
+            style={StyleSheet.absoluteFillObject as ViewStyle}
+          />
+        </View>
+      </View>
+      <View style={dc.container}>
+        <Image source={{ uri: imgUri }} style={dc.image} resizeMode="cover" />
+        <BlurFallback
+          tint="light"
+          intensity={50}
+          fallbackColor="rgba(232,224,209,0.85)"
+          style={StyleSheet.absoluteFillObject as ViewStyle}
+        />
+        <View style={dc.lockedFullBadgeWrap} pointerEvents="none">
+          <View style={dc.lockedFullBadge}>
+            <Ionicons name="lock-closed" size={16} color={EDITORIAL.cream} />
+          </View>
+        </View>
+      </View>
+      <Text style={s.viewMenu}>Subscribe to unlock →</Text>
+    </Pressable>
+  );
+}
+
 // ─── Numbered restaurant section (#02+) ──────────────────────────────────────
 
-function RestaurantSection({ result, index }: { result: RestaurantResult; index: number }) {
+function RestaurantSection({ result, index, locked }: { result: RestaurantResult; index: number; locked: boolean }) {
   const indexStr = String(index + 2).padStart(2, '0');
   const position = index + 1;
 
@@ -370,8 +450,8 @@ function RestaurantSection({ result, index }: { result: RestaurantResult; index:
           </Text>
         </View>
       </View>
-      <DishCard result={result} onPress={handleDishCardPress} />
-      {result.bestMatch && (
+      <DishCard result={result} locked={locked} onPress={handleDishCardPress} />
+      {!locked && result.bestMatch && (
         <Text style={s.viewMenu}>View full menu →</Text>
       )}
     </TouchableOpacity>
@@ -381,6 +461,24 @@ function RestaurantSection({ result, index }: { result: RestaurantResult; index:
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function SearchScreen() {
+  // Present only when entered from the onboarding teaser (welcome/finding.tsx
+  // -> `/(tabs)/search?preview=1`) - gates the out-of-area redirect below so a
+  // returning lapsed subscriber who just filtered too tight never gets routed
+  // into the "not in your area yet" waitlist flow.
+  const { preview } = useLocalSearchParams<{ preview?: string }>();
+  const isOnboardingPreview = preview === '1';
+  // The onboarding teaser's first automatic fetch (macros already set from
+  // earlier onboarding steps, no query typed) doubles as the "is this area
+  // covered" check the old dedicated results.tsx screen used to run - see
+  // outOfAreaCheckedRef usage in doFetch below.
+  const outOfAreaCheckedRef = useRef(false);
+
+  // Preserves the old dedicated results.tsx screen's funnel step in the
+  // onboarding-screen-view analytics, since this screen now plays that role.
+  useEffect(() => {
+    if (isOnboardingPreview) trackOnboardingScreenView('results');
+  }, [isOnboardingPreview]);
+
   const [inputs, setInputs] = useState<MacroValues>(DEFAULT_INPUTS);
   const [results, setResults] = useState<RestaurantResult[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -388,10 +486,16 @@ export default function SearchScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // The API gates restaurant data behind an active subscription (402). When that
-  // happens we show a paywall upsell in place of the empty state rather than a
-  // misleading "no matches nearby".
-  const [needsSubscription, setNeedsSubscription] = useState(false);
+  // The API never blocks unentitled callers - it returns `meta.locked: true`
+  // with bestMatch stripped from every row instead, so this screen doubles as
+  // the onboarding + lapsed-subscriber teaser. See RestaurantSection /
+  // LockedRestaurantSection for the render split.
+  const [locked, setLocked] = useState(false);
+  // Set once the onboarding teaser's first confirmed (non-network-error)
+  // fetch comes back empty - see outOfAreaCheckedRef in doFetch. Renders an
+  // inline choice ("Keep me posted") rather than auto-redirecting, so the
+  // user sees the reassurance copy before leaving search.
+  const [outOfArea, setOutOfArea] = useState(false);
   const initialFetch = useRef(true);
   const [filterVisible, setFilterVisible] = useState(false);
   const [locationPickerVisible, setLocationPickerVisible] = useState(false);
@@ -513,7 +617,7 @@ export default function SearchScreen() {
       if (isRefresh) setRefreshing(true);
       else setLoading(true);
       setError(null);
-      setNeedsSubscription(false);
+      setOutOfArea(false);
       // New search → reset pagination bookkeeping.
       pagesLoadedRef.current = 0;
       isLoadingMoreRef.current = false;
@@ -527,9 +631,59 @@ export default function SearchScreen() {
       const calories = parseFloat(current.calories);
 
       try {
-        const { data, nextCursor: cursor } = await fetchRestaurantsPage(params);
+        const { data, nextCursor: cursor, locked: isLocked, networkError } = await fetchRestaurantsPage(params);
+
+        if (networkError) {
+          // fetchRestaurantsPage swallows fetch/network failures into a
+          // successful-looking `data: []` (so pagination and the general
+          // empty state stay simple) - `networkError: true` is the one
+          // signal that this wasn't a real "zero matches" response.
+          // Surfacing it as an error (not an empty search) matters doubly
+          // here: it stops a dropped connection from masquerading as "no
+          // matches nearby", and specifically keeps it from tripping the
+          // out-of-area check below, which only trusts a *confirmed* empty
+          // response.
+          setResults([]);
+          setNextCursor(null);
+          setError('Network problem - check your connection and try again.');
+          trackSearchPerformed({
+            has_protein_target: !isNaN(protein),
+            has_carbs_target: !isNaN(carbs),
+            has_fat_target: !isNaN(fat),
+            has_calories_target: !isNaN(calories),
+            cuisine_filter: 'all',
+            query_length: q.trim().length,
+            result_count: 0,
+            location_source: locationSource,
+            success: false,
+          });
+          trackSearchFailed({ cuisine_filter: 'all', error_message: 'network_error' });
+          if (isOnboardingPreview) trackPreviewFetchFailed(new Error('network_error'));
+          return;
+        }
+
+        // Out-of-area check - mirrors the old dedicated results.tsx screen,
+        // which measured this once on load using the macros already set
+        // earlier in onboarding. A later edit (user broadens their own
+        // filters, or types a query) never re-triggers it - outOfAreaCheckedRef
+        // is a one-shot latch set on the first *confirmed* (non-network-error)
+        // resolved fetch, so a dropped connection on the very first attempt
+        // doesn't consume it - the next real response still gets checked. The
+        // auth-gated /api/waitlist join needs a real account, so this hands
+        // off to signin (which already carries outOfArea through the rest of
+        // onboarding) rather than joining the waitlist directly.
+        const isFirstFetch = !outOfAreaCheckedRef.current;
+        outOfAreaCheckedRef.current = true;
+        if (isOnboardingPreview && isFirstFetch && q.trim() === '' && data.length === 0) {
+          setOutOfArea(true);
+          setResults([]);
+          setNextCursor(null);
+          return;
+        }
+
         setResults(data);
         setNextCursor(cursor);
+        setLocked(isLocked);
         pagesLoadedRef.current = 1;
         trackSearchPageLoaded({
           page_index: 0,
@@ -573,14 +727,20 @@ export default function SearchScreen() {
           void recordSearchAndMaybePrompt();
         }
       } catch (err) {
+        // Only SubscriptionRequiredError reaches here (fetchRestaurantsPage
+        // resolves every other failure with `networkError: true`, handled
+        // above, instead of throwing). /api/restaurants no longer 402s in
+        // normal operation - an unentitled caller gets a locked 200 instead -
+        // so this is a rare deploy-skew glitch, not a real paywall. Show it
+        // as a plain retry-able error rather than force-navigating an
+        // entitled user off their in-progress search.
         setResults([]);
         setNextCursor(null);
-        // Subscription gate isn't a search failure — show the paywall upsell and
-        // skip the failure analytics (it would pollute the search-error rate).
-        if (err instanceof SubscriptionRequiredError) {
-          setNeedsSubscription(true);
-          return;
-        }
+        setError(
+          err instanceof SubscriptionRequiredError
+            ? 'Something went wrong. Pull to refresh and try again.'
+            : 'Network problem - check your connection and try again.',
+        );
         trackSearchPerformed({
           has_protein_target: !isNaN(protein),
           has_carbs_target: !isNaN(carbs),
@@ -596,12 +756,13 @@ export default function SearchScreen() {
           cuisine_filter: 'all',
           error_message: err instanceof Error ? err.message : undefined,
         });
+        if (isOnboardingPreview) trackPreviewFetchFailed(err);
       } finally {
         if (isRefresh) setRefreshing(false);
         else setLoading(false);
       }
     },
-    [buildParams],
+    [buildParams, isOnboardingPreview],
   );
 
   // Pull-to-refresh: re-fire a fresh API call against the current location.
@@ -660,7 +821,7 @@ export default function SearchScreen() {
     params.cursor = cursorBeingFetched;
 
     try {
-      const { data, nextCursor: cursor } = await fetchRestaurantsPage(params);
+      const { data, nextCursor: cursor, locked: isLocked } = await fetchRestaurantsPage(params);
 
       // Dedupe on id — defends against a server-side equal-distance edge case
       // where a row could (in principle) overlap the cursor boundary. Cheap
@@ -677,6 +838,10 @@ export default function SearchScreen() {
         return merged;
       });
       setNextCursor(cursor);
+      // Entitlement can change mid-session (e.g. a purchase completes while
+      // scrolling) - keep `locked` current rather than trusting only the
+      // first page's value for every subsequently-loaded row.
+      setLocked(isLocked);
       pagesLoadedRef.current = pageIndex + 1;
 
       trackSearchPageLoaded({
@@ -782,11 +947,8 @@ export default function SearchScreen() {
 
   const handleClearQuery = useCallback(() => setQuery(''), []);
 
-  // Send the user to the paywall when search is locked behind a subscription.
-  // The paywall returns to /(tabs)/search on purchase/restore, so they land
-  // back here entitled and the next fetch succeeds.
-  const handleGoToPaywall = useCallback(() => {
-    router.push('/welcome/payment');
+  const handleJoinWaitlist = useCallback(() => {
+    router.push('/welcome/signin?outOfArea=1');
   }, []);
 
   const locationLabel = location.loading
@@ -820,35 +982,44 @@ export default function SearchScreen() {
         </View>
       )}
 
-      {canSearch && needsSubscription && (
+      {canSearch && outOfArea && (
         <View style={s.inlineEmpty}>
-          <Ionicons name="lock-closed-outline" size={32} color={EDITORIAL.greenAccent} />
-          <Text style={s.inlineEmptyText}>Subscribe to unlock search</Text>
+          <Ionicons name="leaf-outline" size={32} color={EDITORIAL.greenAccent} />
+          <Text style={s.inlineEmptyText}>We're not in your area yet</Text>
           <Text style={s.inlineEmptyHint}>
-            Fitsy Pro unlocks macro-matched restaurant search near you. Start your free trial to find your next meal.
+            Fitsy is launching in Los Angeles first - your city is next on the list.
           </Text>
           <Pressable
-            style={({ pressed }) => [s.upsellBtn, pressed && s.upsellBtnPressed]}
-            onPress={handleGoToPaywall}
+            style={({ pressed }) => [s.waitlistBtn, pressed && s.waitlistBtnPressed]}
+            onPress={handleJoinWaitlist}
             accessibilityRole="button"
-            accessibilityLabel="Subscribe now"
+            accessibilityLabel="Keep me posted"
           >
-            <Text style={s.upsellBtnText}>Subscribe now</Text>
+            <Text style={s.waitlistBtnText}>Keep me posted</Text>
           </Pressable>
         </View>
       )}
 
-      {canSearch && !needsSubscription && results.length === 0 && (
+      {canSearch && !outOfArea && results.length === 0 && (
         <View style={s.inlineEmpty}>
           <Ionicons name="search-outline" size={32} color={EDITORIAL.creamDeep} />
           <Text style={s.inlineEmptyText}>No matches nearby</Text>
           <Text style={s.inlineEmptyHint}>
-            {hasQuery ? `Nothing matched "${query.trim()}" — try different terms or a wider area` : 'Try adjusting your macro targets'}
+            {hasQuery ? `Nothing matched "${query.trim()}" - try different terms or a wider area` : 'Try adjusting your macro targets'}
           </Text>
         </View>
       )}
 
-      {canSearch && !needsSubscription && heroResult && <HeroCard result={heroResult} />}
+      {canSearch && heroResult && <HeroCard result={heroResult} locked={locked} />}
+
+      {canSearch && locked && (results.length > 0) && (
+        <View style={s.lockedBanner}>
+          <Ionicons name="lock-closed" size={14} color={EDITORIAL.greenAccent} />
+          <Text style={s.lockedBannerText}>
+            Subscribe to see exactly which meals at each spot fit your macros.
+          </Text>
+        </View>
+      )}
     </>
   );
 
@@ -897,7 +1068,12 @@ export default function SearchScreen() {
           data={canSearch ? listResults : []}
           keyExtractor={(r) => r.id}
           renderItem={({ item, index }) => (
-            <RestaurantSection result={item} index={index} />
+            // Hero (#01) + the first two sections (#02, #03) stay open - real
+            // name/photo/distance, dish teased but not shown. #04 onward is
+            // fully blurred and routes straight to the paywall on tap.
+            locked && index >= 2
+              ? <LockedRestaurantSection result={item} index={index} />
+              : <RestaurantSection result={item} index={index} locked={locked} />
           )}
           ListHeaderComponent={header}
           ListFooterComponent={renderFooter}
@@ -1049,18 +1225,30 @@ const s = StyleSheet.create({
   sectionSub: { fontFamily: FONTS.nunitoSans, fontSize: 11, fontWeight: '500', color: EDITORIAL.textSoft, marginTop: 2 },
   viewMenu: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 12, fontWeight: '600', color: EDITORIAL.greenAccent, paddingHorizontal: 20, marginTop: 6 },
 
+  // Name+distance for a fully-locked row (#04+) - sized to just the text so
+  // the blur below it hugs the text block rather than spanning the row.
+  lockedNameWrap: { flex: 1, borderRadius: 6, overflow: 'hidden' },
+
+  lockedBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    marginHorizontal: 16, marginTop: 18, marginBottom: 4,
+    backgroundColor: EDITORIAL.creamDeep, borderRadius: 12,
+    paddingHorizontal: 14, paddingVertical: 11,
+  },
+  lockedBannerText: { flex: 1, fontFamily: FONTS.nunitoSans, fontSize: 12.5, color: EDITORIAL.text, lineHeight: 17 },
+
   inlineEmpty: { alignItems: 'center', paddingTop: 50, paddingBottom: 30, gap: 8 },
   inlineEmptyText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 15, fontWeight: '600', color: EDITORIAL.textSoft },
   inlineEmptyHint: { fontFamily: FONTS.nunitoSans, fontSize: 14, color: EDITORIAL.textSoft, textAlign: 'center', lineHeight: 20 },
-  upsellBtn: {
+  waitlistBtn: {
     marginTop: 12,
     backgroundColor: EDITORIAL.green,
     borderRadius: 12,
     paddingVertical: 13,
     paddingHorizontal: 28,
   },
-  upsellBtnPressed: { opacity: 0.85 },
-  upsellBtnText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 15, fontWeight: '700', color: EDITORIAL.cream },
+  waitlistBtnPressed: { opacity: 0.85 },
+  waitlistBtnText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 15, fontWeight: '700', color: EDITORIAL.cream },
   footerSpinner: { paddingVertical: 24, alignItems: 'center', justifyContent: 'center' },
   loaderWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   errorBanner: {
@@ -1118,6 +1306,10 @@ const hero = StyleSheet.create({
   macroText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 11, fontWeight: '600', color: 'rgba(253,251,247,0.6)' },
   dot: { fontFamily: FONTS.nunitoSans, fontSize: 11, color: 'rgba(253,251,247,0.3)' },
   calText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 11, fontWeight: '700', color: 'rgba(253,251,247,0.88)' },
+
+  lockedWrap: { marginTop: 4, height: 34, justifyContent: 'center', gap: 5, overflow: 'hidden', borderRadius: 6 },
+  lockedBarWide: { width: '55%', height: 14, borderRadius: 4, backgroundColor: 'rgba(253,251,247,0.55)' },
+  lockedBarNarrow: { width: '35%', height: 10, borderRadius: 3, backgroundColor: 'rgba(253,251,247,0.4)' },
 });
 
 const dc = StyleSheet.create({
@@ -1144,5 +1336,17 @@ const dc = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.4)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
+  },
+
+  lockedWrap: { height: 34, justifyContent: 'center', gap: 5, overflow: 'hidden', borderRadius: 6 },
+  lockedBarWide: { width: '65%', height: 14, borderRadius: 4, backgroundColor: 'rgba(253,251,247,0.55)' },
+  lockedBarNarrow: { width: '45%', height: 10, borderRadius: 3, backgroundColor: 'rgba(253,251,247,0.4)' },
+
+  // Fully-locked row (#04+): centered lock badge over the blurred real photo.
+  lockedFullBadgeWrap: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  lockedFullBadge: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: 'rgba(15,31,21,0.55)',
+    alignItems: 'center', justifyContent: 'center',
   },
 });
