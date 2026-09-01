@@ -621,6 +621,19 @@ describe("getRestaurantMenu", () => {
     expect(result?.menuItems).toHaveLength(2);
   });
 
+  it("always returns the full, unlocked menu — route layer handles entitlement redaction", async () => {
+    const r = makeRestaurant({
+      id: "rest-1",
+      menuItems: [makeMenuItem({ id: "item-1" }), makeMenuItem({ id: "item-2" })],
+    });
+    mockFindUnique.mockResolvedValue(r);
+
+    const result = await getRestaurantMenu("rest-1");
+
+    expect(result?.locked).toBe(false);
+    expect(result?.totalItemCount).toBe(2);
+  });
+
   it("maps macros from MenuItem (denormalized) plus confidence/hadPhoto/estimatedAt from MacroEstimate", async () => {
     const estimatedAt = new Date("2025-06-15T12:00:00.000Z");
     const r = makeRestaurant({

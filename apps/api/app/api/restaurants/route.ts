@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { findNearbyRestaurants, decodeCursor } from "@/lib/restaurantService";
-import { requireSubscription } from "@/lib/subscription";
+import { optionalSubscription } from "@/lib/subscription";
 import { getApiEmitter } from "@/lib/apiEmitter";
 import type { RestaurantsApiResponse } from "@fitsy/shared";
 
@@ -8,9 +8,13 @@ export async function GET(
   request: NextRequest,
 ): Promise<NextResponse<RestaurantsApiResponse>> {
   const tEntry = Date.now();
-  const auth = await requireSubscription(request);
+  // Unauthenticated/unsubscribed callers aren't turned away — they get every
+  // row with `bestMatch` stripped (see `locked` below), which powers the
+  // onboarding + lapsed-subscriber teaser on the search screen. The API stays
+  // the sole enforcement point: the mobile client never receives macro-match
+  // data it isn't entitled to, regardless of what the UI shows.
+  const { entitled } = await optionalSubscription(request);
   const tAfterAuth = Date.now();
-  if (auth instanceof NextResponse) return auth as never;
 
   const { searchParams } = request.nextUrl;
 
@@ -169,8 +173,14 @@ export async function GET(
     // after() defers flush past response; only valid inside Next.js request runtime.
     try { after(() => emitter.flush()); } catch { /* test env or non-runtime */ }
 
+    // Strip macro-match data for unentitled callers rather than omitting rows —
+    // restaurant identity (name/photo/distance) isn't the paid asset, the
+    // macro-matched dish is. Every row is stripped uniformly, never just some,
+    // so the client can't infer real matches from which rows kept `bestMatch`.
+    const responseData = entitled ? data : data.map((r) => ({ ...r, bestMatch: null }));
+
     return NextResponse.json(
-      { data, meta: { total, limit, nextCursor } },
+      { data: responseData, meta: { total, limit, nextCursor, locked: !entitled } },
       { status: 200 },
     );
   } catch (err) {

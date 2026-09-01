@@ -10,7 +10,7 @@ jest.mock("@/lib/auth", () => ({
 }));
 
 import { NextRequest, NextResponse } from "next/server";
-import { isEntitled, subscriptionBypass, requireSubscription } from "./subscription";
+import { isEntitled, subscriptionBypass, requireSubscription, optionalSubscription } from "./subscription";
 
 const ENV = process.env;
 beforeEach(() => {
@@ -105,5 +105,32 @@ describe("requireSubscription", () => {
     mockRequireAuth.mockResolvedValue({ sub: "u1", email: "review@fitsy.app" });
     expect(await requireSubscription(req)).toEqual({ sub: "u1", email: "review@fitsy.app" });
     expect(mockFindUnique).not.toHaveBeenCalled();
+  });
+});
+
+describe("optionalSubscription", () => {
+  it("never rejects — reports entitled: false when requireAuth fails (no/bad token)", async () => {
+    mockRequireAuth.mockResolvedValue(NextResponse.json({ error: "Unauthorized" }, { status: 401 }));
+    const result = await optionalSubscription(req);
+    expect(result).toEqual({ payload: null, entitled: false });
+    expect(mockFindUnique).not.toHaveBeenCalled();
+  });
+
+  it("reports entitled: true with the payload when authenticated AND entitled", async () => {
+    mockRequireAuth.mockResolvedValue({ sub: "u1", email: "a@b.com" });
+    mockFindUnique.mockResolvedValue({ status: "active", expiresAt: null });
+    expect(await optionalSubscription(req)).toEqual({
+      payload: { sub: "u1", email: "a@b.com" },
+      entitled: true,
+    });
+  });
+
+  it("reports entitled: false with the payload when authenticated but not subscribed", async () => {
+    mockRequireAuth.mockResolvedValue({ sub: "u1", email: "a@b.com" });
+    mockFindUnique.mockResolvedValue(null);
+    expect(await optionalSubscription(req)).toEqual({
+      payload: { sub: "u1", email: "a@b.com" },
+      entitled: false,
+    });
   });
 });

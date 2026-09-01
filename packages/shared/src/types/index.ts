@@ -159,6 +159,13 @@ export interface RestaurantsMeta {
    * resume from a stable (distance, id) tie-break across equal distances.
    */
   nextCursor?: string | null;
+  /**
+   * True when the caller isn't entitled (unauthenticated, or authenticated
+   * without an active subscription) — every row's `bestMatch` is `null`
+   * regardless of whether a real match exists, so the client can distinguish
+   * "locked" from "no macro match found" and render the teaser treatment.
+   */
+  locked: boolean;
 }
 
 export interface RestaurantsResponse {
@@ -194,7 +201,12 @@ export interface MenuResponse {
   restaurantName: string;
   rating?: number;
   userRatingCount?: number;
+  /** Truncated to a small free sample when `locked` is true. */
   menuItems: MenuItemResult[];
+  /** True when the caller isn't entitled — `menuItems` is a truncated preview. */
+  locked: boolean;
+  /** Full menu size. May exceed `menuItems.length` when `locked` is true. */
+  totalItemCount: number;
 }
 
 export interface MenuApiResponseBody {

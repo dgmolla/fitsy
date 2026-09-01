@@ -492,6 +492,11 @@ export async function getRestaurantMenu(
     restaurantName: restaurant.name,
     ...(restaurant.rating !== null ? { rating: restaurant.rating } : {}),
     ...(restaurant.userRatingCount !== null ? { userRatingCount: restaurant.userRatingCount } : {}),
+    // Full, unredacted menu — the route layer (not this service) truncates
+    // and sets `locked: true` for callers who aren't entitled, mirroring how
+    // auth is enforced at the route rather than the data-access layer.
+    locked: false,
+    totalItemCount: restaurant.menuItems.length,
     menuItems: restaurant.menuItems.map((item) => {
       // Pick the winning estimate by trust order (merchant > fatsecret > ffn
       // > haiku > llm/unknown) so confidence/hadPhoto/estimatedAt match the
