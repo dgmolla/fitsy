@@ -46,7 +46,7 @@ describe('fetchRestaurants', () => {
   it('builds correct URL with all four macro params', async () => {
     const mockBody: RestaurantsResponse = {
       data: [sampleRestaurant],
-      meta: { total: 1, limit: 20 },
+      meta: { total: 1, limit: 20, locked: false },
     };
     global.fetch = makeMockFetch({ ok: true, body: mockBody });
 
@@ -73,7 +73,7 @@ describe('fetchRestaurants', () => {
   it('omits undefined macro params from query string', async () => {
     const mockBody: RestaurantsResponse = {
       data: [],
-      meta: { total: 0, limit: 20 },
+      meta: { total: 0, limit: 20, locked: false },
     };
     global.fetch = makeMockFetch({ ok: true, body: mockBody });
 
@@ -89,7 +89,7 @@ describe('fetchRestaurants', () => {
   });
 
   it('sends a trimmed query as the `q` param', async () => {
-    const mockBody: RestaurantsResponse = { data: [], meta: { total: 0, limit: 20 } };
+    const mockBody: RestaurantsResponse = { data: [], meta: { total: 0, limit: 20, locked: false } };
     global.fetch = makeMockFetch({ ok: true, body: mockBody });
 
     await fetchRestaurants({ lat: 34.0868, lng: -118.3273, query: '  poke bowl  ' });
@@ -100,7 +100,7 @@ describe('fetchRestaurants', () => {
   });
 
   it('omits the `q` param when query is empty or whitespace-only', async () => {
-    const mockBody: RestaurantsResponse = { data: [], meta: { total: 0, limit: 20 } };
+    const mockBody: RestaurantsResponse = { data: [], meta: { total: 0, limit: 20, locked: false } };
     global.fetch = makeMockFetch({ ok: true, body: mockBody });
 
     await fetchRestaurants({ lat: 34.0868, lng: -118.3273, query: '   ' });
@@ -133,7 +133,7 @@ describe('fetchRestaurants', () => {
   it('returns parsed RestaurantResult[] on success', async () => {
     const mockBody: RestaurantsResponse = {
       data: [sampleRestaurant],
-      meta: { total: 1, limit: 20 },
+      meta: { total: 1, limit: 20, locked: false },
     };
     global.fetch = makeMockFetch({ ok: true, body: mockBody });
 
@@ -148,6 +148,8 @@ describe('fetchRestaurants', () => {
 const sampleMenuResponse: MenuResponse = {
   restaurantId: 'r1',
   restaurantName: 'Test Bistro',
+  locked: false,
+  totalItemCount: 2,
   menuItems: [
     {
       id: 'mi1',

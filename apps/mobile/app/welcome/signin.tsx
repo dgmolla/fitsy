@@ -38,12 +38,12 @@ export default function SignInScreen() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [devLoading, setDevLoading] = useState(false);
 
-  // Sign-in now happens AFTER the anonymous onboarding narrative + the "restaurants
-  // that fit your macros" teaser (welcome/results.tsx), so a new user continues
-  // into a forced review ask (welcome/leave-review) right after account
-  // creation, then into location/notification setup. `outOfArea` carries
-  // results.tsx's empty-preview determination through both hops so an
-  // out-of-area user still lands on the waitlist screen at the end.
+  // Sign-in now happens AFTER the anonymous onboarding narrative + the locked
+  // search-screen teaser (`/(tabs)/search?preview=1` — see welcome/finding.tsx),
+  // so a new user continues into a forced review ask (welcome/leave-review)
+  // right after account creation, then into location/notification setup.
+  // `outOfArea` is legacy plumbing from the old dedicated teaser screen; the
+  // search screen's own empty state now covers "no matches nearby" instead.
   const { outOfArea } = useLocalSearchParams<{ outOfArea?: string }>();
   const newUserDestination = outOfArea === '1' ? '/welcome/leave-review?outOfArea=1' : '/welcome/leave-review';
 

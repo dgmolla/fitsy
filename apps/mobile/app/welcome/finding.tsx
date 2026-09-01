@@ -4,12 +4,14 @@ import AnimatedRN, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { EDITORIAL, FONTS } from '@/lib/brand';
-import { fetchPreviewRestaurants } from '@/lib/previewSearch';
-import { prefetchedRestaurants } from '@/lib/teaserCache';
-import { trackOnboardingScreenView, trackPreviewFetchFailed } from '@/lib/analytics';
+import { trackOnboardingScreenView } from '@/lib/analytics';
 
 const MIN_DISPLAY_MS = 2200;
 
+// The teaser itself is now the real search screen (`/(tabs)/search?preview=1`)
+// rather than a separate lightweight results screen — it fetches live via the
+// normal search endpoint (server-locked when unentitled), so there's nothing
+// to prefetch here. This screen is purely the "finding restaurants" beat.
 export default function FindingScreen() {
   const pulse = useRef(new RNAnimated.Value(0.3)).current;
 
@@ -26,31 +28,8 @@ export default function FindingScreen() {
       ]),
     ).start();
 
-    const start = Date.now();
-
-    async function prefetch() {
-      try {
-        const data = await fetchPreviewRestaurants();
-        prefetchedRestaurants.data = data;
-        prefetchedRestaurants.error = false;
-      } catch (err) {
-        // Flag the cache so the results screen can render an explicit
-        // "network problem, retry" UI rather than conflating this with the
-        // empty-DB state. Also surface the failure in PostHog + console so
-        // we can see how often this fires in the field.
-        prefetchedRestaurants.data = null;
-        prefetchedRestaurants.error = true;
-        // eslint-disable-next-line no-console
-        console.warn('[finding] /api/restaurants/preview prefetch failed:', err);
-        trackPreviewFetchFailed(err);
-      }
-
-      const elapsed = Date.now() - start;
-      const remaining = Math.max(0, MIN_DISPLAY_MS - elapsed);
-      setTimeout(() => router.replace('/welcome/results'), remaining);
-    }
-
-    prefetch();
+    const timer = setTimeout(() => router.replace('/(tabs)/search?preview=1'), MIN_DISPLAY_MS);
+    return () => clearTimeout(timer);
   }, [pulse]);
 
   return (
