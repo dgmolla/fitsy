@@ -21,10 +21,11 @@ export default function TabLayout() {
   // (optionalSubscription), which is the real security boundary. `__DEV__`
   // bypasses local development; App Review demo accounts (`useIsReviewer`,
   // mirroring the server `DEMO_REVIEW_EMAILS` allowlist) skip the paywall so the
-  // reviewer can see the app without a subscription — the API still gates data.
+  // reviewer can see the app without a subscription - the API still gates data.
   const { ready, isPro } = usePurchases();
   const reviewer = useIsReviewer();
-  // `useLocalSearchParams`, not `useGlobalSearchParams` — the latter updates
+  const entitled = isPro || reviewer.isReviewer;
+  // `useLocalSearchParams`, not `useGlobalSearchParams` - the latter updates
   // for every navigation anywhere in the app (including this navigator being
   // backgrounded by an unrelated stack push like /restaurant/[id] or
   // /welcome/signin, neither of which carry `preview`), which would zero out
@@ -36,21 +37,28 @@ export default function TabLayout() {
   // the search tab once with server-locked results (`/api/restaurants`
   // `meta.locked`) as long as they haven't already spent their one free
   // restaurant-detail look (tracked persistently, see lib/teaserGate). Re-read
-  // on every focus — not just on mount — so returning here after that sample
+  // on every focus - not just on mount - so returning here after that sample
   // gets spent (e.g. hardware-back from the paywall) re-locks immediately
-  // instead of trusting a stale in-memory value.
+  // instead of trusting a stale in-memory value. Skipped entirely for an
+  // already-entitled user (the common case) - the flag is structurally
+  // irrelevant to them, so there's no reason to hit AsyncStorage every focus.
   const [sampleUsed, setSampleUsed] = useState<boolean | null>(null);
   useFocusEffect(
     useCallback(() => {
+      if (entitled) { setSampleUsed(true); return; }
       hasUsedPreviewSample().then(setSampleUsed);
-    }, []),
+    }, [entitled]),
   );
 
-  const entitled = isPro || reviewer.isReviewer;
   const allowTeaser = !entitled && preview === '1' && sampleUsed === false;
+  // Single named gate for "still settling" (entitlement/session/teaser-flag
+  // reads not yet resolved) vs. the actual admit/deny decision below, so the
+  // two questions ("are we ready to decide" and "what did we decide") read as
+  // two separate lines instead of one compound boolean expression.
+  const isSettling = !ready || !reviewer.ready || sampleUsed === null;
 
   if (!__DEV__) {
-    if (!ready || !reviewer.ready || sampleUsed === null) return null; // hold while entitlement/session/teaser state settle, avoids a flash
+    if (isSettling) return null; // hold while entitlement/session/teaser state settle, avoids a flash
     if (!entitled && !allowTeaser) return <Redirect href="/welcome/payment" />;
   }
 
@@ -60,7 +68,7 @@ export default function TabLayout() {
     lastTabRef.current = next;
   }
 
-  // Teaser browsing hides the tab bar — Saved/Profile require a real
+  // Teaser browsing hides the tab bar - Saved/Profile require a real
   // subscription and shouldn't be reachable from an unentitled preview.
   const tabBarStyle = allowTeaser
     ? { display: 'none' as const }

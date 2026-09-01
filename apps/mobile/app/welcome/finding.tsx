@@ -9,7 +9,7 @@ import { trackOnboardingScreenView } from '@/lib/analytics';
 const MIN_DISPLAY_MS = 2200;
 
 // The teaser itself is now the real search screen (`/(tabs)/search?preview=1`)
-// rather than a separate lightweight results screen — it fetches live via the
+// rather than a separate lightweight results screen - it fetches live via the
 // normal search endpoint (server-locked when unentitled), so there's nothing
 // to prefetch here. This screen is purely the "finding restaurants" beat.
 export default function FindingScreen() {

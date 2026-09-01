@@ -209,8 +209,8 @@ export default function PaymentScreen() {
             </AnimatedPress>
             <AnimatedPress
               style={s.modalSkip}
-              // Declining every offer still gets the locked search teaser —
-              // real browsing with macro-match data blurred — rather than a
+              // Declining every offer still gets the locked search teaser -
+              // real browsing with macro-match data blurred - rather than a
               // dead end. Same mechanic a first-time visitor gets before
               // signing up, and what resubscribe.tsx's skip does too.
               onPress={() => { setModal('none'); router.replace('/(tabs)/search?preview=1'); }}

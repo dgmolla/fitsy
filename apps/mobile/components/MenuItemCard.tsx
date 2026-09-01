@@ -46,7 +46,7 @@ export function MenuItemCard({
   isSaved: boolean;
   onPress: () => void;
   onToggleSave: () => void;
-  /** True for the free-sample items on a locked (unentitled) menu — the name
+  /** True for the free-sample items on a locked (unentitled) menu - the name
    * itself is the thing being teased, so it renders blurred (real text
    * underneath, not blanked) with a "Subscribe to unlock" caption. */
   nameLocked?: boolean;

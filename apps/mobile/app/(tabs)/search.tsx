@@ -38,6 +38,8 @@ import {
   trackLocationManualOverrideOpened,
   trackLocationManualOverridePicked,
   trackMacroTargetsEdited,
+  trackOnboardingScreenView,
+  trackPreviewFetchFailed,
   trackRestaurantTapped,
   trackSaveMacroTargetsFailed,
   trackSearchEmptyResults,
@@ -235,7 +237,7 @@ function DietaryBadges({ options }: { options?: string[] }) {
 
 // Shown in place of the real dish name/macros when the caller isn't
 // entitled (`meta.locked`). The API never sends the real bestMatch in that
-// case, so this is greeked placeholder content under a blur, not real data —
+// case, so this is greeked placeholder content under a blur, not real data -
 // the lock is enforced server-side, this is just the visual for it.
 function LockedDishTeaser({ variant }: { variant: 'hero' | 'card' }) {
   const wrap = variant === 'hero' ? hero.lockedWrap : dc.lockedWrap;
@@ -347,8 +349,8 @@ function DishCard({ result, locked, onPress }: { result: RestaurantResult; locke
 
 // ─── Fully-locked restaurant section (#04+) ──────────────────────────────────
 
-// Rows beyond the top 3: the real name/photo/dish ARE rendered — the server
-// already sends them (only bestMatch is stripped) — but blurred, so the row
+// Rows beyond the top 3: the real name/photo/dish ARE rendered - the server
+// already sends them (only bestMatch is stripped) - but blurred, so the row
 // reads as "something real is here, locked" rather than a blank placeholder.
 // The row isn't navigable; tapping it goes straight to the paywall rather
 // than a restaurant detail page.
@@ -460,16 +462,22 @@ function RestaurantSection({ result, index, locked }: { result: RestaurantResult
 
 export default function SearchScreen() {
   // Present only when entered from the onboarding teaser (welcome/finding.tsx
-  // → `/(tabs)/search?preview=1`) — gates the out-of-area redirect below so a
+  // -> `/(tabs)/search?preview=1`) - gates the out-of-area redirect below so a
   // returning lapsed subscriber who just filtered too tight never gets routed
   // into the "not in your area yet" waitlist flow.
   const { preview } = useLocalSearchParams<{ preview?: string }>();
   const isOnboardingPreview = preview === '1';
   // The onboarding teaser's first automatic fetch (macros already set from
   // earlier onboarding steps, no query typed) doubles as the "is this area
-  // covered" check the old dedicated results.tsx screen used to run — see
+  // covered" check the old dedicated results.tsx screen used to run - see
   // outOfAreaCheckedRef usage in doFetch below.
   const outOfAreaCheckedRef = useRef(false);
+
+  // Preserves the old dedicated results.tsx screen's funnel step in the
+  // onboarding-screen-view analytics, since this screen now plays that role.
+  useEffect(() => {
+    if (isOnboardingPreview) trackOnboardingScreenView('results');
+  }, [isOnboardingPreview]);
 
   const [inputs, setInputs] = useState<MacroValues>(DEFAULT_INPUTS);
   const [results, setResults] = useState<RestaurantResult[]>([]);
@@ -478,11 +486,16 @@ export default function SearchScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // The API never blocks unentitled callers — it returns `meta.locked: true`
+  // The API never blocks unentitled callers - it returns `meta.locked: true`
   // with bestMatch stripped from every row instead, so this screen doubles as
   // the onboarding + lapsed-subscriber teaser. See RestaurantSection /
   // LockedRestaurantSection for the render split.
   const [locked, setLocked] = useState(false);
+  // Set once the onboarding teaser's first confirmed (non-network-error)
+  // fetch comes back empty - see outOfAreaCheckedRef in doFetch. Renders an
+  // inline choice ("Keep me posted") rather than auto-redirecting, so the
+  // user sees the reassurance copy before leaving search.
+  const [outOfArea, setOutOfArea] = useState(false);
   const initialFetch = useRef(true);
   const [filterVisible, setFilterVisible] = useState(false);
   const [locationPickerVisible, setLocationPickerVisible] = useState(false);
@@ -604,6 +617,7 @@ export default function SearchScreen() {
       if (isRefresh) setRefreshing(true);
       else setLoading(true);
       setError(null);
+      setOutOfArea(false);
       // New search → reset pagination bookkeeping.
       pagesLoadedRef.current = 0;
       isLoadingMoreRef.current = false;
@@ -617,20 +631,53 @@ export default function SearchScreen() {
       const calories = parseFloat(current.calories);
 
       try {
-        const { data, nextCursor: cursor, locked: isLocked } = await fetchRestaurantsPage(params);
+        const { data, nextCursor: cursor, locked: isLocked, networkError } = await fetchRestaurantsPage(params);
 
-        // Out-of-area check — mirrors the old dedicated results.tsx screen,
+        if (networkError) {
+          // fetchRestaurantsPage swallows fetch/network failures into a
+          // successful-looking `data: []` (so pagination and the general
+          // empty state stay simple) - `networkError: true` is the one
+          // signal that this wasn't a real "zero matches" response.
+          // Surfacing it as an error (not an empty search) matters doubly
+          // here: it stops a dropped connection from masquerading as "no
+          // matches nearby", and specifically keeps it from tripping the
+          // out-of-area check below, which only trusts a *confirmed* empty
+          // response.
+          setResults([]);
+          setNextCursor(null);
+          setError('Network problem - check your connection and try again.');
+          trackSearchPerformed({
+            has_protein_target: !isNaN(protein),
+            has_carbs_target: !isNaN(carbs),
+            has_fat_target: !isNaN(fat),
+            has_calories_target: !isNaN(calories),
+            cuisine_filter: 'all',
+            query_length: q.trim().length,
+            result_count: 0,
+            location_source: locationSource,
+            success: false,
+          });
+          trackSearchFailed({ cuisine_filter: 'all', error_message: 'network_error' });
+          if (isOnboardingPreview) trackPreviewFetchFailed(new Error('network_error'));
+          return;
+        }
+
+        // Out-of-area check - mirrors the old dedicated results.tsx screen,
         // which measured this once on load using the macros already set
         // earlier in onboarding. A later edit (user broadens their own
-        // filters, or types a query) never re-triggers it — outOfAreaCheckedRef
-        // is a one-shot latch set on the first resolved fetch regardless of
-        // outcome, and the auth-gated /api/waitlist join needs a real account,
-        // so this hands off to signin (which already carries outOfArea through
-        // the rest of onboarding) rather than joining the waitlist directly.
+        // filters, or types a query) never re-triggers it - outOfAreaCheckedRef
+        // is a one-shot latch set on the first *confirmed* (non-network-error)
+        // resolved fetch, so a dropped connection on the very first attempt
+        // doesn't consume it - the next real response still gets checked. The
+        // auth-gated /api/waitlist join needs a real account, so this hands
+        // off to signin (which already carries outOfArea through the rest of
+        // onboarding) rather than joining the waitlist directly.
         const isFirstFetch = !outOfAreaCheckedRef.current;
         outOfAreaCheckedRef.current = true;
         if (isOnboardingPreview && isFirstFetch && q.trim() === '' && data.length === 0) {
-          router.push('/welcome/signin?outOfArea=1');
+          setOutOfArea(true);
+          setResults([]);
+          setNextCursor(null);
           return;
         }
 
@@ -680,16 +727,20 @@ export default function SearchScreen() {
           void recordSearchAndMaybePrompt();
         }
       } catch (err) {
-        // /api/restaurants no longer 402s in normal operation (an unentitled
-        // caller gets a locked 200 instead) — but a stray 402 is still
-        // possible during a deploy-skew window, so route to the paywall
-        // rather than silently degrading to "no matches nearby" with no CTA.
-        if (err instanceof SubscriptionRequiredError) {
-          void routeToPaywall();
-          return;
-        }
+        // Only SubscriptionRequiredError reaches here (fetchRestaurantsPage
+        // resolves every other failure with `networkError: true`, handled
+        // above, instead of throwing). /api/restaurants no longer 402s in
+        // normal operation - an unentitled caller gets a locked 200 instead -
+        // so this is a rare deploy-skew glitch, not a real paywall. Show it
+        // as a plain retry-able error rather than force-navigating an
+        // entitled user off their in-progress search.
         setResults([]);
         setNextCursor(null);
+        setError(
+          err instanceof SubscriptionRequiredError
+            ? 'Something went wrong. Pull to refresh and try again.'
+            : 'Network problem - check your connection and try again.',
+        );
         trackSearchPerformed({
           has_protein_target: !isNaN(protein),
           has_carbs_target: !isNaN(carbs),
@@ -705,6 +756,7 @@ export default function SearchScreen() {
           cuisine_filter: 'all',
           error_message: err instanceof Error ? err.message : undefined,
         });
+        if (isOnboardingPreview) trackPreviewFetchFailed(err);
       } finally {
         if (isRefresh) setRefreshing(false);
         else setLoading(false);
@@ -787,7 +839,7 @@ export default function SearchScreen() {
       });
       setNextCursor(cursor);
       // Entitlement can change mid-session (e.g. a purchase completes while
-      // scrolling) — keep `locked` current rather than trusting only the
+      // scrolling) - keep `locked` current rather than trusting only the
       // first page's value for every subsequently-loaded row.
       setLocked(isLocked);
       pagesLoadedRef.current = pageIndex + 1;
@@ -895,6 +947,10 @@ export default function SearchScreen() {
 
   const handleClearQuery = useCallback(() => setQuery(''), []);
 
+  const handleJoinWaitlist = useCallback(() => {
+    router.push('/welcome/signin?outOfArea=1');
+  }, []);
+
   const locationLabel = location.loading
     ? 'Locating...'
     : location.source === 'gps'
@@ -926,12 +982,30 @@ export default function SearchScreen() {
         </View>
       )}
 
-      {canSearch && results.length === 0 && (
+      {canSearch && outOfArea && (
+        <View style={s.inlineEmpty}>
+          <Ionicons name="leaf-outline" size={32} color={EDITORIAL.greenAccent} />
+          <Text style={s.inlineEmptyText}>We're not in your area yet</Text>
+          <Text style={s.inlineEmptyHint}>
+            Fitsy is launching in Los Angeles first - your city is next on the list.
+          </Text>
+          <Pressable
+            style={({ pressed }) => [s.waitlistBtn, pressed && s.waitlistBtnPressed]}
+            onPress={handleJoinWaitlist}
+            accessibilityRole="button"
+            accessibilityLabel="Keep me posted"
+          >
+            <Text style={s.waitlistBtnText}>Keep me posted</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {canSearch && !outOfArea && results.length === 0 && (
         <View style={s.inlineEmpty}>
           <Ionicons name="search-outline" size={32} color={EDITORIAL.creamDeep} />
           <Text style={s.inlineEmptyText}>No matches nearby</Text>
           <Text style={s.inlineEmptyHint}>
-            {hasQuery ? `Nothing matched "${query.trim()}" — try different terms or a wider area` : 'Try adjusting your macro targets'}
+            {hasQuery ? `Nothing matched "${query.trim()}" - try different terms or a wider area` : 'Try adjusting your macro targets'}
           </Text>
         </View>
       )}
@@ -994,7 +1068,7 @@ export default function SearchScreen() {
           data={canSearch ? listResults : []}
           keyExtractor={(r) => r.id}
           renderItem={({ item, index }) => (
-            // Hero (#01) + the first two sections (#02, #03) stay open — real
+            // Hero (#01) + the first two sections (#02, #03) stay open - real
             // name/photo/distance, dish teased but not shown. #04 onward is
             // fully blurred and routes straight to the paywall on tap.
             locked && index >= 2
@@ -1151,7 +1225,7 @@ const s = StyleSheet.create({
   sectionSub: { fontFamily: FONTS.nunitoSans, fontSize: 11, fontWeight: '500', color: EDITORIAL.textSoft, marginTop: 2 },
   viewMenu: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 12, fontWeight: '600', color: EDITORIAL.greenAccent, paddingHorizontal: 20, marginTop: 6 },
 
-  // Name+distance for a fully-locked row (#04+) — sized to just the text so
+  // Name+distance for a fully-locked row (#04+) - sized to just the text so
   // the blur below it hugs the text block rather than spanning the row.
   lockedNameWrap: { flex: 1, borderRadius: 6, overflow: 'hidden' },
 
@@ -1166,6 +1240,15 @@ const s = StyleSheet.create({
   inlineEmpty: { alignItems: 'center', paddingTop: 50, paddingBottom: 30, gap: 8 },
   inlineEmptyText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 15, fontWeight: '600', color: EDITORIAL.textSoft },
   inlineEmptyHint: { fontFamily: FONTS.nunitoSans, fontSize: 14, color: EDITORIAL.textSoft, textAlign: 'center', lineHeight: 20 },
+  waitlistBtn: {
+    marginTop: 12,
+    backgroundColor: EDITORIAL.green,
+    borderRadius: 12,
+    paddingVertical: 13,
+    paddingHorizontal: 28,
+  },
+  waitlistBtnPressed: { opacity: 0.85 },
+  waitlistBtnText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 15, fontWeight: '700', color: EDITORIAL.cream },
   footerSpinner: { paddingVertical: 24, alignItems: 'center', justifyContent: 'center' },
   loaderWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   errorBanner: {

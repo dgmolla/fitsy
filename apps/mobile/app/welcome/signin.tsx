@@ -39,7 +39,7 @@ export default function SignInScreen() {
   const [devLoading, setDevLoading] = useState(false);
 
   // Sign-in now happens AFTER the anonymous onboarding narrative + the locked
-  // search-screen teaser (`/(tabs)/search?preview=1` — see welcome/finding.tsx),
+  // search-screen teaser (`/(tabs)/search?preview=1` - see welcome/finding.tsx),
   // so a new user continues into a forced review ask (welcome/leave-review)
   // right after account creation, then into location/notification setup.
   // `outOfArea` is legacy plumbing from the old dedicated teaser screen; the
