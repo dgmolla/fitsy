@@ -164,8 +164,13 @@ export interface RestaurantsMeta {
    * without an active subscription) — every row's `bestMatch` is `null`
    * regardless of whether a real match exists, so the client can distinguish
    * "locked" from "no macro match found" and render the teaser treatment.
+   *
+   * Optional (not always present) rather than defaulted server-side, so a
+   * client built before this field existed still type-checks against a
+   * server response that now always sends it — the two apps deploy
+   * independently. Treat a missing value as `false` (unlocked) when reading.
    */
-  locked: boolean;
+  locked?: boolean;
 }
 
 export interface RestaurantsResponse {
@@ -203,10 +208,14 @@ export interface MenuResponse {
   userRatingCount?: number;
   /** Truncated to a small free sample when `locked` is true. */
   menuItems: MenuItemResult[];
-  /** True when the caller isn't entitled — `menuItems` is a truncated preview. */
-  locked: boolean;
+  /**
+   * True when the caller isn't entitled — `menuItems` is a truncated preview.
+   * Optional for the same cross-app-deploy reason as `RestaurantsMeta.locked`
+   * — treat a missing value as `false` when reading.
+   */
+  locked?: boolean;
   /** Full menu size. May exceed `menuItems.length` when `locked` is true. */
-  totalItemCount: number;
+  totalItemCount?: number;
 }
 
 export interface MenuApiResponseBody {
