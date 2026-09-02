@@ -154,14 +154,20 @@ export default function RestaurantDetailScreen() {
   // button, hardware back, or swipe-back gesture all funnel through
   // `beforeRemove`) spends that sample and sends the user to the paywall
   // instead of back to the search list. `leftRef` guards the async
-  // mark-and-redirect work itself (fires once); `e.preventDefault()` still
-  // runs on every attempt while locked, regardless of `leftRef`, so a fast
-  // repeated back doesn't slip through the default action while the first
-  // attempt's redirect is still in flight.
+  // mark-and-redirect work itself (fires once); a repeated user back while
+  // that redirect is still in flight is still prevented, since only the
+  // redirect's own REPLACE action is allowed through.
   const leftRef = useRef(false);
   useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', (e) => {
       if (!isLockedRef.current) return;
+      // Only intercept a user-initiated back (header chevron / router.back()
+      // dispatch GO_BACK; the swipe gesture and hardware back dispatch POP).
+      // Our own redirect below is a REPLACE and must be let through - blocking
+      // every removal here would also cancel that redirect and strand the
+      // user on this screen with a back button that does nothing.
+      const actionType = e.data?.action?.type;
+      if (actionType !== 'GO_BACK' && actionType !== 'POP') return;
       e.preventDefault();
       if (leftRef.current) return;
       leftRef.current = true;

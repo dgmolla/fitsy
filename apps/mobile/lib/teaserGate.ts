@@ -27,6 +27,17 @@ export async function hasUsedPreviewSample(): Promise<boolean> {
   }
 }
 
+/** Fresh onboarding pass = fresh tease: clears a free look spent in an
+ * earlier session (re-onboarding after sign-out, testing) so it can't gate
+ * a brand-new walkthrough. */
+export async function resetPreviewSample(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(PREVIEW_SAMPLE_USED_KEY);
+  } catch {
+    // Non-fatal - worst case the free look stays spent for this pass.
+  }
+}
+
 export async function markPreviewSampleUsed(): Promise<void> {
   try {
     await AsyncStorage.setItem(PREVIEW_SAMPLE_USED_KEY, '1');

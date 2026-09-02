@@ -26,7 +26,7 @@ import { BlurFallback } from '@/lib/BlurFallback';
 import type { MacroValues } from '@/lib/macroPresets';
 import { fetchRestaurantsPage } from '@/lib/apiClient';
 import { SubscriptionRequiredError } from '@/lib/api';
-import { routeToPaywall } from '@/lib/teaserGate';
+import { hasUsedPreviewSample, routeToPaywall } from '@/lib/teaserGate';
 import { recordSearchAndMaybePrompt } from '@/lib/ratingPrompt';
 import { shouldShowInitialLoader } from '@/lib/searchLoading';
 import { useLocation, type LocationState } from '@/lib/useLocation';
@@ -257,6 +257,17 @@ function LockedDishTeaser({ variant }: { variant: 'hero' | 'card' }) {
   );
 }
 
+// Top-3 rows stay tappable while locked, but the free detail look is once
+// per device: once it's spent, a tap goes to the paywall instead of opening
+// another (truncated) menu. Unlocked rows always just navigate.
+async function openRestaurantOrPaywall(locked: boolean, navigate: () => void): Promise<void> {
+  if (locked && (await hasUsedPreviewSample())) {
+    await routeToPaywall();
+    return;
+  }
+  navigate();
+}
+
 // ─── Hero card (#01) ──────────────────────────────────────────────────────────
 
 function HeroCard({ result, locked }: { result: RestaurantResult; locked: boolean }) {
@@ -274,10 +285,10 @@ function HeroCard({ result, locked }: { result: RestaurantResult; locked: boolea
           entry_point: 'hero',
           best_match_calories: result.bestMatch?.calories,
         });
-        router.push({
+        void openRestaurantOrPaywall(locked, () => router.push({
           pathname: `/restaurant/${result.id}`,
           params: { address: result.address, distance: result.distanceMiles?.toFixed(1), photoUrl: result.photoUrl, cuisine: result.cuisineTags?.[0] },
-        });
+        }));
       }}
       accessibilityLabel={`${result.name}${result.bestMatch ? `, best match: ${result.bestMatch.name}` : ''}`}
       accessibilityRole="button"
@@ -403,10 +414,10 @@ function RestaurantSection({ result, index, locked }: { result: RestaurantResult
   const position = index + 1;
 
   function navigateToRestaurant() {
-    router.push({
+    void openRestaurantOrPaywall(locked, () => router.push({
       pathname: `/restaurant/${result.id}`,
       params: { address: result.address, distance: result.distanceMiles?.toFixed(1), photoUrl: result.photoUrl, cuisine: result.cuisineTags?.[0] },
-    });
+    }));
   }
 
   function handleSectionPress() {
@@ -1089,6 +1100,22 @@ export default function SearchScreen() {
           }
         />
       )}
+      {locked && isOnboardingPreview && (
+        // The tab bar is hidden during the teaser, so this is the one
+        // always-visible way out: sign-up for a new visitor, the paywall
+        // for a signed-in but unsubscribed one (routeToPaywall decides).
+        <View style={s.unlockBar}>
+          <Pressable
+            style={({ pressed }) => [s.unlockBtn, pressed && s.unlockBtnPressed]}
+            onPress={() => { void routeToPaywall(); }}
+            accessibilityRole="button"
+            accessibilityLabel="Unlock everything"
+          >
+            <Ionicons name="lock-open-outline" size={16} color={EDITORIAL.cream} />
+            <Text style={s.unlockBtnText}>Unlock everything</Text>
+          </Pressable>
+        </View>
+      )}
       <FilterPopup
         visible={filterVisible}
         values={inputs}
@@ -1250,6 +1277,17 @@ const s = StyleSheet.create({
   waitlistBtnPressed: { opacity: 0.85 },
   waitlistBtnText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 15, fontWeight: '700', color: EDITORIAL.cream },
   footerSpinner: { paddingVertical: 24, alignItems: 'center', justifyContent: 'center' },
+  unlockBar: {
+    position: 'absolute', left: 0, right: 0, bottom: 0,
+    paddingHorizontal: 16, paddingTop: 10, paddingBottom: 28,
+    backgroundColor: EDITORIAL.cream, borderTopWidth: 1, borderTopColor: EDITORIAL.border,
+  },
+  unlockBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: EDITORIAL.green, borderRadius: 32, paddingVertical: 16,
+  },
+  unlockBtnPressed: { opacity: 0.85 },
+  unlockBtnText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 16, fontWeight: '600', color: EDITORIAL.cream },
   loaderWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   errorBanner: {
     marginHorizontal: 16, marginTop: 16, borderRadius: 8, padding: 12,

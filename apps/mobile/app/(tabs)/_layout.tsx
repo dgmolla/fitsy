@@ -1,11 +1,10 @@
-import { useCallback, useRef, useState } from 'react';
+import { useRef } from 'react';
 import { View } from 'react-native';
-import { Tabs, Redirect, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { Tabs, Redirect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, EDITORIAL, FONTS } from '@/lib/brand';
 import { usePurchases } from '@/lib/usePurchases';
 import { useIsReviewer } from '@/lib/reviewAccess';
-import { hasUsedPreviewSample } from '@/lib/teaserGate';
 import { trackTabSwitched, type TabId } from '@/lib/analytics';
 
 export default function TabLayout() {
@@ -33,29 +32,18 @@ export default function TabLayout() {
   // redirect underneath the screen the user is actually looking at.
   const { preview } = useLocalSearchParams<{ preview?: string }>();
 
-  // Onboarding + lapsed-subscriber teaser: an unentitled visitor may browse
-  // the search tab once with server-locked results (`/api/restaurants`
-  // `meta.locked`) as long as they haven't already spent their one free
-  // restaurant-detail look (tracked persistently, see lib/teaserGate). Re-read
-  // on every focus - not just on mount - so returning here after that sample
-  // gets spent (e.g. hardware-back from the paywall) re-locks immediately
-  // instead of trusting a stale in-memory value. Skipped entirely for an
-  // already-entitled user (the common case) - the flag is structurally
-  // irrelevant to them, so there's no reason to hit AsyncStorage every focus.
-  const [sampleUsed, setSampleUsed] = useState<boolean | null>(null);
-  useFocusEffect(
-    useCallback(() => {
-      if (entitled) { setSampleUsed(true); return; }
-      hasUsedPreviewSample().then(setSampleUsed);
-    }, [entitled]),
-  );
-
-  const allowTeaser = !entitled && preview === '1' && sampleUsed === false;
-  // Single named gate for "still settling" (entitlement/session/teaser-flag
-  // reads not yet resolved) vs. the actual admit/deny decision below, so the
-  // two questions ("are we ready to decide" and "what did we decide") read as
-  // two separate lines instead of one compound boolean expression.
-  const isSettling = !ready || !reviewer.ready || sampleUsed === null;
+  // Onboarding / lapsed-subscriber / declined-paywall teaser: an unentitled
+  // visitor who arrives with `?preview=1` may browse the search tab with
+  // server-locked results (`/api/restaurants` `meta.locked`). Entry is never
+  // gated on the one-free-look flag (lib/teaserGate) - that flag only decides
+  // whether tapping a top-3 row opens a real detail sample or goes straight
+  // to the paywall (see search.tsx). Gating entry on it too would bounce a
+  // returning visitor to /welcome/payment, whose own "Maybe later" comes
+  // right back here: an infinite redirect loop with no way to just browse.
+  const allowTeaser = !entitled && preview === '1';
+  // Named gate for "still settling" (entitlement/session reads not yet
+  // resolved) vs. the actual admit/deny decision below.
+  const isSettling = !ready || !reviewer.ready;
 
   if (!__DEV__) {
     if (isSettling) return null; // hold while entitlement/session/teaser state settle, avoids a flash

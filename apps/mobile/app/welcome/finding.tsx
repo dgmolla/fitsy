@@ -8,10 +8,11 @@ import { trackOnboardingScreenView } from '@/lib/analytics';
 
 const MIN_DISPLAY_MS = 2200;
 
-// The teaser itself is now the real search screen (`/(tabs)/search?preview=1`)
-// rather than a separate lightweight results screen - it fetches live via the
-// normal search endpoint (server-locked when unentitled), so there's nothing
-// to prefetch here. This screen is purely the "finding restaurants" beat.
+// The teaser itself is now the real search screen (`/(tabs)/search?preview=1`,
+// reached via the welcome/preview-intro explainer) rather than a separate
+// lightweight results screen - it fetches live via the normal search endpoint
+// (server-locked when unentitled), so there's nothing to prefetch here. This
+// screen is purely the "finding restaurants" beat.
 export default function FindingScreen() {
   const pulse = useRef(new RNAnimated.Value(0.3)).current;
 
@@ -28,7 +29,7 @@ export default function FindingScreen() {
       ]),
     ).start();
 
-    const timer = setTimeout(() => router.replace('/(tabs)/search?preview=1'), MIN_DISPLAY_MS);
+    const timer = setTimeout(() => router.replace('/welcome/preview-intro'), MIN_DISPLAY_MS);
     return () => clearTimeout(timer);
   }, [pulse]);
 
