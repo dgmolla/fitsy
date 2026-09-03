@@ -77,8 +77,18 @@ describe("isEntitled", () => {
     expect(await isEntitled("u1", "a@b.com")).toBe(false);
   });
 
-  it("false for a non-active status (expired / billing_issue)", async () => {
+  it("false for an expired status", async () => {
     mockFindUnique.mockResolvedValue({ status: "expired", expiresAt: null });
+    expect(await isEntitled("u1", "a@b.com")).toBe(false);
+  });
+
+  it("true for billing_issue while the grace period hasn't lapsed (store keeps the user subscribed)", async () => {
+    mockFindUnique.mockResolvedValue({ status: "billing_issue", expiresAt: new Date(Date.now() + 86_400_000) });
+    expect(await isEntitled("u1", "a@b.com")).toBe(true);
+  });
+
+  it("false for billing_issue once the period has lapsed", async () => {
+    mockFindUnique.mockResolvedValue({ status: "billing_issue", expiresAt: new Date(Date.now() - 1_000) });
     expect(await isEntitled("u1", "a@b.com")).toBe(false);
   });
 
@@ -173,6 +183,7 @@ describe("syncSubscriptionFromRevenueCat", () => {
       plan: "com.fitsy.mobile.yearly",
       expiresAt,
       transactionId: "txn",
+      billingIssue: false,
     });
     mockFindUnique.mockResolvedValue(null);
     expect(await syncSubscriptionFromRevenueCat("u1")).toBe(true);
@@ -194,24 +205,57 @@ describe("syncSubscriptionFromRevenueCat", () => {
     });
   });
 
-  it("expires an existing row when the entitlement moved away or lapsed", async () => {
-    mockFetchProEntitlement.mockResolvedValue({ active: false, plan: "p", expiresAt: null, transactionId: null });
+  it("writes billing_issue (still entitled) during a grace period, matching the webhook", async () => {
+    mockFetchProEntitlement.mockResolvedValue({
+      active: true,
+      plan: "p",
+      expiresAt,
+      transactionId: null,
+      billingIssue: true,
+    });
+    mockFindUnique.mockResolvedValue({ id: "sub-1" });
+    expect(await syncSubscriptionFromRevenueCat("u1")).toBe(true);
+    expect(mockUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({ update: expect.objectContaining({ status: "billing_issue" }) }),
+    );
+  });
+
+  it("expires an existing row without wiping plan/expiry/transaction when the entitlement is gone", async () => {
+    mockFetchProEntitlement.mockResolvedValue({
+      active: false,
+      plan: null,
+      expiresAt: null,
+      transactionId: null,
+      billingIssue: false,
+    });
     mockFindUnique.mockResolvedValue({ id: "sub-1" });
     expect(await syncSubscriptionFromRevenueCat("u1")).toBe(false);
     expect(mockUpsert).toHaveBeenCalledWith(
-      expect.objectContaining({ update: expect.objectContaining({ status: "expired" }) }),
+      expect.objectContaining({ update: { status: "expired" } }),
     );
   });
 
   it("writes nothing for a user who never subscribed", async () => {
-    mockFetchProEntitlement.mockResolvedValue({ active: false, plan: null, expiresAt: null, transactionId: null });
+    mockFetchProEntitlement.mockResolvedValue({
+      active: false,
+      plan: null,
+      expiresAt: null,
+      transactionId: null,
+      billingIssue: false,
+    });
     mockFindUnique.mockResolvedValue(null);
     expect(await syncSubscriptionFromRevenueCat("u1")).toBe(false);
     expect(mockUpsert).not.toHaveBeenCalled();
   });
 
   it("reports RevenueCat's answer but persists nothing when the User row is gone", async () => {
-    mockFetchProEntitlement.mockResolvedValue({ active: true, plan: "p", expiresAt, transactionId: null });
+    mockFetchProEntitlement.mockResolvedValue({
+      active: true,
+      plan: "p",
+      expiresAt,
+      transactionId: null,
+      billingIssue: false,
+    });
     mockUserFindUnique.mockResolvedValue(null);
     expect(await syncSubscriptionFromRevenueCat("u1")).toBe(true);
     expect(mockUpsert).not.toHaveBeenCalled();

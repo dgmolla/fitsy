@@ -37,8 +37,18 @@ export function subscriptionBypass(email: string): boolean {
 }
 
 /**
- * Authoritative entitlement check. Active iff the webhook-synced row says
- * `active` and it hasn't lapsed. Bypassed accounts are always entitled.
+ * Statuses that grant access while `expiresAt` is still in the future.
+ * `billing_issue` is included on purpose: the store failed to charge a
+ * renewal and the subscription is in its grace period, during which Apple
+ * (and RevenueCat's entitlement) keep the user subscribed - locking them out
+ * early would punish a card hiccup. The period's own expiry still applies.
+ */
+const ENTITLED_STATUSES = new Set(["active", "billing_issue"]);
+
+/**
+ * Authoritative entitlement check. Active iff the synced row says `active`
+ * (or `billing_issue`, see above) and it hasn't lapsed. Bypassed accounts
+ * are always entitled.
  */
 export async function isEntitled(userId: string, email: string): Promise<boolean> {
   if (subscriptionBypass(email)) return true;
@@ -46,7 +56,7 @@ export async function isEntitled(userId: string, email: string): Promise<boolean
     where: { userId },
     select: { status: true, expiresAt: true },
   });
-  if (!sub || sub.status !== "active") return false;
+  if (!sub || !ENTITLED_STATUSES.has(sub.status)) return false;
   if (sub.expiresAt && sub.expiresAt.getTime() < Date.now()) return false;
   return true;
 }
@@ -118,22 +128,28 @@ export async function syncSubscriptionFromRevenueCat(userId: string): Promise<bo
   if (!user) return state.active;
   if (!state.active && !existing) return false;
 
-  const status = state.active ? "active" : "expired";
-  const plan = state.plan ?? "unknown";
+  // Same status vocabulary as the webhook (`statusForEvent`), so the two
+  // write paths never disagree on what a row means.
+  const status = !state.active ? "expired" : state.billingIssue ? "billing_issue" : "active";
   await prisma.subscription.upsert({
     where: { userId },
     create: {
       userId,
-      plan,
+      plan: state.plan ?? "unknown",
       status,
       expiresAt: state.expiresAt,
       appleTransactionId: state.transactionId,
     },
+    // Only overwrite what RevenueCat actually reported. Once an entitlement
+    // is gone (lapsed, or transferred to another account) it comes back with
+    // no product/expiry/transaction, and the row should keep the record of
+    // what was subscribed to and when it ended - support and refund disputes
+    // need it, and "expired" is already what revokes access.
     update: {
-      plan,
       status,
-      expiresAt: state.expiresAt,
-      appleTransactionId: state.transactionId,
+      ...(state.plan ? { plan: state.plan } : {}),
+      ...(state.expiresAt ? { expiresAt: state.expiresAt } : {}),
+      ...(state.transactionId ? { appleTransactionId: state.transactionId } : {}),
     },
   });
   return state.active;

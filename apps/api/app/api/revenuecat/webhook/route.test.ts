@@ -194,14 +194,21 @@ describe("POST /api/revenuecat/webhook — TRANSFER", () => {
     expect(mockSubscriptionUpdateMany).not.toHaveBeenCalled();
   });
 
-  it("expires the old owner directly when RevenueCat can't be consulted", async () => {
+  it("returns 500 (RevenueCat retries) when the NEW owner can't be synced, still expiring the old one", async () => {
     mockSync.mockResolvedValue(null);
     const res = await POST(makeRequest(transfer, AUTH));
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(500);
     expect(mockSubscriptionUpdateMany).toHaveBeenCalledWith({
       where: { userId: "user-old" },
       data: { status: "expired" },
     });
+  });
+
+  it("acks when only the OLD owner's lookup failed (already expired directly)", async () => {
+    mockSync.mockImplementation(async (id: string) => (id === "user-old" ? null : true));
+    const res = await POST(makeRequest(transfer, AUTH));
+    expect(res.status).toBe(200);
+    expect(mockSubscriptionUpdateMany).toHaveBeenCalledTimes(1);
   });
 
   it("returns 500 so RevenueCat retries when the sync throws", async () => {

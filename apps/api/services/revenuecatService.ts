@@ -33,6 +33,13 @@ export interface RevenueCatEntitlementState {
   expiresAt: Date | null;
   /** Store transaction id for the backing subscription, when RevenueCat exposes it. */
   transactionId: string | null;
+  /**
+   * The store reported a failed renewal charge and the subscription is in
+   * its grace period. RevenueCat keeps the entitlement active meanwhile, so
+   * `active` stays true; this just lets the DB keep the same
+   * `billing_issue` status the webhook writes.
+   */
+  billingIssue: boolean;
 }
 
 interface SubscriberResponse {
@@ -43,7 +50,11 @@ interface SubscriberResponse {
     >;
     subscriptions?: Record<
       string,
-      { store_transaction_id?: string | null; original_transaction_id?: string | null }
+      {
+        store_transaction_id?: string | null;
+        original_transaction_id?: string | null;
+        billing_issues_detected_at?: string | null;
+      }
     >;
   };
 }
@@ -85,7 +96,9 @@ export async function fetchProEntitlement(
     if (!subscriber || typeof subscriber !== "object") return null;
 
     const ent = subscriber.entitlements?.[PRO_ENTITLEMENT_ID];
-    if (!ent) return { active: false, plan: null, expiresAt: null, transactionId: null };
+    if (!ent) {
+      return { active: false, plan: null, expiresAt: null, transactionId: null, billingIssue: false };
+    }
 
     const expiresAt = ent.expires_date ? new Date(ent.expires_date) : null;
     const validExpiry = expiresAt && !Number.isNaN(expiresAt.getTime()) ? expiresAt : null;
@@ -96,6 +109,7 @@ export async function fetchProEntitlement(
       plan,
       expiresAt: validExpiry,
       transactionId: sub?.original_transaction_id ?? sub?.store_transaction_id ?? null,
+      billingIssue: Boolean(sub?.billing_issues_detected_at),
     };
   } catch (err) {
     console.warn("[revenuecat] subscriber lookup error", err instanceof Error ? err.message : err);

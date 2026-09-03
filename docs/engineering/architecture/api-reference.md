@@ -24,7 +24,8 @@ Merged reference for all Fitsy API routes. Supersedes the archived `api-endpoint
 | `/api/user/profile` | GET, PATCH | Bearer JWT | User profile |
 | `/api/user/push-token` | POST | Bearer JWT | Register push token |
 | `/api/user` | DELETE | Bearer JWT | Delete account |
-| `/api/subscriptions/verify` | POST | Bearer JWT | RevenueCat receipt verification |
+| `/api/subscriptions/status` | GET | Bearer JWT | Server-trusted entitlement state |
+| `/api/subscriptions/sync` | POST | Bearer JWT | Re-read entitlement from RevenueCat |
 | `/api/revenuecat/webhook` | POST | `REVENUECAT_WEBHOOK_AUTH` header | RevenueCat event webhook |
 | `/api/feedback` | POST | Bearer JWT | Submit feedback |
 | `/api/internal/audit-macro-drift` | GET | `CRON_SECRET` Bearer | Vercel cron — macro drift audit |
@@ -317,12 +318,26 @@ Returns `204` on success.
 
 ---
 
-### POST /api/subscriptions/verify
+### GET /api/subscriptions/status
 
 **Auth:** Bearer JWT required  
-**File:** `apps/api/app/api/subscriptions/verify/route.ts`
+**File:** `apps/api/app/api/subscriptions/status/route.ts`
 
-Verifies a RevenueCat receipt and returns the user's current entitlement state. See RevenueCat integration docs for details.
+Returns `{ active }` from the `Subscription` table (plus the dev/demo bypass).
+Replaced the old stubbed `/api/subscriptions/verify` receipt endpoint: clients never send receipts, RevenueCat validates and notifies the webhook.
+
+---
+
+### POST /api/subscriptions/sync
+
+**Auth:** Bearer JWT required  
+**File:** `apps/api/app/api/subscriptions/sync/route.ts`  
+**Env:** `REVENUECAT_PUBLIC_API_KEY` (the app's public SDK key; RevenueCat's v1 subscriber read accepts it)
+
+Pull path for entitlement state: asks RevenueCat for the caller's `pro` entitlement (`services/revenuecatService.ts`) and upserts the `Subscription` row.
+Returns `{ active, synced }`; `synced: false` means RevenueCat could not be consulted and `active` is the existing DB state.
+The mobile client calls it right after a purchase or restore, on sign-in when the device already reports Pro, and when the device says Pro while the API serves locked responses.
+This covers the cases the webhook alone cannot: `TRANSFER` events carry no product/expiry, the first search after purchase can race webhook delivery, and a missed delivery would otherwise lock a paying user out until the next renewal.
 
 ---
 
@@ -331,7 +346,10 @@ Verifies a RevenueCat receipt and returns the user's current entitlement state. 
 **Auth:** `REVENUECAT_WEBHOOK_AUTH` header (constant-time compare)  
 **File:** `apps/api/app/api/revenuecat/webhook/route.ts`
 
-Server-side webhook for RevenueCat subscription lifecycle events (purchase, renewal, cancellation). This is the authoritative source for subscription state — not the `/verify` endpoint.
+Push path for RevenueCat subscription lifecycle events (purchase, renewal, cancellation, expiration, billing issue).
+`TRANSFER` (same Apple ID moved to a new Fitsy account) re-reads both sides from RevenueCat via the same sync as above and returns 500 if the new owner cannot be read, so RevenueCat retries.
+Purchases made under an anonymous pre-login id resolve to the merged account via the event's `aliases`.
+`billing_issue` rows stay entitled until `expiresAt` passes (store grace period), in both write paths.
 
 ---
 

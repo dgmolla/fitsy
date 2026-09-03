@@ -44,6 +44,7 @@ describe("fetchProEntitlement", () => {
       plan: "com.fitsy.mobile.yearly",
       expiresAt: new Date(expires),
       transactionId: "2000001",
+      billingIssue: false,
     });
     const [url, init] = (global.fetch as jest.Mock).mock.calls[0] as [string, RequestInit];
     expect(url).toBe("https://api.revenuecat.com/v1/subscribers/u1");
@@ -65,7 +66,19 @@ describe("fetchProEntitlement", () => {
       plan: null,
       expiresAt: null,
       transactionId: null,
+      billingIssue: false,
     });
+  });
+
+  it("flags a grace-period billing issue while keeping the entitlement active", async () => {
+    const expires = new Date(Date.now() + 86_400_000).toISOString();
+    mockFetch(200, {
+      subscriber: {
+        entitlements: { pro: { expires_date: expires, product_identifier: "p" } },
+        subscriptions: { p: { billing_issues_detected_at: "2026-09-01T00:00:00Z" } },
+      },
+    });
+    expect(await fetchProEntitlement("u1")).toMatchObject({ active: true, billingIssue: true });
   });
 
   it("treats a missing expiry as a non-expiring (active) grant", async () => {
