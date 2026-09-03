@@ -33,6 +33,10 @@ const ROWS: { icon: IconName; title: string; body: string }[] = [
 export default function PreviewIntroScreen() {
   useEffect(() => {
     trackOnboardingScreenView('preview-intro');
+    // A fresh onboarding pass is a fresh tease - a free look spent in an
+    // earlier session (re-onboarding, testing) must not carry over. Done on
+    // mount so Continue never waits on storage.
+    resetPreviewSample();
   }, []);
 
   return (
@@ -41,11 +45,7 @@ export default function PreviewIntroScreen() {
       title={"Here's what we found."}
       subtitle="A quick tour before you look around."
       showBack={false}
-      onContinue={() => {
-        // A fresh onboarding pass is a fresh tease - a free look spent in an
-        // earlier session (re-onboarding, testing) must not carry over.
-        resetPreviewSample().finally(() => router.replace('/(tabs)/search?preview=1'));
-      }}
+      onContinue={() => router.replace('/(tabs)/search?preview=1')}
       canContinue
       continueLabel="Show me"
     >

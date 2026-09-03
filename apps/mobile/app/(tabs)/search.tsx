@@ -258,14 +258,23 @@ function LockedDishTeaser({ variant }: { variant: 'hero' | 'card' }) {
 }
 
 // Top-3 rows stay tappable while locked, but the free detail look is once
-// per device: once it's spent, a tap goes to the paywall instead of opening
-// another (truncated) menu. Unlocked rows always just navigate.
+// per onboarding pass: once it's spent, a tap goes to the paywall instead of
+// opening another (truncated) menu. Unlocked rows always just navigate.
+// `opening` guards a fast double-tap from pushing two detail screens while
+// the (cached, usually instant) flag read is still a microtask away.
+let opening = false;
 async function openRestaurantOrPaywall(locked: boolean, navigate: () => void): Promise<void> {
-  if (locked && (await hasUsedPreviewSample())) {
-    await routeToPaywall();
-    return;
+  if (opening) return;
+  opening = true;
+  try {
+    if (locked && (await hasUsedPreviewSample())) {
+      await routeToPaywall();
+      return;
+    }
+    navigate();
+  } finally {
+    opening = false;
   }
-  navigate();
 }
 
 // ─── Hero card (#01) ──────────────────────────────────────────────────────────
@@ -372,7 +381,7 @@ function LockedRestaurantSection({ result, index }: { result: RestaurantResult; 
     <Pressable
       style={s.restSection}
       onPress={() => { void routeToPaywall(); }}
-      accessibilityLabel={`${result.name}, subscribe to unlock`}
+      accessibilityLabel="Locked restaurant, subscribe to unlock"
       accessibilityRole="button"
     >
       <View style={s.sectionHeader}>
@@ -501,7 +510,8 @@ export default function SearchScreen() {
   // with bestMatch stripped from every row instead, so this screen doubles as
   // the onboarding + lapsed-subscriber teaser. See RestaurantSection /
   // LockedRestaurantSection for the render split.
-  const [locked, setLocked] = useState(false);
+  // null until a fetch resolves; false = proven entitled, true = locked.
+  const [locked, setLocked] = useState<boolean | null>(null);
   // Set once the onboarding teaser's first confirmed (non-network-error)
   // fetch comes back empty - see outOfAreaCheckedRef in doFetch. Renders an
   // inline choice ("Keep me posted") rather than auto-redirecting, so the
@@ -1021,7 +1031,7 @@ export default function SearchScreen() {
         </View>
       )}
 
-      {canSearch && heroResult && <HeroCard result={heroResult} locked={locked} />}
+      {canSearch && heroResult && <HeroCard result={heroResult} locked={locked === true} />}
 
       {canSearch && locked && (results.length > 0) && (
         <View style={s.lockedBanner}>
@@ -1084,7 +1094,7 @@ export default function SearchScreen() {
             // fully blurred and routes straight to the paywall on tap.
             locked && index >= 2
               ? <LockedRestaurantSection result={item} index={index} />
-              : <RestaurantSection result={item} index={index} locked={locked} />
+              : <RestaurantSection result={item} index={index} locked={locked === true} />
           )}
           ListHeaderComponent={header}
           ListFooterComponent={renderFooter}
@@ -1100,10 +1110,14 @@ export default function SearchScreen() {
           }
         />
       )}
-      {locked && isOnboardingPreview && (
+      {isOnboardingPreview && locked !== false && (
         // The tab bar is hidden during the teaser, so this is the one
         // always-visible way out: sign-up for a new visitor, the paywall
         // for a signed-in but unsubscribed one (routeToPaywall decides).
+        // Keyed on the preview entry, not on a successful locked fetch - a
+        // network error on the very first search must not leave the user
+        // with no tab bar *and* no way forward. Only hidden once a fetch
+        // proves the caller is actually entitled.
         <View style={s.unlockBar}>
           <Pressable
             style={({ pressed }) => [s.unlockBtn, pressed && s.unlockBtnPressed]}
@@ -1279,7 +1293,7 @@ const s = StyleSheet.create({
   footerSpinner: { paddingVertical: 24, alignItems: 'center', justifyContent: 'center' },
   unlockBar: {
     position: 'absolute', left: 0, right: 0, bottom: 0,
-    paddingHorizontal: 16, paddingTop: 10, paddingBottom: 28,
+    paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12,
     backgroundColor: EDITORIAL.cream, borderTopWidth: 1, borderTopColor: EDITORIAL.border,
   },
   unlockBtn: {

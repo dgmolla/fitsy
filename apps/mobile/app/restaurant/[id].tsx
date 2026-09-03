@@ -151,27 +151,25 @@ export default function RestaurantDetailScreen() {
 
   // A locked (truncated, unentitled) menu is the "one free look" teaser - the
   // API never sends more than a small real sample. Leaving this screen (back
-  // button, hardware back, or swipe-back gesture all funnel through
-  // `beforeRemove`) spends that sample and sends the user to the paywall
-  // instead of back to the search list. `leftRef` guards the async
-  // mark-and-redirect work itself (fires once); a repeated user back while
-  // that redirect is still in flight is still prevented, since only the
-  // redirect's own REPLACE action is allowed through.
+  // button, hardware back, swipe-back, or any other removal) spends that
+  // sample and sends the user to the paywall instead of back to the search
+  // list. Every removal is intercepted while locked; the one exception is
+  // our own redirect, which sets `redirectingRef` right before it dispatches
+  // so it isn't cancelled by this same listener (that self-cancel is exactly
+  // what stranded users on this screen before). `leftRef` makes the
+  // mark-and-redirect fire once, so a repeated back while the redirect is
+  // still in flight stays blocked rather than slipping through.
   const leftRef = useRef(false);
+  const redirectingRef = useRef(false);
   useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', (e) => {
-      if (!isLockedRef.current) return;
-      // Only intercept a user-initiated back (header chevron / router.back()
-      // dispatch GO_BACK; the swipe gesture and hardware back dispatch POP).
-      // Our own redirect below is a REPLACE and must be let through - blocking
-      // every removal here would also cancel that redirect and strand the
-      // user on this screen with a back button that does nothing.
-      const actionType = e.data?.action?.type;
-      if (actionType !== 'GO_BACK' && actionType !== 'POP') return;
+      if (!isLockedRef.current || redirectingRef.current) return;
       e.preventDefault();
       if (leftRef.current) return;
       leftRef.current = true;
-      markPreviewSampleUsed().finally(() => { void routeToPaywall({ replace: true }); });
+      markPreviewSampleUsed();
+      redirectingRef.current = true;
+      void routeToPaywall({ replace: true });
     });
     return unsubscribe;
   }, [navigation]);

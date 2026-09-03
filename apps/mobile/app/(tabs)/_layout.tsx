@@ -41,12 +41,8 @@ export default function TabLayout() {
   // returning visitor to /welcome/payment, whose own "Maybe later" comes
   // right back here: an infinite redirect loop with no way to just browse.
   const allowTeaser = !entitled && preview === '1';
-  // Named gate for "still settling" (entitlement/session reads not yet
-  // resolved) vs. the actual admit/deny decision below.
-  const isSettling = !ready || !reviewer.ready;
-
   if (!__DEV__) {
-    if (isSettling) return null; // hold while entitlement/session/teaser state settle, avoids a flash
+    if (!ready || !reviewer.ready) return null; // hold until entitlement + session resolve, avoids a flash
     if (!entitled && !allowTeaser) return <Redirect href="/welcome/payment" />;
   }
 

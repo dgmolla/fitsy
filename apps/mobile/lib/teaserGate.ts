@@ -4,47 +4,48 @@ import { supabase } from './supabase';
 
 const PREVIEW_SAMPLE_USED_KEY = '@fitsy/previewSampleUsed';
 
+// In-memory mirror of the persisted flag: reads after the first one are
+// free (no bridge round-trip on every locked-row tap), and mark/reset flip
+// it synchronously with the storage write in the background.
+let sampleUsedCache: boolean | null = null;
+
 /**
  * Whether this device has already spent its one free restaurant-detail view
- * from the locked search teaser (onboarding, a lapsed subscriber, or someone
- * who declined every payment offer). Persisted so leaving the app mid-flow
- * can't reset it.
+ * for the current onboarding pass (or lapsed-subscriber / declined-paywall
+ * browse). Persisted so backgrounding or killing the app mid-flow can't
+ * reset it; a *new* onboarding pass (welcome/preview-intro) does reset it.
  *
  * This is a UX gate only, not a security boundary - it bounds how many free
  * *looks* a well-behaved client offers, not how much data a client can pull.
  * The server's own redaction (locked list rows, truncated menu items) is what
  * actually limits how much real data an unentitled caller can get, and holds
- * regardless of this flag (e.g. a cleared app / reinstalled device just gets
- * more free looks, never more real data per look).
+ * regardless of this flag.
  */
 export async function hasUsedPreviewSample(): Promise<boolean> {
+  if (sampleUsedCache !== null) return sampleUsedCache;
   try {
-    return (await AsyncStorage.getItem(PREVIEW_SAMPLE_USED_KEY)) === '1';
+    sampleUsedCache = (await AsyncStorage.getItem(PREVIEW_SAMPLE_USED_KEY)) === '1';
   } catch {
     // Storage read failure - fail open to "not used" rather than trapping the
     // caller out of the teaser; worst case they get an extra free look.
-    return false;
+    sampleUsedCache = false;
   }
+  return sampleUsedCache;
 }
 
-/** Fresh onboarding pass = fresh tease: clears a free look spent in an
- * earlier session (re-onboarding after sign-out, testing) so it can't gate
- * a brand-new walkthrough. */
-export async function resetPreviewSample(): Promise<void> {
-  try {
-    await AsyncStorage.removeItem(PREVIEW_SAMPLE_USED_KEY);
-  } catch {
-    // Non-fatal - worst case the free look stays spent for this pass.
-  }
+/** Fresh onboarding pass = fresh tease. Sync in memory; the storage write
+ * is fire-and-forget (a failure just means the look stays spent on disk). */
+export function resetPreviewSample(): void {
+  sampleUsedCache = false;
+  AsyncStorage.removeItem(PREVIEW_SAMPLE_USED_KEY).catch(() => {});
 }
 
-export async function markPreviewSampleUsed(): Promise<void> {
-  try {
-    await AsyncStorage.setItem(PREVIEW_SAMPLE_USED_KEY, '1');
-  } catch {
-    // Non-fatal - worst case the device gets more than one free look, which
-    // the server-side redaction still bounds regardless.
-  }
+/** Sync in memory; storage write is fire-and-forget (a failure just means
+ * the device gets more than one free look, which the server-side redaction
+ * still bounds). */
+export function markPreviewSampleUsed(): void {
+  sampleUsedCache = true;
+  AsyncStorage.setItem(PREVIEW_SAMPLE_USED_KEY, '1').catch(() => {});
 }
 
 // Coarse in-flight guard: a fast double-tap on the same locked row/CTA would
@@ -76,12 +77,15 @@ export async function routeToPaywall(options: { replace?: boolean } = {}): Promi
   // rather than landing straight on payment.
   let target: '/welcome/payment' | '/welcome/signin' = '/welcome/signin';
   try {
-    const { data } = await supabase.auth.getSession();
-    if (data.session) target = '/welcome/payment';
-  } catch {
-    // Fall through with the sign-in default set above.
+    try {
+      const { data } = await supabase.auth.getSession();
+      if (data.session) target = '/welcome/payment';
+    } catch {
+      // Fall through with the sign-in default set above.
+    }
+    if (replace) router.replace(target);
+    else router.push(target);
+  } finally {
+    navigating = false;
   }
-  if (replace) router.replace(target);
-  else router.push(target);
-  navigating = false;
 }
