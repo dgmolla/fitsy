@@ -59,6 +59,13 @@ export interface PurchasesContextValue {
   /** Re-fetch CustomerInfo from RevenueCat. */
   refresh: () => Promise<void>;
   /**
+   * Re-fetch the current offering. The initial fetch happens once at boot; if
+   * it failed (offline at launch, StoreKit hiccup) paywalls call this rather
+   * than showing "plans are still loading" until the app is relaunched.
+   * Resolves to the offering so callers can retry a purchase in one step.
+   */
+  refreshOffering: () => Promise<PurchasesOffering | null>;
+  /**
    * Buy a package from our own paywall UI. `source` tags analytics
    * (e.g. 'onboarding', 'profile'). Resolves to the Pro state afterwards.
    */
@@ -131,6 +138,14 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     setCustomerInfo(await fetchCustomerInfo());
   }, []);
 
+  const refreshOffering = useCallback(async (): Promise<PurchasesOffering | null> => {
+    const off = await fetchCurrentOffering();
+    // Keep a previously loaded offering rather than blanking prices on a
+    // transient failure.
+    if (off) setOffering(off);
+    return off;
+  }, []);
+
   const purchase = useCallback(async (pkg: PurchasesPackage, source: string): Promise<boolean> => {
     const { outcome, customerInfo: info } = await rcPurchasePackage(pkg);
     trackPaywallResult({ source, outcome });
@@ -172,6 +187,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     customerInfo,
     offering,
     refresh,
+    refreshOffering,
     purchase,
     presentPaywall,
     presentCustomerCenter,

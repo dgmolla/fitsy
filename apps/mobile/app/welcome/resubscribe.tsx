@@ -22,7 +22,7 @@ import { openLegalLink } from '@/lib/legalLinks';
  * charge with no explanation.
  */
 export default function ResubscribeScreen() {
-  const { offering, purchase, restore } = usePurchases();
+  const { offering, refreshOffering, purchase, restore } = usePurchases();
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
   // A locked teaser of what resubscribing unlocks, same cards + fetch as the
@@ -38,16 +38,22 @@ export default function ResubscribeScreen() {
       .finally(() => setTeaserLoading(false));
   }, []);
 
+  // Retry the boot-time offering fetch when arriving without one (see payment.tsx).
+  useEffect(() => {
+    if (!offering) void refreshOffering();
+  }, [offering, refreshOffering]);
+
   const annualPrice = offering?.annual?.product.priceString ?? '$39.99/yr';
 
   async function handleResubscribe() {
-    if (!offering?.annual) {
+    const annual = offering?.annual ?? (await refreshOffering())?.annual;
+    if (!annual) {
       Alert.alert('Just a moment', 'Plans are still loading — please try again.');
       return;
     }
     setLoading(true);
     try {
-      const isPro = await purchase(offering.annual, 'resubscribe');
+      const isPro = await purchase(annual, 'resubscribe');
       if (isPro) router.replace('/(tabs)/search');
     } finally {
       setLoading(false);
