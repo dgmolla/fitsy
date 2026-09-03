@@ -742,9 +742,11 @@ export default function SearchScreen() {
             has_fat_target: !isNaN(fat),
             has_calories_target: !isNaN(calories),
           });
-        } else {
-          // A successful, non-empty search is an engagement signal — maybe ask
+        } else if (!isLocked) {
+          // A successful, non-empty search is an engagement signal - maybe ask
           // for an App Store rating (gated to return sessions, asked once ever).
+          // Never on the locked teaser: a visitor who hasn't paid yet, staring
+          // at blurred rows, is the wrong moment to ask for a review.
           void recordSearchAndMaybePrompt();
         }
       } catch (err) {
