@@ -25,6 +25,7 @@ import type {
   PurchasesPackage,
 } from 'react-native-purchases';
 import { supabase } from './supabase';
+import { syncServerEntitlement, syncServerEntitlementWithin } from './entitlementSync';
 import {
   addCustomerInfoListener,
   configurePurchases,
@@ -45,6 +46,12 @@ import {
   trackPaywallShown,
   trackPurchasesRestored,
 } from './analytics';
+
+// Post-purchase/restore: the user has just paid and is waiting to get in, so
+// the server sync is capped - normally sub-second, and the first search then
+// lands unlocked; past the cap we navigate anyway and the search screen's
+// mismatch self-heal finishes the job.
+const POST_PURCHASE_SYNC_CAP_MS = 4000;
 
 export interface PurchasesContextValue {
   /** True once configure + first CustomerInfo read have settled. */
@@ -126,6 +133,10 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
       if (event === 'SIGNED_IN' && session) {
         const info = await identifyPurchasesUser(session.user.id);
         if (info) setCustomerInfo(info);
+        // A returning subscriber on a new account (RevenueCat transferred the
+        // store subscription to this app user on logIn) - make sure the
+        // server knows before the first search.
+        if (isProActive(info)) void syncServerEntitlement();
       } else if (event === 'SIGNED_OUT') {
         await logoutPurchasesUser();
         setCustomerInfo(await fetchCustomerInfo());
@@ -151,7 +162,9 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     trackPaywallResult({ source, outcome });
     if (info) {
       setCustomerInfo(info);
-      return isProActive(info);
+      const pro = isProActive(info);
+      if (pro) await syncServerEntitlementWithin(POST_PURCHASE_SYNC_CAP_MS);
+      return pro;
     }
     return false;
   }, []);
@@ -162,7 +175,9 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     trackPaywallResult({ source, outcome });
     const info = await fetchCustomerInfo();
     setCustomerInfo(info);
-    return isProActive(info);
+    const pro = isProActive(info);
+    if (pro) await syncServerEntitlementWithin(POST_PURCHASE_SYNC_CAP_MS);
+    return pro;
   }, []);
 
   const presentCustomerCenter = useCallback(async (): Promise<void> => {
@@ -177,6 +192,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     setCustomerInfo(info);
     const pro = isProActive(info);
     trackPurchasesRestored({ is_pro: pro });
+    if (pro) await syncServerEntitlementWithin(POST_PURCHASE_SYNC_CAP_MS);
     return pro;
   }, []);
 

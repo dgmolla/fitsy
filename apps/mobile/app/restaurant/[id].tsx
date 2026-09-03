@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Stack, router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { MenuItemResult, MenuResponse } from '@fitsy/shared';
-import { BookmarkButton, FitsyLoader, MenuItemCard } from '@/components';
+import { BookmarkButton, FitsyLoader, LockedUnlockCard, MenuItemCard } from '@/components';
 import { fetchMenu, getSavedItems, saveItem, unsaveItem } from '@/lib/apiClient';
 import { getMacroTargets } from '@/lib/macroStorage';
 import { recordSaveAndMaybePrompt } from '@/lib/ratingPrompt';
@@ -458,20 +458,12 @@ export default function RestaurantDetailScreen() {
             // lock - a restaurant with <= the free-sample size has nothing
             // left to promise, and "+0 more dishes" would be a broken CTA.
             isLocked && menu && hiddenItemCount > 0 ? (
-              <Pressable
-                style={s.lockedFooter}
+              <LockedUnlockCard
+                title={`+${hiddenItemCount} more dishes`}
+                subtitle="Subscribe to unlock the full menu, with macros for every item."
                 onPress={() => { void routeToPaywall(); }}
-                accessibilityRole="button"
                 accessibilityLabel="Subscribe to unlock the full menu"
-              >
-                <View style={s.lockedFooterIcon}>
-                  <Ionicons name="lock-closed" size={18} color={EDITORIAL.cream} />
-                </View>
-                <Text style={s.lockedFooterTitle}>
-                  +{hiddenItemCount} more dishes
-                </Text>
-                <Text style={s.lockedFooterSub}>Subscribe to unlock the full menu, with macros for every item.</Text>
-              </Pressable>
+              />
             ) : null
           }
           contentContainerStyle={s.listContent}
@@ -535,17 +527,4 @@ const s = StyleSheet.create({
   listContent: { paddingBottom: 36 },
   empty: { paddingHorizontal: 18, paddingVertical: 28, fontSize: 12, fontStyle: 'italic', color: EDITORIAL.textSoft, textAlign: 'center', fontFamily: FONTS.nunitoSans },
 
-  lockedFooter: {
-    marginHorizontal: 18, marginTop: 8, marginBottom: 12,
-    backgroundColor: EDITORIAL.text, borderRadius: 16,
-    paddingVertical: 22, paddingHorizontal: 20,
-    alignItems: 'center', gap: 4,
-  },
-  lockedFooterIcon: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: EDITORIAL.greenAccent,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 6,
-  },
-  lockedFooterTitle: { fontFamily: FONTS.frauncesDisplay, fontSize: 18, color: EDITORIAL.cream },
-  lockedFooterSub: { fontFamily: FONTS.nunitoSans, fontSize: 12.5, color: 'rgba(253,251,247,0.7)', textAlign: 'center', lineHeight: 18, marginTop: 2 },
 });

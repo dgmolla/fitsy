@@ -190,3 +190,22 @@ export async function voteFeedback(
     return null;
   }
 }
+
+export interface SubscriptionSyncResult {
+  /** Server-trusted entitlement after the sync. */
+  active: boolean;
+  /** False when the server couldn't reach RevenueCat and `active` is its existing state. */
+  synced: boolean;
+}
+
+/**
+ * Ask the API to re-read this user's entitlement straight from RevenueCat
+ * and persist it. Called right after a purchase/restore (so the next search
+ * isn't racing the webhook) and whenever the device says Pro while the API
+ * still serves locked responses (a subscription transferred to this account,
+ * or a webhook delivery that never landed). Throws on network/HTTP failure -
+ * callers treat it as best-effort.
+ */
+export async function syncSubscription(): Promise<SubscriptionSyncResult> {
+  return api.post<SubscriptionSyncResult>('/api/subscriptions/sync', {}, true);
+}

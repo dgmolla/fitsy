@@ -20,16 +20,19 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { RestaurantResult } from '@fitsy/shared';
 import { FitsyLoader } from '@/components/FitsyLoader';
+import { LockedUnlockCard } from '@/components/LockedUnlockCard';
 import { FilterPopup } from '@/components/FilterPopup';
 import { LocationPickerSheet } from '@/components/LocationPickerSheet';
 import { BlurFallback } from '@/lib/BlurFallback';
 import type { MacroValues } from '@/lib/macroPresets';
 import { fetchRestaurantsPage } from '@/lib/apiClient';
+import { syncServerEntitlement } from '@/lib/entitlementSync';
 import { SubscriptionRequiredError } from '@/lib/api';
 import { hasUsedPreviewSample, routeToPaywall } from '@/lib/teaserGate';
 import { recordSearchAndMaybePrompt } from '@/lib/ratingPrompt';
 import { shouldShowInitialLoader } from '@/lib/searchLoading';
 import { useLocation, type LocationState } from '@/lib/useLocation';
+import { usePurchases } from '@/lib/usePurchases';
 import type { PresetLocation } from '@/lib/locations';
 import { getMacroTargets, saveMacroTargets } from '@/lib/macroStorage';
 import { EDITORIAL, FONTS } from '@/lib/brand';
@@ -50,6 +53,8 @@ import {
 } from '@/lib/analytics';
 
 const DEBOUNCE_MS = 600;
+// Restaurants shown in the clear while locked: the hero (#01) + two sections.
+const FREE_RESULT_COUNT = 3;
 const { width: SCREEN_W } = Dimensions.get('window');
 const HERO_H = 320;
 const DISH_CARD_W = SCREEN_W * 0.44;
@@ -512,6 +517,10 @@ export default function SearchScreen() {
   // LockedRestaurantSection for the render split.
   // null until a fetch resolves; false = proven entitled, true = locked.
   const [locked, setLocked] = useState<boolean | null>(null);
+  // Device-side entitlement (RevenueCat). Only consulted for the mismatch
+  // self-heal below: the API's `locked` flag is what actually gates the UI.
+  const { isPro } = usePurchases();
+  const entitlementSyncedRef = useRef(false);
   // Set once the onboarding teaser's first confirmed (non-network-error)
   // fetch comes back empty - see outOfAreaCheckedRef in doFetch. Renders an
   // inline choice ("Keep me posted") rather than auto-redirecting, so the
@@ -787,6 +796,29 @@ export default function SearchScreen() {
     },
     [buildParams, isOnboardingPreview],
   );
+
+  // Device says Pro, API says locked: the server's Subscription row is stale
+  // or missing (subscription transferred to this account from another, or a
+  // webhook delivery that never landed). Ask the API to re-read RevenueCat
+  // once per screen mount, then refetch so the rows unlock in place instead
+  // of a paying user staring at the teaser until pull-to-refresh.
+  //
+  // Deliberately keyed on [isPro, locked] only, with the fetch arguments read
+  // from a ref at completion time: `location` is a fresh object every render
+  // and the purchases context re-renders on every CustomerInfo update, so a
+  // cleanup-cancelled version of this effect would drop the refetch on the
+  // floor almost every time.
+  const selfHealArgsRef = useRef({ inputs, location, query, doFetch });
+  selfHealArgsRef.current = { inputs, location, query, doFetch };
+  useEffect(() => {
+    if (!isPro || locked !== true || entitlementSyncedRef.current) return;
+    entitlementSyncedRef.current = true;
+    void syncServerEntitlement().then((result) => {
+      if (!result?.active) return;
+      const { inputs: current, location: loc, query: q, doFetch: fetch } = selfHealArgsRef.current;
+      void fetch(current, loc.lat, loc.lng, q, loc.source, true);
+    });
+  }, [isPro, locked]);
 
   // Pull-to-refresh: re-fire a fresh API call against the current location.
   // Resets pagination (handled inside doFetch) so the user gets a clean
@@ -1094,8 +1126,27 @@ export default function SearchScreen() {
             // Hero (#01) + the first two sections (#02, #03) stay open - real
             // name/photo/distance, dish teased but not shown. #04 onward is
             // fully blurred and routes straight to the paywall on tap.
-            locked && index >= 2
-              ? <LockedRestaurantSection result={item} index={index} />
+            locked && index >= FREE_RESULT_COUNT - 1
+              ? (
+                <>
+                  {index === FREE_RESULT_COUNT - 1 && (
+                    // Same card as the locked restaurant detail's menu footer:
+                    // sits right after the three open results, ahead of the
+                    // blurred rest of the list.
+                    // Count = rows loaded past the open three, with a trailing
+                    // "+" while more pages exist: the API's `meta.total` is only
+                    // the page size, never the true match count.
+                    <LockedUnlockCard
+                      title={`${listResults.length - FREE_RESULT_COUNT + 1}${nextCursor ? '+' : ''} more restaurants`}
+                      subtitle="Subscribe to unlock every match near you, with the dish that fits your macros at each."
+                      onPress={() => { void routeToPaywall(); }}
+                      accessibilityLabel="Subscribe to unlock all restaurants"
+                      style={s.lockedCard}
+                    />
+                  )}
+                  <LockedRestaurantSection result={item} index={index} />
+                </>
+              )
               : <RestaurantSection result={item} index={index} locked={locked === true} />
           )}
           ListHeaderComponent={header}
@@ -1271,6 +1322,8 @@ const s = StyleSheet.create({
   // Name+distance for a fully-locked row (#04+) - sized to just the text so
   // the blur below it hugs the text block rather than spanning the row.
   lockedNameWrap: { flex: 1, borderRadius: 6, overflow: 'hidden' },
+
+  lockedCard: { marginHorizontal: 16, marginTop: 22, marginBottom: 6 },
 
   lockedBanner: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
