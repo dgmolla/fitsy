@@ -27,10 +27,12 @@ export default function PaymentScreen() {
   const annualPrice = offering?.annual?.product.priceString ?? '$39.99/yr';
   const monthlyPrice = offering?.monthly?.product.priceString ?? '$7.99/mo';
   // Exit-intent discount: a dedicated, lower-priced annual package (RevenueCat
-  // package id `annual_discount`, backed by a separate ASC product
-  // `fitsy_annual_discount` — 25% off, same 3-day trial). Live price with the
-  // designed copy as fallback; if the package isn't configured the discount CTA
-  // says so rather than silently charging full price (see handleStart).
+  // package id `annual_discount`, backed by the ASC product
+  // `com.fitsy.mobile.yearly_discount` - 25% off, billed immediately: that
+  // product has NO introductory offer, so the copy below must not promise a
+  // trial). Live price with the designed copy as fallback; if the package
+  // isn't configured the discount CTA says so rather than silently charging
+  // full price (see handleStart).
   const discountedAnnual =
     offering?.availablePackages.find((p) => p.identifier === 'annual_discount') ?? null;
   const discountPrice = discountedAnnual?.product.priceString ?? '$29.99/yr';
@@ -76,7 +78,7 @@ export default function PaymentScreen() {
       Alert.alert(
         'Just a moment',
         discounted
-          ? "This offer isn't available right now — you can still start your free trial."
+          ? "This offer isn't available right now - you can still start your free trial."
           : 'Plans are still loading — please try again.',
       );
       return;
@@ -193,7 +195,7 @@ export default function PaymentScreen() {
           <Animated.View entering={FadeIn.duration(300)} style={s.modal}>
             <Text style={s.modalTitle}>Wait — 25% off.</Text>
             <Text style={s.modalBody}>
-              Lock in <Text style={{ fontWeight: '700' }}>{discountPrice}</Text> if you start your free trial now.
+              Lock in <Text style={{ fontWeight: '700' }}>{discountPrice}</Text> for your first year, billed today.
             </Text>
             <AnimatedPress style={s.modalCta} onPress={() => { setModal('none'); handleStart(true); }} haptic>
               <Text style={s.modalCtaTxt}>Claim 25% Off</Text>
