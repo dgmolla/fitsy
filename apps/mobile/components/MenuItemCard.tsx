@@ -58,7 +58,14 @@ export function MenuItemCard({
   const badgeColor = hasMatch ? matchColor(pct) : undefined;
 
   return (
-    <Pressable onPress={onPress} style={[s.card, dim && s.cardDim]} accessibilityRole="button">
+    <Pressable
+      onPress={onPress}
+      style={[s.card, dim && s.cardDim]}
+      accessibilityRole="button"
+      // The blur hides the name visually; without an explicit label VoiceOver
+      // would still read the real dish name out of the (blurred) child text.
+      accessibilityLabel={nameLocked ? `${hasMatch ? `${pct}% match, ` : ''}dish name hidden, subscribe to unlock` : undefined}
+    >
       <View style={[s.pct, badgeColor ? { borderColor: badgeColor } : null]}>
         <Text style={[s.pctTxt, badgeColor ? { color: badgeColor } : null]}>
           {hasMatch ? `${pct}%` : '—'}

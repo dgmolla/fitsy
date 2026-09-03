@@ -151,21 +151,25 @@ export default function RestaurantDetailScreen() {
 
   // A locked (truncated, unentitled) menu is the "one free look" teaser - the
   // API never sends more than a small real sample. Leaving this screen (back
-  // button, hardware back, or swipe-back gesture all funnel through
-  // `beforeRemove`) spends that sample and sends the user to the paywall
-  // instead of back to the search list. `leftRef` guards the async
-  // mark-and-redirect work itself (fires once); `e.preventDefault()` still
-  // runs on every attempt while locked, regardless of `leftRef`, so a fast
-  // repeated back doesn't slip through the default action while the first
-  // attempt's redirect is still in flight.
+  // button, hardware back, swipe-back, or any other removal) spends that
+  // sample and sends the user to the paywall instead of back to the search
+  // list. Every removal is intercepted while locked; the one exception is
+  // our own redirect, which sets `redirectingRef` right before it dispatches
+  // so it isn't cancelled by this same listener (that self-cancel is exactly
+  // what stranded users on this screen before). `leftRef` makes the
+  // mark-and-redirect fire once, so a repeated back while the redirect is
+  // still in flight stays blocked rather than slipping through.
   const leftRef = useRef(false);
+  const redirectingRef = useRef(false);
   useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', (e) => {
-      if (!isLockedRef.current) return;
+      if (!isLockedRef.current || redirectingRef.current) return;
       e.preventDefault();
       if (leftRef.current) return;
       leftRef.current = true;
-      markPreviewSampleUsed().finally(() => { void routeToPaywall({ replace: true }); });
+      markPreviewSampleUsed();
+      redirectingRef.current = true;
+      void routeToPaywall({ replace: true });
     });
     return unsubscribe;
   }, [navigation]);

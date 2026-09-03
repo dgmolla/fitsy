@@ -26,7 +26,7 @@ import { BlurFallback } from '@/lib/BlurFallback';
 import type { MacroValues } from '@/lib/macroPresets';
 import { fetchRestaurantsPage } from '@/lib/apiClient';
 import { SubscriptionRequiredError } from '@/lib/api';
-import { routeToPaywall } from '@/lib/teaserGate';
+import { hasUsedPreviewSample, routeToPaywall } from '@/lib/teaserGate';
 import { recordSearchAndMaybePrompt } from '@/lib/ratingPrompt';
 import { shouldShowInitialLoader } from '@/lib/searchLoading';
 import { useLocation, type LocationState } from '@/lib/useLocation';
@@ -257,6 +257,26 @@ function LockedDishTeaser({ variant }: { variant: 'hero' | 'card' }) {
   );
 }
 
+// Top-3 rows stay tappable while locked, but the free detail look is once
+// per onboarding pass: once it's spent, a tap goes to the paywall instead of
+// opening another (truncated) menu. Unlocked rows always just navigate.
+// `opening` guards a fast double-tap from pushing two detail screens while
+// the (cached, usually instant) flag read is still a microtask away.
+let opening = false;
+async function openRestaurantOrPaywall(locked: boolean, navigate: () => void): Promise<void> {
+  if (opening) return;
+  opening = true;
+  try {
+    if (locked && (await hasUsedPreviewSample())) {
+      await routeToPaywall();
+      return;
+    }
+    navigate();
+  } finally {
+    opening = false;
+  }
+}
+
 // ─── Hero card (#01) ──────────────────────────────────────────────────────────
 
 function HeroCard({ result, locked }: { result: RestaurantResult; locked: boolean }) {
@@ -274,10 +294,10 @@ function HeroCard({ result, locked }: { result: RestaurantResult; locked: boolea
           entry_point: 'hero',
           best_match_calories: result.bestMatch?.calories,
         });
-        router.push({
+        void openRestaurantOrPaywall(locked, () => router.push({
           pathname: `/restaurant/${result.id}`,
           params: { address: result.address, distance: result.distanceMiles?.toFixed(1), photoUrl: result.photoUrl, cuisine: result.cuisineTags?.[0] },
-        });
+        }));
       }}
       accessibilityLabel={`${result.name}${result.bestMatch ? `, best match: ${result.bestMatch.name}` : ''}`}
       accessibilityRole="button"
@@ -361,7 +381,7 @@ function LockedRestaurantSection({ result, index }: { result: RestaurantResult; 
     <Pressable
       style={s.restSection}
       onPress={() => { void routeToPaywall(); }}
-      accessibilityLabel={`${result.name}, subscribe to unlock`}
+      accessibilityLabel="Locked restaurant, subscribe to unlock"
       accessibilityRole="button"
     >
       <View style={s.sectionHeader}>
@@ -403,10 +423,10 @@ function RestaurantSection({ result, index, locked }: { result: RestaurantResult
   const position = index + 1;
 
   function navigateToRestaurant() {
-    router.push({
+    void openRestaurantOrPaywall(locked, () => router.push({
       pathname: `/restaurant/${result.id}`,
       params: { address: result.address, distance: result.distanceMiles?.toFixed(1), photoUrl: result.photoUrl, cuisine: result.cuisineTags?.[0] },
-    });
+    }));
   }
 
   function handleSectionPress() {
@@ -490,7 +510,8 @@ export default function SearchScreen() {
   // with bestMatch stripped from every row instead, so this screen doubles as
   // the onboarding + lapsed-subscriber teaser. See RestaurantSection /
   // LockedRestaurantSection for the render split.
-  const [locked, setLocked] = useState(false);
+  // null until a fetch resolves; false = proven entitled, true = locked.
+  const [locked, setLocked] = useState<boolean | null>(null);
   // Set once the onboarding teaser's first confirmed (non-network-error)
   // fetch comes back empty - see outOfAreaCheckedRef in doFetch. Renders an
   // inline choice ("Keep me posted") rather than auto-redirecting, so the
@@ -1010,7 +1031,7 @@ export default function SearchScreen() {
         </View>
       )}
 
-      {canSearch && heroResult && <HeroCard result={heroResult} locked={locked} />}
+      {canSearch && heroResult && <HeroCard result={heroResult} locked={locked === true} />}
 
       {canSearch && locked && (results.length > 0) && (
         <View style={s.lockedBanner}>
@@ -1073,7 +1094,7 @@ export default function SearchScreen() {
             // fully blurred and routes straight to the paywall on tap.
             locked && index >= 2
               ? <LockedRestaurantSection result={item} index={index} />
-              : <RestaurantSection result={item} index={index} locked={locked} />
+              : <RestaurantSection result={item} index={index} locked={locked === true} />
           )}
           ListHeaderComponent={header}
           ListFooterComponent={renderFooter}
@@ -1088,6 +1109,26 @@ export default function SearchScreen() {
             />
           }
         />
+      )}
+      {isOnboardingPreview && locked !== false && (
+        // The tab bar is hidden during the teaser, so this is the one
+        // always-visible way out: sign-up for a new visitor, the paywall
+        // for a signed-in but unsubscribed one (routeToPaywall decides).
+        // Keyed on the preview entry, not on a successful locked fetch - a
+        // network error on the very first search must not leave the user
+        // with no tab bar *and* no way forward. Only hidden once a fetch
+        // proves the caller is actually entitled.
+        <View style={s.unlockBar}>
+          <Pressable
+            style={({ pressed }) => [s.unlockBtn, pressed && s.unlockBtnPressed]}
+            onPress={() => { void routeToPaywall(); }}
+            accessibilityRole="button"
+            accessibilityLabel="Unlock everything"
+          >
+            <Ionicons name="lock-open-outline" size={16} color={EDITORIAL.cream} />
+            <Text style={s.unlockBtnText}>Unlock everything</Text>
+          </Pressable>
+        </View>
       )}
       <FilterPopup
         visible={filterVisible}
@@ -1250,6 +1291,17 @@ const s = StyleSheet.create({
   waitlistBtnPressed: { opacity: 0.85 },
   waitlistBtnText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 15, fontWeight: '700', color: EDITORIAL.cream },
   footerSpinner: { paddingVertical: 24, alignItems: 'center', justifyContent: 'center' },
+  unlockBar: {
+    position: 'absolute', left: 0, right: 0, bottom: 0,
+    paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12,
+    backgroundColor: EDITORIAL.cream, borderTopWidth: 1, borderTopColor: EDITORIAL.border,
+  },
+  unlockBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: EDITORIAL.green, borderRadius: 32, paddingVertical: 16,
+  },
+  unlockBtnPressed: { opacity: 0.85 },
+  unlockBtnText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 16, fontWeight: '600', color: EDITORIAL.cream },
   loaderWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   errorBanner: {
     marginHorizontal: 16, marginTop: 16, borderRadius: 8, padding: 12,
