@@ -25,7 +25,8 @@ import { FilterPopup } from '@/components/FilterPopup';
 import { LocationPickerSheet } from '@/components/LocationPickerSheet';
 import { BlurFallback } from '@/lib/BlurFallback';
 import type { MacroValues } from '@/lib/macroPresets';
-import { fetchRestaurantsPage, syncSubscription } from '@/lib/apiClient';
+import { fetchRestaurantsPage } from '@/lib/apiClient';
+import { syncServerEntitlement } from '@/lib/entitlementSync';
 import { SubscriptionRequiredError } from '@/lib/api';
 import { hasUsedPreviewSample, routeToPaywall } from '@/lib/teaserGate';
 import { recordSearchAndMaybePrompt } from '@/lib/ratingPrompt';
@@ -516,9 +517,6 @@ export default function SearchScreen() {
   // LockedRestaurantSection for the render split.
   // null until a fetch resolves; false = proven entitled, true = locked.
   const [locked, setLocked] = useState<boolean | null>(null);
-  // `meta.total` of the current search - drives the "+N more restaurants"
-  // count on the locked card that follows the three open results.
-  const [totalResults, setTotalResults] = useState(0);
   // Device-side entitlement (RevenueCat). Only consulted for the mismatch
   // self-heal below: the API's `locked` flag is what actually gates the UI.
   const { isPro } = usePurchases();
@@ -663,7 +661,7 @@ export default function SearchScreen() {
       const calories = parseFloat(current.calories);
 
       try {
-        const { data, nextCursor: cursor, total, locked: isLocked, networkError } = await fetchRestaurantsPage(params);
+        const { data, nextCursor: cursor, locked: isLocked, networkError } = await fetchRestaurantsPage(params);
 
         if (networkError) {
           // fetchRestaurantsPage swallows fetch/network failures into a
@@ -715,7 +713,6 @@ export default function SearchScreen() {
 
         setResults(data);
         setNextCursor(cursor);
-        setTotalResults(total);
         setLocked(isLocked);
         pagesLoadedRef.current = 1;
         trackSearchPageLoaded({
@@ -805,23 +802,23 @@ export default function SearchScreen() {
   // webhook delivery that never landed). Ask the API to re-read RevenueCat
   // once per screen mount, then refetch so the rows unlock in place instead
   // of a paying user staring at the teaser until pull-to-refresh.
+  //
+  // Deliberately keyed on [isPro, locked] only, with the fetch arguments read
+  // from a ref at completion time: `location` is a fresh object every render
+  // and the purchases context re-renders on every CustomerInfo update, so a
+  // cleanup-cancelled version of this effect would drop the refetch on the
+  // floor almost every time.
+  const selfHealArgsRef = useRef({ inputs, location, query, doFetch });
+  selfHealArgsRef.current = { inputs, location, query, doFetch };
   useEffect(() => {
     if (!isPro || locked !== true || entitlementSyncedRef.current) return;
     entitlementSyncedRef.current = true;
-    let cancelled = false;
-    (async () => {
-      try {
-        const { active } = await syncSubscription();
-        if (!cancelled && active) {
-          void doFetch(inputs, location.lat, location.lng, query, location.source, true);
-        }
-      } catch {
-        // Best effort - the webhook may still land, and pull-to-refresh
-        // re-reads `locked` on every fetch.
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [isPro, locked, doFetch, inputs, location, query]);
+    void syncServerEntitlement().then((result) => {
+      if (!result?.active) return;
+      const { inputs: current, location: loc, query: q, doFetch: fetch } = selfHealArgsRef.current;
+      void fetch(current, loc.lat, loc.lng, q, loc.source, true);
+    });
+  }, [isPro, locked]);
 
   // Pull-to-refresh: re-fire a fresh API call against the current location.
   // Resets pagination (handled inside doFetch) so the user gets a clean
@@ -1136,8 +1133,11 @@ export default function SearchScreen() {
                     // Same card as the locked restaurant detail's menu footer:
                     // sits right after the three open results, ahead of the
                     // blurred rest of the list.
+                    // Count = rows loaded past the open three, with a trailing
+                    // "+" while more pages exist: the API's `meta.total` is only
+                    // the page size, never the true match count.
                     <LockedUnlockCard
-                      title={`+${Math.max(totalResults - FREE_RESULT_COUNT, 1)} more restaurants`}
+                      title={`${listResults.length - FREE_RESULT_COUNT + 1}${nextCursor ? '+' : ''} more restaurants`}
                       subtitle="Subscribe to unlock every match near you, with the dish that fits your macros at each."
                       onPress={() => { void routeToPaywall(); }}
                       accessibilityLabel="Subscribe to unlock all restaurants"

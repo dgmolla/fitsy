@@ -33,7 +33,7 @@ export interface FetchRestaurantsParams {
  */
 export async function fetchRestaurantsPage(
   params: FetchRestaurantsParams,
-): Promise<{ data: RestaurantResult[]; nextCursor: string | null; total: number; locked: boolean; networkError: boolean }> {
+): Promise<{ data: RestaurantResult[]; nextCursor: string | null; locked: boolean; networkError: boolean }> {
   const { lat, lng } = params;
 
   const qs = new URLSearchParams();
@@ -65,12 +65,12 @@ export async function fetchRestaurantsPage(
     if ('error' in response) {
       // eslint-disable-next-line no-console
       console.log(JSON.stringify({ event: 'fitsy_search_client_done', reqId, ok: false, client_total_ms: t1 - t0 }));
-      return { data: [], nextCursor: null, total: 0, locked: false, networkError: true };
+      return { data: [], nextCursor: null, locked: false, networkError: true };
     }
 
     // eslint-disable-next-line no-console
     console.log(JSON.stringify({ event: 'fitsy_search_client_done', reqId, ok: true, client_total_ms: t1 - t0, results: response.data.length }));
-    return { data: response.data, nextCursor: response.meta.nextCursor ?? null, total: response.meta.total, locked: response.meta.locked ?? false, networkError: false };
+    return { data: response.data, nextCursor: response.meta.nextCursor ?? null, locked: response.meta.locked ?? false, networkError: false };
   } catch (err) {
     const t1 = Date.now();
     // eslint-disable-next-line no-console
@@ -83,7 +83,7 @@ export async function fetchRestaurantsPage(
     // 200 instead), but SubscriptionRequiredError stays defined for other
     // authenticated routes that still gate this way.
     if (err instanceof SubscriptionRequiredError) throw err;
-    return { data: [], nextCursor: null, total: 0, locked: false, networkError: true };
+    return { data: [], nextCursor: null, locked: false, networkError: true };
   }
 }
 

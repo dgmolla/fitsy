@@ -25,7 +25,7 @@ import type {
   PurchasesPackage,
 } from 'react-native-purchases';
 import { supabase } from './supabase';
-import { syncSubscription } from './apiClient';
+import { syncServerEntitlement, syncServerEntitlementWithin } from './entitlementSync';
 import {
   addCustomerInfoListener,
   configurePurchases,
@@ -47,19 +47,11 @@ import {
   trackPurchasesRestored,
 } from './analytics';
 
-/**
- * Push the device's fresh entitlement to the server so the very next data
- * request is served unlocked instead of racing the RevenueCat webhook. Best
- * effort: the server also self-heals from the client's mismatch check
- * (search screen), and the webhook still lands independently.
- */
-async function syncServerEntitlement(): Promise<void> {
-  try {
-    await syncSubscription();
-  } catch (err) {
-    console.warn('[purchases] entitlement sync failed', err);
-  }
-}
+// Post-purchase/restore: the user has just paid and is waiting to get in, so
+// the server sync is capped - normally sub-second, and the first search then
+// lands unlocked; past the cap we navigate anyway and the search screen's
+// mismatch self-heal finishes the job.
+const POST_PURCHASE_SYNC_CAP_MS = 4000;
 
 export interface PurchasesContextValue {
   /** True once configure + first CustomerInfo read have settled. */
@@ -171,7 +163,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     if (info) {
       setCustomerInfo(info);
       const pro = isProActive(info);
-      if (pro) await syncServerEntitlement();
+      if (pro) await syncServerEntitlementWithin(POST_PURCHASE_SYNC_CAP_MS);
       return pro;
     }
     return false;
@@ -184,7 +176,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     const info = await fetchCustomerInfo();
     setCustomerInfo(info);
     const pro = isProActive(info);
-    if (pro) await syncServerEntitlement();
+    if (pro) await syncServerEntitlementWithin(POST_PURCHASE_SYNC_CAP_MS);
     return pro;
   }, []);
 
@@ -200,7 +192,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     setCustomerInfo(info);
     const pro = isProActive(info);
     trackPurchasesRestored({ is_pro: pro });
-    if (pro) await syncServerEntitlement();
+    if (pro) await syncServerEntitlementWithin(POST_PURCHASE_SYNC_CAP_MS);
     return pro;
   }, []);
 
