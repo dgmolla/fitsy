@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { supabase } from './supabase';
+import { fetchCustomerInfo, hasLapsedEntitlement } from './purchases';
 
 const PREVIEW_SAMPLE_USED_KEY = '@fitsy/previewSampleUsed';
 
@@ -54,13 +55,14 @@ export function markPreviewSampleUsed(): void {
 let navigating = false;
 
 /**
- * Sends a locked-out browser to the right paywall entry point: account
- * creation first for a brand-new visitor (who then flows through the normal
- * post-signup onboarding tail into payment), or straight to the paywall for
- * someone who already has a session but isn't subscribed (a lapsed
- * subscriber, or someone who declined every offer). Payment itself assumes
- * an authenticated user, so a session-less caller must go through sign-in
- * first rather than being sent there directly.
+ * Sends a locked-out browser to the right paywall entry point:
+ * - no session: account creation (sign-in), which then flows through the
+ *   normal post-signup onboarding tail into payment - payment itself
+ *   assumes an authenticated user, so it can't be the direct target;
+ * - signed in with a *lapsed* entitlement: the win-back screen
+ *   (welcome/resubscribe), never the first-time paywall - that one promises
+ *   a free trial Apple won't grant a second time to the same Apple ID;
+ * - signed in, never subscribed (declined every offer): the paywall.
  *
  * `replace: true` swaps the current screen instead of pushing on top of it -
  * use this when leaving a screen that's "spent" (e.g. the one free detail
@@ -75,11 +77,15 @@ export async function routeToPaywall(options: { replace?: boolean } = {}): Promi
   // so this is the more common correct outcome, not a guaranteed-safe one:
   // an authenticated user hitting this branch would have to re-authenticate
   // rather than landing straight on payment.
-  let target: '/welcome/payment' | '/welcome/signin' = '/welcome/signin';
+  let target: '/welcome/payment' | '/welcome/resubscribe' | '/welcome/signin' = '/welcome/signin';
   try {
     try {
       const { data } = await supabase.auth.getSession();
-      if (data.session) target = '/welcome/payment';
+      if (data.session) {
+        // fetchCustomerInfo is null when RevenueCat isn't configured or the
+        // read fails - treated as "never subscribed", i.e. the paywall.
+        target = hasLapsedEntitlement(await fetchCustomerInfo()) ? '/welcome/resubscribe' : '/welcome/payment';
+      }
     } catch {
       // Fall through with the sign-in default set above.
     }

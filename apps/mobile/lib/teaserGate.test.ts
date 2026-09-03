@@ -11,6 +11,10 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 }));
 jest.mock('expo-router', () => ({ router: { push: jest.fn(), replace: jest.fn() } }));
 jest.mock('./supabase', () => ({ supabase: { auth: { getSession: jest.fn() } } }));
+jest.mock('./purchases', () => ({
+  fetchCustomerInfo: jest.fn(async () => null),
+  hasLapsedEntitlement: jest.fn((info: unknown) => info !== null && (info as { lapsed?: boolean }).lapsed === true),
+}));
 
 // Fresh module per test so the in-memory mirror starts empty. resetModules
 // also re-instantiates the expo-router / supabase mocks, so the handles the
@@ -21,11 +25,13 @@ async function load() {
   const g = await import('./teaserGate');
   const { router } = await import('expo-router');
   const { supabase } = await import('./supabase');
+  const purchases = await import('./purchases');
   return {
     ...g,
     push: router.push as jest.Mock,
     replace: router.replace as jest.Mock,
     getSession: supabase.auth.getSession as jest.Mock,
+    fetchCustomerInfo: purchases.fetchCustomerInfo as jest.Mock,
   };
 }
 
@@ -78,6 +84,22 @@ describe('routeToPaywall', () => {
     g.getSession.mockResolvedValueOnce({ data: { session: {} } });
     await g.routeToPaywall({ replace: true });
     expect(g.replace).toHaveBeenLastCalledWith('/welcome/payment');
+  });
+
+  it('sends a signed-in *lapsed* subscriber to the win-back screen, not the free-trial paywall', async () => {
+    const g = await load();
+    g.getSession.mockResolvedValueOnce({ data: { session: {} } });
+    g.fetchCustomerInfo.mockResolvedValueOnce({ lapsed: true });
+    await g.routeToPaywall();
+    expect(g.push).toHaveBeenLastCalledWith('/welcome/resubscribe');
+  });
+
+  it('treats an unreadable customer record as never-subscribed (paywall)', async () => {
+    const g = await load();
+    g.getSession.mockResolvedValueOnce({ data: { session: {} } });
+    g.fetchCustomerInfo.mockResolvedValueOnce(null);
+    await g.routeToPaywall();
+    expect(g.push).toHaveBeenLastCalledWith('/welcome/payment');
   });
 
   it('defaults to sign-in when the session check throws, and releases its in-flight guard', async () => {
