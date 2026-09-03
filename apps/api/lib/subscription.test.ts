@@ -1,16 +1,34 @@
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 const mockFindUnique = jest.fn();
+const mockUpsert = jest.fn();
+const mockUserFindUnique = jest.fn();
 const mockRequireAuth = jest.fn();
+const mockFetchProEntitlement = jest.fn();
 
 jest.mock("@/lib/restaurantService", () => ({
-  prisma: { subscription: { findUnique: (...args: unknown[]) => mockFindUnique(...args) } },
+  prisma: {
+    subscription: {
+      findUnique: (...args: unknown[]) => mockFindUnique(...args),
+      upsert: (...args: unknown[]) => mockUpsert(...args),
+    },
+    user: { findUnique: (...args: unknown[]) => mockUserFindUnique(...args) },
+  },
 }));
 jest.mock("@/lib/auth", () => ({
   requireAuth: (...args: unknown[]) => mockRequireAuth(...args),
 }));
+jest.mock("@/services/revenuecatService", () => ({
+  fetchProEntitlement: (...args: unknown[]) => mockFetchProEntitlement(...args),
+}));
 
 import { NextRequest, NextResponse } from "next/server";
-import { isEntitled, subscriptionBypass, requireSubscription, optionalSubscription } from "./subscription";
+import {
+  isEntitled,
+  subscriptionBypass,
+  requireSubscription,
+  optionalSubscription,
+  syncSubscriptionFromRevenueCat,
+} from "./subscription";
 
 const ENV = process.env;
 beforeEach(() => {
@@ -132,5 +150,70 @@ describe("optionalSubscription", () => {
       payload: { sub: "u1", email: "a@b.com" },
       entitled: false,
     });
+  });
+});
+
+describe("syncSubscriptionFromRevenueCat", () => {
+  const expiresAt = new Date(Date.now() + 86_400_000);
+
+  beforeEach(() => {
+    mockUserFindUnique.mockResolvedValue({ id: "u1" });
+    mockUpsert.mockResolvedValue({});
+  });
+
+  it("returns null and writes nothing when RevenueCat can't be consulted", async () => {
+    mockFetchProEntitlement.mockResolvedValue(null);
+    expect(await syncSubscriptionFromRevenueCat("u1")).toBeNull();
+    expect(mockUpsert).not.toHaveBeenCalled();
+  });
+
+  it("writes an active row for an entitled user (transfer / webhook race / missed delivery)", async () => {
+    mockFetchProEntitlement.mockResolvedValue({
+      active: true,
+      plan: "com.fitsy.mobile.yearly",
+      expiresAt,
+      transactionId: "txn",
+    });
+    mockFindUnique.mockResolvedValue(null);
+    expect(await syncSubscriptionFromRevenueCat("u1")).toBe(true);
+    expect(mockUpsert).toHaveBeenCalledWith({
+      where: { userId: "u1" },
+      create: {
+        userId: "u1",
+        plan: "com.fitsy.mobile.yearly",
+        status: "active",
+        expiresAt,
+        appleTransactionId: "txn",
+      },
+      update: {
+        plan: "com.fitsy.mobile.yearly",
+        status: "active",
+        expiresAt,
+        appleTransactionId: "txn",
+      },
+    });
+  });
+
+  it("expires an existing row when the entitlement moved away or lapsed", async () => {
+    mockFetchProEntitlement.mockResolvedValue({ active: false, plan: "p", expiresAt: null, transactionId: null });
+    mockFindUnique.mockResolvedValue({ id: "sub-1" });
+    expect(await syncSubscriptionFromRevenueCat("u1")).toBe(false);
+    expect(mockUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({ update: expect.objectContaining({ status: "expired" }) }),
+    );
+  });
+
+  it("writes nothing for a user who never subscribed", async () => {
+    mockFetchProEntitlement.mockResolvedValue({ active: false, plan: null, expiresAt: null, transactionId: null });
+    mockFindUnique.mockResolvedValue(null);
+    expect(await syncSubscriptionFromRevenueCat("u1")).toBe(false);
+    expect(mockUpsert).not.toHaveBeenCalled();
+  });
+
+  it("reports RevenueCat's answer but persists nothing when the User row is gone", async () => {
+    mockFetchProEntitlement.mockResolvedValue({ active: true, plan: "p", expiresAt, transactionId: null });
+    mockUserFindUnique.mockResolvedValue(null);
+    expect(await syncSubscriptionFromRevenueCat("u1")).toBe(true);
+    expect(mockUpsert).not.toHaveBeenCalled();
   });
 });

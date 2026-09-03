@@ -2,12 +2,17 @@
 
 const mockUserFindUnique = jest.fn();
 const mockSubscriptionUpsert = jest.fn();
+const mockSubscriptionUpdateMany = jest.fn();
+const mockSync = jest.fn();
 
 jest.mock("@/lib/restaurantService", () => ({
   prisma: {
     user: { findUnique: mockUserFindUnique },
-    subscription: { upsert: mockSubscriptionUpsert },
+    subscription: { upsert: mockSubscriptionUpsert, updateMany: mockSubscriptionUpdateMany },
   },
+}));
+jest.mock("@/lib/subscription", () => ({
+  syncSubscriptionFromRevenueCat: (...args: unknown[]) => mockSync(...args),
 }));
 
 import { POST } from "./route";
@@ -89,6 +94,22 @@ describe("POST /api/revenuecat/webhook — parsing", () => {
     expect(mockSubscriptionUpsert).not.toHaveBeenCalled();
   });
 
+  it("falls back to the merged (non-anonymous) alias when the purchase was made pre-login", async () => {
+    const res = await POST(
+      makeRequest(
+        event({
+          app_user_id: "$RCAnonymousID:abc",
+          aliases: ["$RCAnonymousID:abc", "user-1"],
+        }),
+        AUTH,
+      ),
+    );
+    expect(res.status).toBe(200);
+    expect(mockSubscriptionUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: "user-1" } }),
+    );
+  });
+
   it("acknowledges anonymous app_user_id without writing", async () => {
     const res = await POST(
       makeRequest(event({ app_user_id: "$RCAnonymousID:abc" }), AUTH),
@@ -148,6 +169,44 @@ describe("POST /api/revenuecat/webhook — persistence", () => {
   it("returns 500 on a transient DB error so RevenueCat retries", async () => {
     mockSubscriptionUpsert.mockRejectedValue(new Error("db down"));
     const res = await POST(makeRequest(event(), AUTH));
+    expect(res.status).toBe(500);
+  });
+});
+
+describe("POST /api/revenuecat/webhook — TRANSFER", () => {
+  const transfer = {
+    event: {
+      type: "TRANSFER",
+      app_user_id: "user-new",
+      transferred_from: ["user-old", "$RCAnonymousID:x"],
+      transferred_to: ["user-new"],
+    },
+  };
+
+  it("re-reads both sides from RevenueCat instead of trusting the event", async () => {
+    mockSync.mockResolvedValue(true);
+    const res = await POST(makeRequest(transfer, AUTH));
+    expect(res.status).toBe(200);
+    expect(mockSync).toHaveBeenCalledWith("user-new");
+    expect(mockSync).toHaveBeenCalledWith("user-old");
+    expect(mockSync).not.toHaveBeenCalledWith("$RCAnonymousID:x");
+    expect(mockSubscriptionUpsert).not.toHaveBeenCalled();
+    expect(mockSubscriptionUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("expires the old owner directly when RevenueCat can't be consulted", async () => {
+    mockSync.mockResolvedValue(null);
+    const res = await POST(makeRequest(transfer, AUTH));
+    expect(res.status).toBe(200);
+    expect(mockSubscriptionUpdateMany).toHaveBeenCalledWith({
+      where: { userId: "user-old" },
+      data: { status: "expired" },
+    });
+  });
+
+  it("returns 500 so RevenueCat retries when the sync throws", async () => {
+    mockSync.mockRejectedValue(new Error("db down"));
+    const res = await POST(makeRequest(transfer, AUTH));
     expect(res.status).toBe(500);
   });
 });

@@ -2,12 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/restaurantService";
 import { requireAuth } from "@/lib/auth";
 import type { JwtPayload } from "@/services/authService";
+import { fetchProEntitlement } from "@/services/revenuecatService";
 
 /**
  * Server-trusted subscription gate.
  *
  * Entitlement state is synced into the `Subscription` table by the RevenueCat
- * webhook (`apps/api/app/api/revenuecat/webhook`). This is the authoritative
+ * webhook (`apps/api/app/api/revenuecat/webhook`) and, on demand, by
+ * `syncSubscriptionFromRevenueCat` (pull from RevenueCat's REST API - covers
+ * transfers, webhook races and missed deliveries). This is the authoritative
  * server-side check: the mobile client's RevenueCat `isPro` drives UX/routing
  * (instant, on-device), but the API independently enforces entitlement here so
  * the paywall can't be bypassed by calling the API directly.
@@ -87,4 +90,51 @@ export async function optionalSubscription(
   if (auth instanceof NextResponse) return { payload: null, entitled: false };
   const entitled = await isEntitled(auth.sub, auth.email);
   return { payload: auth, entitled };
+}
+
+/**
+ * Pull the user's current `pro` state from RevenueCat and write it to the
+ * `Subscription` row, so the next `isEntitled` read reflects reality without
+ * waiting for (or depending on) a webhook delivery.
+ *
+ * Returns the resulting entitlement, or `null` when RevenueCat couldn't be
+ * consulted (not configured / unreachable) - in which case nothing is
+ * written, so a transient outage can never downgrade a paying user.
+ *
+ * A user RevenueCat has never seen subscribe gets no row (nothing to record);
+ * an existing row is updated to whatever RevenueCat says, including
+ * `expired` when the entitlement moved to another account (TRANSFER).
+ */
+export async function syncSubscriptionFromRevenueCat(userId: string): Promise<boolean | null> {
+  const state = await fetchProEntitlement(userId);
+  if (!state) return null;
+
+  const [user, existing] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId }, select: { id: true } }),
+    prisma.subscription.findUnique({ where: { userId }, select: { id: true } }),
+  ]);
+  // No User row = nothing the FK will let us attach to (deleted account, or
+  // an id we never provisioned). Report what RevenueCat says, persist nothing.
+  if (!user) return state.active;
+  if (!state.active && !existing) return false;
+
+  const status = state.active ? "active" : "expired";
+  const plan = state.plan ?? "unknown";
+  await prisma.subscription.upsert({
+    where: { userId },
+    create: {
+      userId,
+      plan,
+      status,
+      expiresAt: state.expiresAt,
+      appleTransactionId: state.transactionId,
+    },
+    update: {
+      plan,
+      status,
+      expiresAt: state.expiresAt,
+      appleTransactionId: state.transactionId,
+    },
+  });
+  return state.active;
 }
