@@ -20,16 +20,18 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { RestaurantResult } from '@fitsy/shared';
 import { FitsyLoader } from '@/components/FitsyLoader';
+import { LockedUnlockCard } from '@/components/LockedUnlockCard';
 import { FilterPopup } from '@/components/FilterPopup';
 import { LocationPickerSheet } from '@/components/LocationPickerSheet';
 import { BlurFallback } from '@/lib/BlurFallback';
 import type { MacroValues } from '@/lib/macroPresets';
-import { fetchRestaurantsPage } from '@/lib/apiClient';
+import { fetchRestaurantsPage, syncSubscription } from '@/lib/apiClient';
 import { SubscriptionRequiredError } from '@/lib/api';
 import { hasUsedPreviewSample, routeToPaywall } from '@/lib/teaserGate';
 import { recordSearchAndMaybePrompt } from '@/lib/ratingPrompt';
 import { shouldShowInitialLoader } from '@/lib/searchLoading';
 import { useLocation, type LocationState } from '@/lib/useLocation';
+import { usePurchases } from '@/lib/usePurchases';
 import type { PresetLocation } from '@/lib/locations';
 import { getMacroTargets, saveMacroTargets } from '@/lib/macroStorage';
 import { EDITORIAL, FONTS } from '@/lib/brand';
@@ -50,6 +52,8 @@ import {
 } from '@/lib/analytics';
 
 const DEBOUNCE_MS = 600;
+// Restaurants shown in the clear while locked: the hero (#01) + two sections.
+const FREE_RESULT_COUNT = 3;
 const { width: SCREEN_W } = Dimensions.get('window');
 const HERO_H = 320;
 const DISH_CARD_W = SCREEN_W * 0.44;
@@ -512,6 +516,13 @@ export default function SearchScreen() {
   // LockedRestaurantSection for the render split.
   // null until a fetch resolves; false = proven entitled, true = locked.
   const [locked, setLocked] = useState<boolean | null>(null);
+  // `meta.total` of the current search - drives the "+N more restaurants"
+  // count on the locked card that follows the three open results.
+  const [totalResults, setTotalResults] = useState(0);
+  // Device-side entitlement (RevenueCat). Only consulted for the mismatch
+  // self-heal below: the API's `locked` flag is what actually gates the UI.
+  const { isPro } = usePurchases();
+  const entitlementSyncedRef = useRef(false);
   // Set once the onboarding teaser's first confirmed (non-network-error)
   // fetch comes back empty - see outOfAreaCheckedRef in doFetch. Renders an
   // inline choice ("Keep me posted") rather than auto-redirecting, so the
@@ -652,7 +663,7 @@ export default function SearchScreen() {
       const calories = parseFloat(current.calories);
 
       try {
-        const { data, nextCursor: cursor, locked: isLocked, networkError } = await fetchRestaurantsPage(params);
+        const { data, nextCursor: cursor, total, locked: isLocked, networkError } = await fetchRestaurantsPage(params);
 
         if (networkError) {
           // fetchRestaurantsPage swallows fetch/network failures into a
@@ -704,6 +715,7 @@ export default function SearchScreen() {
 
         setResults(data);
         setNextCursor(cursor);
+        setTotalResults(total);
         setLocked(isLocked);
         pagesLoadedRef.current = 1;
         trackSearchPageLoaded({
@@ -787,6 +799,29 @@ export default function SearchScreen() {
     },
     [buildParams, isOnboardingPreview],
   );
+
+  // Device says Pro, API says locked: the server's Subscription row is stale
+  // or missing (subscription transferred to this account from another, or a
+  // webhook delivery that never landed). Ask the API to re-read RevenueCat
+  // once per screen mount, then refetch so the rows unlock in place instead
+  // of a paying user staring at the teaser until pull-to-refresh.
+  useEffect(() => {
+    if (!isPro || locked !== true || entitlementSyncedRef.current) return;
+    entitlementSyncedRef.current = true;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { active } = await syncSubscription();
+        if (!cancelled && active) {
+          void doFetch(inputs, location.lat, location.lng, query, location.source, true);
+        }
+      } catch {
+        // Best effort - the webhook may still land, and pull-to-refresh
+        // re-reads `locked` on every fetch.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isPro, locked, doFetch, inputs, location, query]);
 
   // Pull-to-refresh: re-fire a fresh API call against the current location.
   // Resets pagination (handled inside doFetch) so the user gets a clean
@@ -1094,8 +1129,24 @@ export default function SearchScreen() {
             // Hero (#01) + the first two sections (#02, #03) stay open - real
             // name/photo/distance, dish teased but not shown. #04 onward is
             // fully blurred and routes straight to the paywall on tap.
-            locked && index >= 2
-              ? <LockedRestaurantSection result={item} index={index} />
+            locked && index >= FREE_RESULT_COUNT - 1
+              ? (
+                <>
+                  {index === FREE_RESULT_COUNT - 1 && (
+                    // Same card as the locked restaurant detail's menu footer:
+                    // sits right after the three open results, ahead of the
+                    // blurred rest of the list.
+                    <LockedUnlockCard
+                      title={`+${Math.max(totalResults - FREE_RESULT_COUNT, 1)} more restaurants`}
+                      subtitle="Subscribe to unlock every match near you, with the dish that fits your macros at each."
+                      onPress={() => { void routeToPaywall(); }}
+                      accessibilityLabel="Subscribe to unlock all restaurants"
+                      style={s.lockedCard}
+                    />
+                  )}
+                  <LockedRestaurantSection result={item} index={index} />
+                </>
+              )
               : <RestaurantSection result={item} index={index} locked={locked === true} />
           )}
           ListHeaderComponent={header}
@@ -1271,6 +1322,8 @@ const s = StyleSheet.create({
   // Name+distance for a fully-locked row (#04+) - sized to just the text so
   // the blur below it hugs the text block rather than spanning the row.
   lockedNameWrap: { flex: 1, borderRadius: 6, overflow: 'hidden' },
+
+  lockedCard: { marginHorizontal: 16, marginTop: 22, marginBottom: 6 },
 
   lockedBanner: {
     flexDirection: 'row', alignItems: 'center', gap: 8,

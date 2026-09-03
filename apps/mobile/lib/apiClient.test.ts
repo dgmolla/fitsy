@@ -5,7 +5,7 @@ jest.mock('./authClient', () => ({
   getStoredToken: jest.fn().mockResolvedValue('test-token'),
 }));
 
-import { fetchMenu, fetchRestaurants } from './apiClient';
+import { fetchMenu, fetchRestaurants, syncSubscription } from './apiClient';
 import { SubscriptionRequiredError } from './api';
 import type { MenuApiResponseBody, MenuResponse, RestaurantsResponse } from '@fitsy/shared';
 
@@ -228,5 +228,21 @@ describe('fetchMenu', () => {
     const result = await fetchMenu('r1');
 
     expect(result).toBeNull();
+  });
+});
+
+describe('syncSubscription', () => {
+  it('POSTs to /api/subscriptions/sync and returns the server verdict', async () => {
+    const mockFetch = makeMockFetch({ ok: true, body: { active: true, synced: true } });
+    global.fetch = mockFetch;
+    await expect(syncSubscription()).resolves.toEqual({ active: true, synced: true });
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`${BASE_URL}/api/subscriptions/sync`);
+    expect(init.method).toBe('POST');
+  });
+
+  it('throws on a failed sync so callers can treat it as best-effort', async () => {
+    global.fetch = makeMockFetch({ ok: false, status: 500, body: { error: 'boom' } });
+    await expect(syncSubscription()).rejects.toThrow('boom');
   });
 });

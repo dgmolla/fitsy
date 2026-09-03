@@ -11,6 +11,7 @@ export { FitsyLoader } from './FitsyLoader';
 export type { FitsyLoaderSize } from './FitsyLoader';
 export { LocationBar } from './LocationBar';
 export { LocationPickerSheet } from './LocationPickerSheet';
+export { LockedUnlockCard } from './LockedUnlockCard';
 export { MacroChips } from './MacroChips';
 export { MacroField } from './MacroField';
 export type { MacroFieldProps } from './MacroField';

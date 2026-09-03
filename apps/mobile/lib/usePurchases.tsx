@@ -25,6 +25,7 @@ import type {
   PurchasesPackage,
 } from 'react-native-purchases';
 import { supabase } from './supabase';
+import { syncSubscription } from './apiClient';
 import {
   addCustomerInfoListener,
   configurePurchases,
@@ -45,6 +46,20 @@ import {
   trackPaywallShown,
   trackPurchasesRestored,
 } from './analytics';
+
+/**
+ * Push the device's fresh entitlement to the server so the very next data
+ * request is served unlocked instead of racing the RevenueCat webhook. Best
+ * effort: the server also self-heals from the client's mismatch check
+ * (search screen), and the webhook still lands independently.
+ */
+async function syncServerEntitlement(): Promise<void> {
+  try {
+    await syncSubscription();
+  } catch (err) {
+    console.warn('[purchases] entitlement sync failed', err);
+  }
+}
 
 export interface PurchasesContextValue {
   /** True once configure + first CustomerInfo read have settled. */
@@ -126,6 +141,10 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
       if (event === 'SIGNED_IN' && session) {
         const info = await identifyPurchasesUser(session.user.id);
         if (info) setCustomerInfo(info);
+        // A returning subscriber on a new account (RevenueCat transferred the
+        // store subscription to this app user on logIn) - make sure the
+        // server knows before the first search.
+        if (isProActive(info)) void syncServerEntitlement();
       } else if (event === 'SIGNED_OUT') {
         await logoutPurchasesUser();
         setCustomerInfo(await fetchCustomerInfo());
@@ -151,7 +170,9 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     trackPaywallResult({ source, outcome });
     if (info) {
       setCustomerInfo(info);
-      return isProActive(info);
+      const pro = isProActive(info);
+      if (pro) await syncServerEntitlement();
+      return pro;
     }
     return false;
   }, []);
@@ -162,7 +183,9 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     trackPaywallResult({ source, outcome });
     const info = await fetchCustomerInfo();
     setCustomerInfo(info);
-    return isProActive(info);
+    const pro = isProActive(info);
+    if (pro) await syncServerEntitlement();
+    return pro;
   }, []);
 
   const presentCustomerCenter = useCallback(async (): Promise<void> => {
@@ -177,6 +200,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     setCustomerInfo(info);
     const pro = isProActive(info);
     trackPurchasesRestored({ is_pro: pro });
+    if (pro) await syncServerEntitlement();
     return pro;
   }, []);
 
