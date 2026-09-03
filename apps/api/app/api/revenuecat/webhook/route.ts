@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/restaurantService";
+import { syncSubscriptionFromRevenueCat } from "@/lib/subscription";
 
 /** Constant-time compare for the webhook auth header (avoids timing leaks). */
 function safeEqual(a: string, b: string): boolean {
@@ -55,10 +56,63 @@ const HANDLED_EVENT_TYPES = new Set([
 interface RevenueCatEvent {
   type?: string;
   app_user_id?: string;
+  /** Every app user id RevenueCat has merged into this customer. */
+  aliases?: string[];
   product_id?: string;
   expiration_at_ms?: number | null;
   transaction_id?: string | null;
   original_transaction_id?: string | null;
+  /** TRANSFER only: the customers the store subscription moved between. */
+  transferred_from?: string[];
+  transferred_to?: string[];
+}
+
+const ANONYMOUS_PREFIX = "$RCAnonymousID:";
+
+function isAnonymous(id: string): boolean {
+  return id.startsWith(ANONYMOUS_PREFIX);
+}
+
+/**
+ * The Supabase user id an event belongs to. RevenueCat reports the id the
+ * purchase was made under; if that was an anonymous pre-login id, the
+ * logged-in id it was later merged with is in `aliases`.
+ */
+function resolveUserId(event: RevenueCatEvent): string | null {
+  const primary = event.app_user_id;
+  if (primary && !isAnonymous(primary)) return primary;
+  return event.aliases?.find((a) => !isAnonymous(a)) ?? null;
+}
+
+/**
+ * TRANSFER: the same store subscription (same Apple ID) now belongs to a
+ * different Fitsy account - a reinstall with a new sign-in, or Restore
+ * Purchases on a second account. The event carries no product/expiry, so
+ * both sides are re-read from RevenueCat.
+ *
+ * Returns false when a NEW owner couldn't be synced (RevenueCat unreachable
+ * or not configured): the caller must 500 so RevenueCat retries, because
+ * acking would leave nobody entitled - the old owners are still expired
+ * below, which is what RevenueCat has already decided and is idempotent.
+ */
+async function handleTransfer(event: RevenueCatEvent): Promise<boolean> {
+  const from = (event.transferred_from ?? []).filter((id) => !isAnonymous(id));
+  const to = (event.transferred_to ?? []).filter((id) => !isAnonymous(id));
+  const [toResults, fromResults] = await Promise.all([
+    Promise.all(to.map((id) => syncSubscriptionFromRevenueCat(id))),
+    Promise.all(from.map((id) => syncSubscriptionFromRevenueCat(id))),
+  ]);
+  await Promise.all(
+    from
+      .filter((_, i) => fromResults[i] === null)
+      .map((id) =>
+        prisma.subscription.updateMany({
+          where: { userId: id },
+          data: { status: "expired" },
+        }),
+      ),
+  );
+  return toResults.every((r) => r !== null);
 }
 
 // Precondition: `type` is in HANDLED_EVENT_TYPES (callers ack unknown types).
@@ -70,6 +124,10 @@ function statusForEvent(type: string, expiresAt: Date | null): string {
   if (expiresAt && expiresAt.getTime() < Date.now()) return "expired";
   return "active";
 }
+
+// TRANSFER fans out to RevenueCat (8s timeout each, in parallel) plus DB
+// writes - give it headroom over Vercel's 10s default.
+export const maxDuration = 30;
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   // ─── Auth ──────────────────────────────────────────────────────────────────
@@ -99,16 +157,30 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Missing event" }, { status: 400 });
   }
 
+  if (event.type === "TRANSFER") {
+    try {
+      if (!(await handleTransfer(event))) {
+        return NextResponse.json(
+          { error: "RevenueCat lookup unavailable" },
+          { status: 500 },
+        );
+      }
+      return NextResponse.json({ received: true }, { status: 200 });
+    } catch {
+      return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    }
+  }
+
   // TEST events (dashboard) and any lifecycle type we don't model: acknowledge
   // without persisting, so an unrecognized event can't change entitlement state.
   if (!HANDLED_EVENT_TYPES.has(event.type)) {
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
-  const appUserId = event.app_user_id;
-  // Anonymous ids (pre-login) and missing ids can't map to a User row. Ack so
-  // RevenueCat doesn't retry indefinitely; there's nothing to persist.
-  if (!appUserId || appUserId.startsWith("$RCAnonymousID:")) {
+  const appUserId = resolveUserId(event);
+  // Anonymous ids (pre-login, never merged) and missing ids can't map to a
+  // User row. Ack so RevenueCat doesn't retry indefinitely; nothing to persist.
+  if (!appUserId) {
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
