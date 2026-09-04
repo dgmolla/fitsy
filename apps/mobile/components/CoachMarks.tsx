@@ -25,6 +25,8 @@ const CUTOUT_PAD = 6;
 const CUTOUT_RADIUS = 12;
 const BUBBLE_GAP = 14;
 const BUBBLE_MAX_W = 320;
+// Rough bubble height used only to keep it inside the window before layout.
+const BUBBLE_EST_H = 170;
 const SCRIM = 'rgba(15,31,21,0.55)';
 
 /**
@@ -38,6 +40,7 @@ export function CoachMarks({ visible, steps, onDone, onStepShown }: CoachMarksPr
   const [index, setIndex] = useState(0);
   const [rect, setRect] = useState<Rect | null>(null);
   const step = steps[index];
+  const stepKey = step?.key;
 
   useEffect(() => {
     if (visible) setIndex(0);
@@ -72,10 +75,11 @@ export function CoachMarks({ visible, steps, onDone, onStepShown }: CoachMarksPr
       cancelled = true;
       clearTimeout(t);
     };
-    // onStepShown/onDone are callbacks from the parent; re-measuring on their
-    // identity would flicker the cutout on every parent render.
+    // Keyed on the step's key, not the step object or the parent callbacks:
+    // parents rebuild step arrays and callbacks on re-render, and re-measuring
+    // then would flicker the cutout and double-fire onStepShown.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, step, index]);
+  }, [visible, stepKey, index]);
 
   if (!visible || !step) return null;
 
@@ -98,13 +102,17 @@ export function CoachMarks({ visible, steps, onDone, onStepShown }: CoachMarksPr
     const bubbleW = Math.min(BUBBLE_MAX_W, winW - 32);
     const targetCx = rect.x + rect.width / 2;
     const left = Math.min(Math.max(targetCx - bubbleW / 2, 16), winW - 16 - bubbleW);
-    const placement = step.placement ?? 'below';
+    // Explicit placement wins; otherwise go where there's room. Either way
+    // the bubble is clamped inside the window so its buttons stay reachable
+    // on short screens or when the target was measured partly off-screen.
+    const spaceBelow = winH - (cutout.y + cutout.height);
+    const placement = step.placement ?? (spaceBelow >= BUBBLE_EST_H + BUBBLE_GAP + 16 ? 'below' : 'above');
     if (placement === 'below') {
-      const top = cutout.y + cutout.height + BUBBLE_GAP;
+      const top = Math.min(cutout.y + cutout.height + BUBBLE_GAP, winH - 16 - BUBBLE_EST_H);
       bubbleStyle = { top, left, width: bubbleW };
       arrowStyle = { top: top - 7, left: targetCx - 7 };
     } else {
-      const bottom = winH - cutout.y + BUBBLE_GAP;
+      const bottom = Math.min(winH - cutout.y + BUBBLE_GAP, winH - 16 - BUBBLE_EST_H);
       bubbleStyle = { bottom, left, width: bubbleW };
       arrowStyle = { bottom: bottom - 7, left: targetCx - 7 };
     }

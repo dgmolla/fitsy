@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -471,10 +471,12 @@ export default function SearchScreen() {
   const [error, setError] = useState<string | null>(null);
   // The API never blocks unentitled callers - it returns `meta.locked: true`
   // with bestMatch stripped from every row instead, so this screen doubles as
-  // the onboarding + lapsed-subscriber teaser. See RestaurantSection /
-  // LockedRestaurantSection for the render split.
+  // the onboarding + lapsed-subscriber teaser. See RestaurantSection and
+  // the locked footer in renderFooter for the render split.
   // null until a fetch resolves; false = proven entitled, true = locked.
   const [locked, setLocked] = useState<boolean | null>(null);
+  const lockedRef = useRef<boolean | null>(null);
+  lockedRef.current = locked;
   // Device-side entitlement (RevenueCat). Only consulted for the mismatch
   // self-heal below: the API's `locked` flag is what actually gates the UI.
   const { isPro } = usePurchases();
@@ -494,10 +496,19 @@ export default function SearchScreen() {
   const tourSearchRef = useRef<View | null>(null);
   const tourHeroRef = useRef<View | null>(null);
   const [tourVisible, setTourVisible] = useState(false);
-  const tourCheckedRef = useRef(false);
+  // Set once the tour has actually been shown (or found already seen) for
+  // this mount - not when the check merely started, so a query edit or a
+  // self-heal refetch mid-check can't cancel the tour for good.
+  const tourDoneRef = useRef(false);
+  const tourStartingRef = useRef(false);
+  // Read at fire time, never from a closure: the tour must not open over a
+  // pushed restaurant detail, or on top of the filter / location sheets.
+  const screenFocusedRef = useRef(false);
+  const overlayOpenRef = useRef(false);
   const initialFetch = useRef(true);
   const [filterVisible, setFilterVisible] = useState(false);
   const [locationPickerVisible, setLocationPickerVisible] = useState(false);
+  overlayOpenRef.current = filterVisible || locationPickerVisible;
   const [query, setQuery] = useState('');
 
   // `pagesLoadedRef` counts how many pages have been appended (initial + each
@@ -549,6 +560,13 @@ export default function SearchScreen() {
   // check so unchanged targets don't bump the inputs identity and re-trigger
   // the fetch effect.
   const [targetsLoaded, setTargetsLoaded] = useState(false);
+  useFocusEffect(
+    useCallback(() => {
+      screenFocusedRef.current = true;
+      return () => { screenFocusedRef.current = false; };
+    }, []),
+  );
+
   useFocusEffect(
     useCallback(() => {
       getMacroTargets()
@@ -985,23 +1003,41 @@ export default function SearchScreen() {
 
   useEffect(() => {
     if (!isOnboardingPreview || locked !== true || loading || results.length === 0) return;
-    if (tourCheckedRef.current) return;
-    tourCheckedRef.current = true;
-    let cancelled = false;
+    if (tourDoneRef.current || tourStartingRef.current) return;
+    tourStartingRef.current = true;
     void hasSeenPreviewTour().then((seen) => {
-      if (cancelled || seen) return;
-      // Let the header + hero settle before measuring their positions.
-      setTimeout(() => { if (!cancelled) setTourVisible(true); }, 600);
+      if (seen) {
+        tourDoneRef.current = true;
+        return;
+      }
+      // Let the header + hero settle before measuring their positions, then
+      // re-check the world at fire time: still locked, this screen on top,
+      // no sheet open. Otherwise stand down and let the next results change
+      // try again.
+      setTimeout(() => {
+        tourStartingRef.current = false;
+        const ok = lockedRef.current === true && screenFocusedRef.current && !overlayOpenRef.current;
+        if (!ok) return;
+        tourDoneRef.current = true;
+        setTourVisible(true);
+      }, 600);
     });
-    return () => { cancelled = true; };
   }, [isOnboardingPreview, locked, loading, results.length]);
+
+  // The tour describes the locked preview; the moment the list unlocks
+  // (self-heal refetch mid-tour), it no longer applies.
+  useEffect(() => {
+    if (locked !== true) setTourVisible(false);
+  }, [locked]);
 
   const finishTour = useCallback(() => {
     markPreviewTourSeen();
     setTourVisible(false);
   }, []);
 
-  const tourSteps: CoachMarkStep[] = [
+  // Stable identity: CoachMarks re-measures when a step object changes, and
+  // this screen re-renders constantly (purchases context, location, fetches).
+  const tourSteps: CoachMarkStep[] = useMemo(() => [
     {
       key: 'macros',
       title: 'Set your macros',
@@ -1019,8 +1055,11 @@ export default function SearchScreen() {
       title: 'Open a restaurant',
       body: 'Tap any restaurant for the full menu, with macros on every dish.',
       target: tourHeroRef,
+      // The hero is the tallest target; a bubble below it can run off short
+      // screens, so this one sits above.
+      placement: 'above',
     },
-  ];
+  ], []);
 
   // The header bundles the non-paginated chrome that scrolls with the list —
   // macro strip, search bar, hero card, and inline empty states. The Masthead
@@ -1153,6 +1192,21 @@ export default function SearchScreen() {
           )}
           ListHeaderComponent={header}
           ListFooterComponent={renderFooter}
+          ListEmptyComponent={
+            // The tab bar is hidden during the preview and this screen was
+            // entered with router.replace, so when the first search fails
+            // (network error, empty response) the lock card is the one way
+            // forward - it must not depend on rows having loaded.
+            isOnboardingPreview && locked !== false && !loading && !outOfArea && canSearch ? (
+              <LockedUnlockCard
+                title="Unlock every match near you"
+                subtitle="Subscribe to search restaurants by your macros, with the dish that fits at each."
+                onPress={() => { void routeToPaywall(); }}
+                accessibilityLabel="Subscribe to unlock all restaurants"
+                style={s.lockedCard}
+              />
+            ) : null
+          }
           onEndReached={handleEndReached}
           onEndReachedThreshold={0.5}
           refreshControl={
@@ -1166,7 +1220,7 @@ export default function SearchScreen() {
         />
       )}
       <CoachMarks
-        visible={tourVisible}
+        visible={tourVisible && locked === true}
         steps={tourSteps}
         onDone={finishTour}
         onStepShown={(step) => trackOnboardingScreenView(`preview_tour_${step.key}`)}
