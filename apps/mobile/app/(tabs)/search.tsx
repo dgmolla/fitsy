@@ -26,7 +26,7 @@ import { LocationPickerSheet } from '@/components/LocationPickerSheet';
 import { BlurFallback } from '@/lib/BlurFallback';
 import type { MacroValues } from '@/lib/macroPresets';
 import { fetchRestaurantsPage } from '@/lib/apiClient';
-import { syncServerEntitlement } from '@/lib/entitlementSync';
+import { useEntitlementSelfHeal } from '@/lib/useEntitlementSelfHeal';
 import { SubscriptionRequiredError } from '@/lib/api';
 import { hasUsedPreviewSample, routeToPaywall } from '@/lib/teaserGate';
 import { recordSearchAndMaybePrompt } from '@/lib/ratingPrompt';
@@ -520,7 +520,9 @@ export default function SearchScreen() {
   // Device-side entitlement (RevenueCat). Only consulted for the mismatch
   // self-heal below: the API's `locked` flag is what actually gates the UI.
   const { isPro } = usePurchases();
-  const entitlementSyncedRef = useRef(false);
+  // Bumped on every completed search fetch (first page or pagination) so the
+  // self-heal below can tell "still locked after the refetch" from "locked".
+  const [fetchSeq, setFetchSeq] = useState(0);
   // Set once the onboarding teaser's first confirmed (non-network-error)
   // fetch comes back empty - see outOfAreaCheckedRef in doFetch. Renders an
   // inline choice ("Keep me posted") rather than auto-redirecting, so the
@@ -714,6 +716,7 @@ export default function SearchScreen() {
         setResults(data);
         setNextCursor(cursor);
         setLocked(isLocked);
+        setFetchSeq((n) => n + 1);
         pagesLoadedRef.current = 1;
         trackSearchPageLoaded({
           page_index: 0,
@@ -797,28 +800,22 @@ export default function SearchScreen() {
     [buildParams, isOnboardingPreview],
   );
 
-  // Device says Pro, API says locked: the server's Subscription row is stale
-  // or missing (subscription transferred to this account from another, or a
-  // webhook delivery that never landed). Ask the API to re-read RevenueCat
-  // once per screen mount, then refetch so the rows unlock in place instead
-  // of a paying user staring at the teaser until pull-to-refresh.
-  //
-  // Deliberately keyed on [isPro, locked] only, with the fetch arguments read
-  // from a ref at completion time: `location` is a fresh object every render
-  // and the purchases context re-renders on every CustomerInfo update, so a
-  // cleanup-cancelled version of this effect would drop the refetch on the
-  // floor almost every time.
+  // Device says Pro, API says locked: re-sync the server from RevenueCat and
+  // refetch, with bounded retries - see useEntitlementSelfHeal. The fetch
+  // arguments are read from a ref at fire time so parent re-renders (the
+  // purchases context updates on every CustomerInfo change, `location` is a
+  // fresh object every render) can't cancel a pending attempt.
   const selfHealArgsRef = useRef({ inputs, location, query, doFetch });
   selfHealArgsRef.current = { inputs, location, query, doFetch };
-  useEffect(() => {
-    if (!isPro || locked !== true || entitlementSyncedRef.current) return;
-    entitlementSyncedRef.current = true;
-    void syncServerEntitlement().then((result) => {
-      if (!result?.active) return;
+  useEntitlementSelfHeal({
+    isPro,
+    locked,
+    fetchSeq,
+    refetch: useCallback(() => {
       const { inputs: current, location: loc, query: q, doFetch: fetch } = selfHealArgsRef.current;
       void fetch(current, loc.lat, loc.lng, q, loc.source, true);
-    });
-  }, [isPro, locked]);
+    }, []),
+  });
 
   // Pull-to-refresh: re-fire a fresh API call against the current location.
   // Resets pagination (handled inside doFetch) so the user gets a clean
@@ -897,6 +894,7 @@ export default function SearchScreen() {
       // scrolling) - keep `locked` current rather than trusting only the
       // first page's value for every subsequently-loaded row.
       setLocked(isLocked);
+      setFetchSeq((n) => n + 1);
       pagesLoadedRef.current = pageIndex + 1;
 
       trackSearchPageLoaded({
