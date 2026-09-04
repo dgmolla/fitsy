@@ -342,6 +342,41 @@ else
   echo "PASS"
 fi
 
+echo -n "13. Migrations never add a NOT NULL column without a default... "
+# `prisma migrate dev` happily generates `ADD COLUMN "x" TEXT NOT NULL` when the
+# dev table is empty, and stamps the file with a warning that it "is not
+# possible if the table is not empty". That migration then fails against any
+# environment with rows - which is exactly what happened to production with
+# 20260831054928_add_feedback_board (Feedback had a row; POST /api/feedback
+# 500'd until the column was added by hand with a backfill). Catch it at PR
+# time: hand-write such migrations as ADD COLUMN ... DEFAULT + backfill +
+# ALTER COLUMN ... DROP DEFAULT instead.
+MIGRATIONS_DIR="$REPO_ROOT/prisma/migrations"
+# Already applied everywhere by hand (prod) or on empty tables (dev/CI) - never re-runs.
+MIGRATION_ALLOWLIST=("20260831054928_add_feedback_board")
+MIGRATION_ERRORS=""
+if [ -d "$MIGRATIONS_DIR" ]; then
+  while IFS= read -r sqlfile; do
+    mig="$(basename "$(dirname "$sqlfile")")"
+    skip=false
+    for ok in "${MIGRATION_ALLOWLIST[@]}"; do
+      if [ "$mig" = "$ok" ]; then skip=true; break; fi
+    done
+    if $skip; then continue; fi
+    if grep -q "without a default value. This is not possible if the table is not empty" "$sqlfile"; then
+      MIGRATION_ERRORS="$MIGRATION_ERRORS\n  $mig adds a required column with no default - it will fail on any environment where the table has rows"
+    fi
+  done < <(find "$MIGRATIONS_DIR" -name "migration.sql" 2>/dev/null)
+fi
+if [ -n "$MIGRATION_ERRORS" ]; then
+  echo "FAIL"
+  echo "  Unsafe migration(s):"
+  echo -e "$MIGRATION_ERRORS"
+  ERRORS=$((ERRORS + 1))
+else
+  echo "PASS"
+fi
+
 echo ""
 echo "=== Results ==="
 if [ $ERRORS -gt 0 ]; then
