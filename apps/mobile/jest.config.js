@@ -6,7 +6,7 @@ const config = {
       preset: 'ts-jest',
       testEnvironment: 'node',
       testMatch: ['<rootDir>/lib/**/*.test.ts'],
-      testPathIgnorePatterns: ['<rootDir>/lib/useLocation.test.ts'],
+      testPathIgnorePatterns: ['<rootDir>/lib/useLocation.test.ts', '<rootDir>/lib/useEntitlementSelfHeal.test.ts'],
       moduleNameMapper: {
         '^@fitsy/shared$': '<rootDir>/../../packages/shared/src/index.ts',
         '^@fitsy/shared/(.*)$': '<rootDir>/../../packages/shared/src/$1',
@@ -42,7 +42,7 @@ const config = {
       displayName: 'hooks',
       preset: 'jest-expo',
       testEnvironment: 'node',
-      testMatch: ['<rootDir>/lib/useLocation.test.ts'],
+      testMatch: ['<rootDir>/lib/useLocation.test.ts', '<rootDir>/lib/useEntitlementSelfHeal.test.ts'],
       moduleNameMapper: {
         '^@fitsy/shared$': '<rootDir>/../../packages/shared/src/index.ts',
         '^@fitsy/shared/(.*)$': '<rootDir>/../../packages/shared/src/$1',
