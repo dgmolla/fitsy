@@ -1,3 +1,5 @@
+jest.unmock('react-native');
+
 import React from 'react';
 import { View } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';

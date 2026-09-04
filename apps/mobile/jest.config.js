@@ -45,7 +45,6 @@ const config = {
       testMatch: [
         '<rootDir>/lib/useLocation.test.ts',
         '<rootDir>/lib/useEntitlementSelfHeal.test.ts',
-        '<rootDir>/components/CoachMarks.test.tsx',
       ],
       moduleNameMapper: {
         '^@fitsy/shared$': '<rootDir>/../../packages/shared/src/index.ts',
@@ -56,6 +55,18 @@ const config = {
         '^expo-web-browser$': '<rootDir>/__mocks__/expo-web-browser.ts',
         '^expo-router$': '<rootDir>/__mocks__/expo-router.ts',
         '^expo-crypto$': '<rootDir>/__mocks__/expo-crypto.ts',
+      },
+    },
+    {
+      // Component render tests: jest-expo's own (react-native) environment,
+      // no node override, so StyleSheet/Modal/etc. are the real RN mocks.
+      displayName: 'components',
+      preset: 'jest-expo',
+      testMatch: ['<rootDir>/components/**/*.test.tsx'],
+      moduleNameMapper: {
+        '^@/(.*)$': '<rootDir>/$1',
+        '^@fitsy/shared$': '<rootDir>/../../packages/shared/src/index.ts',
+        '^@fitsy/shared/(.*)$': '<rootDir>/../../packages/shared/src/$1',
       },
     },
   ],
