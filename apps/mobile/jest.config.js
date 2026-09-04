@@ -42,7 +42,11 @@ const config = {
       displayName: 'hooks',
       preset: 'jest-expo',
       testEnvironment: 'node',
-      testMatch: ['<rootDir>/lib/useLocation.test.ts', '<rootDir>/lib/useEntitlementSelfHeal.test.ts'],
+      testMatch: [
+        '<rootDir>/lib/useLocation.test.ts',
+        '<rootDir>/lib/useEntitlementSelfHeal.test.ts',
+        '<rootDir>/components/CoachMarks.test.tsx',
+      ],
       moduleNameMapper: {
         '^@fitsy/shared$': '<rootDir>/../../packages/shared/src/index.ts',
         '^@fitsy/shared/(.*)$': '<rootDir>/../../packages/shared/src/$1',
