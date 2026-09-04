@@ -4,6 +4,7 @@ import { supabase } from './supabase';
 import { fetchCustomerInfo, hasLapsedEntitlement } from './purchases';
 
 const PREVIEW_SAMPLE_USED_KEY = '@fitsy/previewSampleUsed';
+const PREVIEW_TOUR_SEEN_KEY = '@fitsy/previewTourSeen';
 
 // In-memory mirror of the persisted flag: reads after the first one are
 // free (no bridge round-trip on every locked-row tap), and mark/reset flip
@@ -34,11 +35,36 @@ export async function hasUsedPreviewSample(): Promise<boolean> {
   return sampleUsedCache;
 }
 
-/** Fresh onboarding pass = fresh tease. Sync in memory; the storage write
- * is fire-and-forget (a failure just means the look stays spent on disk). */
+/** Fresh onboarding pass = fresh tease: the free look and the three-step
+ * search tour both come back. Sync in memory; the storage writes are
+ * fire-and-forget (a failure just means the look stays spent on disk). */
 export function resetPreviewSample(): void {
   sampleUsedCache = false;
-  AsyncStorage.removeItem(PREVIEW_SAMPLE_USED_KEY).catch(() => {});
+  tourSeenCache = false;
+  AsyncStorage.multiRemove([PREVIEW_SAMPLE_USED_KEY, PREVIEW_TOUR_SEEN_KEY]).catch(() => {});
+}
+
+let tourSeenCache: boolean | null = null;
+
+/**
+ * Whether the locked search preview's coach-mark tour (macros -> search ->
+ * open a restaurant) has already run for this onboarding pass. Same
+ * persistence/reset rules as the free-look flag above; fails open to
+ * "seen" so a storage read failure never traps a user under the scrim.
+ */
+export async function hasSeenPreviewTour(): Promise<boolean> {
+  if (tourSeenCache !== null) return tourSeenCache;
+  try {
+    tourSeenCache = (await AsyncStorage.getItem(PREVIEW_TOUR_SEEN_KEY)) === '1';
+  } catch {
+    tourSeenCache = true;
+  }
+  return tourSeenCache;
+}
+
+export function markPreviewTourSeen(): void {
+  tourSeenCache = true;
+  AsyncStorage.setItem(PREVIEW_TOUR_SEEN_KEY, '1').catch(() => {});
 }
 
 /** Sync in memory; storage write is fire-and-forget (a failure just means

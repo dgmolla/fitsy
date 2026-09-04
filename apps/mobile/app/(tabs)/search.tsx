@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -21,6 +21,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { RestaurantResult } from '@fitsy/shared';
 import { FitsyLoader } from '@/components/FitsyLoader';
 import { LockedUnlockCard } from '@/components/LockedUnlockCard';
+import { CoachMarks, type CoachMarkStep } from '@/components/CoachMarks';
 import { FilterPopup } from '@/components/FilterPopup';
 import { LocationPickerSheet } from '@/components/LocationPickerSheet';
 import { BlurFallback } from '@/lib/BlurFallback';
@@ -28,7 +29,7 @@ import type { MacroValues } from '@/lib/macroPresets';
 import { fetchRestaurantsPage } from '@/lib/apiClient';
 import { useEntitlementSelfHeal } from '@/lib/useEntitlementSelfHeal';
 import { SubscriptionRequiredError } from '@/lib/api';
-import { hasUsedPreviewSample, routeToPaywall } from '@/lib/teaserGate';
+import { hasSeenPreviewTour, hasUsedPreviewSample, markPreviewTourSeen, routeToPaywall } from '@/lib/teaserGate';
 import { recordSearchAndMaybePrompt } from '@/lib/ratingPrompt';
 import { shouldShowInitialLoader } from '@/lib/searchLoading';
 import { useLocation, type LocationState } from '@/lib/useLocation';
@@ -140,7 +141,7 @@ function Masthead({
 
 // ─── Macro strip ──────────────────────────────────────────────────────────────
 
-function MacroStrip({ macros, onEdit }: { macros: MacroValues; onEdit: () => void }) {
+function MacroStrip({ macros, onEdit, editRef }: { macros: MacroValues; onEdit: () => void; editRef?: React.RefObject<View | null> }) {
   const p = macros.protein || '—';
   const c = macros.carbs || '—';
   const f = macros.fat || '—';
@@ -170,15 +171,17 @@ function MacroStrip({ macros, onEdit }: { macros: MacroValues; onEdit: () => voi
         <Text style={s.macroVal}>{cal}</Text>
         <Text style={s.macroLbl}>kcal/meal</Text>
       </View>
-      <TouchableOpacity
-        style={s.editBtn}
-        onPress={onEdit}
-        activeOpacity={0.7}
-        accessibilityLabel="Edit macro targets"
-        accessibilityRole="button"
-      >
-        <Text style={s.editBtnText}>Edit</Text>
-      </TouchableOpacity>
+      <View ref={editRef} collapsable={false}>
+        <TouchableOpacity
+          style={s.editBtn}
+          onPress={onEdit}
+          activeOpacity={0.7}
+          accessibilityLabel="Edit macro targets"
+          accessibilityRole="button"
+        >
+          <Text style={s.editBtnText}>Edit</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -192,13 +195,15 @@ function SearchBar({
   value,
   onChangeText,
   onClear,
+  containerRef,
 }: {
   value: string;
   onChangeText: (text: string) => void;
   onClear: () => void;
+  containerRef?: React.RefObject<View | null>;
 }) {
   return (
-    <View style={s.search}>
+    <View ref={containerRef} collapsable={false} style={s.search}>
       <Text style={s.searchIco}>⌕</Text>
       <TextInput
         style={s.searchInput}
@@ -284,10 +289,11 @@ async function openRestaurantOrPaywall(locked: boolean, navigate: () => void): P
 
 // ─── Hero card (#01) ──────────────────────────────────────────────────────────
 
-function HeroCard({ result, locked }: { result: RestaurantResult; locked: boolean }) {
+function HeroCard({ result, locked, containerRef }: { result: RestaurantResult; locked: boolean; containerRef?: React.RefObject<View | null> }) {
   const bm = result.bestMatch;
   const imgUri = result.photoUrl || getMockImage(result.name);
   return (
+    <View ref={containerRef} collapsable={false}>
     <TouchableOpacity
       activeOpacity={0.92}
       style={hero.container}
@@ -336,6 +342,7 @@ function HeroCard({ result, locked }: { result: RestaurantResult; locked: boolea
         )}
       </View>
     </TouchableOpacity>
+    </View>
   );
 }
 
@@ -369,55 +376,6 @@ function DishCard({ result, locked, onPress }: { result: RestaurantResult; locke
         {!locked && bm && <Text style={dc.cal}>{bm.calories} kcal · P {bm.proteinG}g · C {bm.carbsG}g · F {bm.fatG}g</Text>}
       </View>
     </TouchableOpacity>
-  );
-}
-
-// ─── Fully-locked restaurant section (#04+) ──────────────────────────────────
-
-// Rows beyond the top 3: the real name/photo/dish ARE rendered - the server
-// already sends them (only bestMatch is stripped) - but blurred, so the row
-// reads as "something real is here, locked" rather than a blank placeholder.
-// The row isn't navigable; tapping it goes straight to the paywall rather
-// than a restaurant detail page.
-function LockedRestaurantSection({ result, index }: { result: RestaurantResult; index: number }) {
-  const indexStr = String(index + 2).padStart(2, '0');
-  const imgUri = result.photoUrl || getMockImage(result.name);
-  return (
-    <Pressable
-      style={s.restSection}
-      onPress={() => { void routeToPaywall(); }}
-      accessibilityLabel="Locked restaurant, subscribe to unlock"
-      accessibilityRole="button"
-    >
-      <View style={s.sectionHeader}>
-        <Text style={s.sectionIndex}>{indexStr}</Text>
-        <View style={s.lockedNameWrap}>
-          <Text style={s.sectionRestName} numberOfLines={1}>{result.name}</Text>
-          <Text style={s.sectionSub}>{result.distanceMiles?.toFixed(1)} mi</Text>
-          <BlurFallback
-            tint="light"
-            intensity={40}
-            fallbackColor="rgba(253,251,247,0.78)"
-            style={StyleSheet.absoluteFillObject as ViewStyle}
-          />
-        </View>
-      </View>
-      <View style={dc.container}>
-        <Image source={{ uri: imgUri }} style={dc.image} resizeMode="cover" />
-        <BlurFallback
-          tint="light"
-          intensity={50}
-          fallbackColor="rgba(232,224,209,0.85)"
-          style={StyleSheet.absoluteFillObject as ViewStyle}
-        />
-        <View style={dc.lockedFullBadgeWrap} pointerEvents="none">
-          <View style={dc.lockedFullBadge}>
-            <Ionicons name="lock-closed" size={16} color={EDITORIAL.cream} />
-          </View>
-        </View>
-      </View>
-      <Text style={s.viewMenu}>Subscribe to unlock →</Text>
-    </Pressable>
   );
 }
 
@@ -513,10 +471,12 @@ export default function SearchScreen() {
   const [error, setError] = useState<string | null>(null);
   // The API never blocks unentitled callers - it returns `meta.locked: true`
   // with bestMatch stripped from every row instead, so this screen doubles as
-  // the onboarding + lapsed-subscriber teaser. See RestaurantSection /
-  // LockedRestaurantSection for the render split.
+  // the onboarding + lapsed-subscriber teaser. See RestaurantSection and
+  // the locked footer in renderFooter for the render split.
   // null until a fetch resolves; false = proven entitled, true = locked.
   const [locked, setLocked] = useState<boolean | null>(null);
+  const lockedRef = useRef<boolean | null>(null);
+  lockedRef.current = locked;
   // Device-side entitlement (RevenueCat). Only consulted for the mismatch
   // self-heal below: the API's `locked` flag is what actually gates the UI.
   const { isPro } = usePurchases();
@@ -528,9 +488,27 @@ export default function SearchScreen() {
   // inline choice ("Keep me posted") rather than auto-redirecting, so the
   // user sees the reassurance copy before leaving search.
   const [outOfArea, setOutOfArea] = useState(false);
+  // Three-step coach-mark tour over the locked preview (macros -> search ->
+  // open a restaurant). Runs once per onboarding pass (welcome/preview-intro
+  // resets it), only after the first locked results are on screen so every
+  // target it points at is actually mounted.
+  const tourEditRef = useRef<View | null>(null);
+  const tourSearchRef = useRef<View | null>(null);
+  const tourHeroRef = useRef<View | null>(null);
+  const [tourVisible, setTourVisible] = useState(false);
+  // Set once the tour has actually been shown (or found already seen) for
+  // this mount - not when the check merely started, so a query edit or a
+  // self-heal refetch mid-check can't cancel the tour for good.
+  const tourDoneRef = useRef(false);
+  const tourStartingRef = useRef(false);
+  // Read at fire time, never from a closure: the tour must not open over a
+  // pushed restaurant detail, or on top of the filter / location sheets.
+  const screenFocusedRef = useRef(false);
+  const overlayOpenRef = useRef(false);
   const initialFetch = useRef(true);
   const [filterVisible, setFilterVisible] = useState(false);
   const [locationPickerVisible, setLocationPickerVisible] = useState(false);
+  overlayOpenRef.current = filterVisible || locationPickerVisible;
   const [query, setQuery] = useState('');
 
   // `pagesLoadedRef` counts how many pages have been appended (initial + each
@@ -582,6 +560,13 @@ export default function SearchScreen() {
   // check so unchanged targets don't bump the inputs identity and re-trigger
   // the fetch effect.
   const [targetsLoaded, setTargetsLoaded] = useState(false);
+  useFocusEffect(
+    useCallback(() => {
+      screenFocusedRef.current = true;
+      return () => { screenFocusedRef.current = false; };
+    }, []),
+  );
+
   useFocusEffect(
     useCallback(() => {
       getMacroTargets()
@@ -861,6 +846,8 @@ export default function SearchScreen() {
   // null (end of results) or when a load is already in flight.
   const handleEndReached = useCallback(async () => {
     if (!canSearch) return;
+    // The locked preview ends at the lock card - nothing below it to load.
+    if (locked) return;
     if (nextCursor === null) return;
     if (isLoadingMoreRef.current) return;
 
@@ -933,7 +920,7 @@ export default function SearchScreen() {
     location.lat,
     location.lng,
     nextCursor,
-  ]);
+  , locked]);
 
   useEffect(() => {
     // Pull-to-refresh already fetched with the freshly-acquired coordinates;
@@ -1014,6 +1001,66 @@ export default function SearchScreen() {
 
   const [heroResult, ...listResults] = results;
 
+  useEffect(() => {
+    if (!isOnboardingPreview || locked !== true || loading || results.length === 0) return;
+    if (tourDoneRef.current || tourStartingRef.current) return;
+    tourStartingRef.current = true;
+    void hasSeenPreviewTour().then((seen) => {
+      if (seen) {
+        tourDoneRef.current = true;
+        return;
+      }
+      // Let the header + hero settle before measuring their positions, then
+      // re-check the world at fire time: still locked, this screen on top,
+      // no sheet open. Otherwise stand down and let the next results change
+      // try again.
+      setTimeout(() => {
+        tourStartingRef.current = false;
+        const ok = lockedRef.current === true && screenFocusedRef.current && !overlayOpenRef.current;
+        if (!ok) return;
+        tourDoneRef.current = true;
+        setTourVisible(true);
+      }, 600);
+    });
+  }, [isOnboardingPreview, locked, loading, results.length]);
+
+  // The tour describes the locked preview; the moment the list unlocks
+  // (self-heal refetch mid-tour), it no longer applies.
+  useEffect(() => {
+    if (locked !== true) setTourVisible(false);
+  }, [locked]);
+
+  const finishTour = useCallback(() => {
+    markPreviewTourSeen();
+    setTourVisible(false);
+  }, []);
+
+  // Stable identity: CoachMarks re-measures when a step object changes, and
+  // this screen re-renders constantly (purchases context, location, fetches).
+  const tourSteps: CoachMarkStep[] = useMemo(() => [
+    {
+      key: 'macros',
+      title: 'Set your macros',
+      body: 'Tap Edit to change protein, carbs, fat and calories. Results re-rank instantly.',
+      target: tourEditRef,
+    },
+    {
+      key: 'search',
+      title: 'Search anything',
+      body: 'Type a dish or a restaurant name to narrow down what is nearby.',
+      target: tourSearchRef,
+    },
+    {
+      key: 'restaurant',
+      title: 'Open a restaurant',
+      body: 'Tap any restaurant for the full menu, with macros on every dish.',
+      target: tourHeroRef,
+      // The hero is the tallest target; a bubble below it can run off short
+      // screens, so this one sits above.
+      placement: 'above',
+    },
+  ], []);
+
   // The header bundles the non-paginated chrome that scrolls with the list —
   // macro strip, search bar, hero card, and inline empty states. The Masthead
   // is rendered as a pinned sibling above the FlatList (see return below) so the
@@ -1024,8 +1071,8 @@ export default function SearchScreen() {
   // TextInput would lose focus and dismiss the keyboard every character.
   const header = (
     <>
-      <MacroStrip macros={inputs} onEdit={() => setFilterVisible(true)} />
-      <SearchBar value={query} onChangeText={setQuery} onClear={handleClearQuery} />
+      <MacroStrip macros={inputs} onEdit={() => setFilterVisible(true)} editRef={tourEditRef} />
+      <SearchBar value={query} onChangeText={setQuery} onClear={handleClearQuery} containerRef={tourSearchRef} />
 
       {!canSearch && (
         <View style={s.inlineEmpty}>
@@ -1063,7 +1110,7 @@ export default function SearchScreen() {
         </View>
       )}
 
-      {canSearch && heroResult && <HeroCard result={heroResult} locked={locked === true} />}
+      {canSearch && heroResult && <HeroCard result={heroResult} locked={locked === true} containerRef={tourHeroRef} />}
 
       {canSearch && locked && (results.length > 0) && (
         <View style={s.lockedBanner}>
@@ -1076,17 +1123,34 @@ export default function SearchScreen() {
     </>
   );
 
-  // Footer is the loading spinner during onEndReached fetches. When
-  // nextCursor is null (no more pages) the footer renders nothing — per
-  // spec, we halt silently with no terminal label.
+  // Footer: locked = the lock card that closes the preview (same card as the
+  // locked restaurant detail's menu footer); unlocked = the loading spinner
+  // during onEndReached fetches. When nextCursor is null (no more pages) the
+  // unlocked footer renders nothing — per spec, we halt silently with no
+  // terminal label.
+  const hiddenCount = results.length - FREE_RESULT_COUNT;
   const renderFooter = useCallback(() => {
+    if (locked && results.length > 0) {
+      // Count = rows the first page holds past the open three, with a
+      // trailing "+" while more pages exist: the API's `meta.total` is only
+      // the page size, never the true match count.
+      return (
+        <LockedUnlockCard
+          title={hiddenCount > 0 ? `${hiddenCount}${nextCursor ? '+' : ''} more restaurants` : 'Unlock every match near you'}
+          subtitle="Subscribe to unlock every match near you, with the dish that fits your macros at each."
+          onPress={() => { void routeToPaywall(); }}
+          accessibilityLabel="Subscribe to unlock all restaurants"
+          style={s.lockedCard}
+        />
+      );
+    }
     if (!loadingMore) return null;
     return (
       <View style={s.footerSpinner}>
         <ActivityIndicator size="small" color={EDITORIAL.greenAccent} />
       </View>
     );
-  }, [loadingMore]);
+  }, [loadingMore, locked, results.length, hiddenCount, nextCursor]);
 
   // Only the very first load (before any query interaction, nothing to show
   // yet) gets the full-screen brand loader. Query-driven refetches keep the
@@ -1118,37 +1182,31 @@ export default function SearchScreen() {
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingBottom: 110 }}
           showsVerticalScrollIndicator={false}
-          data={canSearch ? listResults : []}
+          // Locked: only the two open sections after the hero render, then the
+          // lock card (footer). Nothing blurred below it - the card IS the end
+          // of the preview and the single call to action.
+          data={canSearch ? (locked ? listResults.slice(0, FREE_RESULT_COUNT - 1) : listResults) : []}
           keyExtractor={(r) => r.id}
           renderItem={({ item, index }) => (
-            // Hero (#01) + the first two sections (#02, #03) stay open - real
-            // name/photo/distance, dish teased but not shown. #04 onward is
-            // fully blurred and routes straight to the paywall on tap.
-            locked && index >= FREE_RESULT_COUNT - 1
-              ? (
-                <>
-                  {index === FREE_RESULT_COUNT - 1 && (
-                    // Same card as the locked restaurant detail's menu footer:
-                    // sits right after the three open results, ahead of the
-                    // blurred rest of the list.
-                    // Count = rows loaded past the open three, with a trailing
-                    // "+" while more pages exist: the API's `meta.total` is only
-                    // the page size, never the true match count.
-                    <LockedUnlockCard
-                      title={`${listResults.length - FREE_RESULT_COUNT + 1}${nextCursor ? '+' : ''} more restaurants`}
-                      subtitle="Subscribe to unlock every match near you, with the dish that fits your macros at each."
-                      onPress={() => { void routeToPaywall(); }}
-                      accessibilityLabel="Subscribe to unlock all restaurants"
-                      style={s.lockedCard}
-                    />
-                  )}
-                  <LockedRestaurantSection result={item} index={index} />
-                </>
-              )
-              : <RestaurantSection result={item} index={index} locked={locked === true} />
+            <RestaurantSection result={item} index={index} locked={locked === true} />
           )}
           ListHeaderComponent={header}
           ListFooterComponent={renderFooter}
+          ListEmptyComponent={
+            // The tab bar is hidden during the preview and this screen was
+            // entered with router.replace, so when the first search fails
+            // (network error, empty response) the lock card is the one way
+            // forward - it must not depend on rows having loaded.
+            isOnboardingPreview && locked !== false && !loading && !outOfArea && canSearch ? (
+              <LockedUnlockCard
+                title="Unlock every match near you"
+                subtitle="Subscribe to search restaurants by your macros, with the dish that fits at each."
+                onPress={() => { void routeToPaywall(); }}
+                accessibilityLabel="Subscribe to unlock all restaurants"
+                style={s.lockedCard}
+              />
+            ) : null
+          }
           onEndReached={handleEndReached}
           onEndReachedThreshold={0.5}
           refreshControl={
@@ -1161,26 +1219,12 @@ export default function SearchScreen() {
           }
         />
       )}
-      {isOnboardingPreview && locked !== false && (
-        // The tab bar is hidden during the teaser, so this is the one
-        // always-visible way out: sign-up for a new visitor, the paywall
-        // for a signed-in but unsubscribed one (routeToPaywall decides).
-        // Keyed on the preview entry, not on a successful locked fetch - a
-        // network error on the very first search must not leave the user
-        // with no tab bar *and* no way forward. Only hidden once a fetch
-        // proves the caller is actually entitled.
-        <View style={s.unlockBar}>
-          <Pressable
-            style={({ pressed }) => [s.unlockBtn, pressed && s.unlockBtnPressed]}
-            onPress={() => { void routeToPaywall(); }}
-            accessibilityRole="button"
-            accessibilityLabel="Unlock everything"
-          >
-            <Ionicons name="lock-open-outline" size={16} color={EDITORIAL.cream} />
-            <Text style={s.unlockBtnText}>Unlock everything</Text>
-          </Pressable>
-        </View>
-      )}
+      <CoachMarks
+        visible={tourVisible && locked === true}
+        steps={tourSteps}
+        onDone={finishTour}
+        onStepShown={(step) => trackOnboardingScreenView(`preview_tour_${step.key}`)}
+      />
       <FilterPopup
         visible={filterVisible}
         values={inputs}
@@ -1317,10 +1361,6 @@ const s = StyleSheet.create({
   sectionSub: { fontFamily: FONTS.nunitoSans, fontSize: 11, fontWeight: '500', color: EDITORIAL.textSoft, marginTop: 2 },
   viewMenu: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 12, fontWeight: '600', color: EDITORIAL.greenAccent, paddingHorizontal: 20, marginTop: 6 },
 
-  // Name+distance for a fully-locked row (#04+) - sized to just the text so
-  // the blur below it hugs the text block rather than spanning the row.
-  lockedNameWrap: { flex: 1, borderRadius: 6, overflow: 'hidden' },
-
   lockedCard: { marginHorizontal: 16, marginTop: 22, marginBottom: 6 },
 
   lockedBanner: {
@@ -1344,17 +1384,6 @@ const s = StyleSheet.create({
   waitlistBtnPressed: { opacity: 0.85 },
   waitlistBtnText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 15, fontWeight: '700', color: EDITORIAL.cream },
   footerSpinner: { paddingVertical: 24, alignItems: 'center', justifyContent: 'center' },
-  unlockBar: {
-    position: 'absolute', left: 0, right: 0, bottom: 0,
-    paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12,
-    backgroundColor: EDITORIAL.cream, borderTopWidth: 1, borderTopColor: EDITORIAL.border,
-  },
-  unlockBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: EDITORIAL.green, borderRadius: 32, paddingVertical: 16,
-  },
-  unlockBtnPressed: { opacity: 0.85 },
-  unlockBtnText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 16, fontWeight: '600', color: EDITORIAL.cream },
   loaderWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   errorBanner: {
     marginHorizontal: 16, marginTop: 16, borderRadius: 8, padding: 12,
@@ -1447,11 +1476,4 @@ const dc = StyleSheet.create({
   lockedBarWide: { width: '65%', height: 14, borderRadius: 4, backgroundColor: 'rgba(253,251,247,0.55)' },
   lockedBarNarrow: { width: '45%', height: 10, borderRadius: 3, backgroundColor: 'rgba(253,251,247,0.4)' },
 
-  // Fully-locked row (#04+): centered lock badge over the blurred real photo.
-  lockedFullBadgeWrap: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
-  lockedFullBadge: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: 'rgba(15,31,21,0.55)',
-    alignItems: 'center', justifyContent: 'center',
-  },
 });

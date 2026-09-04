@@ -7,7 +7,7 @@ const setItem = jest.fn(async (k: string, v: string) => { store.set(k, v); });
 const removeItem = jest.fn(async (k: string) => { store.delete(k); });
 jest.mock('@react-native-async-storage/async-storage', () => ({
   __esModule: true,
-  default: { getItem: (k: string) => getItem(k), setItem: (k: string, v: string) => setItem(k, v), removeItem: (k: string) => removeItem(k) },
+  default: { getItem: (k: string) => getItem(k), setItem: (k: string, v: string) => setItem(k, v), removeItem: (k: string) => removeItem(k), multiRemove: (k: string[]) => removeItem(k as unknown as string) },
 }));
 jest.mock('expo-router', () => ({ router: { push: jest.fn(), replace: jest.fn() } }));
 jest.mock('./supabase', () => ({ supabase: { auth: { getSession: jest.fn() } } }));
@@ -65,13 +65,37 @@ describe('free-look flag', () => {
     expect(setItem).toHaveBeenCalledWith('@fitsy/previewSampleUsed', '1');
     g.resetPreviewSample();
     await Promise.resolve();
-    expect(removeItem).toHaveBeenCalledWith('@fitsy/previewSampleUsed');
+    expect(removeItem).toHaveBeenCalledWith(['@fitsy/previewSampleUsed', '@fitsy/previewTourSeen']);
   });
 
   it('fails open (unused) when storage cannot be read', async () => {
     getItem.mockRejectedValueOnce(new Error('disk'));
     const g = await load();
     expect(await g.hasUsedPreviewSample()).toBe(false);
+  });
+});
+
+describe('preview tour flag', () => {
+  it('is unseen on a fresh device, seen after mark, unseen again after a fresh onboarding pass', async () => {
+    const g = await load();
+    expect(await g.hasSeenPreviewTour()).toBe(false);
+    g.markPreviewTourSeen();
+    expect(await g.hasSeenPreviewTour()).toBe(true);
+    g.resetPreviewSample();
+    expect(await g.hasSeenPreviewTour()).toBe(false);
+  });
+
+  it('persists the mark', async () => {
+    const g = await load();
+    g.markPreviewTourSeen();
+    await Promise.resolve();
+    expect(setItem).toHaveBeenCalledWith('@fitsy/previewTourSeen', '1');
+  });
+
+  it('fails closed (seen) when storage cannot be read, so a bad disk never traps the user under the scrim', async () => {
+    getItem.mockRejectedValueOnce(new Error('disk'));
+    const g = await load();
+    expect(await g.hasSeenPreviewTour()).toBe(true);
   });
 });
 

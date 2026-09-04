@@ -23,3 +23,5 @@ export { ProgressDots } from './ProgressDots';
 export { RestaurantCard } from './RestaurantCard';
 export { SearchHeader } from './SearchHeader';
 export { SelectionCard } from './SelectionCard';
+export { CoachMarks } from './CoachMarks';
+export type { CoachMarkStep } from './CoachMarks';
