@@ -489,7 +489,7 @@ export default function SearchScreen() {
   // user sees the reassurance copy before leaving search.
   const [outOfArea, setOutOfArea] = useState(false);
   // Three-step coach-mark tour over the locked preview (macros -> search ->
-  // open a restaurant). Runs once per onboarding pass (welcome/preview-intro
+  // open a restaurant). Runs once per onboarding pass (welcome/finding
   // resets it), only after the first locked results are on screen so every
   // target it points at is actually mounted.
   const tourEditRef = useRef<View | null>(null);
