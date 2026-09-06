@@ -324,6 +324,11 @@
   overflow: hidden;
 }
 
+/* Hairline seam when the stats splash follows the (also green) trust section */
+.statsAfterTrust {
+  border-top: 1px solid rgba(253, 251, 247, 0.16);
+}
+
 /* Cascading background words */
 .statsWords {
   position: absolute;

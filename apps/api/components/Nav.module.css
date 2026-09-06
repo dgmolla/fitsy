@@ -47,6 +47,56 @@
   color: #3a7050;
 }
 
+/* ── Optional inline links + CTA (landing page) ───────────────────────── */
+
+.navRight {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.navLinks {
+  display: flex;
+  gap: 1.5rem;
+  margin-right: 0.75rem;
+}
+
+.navLinks a {
+  font-family: var(--font-nunito), system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #3a4f41;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.navLinks a:hover {
+  color: #1b3a26;
+}
+
+.navCta {
+  font-family: var(--font-nunito), system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #fdfbf7;
+  background: #1b3a26;
+  padding: 0.5rem 1.125rem;
+  border-radius: 999px;
+  text-decoration: none;
+  letter-spacing: -0.01em;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.navCta:hover {
+  background: #2a5438;
+  transform: translateY(-1px);
+}
+
+/* Section links only appear in the dropdown when the inline row is hidden. */
+.menuItemMobileOnly {
+  display: none;
+}
+
 /* ── Hamburger menu (all viewports) ─────────────────────────────────────── */
 
 .hamburger {
@@ -133,6 +183,14 @@
 @media (max-width: 768px) {
   .navInner {
     padding: 0.75rem 1.25rem;
+  }
+
+  .navLinks {
+    display: none;
+  }
+
+  .menuItemMobileOnly {
+    display: block;
   }
 
   .menuPanel {

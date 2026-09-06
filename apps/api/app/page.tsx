@@ -1,20 +1,51 @@
 import styles from "./landing.module.css";
 import { prisma } from "@/lib/restaurantService";
 import { Nav } from "@/components/Nav";
+import {
+  FeatureGrid,
+  type FeedbackTilePost,
+} from "@/components/landing/FeatureGrid";
+import {
+  AppleIcon,
+  Closing,
+  Faq,
+  FooterCols,
+  HowItWorks,
+  Trust,
+} from "@/components/landing/Sections";
 
 // Prisma calls below need runtime env — opt out of build-time prerender.
 export const dynamic = "force-dynamic";
 
 const EARLY_ACCESS_URL = "https://testflight.apple.com/join/fitsy"; // placeholder until TestFlight live
 
+const HOME_NAV_LINKS = [
+  { href: "#features", label: "Features" },
+  { href: "#how", label: "How it works" },
+  { href: "#faq", label: "FAQ" },
+];
+
 export default async function LandingPage() {
-  const [restaurantCount, menuItemCount] = await Promise.all([
+  const [restaurantCount, menuItemCount, topPosts] = await Promise.all([
     prisma.restaurant.count(),
     prisma.menuItem.count(),
+    // Top-voted public board posts feed the Feedback tile so the tile shows
+    // what real users are asking for. Falls back to example posts when empty.
+    prisma.feedback.findMany({
+      where: { status: "published" },
+      orderBy: [{ voteCount: "desc" }, { createdAt: "desc" }],
+      take: 3,
+      select: { message: true, displayName: true, voteCount: true },
+    }),
   ]);
+  const posts: FeedbackTilePost[] = topPosts;
+
   return (
     <main className={styles.page}>
-      <Nav />
+      <Nav
+        links={HOME_NAV_LINKS}
+        cta={{ href: EARLY_ACCESS_URL, label: "Download the app" }}
+      />
 
       {/* ─── Hero ────────────────────────────────────────────────── */}
       <section className={styles.hero}>
@@ -28,8 +59,7 @@ export default async function LandingPage() {
             </h1>
             <p className={styles.subtitle}>
               Fitsy finds restaurants near you with meals that match your
-              protein, carb, and fat targets — so you can eat out without
-              blowing your plan.
+              protein, carb, and fat targets. Eat out without blowing your plan.
             </p>
             <div className={styles.heroCtas}>
               <a href={EARLY_ACCESS_URL} className={styles.ctaPrimary}>
@@ -48,8 +78,20 @@ export default async function LandingPage() {
         </div>
       </section>
 
+      {/* ─── Feature grid ────────────────────────────────────────── */}
+      <FeatureGrid posts={posts} />
+
+      {/* ─── How it works ────────────────────────────────────────── */}
+      <HowItWorks />
+
+      {/* ─── Data honesty ────────────────────────────────────────── */}
+      <Trust />
+
       {/* ─── Stats Splash ────────────────────────────────────────── */}
-      <section className={styles.stats} id="features">
+      <section
+        className={`${styles.stats} ${styles.statsAfterTrust}`}
+        id="stats"
+      >
         <div className={styles.statsWords} aria-hidden="true">
           <span>High Protein</span>
           <span>Low Carb</span>
@@ -65,7 +107,9 @@ export default async function LandingPage() {
           <span className={styles.statNumber}>
             {menuItemCount.toLocaleString()}
           </span>
-          <span className={styles.statLabel}>Dishes with macro data in Los Angeles</span>
+          <span className={styles.statLabel}>
+            Dishes with macro data in Los Angeles
+          </span>
           <span className={styles.statSub}>
             across {restaurantCount.toLocaleString()} local restaurants
           </span>
@@ -75,17 +119,12 @@ export default async function LandingPage() {
         </div>
       </section>
 
+      {/* ─── FAQ + closing CTA ───────────────────────────────────── */}
+      <Faq />
+      <Closing href={EARLY_ACCESS_URL} />
+
       {/* ─── Footer ──────────────────────────────────────────────── */}
-      <footer className={styles.footer}>
-        <div className={styles.footerInner}>
-          <span className={styles.footerLogo}>
-            fitsy<span className={styles.logoDot}>.</span>
-          </span>
-          <span className={styles.footerCopy}>
-            &copy; {new Date().getFullYear()} Fitsy
-          </span>
-        </div>
-      </footer>
+      <FooterCols downloadHref={EARLY_ACCESS_URL} />
     </main>
   );
 }
@@ -106,20 +145,3 @@ function PhoneMockup() {
     </div>
   );
 }
-
-/* ─── Inline SVG Icons ─────────────────────────────────────────────── */
-
-function AppleIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="currentColor"
-      aria-hidden="true"
-    >
-      <path d="M12.537 8.426c-.02-1.983 1.619-2.935 1.693-2.98-.921-1.348-2.355-1.532-2.867-1.553-1.22-.124-2.382.719-3.001.719-.618 0-1.574-.7-2.586-.682-1.331.02-2.558.774-3.243 1.966-1.382 2.397-.354 5.95.993 7.896.658.952 1.443 2.021 2.474 1.983.993-.04 1.368-.642 2.568-.642 1.2 0 1.535.642 2.587.622 1.069-.019 1.743-.97 2.397-1.924.756-1.103 1.067-2.171 1.085-2.227-.024-.011-2.082-.799-2.1-3.178zM10.56 2.596c.547-.664.916-1.585.816-2.504-.789.032-1.745.525-2.311 1.189-.508.588-.952 1.527-.833 2.429.881.068 1.78-.448 2.328-1.114z" />
-    </svg>
-  );
-}
-
