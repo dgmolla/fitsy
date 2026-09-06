@@ -26,7 +26,7 @@ Sections, top to bottom (v3, 2026-09-06):
 2. **Hero** - headline, sub-headline, App Store CTA, floating phone with the search screenshot.
 3. **Feature grid** - six tiles (text search, restaurant detail, tweak macros, goals, saved, feedback), each a mono eyebrow + serif headline + a CSS-built slice of the real app UI bleeding off the bottom.
    The search tile cycles example queries; the macro stepper recomputes per-meal kcal and re-ranks the detail tile's dishes.
-   The feedback tile shows the top three published board posts from the database and falls back to example posts when the board is empty.
+   The feedback tile shows illustrative example posts only; real board posts are not rendered on the public page because the board is auth-gated in the app and users were not told their posts would appear here.
 4. **How it works** - the three steps from the onboarding flow; step 3 is tagged as the only one the user does.
 5. **Data honesty** - Verified (chains, published nutrition) vs AI estimated (independents) cards with one real example each.
 6. **Stats splash** - live restaurant and dish counts (unchanged).
@@ -45,7 +45,6 @@ flowchart TD
     V[Visitor] --> Nav["Nav: hamburger (Features, How it works, FAQ, Browse)"]
     Nav --> Hero["Hero: headline + App Store CTA + phone"]
     Hero --> Grid["Feature grid: search · detail · tweak macros · goals · saved · feedback"]
-    Grid -->|"feedback tile"| DB[("Feedback table: top 3 published posts")]
     Grid --> How["How it works: 3 steps"]
     How --> Trust["Data honesty: Verified vs AI estimated"]
     Trust --> Stats["Stats splash: live counts"]
@@ -106,8 +105,8 @@ apps/api/public/landing/         # Dish photos used by the search tile (from app
 - [ ] Page is readable on mobile (320px width) and desktop (1280px width)
 - [ ] No inline styles (structural test enforced)
 - [ ] `npm run build` succeeds with the landing page
-- [ ] Feature grid renders six tiles; macro stepper changes the kcal total and the detail tile's match percentages without a page load
-- [ ] Feedback tile shows real board posts when any exist, example posts otherwise
+- [ ] Feature grid renders six tiles; macro stepper changes the kcal total and re-sorts the detail tile's dishes by match percent without a page load
+- [ ] Feedback tile shows example posts only (no user-generated content on the public page)
 
 ## Edge Cases
 

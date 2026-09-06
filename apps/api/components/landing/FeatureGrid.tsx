@@ -11,11 +11,11 @@ import s from "@/app/landing-sections.module.css";
  * feedback-board.tsx).
  *
  * Two tiles are live: the search tile cycles example queries, and the macro
- * stepper recomputes the per-meal kcal (4/4/9) and re-ranks the two dishes in
- * the restaurant-detail tile. Everything else is static markup.
+ * stepper recomputes the per-meal kcal (4/4/9) and re-ranks (re-sorts) the two
+ * dishes in the restaurant-detail tile. Everything else is static markup.
  */
 
-export interface FeedbackTilePost {
+interface FeedbackTilePost {
   message: string;
   displayName: string;
   voteCount: number;
@@ -82,7 +82,6 @@ const DETAIL_DISHES = [
     kcal: 588,
     price: "$23.45",
     basePct: 91,
-    top: true,
   },
   {
     name: "Aloo Chana Bundle",
@@ -93,7 +92,6 @@ const DETAIL_DISHES = [
     kcal: 470,
     price: "$17.95",
     basePct: 72,
-    top: false,
   },
 ];
 
@@ -116,7 +114,12 @@ function matchPct(
   return Math.max(20, Math.min(100, Math.round(dish.basePct - delta * 45)));
 }
 
-const FALLBACK_POSTS: FeedbackTilePost[] = [
+/**
+ * Illustrative board posts. Real posts are deliberately NOT rendered here:
+ * the board is auth-gated in the app and users were never told their posts
+ * would appear on the public marketing page.
+ */
+const EXAMPLE_POSTS: FeedbackTilePost[] = [
   {
     message:
       'Filter by "under $15" on the search page too, not just inside a restaurant.',
@@ -135,13 +138,16 @@ const FALLBACK_POSTS: FeedbackTilePost[] = [
   },
 ];
 
-export function FeatureGrid({ posts }: { posts: FeedbackTilePost[] }) {
+export function FeatureGrid() {
   const [target, setTarget] = useState<Macros>(BASE_TARGET);
   const kcal = target.p * 4 + target.c * 4 + target.f * 9;
   const bump = (k: keyof Macros, d: number) =>
     setTarget((t) => ({ ...t, [k]: Math.max(5, t[k] + d) }));
-
-  const boardPosts = posts.length > 0 ? posts.slice(0, 3) : FALLBACK_POSTS;
+  // "Ranked by fit": best match first, so the order changes as targets move.
+  const rankedDishes = DETAIL_DISHES.map((dish) => ({
+    dish,
+    pct: matchPct(dish, target),
+  })).sort((a, b) => b.pct - a.pct);
 
   return (
     <section className={s.section} id="features">
@@ -190,8 +196,7 @@ export function FeatureGrid({ posts }: { posts: FeedbackTilePost[] }) {
                   </div>
                   <span className={s.btn}>Sort ↓</span>
                 </div>
-                {DETAIL_DISHES.map((d) => {
-                  const pct = matchPct(d, target);
+                {rankedDishes.map(({ dish: d, pct }, i) => {
                   const tier = pct >= 85 ? "" : pct >= 55 ? s.mid : s.low;
                   return (
                     <div className={s.fItem} key={d.name}>
@@ -217,7 +222,7 @@ export function FeatureGrid({ posts }: { posts: FeedbackTilePost[] }) {
                             <i>cal</i>
                           </span>
                         </div>
-                        {d.top && <span className={s.fTop}>TOP PICK</span>}
+                        {i === 0 && <span className={s.fTop}>TOP PICK</span>}
                       </div>
                       <div className={s.fPrice}>{d.price}</div>
                     </div>
@@ -367,7 +372,7 @@ export function FeatureGrid({ posts }: { posts: FeedbackTilePost[] }) {
                 <div className={s.fBoardHead}>
                   What should we build next? Upvote what matters to you.
                 </div>
-                {boardPosts.map((post, i) => (
+                {EXAMPLE_POSTS.map((post, i) => (
                   <div className={s.fPost} key={`${post.displayName}-${i}`}>
                     <div>
                       <p>{post.message}</p>

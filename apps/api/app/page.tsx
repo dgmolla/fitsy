@@ -1,10 +1,7 @@
 import styles from "./landing.module.css";
 import { prisma } from "@/lib/restaurantService";
 import { Nav } from "@/components/Nav";
-import {
-  FeatureGrid,
-  type FeedbackTilePost,
-} from "@/components/landing/FeatureGrid";
+import { FeatureGrid } from "@/components/landing/FeatureGrid";
 import { AppleIcon } from "@/components/AppleIcon";
 import {
   Closing,
@@ -26,19 +23,10 @@ const HOME_NAV_LINKS = [
 ];
 
 export default async function LandingPage() {
-  const [restaurantCount, menuItemCount, topPosts] = await Promise.all([
+  const [restaurantCount, menuItemCount] = await Promise.all([
     prisma.restaurant.count(),
     prisma.menuItem.count(),
-    // Top-voted public board posts feed the Feedback tile so the tile shows
-    // what real users are asking for. Falls back to example posts when empty.
-    prisma.feedback.findMany({
-      where: { status: "published" },
-      orderBy: [{ voteCount: "desc" }, { createdAt: "desc" }],
-      take: 3,
-      select: { message: true, displayName: true, voteCount: true },
-    }),
   ]);
-  const posts: FeedbackTilePost[] = topPosts;
 
   return (
     <main className={styles.page}>
@@ -76,7 +64,7 @@ export default async function LandingPage() {
       </section>
 
       {/* ─── Feature grid ────────────────────────────────────────── */}
-      <FeatureGrid posts={posts} />
+      <FeatureGrid />
 
       {/* ─── How it works ────────────────────────────────────────── */}
       <HowItWorks />
