@@ -316,17 +316,14 @@
 /* ─── Stats Splash ───────────────────────────────────────────────────── */
 .stats {
   position: relative;
+  /* Hairline seam for when a green section precedes the splash; invisible on cream. */
+  border-top: 1px solid rgba(253, 251, 247, 0.16);
   min-height: 100vh;
   min-height: 100svh;
   background: var(--green);
   display: flex;
   align-items: center;
   overflow: hidden;
-}
-
-/* Hairline seam when the stats splash follows the (also green) trust section */
-.statsAfterTrust {
-  border-top: 1px solid rgba(253, 251, 247, 0.16);
 }
 
 /* Cascading background words */

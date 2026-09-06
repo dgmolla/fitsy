@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import styles from "./Nav.module.css";
 
-export interface NavLink {
+interface NavLink {
   href: string;
   label: string;
 }
@@ -21,6 +22,9 @@ interface NavProps {
  */
 export function Nav({ links = [] }: NavProps = {}) {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+  const onHome = pathname === "/";
+  const onDirectory = pathname === "/restaurants";
 
   return (
     <nav className={styles.nav}>
@@ -29,19 +33,17 @@ export function Nav({ links = [] }: NavProps = {}) {
           fitsy<span className={styles.logoDot}>.</span>
         </a>
 
-        <div className={styles.navRight}>
-          <button
-            type="button"
-            className={`${styles.hamburger} ${open ? styles.hamburgerOpen : ""}`}
-            aria-label={open ? "Close menu" : "Open menu"}
-            aria-expanded={open}
-            onClick={() => setOpen((v) => !v)}
-          >
-            <span className={styles.hamburgerBar} />
-            <span className={styles.hamburgerBar} />
-            <span className={styles.hamburgerBar} />
-          </button>
-        </div>
+        <button
+          type="button"
+          className={`${styles.hamburger} ${open ? styles.hamburgerOpen : ""}`}
+          aria-label={open ? "Close menu" : "Open menu"}
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+        >
+          <span className={styles.hamburgerBar} />
+          <span className={styles.hamburgerBar} />
+          <span className={styles.hamburgerBar} />
+        </button>
       </div>
 
       {open && (
@@ -65,14 +67,26 @@ export function Nav({ links = [] }: NavProps = {}) {
                 {l.label}
               </a>
             ))}
-            <a
-              href="/restaurants"
-              className={styles.menuItem}
-              role="menuitem"
-              onClick={() => setOpen(false)}
-            >
-              Browse Restaurants
-            </a>
+            {!onHome && (
+              <a
+                href="/"
+                className={styles.menuItem}
+                role="menuitem"
+                onClick={() => setOpen(false)}
+              >
+                Home
+              </a>
+            )}
+            {!onDirectory && (
+              <a
+                href="/restaurants"
+                className={styles.menuItem}
+                role="menuitem"
+                onClick={() => setOpen(false)}
+              >
+                Browse Restaurants
+              </a>
+            )}
           </div>
         </>
       )}

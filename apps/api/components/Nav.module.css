@@ -47,14 +47,6 @@
   color: #3a7050;
 }
 
-/* ── Hamburger cluster ────────────────────────────────────────────────── */
-
-.navRight {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
 /* ── Hamburger menu (all viewports) ─────────────────────────────────────── */
 
 .hamburger {

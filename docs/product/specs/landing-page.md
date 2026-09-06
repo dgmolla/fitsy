@@ -25,7 +25,8 @@ Sections, top to bottom (v3, 2026-09-06):
 1. **Nav** - shared `Nav`: wordmark and a hamburger. Section links (Features, How it works, FAQ) and Browse Restaurants live in the hamburger on every viewport; the bar itself holds no inline links.
 2. **Hero** - headline, sub-headline, App Store CTA, floating phone with the search screenshot.
 3. **Feature grid** - six tiles (text search, restaurant detail, tweak macros, goals, saved, feedback), each a mono eyebrow + serif headline + a CSS-built slice of the real app UI bleeding off the bottom.
-   The search tile cycles example queries; the macro stepper recomputes per-meal kcal and re-ranks the detail tile's dishes.
+   The search tile cycles example queries.
+   The macro stepper recomputes per-meal kcal and re-sorts the detail tile's dishes using the app's own match formula (mirrored in `apps/api/lib/landingDemo.ts`).
    The feedback tile shows illustrative example posts only; real board posts are not rendered on the public page because the board is auth-gated in the app and users were not told their posts would appear here.
 4. **How it works** - the three steps from the onboarding flow; step 3 is tagged as the only one the user does.
 5. **Data honesty** - Verified (chains, published nutrition) vs AI estimated (independents) cards with one real example each.
@@ -34,7 +35,7 @@ Sections, top to bottom (v3, 2026-09-06):
 8. **Closing CTA** - "Eat out. Stay on plan." with an App Store badge.
 9. **Footer** - brand, Product / Company / Legal columns, estimate disclaimer.
 
-The `/restaurants` directory is an SEO surface, not core UX: it is linked only from the footer and never presented as a feature.
+The `/restaurants` directory is an SEO surface, not core UX: it is reachable from the hamburger and the footer but never presented as a feature.
 
 ---
 

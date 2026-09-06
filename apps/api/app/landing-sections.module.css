@@ -13,11 +13,6 @@
 }
 .sectionTitle em { font-style: italic; font-weight: 300; color: var(--green-accent); }
 .sectionLead { font-size: 1.0625rem; line-height: 1.7; color: var(--text-mid); max-width: 520px; }
-.ctaGhost {
-  display: inline-flex; align-items: center; gap: 0.375rem; font-size: 0.9375rem; font-weight: 500;
-  color: var(--text-mid); text-decoration: none; padding: 0.8125rem 0.75rem; transition: color 0.2s ease;
-}
-.ctaGhost:hover { color: var(--green); }
 @keyframes blink { 50% { opacity: 0; } }
 
 /* Generic section spacing */
@@ -50,7 +45,6 @@
   border-radius: 18px 18px 0 0; padding: 14px 14px 0; font-size: 12px; color: var(--text);
   box-shadow: 0 -8px 30px rgba(27, 58, 38, 0.06);
 }
-.frag.dark { background: var(--green); color: var(--cream); border-color: rgba(255,255,255,0.08); }
 .fInput {
   display: flex; align-items: center; gap: 8px; background: var(--cream-deep);
   border-radius: 12px; padding: 10px 12px; font-size: 13px; color: var(--text);
@@ -62,11 +56,13 @@
 
 .fHero {
   position: relative; margin-top: 10px; height: 176px; border-radius: 14px; overflow: hidden;
-  background-size: cover; background-position: center; color: var(--cream);
+  color: var(--cream);
   display: flex; flex-direction: column; justify-content: flex-end; padding: 10px 12px;
 }
-.fHero::before { content: ""; position: absolute; inset: 0; background: linear-gradient(to top, rgba(20,44,28,0.95) 0%, rgba(20,44,28,0.35) 55%, rgba(20,44,28,0) 100%); }
-.fHero > * { position: relative; }
+.fHeroImg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.fHero::before { content: ""; position: absolute; inset: 0; z-index: 1; background: linear-gradient(to top, rgba(20,44,28,0.95) 0%, rgba(20,44,28,0.35) 55%, rgba(20,44,28,0) 100%); }
+.fHero > * { position: relative; z-index: 2; }
+.fHero > .fHeroImg { position: absolute; z-index: 0; }
 .fHeroMeta { display: flex; gap: 6px; align-items: center; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; margin-bottom: 4px; }
 .fHeroMeta span { background: rgba(255,255,255,0.14); padding: 2px 6px; border-radius: 5px; }
 .fHeroMeta .dist { margin-left: auto; background: none; font-weight: 500; letter-spacing: 0; }
@@ -189,7 +185,6 @@
 .trustCard .ex { margin-top: 1.5rem; display: flex; align-items: center; gap: 10px; background: rgba(253,251,247,0.06); border-radius: 12px; padding: 10px 12px; font-size: 12px; }
 .trustCard .ex b { font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: 14px; }
 .trustCard .ex .m { margin-left: auto; opacity: 0.8; font-variant-numeric: tabular-nums; }
-.trust + .stats { border-top: 1px solid rgba(253,251,247,0.16); }
 .trustNote { margin-top: 1.5rem; font-size: 0.8125rem; color: rgba(253,251,247,0.45); }
 
 /* ─── FAQ ─── */
@@ -218,18 +213,13 @@
 .storeBadge .sb { display: flex; flex-direction: column; text-align: left; }
 .storeBadge small { font-size: 9px; letter-spacing: 0.02em; opacity: 0.85; }
 .storeBadge b { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
-.storeBadge.ghost { background: transparent; color: var(--green); border: 1px solid var(--green); }
 .storeBadge svg { width: 20px; height: 20px; fill: currentColor; }
 
 /* ─── Footer with columns (fomo) ─── */
 .footerCols { padding: 4rem 2rem 2rem; border-top: 1px solid var(--border); background: var(--cream); }
 .footerColsInner { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: 1.5fr repeat(3, 1fr); gap: 2rem; }
-.footerLogo {
-  display: block; margin-bottom: 0.5rem;
-  font-family: var(--font-fraunces), Georgia, serif; font-size: 1.5rem; font-weight: 700;
-  font-variation-settings: "opsz" 144, "wght" 700; color: var(--green); letter-spacing: -0.025em;
-}
-.logoDot { color: var(--green-accent); }
+.footerLogo { composes: footerLogo from "./landing.module.css"; display: block; margin-bottom: 0.5rem; }
+.logoDot { composes: logoDot from "./landing.module.css"; }
 .footerTag { font-size: 0.9375rem; color: var(--text-mid); max-width: 260px; line-height: 1.5; }
 .footerCol h4 { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.6875rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-soft); margin-bottom: 0.875rem; }
 .footerCol a { display: block; font-size: 0.9rem; color: var(--text-mid); text-decoration: none; margin-bottom: 0.5rem; }

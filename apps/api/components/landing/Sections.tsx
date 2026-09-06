@@ -125,7 +125,7 @@ export function Trust() {
 const FAQ_ITEMS: Array<{ q: string; a: string }> = [
   {
     q: "Where does Fitsy work right now?",
-    a: "Los Angeles, starting with Silver Lake, Echo Park, and Los Feliz. Every restaurant with a delivery menu in those neighborhoods is covered. More neighborhoods and cities are on the feedback board. Upvote yours.",
+    a: "Los Angeles: Silver Lake, Echo Park, Los Feliz, Hollywood, West Hollywood, Koreatown, Downtown, Mid-City, Studio City, and Venice. Every restaurant with a delivery menu in those neighborhoods is covered. More neighborhoods and cities are on the feedback board. Upvote yours.",
   },
   {
     q: "How accurate are the macros?",
@@ -199,7 +199,7 @@ export function FooterCols({ downloadHref }: { downloadHref: string }) {
   return (
     <footer className={s.footerCols}>
       <div className={s.footerColsInner}>
-        <div className={s.footerBrand}>
+        <div>
           <span className={s.footerLogo}>
             fitsy<span className={s.logoDot}>.</span>
           </span>
