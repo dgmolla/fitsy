@@ -5,8 +5,8 @@ import {
   FeatureGrid,
   type FeedbackTilePost,
 } from "@/components/landing/FeatureGrid";
+import { AppleIcon } from "@/components/AppleIcon";
 import {
-  AppleIcon,
   Closing,
   Faq,
   FooterCols,
@@ -42,10 +42,7 @@ export default async function LandingPage() {
 
   return (
     <main className={styles.page}>
-      <Nav
-        links={HOME_NAV_LINKS}
-        cta={{ href: EARLY_ACCESS_URL, label: "Download the app" }}
-      />
+      <Nav links={HOME_NAV_LINKS} downloadHref={EARLY_ACCESS_URL} />
 
       {/* ─── Hero ────────────────────────────────────────────────── */}
       <section className={styles.hero}>

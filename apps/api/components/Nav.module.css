@@ -47,7 +47,7 @@
   color: #3a7050;
 }
 
-/* ── Optional inline links + CTA (landing page) ───────────────────────── */
+/* ── App Store badge + hamburger cluster ─────────────────────────────── */
 
 .navRight {
   display: flex;
@@ -55,46 +55,42 @@
   gap: 0.75rem;
 }
 
-.navLinks {
-  display: flex;
-  gap: 1.5rem;
-  margin-right: 0.75rem;
-}
-
-.navLinks a {
-  font-family: var(--font-nunito), system-ui, sans-serif;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #3a4f41;
+/* Compact App Store badge (black rounded, Apple glyph, two-line label). */
+.storeBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: #0f1f15;
+  color: #fff;
+  border-radius: 9px;
+  padding: 5px 12px 5px 9px;
   text-decoration: none;
-  transition: color 0.2s ease;
-}
-
-.navLinks a:hover {
-  color: #1b3a26;
-}
-
-.navCta {
-  font-family: var(--font-nunito), system-ui, sans-serif;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: #fdfbf7;
-  background: #1b3a26;
-  padding: 0.5rem 1.125rem;
-  border-radius: 999px;
-  text-decoration: none;
-  letter-spacing: -0.01em;
+  line-height: 1;
   transition: background 0.2s ease, transform 0.2s ease;
 }
 
-.navCta:hover {
-  background: #2a5438;
+.storeBadge:hover {
+  background: #1b3a26;
   transform: translateY(-1px);
 }
 
-/* Section links only appear in the dropdown when the inline row is hidden. */
-.menuItemMobileOnly {
-  display: none;
+.storeBadgeText {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  font-family: var(--font-nunito), system-ui, sans-serif;
+}
+
+.storeBadgeText small {
+  font-size: 8px;
+  letter-spacing: 0.02em;
+  opacity: 0.85;
+}
+
+.storeBadgeText b {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 /* ── Hamburger menu (all viewports) ─────────────────────────────────────── */
@@ -183,14 +179,6 @@
 @media (max-width: 768px) {
   .navInner {
     padding: 0.75rem 1.25rem;
-  }
-
-  .navLinks {
-    display: none;
-  }
-
-  .menuItemMobileOnly {
-    display: block;
   }
 
   .menuPanel {

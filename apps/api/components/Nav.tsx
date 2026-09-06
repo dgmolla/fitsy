@@ -2,28 +2,33 @@
 
 import { useState } from "react";
 import styles from "./Nav.module.css";
+import { AppleIcon } from "./AppleIcon";
 
 const EARLY_ACCESS_URL = "https://testflight.apple.com/join/fitsy";
 
-/**
- * Shared site nav. Used by the landing page, restaurant listing, restaurant
- * detail, and item detail pages so the brand bar reads identically across
- * the web app. A single hamburger menu (all viewports) keeps the bar clean —
- * the links live in a regular dropdown menu rather than inline buttons.
- */
 export interface NavLink {
   href: string;
   label: string;
 }
 
 interface NavProps {
-  /** Inline anchor links (desktop only; collapse into the hamburger on mobile). */
+  /** Extra links listed at the top of the hamburger menu (e.g. landing page sections). */
   links?: NavLink[];
-  /** Solid pill CTA shown left of the hamburger. */
-  cta?: NavLink;
+  /** Where the App Store badge points. Defaults to the early-access URL. */
+  downloadHref?: string;
 }
 
-export function Nav({ links = [], cta }: NavProps = {}) {
+/**
+ * Shared site nav. Used by the landing page, restaurant listing, restaurant
+ * detail, item detail, and legal pages so the brand bar reads identically
+ * across the web app. The bar holds the wordmark, an App Store badge, and a
+ * single hamburger (all viewports); every link lives in the dropdown so the
+ * bar itself stays clean.
+ */
+export function Nav({
+  links = [],
+  downloadHref = EARLY_ACCESS_URL,
+}: NavProps = {}) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -34,20 +39,14 @@ export function Nav({ links = [], cta }: NavProps = {}) {
         </a>
 
         <div className={styles.navRight}>
-          {links.length > 0 && (
-            <div className={styles.navLinks}>
-              {links.map((l) => (
-                <a key={l.href} href={l.href}>
-                  {l.label}
-                </a>
-              ))}
-            </div>
-          )}
-          {cta && (
-            <a href={cta.href} className={styles.navCta}>
-              {cta.label}
-            </a>
-          )}
+          <a href={downloadHref} className={styles.storeBadge}>
+            <AppleIcon size={18} />
+            <span className={styles.storeBadgeText}>
+              <small>Download on the</small>
+              <b>App Store</b>
+            </span>
+          </a>
+
           <button
             type="button"
             className={`${styles.hamburger} ${open ? styles.hamburgerOpen : ""}`}
@@ -76,7 +75,7 @@ export function Nav({ links = [], cta }: NavProps = {}) {
               <a
                 key={l.href}
                 href={l.href}
-                className={`${styles.menuItem} ${styles.menuItemMobileOnly}`}
+                className={styles.menuItem}
                 role="menuitem"
                 onClick={() => setOpen(false)}
               >
@@ -90,14 +89,6 @@ export function Nav({ links = [], cta }: NavProps = {}) {
               onClick={() => setOpen(false)}
             >
               Browse Restaurants
-            </a>
-            <a
-              href={EARLY_ACCESS_URL}
-              className={styles.menuItem}
-              role="menuitem"
-              onClick={() => setOpen(false)}
-            >
-              Get Early Access
             </a>
           </div>
         </>
