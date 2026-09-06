@@ -11,10 +11,9 @@ import {
   formatTag,
 } from "@/lib/seoUtils";
 import { Nav } from "@/components/Nav";
+import { APP_STORE_URL } from "@/lib/appLinks";
 
 export const revalidate = 86400;
-
-const EARLY_ACCESS_URL = "https://testflight.apple.com/join/fitsy";
 
 // ─── Static params ────────────────────────────────────────────────────────────
 
@@ -104,23 +103,33 @@ export default async function RestaurantPage({
   });
 
   // Aggregate stats for the meta column.
-  const itemsWithMacros = restaurant.menuItems.filter((i) => i.macroEstimates.length > 0);
+  const itemsWithMacros = restaurant.menuItems.filter(
+    (i) => i.macroEstimates.length > 0,
+  );
   const avgKcal = itemsWithMacros.length
     ? Math.round(
         itemsWithMacros.reduce((sum, i) => {
           const m = i.macroEstimates[0]!;
-          return sum + (m.calories ?? calcCalories(m.proteinG, m.carbsG, m.fatG));
+          return (
+            sum + (m.calories ?? calcCalories(m.proteinG, m.carbsG, m.fatG))
+          );
         }, 0) / itemsWithMacros.length,
       )
     : null;
   const avgProtein = itemsWithMacros.length
-    ? Math.round(itemsWithMacros.reduce((sum, i) => sum + i.macroEstimates[0]!.proteinG, 0) / itemsWithMacros.length)
+    ? Math.round(
+        itemsWithMacros.reduce(
+          (sum, i) => sum + i.macroEstimates[0]!.proteinG,
+          0,
+        ) / itemsWithMacros.length,
+      )
     : null;
 
   // Title: italicize the last word in green, like the mockup's wordplay
   // ("Sweet[em]green[/em]"). For one-word names, italicize the whole thing.
   const nameWords = restaurant.name.trim().split(/\s+/);
-  const titleHead = nameWords.length > 1 ? nameWords.slice(0, -1).join(" ") + " " : "";
+  const titleHead =
+    nameWords.length > 1 ? nameWords.slice(0, -1).join(" ") + " " : "";
   const titleTail = nameWords[nameWords.length - 1] ?? restaurant.name;
 
   const price = priceSymbol(restaurant.priceLevel);
@@ -157,7 +166,8 @@ export default async function RestaurantPage({
           .filter((i) => i.macroEstimates.length > 0)
           .map((i) => {
             const m = i.macroEstimates[0]!;
-            const kcal = m.calories ?? calcCalories(m.proteinG, m.carbsG, m.fatG);
+            const kcal =
+              m.calories ?? calcCalories(m.proteinG, m.carbsG, m.fatG);
             return {
               "@type": "MenuItem",
               name: i.name,
@@ -177,7 +187,9 @@ export default async function RestaurantPage({
 
   const eyebrowParts: string[] = [];
   if (restaurant.cuisineTags.length > 0) {
-    eyebrowParts.push(restaurant.cuisineTags.slice(0, 2).map(formatTag).join(" & "));
+    eyebrowParts.push(
+      restaurant.cuisineTags.slice(0, 2).map(formatTag).join(" & "),
+    );
   }
   eyebrowParts.push(restaurant.chainFlag ? "Chain" : "Independent");
   if (restaurant.menuItems.length > 0) {
@@ -191,7 +203,9 @@ export default async function RestaurantPage({
       {/* Hero — eyebrow + display title with last-word italic accent + meta column */}
       <header className={styles.editorialHero}>
         <div>
-          <div className={styles.editorialEyebrow}>{eyebrowParts.join(" · ")}</div>
+          <div className={styles.editorialEyebrow}>
+            {eyebrowParts.join(" · ")}
+          </div>
           <h1 className={styles.editorialTitle}>
             {titleHead}
             <em>{titleTail}</em>
@@ -200,7 +214,9 @@ export default async function RestaurantPage({
         <div className={styles.editorialMeta}>
           <div className={styles.editorialMetaRow}>
             <span className={styles.editorialMetaLabel}>Address</span>
-            <span className={styles.editorialMetaVal}>{restaurant.address}</span>
+            <span className={styles.editorialMetaVal}>
+              {restaurant.address}
+            </span>
           </div>
           {restaurant.cuisineTags.length > 0 && (
             <div className={styles.editorialMetaRow}>
@@ -226,12 +242,24 @@ export default async function RestaurantPage({
               <span className={styles.editorialMetaVal}>
                 ★ {restaurant.rating.toFixed(1)}
                 {restaurant.userRatingCount != null && (
-                  <span style={{ color: "var(--ed-ink-soft)", fontSize: 14, marginLeft: 8 }}>
+                  <span
+                    style={{
+                      color: "var(--ed-ink-soft)",
+                      fontSize: 14,
+                      marginLeft: 8,
+                    }}
+                  >
                     ({restaurant.userRatingCount.toLocaleString()} reviews)
                   </span>
                 )}
                 {price && (
-                  <span style={{ color: "var(--ed-ink-soft)", fontSize: 14, marginLeft: 12 }}>
+                  <span
+                    style={{
+                      color: "var(--ed-ink-soft)",
+                      fontSize: 14,
+                      marginLeft: 12,
+                    }}
+                  >
                     {price}
                   </span>
                 )}
@@ -265,7 +293,9 @@ export default async function RestaurantPage({
             const m = item.macroEstimates[0];
             const itemHref = `/restaurants/${canonical}/${slugWithId(item.name, item.id)}`;
             const kcal = m
-              ? Math.round(m.calories ?? calcCalories(m.proteinG, m.carbsG, m.fatG))
+              ? Math.round(
+                  m.calories ?? calcCalories(m.proteinG, m.carbsG, m.fatG),
+                )
               : null;
             return (
               <a key={item.id} href={itemHref} className={styles.menuCard}>
@@ -294,7 +324,9 @@ export default async function RestaurantPage({
                 {m && (
                   <div className={styles.menuCardFoot}>
                     <div className={styles.macroStrip}>
-                      <div className={`${styles.macro} ${styles.macroCalories}`}>
+                      <div
+                        className={`${styles.macro} ${styles.macroCalories}`}
+                      >
                         <span className={styles.macroValue}>{kcal}</span>
                         <span className={styles.macroUnit}>Cal</span>
                       </div>
@@ -327,9 +359,7 @@ export default async function RestaurantPage({
 
       {/* FAQ */}
       <section className={styles.faqSection}>
-        <h2 className={styles.faqTitle}>
-          Frequently Asked Questions
-        </h2>
+        <h2 className={styles.faqTitle}>Frequently Asked Questions</h2>
         <FaqItem
           q={`What are the macros at ${restaurant.name}?`}
           a={`${restaurant.name} has ${restaurant.menuItems.length} menu items with full macro data including protein, carbs, fat, and calories for each dish. Browse the full menu above to find items that fit your nutrition targets.`}
@@ -375,13 +405,18 @@ function FaqItem({ q, a }: { q: string; a: string }) {
 
 function CtaBanner({ restaurantName }: { restaurantName: string }) {
   return (
-    <div className={styles.section} style={{ paddingTop: 0, paddingBottom: 40 }}>
+    <div
+      className={styles.section}
+      style={{ paddingTop: 0, paddingBottom: 40 }}
+    >
       <div className={styles.ctaBanner}>
         <div className={styles.ctaBannerText}>
           <h3>Find meals at {restaurantName} that fit your macros</h3>
-          <p>Set your protein, carb, and fat targets. Fitsy ranks every dish.</p>
+          <p>
+            Set your protein, carb, and fat targets. Fitsy ranks every dish.
+          </p>
         </div>
-        <a href={EARLY_ACCESS_URL} className={styles.ctaButton}>
+        <a href={APP_STORE_URL} className={styles.ctaButton}>
           Download Fitsy
         </a>
       </div>

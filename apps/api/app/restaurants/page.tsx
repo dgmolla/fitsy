@@ -3,13 +3,15 @@ import styles from "./restaurants.module.css";
 import { prisma } from "@/lib/restaurantService";
 import { slugWithId, priceSymbol, formatTag } from "@/lib/seoUtils";
 import { Nav } from "@/components/Nav";
+import { APP_STORE_URL } from "@/lib/appLinks";
 
 export const revalidate = 86400;
 
-const EARLY_ACCESS_URL = "https://testflight.apple.com/join/fitsy";
 const PAGE_SIZE = 20;
 
-type RestaurantCard = Awaited<ReturnType<typeof loadRestaurants>>["rows"][number];
+type RestaurantCard = Awaited<
+  ReturnType<typeof loadRestaurants>
+>["rows"][number];
 
 function parsePage(value: string | string[] | undefined): number {
   const raw = Array.isArray(value) ? value[0] : value;
@@ -77,7 +79,8 @@ export default async function RestaurantsPage({
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const hasPrev = page > 1;
   const hasNext = page < totalPages;
-  const pageHref = (n: number) => (n === 1 ? "/restaurants" : `/restaurants?page=${n}`);
+  const pageHref = (n: number) =>
+    n === 1 ? "/restaurants" : `/restaurants?page=${n}`;
 
   return (
     <div className={`${styles.page} ${styles.editorial} ${styles.directory}`}>
@@ -86,7 +89,8 @@ export default async function RestaurantsPage({
       {/* Compact directory header — small italic title, no display-size hero */}
       <header className={styles.dirHeader}>
         <div className={styles.dirEyebrow}>
-          Fitsy &middot; The directory &middot; {total.toLocaleString()} restaurants
+          Fitsy &middot; The directory &middot; {total.toLocaleString()}{" "}
+          restaurants
           {totalPages > 1 ? ` · page ${page} of ${totalPages}` : ""}
         </div>
         <h1 className={styles.dirTitle}>
@@ -100,10 +104,10 @@ export default async function RestaurantsPage({
 
       <div className={styles.dirToolbar}>
         <div className={styles.dirCount}>
-          <span className={styles.dirCountNum}>
-            {total.toLocaleString()}
-          </span>{" "}
-          <span className={styles.dirCountLabel}>restaurants in Los Angeles</span>
+          <span className={styles.dirCountNum}>{total.toLocaleString()}</span>{" "}
+          <span className={styles.dirCountLabel}>
+            restaurants in Los Angeles
+          </span>
         </div>
         <div className={styles.dirSort}>
           <span className={styles.dirSortLabel}>Sorted by</span>{" "}
@@ -122,7 +126,9 @@ export default async function RestaurantsPage({
           tagBits.push(r.chainFlag ? "Chain" : "Independent");
           if (price) tagBits.push(price);
           if (r.dietaryOptions.length > 0)
-            tagBits.push(r.dietaryOptions.slice(0, 2).map(formatTag).join(", "));
+            tagBits.push(
+              r.dietaryOptions.slice(0, 2).map(formatTag).join(", "),
+            );
           return (
             <li key={r.id} className={styles.dirRow}>
               <a href={href} className={styles.dirRowLink}>
@@ -216,13 +222,19 @@ export default async function RestaurantsPage({
 
 function CtaBanner() {
   return (
-    <div className={styles.section} style={{ paddingTop: 0, paddingBottom: 40 }}>
+    <div
+      className={styles.section}
+      style={{ paddingTop: 0, paddingBottom: 40 }}
+    >
       <div className={styles.ctaBanner}>
         <div className={styles.ctaBannerText}>
           <h3>Track macros at any restaurant</h3>
-          <p>Set your protein, carb, and fat targets. Fitsy finds meals that match.</p>
+          <p>
+            Set your protein, carb, and fat targets. Fitsy finds meals that
+            match.
+          </p>
         </div>
-        <a href={EARLY_ACCESS_URL} className={styles.ctaButton}>
+        <a href={APP_STORE_URL} className={styles.ctaButton}>
           Download Fitsy
         </a>
       </div>

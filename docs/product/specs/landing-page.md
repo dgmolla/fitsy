@@ -1,6 +1,6 @@
 # Landing Page
 
-> **Status:** Shipped — live · **Last verified:** 2026-06-12
+> **Status:** Shipped - live · **Last verified:** 2026-09-06 (v3 expansion: feature grid, how it works, data honesty, FAQ, closing CTA)
 > **Author:** Frontend
 > **Date:** 2026-03-24 (spec); shipped ~Sprint 8
 
@@ -21,24 +21,39 @@ Currently the root URL (`fitsy-api.vercel.app`) returns a 404. Any link to Fitsy
 
 A single-page Next.js marketing site at `/` in the API project. The existing Next.js backend already handles routing — adding a root `page.tsx` makes it serve a landing page without any additional infrastructure.
 
-Three sections:
-1. **Hero** — headline, sub-headline, email capture / App Store CTA
-2. **Features** — three differentiating benefits (macro search, LLM estimation, restaurant discovery)
-3. **Footer** — minimal: app name, tagline
+Sections, top to bottom (v3, 2026-09-06):
+1. **Nav** - shared `Nav`: wordmark and a hamburger. Section links (Features, How it works, FAQ) and Browse Restaurants live in the hamburger on every viewport; the bar itself holds no inline links.
+2. **Hero** - headline, sub-headline, App Store CTA, floating phone with the search screenshot.
+3. **Feature grid** - six tiles (text search, restaurant detail, tweak macros, goals, saved, feedback), each a mono eyebrow + serif headline + a CSS-built slice of the real app UI bleeding off the bottom.
+   The search tile cycles example queries.
+   The macro stepper recomputes per-meal kcal and re-sorts the detail tile's dishes using the app's own match formula (mirrored in `apps/api/lib/landingDemo.ts`).
+   The feedback tile shows illustrative example posts only; real board posts are not rendered on the public page because the board is auth-gated in the app and users were not told their posts would appear here.
+4. **How it works** - the three steps from the onboarding flow; step 3 is tagged as the only one the user does.
+5. **Data honesty** - Verified (chains, published nutrition) vs AI estimated (independents) cards with one real example each.
+6. **Stats splash** - live restaurant and dish counts (unchanged).
+7. **FAQ** - coverage, accuracy, logging, price.
+8. **Closing CTA** - "Eat out. Stay on plan." with an App Store badge.
+9. **Footer** - brand, Product / Company / Legal columns, estimate disclaimer.
+
+The `/restaurants` directory is an SEO surface, not core UX: it is reachable from the hamburger and the footer but never presented as a feature.
 
 ---
 
 ## Diagrams
 
 ```mermaid
-flowchart LR
-    V[Visitor] --> LandingPage[/ Landing Page]
-    LandingPage --> Hero["Hero: what Fitsy does + CTA"]
-    LandingPage --> Features["Features: macro search, LLM estimation, discovery"]
-    LandingPage --> Footer["Footer: copyright"]
-    Hero --> CTA["App Store button (email capture until live)"]
+flowchart TD
+    V[Visitor] --> Nav["Nav: hamburger (Features, How it works, FAQ, Browse)"]
+    Nav --> Hero["Hero: headline + App Store CTA + phone"]
+    Hero --> Grid["Feature grid: search · detail · tweak macros · goals · saved · feedback"]
+    Grid --> How["How it works: 3 steps"]
+    How --> Trust["Data honesty: Verified vs AI estimated"]
+    Trust --> Stats["Stats splash: live counts"]
+    Stats -->|"counts"| DB2[("Restaurant / MenuItem counts")]
+    Stats --> FAQ["FAQ"]
+    FAQ --> Closing["Closing CTA: App Store badge"]
+    Closing --> Footer["Footer: Product / Company / Legal"]
 ```
-
 ---
 
 ## Approach
@@ -67,10 +82,15 @@ flowchart LR
 
 ```
 apps/api/app/
-├── globals.css         # Global CSS reset (box-sizing, margin, padding)
-├── layout.tsx          # Root HTML shell (required for Next.js App Router)
-├── page.tsx            # Landing page component
-└── landing.module.css  # CSS modules for landing page
+├── globals.css                  # Global CSS reset (box-sizing, margin, padding)
+├── layout.tsx                   # Root HTML shell (required for Next.js App Router)
+├── page.tsx                     # Landing page (server component; fetches counts + top feedback posts)
+├── landing.module.css           # Hero, stats, phone frame, palette tokens on .page
+└── landing-sections.module.css  # Feature grid fragments, how it works, trust, FAQ, closing, footer
+apps/api/components/landing/
+├── FeatureGrid.tsx              # Client component: six tiles, live search + macro stepper
+└── Sections.tsx                 # Server components: HowItWorks, Trust, Faq, Closing, FooterCols
+apps/api/public/landing/         # Dish photos used by the search tile (from apps/mobile/assets/dishes)
 ```
 
 ### Route
@@ -86,6 +106,8 @@ apps/api/app/
 - [ ] Page is readable on mobile (320px width) and desktop (1280px width)
 - [ ] No inline styles (structural test enforced)
 - [ ] `npm run build` succeeds with the landing page
+- [ ] Feature grid renders six tiles; macro stepper changes the kcal total and re-sorts the detail tile's dishes by match percent without a page load
+- [ ] Feedback tile shows example posts only (no user-generated content on the public page)
 
 ## Edge Cases
 

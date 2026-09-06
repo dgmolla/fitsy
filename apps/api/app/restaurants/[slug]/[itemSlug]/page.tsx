@@ -10,10 +10,9 @@ import {
   formatTag,
 } from "@/lib/seoUtils";
 import { Nav } from "@/components/Nav";
+import { APP_STORE_URL } from "@/lib/appLinks";
 
 export const revalidate = 86400;
-
-const EARLY_ACCESS_URL = "https://testflight.apple.com/join/fitsy";
 
 // ─── Static params ────────────────────────────────────────────────────────────
 
@@ -199,29 +198,43 @@ export default async function MenuItemPage({
         {/* Macro blocks */}
         {m && (
           <div className={styles.macroGrid}>
-            <div className={`${styles.macroBlock} ${styles.macroBlockCalories}`}>
-              <span className={styles.macroBlockValue} style={{ color: "#3d7a5e" }}>
+            <div
+              className={`${styles.macroBlock} ${styles.macroBlockCalories}`}
+            >
+              <span
+                className={styles.macroBlockValue}
+                style={{ color: "#3d7a5e" }}
+              >
                 {kcal}
               </span>
               <span className={styles.macroBlockUnit}>cal</span>
               <span className={styles.macroBlockLabel}>Calories</span>
             </div>
             <div className={`${styles.macroBlock} ${styles.macroBlockProtein}`}>
-              <span className={styles.macroBlockValue} style={{ color: "#2563eb" }}>
+              <span
+                className={styles.macroBlockValue}
+                style={{ color: "#2563eb" }}
+              >
                 {Math.round(m.proteinG)}
               </span>
               <span className={styles.macroBlockUnit}>g</span>
               <span className={styles.macroBlockLabel}>Protein</span>
             </div>
             <div className={`${styles.macroBlock} ${styles.macroBlockCarbs}`}>
-              <span className={styles.macroBlockValue} style={{ color: "#d97706" }}>
+              <span
+                className={styles.macroBlockValue}
+                style={{ color: "#d97706" }}
+              >
                 {Math.round(m.carbsG)}
               </span>
               <span className={styles.macroBlockUnit}>g</span>
               <span className={styles.macroBlockLabel}>Carbs</span>
             </div>
             <div className={`${styles.macroBlock} ${styles.macroBlockFat}`}>
-              <span className={styles.macroBlockValue} style={{ color: "#9333ea" }}>
+              <span
+                className={styles.macroBlockValue}
+                style={{ color: "#9333ea" }}
+              >
                 {Math.round(m.fatG)}
               </span>
               <span className={styles.macroBlockUnit}>g</span>
@@ -231,7 +244,13 @@ export default async function MenuItemPage({
         )}
 
         {item.description && (
-          <p style={{ color: "var(--text-muted)", lineHeight: 1.6, marginBottom: 16 }}>
+          <p
+            style={{
+              color: "var(--text-muted)",
+              lineHeight: 1.6,
+              marginBottom: 16,
+            }}
+          >
             {item.description}
           </p>
         )}
@@ -307,7 +326,10 @@ function CtaBanner({
   restaurantName: string;
 }) {
   return (
-    <div className={styles.section} style={{ paddingTop: 0, paddingBottom: 40 }}>
+    <div
+      className={styles.section}
+      style={{ paddingTop: 0, paddingBottom: 40 }}
+    >
       <div className={styles.ctaBanner}>
         <div className={styles.ctaBannerText}>
           <h3>Track the {itemName} and every other meal</h3>
@@ -316,7 +338,7 @@ function CtaBanner({
             that fit your exact macro targets.
           </p>
         </div>
-        <a href={EARLY_ACCESS_URL} className={styles.ctaButton}>
+        <a href={APP_STORE_URL} className={styles.ctaButton}>
           Download Fitsy
         </a>
       </div>

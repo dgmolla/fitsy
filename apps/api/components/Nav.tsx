@@ -1,18 +1,30 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import styles from "./Nav.module.css";
 
-const EARLY_ACCESS_URL = "https://testflight.apple.com/join/fitsy";
+interface NavLink {
+  href: string;
+  label: string;
+}
+
+interface NavProps {
+  /** Extra links listed at the top of the hamburger menu (e.g. landing page sections). */
+  links?: NavLink[];
+}
 
 /**
  * Shared site nav. Used by the landing page, restaurant listing, restaurant
- * detail, and item detail pages so the brand bar reads identically across
- * the web app. A single hamburger menu (all viewports) keeps the bar clean —
- * the links live in a regular dropdown menu rather than inline buttons.
+ * detail, item detail, and legal pages so the brand bar reads identically
+ * across the web app. The bar holds the wordmark and a single hamburger (all
+ * viewports); every link lives in the dropdown so the bar itself stays clean.
  */
-export function Nav() {
+export function Nav({ links = [] }: NavProps = {}) {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+  const onHome = pathname === "/";
+  const onDirectory = pathname === "/restaurants";
 
   return (
     <nav className={styles.nav}>
@@ -44,22 +56,37 @@ export function Nav() {
             onClick={() => setOpen(false)}
           />
           <div className={styles.menuPanel} role="menu">
-            <a
-              href="/restaurants"
-              className={styles.menuItem}
-              role="menuitem"
-              onClick={() => setOpen(false)}
-            >
-              Browse Restaurants
-            </a>
-            <a
-              href={EARLY_ACCESS_URL}
-              className={styles.menuItem}
-              role="menuitem"
-              onClick={() => setOpen(false)}
-            >
-              Get Early Access
-            </a>
+            {links.map((l) => (
+              <a
+                key={l.href}
+                href={l.href}
+                className={styles.menuItem}
+                role="menuitem"
+                onClick={() => setOpen(false)}
+              >
+                {l.label}
+              </a>
+            ))}
+            {!onHome && (
+              <a
+                href="/"
+                className={styles.menuItem}
+                role="menuitem"
+                onClick={() => setOpen(false)}
+              >
+                Home
+              </a>
+            )}
+            {!onDirectory && (
+              <a
+                href="/restaurants"
+                className={styles.menuItem}
+                role="menuitem"
+                onClick={() => setOpen(false)}
+              >
+                Browse Restaurants
+              </a>
+            )}
           </div>
         </>
       )}
