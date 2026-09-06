@@ -11,7 +11,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { COLORS, FONTS } from '@/lib/brand';
+import { EDITORIAL, FONTS } from '@/lib/brand';
 import type { MacroValues } from '@/lib/macroPresets';
 
 interface FilterPopupProps {
@@ -153,6 +153,8 @@ export function FilterPopup({ visible, values, onApply, onClose }: FilterPopupPr
             },
           ]}
         >
+          <Text style={s.title}>Per-meal targets</Text>
+
           {MACROS.map(({ key, label, color }, i) => (
             <View key={key}>
               {i > 0 && <View style={s.divider} />}
@@ -162,34 +164,54 @@ export function FilterPopup({ visible, values, onApply, onClose }: FilterPopupPr
                   <Text style={s.label}>{label}</Text>
                 </View>
 
-                <Pressable style={s.stepper} onPress={() => step(key, -1)}>
-                  <Text style={s.stepperText}>−</Text>
-                </Pressable>
+                <View style={s.control}>
+                  <Pressable
+                    style={({ pressed }) => [s.stepper, pressed && s.stepperPressed]}
+                    onPress={() => step(key, -1)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Decrease ${label}`}
+                    hitSlop={6}
+                  >
+                    <Text style={s.stepperText}>−</Text>
+                  </Pressable>
 
-                <TextInput
-                  style={s.numInput}
-                  value={draft[key]}
-                  onChangeText={(t) => update(key, t.replace(/[^0-9]/g, ''))}
-                  keyboardType="number-pad"
-                  placeholder="—"
-                  placeholderTextColor="#C8C8C8"
-                  maxLength={4}
-                  textAlign="center"
-                  selectTextOnFocus
-                />
-                <Text style={s.unit}>g</Text>
+                  <View style={s.valueCol}>
+                    <TextInput
+                      style={s.numInput}
+                      value={draft[key]}
+                      onChangeText={(t) => update(key, t.replace(/[^0-9]/g, ''))}
+                      keyboardType="number-pad"
+                      placeholder="—"
+                      placeholderTextColor={EDITORIAL.textSoft}
+                      maxLength={4}
+                      textAlign="right"
+                      selectTextOnFocus
+                      accessibilityLabel={`${label} grams`}
+                    />
+                    <Text style={s.unit}>g</Text>
+                  </View>
 
-                <Pressable style={s.stepper} onPress={() => step(key, 1)}>
-                  <Text style={s.stepperText}>+</Text>
-                </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [s.stepper, pressed && s.stepperPressed]}
+                    onPress={() => step(key, 1)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Increase ${label}`}
+                    hitSlop={6}
+                  >
+                    <Text style={s.stepperText}>+</Text>
+                  </Pressable>
+                </View>
               </View>
             </View>
           ))}
 
-          {/* Calories */}
+          {/* Per-meal total */}
           <View style={s.calRow}>
-            <Text style={s.calNum}>{cal || '—'}</Text>
-            <Text style={s.calUnit}>kcal</Text>
+            <Text style={s.calLabel}>Per meal</Text>
+            <View style={s.calValue}>
+              <Text style={s.calNum}>{cal || '—'}</Text>
+              <Text style={s.calUnit}>kcal</Text>
+            </View>
           </View>
 
           {/* Apply */}
@@ -212,16 +234,19 @@ const s = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
   },
+  // Mirrors the "Tweak macros" tile on fitsy.org (apps/api landing
+  // MacroDemo): cream card, serif title, right-aligned stepper cluster,
+  // serif figures, per-meal total row, full-width dark Apply.
   card: {
     width: '100%',
     maxWidth: 340,
-    borderRadius: 28,
-    backgroundColor: '#FDFBF7',
+    borderRadius: 22,
+    backgroundColor: EDITORIAL.cream,
     borderWidth: 1,
-    borderColor: '#E8E2D8',
-    paddingHorizontal: 24,
-    paddingTop: 28,
-    paddingBottom: 22,
+    borderColor: EDITORIAL.border,
+    paddingHorizontal: 20,
+    paddingTop: 22,
+    paddingBottom: 18,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.1,
@@ -229,103 +254,135 @@ const s = StyleSheet.create({
     elevation: 10,
   },
 
+  title: {
+    fontFamily: FONTS.frauncesMedium,
+    fontSize: 20,
+    color: EDITORIAL.green,
+    letterSpacing: -0.3,
+    marginBottom: 6,
+  },
+
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 18,
+    justifyContent: 'space-between',
+    paddingVertical: 12,
   },
   labelCol: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    width: 95,
+    flexShrink: 1,
   },
   dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
   },
   label: {
     fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 15,
     fontWeight: '600',
-    color: '#1B3A26',
-    letterSpacing: -0.3,
+    color: EDITORIAL.textMid,
+    letterSpacing: -0.2,
   },
 
+  control: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   stepper: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#F0EBE3',
+    borderWidth: 1,
+    borderColor: EDITORIAL.border,
+    backgroundColor: EDITORIAL.creamCard,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  stepperPressed: {
+    backgroundColor: EDITORIAL.creamDeep,
   },
   stepperText: {
     fontFamily: FONTS.nunitoSans,
     fontSize: 20,
-    fontWeight: '300',
-    color: '#3A4F41',
+    fontWeight: '400',
+    color: EDITORIAL.green,
     marginTop: -1,
   },
 
+  valueCol: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    minWidth: 62,
+    justifyContent: 'flex-end',
+  },
   numInput: {
-    fontFamily: FONTS.nunitoSansSemiBold,
-    flex: 1,
-    fontSize: 34,
-    fontWeight: '700',
-    color: '#1B3A26',
-    letterSpacing: -1.5,
+    fontFamily: FONTS.frauncesMedium,
+    fontSize: 30,
+    color: EDITORIAL.text,
+    letterSpacing: -0.8,
     padding: 0,
-    marginHorizontal: 4,
+    minWidth: 44,
+    fontVariant: ['tabular-nums'],
   },
   unit: {
     fontFamily: FONTS.nunitoSans,
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#7A8C7E',
-    marginRight: 8,
+    fontSize: 13,
+    color: EDITORIAL.textSoft,
+    marginLeft: 2,
   },
 
   divider: {
     height: 1,
-    backgroundColor: '#E8E2D8',
+    backgroundColor: EDITORIAL.border,
   },
 
   calRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    justifyContent: 'center',
-    gap: 6,
-    paddingTop: 20,
-    paddingBottom: 16,
+    justifyContent: 'space-between',
+    paddingTop: 18,
+    paddingBottom: 14,
+  },
+  calLabel: {
+    fontFamily: FONTS.nunitoSansSemiBold,
+    fontSize: 13,
+    fontWeight: '600',
+    color: EDITORIAL.textSoft,
+  },
+  calValue: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 5,
   },
   calNum: {
-    fontFamily: FONTS.nunitoSansSemiBold,
+    fontFamily: FONTS.frauncesMedium,
     fontSize: 40,
-    fontWeight: '800',
-    color: '#1B3A26',
-    letterSpacing: -2,
+    color: EDITORIAL.green,
+    letterSpacing: -1.2,
+    fontVariant: ['tabular-nums'],
   },
   calUnit: {
     fontFamily: FONTS.nunitoSansSemiBold,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#7A8C7E',
-    letterSpacing: 0.3,
+    color: EDITORIAL.textSoft,
   },
 
   applyBtn: {
-    borderRadius: 16,
-    paddingVertical: 16,
+    borderRadius: 14,
+    paddingVertical: 14,
     alignItems: 'center',
-    backgroundColor: '#1B3A26',
+    backgroundColor: EDITORIAL.green,
   },
   applyText: {
     fontFamily: FONTS.nunitoSansSemiBold,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
-    color: '#FDFBF7',
+    color: EDITORIAL.cream,
     letterSpacing: -0.2,
   },
 });

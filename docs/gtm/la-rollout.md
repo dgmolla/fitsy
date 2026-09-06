@@ -4,6 +4,28 @@
 > Supersedes the top-10-metro direction in `docs/engineering/pipeline/macro-accuracy-recommendations-2026-08-16.md` § Decision 5.
 > Complements `strategy.md` (positioning, flywheel) and `ugc-playbook.md` (creator mechanics).
 
+## Current status (updated 2026-09-06)
+
+**Release:** app is live in production.
+
+**Feedback loop + scoreboard:** live since 2026-08-28 (#207/#208). PostHog env vars set; Monday scoreboard posting.
+
+**Trainer channel (Tier A/B/C, 56 names in `trainer-prospects.csv`):** built 2026-08-29, outreach **not started** - all 56 rows still `cold`. This is the actual distribution channel and it is idle; see Next steps.
+
+**RevenueCat grant path (free Pro for trainers):** documented, **not verified end-to-end in prod**. Do this before the first real grant, not after a trainer says yes.
+
+**Mixer (2026-09-01, Health/Fitness/Wellness Business Networking Mixer, The Lincoln):** attended.
+Outcome: several interested potential users and people who agreed to leave an App Store review; zero trainers.
+Matches the pre-event read (generalist wellness crowd, ~10-15/50 relevant) - not a failed channel, just not the trainer channel.
+Action: personally follow up with mixer contacts this week while interest is fresh (installs + reviews); do not treat this as trainer outreach.
+
+**Next steps, in priority order:**
+1. Follow up with mixer leads (installs, reviews) - time-sensitive.
+2. Verify the RevenueCat granted-entitlement webhook path on a test account.
+3. Draft a host-gym-owner pitch (distinct from the individual-trainer pitch below - an owner cares about value to their trainers/clients, not personal access) and start Tier A outreach (6 host gyms).
+4. Start warming Tier B (macro coaches): 2-3 post engagements per person before DMing; this has a ~1 week lead time built into the plan, so start now.
+5. Move `trainer-prospects.csv` status column off `cold` as outreach progresses.
+
 ## The decision
 
 Launch Los Angeles only and run it as a 12-16 week test.
