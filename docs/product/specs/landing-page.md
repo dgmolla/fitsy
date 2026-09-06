@@ -22,7 +22,7 @@ Currently the root URL (`fitsy-api.vercel.app`) returns a 404. Any link to Fitsy
 A single-page Next.js marketing site at `/` in the API project. The existing Next.js backend already handles routing — adding a root `page.tsx` makes it serve a landing page without any additional infrastructure.
 
 Sections, top to bottom (v3, 2026-09-06):
-1. **Nav** - shared `Nav`: wordmark, a compact App Store badge, and a hamburger. Section links (Features, How it works, FAQ) and Browse Restaurants live in the hamburger on every viewport; the bar itself holds no inline links.
+1. **Nav** - shared `Nav`: wordmark and a hamburger. Section links (Features, How it works, FAQ) and Browse Restaurants live in the hamburger on every viewport; the bar itself holds no inline links.
 2. **Hero** - headline, sub-headline, App Store CTA, floating phone with the search screenshot.
 3. **Feature grid** - six tiles (text search, restaurant detail, tweak macros, goals, saved, feedback), each a mono eyebrow + serif headline + a CSS-built slice of the real app UI bleeding off the bottom.
    The search tile cycles example queries; the macro stepper recomputes per-meal kcal and re-ranks the detail tile's dishes.
@@ -42,7 +42,7 @@ The `/restaurants` directory is an SEO surface, not core UX: it is linked only f
 
 ```mermaid
 flowchart TD
-    V[Visitor] --> Nav["Nav: App Store badge + hamburger (Features, How it works, FAQ, Browse)"]
+    V[Visitor] --> Nav["Nav: hamburger (Features, How it works, FAQ, Browse)"]
     Nav --> Hero["Hero: headline + App Store CTA + phone"]
     Hero --> Grid["Feature grid: search · detail · tweak macros · goals · saved · feedback"]
     Grid -->|"feedback tile"| DB[("Feedback table: top 3 published posts")]

@@ -42,7 +42,7 @@ export default async function LandingPage() {
 
   return (
     <main className={styles.page}>
-      <Nav links={HOME_NAV_LINKS} downloadHref={EARLY_ACCESS_URL} />
+      <Nav links={HOME_NAV_LINKS} />
 
       {/* ─── Hero ────────────────────────────────────────────────── */}
       <section className={styles.hero}>

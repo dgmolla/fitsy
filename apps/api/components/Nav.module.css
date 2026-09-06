@@ -47,50 +47,12 @@
   color: #3a7050;
 }
 
-/* ── App Store badge + hamburger cluster ─────────────────────────────── */
+/* ── Hamburger cluster ────────────────────────────────────────────────── */
 
 .navRight {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-}
-
-/* Compact App Store badge (black rounded, Apple glyph, two-line label). */
-.storeBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  background: #0f1f15;
-  color: #fff;
-  border-radius: 9px;
-  padding: 5px 12px 5px 9px;
-  text-decoration: none;
-  line-height: 1;
-  transition: background 0.2s ease, transform 0.2s ease;
-}
-
-.storeBadge:hover {
-  background: #1b3a26;
-  transform: translateY(-1px);
-}
-
-.storeBadgeText {
-  display: flex;
-  flex-direction: column;
-  text-align: left;
-  font-family: var(--font-nunito), system-ui, sans-serif;
-}
-
-.storeBadgeText small {
-  font-size: 8px;
-  letter-spacing: 0.02em;
-  opacity: 0.85;
-}
-
-.storeBadgeText b {
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
 }
 
 /* ── Hamburger menu (all viewports) ─────────────────────────────────────── */
