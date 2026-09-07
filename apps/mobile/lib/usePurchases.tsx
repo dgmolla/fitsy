@@ -157,27 +157,16 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   }, []);
   // When the store last confirmed Pro (settleAfterStore); 0 = never.
   const storeConfirmedAtRef = useRef(0);
-  // One request in flight per reason: concurrent callers (the boot effect
-  // and a screen asking at the same moment, two mismatch handlers) share it
-  // instead of hitting the API twice for the same answer.
-  const inflightRef = useRef(new Map<EntitlementSyncReason, Promise<boolean | null>>());
+  // One request in flight per (reason, user): concurrent callers (the boot
+  // effect and a screen asking at the same moment, two mismatch handlers)
+  // share it instead of hitting the API twice for the same answer. Keyed on
+  // the user too, so a sign_in sync still in flight for user A is not handed
+  // to user B (the stale-session guard would resolve it to null and leave B
+  // unresolved).
+  const inflightRef = useRef(new Map<string, Promise<boolean | null>>());
 
   const runSync = useCallback(
-    async (reason: EntitlementSyncReason): Promise<boolean | null> => {
-      let userId: string;
-      try {
-        // No session: nothing to be entitled as. Also keeps the anonymous
-        // teaser from firing an authenticated request that a 401 would turn
-        // into a "session expired" bounce.
-        const { data } = await supabase.auth.getSession();
-        if (!data.session) {
-          setEntitled(false);
-          return false;
-        }
-        userId = data.session.user.id;
-      } catch {
-        return null;
-      }
+    async (reason: EntitlementSyncReason, userId: string): Promise<boolean | null> => {
       const active = await fetchServerEntitlement(reason);
       if (active === null) {
         trackEntitlementSyncFailed({ reason });
@@ -212,13 +201,28 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   );
 
   const syncEntitlement = useCallback(
-    (reason: EntitlementSyncReason): Promise<boolean | null> => {
-      const existing = inflightRef.current.get(reason);
+    async (reason: EntitlementSyncReason): Promise<boolean | null> => {
+      let userId: string;
+      try {
+        // No session: nothing to be entitled as. Also keeps the anonymous
+        // teaser from firing an authenticated request that a 401 would turn
+        // into a "session expired" bounce.
+        const { data } = await supabase.auth.getSession();
+        if (!data.session) {
+          setEntitled(false);
+          return false;
+        }
+        userId = data.session.user.id;
+      } catch {
+        return null;
+      }
+      const key = `${reason}:${userId}`;
+      const existing = inflightRef.current.get(key);
       if (existing) return existing;
-      const inflight = runSync(reason).finally(() => {
-        inflightRef.current.delete(reason);
+      const inflight = runSync(reason, userId).finally(() => {
+        if (inflightRef.current.get(key) === inflight) inflightRef.current.delete(key);
       });
-      inflightRef.current.set(reason, inflight);
+      inflightRef.current.set(key, inflight);
       return inflight;
     },
     [runSync],
@@ -302,9 +306,13 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
       } else if (event === 'SIGNED_OUT') {
         // Drop the verdict and cache first, synchronously: a fast re-sign-in
         // can land its own verdict while the RevenueCat logout below is
-        // still in flight, and that must not be overwritten afterwards.
+        // still in flight, and that must not be overwritten afterwards. The
+        // in-flight syncs and the post-store grace window belong to the user
+        // who just left, not the next one.
         setEntitled(false);
         void clearCachedEntitlement();
+        inflightRef.current.clear();
+        storeConfirmedAtRef.current = 0;
         await logoutPurchasesUser();
         setCustomerInfo(await fetchCustomerInfo());
       }

@@ -304,7 +304,8 @@ describe('syncEntitlement', () => {
     await act(async () => {
       const pa = result.current.syncEntitlement('mismatch');
       const pb = result.current.syncEntitlement('mismatch');
-      expect(pa).toBe(pb);
+      // Let both pass the session check and reach the in-flight map.
+      await new Promise((r) => setImmediate(r));
       pending.resolve({ active: true, synced: true });
       [a, b] = await Promise.all([pa, pb]);
     });
@@ -315,6 +316,30 @@ describe('syncEntitlement', () => {
     mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
     await act(async () => { await result.current.syncEntitlement('mismatch'); });
     expect(mockApi.syncSubscription).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not hand user A\'s in-flight sign_in sync to user B', async () => {
+    const { result } = render();
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    const forA = deferred<{ active: boolean; synced: boolean }>();
+    mockApi.syncSubscription.mockReturnValueOnce(forA.promise);
+    let a: Promise<boolean | null> | undefined;
+    await act(async () => {
+      a = result.current.syncEntitlement('sign_in');
+      await new Promise((r) => setImmediate(r));
+    });
+    // B signs in while A's request is still out.
+    mockSession = { user: { id: 'u2' } };
+    mockApi.syncSubscription.mockResolvedValueOnce({ active: true, synced: true });
+    let b: boolean | null = null;
+    await act(async () => { b = await result.current.syncEntitlement('sign_in'); });
+    expect(b).toBe(true);
+    expect(result.current.entitled).toBe(true);
+    expect(mockApi.syncSubscription).toHaveBeenCalledTimes(2);
+    // A's late answer is dropped by the stale-session guard, not applied to B.
+    await act(async () => { forA.resolve({ active: false, synced: true }); });
+    expect(await a).toBeNull();
+    expect(result.current.entitled).toBe(true);
   });
 
   it('drops an answer whose session changed or ended mid-flight', async () => {

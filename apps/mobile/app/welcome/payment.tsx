@@ -30,13 +30,15 @@ export default function PaymentScreen() {
   // already passed until the next relaunch. Held off while a purchase or
   // restore is in flight here: that path completes onboarding itself
   // (completeOnboarding runs while `loading` / `restoring` is true) and must
-  // not be raced. Once-only so the post-purchase `finally` (loading back to
-  // false) cannot fire a second replace.
+  // not be raced. Once-only (completeOnboarding claims the ref first) so the
+  // post-purchase `finally` (loading back to false) cannot fire a second
+  // replace. Goes through completeOnboarding: an entitled user leaving this
+  // screen has finished onboarding just like a buyer (flag, profile push,
+  // onboarding_completed), and that helper tracks no purchase event.
   const redirectedRef = useRef(false);
   useEffect(() => {
     if (entitled !== true || loading || restoring || redirectedRef.current) return;
-    redirectedRef.current = true;
-    router.replace('/(tabs)/search');
+    void completeOnboarding(false);
   }, [entitled, loading, restoring]);
 
   // Live, store-localized prices from the current RevenueCat offering, with the
@@ -69,6 +71,9 @@ export default function PaymentScreen() {
   // Onboarding completes once the user holds Pro - whether freshly purchased or
   // restored. Shared by handleStart and handleRestore.
   async function completeOnboarding(discounted = false) {
+    // Claim the one redirect before anything awaits: the entitled-effect
+    // below must not fire a second replace once `loading` flips back.
+    redirectedRef.current = true;
     await AsyncStorage.setItem('onboardingComplete', 'true');
     if (discounted) await AsyncStorage.setItem('discountApplied', 'true');
     pushProfileToServer();

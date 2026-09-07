@@ -29,7 +29,8 @@ export default function ResubscribeScreen() {
   // Same as payment.tsx: a verdict that turns true while this screen is up
   // (late boot answer past BOOT_VERDICT_CAP_MS, a resubscribe made on another
   // device) must let the user through without a relaunch. Held off while a
-  // purchase / restore here is in flight, since those navigate themselves.
+  // purchase / restore here is in flight, since those navigate themselves
+  // (and claim the ref first so `loading` flipping back cannot replace twice).
   const redirectedRef = useRef(false);
   useEffect(() => {
     if (entitled !== true || loading || restoring || redirectedRef.current) return;
@@ -68,7 +69,10 @@ export default function ResubscribeScreen() {
     setLoading(true);
     try {
       const isPro = await purchase(annual, 'resubscribe');
-      if (isPro) router.replace('/(tabs)/search');
+      if (isPro) {
+        redirectedRef.current = true;
+        router.replace('/(tabs)/search');
+      }
     } finally {
       setLoading(false);
     }
@@ -79,6 +83,7 @@ export default function ResubscribeScreen() {
     try {
       const isPro = await restore();
       if (isPro) {
+        redirectedRef.current = true;
         router.replace('/(tabs)/search');
       } else {
         Alert.alert('Nothing to restore', "We couldn't find an active subscription for this account.");
