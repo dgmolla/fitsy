@@ -13,8 +13,10 @@ if grep -rn --include="*.ts" --include="*.tsx" \
   FAIL="hardcoded secret pattern found"
 fi
 CHANGED="$(git diff --name-only origin/main...HEAD 2>/dev/null || git diff --name-only HEAD^ HEAD 2>/dev/null || true)"
-if echo "$CHANGED" | grep -E '(^|/)\.env$' | grep -v '\.env\.example' >&2; then
-  FAIL="${FAIL:+$FAIL; }.env file committed"
+# .env, .env.dev, .env.local, ... — anything env-shaped except the example.
+# (.env.dev slipped through the exact-match version of this pattern 2026-09-07.)
+if echo "$CHANGED" | grep -E '(^|/)\.env(\.[A-Za-z0-9_.-]+)?$' | grep -v '\.env\.example' >&2; then
+  FAIL="${FAIL:+$FAIL; }env file committed"
 fi
 if echo "$CHANGED" | grep -E '\.(js|js\.map)$' | grep -vE '(\.config\.(js|cjs|mjs)|^scripts/)' >&2; then
   FAIL="${FAIL:+$FAIL; }compiled build output committed"
