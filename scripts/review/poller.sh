@@ -23,11 +23,22 @@ gh pr list --state open --json number,headRefOid --limit 20 --jq '.[] | "\(.numb
 while read -r NUM SHA; do
   # tier decides the lens: low (docs/bookkeeping) -> docs-sanity, else correctness
   TIER="$(gh pr view "$NUM" --json files --jq '.files[].path' | node scripts/review/tier.mjs)"
-  LENS=$([ "$TIER" = "low" ] && echo docs-sanity || echo correctness)
+  LABELS="$(gh pr view "$NUM" --json labels --jq '.labels[].name')"
+  BODY="$(gh pr view "$NUM" --json body --jq '.body // ""')"
+  if [ "$TIER" = "low" ]; then LENSES="docs-sanity"; else LENSES="correctness"; fi
+  [ "$TIER" = "high" ] && LENSES="$LENSES danger-zone"
+  # exact label match, not substring (a future "incident-followup" label must not trigger)
+  echo "$LABELS" | grep -qx incident && LENSES="$LENSES harness-audit"
+  # spec-conformance runs when the PR declares a spec
+  echo "$BODY" | grep -qiE '^spec:' && LENSES="$LENSES spec-conformance"
   # skip if this head commit already has the lens status
-  HAVE="$(gh api "repos/{owner}/{repo}/commits/$SHA/statuses" --jq "[.[] | select(.context==\"lens/$LENS\")] | length" 2>/dev/null || echo 0)"
-  if [ "${HAVE:-0}" -gt 0 ]; then continue; fi
-  echo "[poller] reviewing PR #$NUM ($LENS) at ${SHA:0:7}"
+  PENDING=""
+  for L in $LENSES; do
+    HAVE="$(gh api "repos/{owner}/{repo}/commits/$SHA/statuses" --jq "[.[] | select(.context==\"lens/$L\")] | length" 2>/dev/null || echo 0)"
+    [ "${HAVE:-0}" -gt 0 ] || PENDING="$PENDING $L"
+  done
+  [ -n "$PENDING" ] || continue
+  echo "[poller] reviewing PR #$NUM (${PENDING# }) at ${SHA:0:7}"
   # Check out the PR head so the lens reads the branch's actual file context;
   # fail closed: reviewing against stale context is worse than waiting a tick.
   if ! (git fetch -q origin "pull/$NUM/head" && git checkout -qf FETCH_HEAD); then
@@ -37,7 +48,9 @@ while read -r NUM SHA; do
   # Overlay the review harness from origin/main: the PR must not be able to
   # edit its own reviewer (T12), and old branches may predate the harness.
   git checkout -q origin/main -- scripts/review scripts/verify/risk-tiers.yml REVIEW.md .claude/lenses
-  bash scripts/review/run-lens.sh "$NUM" "$LENS" || echo "[poller] PR #$NUM lens/$LENS -> fail"
+  for L in $PENDING; do
+    bash scripts/review/run-lens.sh "$NUM" "$L" || echo "[poller] PR #$NUM lens/$L -> fail"
+  done
   git checkout -qf origin/main 2>/dev/null || true
   git clean -qfd 2>/dev/null || true
 done
