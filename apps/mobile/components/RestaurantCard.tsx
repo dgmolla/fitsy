@@ -36,7 +36,7 @@ function getMockImage(name: string): string {
 }
 
 // Deterministic placeholder color from name
-function placeholderColor(name: string): string {
+function _placeholderColor(name: string): string {
   const COLORS = [
     '#2D6A4F', '#40916C', '#1B4332', '#52796F',
     '#354F52', '#2F3E46', '#84A98C', '#3D5A80',

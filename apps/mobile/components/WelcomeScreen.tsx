@@ -12,7 +12,7 @@ import {
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useNavigation } from 'expo-router';
-import { EDITORIAL, FONTS, TEXT } from '@/lib/brand';
+import { EDITORIAL, TEXT } from '@/lib/brand';
 import { AnimatedPress } from './AnimatedPress';
 
 interface Props {
@@ -33,8 +33,8 @@ interface Props {
 }
 
 export function WelcomeScreen({
-  step,
-  totalSteps,
+  step: _step,
+  totalSteps: _totalSteps,
   progress,
   title,
   subtitle,

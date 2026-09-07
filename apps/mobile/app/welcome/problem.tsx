@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated as RNAnimated, Dimensions, Image, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { Animated as RNAnimated, Dimensions, Image, Pressable, SafeAreaView, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { EDITORIAL, FONTS } from '@/lib/brand';
@@ -7,7 +7,7 @@ import { AnimatedPress } from '@/components/AnimatedPress';
 import { DISHES } from '@/lib/dishImages';
 import { trackOnboardingScreenView } from '@/lib/analytics';
 
-const { width: W, height: H } = Dimensions.get('window');
+const { width: W, height: _H } = Dimensions.get('window');
 const GAP = 8;
 const COL_W = (W - GAP * 3) / 2;
 const RADIUS = 14;
@@ -15,8 +15,8 @@ const RADIUS = 14;
 // Build two columns of images with varying heights
 function buildColumns() {
   const heights = [180, 220, 160, 240, 200, 180, 220, 200, 160];
-  const left: { source: any; h: number }[] = [];
-  const right: { source: any; h: number }[] = [];
+  const left: { source: ImageSourcePropType; h: number }[] = [];
+  const right: { source: ImageSourcePropType; h: number }[] = [];
 
   DISHES.forEach((source, i) => {
     const h = heights[i % heights.length]!;
@@ -38,7 +38,7 @@ function colHeight(items: { h: number }[]) {
   return items.reduce((sum, item) => sum + item.h + GAP, 0);
 }
 
-function ScrollingColumn({ items, speed, offset }: { items: { source: any; h: number }[]; speed: number; offset: number }) {
+function ScrollingColumn({ items, speed, offset }: { items: { source: ImageSourcePropType; h: number }[]; speed: number; offset: number }) {
   const translateY = useRef(new RNAnimated.Value(0)).current;
   const totalH = colHeight(items) / 3; // one set height (we tripled)
 
