@@ -31,7 +31,8 @@ Sections, top to bottom (v3, 2026-09-06):
 4. **How it works** - the three steps from the onboarding flow; step 3 is tagged as the only one the user does.
 5. **Data honesty** - Verified (chains, published nutrition) vs AI estimated (independents) cards with one real example each.
 6. **Stats splash** - live restaurant and dish counts (unchanged).
-7. **FAQ** - coverage, accuracy, logging, price. Prices come from App Store Connect (`apps/api/lib/pricing.ts`, cached daily) with the decision-record values as fallback.
+7. **FAQ** - coverage, accuracy, logging, price.
+   Prices and trial length come from App Store Connect (`apps/api/lib/pricing.ts`, cached daily) with the decision-record values as fallback.
 8. **Closing CTA** - "Eat out. Stay on plan." with an App Store badge.
 9. **Footer** - brand, Product / Company / Legal columns, estimate disclaimer.
 

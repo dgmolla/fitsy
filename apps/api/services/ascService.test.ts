@@ -1,11 +1,11 @@
 import { createPublicKey, generateKeyPairSync, verify } from "crypto";
 import {
   ascAppId,
-  ascConfigured,
+  ascErrorStatus,
   ascGet,
   ascToken,
-  DEFAULT_APP_ID,
-} from "./asc";
+  isAscConfigured,
+} from "./ascService";
 
 const ENV = [
   "ASC_KEY_ID",
@@ -26,9 +26,10 @@ afterEach(() => {
     if (saved[k] === undefined) delete process.env[k];
     else process.env[k] = saved[k];
   }
+  jest.restoreAllMocks();
 });
 
-function primeCreds() {
+export function primeAscCreds() {
   const { privateKey } = generateKeyPairSync("ec", {
     namedCurve: "prime256v1",
   });
@@ -39,15 +40,16 @@ function primeCreds() {
   return privateKey;
 }
 
-describe("ascConfigured / ascAppId", () => {
+describe("isAscConfigured / ascAppId", () => {
   it("is false until all three credentials are present", () => {
-    expect(ascConfigured()).toBe(false);
-    primeCreds();
-    expect(ascConfigured()).toBe(true);
+    expect(isAscConfigured()).toBe(false);
+    primeAscCreds();
+    expect(isAscConfigured()).toBe(true);
   });
 
   it("defaults the app id and honours the override", () => {
-    expect(ascAppId()).toBe(DEFAULT_APP_ID);
+    const def = ascAppId();
+    expect(def).toMatch(/^\d+$/);
     process.env["ASC_APP_ID"] = "999";
     expect(ascAppId()).toBe("999");
   });
@@ -59,9 +61,8 @@ describe("ascToken", () => {
   });
 
   it("mints an ES256 JWT that verifies against the key", () => {
-    const privateKey = primeCreds();
-    const token = ascToken();
-    const [h, p, s] = token.split(".");
+    const privateKey = primeAscCreds();
+    const [h, p, s] = ascToken().split(".");
     const header = JSON.parse(Buffer.from(h!, "base64url").toString());
     const payload = JSON.parse(Buffer.from(p!, "base64url").toString());
     expect(header).toEqual({ alg: "ES256", kid: "KEY123", typ: "JWT" });
@@ -79,31 +80,54 @@ describe("ascToken", () => {
 });
 
 describe("ascGet", () => {
-  it("sends the bearer token and parses JSON", async () => {
-    primeCreds();
+  it("sends the bearer token, no-store, and parses JSON", async () => {
+    primeAscCreds();
     const fetchMock = jest
-      .fn()
-      .mockResolvedValue({ ok: true, json: async () => ({ data: [] }) });
-    global.fetch = fetchMock as unknown as typeof fetch;
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue({
+        ok: true,
+        json: async () => ({ data: [] }),
+      } as unknown as Response);
     await expect(ascGet("/apps/1/subscriptionGroups")).resolves.toEqual({
       data: [],
     });
-    const [url, init] = fetchMock.mock.calls[0];
+    const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe(
       "https://api.appstoreconnect.apple.com/v1/apps/1/subscriptionGroups",
     );
-    expect(init.headers.Authorization).toMatch(/^Bearer ey/);
+    expect((init as RequestInit).cache).toBe("no-store");
+    expect((init!.headers as Record<string, string>).Authorization).toMatch(
+      /^Bearer ey/,
+    );
   });
 
-  it("throws on non-2xx", async () => {
-    primeCreds();
-    global.fetch = jest
-      .fn()
+  it("reuses a supplied token instead of minting one", async () => {
+    primeAscCreds();
+    const fetchMock = jest
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue({
+        ok: true,
+        json: async () => ({}),
+      } as unknown as Response);
+    await ascGet("/x", { token: "tok" });
+    expect(
+      (fetchMock.mock.calls[0]![1]!.headers as Record<string, string>)
+        .Authorization,
+    ).toBe("Bearer tok");
+  });
+
+  it("throws a status-carrying error on non-2xx", async () => {
+    primeAscCreds();
+    jest
+      .spyOn(globalThis, "fetch")
       .mockResolvedValue({
         ok: false,
         status: 401,
         json: async () => ({}),
-      }) as unknown as typeof fetch;
-    await expect(ascGet("/x")).rejects.toThrow(/ASC 401/);
+      } as unknown as Response);
+    const err = await ascGet("/x").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect(ascErrorStatus(err)).toBe(401);
+    expect(ascErrorStatus(new Error("boom"))).toBeNull();
   });
 });
