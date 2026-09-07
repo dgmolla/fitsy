@@ -42,16 +42,21 @@ const [layerMin, layerMax] =
   layerArg === "all" ? [0, 99] : layerArg.includes("-") ? layerArg.split("-").map(Number) : [Number(layerArg), Number(layerArg)];
 
 function changedFiles() {
-  const tries = ["git diff --name-only origin/main...HEAD", "git diff --name-only HEAD^ HEAD"];
-  for (const cmd of tries) {
+  // Branch diff PLUS working-tree changes and untracked files: a pre-commit
+  // `npm run verify` must see what you are about to commit, not just what you
+  // already did (skipped the test layer on uncommitted work, 2026-09-07).
+  const collect = (cmd) => {
     try {
-      const out = execSync(cmd, { cwd: REPO_ROOT, stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
-      return out ? out.split("\n") : [];
+      return execSync(cmd, { cwd: REPO_ROOT, stdio: ["ignore", "pipe", "ignore"] }).toString().trim().split("\n").filter(Boolean);
     } catch {
-      /* next */
+      return null;
     }
-  }
-  return null; // unknown -> run everything
+  };
+  const branch = collect("git diff --name-only origin/main...HEAD") ?? collect("git diff --name-only HEAD^ HEAD");
+  if (branch === null) return null; // unknown -> run everything
+  const workingTree = collect("git diff --name-only HEAD") ?? [];
+  const untracked = collect("git ls-files -o --exclude-standard") ?? [];
+  return [...new Set([...branch, ...workingTree, ...untracked])];
 }
 
 function globToRegExp(glob) {
