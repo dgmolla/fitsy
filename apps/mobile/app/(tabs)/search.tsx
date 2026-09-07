@@ -58,7 +58,7 @@ const DEBOUNCE_MS = 600;
 const FREE_RESULT_COUNT = 3;
 const { width: SCREEN_W } = Dimensions.get('window');
 const HERO_H = 320;
-const DISH_CARD_W = SCREEN_W * 0.44;
+const _DISH_CARD_W = SCREEN_W * 0.44;
 const DISH_CARD_H = 138;
 
 // ─── Dietary badge labels ─────────────────────────────────────────────────────
@@ -88,7 +88,7 @@ function getMockImage(name: string): string {
   return MOCK_IMAGES[h % MOCK_IMAGES.length]!;
 }
 
-const MOCK_RESULTS: RestaurantResult[] = [
+const _MOCK_RESULTS: RestaurantResult[] = [
   { id: 'mock-1', name: 'Evergreen Kitchen', address: '1424 Sunset Blvd, Silver Lake', lat: 34.0875, lng: -118.2604, distanceMiles: 0.4, cuisineTags: ['healthy', 'bowls'], chainFlag: false, photoUrl: MOCK_IMAGES[0]!, bestMatch: { name: 'Seared Ahi Bowl', calories: 482, proteinG: 42, carbsG: 38, fatG: 14, matchScore: 0.02, confidence: 'HIGH', menuItemId: 'mock-mi-1' } },
   { id: 'mock-2', name: 'The Iron Grill', address: '3302 Glendale Blvd', lat: 34.0922, lng: -118.2587, distanceMiles: 1.2, cuisineTags: ['american', 'fast_food'], chainFlag: true, photoUrl: MOCK_IMAGES[2]!, bestMatch: { name: 'Double Smash Burger', calories: 620, proteinG: 48, carbsG: 32, fatG: 28, matchScore: 0.12, confidence: 'MEDIUM', menuItemId: 'mock-mi-2' } },
   { id: 'mock-3', name: 'Mesa Verde', address: '2100 Echo Park Ave', lat: 34.0781, lng: -118.2606, distanceMiles: 1.8, cuisineTags: ['mexican'], chainFlag: false, photoUrl: MOCK_IMAGES[4]!, bestMatch: { name: 'Chicken Burrito Bowl', calories: 610, proteinG: 45, carbsG: 52, fatG: 18, matchScore: 0.22, confidence: 'HIGH', menuItemId: 'mock-mi-3' } },

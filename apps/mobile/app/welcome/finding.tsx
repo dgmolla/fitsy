@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated as RNAnimated, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { Animated as RNAnimated, SafeAreaView, StyleSheet, View } from 'react-native';
 import AnimatedRN, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
