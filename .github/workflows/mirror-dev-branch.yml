@@ -11,6 +11,16 @@ name: Mirror main to dev
 on:
   push:
     branches: [main]
+    # Only API-relevant changes need a dev rebuild; docs/mobile/gtm pushes were
+    # burning a build each (found via the Sep 2026 usage spike).
+    paths:
+      - "apps/api/**"
+      - "packages/**"
+      - "prisma/**"
+      - "vercel.json"
+      - "package.json"
+      - "package-lock.json"
+      - "scripts/dev/vercel-build.sh"
 permissions:
   contents: write
 jobs:
