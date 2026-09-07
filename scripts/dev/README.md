@@ -11,7 +11,7 @@ Every script refuses to target production (`lib/guard.ts`); override only with `
 | `write-local-env.sh` | pull dev creds into `apps/api/.env.local`, `.env.dev`, `apps/mobile/.env.development.local` | after provisioning; whenever creds rotate |
 | `../../prisma/seed.ts` (`npx prisma db seed`) | deterministic fixture: 3 users, 50 restaurants, 400 items | on a fresh DB; safe to re-run |
 | `snapshot.ts` | copy ~500 real LA restaurants (no user data) from prod read-only into dev | monthly, or when search needs fresher data |
-| `reset.ts` | delete all dev auth users, truncate user tables, re-seed users | nightly; before E2E |
+| `reset.ts` | reset user data to seed state (admin mode with a service key; sql-only mode otherwise preserves seed auth users) | nightly (CI, sql-only); before E2E |
 | `vercel-build.sh` | Vercel build entrypoint; migrates dev on preview builds | every Vercel build |
 | `../verify/dev-drift.sh` | dev has every migration on `main` and seed data present | scheduled + before E2E |
 

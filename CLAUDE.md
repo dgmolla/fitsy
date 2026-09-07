@@ -178,15 +178,11 @@ You are done when CI and deploy are green, not when you push. After pushing, pol
 
 ## Shipyard Settings
 
-| Knob | Value |
-|------|-------|
-| human-review-gate | cruise |
-| spec-requirement | always |
-| auto-merge | on-approval |
-| active-roles | all |
-| wave-progression | auto |
-
-See `docs/engineering/tuning-guide.md` for what each knob does and when to change it.
+The pipeline's knobs (merge gate, lens routing, shadow checks, ratchets) live
+with their enforcement mechanisms: `docs/engineering/tuning-guide.md` is the
+reference, `scripts/verify/registry.yml` + `scripts/verify/risk-tiers.yml`
+are the machine-read settings. `merge-gate` is currently **advisory** by
+owner decision - flip it per the tuning guide when ready.
 
 ## Deployment
 

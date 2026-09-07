@@ -1,0 +1,61 @@
+# Dev environment upkeep (autoship step 4b operations): nightly reset of user
+# data to seed state + drift check; monthly refresh of the restaurant subset
+# from prod (read-only source). No model runs here; dev-scoped secrets only,
+# except the read-only monthly snapshot source.
+name: Dev maintenance
+on:
+  schedule:
+    - cron: "0 9 * * *"    # nightly ~2am LA
+    - cron: "0 10 1 * *"   # monthly snapshot, 1st of month
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  nightly:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Reset dev user data to seed state (sql-only mode)
+        env:
+          POSTGRES_URL_NON_POOLING: ${{ secrets.DEV_DATABASE_URL }}
+        run: npx tsx scripts/dev/reset.ts
+      - name: Drift check
+        env:
+          POSTGRES_URL_NON_POOLING: ${{ secrets.DEV_DATABASE_URL }}
+        run: |
+          sudo apt-get install -y -q postgresql-client >/dev/null 2>&1 || true
+          bash scripts/verify/dev-drift.sh; code=$?
+          [ "$code" -eq 0 ] || [ "$code" -eq 2 ] || exit 1
+      - name: File incident on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue list --label incident --state open --search "dev maintenance" --json number --jq length | grep -qv '^0$' || \
+          gh issue create --label incident \
+            --title "incident: dev maintenance failed $(date -u +%F)" \
+            --body "Nightly dev reset or drift check failed (see the Dev maintenance workflow logs). E2E against dev is unreliable until fixed. Layer: L6. Closing PR must add fix + detector + constraint."
+
+  monthly-snapshot:
+    if: github.event.schedule == '0 10 1 * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Refresh restaurant subset from prod (read-only source)
+        env:
+          PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+          POSTGRES_URL_NON_POOLING: ${{ secrets.DEV_DATABASE_URL }}
+        run: npx tsx scripts/dev/snapshot.ts
