@@ -1,0 +1,21 @@
+# Mobile E2E on EAS's cloud simulators (autoship L7): build the simulator app,
+# run the Maestro flows. Independent of any developer Mac. Trigger manually or
+# on a label until the flow list is broad enough to run per-PR.
+#   npx eas-cli workflow:run .eas/workflows/mobile-e2e.yml
+# Requires the e2e-simulator build profile (ships with the companion frontend
+# PR that adds apps/mobile/e2e/); dispatching before that lands fails cleanly.
+name: mobile-e2e
+on:
+  workflow_dispatch: {}
+jobs:
+  build:
+    type: build
+    params:
+      platform: ios
+      profile: e2e-simulator
+  maestro:
+    needs: [build]
+    type: maestro
+    params:
+      build_id: ${{ needs.build.outputs.build_id }}
+      flow_path: ["apps/mobile/e2e/flows"]
