@@ -1,31 +1,44 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { pushProfileToServer } from '@/lib/profileSync';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
+import { PaywallExitModals, type PaywallExitModal } from '@/components/PaywallExitModals';
 import { EDITORIAL, FONTS } from '@/lib/brand';
-import { getOnboardingData } from '@/lib/onboardingStorage';
+import { recordOnboardingComplete } from '@/lib/onboardingCompletion';
 import { usePurchases } from '@/lib/usePurchases';
+import { useRedirectOnceEntitled } from '@/lib/useRedirectOnceEntitled';
+import { ensureSessionForPurchase } from '@/lib/purchaseSession';
 import { openLegalLink } from '@/lib/legalLinks';
-import { trackOnboardingCompleted, trackOnboardingScreenView } from '@/lib/analytics';
+import { trackOnboardingScreenView } from '@/lib/analytics';
 
 type PlanId = 'monthly' | 'yearly';
-type ModalState = 'none' | 'discount' | 'goodbye';
 
 export default function PaymentScreen() {
   const [plan, setPlan] = useState<PlanId>('yearly');
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
-  const [modal, setModal] = useState<ModalState>('none');
-  const { offering, refreshOffering, purchase, restore } = usePurchases();
+  const [modal, setModal] = useState<PaywallExitModal>('none');
+  const { offering, refreshOffering, purchase, restore, entitled } = usePurchases();
+
+  // A verdict that turns true while this screen is up (late boot / sign-in
+  // answer, a subscription bought on another device) goes through
+  // completeOnboarding: an entitled user leaving here has finished onboarding
+  // just like a buyer (flag, profile push, onboarding_completed), and that
+  // helper tracks no purchase event. See useRedirectOnceEntitled.
+  const { claim } = useRedirectOnceEntitled({
+    entitled,
+    busy: loading || restoring,
+    onEntitled: () => { void completeOnboarding(false); },
+  });
 
   // Live, store-localized prices from the current RevenueCat offering, with the
   // designed copy as a fallback while offerings load (or in Expo Go / no key).
-  const annualPrice = offering?.annual?.product.priceString ?? '$39.99/yr';
-  const monthlyPrice = offering?.monthly?.product.priceString ?? '$7.99/mo';
+  // Fallbacks carry no period, matching the live priceString: the period is
+  // added once where it is displayed, so the copy reads the same either way.
+  const annualPrice = offering?.annual?.product.priceString ?? '$39.99';
+  const monthlyPrice = offering?.monthly?.product.priceString ?? '$7.99';
   // Exit-intent discount: a dedicated, lower-priced annual package (RevenueCat
   // package id `annual_discount`, backed by the ASC product
   // `com.fitsy.mobile.yearly_discount` - 25% off, billed immediately: that
@@ -35,7 +48,7 @@ export default function PaymentScreen() {
   // full price (see handleStart).
   const discountedAnnual =
     offering?.availablePackages.find((p) => p.identifier === 'annual_discount') ?? null;
-  const discountPrice = discountedAnnual?.product.priceString ?? '$29.99/yr';
+  const discountPrice = discountedAnnual?.product.priceString ?? '$29.99';
 
   useEffect(() => {
     trackOnboardingScreenView('payment');
@@ -47,18 +60,18 @@ export default function PaymentScreen() {
     if (!offering) void refreshOffering();
   }, [offering, refreshOffering]);
 
-  // Onboarding completes once the user holds Pro — whether freshly purchased or
+  // Onboarding completes once the user holds Pro - whether freshly purchased or
   // restored. Shared by handleStart and handleRestore.
   async function completeOnboarding(discounted = false) {
-    await AsyncStorage.setItem('onboardingComplete', 'true');
-    if (discounted) await AsyncStorage.setItem('discountApplied', 'true');
-    pushProfileToServer();
-    const d = await getOnboardingData();
-    trackOnboardingCompleted({ goal: d.goal, activity_level: d.activity, has_weight: d.weightKg !== undefined, has_height: d.heightCm !== undefined });
+    // Claim the one redirect before anything awaits, so the entitled hook
+    // cannot fire a second replace once `loading` flips back. The recording
+    // itself is idempotent (a re-entered paywall must not double-count).
+    claim();
+    await recordOnboardingComplete(discounted);
     router.replace('/(tabs)/search');
   }
 
-  // This screen IS the paywall — it renders Fitsy's own design and buys the
+  // This screen IS the paywall - it renders Fitsy's own design and buys the
   // selected package directly through the RevenueCat SDK (no dashboard-designed
   // hosted paywall).
   async function handleStart(discounted = false) {
@@ -79,14 +92,15 @@ export default function PaymentScreen() {
         'Just a moment',
         discounted
           ? "This offer isn't available right now - you can still start your free trial."
-          : 'Plans are still loading — please try again.',
+          : 'Plans are still loading, please try again.',
       );
       return;
     }
+    if (!(await ensureSessionForPurchase())) return;
     setLoading(true);
     try {
       const isPro = await purchase(pkg, discounted ? 'onboarding_discount' : 'onboarding');
-      if (!isPro) return; // cancelled or errored — stay on screen
+      if (!isPro) return; // cancelled or errored - stay on screen
       await completeOnboarding(discounted);
     } finally {
       setLoading(false);
@@ -96,6 +110,7 @@ export default function PaymentScreen() {
   // Apple requires a Restore Purchases path. It lives here (the paywall) rather
   // than in-app, since a reinstalled subscriber re-runs onboarding.
   async function handleRestore() {
+    if (!(await ensureSessionForPurchase())) return;
     setRestoring(true);
     try {
       const isPro = await restore();
@@ -168,12 +183,12 @@ export default function PaymentScreen() {
           <Text style={s.restoreTxt}>{restoring ? 'Restoring…' : 'Restore purchases'}</Text>
         </AnimatedPress>
 
-        {/* Subscription disclosure + legal links — required by App Store
+        {/* Subscription disclosure + legal links - required by App Store
             Guideline 3.1.2(c). Title, length, and price of the auto-renewing
             subscription, plus functional Terms of Use (EULA) and Privacy
             Policy links, must appear in the purchase flow. */}
         <Text style={s.disclosure}>
-          Fitsy Pro is an auto-renewing subscription ({annualPrice} or {monthlyPrice} after a
+          Fitsy Pro is an auto-renewing subscription ({annualPrice}/yr or {monthlyPrice}/mo after a
           3-day free trial). Payment is charged to your Apple ID at confirmation. It renews
           automatically unless cancelled at least 24 hours before the period ends. Manage or
           cancel in your App Store account settings.
@@ -189,48 +204,19 @@ export default function PaymentScreen() {
         </View>
       </WelcomeScreen>
 
-      {/* Discount modal — first skip */}
-      <Modal visible={modal === 'discount'} transparent animationType="fade" onRequestClose={() => setModal('none')}>
-        <View style={s.overlay}>
-          <Animated.View entering={FadeIn.duration(300)} style={s.modal}>
-            <Text style={s.modalTitle}>Wait — 25% off.</Text>
-            <Text style={s.modalBody}>
-              Lock in <Text style={{ fontWeight: '700' }}>{discountPrice}</Text> for your first year, billed today.
-            </Text>
-            <AnimatedPress style={s.modalCta} onPress={() => { setModal('none'); handleStart(true); }} haptic>
-              <Text style={s.modalCtaTxt}>Claim 25% Off</Text>
-            </AnimatedPress>
-            <AnimatedPress style={s.modalSkip} onPress={() => setModal('goodbye')}>
-              <Text style={s.modalSkipTxt}>No thanks</Text>
-            </AnimatedPress>
-          </Animated.View>
-        </View>
-      </Modal>
-
-      {/* Goodbye screen — second skip */}
-      <Modal visible={modal === 'goodbye'} transparent animationType="fade" onRequestClose={() => setModal('none')}>
-        <View style={s.overlay}>
-          <Animated.View entering={FadeIn.duration(300)} style={s.modal}>
-            <Text style={s.goodbyeTitle}>We're sorry to{'\n'}see you go.</Text>
-            <Text style={s.modalBody}>
-              Fitsy requires a subscription to access personalized restaurant recommendations. You can start a free trial anytime.
-            </Text>
-            <AnimatedPress style={s.modalCta} onPress={() => { setModal('none'); handleStart(false); }} haptic>
-              <Text style={s.modalCtaTxt}>Start Free Trial</Text>
-            </AnimatedPress>
-            <AnimatedPress
-              style={s.modalSkip}
-              // Declining every offer still gets the locked search teaser -
-              // real browsing with macro-match data blurred - rather than a
-              // dead end. Same mechanic a first-time visitor gets before
-              // signing up, and what resubscribe.tsx's skip does too.
-              onPress={() => { setModal('none'); router.replace('/(tabs)/search?preview=1'); }}
-            >
-              <Text style={s.modalSkipTxt}>Maybe later</Text>
-            </AnimatedPress>
-          </Animated.View>
-        </View>
-      </Modal>
+      <PaywallExitModals
+        modal={modal}
+        discountPrice={discountPrice}
+        onClose={() => setModal('none')}
+        onClaimDiscount={() => { setModal('none'); handleStart(true); }}
+        onDeclineDiscount={() => setModal('goodbye')}
+        onStartTrial={() => { setModal('none'); handleStart(false); }}
+        // Declining every offer still gets the locked search teaser -
+        // real browsing with macro-match data blurred - rather than a
+        // dead end. Same mechanic a first-time visitor gets before
+        // signing up, and what resubscribe.tsx's skip does too.
+        onMaybeLater={() => { setModal('none'); router.replace('/(tabs)/search?preview=1'); }}
+      />
     </>
   );
 }
@@ -270,13 +256,4 @@ const s = StyleSheet.create({
   planPrice: { fontFamily: FONTS.frauncesDisplay, fontSize: 17, color: EDITORIAL.text },
   planPriceOn: { color: EDITORIAL.cream },
 
-  overlay: { flex: 1, backgroundColor: 'rgba(15,31,21,0.55)', justifyContent: 'center', padding: 36 },
-  modal: { backgroundColor: EDITORIAL.cream, borderRadius: 28, padding: 36, alignItems: 'center', gap: 16 },
-  modalTitle: { fontFamily: FONTS.frauncesDisplay, fontSize: 30, color: EDITORIAL.text, letterSpacing: -1 },
-  goodbyeTitle: { fontFamily: FONTS.frauncesDisplay, fontSize: 28, color: EDITORIAL.text, letterSpacing: -0.8, textAlign: 'center' },
-  modalBody: { fontFamily: FONTS.nunitoSans, fontSize: 16, lineHeight: 24, color: EDITORIAL.textSoft, textAlign: 'center' },
-  modalCta: { backgroundColor: EDITORIAL.green, borderRadius: 32, paddingVertical: 18, width: '100%', alignItems: 'center', marginTop: 8 },
-  modalCtaTxt: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 16, fontWeight: '600', color: EDITORIAL.cream },
-  modalSkip: { paddingVertical: 8 },
-  modalSkipTxt: { fontFamily: FONTS.nunitoSans, fontSize: 14, color: EDITORIAL.textSoft },
 });

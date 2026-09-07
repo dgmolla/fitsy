@@ -33,6 +33,7 @@ describe("fetchProEntitlement", () => {
   it("reads an active pro entitlement with plan, expiry and transaction id", async () => {
     const expires = new Date(Date.now() + 86_400_000).toISOString();
     mockFetch(200, {
+      request_date_ms: 1_800_000_000_000,
       subscriber: {
         entitlements: { pro: { expires_date: expires, product_identifier: "com.fitsy.mobile.yearly" } },
         subscriptions: { "com.fitsy.mobile.yearly": { original_transaction_id: "2000001" } },
@@ -45,6 +46,7 @@ describe("fetchProEntitlement", () => {
       expiresAt: new Date(expires),
       transactionId: "2000001",
       billingIssue: false,
+      requestDate: new Date(1_800_000_000_000),
     });
     const [url, init] = (global.fetch as jest.Mock).mock.calls[0] as [string, RequestInit];
     expect(url).toBe("https://api.revenuecat.com/v1/subscribers/u1");
@@ -59,6 +61,13 @@ describe("fetchProEntitlement", () => {
     expect(await fetchProEntitlement("u1")).toMatchObject({ active: false, plan: "p" });
   });
 
+  it("reports a null requestDate when the response has no request_date_ms", async () => {
+    mockFetch(200, {
+      subscriber: { entitlements: { pro: { expires_date: null, product_identifier: "p" } } },
+    });
+    expect(await fetchProEntitlement("u1")).toMatchObject({ active: true, requestDate: null });
+  });
+
   it("reports no entitlement as inactive (not unknown)", async () => {
     mockFetch(200, { subscriber: { entitlements: {}, subscriptions: {} } });
     expect(await fetchProEntitlement("u1")).toEqual({
@@ -67,6 +76,7 @@ describe("fetchProEntitlement", () => {
       expiresAt: null,
       transactionId: null,
       billingIssue: false,
+      requestDate: null,
     });
   });
 

@@ -5,8 +5,7 @@ jest.mock('./authClient', () => ({
   getStoredToken: jest.fn().mockResolvedValue('test-token'),
 }));
 
-import { fetchMenu, fetchRestaurants, syncSubscription } from './apiClient';
-import { SubscriptionRequiredError } from './api';
+import { fetchMenu, fetchRestaurants, fetchRestaurantsPage, fetchSubscriptionStatus, syncSubscription } from './apiClient';
 import type { MenuApiResponseBody, MenuResponse, RestaurantsResponse } from '@fitsy/shared';
 
 const BASE_URL = 'http://localhost:3000';
@@ -118,16 +117,16 @@ describe('fetchRestaurants', () => {
     expect(result).toEqual([]);
   });
 
-  it('propagates SubscriptionRequiredError on a 402 (paywall) so the screen can upsell', async () => {
-    // 402 on both the initial call and the single retry → paywall, not "no results".
+  it('treats a 402 like any other failure (no retry, no special error): entitlement is a locked 200 now', async () => {
     global.fetch = makeMockFetch({ ok: false, status: 402, body: { error: 'subscription_required' } });
 
-    await expect(
-      fetchRestaurants({ lat: 34.0868, lng: -118.3273 }),
-    ).rejects.toBeInstanceOf(SubscriptionRequiredError);
-
-    // Initial request + one in-flight retry before giving up.
-    expect(global.fetch).toHaveBeenCalledTimes(2);
+    await expect(fetchRestaurantsPage({ lat: 34.0868, lng: -118.3273 })).resolves.toEqual({
+      data: [],
+      nextCursor: null,
+      locked: false,
+      networkError: true,
+    });
+    expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 
   it('returns parsed RestaurantResult[] on success', async () => {
@@ -232,17 +231,38 @@ describe('fetchMenu', () => {
 });
 
 describe('syncSubscription', () => {
-  it('POSTs to /api/subscriptions/sync and returns the server verdict', async () => {
+  it('POSTs to /api/subscriptions/sync with the reason and returns the server verdict', async () => {
     const mockFetch = makeMockFetch({ ok: true, body: { active: true, synced: true } });
     global.fetch = mockFetch;
-    await expect(syncSubscription()).resolves.toEqual({ active: true, synced: true });
+    await expect(syncSubscription('purchase')).resolves.toEqual({ active: true, synced: true });
     const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
     expect(url).toBe(`${BASE_URL}/api/subscriptions/sync`);
     expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({ reason: 'purchase' });
   });
 
   it('throws on a failed sync so callers can treat it as best-effort', async () => {
     global.fetch = makeMockFetch({ ok: false, status: 500, body: { error: 'boom' } });
-    await expect(syncSubscription()).rejects.toThrow('boom');
+    await expect(syncSubscription('mismatch')).rejects.toThrow('boom');
+  });
+});
+
+describe('fetchSubscriptionStatus', () => {
+  it("GETs /api/subscriptions/status and returns the server's stored verdict", async () => {
+    const mockFetch = makeMockFetch({ ok: true, body: { active: true, status: 'active', expiresAt: '2027-01-01T00:00:00.000Z' } });
+    global.fetch = mockFetch;
+    await expect(fetchSubscriptionStatus()).resolves.toEqual({
+      active: true,
+      status: 'active',
+      expiresAt: '2027-01-01T00:00:00.000Z',
+    });
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit | undefined];
+    expect(url).toBe(`${BASE_URL}/api/subscriptions/status`);
+    expect(init?.method).toBeUndefined();
+  });
+
+  it('throws on a failed read so the provider can keep its current verdict', async () => {
+    global.fetch = makeMockFetch({ ok: false, status: 500, body: { error: 'boom' } });
+    await expect(fetchSubscriptionStatus()).rejects.toThrow('boom');
   });
 });

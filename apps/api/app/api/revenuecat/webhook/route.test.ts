@@ -1,58 +1,41 @@
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
-const mockUserFindUnique = jest.fn();
+const mockReadUserAndRow = jest.fn();
 const mockSubscriptionUpsert = jest.fn();
 const mockSubscriptionUpdateMany = jest.fn();
 const mockSync = jest.fn();
+const mockLogStatusChange = jest.fn();
 
 jest.mock("@/lib/restaurantService", () => ({
   prisma: {
-    user: { findUnique: mockUserFindUnique },
-    subscription: { upsert: mockSubscriptionUpsert, updateMany: mockSubscriptionUpdateMany },
+    subscription: {
+      upsert: mockSubscriptionUpsert,
+      updateMany: mockSubscriptionUpdateMany,
+    },
   },
 }));
 jest.mock("@/lib/subscription", () => ({
+  readUserAndRow: (...args: unknown[]) => mockReadUserAndRow(...args),
   syncSubscriptionFromRevenueCat: (...args: unknown[]) => mockSync(...args),
+  logStatusChange: (...args: unknown[]) => mockLogStatusChange(...args),
 }));
 
 import { POST } from "./route";
-import { NextRequest } from "next/server";
+import { AUTH, event, makeRequest } from "./fixtures";
 
-const AUTH = "Bearer rc-secret";
-
-function makeRequest(body: unknown, authHeader?: string | null): NextRequest {
-  return new NextRequest("http://localhost/api/revenuecat/webhook", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(authHeader ? { Authorization: authHeader } : {}),
-    },
-    body: typeof body === "string" ? body : JSON.stringify(body),
-  });
-}
-
-function event(overrides: Record<string, unknown> = {}) {
-  return {
-    event: {
-      type: "INITIAL_PURCHASE",
-      app_user_id: "user-1",
-      product_id: "fitsy.annual",
-      expiration_at_ms: Date.now() + 365 * 24 * 60 * 60 * 1000,
-      transaction_id: "txn-1",
-      ...overrides,
-    },
-  };
-}
+let warn: jest.SpyInstance;
 
 beforeEach(() => {
   jest.resetAllMocks();
   process.env["REVENUECAT_WEBHOOK_AUTH"] = AUTH;
-  mockUserFindUnique.mockResolvedValue({ id: "user-1" });
+  mockReadUserAndRow.mockResolvedValue({ userExists: true, row: null });
   mockSubscriptionUpsert.mockResolvedValue({});
+  warn = jest.spyOn(console, "warn").mockImplementation(() => {});
 });
 
 afterEach(() => {
   delete process.env["REVENUECAT_WEBHOOK_AUTH"];
+  warn.mockRestore();
 });
 
 describe("POST /api/revenuecat/webhook — auth", () => {
@@ -121,7 +104,7 @@ describe("POST /api/revenuecat/webhook — parsing", () => {
 
 describe("POST /api/revenuecat/webhook — persistence", () => {
   it("acknowledges (200) when the user does not exist, without upserting", async () => {
-    mockUserFindUnique.mockResolvedValue(null);
+    mockReadUserAndRow.mockResolvedValue({ userExists: false, row: null });
     const res = await POST(makeRequest(event(), AUTH));
     expect(res.status).toBe(200);
     expect(mockSubscriptionUpsert).not.toHaveBeenCalled();
@@ -171,6 +154,12 @@ describe("POST /api/revenuecat/webhook — persistence", () => {
     const res = await POST(makeRequest(event(), AUTH));
     expect(res.status).toBe(500);
   });
+
+  it("logs the status transition against the previously stored row", async () => {
+    mockReadUserAndRow.mockResolvedValue({ userExists: true, row: { status: "expired", lastEventAt: null } });
+    await POST(makeRequest(event(), AUTH));
+    expect(mockLogStatusChange).toHaveBeenCalledWith("user-1", "expired", "active", "webhook");
+  });
 });
 
 describe("POST /api/revenuecat/webhook — TRANSFER", () => {
@@ -200,8 +189,16 @@ describe("POST /api/revenuecat/webhook — TRANSFER", () => {
     expect(res.status).toBe(500);
     expect(mockSubscriptionUpdateMany).toHaveBeenCalledWith({
       where: { userId: "user-old" },
-      data: { status: "expired" },
+      data: { status: "expired", lastEventAt: expect.any(Date) },
     });
+  });
+
+  it("stamps the fallback expiry as now so a delayed pre-transfer RENEWAL can't revive the old owner", async () => {
+    mockSync.mockResolvedValue(null);
+    const before = Date.now();
+    await POST(makeRequest(transfer, AUTH));
+    const stamped = mockSubscriptionUpdateMany.mock.calls[0][0].data.lastEventAt as Date;
+    expect(stamped.getTime()).toBeGreaterThanOrEqual(before);
   });
 
   it("acks when only the OLD owner's lookup failed (already expired directly)", async () => {

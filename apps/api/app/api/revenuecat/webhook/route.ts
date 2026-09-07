@@ -1,7 +1,11 @@
 import { timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/restaurantService";
-import { syncSubscriptionFromRevenueCat } from "@/lib/subscription";
+import {
+  logStatusChange,
+  readUserAndRow,
+  syncSubscriptionFromRevenueCat,
+} from "@/lib/subscription";
 
 /** Constant-time compare for the webhook auth header (avoids timing leaks). */
 function safeEqual(a: string, b: string): boolean {
@@ -27,6 +31,16 @@ function safeEqual(a: string, b: string): boolean {
  * Security: RevenueCat sends the Authorization header value configured in the
  * dashboard (Integrations → Webhooks). We require `REVENUECAT_WEBHOOK_AUTH` to
  * be set and to match exactly, else the endpoint is closed.
+ *
+ * Idempotency: RevenueCat retries on non-2xx and does not guarantee ordering,
+ * and `syncSubscriptionFromRevenueCat` (REST pull) can land between two
+ * deliveries. Each row remembers the time of the newest event applied to it
+ * (`lastEventAt`); a lifecycle event older than that is acked without
+ * writing, so an out-of-order delivery can never regress a subscription to an
+ * older state. Equal timestamps apply (a duplicate re-applies the same
+ * payload harmlessly). If a stale event disagrees with the stored status,
+ * RevenueCat's current REST state is re-read as the tiebreaker rather than
+ * trusting either side.
  *
  * Docs: https://www.revenuecat.com/docs/integrations/webhooks
  */
@@ -62,6 +76,8 @@ interface RevenueCatEvent {
   expiration_at_ms?: number | null;
   transaction_id?: string | null;
   original_transaction_id?: string | null;
+  /** When RevenueCat generated the event (epoch ms). Orders deliveries. */
+  event_timestamp_ms?: number | null;
   /** TRANSFER only: the customers the store subscription moved between. */
   transferred_from?: string[];
   transferred_to?: string[];
@@ -102,13 +118,16 @@ async function handleTransfer(event: RevenueCatEvent): Promise<boolean> {
     Promise.all(to.map((id) => syncSubscriptionFromRevenueCat(id))),
     Promise.all(from.map((id) => syncSubscriptionFromRevenueCat(id))),
   ]);
+  // Stamped "now" so a delayed pre-transfer RENEWAL for the old account is
+  // dropped as stale instead of reviving an entitlement that moved away.
+  const expiredAt = new Date();
   await Promise.all(
     from
       .filter((_, i) => fromResults[i] === null)
       .map((id) =>
         prisma.subscription.updateMany({
           where: { userId: id },
-          data: { status: "expired" },
+          data: { status: "expired", lastEventAt: expiredAt },
         }),
       ),
   );
@@ -123,6 +142,15 @@ function statusForEvent(type: string, expiresAt: Date | null): string {
   // reflect that rather than reporting a stale "active".
   if (expiresAt && expiresAt.getTime() < Date.now()) return "expired";
   return "active";
+}
+
+/** Equal instants, with null only equal to null. */
+function sameInstant(a: Date | null, b: Date | null): boolean {
+  return (a?.getTime() ?? null) === (b?.getTime() ?? null);
+}
+
+function isoOrNull(d: Date | null): string {
+  return d ? d.toISOString() : "null";
 }
 
 // TRANSFER fans out to RevenueCat (8s timeout each, in parallel) plus DB
@@ -193,17 +221,49 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const plan = event.product_id ?? "unknown";
   const appleTransactionId =
     event.original_transaction_id ?? event.transaction_id ?? null;
+  // An event with no usable timestamp is treated as "now" rather than dropped:
+  // losing a real lifecycle event is worse than applying it out of order.
+  const eventAt =
+    typeof event.event_timestamp_ms === "number" && event.event_timestamp_ms > 0
+      ? new Date(event.event_timestamp_ms)
+      : new Date();
 
   // ─── Persist ─────────────────────────────────────────────────────────────────
   try {
     // The Subscription FK requires the User to exist. If it doesn't (deleted
     // account, or an event for a user we never provisioned), acknowledge and
     // move on instead of 500-ing into a RevenueCat retry loop.
-    const user = await prisma.user.findUnique({
-      where: { id: appUserId },
-      select: { id: true },
-    });
-    if (!user) {
+    const { userExists, row: existing } = await readUserAndRow(appUserId);
+    if (!userExists) {
+      return NextResponse.json({ received: true }, { status: 200 });
+    }
+
+    // Stale delivery: the row already reflects something newer (a later
+    // event, or a REST sync). Never apply it, but if it disagrees with what
+    // is stored - status OR expiry, since a RENEWAL keeps "active" and only
+    // moves expiresAt - our ordering assumption may be wrong (clock skew, a
+    // sync that raced a renewal), so let RevenueCat's current truth settle
+    // it. If that truth can't be read, 500 so RevenueCat retries (as
+    // handleTransfer does): acking would leave a possibly-wrong row in place
+    // with nothing left to correct it. A stale event that agrees with the
+    // row is simply acked.
+    if (existing?.lastEventAt && existing.lastEventAt.getTime() > eventAt.getTime()) {
+      const differs = [
+        ...(existing.status !== status ? [`status ${existing.status} vs ${status}`] : []),
+        ...(!sameInstant(existing.expiresAt, expiresAt)
+          ? [`expiresAt ${isoOrNull(existing.expiresAt)} vs ${isoOrNull(expiresAt)}`]
+          : []),
+      ];
+      if (differs.length > 0) {
+        console.warn(
+          `[subscription] ${appUserId} stale ${event.type} (${eventAt.toISOString()}) ` +
+            `disagrees with row @ ${existing.lastEventAt.toISOString()} (${differs.join(", ")}); re-syncing`,
+        );
+        if ((await syncSubscriptionFromRevenueCat(appUserId)) === null) {
+          console.warn(`[subscription] ${appUserId} tiebreak sync failed: RevenueCat unreachable`);
+          return NextResponse.json({ error: "RevenueCat lookup unavailable" }, { status: 500 });
+        }
+      }
       return NextResponse.json({ received: true }, { status: 200 });
     }
 
@@ -215,14 +275,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         status,
         expiresAt,
         appleTransactionId,
+        lastEventAt: eventAt,
       },
       update: {
         plan,
         status,
         expiresAt,
         appleTransactionId,
+        lastEventAt: eventAt,
       },
     });
+    logStatusChange(appUserId, existing?.status ?? null, status, "webhook");
 
     return NextResponse.json({ received: true }, { status: 200 });
   } catch {

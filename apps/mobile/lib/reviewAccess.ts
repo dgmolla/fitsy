@@ -8,7 +8,8 @@ import { supabase } from './supabase';
 // Reviewer-only: there is NO UI entry point for these accounts. App Review
 // reaches the sign-in via the documented deep link `fitsy://auth/reviewer`.
 // A non-reviewer who found that link could sign in, but would still hit the
-// paywall here AND get 402s from the API — the server stays the real boundary.
+// paywall here AND get locked 200s from the API's optionalSubscription gate,
+// which reads the server's Subscription row - the server stays the boundary.
 const REVIEW_EMAILS = new Set<string>(['appreview@fitsy.org']);
 
 export function isReviewEmail(email: string | null | undefined): boolean {

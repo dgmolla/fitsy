@@ -1,5 +1,5 @@
 import { FeedbackBoardPost, FeedbackBoardResponse, FeedbackVoteResponse, MenuApiResponse, MenuResponse, RestaurantResult, RestaurantsApiResponse, SavedItemResponse, SavedItemsResponse } from '@fitsy/shared';
-import { api, SubscriptionRequiredError } from './api';
+import { api } from './api';
 
 export interface FetchRestaurantsParams {
   protein?: number;
@@ -75,20 +75,18 @@ export async function fetchRestaurantsPage(
     const t1 = Date.now();
     // eslint-disable-next-line no-console
     console.log(JSON.stringify({ event: 'fitsy_search_client_done', reqId, ok: false, client_total_ms: t1 - t0, err: String(err) }));
-    // Other errors stay swallowed as an empty page (network blips read as
-    // "nothing nearby" in the list itself, not a crash) - but `networkError:
-    // true` lets callers that need to tell "no matches" apart from "couldn't
-    // reach the API" (e.g. the onboarding out-of-area check) still do so.
-    // `/api/restaurants` no longer 402s (an unentitled caller gets a locked
-    // 200 instead), but SubscriptionRequiredError stays defined for other
-    // authenticated routes that still gate this way.
-    if (err instanceof SubscriptionRequiredError) throw err;
+    // Errors are swallowed as an empty page (network blips read as "nothing
+    // nearby" in the list itself, not a crash) - but `networkError: true`
+    // lets callers that need to tell "no matches" apart from "couldn't reach
+    // the API" (e.g. the onboarding out-of-area check) still do so. An
+    // unentitled caller never errors here: `/api/restaurants` answers with a
+    // locked 200 instead.
     return { data: [], nextCursor: null, locked: false, networkError: true };
   }
 }
 
 /**
- * @deprecated Prefer `fetchRestaurantsPage` for new callers — it surfaces
+ * @deprecated Prefer `fetchRestaurantsPage` for new callers - it surfaces
  * `nextCursor` so the list can paginate. Retained for callers that only
  * need the first page and don't paginate.
  */
@@ -198,14 +196,33 @@ export interface SubscriptionSyncResult {
   synced: boolean;
 }
 
+/** Why the client asks for a re-read; the server refuses to persist a downgrade on 'purchase'/'restore'. */
+export type SubscriptionSyncReason = 'purchase' | 'restore' | 'sign_in' | 'mismatch';
+
 /**
  * Ask the API to re-read this user's entitlement straight from RevenueCat
- * and persist it. Called right after a purchase/restore (so the next search
- * isn't racing the webhook) and whenever the device says Pro while the API
- * still serves locked responses (a subscription transferred to this account,
- * or a webhook delivery that never landed). Throws on network/HTTP failure -
- * callers treat it as best-effort.
+ * and persist it. Called right after a purchase/restore/sign-in (so the next
+ * search isn't racing the webhook) and whenever the API serves a locked
+ * response while we believed the user was Pro (a subscription transferred to
+ * this account, or a webhook delivery that never landed). Throws on
+ * network/HTTP failure - the provider treats it as best-effort.
  */
-export async function syncSubscription(): Promise<SubscriptionSyncResult> {
-  return api.post<SubscriptionSyncResult>('/api/subscriptions/sync', {}, true);
+export async function syncSubscription(reason: SubscriptionSyncReason): Promise<SubscriptionSyncResult> {
+  return api.post<SubscriptionSyncResult>('/api/subscriptions/sync', { reason }, true);
+}
+
+export interface SubscriptionStatusResult {
+  /** Server-trusted entitlement as currently stored (webhook + past syncs). */
+  active: boolean;
+  status: string | null;
+  expiresAt: string | null;
+}
+
+/**
+ * The server's stored verdict: a cheap DB read, no RevenueCat round trip.
+ * Used at boot, where nothing has just happened that the stored row could be
+ * missing. Throws on network/HTTP failure.
+ */
+export async function fetchSubscriptionStatus(): Promise<SubscriptionStatusResult> {
+  return api.get<SubscriptionStatusResult>('/api/subscriptions/status', true);
 }

@@ -34,6 +34,7 @@ import {
   type ProfileField,
 } from '@/lib/analytics';
 import { EDITORIAL, FONTS } from '@/lib/brand';
+import { usePurchases } from '@/lib/usePurchases';
 
 const GOAL_OPTIONS = [
   { id: 'lose_fat', label: 'Lose Weight', icon: 'flame-outline', description: 'Calorie deficit for fat loss' },
@@ -120,16 +121,34 @@ export default function ProfileScreen() {
     }
   }, []);
 
+  // Deleting the Fitsy account does NOT cancel the App Store subscription:
+  // that lives on the Apple ID and keeps renewing until cancelled there. A
+  // Pro user gets told so, with a one-tap route to the manage sheet, before
+  // they can delete. Device RevenueCat state is fine for this: it is copy,
+  // not a gate.
+  const { isPro, showManageSubscriptions } = usePurchases();
   const confirmDelete = useCallback(() => {
+    if (isPro) {
+      Alert.alert(
+        'Delete account?',
+        'Deleting your account does not cancel your Fitsy Pro subscription. It stays on your Apple ID and keeps renewing until you cancel it in the App Store.',
+        [
+          { text: 'Manage subscription', onPress: () => void showManageSubscriptions() },
+          { text: 'Delete anyway', style: 'destructive', onPress: handleDelete },
+          { text: 'Cancel', style: 'cancel' },
+        ],
+      );
+      return;
+    }
     Alert.alert(
       'Delete account?',
-      'This permanently removes your account, saved items, and subscription. This cannot be undone.',
+      'This permanently removes your account and saved items. This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Delete', style: 'destructive', onPress: handleDelete },
       ],
     );
-  }, [handleDelete]);
+  }, [handleDelete, isPro, showManageSubscriptions]);
 
   async function updateFieldAndRecalc<K extends keyof OnboardingData>(field: K, value: OnboardingData[K]) {
     await saveOnboardingField(field, value);

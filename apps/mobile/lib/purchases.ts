@@ -1,5 +1,5 @@
 /**
- * RevenueCat integration — framework-agnostic core.
+ * RevenueCat integration - framework-agnostic core.
  *
  * This module owns every direct call into `react-native-purchases` /
  * `react-native-purchases-ui`. UI code talks to RevenueCat exclusively through
@@ -7,16 +7,17 @@
  * it that way: one seam to the native SDK makes the whole thing mockable and
  * keeps entitlement logic out of screens.
  *
- * Source of truth for "is this user paying?" is RevenueCat, read client-side
- * via `customerInfo.entitlements.active`. The backend is synced separately by
- * the RevenueCat webhook (apps/api) for server-trusted checks — the client does
- * NOT validate receipts itself.
+ * The SERVER is the source of truth for "is this user allowed in?" (see
+ * `syncEntitlement` in usePurchases.tsx). What this file reads client-side
+ * via `customerInfo.entitlements.active` is a fast hint that triggers a sync,
+ * plus the copy source for lapsed-vs-never-subscribed. The client does NOT
+ * validate receipts itself.
  *
  * Keys are read from `app.config.ts` → `extra.revenueCat`, which pulls from
  * EXPO_PUBLIC_REVENUECAT_IOS_KEY / EXPO_PUBLIC_REVENUECAT_ANDROID_KEY. We never
  * hardcode the key (see the env-reliability convention in the repo).
  */
-import { Platform } from 'react-native';
+import { Linking, Platform } from 'react-native';
 import Constants from 'expo-constants';
 import Purchases, {
   LOG_LEVEL,
@@ -28,7 +29,7 @@ import Purchases, {
 import RevenueCatUI, { PAYWALL_RESULT } from 'react-native-purchases-ui';
 
 /**
- * Entitlement identifier — MUST match the entitlement configured in the
+ * Entitlement identifier - MUST match the entitlement configured in the
  * RevenueCat dashboard exactly (case-sensitive). Display name there is
  * "Fitsy Pro"; the identifier is the lowercase conventional `pro`.
  */
@@ -47,7 +48,7 @@ export interface RevenueCatKeys {
   test?: string;
 }
 
-/** Pure per-platform store-key selection — unit-testable without the SDK. */
+/** Pure per-platform store-key selection - unit-testable without the SDK. */
 export function pickApiKey(os: typeof Platform.OS, keys: RevenueCatKeys): string | undefined {
   if (os === 'ios') return keys.ios;
   if (os === 'android') return keys.android;
@@ -81,8 +82,8 @@ export function isPurchasesConfigured(): boolean {
 
 /**
  * Configure the SDK exactly once. Returns false (and no-ops) when no key is
- * present for the current platform — e.g. running in Expo Go, on web, or before
- * the keys are pasted into env — so the app still boots instead of crashing.
+ * present for the current platform - e.g. running in Expo Go, on web, or before
+ * the keys are pasted into env - so the app still boots instead of crashing.
  */
 export function configurePurchases(): boolean {
   if (configured) return true;
@@ -102,7 +103,7 @@ export function configurePurchases(): boolean {
   return true;
 }
 
-/** Pure entitlement check — the single definition of "is Pro". */
+/** Pure entitlement check - the single definition of "is Pro". */
 export function isProActive(
   info: CustomerInfo | null | undefined,
   entitlementId: string = ENTITLEMENT_ID,
@@ -114,7 +115,7 @@ export function isProActive(
 /**
  * True when the user has a past record of this entitlement (RevenueCat keeps
  * expired/cancelled entitlements in `entitlements.all`) but it isn't active
- * now — i.e. they subscribed before and lapsed, as opposed to never having
+ * now - i.e. they subscribed before and lapsed, as opposed to never having
  * subscribed at all (no record in `.all`). Used to route lapsed users to a
  * dedicated win-back screen instead of the generic first-time paywall, since
  * that paywall promises a free trial Apple won't grant a second time to the
@@ -151,7 +152,7 @@ export async function logoutPurchasesUser(): Promise<void> {
   try {
     await Purchases.logOut();
   } catch {
-    // logOut throws when the current user is already anonymous — expected, ignore.
+    // logOut throws when the current user is already anonymous - expected, ignore.
   }
 }
 
@@ -194,7 +195,7 @@ export async function restorePurchases(): Promise<CustomerInfo | null> {
  * The current offering (the one marked current in the dashboard). Its
  * `.annual` / `.monthly` packages back our in-app paywall (apps render their
  * own UI and call purchasePackage, rather than using a RevenueCat-hosted
- * paywall — keeps the paywall on Fitsy's design system, no dashboard design).
+ * paywall - keeps the paywall on Fitsy's design system, no dashboard design).
  */
 export async function fetchCurrentOffering(): Promise<PurchasesOffering | null> {
   const offerings = await fetchOfferings();
@@ -217,7 +218,7 @@ export function interpretPurchaseError(err: unknown): Exclude<PurchaseOutcome, '
 
 /**
  * Buy a package. Returns the outcome plus fresh CustomerInfo on success so the
- * caller can immediately re-derive entitlement state. Never throws — a user
+ * caller can immediately re-derive entitlement state. Never throws - a user
  * cancel is a normal 'cancelled' outcome, not an error.
  */
 export async function purchasePackage(
@@ -248,11 +249,11 @@ export function addCustomerInfoListener(cb: (info: CustomerInfo) => void): () =>
   };
 }
 
-// ─── Paywall + Customer Center (RevenueCatUI) ─────────────────────────────────
+// ─── Paywall (RevenueCatUI) ───────────────────────────────────────────────────
 
 export type PaywallOutcome = 'purchased' | 'restored' | 'cancelled' | 'not_presented' | 'error';
 
-/** Pure mapping from the SDK enum to our normalized outcome — unit-testable. */
+/** Pure mapping from the SDK enum to our normalized outcome - unit-testable. */
 export function mapPaywallResult(result: PAYWALL_RESULT): PaywallOutcome {
   switch (result) {
     case PAYWALL_RESULT.PURCHASED:
@@ -301,12 +302,21 @@ export async function presentPaywallIfNeeded(
   }
 }
 
-/** Present the RevenueCat Customer Center (manage plan, restore, refunds, surveys). */
-export async function presentCustomerCenter(): Promise<void> {
+export const MANAGE_SUBSCRIPTIONS_URL = 'https://apps.apple.com/account/subscriptions';
+
+/**
+ * Open the App Store's manage-subscriptions sheet. Falls back to the account
+ * subscriptions URL when the native sheet isn't available (older iOS, the
+ * SDK not configured, Android), so the user always lands somewhere they can
+ * cancel. Used by the delete-account dialog: deleting a Fitsy account does
+ * not cancel the Apple subscription, and this is the one-tap way to do that.
+ */
+export async function showManageSubscriptions(): Promise<void> {
   try {
-    await RevenueCatUI.presentCustomerCenter();
+    await Purchases.showManageSubscriptions();
   } catch (err) {
     // eslint-disable-next-line no-console
-    console.warn('[purchases] presentCustomerCenter failed', err);
+    console.warn('[purchases] showManageSubscriptions failed, opening URL', err);
+    await Linking.openURL(MANAGE_SUBSCRIPTIONS_URL);
   }
 }

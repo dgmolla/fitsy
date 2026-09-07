@@ -11,3 +11,7 @@ export const Platform = {
   select: <T,>(spec: SelectSpec<T>): T | undefined =>
     spec.ios ?? spec.native ?? spec.default,
 };
+
+export const Linking = {
+  openURL: async (_url: string): Promise<boolean> => true,
+};

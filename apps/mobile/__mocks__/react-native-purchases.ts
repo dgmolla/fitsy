@@ -28,6 +28,7 @@ const Purchases = {
   restorePurchases: async () => emptyCustomerInfo,
   addCustomerInfoUpdateListener: () => undefined,
   removeCustomerInfoUpdateListener: () => false,
+  showManageSubscriptions: async () => undefined,
 };
 
 export default Purchases;

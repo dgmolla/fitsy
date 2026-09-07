@@ -6,13 +6,15 @@ import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { RestaurantCard, SkeletonCard } from '@/components/PreviewRestaurantCard';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { usePurchases } from '@/lib/usePurchases';
+import { useRedirectOnceEntitled } from '@/lib/useRedirectOnceEntitled';
+import { ensureSessionForPurchase } from '@/lib/purchaseSession';
 import { fetchPreviewRestaurants, type PreviewRestaurant } from '@/lib/previewSearch';
 import { openLegalLink } from '@/lib/legalLinks';
 
 /**
  * Shown instead of the search tab when a signed-in user's Fitsy Pro
  * entitlement has LAPSED (RevenueCat has a past record of it, but it isn't
- * active now) — as opposed to a user who never subscribed, who sees the
+ * active now) - as opposed to a user who never subscribed, who sees the
  * regular inline paywall card on the search tab instead. See app/index.tsx
  * for the routing decision and lib/purchases.ts `hasLapsedEntitlement`.
  *
@@ -22,12 +24,21 @@ import { openLegalLink } from '@/lib/legalLinks';
  * charge with no explanation.
  */
 export default function ResubscribeScreen() {
-  const { offering, refreshOffering, purchase, restore } = usePurchases();
+  const { offering, refreshOffering, purchase, restore, entitled } = usePurchases();
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
+
+  // A verdict that turns true while this screen is up (late boot / sign-in
+  // answer, a resubscribe made on another device) lets the user through
+  // without a relaunch. See useRedirectOnceEntitled.
+  const { claim } = useRedirectOnceEntitled({
+    entitled,
+    busy: loading || restoring,
+    onEntitled: () => router.replace('/(tabs)/search'),
+  });
   // A locked teaser of what resubscribing unlocks, same cards + fetch as the
   // onboarding teaser (welcome/results.tsx). A fetch failure just hides the
-  // section — this is illustrative, not required to resubscribe.
+  // section - this is illustrative, not required to resubscribe.
   const [restaurants, setRestaurants] = useState<PreviewRestaurant[]>([]);
   const [teaserLoading, setTeaserLoading] = useState(true);
 
@@ -43,28 +54,37 @@ export default function ResubscribeScreen() {
     if (!offering) void refreshOffering();
   }, [offering, refreshOffering]);
 
-  const annualPrice = offering?.annual?.product.priceString ?? '$39.99/yr';
+  // Live, store-localized price with the designed copy as a fallback. The
+  // fallback carries no period: the button and disclosure add "/yr" once
+  // themselves, and the live priceString never includes it either.
+  const annualPrice = offering?.annual?.product.priceString ?? '$39.99';
 
   async function handleResubscribe() {
     const annual = offering?.annual ?? (await refreshOffering())?.annual;
     if (!annual) {
-      Alert.alert('Just a moment', 'Plans are still loading — please try again.');
+      Alert.alert('Just a moment', 'Plans are still loading, please try again.');
       return;
     }
+    if (!(await ensureSessionForPurchase())) return;
     setLoading(true);
     try {
       const isPro = await purchase(annual, 'resubscribe');
-      if (isPro) router.replace('/(tabs)/search');
+      if (isPro) {
+        claim();
+        router.replace('/(tabs)/search');
+      }
     } finally {
       setLoading(false);
     }
   }
 
   async function handleRestore() {
+    if (!(await ensureSessionForPurchase())) return;
     setRestoring(true);
     try {
       const isPro = await restore();
       if (isPro) {
+        claim();
         router.replace('/(tabs)/search');
       } else {
         Alert.alert('Nothing to restore', "We couldn't find an active subscription for this account.");
@@ -80,7 +100,7 @@ export default function ResubscribeScreen() {
       subtitle="Your Fitsy Pro subscription ended. Resubscribe to keep finding restaurants that fit your macros."
       onContinue={handleResubscribe}
       canContinue={!loading}
-      continueLabel={loading ? 'Resubscribing…' : `Resubscribe — ${annualPrice}/yr`}
+      continueLabel={loading ? 'Resubscribing…' : `Resubscribe - ${annualPrice}/yr`}
       // Declining resubscribe still gets the locked search teaser (real
       // browsing, blurred macro-match data) rather than a dead end - same
       // mechanic as a first-time visitor who hasn't paid yet.
@@ -115,7 +135,7 @@ export default function ResubscribeScreen() {
       </Pressable>
 
       <Text style={s.disclosure}>
-        Fitsy Pro is an auto-renewing subscription ({annualPrice}). Payment is charged to your
+        Fitsy Pro is an auto-renewing subscription ({annualPrice}/yr). Payment is charged to your
         Apple ID at confirmation. It renews automatically unless cancelled at least 24 hours
         before the period ends. Manage or cancel in your App Store account settings.
       </Text>

@@ -14,16 +14,17 @@ export default function TabLayout() {
   // sign-in" from a mid-session switch.
   const lastTabRef = useRef<TabId | null>(null);
 
-  // Subscription hard-wall: the tabbed app is Pro-only. `isPro` is instant and
-  // on-device (a just-purchased user enters immediately), so this is the UX
-  // gate; the API independently enforces entitlement server-side
-  // (optionalSubscription), which is the real security boundary. `__DEV__`
+  // Subscription hard-wall: the tabbed app is Pro-only. The gate is the
+  // SERVER's verdict (`purchases.entitled`; null while boot / sign-in /
+  // sign-out is settling it, which is the hold below), the same truth the
+  // API uses to lock data (optionalSubscription), so the two cannot disagree
+  // for longer than one sync. The phone's RevenueCat state is never the gate. `__DEV__`
   // bypasses local development; App Review demo accounts (`useIsReviewer`,
   // mirroring the server `DEMO_REVIEW_EMAILS` allowlist) skip the paywall so the
   // reviewer can see the app without a subscription - the API still gates data.
-  const { ready, isPro } = usePurchases();
+  const purchases = usePurchases();
   const reviewer = useIsReviewer();
-  const entitled = isPro || reviewer.isReviewer;
+  const entitled = purchases.entitled === true || reviewer.isReviewer;
   // `useLocalSearchParams`, not `useGlobalSearchParams` - the latter updates
   // for every navigation anywhere in the app (including this navigator being
   // backgrounded by an unrelated stack push like /restaurant/[id] or
@@ -41,9 +42,14 @@ export default function TabLayout() {
   // returning visitor to /welcome/payment, whose own "Maybe later" comes
   // right back here: an infinite redirect loop with no way to just browse.
   const allowTeaser = !entitled && preview === '1';
+  // A lapsed subscriber can reach the tabs first (cached verdict, or the
+  // win-back screen's own entitled redirect) and be bounced by a later
+  // server "false": they belong on the win-back screen, not the free-trial
+  // paywall, which promises a trial Apple won't grant them twice.
+  const unentitledTarget = purchases.isLapsed ? '/welcome/resubscribe' : '/welcome/payment';
   if (!__DEV__) {
-    if (!ready || !reviewer.ready) return null; // hold until entitlement + session resolve, avoids a flash
-    if (!entitled && !allowTeaser) return <Redirect href="/welcome/payment" />;
+    if (purchases.entitled === null || !reviewer.ready) return null; // hold until the verdict + session settle, avoids a flash
+    if (!entitled && !allowTeaser) return <Redirect href={unentitledTarget} />;
   }
 
   function emitTabSwitched(next: TabId) {

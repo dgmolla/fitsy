@@ -27,8 +27,7 @@ import { LocationPickerSheet } from '@/components/LocationPickerSheet';
 import { BlurFallback } from '@/lib/BlurFallback';
 import type { MacroValues } from '@/lib/macroPresets';
 import { fetchRestaurantsPage } from '@/lib/apiClient';
-import { useEntitlementSelfHeal } from '@/lib/useEntitlementSelfHeal';
-import { SubscriptionRequiredError } from '@/lib/api';
+import { useEntitlementMismatch } from '@/lib/useEntitlementMismatch';
 import { hasSeenPreviewTour, hasUsedPreviewSample, markPreviewTourSeen, routeToPaywall } from '@/lib/teaserGate';
 import { recordSearchAndMaybePrompt } from '@/lib/ratingPrompt';
 import { shouldShowInitialLoader } from '@/lib/searchLoading';
@@ -273,10 +272,20 @@ function LockedDishTeaser({ variant }: { variant: 'hero' | 'card' }) {
 // `opening` guards a fast double-tap from pushing two detail screens while
 // the (cached, usually instant) flag read is still a microtask away.
 let opening = false;
-async function openRestaurantOrPaywall(locked: boolean, navigate: () => void): Promise<void> {
+async function openRestaurantOrPaywall(
+  locked: boolean,
+  navigate: () => void,
+  unlocking?: () => void,
+): Promise<void> {
   if (opening) return;
   opening = true;
   try {
+    if (locked && unlocking) {
+      // Entitled but the rows are still locked (server row lagging a
+      // purchase): the paywall is the wrong place, re-sync instead.
+      unlocking();
+      return;
+    }
     if (locked && (await hasUsedPreviewSample())) {
       await routeToPaywall();
       return;
@@ -289,7 +298,7 @@ async function openRestaurantOrPaywall(locked: boolean, navigate: () => void): P
 
 // ─── Hero card (#01) ──────────────────────────────────────────────────────────
 
-function HeroCard({ result, locked, containerRef }: { result: RestaurantResult; locked: boolean; containerRef?: React.RefObject<View | null> }) {
+function HeroCard({ result, locked, unlocking, containerRef }: { result: RestaurantResult; locked: boolean; unlocking?: () => void; containerRef?: React.RefObject<View | null> }) {
   const bm = result.bestMatch;
   const imgUri = result.photoUrl || getMockImage(result.name);
   return (
@@ -308,7 +317,7 @@ function HeroCard({ result, locked, containerRef }: { result: RestaurantResult; 
         void openRestaurantOrPaywall(locked, () => router.push({
           pathname: `/restaurant/${result.id}`,
           params: { address: result.address, distance: result.distanceMiles?.toFixed(1), photoUrl: result.photoUrl, cuisine: result.cuisineTags?.[0] },
-        }));
+        }), unlocking);
       }}
       accessibilityLabel={`${result.name}${result.bestMatch ? `, best match: ${result.bestMatch.name}` : ''}`}
       accessibilityRole="button"
@@ -381,7 +390,7 @@ function DishCard({ result, locked, onPress }: { result: RestaurantResult; locke
 
 // ─── Numbered restaurant section (#02+) ──────────────────────────────────────
 
-function RestaurantSection({ result, index, locked }: { result: RestaurantResult; index: number; locked: boolean }) {
+function RestaurantSection({ result, index, locked, unlocking }: { result: RestaurantResult; index: number; locked: boolean; unlocking?: () => void }) {
   const indexStr = String(index + 2).padStart(2, '0');
   const position = index + 1;
 
@@ -389,7 +398,7 @@ function RestaurantSection({ result, index, locked }: { result: RestaurantResult
     void openRestaurantOrPaywall(locked, () => router.push({
       pathname: `/restaurant/${result.id}`,
       params: { address: result.address, distance: result.distanceMiles?.toFixed(1), photoUrl: result.photoUrl, cuisine: result.cuisineTags?.[0] },
-    }));
+    }), unlocking);
   }
 
   function handleSectionPress() {
@@ -477,11 +486,11 @@ export default function SearchScreen() {
   const [locked, setLocked] = useState<boolean | null>(null);
   const lockedRef = useRef<boolean | null>(null);
   lockedRef.current = locked;
-  // Device-side entitlement (RevenueCat). Only consulted for the mismatch
-  // self-heal below: the API's `locked` flag is what actually gates the UI.
-  const { isPro } = usePurchases();
+  // Provider verdict (server) + device hint (RevenueCat). Only consulted for
+  // the mismatch handler below: the API's `locked` flag is what gates the UI.
+  const { entitled, isPro, syncEntitlement, storeConfirmed } = usePurchases();
   // Bumped on every completed search fetch (first page or pagination) so the
-  // self-heal below can tell "still locked after the refetch" from "locked".
+  // mismatch handler can tell "still locked after the refetch" from "locked".
   const [fetchSeq, setFetchSeq] = useState(0);
   // Set once the onboarding teaser's first confirmed (non-network-error)
   // fetch comes back empty - see outOfAreaCheckedRef in doFetch. Renders an
@@ -498,7 +507,7 @@ export default function SearchScreen() {
   const [tourVisible, setTourVisible] = useState(false);
   // Set once the tour has actually been shown (or found already seen) for
   // this mount - not when the check merely started, so a query edit or a
-  // self-heal refetch mid-check can't cancel the tour for good.
+  // mismatch refetch mid-check can't cancel the tour for good.
   const tourDoneRef = useRef(false);
   const tourStartingRef = useRef(false);
   // Read at fire time, never from a closure: the tour must not open over a
@@ -747,20 +756,13 @@ export default function SearchScreen() {
           void recordSearchAndMaybePrompt();
         }
       } catch (err) {
-        // Only SubscriptionRequiredError reaches here (fetchRestaurantsPage
-        // resolves every other failure with `networkError: true`, handled
-        // above, instead of throwing). /api/restaurants no longer 402s in
-        // normal operation - an unentitled caller gets a locked 200 instead -
-        // so this is a rare deploy-skew glitch, not a real paywall. Show it
-        // as a plain retry-able error rather than force-navigating an
-        // entitled user off their in-progress search.
+        // fetchRestaurantsPage resolves every fetch failure with
+        // `networkError: true` (handled above) rather than throwing, so this
+        // only catches a bug in the handling code itself. Show it as a plain
+        // retry-able error rather than leaving the spinner up.
         setResults([]);
         setNextCursor(null);
-        setError(
-          err instanceof SubscriptionRequiredError
-            ? 'Something went wrong. Pull to refresh and try again.'
-            : 'Network problem - check your connection and try again.',
-        );
+        setError('Network problem - check your connection and try again.');
         trackSearchPerformed({
           has_protein_target: !isNaN(protein),
           has_carbs_target: !isNaN(carbs),
@@ -785,22 +787,36 @@ export default function SearchScreen() {
     [buildParams, isOnboardingPreview],
   );
 
-  // Device says Pro, API says locked: re-sync the server from RevenueCat and
-  // refetch, with bounded retries - see useEntitlementSelfHeal. The fetch
+  // We believe the user is Pro, API says locked: have the server re-read
+  // RevenueCat and refetch, bounded - see useEntitlementMismatch. The fetch
   // arguments are read from a ref at fire time so parent re-renders (the
   // purchases context updates on every CustomerInfo change, `location` is a
   // fresh object every render) can't cancel a pending attempt.
-  const selfHealArgsRef = useRef({ inputs, location, query, doFetch });
-  selfHealArgsRef.current = { inputs, location, query, doFetch };
-  useEntitlementSelfHeal({
-    isPro,
-    locked,
-    fetchSeq,
-    refetch: useCallback(() => {
-      const { inputs: current, location: loc, query: q, doFetch: fetch } = selfHealArgsRef.current;
-      void fetch(current, loc.lat, loc.lng, q, loc.source, true);
-    }, []),
-  });
+  const mismatchArgsRef = useRef({ inputs, location, query, doFetch });
+  mismatchArgsRef.current = { inputs, location, query, doFetch };
+  const mismatchRefetch = useCallback(() => {
+    const { inputs: current, location: loc, query: q, doFetch: run } = mismatchArgsRef.current;
+    void run(current, loc.lat, loc.lng, q, loc.source, true);
+  }, []);
+  useEntitlementMismatch({ entitled, isPro, locked, fetchSeq, syncEntitlement, refetch: mismatchRefetch });
+  // Entitled, yet the rows are locked: the server row is still catching up
+  // with a purchase (grace window). Every lock CTA on this screen becomes an
+  // "unlocking" state whose tap re-syncs and refetches instead of pushing
+  // the paywall - which would fire its entitled-redirect straight back here
+  // and look like a dead button.
+  const unlocking = entitled === true && locked === true;
+  const resyncNow = useCallback(() => {
+    void syncEntitlement('mismatch').then(() => mismatchRefetch());
+  }, [syncEntitlement, mismatchRefetch]);
+  const onLockedTap = unlocking ? resyncNow : undefined;
+  // "Your purchase went through" only while the store actually just
+  // confirmed one; an entitled-but-locked state can also be a lapsed user
+  // whose cached verdict beat a slow boot answer, who bought nothing.
+  const unlockTitle = storeConfirmed ? 'Unlocking your subscription...' : 'Checking your subscription...';
+  const unlockSubtitle = storeConfirmed
+    ? 'Your purchase went through. Tap to refresh if this takes more than a moment.'
+    : 'Tap to refresh.';
+  const unlockLabel = `${unlockTitle} tap to refresh`;
 
   // Pull-to-refresh: re-fire a fresh API call against the current location.
   // Resets pagination (handled inside doFetch) so the user gets a clean
@@ -1025,7 +1041,7 @@ export default function SearchScreen() {
   }, [isOnboardingPreview, locked, loading, results.length]);
 
   // The tour describes the locked preview; the moment the list unlocks
-  // (self-heal refetch mid-tour), it no longer applies.
+  // (mismatch refetch mid-tour), it no longer applies.
   useEffect(() => {
     if (locked !== true) setTourVisible(false);
   }, [locked]);
@@ -1110,15 +1126,26 @@ export default function SearchScreen() {
         </View>
       )}
 
-      {canSearch && heroResult && <HeroCard result={heroResult} locked={locked === true} containerRef={tourHeroRef} />}
+      {canSearch && heroResult && <HeroCard result={heroResult} locked={locked === true} unlocking={onLockedTap} containerRef={tourHeroRef} />}
 
       {canSearch && locked && (results.length > 0) && (
-        <View style={s.lockedBanner}>
-          <Ionicons name="lock-closed" size={14} color={EDITORIAL.greenAccent} />
+        // Same destination as the lock card in the footer: the banner reads
+        // as a call to action, so it must act like one.
+        <Pressable
+          style={s.lockedBanner}
+          onPress={unlocking ? resyncNow : () => { void routeToPaywall(); }}
+          accessibilityRole="button"
+          accessibilityLabel={unlocking ? unlockLabel : 'Subscribe to unlock all restaurants'}
+        >
+          {unlocking
+            ? <ActivityIndicator size="small" color={EDITORIAL.greenAccent} />
+            : <Ionicons name="lock-closed" size={14} color={EDITORIAL.greenAccent} />}
           <Text style={s.lockedBannerText}>
-            Subscribe to see exactly which meals at each spot fit your macros.
+            {unlocking
+              ? `${unlockTitle} ${unlockSubtitle}`
+              : 'Subscribe to see exactly which meals at each spot fit your macros.'}
           </Text>
-        </View>
+        </Pressable>
       )}
     </>
   );
@@ -1134,6 +1161,17 @@ export default function SearchScreen() {
       // Count = rows the first page holds past the open three, with a
       // trailing "+" while more pages exist: the API's `meta.total` is only
       // the page size, never the true match count.
+      if (unlocking) {
+        return (
+          <LockedUnlockCard
+            title={unlockTitle}
+            subtitle={unlockSubtitle}
+            onPress={resyncNow}
+            accessibilityLabel={unlockLabel}
+            style={s.lockedCard}
+          />
+        );
+      }
       return (
         <LockedUnlockCard
           title={hiddenCount > 0 ? `${hiddenCount}${nextCursor ? '+' : ''} more restaurants` : 'Unlock every match near you'}
@@ -1150,7 +1188,7 @@ export default function SearchScreen() {
         <ActivityIndicator size="small" color={EDITORIAL.greenAccent} />
       </View>
     );
-  }, [loadingMore, locked, results.length, hiddenCount, nextCursor]);
+  }, [loadingMore, locked, results.length, hiddenCount, nextCursor, unlocking, resyncNow, unlockTitle, unlockSubtitle, unlockLabel]);
 
   // Only the very first load (before any query interaction, nothing to show
   // yet) gets the full-screen brand loader. Query-driven refetches keep the
@@ -1188,7 +1226,7 @@ export default function SearchScreen() {
           data={canSearch ? (locked ? listResults.slice(0, FREE_RESULT_COUNT - 1) : listResults) : []}
           keyExtractor={(r) => r.id}
           renderItem={({ item, index }) => (
-            <RestaurantSection result={item} index={index} locked={locked === true} />
+            <RestaurantSection result={item} index={index} locked={locked === true} unlocking={onLockedTap} />
           )}
           ListHeaderComponent={header}
           ListFooterComponent={renderFooter}
@@ -1199,10 +1237,12 @@ export default function SearchScreen() {
             // forward - it must not depend on rows having loaded.
             isOnboardingPreview && locked !== false && !loading && !outOfArea && canSearch ? (
               <LockedUnlockCard
-                title="Unlock every match near you"
-                subtitle="Subscribe to search restaurants by your macros, with the dish that fits at each."
-                onPress={() => { void routeToPaywall(); }}
-                accessibilityLabel="Subscribe to unlock all restaurants"
+                title={unlocking ? unlockTitle : 'Unlock every match near you'}
+                subtitle={unlocking
+                  ? unlockSubtitle
+                  : 'Subscribe to search restaurants by your macros, with the dish that fits at each.'}
+                onPress={unlocking ? resyncNow : () => { void routeToPaywall(); }}
+                accessibilityLabel={unlocking ? unlockLabel : 'Subscribe to unlock all restaurants'}
                 style={s.lockedCard}
               />
             ) : null

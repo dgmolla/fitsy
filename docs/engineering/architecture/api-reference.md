@@ -323,7 +323,10 @@ Returns `204` on success.
 **Auth:** Bearer JWT required  
 **File:** `apps/api/app/api/subscriptions/status/route.ts`
 
-Returns `{ active }` from the `Subscription` table (plus the dev/demo bypass).
+The server's entitlement verdict, which the mobile app gates on at every launch (the on-device RevenueCat state is only a hint that triggers a sync).
+Returns `{ active, status, expiresAt }` from the `Subscription` table plus the dev/demo bypass.
+`active` is the same verdict `optionalSubscription` uses; `status` is the stored row status (`active` | `billing_issue` | `expired`) or `null` for a user who never subscribed; `expiresAt` is ISO-8601 or `null`.
+Clients rely on `active` only.
 Replaced the old stubbed `/api/subscriptions/verify` receipt endpoint: clients never send receipts, RevenueCat validates and notifies the webhook.
 
 ---
@@ -335,8 +338,11 @@ Replaced the old stubbed `/api/subscriptions/verify` receipt endpoint: clients n
 **Env:** `REVENUECAT_PUBLIC_API_KEY` (the app's public SDK key; RevenueCat's v1 subscriber read accepts it)
 
 Pull path for entitlement state: asks RevenueCat for the caller's `pro` entitlement (`services/revenuecatService.ts`) and upserts the `Subscription` row.
-Returns `{ active, synced }`; `synced: false` means RevenueCat could not be consulted and `active` is the existing DB state.
-The mobile client calls it right after a purchase or restore, on sign-in when the device already reports Pro, and when the device says Pro while the API serves locked responses.
+Optional JSON body `{ reason }` with one of `boot` | `purchase` | `restore` | `sign_in` | `mismatch` (unknown values are ignored).
+For `purchase` and `restore` the server never persists a downgrade: an inactive RevenueCat read is re-read every 1 s for up to 6 s, and if still inactive nothing is written and a `[subscription]` warning is logged, because RevenueCat's REST view can lag StoreKit by seconds right after a purchase.
+Returns `{ active, synced }`; `synced: false` means nothing was written (RevenueCat could not be consulted, or a downgrade was withheld) and `active` is the existing DB state.
+A successful sync stamps the row's `lastEventAt` with RevenueCat's `request_date_ms` (falling back to a time captured before the read), so a webhook event generated earlier but delivered later is ignored while one emitted after the read is still applied (see the webhook below).
+The mobile client calls it right after a purchase or restore, on every sign-in, and when the device says Pro while the API serves locked responses.
 This covers the cases the webhook alone cannot: `TRANSFER` events carry no product/expiry, the first search after purchase can race webhook delivery, and a missed delivery would otherwise lock a paying user out until the next renewal.
 
 ---
@@ -350,6 +356,11 @@ Push path for RevenueCat subscription lifecycle events (purchase, renewal, cance
 `TRANSFER` (same Apple ID moved to a new Fitsy account) re-reads both sides from RevenueCat via the same sync as above and returns 500 if the new owner cannot be read, so RevenueCat retries.
 Purchases made under an anonymous pre-login id resolve to the merged account via the event's `aliases`.
 `billing_issue` rows stay entitled until `expiresAt` passes (store grace period), in both write paths.
+Idempotent: each row records the `event_timestamp_ms` of the newest event applied (`Subscription.lastEventAt`), and a lifecycle event older than that is acked with 200 without writing, so out-of-order deliveries cannot regress the row (equal timestamps re-apply the same payload harmlessly).
+If a stale event would have produced a different status or `expiresAt` than the stored row, the handler logs a `[subscription]` warning and re-reads RevenueCat via the same sync as the tiebreaker; if RevenueCat cannot be read it returns 500 so RevenueCat retries, exactly as `TRANSFER` does.
+A stale event that agrees with the row is acked without any lookup.
+An event without a timestamp is applied as "now" rather than dropped.
+Every status transition from either write path logs one `[subscription] <userId> status <from> -> <to> (<webhook|sync>)` warning for Vercel log search.
 
 ---
 
