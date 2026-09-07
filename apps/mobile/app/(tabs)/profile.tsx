@@ -412,7 +412,7 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: EDITORIAL.cream,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: EDITORIAL.border,
@@ -437,7 +437,7 @@ const s = StyleSheet.create({
   },
   goalBannerValue: {
     fontFamily: FONTS.frauncesMedium,
-    fontSize: 21,
+    fontSize: 19,
     color: EDITORIAL.green,
     letterSpacing: -0.3,
   },
@@ -445,7 +445,7 @@ const s = StyleSheet.create({
   statsCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: EDITORIAL.cream,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: EDITORIAL.border,
@@ -456,9 +456,9 @@ const s = StyleSheet.create({
   statBlock: { flex: 1, alignItems: 'center', gap: 2 },
   statValue: {
     fontFamily: FONTS.frauncesRegular,
-    fontSize: 23,
+    fontSize: 20,
     color: EDITORIAL.text,
-    letterSpacing: -0.6,
+    letterSpacing: -0.5,
     fontVariant: ['tabular-nums'],
   },
   statValueWord: {
@@ -480,7 +480,7 @@ const s = StyleSheet.create({
   statDivider: { width: 1, height: 24, backgroundColor: EDITORIAL.border },
   // Macros
   macroCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: EDITORIAL.cream,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: EDITORIAL.border,
@@ -519,7 +519,7 @@ const s = StyleSheet.create({
   macroRow: { flexDirection: 'row' },
   macroBlock: { flex: 1, alignItems: 'center', gap: 3 },
   macroDot: { width: 6, height: 6, borderRadius: 3 },
-  macroValue: { fontFamily: FONTS.frauncesRegular, fontSize: 28, letterSpacing: -0.8, fontVariant: ['tabular-nums'] },
+  macroValue: { fontFamily: FONTS.frauncesRegular, fontSize: 24, letterSpacing: -0.6, fontVariant: ['tabular-nums'] },
   macroUnit: { fontFamily: FONTS.nunitoSans, fontSize: 12, fontWeight: '500', color: EDITORIAL.textSoft },
   macroLabel: {
     fontFamily: FONTS.nunitoSansSemiBold,
@@ -534,7 +534,7 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: EDITORIAL.cream,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: EDITORIAL.border,
