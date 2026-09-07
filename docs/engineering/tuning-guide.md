@@ -1,141 +1,40 @@
 # Shipyard Settings Tuning Guide
 
-> **Status:** Living · **Last verified:** 2026-06-12
-> **Owner:** CTO
+> **Status:** Living · **Last verified:** 2026-09-07 · **Owner:** CTO
+> Rewritten for the autonomous-shipping pipeline (`docs/engineering/devops/autonomous-shipping.md`).
+> Rule: a knob without an enforcement mechanism is documentation, not a setting - anything that lost its mechanism was deleted rather than kept as prose.
 
-This file documents every Shipyard Settings knob in `CLAUDE.md`. It explains what each knob does, what values it accepts, what the current value is, and when to change it.
+## Current settings
 
-Shipyard Settings are the harness-level controls that govern how the Claude Code agent team operates on this project: how much human oversight is required, what spec discipline is enforced, and how the sprint machinery moves forward. They are not runtime feature flags — they control the development process itself.
+| Knob | Value | Enforced by |
+|---|---|---|
+| `merge-gate` | **advisory** (owner's deferral, 2026-09-07) | When flipped: GitHub ruleset on `main` - PR required, required checks = verify.yml jobs + `lens/correctness`, squash only, 0 required reviewers, admins included. Until then every check runs and reports, but direct pushes remain possible. |
+| `auto-merge` | manual (agents merge on green) | Becomes GitHub auto-merge-on-green when `merge-gate` flips. |
+| `spec-requirement` | `feature` | `spec-conformance` lens runs when a PR body carries a `Spec:` line; a medium+ feature PR without one gets a CONFIRMED finding. Bug fixes reference their incident instead. |
+| `review` | every open PR, tiered | `com.fitsy.review-poller` LaunchAgent (every 3 min, Max subscription): correctness on medium/high tiers; + `danger-zone` on tier-high paths (`scripts/verify/risk-tiers.yml`); + `harness-audit` on the `incident` label; + `workflow-security` on CI/CD paths; + `test-quality` on test files; `docs-sanity` (comment-only) on tier-low. Statuses post as `lens/<name>`. |
+| `shadow-checks` | `own-code-mocks`, `mutation`, `mobile-e2e`, `dev-drift`, `api-e2e` | `blocking: shadow` in `scripts/verify/registry.yml`; promotion = a PR flipping the field after two clean weeks. |
+| `harden-on-incident` | required | `harness-audit` lens blocks incident-labeled PRs missing fix + detector + constraint + eval case + `Layer:` attribution. |
+| `size-gate` | 600 changed lines | `size-check` (T8); `override-size` label escapes with written justification, logged as a Layer-10 input. |
+| `mutation-break` | 50 (baseline 59.0%, 2026-09-07) | `stryker.config.mjs` `thresholds.break`; ratchet +5/month while green (rollout step 10). |
+| `human-override` | `override-check` label | Logged and reviewed on the Monday scoreboard. |
 
----
+## The one command
 
-## Current Settings (as of 2026-06-12)
+`npm run verify` (layers 0-2, changed scope) is the whole pre-PR gate; the
+pre-push hook runs it plus size and domain checks on every push. The check
+list itself lives in `scripts/verify/registry.yml` - change behavior there,
+not here.
 
-| Knob | Current value |
-|------|--------------|
-| `human-review-gate` | `cruise` |
-| `spec-requirement` | `always` |
-| `auto-merge` | `on-approval` |
-| `active-roles` | `all` |
-| `wave-progression` | `auto` |
+## Tighten vs. loosen
 
----
+| Situation | Change |
+|---|---|
+| Ready for no-human-merge | Flip `merge-gate`: create the ruleset, enable auto-merge, delete the review/merge steps from `.claude/agents/sprint.md` and `~/.claude/skills/ship-branch` (they conflict once the gate exists) |
+| A shadow check has been quiet two weeks | PR the registry: `blocking: shadow` -> `true` |
+| A lens is noisy | Edit its `.claude/lenses/<name>.md`; `scripts/verify/evals/replay.sh` proves the edit kept recall on past incidents |
+| Mutation score stuck | Surviving mutants in `.evidence/mutation/report.json` name the exact untested lines |
+| An agent needs prod data | It does not; `scripts/dev/` refuses prod, `FITSY_ALLOW_PROD=1` is the deliberate exception |
 
-## Knob Reference
-
-### `human-review-gate`
-
-Controls how much human review is required before agents can proceed with significant actions (merges, deploys, sprint transitions).
-
-| Value | Behavior |
-|-------|----------|
-| `strict` | Every PR and sprint-phase transition requires explicit human approval before the agent team proceeds. Use when the product or codebase is fragile, or when onboarding a new agent role. |
-| `cruise` | Agents proceed autonomously on approved work. Human approval is still required for production deploys and anything touching the Danger Zones (auth, nutrition data, external APIs). This is the normal operating mode. **(current)** |
-| `off` | No human gate; agents merge and deploy without waiting. Not recommended — use only for trivial batch work (e.g., mass doc reformatting) where every change is reversible. |
-
-**When to change:**
-- Tighten to `strict` when landing a new critical system (e.g., payment integration, first production data), or when a rogue agent produced a bad merge.
-- Loosen to `off` temporarily for mechanical batch tasks. Reset to `cruise` immediately after.
-
----
-
-### `spec-requirement`
-
-Governs whether a spec document must exist before implementation work begins on a new feature.
-
-| Value | Behavior |
-|-------|----------|
-| `always` | No implementation starts without a written spec in `docs/`. Agents will refuse to begin coding work and instead produce a spec for review. This prevents spec-implementation gaps. **(current)** |
-| `on-new-features` | Spec required for net-new features; bug fixes and refactors can proceed without one. |
-| `off` | No spec requirement. Fastest iteration, but increases the risk of misalignment between intent and implementation. Not recommended except in early exploration. |
-
-**When to change:**
-- Stay at `always` throughout normal sprints.
-- Consider `on-new-features` for hotfix sprints where there's no time to write specs for small bug fixes.
-- Never set to `off` for features that touch auth, nutrition data, or payment flows.
-
----
-
-### `auto-merge`
-
-Controls when the harness automatically merges a PR after CI passes.
-
-| Value | Behavior |
-|-------|----------|
-| `on-approval` | PR is auto-merged once it has received the required human approval and all CI checks pass. This is the standard mode — human stays in the loop but doesn't need to click merge manually. **(current)** |
-| `on-green` | PR is auto-merged as soon as CI passes, without waiting for human approval. Fastest path; appropriate only for doc-only or trivially safe PRs. |
-| `off` | Auto-merge is disabled. All merges require a manual merge action. Use when you want to batch-review a set of PRs before any land. |
-
-**When to change:**
-- `on-approval` is the right default for feature work.
-- Temporarily set to `off` when preparing a release and you want to review and land PRs in a specific order.
-
----
-
-### `active-roles`
-
-Specifies which agent roles are active and permitted to pick up work.
-
-| Value | Behavior |
-|-------|----------|
-| `all` | All defined agent roles (CTO, backend, frontend, designer, product-manager, GTM) are active. **(current)** |
-| A comma-separated list of role names (e.g., `backend,frontend`) | Only the listed roles are active. Useful when focus is needed on a specific domain and you don't want off-domain agents consuming sprint capacity. |
-| `none` | No agents pick up work autonomously. Human-only sprint. Useful for strategic planning sprints or when the codebase is in a broken state. |
-
-**When to change:**
-- Narrow to specific roles during domain-focused sprints (e.g., `backend,devops` during an infrastructure sprint).
-- Set to `none` during a sprint retrospective or OKR planning session.
-- Keep at `all` for normal feature sprints.
-
----
-
-### `wave-progression`
-
-Controls how the sprint machinery advances from one wave of tasks to the next.
-
-| Value | Behavior |
-|-------|----------|
-| `auto` | The harness advances to the next wave automatically once all tasks in the current wave are marked complete and their gates pass. No human action needed to start the next wave. **(current)** |
-| `manual` | A human must explicitly advance to the next wave. Gives the team a natural pause point between waves to review completed work before the next batch begins. |
-| `blocked` | Wave progression is paused. The harness will not advance regardless of task completion. Use when a dependency outside the codebase (e.g., App Store review, external API provisioning) must be resolved before work can continue. |
-
-**When to change:**
-- Switch to `manual` during high-stakes sprints (e.g., the App Store submission sprint) where you want to review each wave before proceeding.
-- Set to `blocked` when a known external blocker (e.g., S-207 Apple Developer account setup) prevents any wave from proceeding usefully.
-- Keep at `auto` for normal development velocity.
-
----
-
-## Mermaid: Gate Flow Under Current Settings
-
-```mermaid
-flowchart TD
-    A[Agent picks up ticket] --> B{spec-requirement = always}
-    B -- "No spec exists" --> C[Agent writes spec → human review]
-    B -- "Spec exists" --> D[Agent implements]
-    D --> E[CI passes]
-    E --> F{auto-merge = on-approval}
-    F -- "Human approves" --> G[Auto-merge to main]
-    F -- "No approval yet" --> F
-    G --> H{wave-progression = auto}
-    H -- "All wave tasks complete" --> I[Advance to next wave]
-    H -- "Tasks remaining" --> D
-
-    style C fill:#f9a623,color:#000
-    style G fill:#2d7d46,color:#fff
-    style I fill:#2d7d46,color:#fff
-```
-
----
-
-## Quick Reference: Tighten vs. Loosen
-
-| Situation | Recommended change |
-|-----------|-------------------|
-| Landing payments / auth / nutrition data | `human-review-gate` → `strict` |
-| Mechanical batch work (doc reformats, renames) | `human-review-gate` → `off` (temporary) |
-| Bug-fix sprint with no time for full specs | `spec-requirement` → `on-new-features` |
-| Infrastructure-only sprint | `active-roles` → `backend,devops` |
-| External blocker (e.g., Apple Developer account) | `wave-progression` → `blocked` |
-| High-stakes release review | `wave-progression` → `manual` |
-| Normal feature sprint | All knobs at current defaults |
+Historical note: the pre-pipeline knobs (`human-review-gate: cruise`,
+`wave-progression`, `active-roles`) governed the sprint-skill review loop that
+the lens pipeline replaced; sprint planning conventions live in `proj-mgmt/`.
