@@ -48,7 +48,12 @@ else
 fi
 
 echo -n "3. No .env files staged... "
-ENVFILES=$(git -C "$REPO_ROOT" diff --cached --name-only 2>/dev/null | grep -E '\.env$' | grep -v 'env\.example' || true)
+# Branch diff (falls back to staged for a mid-edit local run). The staging
+# area is always empty in CI, which made the old --cached version a no-op there.
+DIFF_RANGE="origin/main...HEAD"
+git -C "$REPO_ROOT" rev-parse origin/main >/dev/null 2>&1 || DIFF_RANGE="HEAD"
+ENVFILES=$(git -C "$REPO_ROOT" diff "$DIFF_RANGE" --name-only 2>/dev/null | grep -E '\.env$' | grep -v 'env\.example' || true)
+[ -z "$ENVFILES" ] && ENVFILES=$(git -C "$REPO_ROOT" diff --cached --name-only 2>/dev/null | grep -E '\.env$' | grep -v 'env\.example' || true)
 if [ -n "$ENVFILES" ]; then
   echo "FAIL"
   echo "  .env files should not be committed. Add to .gitignore."
@@ -88,7 +93,7 @@ else
 fi
 
 echo -n "5. No 'as any' type assertions... "
-ANY_TYPES=$(git -C "$REPO_ROOT" diff --cached -U0 --diff-filter=AM -- '*.ts' '*.tsx' 2>/dev/null \
+ANY_TYPES=$(git -C "$REPO_ROOT" diff "$DIFF_RANGE" -U0 --diff-filter=AM -- '*.ts' '*.tsx' 2>/dev/null \
   | grep -n "^+" | grep -v "^+++" | grep "as any\|: any" || true)
 if [ -n "$ANY_TYPES" ]; then
   echo "WARN"
@@ -289,8 +294,8 @@ if [ -f "$REPO_ROOT/package.json" ]; then
     SCAFFOLD_ERRORS="$SCAFFOLD_ERRORS\n  Missing tsconfig.json — TypeScript not configured"
   fi
   # npm ci gate in reviewer workflow must have install step
-  if ! grep -q 'npm ci\|npm install' "$REPO_ROOT/.github/workflows/reviewer.yml" 2>/dev/null; then
-    SCAFFOLD_ERRORS="$SCAFFOLD_ERRORS\n  reviewer.yml missing npm install step — add it now that package.json exists"
+  if ! grep -q 'npm ci\|npm install' "$REPO_ROOT/.github/workflows/verify.yml" 2>/dev/null; then
+    SCAFFOLD_ERRORS="$SCAFFOLD_ERRORS\n  verify.yml missing npm install step — add it now that package.json exists"
   fi
   if [ -n "$SCAFFOLD_ERRORS" ]; then
     echo "FAIL"

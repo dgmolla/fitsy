@@ -6,8 +6,8 @@
     "dev": "next dev --turbopack",
     "build": "prisma generate --schema ../../prisma/schema.prisma && next build",
     "start": "next start",
-    "test": "jest --passWithNoTests",
-    "test:coverage": "jest --coverage --passWithNoTests",
+    "test": "jest",
+    "test:coverage": "jest --coverage",
     "type-check": "tsc --noEmit",
     "lint": "eslint --no-warn-ignored ."
   },
