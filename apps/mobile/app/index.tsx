@@ -11,7 +11,7 @@ type Destination = '/(tabs)/search' | '/welcome/problem' | '/macro-setup' | '/we
 
 export default function Index() {
   const [destination, setDestination] = useState<Destination | null>(null);
-  const { ready: purchasesReady, isLapsed } = usePurchases();
+  const { ready: purchasesReady, entitled, isLapsed } = usePurchases();
 
   useEffect(() => {
     async function resolve() {
@@ -32,13 +32,16 @@ export default function Index() {
         // gets the win-back screen instead of a flash of the search tab, and
         // the tab layout's gate has a settled verdict the moment it mounts.
         if (!purchasesReady) return;
-        setDestination(isLapsed ? '/welcome/resubscribe' : '/(tabs)/search');
+        // The server verdict wins: an active row goes straight to search even
+        // if the device's RevenueCat record reads as lapsed. Only an
+        // unentitled lapsed subscriber gets the win-back screen.
+        setDestination(entitled === true || !isLapsed ? '/(tabs)/search' : '/welcome/resubscribe');
       } catch {
         setDestination('/welcome/problem');
       }
     }
     resolve();
-  }, [purchasesReady, isLapsed]);
+  }, [purchasesReady, entitled, isLapsed]);
 
   if (!destination) {
     return (

@@ -182,6 +182,8 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
           if (info) setCustomerInfo(info);
           return info;
         });
+        // From here a duplicate SIGNED_IN for this user is a no-op too.
+        bootUserIdRef.current = session.user.id;
       } else if (event === 'SIGNED_OUT') {
         bootUserIdRef.current = null;
         beginSignOut();

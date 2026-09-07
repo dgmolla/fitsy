@@ -236,9 +236,15 @@ export function useEntitlementVerdict({
   }, [setEntitled]);
 
   const settleAfterSignOut = useCallback(async () => {
-    // A fast re-sign-in owns the verdict from here; otherwise anonymous.
-    const { data } = await supabase.auth.getSession();
-    if (!data.session) setEntitled((current) => current ?? false);
+    // A fast re-sign-in owns the verdict from here; otherwise anonymous. On a
+    // failed session read assume anonymous: null must never be left behind.
+    try {
+      const { data } = await supabase.auth.getSession();
+      if (data.session) return;
+    } catch {
+      // fall through
+    }
+    setEntitled((current) => current ?? false);
   }, [setEntitled]);
 
   return {

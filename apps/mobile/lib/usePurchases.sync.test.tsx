@@ -109,6 +109,21 @@ describe('sign-in', () => {
     jest.useRealTimers();
   });
 
+  it('a duplicate SIGNED_IN for the same new user does not re-blank the app or re-identify', async () => {
+    mockAuth.session = null;
+    const { result, seen } = renderProviderTracking();
+    await waitFor(() => expect(result.current.entitled).toBe(false));
+    mockAuth.session = { user: { id: 'u2' } };
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    await act(async () => { mockAuth.listener?.('SIGNED_IN', { user: { id: 'u2' } }); });
+    await waitFor(() => expect(result.current.entitled).toBe(true));
+    await act(async () => { mockAuth.listener?.('SIGNED_IN', { user: { id: 'u2' } }); });
+    await flush();
+    expect(mockRc.identifyPurchasesUser).toHaveBeenCalledTimes(1);
+    expect(mockApi.syncSubscription).toHaveBeenCalledTimes(1);
+    expect(seen).toEqual([null, false, null, true]);
+  });
+
   it('ignores the SIGNED_IN that session recovery re-emits for the user boot already resolved', async () => {
     mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null });
     const { result, seen } = renderProviderTracking();
