@@ -57,9 +57,7 @@ function changedFiles() {
 function globToRegExp(glob) {
   const re = glob
     .replace(/[.+^${}()|[\]\\]/g, "\\$&")
-    .replace(/\*\*/g, "DOUBLESTAR")
-    .replace(/\*/g, "[^/]*")
-    .replace(/DOUBLESTAR/g, ".*");
+    .replace(/\*\*|\*/g, (m) => (m === "**" ? ".*" : "[^/]*"));
   return new RegExp(`^${re}$`);
 }
 

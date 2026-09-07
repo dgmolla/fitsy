@@ -1,4 +1,16 @@
 #!/usr/bin/env bash
-# Fast local gate: layer 0-1 checks on the changed scope (structural, secrets,
-# lint, typecheck). Full gate before a PR: npm run verify.
-exec bash "$(git rev-parse --show-toplevel)/scripts/verify/run.sh" --layer=0-1 --scope=changed --runs=local
+# Full local gate on every push: layers 0-2 (structural, secrets, lint, types,
+# tests) plus size and domain checks, against the exact branch state being
+# pushed. Wired automatically by `npm install` (prepare -> core.hooksPath).
+# Bypass (emergencies only, CI still gates): git push --no-verify
+set -u
+ROOT="$(git rev-parse --show-toplevel)"
+bash "$ROOT/scripts/verify/run.sh" --layer=0-2 --scope=changed --runs=local || exit 1
+# exit 2 = skipped (not applicable), which must not block the push
+for check in size-check domain-check; do
+  bash "$ROOT/scripts/verify/$check.sh"; code=$?
+  if [ "$code" -ne 0 ] && [ "$code" -ne 2 ]; then
+    echo "pre-push: $check failed (see above)" >&2
+    exit 1
+  fi
+done

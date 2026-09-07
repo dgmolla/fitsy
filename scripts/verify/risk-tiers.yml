@@ -1,0 +1,23 @@
+# Path -> risk tier. Deterministic; a classifier may RAISE a tier, never lower.
+# Consumed by scripts/review/run-lens.sh (lens + model selection) and CI labels.
+# docs: autonomous-shipping.md §3 Risk tiers.
+tiers:
+  high:
+    - "apps/api/lib/auth*"
+    - "apps/api/lib/subscription*"
+    - "apps/api/app/api/auth/**"
+    - "apps/api/app/api/revenuecat/**"
+    - "apps/api/services/**"
+    - "apps/api/lib/macro*"
+    - "prisma/**"
+    - ".github/**"
+    - "vercel.json"
+    - "apps/mobile/eas.json"
+    - "apps/mobile/app.config.ts"
+    - "packages/shared/src/env.ts"
+    - "scripts/deploy/**"
+  low:
+    - "docs/**"
+    - "proj-mgmt/**"
+    - "*.md"
+# everything else: medium
