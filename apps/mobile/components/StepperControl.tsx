@@ -14,14 +14,20 @@ import { EDITORIAL, FONTS } from "@/lib/brand";
 
 type Size = "md" | "lg";
 
+/** Placeholders are hints, not values: textSoft at half strength so "70" never reads as a saved weight. */
+const PLACEHOLDER = "rgba(122, 140, 126, 0.45)";
+
 interface SerifFieldProps {
   value: string;
   unit?: string;
   onChangeText: (text: string) => void;
   placeholder?: string;
   maxLength?: number;
-  /** Accessibility label for the text field, e.g. "Protein grams". */
+  /** Accessibility label for the +/- buttons ("Decrease {label}") and, unless
+   *  `fieldLabel` is given, for the text field too. */
   label: string;
+  /** Accessibility label for the text field itself, e.g. "Protein grams". */
+  fieldLabel?: string;
   size?: Size;
   /** Allow a decimal point (weight). Default digits only. */
   decimal?: boolean;
@@ -34,6 +40,7 @@ export function SerifField({
   placeholder = "—",
   maxLength = 4,
   label,
+  fieldLabel,
   size = "md",
   decimal = false,
 }: SerifFieldProps) {
@@ -48,11 +55,11 @@ export function SerifField({
         }
         keyboardType={decimal ? "decimal-pad" : "number-pad"}
         placeholder={placeholder}
-        placeholderTextColor={EDITORIAL.textSoft}
+        placeholderTextColor={PLACEHOLDER}
         maxLength={maxLength}
         textAlign="right"
         selectTextOnFocus
-        accessibilityLabel={label}
+        accessibilityLabel={fieldLabel ?? label}
       />
       {unit ? <Text style={[s.unit, lg && s.unitLg]}>{unit}</Text> : null}
     </View>
@@ -148,7 +155,7 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "baseline",
     minWidth: 66,
-    justifyContent: "center",
+    justifyContent: "flex-end",
   },
   valueColLg: {
     minWidth: 96,
@@ -160,7 +167,6 @@ const s = StyleSheet.create({
     letterSpacing: -0.8,
     padding: 0,
     minWidth: 34,
-    fontVariant: ["tabular-nums"],
   },
   numInputLg: {
     fontSize: 42,

@@ -52,6 +52,10 @@ interface HeightProps extends BaseProps {
 
 export type ProfileEditSheetProps = ChoiceProps | NumericProps | HeightProps;
 
+function clampInt(n: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, n));
+}
+
 // ─── Shared animation hooks ─────────────────────────────────────────────────
 
 function useSheetAnimation(visible: boolean) {
@@ -173,9 +177,8 @@ function NumericContent({ title, value, unit, placeholder, onApply, dismiss }: N
           unit={unit}
           placeholder={placeholder}
           maxLength={5}
-          decimal
           onChangeText={setDraft}
-          onStep={(dir) => setDraft(String(Math.max(0, (parseInt(draft, 10) || 0) + dir)))}
+          onStep={(dir) => setDraft((prev) => String(clampInt((parseInt(prev, 10) || 0) + dir, 0, 99999)))}
         />
       </View>
       <Pressable style={s.applyBtn} onPress={() => dismiss(() => onApply(draft))}>
@@ -197,9 +200,10 @@ function HeightContent({ valueCm, onApply, dismiss }: HeightProps & { dismiss: (
     setCm(valueCm);
     if (valueCm) {
       const total = parseFloat(valueCm);
-      const totalInches = total / 2.54;
+      // Round the whole-inch total first so 71.65in becomes 6'0", not 5'12".
+      const totalInches = Math.round(total / 2.54);
       setFt(String(Math.floor(totalInches / 12)));
-      setInches(String(Math.round(totalInches % 12)));
+      setInches(String(totalInches % 12));
     }
   }, [valueCm]);
 
@@ -231,7 +235,7 @@ function HeightContent({ valueCm, onApply, dismiss }: HeightProps & { dismiss: (
             placeholder="170"
             maxLength={3}
             onChangeText={setCm}
-            onStep={(dir) => setCm(String(Math.max(0, (parseInt(cm, 10) || 0) + dir)))}
+            onStep={(dir) => setCm((prev) => String(clampInt((parseInt(prev, 10) || 0) + dir, 0, 999)))}
           />
         </View>
       ) : (
@@ -257,17 +261,17 @@ const s = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
   },
-  // Same card as FilterPopup (mirrors the web "Tweak macros" tile).
+  // Keep in step with FilterPopup's card (mirrors the web "Tweak macros" tile).
   card: {
     width: '100%',
-    maxWidth: 340,
-    borderRadius: 22,
+    maxWidth: 356,
+    borderRadius: 24,
     backgroundColor: EDITORIAL.cream,
     borderWidth: 1,
     borderColor: EDITORIAL.border,
-    paddingHorizontal: 20,
-    paddingTop: 22,
-    paddingBottom: 18,
+    paddingHorizontal: 22,
+    paddingTop: 24,
+    paddingBottom: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.1,
@@ -279,7 +283,7 @@ const s = StyleSheet.create({
     fontSize: 20,
     color: EDITORIAL.green,
     letterSpacing: -0.3,
-    marginBottom: 14,
+    marginBottom: 10,
   },
 
   // Choice
@@ -357,7 +361,7 @@ const s = StyleSheet.create({
   // Apply
   applyBtn: {
     borderRadius: 14,
-    paddingVertical: 14,
+    paddingVertical: 15,
     alignItems: 'center',
     backgroundColor: EDITORIAL.green,
   },

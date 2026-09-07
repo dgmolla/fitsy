@@ -12,6 +12,7 @@ import {
 import { BlurView } from "expo-blur";
 import { EDITORIAL, FONTS } from "@/lib/brand";
 import { StepperControl } from "@/components/StepperControl";
+import { MACRO_COLORS } from "@/lib/macroColors";
 import type { MacroValues } from "@/lib/macroPresets";
 
 interface FilterPopupProps {
@@ -27,9 +28,9 @@ const MACROS: {
   color: string;
   step: number;
 }[] = [
-  { key: "protein", label: "Protein", color: "#5B7C6B", step: 5 },
-  { key: "carbs", label: "Carbs", color: "#8B7355", step: 5 },
-  { key: "fat", label: "Fat", color: "#7B6B8A", step: 5 },
+  { key: "protein", label: "Protein", color: MACRO_COLORS.protein, step: 5 },
+  { key: "carbs", label: "Carbs", color: MACRO_COLORS.carbs, step: 5 },
+  { key: "fat", label: "Fat", color: MACRO_COLORS.fat, step: 5 },
 ];
 
 function calcCal(p: string, c: string, f: string): string {
@@ -184,6 +185,7 @@ export function FilterPopup({
 
                 <StepperControl
                   label={label}
+                  fieldLabel={`${label} grams`}
                   value={draft[key]}
                   unit="g"
                   onChangeText={(t) => update(key, t)}
@@ -303,7 +305,6 @@ const s = StyleSheet.create({
     fontSize: 40,
     color: EDITORIAL.green,
     letterSpacing: -1.2,
-    fontVariant: ["tabular-nums"],
   },
   calUnit: {
     fontFamily: FONTS.nunitoSansSemiBold,
