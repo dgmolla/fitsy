@@ -47,8 +47,12 @@ function _placeholderColor(name: string): string {
   return COLORS[h % COLORS.length];
 }
 
-function matchScoreToFitPct(score: number): number {
-  // matchScore is normalized Euclidean distance: 0 = perfect, ~1 = 100% off
+function matchScoreToFitPct(score: number | null): number | null {
+  // matchScore is normalized Euclidean distance: 0 = perfect, ~1 = 100% off.
+  // The server sends null when no macro targets are set (historically
+  // Infinity, which JSON already delivered as null) - without this guard,
+  // (1 - null) * 100 rendered a bogus "100% fit" pill on untargeted searches.
+  if (score === null || !Number.isFinite(score)) return null;
   // Convert to a 0-100% where lower score = higher fit
   return Math.max(0, Math.round((1 - score) * 100));
 }
