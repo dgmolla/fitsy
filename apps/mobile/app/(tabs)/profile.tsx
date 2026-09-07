@@ -272,7 +272,7 @@ export default function ProfileScreen() {
           </Pressable>
           <View style={s.statDivider} />
           <Pressable style={s.statBlock} onPress={() => openEditField('activity')}>
-            <Text style={[s.statValue, { fontFamily: FONTS.nunitoSans, fontSize: 14 }]}>
+            <Text style={s.statValueWord}>
               {profile.activity ? profile.activity.replace(/_/g, ' ').split(' ')[0]!.charAt(0).toUpperCase() + profile.activity.replace(/_/g, ' ').split(' ')[0]!.slice(1) : '—'}
             </Text>
             <Text style={s.statLabel}>Activity</Text>
@@ -436,11 +436,10 @@ const s = StyleSheet.create({
     marginBottom: 2,
   },
   goalBannerValue: {
-    fontFamily: FONTS.nunitoSansSemiBold,
-    fontSize: 18,
-    fontWeight: '700',
-    color: EDITORIAL.text,
-    letterSpacing: -0.4,
+    fontFamily: FONTS.frauncesMedium,
+    fontSize: 21,
+    color: EDITORIAL.green,
+    letterSpacing: -0.3,
   },
   // Stats
   statsCard: {
@@ -456,11 +455,19 @@ const s = StyleSheet.create({
   },
   statBlock: { flex: 1, alignItems: 'center', gap: 2 },
   statValue: {
-    fontFamily: FONTS.nunitoSansSemiBold,
-    fontSize: 18,
-    fontWeight: '700',
+    fontFamily: FONTS.frauncesRegular,
+    fontSize: 23,
     color: EDITORIAL.text,
-    letterSpacing: -0.5,
+    letterSpacing: -0.6,
+    fontVariant: ['tabular-nums'],
+  },
+  statValueWord: {
+    fontFamily: FONTS.nunitoSansSemiBold,
+    fontSize: 14,
+    fontWeight: '600',
+    color: EDITORIAL.text,
+    letterSpacing: -0.2,
+    paddingTop: 5,
   },
   statLabel: {
     fontFamily: FONTS.nunitoSansSemiBold,
@@ -512,8 +519,8 @@ const s = StyleSheet.create({
   macroRow: { flexDirection: 'row' },
   macroBlock: { flex: 1, alignItems: 'center', gap: 3 },
   macroDot: { width: 6, height: 6, borderRadius: 3 },
-  macroValue: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 22, fontWeight: '800', letterSpacing: -0.8 },
-  macroUnit: { fontFamily: FONTS.nunitoSans, fontSize: 13, fontWeight: '500', color: EDITORIAL.textSoft },
+  macroValue: { fontFamily: FONTS.frauncesRegular, fontSize: 28, letterSpacing: -0.8, fontVariant: ['tabular-nums'] },
+  macroUnit: { fontFamily: FONTS.nunitoSans, fontSize: 12, fontWeight: '500', color: EDITORIAL.textSoft },
   macroLabel: {
     fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 9,
