@@ -847,6 +847,32 @@ export function trackCustomerCenterOpened(): void {
   }
 }
 
+// The server is the source of truth for entitlement; the phone's RevenueCat
+// state is a hint. `entitlement_mismatch` fires whenever the two disagree at
+// sync time (webhook not landed yet, a transferred subscription, a refund the
+// device hasn't seen) so the size of that window is measurable per reason.
+// `entitlement_sync_failed` counts the syncs that couldn't ask at all.
+
+export function trackEntitlementMismatch(props: {
+  reason: string;
+  device_pro: boolean;
+  server_active: boolean;
+}): void {
+  try {
+    getPostHogClient().capture('entitlement_mismatch', props as unknown as Record<string, JsonType>);
+  } catch (err) {
+    logCaptureError('entitlement_mismatch', err);
+  }
+}
+
+export function trackEntitlementSyncFailed(props: { reason: string }): void {
+  try {
+    getPostHogClient().capture('entitlement_sync_failed', props as unknown as Record<string, JsonType>);
+  } catch (err) {
+    logCaptureError('entitlement_sync_failed', err);
+  }
+}
+
 export function __resetForTesting(): void {
   _client = null;
 }

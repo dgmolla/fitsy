@@ -43,7 +43,10 @@ export default function ResubscribeScreen() {
     if (!offering) void refreshOffering();
   }, [offering, refreshOffering]);
 
-  const annualPrice = offering?.annual?.product.priceString ?? '$39.99/yr';
+  // Live, store-localized price with the designed copy as a fallback. The
+  // fallback carries no period: the button and disclosure add "/yr" once
+  // themselves, and the live priceString never includes it either.
+  const annualPrice = offering?.annual?.product.priceString ?? '$39.99';
 
   async function handleResubscribe() {
     const annual = offering?.annual ?? (await refreshOffering())?.annual;
@@ -80,7 +83,7 @@ export default function ResubscribeScreen() {
       subtitle="Your Fitsy Pro subscription ended. Resubscribe to keep finding restaurants that fit your macros."
       onContinue={handleResubscribe}
       canContinue={!loading}
-      continueLabel={loading ? 'Resubscribing…' : `Resubscribe — ${annualPrice}/yr`}
+      continueLabel={loading ? 'Resubscribing…' : `Resubscribe - ${annualPrice}/yr`}
       // Declining resubscribe still gets the locked search teaser (real
       // browsing, blurred macro-match data) rather than a dead end - same
       // mechanic as a first-time visitor who hasn't paid yet.
@@ -115,7 +118,7 @@ export default function ResubscribeScreen() {
       </Pressable>
 
       <Text style={s.disclosure}>
-        Fitsy Pro is an auto-renewing subscription ({annualPrice}). Payment is charged to your
+        Fitsy Pro is an auto-renewing subscription ({annualPrice}/yr). Payment is charged to your
         Apple ID at confirmation. It renews automatically unless cancelled at least 24 hours
         before the period ends. Manage or cancel in your App Store account settings.
       </Text>

@@ -27,8 +27,7 @@ import { LocationPickerSheet } from '@/components/LocationPickerSheet';
 import { BlurFallback } from '@/lib/BlurFallback';
 import type { MacroValues } from '@/lib/macroPresets';
 import { fetchRestaurantsPage } from '@/lib/apiClient';
-import { useEntitlementSelfHeal } from '@/lib/useEntitlementSelfHeal';
-import { SubscriptionRequiredError } from '@/lib/api';
+import { useEntitlementMismatch } from '@/lib/useEntitlementMismatch';
 import { hasSeenPreviewTour, hasUsedPreviewSample, markPreviewTourSeen, routeToPaywall } from '@/lib/teaserGate';
 import { recordSearchAndMaybePrompt } from '@/lib/ratingPrompt';
 import { shouldShowInitialLoader } from '@/lib/searchLoading';
@@ -477,11 +476,11 @@ export default function SearchScreen() {
   const [locked, setLocked] = useState<boolean | null>(null);
   const lockedRef = useRef<boolean | null>(null);
   lockedRef.current = locked;
-  // Device-side entitlement (RevenueCat). Only consulted for the mismatch
-  // self-heal below: the API's `locked` flag is what actually gates the UI.
-  const { isPro } = usePurchases();
+  // Provider verdict (server) + device hint (RevenueCat). Only consulted for
+  // the mismatch handler below: the API's `locked` flag is what gates the UI.
+  const { entitled, isPro, syncEntitlement } = usePurchases();
   // Bumped on every completed search fetch (first page or pagination) so the
-  // self-heal below can tell "still locked after the refetch" from "locked".
+  // mismatch handler can tell "still locked after the refetch" from "locked".
   const [fetchSeq, setFetchSeq] = useState(0);
   // Set once the onboarding teaser's first confirmed (non-network-error)
   // fetch comes back empty - see outOfAreaCheckedRef in doFetch. Renders an
@@ -498,7 +497,7 @@ export default function SearchScreen() {
   const [tourVisible, setTourVisible] = useState(false);
   // Set once the tour has actually been shown (or found already seen) for
   // this mount - not when the check merely started, so a query edit or a
-  // self-heal refetch mid-check can't cancel the tour for good.
+  // mismatch refetch mid-check can't cancel the tour for good.
   const tourDoneRef = useRef(false);
   const tourStartingRef = useRef(false);
   // Read at fire time, never from a closure: the tour must not open over a
@@ -747,20 +746,13 @@ export default function SearchScreen() {
           void recordSearchAndMaybePrompt();
         }
       } catch (err) {
-        // Only SubscriptionRequiredError reaches here (fetchRestaurantsPage
-        // resolves every other failure with `networkError: true`, handled
-        // above, instead of throwing). /api/restaurants no longer 402s in
-        // normal operation - an unentitled caller gets a locked 200 instead -
-        // so this is a rare deploy-skew glitch, not a real paywall. Show it
-        // as a plain retry-able error rather than force-navigating an
-        // entitled user off their in-progress search.
+        // fetchRestaurantsPage resolves every fetch failure with
+        // `networkError: true` (handled above) rather than throwing, so this
+        // only catches a bug in the handling code itself. Show it as a plain
+        // retry-able error rather than leaving the spinner up.
         setResults([]);
         setNextCursor(null);
-        setError(
-          err instanceof SubscriptionRequiredError
-            ? 'Something went wrong. Pull to refresh and try again.'
-            : 'Network problem - check your connection and try again.',
-        );
+        setError('Network problem - check your connection and try again.');
         trackSearchPerformed({
           has_protein_target: !isNaN(protein),
           has_carbs_target: !isNaN(carbs),
@@ -785,19 +777,21 @@ export default function SearchScreen() {
     [buildParams, isOnboardingPreview],
   );
 
-  // Device says Pro, API says locked: re-sync the server from RevenueCat and
-  // refetch, with bounded retries - see useEntitlementSelfHeal. The fetch
+  // We believe the user is Pro, API says locked: have the server re-read
+  // RevenueCat and refetch, bounded - see useEntitlementMismatch. The fetch
   // arguments are read from a ref at fire time so parent re-renders (the
   // purchases context updates on every CustomerInfo change, `location` is a
   // fresh object every render) can't cancel a pending attempt.
-  const selfHealArgsRef = useRef({ inputs, location, query, doFetch });
-  selfHealArgsRef.current = { inputs, location, query, doFetch };
-  useEntitlementSelfHeal({
+  const mismatchArgsRef = useRef({ inputs, location, query, doFetch });
+  mismatchArgsRef.current = { inputs, location, query, doFetch };
+  useEntitlementMismatch({
+    entitled,
     isPro,
     locked,
     fetchSeq,
+    syncEntitlement,
     refetch: useCallback(() => {
-      const { inputs: current, location: loc, query: q, doFetch: fetch } = selfHealArgsRef.current;
+      const { inputs: current, location: loc, query: q, doFetch: fetch } = mismatchArgsRef.current;
       void fetch(current, loc.lat, loc.lng, q, loc.source, true);
     }, []),
   });
@@ -1025,7 +1019,7 @@ export default function SearchScreen() {
   }, [isOnboardingPreview, locked, loading, results.length]);
 
   // The tour describes the locked preview; the moment the list unlocks
-  // (self-heal refetch mid-tour), it no longer applies.
+  // (mismatch refetch mid-tour), it no longer applies.
   useEffect(() => {
     if (locked !== true) setTourVisible(false);
   }, [locked]);

@@ -7,16 +7,17 @@
  * it that way: one seam to the native SDK makes the whole thing mockable and
  * keeps entitlement logic out of screens.
  *
- * Source of truth for "is this user paying?" is RevenueCat, read client-side
- * via `customerInfo.entitlements.active`. The backend is synced separately by
- * the RevenueCat webhook (apps/api) for server-trusted checks — the client does
- * NOT validate receipts itself.
+ * The SERVER is the source of truth for "is this user allowed in?" (see
+ * `syncEntitlement` in usePurchases.tsx). What this file reads client-side
+ * via `customerInfo.entitlements.active` is a fast hint that triggers a sync,
+ * plus the copy source for lapsed-vs-never-subscribed. The client does NOT
+ * validate receipts itself.
  *
  * Keys are read from `app.config.ts` → `extra.revenueCat`, which pulls from
  * EXPO_PUBLIC_REVENUECAT_IOS_KEY / EXPO_PUBLIC_REVENUECAT_ANDROID_KEY. We never
  * hardcode the key (see the env-reliability convention in the repo).
  */
-import { Platform } from 'react-native';
+import { Linking, Platform } from 'react-native';
 import Constants from 'expo-constants';
 import Purchases, {
   LOG_LEVEL,
@@ -298,6 +299,25 @@ export async function presentPaywallIfNeeded(
     // eslint-disable-next-line no-console
     console.warn('[purchases] presentPaywallIfNeeded failed', err);
     return 'error';
+  }
+}
+
+export const MANAGE_SUBSCRIPTIONS_URL = 'https://apps.apple.com/account/subscriptions';
+
+/**
+ * Open the App Store's manage-subscriptions sheet. Falls back to the account
+ * subscriptions URL when the native sheet isn't available (older iOS, the
+ * SDK not configured, Android), so the user always lands somewhere they can
+ * cancel. Used by the delete-account dialog: deleting a Fitsy account does
+ * not cancel the Apple subscription, and this is the one-tap way to do that.
+ */
+export async function showManageSubscriptions(): Promise<void> {
+  try {
+    await Purchases.showManageSubscriptions();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[purchases] showManageSubscriptions failed, opening URL', err);
+    await Linking.openURL(MANAGE_SUBSCRIPTIONS_URL);
   }
 }
 

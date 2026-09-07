@@ -5,19 +5,6 @@ import { clearToken } from './authClient';
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
 
 /**
- * Thrown when an authenticated data route returns 402 `subscription_required`
- * (after the one in-flight retry below). Callers can `instanceof`-check this to
- * distinguish "you need Pro" from a genuine network error / empty result and
- * surface a paywall upsell instead of a generic empty state.
- */
-export class SubscriptionRequiredError extends Error {
-  constructor() {
-    super('subscription_required');
-    this.name = 'SubscriptionRequiredError';
-  }
-}
-
-/**
  * Source the access token from the Supabase SDK rather than the legacy
  * SecureStore key. The SDK proactively refreshes ~5 min before expiry and
  * `getSession()` returns the current (possibly just-refreshed) access token.
@@ -52,17 +39,6 @@ async function get<T>(path: string, authenticated = false): Promise<T> {
 
   if (res.status === 401 && authenticated) {
     return handleUnauthorized();
-  }
-
-  if (res.status === 402 && authenticated) {
-    // Subscription not yet synced server-side — the brief window between a
-    // successful purchase and the RevenueCat webhook landing. Retry once.
-    // (Non-subscribers don't reach authed data routes: the (tabs) guard
-    // redirects them to the paywall first.)
-    await new Promise((r) => setTimeout(r, 1500));
-    const retry = await fetch(`${BASE_URL}${path}`, init);
-    if (retry.ok) return retry.json() as Promise<T>;
-    throw new SubscriptionRequiredError();
   }
 
   if (!res.ok) {

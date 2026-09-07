@@ -24,8 +24,10 @@ export default function PaymentScreen() {
 
   // Live, store-localized prices from the current RevenueCat offering, with the
   // designed copy as a fallback while offerings load (or in Expo Go / no key).
-  const annualPrice = offering?.annual?.product.priceString ?? '$39.99/yr';
-  const monthlyPrice = offering?.monthly?.product.priceString ?? '$7.99/mo';
+  // Fallbacks carry no period, matching the live priceString: the period is
+  // added once where it is displayed, so the copy reads the same either way.
+  const annualPrice = offering?.annual?.product.priceString ?? '$39.99';
+  const monthlyPrice = offering?.monthly?.product.priceString ?? '$7.99';
   // Exit-intent discount: a dedicated, lower-priced annual package (RevenueCat
   // package id `annual_discount`, backed by the ASC product
   // `com.fitsy.mobile.yearly_discount` - 25% off, billed immediately: that
@@ -35,7 +37,7 @@ export default function PaymentScreen() {
   // full price (see handleStart).
   const discountedAnnual =
     offering?.availablePackages.find((p) => p.identifier === 'annual_discount') ?? null;
-  const discountPrice = discountedAnnual?.product.priceString ?? '$29.99/yr';
+  const discountPrice = discountedAnnual?.product.priceString ?? '$29.99';
 
   useEffect(() => {
     trackOnboardingScreenView('payment');
@@ -173,7 +175,7 @@ export default function PaymentScreen() {
             subscription, plus functional Terms of Use (EULA) and Privacy
             Policy links, must appear in the purchase flow. */}
         <Text style={s.disclosure}>
-          Fitsy Pro is an auto-renewing subscription ({annualPrice} or {monthlyPrice} after a
+          Fitsy Pro is an auto-renewing subscription ({annualPrice}/yr or {monthlyPrice}/mo after a
           3-day free trial). Payment is charged to your Apple ID at confirmation. It renews
           automatically unless cancelled at least 24 hours before the period ends. Manage or
           cancel in your App Store account settings.

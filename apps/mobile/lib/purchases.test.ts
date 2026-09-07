@@ -1,13 +1,16 @@
-import type { CustomerInfo } from 'react-native-purchases';
+import { Linking } from 'react-native';
+import Purchases, { type CustomerInfo } from 'react-native-purchases';
 import { PAYWALL_RESULT } from 'react-native-purchases-ui';
 import {
   ENTITLEMENT_ID,
+  MANAGE_SUBSCRIPTIONS_URL,
   hasLapsedEntitlement,
   interpretPurchaseError,
   isProActive,
   mapPaywallResult,
   pickApiKey,
   resolveApiKey,
+  showManageSubscriptions,
 } from './purchases';
 
 // Build a CustomerInfo-shaped object with the given active entitlement ids.
@@ -138,5 +141,25 @@ describe('mapPaywallResult', () => {
     expect(mapPaywallResult(PAYWALL_RESULT.CANCELLED)).toBe('cancelled');
     expect(mapPaywallResult(PAYWALL_RESULT.NOT_PRESENTED)).toBe('not_presented');
     expect(mapPaywallResult(PAYWALL_RESULT.ERROR)).toBe('error');
+  });
+});
+
+describe('showManageSubscriptions', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it('opens the native sheet when the SDK supports it', async () => {
+    const native = jest.spyOn(Purchases, 'showManageSubscriptions').mockResolvedValue(undefined);
+    const url = jest.spyOn(Linking, 'openURL');
+    await showManageSubscriptions();
+    expect(native).toHaveBeenCalledTimes(1);
+    expect(url).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the App Store subscriptions URL when the sheet throws', async () => {
+    jest.spyOn(Purchases, 'showManageSubscriptions').mockRejectedValue(new Error('unsupported'));
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const url = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    await showManageSubscriptions();
+    expect(url).toHaveBeenCalledWith(MANAGE_SUBSCRIPTIONS_URL);
   });
 });

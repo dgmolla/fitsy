@@ -26,8 +26,10 @@ export default function Index() {
           setDestination('/macro-setup');
           return;
         }
-        // Wait for RevenueCat's first CustomerInfo read so a lapsed subscriber
-        // gets the win-back screen instead of a flash of the search tab.
+        // Wait for the provider (RevenueCat's first CustomerInfo read plus
+        // the server's entitlement verdict) so a lapsed subscriber gets the
+        // win-back screen instead of a flash of the search tab, and the tab
+        // layout's gate has a verdict to act on the moment it mounts.
         if (!purchasesReady) return;
         setDestination(isLapsed ? '/welcome/resubscribe' : '/(tabs)/search');
       } catch {
