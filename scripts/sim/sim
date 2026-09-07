@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# Simulator CLI for agents (autoship L7): one wrapper per verb, JSON-friendly,
+# evidence lands in .evidence/ by default. Thin layer over xcrun simctl + expo.
+#
+#   scripts/sim/sim boot [--device "iPhone 16"]     boot (or reuse) a simulator
+#   scripts/sim/sim install <path.app>              install an app bundle
+#   scripts/sim/sim launch <bundle-id|--url URL>    launch app or open deep link
+#   scripts/sim/sim screenshot <name>               PNG -> .evidence/sim/<name>.png
+#   scripts/sim/sim logs [--grep RE] [--seconds N]  device log excerpt to stdout
+#   scripts/sim/sim reset                           erase the booted simulator
+#   scripts/sim/sim status                          booted device, JSON line
+set -euo pipefail
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+EVID="$REPO_ROOT/.evidence/sim"; mkdir -p "$EVID"
+CMD="${1:-status}"; shift || true
+
+booted_udid() { xcrun simctl list devices booted | grep -oE '[0-9A-F-]{36}' | head -1; }
+
+case "$CMD" in
+  boot)
+    DEVICE="iPhone 16"
+    [ "${1:-}" = "--device" ] && DEVICE="$2"
+    UDID="$(booted_udid)"
+    if [ -z "$UDID" ]; then
+      UDID="$(xcrun simctl list devices available | grep -F "$DEVICE (" | grep -oE '[0-9A-F-]{36}' | head -1)"
+      [ -n "$UDID" ] || { echo "no available simulator named '$DEVICE'" >&2; exit 1; }
+      xcrun simctl boot "$UDID"
+      open -a Simulator --background || true
+    fi
+    printf '{"name":"sim-boot","status":"pass","udid":"%s"}\n' "$UDID"
+    ;;
+  install)
+    APP="${1:?path to .app}"
+    xcrun simctl install booted "$APP"
+    printf '{"name":"sim-install","status":"pass","app":"%s"}\n' "$APP"
+    ;;
+  launch)
+    if [ "${1:-}" = "--url" ]; then
+      xcrun simctl openurl booted "$2"
+      printf '{"name":"sim-launch","status":"pass","url":"%s"}\n' "$2"
+    else
+      xcrun simctl launch booted "${1:?bundle id}" >/dev/null
+      printf '{"name":"sim-launch","status":"pass","bundle":"%s"}\n' "$1"
+    fi
+    ;;
+  screenshot)
+    NAME="${1:?screenshot name}"
+    OUT="$EVID/$NAME.png"
+    xcrun simctl io booted screenshot "$OUT" >/dev/null
+    printf '{"name":"sim-screenshot","status":"pass","file":"%s"}\n' "${OUT#$REPO_ROOT/}"
+    ;;
+  logs)
+    GREP=""; SECS=30
+    while [ $# -gt 0 ]; do case "$1" in --grep) GREP="$2"; shift 2;; --seconds) SECS="$2"; shift 2;; *) shift;; esac; done
+    if [ -n "$GREP" ]; then
+      xcrun simctl spawn booted log show --last "${SECS}s" --style compact 2>/dev/null | grep -E "$GREP" | tail -100
+    else
+      xcrun simctl spawn booted log show --last "${SECS}s" --style compact 2>/dev/null | tail -100
+    fi
+    ;;
+  reset)
+    UDID="$(booted_udid)"; [ -n "$UDID" ] || { echo "nothing booted" >&2; exit 1; }
+    xcrun simctl shutdown "$UDID" && xcrun simctl erase "$UDID"
+    printf '{"name":"sim-reset","status":"pass","udid":"%s"}\n' "$UDID"
+    ;;
+  status)
+    UDID="$(booted_udid)"
+    if [ -n "$UDID" ]; then
+      NAME="$(xcrun simctl list devices booted | grep "$UDID" | sed -E 's/^ +([^(]+) \(.*/\1/' | head -1 | xargs)"
+      printf '{"name":"sim-status","status":"pass","booted":true,"udid":"%s","device":"%s"}\n' "$UDID" "$NAME"
+    else
+      printf '{"name":"sim-status","status":"pass","booted":false}\n'
+    fi
+    ;;
+  *) echo "unknown subcommand: $CMD" >&2; exit 1 ;;
+esac

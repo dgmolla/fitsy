@@ -39,6 +39,15 @@ export default [
       // Jest manual mocks under __mocks__/ legitimately use require()
       "@typescript-eslint/no-require-imports": "off",
       "no-console": "warn",
+      // Maestro flows and the L7 agent-driven verifier need stable handles;
+      // warn (not error) while the codebase adopts testIDs screen by screen.
+      "no-restricted-syntax": [
+        "warn",
+        {
+          selector: "JSXOpeningElement[name.name=/^(Pressable|TouchableOpacity|TextInput)$/]:not(:has(JSXAttribute[name.name='testID']))",
+          message: "Interactive elements need a testID so E2E flows can target them (autoship L7).",
+        },
+      ],
     },
   },
   // TypeScript rules for app + shared sources
