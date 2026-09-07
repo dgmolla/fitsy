@@ -215,6 +215,10 @@ model Subscription {
   status               String
   appleTransactionId   String?
   expiresAt            DateTime?
+  // Time of the newest RevenueCat event (or REST sync) applied to this row.
+  // Webhook deliveries older than this are stale (out-of-order or retried)
+  // and are acked without writing, so they can never clobber fresher state.
+  lastEventAt          DateTime?
   createdAt            DateTime  @default(now())
   user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

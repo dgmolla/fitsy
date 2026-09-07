@@ -213,11 +213,11 @@ The reviewer lens for tests (L5) receives the mutation report: surviving mutants
 
 ### L3. Contract and DB integration
 
-**Catches:** the API and the mobile client disagreeing; queries that are wrong against real Postgres/PostGIS; migrations that break; `requireSubscription` behavior that only a real request exercises.
+**Catches:** the API and the mobile client disagreeing; queries that are wrong against real Postgres/PostGIS; migrations that break; `optionalSubscription` behavior that only a real request exercises.
 
 | Check | Status | Notes |
 |---|---|---|
-| contract tests | **new** | for each `route.ts`, a generated test calls the handler with schema-valid and schema-invalid inputs and asserts the response matches the response schema and the declared auth level (401 without token, 402 without subscription). Generator from T1 emits this test. |
+| contract tests | **new** | for each `route.ts`, a generated test calls the handler with schema-valid and schema-invalid inputs and asserts the response matches the response schema and the declared auth level (401 without token, `locked: true` without subscription). Generator from T1 emits this test. |
 | DB integration tests | **new** | the CI Postgres service exists and is unused; add `apps/api/tests/db/` using a real Prisma client against it: search LATERAL query, saved items, subscription entitlement, feedback insert. Seed via `prisma/seed.ts` (new) with a 50-restaurant fixture in one H3 hex. Locally: `scripts/dev/db.sh up` runs the same image via Docker. |
 | migration safety (T9) | **new** | `prisma migrate diff --from-migrations --to-schema-datamodel`; fail if the diff contains `DROP`, `ALTER ... TYPE`, or `NOT NULL` without default unless the PR contains `prisma/migrations/<id>/down.sql` and carries the `destructive-migration` label |
 | migration apply + rollback rehearsal | **new** | apply all migrations to the container, then apply `down.sql` for the PR's migrations if present |
@@ -310,7 +310,7 @@ Local-runner security: a dedicated macOS user with only `gh` auth and the Claude
 
 | Check | Status | Notes |
 |---|---|---|
-| preview smoke | **new** | on `repository_dispatch: vercel.deployment.success` for preview URLs, run `scripts/verify/api-e2e.sh --base=$URL` against the **dev** environment: health, register/login with a seed test user, search in the snapshot's LA hex, saved items round trip, subscription gate 402, each `affected_route` from L4 with schema-valid input. Writes are real and are wiped by the nightly reset. |
+| preview smoke | **new** | on `repository_dispatch: vercel.deployment.success` for preview URLs, run `scripts/verify/api-e2e.sh --base=$URL` against the **dev** environment: health, register/login with a seed test user, search in the snapshot's LA hex, saved items round trip, subscription gate (locked response without entitlement), each `affected_route` from L4 with schema-valid input. Writes are real and are wiped by the nightly reset. |
 | cold-start budget | **new**, shadow | p50 of 5 cold hits under a budget; the 3-10s search cold start is a known issue (memory: search cold start) and this is where it becomes a number |
 | protection bypass | **new** | `x-vercel-protection-bypass` token in Actions secrets, scoped to this job |
 

@@ -10,11 +10,14 @@ import {
  * POST /api/subscriptions/sync - refresh this user's server-side entitlement
  * straight from RevenueCat.
  *
- * The mobile client calls this at the moments entitlement changes hands:
+ * The mobile client calls this at the moments entitlement can change hands:
  * right after a purchase or restore (so the very next search isn't racing the
- * webhook), and whenever the device's RevenueCat state says Pro while the API
- * is still serving locked responses (a subscription transferred to this
- * account from another, or a webhook delivery that never landed).
+ * webhook), on every sign-in (a returning user's row may exist while the
+ * device SDK is fresh, or vice versa), and whenever the device's RevenueCat
+ * state says Pro while the API is still serving locked responses (a
+ * subscription transferred to this account from another, or a webhook
+ * delivery that never landed). Plain launches use the cheaper GET
+ * /api/subscriptions/status instead.
  *
  * Response: `{ active, synced }` - `synced: false` means RevenueCat couldn't
  * be consulted and `active` is the existing DB state instead.

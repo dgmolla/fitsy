@@ -24,10 +24,11 @@ jest.mock("@/services/revenuecatService", () => ({
 import { NextRequest, NextResponse } from "next/server";
 import {
   isEntitled,
+  getEntitlementStatus,
   subscriptionBypass,
-  requireSubscription,
   optionalSubscription,
   syncSubscriptionFromRevenueCat,
+  logStatusChange,
 } from "./subscription";
 
 const ENV = process.env;
@@ -104,35 +105,70 @@ describe("isEntitled", () => {
   });
 });
 
-describe("requireSubscription", () => {
-  it("propagates the 401 from requireAuth when unauthenticated", async () => {
-    const unauth = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    mockRequireAuth.mockResolvedValue(unauth);
-    const res = await requireSubscription(req);
-    expect(res).toBe(unauth);
-    expect(mockFindUnique).not.toHaveBeenCalled();
+describe("getEntitlementStatus", () => {
+  const expiresAt = new Date(Date.now() + 86_400_000);
+
+  it("reports the row alongside the same verdict as isEntitled", async () => {
+    mockFindUnique.mockResolvedValue({ status: "active", expiresAt });
+    expect(await getEntitlementStatus("u1", "a@b.com")).toEqual({
+      active: true,
+      status: "active",
+      expiresAt,
+    });
   });
 
-  it("returns the payload when authenticated AND entitled", async () => {
-    mockRequireAuth.mockResolvedValue({ sub: "u1", email: "a@b.com" });
-    mockFindUnique.mockResolvedValue({ status: "active", expiresAt: null });
-    expect(await requireSubscription(req)).toEqual({ sub: "u1", email: "a@b.com" });
+  it("keeps the lapsed row visible while reporting inactive", async () => {
+    const past = new Date(Date.now() - 1_000);
+    mockFindUnique.mockResolvedValue({ status: "active", expiresAt: past });
+    expect(await getEntitlementStatus("u1", "a@b.com")).toEqual({
+      active: false,
+      status: "active",
+      expiresAt: past,
+    });
   });
 
-  it("returns 402 subscription_required when authenticated but not entitled", async () => {
-    mockRequireAuth.mockResolvedValue({ sub: "u1", email: "a@b.com" });
+  it("returns nulls for a user who never subscribed", async () => {
     mockFindUnique.mockResolvedValue(null);
-    const res = await requireSubscription(req);
-    expect(res).toBeInstanceOf(NextResponse);
-    expect((res as NextResponse).status).toBe(402);
-    expect(await (res as NextResponse).json()).toEqual({ error: "subscription_required" });
+    expect(await getEntitlementStatus("u1", "a@b.com")).toEqual({
+      active: false,
+      status: null,
+      expiresAt: null,
+    });
   });
 
-  it("lets the demo reviewer account through without a subscription row", async () => {
+  it("is active for a bypassed account even without a row", async () => {
     process.env["DEMO_REVIEW_EMAILS"] = "review@fitsy.app";
-    mockRequireAuth.mockResolvedValue({ sub: "u1", email: "review@fitsy.app" });
-    expect(await requireSubscription(req)).toEqual({ sub: "u1", email: "review@fitsy.app" });
-    expect(mockFindUnique).not.toHaveBeenCalled();
+    mockFindUnique.mockResolvedValue(null);
+    expect(await getEntitlementStatus("u1", "review@fitsy.app")).toEqual({
+      active: true,
+      status: null,
+      expiresAt: null,
+    });
+  });
+});
+
+describe("logStatusChange", () => {
+  let warn: jest.SpyInstance;
+  beforeEach(() => {
+    warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+  });
+  afterEach(() => {
+    warn.mockRestore();
+  });
+
+  it("logs a tagged from -> to line when the status changes", () => {
+    logStatusChange("u1", "active", "expired", "sync");
+    expect(warn).toHaveBeenCalledWith("[subscription] u1 status active -> expired (sync)");
+  });
+
+  it("reports a first row as coming from none", () => {
+    logStatusChange("u1", null, "active", "webhook");
+    expect(warn).toHaveBeenCalledWith("[subscription] u1 status none -> active (webhook)");
+  });
+
+  it("stays silent when the status is unchanged (renewals, repeated syncs)", () => {
+    logStatusChange("u1", "active", "active", "sync");
+    expect(warn).not.toHaveBeenCalled();
   });
 });
 
@@ -165,11 +201,19 @@ describe("optionalSubscription", () => {
 
 describe("syncSubscriptionFromRevenueCat", () => {
   const expiresAt = new Date(Date.now() + 86_400_000);
+  let warn: jest.SpyInstance;
 
   beforeEach(() => {
     mockUserFindUnique.mockResolvedValue({ id: "u1" });
     mockUpsert.mockResolvedValue({});
+    warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    jest.useFakeTimers({ now: new Date("2026-09-06T12:00:00Z") });
   });
+  afterEach(() => {
+    warn.mockRestore();
+    jest.useRealTimers();
+  });
+  const NOW = new Date("2026-09-06T12:00:00Z");
 
   it("returns null and writes nothing when RevenueCat can't be consulted", async () => {
     mockFetchProEntitlement.mockResolvedValue(null);
@@ -195,14 +239,57 @@ describe("syncSubscriptionFromRevenueCat", () => {
         status: "active",
         expiresAt,
         appleTransactionId: "txn",
+        lastEventAt: NOW,
       },
       update: {
         plan: "com.fitsy.mobile.yearly",
         status: "active",
         expiresAt,
         appleTransactionId: "txn",
+        lastEventAt: NOW,
       },
     });
+  });
+
+  it("stamps lastEventAt = now so an older webhook arriving later cannot overwrite the REST read", async () => {
+    mockFetchProEntitlement.mockResolvedValue({
+      active: true,
+      plan: "p",
+      expiresAt,
+      transactionId: null,
+      billingIssue: false,
+    });
+    mockFindUnique.mockResolvedValue({ status: "active" });
+    await syncSubscriptionFromRevenueCat("u1");
+    expect(mockUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({ update: expect.objectContaining({ lastEventAt: NOW }) }),
+    );
+  });
+
+  it("logs a [subscription] line when the sync flips the stored status", async () => {
+    mockFetchProEntitlement.mockResolvedValue({
+      active: false,
+      plan: null,
+      expiresAt: null,
+      transactionId: null,
+      billingIssue: false,
+    });
+    mockFindUnique.mockResolvedValue({ status: "active" });
+    await syncSubscriptionFromRevenueCat("u1");
+    expect(warn).toHaveBeenCalledWith("[subscription] u1 status active -> expired (sync)");
+  });
+
+  it("does not log when the sync confirms the stored status", async () => {
+    mockFetchProEntitlement.mockResolvedValue({
+      active: true,
+      plan: "p",
+      expiresAt,
+      transactionId: null,
+      billingIssue: false,
+    });
+    mockFindUnique.mockResolvedValue({ status: "active" });
+    await syncSubscriptionFromRevenueCat("u1");
+    expect(warn).not.toHaveBeenCalled();
   });
 
   it("writes billing_issue (still entitled) during a grace period, matching the webhook", async () => {
@@ -213,7 +300,7 @@ describe("syncSubscriptionFromRevenueCat", () => {
       transactionId: null,
       billingIssue: true,
     });
-    mockFindUnique.mockResolvedValue({ id: "sub-1" });
+    mockFindUnique.mockResolvedValue({ status: "active" });
     expect(await syncSubscriptionFromRevenueCat("u1")).toBe(true);
     expect(mockUpsert).toHaveBeenCalledWith(
       expect.objectContaining({ update: expect.objectContaining({ status: "billing_issue" }) }),
@@ -228,10 +315,10 @@ describe("syncSubscriptionFromRevenueCat", () => {
       transactionId: null,
       billingIssue: false,
     });
-    mockFindUnique.mockResolvedValue({ id: "sub-1" });
+    mockFindUnique.mockResolvedValue({ status: "active" });
     expect(await syncSubscriptionFromRevenueCat("u1")).toBe(false);
     expect(mockUpsert).toHaveBeenCalledWith(
-      expect.objectContaining({ update: { status: "expired" } }),
+      expect.objectContaining({ update: { status: "expired", lastEventAt: NOW } }),
     );
   });
 

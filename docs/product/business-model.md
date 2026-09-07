@@ -56,7 +56,7 @@ sequenceDiagram
     App->>App: completeOnboarding() → navigate to /(tabs)/search
 
     Note over App,ASC: On renewal: Apple charges silently;<br/>RevenueCat fires RENEWAL webhook → API updates DB
-    Note over App,API: Every protected request: requireSubscription()<br/>reads the Subscription row → 402 if not active
+    Note over App,API: App gates on GET /api/subscriptions/status;<br/>every restaurant request: optionalSubscription()<br/>reads the Subscription row → locked/truncated if not active
 ```
 
 ---
@@ -69,22 +69,25 @@ Fitsy does **not** use Stripe webhooks. Subscription state is kept current via:
    `EXPIRATION`, `BILLING_ISSUE`, and other events to a Fitsy API endpoint.
    The handler upserts the user's subscription record in PostgreSQL.
 
-2. **`GET /api/subscriptions/status`** — server-trusted entitlement read the
-   client uses to make the "must subscribe" decision server-side. (The old
-   `POST /api/subscriptions/verify` receipt stub was removed 2026-06-16 —
-   clients no longer send receipts.)
+2. **`GET /api/subscriptions/status`** - the server's entitlement verdict
+   (`{ active, status, expiresAt }`). The mobile app gates on `active` at every
+   launch; the on-device RevenueCat state is only a hint that triggers
+   `POST /api/subscriptions/sync` (re-reads RevenueCat and upserts the row).
+   (The old `POST /api/subscriptions/verify` receipt stub was removed
+   2026-06-16 - clients no longer send receipts.)
 
-3. **API middleware** — `requireSubscription()` (`apps/api/lib/subscription.ts`)
+3. **API gate** - `optionalSubscription()` (`apps/api/lib/subscription.ts`)
    guards `/api/restaurants` and `/api/restaurants/[id]/menu`, reading the
-   webhook-synced `Subscription` row. Returns `402 subscription_required` for
-   unentitled users; the mobile `(tabs)` guard redirects to the paywall and a
-   one-shot 402 retry covers the post-purchase webhook lag. Bypass:
+   webhook/sync-maintained `Subscription` row. It never rejects: an unentitled
+   caller gets a locked/truncated response (`locked: true`), which powers the
+   onboarding teaser and the lapsed-subscriber browse-then-paywall flow. The
+   former `requireSubscription()` 402 path was deleted 2026-09. Bypass:
    `ALLOW_STUB_SUBSCRIPTIONS` (dev) and `DEMO_REVIEW_EMAILS` (App Store reviewer).
 
 ### Database model (Prisma)
 
 Subscription state lives in its own `Subscription` table (1:1 with `User`),
-written **only** by the RevenueCat webhook:
+written **only** by the RevenueCat webhook and the RevenueCat REST sync:
 
 ```prisma
 model Subscription {
@@ -94,6 +97,7 @@ model Subscription {
   status             String    // "active" | "expired" | "billing_issue"
   appleTransactionId String?
   expiresAt          DateTime?
+  lastEventAt        DateTime? // newest event/sync applied; older webhooks are ignored
   createdAt          DateTime  @default(now())
   user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
@@ -123,7 +127,7 @@ RevenueCat is wired and ASC products are created. Remaining items:
 | Apple Developer account + ASC app record | `#human` | ✅ done (Apple ID 6763851364) |
 | ASC subscription products (`fitsy_monthly`, `fitsy_annual`) | `#human` | ✅ created 2026-06-16 ($7.99 / $39.99, 3-day trial) |
 | Bundle ID | `#frontend` | ✅ resolved — code + ASC agree on `com.fitsy.mobile` |
-| `requireSubscription()` server gate | `#backend` | ✅ done — guards `/api/restaurants` + menu; `(tabs)` guard + 402-retry on client |
+| `optionalSubscription()` server gate | `#backend` | ✅ done - guards `/api/restaurants` + menu (locked responses); client gates on `GET /api/subscriptions/status` |
 | RevenueCat webhook in production | `#backend` | Endpoint `POST /api/revenuecat/webhook` is live — **confirm URL + `REVENUECAT_WEBHOOK_AUTH` are set in the RC dashboard + Vercel** |
 | `EXPO_PUBLIC_REVENUECAT_IOS_KEY` in the production EAS build | `#frontend` | Verify it's set (test key only works in dev) |
 | Exit-intent discount product | `#human` | Create `fitsy_annual_discount` ($29.99/yr, 3-day trial) in the same subscription group + RevenueCat package `annual_discount`; paywall already wired |

@@ -10,10 +10,11 @@ import { fetchProEntitlement } from "@/services/revenuecatService";
  * Entitlement state is synced into the `Subscription` table by the RevenueCat
  * webhook (`apps/api/app/api/revenuecat/webhook`) and, on demand, by
  * `syncSubscriptionFromRevenueCat` (pull from RevenueCat's REST API - covers
- * transfers, webhook races and missed deliveries). This is the authoritative
- * server-side check: the mobile client's RevenueCat `isPro` drives UX/routing
- * (instant, on-device), but the API independently enforces entitlement here so
- * the paywall can't be bypassed by calling the API directly.
+ * transfers, webhook races and missed deliveries). This is the single source
+ * of truth for entitlement: the mobile client's on-device RevenueCat `isPro`
+ * is only a hint that triggers a sync, and the app gates on the verdict it
+ * reads back from this server (GET /api/subscriptions/status), so the paywall
+ * can't be bypassed by calling the API directly or by a stale device cache.
  *
  * Bypass (no active subscription required) for:
  *   - `ALLOW_STUB_SUBSCRIPTIONS=true`  → local dev / staging convenience.
@@ -45,6 +46,23 @@ export function subscriptionBypass(email: string): boolean {
  */
 const ENTITLED_STATUSES = new Set(["active", "billing_issue"]);
 
+type SubscriptionRow = { status: string; expiresAt: Date | null } | null;
+
+/** The fields every entitlement read needs; null when the user never subscribed. */
+function readRow(userId: string): Promise<SubscriptionRow> {
+  return prisma.subscription.findUnique({
+    where: { userId },
+    select: { status: true, expiresAt: true },
+  });
+}
+
+/** The row grants access iff its status is entitled and it hasn't lapsed. */
+function rowEntitled(sub: SubscriptionRow): boolean {
+  if (!sub || !ENTITLED_STATUSES.has(sub.status)) return false;
+  if (sub.expiresAt && sub.expiresAt.getTime() < Date.now()) return false;
+  return true;
+}
+
 /**
  * Authoritative entitlement check. Active iff the synced row says `active`
  * (or `billing_issue`, see above) and it hasn't lapsed. Bypassed accounts
@@ -52,32 +70,32 @@ const ENTITLED_STATUSES = new Set(["active", "billing_issue"]);
  */
 export async function isEntitled(userId: string, email: string): Promise<boolean> {
   if (subscriptionBypass(email)) return true;
-  const sub = await prisma.subscription.findUnique({
-    where: { userId },
-    select: { status: true, expiresAt: true },
-  });
-  if (!sub || !ENTITLED_STATUSES.has(sub.status)) return false;
-  if (sub.expiresAt && sub.expiresAt.getTime() < Date.now()) return false;
-  return true;
+  return rowEntitled(await readRow(userId));
+}
+
+export interface EntitlementStatus {
+  /** Same verdict as `isEntitled` (bypass included). */
+  active: boolean;
+  /** Stored row status, or null when the user has never subscribed. */
+  status: string | null;
+  expiresAt: Date | null;
 }
 
 /**
- * Require an authenticated user WITH an active subscription. Mirrors
- * `requireAuth`'s contract — returns the `JwtPayload` on success, or a
- * `NextResponse` the caller should return:
- *   - 401 if unauthenticated (delegated to `requireAuth`)
- *   - 402 `{ error: "subscription_required" }` if authenticated but not entitled
- *
- *   const auth = await requireSubscription(request);
- *   if (auth instanceof NextResponse) return auth;
+ * `isEntitled` plus the raw row, in one read, for the status endpoint. The
+ * row is reported even for bypassed accounts so support can see what the
+ * store actually thinks; `active` alone is what the client gates on.
  */
-export async function requireSubscription(
-  request: NextRequest,
-): Promise<JwtPayload | NextResponse> {
-  const auth = await requireAuth(request);
-  if (auth instanceof NextResponse) return auth;
-  if (await isEntitled(auth.sub, auth.email)) return auth;
-  return NextResponse.json({ error: "subscription_required" }, { status: 402 });
+export async function getEntitlementStatus(
+  userId: string,
+  email: string,
+): Promise<EntitlementStatus> {
+  const sub = await readRow(userId);
+  return {
+    active: subscriptionBypass(email) || rowEntitled(sub),
+    status: sub?.status ?? null,
+    expiresAt: sub?.expiresAt ?? null,
+  };
 }
 
 export interface OptionalSubscriptionResult {
@@ -86,7 +104,7 @@ export interface OptionalSubscriptionResult {
 }
 
 /**
- * Like `requireSubscription`, but never rejects the request — an
+ * Authenticate and check entitlement without ever rejecting the request: an
  * unauthenticated or unentitled caller gets `entitled: false` instead of a
  * 401/402, so the route can degrade to a locked/truncated response (the
  * onboarding teaser and the lapsed-subscriber browse-then-paywall flow)
@@ -121,7 +139,7 @@ export async function syncSubscriptionFromRevenueCat(userId: string): Promise<bo
 
   const [user, existing] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId }, select: { id: true } }),
-    prisma.subscription.findUnique({ where: { userId }, select: { id: true } }),
+    prisma.subscription.findUnique({ where: { userId }, select: { status: true } }),
   ]);
   // No User row = nothing the FK will let us attach to (deleted account, or
   // an id we never provisioned). Report what RevenueCat says, persist nothing.
@@ -131,6 +149,10 @@ export async function syncSubscriptionFromRevenueCat(userId: string): Promise<bo
   // Same status vocabulary as the webhook (`statusForEvent`), so the two
   // write paths never disagree on what a row means.
   const status = !state.active ? "expired" : state.billingIssue ? "billing_issue" : "active";
+  // A REST read is the freshest truth there is, so stamp it as "now": a
+  // webhook event that was emitted before this read but arrives later is
+  // stale by definition and must not overwrite what we just learned.
+  const lastEventAt = new Date();
   await prisma.subscription.upsert({
     where: { userId },
     create: {
@@ -139,6 +161,7 @@ export async function syncSubscriptionFromRevenueCat(userId: string): Promise<bo
       status,
       expiresAt: state.expiresAt,
       appleTransactionId: state.transactionId,
+      lastEventAt,
     },
     // Only overwrite what RevenueCat actually reported. Once an entitlement
     // is gone (lapsed, or transferred to another account) it comes back with
@@ -147,10 +170,27 @@ export async function syncSubscriptionFromRevenueCat(userId: string): Promise<bo
     // need it, and "expired" is already what revokes access.
     update: {
       status,
+      lastEventAt,
       ...(state.plan ? { plan: state.plan } : {}),
       ...(state.expiresAt ? { expiresAt: state.expiresAt } : {}),
       ...(state.transactionId ? { appleTransactionId: state.transactionId } : {}),
     },
   });
+  logStatusChange(userId, existing?.status ?? null, status, "sync");
   return state.active;
+}
+
+/**
+ * One line per entitlement transition, tagged so Vercel's log search finds
+ * every status flip regardless of which write path caused it. Unchanged
+ * status stays silent: renewals and repeated syncs would otherwise drown it.
+ */
+export function logStatusChange(
+  userId: string,
+  from: string | null,
+  to: string,
+  source: "sync" | "webhook",
+): void {
+  if (from === to) return;
+  console.warn(`[subscription] ${userId} status ${from ?? "none"} -> ${to} (${source})`);
 }

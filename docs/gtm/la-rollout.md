@@ -125,7 +125,7 @@ Fitsy's own IG needs a few real posts before outreach starts; an active sender p
 1. Trainer installs Fitsy and signs in (any method); they will hit the paywall, that is expected.
 2. In the RevenueCat dashboard, find the customer (search by email or app user ID), Customer history → Grant entitlement → `pro`, duration Lifetime.
 3. Access lifts on their next app open: the SDK sees `entitlements.active.pro` and the paywall gate clears (`apps/mobile/lib/purchases.ts`).
-4. RevenueCat sends a `NON_RENEWING_PURCHASE` webhook with `store: PROMOTIONAL`; our webhook marks the `Subscription` row active, so the server gate (`requireSubscription`) passes too. `plan` records as `unknown` for grants; cosmetic.
+4. RevenueCat sends a `NON_RENEWING_PURCHASE` webhook with `store: PROMOTIONAL`; our webhook marks the `Subscription` row active, so the server gate (`optionalSubscription`) passes too. `plan` records as `unknown` for grants; cosmetic.
 5. Track it in `trainer-prospects.csv` (status → `granted`).
 
 Grants never touch Apple billing, never charge, and can be revoked in the same screen.
