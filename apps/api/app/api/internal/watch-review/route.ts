@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createPrivateKey, sign } from "crypto";
 import { postSlackMessage } from "@fitsy/shared";
 import { prisma } from "@/lib/restaurantService";
+import { ascAppId, ascErrorStatus, ascGet } from "@/services/ascService";
 
 /**
  * App Store review-result watcher. Triggered by Vercel Cron every 4 hours.
@@ -23,8 +23,6 @@ import { prisma } from "@/lib/restaurantService";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const DEFAULT_APP_ID = "6763851364";
-const ASC_BASE = "https://api.appstoreconnect.apple.com/v1";
 
 /** Map an ASC version state to a Slack-worthy result, or null to stay quiet. */
 function classify(state: string): { kind: string; emoji: string; text: string } | null {
@@ -48,24 +46,6 @@ function classify(state: string): { kind: string; emoji: string; text: string } 
   }
 }
 
-/** Mint a short-lived ES256 JWT for the App Store Connect API. */
-function ascToken(): string {
-  const keyId = process.env["ASC_KEY_ID"];
-  const issuerId = process.env["ASC_ISSUER_ID"];
-  const p8b64 = process.env["ASC_P8_BASE64"];
-  if (!keyId || !issuerId || !p8b64) throw new Error("ASC credentials not configured");
-  const p8 = Buffer.from(p8b64, "base64").toString("utf8");
-  const now = Math.floor(Date.now() / 1000);
-  const enc = (o: unknown) => Buffer.from(JSON.stringify(o)).toString("base64url");
-  const header = enc({ alg: "ES256", kid: keyId, typ: "JWT" });
-  const payload = enc({ iss: issuerId, iat: now, exp: now + 600, aud: "appstoreconnect-v1" });
-  const signingInput = `${header}.${payload}`;
-  const signature = sign("sha256", Buffer.from(signingInput), {
-    key: createPrivateKey(p8),
-    dsaEncoding: "ieee-p1363", // raw r||s — required for JOSE ES256
-  });
-  return `${signingInput}.${signature.toString("base64url")}`;
-}
 
 type Version = { attributes?: { versionString?: string; appStoreState?: string; state?: string } };
 
@@ -76,20 +56,19 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const appId = process.env["ASC_APP_ID"] ?? DEFAULT_APP_ID;
+  const appId = ascAppId();
 
   let versions: Version[];
   try {
-    const token = ascToken();
-    const res = await fetch(
-      `${ASC_BASE}/apps/${appId}/appStoreVersions?filter[platform]=IOS&limit=5`,
-      { headers: { authorization: `Bearer ${token}` }, cache: "no-store" },
+    const body = await ascGet<{ data?: Version[] }>(
+      `/apps/${appId}/appStoreVersions?filter[platform]=IOS&limit=5`,
     );
-    if (!res.ok) {
-      return NextResponse.json({ ok: false, error: `ASC ${res.status}` }, { status: 502 });
-    }
-    versions = ((await res.json()) as { data?: Version[] }).data ?? [];
+    versions = body.data ?? [];
   } catch (err) {
+    const status = ascErrorStatus(err);
+    if (status !== null) {
+      return NextResponse.json({ ok: false, error: `ASC ${status}` }, { status: 502 });
+    }
     return NextResponse.json({ ok: false, error: String(err) }, { status: 500 });
   }
 

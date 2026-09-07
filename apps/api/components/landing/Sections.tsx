@@ -1,5 +1,6 @@
 import s from "@/app/landing-sections.module.css";
 import { AppleIcon } from "@/components/AppleIcon";
+import type { DisplayPricing } from "@/lib/pricing";
 
 /**
  * Static landing-page sections below the feature grid. Server components:
@@ -122,26 +123,37 @@ export function Trust() {
   );
 }
 
-const FAQ_ITEMS: Array<{ q: string; a: string }> = [
-  {
-    q: "Where does Fitsy work right now?",
-    a: "Los Angeles: Silver Lake, Echo Park, Los Feliz, Hollywood, West Hollywood, Koreatown, Downtown, Mid-City, Studio City, and Venice. Every restaurant with a delivery menu in those neighborhoods is covered. More neighborhoods and cities are on the feedback board. Upvote yours.",
-  },
-  {
-    q: "How accurate are the macros?",
-    a: "Chains use published nutrition, so those numbers are exact. Independent restaurants are AI-estimated from the menu and marked as such. Treat them as a close guide, not a lab result.",
-  },
-  {
-    q: "Do I have to log anything?",
-    a: "No. Fitsy is not a food diary. You set targets once, and the app ranks what is around you. If you already track in another app, Fitsy just makes the ordering decision easier.",
-  },
-  {
-    q: "What does it cost?",
-    a: "Three days free, then $7.99 a month or $39.99 a year. Cancel anytime. Nothing is charged until the trial ends.",
-  },
-];
+/** "3-day free trial, then $7.99 a month or $39.99 a year." Omits the trial clause when there is none. */
+function priceAnswer(p: DisplayPricing): string {
+  const plans = `${p.monthly} a month or ${p.annual} a year`;
+  if (p.trialDays > 0) {
+    return `${p.trialDays}-day free trial, then ${plans}. Cancel anytime. Nothing is charged until the trial ends.`;
+  }
+  return `${plans}. Cancel anytime.`;
+}
 
-export function Faq() {
+function faqItems(pricing: DisplayPricing): Array<{ q: string; a: string }> {
+  return [
+    {
+      q: "Where does Fitsy work right now?",
+      a: "Los Angeles: Silver Lake, Echo Park, Los Feliz, Hollywood, West Hollywood, Koreatown, Downtown, Mid-City, Studio City, and Venice. Every restaurant with a delivery menu in those neighborhoods is covered. More neighborhoods and cities are on the feedback board. Upvote yours.",
+    },
+    {
+      q: "How accurate are the macros?",
+      a: "Chains use published nutrition, so those numbers are exact. Independent restaurants are AI-estimated from the menu and marked as such. Treat them as a close guide, not a lab result.",
+    },
+    {
+      q: "Do I have to log anything?",
+      a: "No. Fitsy is not a food diary. You set targets once, and the app ranks what is around you. If you already track in another app, Fitsy just makes the ordering decision easier.",
+    },
+    {
+      q: "What does it cost?",
+      a: priceAnswer(pricing),
+    },
+  ];
+}
+
+export function Faq({ pricing }: { pricing: DisplayPricing }) {
   return (
     <section className={s.section} id="faq">
       <div className={s.container}>
@@ -152,7 +164,7 @@ export function Faq() {
           </h2>
         </div>
         <div className={s.faq}>
-          {FAQ_ITEMS.map((item, i) => (
+          {faqItems(pricing).map((item, i) => (
             <details key={item.q} open={i === 0}>
               <summary>{item.q}</summary>
               <p>{item.a}</p>
