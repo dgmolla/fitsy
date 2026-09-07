@@ -36,6 +36,29 @@ checks:
     paths: ["apps/**", "packages/**", "scripts/**", "prisma/**", "tsconfig.json"]
     why: tsc --noEmit per workspace (api, mobile, shared, scripts).
 
+  - name: boundaries
+    script: boundaries.sh
+    layer: 1
+    blocking: true
+    runs: [local, ci]
+    paths: ["apps/**", "packages/**", "scripts/**", ".dependency-cruiser.cjs"]
+    why: T3 boundaries as code (dependency-cruiser); added in autoship step 3, 2026-09-07.
+
+  - name: size-check
+    script: size-check.sh
+    layer: 1
+    blocking: true
+    runs: [ci]
+    why: T8 - PRs over 600 changed lines (excluding lockfiles/migrations/snapshots) are unreviewable; override-size label escapes with justification.
+
+  - name: actionlint
+    script: actionlint.sh
+    layer: 1
+    blocking: true
+    runs: [local, ci]
+    paths: [".github/**"]
+    why: Workflow files are tier-high attack surface (prompt-injection mitigations live there); lint them.
+
   - name: domain-check
     script: domain-check.sh
     layer: 1

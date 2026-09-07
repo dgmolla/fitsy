@@ -46,7 +46,9 @@
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.57.2",
     "@typescript-eslint/parser": "^8.57.2",
+    "dependency-cruiser": "^16.10.4",
     "eslint": "^10.1.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "tsx": "^4.21.0"
   },
   "overrides": {
