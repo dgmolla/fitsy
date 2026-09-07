@@ -110,7 +110,7 @@ const s = StyleSheet.create({
   control: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 12,
   },
   controlLg: {
     gap: 14,
@@ -147,7 +147,7 @@ const s = StyleSheet.create({
   valueCol: {
     flexDirection: "row",
     alignItems: "baseline",
-    minWidth: 62,
+    minWidth: 66,
     justifyContent: "center",
   },
   valueColLg: {

@@ -227,14 +227,14 @@ const s = StyleSheet.create({
   // serif figures, per-meal total row, full-width dark Apply.
   card: {
     width: "100%",
-    maxWidth: 340,
-    borderRadius: 22,
+    maxWidth: 356,
+    borderRadius: 24,
     backgroundColor: EDITORIAL.cream,
     borderWidth: 1,
     borderColor: EDITORIAL.border,
-    paddingHorizontal: 20,
-    paddingTop: 22,
-    paddingBottom: 18,
+    paddingHorizontal: 22,
+    paddingTop: 24,
+    paddingBottom: 20,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.1,
@@ -247,14 +247,14 @@ const s = StyleSheet.create({
     fontSize: 20,
     color: EDITORIAL.green,
     letterSpacing: -0.3,
-    marginBottom: 6,
+    marginBottom: 10,
   },
 
   row: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: 12,
+    paddingVertical: 16,
   },
   labelCol: {
     flexDirection: "row",
@@ -284,8 +284,8 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "baseline",
     justifyContent: "space-between",
-    paddingTop: 18,
-    paddingBottom: 14,
+    paddingTop: 22,
+    paddingBottom: 18,
   },
   calLabel: {
     fontFamily: FONTS.nunitoSansSemiBold,
@@ -314,7 +314,7 @@ const s = StyleSheet.create({
 
   applyBtn: {
     borderRadius: 14,
-    paddingVertical: 14,
+    paddingVertical: 15,
     alignItems: "center",
     backgroundColor: EDITORIAL.green,
   },
