@@ -19,6 +19,15 @@ the known weak spot (T5). Read `REVIEW.md` first.
 - Mutation-surviving shapes: branches with no test on the false path,
   error paths asserted only as "does not throw".
 
+## Examples from real incidents
+
+- File-wide mock leaking across describes: `jest.mock` at module scope left a
+  `mockResolvedValue(8)` active inside the "real DB" describe, so the suite
+  asserted against the mock - and had NEVER actually run (its env gate was
+  never satisfied in CI). Tell: one file mixing mocked-unit and real-DB
+  describes without restoring implementations; a DB describe whose env gate
+  no CI job satisfies. (#234)
+
 ## Inputs
 
 When a Stryker report exists in `.evidence/mutation/`, surviving mutants on

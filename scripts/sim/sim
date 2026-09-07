@@ -8,16 +8,83 @@
 #   scripts/sim/sim screenshot <name>               PNG -> .evidence/sim/<name>.png
 #   scripts/sim/sim logs [--grep RE] [--seconds N]  device log excerpt to stdout
 #   scripts/sim/sim reset                           erase the booted simulator
-#   scripts/sim/sim status                          booted device, JSON line
+#   scripts/sim/sim status                          booted device + claim, JSON line
+#   FITSY_SIM_OWNER=me scripts/sim/sim claim [--minutes N]   sign out (default 30m)
+#   FITSY_SIM_OWNER=me scripts/sim/sim release               give it back
+# Identity is ALWAYS the FITSY_SIM_OWNER env var, for claim and destructive
+# verbs alike - one source, so you cannot lock yourself out.
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 EVID="$REPO_ROOT/.evidence/sim"; mkdir -p "$EVID"
 CMD="${1:-status}"; shift || true
 
-booted_udid() { xcrun simctl list devices booted | grep -oE '[0-9A-F-]{36}' | head -1; }
+# grep exits 1 on no booted device; do not let set -e kill the script for that
+booted_udid() { xcrun simctl list devices booted | grep -oE '[0-9A-F-]{36}' | head -1 || true; }
+
+# ── Claim sheet ─────────────────────────────────────────────────────────────
+# Multiple agents share one Mac; destructive verbs (boot/install/launch/reset)
+# respect an active claim by someone else. Claims expire on their own so a
+# dead agent never wedges the sim. Claim acquisition is check-then-write, not
+# atomic: cooperating agents on one machine, worst case equals the no-sheet
+# world - accepted tradeoff.
+CLAIM_FILE="$HOME/.fitsy-sim-claim.json"
+claim_owner() { # prints active owner, or nothing
+  [ -f "$CLAIM_FILE" ] || return 0
+  python3 - "$CLAIM_FILE" <<'PY'
+import json, sys, time
+try:
+    d = json.load(open(sys.argv[1]))
+    if d.get("expires", 0) > time.time():
+        print(d.get("owner", ""))
+except Exception:
+    pass
+PY
+}
+require_claim_or_free() { # identity from FITSY_SIM_OWNER (defaults to "anonymous", which any claim blocks)
+  local me="${FITSY_SIM_OWNER:-anonymous}"
+  local owner; owner="$(claim_owner)"
+  if [ -n "$owner" ] && [ "$owner" != "$me" ]; then
+    printf '{"name":"sim-%s","status":"fail","summary":"simulator is claimed by %s","fix":"wait for the claim to expire (sim status shows it), coordinate, or claim it yourself once free: sim claim <you>"}
+' "$CMD" "$owner"
+    exit 1
+  fi
+}
 
 case "$CMD" in
+  claim)
+    ME="${FITSY_SIM_OWNER:?export FITSY_SIM_OWNER=<agent-name> first}"
+    MIN=30; [ "${1:-}" = "--minutes" ] && MIN="${2:-30}"
+    case "$MIN" in ''|*[!0-9]*)
+      printf '{"name":"sim-claim","status":"fail","summary":"--minutes must be a positive integer","fix":"sim claim --minutes 30"}
+'; exit 1;; esac
+    OWNER="$(claim_owner)"
+    if [ -n "$OWNER" ] && [ "$OWNER" != "$ME" ]; then
+      printf '{"name":"sim-claim","status":"fail","summary":"already claimed by %s","fix":"sim status shows the expiry; coordinate or wait"}
+' "$OWNER"
+      exit 1
+    fi
+    python3 - "$CLAIM_FILE" "$ME" "$MIN" <<'PY'
+import json, sys, time
+json.dump({"owner": sys.argv[2], "expires": time.time() + int(sys.argv[3]) * 60,
+           "claimed_at": time.strftime("%FT%TZ", time.gmtime())}, open(sys.argv[1], "w"))
+PY
+    printf '{"name":"sim-claim","status":"pass","owner":"%s","minutes":%s}
+' "$ME" "$MIN"
+    ;;
+  release)
+    ME="${FITSY_SIM_OWNER:?export FITSY_SIM_OWNER=<agent-name> first}"
+    OWNER="$(claim_owner)"
+    if [ -n "$OWNER" ] && [ "$OWNER" != "$ME" ]; then
+      printf '{"name":"sim-release","status":"fail","summary":"claimed by %s, not you","fix":"only the claim owner releases it"}
+' "$OWNER"
+      exit 1
+    fi
+    rm -f "$CLAIM_FILE"
+    printf '{"name":"sim-release","status":"pass","owner":"%s"}
+' "$ME"
+    ;;
   boot)
+    require_claim_or_free
     DEVICE="iPhone 16"
     [ "${1:-}" = "--device" ] && DEVICE="$2"
     UDID="$(booted_udid)"
@@ -30,11 +97,13 @@ case "$CMD" in
     printf '{"name":"sim-boot","status":"pass","udid":"%s"}\n' "$UDID"
     ;;
   install)
+    require_claim_or_free
     APP="${1:?path to .app}"
     xcrun simctl install booted "$APP"
     printf '{"name":"sim-install","status":"pass","app":"%s"}\n' "$APP"
     ;;
   launch)
+    require_claim_or_free
     if [ "${1:-}" = "--url" ]; then
       xcrun simctl openurl booted "$2"
       printf '{"name":"sim-launch","status":"pass","url":"%s"}\n' "$2"
@@ -59,17 +128,19 @@ case "$CMD" in
     fi
     ;;
   reset)
+    require_claim_or_free
     UDID="$(booted_udid)"; [ -n "$UDID" ] || { echo "nothing booted" >&2; exit 1; }
     xcrun simctl shutdown "$UDID" && xcrun simctl erase "$UDID"
     printf '{"name":"sim-reset","status":"pass","udid":"%s"}\n' "$UDID"
     ;;
   status)
     UDID="$(booted_udid)"
+    OWNER="$(claim_owner)"
     if [ -n "$UDID" ]; then
       NAME="$(xcrun simctl list devices booted | grep "$UDID" | sed -E 's/^ +([^(]+) \(.*/\1/' | head -1 | xargs)"
-      printf '{"name":"sim-status","status":"pass","booted":true,"udid":"%s","device":"%s"}\n' "$UDID" "$NAME"
+      printf '{"name":"sim-status","status":"pass","booted":true,"udid":"%s","device":"%s","claimed_by":"%s"}\n' "$UDID" "$NAME" "${OWNER:-}"
     else
-      printf '{"name":"sim-status","status":"pass","booted":false}\n'
+      printf '{"name":"sim-status","status":"pass","booted":false,"claimed_by":"%s"}\n' "${OWNER:-}"
     fi
     ;;
   *) echo "unknown subcommand: $CMD" >&2; exit 1 ;;
