@@ -68,6 +68,14 @@ checks:
     runs: [ci]
     why: Single-domain PRs (route-reviewers.sh). Moved from reviewer.yml 2026-09-07.
 
+  - name: context-freshness
+    script: context-freshness.sh
+    layer: 1
+    blocking: true
+    runs: [local, ci]
+    paths: ["CLAUDE.md", "apps/**/CLAUDE.md", "scripts/CLAUDE.md", "apps/mobile/FEATURE_MAP.md", "package.json", "apps/**", "packages/**", "scripts/**"]
+    why: T14 - a stale command or path in a context file misleads every zero-context author; caught a dead root-CLAUDE.md pointer on its first run (2026-09-07).
+
   - name: migration-safety
     script: migration-safety.sh
     layer: 1

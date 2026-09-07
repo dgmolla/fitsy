@@ -42,12 +42,12 @@ if echo "$CHANGED" | grep -qE '^apps/api/tests/e2e/'; then
 fi
 
 # All of apps/api/ except e2e tests                                        -> backend
-if echo "$CHANGED" | grep -vE '^apps/api/(tests/e2e/|package\.json$|tsconfig\.json$)' | grep -qE '^apps/api/'; then
+if echo "$CHANGED" | grep -vE '^apps/api/(tests/e2e/|package\.json$|tsconfig\.json$|CLAUDE\.md$)' | grep -qE '^apps/api/'; then
   AGENTS="$AGENTS backend"
 fi
 
 # All of apps/mobile/                                                         -> frontend
-if echo "$CHANGED" | grep -vE '^apps/mobile/(package\.json|tsconfig\.json)$' | grep -qE '^apps/mobile/'; then
+if echo "$CHANGED" | grep -vE '^apps/mobile/(package\.json|tsconfig\.json|CLAUDE\.md)$' | grep -qE '^apps/mobile/'; then
   AGENTS="$AGENTS frontend"
 fi
 

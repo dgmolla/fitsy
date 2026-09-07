@@ -9,7 +9,7 @@ and more.
 
 ## Current State
 
-Last audited: 2026-06-12. Full docs audit + refactor: `docs/docs-refactor-proposal-2026-06-11.md`.
+Last audited: 2026-06-12 (docs audit executed; proposal archived under `docs/engineering/archive/`).
 
 **Built and shipped**: Prisma schema + all API routes (filter expansion + `requireAuth` JWT middleware on reads), full mobile auth (Apple + Google Sign-In via Supabase, JWKS-verified — no local secret), 15-screen onboarding, GPS via `expo-location` (wired into search), search/detail/saved/profile screens (editorial cream palette), UE-first preload pipeline (Uber Eats discovery → FatSecret/Brave menus → Haiku macros), search 60× faster (LATERAL + denormalized MenuItem macros), PostHog analytics, security hardening, RevenueCat subscriptions wired on Test Store, EAS build config.
 

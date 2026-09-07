@@ -13,6 +13,7 @@ Multiple agents may review the same PR if it crosses domains.
 |---|---|
 | `apps/api/tests/e2e/` | **cto** |
 | `apps/(api\|mobile)/(package.json\|tsconfig.json)` | **cto** |
+| `(apps/(api\|mobile)\|scripts\|packages/shared)/CLAUDE.md` (docs-only PRs; rides with code otherwise) | **cto** |
 | `apps/api/` (all other files) | **backend** |
 | `apps/mobile/` (all other files) | **frontend** |
 | `packages/shared/src/`, `prisma/` | **backend** |
