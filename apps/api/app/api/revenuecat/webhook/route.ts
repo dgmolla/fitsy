@@ -1,7 +1,11 @@
 import { timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/restaurantService";
-import { logStatusChange, syncSubscriptionFromRevenueCat } from "@/lib/subscription";
+import {
+  logStatusChange,
+  readUserAndRow,
+  syncSubscriptionFromRevenueCat,
+} from "@/lib/subscription";
 
 /** Constant-time compare for the webhook auth header (avoids timing leaks). */
 function safeEqual(a: string, b: string): boolean {
@@ -114,13 +118,16 @@ async function handleTransfer(event: RevenueCatEvent): Promise<boolean> {
     Promise.all(to.map((id) => syncSubscriptionFromRevenueCat(id))),
     Promise.all(from.map((id) => syncSubscriptionFromRevenueCat(id))),
   ]);
+  // Stamped "now" so a delayed pre-transfer RENEWAL for the old account is
+  // dropped as stale instead of reviving an entitlement that moved away.
+  const expiredAt = new Date();
   await Promise.all(
     from
       .filter((_, i) => fromResults[i] === null)
       .map((id) =>
         prisma.subscription.updateMany({
           where: { userId: id },
-          data: { status: "expired" },
+          data: { status: "expired", lastEventAt: expiredAt },
         }),
       ),
   );
@@ -135,6 +142,15 @@ function statusForEvent(type: string, expiresAt: Date | null): string {
   // reflect that rather than reporting a stale "active".
   if (expiresAt && expiresAt.getTime() < Date.now()) return "expired";
   return "active";
+}
+
+/** Equal instants, with null only equal to null. */
+function sameInstant(a: Date | null, b: Date | null): boolean {
+  return (a?.getTime() ?? null) === (b?.getTime() ?? null);
+}
+
+function isoOrNull(d: Date | null): string {
+  return d ? d.toISOString() : "null";
 }
 
 // TRANSFER fans out to RevenueCat (8s timeout each, in parallel) plus DB
@@ -217,27 +233,28 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // The Subscription FK requires the User to exist. If it doesn't (deleted
     // account, or an event for a user we never provisioned), acknowledge and
     // move on instead of 500-ing into a RevenueCat retry loop.
-    const [user, existing] = await Promise.all([
-      prisma.user.findUnique({ where: { id: appUserId }, select: { id: true } }),
-      prisma.subscription.findUnique({
-        where: { userId: appUserId },
-        select: { status: true, lastEventAt: true },
-      }),
-    ]);
-    if (!user) {
+    const { userExists, row: existing } = await readUserAndRow(appUserId);
+    if (!userExists) {
       return NextResponse.json({ received: true }, { status: 200 });
     }
 
     // Stale delivery: the row already reflects something newer (a later
     // event, or a REST sync). Never apply it, but if it disagrees with what
-    // is stored, our ordering assumption may be wrong (clock skew, a sync
-    // that raced a renewal), so let RevenueCat's current truth settle it.
-    // Ack either way so RevenueCat stops retrying.
+    // is stored - status OR expiry, since a RENEWAL keeps "active" and only
+    // moves expiresAt - our ordering assumption may be wrong (clock skew, a
+    // sync that raced a renewal), so let RevenueCat's current truth settle
+    // it. Ack either way so RevenueCat stops retrying.
     if (existing?.lastEventAt && existing.lastEventAt.getTime() > eventAt.getTime()) {
-      if (existing.status !== status) {
+      const differs = [
+        ...(existing.status !== status ? [`status ${existing.status} vs ${status}`] : []),
+        ...(!sameInstant(existing.expiresAt, expiresAt)
+          ? [`expiresAt ${isoOrNull(existing.expiresAt)} vs ${isoOrNull(expiresAt)}`]
+          : []),
+      ];
+      if (differs.length > 0) {
         console.warn(
           `[subscription] ${appUserId} stale ${event.type} (${eventAt.toISOString()}) ` +
-            `would set ${status} but row is ${existing.status} @ ${existing.lastEventAt.toISOString()}; re-syncing`,
+            `disagrees with row @ ${existing.lastEventAt.toISOString()} (${differs.join(", ")}); re-syncing`,
         );
         if ((await syncSubscriptionFromRevenueCat(appUserId)) === null) {
           console.warn(`[subscription] ${appUserId} tiebreak sync failed: RevenueCat unreachable`);

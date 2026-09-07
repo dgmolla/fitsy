@@ -40,9 +40,17 @@ export interface RevenueCatEntitlementState {
    * `billing_issue` status the webhook writes.
    */
   billingIssue: boolean;
+  /**
+   * When RevenueCat served this snapshot, on RevenueCat's clock. Webhook
+   * `event_timestamp_ms` values are on that same clock, so ordering a sync
+   * against later events must use this rather than our server time.
+   * `null` when the response did not carry it.
+   */
+  requestDate: Date | null;
 }
 
 interface SubscriberResponse {
+  request_date_ms?: number | null;
   subscriber?: {
     entitlements?: Record<
       string,
@@ -94,10 +102,21 @@ export async function fetchProEntitlement(
     const body = (await res.json()) as SubscriberResponse;
     const subscriber = body.subscriber;
     if (!subscriber || typeof subscriber !== "object") return null;
+    const requestDate =
+      typeof body.request_date_ms === "number" && body.request_date_ms > 0
+        ? new Date(body.request_date_ms)
+        : null;
 
     const ent = subscriber.entitlements?.[PRO_ENTITLEMENT_ID];
     if (!ent) {
-      return { active: false, plan: null, expiresAt: null, transactionId: null, billingIssue: false };
+      return {
+        active: false,
+        plan: null,
+        expiresAt: null,
+        transactionId: null,
+        billingIssue: false,
+        requestDate,
+      };
     }
 
     const expiresAt = ent.expires_date ? new Date(ent.expires_date) : null;
@@ -110,6 +129,7 @@ export async function fetchProEntitlement(
       expiresAt: validExpiry,
       transactionId: sub?.original_transaction_id ?? sub?.store_transaction_id ?? null,
       billingIssue: Boolean(sub?.billing_issues_detected_at),
+      requestDate,
     };
   } catch (err) {
     console.warn("[revenuecat] subscriber lookup error", err instanceof Error ? err.message : err);

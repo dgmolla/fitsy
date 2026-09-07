@@ -46,14 +46,33 @@ export function subscriptionBypass(email: string): boolean {
  */
 const ENTITLED_STATUSES = new Set(["active", "billing_issue"]);
 
-type SubscriptionRow = { status: string; expiresAt: Date | null } | null;
+export type SubscriptionRow = {
+  status: string;
+  expiresAt: Date | null;
+  lastEventAt: Date | null;
+} | null;
 
-/** The fields every entitlement read needs; null when the user never subscribed. */
+/** The fields every entitlement read or write needs; null when the user never subscribed. */
 function readRow(userId: string): Promise<SubscriptionRow> {
   return prisma.subscription.findUnique({
     where: { userId },
-    select: { status: true, expiresAt: true },
+    select: { status: true, expiresAt: true, lastEventAt: true },
   });
+}
+
+/**
+ * What both write paths (webhook and REST sync) need before touching the
+ * row: whether the User still exists (the Subscription FK needs it, and a
+ * deleted account must be acked, not 500-ed) and the current row, if any.
+ */
+export async function readUserAndRow(
+  userId: string,
+): Promise<{ userExists: boolean; row: SubscriptionRow }> {
+  const [user, row] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId }, select: { id: true } }),
+    readRow(userId),
+  ]);
+  return { userExists: user !== null, row };
 }
 
 /** The row grants access iff its status is entitled and it hasn't lapsed. */
@@ -120,39 +139,77 @@ export async function optionalSubscription(
   return { payload: auth, entitled };
 }
 
+export interface SyncOptions {
+  /**
+   * Never persist a downgrade. Right after a purchase or restore RevenueCat's
+   * REST view can lag StoreKit by a few seconds; writing `expired` then would
+   * poison the row and bounce a paying user on their next launch. The read is
+   * retried a few times and, if still inactive, nothing is written.
+   */
+  neverDowngrade?: boolean;
+}
+
+/** Bounded so purchase/restore syncs stay under the client's 4 s cap. */
+const DOWNGRADE_RETRY_ATTEMPTS = 3;
+const DOWNGRADE_RETRY_DELAY_MS = 1_000;
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
 /**
  * Pull the user's current `pro` state from RevenueCat and write it to the
  * `Subscription` row, so the next `isEntitled` read reflects reality without
  * waiting for (or depending on) a webhook delivery.
  *
- * Returns the resulting entitlement, or `null` when RevenueCat couldn't be
- * consulted (not configured / unreachable) - in which case nothing is
- * written, so a transient outage can never downgrade a paying user.
+ * Returns the resulting entitlement, or `null` when nothing was written:
+ * RevenueCat couldn't be consulted (not configured / unreachable), or
+ * `neverDowngrade` blocked an inactive result. Either way a transient
+ * condition can never downgrade a paying user.
  *
  * A user RevenueCat has never seen subscribe gets no row (nothing to record);
  * an existing row is updated to whatever RevenueCat says, including
  * `expired` when the entitlement moved to another account (TRANSFER).
  */
-export async function syncSubscriptionFromRevenueCat(userId: string): Promise<boolean | null> {
-  const state = await fetchProEntitlement(userId);
+export async function syncSubscriptionFromRevenueCat(
+  userId: string,
+  { neverDowngrade = false }: SyncOptions = {},
+): Promise<boolean | null> {
+  // Fallback stamp when RevenueCat doesn't date its response: captured
+  // BEFORE the call so the row never claims knowledge of events that
+  // happened during the read (see `lastEventAt` below).
+  const readStartedAt = new Date();
+  let state = await fetchProEntitlement(userId);
   if (!state) return null;
 
-  const [user, existing] = await Promise.all([
-    prisma.user.findUnique({ where: { id: userId }, select: { id: true } }),
-    prisma.subscription.findUnique({ where: { userId }, select: { status: true } }),
-  ]);
+  if (neverDowngrade) {
+    for (let attempt = 1; attempt < DOWNGRADE_RETRY_ATTEMPTS && !state.active; attempt++) {
+      await sleep(DOWNGRADE_RETRY_DELAY_MS);
+      const again = await fetchProEntitlement(userId);
+      if (!again) break;
+      state = again;
+    }
+    if (!state.active) {
+      console.warn(
+        `[subscription] ${userId} RevenueCat still inactive after ${DOWNGRADE_RETRY_ATTEMPTS} reads; ` +
+          "not persisting a downgrade on a purchase/restore sync",
+      );
+      return null;
+    }
+  }
+
+  const { userExists, row: existing } = await readUserAndRow(userId);
   // No User row = nothing the FK will let us attach to (deleted account, or
   // an id we never provisioned). Report what RevenueCat says, persist nothing.
-  if (!user) return state.active;
+  if (!userExists) return state.active;
   if (!state.active && !existing) return false;
 
   // Same status vocabulary as the webhook (`statusForEvent`), so the two
   // write paths never disagree on what a row means.
   const status = !state.active ? "expired" : state.billingIssue ? "billing_issue" : "active";
-  // A REST read is the freshest truth there is, so stamp it as "now": a
-  // webhook event that was emitted before this read but arrives later is
-  // stale by definition and must not overwrite what we just learned.
-  const lastEventAt = new Date();
+  // The row's lastEventAt orders this read against webhook events, whose
+  // event_timestamp_ms is on RevenueCat's clock, so stamp RevenueCat's own
+  // response time: a RENEWAL emitted after it is applied even if Vercel's
+  // clock runs ahead, and one emitted before it is stale by definition.
+  const lastEventAt = state.requestDate ?? readStartedAt;
   await prisma.subscription.upsert({
     where: { userId },
     create: {

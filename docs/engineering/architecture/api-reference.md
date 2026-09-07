@@ -338,8 +338,10 @@ Replaced the old stubbed `/api/subscriptions/verify` receipt endpoint: clients n
 **Env:** `REVENUECAT_PUBLIC_API_KEY` (the app's public SDK key; RevenueCat's v1 subscriber read accepts it)
 
 Pull path for entitlement state: asks RevenueCat for the caller's `pro` entitlement (`services/revenuecatService.ts`) and upserts the `Subscription` row.
-Returns `{ active, synced }`; `synced: false` means RevenueCat could not be consulted and `active` is the existing DB state.
-A successful sync stamps the row's `lastEventAt` with the read time, so a webhook event generated earlier but delivered later is ignored (see the webhook below).
+Optional JSON body `{ reason }` with one of `boot` | `purchase` | `restore` | `sign_in` | `mismatch` (unknown values are ignored).
+For `purchase` and `restore` the server never persists a downgrade: an inactive RevenueCat read is retried up to 3 times, 1 s apart, and if still inactive nothing is written and a `[subscription]` warning is logged, because RevenueCat's REST view can lag StoreKit by seconds right after a purchase.
+Returns `{ active, synced }`; `synced: false` means nothing was written (RevenueCat could not be consulted, or a downgrade was withheld) and `active` is the existing DB state.
+A successful sync stamps the row's `lastEventAt` with RevenueCat's `request_date_ms` (falling back to a time captured before the read), so a webhook event generated earlier but delivered later is ignored while one emitted after the read is still applied (see the webhook below).
 The mobile client calls it right after a purchase or restore, on every sign-in, and when the device says Pro while the API serves locked responses.
 This covers the cases the webhook alone cannot: `TRANSFER` events carry no product/expiry, the first search after purchase can race webhook delivery, and a missed delivery would otherwise lock a paying user out until the next renewal.
 

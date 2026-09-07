@@ -19,9 +19,26 @@ import {
  * delivery that never landed). Plain launches use the cheaper GET
  * /api/subscriptions/status instead.
  *
- * Response: `{ active, synced }` - `synced: false` means RevenueCat couldn't
- * be consulted and `active` is the existing DB state instead.
+ * Body (optional): `{ reason }` - why the client is syncing. For `purchase`
+ * and `restore` the server never persists a downgrade (RevenueCat's REST
+ * view can lag StoreKit by seconds): an inactive read is retried briefly
+ * and, if still inactive, nothing is written. Unknown reasons are ignored.
+ *
+ * Response: `{ active, synced }` - `synced: false` means nothing was written
+ * (RevenueCat couldn't be consulted, or a downgrade was withheld) and
+ * `active` is the existing DB state instead.
  */
+const NEVER_DOWNGRADE_REASONS = new Set(["purchase", "restore"]);
+
+async function readReason(request: NextRequest): Promise<string | null> {
+  try {
+    const body = (await request.json()) as { reason?: unknown } | null;
+    return typeof body?.reason === "string" ? body.reason : null;
+  } catch {
+    return null; // no body, or not JSON: a plain sync
+  }
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
@@ -30,7 +47,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ active: true, synced: false });
   }
 
-  const active = await syncSubscriptionFromRevenueCat(auth.sub);
+  const reason = await readReason(request);
+  const active = await syncSubscriptionFromRevenueCat(auth.sub, {
+    neverDowngrade: reason !== null && NEVER_DOWNGRADE_REASONS.has(reason),
+  });
   if (active === null) {
     return NextResponse.json({
       active: await isEntitled(auth.sub, auth.email),

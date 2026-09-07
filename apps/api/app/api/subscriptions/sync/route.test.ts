@@ -17,6 +17,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { POST } from "./route";
 
 const req = new NextRequest("http://localhost/api/subscriptions/sync", { method: "POST" });
+const withReason = (reason: unknown) =>
+  new NextRequest("http://localhost/api/subscriptions/sync", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reason }),
+  });
 
 beforeEach(() => {
   jest.resetAllMocks();
@@ -35,8 +41,20 @@ describe("POST /api/subscriptions/sync", () => {
   it("syncs from RevenueCat and reports the fresh state", async () => {
     mockSync.mockResolvedValue(true);
     const res = await POST(req);
-    expect(mockSync).toHaveBeenCalledWith("user-1");
+    expect(mockSync).toHaveBeenCalledWith("user-1", { neverDowngrade: false });
     expect(await res.json()).toEqual({ active: true, synced: true });
+  });
+
+  it.each(["purchase", "restore"])("never downgrades on a %s sync", async (reason) => {
+    mockSync.mockResolvedValue(true);
+    await POST(withReason(reason));
+    expect(mockSync).toHaveBeenCalledWith("user-1", { neverDowngrade: true });
+  });
+
+  it.each(["boot", "sign_in", "mismatch", "bogus", 42])("allows a downgrade for reason %p", async (reason) => {
+    mockSync.mockResolvedValue(false);
+    await POST(withReason(reason));
+    expect(mockSync).toHaveBeenCalledWith("user-1", { neverDowngrade: false });
   });
 
   it("reports inactive when RevenueCat says the user is not entitled", async () => {
