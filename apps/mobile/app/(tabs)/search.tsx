@@ -272,10 +272,20 @@ function LockedDishTeaser({ variant }: { variant: 'hero' | 'card' }) {
 // `opening` guards a fast double-tap from pushing two detail screens while
 // the (cached, usually instant) flag read is still a microtask away.
 let opening = false;
-async function openRestaurantOrPaywall(locked: boolean, navigate: () => void): Promise<void> {
+async function openRestaurantOrPaywall(
+  locked: boolean,
+  navigate: () => void,
+  unlocking?: () => void,
+): Promise<void> {
   if (opening) return;
   opening = true;
   try {
+    if (locked && unlocking) {
+      // Entitled but the rows are still locked (server row lagging a
+      // purchase): the paywall is the wrong place, re-sync instead.
+      unlocking();
+      return;
+    }
     if (locked && (await hasUsedPreviewSample())) {
       await routeToPaywall();
       return;
@@ -288,7 +298,7 @@ async function openRestaurantOrPaywall(locked: boolean, navigate: () => void): P
 
 // ─── Hero card (#01) ──────────────────────────────────────────────────────────
 
-function HeroCard({ result, locked, containerRef }: { result: RestaurantResult; locked: boolean; containerRef?: React.RefObject<View | null> }) {
+function HeroCard({ result, locked, unlocking, containerRef }: { result: RestaurantResult; locked: boolean; unlocking?: () => void; containerRef?: React.RefObject<View | null> }) {
   const bm = result.bestMatch;
   const imgUri = result.photoUrl || getMockImage(result.name);
   return (
@@ -307,7 +317,7 @@ function HeroCard({ result, locked, containerRef }: { result: RestaurantResult; 
         void openRestaurantOrPaywall(locked, () => router.push({
           pathname: `/restaurant/${result.id}`,
           params: { address: result.address, distance: result.distanceMiles?.toFixed(1), photoUrl: result.photoUrl, cuisine: result.cuisineTags?.[0] },
-        }));
+        }), unlocking);
       }}
       accessibilityLabel={`${result.name}${result.bestMatch ? `, best match: ${result.bestMatch.name}` : ''}`}
       accessibilityRole="button"
@@ -380,7 +390,7 @@ function DishCard({ result, locked, onPress }: { result: RestaurantResult; locke
 
 // ─── Numbered restaurant section (#02+) ──────────────────────────────────────
 
-function RestaurantSection({ result, index, locked }: { result: RestaurantResult; index: number; locked: boolean }) {
+function RestaurantSection({ result, index, locked, unlocking }: { result: RestaurantResult; index: number; locked: boolean; unlocking?: () => void }) {
   const indexStr = String(index + 2).padStart(2, '0');
   const position = index + 1;
 
@@ -388,7 +398,7 @@ function RestaurantSection({ result, index, locked }: { result: RestaurantResult
     void openRestaurantOrPaywall(locked, () => router.push({
       pathname: `/restaurant/${result.id}`,
       params: { address: result.address, distance: result.distanceMiles?.toFixed(1), photoUrl: result.photoUrl, cuisine: result.cuisineTags?.[0] },
-    }));
+    }), unlocking);
   }
 
   function handleSectionPress() {
@@ -784,17 +794,21 @@ export default function SearchScreen() {
   // fresh object every render) can't cancel a pending attempt.
   const mismatchArgsRef = useRef({ inputs, location, query, doFetch });
   mismatchArgsRef.current = { inputs, location, query, doFetch };
-  useEntitlementMismatch({
-    entitled,
-    isPro,
-    locked,
-    fetchSeq,
-    syncEntitlement,
-    refetch: useCallback(() => {
-      const { inputs: current, location: loc, query: q, doFetch: run } = mismatchArgsRef.current;
-      void run(current, loc.lat, loc.lng, q, loc.source, true);
-    }, []),
-  });
+  const mismatchRefetch = useCallback(() => {
+    const { inputs: current, location: loc, query: q, doFetch: run } = mismatchArgsRef.current;
+    void run(current, loc.lat, loc.lng, q, loc.source, true);
+  }, []);
+  useEntitlementMismatch({ entitled, isPro, locked, fetchSeq, syncEntitlement, refetch: mismatchRefetch });
+  // Entitled, yet the rows are locked: the server row is still catching up
+  // with a purchase (grace window). Every lock CTA on this screen becomes an
+  // "unlocking" state whose tap re-syncs and refetches instead of pushing
+  // the paywall - which would fire its entitled-redirect straight back here
+  // and look like a dead button.
+  const unlocking = entitled === true && locked === true;
+  const resyncNow = useCallback(() => {
+    void syncEntitlement('mismatch').then(() => mismatchRefetch());
+  }, [syncEntitlement, mismatchRefetch]);
+  const onLockedTap = unlocking ? resyncNow : undefined;
 
   // Pull-to-refresh: re-fire a fresh API call against the current location.
   // Resets pagination (handled inside doFetch) so the user gets a clean
@@ -1104,20 +1118,24 @@ export default function SearchScreen() {
         </View>
       )}
 
-      {canSearch && heroResult && <HeroCard result={heroResult} locked={locked === true} containerRef={tourHeroRef} />}
+      {canSearch && heroResult && <HeroCard result={heroResult} locked={locked === true} unlocking={onLockedTap} containerRef={tourHeroRef} />}
 
       {canSearch && locked && (results.length > 0) && (
         // Same destination as the lock card in the footer: the banner reads
         // as a call to action, so it must act like one.
         <Pressable
           style={s.lockedBanner}
-          onPress={() => { void routeToPaywall(); }}
+          onPress={unlocking ? resyncNow : () => { void routeToPaywall(); }}
           accessibilityRole="button"
-          accessibilityLabel="Subscribe to unlock all restaurants"
+          accessibilityLabel={unlocking ? 'Unlocking your subscription, tap to refresh' : 'Subscribe to unlock all restaurants'}
         >
-          <Ionicons name="lock-closed" size={14} color={EDITORIAL.greenAccent} />
+          {unlocking
+            ? <ActivityIndicator size="small" color={EDITORIAL.greenAccent} />
+            : <Ionicons name="lock-closed" size={14} color={EDITORIAL.greenAccent} />}
           <Text style={s.lockedBannerText}>
-            Subscribe to see exactly which meals at each spot fit your macros.
+            {unlocking
+              ? 'Unlocking your subscription... tap to refresh if this takes more than a moment.'
+              : 'Subscribe to see exactly which meals at each spot fit your macros.'}
           </Text>
         </Pressable>
       )}
@@ -1135,6 +1153,17 @@ export default function SearchScreen() {
       // Count = rows the first page holds past the open three, with a
       // trailing "+" while more pages exist: the API's `meta.total` is only
       // the page size, never the true match count.
+      if (unlocking) {
+        return (
+          <LockedUnlockCard
+            title="Unlocking your subscription..."
+            subtitle="Your purchase went through. Tap to refresh if this takes more than a moment."
+            onPress={resyncNow}
+            accessibilityLabel="Unlocking your subscription, tap to refresh"
+            style={s.lockedCard}
+          />
+        );
+      }
       return (
         <LockedUnlockCard
           title={hiddenCount > 0 ? `${hiddenCount}${nextCursor ? '+' : ''} more restaurants` : 'Unlock every match near you'}
@@ -1151,7 +1180,7 @@ export default function SearchScreen() {
         <ActivityIndicator size="small" color={EDITORIAL.greenAccent} />
       </View>
     );
-  }, [loadingMore, locked, results.length, hiddenCount, nextCursor]);
+  }, [loadingMore, locked, results.length, hiddenCount, nextCursor, unlocking, resyncNow]);
 
   // Only the very first load (before any query interaction, nothing to show
   // yet) gets the full-screen brand loader. Query-driven refetches keep the
@@ -1189,7 +1218,7 @@ export default function SearchScreen() {
           data={canSearch ? (locked ? listResults.slice(0, FREE_RESULT_COUNT - 1) : listResults) : []}
           keyExtractor={(r) => r.id}
           renderItem={({ item, index }) => (
-            <RestaurantSection result={item} index={index} locked={locked === true} />
+            <RestaurantSection result={item} index={index} locked={locked === true} unlocking={onLockedTap} />
           )}
           ListHeaderComponent={header}
           ListFooterComponent={renderFooter}
@@ -1200,10 +1229,12 @@ export default function SearchScreen() {
             // forward - it must not depend on rows having loaded.
             isOnboardingPreview && locked !== false && !loading && !outOfArea && canSearch ? (
               <LockedUnlockCard
-                title="Unlock every match near you"
-                subtitle="Subscribe to search restaurants by your macros, with the dish that fits at each."
-                onPress={() => { void routeToPaywall(); }}
-                accessibilityLabel="Subscribe to unlock all restaurants"
+                title={unlocking ? 'Unlocking your subscription...' : 'Unlock every match near you'}
+                subtitle={unlocking
+                  ? 'Your purchase went through. Tap to refresh if this takes more than a moment.'
+                  : 'Subscribe to search restaurants by your macros, with the dish that fits at each.'}
+                onPress={unlocking ? resyncNow : () => { void routeToPaywall(); }}
+                accessibilityLabel={unlocking ? 'Unlocking your subscription, tap to refresh' : 'Subscribe to unlock all restaurants'}
                 style={s.lockedCard}
               />
             ) : null

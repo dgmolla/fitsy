@@ -100,10 +100,18 @@ export function useEntitlementVerdict({
   }, []);
   // When the store last confirmed Pro (markStoreConfirmed); 0 = never.
   const storeConfirmedAtRef = useRef(0);
+  const inStoreGrace = useCallback(() => Date.now() - storeConfirmedAtRef.current < STORE_GRACE_MS, []);
 
   /** Server round trip only: no state. Null = couldn't ask, or the session moved on. */
   const fetchVerdict = useCallback(async (reason: EntitlementSyncReason, userId: string) => {
-    const active = await fetchServerEntitlement(reason);
+    // Inside the grace window every re-read goes over the wire as 'purchase':
+    // the server's never-downgrade path. A 'mismatch' sync fires at 0 ms
+    // right after a purchase, and with a lagging RevenueCat read the server
+    // would otherwise persist "expired" with a fresh lastEventAt onto an
+    // existing row and mark the real INITIAL_PURCHASE webhook stale. The
+    // caller's reason still tags the client-side analytics below.
+    const wireReason = reason !== 'boot' && inStoreGrace() ? 'purchase' : reason;
+    const active = await fetchServerEntitlement(wireReason);
     if (active === null) {
       trackEntitlementSyncFailed({ reason });
       return null;
@@ -118,7 +126,7 @@ export function useEntitlementVerdict({
       return null;
     }
     return active;
-  }, []);
+  }, [inStoreGrace]);
 
   /** Store a server answer; resolves to the verdict now in effect. */
   const applyVerdict = useCallback(
@@ -127,7 +135,7 @@ export function useEntitlementVerdict({
       if (devicePro !== active) {
         trackEntitlementMismatch({ reason, device_pro: devicePro, server_active: active });
       }
-      if (!active && devicePro && Date.now() - storeConfirmedAtRef.current < STORE_GRACE_MS) {
+      if (!active && devicePro && inStoreGrace()) {
         // Inside the post-store grace window (see STORE_GRACE_MS) a server
         // "false" never downgrades: the verdict set in markStoreConfirmed
         // stands and the cache is left alone. Bouncing a user who just paid
@@ -138,7 +146,7 @@ export function useEntitlementVerdict({
       void writeCachedEntitlement(active);
       return active;
     },
-    [customerInfoRef, setEntitled],
+    [customerInfoRef, inStoreGrace, setEntitled],
   );
 
   const runSync = useCallback(
@@ -157,6 +165,11 @@ export function useEntitlementVerdict({
         // into a "session expired" bounce.
         const { data } = await supabase.auth.getSession();
         if (!data.session) {
+          // Inside the grace window the store just confirmed Pro; a session
+          // auth-js dropped meanwhile must not bounce the charged user (the
+          // paywall refuses to start a purchase without one, so this is the
+          // rare drop-during-StoreKit case). Mirrors applyVerdict.
+          if (inStoreGrace()) return entitledRef.current;
           setEntitled(false);
           return false;
         }
@@ -165,7 +178,7 @@ export function useEntitlementVerdict({
         return null;
       }
     },
-    [runSync, setEntitled],
+    [runSync, inStoreGrace, setEntitled],
   );
 
   const resolveAtBoot = useCallback(
@@ -192,9 +205,17 @@ export function useEntitlementVerdict({
         void answer.then((late) => {
           if (late !== null && !isCancelled()) applyVerdict('boot', late);
         });
+      } else if (!server && isProActive(info)) {
+        // The stored row says no while the device says Pro: a missed webhook
+        // or an earlier lagging sync. The boot read is a cheap DB read, so
+        // escalate once to a RevenueCat re-read; the paywall's entitled
+        // redirect lets the user in if it comes back true. Without this the
+        // mismatch handler (which lives on the search screen) never mounts
+        // and a subscriber is locked out until they tap Restore.
+        void syncEntitlement('mismatch');
       }
     },
-    [fetchVerdict, applyVerdict, setEntitled],
+    [fetchVerdict, applyVerdict, syncEntitlement, setEntitled],
   );
 
   const settleAfterBootFailure = useCallback(

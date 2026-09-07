@@ -136,13 +136,29 @@ describe('boot', () => {
     expect(result.current.entitled).toBe(false);
   });
 
-  it('boot takes a server "false" at face value even with a cached "true" and a Pro device', async () => {
+  it('boot takes a server "false" at face value, then escalates ONCE to a RevenueCat re-read when the device says Pro', async () => {
     mockStore[ENTITLEMENT_CACHE_KEY] = 'true';
     mockRc.identifyPurchasesUser.mockResolvedValue(proInfo);
     mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: false, status: 'expired', expiresAt: null });
+    const pending = deferred<{ active: boolean; synced: boolean }>();
+    mockApi.syncSubscription.mockReturnValue(pending.promise);
     const { result } = renderProvider();
     await waitFor(() => expect(result.current.entitled).toBe(false));
     expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBe('false');
+    await flush();
+    expect(mockApi.syncSubscription).toHaveBeenCalledTimes(1);
+    expect(mockApi.syncSubscription).toHaveBeenCalledWith('mismatch');
+    // The re-read finds the subscription: the user is let in without Restore.
+    await act(async () => { pending.resolve({ active: true, synced: true }); });
+    await waitFor(() => expect(result.current.entitled).toBe(true));
+  });
+
+  it('does not escalate a server "false" when the device agrees', async () => {
+    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: false, status: 'expired', expiresAt: null });
+    const { result } = renderProvider();
+    await waitFor(() => expect(result.current.entitled).toBe(false));
+    await flush();
+    expect(mockApi.syncSubscription).not.toHaveBeenCalled();
   });
 
   it('without a session settles to false at once, never asks the server, and ignores a stale cache', async () => {

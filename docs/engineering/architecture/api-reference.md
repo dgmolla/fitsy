@@ -339,7 +339,7 @@ Replaced the old stubbed `/api/subscriptions/verify` receipt endpoint: clients n
 
 Pull path for entitlement state: asks RevenueCat for the caller's `pro` entitlement (`services/revenuecatService.ts`) and upserts the `Subscription` row.
 Optional JSON body `{ reason }` with one of `boot` | `purchase` | `restore` | `sign_in` | `mismatch` (unknown values are ignored).
-For `purchase` and `restore` the server never persists a downgrade: an inactive RevenueCat read is retried up to 3 times, 1 s apart, and if still inactive nothing is written and a `[subscription]` warning is logged, because RevenueCat's REST view can lag StoreKit by seconds right after a purchase.
+For `purchase` and `restore` the server never persists a downgrade: an inactive RevenueCat read is re-read every 1 s for up to 6 s, and if still inactive nothing is written and a `[subscription]` warning is logged, because RevenueCat's REST view can lag StoreKit by seconds right after a purchase.
 Returns `{ active, synced }`; `synced: false` means nothing was written (RevenueCat could not be consulted, or a downgrade was withheld) and `active` is the existing DB state.
 A successful sync stamps the row's `lastEventAt` with RevenueCat's `request_date_ms` (falling back to a time captured before the read), so a webhook event generated earlier but delivered later is ignored while one emitted after the read is still applied (see the webhook below).
 The mobile client calls it right after a purchase or restore, on every sign-in, and when the device says Pro while the API serves locked responses.
@@ -357,7 +357,8 @@ Push path for RevenueCat subscription lifecycle events (purchase, renewal, cance
 Purchases made under an anonymous pre-login id resolve to the merged account via the event's `aliases`.
 `billing_issue` rows stay entitled until `expiresAt` passes (store grace period), in both write paths.
 Idempotent: each row records the `event_timestamp_ms` of the newest event applied (`Subscription.lastEventAt`), and a lifecycle event older than that is acked with 200 without writing, so out-of-order deliveries cannot regress the row (equal timestamps re-apply the same payload harmlessly).
-If a stale event would have produced a different status than the stored one, the handler re-reads RevenueCat via the same sync as a tiebreaker and logs a `[subscription]` warning before acking.
+If a stale event would have produced a different status or `expiresAt` than the stored row, the handler logs a `[subscription]` warning and re-reads RevenueCat via the same sync as the tiebreaker; if RevenueCat cannot be read it returns 500 so RevenueCat retries, exactly as `TRANSFER` does.
+A stale event that agrees with the row is acked without any lookup.
 An event without a timestamp is applied as "now" rather than dropped.
 Every status transition from either write path logs one `[subscription] <userId> status <from> -> <to> (<webhook|sync>)` warning for Vercel log search.
 

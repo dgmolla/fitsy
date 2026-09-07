@@ -7,6 +7,7 @@ import { RestaurantCard, SkeletonCard } from '@/components/PreviewRestaurantCard
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { usePurchases } from '@/lib/usePurchases';
 import { useRedirectOnceEntitled } from '@/lib/useRedirectOnceEntitled';
+import { ensureSessionForPurchase } from '@/lib/purchaseSession';
 import { fetchPreviewRestaurants, type PreviewRestaurant } from '@/lib/previewSearch';
 import { openLegalLink } from '@/lib/legalLinks';
 
@@ -64,6 +65,7 @@ export default function ResubscribeScreen() {
       Alert.alert('Just a moment', 'Plans are still loading, please try again.');
       return;
     }
+    if (!(await ensureSessionForPurchase())) return;
     setLoading(true);
     try {
       const isPro = await purchase(annual, 'resubscribe');
@@ -77,6 +79,7 @@ export default function ResubscribeScreen() {
   }
 
   async function handleRestore() {
+    if (!(await ensureSessionForPurchase())) return;
     setRestoring(true);
     try {
       const isPro = await restore();

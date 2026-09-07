@@ -2,17 +2,16 @@ import React, { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { pushProfileToServer } from '@/lib/profileSync';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { PaywallExitModals, type PaywallExitModal } from '@/components/PaywallExitModals';
 import { EDITORIAL, FONTS } from '@/lib/brand';
-import { getOnboardingData } from '@/lib/onboardingStorage';
+import { recordOnboardingComplete } from '@/lib/onboardingCompletion';
 import { usePurchases } from '@/lib/usePurchases';
 import { useRedirectOnceEntitled } from '@/lib/useRedirectOnceEntitled';
+import { ensureSessionForPurchase } from '@/lib/purchaseSession';
 import { openLegalLink } from '@/lib/legalLinks';
-import { trackOnboardingCompleted, trackOnboardingScreenView } from '@/lib/analytics';
+import { trackOnboardingScreenView } from '@/lib/analytics';
 
 type PlanId = 'monthly' | 'yearly';
 
@@ -65,13 +64,10 @@ export default function PaymentScreen() {
   // restored. Shared by handleStart and handleRestore.
   async function completeOnboarding(discounted = false) {
     // Claim the one redirect before anything awaits, so the entitled hook
-    // cannot fire a second replace once `loading` flips back.
+    // cannot fire a second replace once `loading` flips back. The recording
+    // itself is idempotent (a re-entered paywall must not double-count).
     claim();
-    await AsyncStorage.setItem('onboardingComplete', 'true');
-    if (discounted) await AsyncStorage.setItem('discountApplied', 'true');
-    pushProfileToServer();
-    const d = await getOnboardingData();
-    trackOnboardingCompleted({ goal: d.goal, activity_level: d.activity, has_weight: d.weightKg !== undefined, has_height: d.heightCm !== undefined });
+    await recordOnboardingComplete(discounted);
     router.replace('/(tabs)/search');
   }
 
@@ -100,6 +96,7 @@ export default function PaymentScreen() {
       );
       return;
     }
+    if (!(await ensureSessionForPurchase())) return;
     setLoading(true);
     try {
       const isPro = await purchase(pkg, discounted ? 'onboarding_discount' : 'onboarding');
@@ -113,6 +110,7 @@ export default function PaymentScreen() {
   // Apple requires a Restore Purchases path. It lives here (the paywall) rather
   // than in-app, since a reinstalled subscriber re-runs onboarding.
   async function handleRestore() {
+    if (!(await ensureSessionForPurchase())) return;
     setRestoring(true);
     try {
       const isPro = await restore();

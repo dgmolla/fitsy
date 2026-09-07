@@ -39,15 +39,18 @@ afterAll(() => {
 
 describe("syncSubscriptionFromRevenueCat", () => {
   const expiresAt = new Date(Date.now() + 86_400_000);
+  let log: jest.SpyInstance;
   let warn: jest.SpyInstance;
 
   beforeEach(() => {
     mockUserFindUnique.mockResolvedValue({ id: "u1" });
     mockUpsert.mockResolvedValue({});
+    log = jest.spyOn(console, "info").mockImplementation(() => {});
     warn = jest.spyOn(console, "warn").mockImplementation(() => {});
     jest.useFakeTimers({ now: new Date("2026-09-06T12:00:00Z") });
   });
   afterEach(() => {
+    log.mockRestore();
     warn.mockRestore();
     jest.useRealTimers();
   });
@@ -127,7 +130,8 @@ describe("syncSubscriptionFromRevenueCat", () => {
     });
     mockFindUnique.mockResolvedValue({ status: "active" });
     await syncSubscriptionFromRevenueCat("u1");
-    expect(warn).toHaveBeenCalledWith("[subscription] u1 status active -> expired (sync)");
+    expect(log).toHaveBeenCalledWith("[subscription] u1 status active -> expired (sync)");
+    expect(warn).not.toHaveBeenCalled();
   });
 
   it("does not log when the sync confirms the stored status", async () => {
@@ -140,6 +144,7 @@ describe("syncSubscriptionFromRevenueCat", () => {
     });
     mockFindUnique.mockResolvedValue({ status: "active" });
     await syncSubscriptionFromRevenueCat("u1");
+    expect(log).not.toHaveBeenCalled();
     expect(warn).not.toHaveBeenCalled();
   });
 
@@ -220,10 +225,10 @@ describe("syncSubscriptionFromRevenueCat", () => {
     const inactive = { active: false, plan: null, expiresAt: null, transactionId: null, billingIssue: false };
     const active = { active: true, plan: "p", expiresAt, transactionId: null, billingIssue: false };
 
-    /** Drive the 1 s retry sleeps under fake timers. */
+    /** Drive the 1 s retry sleeps under fake timers past the 6 s budget. */
     async function syncWithRetries(): Promise<boolean | null> {
       const pending = syncSubscriptionFromRevenueCat("u1", { neverDowngrade: true });
-      await jest.advanceTimersByTimeAsync(3_000);
+      await jest.advanceTimersByTimeAsync(10_000);
       return pending;
     }
 
@@ -240,13 +245,24 @@ describe("syncSubscriptionFromRevenueCat", () => {
       );
     });
 
-    it("writes nothing and returns null when still inactive after three reads", async () => {
+    it("writes nothing and returns null when still inactive once the 6 s budget is spent", async () => {
       mockFetchProEntitlement.mockResolvedValue(inactive);
       mockFindUnique.mockResolvedValue({ status: "active" });
       expect(await syncWithRetries()).toBeNull();
-      expect(mockFetchProEntitlement).toHaveBeenCalledTimes(3);
+      // First read at t=0, then one re-read per second while elapsed < 6 s.
+      expect(mockFetchProEntitlement).toHaveBeenCalledTimes(7);
       expect(mockUpsert).not.toHaveBeenCalled();
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining("[subscription] u1 RevenueCat still inactive"));
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining("[subscription] u1 RevenueCat still inactive after 7 reads over 6000 ms"),
+      );
+    });
+
+    it("stops retrying early when a re-read fails outright, without writing", async () => {
+      mockFetchProEntitlement.mockResolvedValueOnce(inactive).mockResolvedValueOnce(null);
+      mockFindUnique.mockResolvedValue({ status: "active" });
+      expect(await syncWithRetries()).toBeNull();
+      expect(mockFetchProEntitlement).toHaveBeenCalledTimes(2);
+      expect(mockUpsert).not.toHaveBeenCalled();
     });
 
     it("does not retry an active first read", async () => {

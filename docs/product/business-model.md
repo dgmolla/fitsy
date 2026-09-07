@@ -69,20 +69,14 @@ Fitsy does **not** use Stripe webhooks. Subscription state is kept current via:
    `EXPIRATION`, `BILLING_ISSUE`, and other events to a Fitsy API endpoint.
    The handler upserts the user's subscription record in PostgreSQL.
 
-2. **`GET /api/subscriptions/status`** - the server's entitlement verdict
-   (`{ active, status, expiresAt }`). The mobile app gates on `active` at every
-   launch; the on-device RevenueCat state is only a hint that triggers
-   `POST /api/subscriptions/sync` (re-reads RevenueCat and upserts the row).
-   (The old `POST /api/subscriptions/verify` receipt stub was removed
-   2026-06-16 - clients no longer send receipts.)
+2. **`GET /api/subscriptions/status`** - the server's entitlement verdict (`{ active, status, expiresAt }`).
+   The mobile app gates on `active` at every launch; the on-device RevenueCat state is only a hint that triggers `POST /api/subscriptions/sync` (re-reads RevenueCat and upserts the row).
+   (The old `POST /api/subscriptions/verify` receipt stub was removed 2026-06-16 - clients no longer send receipts.)
 
-3. **API gate** - `optionalSubscription()` (`apps/api/lib/subscription.ts`)
-   guards `/api/restaurants` and `/api/restaurants/[id]/menu`, reading the
-   webhook/sync-maintained `Subscription` row. It never rejects: an unentitled
-   caller gets a locked/truncated response (`locked: true`), which powers the
-   onboarding teaser and the lapsed-subscriber browse-then-paywall flow. The
-   former `requireSubscription()` 402 path was deleted 2026-09. Bypass:
-   `ALLOW_STUB_SUBSCRIPTIONS` (dev) and `DEMO_REVIEW_EMAILS` (App Store reviewer).
+3. **API gate** - `optionalSubscription()` (`apps/api/lib/subscription.ts`) guards `/api/restaurants` and `/api/restaurants/[id]/menu`, reading the webhook/sync-maintained `Subscription` row.
+   It never rejects: an unentitled caller gets a locked/truncated response (`locked: true`), which powers the onboarding teaser and the lapsed-subscriber browse-then-paywall flow.
+   The former `requireSubscription()` 402 path was deleted 2026-09.
+   Bypass: `ALLOW_STUB_SUBSCRIPTIONS` (dev) and `DEMO_REVIEW_EMAILS` (App Store reviewer).
 
 ### Database model (Prisma)
 

@@ -30,6 +30,12 @@ import {
  */
 const NEVER_DOWNGRADE_REASONS = new Set(["purchase", "restore"]);
 
+// The purchase/restore retry loop (up to ~6 s of re-reads, each with an 8 s
+// RevenueCat timeout) can outlive Vercel's 10 s default. A kill after a
+// successful final read but before the upsert would lose the write, so give
+// it the same headroom as the webhook.
+export const maxDuration = 30;
+
 async function readReason(request: NextRequest): Promise<string | null> {
   try {
     const body = (await request.json()) as { reason?: unknown } | null;

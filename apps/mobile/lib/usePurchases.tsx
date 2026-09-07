@@ -111,10 +111,11 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     customerInfoRef.current = info;
     setCustomerInfoState(info);
   }, []);
-  // The user the boot effect identified, so a SIGNED_IN that supabase-js
-  // emits while recovering that same session on cold start is not treated
-  // as a fresh sign-in (boot owns that resolution).
+  // Which user boot identified, and whether boot is still running: the
+  // SIGNED_IN supabase-js emits while recovering that session on cold start
+  // must not start a second identify + sync (boot owns that resolution).
   const bootUserIdRef = useRef<string | null>(null);
+  const bootPendingRef = useRef(true);
   const verdict = useEntitlementVerdict({ customerInfoRef });
   const {
     entitled,
@@ -136,6 +137,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     let unsubscribe: (() => void) | undefined;
     let cancelled = false;
     const isCancelled = () => cancelled;
+    bootPendingRef.current = true;
 
     (async () => {
       let userId: string | undefined;
@@ -160,6 +162,8 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
         // The seams swallow their own errors, but no gate may hold forever.
         console.warn('[purchases] boot failed', err instanceof Error ? err.message : err);
         await settleAfterBootFailure(userId, isCancelled);
+      } finally {
+        bootPendingRef.current = false;
       }
     })();
 
@@ -169,27 +173,33 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     };
   }, [setCustomerInfo, resolveAtBoot, settleAfterBootFailure]);
 
-  // Keep RevenueCat identity in lockstep with auth. logIn/logOut as the user
-  // signs in/out so entitlements follow the account, not the device.
+  // Keep RevenueCat identity in lockstep with auth (logIn/logOut so
+  // entitlements follow the account, not the device). The listener returns
+  // synchronously: supabase-js awaits every callback, and a getSession inside
+  // one waits on the client's own init, which waits on this callback.
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session) {
-        // Session recovery on cold start re-emits SIGNED_IN for the user the
-        // boot effect already identified and resolved: nothing to do.
+        // Boot owns the first identify + sync (a recovery SIGNED_IN can land
+        // before it has even read the session); a later duplicate for the
+        // user boot or a previous sign-in resolved is nothing to do either.
+        if (bootPendingRef.current) return;
         if (session.user.id === bootUserIdRef.current && entitledRef.current !== null) return;
-        await resolveAfterSignIn(async () => {
+        void resolveAfterSignIn(async () => {
           const info = await identifyPurchasesUser(session.user.id);
           if (info) setCustomerInfo(info);
           return info;
+        }).then(() => {
+          bootUserIdRef.current = session.user.id;
         });
-        // From here a duplicate SIGNED_IN for this user is a no-op too.
-        bootUserIdRef.current = session.user.id;
       } else if (event === 'SIGNED_OUT') {
         bootUserIdRef.current = null;
         beginSignOut();
-        await logoutPurchasesUser();
-        setCustomerInfo(await fetchCustomerInfo());
-        await settleAfterSignOut();
+        void (async () => {
+          await logoutPurchasesUser();
+          setCustomerInfo(await fetchCustomerInfo());
+          await settleAfterSignOut();
+        })();
       }
     });
     return () => sub.subscription.unsubscribe();

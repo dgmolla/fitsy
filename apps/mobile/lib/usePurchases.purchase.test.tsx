@@ -8,6 +8,7 @@ import {
   flush,
   mockAnalytics,
   mockApi,
+  mockAuth,
   mockRc,
   mockStore,
   proInfo,
@@ -103,7 +104,7 @@ describe('purchase / restore', () => {
     jest.useRealTimers();
   });
 
-  it('inside the grace window a sync resolves to the verdict in effect (true) whatever the reason; after it the server wins', async () => {
+  it('inside the grace window a sync resolves to the verdict in effect (true) and goes over the wire as "purchase"; after it the server wins', async () => {
     const { result } = renderProvider();
     await waitFor(() => expect(result.current.ready).toBe(true));
     useFakeTimersKeepingFlush();
@@ -113,18 +114,47 @@ describe('purchase / restore', () => {
     expect(result.current.entitled).toBe(true);
 
     // The search screen's mismatch handler fires right away; REST still lags.
+    mockApi.syncSubscription.mockClear();
     mockApi.syncSubscription.mockResolvedValue({ active: false, synced: true });
     let verdict: boolean | null = null;
     await act(async () => { verdict = await result.current.syncEntitlement('mismatch'); });
     expect(verdict).toBe(true);
     expect(result.current.entitled).toBe(true);
     expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBe('true');
+    // Never-downgrade on the server side too: the wire reason is 'purchase'.
+    expect(mockApi.syncSubscription).toHaveBeenLastCalledWith('purchase');
+    expect(mockAnalytics.trackEntitlementMismatch).toHaveBeenLastCalledWith({
+      reason: 'mismatch', device_pro: true, server_active: false,
+    });
 
     act(() => { jest.advanceTimersByTime(STORE_GRACE_MS); });
     await act(async () => { verdict = await result.current.syncEntitlement('mismatch'); });
     expect(verdict).toBe(false);
     expect(result.current.entitled).toBe(false);
     expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBe('false');
+    expect(mockApi.syncSubscription).toHaveBeenLastCalledWith('mismatch');
+    jest.useRealTimers();
+  });
+
+  it('a session dropped right after a purchase does not bounce the charged user (grace window)', async () => {
+    const { result } = renderProvider();
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    useFakeTimersKeepingFlush();
+    mockRc.purchasePackage.mockResolvedValue({ outcome: 'purchased', customerInfo: proInfo });
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    await act(async () => { await result.current.purchase({} as never, 'test'); });
+    expect(result.current.entitled).toBe(true);
+
+    mockAuth.session = null;
+    let verdict: boolean | null = null;
+    await act(async () => { verdict = await result.current.syncEntitlement('mismatch'); });
+    expect(verdict).toBe(true);
+    expect(result.current.entitled).toBe(true);
+
+    act(() => { jest.advanceTimersByTime(STORE_GRACE_MS); });
+    await act(async () => { verdict = await result.current.syncEntitlement('mismatch'); });
+    expect(verdict).toBe(false);
+    expect(result.current.entitled).toBe(false);
     jest.useRealTimers();
   });
 

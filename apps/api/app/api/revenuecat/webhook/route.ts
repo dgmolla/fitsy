@@ -243,7 +243,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // is stored - status OR expiry, since a RENEWAL keeps "active" and only
     // moves expiresAt - our ordering assumption may be wrong (clock skew, a
     // sync that raced a renewal), so let RevenueCat's current truth settle
-    // it. Ack either way so RevenueCat stops retrying.
+    // it. If that truth can't be read, 500 so RevenueCat retries (as
+    // handleTransfer does): acking would leave a possibly-wrong row in place
+    // with nothing left to correct it. A stale event that agrees with the
+    // row is simply acked.
     if (existing?.lastEventAt && existing.lastEventAt.getTime() > eventAt.getTime()) {
       const differs = [
         ...(existing.status !== status ? [`status ${existing.status} vs ${status}`] : []),
@@ -258,6 +261,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         );
         if ((await syncSubscriptionFromRevenueCat(appUserId)) === null) {
           console.warn(`[subscription] ${appUserId} tiebreak sync failed: RevenueCat unreachable`);
+          return NextResponse.json({ error: "RevenueCat lookup unavailable" }, { status: 500 });
         }
       }
       return NextResponse.json({ received: true }, { status: 200 });

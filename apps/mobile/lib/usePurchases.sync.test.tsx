@@ -8,6 +8,7 @@ import {
   flush,
   mockAnalytics,
   mockApi,
+  freeInfo,
   mockAuth,
   mockRc,
   mockStore,
@@ -124,6 +125,23 @@ describe('sign-in', () => {
     expect(seen).toEqual([null, false, null, true]);
   });
 
+  it('a SIGNED_IN emitted while boot is still pending is ignored, and the listener never blocks', async () => {
+    // Device free, so boot's own fold has no escalation to make; any sync
+    // request would come from the (ignored) SIGNED_IN.
+    const identify = deferred<typeof freeInfo>();
+    mockRc.identifyPurchasesUser.mockReturnValue(identify.promise);
+    const { result } = renderProvider();
+    await flush();
+    expect(result.current.entitled).toBeNull();
+    let returned: unknown = 'not called';
+    await act(async () => { returned = mockAuth.listener?.('SIGNED_IN', { user: { id: 'u1' } }); });
+    expect(returned).toBeUndefined();
+    await act(async () => { identify.resolve(freeInfo); });
+    await waitFor(() => expect(result.current.entitled).not.toBeNull());
+    expect(mockRc.identifyPurchasesUser).toHaveBeenCalledTimes(1);
+    expect(mockApi.syncSubscription).not.toHaveBeenCalled();
+  });
+
   it('ignores the SIGNED_IN that session recovery re-emits for the user boot already resolved', async () => {
     mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null });
     const { result, seen } = renderProviderTracking();
@@ -146,10 +164,13 @@ describe('sign-out', () => {
     const logout = deferred<undefined>();
     mockRc.logoutPurchasesUser.mockReturnValue(logout.promise);
     mockAuth.session = null;
+    let returned: unknown = 'not called';
     await act(async () => {
-      mockAuth.listener?.('SIGNED_OUT', null);
+      returned = mockAuth.listener?.('SIGNED_OUT', null);
       await new Promise((r) => setImmediate(r));
     });
+    // The listener returned synchronously (supabase-js awaits callbacks).
+    expect(returned).toBeUndefined();
     // Logout still in flight: held, cache already gone.
     expect(result.current.entitled).toBeNull();
     expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBeUndefined();

@@ -194,26 +194,30 @@ describe("readUserAndRow", () => {
 });
 
 describe("logStatusChange", () => {
+  let log: jest.SpyInstance;
   let warn: jest.SpyInstance;
   beforeEach(() => {
+    log = jest.spyOn(console, "info").mockImplementation(() => {});
     warn = jest.spyOn(console, "warn").mockImplementation(() => {});
   });
   afterEach(() => {
+    log.mockRestore();
     warn.mockRestore();
   });
 
-  it("logs a tagged from -> to line when the status changes", () => {
+  it("logs a tagged from -> to line at info level when the status changes", () => {
     logStatusChange("u1", "active", "expired", "sync");
-    expect(warn).toHaveBeenCalledWith("[subscription] u1 status active -> expired (sync)");
+    expect(log).toHaveBeenCalledWith("[subscription] u1 status active -> expired (sync)");
+    expect(warn).not.toHaveBeenCalled();
   });
 
   it("reports a first row as coming from none", () => {
     logStatusChange("u1", null, "active", "webhook");
-    expect(warn).toHaveBeenCalledWith("[subscription] u1 status none -> active (webhook)");
+    expect(log).toHaveBeenCalledWith("[subscription] u1 status none -> active (webhook)");
   });
 
   it("stays silent when the status is unchanged (renewals, repeated syncs)", () => {
     logStatusChange("u1", "active", "active", "sync");
-    expect(warn).not.toHaveBeenCalled();
+    expect(log).not.toHaveBeenCalled();
   });
 });

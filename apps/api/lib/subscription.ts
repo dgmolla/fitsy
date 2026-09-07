@@ -149,8 +149,14 @@ export interface SyncOptions {
   neverDowngrade?: boolean;
 }
 
-/** Bounded so purchase/restore syncs stay under the client's 4 s cap. */
-const DOWNGRADE_RETRY_ATTEMPTS = 3;
+/**
+ * Wall-clock budget for purchase/restore re-reads, measured from the first
+ * read. Worst case (budget + one delay + one 8 s RevenueCat timeout) stays
+ * well inside the route's 30 s maxDuration. It can exceed the client's 4 s
+ * post-purchase cap on a cold start; that is fine because the client only
+ * stops waiting - the request keeps running and the late write still lands.
+ */
+const DOWNGRADE_RETRY_BUDGET_MS = 6_000;
 const DOWNGRADE_RETRY_DELAY_MS = 1_000;
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -181,15 +187,18 @@ export async function syncSubscriptionFromRevenueCat(
   if (!state) return null;
 
   if (neverDowngrade) {
-    for (let attempt = 1; attempt < DOWNGRADE_RETRY_ATTEMPTS && !state.active; attempt++) {
+    let reads = 1;
+    while (!state.active && Date.now() - readStartedAt.getTime() < DOWNGRADE_RETRY_BUDGET_MS) {
       await sleep(DOWNGRADE_RETRY_DELAY_MS);
       const again = await fetchProEntitlement(userId);
+      reads++;
       if (!again) break;
       state = again;
     }
     if (!state.active) {
+      const elapsed = Date.now() - readStartedAt.getTime();
       console.warn(
-        `[subscription] ${userId} RevenueCat still inactive after ${DOWNGRADE_RETRY_ATTEMPTS} reads; ` +
+        `[subscription] ${userId} RevenueCat still inactive after ${reads} reads over ${elapsed} ms; ` +
           "not persisting a downgrade on a purchase/restore sync",
       );
       return null;
@@ -241,6 +250,10 @@ export async function syncSubscriptionFromRevenueCat(
  * One line per entitlement transition, tagged so Vercel's log search finds
  * every status flip regardless of which write path caused it. Unchanged
  * status stays silent: renewals and repeated syncs would otherwise drown it.
+ * Info level on purpose: these are healthy lifecycle events, and Vercel's
+ * Warning filter is reserved for the degraded paths (withheld downgrades,
+ * stale conflicts, failed tiebreaks). `info` rather than `log` because the
+ * structural gate (check 6) blocks new plain-log call sites.
  */
 export function logStatusChange(
   userId: string,
@@ -249,5 +262,5 @@ export function logStatusChange(
   source: "sync" | "webhook",
 ): void {
   if (from === to) return;
-  console.warn(`[subscription] ${userId} status ${from ?? "none"} -> ${to} (${source})`);
+  console.info(`[subscription] ${userId} status ${from ?? "none"} -> ${to} (${source})`); // eslint-disable-line no-console
 }

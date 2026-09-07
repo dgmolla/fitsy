@@ -106,13 +106,14 @@ describe("POST /api/revenuecat/webhook - idempotency", () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("[subscription] user-1 stale EXPIRATION"));
   });
 
-  it("still acks a conflicting stale event when the tiebreaker sync can't reach RevenueCat", async () => {
+  it("returns 500 (RevenueCat retries) when a conflicting stale event's tiebreaker can't reach RevenueCat", async () => {
     mockReadUserAndRow.mockResolvedValue({ userExists: true, row: { status: "active", lastEventAt: new Date(EVENT_MS + 60_000) } });
     mockSync.mockResolvedValue(null);
     const res = await POST(
       makeRequest(event({ type: "EXPIRATION", expiration_at_ms: Date.now() - 1000 }), AUTH),
     );
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(500);
+    expect(mockSubscriptionUpsert).not.toHaveBeenCalled();
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("tiebreak sync failed"));
   });
 
