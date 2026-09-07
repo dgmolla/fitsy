@@ -23,6 +23,7 @@ import { pushProfileToServer } from '@/lib/profileSync';
 import { useTheme } from '@/lib/theme';
 import { FilterPopup } from '@/components/FilterPopup';
 import { ProfileEditSheet, type ProfileEditSheetProps } from '@/components/ProfileEditSheet';
+import { MACRO_COLORS } from '@/lib/macroColors';
 import { calculateMacros, macrosToStored } from '@/lib/macroCalculator';
 import { openLegalLink } from '@/lib/legalLinks';
 import {
@@ -272,8 +273,8 @@ export default function ProfileScreen() {
           </Pressable>
           <View style={s.statDivider} />
           <Pressable style={s.statBlock} onPress={() => openEditField('activity')}>
-            <Text style={[s.statValue, { fontFamily: FONTS.nunitoSans, fontSize: 14 }]}>
-              {profile.activity ? profile.activity.replace(/_/g, ' ').split(' ')[0]!.charAt(0).toUpperCase() + profile.activity.replace(/_/g, ' ').split(' ')[0]!.slice(1) : '—'}
+            <Text style={s.statValueWord}>
+              {ACTIVITY_OPTIONS.find((o) => o.id === profile.activity)?.label ?? '—'}
             </Text>
             <Text style={s.statLabel}>Activity</Text>
           </Pressable>
@@ -291,9 +292,9 @@ export default function ProfileScreen() {
             </View>
 
             <View style={s.macroRow}>
-              <MacroBlock label="Protein" value={macroTargets.protein || '—'} unit="g" color="#5B7C6B" />
-              <MacroBlock label="Carbs" value={macroTargets.carbs || '—'} unit="g" color="#8B7355" />
-              <MacroBlock label="Fat" value={macroTargets.fat || '—'} unit="g" color="#7B6B8A" />
+              <MacroBlock label="Protein" value={macroTargets.protein || '—'} unit="g" color={MACRO_COLORS.protein} />
+              <MacroBlock label="Carbs" value={macroTargets.carbs || '—'} unit="g" color={MACRO_COLORS.carbs} />
+              <MacroBlock label="Fat" value={macroTargets.fat || '—'} unit="g" color={MACRO_COLORS.fat} />
               <MacroBlock label="Calories" value={macroTargets.calories || '—'} unit="" color={EDITORIAL.text} />
             </View>
           </Pressable>
@@ -412,7 +413,7 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: EDITORIAL.cream,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: EDITORIAL.border,
@@ -436,17 +437,16 @@ const s = StyleSheet.create({
     marginBottom: 2,
   },
   goalBannerValue: {
-    fontFamily: FONTS.nunitoSansSemiBold,
-    fontSize: 18,
-    fontWeight: '700',
-    color: EDITORIAL.text,
-    letterSpacing: -0.4,
+    fontFamily: FONTS.frauncesMedium,
+    fontSize: 19,
+    color: EDITORIAL.green,
+    letterSpacing: -0.3,
   },
   // Stats
   statsCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: EDITORIAL.cream,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: EDITORIAL.border,
@@ -456,11 +456,18 @@ const s = StyleSheet.create({
   },
   statBlock: { flex: 1, alignItems: 'center', gap: 2 },
   statValue: {
-    fontFamily: FONTS.nunitoSansSemiBold,
-    fontSize: 18,
-    fontWeight: '700',
+    fontFamily: FONTS.frauncesRegular,
+    fontSize: 20,
     color: EDITORIAL.text,
     letterSpacing: -0.5,
+  },
+  statValueWord: {
+    fontFamily: FONTS.nunitoSansSemiBold,
+    fontSize: 14,
+    fontWeight: '600',
+    color: EDITORIAL.text,
+    letterSpacing: -0.2,
+    paddingTop: 5,
   },
   statLabel: {
     fontFamily: FONTS.nunitoSansSemiBold,
@@ -473,7 +480,7 @@ const s = StyleSheet.create({
   statDivider: { width: 1, height: 24, backgroundColor: EDITORIAL.border },
   // Macros
   macroCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: EDITORIAL.cream,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: EDITORIAL.border,
@@ -512,8 +519,8 @@ const s = StyleSheet.create({
   macroRow: { flexDirection: 'row' },
   macroBlock: { flex: 1, alignItems: 'center', gap: 3 },
   macroDot: { width: 6, height: 6, borderRadius: 3 },
-  macroValue: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 22, fontWeight: '800', letterSpacing: -0.8 },
-  macroUnit: { fontFamily: FONTS.nunitoSans, fontSize: 13, fontWeight: '500', color: EDITORIAL.textSoft },
+  macroValue: { fontFamily: FONTS.frauncesRegular, fontSize: 24, letterSpacing: -0.6 },
+  macroUnit: { fontFamily: FONTS.nunitoSans, fontSize: 12, fontWeight: '500', color: EDITORIAL.textSoft },
   macroLabel: {
     fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 9,
@@ -527,7 +534,7 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: EDITORIAL.cream,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: EDITORIAL.border,

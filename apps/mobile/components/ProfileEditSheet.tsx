@@ -6,13 +6,13 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
   type ViewStyle,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { EDITORIAL, FONTS } from '@/lib/brand';
+import { SerifField, StepperControl } from '@/components/StepperControl';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -51,6 +51,10 @@ interface HeightProps extends BaseProps {
 }
 
 export type ProfileEditSheetProps = ChoiceProps | NumericProps | HeightProps;
+
+function clampInt(n: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, n));
+}
 
 // ─── Shared animation hooks ─────────────────────────────────────────────────
 
@@ -136,7 +140,7 @@ function ChoiceContent({ options, value, onApply, dismiss }: ChoiceProps & { dis
               onPress={() => setSelected(opt.id)}
             >
               {opt.icon && (
-                <Ionicons name={opt.icon as any} size={18} color={active ? '#FDFBF7' : EDITORIAL.textSoft} />
+                <Ionicons name={opt.icon as any} size={18} color={active ? EDITORIAL.cream : EDITORIAL.textSoft} />
               )}
               <View style={{ flex: 1 }}>
                 <Text style={[s.choiceLabel, active && s.choiceLabelActive]}>{opt.label}</Text>
@@ -144,7 +148,7 @@ function ChoiceContent({ options, value, onApply, dismiss }: ChoiceProps & { dis
                   <Text style={[s.choiceDesc, active && { color: 'rgba(253,251,247,0.6)' }]}>{opt.description}</Text>
                 )}
               </View>
-              {active && <Ionicons name="checkmark" size={18} color="#FDFBF7" />}
+              {active && <Ionicons name="checkmark" size={18} color={EDITORIAL.cream} />}
             </Pressable>
           );
         })}
@@ -158,7 +162,7 @@ function ChoiceContent({ options, value, onApply, dismiss }: ChoiceProps & { dis
 
 // ─── Numeric content ────────────────────────────────────────────────────────
 
-function NumericContent({ value, unit, placeholder, onApply, dismiss }: NumericProps & { dismiss: (cb: () => void) => void }) {
+function NumericContent({ title, value, unit, placeholder, onApply, dismiss }: NumericProps & { dismiss: (cb: () => void) => void }) {
   const [draft, setDraft] = useState(value);
 
   useEffect(() => { setDraft(value); }, [value]);
@@ -166,26 +170,16 @@ function NumericContent({ value, unit, placeholder, onApply, dismiss }: NumericP
   return (
     <>
       <View style={s.numericRow}>
-        <Pressable style={s.stepper} onPress={() => setDraft(String(Math.max(0, (parseInt(draft) || 0) - 1)))}>
-          <Text style={s.stepperText}>−</Text>
-        </Pressable>
-
-        <TextInput
-          style={s.numInput}
+        <StepperControl
+          size="lg"
+          label={title}
           value={draft}
-          onChangeText={(t) => setDraft(t.replace(/[^0-9.]/g, ''))}
-          keyboardType="number-pad"
-          placeholder={placeholder ?? '—'}
-          placeholderTextColor="#C8C8C8"
+          unit={unit}
+          placeholder={placeholder}
           maxLength={5}
-          textAlign="center"
-          selectTextOnFocus
+          onChangeText={setDraft}
+          onStep={(dir) => setDraft((prev) => String(clampInt((parseInt(prev, 10) || 0) + dir, 0, 99999)))}
         />
-        <Text style={s.numUnit}>{unit}</Text>
-
-        <Pressable style={s.stepper} onPress={() => setDraft(String((parseInt(draft) || 0) + 1))}>
-          <Text style={s.stepperText}>+</Text>
-        </Pressable>
       </View>
       <Pressable style={s.applyBtn} onPress={() => dismiss(() => onApply(draft))}>
         <Text style={s.applyText}>Apply</Text>
@@ -206,9 +200,10 @@ function HeightContent({ valueCm, onApply, dismiss }: HeightProps & { dismiss: (
     setCm(valueCm);
     if (valueCm) {
       const total = parseFloat(valueCm);
-      const totalInches = total / 2.54;
+      // Round the whole-inch total first so 71.65in becomes 6'0", not 5'12".
+      const totalInches = Math.round(total / 2.54);
       setFt(String(Math.floor(totalInches / 12)));
-      setInches(String(Math.round(totalInches % 12)));
+      setInches(String(totalInches % 12));
     }
   }, [valueCm]);
 
@@ -232,49 +227,21 @@ function HeightContent({ valueCm, onApply, dismiss }: HeightProps & { dismiss: (
 
       {mode === 'metric' ? (
         <View style={s.numericRow}>
-          <TextInput
-            style={s.numInput}
+          <StepperControl
+            size="lg"
+            label="Height in centimeters"
             value={cm}
-            onChangeText={(t) => setCm(t.replace(/[^0-9]/g, ''))}
-            keyboardType="number-pad"
+            unit="cm"
             placeholder="170"
-            placeholderTextColor="#C8C8C8"
             maxLength={3}
-            textAlign="center"
-            selectTextOnFocus
+            onChangeText={setCm}
+            onStep={(dir) => setCm((prev) => String(clampInt((parseInt(prev, 10) || 0) + dir, 0, 999)))}
           />
-          <Text style={s.numUnit}>cm</Text>
         </View>
       ) : (
         <View style={s.heightImperial}>
-          <View style={s.heightField}>
-            <TextInput
-              style={s.numInput}
-              value={ft}
-              onChangeText={(t) => setFt(t.replace(/[^0-9]/g, ''))}
-              keyboardType="number-pad"
-              placeholder="5"
-              placeholderTextColor="#C8C8C8"
-              maxLength={1}
-              textAlign="center"
-              selectTextOnFocus
-            />
-            <Text style={s.numUnit}>ft</Text>
-          </View>
-          <View style={s.heightField}>
-            <TextInput
-              style={s.numInput}
-              value={inches}
-              onChangeText={(t) => setInches(t.replace(/[^0-9]/g, ''))}
-              keyboardType="number-pad"
-              placeholder="9"
-              placeholderTextColor="#C8C8C8"
-              maxLength={2}
-              textAlign="center"
-              selectTextOnFocus
-            />
-            <Text style={s.numUnit}>in</Text>
-          </View>
+          <SerifField size="lg" label="Height feet" value={ft} unit="ft" placeholder="5" maxLength={1} onChangeText={setFt} />
+          <SerifField size="lg" label="Height inches" value={inches} unit="in" placeholder="9" maxLength={2} onChangeText={setInches} />
         </View>
       )}
 
@@ -294,16 +261,17 @@ const s = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
   },
+  // Keep in step with FilterPopup's card (mirrors the web "Tweak macros" tile).
   card: {
     width: '100%',
-    maxWidth: 340,
-    borderRadius: 28,
-    backgroundColor: '#FDFBF7',
+    maxWidth: 356,
+    borderRadius: 24,
+    backgroundColor: EDITORIAL.cream,
     borderWidth: 1,
-    borderColor: '#E8E2D8',
-    paddingHorizontal: 24,
+    borderColor: EDITORIAL.border,
+    paddingHorizontal: 22,
     paddingTop: 24,
-    paddingBottom: 22,
+    paddingBottom: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.1,
@@ -311,11 +279,11 @@ const s = StyleSheet.create({
     elevation: 10,
   },
   title: {
-    fontFamily: FONTS.frauncesDisplay,
-    fontSize: 22,
-    color: EDITORIAL.text,
-    letterSpacing: -0.5,
-    marginBottom: 18,
+    fontFamily: FONTS.frauncesMedium,
+    fontSize: 20,
+    color: EDITORIAL.green,
+    letterSpacing: -0.3,
+    marginBottom: 10,
   },
 
   // Choice
@@ -342,7 +310,7 @@ const s = StyleSheet.create({
     color: EDITORIAL.text,
     letterSpacing: -0.2,
   },
-  choiceLabelActive: { color: '#FDFBF7' },
+  choiceLabelActive: { color: EDITORIAL.cream },
   choiceDesc: {
     fontFamily: FONTS.nunitoSans,
     fontSize: 12,
@@ -352,57 +320,19 @@ const s = StyleSheet.create({
 
   // Numeric
   numericRow: {
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 20,
-    marginBottom: 12,
-  },
-  stepper: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F0EBE3',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepperText: {
-    fontFamily: FONTS.nunitoSans,
-    fontSize: 22,
-    fontWeight: '300',
-    color: '#3A4F41',
-    marginTop: -1,
-  },
-  numInput: {
-    fontFamily: FONTS.nunitoSansSemiBold,
-    flex: 1,
-    fontSize: 40,
-    fontWeight: '700',
-    color: '#1B3A26',
-    letterSpacing: -1.5,
-    padding: 0,
-    marginHorizontal: 8,
-    maxWidth: 140,
-  },
-  numUnit: {
-    fontFamily: FONTS.nunitoSans,
-    fontSize: 18,
-    fontWeight: '500',
-    color: '#7A8C7E',
-    marginRight: 8,
+    paddingVertical: 22,
+    marginBottom: 10,
   },
 
   // Height imperial
   heightImperial: {
     flexDirection: 'row',
-    gap: 16,
+    gap: 28,
     justifyContent: 'center',
-    paddingVertical: 20,
-    marginBottom: 12,
-  },
-  heightField: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    paddingVertical: 22,
+    marginBottom: 10,
   },
 
   // Toggle
@@ -426,20 +356,20 @@ const s = StyleSheet.create({
     fontWeight: '600',
     color: EDITORIAL.textSoft,
   },
-  toggleTextActive: { color: '#FDFBF7' },
+  toggleTextActive: { color: EDITORIAL.cream },
 
   // Apply
   applyBtn: {
-    borderRadius: 16,
-    paddingVertical: 16,
+    borderRadius: 14,
+    paddingVertical: 15,
     alignItems: 'center',
-    backgroundColor: '#1B3A26',
+    backgroundColor: EDITORIAL.green,
   },
   applyText: {
     fontFamily: FONTS.nunitoSansSemiBold,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
-    color: '#FDFBF7',
+    color: EDITORIAL.cream,
     letterSpacing: -0.2,
   },
 });
