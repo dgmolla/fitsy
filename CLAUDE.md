@@ -86,10 +86,9 @@ Environments: ephemeral (CI + `prisma/seed.ts`), **dev** (`fitsy-dev` Supabase: 
 ```bash
 git config core.hooksPath .githooks
 ```
-This activates a **fast local gate** (`scripts/pre-push.sh`) — runs structural
-tests and TypeScript checks before every push. This is a quick filter, not a
-substitute for the full Pre-PR Gate above (which also requires `npm test` and
-`npm run build`). Catches the most common CI failures in seconds.
+`npm install` wires this automatically (the `prepare` script). The hook runs
+layers 0-1 of `scripts/verify/` on your changes before every push — a quick
+filter, not a substitute for `npm run verify`.
 
 ### Environment Variables
 Managed via Vercel CLI. All secrets live in Vercel → auto-synced to deploys. `Production` holds prod creds; `Preview` and `Development` hold the dev environment's.
@@ -137,13 +136,13 @@ committing. Fix all failures in your session. Do not open a PR that
 you haven't verified passes locally.
 
 ```bash
-bash scripts/structural-tests.sh                              # structural tests
-npx tsc --noEmit                                              # type check
-npm test                                                     # unit + integration
-npm run build                                                # build (catches what tests miss)
-git diff --cached --name-only | grep -E '\.(js|js\.map)$'    # must be empty (no build output)
-# E2E: use mobile MCP tools to verify critical flows in the Expo Go simulator
+npm run verify         # layers 0-2 on your changes (structural, secrets, lint, types, tests)
+npm run verify:all     # everything, including the production build
+# E2E: use mobile MCP tools to verify critical flows in the simulator
 ```
+
+The check list lives in `scripts/verify/registry.yml`; CI (`verify.yml`), the
+pre-push hook, and agents all run the same scripts.
 
 **The rule**: if CI would catch it, you should have caught it first.
 
