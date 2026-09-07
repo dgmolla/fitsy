@@ -79,8 +79,21 @@ export const POST_PURCHASE_SYNC_CAP_MS = 4000;
 // the webhook corrects the server row well inside the window.
 export const STORE_GRACE_MS = 60_000;
 
+// Boot: the cached verdict is hydrated at once, but screens are held (`ready`
+// false) for up to this long so the boot sync can overrule a stale cache
+// BEFORE anything gates on it. Otherwise a cached "false" sends the tabs
+// layout to the paywall a moment before the server says "true" (and nothing
+// on the paywall used to react), or a cached "true" flashes the search shell
+// before an expired verdict lands. Past the cap the cache (or the offline
+// fallback) stands and a late answer is applied when it arrives.
+export const BOOT_VERDICT_CAP_MS = 1500;
+
 export interface PurchasesContextValue {
-  /** True once configure, the first CustomerInfo read, and `entitled` have settled. */
+  /**
+   * True once configure, the first CustomerInfo read, and `entitled` have
+   * settled: the server answered, or BOOT_VERDICT_CAP_MS passed with the
+   * cache / offline fallback standing in.
+   */
   ready: boolean;
   /**
    * The server's verdict: may this user use the app? `null` until resolved
@@ -144,8 +157,12 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   }, []);
   // When the store last confirmed Pro (settleAfterStore); 0 = never.
   const storeConfirmedAtRef = useRef(0);
+  // One request in flight per reason: concurrent callers (the boot effect
+  // and a screen asking at the same moment, two mismatch handlers) share it
+  // instead of hitting the API twice for the same answer.
+  const inflightRef = useRef(new Map<EntitlementSyncReason, Promise<boolean | null>>());
 
-  const syncEntitlement = useCallback(
+  const runSync = useCallback(
     async (reason: EntitlementSyncReason): Promise<boolean | null> => {
       let userId: string;
       try {
@@ -194,9 +211,22 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
+  const syncEntitlement = useCallback(
+    (reason: EntitlementSyncReason): Promise<boolean | null> => {
+      const existing = inflightRef.current.get(reason);
+      if (existing) return existing;
+      const inflight = runSync(reason).finally(() => {
+        inflightRef.current.delete(reason);
+      });
+      inflightRef.current.set(reason, inflight);
+      return inflight;
+    },
+    [runSync],
+  );
+
   // Boot: configure once, align identity to the current session, wire the
-  // listener, then resolve `entitled` (cache first for instant UI, then the
-  // server, then the offline fallback).
+  // listener, then resolve `entitled` (cache first, the server given
+  // BOOT_VERDICT_CAP_MS to overrule it, then the offline fallback).
   useEffect(() => {
     const configured = configurePurchases();
     let unsubscribe: (() => void) | undefined;
@@ -222,19 +252,20 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
 
         cached = await readCachedEntitlement();
         if (cancelled) return;
-        if (cached !== null) {
-          setEntitled(cached);
-          setReady(true);
-        }
-        const server = await syncEntitlement('boot');
+        if (cached !== null) setEntitled(cached);
+        // `ready` waits for the server or the cap, whichever comes first (see
+        // BOOT_VERDICT_CAP_MS). A no-session answer is immediate.
+        const server = await withinMs(syncEntitlement('boot'), BOOT_VERDICT_CAP_MS);
         if (cancelled) return;
         if (server === null && cached === null) {
-          // Offline on a launch with no cached verdict: one of the two places
-          // the phone's RevenueCat state is used as a verdict rather than a
-          // hint (the other is a confirmed purchase/restore, settleAfterStore),
-          // so a subscriber without signal isn't bounced to the paywall. The
-          // next successful sync replaces it.
-          setEntitled(isProActive(info));
+          // Offline (or past the cap) on a launch with no cached verdict:
+          // one of the two places the phone's RevenueCat state is used as a
+          // verdict rather than a hint (the other is a confirmed
+          // purchase/restore, settleAfterStore), so a subscriber without
+          // signal isn't bounced to the paywall. Functional update: a slow
+          // server answer that landed meanwhile wins over the fallback, and
+          // one that lands later replaces it.
+          setEntitled((current) => current ?? isProActive(info));
         }
         setReady(true);
       } catch (err) {

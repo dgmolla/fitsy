@@ -85,12 +85,21 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 }));
 
 import { ENTITLEMENT_CACHE_KEY } from './entitlement';
-import { POST_PURCHASE_SYNC_CAP_MS, PurchasesProvider, STORE_GRACE_MS, usePurchases } from './usePurchases';
+import {
+  BOOT_VERDICT_CAP_MS,
+  POST_PURCHASE_SYNC_CAP_MS,
+  PurchasesProvider,
+  STORE_GRACE_MS,
+  usePurchases,
+} from './usePurchases';
 
 const wrapper = ({ children }: { children: React.ReactNode }) => (
   <PurchasesProvider>{children}</PurchasesProvider>
 );
 const render = () => renderHook(() => usePurchases(), { wrapper });
+
+/** Drain the microtask/immediate queue so pending provider work settles. */
+const flush = () => act(async () => { await new Promise((r) => setImmediate(r)); });
 
 /** A promise the test resolves by hand, to hold the server mid-flight. */
 function deferred<T>() {
@@ -129,16 +138,80 @@ describe('boot', () => {
     });
   });
 
-  it('hydrates from the cache for instant UI, then lets the server overrule it', async () => {
+  it('holds `ready` until a prompt server answer overrules a stale cached "false" (no paywall bounce)', async () => {
+    jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick', 'queueMicrotask'] });
+    mockStore[ENTITLEMENT_CACHE_KEY] = 'false';
+    const pending = deferred<{ active: boolean; status: null; expiresAt: null }>();
+    mockApi.fetchSubscriptionStatus.mockReturnValue(pending.promise);
+    const { result } = render();
+    await flush();
+    await flush();
+    // Cache hydrated, but nothing may gate on it yet.
+    expect(result.current.entitled).toBe(false);
+    expect(result.current.ready).toBe(false);
+    await act(async () => { pending.resolve({ active: true, status: null, expiresAt: null }); });
+    await flush();
+    expect(result.current.ready).toBe(true);
+    expect(result.current.entitled).toBe(true);
+    expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBe('true');
+    jest.useRealTimers();
+  });
+
+  it('past the cap the cached verdict stands and becomes ready; the late server answer is still applied', async () => {
+    jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick', 'queueMicrotask'] });
+    mockStore[ENTITLEMENT_CACHE_KEY] = 'false';
+    const pending = deferred<{ active: boolean; status: null; expiresAt: null }>();
+    mockApi.fetchSubscriptionStatus.mockReturnValue(pending.promise);
+    const { result } = render();
+    await flush();
+    await flush();
+    expect(result.current.ready).toBe(false);
+    act(() => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
+    await flush();
+    expect(result.current.ready).toBe(true);
+    expect(result.current.entitled).toBe(false);
+    await act(async () => { pending.resolve({ active: true, status: null, expiresAt: null }); });
+    await flush();
+    expect(result.current.entitled).toBe(true);
+    expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBe('true');
+    jest.useRealTimers();
+  });
+
+  it('hydrates from the cache, then lets a prompt server "false" overrule it before ready (no search flash)', async () => {
+    jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick', 'queueMicrotask'] });
     mockStore[ENTITLEMENT_CACHE_KEY] = 'true';
     const pending = deferred<{ active: boolean; status: null; expiresAt: null }>();
     mockApi.fetchSubscriptionStatus.mockReturnValue(pending.promise);
     const { result } = render();
-    await waitFor(() => expect(result.current.ready).toBe(true));
+    await flush();
+    await flush();
+    expect(result.current.entitled).toBe(true);
+    expect(result.current.ready).toBe(false);
+    await act(async () => { pending.resolve({ active: false, status: null, expiresAt: null }); });
+    await flush();
+    expect(result.current.ready).toBe(true);
+    expect(result.current.entitled).toBe(false);
+    expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBe('false');
+    jest.useRealTimers();
+  });
+
+  it('past the cap with no cache falls back to the device, and a slow server answer still replaces it', async () => {
+    jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick', 'queueMicrotask'] });
+    mockRc.identifyPurchasesUser.mockResolvedValue(proInfo);
+    const pending = deferred<{ active: boolean; status: null; expiresAt: null }>();
+    mockApi.fetchSubscriptionStatus.mockReturnValue(pending.promise);
+    const { result } = render();
+    await flush();
+    await flush();
+    expect(result.current.ready).toBe(false);
+    act(() => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
+    await flush();
+    expect(result.current.ready).toBe(true);
     expect(result.current.entitled).toBe(true);
     await act(async () => { pending.resolve({ active: false, status: null, expiresAt: null }); });
-    await waitFor(() => expect(result.current.entitled).toBe(false));
-    expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBe('false');
+    await flush();
+    expect(result.current.entitled).toBe(false);
+    jest.useRealTimers();
   });
 
   it('falls back to the device verdict only when offline with no cache (subscriber not bounced)', async () => {
@@ -219,6 +292,29 @@ describe('syncEntitlement', () => {
     expect(verdict).toBeNull();
     expect(result.current.entitled).toBe(true);
     expect(mockAnalytics.trackEntitlementSyncFailed).toHaveBeenCalledWith({ reason: 'mismatch' });
+  });
+
+  it('shares one in-flight request per reason between concurrent callers', async () => {
+    const { result } = render();
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    const pending = deferred<{ active: boolean; synced: boolean }>();
+    mockApi.syncSubscription.mockReturnValue(pending.promise);
+    let a: boolean | null = null;
+    let b: boolean | null = null;
+    await act(async () => {
+      const pa = result.current.syncEntitlement('mismatch');
+      const pb = result.current.syncEntitlement('mismatch');
+      expect(pa).toBe(pb);
+      pending.resolve({ active: true, synced: true });
+      [a, b] = await Promise.all([pa, pb]);
+    });
+    expect(a).toBe(true);
+    expect(b).toBe(true);
+    expect(mockApi.syncSubscription).toHaveBeenCalledTimes(1);
+    // Settled: the next call is a fresh request.
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    await act(async () => { await result.current.syncEntitlement('mismatch'); });
+    expect(mockApi.syncSubscription).toHaveBeenCalledTimes(2);
   });
 
   it('drops an answer whose session changed or ended mid-flight', async () => {

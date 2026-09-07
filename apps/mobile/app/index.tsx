@@ -27,9 +27,10 @@ export default function Index() {
           return;
         }
         // Wait for the provider (RevenueCat's first CustomerInfo read plus
-        // the server's entitlement verdict) so a lapsed subscriber gets the
+        // the server's entitlement verdict, or the cache once
+        // BOOT_VERDICT_CAP_MS has passed) so a lapsed subscriber gets the
         // win-back screen instead of a flash of the search tab, and the tab
-        // layout's gate has a verdict to act on the moment it mounts.
+        // layout's gate has a settled verdict the moment it mounts.
         if (!purchasesReady) return;
         setDestination(isLapsed ? '/welcome/resubscribe' : '/(tabs)/search');
       } catch {

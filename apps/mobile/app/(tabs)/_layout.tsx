@@ -15,10 +15,11 @@ export default function TabLayout() {
   const lastTabRef = useRef<TabId | null>(null);
 
   // Subscription hard-wall: the tabbed app is Pro-only. The gate is the
-  // SERVER's verdict (`purchases.entitled`, cached across launches so a
-  // returning subscriber enters instantly), the same truth the API uses to
-  // lock data (optionalSubscription), so the two cannot disagree for longer
-  // than one sync. The phone's RevenueCat state is never the gate. `__DEV__`
+  // SERVER's verdict (`purchases.entitled`: cached across launches, and the
+  // provider holds it back for up to BOOT_VERDICT_CAP_MS so a boot answer
+  // can overrule a stale cache before we act on it), the same truth the API
+  // uses to lock data (optionalSubscription), so the two cannot disagree for
+  // longer than one sync. The phone's RevenueCat state is never the gate. `__DEV__`
   // bypasses local development; App Review demo accounts (`useIsReviewer`,
   // mirroring the server `DEMO_REVIEW_EMAILS` allowlist) skip the paywall so the
   // reviewer can see the app without a subscription - the API still gates data.

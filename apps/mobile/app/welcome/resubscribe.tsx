@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,7 +12,7 @@ import { openLegalLink } from '@/lib/legalLinks';
 /**
  * Shown instead of the search tab when a signed-in user's Fitsy Pro
  * entitlement has LAPSED (RevenueCat has a past record of it, but it isn't
- * active now) — as opposed to a user who never subscribed, who sees the
+ * active now) - as opposed to a user who never subscribed, who sees the
  * regular inline paywall card on the search tab instead. See app/index.tsx
  * for the routing decision and lib/purchases.ts `hasLapsedEntitlement`.
  *
@@ -22,12 +22,23 @@ import { openLegalLink } from '@/lib/legalLinks';
  * charge with no explanation.
  */
 export default function ResubscribeScreen() {
-  const { offering, refreshOffering, purchase, restore } = usePurchases();
+  const { offering, refreshOffering, purchase, restore, entitled } = usePurchases();
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
+
+  // Same as payment.tsx: a verdict that turns true while this screen is up
+  // (late boot answer past BOOT_VERDICT_CAP_MS, a resubscribe made on another
+  // device) must let the user through without a relaunch. Held off while a
+  // purchase / restore here is in flight, since those navigate themselves.
+  const redirectedRef = useRef(false);
+  useEffect(() => {
+    if (entitled !== true || loading || restoring || redirectedRef.current) return;
+    redirectedRef.current = true;
+    router.replace('/(tabs)/search');
+  }, [entitled, loading, restoring]);
   // A locked teaser of what resubscribing unlocks, same cards + fetch as the
   // onboarding teaser (welcome/results.tsx). A fetch failure just hides the
-  // section — this is illustrative, not required to resubscribe.
+  // section - this is illustrative, not required to resubscribe.
   const [restaurants, setRestaurants] = useState<PreviewRestaurant[]>([]);
   const [teaserLoading, setTeaserLoading] = useState(true);
 
@@ -51,7 +62,7 @@ export default function ResubscribeScreen() {
   async function handleResubscribe() {
     const annual = offering?.annual ?? (await refreshOffering())?.annual;
     if (!annual) {
-      Alert.alert('Just a moment', 'Plans are still loading — please try again.');
+      Alert.alert('Just a moment', 'Plans are still loading, please try again.');
       return;
     }
     setLoading(true);

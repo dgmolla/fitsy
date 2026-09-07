@@ -1107,12 +1107,19 @@ export default function SearchScreen() {
       {canSearch && heroResult && <HeroCard result={heroResult} locked={locked === true} containerRef={tourHeroRef} />}
 
       {canSearch && locked && (results.length > 0) && (
-        <View style={s.lockedBanner}>
+        // Same destination as the lock card in the footer: the banner reads
+        // as a call to action, so it must act like one.
+        <Pressable
+          style={s.lockedBanner}
+          onPress={() => { void routeToPaywall(); }}
+          accessibilityRole="button"
+          accessibilityLabel="Subscribe to unlock all restaurants"
+        >
           <Ionicons name="lock-closed" size={14} color={EDITORIAL.greenAccent} />
           <Text style={s.lockedBannerText}>
             Subscribe to see exactly which meals at each spot fit your macros.
           </Text>
-        </View>
+        </Pressable>
       )}
     </>
   );

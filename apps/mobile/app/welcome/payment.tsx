@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
@@ -20,7 +20,24 @@ export default function PaymentScreen() {
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [modal, setModal] = useState<ModalState>('none');
-  const { offering, refreshOffering, purchase, restore } = usePurchases();
+  const { offering, refreshOffering, purchase, restore, entitled } = usePurchases();
+
+  // The verdict can turn true while this screen is up without anything here
+  // having been tapped: the boot sync answering after BOOT_VERDICT_CAP_MS
+  // (the tabs layout already sent us here on a stale cached "false"), or a
+  // subscription bought / restored on another device. Nothing else on this
+  // screen reacts to it, so the user would sit on a paywall they have
+  // already passed until the next relaunch. Held off while a purchase or
+  // restore is in flight here: that path completes onboarding itself
+  // (completeOnboarding runs while `loading` / `restoring` is true) and must
+  // not be raced. Once-only so the post-purchase `finally` (loading back to
+  // false) cannot fire a second replace.
+  const redirectedRef = useRef(false);
+  useEffect(() => {
+    if (entitled !== true || loading || restoring || redirectedRef.current) return;
+    redirectedRef.current = true;
+    router.replace('/(tabs)/search');
+  }, [entitled, loading, restoring]);
 
   // Live, store-localized prices from the current RevenueCat offering, with the
   // designed copy as a fallback while offerings load (or in Expo Go / no key).
@@ -49,7 +66,7 @@ export default function PaymentScreen() {
     if (!offering) void refreshOffering();
   }, [offering, refreshOffering]);
 
-  // Onboarding completes once the user holds Pro — whether freshly purchased or
+  // Onboarding completes once the user holds Pro - whether freshly purchased or
   // restored. Shared by handleStart and handleRestore.
   async function completeOnboarding(discounted = false) {
     await AsyncStorage.setItem('onboardingComplete', 'true');
@@ -60,7 +77,7 @@ export default function PaymentScreen() {
     router.replace('/(tabs)/search');
   }
 
-  // This screen IS the paywall — it renders Fitsy's own design and buys the
+  // This screen IS the paywall - it renders Fitsy's own design and buys the
   // selected package directly through the RevenueCat SDK (no dashboard-designed
   // hosted paywall).
   async function handleStart(discounted = false) {
@@ -81,14 +98,14 @@ export default function PaymentScreen() {
         'Just a moment',
         discounted
           ? "This offer isn't available right now - you can still start your free trial."
-          : 'Plans are still loading — please try again.',
+          : 'Plans are still loading, please try again.',
       );
       return;
     }
     setLoading(true);
     try {
       const isPro = await purchase(pkg, discounted ? 'onboarding_discount' : 'onboarding');
-      if (!isPro) return; // cancelled or errored — stay on screen
+      if (!isPro) return; // cancelled or errored - stay on screen
       await completeOnboarding(discounted);
     } finally {
       setLoading(false);
@@ -170,7 +187,7 @@ export default function PaymentScreen() {
           <Text style={s.restoreTxt}>{restoring ? 'Restoring…' : 'Restore purchases'}</Text>
         </AnimatedPress>
 
-        {/* Subscription disclosure + legal links — required by App Store
+        {/* Subscription disclosure + legal links - required by App Store
             Guideline 3.1.2(c). Title, length, and price of the auto-renewing
             subscription, plus functional Terms of Use (EULA) and Privacy
             Policy links, must appear in the purchase flow. */}
@@ -191,11 +208,11 @@ export default function PaymentScreen() {
         </View>
       </WelcomeScreen>
 
-      {/* Discount modal — first skip */}
+      {/* Discount modal - first skip */}
       <Modal visible={modal === 'discount'} transparent animationType="fade" onRequestClose={() => setModal('none')}>
         <View style={s.overlay}>
           <Animated.View entering={FadeIn.duration(300)} style={s.modal}>
-            <Text style={s.modalTitle}>Wait — 25% off.</Text>
+            <Text style={s.modalTitle}>Wait, 25% off.</Text>
             <Text style={s.modalBody}>
               Lock in <Text style={{ fontWeight: '700' }}>{discountPrice}</Text> for your first year, billed today.
             </Text>
@@ -209,7 +226,7 @@ export default function PaymentScreen() {
         </View>
       </Modal>
 
-      {/* Goodbye screen — second skip */}
+      {/* Goodbye screen - second skip */}
       <Modal visible={modal === 'goodbye'} transparent animationType="fade" onRequestClose={() => setModal('none')}>
         <View style={s.overlay}>
           <Animated.View entering={FadeIn.duration(300)} style={s.modal}>
