@@ -33,9 +33,11 @@ Index of all documentation. Restructured 2026-06-12 (see [`docs-refactor-proposa
 
 **`pipeline/`** — UE-first preload pipeline
 - [ue-first-pipeline.md](engineering/pipeline/ue-first-pipeline.md) — primary design (Uber Eats discovery)
-- [data-pipeline-v3.md](engineering/pipeline/data-pipeline-v3.md) — supporting architecture
 - [runbook.md](engineering/pipeline/runbook.md) — operations (`scripts/preload-ue-first.ts --phase …`)
-- [status.md](engineering/pipeline/status.md) — stage/hardening status · [baseline-v6.md](engineering/pipeline/baseline-v6.md) — baseline metrics
+- [macro-accuracy-recommendations-2026-08-16.md](engineering/pipeline/macro-accuracy-recommendations-2026-08-16.md) — accuracy/model decisions (latest)
+- [open-model-spike-2026-07-20.md](engineering/pipeline/open-model-spike-2026-07-20.md) — eval evidence log
+- [canonical-chain-macros.md](engineering/pipeline/canonical-chain-macros.md) — Brand/ChainItem canonical design
+- Superseded (in `engineering/archive/`): data-pipeline-v3, status, baseline-v6, macro-accuracy-handoff-2026-08-16, phase1-extraction-execution
 
 **`backend/`** — [perf-and-security-handoff](engineering/backend/perf-and-security-handoff-2026-04-25.md) · [api-perf-followups-spec](engineering/backend/api-perf-followups-spec.md) · [idempotent-preload-spec](engineering/backend/idempotent-preload-spec.md) · [security-audit-sprint10](engineering/backend/security-audit-sprint10.md) · [rls-policies-parked.sql](engineering/backend/rls-policies-parked.sql)
 

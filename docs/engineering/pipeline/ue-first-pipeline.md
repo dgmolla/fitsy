@@ -2,8 +2,9 @@
 
 **Created:** 2026-04-18
 **Revised:** 2026-04-19 (rewritten against current code after review)
-**Status:** Design finalized, spike cleared 2026-04-19 (see `ue-feed-spike-findings.md`), implementation not started
-**Owner:** next session
+**Status:** Implemented and in production as `scripts/preload-ue-first.ts` (Stage 3 gate passed 2026-06-12: 94 restaurants / 6,791 items / 0 Google Places on the test hex).
+Operations live in `runbook.md`; this doc is the design record.
+The v3-era architecture it replaced (Overture/Brave/Firecrawl discovery) is archived at `../archive/data-pipeline-v3.md`.
 
 ---
 
@@ -37,7 +38,7 @@ Overture parquet → per-restaurant URL discovery (sitemap → Brave → Firecra
 - Bot-defense events: 46 (down from 82 in v5)
 - Cost: ~$1.60/run (Brave + Firecrawl + Haiku)
 
-**Action before Stage 4:** commit these numbers + per-restaurant outcomes into `docs/engineering/pipeline/baseline-v6.md` so Stage 4 comparisons have a stable reference. The current `/tmp` log will not persist.
+**Action before Stage 4:** commit these numbers + per-restaurant outcomes into `docs/engineering/archive/baseline-v6.md` so Stage 4 comparisons have a stable reference. The current `/tmp` log will not persist.
 
 ### Why the ceiling is ~83%
 
@@ -382,7 +383,7 @@ To back out the migration entirely (e.g. UE feed endpoint turns out to be unreli
 
 ### Stage 4 — Baseline + side-by-side (~0.5 day)
 
-- Commit `docs/engineering/pipeline/baseline-v6.md` with v6 per-restaurant outcomes and aggregate numbers. Freeze the numbers before running Phase 1.
+- Commit `docs/engineering/archive/baseline-v6.md` with v6 per-restaurant outcomes and aggregate numbers. Freeze the numbers before running Phase 1.
 - Run UE-first against 10 diverse hexes (dense urban, suburban, sparse) in a clean-staging DB.
 - Per hex, compare: persist count, per-restaurant coverage delta (UE-first rows not in v6 baseline — dine-in venues expected missing, that's fine), data quality (macro presence, photo presence), photoSource distribution (spend projection).
 - Document in `docs/engineering/pipeline/ue-first-coverage-report.md`. No reconciliation script needed — staging is wiped before the run.

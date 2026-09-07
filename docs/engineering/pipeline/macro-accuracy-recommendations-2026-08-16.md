@@ -3,8 +3,10 @@
 **Created:** 2026-08-16 (revised same day after the metro-direction decision)
 **Branch:** `spike/open-model-macro-eval`
 **Input docs:** `macro-accuracy-handoff-2026-08-16.md` (the nine decisions), `open-model-spike-2026-07-20.md` (evidence log)
-**Status:** Recommendations, aligned with the settled direction: **launch LA now, then roll out to the top ~10 US metros** (NYC, Chicago, Houston, ...), each gated on a per-metro data check.
-The original handoff had nine decisions; this doc adds a tenth (sourcing refactors) that the metro direction makes necessary.
+**Status:** Recommendations, originally aligned with a top-10-metro rollout direction.
+**Superseded on direction (2026-08-26): the rollout is LA-only for now** - see `docs/gtm/la-rollout.md`.
+The metro-specific items below (certification harness, metros registry, Batch API timing, Overture coverage audit, Nutritionix buy scoping, D10 sourcing refactors) are dormant until expansion re-opens; the accuracy and reliability decisions (D0-D4, D6, D7, D9 short-circuit) stand.
+The original handoff (nine decisions, now archived at `../archive/macro-accuracy-handoff-2026-08-16.md`) got a tenth (sourcing refactors) that the metro direction made necessary.
 
 ---
 

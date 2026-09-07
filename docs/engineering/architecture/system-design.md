@@ -172,7 +172,7 @@ This dual-write is enforced in `scripts/pipeline-utils.ts` (`persistItemsInTx` /
 
 ### 2.4 Pipeline Operations
 
-The pipeline is invoked with `--phase` flags (not `npm run preload`). See `docs/engineering/pipeline/ue-first-pipeline.md` for the full phase breakdown and `docs/engineering/pipeline/data-pipeline-v3.md` for the supporting architecture.
+The pipeline is invoked with `--phase` flags (not `npm run preload`). See `docs/engineering/pipeline/ue-first-pipeline.md` for the full phase breakdown (the superseded v3 architecture is archived at `docs/engineering/archive/data-pipeline-v3.md`).
 
 **Constraints:**
 - MVP scope: **Los Angeles only** (H3 hex grid over the LA metro)

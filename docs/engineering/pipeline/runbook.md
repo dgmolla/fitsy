@@ -219,8 +219,12 @@ npx tsx scripts/pipeline-report.ts --latest
 |---|---|
 | Error spike | > 50 errors in 5-minute window |
 | Run failed | `restaurantsFailed > restaurantsPersisted` on run event |
-| Cost overrun | `cumulativeCost > 200` mid-run |
+| Cost overrun | `costTotal > 200` on run event |
+| Cost checkpoint spike | `cumulativeCost > 5` on a single hex checkpoint |
 | Zero output | `restaurantsPersisted == 0` on run event |
+
+Monitor definitions are provisioned by `scripts/axiom-setup.ts` (source of truth for the exact queries).
+The full event schema and APL query examples live in the archived `docs/engineering/archive/data-pipeline-v3.md` (Observability section) until a dedicated `monitoring.md` absorbs them.
 
 ---
 
@@ -292,7 +296,7 @@ psql $POSTGRES_URL_NON_POOLING -c "
 "
 ```
 
-**Expected post-run numbers (single LA hex, v6 baseline):** 94 restaurants, 6,791 items, 0 Google Places calls. See `docs/engineering/pipeline/baseline-v6.md` for the full reference.
+**Expected post-run numbers (single LA hex, v6 baseline):** 94 restaurants, 6,791 items, 0 Google Places calls. See `docs/engineering/archive/baseline-v6.md` for the full reference.
 
 ---
 

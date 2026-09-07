@@ -66,7 +66,7 @@ fitsy/
 | Preload pipeline (UE-first) | `scripts/preload-ue-first.ts` | Uber Eats discovery → FatSecret/Brave menus → Claude Haiku macros → PostgreSQL (H3 hex checkpoints, Axiom telemetry) |
 | API backend | `apps/api/` | Query + filter preloaded data; no external API calls |
 
-Architecture: `docs/engineering/architecture/system-design.md` (+ `auth.md`, `api-reference.md`). Pipeline: `docs/engineering/pipeline/` (runbook, status, data-pipeline-v3).
+Architecture: `docs/engineering/architecture/system-design.md` (+ `auth.md`, `api-reference.md`). Pipeline: `docs/engineering/pipeline/` (runbook, ue-first-pipeline, macro-accuracy-recommendations-2026-08-16).
 ---
 
 ## Development Commands
