@@ -1,6 +1,7 @@
 # Autonomous Shipping
 
 > **Status:** Design v2, 2026-08-28 · **Owner:** CTO · Supersedes v1 (2026-08-28, same file)
+> **Rollout status (2026-09-07):** steps 2-5 LIVE (verify registry #233, static completeness #236, lenses + local poller #238-240, deploy/rollback #241; dev environment 2026-08-29). Step 1 (ruleset) deliberately deferred by owner decision - checks are advisory until it flips. Poller LaunchAgent `com.fitsy.review-poller` reviews every open PR on the Max subscription. Remaining: steps 6-10 (contracts/DB tests, mobile E2E + sim CLI, remaining lenses + harden loop with replay evals, routines, ratchet).
 > Goal: any code change, from any origin, reaches production with no human in the merge path, and every escape makes the pipeline stronger.
 
 This document is the plan.
@@ -582,12 +583,12 @@ Never run a frontier model on a `low` or `medium` PR.
 Ordered so each step is useful alone and nothing depends on a later step.
 Steps 1-4 are the foundation and should land before any routine dispatches work.
 
-1. **Gate** (an hour): ruleset on `main`: PR required, required checks = current CI jobs, squash only, no direct push, admins included. Auto-merge on. `sprint.md` §3b-d and `ship-branch` 3.5-6 deleted the same day, since they would now conflict with the ruleset.
-2. **One implementation** (a day): `scripts/verify/` with `run.sh`, `registry.yml`, and the existing checks moved in unchanged. `verify.yml` replaces `ci.yml` + `reviewer.yml`. Pre-push calls `run.sh --layer=0`. Husky removed. `--passWithNoTests` removed. Structural 3 and 5 fixed to `--scope=changed`. Nested `CLAUDE.md` per app with commands only; root `CLAUDE.md` trimmed; `context-freshness` check.
-3. **Static completeness** (a day): mobile lint, mobile tests in CI, dependency-cruiser with the T3 graph, size check, gitleaks, actionlint, structural 4-8 to FAIL with a shrink-only allowlist, `docs/` and `proj-mgmt/` exempt from domain count.
-4. **Review lenses, local runner** (a day): `scripts/review/run-lens.sh`, `REVIEW.md`, `correctness` and `docs-sanity` lenses, launchd poller on Dawit's Mac, classify job in CI with tier labels, `stale-review` timeout. Blocking from day one for `correctness` CONFIRMED; everything else shadow.
+1. **Gate** (an hour) - DEFERRED by owner decision 2026-09-07 (docs velocity); flip when ready: ruleset on `main`: PR required, required checks = current CI jobs, squash only, no direct push, admins included. Auto-merge on. `sprint.md` §3b-d and `ship-branch` 3.5-6 deleted the same day, since they would now conflict with the ruleset.
+2. **One implementation** - DONE 2026-09-07 (#233): `scripts/verify/` with `run.sh`, `registry.yml`, and the existing checks moved in unchanged. `verify.yml` replaces `ci.yml` + `reviewer.yml`. Pre-push calls `run.sh --layer=0`. Husky removed. `--passWithNoTests` removed. Structural 3 and 5 fixed to `--scope=changed`. Nested `CLAUDE.md` per app with commands only; root `CLAUDE.md` trimmed; `context-freshness` check.
+3. **Static completeness** - DONE 2026-09-07 (#236): mobile lint, mobile tests in CI, dependency-cruiser with the T3 graph, size check, gitleaks, actionlint, structural 4-8 to FAIL with a shrink-only allowlist, `docs/` and `proj-mgmt/` exempt from domain count.
+4. **Review lenses, local runner** - DONE 2026-09-07 (#238, #239, #240; poller live): `scripts/review/run-lens.sh`, `REVIEW.md`, `correctness` and `docs-sanity` lenses, launchd poller on Dawit's Mac, classify job in CI with tier labels, `stale-review` timeout. Blocking from day one for `correctness` CONFIRMED; everything else shadow.
 4b. **Dev environment** (half a day plus a data snapshot): `fitsy-dev` Supabase project, Vercel Preview env vars repointed, `seed.ts`, `snapshot.ts`, `reset.ts`, `dev-drift` check, local dev defaults to dev. `staging-environment.md` rewritten to the Environments table above. **Scripts landed 2026-08-29 (`scripts/dev/`, first `scripts/verify/` check); provisioning waits on a one-time `npx supabase login`.**
-5. **Deploy and rollback** (a day): `deploy.yml` with migrate-then-Vercel, `eas update` at 10%, deploy record, `rollback.sh`, `api-e2e.sh` on prod. Fix `eas.json` submit path.
+5. **Deploy and rollback** - DONE 2026-09-07 (#241; first live run green): `deploy.yml` with migrate-then-Vercel, `eas update` at 10%, deploy record, `rollback.sh`, `api-e2e.sh` on prod. Fix `eas.json` submit path.
 6. **Contracts and DB tests** (a few days, incremental): `packages/shared/src/contracts/`, generator for routes, contract tests, seed, first DB tests for search and subscription, migration safety. Own-code-mock lint in shadow.
 7. **Mobile E2E** (a few days): `sim` CLI, FEATURE_MAP, testID lint, six Maestro flows, EAS workflow, `mobile-ui` lens. Dev-client decision documented.
 8. **Remaining lenses and the loop** (after the first real incidents): `spec-conformance`, `test-quality` with Stryker in shadow, `danger-zone`, `workflow-security`, `harness-audit`, `replay.sh`, eval corpus, layer-attribution metric on the scoreboard.
