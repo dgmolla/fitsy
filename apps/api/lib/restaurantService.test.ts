@@ -178,7 +178,7 @@ describe("findNearbyRestaurants", () => {
     expect(result.data[0]?.bestMatch?.matchScore).toBe(0.2);
   });
 
-  it("sets matchScore to Infinity when no targets provided (score is meaningless)", async () => {
+  it("sets matchScore to null when no targets provided (score is meaningless)", async () => {
     mockQueryRaw.mockResolvedValue([makeScoredRow({ scoreSum: 0 })]);
 
     const result = await findNearbyRestaurants({
@@ -186,7 +186,7 @@ describe("findNearbyRestaurants", () => {
       targets: {},
     });
 
-    expect(result.data[0]?.bestMatch?.matchScore).toBe(Infinity);
+    expect(result.data[0]?.bestMatch?.matchScore).toBeNull();
   });
 
   it("perfect match (scoreSum = 0) produces matchScore = 0", async () => {
