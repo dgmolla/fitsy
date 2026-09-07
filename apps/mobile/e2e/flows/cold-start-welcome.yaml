@@ -1,0 +1,12 @@
+# Fresh-install cold start lands on the welcome problem screen.
+# Guards the +not-found boot-loop class (env wiring) and the first-run path.
+# Target: the e2e-simulator build (embedded JS bundle). clearState is correct
+# there; against a dev-client install it would drop you in the launcher UI.
+appId: com.fitsy.mobile
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "continue"
+    timeout: 15000
+- assertVisible: ".*Log in.*"

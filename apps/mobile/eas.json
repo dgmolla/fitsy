@@ -31,6 +31,16 @@
     },
     "production": {
       "channel": "production"
+    },
+    "e2e-simulator": {
+      "distribution": "internal",
+      "channel": "e2e",
+      "ios": {
+        "simulator": true
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://dev.fitsy.org"
+      }
     }
   },
   "submit": {

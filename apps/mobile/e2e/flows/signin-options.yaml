@@ -1,0 +1,16 @@
+# From the welcome screen, the login link opens /auth/login ("Welcome back"
+# with Apple/Google/email options).
+# Target: the e2e-simulator build (embedded JS bundle). clearState is correct
+# there; against a dev-client install it would drop you in the launcher UI.
+appId: com.fitsy.mobile
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: ".*Log in.*"
+    timeout: 15000
+- tapOn: ".*Log in.*"
+- extendedWaitUntil:
+    visible: "Welcome back"
+    timeout: 10000
+- assertVisible: "Continue with Apple"
