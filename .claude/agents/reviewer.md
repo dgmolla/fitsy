@@ -12,8 +12,9 @@ Multiple agents may review the same PR if it crosses domains.
 | Path pattern | Reviewing agent |
 |---|---|
 | `apps/api/tests/e2e/` | **cto** |
+| `apps/(api\|mobile)/(package.json\|tsconfig.json)` | **cto** |
 | `apps/api/` (all other files) | **backend** |
-| `apps/mobile/` (all files) | **frontend** |
+| `apps/mobile/` (all other files) | **frontend** |
 | `packages/shared/src/`, `prisma/` | **backend** |
 | `packages/shared/(package.json\|tsconfig.json)` | **cto** |
 | `docs/design/` | **designer** |

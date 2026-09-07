@@ -13,7 +13,14 @@ if [ -z "$CHANGED" ]; then
   printf '{"name":"domain-check","status":"skipped","summary":"no diff vs origin/main","fix":""}\n'
   exit 2
 fi
-git show origin/main:scripts/route-reviewers.sh > /tmp/route-reviewers.sh 2>/dev/null || cp scripts/route-reviewers.sh /tmp/route-reviewers.sh
+# Main's routing table, so PR branches never need a rebase to pick up routing
+# fixes — EXCEPT when the PR itself changes the table: that change is under
+# review in this very PR (structural test 10 keeps it synced with reviewer.md).
+if echo "$CHANGED" | grep -q '^scripts/route-reviewers.sh$'; then
+  cp scripts/route-reviewers.sh /tmp/route-reviewers.sh
+else
+  git show origin/main:scripts/route-reviewers.sh > /tmp/route-reviewers.sh 2>/dev/null || cp scripts/route-reviewers.sh /tmp/route-reviewers.sh
+fi
 RESULT="$(echo "$CHANGED" | bash /tmp/route-reviewers.sh)"
 UNIQUE="$(echo "$RESULT" | tr -d '[]"' | tr ',' '\n' | sed '/^$/d' | sort -u | tr '\n' ' ' | xargs)"
 COUNT="$(echo "$UNIQUE" | wc -w | xargs)"

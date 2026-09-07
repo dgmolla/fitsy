@@ -71,6 +71,7 @@ const skipped = [];
 for (const c of registry.checks) {
   if (only && !only.has(c.name)) continue;
   if (!only) {
+    if (c.standalone) continue;
     if (c.layer < layerMin || c.layer > layerMax) continue;
     if (c.runs && !c.runs.includes(runsCtx)) continue;
     if (files && c.paths?.length) {

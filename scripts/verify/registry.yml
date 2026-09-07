@@ -40,6 +40,7 @@ checks:
     script: domain-check.sh
     layer: 1
     blocking: true
+    standalone: true   # runs only via --only=domain-check (its own CI job with PR context)
     runs: [ci]
     why: Single-domain PRs (route-reviewers.sh). Moved from reviewer.yml 2026-09-07.
 
