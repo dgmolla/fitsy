@@ -28,13 +28,17 @@ while read -r NUM SHA; do
   HAVE="$(gh api "repos/{owner}/{repo}/commits/$SHA/statuses" --jq "[.[] | select(.context==\"lens/$LENS\")] | length" 2>/dev/null || echo 0)"
   if [ "${HAVE:-0}" -gt 0 ]; then continue; fi
   echo "[poller] reviewing PR #$NUM ($LENS) at ${SHA:0:7}"
-  # check out the PR head so the lens reads the branch's actual file context;
-  # fail closed: reviewing against stale context is worse than waiting a tick
+  # Check out the PR head so the lens reads the branch's actual file context;
+  # fail closed: reviewing against stale context is worse than waiting a tick.
   if ! (git fetch -q origin "pull/$NUM/head" && git checkout -qf FETCH_HEAD); then
     echo "[poller] PR #$NUM: could not check out head; skipping this tick"
     continue
   fi
+  # Overlay the review harness from origin/main: the PR must not be able to
+  # edit its own reviewer (T12), and old branches may predate the harness.
+  git checkout -q origin/main -- scripts/review scripts/verify/risk-tiers.yml REVIEW.md .claude/lenses
   bash scripts/review/run-lens.sh "$NUM" "$LENS" || echo "[poller] PR #$NUM lens/$LENS -> fail"
   git checkout -qf origin/main 2>/dev/null || true
+  git clean -qfd 2>/dev/null || true
 done
 echo "[poller] done"
