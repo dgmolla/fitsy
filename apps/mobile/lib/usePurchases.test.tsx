@@ -85,7 +85,7 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 }));
 
 import { ENTITLEMENT_CACHE_KEY } from './entitlement';
-import { PurchasesProvider, usePurchases } from './usePurchases';
+import { POST_PURCHASE_SYNC_CAP_MS, PurchasesProvider, STORE_GRACE_MS, usePurchases } from './usePurchases';
 
 const wrapper = ({ children }: { children: React.ReactNode }) => (
   <PurchasesProvider>{children}</PurchasesProvider>
@@ -172,6 +172,32 @@ describe('boot', () => {
     expect(mockApi.syncSubscription).not.toHaveBeenCalled();
   });
 
+  it('still becomes ready with a verdict when boot throws (cache, else device, else false)', async () => {
+    // Throws before the cache read: the cache is consulted anyway.
+    mockStore[ENTITLEMENT_CACHE_KEY] = 'true';
+    mockRc.fetchCurrentOffering.mockRejectedValueOnce(new Error('boom'));
+    const a = render();
+    await waitFor(() => expect(a.result.current.ready).toBe(true));
+    expect(a.result.current.entitled).toBe(true);
+    expect(mockApi.fetchSubscriptionStatus).not.toHaveBeenCalled();
+    a.unmount();
+
+    // Throws after identity, no cache: the device verdict.
+    delete mockStore[ENTITLEMENT_CACHE_KEY];
+    mockRc.identifyPurchasesUser.mockResolvedValue(proInfo);
+    mockRc.addCustomerInfoListener.mockImplementationOnce(() => { throw new Error('boom'); });
+    const b = render();
+    await waitFor(() => expect(b.result.current.ready).toBe(true));
+    expect(b.result.current.entitled).toBe(true);
+    b.unmount();
+
+    // Throws before identity, no cache: not entitled, but ready.
+    mockRc.fetchCurrentOffering.mockRejectedValueOnce(new Error('boom'));
+    const c = render();
+    await waitFor(() => expect(c.result.current.ready).toBe(true));
+    expect(c.result.current.entitled).toBe(false);
+  });
+
   it('still resolves a verdict when the SDK has no key (Expo Go, web)', async () => {
     mockRc.configurePurchases.mockReturnValueOnce(false);
     mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null });
@@ -193,6 +219,25 @@ describe('syncEntitlement', () => {
     expect(verdict).toBeNull();
     expect(result.current.entitled).toBe(true);
     expect(mockAnalytics.trackEntitlementSyncFailed).toHaveBeenCalledWith({ reason: 'mismatch' });
+  });
+
+  it('drops an answer whose session changed or ended mid-flight', async () => {
+    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null });
+    const { result } = render();
+    await waitFor(() => expect(result.current.entitled).toBe(true));
+    const pending = deferred<{ active: boolean; synced: boolean }>();
+    mockApi.syncSubscription.mockReturnValue(pending.promise);
+    let verdict: boolean | null = true;
+    await act(async () => {
+      const p = result.current.syncEntitlement('mismatch');
+      await new Promise((r) => setImmediate(r));
+      mockSession = { user: { id: 'someone-else' } };
+      pending.resolve({ active: false, synced: true });
+      verdict = await p;
+    });
+    expect(verdict).toBeNull();
+    expect(result.current.entitled).toBe(true);
+    expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBe('true');
   });
 
   it('non-boot reasons make the server re-read RevenueCat and the verdict flips', async () => {
@@ -248,10 +293,8 @@ describe('purchase / restore', () => {
     expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBe('false');
   });
 
-  it('lets the user in on the device verdict when the sync stalls past the cap, then applies the late answer', async () => {
-    const { result } = render();
-    await waitFor(() => expect(result.current.ready).toBe(true));
-    jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick', 'queueMicrotask'] });
+  /** Restore with the server held mid-flight; resolves once the cap has passed. */
+  async function restoreWithStalledSync(result: { current: ReturnType<typeof usePurchases> }) {
     mockRc.restorePurchases.mockResolvedValue(proInfo);
     const pending = deferred<{ active: boolean; synced: boolean }>();
     mockApi.syncSubscription.mockReturnValue(pending.promise);
@@ -259,15 +302,65 @@ describe('purchase / restore', () => {
     await act(async () => {
       const p = result.current.restore();
       await new Promise((r) => setImmediate(r));
-      jest.advanceTimersByTime(4000);
+      jest.advanceTimersByTime(POST_PURCHASE_SYNC_CAP_MS);
       got = await p;
     });
+    return { got, pending };
+  }
+
+  it('lets the user in when the sync stalls past the cap, and a late "false" inside the grace window is not applied', async () => {
+    const { result } = render();
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick', 'queueMicrotask'] });
+    const { got, pending } = await restoreWithStalledSync(result);
     expect(got).toBe(true);
     expect(result.current.entitled).toBe(true);
-    await act(async () => { pending.resolve({ active: true, synced: true }); });
-    await waitFor(() => expect(mockApi.syncSubscription).toHaveBeenCalledTimes(1));
-    expect(result.current.entitled).toBe(true);
     expect(mockAnalytics.trackPurchasesRestored).toHaveBeenCalledWith({ is_pro: true });
+    await act(async () => { pending.resolve({ active: false, synced: true }); });
+    await act(async () => { await new Promise((r) => setImmediate(r)); });
+    expect(result.current.entitled).toBe(true);
+    expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBe('true');
+    expect(mockAnalytics.trackEntitlementMismatch).toHaveBeenCalledWith({
+      reason: 'restore', device_pro: true, server_active: false,
+    });
+    jest.useRealTimers();
+  });
+
+  it('a late "true" after a stalled sync still writes the cache', async () => {
+    const { result } = render();
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick', 'queueMicrotask'] });
+    const { pending } = await restoreWithStalledSync(result);
+    // Simulate the optimistic cache write being lost, so the late answer is what refills it.
+    delete mockStore[ENTITLEMENT_CACHE_KEY];
+    await act(async () => { pending.resolve({ active: true, synced: true }); });
+    await waitFor(() => expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBe('true'));
+    expect(result.current.entitled).toBe(true);
+    jest.useRealTimers();
+  });
+
+  it('inside the grace window no reason can downgrade a store-confirmed verdict; after it the server wins', async () => {
+    const { result } = render();
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick', 'queueMicrotask'] });
+    mockRc.purchasePackage.mockResolvedValue({ outcome: 'purchased', customerInfo: proInfo });
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    await act(async () => { await result.current.purchase({} as never, 'test'); });
+    expect(result.current.entitled).toBe(true);
+
+    // The search screen's mismatch handler fires right away; REST still lags.
+    mockApi.syncSubscription.mockResolvedValue({ active: false, synced: true });
+    let verdict: boolean | null = null;
+    await act(async () => { verdict = await result.current.syncEntitlement('mismatch'); });
+    expect(verdict).toBe(false);
+    expect(result.current.entitled).toBe(true);
+    expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBe('true');
+
+    act(() => { jest.advanceTimersByTime(STORE_GRACE_MS); });
+    await act(async () => { verdict = await result.current.syncEntitlement('mismatch'); });
+    expect(verdict).toBe(false);
+    expect(result.current.entitled).toBe(false);
+    expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBe('false');
     jest.useRealTimers();
   });
 
@@ -293,14 +386,22 @@ describe('auth events', () => {
     expect(mockApi.syncSubscription).toHaveBeenCalledTimes(1);
   });
 
-  it('SIGNED_OUT logs out of RevenueCat, drops the verdict, and clears the cache', async () => {
+  it('SIGNED_OUT drops the verdict and cache before the RevenueCat logout settles', async () => {
     mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null });
     const { result } = render();
     await waitFor(() => expect(result.current.entitled).toBe(true));
     expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBe('true');
-    await act(async () => { mockAuthListener?.('SIGNED_OUT', null); });
-    await waitFor(() => expect(result.current.entitled).toBe(false));
-    expect(mockRc.logoutPurchasesUser).toHaveBeenCalledTimes(1);
+    const logout = deferred<undefined>();
+    mockRc.logoutPurchasesUser.mockReturnValue(logout.promise);
+    await act(async () => {
+      mockAuthListener?.('SIGNED_OUT', null);
+      await new Promise((r) => setImmediate(r));
+    });
+    // Logout still in flight, verdict already gone.
+    expect(result.current.entitled).toBe(false);
     expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBeUndefined();
+    await act(async () => { logout.resolve(undefined); });
+    expect(mockRc.logoutPurchasesUser).toHaveBeenCalledTimes(1);
+    expect(result.current.entitled).toBe(false);
   });
 });

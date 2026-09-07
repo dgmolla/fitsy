@@ -70,6 +70,15 @@ import {
 // search screen's mismatch handler finishes the job.
 export const POST_PURCHASE_SYNC_CAP_MS = 4000;
 
+// After the store confirms a purchase/restore, the server is not allowed to
+// downgrade the verdict for this long, whatever the sync reason. RevenueCat's
+// REST read can lag StoreKit by seconds, and the search screen's mismatch
+// handler fires the instant `entitled` flips true under a locked page, so
+// without the window that very sync would apply "false" and bounce the user
+// who just paid. The API's data gate still protects paid rows meanwhile, and
+// the webhook corrects the server row well inside the window.
+export const STORE_GRACE_MS = 60_000;
+
 export interface PurchasesContextValue {
   /** True once configure, the first CustomerInfo read, and `entitled` have settled. */
   ready: boolean;
@@ -133,9 +142,12 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     customerInfoRef.current = info;
     setCustomerInfoState(info);
   }, []);
+  // When the store last confirmed Pro (settleAfterStore); 0 = never.
+  const storeConfirmedAtRef = useRef(0);
 
   const syncEntitlement = useCallback(
     async (reason: EntitlementSyncReason): Promise<boolean | null> => {
+      let userId: string;
       try {
         // No session: nothing to be entitled as. Also keeps the anonymous
         // teaser from firing an authenticated request that a 401 would turn
@@ -145,6 +157,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
           setEntitled(false);
           return false;
         }
+        userId = data.session.user.id;
       } catch {
         return null;
       }
@@ -153,18 +166,25 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
         trackEntitlementSyncFailed({ reason });
         return null;
       }
+      try {
+        // The answer is about the user who was signed in when we asked. If
+        // the session changed or ended mid-flight (sign-out, fast re-sign-in
+        // as someone else) it must not become the new user's verdict.
+        const { data } = await supabase.auth.getSession();
+        if (data.session?.user.id !== userId) return null;
+      } catch {
+        return null;
+      }
       const devicePro = isProActive(customerInfoRef.current);
       if (devicePro !== active) {
         trackEntitlementMismatch({ reason, device_pro: devicePro, server_active: active });
       }
-      if (!active && devicePro && (reason === 'purchase' || reason === 'restore')) {
-        // A confirmed store purchase/restore never downgrades: RevenueCat's
-        // REST read can lag StoreKit by seconds, and bouncing a user who
-        // just paid back to the paywall is the worse failure. The verdict
-        // set in settleAfterStore stands; the API's data gate still protects
-        // paid rows, the search screen's mismatch handler re-syncs, and the
-        // webhook corrects the server row within seconds. Direct callers of
-        // syncEntitlement still get the server's answer.
+      if (!active && devicePro && Date.now() - storeConfirmedAtRef.current < STORE_GRACE_MS) {
+        // Inside the post-store grace window (see STORE_GRACE_MS) a server
+        // "false" never downgrades, whatever the reason: the verdict set in
+        // settleAfterStore stands and the cache is left alone. Bouncing a
+        // user who just paid to the paywall is the worse failure. Direct
+        // callers still get the server's answer.
         return false;
       }
       setEntitled(active);
@@ -184,37 +204,50 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
 
     (async () => {
       let info: CustomerInfo | null = null;
-      if (configured) {
-        const { data } = await supabase.auth.getSession();
-        const userId = data.session?.user.id;
-        const [rcInfo, off] = await Promise.all([
-          userId ? identifyPurchasesUser(userId) : fetchCustomerInfo(),
-          fetchCurrentOffering(),
-        ]);
-        if (cancelled) return;
-        info = rcInfo;
-        setCustomerInfo(info);
-        setOffering(off);
-        unsubscribe = addCustomerInfoListener(setCustomerInfo);
-      }
+      let cached: boolean | null = null;
+      try {
+        if (configured) {
+          const { data } = await supabase.auth.getSession();
+          const userId = data.session?.user.id;
+          const [rcInfo, off] = await Promise.all([
+            userId ? identifyPurchasesUser(userId) : fetchCustomerInfo(),
+            fetchCurrentOffering(),
+          ]);
+          if (cancelled) return;
+          info = rcInfo;
+          setCustomerInfo(info);
+          setOffering(off);
+          unsubscribe = addCustomerInfoListener(setCustomerInfo);
+        }
 
-      const cached = await readCachedEntitlement();
-      if (cancelled) return;
-      if (cached !== null) {
-        setEntitled(cached);
+        cached = await readCachedEntitlement();
+        if (cancelled) return;
+        if (cached !== null) {
+          setEntitled(cached);
+          setReady(true);
+        }
+        const server = await syncEntitlement('boot');
+        if (cancelled) return;
+        if (server === null && cached === null) {
+          // Offline on a launch with no cached verdict: one of the two places
+          // the phone's RevenueCat state is used as a verdict rather than a
+          // hint (the other is a confirmed purchase/restore, settleAfterStore),
+          // so a subscriber without signal isn't bounced to the paywall. The
+          // next successful sync replaces it.
+          setEntitled(isProActive(info));
+        }
+        setReady(true);
+      } catch (err) {
+        // Nothing above is expected to throw (the seams swallow their own
+        // errors), but the app must never sit on the splash forever: resolve
+        // a verdict from whatever we got (cache, else device, else false)
+        // and become ready.
+        console.warn('[purchases] boot failed', err instanceof Error ? err.message : err);
+        const cachedNow = cached ?? (await readCachedEntitlement());
+        if (cancelled) return;
+        setEntitled((current) => current ?? cachedNow ?? isProActive(info));
         setReady(true);
       }
-      const server = await syncEntitlement('boot');
-      if (cancelled) return;
-      if (server === null && cached === null) {
-        // Offline on a launch with no cached verdict: one of the two places
-        // the phone's RevenueCat state is used as a verdict rather than a
-        // hint (the other is a confirmed purchase/restore, settleAfterStore),
-        // so a subscriber without signal isn't bounced to the paywall. The
-        // next successful sync replaces it.
-        setEntitled(isProActive(info));
-      }
-      setReady(true);
     })();
 
     return () => {
@@ -236,10 +269,13 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
         // told before the first search.
         void syncEntitlement('sign_in');
       } else if (event === 'SIGNED_OUT') {
-        await logoutPurchasesUser();
-        setCustomerInfo(await fetchCustomerInfo());
+        // Drop the verdict and cache first, synchronously: a fast re-sign-in
+        // can land its own verdict while the RevenueCat logout below is
+        // still in flight, and that must not be overwritten afterwards.
         setEntitled(false);
         void clearCachedEntitlement();
+        await logoutPurchasesUser();
+        setCustomerInfo(await fetchCustomerInfo());
       }
     });
     return () => sub.subscription.unsubscribe();
@@ -266,14 +302,15 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   // charged user on the paywall, or let payment.tsx navigate into the tabs
   // only for the layout to bounce them straight back. The capped server
   // sync then runs so the server learns about it; its answer only feeds
-  // `entitled`, the mismatch event, and the cache (and, via the
-  // 'purchase'/'restore' rule in syncEntitlement, can only confirm, never
-  // downgrade). Past the cap we navigate anyway; the still-running sync and
-  // the search screen's mismatch handler finish the job.
+  // `entitled`, the mismatch event, and the cache (and, inside
+  // STORE_GRACE_MS, can only confirm, never downgrade). Past the cap we
+  // navigate anyway; the still-running sync and the search screen's
+  // mismatch handler finish the job.
   const settleAfterStore = useCallback(
     async (info: CustomerInfo | null, reason: 'purchase' | 'restore'): Promise<boolean> => {
       const pro = isProActive(info);
       if (!pro) return false;
+      storeConfirmedAtRef.current = Date.now();
       setEntitled(true);
       void writeCachedEntitlement(true);
       await withinMs(syncEntitlement(reason), POST_PURCHASE_SYNC_CAP_MS);

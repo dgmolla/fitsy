@@ -100,7 +100,7 @@ async function del(path: string, authenticated = true): Promise<void> {
     const errBody = await res.json().catch(() => ({})) as { error?: string };
     throw new Error(errBody.error ?? `Request failed: ${res.status}`);
   }
-  // 204 No Content — nothing to parse
+  // 204 No Content - nothing to parse
 }
 
 async function patch<T>(path: string, body: unknown, authenticated = true): Promise<T> {
