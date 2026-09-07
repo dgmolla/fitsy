@@ -123,6 +123,15 @@ export function Trust() {
   );
 }
 
+/** "3-day free trial, then $7.99 a month or $39.99 a year." Omits the trial clause when there is none. */
+function priceAnswer(p: DisplayPricing): string {
+  const plans = `${p.monthly} a month or ${p.annual} a year`;
+  if (p.trialDays > 0) {
+    return `${p.trialDays}-day free trial, then ${plans}. Cancel anytime. Nothing is charged until the trial ends.`;
+  }
+  return `${plans}. Cancel anytime.`;
+}
+
 function faqItems(pricing: DisplayPricing): Array<{ q: string; a: string }> {
   return [
     {
@@ -139,7 +148,7 @@ function faqItems(pricing: DisplayPricing): Array<{ q: string; a: string }> {
     },
     {
       q: "What does it cost?",
-      a: `${pricing.trialDays === 3 ? "Three" : String(pricing.trialDays)} days free, then ${pricing.monthly} a month or ${pricing.annual} a year. Cancel anytime. Nothing is charged until the trial ends.`,
+      a: priceAnswer(pricing),
     },
   ];
 }
