@@ -136,21 +136,46 @@ describe('boot', () => {
     expect(result.current.entitled).toBe(false);
   });
 
-  it('boot takes a server "false" at face value, then escalates ONCE to a RevenueCat re-read when the device says Pro', async () => {
+  it('server "false" + device Pro: escalates ONCE to a RevenueCat re-read before settling, so no paywall flash', async () => {
+    useFakeTimersKeepingFlush();
     mockStore[ENTITLEMENT_CACHE_KEY] = 'true';
     mockRc.identifyPurchasesUser.mockResolvedValue(proInfo);
     mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: false, status: 'expired', expiresAt: null });
     const pending = deferred<{ active: boolean; synced: boolean }>();
     mockApi.syncSubscription.mockReturnValue(pending.promise);
     const { result } = renderProvider();
-    await waitFor(() => expect(result.current.entitled).toBe(false));
-    expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBe('false');
     await flush();
+    await flush();
+    // Held while the re-read is out: nothing may gate on the stale "false".
+    expect(result.current.entitled).toBeNull();
     expect(mockApi.syncSubscription).toHaveBeenCalledTimes(1);
     expect(mockApi.syncSubscription).toHaveBeenCalledWith('mismatch');
-    // The re-read finds the subscription: the user is let in without Restore.
     await act(async () => { pending.resolve({ active: true, synced: true }); });
-    await waitFor(() => expect(result.current.entitled).toBe(true));
+    await flush();
+    expect(result.current.entitled).toBe(true);
+    expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBe('true');
+    expect(mockApi.fetchSubscriptionStatus).toHaveBeenCalledTimes(1);
+    jest.useRealTimers();
+  });
+
+  it('server "false" + device Pro with a slow re-read: settles false at the cap, the late "true" still lets them in', async () => {
+    useFakeTimersKeepingFlush();
+    mockRc.identifyPurchasesUser.mockResolvedValue(proInfo);
+    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: false, status: 'expired', expiresAt: null });
+    const pending = deferred<{ active: boolean; synced: boolean }>();
+    mockApi.syncSubscription.mockReturnValue(pending.promise);
+    const { result } = renderProvider();
+    await flush();
+    await flush();
+    expect(result.current.entitled).toBeNull();
+    act(() => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
+    await flush();
+    expect(result.current.entitled).toBe(false);
+    await act(async () => { pending.resolve({ active: true, synced: true }); });
+    await flush();
+    expect(result.current.entitled).toBe(true);
+    expect(mockApi.syncSubscription).toHaveBeenCalledTimes(1);
+    jest.useRealTimers();
   });
 
   it('does not escalate a server "false" when the device agrees', async () => {

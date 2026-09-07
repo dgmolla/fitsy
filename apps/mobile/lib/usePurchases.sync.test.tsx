@@ -180,6 +180,16 @@ describe('sign-out', () => {
     expect(seen).toEqual([null, true, null, false]);
   });
 
+  it('never calls getSession from the SIGNED_OUT path (auth-js holds its lock while notifying)', async () => {
+    const { result } = renderProvider();
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    mockAuth.getSession.mockClear();
+    mockAuth.session = null;
+    await act(async () => { mockAuth.listener?.('SIGNED_OUT', null); });
+    await waitFor(() => expect(result.current.entitled).toBe(false));
+    expect(mockAuth.getSession).not.toHaveBeenCalled();
+  });
+
   it('leaves the verdict to a fast re-sign-in instead of forcing false', async () => {
     mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null });
     const { result } = renderProvider();
@@ -190,10 +200,13 @@ describe('sign-out', () => {
       mockAuth.listener?.('SIGNED_OUT', null);
       await new Promise((r) => setImmediate(r));
     });
-    // Someone signed in again before the logout settled.
+    // Someone signed in again before the logout settled, and their sync says yes.
     mockAuth.session = { user: { id: 'u2' } };
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    await act(async () => { mockAuth.listener?.('SIGNED_IN', { user: { id: 'u2' } }); });
+    await waitFor(() => expect(result.current.entitled).toBe(true));
     await act(async () => { logout.resolve(undefined); });
     await flush();
-    expect(result.current.entitled).toBeNull();
+    expect(result.current.entitled).toBe(true);
   });
 });

@@ -25,6 +25,7 @@ describe('useEntitlementMismatch', () => {
   it.each([
     { entitled: false, isPro: false, locked: true },
     { entitled: null, isPro: false, locked: true },
+    { entitled: null, isPro: true, locked: true },
     { entitled: true, isPro: true, locked: false },
     { entitled: true, isPro: true, locked: null },
   ])('does nothing for %j', async (props) => {
@@ -34,9 +35,22 @@ describe('useEntitlementMismatch', () => {
     expect(syncEntitlement).not.toHaveBeenCalled();
   });
 
+  it('waits out an in-flight resolution (entitled null), then fires once it settles', async () => {
+    const { refetch, syncEntitlement, rerender } = setup({ entitled: null, isPro: true, locked: true });
+    syncEntitlement.mockResolvedValue(true);
+    act(() => { jest.runAllTimers(); });
+    await flush();
+    expect(syncEntitlement).not.toHaveBeenCalled();
+    rerender({ entitled: false, isPro: true, locked: true, fetchSeq: 0 });
+    act(() => { jest.advanceTimersByTime(0); });
+    await flush();
+    expect(syncEntitlement).toHaveBeenCalledTimes(1);
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
   it.each([
     { entitled: true, isPro: false },
-    { entitled: null, isPro: true },
+    { entitled: false, isPro: true },
   ])('syncs immediately and refetches when %j meets a locked page', async (belief) => {
     const { refetch, syncEntitlement } = setup({ ...belief, locked: true });
     syncEntitlement.mockResolvedValue(true);

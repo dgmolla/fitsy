@@ -54,7 +54,10 @@ export function useEntitlementMismatch({
   syncEntitlement,
   refetch,
 }: Options): void {
-  const believedPro = entitled === true || isPro;
+  // Not while a resolution is in flight (`entitled === null`, boot or
+  // sign-in): the provider's own sync is about to answer, and a 'mismatch'
+  // fired here as `isPro` flips would just duplicate it.
+  const believedPro = entitled !== null && (entitled || isPro);
   const refetchRef = useRef(refetch);
   refetchRef.current = refetch;
   const syncRef = useRef(syncEntitlement);

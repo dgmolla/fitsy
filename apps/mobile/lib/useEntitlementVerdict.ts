@@ -80,8 +80,8 @@ export interface EntitlementVerdict {
   markStoreConfirmed: () => void;
   /** Sign-out, synchronous half: hold the gates (null), drop cache and grace window. */
   beginSignOut: () => void;
-  /** Sign-out, after the RevenueCat logout: not entitled if there is still no session. */
-  settleAfterSignOut: () => Promise<void>;
+  /** Sign-out, after the RevenueCat logout: not entitled unless a sign-in arrived meanwhile. Lock-free. */
+  settleAfterSignOut: () => void;
 }
 
 export function useEntitlementVerdict({
@@ -100,6 +100,10 @@ export function useEntitlementVerdict({
   }, []);
   // When the store last confirmed Pro (markStoreConfirmed); 0 = never.
   const storeConfirmedAtRef = useRef(0);
+  // Counts sign-ins, so a sign-out can tell whether one overtook it without
+  // asking auth-js (see settleAfterSignOut).
+  const signInEpochRef = useRef(0);
+  const signOutEpochRef = useRef(0);
   const inStoreGrace = useCallback(() => Date.now() - storeConfirmedAtRef.current < STORE_GRACE_MS, []);
 
   /** Server round trip only: no state. Null = couldn't ask, or the session moved on. */
@@ -195,6 +199,21 @@ export function useEntitlementVerdict({
       }
       // Applied only now, after the RevenueCat read, so the mismatch event
       // compares against the real device state.
+      if (server === false && isProActive(info)) {
+        // The stored row says no while the device says Pro: a missed webhook
+        // or an earlier lagging sync. The boot read is a cheap DB read, so
+        // escalate once to a RevenueCat re-read BEFORE anything settles, so
+        // the common case lands on search with no paywall flash. Past the
+        // cap, fold as usual and let the late answer apply. Without this a
+        // subscriber is locked out until they tap Restore: the mismatch
+        // handler lives on the search screen, which never mounts.
+        const escalated = await withinMs(runSync('mismatch', userId), BOOT_VERDICT_CAP_MS);
+        if (isCancelled()) return;
+        if (escalated !== null) {
+          setEntitled((current) => current ?? escalated);
+          return;
+        }
+      }
       const effective = server === null ? null : applyVerdict('boot', server);
       // The single settled signal: server, else cache, else the device (so an
       // offline subscriber isn't bounced). `current` covers an answer that
@@ -205,17 +224,9 @@ export function useEntitlementVerdict({
         void answer.then((late) => {
           if (late !== null && !isCancelled()) applyVerdict('boot', late);
         });
-      } else if (!server && isProActive(info)) {
-        // The stored row says no while the device says Pro: a missed webhook
-        // or an earlier lagging sync. The boot read is a cheap DB read, so
-        // escalate once to a RevenueCat re-read; the paywall's entitled
-        // redirect lets the user in if it comes back true. Without this the
-        // mismatch handler (which lives on the search screen) never mounts
-        // and a subscriber is locked out until they tap Restore.
-        void syncEntitlement('mismatch');
       }
     },
-    [fetchVerdict, applyVerdict, syncEntitlement, setEntitled],
+    [fetchVerdict, applyVerdict, runSync, setEntitled],
   );
 
   const settleAfterBootFailure = useCallback(
@@ -232,6 +243,7 @@ export function useEntitlementVerdict({
       // Hold the gates: the sign-in screen replaces to the tabs before the
       // server has answered, and a stale "false" would bounce a returning
       // subscriber to the paywall for the length of a round trip.
+      signInEpochRef.current += 1;
       setEntitled(null);
       const info = await identify();
       const server = await withinMs(syncEntitlement('sign_in'), BOOT_VERDICT_CAP_MS);
@@ -251,20 +263,19 @@ export function useEntitlementVerdict({
     // Null, not false: a false here would have the still-mounted tabs layout
     // redirect to the paywall before the caller's own navigation lands. The
     // cache and grace window belong to the user who just left.
+    signOutEpochRef.current = signInEpochRef.current;
     setEntitled(null);
     void clearCachedEntitlement();
     storeConfirmedAtRef.current = 0;
   }, [setEntitled]);
 
-  const settleAfterSignOut = useCallback(async () => {
-    // A fast re-sign-in owns the verdict from here; otherwise anonymous. On a
-    // failed session read assume anonymous: null must never be left behind.
-    try {
-      const { data } = await supabase.auth.getSession();
-      if (data.session) return;
-    } catch {
-      // fall through
-    }
+  const settleAfterSignOut = useCallback(() => {
+    // Decided from the auth events alone, never from getSession: auth-js
+    // runs SIGNED_OUT subscribers inside signOut's lock, and a getSession
+    // queued behind that lock deadlocked every later session read. A
+    // sign-in that arrived since owns the verdict; otherwise anonymous, and
+    // null must never be left behind.
+    if (signInEpochRef.current !== signOutEpochRef.current) return;
     setEntitled((current) => current ?? false);
   }, [setEntitled]);
 

@@ -50,15 +50,20 @@ export const mockApi = {
 };
 jest.mock('./apiClient', () => mockLazy(() => mockApi));
 
-/** Mutable session the mocked Supabase client reports. */
+/** Mutable session the mocked Supabase client reports; `getSession` is countable. */
 export const mockAuth: {
   session: { user: { id: string } } | null;
   listener: ((event: string, session: unknown) => void) | undefined;
-} = { session: { user: { id: 'u1' } }, listener: undefined };
+  getSession: jest.Mock;
+} = {
+  session: { user: { id: 'u1' } },
+  listener: undefined,
+  getSession: jest.fn(async () => ({ data: { session: mockAuth.session } })),
+};
 jest.mock('./supabase', () => ({
   supabase: {
     auth: {
-      getSession: async () => ({ data: { session: mockAuth.session } }),
+      getSession: (...a: unknown[]) => mockAuth.getSession(...a),
       onAuthStateChange: (cb: (event: string, session: unknown) => void) => {
         mockAuth.listener = cb;
         return { data: { subscription: { unsubscribe: () => undefined } } };

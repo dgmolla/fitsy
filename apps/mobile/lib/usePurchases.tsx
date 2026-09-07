@@ -198,7 +198,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
         void (async () => {
           await logoutPurchasesUser();
           setCustomerInfo(await fetchCustomerInfo());
-          await settleAfterSignOut();
+          settleAfterSignOut();
         })();
       }
     });
