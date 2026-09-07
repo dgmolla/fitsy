@@ -15,7 +15,7 @@ let sampleUsedCache: boolean | null = null;
  * Whether this device has already spent its one free restaurant-detail view
  * for the current onboarding pass (or lapsed-subscriber / declined-paywall
  * browse). Persisted so backgrounding or killing the app mid-flow can't
- * reset it; a *new* onboarding pass (welcome/preview-intro) does reset it.
+ * reset it; a *new* onboarding pass (welcome/finding) does reset it.
  *
  * This is a UX gate only, not a security boundary - it bounds how many free
  * *looks* a well-behaved client offers, not how much data a client can pull.
