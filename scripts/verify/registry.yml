@@ -1,5 +1,6 @@
 # Registry of verification checks. See README.md for the contract.
-# layer: 0 = fast local gate, 1 = static, 2 = unit tests, 3 = build/integration
+# layer: 0 = fast local gate, 1 = static, 2 = unit tests, 3 = build/integration,
+#        6 = deployed-environment E2E, 9 = post-deploy (invoked by deploy.yml)
 #        (numbers align with L-layers in docs/engineering/devops/autonomous-shipping.md)
 # blocking: true | shadow   (shadow = reported, never fails the run)
 # runs: local | ci | scheduled   (contexts this check executes in)
@@ -82,6 +83,17 @@ checks:
     runs: [ci]
     paths: ["apps/api/**", "packages/**", "prisma/**", "package.json", "package-lock.json", "vercel.json"]
     why: Next.js production build catches what tests miss; asserts no compiled output lands in the tree.
+
+  - name: api-e2e
+    script: api-e2e.sh
+    layer: 6
+    blocking: shadow
+    runs: [scheduled, local]   # bare invocation defaults to dev.fitsy.org
+    paths: ["apps/api/**", "packages/**", "prisma/**"]
+    why: >
+      Deployed-API smoke (health, teaser lock invariants, auth, register).
+      Invoked directly by deploy.yml against prod (--prod-safe) and usable
+      against dev/previews; replaced scripts/verify-prod.sh 2026-09-07.
 
   - name: dev-drift
     script: dev-drift.sh

@@ -69,7 +69,7 @@ graph TD
 ### 1. Health endpoint (`/api/health`)
 
 `GET /api/health` — returns `200` with DB status and build info. Used by:
-- `scripts/verify-prod.sh` smoke test
+- `scripts/verify/api-e2e.sh` smoke test
 - Future: Vercel cron-based uptime monitor, external uptime services
 
 Response schema:

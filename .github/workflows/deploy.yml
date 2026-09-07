@@ -1,0 +1,196 @@
+# Deploy from main (autoship L8-L9): derived from the merged diff, never from
+# memory. Runs NO model and holds the only prod secret (T12: agent jobs and
+# deploy jobs never mix).
+#
+#   migrate  - prisma migrate deploy to PROD when migrations changed.
+#              Old code runs on the new schema while Vercel builds; guardrails
+#              are structural check 13 (no NOT NULL without default) plus
+#              migration review - NOT a full additive-only proof. If a
+#              migration still breaks old code: rollback.sh api + incident.
+#   smoke    - waits for Vercel's production deployment of this commit, then
+#              runs the prod-safe API smoke; failure files an incident issue.
+#              Rollback is one local command: scripts/deploy/rollback.sh api
+#   ota      - publishes the mobile OTA when mobile/shared changed, no native
+#              changes, and EXPO_TOKEN exists; otherwise leaves a reminder
+#              issue to run scripts/deploy/ota.sh locally.
+name: Deploy
+on:
+  push:
+    branches: [main]
+
+# serialize deploys in push order; a stale run must not publish after a newer one
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+  statuses: read
+  deployments: read
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      migrations: ${{ steps.f.outputs.migrations }}
+      mobile: ${{ steps.f.outputs.mobile }}
+      api: ${{ steps.f.outputs.api }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: f
+        run: |
+          # full push range (a push can carry several commits); if the range is
+          # unresolvable, fail SAFE by treating everything as changed
+          if ! CHANGED=$(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" 2>/dev/null); then
+            echo "diff range unresolvable; assuming all surfaces changed"
+            CHANGED=$(printf 'prisma/migrations/x\napps/mobile/x\napps/api/x\n')
+          fi
+          echo "$CHANGED"
+          echo "migrations=$(echo "$CHANGED" | grep -q '^prisma/migrations/' && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "mobile=$(echo "$CHANGED" | grep -qE '^(apps/mobile/|packages/shared/)' && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "api=$(echo "$CHANGED" | grep -qE '^(apps/api/|packages/|prisma/|scripts/|vercel\.json|package\.json|package-lock\.json)' && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+  migrate:
+    # Runs on EVERY push: migrate deploy is a no-op when nothing is pending,
+    # and gating it on this push's diff loses migrations from pushes that a
+    # concurrency queue superseded (lens finding, 2026-09-07).
+    needs: changes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Migrate production
+        env:
+          PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+        run: bash scripts/deploy/migrate-prod.sh
+      - name: File incident on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create --label incident \
+            --title "incident: prod migration failed at ${GITHUB_SHA:0:7}" \
+            --body "prisma migrate deploy against prod failed for $GITHUB_SHA. Vercel will still auto-deploy this commit; if the new code needs the new schema, roll back: \`scripts/deploy/rollback.sh api\`. Closing PR must add fix + detector + constraint."
+
+  smoke:
+    needs: [changes, migrate]
+    if: always() && needs.changes.outputs.api == 'true' && needs.migrate.result == 'success' 
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for Vercel PRODUCTION deployment of this commit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Use the Deployments API filtered to environment=Production: the same
+          # sha also gets a Preview deployment via the dev-branch mirror, and a
+          # bare commit status cannot tell them apart.
+          for i in $(seq 1 60); do
+            DID=$(gh api "repos/${GITHUB_REPOSITORY}/deployments?sha=${GITHUB_SHA}&environment=Production" --jq '.[0].id' 2>/dev/null || true)
+            if [ -n "$DID" ] && [ "$DID" != "null" ]; then
+              STATE=$(gh api "repos/${GITHUB_REPOSITORY}/deployments/$DID/statuses" --jq '.[0].state' 2>/dev/null || true)
+              echo "production deployment $DID: ${STATE:-pending} ($i)"
+              [ "$STATE" = "success" ] && exit 0
+              case "$STATE" in failure|error) echo "vercel production deploy failed"; exit 1 ;; esac
+            else
+              echo "no Production deployment yet ($i)"
+            fi
+            sleep 20
+          done
+          echo "timed out waiting for the Vercel production deployment"; exit 1
+      - name: Prod-safe API smoke
+        env:
+          # optional: set these secrets to activate the entitled-account probe
+          PROD_SMOKE_EMAIL: ${{ secrets.PROD_SMOKE_EMAIL }}
+          PROD_SMOKE_PASSWORD: ${{ secrets.PROD_SMOKE_PASSWORD }}
+        run: bash scripts/verify/api-e2e.sh --base=https://fitsy.org --prod-safe
+      - name: File incident on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create --label incident \
+            --title "incident: prod smoke failed at ${GITHUB_SHA:0:7}" \
+            --body "Post-deploy smoke failed for $GITHUB_SHA (see the Deploy workflow logs). ROLL BACK FIRST: \`scripts/deploy/rollback.sh api\`, diagnose second. Closing PR must add fix + detector + constraint."
+
+  ota:
+    needs: [changes, migrate, smoke]
+    # never OTA over a failed migration or failed smoke: skipped smoke is only
+    # acceptable when nothing upstream failed (lens finding, 2026-09-07)
+    if: always() && needs.changes.outputs.mobile == 'true' && needs.migrate.result != 'failure' && (needs.smoke.result == 'success' || needs.smoke.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - id: tok
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -n "$EXPO_TOKEN" ]; then echo "has=true" >> "$GITHUB_OUTPUT"; else echo "has=false" >> "$GITHUB_OUTPUT"; fi
+      - name: Native change since the last release tag? OTA is unsafe
+        id: nativecheck
+        run: |
+          LAST_TAG=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
+          if [ -z "$LAST_TAG" ]; then
+            echo "no v* release tag; failing safe (no OTA)"
+            echo "unsafe=true" >> "$GITHUB_OUTPUT"
+            echo "reason=no v* release tag exists, so the shipped runtime cannot be established; tag the current App Store binary's commit (git tag vX.Y.Z <sha>) to enable OTA" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only "$LAST_TAG"..HEAD | grep -qE '^(apps/mobile/(app\.config\.ts|package\.json|eas\.json|ios/|android/)|package\.json$)'; then
+            echo "native changes since $LAST_TAG; users' binaries lack this runtime"
+            echo "unsafe=true" >> "$GITHUB_OUTPUT"
+            echo "reason=native files changed since $LAST_TAG; ship a binary via eas-build (tag) before any OTA" >> "$GITHUB_OUTPUT"
+          else
+            echo "unsafe=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: File a release reminder when OTA is unsafe
+        if: steps.nativecheck.outputs.unsafe == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REASON: ${{ steps.nativecheck.outputs.reason }}
+        run: |
+          if gh issue list --label release --state open --search "release: OTA blocked" --json number --jq length | grep -qv '^0$'; then
+            echo "open OTA-blocked issue already exists; not filing another"
+          else
+            gh issue create --label release \
+              --title "release: OTA blocked at ${GITHUB_SHA:0:7}" \
+              --body "OTA skipped: ${REASON}. Do NOT eas update until resolved." || true
+          fi
+          echo "OTA unsafe: ${REASON}"
+      - name: Publish OTA
+        if: steps.nativecheck.outputs.unsafe != 'true' && steps.tok.outputs.has == 'true'
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          npm ci
+          bash scripts/deploy/ota.sh "$(git log -1 --format='%h: %s')"
+      - name: No EXPO_TOKEN — remind to publish locally
+        if: steps.nativecheck.outputs.unsafe != 'true' && steps.tok.outputs.has == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh issue list --label release --state open --search "OTA pending" --json number --jq length | grep -qv '^0$'; then
+            echo "open OTA-pending issue already exists"; exit 0
+          fi
+          gh issue create --label release \
+            --title "release: OTA pending for ${GITHUB_SHA:0:7} (no EXPO_TOKEN in CI)" \
+            --body "Mobile/shared changed on main but CI has no EXPO_TOKEN. Publish locally: \`bash scripts/deploy/ota.sh\` (it enforces --environment production and verifies the manifest). Add an EXPO_TOKEN repo secret to automate this." || true
+      - name: File incident on OTA failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create --label incident \
+            --title "incident: OTA publish failed at ${GITHUB_SHA:0:7}" \
+            --body "The OTA job failed for $GITHUB_SHA (see Deploy workflow logs). A partial publish is possible; verify with eas update:list, and if a broken group is live (\`scripts/deploy/rollback.sh mobile\`). Closing PR must add fix + detector + constraint." || true

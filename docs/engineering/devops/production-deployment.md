@@ -37,7 +37,7 @@ flowchart TD
     F --> G[Smoke-test Vercel prod endpoints]
     G --> H{All checks pass?}
     H -- Yes --> I[Production is live]
-    H -- No --> J[Debug via scripts/verify-prod.sh]
+    H -- No --> J[Debug via scripts/verify/api-e2e.sh --base=https://fitsy.org --prod-safe]
 ```
 
 ---
@@ -139,7 +139,7 @@ psql $DATABASE_URL -c "SELECT COUNT(*) FROM \"Restaurant\";"
 After deploying (Vercel auto-deploys on push to `main`), run the verification script:
 
 ```bash
-bash scripts/verify-prod.sh https://fitsy-api.vercel.app
+bash scripts/verify/api-e2e.sh --base=https://fitsy.org --prod-safe
 ```
 
 Manual smoke tests:

@@ -272,7 +272,7 @@ Reuse `PipelineEmitter` for reporting. Each invariant failure emits a `PipelineE
 | Unique (restaurantId, name) | Matches existing `@@unique([restaurantId, name])` constraint |
 | Macro values in sane ranges | calories 0–5000, protein 0–200g, carbs 0–500g, fat 0–300g |
 
-Reuse `scripts/verify-prod.sh` as the entry point for the nightly variant; no new cron infra in scope.
+Reuse `scripts/verify/api-e2e.sh` as the entry point for the nightly variant; no new cron infra in scope.
 
 ---
 
@@ -398,7 +398,7 @@ Based on Stage 4 report:
 
 - Wire `scripts/preload-ue-first.ts --phase=discover` to daily cron.
 - Wire `scripts/preload-ue-first.ts --phase=enrich` to a worker that drains the backlog.
-- Extend `scripts/verify-prod.sh` with the invariants from both phases.
+- Extend `scripts/verify/api-e2e.sh` with the invariants from both phases.
 - Monitoring: Axiom queries on `fitsy-pipeline` filtered by `phase=ue-first` — probe success rate, bot-defense rate, enrichment throughput, invariant violation count. Reuse existing `RestaurantEvent` / `CostCheckpoint` / `SubstepEvent` schemas.
 
 ---
