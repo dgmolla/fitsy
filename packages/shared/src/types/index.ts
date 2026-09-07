@@ -128,7 +128,13 @@ export interface BestMatchSummary {
   carbsG: number;
   fatG: number;
   confidence: ConfidenceLevel;
-  matchScore: number;
+  /**
+   * Macro-fit score (lower = better fit). `null` when the caller set no macro
+   * targets - there is nothing to score against. (Historically the server put
+   * Infinity here, which JSON.stringify silently turned into null on the wire;
+   * the type now tells the truth. Found by the response contract, 2026-09-07.)
+   */
+  matchScore: number | null;
 }
 
 /** Shape of a single restaurant row in GET /api/restaurants */

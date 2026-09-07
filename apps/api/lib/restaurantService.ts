@@ -432,9 +432,11 @@ export async function findNearbyRestaurants(
       carbsG: r.carbsG,
       fatG: r.fatG,
       confidence: r.confidence,
+      // null (not Infinity): there is no score without targets, and JSON was
+      // already coercing Infinity to null on the wire anyway
       matchScore: targetsActive
         ? Math.round(Math.sqrt(r.scoreSum) * 10000) / 10000
-        : Infinity,
+        : null,
     },
   }));
 
