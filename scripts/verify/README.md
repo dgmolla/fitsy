@@ -33,5 +33,6 @@ A check without a registry entry, or an entry without a script, is itself a fail
 | `test.sh` | 2 | api coverage gate + scripts tests |
 | `build.sh` | 3 | production API build, no stray compiled output |
 | `dev-drift.sh` | 3 | the dev environment has every migration on `main` and holds seed data |
+| `api-e2e.sh` | 6 | a deployed API serves health + teaser-lock invariants (read-only by default; `--write` adds the register probe) |
 
 Callers: `.githooks/pre-push` (layers 0-1, changed scope), `npm run verify` (0-2), `npm run verify:all`, and `.github/workflows/verify.yml` (one thin job per layer).
