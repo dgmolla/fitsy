@@ -17,6 +17,10 @@ Read `REVIEW.md` first.
 4. **Eval case**: the incident's triggering diff or state captured under
    scripts/verify/evals/incidents/<issue-number>/ so lens recall is measurable.
 
+5. **Layer attribution**: the incident ISSUE body carries a `Layer: L<n>`
+   line naming which pipeline layer should have caught it - the Monday
+   scoreboard aggregates these (harness-metrics.sh).
+
 ## Also check
 
 - The incident issue is linked and will auto-close.

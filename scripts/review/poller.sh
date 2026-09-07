@@ -22,7 +22,8 @@ git fetch -q origin && git checkout -qf origin/main 2>/dev/null
 gh pr list --state open --json number,headRefOid --limit 20 --jq '.[] | "\(.number) \(.headRefOid)"' |
 while read -r NUM SHA; do
   # tier decides the lens: low (docs/bookkeeping) -> docs-sanity, else correctness
-  TIER="$(gh pr view "$NUM" --json files --jq '.files[].path' | node scripts/review/tier.mjs)"
+  FILES_FOR_TIER="$(gh pr view "$NUM" --json files --jq '.files[].path')"
+  TIER="$(echo "$FILES_FOR_TIER" | node scripts/review/tier.mjs)"
   LABELS="$(gh pr view "$NUM" --json labels --jq '.labels[].name')"
   BODY="$(gh pr view "$NUM" --json body --jq '.body // ""')"
   if [ "$TIER" = "low" ]; then LENSES="docs-sanity"; else LENSES="correctness"; fi
@@ -31,6 +32,9 @@ while read -r NUM SHA; do
   echo "$LABELS" | grep -qx incident && LENSES="$LENSES harness-audit"
   # spec-conformance runs when the PR declares a spec
   echo "$BODY" | grep -qiE '^spec:' && LENSES="$LENSES spec-conformance"
+  FILES="$FILES_FOR_TIER"
+  echo "$FILES" | grep -qE '^(\.github/|vercel\.json|apps/mobile/eas\.json|scripts/deploy/)' && LENSES="$LENSES workflow-security"
+  echo "$FILES" | grep -qE '\.test\.(ts|tsx)$' && LENSES="$LENSES test-quality"
   # skip if this head commit already has the lens status
   PENDING=""
   for L in $LENSES; do
