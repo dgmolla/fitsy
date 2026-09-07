@@ -8,6 +8,7 @@
  *      derived from it (hints and copy, never a gate),
  *   4. composes `useEntitlementVerdict`, which owns `entitled` (the SERVER's
  *      verdict, the thing screens gate on) and `syncEntitlement`, and
+ *      `useAuthLifecycle`, which follows Supabase sign-in / sign-out, and
  *   5. exposes paywall / manage-subscription / restore actions.
  *
  * Screens consume `usePurchases()`; they never import `lib/purchases.ts`
@@ -31,6 +32,7 @@ import { supabase } from './supabase';
 import { withinMs } from './async';
 import type { EntitlementSyncReason } from './entitlement';
 import { useEntitlementVerdict } from './useEntitlementVerdict';
+import { useAuthLifecycle } from './useAuthLifecycle';
 import {
   addCustomerInfoListener,
   configurePurchases,
@@ -39,7 +41,6 @@ import {
   hasLapsedEntitlement,
   identifyPurchasesUser,
   isProActive,
-  logoutPurchasesUser,
   presentPaywall as rcPresentPaywall,
   purchasePackage as rcPurchasePackage,
   restorePurchases as rcRestore,
@@ -96,6 +97,8 @@ export interface PurchasesContextValue {
   presentPaywall: (source: string) => Promise<boolean>;
   /** Open the App Store's manage-subscriptions sheet (URL fallback inside). */
   showManageSubscriptions: () => Promise<void>;
+  /** The store confirmed a purchase/restore within the last STORE_GRACE_MS. */
+  storeConfirmed: boolean;
   restore: () => Promise<boolean>; // resolves like `purchase`
 }
 
@@ -111,23 +114,9 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     customerInfoRef.current = info;
     setCustomerInfoState(info);
   }, []);
-  // Which user boot identified, and whether boot is still running: the
-  // SIGNED_IN supabase-js emits while recovering that session on cold start
-  // must not start a second identify + sync (boot owns that resolution).
-  const bootUserIdRef = useRef<string | null>(null);
-  const bootPendingRef = useRef(true);
   const verdict = useEntitlementVerdict({ customerInfoRef });
-  const {
-    entitled,
-    entitledRef,
-    syncEntitlement,
-    resolveAtBoot,
-    settleAfterBootFailure,
-    resolveAfterSignIn,
-    markStoreConfirmed,
-    beginSignOut,
-    settleAfterSignOut,
-  } = verdict;
+  const { entitled, inStoreGrace, syncEntitlement, resolveAtBoot, settleAfterBootFailure, markStoreConfirmed } = verdict;
+  const auth = useAuthLifecycle({ verdict, setCustomerInfo });
 
   // Boot: one session read, then the RevenueCat identify/offering and the
   // verdict's cache read + capped server fetch all run in parallel; the
@@ -137,14 +126,14 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     let unsubscribe: (() => void) | undefined;
     let cancelled = false;
     const isCancelled = () => cancelled;
-    bootPendingRef.current = true;
+    auth.beginBoot();
 
     (async () => {
       let userId: string | undefined;
       try {
         const { data } = await supabase.auth.getSession();
         userId = data.session?.user.id;
-        bootUserIdRef.current = userId ?? null;
+        auth.markBootUser(userId);
         const rcReady = (async (): Promise<CustomerInfo | null> => {
           if (!configured) return null;
           const [info, off] = await Promise.all([
@@ -163,7 +152,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
         console.warn('[purchases] boot failed', err instanceof Error ? err.message : err);
         await settleAfterBootFailure(userId, isCancelled);
       } finally {
-        bootPendingRef.current = false;
+        auth.finishBoot(cancelled);
       }
     })();
 
@@ -171,39 +160,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
       cancelled = true;
       unsubscribe?.();
     };
-  }, [setCustomerInfo, resolveAtBoot, settleAfterBootFailure]);
-
-  // Keep RevenueCat identity in lockstep with auth (logIn/logOut so
-  // entitlements follow the account, not the device). The listener returns
-  // synchronously: supabase-js awaits every callback, and a getSession inside
-  // one waits on the client's own init, which waits on this callback.
-  useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session) {
-        // Boot owns the first identify + sync (a recovery SIGNED_IN can land
-        // before it has even read the session); a later duplicate for the
-        // user boot or a previous sign-in resolved is nothing to do either.
-        if (bootPendingRef.current) return;
-        if (session.user.id === bootUserIdRef.current && entitledRef.current !== null) return;
-        void resolveAfterSignIn(async () => {
-          const info = await identifyPurchasesUser(session.user.id);
-          if (info) setCustomerInfo(info);
-          return info;
-        }).then(() => {
-          bootUserIdRef.current = session.user.id;
-        });
-      } else if (event === 'SIGNED_OUT') {
-        bootUserIdRef.current = null;
-        beginSignOut();
-        void (async () => {
-          await logoutPurchasesUser();
-          setCustomerInfo(await fetchCustomerInfo());
-          settleAfterSignOut();
-        })();
-      }
-    });
-    return () => sub.subscription.unsubscribe();
-  }, [setCustomerInfo, entitledRef, resolveAfterSignIn, beginSignOut, settleAfterSignOut]);
+  }, [setCustomerInfo, resolveAtBoot, settleAfterBootFailure, auth]);
 
   const refresh = useCallback(async () => {
     setCustomerInfo(await fetchCustomerInfo());
@@ -220,12 +177,11 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   // After RevenueCat reports Pro right out of the StoreKit flow: the user
   // just paid, so `entitled` flips true immediately (cached) and the caller
   // gets `true` whatever the server says; otherwise a stalled or lagging
-  // sync would leave the paywall's `if (!isPro) return` holding a charged
-  // user on the paywall, or let the tabs layout bounce them back. The capped
-  // sync then tells the server; its answer only feeds `entitled`, the
-  // mismatch event, and the cache (and, inside STORE_GRACE_MS, can only
-  // confirm, never downgrade). Past the cap we navigate anyway; the
-  // still-running sync and the search screen's mismatch handler finish.
+  // sync would hold a charged user on the paywall (`if (!isPro) return`) or
+  // let the tabs layout bounce them back. The capped sync then tells the
+  // server; its answer only feeds `entitled`, the mismatch event and the
+  // cache (inside STORE_GRACE_MS it can only confirm). Past the cap we
+  // navigate anyway; the sync and the search screen's mismatch handler finish.
   const settleAfterStore = useCallback(
     async (info: CustomerInfo | null, reason: 'purchase' | 'restore'): Promise<boolean> => {
       const pro = isProActive(info);
@@ -267,10 +223,13 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     return settleAfterStore(info, 'restore');
   }, [setCustomerInfo, settleAfterStore]);
 
+  // Time-based, so read on every render and let the memo key on the result.
+  const storeConfirmed = inStoreGrace();
   const value = useMemo<PurchasesContextValue>(
     () => ({
       ready: entitled !== null,
       entitled,
+      storeConfirmed,
       isPro: isProActive(customerInfo),
       isLapsed: hasLapsedEntitlement(customerInfo),
       customerInfo,
@@ -283,7 +242,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
       showManageSubscriptions: rcShowManageSubscriptions,
       restore,
     }),
-    [entitled, customerInfo, offering, syncEntitlement, refresh, refreshOffering, purchase, presentPaywall, restore],
+    [entitled, storeConfirmed, customerInfo, offering, syncEntitlement, refresh, refreshOffering, purchase, presentPaywall, restore],
   );
 
   return <PurchasesContext.Provider value={value}>{children}</PurchasesContext.Provider>;

@@ -52,6 +52,8 @@ export interface EntitlementVerdict {
   entitled: boolean | null;
   /** Same value, readable from async callbacks. */
   entitledRef: MutableRefObject<boolean | null>;
+  /** True inside STORE_GRACE_MS after the store confirmed a purchase/restore. */
+  inStoreGrace: () => boolean;
   /**
    * Ask the server and store the answer. Resolves to the verdict NOW IN
    * EFFECT: the stored answer, or `true` when a server "false" was refused
@@ -282,6 +284,7 @@ export function useEntitlementVerdict({
   return {
     entitled,
     entitledRef,
+    inStoreGrace,
     syncEntitlement,
     resolveAtBoot,
     settleAfterBootFailure,

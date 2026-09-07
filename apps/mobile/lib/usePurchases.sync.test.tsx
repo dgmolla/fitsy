@@ -142,6 +142,25 @@ describe('sign-in', () => {
     expect(mockApi.syncSubscription).not.toHaveBeenCalled();
   });
 
+  it('a real sign-in for a DIFFERENT user during a slow boot is deferred, then identified and synced once', async () => {
+    const identify = deferred<typeof freeInfo>();
+    mockRc.identifyPurchasesUser.mockReturnValueOnce(identify.promise);
+    const { result } = renderProvider();
+    await flush();
+    expect(result.current.entitled).toBeNull();
+    mockAuth.session = { user: { id: 'u2' } };
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    await act(async () => { mockAuth.listener?.('SIGNED_IN', { user: { id: 'u2' } }); });
+    await flush();
+    expect(mockRc.identifyPurchasesUser).toHaveBeenCalledTimes(1); // boot's, still pending
+    await act(async () => { identify.resolve(freeInfo); });
+    await waitFor(() => expect(result.current.entitled).toBe(true));
+    expect(mockRc.identifyPurchasesUser).toHaveBeenCalledTimes(2);
+    expect(mockRc.identifyPurchasesUser).toHaveBeenLastCalledWith('u2');
+    expect(mockApi.syncSubscription).toHaveBeenCalledTimes(1);
+    expect(mockApi.syncSubscription).toHaveBeenCalledWith('sign_in');
+  });
+
   it('ignores the SIGNED_IN that session recovery re-emits for the user boot already resolved', async () => {
     mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null });
     const { result, seen } = renderProviderTracking();

@@ -488,7 +488,7 @@ export default function SearchScreen() {
   lockedRef.current = locked;
   // Provider verdict (server) + device hint (RevenueCat). Only consulted for
   // the mismatch handler below: the API's `locked` flag is what gates the UI.
-  const { entitled, isPro, syncEntitlement } = usePurchases();
+  const { entitled, isPro, syncEntitlement, storeConfirmed } = usePurchases();
   // Bumped on every completed search fetch (first page or pagination) so the
   // mismatch handler can tell "still locked after the refetch" from "locked".
   const [fetchSeq, setFetchSeq] = useState(0);
@@ -809,6 +809,14 @@ export default function SearchScreen() {
     void syncEntitlement('mismatch').then(() => mismatchRefetch());
   }, [syncEntitlement, mismatchRefetch]);
   const onLockedTap = unlocking ? resyncNow : undefined;
+  // "Your purchase went through" only while the store actually just
+  // confirmed one; an entitled-but-locked state can also be a lapsed user
+  // whose cached verdict beat a slow boot answer, who bought nothing.
+  const unlockTitle = storeConfirmed ? 'Unlocking your subscription...' : 'Checking your subscription...';
+  const unlockSubtitle = storeConfirmed
+    ? 'Your purchase went through. Tap to refresh if this takes more than a moment.'
+    : 'Tap to refresh.';
+  const unlockLabel = `${unlockTitle} tap to refresh`;
 
   // Pull-to-refresh: re-fire a fresh API call against the current location.
   // Resets pagination (handled inside doFetch) so the user gets a clean
@@ -1127,14 +1135,14 @@ export default function SearchScreen() {
           style={s.lockedBanner}
           onPress={unlocking ? resyncNow : () => { void routeToPaywall(); }}
           accessibilityRole="button"
-          accessibilityLabel={unlocking ? 'Unlocking your subscription, tap to refresh' : 'Subscribe to unlock all restaurants'}
+          accessibilityLabel={unlocking ? unlockLabel : 'Subscribe to unlock all restaurants'}
         >
           {unlocking
             ? <ActivityIndicator size="small" color={EDITORIAL.greenAccent} />
             : <Ionicons name="lock-closed" size={14} color={EDITORIAL.greenAccent} />}
           <Text style={s.lockedBannerText}>
             {unlocking
-              ? 'Unlocking your subscription... tap to refresh if this takes more than a moment.'
+              ? `${unlockTitle} ${unlockSubtitle}`
               : 'Subscribe to see exactly which meals at each spot fit your macros.'}
           </Text>
         </Pressable>
@@ -1156,10 +1164,10 @@ export default function SearchScreen() {
       if (unlocking) {
         return (
           <LockedUnlockCard
-            title="Unlocking your subscription..."
-            subtitle="Your purchase went through. Tap to refresh if this takes more than a moment."
+            title={unlockTitle}
+            subtitle={unlockSubtitle}
             onPress={resyncNow}
-            accessibilityLabel="Unlocking your subscription, tap to refresh"
+            accessibilityLabel={unlockLabel}
             style={s.lockedCard}
           />
         );
@@ -1180,7 +1188,7 @@ export default function SearchScreen() {
         <ActivityIndicator size="small" color={EDITORIAL.greenAccent} />
       </View>
     );
-  }, [loadingMore, locked, results.length, hiddenCount, nextCursor, unlocking, resyncNow]);
+  }, [loadingMore, locked, results.length, hiddenCount, nextCursor, unlocking, resyncNow, unlockTitle, unlockSubtitle, unlockLabel]);
 
   // Only the very first load (before any query interaction, nothing to show
   // yet) gets the full-screen brand loader. Query-driven refetches keep the
@@ -1229,12 +1237,12 @@ export default function SearchScreen() {
             // forward - it must not depend on rows having loaded.
             isOnboardingPreview && locked !== false && !loading && !outOfArea && canSearch ? (
               <LockedUnlockCard
-                title={unlocking ? 'Unlocking your subscription...' : 'Unlock every match near you'}
+                title={unlocking ? unlockTitle : 'Unlock every match near you'}
                 subtitle={unlocking
-                  ? 'Your purchase went through. Tap to refresh if this takes more than a moment.'
+                  ? unlockSubtitle
                   : 'Subscribe to search restaurants by your macros, with the dish that fits at each.'}
                 onPress={unlocking ? resyncNow : () => { void routeToPaywall(); }}
-                accessibilityLabel={unlocking ? 'Unlocking your subscription, tap to refresh' : 'Subscribe to unlock all restaurants'}
+                accessibilityLabel={unlocking ? unlockLabel : 'Subscribe to unlock all restaurants'}
                 style={s.lockedCard}
               />
             ) : null

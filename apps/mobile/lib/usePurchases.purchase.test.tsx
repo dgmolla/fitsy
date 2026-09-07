@@ -158,6 +158,23 @@ describe('purchase / restore', () => {
     jest.useRealTimers();
   });
 
+  it('exposes storeConfirmed while inside the grace window only', async () => {
+    const { result } = renderProvider();
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    expect(result.current.storeConfirmed).toBe(false);
+    useFakeTimersKeepingFlush();
+    mockRc.purchasePackage.mockResolvedValue({ outcome: 'purchased', customerInfo: proInfo });
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    await act(async () => { await result.current.purchase({} as never, 'test'); });
+    expect(result.current.storeConfirmed).toBe(true);
+    act(() => { jest.advanceTimersByTime(STORE_GRACE_MS); });
+    // Any re-render re-reads the window; a sync is the natural trigger.
+    mockApi.syncSubscription.mockResolvedValue({ active: false, synced: true });
+    await act(async () => { await result.current.syncEntitlement('mismatch'); });
+    expect(result.current.storeConfirmed).toBe(false);
+    jest.useRealTimers();
+  });
+
   it('does not ask the server when the store says no', async () => {
     const { result } = renderProvider();
     await waitFor(() => expect(result.current.ready).toBe(true));
