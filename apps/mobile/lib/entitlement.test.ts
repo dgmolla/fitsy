@@ -30,7 +30,6 @@ import {
   clearCachedEntitlement,
   fetchServerEntitlement,
   readCachedEntitlement,
-  withinMs,
   writeCachedEntitlement,
 } from './entitlement';
 
@@ -49,9 +48,10 @@ describe('fetchServerEntitlement', () => {
     expect(mockSyncSubscription).not.toHaveBeenCalled();
   });
 
-  it.each(['purchase', 'restore', 'sign_in', 'mismatch'] as const)('%s re-reads RevenueCat via sync', async (reason) => {
+  it.each(['purchase', 'restore', 'sign_in', 'mismatch'] as const)('%s re-reads RevenueCat via sync, telling the server why', async (reason) => {
     mockSyncSubscription.mockResolvedValue({ active: false, synced: true });
     expect(await fetchServerEntitlement(reason)).toBe(false);
+    expect(mockSyncSubscription).toHaveBeenCalledWith(reason);
     expect(mockFetchSubscriptionStatus).not.toHaveBeenCalled();
   });
 
@@ -84,19 +84,5 @@ describe('entitlement cache', () => {
     expect(await readCachedEntitlement()).toBeNull();
     await expect(writeCachedEntitlement(true)).resolves.toBeUndefined();
     await expect(clearCachedEntitlement()).resolves.toBeUndefined();
-  });
-});
-
-describe('withinMs', () => {
-  it('gives up after the cap so a stalled sync cannot hold the post-purchase navigation', async () => {
-    jest.useFakeTimers();
-    const p = withinMs(new Promise<boolean>(() => {}), 4000);
-    jest.advanceTimersByTime(4000);
-    expect(await p).toBeNull();
-    jest.useRealTimers();
-  });
-
-  it('passes a prompt result through', async () => {
-    expect(await withinMs(Promise.resolve(true), 4000)).toBe(true);
   });
 });

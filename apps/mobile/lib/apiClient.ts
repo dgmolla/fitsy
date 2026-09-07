@@ -86,7 +86,7 @@ export async function fetchRestaurantsPage(
 }
 
 /**
- * @deprecated Prefer `fetchRestaurantsPage` for new callers — it surfaces
+ * @deprecated Prefer `fetchRestaurantsPage` for new callers - it surfaces
  * `nextCursor` so the list can paginate. Retained for callers that only
  * need the first page and don't paginate.
  */
@@ -196,6 +196,9 @@ export interface SubscriptionSyncResult {
   synced: boolean;
 }
 
+/** Why the client asks for a re-read; the server refuses to persist a downgrade on 'purchase'/'restore'. */
+export type SubscriptionSyncReason = 'purchase' | 'restore' | 'sign_in' | 'mismatch';
+
 /**
  * Ask the API to re-read this user's entitlement straight from RevenueCat
  * and persist it. Called right after a purchase/restore/sign-in (so the next
@@ -204,8 +207,8 @@ export interface SubscriptionSyncResult {
  * this account, or a webhook delivery that never landed). Throws on
  * network/HTTP failure - the provider treats it as best-effort.
  */
-export async function syncSubscription(): Promise<SubscriptionSyncResult> {
-  return api.post<SubscriptionSyncResult>('/api/subscriptions/sync', {}, true);
+export async function syncSubscription(reason: SubscriptionSyncReason): Promise<SubscriptionSyncResult> {
+  return api.post<SubscriptionSyncResult>('/api/subscriptions/sync', { reason }, true);
 }
 
 export interface SubscriptionStatusResult {

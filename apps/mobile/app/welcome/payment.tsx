@@ -1,45 +1,38 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import React, { useEffect, useState } from 'react';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { pushProfileToServer } from '@/lib/profileSync';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
+import { PaywallExitModals, type PaywallExitModal } from '@/components/PaywallExitModals';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { getOnboardingData } from '@/lib/onboardingStorage';
 import { usePurchases } from '@/lib/usePurchases';
+import { useRedirectOnceEntitled } from '@/lib/useRedirectOnceEntitled';
 import { openLegalLink } from '@/lib/legalLinks';
 import { trackOnboardingCompleted, trackOnboardingScreenView } from '@/lib/analytics';
 
 type PlanId = 'monthly' | 'yearly';
-type ModalState = 'none' | 'discount' | 'goodbye';
 
 export default function PaymentScreen() {
   const [plan, setPlan] = useState<PlanId>('yearly');
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
-  const [modal, setModal] = useState<ModalState>('none');
+  const [modal, setModal] = useState<PaywallExitModal>('none');
   const { offering, refreshOffering, purchase, restore, entitled } = usePurchases();
 
-  // The verdict can turn true while this screen is up without anything here
-  // having been tapped: the boot sync answering after BOOT_VERDICT_CAP_MS
-  // (the tabs layout already sent us here on a stale cached "false"), or a
-  // subscription bought / restored on another device. Nothing else on this
-  // screen reacts to it, so the user would sit on a paywall they have
-  // already passed until the next relaunch. Held off while a purchase or
-  // restore is in flight here: that path completes onboarding itself
-  // (completeOnboarding runs while `loading` / `restoring` is true) and must
-  // not be raced. Once-only (completeOnboarding claims the ref first) so the
-  // post-purchase `finally` (loading back to false) cannot fire a second
-  // replace. Goes through completeOnboarding: an entitled user leaving this
-  // screen has finished onboarding just like a buyer (flag, profile push,
-  // onboarding_completed), and that helper tracks no purchase event.
-  const redirectedRef = useRef(false);
-  useEffect(() => {
-    if (entitled !== true || loading || restoring || redirectedRef.current) return;
-    void completeOnboarding(false);
-  }, [entitled, loading, restoring]);
+  // A verdict that turns true while this screen is up (late boot / sign-in
+  // answer, a subscription bought on another device) goes through
+  // completeOnboarding: an entitled user leaving here has finished onboarding
+  // just like a buyer (flag, profile push, onboarding_completed), and that
+  // helper tracks no purchase event. See useRedirectOnceEntitled.
+  const { claim } = useRedirectOnceEntitled({
+    entitled,
+    busy: loading || restoring,
+    onEntitled: () => { void completeOnboarding(false); },
+  });
 
   // Live, store-localized prices from the current RevenueCat offering, with the
   // designed copy as a fallback while offerings load (or in Expo Go / no key).
@@ -71,9 +64,9 @@ export default function PaymentScreen() {
   // Onboarding completes once the user holds Pro - whether freshly purchased or
   // restored. Shared by handleStart and handleRestore.
   async function completeOnboarding(discounted = false) {
-    // Claim the one redirect before anything awaits: the entitled-effect
-    // below must not fire a second replace once `loading` flips back.
-    redirectedRef.current = true;
+    // Claim the one redirect before anything awaits, so the entitled hook
+    // cannot fire a second replace once `loading` flips back.
+    claim();
     await AsyncStorage.setItem('onboardingComplete', 'true');
     if (discounted) await AsyncStorage.setItem('discountApplied', 'true');
     pushProfileToServer();
@@ -213,48 +206,19 @@ export default function PaymentScreen() {
         </View>
       </WelcomeScreen>
 
-      {/* Discount modal - first skip */}
-      <Modal visible={modal === 'discount'} transparent animationType="fade" onRequestClose={() => setModal('none')}>
-        <View style={s.overlay}>
-          <Animated.View entering={FadeIn.duration(300)} style={s.modal}>
-            <Text style={s.modalTitle}>Wait, 25% off.</Text>
-            <Text style={s.modalBody}>
-              Lock in <Text style={{ fontWeight: '700' }}>{discountPrice}</Text> for your first year, billed today.
-            </Text>
-            <AnimatedPress style={s.modalCta} onPress={() => { setModal('none'); handleStart(true); }} haptic>
-              <Text style={s.modalCtaTxt}>Claim 25% Off</Text>
-            </AnimatedPress>
-            <AnimatedPress style={s.modalSkip} onPress={() => setModal('goodbye')}>
-              <Text style={s.modalSkipTxt}>No thanks</Text>
-            </AnimatedPress>
-          </Animated.View>
-        </View>
-      </Modal>
-
-      {/* Goodbye screen - second skip */}
-      <Modal visible={modal === 'goodbye'} transparent animationType="fade" onRequestClose={() => setModal('none')}>
-        <View style={s.overlay}>
-          <Animated.View entering={FadeIn.duration(300)} style={s.modal}>
-            <Text style={s.goodbyeTitle}>We're sorry to{'\n'}see you go.</Text>
-            <Text style={s.modalBody}>
-              Fitsy requires a subscription to access personalized restaurant recommendations. You can start a free trial anytime.
-            </Text>
-            <AnimatedPress style={s.modalCta} onPress={() => { setModal('none'); handleStart(false); }} haptic>
-              <Text style={s.modalCtaTxt}>Start Free Trial</Text>
-            </AnimatedPress>
-            <AnimatedPress
-              style={s.modalSkip}
-              // Declining every offer still gets the locked search teaser -
-              // real browsing with macro-match data blurred - rather than a
-              // dead end. Same mechanic a first-time visitor gets before
-              // signing up, and what resubscribe.tsx's skip does too.
-              onPress={() => { setModal('none'); router.replace('/(tabs)/search?preview=1'); }}
-            >
-              <Text style={s.modalSkipTxt}>Maybe later</Text>
-            </AnimatedPress>
-          </Animated.View>
-        </View>
-      </Modal>
+      <PaywallExitModals
+        modal={modal}
+        discountPrice={discountPrice}
+        onClose={() => setModal('none')}
+        onClaimDiscount={() => { setModal('none'); handleStart(true); }}
+        onDeclineDiscount={() => setModal('goodbye')}
+        onStartTrial={() => { setModal('none'); handleStart(false); }}
+        // Declining every offer still gets the locked search teaser -
+        // real browsing with macro-match data blurred - rather than a
+        // dead end. Same mechanic a first-time visitor gets before
+        // signing up, and what resubscribe.tsx's skip does too.
+        onMaybeLater={() => { setModal('none'); router.replace('/(tabs)/search?preview=1'); }}
+      />
     </>
   );
 }
@@ -294,13 +258,4 @@ const s = StyleSheet.create({
   planPrice: { fontFamily: FONTS.frauncesDisplay, fontSize: 17, color: EDITORIAL.text },
   planPriceOn: { color: EDITORIAL.cream },
 
-  overlay: { flex: 1, backgroundColor: 'rgba(15,31,21,0.55)', justifyContent: 'center', padding: 36 },
-  modal: { backgroundColor: EDITORIAL.cream, borderRadius: 28, padding: 36, alignItems: 'center', gap: 16 },
-  modalTitle: { fontFamily: FONTS.frauncesDisplay, fontSize: 30, color: EDITORIAL.text, letterSpacing: -1 },
-  goodbyeTitle: { fontFamily: FONTS.frauncesDisplay, fontSize: 28, color: EDITORIAL.text, letterSpacing: -0.8, textAlign: 'center' },
-  modalBody: { fontFamily: FONTS.nunitoSans, fontSize: 16, lineHeight: 24, color: EDITORIAL.textSoft, textAlign: 'center' },
-  modalCta: { backgroundColor: EDITORIAL.green, borderRadius: 32, paddingVertical: 18, width: '100%', alignItems: 'center', marginTop: 8 },
-  modalCtaTxt: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 16, fontWeight: '600', color: EDITORIAL.cream },
-  modalSkip: { paddingVertical: 8 },
-  modalSkipTxt: { fontFamily: FONTS.nunitoSans, fontSize: 14, color: EDITORIAL.textSoft },
 });

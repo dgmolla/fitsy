@@ -249,7 +249,7 @@ export function addCustomerInfoListener(cb: (info: CustomerInfo) => void): () =>
   };
 }
 
-// ─── Paywall + Customer Center (RevenueCatUI) ─────────────────────────────────
+// ─── Paywall (RevenueCatUI) ───────────────────────────────────────────────────
 
 export type PaywallOutcome = 'purchased' | 'restored' | 'cancelled' | 'not_presented' | 'error';
 
@@ -318,15 +318,5 @@ export async function showManageSubscriptions(): Promise<void> {
     // eslint-disable-next-line no-console
     console.warn('[purchases] showManageSubscriptions failed, opening URL', err);
     await Linking.openURL(MANAGE_SUBSCRIPTIONS_URL);
-  }
-}
-
-/** Present the RevenueCat Customer Center (manage plan, restore, refunds, surveys). */
-export async function presentCustomerCenter(): Promise<void> {
-  try {
-    await RevenueCatUI.presentCustomerCenter();
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.warn('[purchases] presentCustomerCenter failed', err);
   }
 }

@@ -6,7 +6,11 @@ const config = {
       preset: 'ts-jest',
       testEnvironment: 'node',
       testMatch: ['<rootDir>/lib/**/*.test.ts'],
-      testPathIgnorePatterns: ['<rootDir>/lib/useLocation.test.ts', '<rootDir>/lib/useEntitlementMismatch.test.ts'],
+      testPathIgnorePatterns: [
+        '<rootDir>/lib/useLocation.test.ts',
+        '<rootDir>/lib/useEntitlementMismatch.test.ts',
+        '<rootDir>/lib/useRedirectOnceEntitled.test.ts',
+      ],
       moduleNameMapper: {
         '^@fitsy/shared$': '<rootDir>/../../packages/shared/src/index.ts',
         '^@fitsy/shared/(.*)$': '<rootDir>/../../packages/shared/src/$1',
@@ -45,7 +49,10 @@ const config = {
       testMatch: [
         '<rootDir>/lib/useLocation.test.ts',
         '<rootDir>/lib/useEntitlementMismatch.test.ts',
-        '<rootDir>/lib/usePurchases.test.tsx',
+        '<rootDir>/lib/useRedirectOnceEntitled.test.ts',
+        '<rootDir>/lib/usePurchases.boot.test.tsx',
+        '<rootDir>/lib/usePurchases.sync.test.tsx',
+        '<rootDir>/lib/usePurchases.purchase.test.tsx',
       ],
       moduleNameMapper: {
         '^@fitsy/shared$': '<rootDir>/../../packages/shared/src/index.ts',

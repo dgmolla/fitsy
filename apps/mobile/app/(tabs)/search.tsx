@@ -791,8 +791,8 @@ export default function SearchScreen() {
     fetchSeq,
     syncEntitlement,
     refetch: useCallback(() => {
-      const { inputs: current, location: loc, query: q, doFetch: fetch } = mismatchArgsRef.current;
-      void fetch(current, loc.lat, loc.lng, q, loc.source, true);
+      const { inputs: current, location: loc, query: q, doFetch: run } = mismatchArgsRef.current;
+      void run(current, loc.lat, loc.lng, q, loc.source, true);
     }, []),
   });
 

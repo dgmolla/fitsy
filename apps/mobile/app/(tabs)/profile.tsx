@@ -35,7 +35,6 @@ import {
 } from '@/lib/analytics';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { usePurchases } from '@/lib/usePurchases';
-import { showManageSubscriptions } from '@/lib/purchases';
 
 const GOAL_OPTIONS = [
   { id: 'lose_fat', label: 'Lose Weight', icon: 'flame-outline', description: 'Calorie deficit for fat loss' },
@@ -127,7 +126,7 @@ export default function ProfileScreen() {
   // Pro user gets told so, with a one-tap route to the manage sheet, before
   // they can delete. Device RevenueCat state is fine for this: it is copy,
   // not a gate.
-  const { isPro } = usePurchases();
+  const { isPro, showManageSubscriptions } = usePurchases();
   const confirmDelete = useCallback(() => {
     if (isPro) {
       Alert.alert(
@@ -149,7 +148,7 @@ export default function ProfileScreen() {
         { text: 'Delete', style: 'destructive', onPress: handleDelete },
       ],
     );
-  }, [handleDelete, isPro]);
+  }, [handleDelete, isPro, showManageSubscriptions]);
 
   async function updateFieldAndRecalc<K extends keyof OnboardingData>(field: K, value: OnboardingData[K]) {
     await saveOnboardingField(field, value);

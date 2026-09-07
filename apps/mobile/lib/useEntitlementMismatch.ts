@@ -1,7 +1,12 @@
 import { useEffect, useRef } from 'react';
 
-/** Delay before each attempt, in ms. Length = maximum attempts per Pro episode. */
-export const MISMATCH_DELAYS_MS = [0, 2000];
+/**
+ * Delay before each attempt, in ms. Length = maximum attempts per Pro
+ * episode. Long enough to outlast a purchase whose RevenueCat REST read lags
+ * StoreKit: the webhook typically lands within a few seconds, and the last
+ * attempts are what unlock the rows once it has.
+ */
+export const MISMATCH_DELAYS_MS = [0, 2000, 5000, 10000];
 
 interface Options {
   /** Server verdict held by the provider (null until resolved this launch). */
@@ -12,7 +17,7 @@ interface Options {
   locked: boolean | null;
   /** Increments on every completed search fetch, so a refetch that comes back still locked re-arms the next attempt. */
   fetchSeq: number;
-  /** Ask the server to re-read RevenueCat and store its verdict. */
+  /** Ask the server to re-read RevenueCat; resolves to the verdict now in effect. */
   syncEntitlement: (reason: 'mismatch') => Promise<boolean | null>;
   /** Re-run the current search. */
   refetch: () => void;
@@ -69,8 +74,11 @@ export function useEntitlementMismatch({
     const timer = setTimeout(() => {
       attemptsRef.current = attempt + 1;
       void syncRef.current('mismatch').then((active) => {
-        // false = the server (having re-read RevenueCat) says not entitled:
-        // the layout redirects, nothing to refetch. null = couldn't ask; the
+        // false = the server's "not entitled" was STORED (never inside the
+        // post-purchase grace window): the layout redirects, nothing to
+        // refetch. true = in effect (stored, or a refused downgrade right
+        // after a purchase): refetch; if the rows are still locked the
+        // fetchSeq bump arms the next attempt. null = couldn't ask; the
         // webhook may still have landed, so a refetch is still worth it.
         if (active === false) return;
         refetchRef.current();

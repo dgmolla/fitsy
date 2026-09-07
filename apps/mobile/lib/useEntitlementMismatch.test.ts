@@ -81,7 +81,7 @@ describe('useEntitlementMismatch', () => {
     expect(refetch).toHaveBeenCalledTimes(MISMATCH_DELAYS_MS.length + 1);
   });
 
-  it('leaves it to the layout when the server says not entitled, but still refetches when it could not ask', async () => {
+  it('a stored "false" ends the episode (layout redirects); "null" (could not ask) still refetches', async () => {
     const a = setup({ entitled: true, isPro: true, locked: true });
     a.syncEntitlement.mockResolvedValueOnce(false);
     act(() => { jest.advanceTimersByTime(0); });

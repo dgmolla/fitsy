@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,6 +6,7 @@ import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { RestaurantCard, SkeletonCard } from '@/components/PreviewRestaurantCard';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { usePurchases } from '@/lib/usePurchases';
+import { useRedirectOnceEntitled } from '@/lib/useRedirectOnceEntitled';
 import { fetchPreviewRestaurants, type PreviewRestaurant } from '@/lib/previewSearch';
 import { openLegalLink } from '@/lib/legalLinks';
 
@@ -26,17 +27,14 @@ export default function ResubscribeScreen() {
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
 
-  // Same as payment.tsx: a verdict that turns true while this screen is up
-  // (late boot answer past BOOT_VERDICT_CAP_MS, a resubscribe made on another
-  // device) must let the user through without a relaunch. Held off while a
-  // purchase / restore here is in flight, since those navigate themselves
-  // (and claim the ref first so `loading` flipping back cannot replace twice).
-  const redirectedRef = useRef(false);
-  useEffect(() => {
-    if (entitled !== true || loading || restoring || redirectedRef.current) return;
-    redirectedRef.current = true;
-    router.replace('/(tabs)/search');
-  }, [entitled, loading, restoring]);
+  // A verdict that turns true while this screen is up (late boot / sign-in
+  // answer, a resubscribe made on another device) lets the user through
+  // without a relaunch. See useRedirectOnceEntitled.
+  const { claim } = useRedirectOnceEntitled({
+    entitled,
+    busy: loading || restoring,
+    onEntitled: () => router.replace('/(tabs)/search'),
+  });
   // A locked teaser of what resubscribing unlocks, same cards + fetch as the
   // onboarding teaser (welcome/results.tsx). A fetch failure just hides the
   // section - this is illustrative, not required to resubscribe.
@@ -70,7 +68,7 @@ export default function ResubscribeScreen() {
     try {
       const isPro = await purchase(annual, 'resubscribe');
       if (isPro) {
-        redirectedRef.current = true;
+        claim();
         router.replace('/(tabs)/search');
       }
     } finally {
@@ -83,7 +81,7 @@ export default function ResubscribeScreen() {
     try {
       const isPro = await restore();
       if (isPro) {
-        redirectedRef.current = true;
+        claim();
         router.replace('/(tabs)/search');
       } else {
         Alert.alert('Nothing to restore', "We couldn't find an active subscription for this account.");

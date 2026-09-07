@@ -231,18 +231,19 @@ describe('fetchMenu', () => {
 });
 
 describe('syncSubscription', () => {
-  it('POSTs to /api/subscriptions/sync and returns the server verdict', async () => {
+  it('POSTs to /api/subscriptions/sync with the reason and returns the server verdict', async () => {
     const mockFetch = makeMockFetch({ ok: true, body: { active: true, synced: true } });
     global.fetch = mockFetch;
-    await expect(syncSubscription()).resolves.toEqual({ active: true, synced: true });
+    await expect(syncSubscription('purchase')).resolves.toEqual({ active: true, synced: true });
     const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
     expect(url).toBe(`${BASE_URL}/api/subscriptions/sync`);
     expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({ reason: 'purchase' });
   });
 
   it('throws on a failed sync so callers can treat it as best-effort', async () => {
     global.fetch = makeMockFetch({ ok: false, status: 500, body: { error: 'boom' } });
-    await expect(syncSubscription()).rejects.toThrow('boom');
+    await expect(syncSubscription('mismatch')).rejects.toThrow('boom');
   });
 });
 

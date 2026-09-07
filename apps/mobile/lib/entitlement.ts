@@ -10,7 +10,7 @@
  * each testable without React.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { fetchSubscriptionStatus, syncSubscription } from './apiClient';
+import { fetchSubscriptionStatus, syncSubscription, type SubscriptionSyncReason } from './apiClient';
 
 /**
  * Why a sync is being asked for. `boot` is a cheap DB read of the server's
@@ -19,7 +19,7 @@ import { fetchSubscriptionStatus, syncSubscription } from './apiClient';
  * response while we believed the user was Pro) that the stored row may not
  * reflect yet.
  */
-export type EntitlementSyncReason = 'boot' | 'purchase' | 'restore' | 'sign_in' | 'mismatch';
+export type EntitlementSyncReason = 'boot' | SubscriptionSyncReason;
 
 /** Last server verdict, persisted so the next launch can gate instantly. */
 export const ENTITLEMENT_CACHE_KEY = '@fitsy/entitlement';
@@ -61,24 +61,10 @@ export async function clearCachedEntitlement(): Promise<void> {
  */
 export async function fetchServerEntitlement(reason: EntitlementSyncReason): Promise<boolean | null> {
   try {
-    const { active } = reason === 'boot' ? await fetchSubscriptionStatus() : await syncSubscription();
+    const { active } = reason === 'boot' ? await fetchSubscriptionStatus() : await syncSubscription(reason);
     return active;
   } catch (err) {
     console.warn('[entitlement] sync failed', reason, err instanceof Error ? err.message : err);
     return null;
   }
-}
-
-/**
- * Resolve `promise` or `null` after `ms`, whichever is first. Post-purchase
- * the user has just paid and is waiting to get in: normally the sync is a
- * sub-second round trip, but past the cap we navigate anyway and let the
- * search screen's mismatch handler finish the job. The underlying sync keeps
- * running and still lands its verdict when it completes.
- */
-export function withinMs<T>(promise: Promise<T>, ms: number): Promise<T | null> {
-  return Promise.race([
-    promise,
-    new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
-  ]);
 }

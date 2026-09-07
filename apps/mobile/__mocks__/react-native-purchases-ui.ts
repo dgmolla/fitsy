@@ -14,7 +14,6 @@ const RevenueCatUI = {
   PAYWALL_RESULT,
   presentPaywall: async () => PAYWALL_RESULT.PURCHASED,
   presentPaywallIfNeeded: async () => PAYWALL_RESULT.PURCHASED,
-  presentCustomerCenter: async () => undefined,
 };
 
 export default RevenueCatUI;

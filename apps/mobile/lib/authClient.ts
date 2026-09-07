@@ -239,9 +239,9 @@ export async function updateProfile(data: UserProfileData): Promise<void> {
   }
 }
 
-// Subscription state is owned by RevenueCat (client SDK) + the RevenueCat
-// webhook (server). The mobile app no longer POSTs receipts to the API; the
-// old verifySubscription() was removed when the stub /api/subscriptions/verify
-// route was deleted. Server-trusted status is available at
-// GET /api/subscriptions/status, and protected routes enforce it via
-// requireSubscription.
+// Entitlement is owned by the server's Subscription row (fed by the
+// RevenueCat webhook and by POST /api/subscriptions/sync re-reads). The
+// mobile app never POSTs receipts; it reads the verdict from
+// GET /api/subscriptions/status and asks for a re-read via /sync (see
+// lib/useEntitlementVerdict.ts). Protected data routes use
+// optionalSubscription: an unentitled caller gets a locked 200, never a 402.

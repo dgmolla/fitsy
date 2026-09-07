@@ -839,13 +839,6 @@ export function trackPurchasesRestored(props: { is_pro: boolean }): void {
   }
 }
 
-export function trackCustomerCenterOpened(): void {
-  try {
-    getPostHogClient().capture('customer_center_opened', {});
-  } catch (err) {
-    logCaptureError('customer_center_opened', err);
-  }
-}
 
 // The server is the source of truth for entitlement; the phone's RevenueCat
 // state is a hint. `entitlement_mismatch` fires whenever the two disagree at
