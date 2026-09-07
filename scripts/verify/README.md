@@ -30,7 +30,9 @@ A check without a registry entry, or an entry without a script, is itself a fail
 | `size-check.sh` | 1 | the PR is under 600 changed lines, or carries `override-size` (T8) |
 | `actionlint.sh` | 1 | workflow files lint clean |
 | `domain-check.sh` | 1 | the PR touches a single domain |
-| `test.sh` | 2 | api coverage gate + scripts tests |
+| `migration-safety.sh` | 1 | destructive migrations carry a down.sql (T9) |
+| `test.sh` | 2 | api + scripts + mobile tests |
+| `own-code-mocks.sh` | 2 (shadow) | api tests mock only external services |
 | `build.sh` | 3 | production API build, no stray compiled output |
 | `dev-drift.sh` | 3 | the dev environment has every migration on `main` and holds seed data |
 | `api-e2e.sh` | 6 | a deployed API serves health + teaser-lock invariants (read-only by default; `--write` adds the register probe) |

@@ -106,6 +106,8 @@ jobs:
       - run: git fetch origin main
       - name: Apply Prisma migrations (ephemeral DB)
         run: npx prisma migrate deploy
+      - name: Seed fixture data (deterministic; no auth users in CI)
+        run: npx tsx prisma/seed.ts --data-only
       - name: Run L2 checks
         run: node scripts/verify/run.mjs --layer=2 --runs=ci --scope=${{ github.event_name == 'pull_request' && 'changed' || 'all' }}
 
