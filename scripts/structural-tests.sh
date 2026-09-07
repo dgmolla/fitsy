@@ -48,7 +48,12 @@ else
 fi
 
 echo -n "3. No .env files staged... "
-ENVFILES=$(git -C "$REPO_ROOT" diff --cached --name-only 2>/dev/null | grep -E '\.env$' | grep -v 'env\.example' || true)
+# Branch diff (falls back to staged for a mid-edit local run). The staging
+# area is always empty in CI, which made the old --cached version a no-op there.
+DIFF_RANGE="origin/main...HEAD"
+git -C "$REPO_ROOT" rev-parse origin/main >/dev/null 2>&1 || DIFF_RANGE="HEAD"
+ENVFILES=$(git -C "$REPO_ROOT" diff "$DIFF_RANGE" --name-only 2>/dev/null | grep -E '\.env$' | grep -v 'env\.example' || true)
+[ -z "$ENVFILES" ] && ENVFILES=$(git -C "$REPO_ROOT" diff --cached --name-only 2>/dev/null | grep -E '\.env$' | grep -v 'env\.example' || true)
 if [ -n "$ENVFILES" ]; then
   echo "FAIL"
   echo "  .env files should not be committed. Add to .gitignore."
@@ -60,6 +65,39 @@ fi
 
 MAX_LINES=300
 EXEMPT_FILES=("")
+
+
+# ─── Grandfather allowlist (shrink-only) ────────────────────────────────────
+# Checks 4/6/7/8 block NEW offenders; existing ones are grandfathered in
+# scripts/verify/structural-allowlist.txt. An entry whose file no longer
+# offends must be deleted (the list only shrinks). Format: "<check> <path>".
+ALLOWLIST_FILE="$REPO_ROOT/scripts/verify/structural-allowlist.txt"
+gate_allowlisted() { # id, offenders (newline-separated paths), fix-hint
+  local id="$1" offenders="$2" hint="$3" new="" stale=""
+  while IFS= read -r f; do
+    [ -z "$f" ] && continue
+    grep -qxF "$id $f" "$ALLOWLIST_FILE" 2>/dev/null || new="$new\n  $f"
+  done <<< "$offenders"
+  while IFS= read -r entry; do
+    [ -z "$entry" ] && continue
+    local ef="${entry#"$id "}"
+    printf '%s\n' "$offenders" | grep -qxF "$ef" || stale="$stale\n  $ef"
+  done < <(grep "^$id " "$ALLOWLIST_FILE" 2>/dev/null || true)
+  if [ -n "$new" ]; then
+    echo "FAIL"
+    echo "  New offenders (not grandfathered). $hint"
+    echo -e "$new"
+    ERRORS=$((ERRORS + 1))
+  elif [ -n "$stale" ]; then
+    echo "FAIL"
+    echo "  Fixed! Now delete these entries from scripts/verify/structural-allowlist.txt (the list only shrinks):"
+    echo -e "$stale"
+    ERRORS=$((ERRORS + 1))
+  else
+    echo "PASS"
+  fi
+}
+
 
 echo -n "4. File length limits (<${MAX_LINES} lines)... "
 LONG_FILES=""
@@ -73,27 +111,22 @@ for dir in "${SOURCE_DIRS[@]}"; do
     if $skip; then continue; fi
     lines=$(wc -l < "$file")
     if [ "$lines" -gt "$MAX_LINES" ]; then
-      LONG_FILES="$LONG_FILES\n  $file: $lines lines"
+      LONG_FILES="$LONG_FILES\n${file#$REPO_ROOT/}"
     fi
   done < <(find "$dir" \( -name "*.ts" -o -name "*.tsx" \) \
     -not -path "*/node_modules/*" -not -path "*/dist/*" -not -path "*/.next/*" 2>/dev/null)
 done
-if [ -n "$LONG_FILES" ]; then
-  echo "WARN"
-  echo "  Files over $MAX_LINES lines found. Split into smaller modules."
-  echo -e "$LONG_FILES"
-  # Warning only — not a blocking error. Pre-existing files are grandfathered.
-else
-  echo "PASS"
-fi
+LONG_PATHS=$(echo -e "$LONG_FILES" | sed '/^$/d')
+gate_allowlisted "long-file" "$LONG_PATHS" "Files must stay under $MAX_LINES lines — split into modules."
 
 echo -n "5. No 'as any' type assertions... "
-ANY_TYPES=$(git -C "$REPO_ROOT" diff --cached -U0 --diff-filter=AM -- '*.ts' '*.tsx' 2>/dev/null \
+ANY_TYPES=$(git -C "$REPO_ROOT" diff "$DIFF_RANGE" -U0 --diff-filter=AM -- '*.ts' '*.tsx' 2>/dev/null \
   | grep -n "^+" | grep -v "^+++" | grep "as any\|: any" || true)
 if [ -n "$ANY_TYPES" ]; then
-  echo "WARN"
-  echo "  'any' types in staged changes. Define proper interfaces."
-  echo "$ANY_TYPES" | head -5 | sed 's/^/  /'
+  echo "FAIL"
+  echo "  'any' types added in this branch. Define proper interfaces."
+  echo "$ANY_TYPES" | head -8 | sed 's/^/  /'
+  ERRORS=$((ERRORS + 1))
 else
   echo "PASS"
 fi
@@ -102,38 +135,23 @@ echo -n "6. No console.log in src... "
 CONSOLE=$(grep -rn --include="*.ts" --include="*.tsx" \
   --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.next \
   'console\.log' "${SOURCE_DIRS[@]}" 2>/dev/null || true)
-if [ -n "$CONSOLE" ]; then
-  echo "WARN"
-  echo "  console.log found in source. Use a proper logger."
-  echo "$CONSOLE" | head -5 | sed 's/^/  /'
-else
-  echo "PASS"
-fi
+CONSOLE_PATHS=$(echo "$CONSOLE" | cut -d: -f1 | sed "s|^$REPO_ROOT/||" | sed '/^$/d' | sort -u)
+gate_allowlisted "console-log" "$CONSOLE_PATHS" "Use a proper logger, not console.log."
 
-echo -n "7. No inline styles... "
+echo -n "7. No inline styles (web surfaces only — style={{}} is idiomatic RN)... "
 INLINE=$(grep -rn --include="*.tsx" \
   --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.next \
-  'style={{' "${SOURCE_DIRS[@]}" 2>/dev/null || true)
-if [ -n "$INLINE" ]; then
-  echo "WARN"
-  echo "  Inline styles found. Use Tailwind classes or design system."
-  echo "$INLINE" | head -5 | sed 's/^/  /'
-else
-  echo "PASS"
-fi
+  'style={{' "$REPO_ROOT/apps/api" 2>/dev/null || true)
+INLINE_PATHS=$(echo "$INLINE" | cut -d: -f1 | sed "s|^$REPO_ROOT/||" | sed '/^$/d' | sort -u)
+gate_allowlisted "inline-style" "$INLINE_PATHS" "Use the design system / CSS, not inline style objects."
 
 echo -n "8. No direct API calls outside API layer... "
 DIRECT_API=$(grep -rn --include="*.tsx" \
   --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.next \
   -E '(fetch\(|axios\.|\.get\(|\.post\()' "${SOURCE_DIRS[@]}" 2>/dev/null \
   | grep -v 'src/lib/' | grep -v 'src/services/' || true)
-if [ -n "$DIRECT_API" ]; then
-  echo "WARN"
-  echo "  Direct API calls outside lib/services. Use the API layer."
-  echo "$DIRECT_API" | head -5 | sed 's/^/  /'
-else
-  echo "PASS"
-fi
+DIRECT_PATHS=$(echo "$DIRECT_API" | cut -d: -f1 | sed "s|^$REPO_ROOT/||" | sed '/^$/d' | sort -u)
+gate_allowlisted "direct-api" "$DIRECT_PATHS" "Route network calls through the lib/ API layer."
 
 ALLOWED_DOCS_DOMAINS="product engineering design gtm"
 
@@ -289,8 +307,8 @@ if [ -f "$REPO_ROOT/package.json" ]; then
     SCAFFOLD_ERRORS="$SCAFFOLD_ERRORS\n  Missing tsconfig.json — TypeScript not configured"
   fi
   # npm ci gate in reviewer workflow must have install step
-  if ! grep -q 'npm ci\|npm install' "$REPO_ROOT/.github/workflows/reviewer.yml" 2>/dev/null; then
-    SCAFFOLD_ERRORS="$SCAFFOLD_ERRORS\n  reviewer.yml missing npm install step — add it now that package.json exists"
+  if ! grep -q 'npm ci\|npm install' "$REPO_ROOT/.github/workflows/verify.yml" 2>/dev/null; then
+    SCAFFOLD_ERRORS="$SCAFFOLD_ERRORS\n  verify.yml missing npm install step — add it now that package.json exists"
   fi
   if [ -n "$SCAFFOLD_ERRORS" ]; then
     echo "FAIL"

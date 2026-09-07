@@ -1,0 +1,126 @@
+# The verification pipeline. Replaces ci.yml + reviewer.yml (2026-09-07).
+# Every job is a thin caller of scripts/verify/run.mjs, which reads
+# scripts/verify/registry.yml — the single list of checks. The pre-push hook
+# and agents run the same scripts locally. Design:
+# docs/engineering/devops/autonomous-shipping.md
+name: Verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: verify-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  static:
+    name: Static (L0-L1)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Install actionlint + gitleaks
+        run: |
+          curl -sL "$(curl -s https://api.github.com/repos/rhysd/actionlint/releases/latest | grep browser_download_url | grep linux_amd64 | cut -d '"' -f4)" | tar xz -C /usr/local/bin actionlint || echo "actionlint install failed; check will skip"
+          curl -sL "$(curl -s https://api.github.com/repos/gitleaks/gitleaks/releases/latest | grep browser_download_url | grep linux_x64.tar.gz | head -1 | cut -d '"' -f4)" | tar xz -C /usr/local/bin gitleaks || echo "gitleaks install failed; grep fallback covers"
+      - name: Fetch main for diff scope
+        run: git fetch origin main
+      - name: Run L0-L1 checks (minus domain-check)
+        run: node scripts/verify/run.mjs --layer=0-1 --runs=ci --scope=${{ github.event_name == 'pull_request' && 'changed' || 'all' }}
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  domain-check:
+    name: Single-domain PR check
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: git fetch origin main
+      - name: Enforce single-domain PR
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: node scripts/verify/run.mjs --only=domain-check
+      - name: Comment on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} \
+            --body "**domain-check**: this PR touches multiple domains. PRs must be scoped to a single domain (routing: \`scripts/route-reviewers.sh\`). Please split." || true
+
+  test:
+    name: Tests (L2)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: fitsy_test
+          POSTGRES_PASSWORD: fitsy_test
+          POSTGRES_DB: fitsy_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      POSTGRES_PRISMA_URL: postgresql://fitsy_test:fitsy_test@localhost:5432/fitsy_test
+      POSTGRES_URL_NON_POOLING: postgresql://fitsy_test:fitsy_test@localhost:5432/fitsy_test
+      # External API keys intentionally absent — tests must mock all external services
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: git fetch origin main
+      - name: Apply Prisma migrations (ephemeral DB)
+        run: npx prisma migrate deploy
+      - name: Run L2 checks
+        run: node scripts/verify/run.mjs --layer=2 --runs=ci --scope=${{ github.event_name == 'pull_request' && 'changed' || 'all' }}
+
+  build:
+    name: Build (L3)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: git fetch origin main
+      - name: Run L3 checks
+        run: node scripts/verify/run.mjs --layer=3 --runs=ci --scope=${{ github.event_name == 'pull_request' && 'changed' || 'all' }}

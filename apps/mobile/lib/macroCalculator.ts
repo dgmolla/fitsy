@@ -1,4 +1,4 @@
-import { calculateSuggestedCalories, type Goal, type OnboardingData } from './onboardingStorage';
+import { calculateSuggestedCalories, type OnboardingData } from './onboardingStorage';
 import type { StoredMacroTargets } from './macroStorage';
 
 interface Macros {

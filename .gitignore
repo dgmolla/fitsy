@@ -1,5 +1,5 @@
 # Dependencies
-node_modules/
+node_modules
 
 # Build
 .next/
@@ -66,3 +66,7 @@ docs/docs-refactor-proposal-2026-06-11.md
 
 # Phase 1 extraction scratch output (local artifacts, not committed)
 scripts/phase1-out/
+
+# dev environment creds (scripts/dev/write-local-env.sh)
+.env.dev
+.env.prod.local

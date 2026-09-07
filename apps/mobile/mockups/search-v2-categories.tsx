@@ -10,7 +10,7 @@
  * To preview: export { default } from '../../mockups/search-v2-categories';
  */
 
-import React, { useState } from 'react';
+import React, { type ComponentProps, useState } from 'react';
 import {
   Dimensions,
   FlatList,
@@ -173,7 +173,7 @@ function CuisineFilters({ selected, onSelect }: { selected: string; onSelect: (i
             activeOpacity={0.7}
           >
             <Ionicons
-              name={f.icon as any}
+              name={f.icon as ComponentProps<typeof Ionicons>['name']}
               size={18}
               color={active ? C.white : C.textSecondary}
             />

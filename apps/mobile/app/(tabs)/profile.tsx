@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { type ComponentProps, useCallback, useRef, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -265,7 +265,7 @@ export default function ProfileScreen() {
         {/* Goal banner */}
         <Pressable style={s.goalBanner} onPress={() => openEditField('goal')}>
           <View style={s.goalIconCircle}>
-            <Ionicons name={goalIcon as any} size={18} color={EDITORIAL.greenAccent} />
+            <Ionicons name={goalIcon as ComponentProps<typeof Ionicons>['name']} size={18} color={EDITORIAL.greenAccent} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={s.goalBannerLabel}>YOUR GOAL</Text>

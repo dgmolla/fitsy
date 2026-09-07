@@ -148,6 +148,16 @@ describe("persistHex transaction semantics (mock)", () => {
 // ─── DB integration tests ───────────────────────────────────────────────────
 
 describeIfDb("persistHex + isHexComplete (DB)", () => {
+  // The mock block above leaves mockPersistHexBulkInTx resolving 8; these
+  // tests exercise the real write path, so restore the actual implementation.
+  // (Unnoticed until 2026-09-07: the old CI never set DB env for this
+  // workspace, so this whole block had never executed.)
+  beforeAll(() => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const actual = jest.requireActual("./pipeline-utils") as typeof import("./pipeline-utils");
+    mockPersistHexBulkInTx.mockImplementation(actual.persistHexBulkInTx);
+  });
+
   it("isHexComplete returns false for non-existent hex", async () => {
     const result = await isHexComplete(RUN_ID, "hex_nonexistent", prisma!);
     expect(result).toBe(false);

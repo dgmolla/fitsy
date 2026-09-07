@@ -12,18 +12,19 @@ Multiple agents may review the same PR if it crosses domains.
 | Path pattern | Reviewing agent |
 |---|---|
 | `apps/api/tests/e2e/` | **cto** |
+| `apps/(api\|mobile)/(package.json\|tsconfig.json)` | **cto** |
 | `apps/api/` (all other files) | **backend** |
-| `apps/mobile/` (all files) | **frontend** |
+| `apps/mobile/` (all other files) | **frontend** |
 | `packages/shared/src/`, `prisma/` | **backend** |
 | `packages/shared/(package.json\|tsconfig.json)` | **cto** |
 | `docs/design/` | **designer** |
-| `docs/product/`, `proj-mgmt/okrs*` | **product-manager** |
+| `docs/product/`, `proj-mgmt/` | **product-manager** |
 | `docs/gtm/` | **gtm** |
 | `docs/engineering/backend/` | **backend** |
 | `.github/`, `.claude/`, `scripts/`, `CLAUDE.md`, `docs/engineering/adrs/`, `docs/engineering/devops/` | **cto** |
 | No match / fallback | **cto** |
 
-Docs under `docs/design/`, `docs/product/`, `docs/gtm/`, `docs/engineering/backend/`, and `docs/engineering/(adrs|devops)/` route to their own domain only when the PR is docs-only.
+Docs under `docs/design/`, `docs/product/`, `docs/gtm/`, `docs/engineering/backend/`, `docs/engineering/(adrs|devops)/`, and `proj-mgmt/` route to their own domain only when the PR is docs-only.
 When code is present, the docs ride with the code and the code reviewer reads them as part of the diff.
 
 **Source of truth**: `scripts/route-reviewers.sh`. The workflow calls

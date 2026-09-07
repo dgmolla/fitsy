@@ -30,18 +30,24 @@ if echo "$CHANGED" | grep -qE '^prisma/'; then
 fi
 
 # BEGIN ROUTING TABLE
+# Workspace build config (package.json/tsconfig.json) is harness infrastructure,
+# same as the root versions and packages/shared's — the CTO owns tooling.   -> cto
+if echo "$CHANGED" | grep -qE '^apps/(api|mobile)/(package\.json|tsconfig\.json)$'; then
+  AGENTS="$AGENTS cto"
+fi
+
 # E2E tests under apps/api/tests/e2e/ are cross-domain — CTO reviews      -> cto
 if echo "$CHANGED" | grep -qE '^apps/api/tests/e2e/'; then
   AGENTS="$AGENTS cto"
 fi
 
 # All of apps/api/ except e2e tests                                        -> backend
-if echo "$CHANGED" | grep -vE '^apps/api/tests/e2e/' | grep -qE '^apps/api/'; then
+if echo "$CHANGED" | grep -vE '^apps/api/(tests/e2e/|package\.json$|tsconfig\.json$)' | grep -qE '^apps/api/'; then
   AGENTS="$AGENTS backend"
 fi
 
 # All of apps/mobile/                                                         -> frontend
-if echo "$CHANGED" | grep -qE '^apps/mobile/'; then
+if echo "$CHANGED" | grep -vE '^apps/mobile/(package\.json|tsconfig\.json)$' | grep -qE '^apps/mobile/'; then
   AGENTS="$AGENTS frontend"
 fi
 
@@ -58,9 +64,10 @@ if echo "$CHANGED" | grep -qE '^docs/design/'; then
   DOC_AGENTS="$DOC_AGENTS designer"
 fi
 
-# docs/product/ proj-mgmt/                                                   -> product-manager
+# proj-mgmt/ is sprint bookkeeping: it rides with code like docs do, and
+# only routes when the PR is bookkeeping-only                      -> product-manager
 if echo "$CHANGED" | grep -qE '^proj-mgmt/'; then
-  AGENTS="$AGENTS product-manager"
+  DOC_AGENTS="$DOC_AGENTS product-manager"
 fi
 if echo "$CHANGED" | grep -qE '^docs/product/'; then
   DOC_AGENTS="$DOC_AGENTS product-manager"

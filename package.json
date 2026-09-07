@@ -20,10 +20,12 @@
     "test:coverage": "npm run test:coverage --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "type-check": "npm run type-check --workspaces --if-present",
-    "prepare": "husky",
+    "prepare": "git config core.hooksPath .githooks || true",
     "dev:env": "bash scripts/dev/write-local-env.sh",
     "dev:reset": "tsx scripts/dev/reset.ts",
     "dev:snapshot": "tsx scripts/dev/snapshot.ts",
+    "verify": "node scripts/verify/run.mjs --layer=0-2 --scope=changed",
+    "verify:all": "node scripts/verify/run.mjs --layer=all --scope=all",
     "verify:dev-drift": "bash scripts/verify/dev-drift.sh",
     "android": "expo run:android",
     "ios": "expo run:ios"
@@ -44,8 +46,9 @@
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.57.2",
     "@typescript-eslint/parser": "^8.57.2",
+    "dependency-cruiser": "^16.10.4",
     "eslint": "^10.1.0",
-    "husky": "^9.1.7",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "tsx": "^4.21.0"
   },
   "overrides": {

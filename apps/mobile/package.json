@@ -8,8 +8,9 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "test": "jest --passWithNoTests",
-    "type-check": "tsc --noEmit"
+    "test": "jest",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint --no-warn-ignored ."
   },
   "dependencies": {
     "@expo-google-fonts/fraunces": "^0.4.1",

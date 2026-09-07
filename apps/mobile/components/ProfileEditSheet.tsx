@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { type ComponentProps, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
@@ -140,7 +140,7 @@ function ChoiceContent({ options, value, onApply, dismiss }: ChoiceProps & { dis
               onPress={() => setSelected(opt.id)}
             >
               {opt.icon && (
-                <Ionicons name={opt.icon as any} size={18} color={active ? EDITORIAL.cream : EDITORIAL.textSoft} />
+                <Ionicons name={opt.icon as ComponentProps<typeof Ionicons>['name']} size={18} color={active ? EDITORIAL.cream : EDITORIAL.textSoft} />
               )}
               <View style={{ flex: 1 }}>
                 <Text style={[s.choiceLabel, active && s.choiceLabelActive]}>{opt.label}</Text>

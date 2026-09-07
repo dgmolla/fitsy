@@ -15,11 +15,9 @@
 import React, { useRef, useState, useEffect } from 'react';
 import {
   Animated,
-  Dimensions,
   Easing,
   Image,
   Modal,
-  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,

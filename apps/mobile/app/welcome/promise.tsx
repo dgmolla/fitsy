@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { EDITORIAL, FONTS, TEXT } from '@/lib/brand';
+import { EDITORIAL, TEXT } from '@/lib/brand';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { trackOnboardingScreenView } from '@/lib/analytics';
 
