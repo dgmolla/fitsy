@@ -68,6 +68,22 @@ checks:
     runs: [ci]
     why: Single-domain PRs (route-reviewers.sh). Moved from reviewer.yml 2026-09-07.
 
+  - name: migration-safety
+    script: migration-safety.sh
+    layer: 1
+    blocking: true
+    runs: [local, ci]
+    paths: ["prisma/migrations/**"]
+    why: T9 - destructive migrations need a down.sql (expand-migrate-contract otherwise); extends structural check 13. Added in autoship step 6, 2026-09-07.
+
+  - name: own-code-mocks
+    script: own-code-mocks.sh
+    layer: 2
+    blocking: shadow
+    runs: [local, ci]
+    paths: ["apps/api/**"]
+    why: Mock only external services, never your own code (testing-strategy). Shadow until pre-existing offenders migrate to the DB-container tests.
+
   - name: test
     script: test.sh
     layer: 2

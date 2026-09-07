@@ -66,11 +66,19 @@ else
     echo "End with the fenced JSON block required by REVIEW.md's output contract."
   } > "$PROMPT_FILE"
   echo "[run-lens] $LENS on ${TARGET} (tier=$TIER model=$MODEL)" >&2
-  RAW="$(claude -p "$(cat "$PROMPT_FILE")" --model "$MODEL" --output-format json \
-    --allowedTools "Read" "Glob" "Grep" "Bash(git diff:*)" "Bash(git log:*)" 2>>"$CACHE_DIR/errors.log" || true)"
+  # stdin must be explicit: claude -p inherits the caller's stdin and can hang
+  # or read loop data (poller); prompt goes via stdin, not argv (size limits)
+  RAW="$(claude -p --model "$MODEL" --output-format json \
+    --allowedTools "Read" "Glob" "Grep" "Bash(git diff:*)" "Bash(git log:*)" \
+    < "$PROMPT_FILE" 2>>"$CACHE_DIR/errors.log" || true)"
+  printf '%s' "$RAW" > "$CACHE_DIR/last-raw.json"
   rm -f "$PROMPT_FILE"
   RESULT_JSON="$(printf '%s' "$RAW" | python3 scripts/review/extract-verdict.py "$LENS")"
-  printf '%s' "$RESULT_JSON" > "$CACHE_FILE"
+  # never cache a runner-error verdict: it would replay a transient failure
+  # against every retry of the same diff (hit exactly this, 2026-09-07)
+  if ! printf '%s' "$RESULT_JSON" | grep -q '"file": "(runner)"'; then
+    printf '%s' "$RESULT_JSON" > "$CACHE_FILE"
+  fi
 fi
 
 VERDICT="$(echo "$RESULT_JSON" | python3 -c 'import sys,json;print(json.load(sys.stdin)["verdict"])')"
