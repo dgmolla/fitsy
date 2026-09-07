@@ -26,6 +26,9 @@ A check without a registry entry, or an entry without a script, is itself a fail
 | `secrets.sh` | 0 | no hardcoded keys, committed .env, or build output in the diff |
 | `lint.sh` | 1 | eslint clean across workspaces |
 | `typecheck.sh` | 1 | tsc clean per workspace |
+| `boundaries.sh` | 1 | imports respect the layer graph in `.dependency-cruiser.cjs` (T3) |
+| `size-check.sh` | 1 | the PR is under 600 changed lines, or carries `override-size` (T8) |
+| `actionlint.sh` | 1 | workflow files lint clean |
 | `domain-check.sh` | 1 | the PR touches a single domain |
 | `test.sh` | 2 | api coverage gate + scripts tests |
 | `build.sh` | 3 | production API build, no stray compiled output |

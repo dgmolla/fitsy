@@ -32,13 +32,17 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - name: Install actionlint + gitleaks
+        run: |
+          curl -sL "$(curl -s https://api.github.com/repos/rhysd/actionlint/releases/latest | grep browser_download_url | grep linux_amd64 | cut -d '"' -f4)" | tar xz -C /usr/local/bin actionlint || echo "actionlint install failed; check will skip"
+          curl -sL "$(curl -s https://api.github.com/repos/gitleaks/gitleaks/releases/latest | grep browser_download_url | grep linux_x64.tar.gz | head -1 | cut -d '"' -f4)" | tar xz -C /usr/local/bin gitleaks || echo "gitleaks install failed; grep fallback covers"
       - name: Fetch main for diff scope
         run: git fetch origin main
       - name: Run L0-L1 checks (minus domain-check)
         run: node scripts/verify/run.mjs --layer=0-1 --runs=ci --scope=${{ github.event_name == 'pull_request' && 'changed' || 'all' }}
         env:
-          # domain-check runs in its own job with PR context
-          PR_NUMBER: ""
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   domain-check:
     name: Single-domain PR check

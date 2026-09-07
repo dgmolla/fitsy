@@ -6,6 +6,13 @@ set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$REPO_ROOT"
 FAIL=""
+# Prefer gitleaks (real ruleset) when installed; the greps below stay as the
+# zero-dependency fallback and run either way.
+if command -v gitleaks >/dev/null; then
+  if ! gitleaks git --no-banner --redact --log-opts="origin/main..HEAD" . >&2 2>&1; then
+    FAIL="gitleaks found a secret in the branch commits"
+  fi
+fi
 if grep -rn --include="*.ts" --include="*.tsx" \
     --exclude-dir=node_modules --exclude-dir=discovery-test \
     -E '(ANTHROPIC_API_KEY\s*=\s*"sk-ant|GOOGLE_PLACES_API_KEY\s*=\s*"AIza|FIRECRAWL_API_KEY\s*=\s*"fc-|sk_test_|sk_live_|pk_test_|pk_live_|"-----BEGIN (RSA|EC|OPENSSH) PRIVATE KEY)' \

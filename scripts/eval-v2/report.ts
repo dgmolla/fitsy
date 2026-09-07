@@ -7,7 +7,7 @@
  * 3. Color-coded error cells (green < 15%, yellow < 30%, red > 30%)
  */
 
-import type { PromptResult } from "./run.js";
+import type { PromptResult } from "./types.js";
 import { PROMPT_MAP } from "./prompts.js";
 
 function errorColor(pct: number): string {

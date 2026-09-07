@@ -1,5 +1,6 @@
 import tsPlugin from "@typescript-eslint/eslint-plugin";
 import tsParser from "@typescript-eslint/parser";
+import reactHooks from "eslint-plugin-react-hooks";
 
 /** @type {import("eslint").Linter.FlatConfig[]} */
 export default [
@@ -12,6 +13,33 @@ export default [
       "**/dist/**",
       "**/next-env.d.ts",
     ],
+  },
+  // Mobile: type-aware parsing is too slow for RN's tree and jest-expo mocks;
+  // parse without a project. Same rule intent as api; deviations noted inline.
+  {
+    files: ["apps/mobile/**/*.{ts,tsx}"],
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: { ecmaFeatures: { jsx: true } },
+    },
+    plugins: {
+      "@typescript-eslint": tsPlugin,
+      "react-hooks": reactHooks,
+    },
+    rules: {
+      ...tsPlugin.configs.recommended.rules,
+      "react-hooks/rules-of-hooks": "error",
+      "react-hooks/exhaustive-deps": "warn",
+      "@typescript-eslint/no-explicit-any": "error",
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
+      "@typescript-eslint/explicit-function-return-type": "off",
+      // Jest manual mocks under __mocks__/ legitimately use require()
+      "@typescript-eslint/no-require-imports": "off",
+      "no-console": "warn",
+    },
   },
   // TypeScript rules for app + shared sources
   {

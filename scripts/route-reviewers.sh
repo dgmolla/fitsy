@@ -64,9 +64,10 @@ if echo "$CHANGED" | grep -qE '^docs/design/'; then
   DOC_AGENTS="$DOC_AGENTS designer"
 fi
 
-# docs/product/ proj-mgmt/                                                   -> product-manager
+# proj-mgmt/ is sprint bookkeeping: it rides with code like docs do, and
+# only routes when the PR is bookkeeping-only                      -> product-manager
 if echo "$CHANGED" | grep -qE '^proj-mgmt/'; then
-  AGENTS="$AGENTS product-manager"
+  DOC_AGENTS="$DOC_AGENTS product-manager"
 fi
 if echo "$CHANGED" | grep -qE '^docs/product/'; then
   DOC_AGENTS="$DOC_AGENTS product-manager"
