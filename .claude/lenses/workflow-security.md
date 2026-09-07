@@ -19,6 +19,13 @@ and injection-proof** (tenet T12). Read `REVIEW.md` first.
 - Agent workflows (`review`-adjacent): tool allowlists loosened, model steps
   gaining non-Anthropic secrets (the deploy/model separation must hold).
 
+## Examples from real incidents
+
+- Reviewer harness executed from the reviewed branch: the poller ran
+  `run-lens.sh` from the PR's own checkout, letting any PR edit its reviewer
+  (and old branches simply lacked the scripts). Tell: automation that
+  executes scripts from a ref the automation is judging. (#240)
+
 ## Verdict discipline
 
 The blast radius here is the whole pipeline; a PLAUSIBLE that would leak a

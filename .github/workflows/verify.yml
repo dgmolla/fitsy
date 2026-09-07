@@ -20,7 +20,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Cheap first: classify the diff's risk tier with no npm install. Tier-low
+  # (docs/bookkeeping) PRs run only the bash-only checks below and stop -
+  # heavy verification for them lives locally and in the docs-sanity lens.
+  classify:
+    runs-on: ubuntu-latest
+    outputs:
+      tier: ${{ steps.t.outputs.tier }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: git fetch origin main
+      - id: t
+        run: |
+          FILES=$(git diff --name-only origin/main...HEAD 2>/dev/null || git diff --name-only HEAD^ HEAD)
+          TIER=$(echo "$FILES" | node scripts/review/tier.mjs)
+          echo "tier=$TIER" >> "$GITHUB_OUTPUT"
+          echo "tier: $TIER"
+      - name: Install gitleaks (docs PRs can leak secrets too)
+        run: curl -sL "$(curl -s https://api.github.com/repos/gitleaks/gitleaks/releases/latest | grep browser_download_url | grep linux_x64.tar.gz | head -1 | cut -d '"' -f4)" | tar xz -C /usr/local/bin gitleaks || echo "gitleaks install failed; grep fallback covers"
+      - name: Bash-only checks (always, no npm ci; re-run for medium+ in static is cheap)
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          bash scripts/verify/structural.sh
+          bash scripts/verify/secrets.sh
+          bash scripts/verify/context-freshness.sh
+          bash scripts/verify/size-check.sh || { c=$?; [ "$c" -eq 2 ] || exit 1; }
+
   static:
+    needs: classify
+    if: needs.classify.outputs.tier != 'low'
     name: Static (L0-L1)
     runs-on: ubuntu-latest
     steps:
@@ -53,18 +85,14 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-      - run: npm ci
       - run: git fetch origin main
       - name: Enforce single-domain PR
         id: check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: node scripts/verify/run.mjs --only=domain-check
+        # bash-only check; exit 2 = skipped (no diff), which must not fail the job
+        run: bash scripts/verify/domain-check.sh || { c=$?; [ "$c" -eq 2 ] || exit 1; }
       - name: Comment on failure
         if: failure()
         env:
@@ -74,6 +102,8 @@ jobs:
             --body "**domain-check**: this PR touches multiple domains. PRs must be scoped to a single domain (routing: \`scripts/route-reviewers.sh\`). Please split." || true
 
   test:
+    needs: classify
+    if: needs.classify.outputs.tier != 'low'
     name: Tests (L2)
     runs-on: ubuntu-latest
     services:
@@ -112,6 +142,8 @@ jobs:
         run: node scripts/verify/run.mjs --layer=2 --runs=ci --scope=${{ github.event_name == 'pull_request' && 'changed' || 'all' }}
 
   build:
+    needs: classify
+    if: needs.classify.outputs.tier != 'low'
     name: Build (L3)
     runs-on: ubuntu-latest
     steps:

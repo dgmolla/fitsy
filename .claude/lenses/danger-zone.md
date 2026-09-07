@@ -29,4 +29,10 @@ reading the guards that might already handle it. Cite what you checked.
 
 ## Examples from real incidents
 
-(grows via harness-audit; none yet)
+- Publish-command env omission: `eas update` without `--environment production`
+  shipped a keyless bundle twice; the paywall hung on "Plans are still
+  loading" in prod. Constrained since: `scripts/deploy/ota.sh` hardcodes the
+  flag - flag any OTA publish path that bypasses that script. (#219, incidents 2026-09-01)
+- Webhook event-type gaps: the RevenueCat handler ignored TRANSFER events, so
+  entitlement silently detached from the paying account. Tell: a webhook
+  switch without an explicit default that alerts on unknown types. (#223)
