@@ -111,6 +111,17 @@ checks:
       Invoked directly by deploy.yml against prod (--prod-safe) and usable
       against dev/previews; replaced scripts/verify-prod.sh 2026-09-07.
 
+  - name: mutation
+    script: mutation.sh
+    layer: 2
+    blocking: shadow
+    runs: [scheduled]
+    paths: ["apps/api/lib/**", "packages/shared/src/**"]
+    why: >
+      T5 - agent-written tests must be able to fail; mutation score is the
+      proof. Scheduled-only (minutes even incremental); the break threshold
+      (stryker.config.mjs) ratchets +5/month while green per rollout step 10.
+
   - name: mobile-e2e
     script: mobile-e2e.sh
     layer: 7

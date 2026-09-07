@@ -84,3 +84,18 @@ if [ ! -f "$METRICS_LOG" ]; then
   echo "date,task_completion,ci_pass_rate,review_pass_rate,reverts" > "$METRICS_LOG"
 fi
 echo "$(date +%Y-%m-%d),${RATE},${CI_RATE},${REVIEW_RATE},${REVERT_COMMITS}" >> "$METRICS_LOG"
+
+echo "--- Escaped Defects (incident issues, last ${DAYS} days) ---"
+INCIDENTS=$(gh issue list --label incident --state all --search "created:>=${SINCE}" --json number,title,state 2>/dev/null || echo "[]")
+INC_COUNT=$(echo "$INCIDENTS" | jq 'length' 2>/dev/null || echo 0)
+echo "  Incidents: ${INC_COUNT} (target: trending down while PR volume holds)"
+if [ "${INC_COUNT:-0}" -gt 0 ]; then
+  echo "$INCIDENTS" | jq -r '.[] | "    #\(.number) [\(.state)] \(.title)"' 2>/dev/null | head -10
+  # layer attribution comes from the "Layer:" line harness-audit requires in
+  # each incident issue body
+  for N in $(echo "$INCIDENTS" | jq -r '.[].number' 2>/dev/null); do
+    LAYER=$(gh issue view "$N" --json body --jq '.body' 2>/dev/null | grep -ioE "^layer:.*" | head -1)
+    [ -n "$LAYER" ] && echo "    #$N $LAYER"
+  done
+fi
+echo ""

@@ -70,3 +70,7 @@ scripts/phase1-out/
 # dev environment creds (scripts/dev/write-local-env.sh)
 .env.dev
 .env.prod.local
+
+# verification evidence (screenshots, reports, mutation cache) - never committed
+.evidence/
+.stryker-tmp/
