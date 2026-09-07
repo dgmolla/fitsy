@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createPrivateKey, sign } from "crypto";
 import { postSlackMessage } from "@fitsy/shared";
 import { prisma } from "@/lib/restaurantService";
+import { ASC_BASE, DEFAULT_APP_ID, ascToken } from "@/lib/asc";
 
 /**
  * App Store review-result watcher. Triggered by Vercel Cron every 4 hours.
@@ -23,51 +23,61 @@ import { prisma } from "@/lib/restaurantService";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const DEFAULT_APP_ID = "6763851364";
-const ASC_BASE = "https://api.appstoreconnect.apple.com/v1";
-
 /** Map an ASC version state to a Slack-worthy result, or null to stay quiet. */
-function classify(state: string): { kind: string; emoji: string; text: string } | null {
+function classify(
+  state: string,
+): { kind: string; emoji: string; text: string } | null {
   switch (state) {
     case "PENDING_DEVELOPER_RELEASE":
-      return { kind: "APPROVED", emoji: ":white_check_mark:", text: "*Fitsy was APPROVED* — waiting for you to manually release it." };
+      return {
+        kind: "APPROVED",
+        emoji: ":white_check_mark:",
+        text: "*Fitsy was APPROVED* — waiting for you to manually release it.",
+      };
     case "PENDING_APPLE_RELEASE":
-      return { kind: "APPROVED", emoji: ":white_check_mark:", text: "*Fitsy was APPROVED* — Apple will release it on your scheduled date." };
+      return {
+        kind: "APPROVED",
+        emoji: ":white_check_mark:",
+        text: "*Fitsy was APPROVED* — Apple will release it on your scheduled date.",
+      };
     case "READY_FOR_SALE":
     case "READY_FOR_DISTRIBUTION":
-      return { kind: "LIVE", emoji: ":tada:", text: "*Fitsy is APPROVED and live* on the App Store." };
+      return {
+        kind: "LIVE",
+        emoji: ":tada:",
+        text: "*Fitsy is APPROVED and live* on the App Store.",
+      };
     case "REJECTED":
     case "DEVELOPER_REJECTED":
-      return { kind: "REJECTED", emoji: ":x:", text: "*Fitsy was REJECTED.* Open App Store Connect → Resolution Center for the reviewer's notes." };
+      return {
+        kind: "REJECTED",
+        emoji: ":x:",
+        text: "*Fitsy was REJECTED.* Open App Store Connect → Resolution Center for the reviewer's notes.",
+      };
     case "METADATA_REJECTED":
-      return { kind: "METADATA_REJECTED", emoji: ":warning:", text: "*Fitsy got a METADATA rejection.* Check Resolution Center — usually fixable without a new build." };
+      return {
+        kind: "METADATA_REJECTED",
+        emoji: ":warning:",
+        text: "*Fitsy got a METADATA rejection.* Check Resolution Center — usually fixable without a new build.",
+      };
     case "INVALID_BINARY":
-      return { kind: "INVALID_BINARY", emoji: ":warning:", text: "*Fitsy build marked INVALID.* Check the build / email from Apple." };
+      return {
+        kind: "INVALID_BINARY",
+        emoji: ":warning:",
+        text: "*Fitsy build marked INVALID.* Check the build / email from Apple.",
+      };
     default:
       return null; // IN_REVIEW, WAITING_FOR_REVIEW, PREPARE_FOR_SUBMISSION, PROCESSING_FOR_DISTRIBUTION, etc.
   }
 }
 
-/** Mint a short-lived ES256 JWT for the App Store Connect API. */
-function ascToken(): string {
-  const keyId = process.env["ASC_KEY_ID"];
-  const issuerId = process.env["ASC_ISSUER_ID"];
-  const p8b64 = process.env["ASC_P8_BASE64"];
-  if (!keyId || !issuerId || !p8b64) throw new Error("ASC credentials not configured");
-  const p8 = Buffer.from(p8b64, "base64").toString("utf8");
-  const now = Math.floor(Date.now() / 1000);
-  const enc = (o: unknown) => Buffer.from(JSON.stringify(o)).toString("base64url");
-  const header = enc({ alg: "ES256", kid: keyId, typ: "JWT" });
-  const payload = enc({ iss: issuerId, iat: now, exp: now + 600, aud: "appstoreconnect-v1" });
-  const signingInput = `${header}.${payload}`;
-  const signature = sign("sha256", Buffer.from(signingInput), {
-    key: createPrivateKey(p8),
-    dsaEncoding: "ieee-p1363", // raw r||s — required for JOSE ES256
-  });
-  return `${signingInput}.${signature.toString("base64url")}`;
-}
-
-type Version = { attributes?: { versionString?: string; appStoreState?: string; state?: string } };
+type Version = {
+  attributes?: {
+    versionString?: string;
+    appStoreState?: string;
+    state?: string;
+  };
+};
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const expected = process.env["CRON_SECRET"];
@@ -86,26 +96,43 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       { headers: { authorization: `Bearer ${token}` }, cache: "no-store" },
     );
     if (!res.ok) {
-      return NextResponse.json({ ok: false, error: `ASC ${res.status}` }, { status: 502 });
+      return NextResponse.json(
+        { ok: false, error: `ASC ${res.status}` },
+        { status: 502 },
+      );
     }
     versions = ((await res.json()) as { data?: Version[] }).data ?? [];
   } catch (err) {
-    return NextResponse.json({ ok: false, error: String(err) }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: String(err) },
+      { status: 500 },
+    );
   }
 
   // Pick the most actionable version: prefer one already in a terminal result
   // state, else the newest. ASC returns newest-first; we scan for a result.
-  let chosen: { version: string; state: string; result: ReturnType<typeof classify> } | null = null;
+  let chosen: {
+    version: string;
+    state: string;
+    result: ReturnType<typeof classify>;
+  } | null = null;
   for (const v of versions) {
     const state = v.attributes?.appStoreState ?? v.attributes?.state ?? "";
     const result = classify(state);
     const version = v.attributes?.versionString ?? "?";
-    if (result) { chosen = { version, state, result }; break; }
+    if (result) {
+      chosen = { version, state, result };
+      break;
+    }
     if (!chosen) chosen = { version, state, result: null };
   }
 
   if (!chosen || !chosen.result) {
-    return NextResponse.json({ ok: true, notified: false, state: chosen?.state ?? "none" });
+    return NextResponse.json({
+      ok: true,
+      notified: false,
+      state: chosen?.state ?? "none",
+    });
   }
 
   // Self-creating KV for once-per-result dedup (no Prisma migration).
@@ -117,7 +144,12 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     `SELECT value FROM "_review_watch" WHERE key = 'last_result' LIMIT 1`,
   );
   if (last[0]?.value === signature) {
-    return NextResponse.json({ ok: true, notified: false, state: chosen.state, deduped: true });
+    return NextResponse.json({
+      ok: true,
+      notified: false,
+      state: chosen.state,
+      deduped: true,
+    });
   }
 
   // Only record the dedup signature once Slack actually accepted the message.
@@ -135,5 +167,10 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     );
   }
 
-  return NextResponse.json({ ok: true, notified: posted, state: chosen.state, version: chosen.version });
+  return NextResponse.json({
+    ok: true,
+    notified: posted,
+    state: chosen.state,
+    version: chosen.version,
+  });
 }

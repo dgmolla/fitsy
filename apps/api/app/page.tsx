@@ -2,6 +2,7 @@ import styles from "./landing.module.css";
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/restaurantService";
 import { APP_STORE_URL } from "@/lib/appLinks";
+import { getDisplayPricing } from "@/lib/pricing";
 import { Nav } from "@/components/Nav";
 import { FeatureGrid } from "@/components/landing/FeatureGrid";
 import { AppleIcon } from "@/components/AppleIcon";
@@ -38,7 +39,10 @@ const getCounts = unstable_cache(
 );
 
 export default async function LandingPage() {
-  const { restaurantCount, menuItemCount } = await getCounts();
+  const [{ restaurantCount, menuItemCount }, pricing] = await Promise.all([
+    getCounts(),
+    getDisplayPricing(),
+  ]);
 
   return (
     <main className={styles.page}>
@@ -114,7 +118,7 @@ export default async function LandingPage() {
       </section>
 
       {/* ─── FAQ + closing CTA ───────────────────────────────────── */}
-      <Faq />
+      <Faq pricing={pricing} />
       <Closing href={APP_STORE_URL} />
 
       {/* ─── Footer ──────────────────────────────────────────────── */}

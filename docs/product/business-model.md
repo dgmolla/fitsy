@@ -138,9 +138,11 @@ See `docs/product/pre-launch-action-items.md` for the full critical path.
 > **Status: CONFIRMED 2026-06-16 — $7.99/month · $39.99/year · 3-day free trial.**
 
 The true source of truth for prices is the **RevenueCat offering**, which maps
-to the **App Store Connect subscription products** (`fitsy_monthly` $7.99,
-`fitsy_annual` $39.99, both with a 3-day introductory free trial), created
-2026-06-16. The app reads prices live from the offering; `payment.tsx` fallback
+to the **App Store Connect subscription products** (`com.fitsy.mobile.monthly`
+$7.99, `com.fitsy.mobile.yearly` $39.99, `com.fitsy.mobile.yearly_discount` $29.99,
+all with a 3-day introductory free trial), created 2026-06-16.
+The website reads these prices from the App Store Connect API at render time
+(`apps/api/lib/pricing.ts`, cached daily) and falls back to the values here. The app reads prices live from the offering; `payment.tsx` fallback
 strings mirror them for display only.
 
 ### All observed price points and their sources

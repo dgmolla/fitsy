@@ -1,5 +1,6 @@
 import s from "@/app/landing-sections.module.css";
 import { AppleIcon } from "@/components/AppleIcon";
+import type { DisplayPricing } from "@/lib/pricing";
 
 /**
  * Static landing-page sections below the feature grid. Server components:
@@ -122,26 +123,28 @@ export function Trust() {
   );
 }
 
-const FAQ_ITEMS: Array<{ q: string; a: string }> = [
-  {
-    q: "Where does Fitsy work right now?",
-    a: "Los Angeles: Silver Lake, Echo Park, Los Feliz, Hollywood, West Hollywood, Koreatown, Downtown, Mid-City, Studio City, and Venice. Every restaurant with a delivery menu in those neighborhoods is covered. More neighborhoods and cities are on the feedback board. Upvote yours.",
-  },
-  {
-    q: "How accurate are the macros?",
-    a: "Chains use published nutrition, so those numbers are exact. Independent restaurants are AI-estimated from the menu and marked as such. Treat them as a close guide, not a lab result.",
-  },
-  {
-    q: "Do I have to log anything?",
-    a: "No. Fitsy is not a food diary. You set targets once, and the app ranks what is around you. If you already track in another app, Fitsy just makes the ordering decision easier.",
-  },
-  {
-    q: "What does it cost?",
-    a: "Three days free, then $7.99 a month or $39.99 a year. Cancel anytime. Nothing is charged until the trial ends.",
-  },
-];
+function faqItems(pricing: DisplayPricing): Array<{ q: string; a: string }> {
+  return [
+    {
+      q: "Where does Fitsy work right now?",
+      a: "Los Angeles: Silver Lake, Echo Park, Los Feliz, Hollywood, West Hollywood, Koreatown, Downtown, Mid-City, Studio City, and Venice. Every restaurant with a delivery menu in those neighborhoods is covered. More neighborhoods and cities are on the feedback board. Upvote yours.",
+    },
+    {
+      q: "How accurate are the macros?",
+      a: "Chains use published nutrition, so those numbers are exact. Independent restaurants are AI-estimated from the menu and marked as such. Treat them as a close guide, not a lab result.",
+    },
+    {
+      q: "Do I have to log anything?",
+      a: "No. Fitsy is not a food diary. You set targets once, and the app ranks what is around you. If you already track in another app, Fitsy just makes the ordering decision easier.",
+    },
+    {
+      q: "What does it cost?",
+      a: `${pricing.trialDays === 3 ? "Three" : String(pricing.trialDays)} days free, then ${pricing.monthly} a month or ${pricing.annual} a year. Cancel anytime. Nothing is charged until the trial ends.`,
+    },
+  ];
+}
 
-export function Faq() {
+export function Faq({ pricing }: { pricing: DisplayPricing }) {
   return (
     <section className={s.section} id="faq">
       <div className={s.container}>
@@ -152,7 +155,7 @@ export function Faq() {
           </h2>
         </div>
         <div className={s.faq}>
-          {FAQ_ITEMS.map((item, i) => (
+          {faqItems(pricing).map((item, i) => (
             <details key={item.q} open={i === 0}>
               <summary>{item.q}</summary>
               <p>{item.a}</p>
