@@ -222,6 +222,8 @@ export interface MenuResponse {
   locked?: boolean;
   /** Full menu size. May exceed `menuItems.length` when `locked` is true. */
   totalItemCount?: number;
+  /** Opaque next menu page; repeat the same targets and selection. */
+  nextCursor?: string | null;
 }
 
 export interface MenuApiResponseBody {

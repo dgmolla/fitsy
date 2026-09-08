@@ -602,6 +602,16 @@ function makeRestaurant(overrides: Partial<MockRestaurant> = {}): MockRestaurant
   };
 }
 
+function mockMenu(restaurant: MockRestaurant) {
+  mockFindUnique.mockResolvedValue({ ...restaurant, _count: { menuItems: restaurant.menuItems.length } });
+  mockQueryRaw.mockResolvedValue(restaurant.menuItems.map(item => ({ ...item,
+    confidence: item.macroEstimates[0]?.confidence ?? null,
+    hadPhoto: item.macroEstimates[0]?.hadPhoto ?? null,
+    estimatedAt: item.macroEstimates[0]?.estimatedAt ?? null,
+    score: 0,
+  })));
+}
+
 describe("getRestaurantMenu", () => {
   it("returns null for unknown restaurant", async () => {
     mockFindUnique.mockResolvedValue(null);
@@ -620,7 +630,7 @@ describe("getRestaurantMenu", () => {
         makeMenuItem({ id: "item-2", name: "Burger" }),
       ],
     });
-    mockFindUnique.mockResolvedValue(r);
+    mockMenu(r);
 
     const result = await getRestaurantMenu("rest-1");
 
@@ -635,7 +645,7 @@ describe("getRestaurantMenu", () => {
       id: "rest-1",
       menuItems: [makeMenuItem({ id: "item-1" }), makeMenuItem({ id: "item-2" })],
     });
-    mockFindUnique.mockResolvedValue(r);
+    mockMenu(r);
 
     const result = await getRestaurantMenu("rest-1");
 
@@ -671,7 +681,7 @@ describe("getRestaurantMenu", () => {
         }),
       ],
     });
-    mockFindUnique.mockResolvedValue(r);
+    mockMenu(r);
 
     const result = await getRestaurantMenu("rest-1");
 
@@ -686,16 +696,16 @@ describe("getRestaurantMenu", () => {
     expect(macros?.estimatedAt).toBe("2025-06-15T12:00:00.000Z");
   });
 
-  it("returns macros: null when item has no estimates", async () => {
+  it("returns low-confidence stored macros when an item has no estimates", async () => {
     const r = makeRestaurant({
       id: "rest-1",
       menuItems: [makeMenuItem({ id: "item-no-est", macroEstimates: [] })],
     });
-    mockFindUnique.mockResolvedValue(r);
+    mockMenu(r);
 
     const result = await getRestaurantMenu("rest-1");
 
-    expect(result?.menuItems[0]?.macros).toBeNull();
+    expect(result?.menuItems[0]?.macros?.confidence).toBe("LOW");
   });
 
   it("includes optional fields when present — description, category, price", async () => {
@@ -710,7 +720,7 @@ describe("getRestaurantMenu", () => {
         }),
       ],
     });
-    mockFindUnique.mockResolvedValue(r);
+    mockMenu(r);
 
     const result = await getRestaurantMenu("rest-1");
 
@@ -732,7 +742,7 @@ describe("getRestaurantMenu", () => {
         }),
       ],
     });
-    mockFindUnique.mockResolvedValue(r);
+    mockMenu(r);
 
     const result = await getRestaurantMenu("rest-1");
 
@@ -742,27 +752,11 @@ describe("getRestaurantMenu", () => {
     expect(item).not.toHaveProperty("price");
   });
 
-  it("passes orderBy name asc to Prisma for menu items", async () => {
-    const r = makeRestaurant({
-      id: "rest-1",
-      menuItems: [
-        makeMenuItem({ id: "item-z", name: "Zucchini Soup" }),
-        makeMenuItem({ id: "item-a", name: "Apple Salad" }),
-      ],
-    });
-    mockFindUnique.mockResolvedValue(r);
-
-    await getRestaurantMenu("rest-1");
-
-    expect(mockFindUnique).toHaveBeenCalledTimes(1);
-    const [callArg] = mockFindUnique.mock.calls[0] as [
-      {
-        where: { id: string };
-        include: {
-          menuItems: { orderBy: { name: string }; include: unknown };
-        };
-      },
-    ];
-    expect(callArg.include.menuItems.orderBy).toEqual({ name: "asc" });
+  it("limits the result page and uses SQL ordering", async () => {
+    mockMenu(makeRestaurant());
+    await getRestaurantMenu("rest-1", { limit: 3 });
+    const [parts, ...values] = mockQueryRaw.mock.calls[0]!;
+    expect((parts as string[]).join(' ')).toContain('ORDER BY score, id LIMIT');
+    expect(values).toContain(4);
   });
 });

@@ -5,3 +5,4 @@ export * from "./utils/macroProvenance";
 export * from "./utils/notifySlack";
 export * from "./env";
 export * from "./utils/macroScoring";
+export * from "./contracts/menu";

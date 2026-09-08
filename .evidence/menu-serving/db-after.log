@@ -1,0 +1,23 @@
+{"event":"search_query","restaurants":20,"hasTargets":true,"totalMs":26,"paginated":false}
+[api-emitter] AXIOM_TOKEN not set — events will not be sent
+{"event":"search_query","restaurants":20,"hasTargets":true,"totalMs":2,"paginated":false}
+✔ real authenticated search accepts equivalent aliases and keeps a valid wire contract (1570.254166ms)
+✔ invalid targets return 400 through the handler (5.43625ms)
+{"event":"search_query","restaurants":20,"hasTargets":true,"totalMs":3,"paginated":false}
+✔ unauthenticated search still strips every best match (3.829459ms)
+{"event":"search_query","restaurants":2,"hasTargets":true,"totalMs":3,"paginated":false}
+✔ search and detail agree beyond the old 200-item alphabetical cap, with winning metadata (53.537917ms)
+✔ all 251 IDs remain reachable exactly once, including with smaller pages (27.523625ms)
+✔ cursor is bound to restaurant, target values and selection (10.640166ms)
+✔ selection pins the searched item without losing or repeating rows (8.420125ms)
+✔ invalid targets and page sizes return 400 on detail too (5.853041ms)
+✔ locked callers cannot enumerate dishes using targets, selection, page size or cursors (19.180208ms)
+✔ zero targets agree; empty pages keep the real total; unknown restaurants return 404 (22.567167ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2273.2035

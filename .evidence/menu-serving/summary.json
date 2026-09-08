@@ -1,0 +1,22 @@
+{
+  "native_route_tests": 10,
+  "before": {
+    "passed": 3,
+    "failed": 7
+  },
+  "after": {
+    "passed": 10,
+    "failed": 0
+  },
+  "build": "pass",
+  "registry": "static/typecheck/lint/boundary/secrets pass; API coverage and scripts pass; mobile timed out under load",
+  "mobile_retry": {
+    "mode": "runInBand",
+    "suites": 27,
+    "tests": 264,
+    "result": "pass"
+  },
+  "database": "isolated PostGIS 16 fixture, 2 restaurants / 251 items each",
+  "production_writes": false,
+  "schema_migration": false
+}
