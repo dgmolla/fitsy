@@ -62,6 +62,10 @@ model LaunchWaitlist {
   // attempt inside a single run's drain loop.
   lastNotifyAttemptAt DateTime?
   emailOptOutAt DateTime?      // set via /unsubscribe?w=<id>; suppresses email to this row
+  // Double opt-in. Onboarding rows are confirmed at creation (the provider
+  // verified the account email); website rows are confirmed by the link in
+  // the confirmation email. Unconfirmed rows receive nothing but that email.
+  confirmedAt   DateTime?
   // SetNull, not Cascade: the row is the address-keyed suppression record and
   // may have been created on the website independently of the account. The
   // delete-account route removes onboarding-only rows that never opted out.
@@ -69,6 +73,7 @@ model LaunchWaitlist {
 
   @@index([notifiedAt])
   @@index([lat, lng])
+  @@index([confirmedAt])
 }
 
 enum WaitlistSource {

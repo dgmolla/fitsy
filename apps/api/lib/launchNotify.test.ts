@@ -55,14 +55,14 @@ describe("milesBetween", () => {
   });
 });
 
-
 describe("notifyLaunch: matching, dry run, batching", () => {
-  it("only considers unnotified rows with attempts left and past the retry cooldown, oldest first", async () => {
+  it("only considers unnotified, confirmed rows with attempts left and past the retry cooldown, oldest first", async () => {
     const before = Date.now();
     await notifyLaunch({ ...LA, dryRun: true });
     const arg = (prisma.launchWaitlist.findMany as jest.Mock).mock.calls[0]![0];
     expect(arg.orderBy).toEqual({ createdAt: "asc" });
     expect(arg.where.notifiedAt).toBeNull();
+    expect(arg.where.confirmedAt).toEqual({ not: null });
     expect(arg.where.notifyAttempts).toEqual({ lt: MAX_NOTIFY_ATTEMPTS });
     const [never, cooled] = arg.where.OR;
     expect(never).toEqual({ lastNotifyAttemptAt: null });

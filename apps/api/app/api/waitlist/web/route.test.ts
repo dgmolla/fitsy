@@ -8,10 +8,27 @@ jest.mock("@/lib/restaurantService", () => ({
   },
 }));
 
+jest.mock("@/lib/waitlistConfirmSend", () => ({
+  sendWaitlistConfirmation: jest.fn(),
+}));
+
+// after() needs the Next.js request context, which jest lacks. Run the
+// callback immediately so the deferred confirmation send is observable.
+jest.mock("next/server", () => {
+  const actual = jest.requireActual("next/server");
+  return {
+    ...actual,
+    after: (cb: () => unknown) => {
+      void cb();
+    },
+  };
+});
+
 import { POST } from "./route";
 import { NextRequest } from "next/server";
 import { waitlistLimiter } from "@/lib/rateLimit";
 import { prisma } from "@/lib/restaurantService";
+import { sendWaitlistConfirmation } from "@/lib/waitlistConfirmSend";
 
 function makeRequest(body: unknown, headers: Record<string, string> = {}): NextRequest {
   return new NextRequest("http://localhost/api/waitlist/web", {
@@ -24,7 +41,8 @@ function makeRequest(body: unknown, headers: Record<string, string> = {}): NextR
 beforeEach(() => {
   jest.clearAllMocks();
   (waitlistLimiter.check as jest.Mock).mockReturnValue({ ok: true, remaining: 4, retryAfterMs: 0 });
-  (prisma.launchWaitlist.upsert as jest.Mock).mockResolvedValue({});
+  (prisma.launchWaitlist.upsert as jest.Mock).mockResolvedValue({ id: "wl-new", confirmedAt: null });
+  (sendWaitlistConfirmation as jest.Mock).mockResolvedValue(true);
 });
 
 describe("POST /api/waitlist/web (public form)", () => {
@@ -68,6 +86,7 @@ describe("POST /api/waitlist/web (public form)", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
     expect(prisma.launchWaitlist.upsert).not.toHaveBeenCalled();
+    expect(sendWaitlistConfirmation).not.toHaveBeenCalled();
   });
 
   it("stores a normalized web signup and leaves an existing row untouched", async () => {
@@ -78,6 +97,22 @@ describe("POST /api/waitlist/web (public form)", () => {
       where: { email: "dawit@gmail.com" },
       create: { email: "dawit@gmail.com", source: "web" },
       update: {},
+      select: { id: true, confirmedAt: true },
     });
+  });
+
+  it("sends the double opt-in confirmation for an unconfirmed row", async () => {
+    await POST(makeRequest({ email: "dawit@gmail.com" }));
+    expect(sendWaitlistConfirmation).toHaveBeenCalledWith({ id: "wl-new", email: "dawit@gmail.com" });
+  });
+
+  it("sends nothing for an address that is already confirmed", async () => {
+    (prisma.launchWaitlist.upsert as jest.Mock).mockResolvedValue({
+      id: "wl-old",
+      confirmedAt: new Date(),
+    });
+    const res = await POST(makeRequest({ email: "dawit@gmail.com" }));
+    expect(res.status).toBe(200);
+    expect(sendWaitlistConfirmation).not.toHaveBeenCalled();
   });
 });

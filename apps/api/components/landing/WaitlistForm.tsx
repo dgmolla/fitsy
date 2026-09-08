@@ -42,7 +42,7 @@ export function WaitlistForm({ align = "start" }: { align?: "start" | "center" }
           <span className={s.doneIcon} aria-hidden="true">
             &#10003;
           </span>
-          You&rsquo;re on the list. We&rsquo;ll email you at launch.
+          Check your inbox to confirm, and you&rsquo;re on the list.
         </span>
       </div>
     );

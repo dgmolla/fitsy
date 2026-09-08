@@ -10,8 +10,8 @@ Every send path needs the same guarantees: one send per step per address, never 
 
 Two schedules feed one send ledger.
 
-1. **Static (calendar) schedule.** The Tuesday weekly editorial (accounts now; confirmed waitlist-only addresses once double opt-in ships), plus the launch-day blast, which fires from a daily cron from the date in `apps/api/lib/launch.ts` onward.
-2. **Dynamic (lifecycle) schedule.** A daily cron that walks a table of steps keyed on an anchor event and an offset (waitlist join +3d, +7d; account created +1d, +3d, +7d) and sends whatever is due. Ships in a follow-up PR, together with the double opt-in confirmation that becomes step zero of the waitlist track.
+1. **Static (calendar) schedule.** The Tuesday weekly editorial (accounts and confirmed waitlist-only addresses), plus the launch-day blast, which fires from a daily cron from the date in `apps/api/lib/launch.ts` onward.
+2. **Dynamic (lifecycle) schedule.** Step zero of the waitlist track is the double opt-in confirmation, sent from the signup request itself (deferred with `after()`); nothing else reaches an unconfirmed address. The remaining steps (waitlist join +3d, +7d; account created +1d, +3d, +7d) are walked by a daily cron that ships in a follow-up PR.
 
 The `MarketingSend` ledger records every marketing send by normalized address, campaign, and step.
 It gives every campaign idempotency and the cross-campaign frequency cap.
@@ -43,8 +43,10 @@ flowchart TD
         LD -->|"today == LAUNCH_DATE_ISO"| LN[lib/launchNotify.notifyLaunch]
         OP[Operator POST /api/internal/waitlist/notify] --> LN
     end
-    subgraph Dynamic schedule - follow-up PR
-        D[Vercel cron daily 16:00 UTC] --> LC[/api/internal/marketing/lifecycle]
+    subgraph Dynamic schedule
+        S[POST /api/waitlist/web] -->|"after()"| C0[step 0: confirmation email]
+        C0 --> CONF[GET /waitlist/confirm sets confirmedAt]
+        D[Vercel cron daily 16:00 UTC - follow-up PR] --> LC[/api/internal/marketing/lifecycle]
         LC --> STEPS[steps: anchor + offset]
     end
     WR --> AUD[lib/marketingAudience]
@@ -69,7 +71,7 @@ flowchart TD
 
 - `MarketingSend(email, campaign, step, sentAt)` with a unique key on the first three columns. Campaigns: `weekly`, `launch`, `lifecycle`.
 - `lib/marketingLedger.ts`: `wasSent`, `recordSend` (idempotent upsert), `sentWithin` (frequency cap, default 48 hours).
-- `lib/marketingAudience.ts`: accounts not opted out anywhere, optionally union waitlist-only rows not opted out anywhere (each branch mirrors the other table's opt-out for the address), one recipient per address, undeliverable seeds removed. The weekly cron passes `includeWaitlistOnly: false` until double opt-in gates those rows on `confirmedAt`.
+- `lib/marketingAudience.ts`: accounts not opted out anywhere, optionally union waitlist-only rows not opted out anywhere (each branch mirrors the other table's opt-out for the address), one recipient per address, undeliverable seeds removed. Waitlist-only rows are further limited to `confirmedAt IS NOT NULL` (double opt-in); the weekly cron passes `includeWaitlistOnly: true`.
 - `lib/launchNotify.ts`: the launch blast, shared by the operator route and the launch-day cron. Records successful emails under campaign `launch` with the city as the step.
 - Weekly cron: audience from the helper, edition dedup and pacing from the ledger, recipient kind (`userId` or `waitlistId`) decides which unsubscribe link is minted.
 

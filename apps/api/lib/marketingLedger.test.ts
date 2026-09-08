@@ -29,14 +29,14 @@ describe("marketingLedger", () => {
     expect(await wasSent("alice@example.org", "weekly", "ed-1")).toBe(false);
   });
 
-  it("recordSend is an idempotent upsert on the unique key", async () => {
+  it("recordSend upserts on the unique key and refreshes sentAt on a repeat", async () => {
     await recordSend("Alice@Example.org", "launch", "Los Angeles");
     expect(prisma.marketingSend.upsert).toHaveBeenCalledWith({
       where: {
         email_campaign_step: { email: "alice@example.org", campaign: "launch", step: "Los Angeles" },
       },
       create: { email: "alice@example.org", campaign: "launch", step: "Los Angeles" },
-      update: {},
+      update: { sentAt: expect.any(Date) },
     });
   });
 

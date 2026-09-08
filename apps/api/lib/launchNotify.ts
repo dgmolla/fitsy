@@ -106,6 +106,7 @@ export async function notifyLaunch(opts: LaunchNotifyOptions): Promise<LaunchNot
   const pending = await prisma.launchWaitlist.findMany({
     where: {
       notifiedAt: null,
+      confirmedAt: { not: null },
       notifyAttempts: { lt: MAX_NOTIFY_ATTEMPTS },
       OR: [{ lastNotifyAttemptAt: null }, { lastNotifyAttemptAt: { lt: retryBefore } }],
     },

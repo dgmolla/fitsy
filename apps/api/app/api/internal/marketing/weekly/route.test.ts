@@ -62,10 +62,10 @@ describe("GET /api/internal/marketing/weekly", () => {
     expect(marketingAudience).not.toHaveBeenCalled();
   });
 
-  it("asks for accounts only until double opt-in, excluding addresses already sent this week-stamped step", async () => {
+  it("includes confirmed waitlist-only rows, excluding addresses already sent this week-stamped step", async () => {
     await GET(makeRequest());
     expect(marketingAudience).toHaveBeenCalledWith({
-      includeWaitlistOnly: false,
+      includeWaitlistOnly: true,
       excludeSent: { campaign: "weekly", step: "ed-1:w35" },
     });
   });
