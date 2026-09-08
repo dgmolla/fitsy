@@ -68,7 +68,9 @@ describe("POST /api/waitlist (onboarding)", () => {
     expect((await POST(makeRequest({}))).status).toBe(400);
     expect((await POST(makeRequest({ lat: "34", lng: -118 }))).status).toBe(400);
     expect((await POST(makeRequest({ lat: 91, lng: -118 }))).status).toBe(400);
+    expect((await POST(makeRequest({ lat: -91, lng: -118 }))).status).toBe(400);
     expect((await POST(makeRequest({ lat: 34, lng: 181 }))).status).toBe(400);
+    expect((await POST(makeRequest({ lat: 34, lng: -181 }))).status).toBe(400);
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
@@ -124,6 +126,12 @@ describe("POST /api/waitlist (onboarding)", () => {
     // Notified for LA, then moved to Chicago and tapped again.
     tx.launchWaitlist.findUnique.mockResolvedValue({ lat: 34.1, lng: -118.2, emailOptOutAt: null });
     await POST(makeRequest({ lat: 41.88, lng: -87.63, city: "Chicago" }));
+    expect(upsertArg().update).toHaveProperty("notifiedAt", null);
+  });
+
+  it("a move along one axis only (same coarse latitude) still counts as a new city", async () => {
+    tx.launchWaitlist.findUnique.mockResolvedValue({ lat: 34.1, lng: -118.2, emailOptOutAt: null });
+    await POST(makeRequest({ lat: 34.1, lng: -96.0, city: "Dallas" }));
     expect(upsertArg().update).toHaveProperty("notifiedAt", null);
   });
 

@@ -40,6 +40,8 @@ beforeEach(() => {
   mockSavedItemDeleteMany.mockReset().mockResolvedValue({ count: 0 });
   mockMacroTargetDeleteMany.mockReset().mockResolvedValue({ count: 0 });
   mockSubscriptionDeleteMany.mockReset().mockResolvedValue({ count: 0 });
+  mockWaitlistDeleteMany.mockReset().mockResolvedValue({ count: 0 });
+  mockWaitlistUpdateMany.mockReset().mockResolvedValue({ count: 0 });
   mockUserDelete.mockReset().mockResolvedValue({ id: "user-1" });
   mockTransaction.mockReset();
   mockSupabaseDeleteUser.mockReset().mockResolvedValue({ data: {}, error: null });

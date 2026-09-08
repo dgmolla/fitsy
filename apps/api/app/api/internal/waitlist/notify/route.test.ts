@@ -188,7 +188,20 @@ describe("POST /api/internal/waitlist/notify", () => {
       expect.objectContaining({ viaPush: 1, viaEmail: 0, notified: 1, suppressed: 0, failed: 0 }),
     );
     expect(sendMarketingEmail).not.toHaveBeenCalled();
-    expect(sendLaunchPush).toHaveBeenCalledTimes(1);
+    // No city in the body: the row's own label is used.
+    expect(sendLaunchPush).toHaveBeenCalledWith("ExponentPushToken[abc]", "Los Angeles");
+  });
+
+  it("live web row with no push token whose email fails is left for retry, not closed", async () => {
+    // Only an opted-out row may be closed without a delivery; a transient
+    // provider failure must keep the row eligible for the next run.
+    (prisma.launchWaitlist.findMany as jest.Mock).mockResolvedValue([WEB]);
+    (sendMarketingEmail as jest.Mock).mockResolvedValue(false);
+    const res = await POST(makeRequest({ ...LA, includeUnlocated: true }));
+    expect(await res.json()).toEqual(
+      expect.objectContaining({ matched: 1, notified: 0, suppressed: 0, failed: 1 }),
+    );
+    expect(prisma.launchWaitlist.update).not.toHaveBeenCalled();
   });
 
   it("opted out with no push token: nothing may be sent, so the row is closed as suppressed", async () => {
