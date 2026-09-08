@@ -1,6 +1,6 @@
 # Landing Page
 
-> **Status:** Shipped - live · **Last verified:** 2026-09-06 (v3 expansion: feature grid, how it works, data honesty, FAQ, closing CTA)
+> **Status:** Shipped - live · **Last verified:** 2026-09-07 (waitlist CTA replaces the App Store CTA until the listing is live)
 > **Author:** Frontend
 > **Date:** 2026-03-24 (spec); shipped ~Sprint 8
 
@@ -23,17 +23,19 @@ A single-page Next.js marketing site at `/` in the API project. The existing Nex
 
 Sections, top to bottom (v3, 2026-09-06):
 1. **Nav** - shared `Nav`: wordmark and a hamburger. Section links (Features, How it works, FAQ) and Browse Restaurants live in the hamburger on every viewport; the bar itself holds no inline links.
-2. **Hero** - headline, sub-headline, App Store CTA, floating phone with the search screenshot.
+2. **Hero** - headline, sub-headline, waitlist form (email + "Join the waitlist"), floating phone with the search screenshot.
+   The form posts to `POST /api/waitlist/web`, which writes to the same `LaunchWaitlist` table as the app's out-of-area "Notify me at launch" screen, so the website and onboarding feed one launch list (`docs/engineering/backend/launch-waitlist.md`).
+   At App Store launch the form becomes the store CTA again (`apps/api/lib/appLinks.ts`).
 3. **Feature grid** - six tiles (text search, restaurant detail, tweak macros, goals, saved, feedback), each a mono eyebrow + serif headline + a CSS-built slice of the real app UI bleeding off the bottom.
    The search tile cycles example queries.
    The macro stepper recomputes per-meal kcal and re-sorts the detail tile's dishes using the app's own match formula (mirrored in `apps/api/lib/landingDemo.ts`).
    The feedback tile shows illustrative example posts only; real board posts are not rendered on the public page because the board is auth-gated in the app and users were not told their posts would appear here.
 4. **How it works** - the three steps from the onboarding flow; step 3 is tagged as the only one the user does.
 5. **Data honesty** - Verified (chains, published nutrition) vs AI estimated (independents) cards with one real example each.
-6. **Stats splash** - live restaurant and dish counts (unchanged).
+6. **Stats splash** - live restaurant and dish counts; its CTA links to `#waitlist`.
 7. **FAQ** - coverage, accuracy, logging, price.
    Prices and trial length come from App Store Connect (`apps/api/lib/pricing.ts`, cached daily) with the decision-record values as fallback.
-8. **Closing CTA** - "Eat out. Stay on plan." with an App Store badge.
+8. **Closing CTA** (`#waitlist`) - "Eat out. Stay on plan." with the waitlist form; every "Join the waitlist" link on the site (stats splash, footer, restaurant pages) lands here.
 9. **Footer** - brand, Product / Company / Legal columns, estimate disclaimer.
 
 The `/restaurants` directory is an SEO surface, not core UX: it is reachable from the hamburger and the footer but never presented as a feature.
@@ -45,14 +47,16 @@ The `/restaurants` directory is an SEO surface, not core UX: it is reachable fro
 ```mermaid
 flowchart TD
     V[Visitor] --> Nav["Nav: hamburger (Features, How it works, FAQ, Browse)"]
-    Nav --> Hero["Hero: headline + App Store CTA + phone"]
+    Nav --> Hero["Hero: headline + waitlist form + phone"]
+    Hero -->|"POST /api/waitlist/web"| WL[("LaunchWaitlist (shared with onboarding)")]
     Hero --> Grid["Feature grid: search · detail · tweak macros · goals · saved · feedback"]
     Grid --> How["How it works: 3 steps"]
     How --> Trust["Data honesty: Verified vs AI estimated"]
     Trust --> Stats["Stats splash: live counts"]
     Stats -->|"counts"| DB2[("Restaurant / MenuItem counts")]
     Stats --> FAQ["FAQ"]
-    FAQ --> Closing["Closing CTA: App Store badge"]
+    FAQ --> Closing["Closing CTA (#waitlist): waitlist form"]
+    Closing -->|"POST /api/waitlist/web"| WL
     Closing --> Footer["Footer: Product / Company / Legal"]
 ```
 ---

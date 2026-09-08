@@ -1,26 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/restaurantService";
 import { requireAuth } from "@/lib/auth";
+import { coarseCoord, normalizeEmail } from "@/lib/waitlist";
 
 export const runtime = "nodejs";
 
 /**
- * POST /api/waitlist - join the launch waitlist.
+ * POST /api/waitlist - join the launch waitlist from onboarding.
  *
  * Called when an authenticated onboarding user hits "we're not in your area
  * yet". We store their email (already collected at sign-in) plus a COARSE,
  * city-level location so we can email them when Fitsy launches near them.
  *
+ * The list is keyed by email and shared with the fitsy.org waitlist form
+ * (POST /api/waitlist/web). If this address already joined on the website,
+ * the same row is linked to the account and gains the location.
+ *
  * Data minimization: the location is rounded to ~1 decimal (~11 km) before
  * storage - enough to match a city, not a precise fix. See
  * docs/engineering/backend/launch-waitlist.md for the ASC privacy disclosures.
  */
-
-// Round to ~city precision so we never persist a precise location.
-function coarse(n: number): number {
-  return Math.round(n * 10) / 10;
-}
-
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
@@ -60,25 +59,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
+  const email = normalizeEmail(user.email);
   const label = typeof city === "string" ? city.slice(0, 80) : null;
+  const location = { lat: coarseCoord(lat), lng: coarseCoord(lng), city: label };
 
-  // Upsert so re-hitting the screen refreshes the location without spamming
-  // rows; we deliberately do NOT reset notifiedAt on update.
+  // Upsert by email so re-hitting the screen refreshes the location without
+  // spamming rows, and a prior website signup becomes this account's row.
+  // We deliberately do NOT reset notifiedAt or emailOptOutAt on update.
   await prisma.launchWaitlist.upsert({
-    where: { userId: auth.sub },
-    create: {
-      userId: auth.sub,
-      email: user.email,
-      lat: coarse(lat),
-      lng: coarse(lng),
-      city: label,
-    },
-    update: {
-      email: user.email,
-      lat: coarse(lat),
-      lng: coarse(lng),
-      city: label,
-    },
+    where: { email },
+    create: { email, userId: auth.sub, source: "onboarding", ...location },
+    update: { userId: auth.sub, ...location },
   });
 
   return NextResponse.json({ ok: true }, { status: 200 });

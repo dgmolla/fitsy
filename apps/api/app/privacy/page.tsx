@@ -55,9 +55,12 @@ export default function PrivacyPage() {
             and you tap &ldquo;Notify me at launch,&rdquo; we save your email
             and a <strong>coarse, city-level</strong> location so we can let
             you know when Fitsy goes live near you &mdash; by push notification
-            and email. We may also send you occasional Fitsy updates by email.
-            Every marketing email includes an unsubscribe link; you can also
-            email <a href={`mailto:${PRIVACY_EMAIL}`}>{PRIVACY_EMAIL}</a> to be
+            and email. If you join the waitlist on fitsy.org instead, we save
+            only the email address you enter; no account or location is
+            created. Both go on one launch list. We may also send you
+            occasional Fitsy updates by email. Every marketing email includes
+            an unsubscribe link; you can also email{" "}
+            <a href={`mailto:${PRIVACY_EMAIL}`}>{PRIVACY_EMAIL}</a> to be
             removed. Unsubscribing stops marketing email but does not affect
             account or service messages. We keep that location only for this
             purpose, and only if you opt in.

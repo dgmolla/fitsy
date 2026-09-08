@@ -9,11 +9,17 @@ export const dynamic = "force-dynamic";
 /**
  * POST /api/internal/waitlist/notify - notify waitlist users when a city launches.
  *
+ * Matches entries whose coarse location is within `radiusMiles` of the launch
+ * center. Website signups (POST /api/waitlist/web) carry no location, so they
+ * never radius-match; pass `includeUnlocated: true` to fold them into a
+ * launch blast (typically the first city launch).
+ *
  * Attempts BOTH push and email for every matched entry (not push-primary/email-fallback).
+ * Push needs a linked account with a token; email goes to everyone not opted out.
  * Marks notifiedAt when EITHER channel succeeds.
  *
  * Auth: CRON_SECRET Bearer (same as other internal endpoints).
- * Body: { lat, lng, radiusMiles?, city?, dryRun? }
+ * Body: { lat, lng, radiusMiles?, city?, includeUnlocated?, dryRun? }
  * Response: { ok, matched, viaPush, viaEmail, notified, failed }
  */
 
@@ -41,11 +47,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
-  const { lat, lng, radiusMiles, city, dryRun } = (body ?? {}) as {
+  const { lat, lng, radiusMiles, city, includeUnlocated, dryRun } = (body ?? {}) as {
     lat?: number;
     lng?: number;
     radiusMiles?: number;
     city?: string;
+    includeUnlocated?: boolean;
     dryRun?: boolean;
   };
   if (typeof lat !== "number" || typeof lng !== "number") {
@@ -58,16 +65,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   type WaitlistRow = {
     id: string;
-    userId: string;
+    userId: string | null;
     email: string;
-    lat: number;
-    lng: number;
+    lat: number | null;
+    lng: number | null;
     city: string | null;
-    user: { pushToken: string | null };
+    user: { pushToken: string | null } | null;
   };
 
   const pending: WaitlistRow[] = await prisma.launchWaitlist.findMany({
-    where: { notifiedAt: null },
+    where: { notifiedAt: null, emailOptOutAt: null },
     select: {
       id: true,
       userId: true,
@@ -79,8 +86,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     },
   });
 
-  const inArea = pending.filter(
-    (w) => milesBetween(lat, lng, w.lat, w.lng) <= radius,
+  const inArea = pending.filter((w) =>
+    w.lat === null || w.lng === null
+      ? includeUnlocated === true
+      : milesBetween(lat, lng, w.lat, w.lng) <= radius,
   );
 
   if (dryRun) {
@@ -95,12 +104,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   for (const w of inArea) {
     const effectiveCity = city ?? w.city;
 
-    // Attempt both channels in parallel
+    // Attempt both channels in parallel. Opt-out for account-linked rows lives
+    // on the User; for web-only rows it lives on the waitlist row itself.
+    const recipient =
+      w.userId !== null ? { userId: w.userId } : { waitlistId: w.id };
     const [pushed, emailed] = await Promise.all([
-      sendLaunchPush(w.user.pushToken, effectiveCity),
+      w.user ? sendLaunchPush(w.user.pushToken, effectiveCity) : Promise.resolve(false),
       (async () => {
         const { subject, html } = launchEmailContent(effectiveCity);
-        return sendMarketingEmail({ userId: w.userId, to: w.email, subject, html });
+        return sendMarketingEmail({ ...recipient, to: w.email, subject, html });
       })(),
     ]);
 

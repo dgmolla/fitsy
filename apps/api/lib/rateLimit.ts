@@ -74,3 +74,9 @@ export const authLimiter = createRateLimiter({ windowMs: 60_000, max: 10 });
  * Deters spamming the team inbox while leaving room for genuine follow-ups.
  */
 export const feedbackLimiter = createRateLimiter({ windowMs: 300_000, max: 5 });
+
+/**
+ * Public website waitlist form: 5 signups per IP per 10 minutes.
+ * The form is unauthenticated, so this is the only brake on list-stuffing.
+ */
+export const waitlistLimiter = createRateLimiter({ windowMs: 600_000, max: 5 });
