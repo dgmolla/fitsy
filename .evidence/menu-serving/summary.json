@@ -1,11 +1,11 @@
 {
-  "native_route_tests": 10,
+  "native_route_tests": 13,
   "before": {
     "passed": 3,
     "failed": 7
   },
   "after": {
-    "passed": 10,
+    "passed": 13,
     "failed": 0
   },
   "build": "pass",
@@ -18,5 +18,9 @@
   },
   "database": "isolated PostGIS 16 fixture, 2 restaurants / 251 items each",
   "production_writes": false,
-  "schema_migration": false
+  "schema_migration": false,
+  "additional_regressions": [
+    "cursor underflow rejects before SQL",
+    "missing provenance consistent with search LOW"
+  ]
 }

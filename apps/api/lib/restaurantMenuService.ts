@@ -17,7 +17,8 @@ function decode(raw: string, key: string): { id: string; score: string } {
   try {
     const c = JSON.parse(Buffer.from(raw, "base64url").toString("utf8")) as { id: string; score: string; key: string };
     if (typeof c.id === "string" && typeof c.score === "string" && /^-?\d+(\.\d+)?(e[+-]?\d+)?$/i.test(c.score)
-      && Number.isFinite(Number(c.score)) && c.key === key) return c;
+      && Number.isFinite(Number(c.score))
+      && !(Number(c.score) === 0 && /[1-9]/.test(c.score.split(/e/i)[0]!)) && c.key === key) return c;
   } catch { /* fall through */ }
   throw new Error("Invalid menu cursor");
 }

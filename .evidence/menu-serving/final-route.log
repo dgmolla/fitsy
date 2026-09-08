@@ -1,0 +1,12 @@
+
+> @fitsy/api@0.1.0 test
+> jest --runInBand tests/db/search-route.db.test.ts
+
+PASS tests/db/search-route.db.test.ts
+  ✓ search route integration with real JWT and Postgres (1307 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       1 passed, 1 total
+Snapshots:   0 total
+Time:        1.536 s, estimated 2 s
+Ran all test suites matching /tests\/db\/search-route.db.test.ts/i.

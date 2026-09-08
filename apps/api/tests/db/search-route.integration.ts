@@ -142,6 +142,9 @@ test('cursor is bound to restaurant, target values and selection', async () => {
   assert.equal((await getMenu(id, 'calories=500' + suffix)).status, 400);
   assert.equal((await getMenu(id, targetQuery + suffix + '&selectedItemId=another')).status, 400);
   assert.equal((await getMenu(id, 'cursor=garbage')).status, 400);
+  const underflow = JSON.parse(Buffer.from(first.nextCursor, 'base64url').toString());
+  underflow.score = '1e-400';
+  assert.equal((await getMenu(id, targetQuery + '&cursor=' + Buffer.from(JSON.stringify(underflow)).toString('base64url'))).status, 400);
 });
 
 test('selection pins the searched item without losing or repeating rows', async () => {
@@ -211,4 +214,18 @@ test('out-of-range cursor numbers are client errors, while genuine zero is accep
     const cursor = Buffer.from(JSON.stringify({ id: 'x', orderKey: 0, orderKeyText })).toString('base64');
     assert.equal((await GET(request('cursor=' + encodeURIComponent(cursor)))).status, orderKeyText === '0' ? 200 : 400);
   }
+});
+
+test('search and detail expose the same LOW confidence when provenance is missing', async () => {
+  const id = restaurantIds[0]!;
+  await prisma.macroEstimate.deleteMany({ where: { menuItemId: `${id}-251` } });
+  const response = await GET(new NextRequest(`http://localhost/api/restaurants?lat=12&lng=12&${targetQuery}`,
+    { headers: { authorization: `Bearer ${token}` } }));
+  const results = (await response.json()).data as RestaurantResult[];
+  const best = results.find(r => r.id === id)!.bestMatch!;
+  const detail = await body(await getMenu(id, targetQuery));
+  assert.equal(best.confidence, 'LOW');
+  assert.equal(detail.menuItems[0]!.id, best.menuItemId);
+  assert.equal(detail.menuItems[0]!.macros!.confidence, 'LOW');
+  assert.equal(detail.menuItems[0]!.macros!.calories, best.calories);
 });
