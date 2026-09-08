@@ -4,7 +4,8 @@
 
 Fitsy sends two categories of marketing email: a one-time city-launch blast and a recurring weekly editorial.
 Both share the same brand shell, compliance pipeline, and send primitive.
-All compliance requirements (suppression check, unsubscribe URL, postal address, RFC 8058 one-click headers) are enforced inside `sendMarketingEmail` — callers only supply `userId`, `to`, `subject`, and `html`.
+All compliance requirements (suppression check, unsubscribe URL, postal address, RFC 8058 one-click headers) are enforced inside `sendMarketingEmail` - callers only supply a recipient (`userId` or `waitlistId`), `to`, `subject`, and `html`.
+Suppression is keyed on the address across both the `User` and `LaunchWaitlist` tables (see [launch-waitlist.md](launch-waitlist.md)).
 
 ---
 
@@ -23,7 +24,7 @@ sequenceDiagram
     Route->>EditionFn: editionForDate(new Date())
     EditionFn-->>Route: { slug, subject, html }
     Route->>DB: CREATE TABLE IF NOT EXISTS _marketing_send
-    Route->>DB: SELECT id, email FROM "User" WHERE emailOptOutAt IS NULL
+    Route->>DB: SELECT id, email FROM "User" WHERE emailOptOutAt IS NULL AND no opted-out LaunchWaitlist row for the same address
     DB-->>Route: eligible users
     loop For each user (max 500)
         Route->>DB: SELECT from _marketing_send WHERE edition=$1 AND user_id=$2
@@ -31,7 +32,7 @@ sequenceDiagram
             Route-->>Route: skipped++
         else not sent
             Route->>Send: sendMarketingEmail({ userId, to, subject, html })
-            Send->>DB: SELECT emailOptOutAt FROM "User" WHERE id=$userId
+            Send->>DB: isEmailOptedOut(to): opt-out on User OR LaunchWaitlist for this address?
             Send->>Resend: POST /emails (with List-Unsubscribe headers)
             Resend-->>Send: 200 OK
             Send-->>Route: true
