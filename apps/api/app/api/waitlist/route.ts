@@ -66,14 +66,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   await prisma.$transaction(async (tx) => {
     const existing = await tx.launchWaitlist.findUnique({
       where: { email },
-      select: { lat: true, emailOptOutAt: true },
+      select: { lat: true, lng: true, emailOptOutAt: true },
     });
 
-    // A website row has no city. Gaining one is a fresh, per-city opt-in, so
-    // a launch blast it already received (includeUnlocated) must not keep it
-    // from hearing about its own city. A located row re-tapping the button
-    // keeps notifiedAt: same city, no re-spam.
-    const gainingCity = existing !== null && existing.lat === null;
+    // Opting in from a different coarse location is a fresh, per-city opt-in:
+    // a website row gaining its first city, or a user who moved. A launch
+    // they already heard about must not keep them from hearing about this
+    // one. Re-tapping from the same place keeps notifiedAt: no re-spam.
+    const newCity =
+      existing !== null && (existing.lat !== location.lat || existing.lng !== location.lng);
 
     // Upsert by email so re-hitting the screen refreshes the location without
     // spamming rows, and a prior website signup becomes this account's row.
@@ -84,7 +85,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       update: {
         userId: auth.sub,
         ...location,
-        ...(gainingCity ? { notifiedAt: null } : {}),
+        ...(newCity ? { notifiedAt: null } : {}),
       },
     });
 

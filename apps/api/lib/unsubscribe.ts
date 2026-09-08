@@ -22,21 +22,17 @@ function subjectString(subject: UnsubscribeSubject): string {
 }
 
 /** Returns a hex HMAC-SHA256 token, or null if UNSUBSCRIBE_SECRET is unset. */
-export function makeUnsubscribeToken(subject: string | UnsubscribeSubject): string | null {
+export function makeUnsubscribeToken(subject: UnsubscribeSubject): string | null {
   const secret = process.env["UNSUBSCRIBE_SECRET"];
   if (!secret) return null;
-  const s = typeof subject === "string" ? subject : subjectString(subject);
-  return createHmac("sha256", secret).update(s).digest("hex");
+  return createHmac("sha256", secret).update(subjectString(subject)).digest("hex");
 }
 
 /**
  * Verifies a token in constant time.
  * Returns false on any mismatch or error — never throws.
  */
-export function verifyUnsubscribeToken(
-  subject: string | UnsubscribeSubject,
-  token: string,
-): boolean {
+export function verifyUnsubscribeToken(subject: UnsubscribeSubject, token: string): boolean {
   try {
     const expected = makeUnsubscribeToken(subject);
     if (!expected) return false;
@@ -54,13 +50,12 @@ export function verifyUnsubscribeToken(
  *   https://fitsy.org/unsubscribe?u=<userId>&t=<token>
  *   https://fitsy.org/unsubscribe?w=<waitlistId>&t=<token>
  */
-export function unsubscribeUrl(subject: string | UnsubscribeSubject): string | null {
+export function unsubscribeUrl(subject: UnsubscribeSubject): string | null {
   const token = makeUnsubscribeToken(subject);
   if (!token) return null;
-  const s = typeof subject === "string" ? { userId: subject } : subject;
   const param =
-    "userId" in s
-      ? `u=${encodeURIComponent(s.userId)}`
-      : `w=${encodeURIComponent(s.waitlistId)}`;
+    "userId" in subject
+      ? `u=${encodeURIComponent(subject.userId)}`
+      : `w=${encodeURIComponent(subject.waitlistId)}`;
   return `https://fitsy.org/unsubscribe?${param}&t=${encodeURIComponent(token)}`;
 }

@@ -59,7 +59,7 @@ sequenceDiagram
 - `POST /api/waitlist` (authed) - stores account email and a coarse, city-level location.
   Upserts by normalized email so it never duplicates, and links the account onto a prior website signup.
   Coords are rounded to ~1 decimal place before storage.
-  A website row gaining its first city is a fresh per-city opt-in, so `notifiedAt` is cleared in that one case (a re-tap on an already-located row keeps it: no re-spam).
+  Opting in from a different coarse location (a website row gaining its first city, or a user who moved) is a fresh per-city opt-in, so `notifiedAt` is cleared; a re-tap from the same place keeps it (no re-spam).
   Linking onto a row that already opted out copies the opt-out onto the account.
   Never resets `emailOptOutAt`.
 
@@ -114,7 +114,7 @@ sequenceDiagram
 
 - `LaunchWaitlist` - one row per email address.
   `userId` is `SET NULL` on account deletion, not cascaded: the row may be a website signup in its own right and is the address-keyed opt-out record.
-  `DELETE /api/user` removes only an onboarding-sourced row that never opted out.
+  `DELETE /api/user` removes an onboarding-sourced row that never opted out, and strips the coarse location from any row that survives, so what remains is the address and its opt-out only.
   Columns: `email` (unique, normalized), `userId?` (unique; null for web signups), `source` (`onboarding` | `web`), `lat?` / `lng?` (coarse; null for web signups), `city?`, `notifiedAt?`, `emailOptOutAt?`.
 
 - `User.emailOptOutAt` — nullable timestamp.

@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import {
   makeUnsubscribeToken,
   unsubscribeUrl,
@@ -17,12 +18,13 @@ afterEach(() => {
 describe("makeUnsubscribeToken", () => {
   it("returns null without a secret", () => {
     delete process.env["UNSUBSCRIBE_SECRET"];
-    expect(makeUnsubscribeToken("user-1")).toBeNull();
+    expect(makeUnsubscribeToken({ userId: "user-1" })).toBeNull();
     expect(makeUnsubscribeToken({ waitlistId: "wl-1" })).toBeNull();
   });
 
-  it("treats a bare string and { userId } identically (existing links keep working)", () => {
-    expect(makeUnsubscribeToken("user-1")).toBe(makeUnsubscribeToken({ userId: "user-1" }));
+  it("hashes the bare userId for accounts, so links minted before waitlist subjects existed still verify", () => {
+    const legacy = createHmac("sha256", SECRET).update("user-1").digest("hex");
+    expect(makeUnsubscribeToken({ userId: "user-1" })).toBe(legacy);
   });
 
   it("domain-separates user and waitlist subjects with the same id", () => {
@@ -46,8 +48,8 @@ describe("verifyUnsubscribeToken", () => {
   });
 
   it("rejects wrong-length and empty tokens without throwing", () => {
-    expect(verifyUnsubscribeToken("user-1", "")).toBe(false);
-    expect(verifyUnsubscribeToken("user-1", "abc")).toBe(false);
+    expect(verifyUnsubscribeToken({ userId: "user-1" }, "")).toBe(false);
+    expect(verifyUnsubscribeToken({ userId: "user-1" }, "abc")).toBe(false);
   });
 });
 
