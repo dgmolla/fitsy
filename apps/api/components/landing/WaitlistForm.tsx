@@ -14,7 +14,7 @@ import { LAUNCH_CITY, LAUNCH_DATE_LABEL } from "@/lib/launch";
  */
 export function WaitlistForm({ align = "start" }: { align?: "start" | "center" }) {
   const [email, setEmail] = useState("");
-  const [website, setWebsite] = useState(""); // honeypot
+  const [hp, setHp] = useState(""); // honeypot
   const [status, setStatus] = useState<"idle" | "submitting" | "done">("idle");
   const [error, setError] = useState<string | null>(null);
   const inputId = useId();
@@ -24,7 +24,7 @@ export function WaitlistForm({ align = "start" }: { align?: "start" | "center" }
     if (status !== "idle") return;
     setStatus("submitting");
     setError(null);
-    const result = await joinWaitlist(email, website);
+    const result = await joinWaitlist(email, hp);
     if (result.ok) {
       setStatus("done");
     } else {
@@ -77,16 +77,18 @@ export function WaitlistForm({ align = "start" }: { align?: "start" | "center" }
           {status === "submitting" ? "Joining…" : "Join the waitlist"}
         </button>
       </div>
-      {/* Honeypot: hidden from people, filled by bots. Server drops entries that set it. */}
+      {/* Honeypot: hidden from people, filled by bots; the server drops entries
+          that set it. Named so no browser or password-manager autofill heuristic
+          matches it (a "website"/"url" field can be autofilled for real users). */}
       <input
         className={s.hp}
         type="text"
-        name="website"
+        name="hp-token"
         tabIndex={-1}
         autoComplete="off"
         aria-hidden="true"
-        value={website}
-        onChange={(e) => setWebsite(e.target.value)}
+        value={hp}
+        onChange={(e) => setHp(e.target.value)}
       />
       {error ? (
         <p id={`${inputId}-error`} className={s.error} role="alert">

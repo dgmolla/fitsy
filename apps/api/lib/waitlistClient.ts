@@ -8,18 +8,15 @@ export type JoinWaitlistResult = { ok: true } | { ok: false; error: string };
 const GENERIC_ERROR = "Something went wrong. Please try again.";
 
 /**
- * POST /api/waitlist/web. `website` is the honeypot field: real users never
- * fill it, so it is forwarded verbatim and the server discards bot entries.
+ * POST /api/waitlist/web. `hp` is the honeypot field: real users never fill
+ * it, so it is forwarded verbatim and the server discards bot entries.
  */
-export async function joinWaitlist(
-  email: string,
-  website: string,
-): Promise<JoinWaitlistResult> {
+export async function joinWaitlist(email: string, hp: string): Promise<JoinWaitlistResult> {
   try {
     const res = await fetch("/api/waitlist/web", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, website }),
+      body: JSON.stringify({ email, hp }),
     });
     if (res.ok) return { ok: true };
     if (res.status === 429) {

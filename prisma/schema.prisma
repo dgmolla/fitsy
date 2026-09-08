@@ -54,7 +54,10 @@ model LaunchWaitlist {
   createdAt     DateTime       @default(now())
   notifiedAt    DateTime?      // set when we email them about their city launching
   emailOptOutAt DateTime?      // set via /unsubscribe?w=<id>; suppresses email to this row
-  user          User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // SetNull, not Cascade: the row is the address-keyed suppression record and
+  // may have been created on the website independently of the account. The
+  // delete-account route removes onboarding-only rows that never opted out.
+  user          User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([notifiedAt])
   @@index([lat, lng])

@@ -291,7 +291,7 @@ export default async function MenuItemPage({
         )}
         <FaqItem
           q={`Is the ${item.name} good for macro tracking?`}
-          a={`The ${item.name} at ${restaurantName} has complete macro data available in the Fitsy app. Download Fitsy to get personalized recommendations based on your protein, carb, and fat targets.`}
+          a={`The ${item.name} at ${restaurantName} has complete macro data available in the Fitsy app. Join the Fitsy waitlist to get personalized recommendations based on your protein, carb, and fat targets when the app launches.`}
         />
       </section>
 

@@ -32,16 +32,16 @@ sequenceDiagram
     Note over API,DB: coords rounded to ~1 decimal place (city precision) before storage
 
     Note over Web: visitor submits "Join the waitlist" form
-    Web->>API: POST /api/waitlist/web { email, website (honeypot) }  (public, rate-limited)
+    Web->>API: POST /api/waitlist/web { email, hp (honeypot) }  (public, rate-limited)
     API->>DB: upsert LaunchWaitlist by email { source: web } (no-op if already listed)
 
     Note over API: operator calls when a city goes live
     API->>API: POST /api/internal/waitlist/notify { lat, lng, radiusMiles?, city?, includeUnlocated?, dryRun? }
     Note over API: CRON_SECRET auth
-    API->>DB: fetch unnotified, not-opted-out entries within radius (+ unlocated web rows if includeUnlocated)
-    API->>Expo: send push notification (User.pushToken, account-linked rows only)
-    API->>Resend: send marketing email
-    Note over Expo,Resend: both channels attempted; notifiedAt set if either succeeds
+    API->>DB: fetch unnotified entries within radius (+ unlocated web rows if includeUnlocated)
+    API->>Expo: send push notification (User.pushToken, account-linked rows only; NOT gated by email opt-out)
+    API->>Resend: send marketing email (skipped when the address opted out)
+    Note over Expo,Resend: both channels attempted; notifiedAt set if either succeeds, or if nothing may be sent (opted out, no push token)
     API->>DB: set LaunchWaitlist.notifiedAt (idempotent re-runs skip already-notified)
 
     Note over App,Resend: unsubscribe path (email only)
@@ -64,7 +64,7 @@ sequenceDiagram
   Never resets `emailOptOutAt`.
 
 - `POST /api/waitlist/web` (public) - the fitsy.org form.
-  Body `{ email, website? }`; `website` is a honeypot that real users never see.
+  Body `{ email, hp? }`; `hp` is a honeypot that real users never see (named so autofill never touches it).
   Per-IP rate limit (5 per 10 minutes), email shape check, reserved-TLD rejection.
   Upserts by normalized email with an empty update, so an existing row is untouched.
   Always answers `{ ok: true }` for a well-formed address so membership cannot be probed.
@@ -73,8 +73,9 @@ sequenceDiagram
   Accepts `{ lat, lng, radiusMiles?, city?, includeUnlocated?, dryRun? }`.
   Website rows have no location and never radius-match; `includeUnlocated: true` folds them into the blast (use it for the first city launch).
   With `dryRun: true` it returns the count of users who would be notified without sending anything.
-  Idempotent: entries with `notifiedAt` already set are skipped, as are rows opted out on the row or on the linked account.
-  Sets `notifiedAt` when either push or email succeeds.
+  Idempotent: entries with `notifiedAt` already set are skipped.
+  An email opt-out suppresses the email only; the push is a separately requested notification and still goes out.
+  Sets `notifiedAt` when either push or email succeeds, and also when an opted-out entry has no push token (reported as `suppressed`) so the job converges.
 
 - `GET /unsubscribe` - renders a confirmation page with a button.
   Accepts `?u=<userId>` (account) or `?w=<waitlistId>` (web-only email) plus `&t=<token>`.
@@ -112,6 +113,8 @@ sequenceDiagram
 ### Data model
 
 - `LaunchWaitlist` - one row per email address.
+  `userId` is `SET NULL` on account deletion, not cascaded: the row may be a website signup in its own right and is the address-keyed opt-out record.
+  `DELETE /api/user` removes only an onboarding-sourced row that never opted out.
   Columns: `email` (unique, normalized), `userId?` (unique; null for web signups), `source` (`onboarding` | `web`), `lat?` / `lng?` (coarse; null for web signups), `city?`, `notifiedAt?`, `emailOptOutAt?`.
 
 - `User.emailOptOutAt` — nullable timestamp.

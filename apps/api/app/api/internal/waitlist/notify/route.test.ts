@@ -10,6 +10,7 @@ jest.mock("@/lib/launchPush", () => ({
 
 jest.mock("@/lib/marketingEmail", () => ({
   sendMarketingEmail: jest.fn(),
+  isEmailOptedOut: jest.fn(),
   launchEmailContent: jest.fn(() => ({ subject: "Fitsy launched", html: "<p>hi</p>" })),
 }));
 
@@ -17,7 +18,7 @@ import { POST } from "./route";
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/restaurantService";
 import { sendLaunchPush } from "@/lib/launchPush";
-import { sendMarketingEmail } from "@/lib/marketingEmail";
+import { isEmailOptedOut, sendMarketingEmail } from "@/lib/marketingEmail";
 
 const SECRET = "cron-secret";
 const LA = { lat: 34.05, lng: -118.24 };
@@ -85,6 +86,7 @@ beforeEach(() => {
   (prisma.launchWaitlist.update as jest.Mock).mockResolvedValue({});
   (sendLaunchPush as jest.Mock).mockResolvedValue(true);
   (sendMarketingEmail as jest.Mock).mockResolvedValue(true);
+  (isEmailOptedOut as jest.Mock).mockResolvedValue(false);
 });
 
 afterEach(() => {
@@ -104,16 +106,10 @@ describe("POST /api/internal/waitlist/notify", () => {
     expect((await POST(makeRequest({ lat: 34 }))).status).toBe(400);
   });
 
-  it("only considers rows that are unnotified and not opted out on the row or its account", async () => {
+  it("only considers unnotified rows; opt-out is decided per address at send time", async () => {
     await POST(makeRequest({ ...LA, dryRun: true }));
     expect(prisma.launchWaitlist.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: {
-          notifiedAt: null,
-          emailOptOutAt: null,
-          OR: [{ userId: null }, { user: { emailOptOutAt: null } }],
-        },
-      }),
+      expect.objectContaining({ where: { notifiedAt: null } }),
     );
   });
 
@@ -135,8 +131,10 @@ describe("POST /api/internal/waitlist/notify", () => {
       viaPush: 1,
       viaEmail: 1,
       notified: 1,
+      suppressed: 0,
       failed: 0,
     });
+    expect(isEmailOptedOut).toHaveBeenCalledWith("app@fitsy.org");
     expect(sendLaunchPush).toHaveBeenCalledWith("ExponentPushToken[abc]", "LA");
     expect(sendMarketingEmail).toHaveBeenCalledWith(
       expect.objectContaining({ userId: "user-1", to: "app@fitsy.org" }),
@@ -156,6 +154,7 @@ describe("POST /api/internal/waitlist/notify", () => {
       viaPush: 0,
       viaEmail: 1,
       notified: 1,
+      suppressed: 0,
       failed: 0,
     });
     expect(sendLaunchPush).not.toHaveBeenCalled();
@@ -166,16 +165,45 @@ describe("POST /api/internal/waitlist/notify", () => {
     expect(sent).not.toHaveProperty("userId");
   });
 
-  it("account without a push token: email alone still marks the row notified", async () => {
+  it("account without a push token: no push attempt, email alone marks the row notified", async () => {
     (prisma.launchWaitlist.findMany as jest.Mock).mockResolvedValue([ONBOARDING_NO_TOKEN]);
-    (sendLaunchPush as jest.Mock).mockResolvedValue(false);
     const res = await POST(makeRequest(LA));
     expect(await res.json()).toEqual(
       expect.objectContaining({ matched: 1, viaPush: 0, viaEmail: 1, notified: 1, failed: 0 }),
     );
-    expect(sendLaunchPush).toHaveBeenCalledWith(null, "Los Angeles");
+    expect(sendLaunchPush).not.toHaveBeenCalled();
     expect(prisma.launchWaitlist.update).toHaveBeenCalledWith({
       where: { id: "wl-notoken" },
+      data: { notifiedAt: expect.any(Date) },
+    });
+  });
+
+  it("email opt-out suppresses the email only: the requested launch push still goes out", async () => {
+    // They tapped "Notify me at launch" and later unsubscribed from the weekly
+    // editorial. Unsubscribing stops marketing email, not this notification.
+    (prisma.launchWaitlist.findMany as jest.Mock).mockResolvedValue([ONBOARDING_LA]);
+    (isEmailOptedOut as jest.Mock).mockResolvedValue(true);
+    const res = await POST(makeRequest(LA));
+    expect(await res.json()).toEqual(
+      expect.objectContaining({ viaPush: 1, viaEmail: 0, notified: 1, suppressed: 0, failed: 0 }),
+    );
+    expect(sendMarketingEmail).not.toHaveBeenCalled();
+    expect(sendLaunchPush).toHaveBeenCalledTimes(1);
+  });
+
+  it("opted out with no push token: nothing may be sent, so the row is closed as suppressed", async () => {
+    // Converges: without this the row would be re-matched and counted as
+    // failed on every future launch run.
+    (prisma.launchWaitlist.findMany as jest.Mock).mockResolvedValue([WEB]);
+    (isEmailOptedOut as jest.Mock).mockResolvedValue(true);
+    const res = await POST(makeRequest({ ...LA, includeUnlocated: true }));
+    expect(await res.json()).toEqual(
+      expect.objectContaining({ matched: 1, notified: 0, suppressed: 1, failed: 0 }),
+    );
+    expect(sendMarketingEmail).not.toHaveBeenCalled();
+    expect(sendLaunchPush).not.toHaveBeenCalled();
+    expect(prisma.launchWaitlist.update).toHaveBeenCalledWith({
+      where: { id: "wl-web" },
       data: { notifiedAt: expect.any(Date) },
     });
   });

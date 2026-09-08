@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/restaurantService";
 import { sendLaunchPush } from "@/lib/launchPush";
-import { sendMarketingEmail, launchEmailContent } from "@/lib/marketingEmail";
+import { isEmailOptedOut, launchEmailContent, sendMarketingEmail } from "@/lib/marketingEmail";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,12 +15,16 @@ export const dynamic = "force-dynamic";
  * launch blast (typically the first city launch).
  *
  * Attempts BOTH push and email for every matched entry (not push-primary/email-fallback).
- * Push needs a linked account with a token; email goes to everyone not opted out.
- * Marks notifiedAt when EITHER channel succeeds.
+ * Push needs a linked account with a token. An email opt-out (unsubscribe)
+ * suppresses only the email: "Notify me at launch" is a separately requested
+ * notification, and the privacy page promises unsubscribing stops marketing
+ * email only. Marks notifiedAt when EITHER channel succeeds, and also when an
+ * opted-out entry has no push token (nothing we may send; counted as
+ * `suppressed`) so the job converges instead of re-matching it forever.
  *
  * Auth: CRON_SECRET Bearer (same as other internal endpoints).
  * Body: { lat, lng, radiusMiles?, city?, includeUnlocated?, dryRun? }
- * Response: { ok, matched, viaPush, viaEmail, notified, failed }
+ * Response: { ok, matched, viaPush, viaEmail, notified, suppressed, failed }
  */
 
 function milesBetween(aLat: number, aLng: number, bLat: number, bLng: number): number {
@@ -74,11 +78,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   };
 
   const pending: WaitlistRow[] = await prisma.launchWaitlist.findMany({
-    where: {
-      notifiedAt: null,
-      emailOptOutAt: null,
-      OR: [{ userId: null }, { user: { emailOptOutAt: null } }],
-    },
+    where: { notifiedAt: null },
     select: {
       id: true,
       userId: true,
@@ -103,33 +103,39 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   let viaPush = 0;
   let viaEmail = 0;
   let notified = 0;
+  let suppressed = 0;
   let failed = 0;
 
   for (const w of inArea) {
     const effectiveCity = city ?? w.city;
+    const pushToken = w.user?.pushToken ?? null;
 
-    // Attempt both channels in parallel. Opt-out for account-linked rows lives
-    // on the User; for web-only rows it lives on the waitlist row itself.
+    // Opt-out is keyed on the address across both tables; it gates email only.
+    const optedOut = await isEmailOptedOut(w.email);
     const recipient =
       w.userId !== null ? { userId: w.userId } : { waitlistId: w.id };
+
     const [pushed, emailed] = await Promise.all([
-      w.user ? sendLaunchPush(w.user.pushToken, effectiveCity) : Promise.resolve(false),
-      (async () => {
-        const { subject, html } = launchEmailContent(effectiveCity);
-        return sendMarketingEmail({ ...recipient, to: w.email, subject, html });
-      })(),
+      pushToken ? sendLaunchPush(pushToken, effectiveCity) : Promise.resolve(false),
+      optedOut
+        ? Promise.resolve(false)
+        : (async () => {
+            const { subject, html } = launchEmailContent(effectiveCity);
+            return sendMarketingEmail({ ...recipient, to: w.email, subject, html });
+          })(),
     ]);
 
-    const either = pushed || emailed;
-
-    if (either) {
+    // Terminal when a channel succeeded, or when nothing may ever be sent.
+    const nothingAllowed = optedOut && !pushToken;
+    if (pushed || emailed || nothingAllowed) {
       await prisma.launchWaitlist.update({
         where: { id: w.id },
         data: { notifiedAt: new Date() },
       });
-      notified++;
       if (pushed) viaPush++;
       if (emailed) viaEmail++;
+      if (pushed || emailed) notified++;
+      else suppressed++;
     } else {
       failed++;
     }
@@ -141,6 +147,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     viaPush,
     viaEmail,
     notified,
+    suppressed,
     failed,
   });
 }

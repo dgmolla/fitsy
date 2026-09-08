@@ -43,6 +43,13 @@ describe("POST /api/waitlist/web (public form)", () => {
     expect(prisma.launchWaitlist.upsert).not.toHaveBeenCalled();
   });
 
+  it("falls back to x-real-ip, then a shared bucket, for the rate-limit key", async () => {
+    await POST(makeRequest({ email: "a@b.com" }, { "x-real-ip": "203.0.113.7" }));
+    expect(waitlistLimiter.check).toHaveBeenLastCalledWith("203.0.113.7");
+    await POST(makeRequest({ email: "a@b.com" }));
+    expect(waitlistLimiter.check).toHaveBeenLastCalledWith("unknown");
+  });
+
   it("rejects invalid JSON", async () => {
     expect((await POST(makeRequest("{nope"))).status).toBe(400);
   });
@@ -57,14 +64,14 @@ describe("POST /api/waitlist/web (public form)", () => {
   });
 
   it("silently drops honeypot submissions with a 200", async () => {
-    const res = await POST(makeRequest({ email: "bot@spam.com", website: "http://spam" }));
+    const res = await POST(makeRequest({ email: "bot@spam.com", hp: "http://spam" }));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
     expect(prisma.launchWaitlist.upsert).not.toHaveBeenCalled();
   });
 
   it("stores a normalized web signup and leaves an existing row untouched", async () => {
-    const res = await POST(makeRequest({ email: "  Dawit@Gmail.com ", website: "" }));
+    const res = await POST(makeRequest({ email: "  Dawit@Gmail.com ", hp: "" }));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
     expect(prisma.launchWaitlist.upsert).toHaveBeenCalledWith({
