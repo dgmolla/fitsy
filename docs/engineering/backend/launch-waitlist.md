@@ -69,10 +69,15 @@ sequenceDiagram
   Upserts by normalized email with an empty update, so an existing row is untouched.
   Always answers `{ ok: true }` for a well-formed address so membership cannot be probed.
 
-- `POST /api/internal/waitlist/notify` (CRON_SECRET) - run once when a city launches.
+- `GET /api/internal/waitlist/launch-day` (CRON_SECRET, daily cron) - the scheduled first-launch blast.
+  No-op until the UTC date equals `LAUNCH_DATE_ISO` in `apps/api/lib/launch.ts`; on that day it runs the notify logic below with the launch center, the launch city, and `includeUnlocated: true`.
+  Idempotent on later runs because `notifiedAt` is set. See [email-automation.md](email-automation.md).
+
+- `POST /api/internal/waitlist/notify` (CRON_SECRET) - run by hand when a later city launches.
   Accepts `{ lat, lng, radiusMiles?, city?, includeUnlocated?, dryRun? }`.
   Website rows have no location and never radius-match; `includeUnlocated: true` folds them into the blast (use it for the first city launch).
-  With `dryRun: true` it returns the count of users who would be notified without sending anything.
+  With `dryRun: true` it returns `matched`, `wouldNotify`, and `wouldSuppress` without sending anything.
+  Live runs process up to 400 rows and report `remaining`; re-run while it is above zero (already-notified rows are skipped).
   Idempotent: entries with `notifiedAt` already set are skipped.
   An email opt-out suppresses the email only; the push is a separately requested notification and still goes out.
   Sets `notifiedAt` when either push or email succeeds, and also when an opted-out entry has no push token (reported as `suppressed`) so the job converges.
@@ -100,7 +105,10 @@ sequenceDiagram
 
 - `lib/waitlist.ts` - email normalization and validation shared by both write paths, plus the coordinate rounding.
 
-- `lib/launchPush.ts` — wraps Expo Push.
+- `lib/launchNotify.ts` - the matching and channel logic behind both the operator route and the launch-day cron.
+  Successful emails are recorded in the `MarketingSend` ledger (campaign `launch`).
+
+- `lib/launchPush.ts` - wraps Expo Push.
   Sends push notification via the stored `User.pushToken`.
   Push delivery silently fails if the user deleted the app (token becomes invalid); email is the durable fallback.
 
@@ -144,7 +152,9 @@ Every marketing email sent by Fitsy must satisfy CAN-SPAM and RFC 8058.
 
 Capture is fully automatic on opt-in - no operator action needed.
 
-Notify is one operator call per city launch:
+The first launch (Los Angeles, date in `apps/api/lib/launch.ts`) is automatic: the daily launch-day cron fires the blast on that date, website signups included.
+
+Later city launches are one operator call each:
 
 ```
 POST /api/internal/waitlist/notify
@@ -156,7 +166,7 @@ Content-Type: application/json
 
 Run with `dryRun: true` first to preview the count.
 Then re-run with `dryRun: false` to send.
-Set `includeUnlocated: true` for the first launch so website signups (no location) hear about it; later city launches should leave it off, since those rows were already notified.
+`includeUnlocated: true` is what the launch-day cron uses for the first launch so website signups (no location) hear about it; later city launches should leave it off, since those rows were already notified.
 
 Future automation path: add a `LiveArea` table (city polygon or center + radius) and a scheduled cron that diffs newly-added rows against the waitlist.
 The radius-matching logic in the notify route is already the reusable core.

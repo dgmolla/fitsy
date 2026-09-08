@@ -3,7 +3,8 @@
 ## Overview
 
 Fitsy sends two categories of marketing email: a one-time city-launch blast and a recurring weekly editorial.
-Both share the same brand shell, compliance pipeline, and send primitive.
+Both share the same brand shell, compliance pipeline, send primitive, and the `MarketingSend` ledger.
+Scheduling, audience, and pacing rules live in [email-automation.md](email-automation.md).
 All compliance requirements (suppression check, unsubscribe URL, postal address, RFC 8058 one-click headers) are enforced inside `sendMarketingEmail` - callers only supply a recipient (`userId` or `waitlistId`), `to`, `subject`, and `html`.
 Suppression is keyed on the address across both the `User` and `LaunchWaitlist` tables (see [launch-waitlist.md](launch-waitlist.md)).
 
@@ -23,23 +24,22 @@ sequenceDiagram
     Vercel->>Route: GET (Bearer CRON_SECRET)
     Route->>EditionFn: editionForDate(new Date())
     EditionFn-->>Route: { slug, subject, html }
-    Route->>DB: CREATE TABLE IF NOT EXISTS _marketing_send
-    Route->>DB: SELECT id, email FROM "User" WHERE emailOptOutAt IS NULL AND no opted-out LaunchWaitlist row for the same address
-    DB-->>Route: eligible users
-    loop For each user (max 500)
-        Route->>DB: SELECT from _marketing_send WHERE edition=$1 AND user_id=$2
-        alt already sent
-            Route-->>Route: skipped++
-        else not sent
-            Route->>Send: sendMarketingEmail({ userId, to, subject, html })
+    Route->>DB: marketingAudience(): accounts + waitlist-only addresses, minus every opt-out
+    DB-->>Route: recipients (one per address)
+    loop For each recipient (max 500)
+        Route->>DB: MarketingSend: wasSent(email, weekly, edition)? sentWithin(email, 48h)?
+        alt already sent / paced
+            Route-->>Route: skipped++ / paced++
+        else due
+            Route->>Send: sendMarketingEmail({ userId | waitlistId, to, subject, html })
             Send->>DB: isEmailOptedOut(to): opt-out on User OR LaunchWaitlist for this address?
             Send->>Resend: POST /emails (with List-Unsubscribe headers)
             Resend-->>Send: 200 OK
             Send-->>Route: true
-            Route->>DB: INSERT INTO _marketing_send (edition, user_id)
+            Route->>DB: recordSend(email, weekly, edition)
         end
     end
-    Route-->>Vercel: { ok, edition, eligible, sent, skipped, failed }
+    Route-->>Vercel: { ok, edition, eligible, sent, skipped, paced, failed }
 ```
 
 ---
@@ -120,24 +120,21 @@ The rotation repeats every 8 weeks indefinitely.
 ### Send cap
 
 The route processes at most 500 sends per invocation.
-The dedup table ensures subsequent runs (next week's cron, or a manual retry) pick up where the previous one left off.
-This bounds Vercel function wall-time while guaranteeing eventual delivery to all eligible users.
+The ledger ensures subsequent runs (next week's cron, or a manual retry) pick up where the previous one left off.
+This bounds Vercel function wall-time while guaranteeing eventual delivery to the whole audience.
 
-### Dedup table
+### Audience
 
-`_marketing_send` is a self-creating PostgreSQL table (created with `CREATE TABLE IF NOT EXISTS`, no Prisma migration needed):
+`marketingAudience()` in `apps/api/lib/marketingAudience.ts`: accounts that have not opted out anywhere, plus waitlist-only addresses (no account) that have not opted out, one recipient per address.
+The recipient kind (`userId` or `waitlistId`) decides which unsubscribe link is minted.
 
-```sql
-CREATE TABLE IF NOT EXISTS "_marketing_send" (
-  edition  text        NOT NULL,
-  user_id  text        NOT NULL,
-  sent_at  timestamptz DEFAULT now(),
-  PRIMARY KEY (edition, user_id)
-);
-```
+### Ledger
 
-A dedup row is written only after `sendMarketingEmail` returns `true`.
-A failed or transient-error send is never recorded, so the next run retries it.
+`MarketingSend` (Prisma model, `apps/api/lib/marketingLedger.ts`) records every marketing send by normalized address, campaign, and step.
+The weekly cron uses campaign `weekly` with the edition slug as the step.
+A row is written only after `sendMarketingEmail` returns `true`; a failed send is never recorded, so the next run retries it.
+Before sending, the cron also skips any address that heard from any campaign within the last 48 hours (`paced`), so a lifecycle email and an edition never land back to back.
+The migration that introduced the ledger copied the old `_marketing_send` history into it; the old table is dropped in a later contraction migration.
 
 ### Dry run
 
@@ -153,6 +150,7 @@ Useful for verifying audience size and edition selection before a live run.
   "eligible": 1200,
   "sent": 500,
   "skipped": 0,
+  "paced": 4,
   "failed": 3
 }
 ```

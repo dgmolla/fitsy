@@ -1,25 +1,30 @@
-jest.mock("@/lib/restaurantService", () => ({
-  prisma: {
-    $queryRawUnsafe: jest.fn(),
-    $executeRawUnsafe: jest.fn(),
-  },
-}));
-
 jest.mock("@/lib/marketingEmail", () => ({
   sendMarketingEmail: jest.fn(),
-  isUndeliverableAddress: jest.requireActual("@/lib/marketingEmail").isUndeliverableAddress,
 }));
 
 jest.mock("@/lib/emailTemplates", () => ({
   editionForDate: jest.fn(() => ({ slug: "ed-1", subject: "S", html: "<p>h</p>" })),
 }));
 
+jest.mock("@/lib/marketingAudience", () => ({
+  marketingAudience: jest.fn(),
+}));
+
+jest.mock("@/lib/marketingLedger", () => ({
+  wasSent: jest.fn(),
+  sentWithin: jest.fn(),
+  recordSend: jest.fn(),
+}));
+
 import { GET } from "./route";
 import { NextRequest } from "next/server";
-import { prisma } from "@/lib/restaurantService";
 import { sendMarketingEmail } from "@/lib/marketingEmail";
+import { marketingAudience } from "@/lib/marketingAudience";
+import { recordSend, sentWithin, wasSent } from "@/lib/marketingLedger";
 
 const SECRET = "cron-secret";
+const ACCOUNT = { email: "alice@example.org", userId: "u1" };
+const WAITLIST_ONLY = { email: "web@example.org", waitlistId: "wl1" };
 
 function makeRequest(qs = "", auth: string | null = `Bearer ${SECRET}`): NextRequest {
   const headers: Record<string, string> = {};
@@ -27,25 +32,13 @@ function makeRequest(qs = "", auth: string | null = `Bearer ${SECRET}`): NextReq
   return new NextRequest(`http://localhost/api/internal/marketing/weekly${qs}`, { headers });
 }
 
-/** The audience query is the first $queryRawUnsafe call after the dedup DDL. */
-function audienceSql(): string {
-  return (prisma.$queryRawUnsafe as jest.Mock).mock.calls[0]![0] as string;
-}
-
 beforeEach(() => {
   jest.clearAllMocks();
   process.env["CRON_SECRET"] = SECRET;
-  (prisma.$executeRawUnsafe as jest.Mock).mockResolvedValue(0);
-  (prisma.$queryRawUnsafe as jest.Mock).mockImplementation(async (sql: string) => {
-    if (sql.includes('FROM "User"')) {
-      return [
-        { id: "u1", email: "real@fitsy.org" },
-        { id: "u2", email: "seed@fitsy.test" },
-      ];
-    }
-    if (sql.includes("COUNT(*)")) return [{ count: "0" }];
-    return []; // dedup lookup: nothing sent yet
-  });
+  (marketingAudience as jest.Mock).mockResolvedValue([ACCOUNT, WAITLIST_ONLY]);
+  (wasSent as jest.Mock).mockResolvedValue(false);
+  (sentWithin as jest.Mock).mockResolvedValue(false);
+  (recordSend as jest.Mock).mockResolvedValue(undefined);
   (sendMarketingEmail as jest.Mock).mockResolvedValue(true);
 });
 
@@ -57,61 +50,69 @@ describe("GET /api/internal/marketing/weekly", () => {
   it("requires the CRON_SECRET bearer", async () => {
     expect((await GET(makeRequest("", null))).status).toBe(401);
     expect((await GET(makeRequest("", "Bearer nope"))).status).toBe(401);
+    expect(marketingAudience).not.toHaveBeenCalled();
   });
 
-  it("audience excludes addresses opted out on a LaunchWaitlist row, not just on the User", async () => {
-    await GET(makeRequest("?dryRun=1"));
-    const sql = audienceSql();
-    expect(sql).toContain('u."emailOptOutAt" IS NULL');
-    expect(sql).toContain("NOT EXISTS");
-    expect(sql).toContain('FROM "LaunchWaitlist" w');
-    expect(sql).toContain('w."email" = lower(u."email")');
-    expect(sql).toContain('w."emailOptOutAt" IS NOT NULL');
-  });
-
-  it("dry run reports the deliverable audience without sending", async () => {
+  it("dry run reports the audience and how many already have this edition, without sending", async () => {
+    (wasSent as jest.Mock).mockResolvedValueOnce(true).mockResolvedValueOnce(false);
     const res = await GET(makeRequest("?dryRun=1"));
-    // The reserved-TLD seed account is not counted as eligible.
     expect(await res.json()).toEqual({
       ok: true,
       dryRun: true,
       edition: "ed-1",
-      eligible: 1,
-      alreadySent: 0,
+      eligible: 2,
+      alreadySent: 1,
     });
     expect(sendMarketingEmail).not.toHaveBeenCalled();
   });
 
-  it("sends to each eligible user as an account recipient and records the dedup row", async () => {
+  it("sends to accounts and waitlist-only addresses with the matching recipient kind, then records the ledger", async () => {
     const res = await GET(makeRequest());
     expect(await res.json()).toEqual({
       ok: true,
       edition: "ed-1",
-      eligible: 1,
-      sent: 1,
+      eligible: 2,
+      sent: 2,
       skipped: 0,
+      paced: 0,
       failed: 0,
     });
-    expect(sendMarketingEmail).toHaveBeenCalledWith({
+    expect(sendMarketingEmail).toHaveBeenNthCalledWith(1, {
       userId: "u1",
-      to: "real@fitsy.org",
+      to: "alice@example.org",
       subject: "S",
       html: "<p>h</p>",
     });
-    const inserts = (prisma.$executeRawUnsafe as jest.Mock).mock.calls.filter(
-      (c) => String(c[0]).includes("INSERT INTO"),
-    );
-    expect(inserts).toHaveLength(1);
-    expect(inserts[0]!.slice(1)).toEqual(["ed-1", "u1"]);
+    expect(sendMarketingEmail).toHaveBeenNthCalledWith(2, {
+      waitlistId: "wl1",
+      to: "web@example.org",
+      subject: "S",
+      html: "<p>h</p>",
+    });
+    expect(recordSend).toHaveBeenCalledWith("alice@example.org", "weekly", "ed-1");
+    expect(recordSend).toHaveBeenCalledWith("web@example.org", "weekly", "ed-1");
   });
 
-  it("does not record a dedup row for a failed send, so it is retried next run", async () => {
+  it("skips an address that already has this edition", async () => {
+    (wasSent as jest.Mock).mockImplementation(async (email: string) => email === "alice@example.org");
+    const res = await GET(makeRequest());
+    expect(await res.json()).toEqual(expect.objectContaining({ sent: 1, skipped: 1 }));
+    expect(sendMarketingEmail).toHaveBeenCalledTimes(1);
+    expect(sendMarketingEmail).toHaveBeenCalledWith(expect.objectContaining({ to: "web@example.org" }));
+  });
+
+  it("paces an address that heard from any campaign within the frequency cap, without recording", async () => {
+    (sentWithin as jest.Mock).mockImplementation(async (email: string) => email === "web@example.org");
+    const res = await GET(makeRequest());
+    expect(await res.json()).toEqual(expect.objectContaining({ sent: 1, paced: 1 }));
+    expect(sendMarketingEmail).not.toHaveBeenCalledWith(expect.objectContaining({ to: "web@example.org" }));
+    expect(recordSend).not.toHaveBeenCalledWith("web@example.org", "weekly", "ed-1");
+  });
+
+  it("does not record a failed send, so it is retried next run", async () => {
     (sendMarketingEmail as jest.Mock).mockResolvedValue(false);
     const res = await GET(makeRequest());
-    expect(await res.json()).toEqual(expect.objectContaining({ sent: 0, failed: 1 }));
-    const inserts = (prisma.$executeRawUnsafe as jest.Mock).mock.calls.filter(
-      (c) => String(c[0]).includes("INSERT INTO"),
-    );
-    expect(inserts).toHaveLength(0);
+    expect(await res.json()).toEqual(expect.objectContaining({ sent: 0, failed: 2 }));
+    expect(recordSend).not.toHaveBeenCalled();
   });
 });

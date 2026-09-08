@@ -376,7 +376,7 @@ export default async function RestaurantPage({
         )}
         <FaqItem
           q={`Is ${restaurant.name} good for macro tracking?`}
-          a={`${restaurant.name} is macro-friendly with detailed nutrition data for its entire menu. Download the Fitsy app to get personalized meal recommendations based on your specific protein, carb, and fat targets.`}
+          a={`${restaurant.name} is macro-friendly with detailed nutrition data for its entire menu. Join the Fitsy waitlist to get personalized meal recommendations based on your specific protein, carb, and fat targets when the app launches.`}
         />
       </section>
 

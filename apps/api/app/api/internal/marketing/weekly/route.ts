@@ -2,35 +2,41 @@
  * GET /api/internal/marketing/weekly
  *
  * Weekly marketing email cron — triggered every Tuesday at 16:00 UTC.
- * Picks the deterministic edition for the current week, queries all opted-in
- * users, deduplicates against a self-creating _marketing_send table, and
- * sends sequentially (no fan-out) with a 500-send cap per invocation.
+ * Picks the deterministic edition for the current week, loads the marketing
+ * audience (accounts AND waitlist-only addresses, minus every opt-out; see
+ * lib/marketingAudience.ts), and sends sequentially (no fan-out) with a
+ * 500-send cap per invocation.
  *
- * Idempotent: if the cron fires more than once in a week (e.g. retries),
- * already-sent rows are skipped and the next 500 unsent users are processed.
- * This means the cap + dedup together guarantee eventual delivery to the full
- * audience across as many invocations as needed.
+ * Idempotency and pacing come from the MarketingSend ledger
+ * (lib/marketingLedger.ts): an edition goes to an address once, ever, and an
+ * address that heard from any marketing campaign within the last 48 hours
+ * (e.g. a lifecycle step) is skipped this week rather than double-mailed.
+ * The cap + ledger together guarantee eventual delivery to the full audience
+ * across as many invocations as needed.
  *
  * Auth: CRON_SECRET Bearer (same as all other internal cron routes).
  * DryRun: ?dryRun=1 returns stats without sending.
- * Response: { ok, edition, eligible, sent, skipped, failed }
+ * Response: { ok, edition, eligible, sent, skipped, paced, failed }
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/restaurantService";
-import { sendMarketingEmail, isUndeliverableAddress } from "@/lib/marketingEmail";
+import { sendMarketingEmail } from "@/lib/marketingEmail";
 import { editionForDate } from "@/lib/emailTemplates";
+import { marketingAudience } from "@/lib/marketingAudience";
+import { recordSend, sentWithin, wasSent } from "@/lib/marketingLedger";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// Sequential sends with provider timeouts: give the function the room it
+// needs rather than dying mid-loop at the platform default.
+export const maxDuration = 300;
 
-// Maximum sends per invocation. Weekly cron + idempotent dedup means the
+// Maximum sends per invocation. Weekly cron + idempotent ledger means the
 // next scheduled run (or a manual retry) will pick up any remainder, so
-// this cap bounds Vercel function wall-time without dropping users.
+// this cap bounds Vercel function wall-time without dropping anyone.
 const MAX_SENDS_PER_INVOCATION = 500;
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
-  // --- Auth ---
   const expected = process.env["CRON_SECRET"];
   const provided = req.headers.get("authorization");
   if (!expected || provided !== `Bearer ${expected}`) {
@@ -38,93 +44,46 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   }
 
   const dryRun = req.nextUrl.searchParams.get("dryRun") === "1";
-
-  // --- Pick edition for this week ---
   const { slug, subject, html } = editionForDate(new Date());
-
-  // --- Ensure dedup table exists (self-creating, no Prisma migration needed) ---
-  await prisma.$executeRawUnsafe(
-    `CREATE TABLE IF NOT EXISTS "_marketing_send" (
-       edition  text        NOT NULL,
-       user_id  text        NOT NULL,
-       sent_at  timestamptz DEFAULT now(),
-       PRIMARY KEY (edition, user_id)
-     )`,
-  );
-
-  // --- Audience: all users who have not opted out ---
-  // Opt-out is keyed on the address (see lib/marketingEmail.ts
-  // isEmailOptedOut): a waitlist row for the same email that opted out via a
-  // `?w=` link counts, whether or not it ever linked to this account.
-  // PRE-GENERATE CONSTRAINT: emailOptOutAt is not in the Prisma client type,
-  // so we must use $queryRawUnsafe with an explicit row type.
-  // Reserved-TLD addresses are excluded here as well as in sendMarketingEmail so
-  // `eligible` reflects the real audience instead of counting seeded test
-  // accounts that could only ever bounce.
-  const rows = (
-    await prisma.$queryRawUnsafe<{ id: string; email: string }[]>(
-      `SELECT u.id, u.email FROM "User" u
-        WHERE u."emailOptOutAt" IS NULL
-          AND NOT EXISTS (
-            SELECT 1 FROM "LaunchWaitlist" w
-             WHERE w."email" = lower(u."email") AND w."emailOptOutAt" IS NOT NULL
-          )`,
-    )
-  ).filter((r) => !isUndeliverableAddress(r.email));
-
-  const eligible = rows.length;
+  const audience = await marketingAudience();
+  const eligible = audience.length;
 
   if (dryRun) {
-    // Count how many have already been sent this edition without sending anything
-    const alreadySentRows = await prisma.$queryRawUnsafe<{ count: string }[]>(
-      `SELECT COUNT(*)::text AS count FROM "_marketing_send" WHERE edition = $1`,
-      slug,
-    );
-    const alreadySent = parseInt(alreadySentRows[0]?.count ?? "0", 10);
+    let alreadySent = 0;
+    for (const r of audience) if (await wasSent(r.email, "weekly", slug)) alreadySent++;
     return NextResponse.json({ ok: true, dryRun: true, edition: slug, eligible, alreadySent });
   }
 
-  // --- Send loop ---
   let sent = 0;
   let skipped = 0;
+  let paced = 0;
   let failed = 0;
 
-  for (const row of rows) {
-    // Hard cap per invocation — remainder handled on next run
+  for (const r of audience) {
     if (sent >= MAX_SENDS_PER_INVOCATION) break;
 
-    // Check dedup: skip if already sent to this user for this edition
-    const existing = await prisma.$queryRawUnsafe<{ user_id: string }[]>(
-      `SELECT user_id FROM "_marketing_send" WHERE edition = $1 AND user_id = $2 LIMIT 1`,
-      slug,
-      row.id,
-    );
-    if (existing.length > 0) {
+    if (await wasSent(r.email, "weekly", slug)) {
       skipped++;
       continue;
     }
+    // Frequency cap across campaigns: never two marketing emails within 48h.
+    if (await sentWithin(r.email)) {
+      paced++;
+      continue;
+    }
 
-    // Attempt send
-    const ok = await sendMarketingEmail({
-      userId: row.id,
-      to: row.email,
-      subject,
-      html,
-    });
+    const recipient = r.userId !== undefined ? { userId: r.userId } : { waitlistId: r.waitlistId };
+    const ok = await sendMarketingEmail({ ...recipient, to: r.email, subject, html });
 
     if (ok) {
-      // Record dedup row only after confirmed send — a failed send must be
-      // retried on the next run, never silently dropped.
-      await prisma.$executeRawUnsafe(
-        `INSERT INTO "_marketing_send" (edition, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-        slug,
-        row.id,
-      );
+      // Record only after a confirmed send — a failed send must be retried
+      // on the next run, never silently dropped.
+      await recordSend(r.email, "weekly", slug);
       sent++;
     } else {
       failed++;
     }
   }
 
-  return NextResponse.json({ ok: true, edition: slug, eligible, sent, skipped, failed });
+  return NextResponse.json({ ok: true, edition: slug, eligible, sent, skipped, paced, failed });
 }

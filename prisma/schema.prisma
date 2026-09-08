@@ -68,6 +68,21 @@ enum WaitlistSource {
   web
 }
 
+// Ledger of every marketing email sent, keyed on the normalized address so
+// the same person is one history whether they are an account, a waitlist
+// row, or both. Gives every campaign idempotency (unique per step) and the
+// cross-campaign frequency cap. See docs/engineering/backend/email-automation.md.
+model MarketingSend {
+  id       String   @id @default(cuid())
+  email    String   // normalized: trimmed + lowercased
+  campaign String   // "weekly" | "launch" | "lifecycle"
+  step     String   // edition slug, city, or lifecycle step key
+  sentAt   DateTime @default(now())
+
+  @@unique([email, campaign, step])
+  @@index([email, sentAt])
+}
+
 model MacroTarget {
   id        String   @id @default(cuid())
   userId    String   @unique

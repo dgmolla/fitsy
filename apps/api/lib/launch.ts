@@ -5,3 +5,6 @@
 export const LAUNCH_DATE_ISO = "2026-09-11";
 export const LAUNCH_DATE_LABEL = "September 11";
 export const LAUNCH_CITY = "Los Angeles";
+
+/** Launch center + radius for the launch-day waitlist blast (downtown LA). */
+export const LAUNCH_CENTER = { lat: 34.05, lng: -118.24, radiusMiles: 30 };
