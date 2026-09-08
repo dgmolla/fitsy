@@ -1,6 +1,7 @@
 import s from "@/app/landing-sections.module.css";
 import { WaitlistForm } from "@/components/landing/WaitlistForm";
 import type { DisplayPricing } from "@/lib/pricing";
+import { LAUNCH_CITY, LAUNCH_DATE_ISO, LAUNCH_DATE_LABEL } from "@/lib/launch";
 
 /**
  * Static landing-page sections below the feature grid. Server components:
@@ -185,15 +186,17 @@ export function Closing() {
   return (
     <section className={s.closing} id="waitlist">
       <div className={s.container}>
-        <span className={s.eyebrow}>Launching soon</span>
+        <span className={s.eyebrow}>
+          Launching <time dateTime={LAUNCH_DATE_ISO}>{LAUNCH_DATE_LABEL}</time>
+        </span>
         <h2 className={`${s.sectionTitle} ${s.closingTitle}`}>
           Eat out.
           <br />
           <em>Stay on plan.</em>
         </h2>
         <p className={s.sectionLead}>
-          Join the waitlist and be first in when Fitsy opens in Los Angeles.
-          More cities follow.
+          Fitsy opens in {LAUNCH_CITY} on {LAUNCH_DATE_LABEL}. Join the
+          waitlist to be first in. More cities follow.
         </p>
         <div className={s.closingCtas}>
           <WaitlistForm align="center" />
@@ -215,7 +218,8 @@ export function FooterCols({ waitlistHref }: { waitlistHref: string }) {
             fitsy<span className={s.logoDot}>.</span>
           </span>
           <p className={s.footerTag}>
-            Find food that fits your macros. Launching first in Los Angeles.
+            Find food that fits your macros. Launching in {LAUNCH_CITY} on{" "}
+            {LAUNCH_DATE_LABEL}.
           </p>
         </div>
         <div className={s.footerCol}>

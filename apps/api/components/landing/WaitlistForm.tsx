@@ -3,6 +3,7 @@
 import { useId, useState, type FormEvent } from "react";
 import s from "@/app/waitlist-form.module.css";
 import { joinWaitlist } from "@/lib/waitlistClient";
+import { LAUNCH_CITY, LAUNCH_DATE_LABEL } from "@/lib/launch";
 
 /**
  * Email capture for the launch waitlist. Posts to /api/waitlist/web, which
@@ -100,8 +101,8 @@ export function WaitlistForm({
         </p>
       ) : (
         <p className={s.note}>
-          We&rsquo;ll email you the moment Fitsy opens in your city. No spam,
-          unsubscribe anytime.
+          {LAUNCH_CITY} launches {LAUNCH_DATE_LABEL}. We&rsquo;ll email you the
+          moment Fitsy opens in your city. No spam, unsubscribe anytime.
         </p>
       )}
     </form>

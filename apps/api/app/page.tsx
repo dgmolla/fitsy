@@ -2,6 +2,7 @@ import styles from "./landing.module.css";
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/restaurantService";
 import { WAITLIST_URL } from "@/lib/appLinks";
+import { LAUNCH_CITY, LAUNCH_DATE_ISO, LAUNCH_DATE_LABEL } from "@/lib/launch";
 import { getDisplayPricing } from "@/lib/pricing";
 import { Nav } from "@/components/Nav";
 import { FeatureGrid } from "@/components/landing/FeatureGrid";
@@ -52,7 +53,10 @@ export default async function LandingPage() {
       <section className={styles.hero}>
         <div className={styles.heroContent}>
           <div className={styles.heroText}>
-            <span className={styles.badge}>Launching first in Los Angeles</span>
+            <span className={styles.badge}>
+              Launching in {LAUNCH_CITY} on{" "}
+              <time dateTime={LAUNCH_DATE_ISO}>{LAUNCH_DATE_LABEL}</time>
+            </span>
             <h1 className={styles.headline}>
               Find food that fits
               <br />

@@ -26,6 +26,7 @@ Sections, top to bottom (v3, 2026-09-06):
 2. **Hero** - headline, sub-headline, waitlist form (email + "Join the waitlist"), floating phone with the search screenshot.
    The form posts to `POST /api/waitlist/web`, which writes to the same `LaunchWaitlist` table as the app's out-of-area "Notify me at launch" screen, so the website and onboarding feed one launch list (`docs/engineering/backend/launch-waitlist.md`).
    At App Store launch the form becomes the store CTA again (`apps/api/lib/appLinks.ts`).
+   The launch date and city shown in the badge, form note, closing section, and footer come from `apps/api/lib/launch.ts` (currently September 11, 2026, Los Angeles).
 3. **Feature grid** - six tiles (text search, restaurant detail, tweak macros, goals, saved, feedback), each a mono eyebrow + serif headline + a CSS-built slice of the real app UI bleeding off the bottom.
    The search tile cycles example queries.
    The macro stepper recomputes per-meal kcal and re-sorts the detail tile's dishes using the app's own match formula (mirrored in `apps/api/lib/landingDemo.ts`).
