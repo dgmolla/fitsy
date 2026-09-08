@@ -10,14 +10,16 @@ ALTER TABLE "LaunchWaitlist"
   ADD COLUMN "source" "WaitlistSource" NOT NULL DEFAULT 'onboarding',
   ADD COLUMN "emailOptOutAt" TIMESTAMP(3);
 
--- Every existing row came from onboarding; the default backfilled them.
-ALTER TABLE "LaunchWaitlist" ALTER COLUMN "source" DROP DEFAULT;
+-- Every existing row came from onboarding; the default backfilled them. The
+-- default stays: the previous bundle keeps serving during the migrate/deploy
+-- window and its insert omits "source".
 
 -- Normalize before enforcing uniqueness. Keep the oldest row if two rows
 -- collapse onto the same address (only possible via email case differences).
 UPDATE "LaunchWaitlist" SET "email" = lower(trim("email"));
 DELETE FROM "LaunchWaitlist" a
   USING "LaunchWaitlist" b
-  WHERE a."email" = b."email" AND a."createdAt" > b."createdAt";
+  WHERE a."email" = b."email"
+    AND (a."createdAt" > b."createdAt" OR (a."createdAt" = b."createdAt" AND a."id" > b."id"));
 
 CREATE UNIQUE INDEX "LaunchWaitlist_email_key" ON "LaunchWaitlist"("email");

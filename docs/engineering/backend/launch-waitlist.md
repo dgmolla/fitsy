@@ -48,8 +48,8 @@ sequenceDiagram
     Resend-->>App: email contains /unsubscribe?u=<userId>&t=<hmac> (account) or ?w=<waitlistId>&t=<hmac> (web-only)
     App->>API: GET /unsubscribe?... (confirm page, no mutation)
     App->>API: POST /unsubscribe?... (user submits confirm form)
-    API->>DB: u: set User.emailOptOutAt; w: set LaunchWaitlist.emailOptOutAt (+ linked User, if any)
-    Note over API: future marketing emails to this recipient are silently skipped
+    API->>DB: u: set User.emailOptOutAt + any LaunchWaitlist row for that account or address; w: set LaunchWaitlist.emailOptOutAt + linked User, if any
+    Note over API: every sender checks opt-out BY ADDRESS across both tables (isEmailOptedOut), so the choice holds however the address is linked
 ```
 
 ## Pieces
@@ -59,7 +59,9 @@ sequenceDiagram
 - `POST /api/waitlist` (authed) - stores account email and a coarse, city-level location.
   Upserts by normalized email so it never duplicates, and links the account onto a prior website signup.
   Coords are rounded to ~1 decimal place before storage.
-  Never resets `notifiedAt` or `emailOptOutAt`.
+  A website row gaining its first city is a fresh per-city opt-in, so `notifiedAt` is cleared in that one case (a re-tap on an already-located row keeps it: no re-spam).
+  Linking onto a row that already opted out copies the opt-out onto the account.
+  Never resets `emailOptOutAt`.
 
 - `POST /api/waitlist/web` (public) - the fitsy.org form.
   Body `{ email, website? }`; `website` is a honeypot that real users never see.
@@ -71,7 +73,7 @@ sequenceDiagram
   Accepts `{ lat, lng, radiusMiles?, city?, includeUnlocated?, dryRun? }`.
   Website rows have no location and never radius-match; `includeUnlocated: true` folds them into the blast (use it for the first city launch).
   With `dryRun: true` it returns the count of users who would be notified without sending anything.
-  Idempotent: entries with `notifiedAt` already set are skipped, as are opted-out rows.
+  Idempotent: entries with `notifiedAt` already set are skipped, as are rows opted out on the row or on the linked account.
   Sets `notifiedAt` when either push or email succeeds.
 
 - `GET /unsubscribe` - renders a confirmation page with a button.
@@ -80,17 +82,20 @@ sequenceDiagram
   Validates the HMAC token before rendering.
 
 - `POST /unsubscribe` - processes the unsubscribe.
-  Re-validates the HMAC token, then sets `User.emailOptOutAt` (`u`) or `LaunchWaitlist.emailOptOutAt` plus the linked user's, if any (`w`).
+  Re-validates the HMAC token, then sets `User.emailOptOutAt` plus any waitlist row for that account or address (`u`), or `LaunchWaitlist.emailOptOutAt` plus the linked user, if any (`w`).
   Marketing email stops; transactional and account messages are unaffected.
 
 ### Libraries
 
 - `lib/marketingEmail.ts` - wraps Resend.
-  Takes a recipient of `{ userId }` or `{ waitlistId }`, which decides where opt-out is read and which unsubscribe link is minted.
+  Takes a recipient of `{ userId }` or `{ waitlistId }`, which decides which unsubscribe link is minted.
+  Opt-out is checked by address, not by record: `isEmailOptedOut(email)` returns true if the `User` or the `LaunchWaitlist` row for that normalized address has `emailOptOutAt` set.
+  An address can sit on both tables, linked or not, and can move between them, so this is the only check that cannot be bypassed by link state.
+  The weekly marketing audience query applies the same rule with a `NOT EXISTS` on `LaunchWaitlist`.
   Injects List-Unsubscribe and List-Unsubscribe-Post headers (RFC 8058 one-click).
   Appends unsubscribe link and physical postal address to every message.
   Fails closed: returns false if `RESEND_API_KEY`, `UNSUBSCRIBE_SECRET`, or `FITSY_POSTAL_ADDRESS` is missing.
-  Skips send (returns false) if the recipient's `emailOptOutAt` is set.
+  Skips send (returns false) if the address has opted out anywhere.
 
 - `lib/waitlist.ts` - email normalization and validation shared by both write paths, plus the coordinate rounding.
 

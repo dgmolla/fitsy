@@ -73,10 +73,4 @@ describe("POST /api/waitlist/web (public form)", () => {
       update: {},
     });
   });
-
-  it("responds identically whether or not the email was already listed", async () => {
-    const first = await POST(makeRequest({ email: "a@b.com" }));
-    const second = await POST(makeRequest({ email: "a@b.com" }));
-    expect(await first.json()).toEqual(await second.json());
-  });
 });

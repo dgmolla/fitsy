@@ -22,6 +22,11 @@ function sqlText(call: unknown[]): string {
   return (sql?.strings ?? []).join("?");
 }
 
+/** Bound parameters of that Prisma.Sql, so tests pin WHICH id is opted out. */
+function sqlValues(call: unknown[]): unknown[] {
+  return (call[0] as { values?: unknown[] }).values ?? [];
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   process.env["UNSUBSCRIBE_SECRET"] = SECRET;
@@ -69,12 +74,17 @@ describe("POST /unsubscribe", () => {
     expect(prisma.$executeRaw).not.toHaveBeenCalled();
   });
 
-  it("account link: opts the User out", async () => {
+  it("account link: opts the User out and any waitlist row for that account or address, atomically", async () => {
     const res = await POST(req(`u=u1&t=${userTok()}`, "POST"));
     expect(res.status).toBe(200);
-    expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
-    expect(sqlText((prisma.$executeRaw as jest.Mock).mock.calls[0]!)).toContain('UPDATE "User"');
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    const calls = (prisma.$executeRaw as jest.Mock).mock.calls;
+    expect(calls).toHaveLength(2);
+    expect(sqlText(calls[0]!)).toContain('UPDATE "User"');
+    expect(sqlValues(calls[0]!)).toEqual(["u1"]);
+    expect(sqlText(calls[1]!)).toContain('UPDATE "LaunchWaitlist"');
+    expect(sqlText(calls[1]!)).toContain('SELECT lower("email") FROM "User"');
+    expect(sqlValues(calls[1]!)).toEqual(["u1", "u1"]);
   });
 
   it("waitlist link: opts the row out and any account it has since linked, atomically", async () => {
@@ -85,7 +95,9 @@ describe("POST /unsubscribe", () => {
     const calls = (prisma.$executeRaw as jest.Mock).mock.calls;
     expect(calls).toHaveLength(2);
     expect(sqlText(calls[0]!)).toContain('UPDATE "LaunchWaitlist"');
+    expect(sqlValues(calls[0]!)).toEqual(["wl1"]);
     expect(sqlText(calls[1]!)).toContain('UPDATE "User"');
     expect(sqlText(calls[1]!)).toContain('SELECT "userId" FROM "LaunchWaitlist"');
+    expect(sqlValues(calls[1]!)).toEqual(["wl1"]);
   });
 });

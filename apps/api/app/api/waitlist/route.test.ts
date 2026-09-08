@@ -2,10 +2,17 @@ jest.mock("@/lib/auth", () => ({
   requireAuth: jest.fn(),
 }));
 
+// Interactive transaction: the route receives a tx client and we hand it the
+// same mocks so every call inside the callback is observable.
+const tx = {
+  launchWaitlist: { findUnique: jest.fn(), upsert: jest.fn() },
+  user: { updateMany: jest.fn() },
+};
+
 jest.mock("@/lib/restaurantService", () => ({
   prisma: {
     user: { findUnique: jest.fn() },
-    launchWaitlist: { upsert: jest.fn() },
+    $transaction: jest.fn(),
   },
 }));
 
@@ -15,6 +22,8 @@ import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/restaurantService";
 
 const AUTH_OK = { sub: "user-1", email: "Alice@Example.org" };
+const LA = { lat: 34.0522, lng: -118.2437, city: "Los Angeles" };
+const COARSE_LA = { lat: 34.1, lng: -118.2, city: "Los Angeles" };
 
 function makeRequest(body: unknown): NextRequest {
   return new NextRequest("http://localhost/api/waitlist", {
@@ -24,11 +33,20 @@ function makeRequest(body: unknown): NextRequest {
   });
 }
 
+function upsertArg(): { create: Record<string, unknown>; update: Record<string, unknown> } {
+  return tx.launchWaitlist.upsert.mock.calls[0]![0];
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   (requireAuth as jest.Mock).mockResolvedValue(AUTH_OK);
   (prisma.user.findUnique as jest.Mock).mockResolvedValue({ email: "Alice@Example.org" });
-  (prisma.launchWaitlist.upsert as jest.Mock).mockResolvedValue({});
+  (prisma.$transaction as jest.Mock).mockImplementation(
+    async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx),
+  );
+  tx.launchWaitlist.findUnique.mockResolvedValue(null);
+  tx.launchWaitlist.upsert.mockResolvedValue({});
+  tx.user.updateMany.mockResolvedValue({ count: 0 });
 });
 
 describe("POST /api/waitlist (onboarding)", () => {
@@ -38,7 +56,7 @@ describe("POST /api/waitlist (onboarding)", () => {
     );
     const res = await POST(makeRequest({ lat: 34, lng: -118 }));
     expect(res.status).toBe(401);
-    expect(prisma.launchWaitlist.upsert).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it("rejects invalid JSON", async () => {
@@ -51,7 +69,7 @@ describe("POST /api/waitlist (onboarding)", () => {
     expect((await POST(makeRequest({ lat: "34", lng: -118 }))).status).toBe(400);
     expect((await POST(makeRequest({ lat: 91, lng: -118 }))).status).toBe(400);
     expect((await POST(makeRequest({ lat: 34, lng: 181 }))).status).toBe(400);
-    expect(prisma.launchWaitlist.upsert).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it("returns 404 when the account no longer exists", async () => {
@@ -60,36 +78,70 @@ describe("POST /api/waitlist (onboarding)", () => {
     expect(res.status).toBe(404);
   });
 
-  it("upserts by normalized email with coarse coords, linking the account", async () => {
-    const res = await POST(
-      makeRequest({ lat: 34.0522, lng: -118.2437, city: "Los Angeles" }),
-    );
+  it("first join: creates by normalized email with coarse coords and the account linked", async () => {
+    const res = await POST(makeRequest(LA));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
 
-    const location = { lat: 34.1, lng: -118.2, city: "Los Angeles" };
-    expect(prisma.launchWaitlist.upsert).toHaveBeenCalledWith({
+    expect(tx.launchWaitlist.findUnique).toHaveBeenCalledWith({
       where: { email: "alice@example.org" },
-      create: { email: "alice@example.org", userId: "user-1", source: "onboarding", ...location },
-      update: { userId: "user-1", ...location },
+      select: { lat: true, emailOptOutAt: true },
+    });
+    expect(tx.launchWaitlist.upsert).toHaveBeenCalledWith({
+      where: { email: "alice@example.org" },
+      create: { email: "alice@example.org", userId: "user-1", source: "onboarding", ...COARSE_LA },
+      update: { userId: "user-1", ...COARSE_LA },
+    });
+    expect(tx.user.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("re-tapping in a located row refreshes the location but never resets notifiedAt", async () => {
+    tx.launchWaitlist.findUnique.mockResolvedValue({ lat: 34.1, emailOptOutAt: null });
+    await POST(makeRequest(LA));
+    const { update } = upsertArg();
+    expect(update).toEqual({ userId: "user-1", ...COARSE_LA });
+    expect(update).not.toHaveProperty("notifiedAt");
+    expect(update).not.toHaveProperty("emailOptOutAt");
+    expect(update).not.toHaveProperty("source");
+  });
+
+  it("a website row gaining its first city is a fresh per-city opt-in: notifiedAt clears", async () => {
+    // Bob joined on fitsy.org (no location), was included in the LA launch
+    // blast, then asks for Chicago in-app. He must be eligible for Chicago.
+    tx.launchWaitlist.findUnique.mockResolvedValue({ lat: null, emailOptOutAt: null });
+    await POST(makeRequest({ lat: 41.88, lng: -87.63, city: "Chicago" }));
+    const { update } = upsertArg();
+    expect(update).toEqual({
+      userId: "user-1",
+      lat: 41.9,
+      lng: -87.6,
+      city: "Chicago",
+      notifiedAt: null,
     });
   });
 
-  it("never resets notifiedAt or emailOptOutAt on a repeat join", async () => {
-    await POST(makeRequest({ lat: 34, lng: -118 }));
-    const call = (prisma.launchWaitlist.upsert as jest.Mock).mock.calls[0]![0];
-    expect(call.update).not.toHaveProperty("notifiedAt");
-    expect(call.update).not.toHaveProperty("emailOptOutAt");
-    expect(call.update).not.toHaveProperty("source");
+  it("linking onto a row that already opted out carries the opt-out onto the account", async () => {
+    const optedOut = new Date("2026-09-01T00:00:00.000Z");
+    tx.launchWaitlist.findUnique.mockResolvedValue({ lat: null, emailOptOutAt: optedOut });
+    await POST(makeRequest(LA));
+    expect(upsertArg().update).not.toHaveProperty("emailOptOutAt");
+    expect(tx.user.updateMany).toHaveBeenCalledWith({
+      where: { id: "user-1", emailOptOutAt: null },
+      data: { emailOptOutAt: optedOut },
+    });
   });
 
   it("truncates an over-long city label and stores null for a non-string", async () => {
     await POST(makeRequest({ lat: 34, lng: -118, city: "x".repeat(200) }));
-    let call = (prisma.launchWaitlist.upsert as jest.Mock).mock.calls[0]![0];
-    expect(call.create.city).toHaveLength(80);
+    expect(upsertArg().create["city"]).toHaveLength(80);
 
+    jest.clearAllMocks();
+    (prisma.$transaction as jest.Mock).mockImplementation(
+      async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx),
+    );
+    (requireAuth as jest.Mock).mockResolvedValue(AUTH_OK);
+    (prisma.user.findUnique as jest.Mock).mockResolvedValue({ email: "a@b.org" });
     await POST(makeRequest({ lat: 34, lng: -118, city: 42 }));
-    call = (prisma.launchWaitlist.upsert as jest.Mock).mock.calls[1]![0];
-    expect(call.create.city).toBeNull();
+    expect(upsertArg().create["city"]).toBeNull();
   });
 });

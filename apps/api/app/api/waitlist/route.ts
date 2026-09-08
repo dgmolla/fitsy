@@ -63,13 +63,39 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const label = typeof city === "string" ? city.slice(0, 80) : null;
   const location = { lat: coarseCoord(lat), lng: coarseCoord(lng), city: label };
 
-  // Upsert by email so re-hitting the screen refreshes the location without
-  // spamming rows, and a prior website signup becomes this account's row.
-  // We deliberately do NOT reset notifiedAt or emailOptOutAt on update.
-  await prisma.launchWaitlist.upsert({
-    where: { email },
-    create: { email, userId: auth.sub, source: "onboarding", ...location },
-    update: { userId: auth.sub, ...location },
+  await prisma.$transaction(async (tx) => {
+    const existing = await tx.launchWaitlist.findUnique({
+      where: { email },
+      select: { lat: true, emailOptOutAt: true },
+    });
+
+    // A website row has no city. Gaining one is a fresh, per-city opt-in, so
+    // a launch blast it already received (includeUnlocated) must not keep it
+    // from hearing about its own city. A located row re-tapping the button
+    // keeps notifiedAt: same city, no re-spam.
+    const gainingCity = existing !== null && existing.lat === null;
+
+    // Upsert by email so re-hitting the screen refreshes the location without
+    // spamming rows, and a prior website signup becomes this account's row.
+    // emailOptOutAt is never reset here.
+    await tx.launchWaitlist.upsert({
+      where: { email },
+      create: { email, userId: auth.sub, source: "onboarding", ...location },
+      update: {
+        userId: auth.sub,
+        ...location,
+        ...(gainingCity ? { notifiedAt: null } : {}),
+      },
+    });
+
+    // Linking an account onto a row that already opted out carries the
+    // opt-out onto the account, so account-keyed audiences agree with it.
+    if (existing?.emailOptOutAt) {
+      await tx.user.updateMany({
+        where: { id: auth.sub, emailOptOutAt: null },
+        data: { emailOptOutAt: existing.emailOptOutAt },
+      });
+    }
   });
 
   return NextResponse.json({ ok: true }, { status: 200 });

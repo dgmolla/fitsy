@@ -9,8 +9,11 @@
  *   Also serves RFC 8058 one-click unsubscribe (body ignored).
  *
  * `u` links are minted for accounts, `w` links for waitlist-only emails that
- * have no account (joined at fitsy.org). A `w` opt-out also flips the linked
- * account, if the address later signed up, so no send path can bypass it.
+ * have no account (joined at fitsy.org). Each path also flips the other
+ * table's record for the same address when one exists, and every sender
+ * checks opt-out by address (lib/marketingEmail.ts isEmailOptedOut), so an
+ * account created after a `w` opt-out, or a website row that never linked,
+ * still cannot be mailed.
  *
  * No auth required — the HMAC token in the URL is the auth.
  */
@@ -114,9 +117,17 @@ export async function POST(request: NextRequest): Promise<Response> {
 
   // Idempotent: COALESCE preserves the original opt-out timestamp on re-submissions.
   if ("userId" in subject) {
-    await prisma.$executeRaw(
-      Prisma.sql`UPDATE "User" SET "emailOptOutAt" = COALESCE("emailOptOutAt", NOW()) WHERE id = ${subject.userId}`,
-    );
+    await prisma.$transaction([
+      prisma.$executeRaw(
+        Prisma.sql`UPDATE "User" SET "emailOptOutAt" = COALESCE("emailOptOutAt", NOW()) WHERE id = ${subject.userId}`,
+      ),
+      // Any waitlist row for this account or its address, linked or not.
+      prisma.$executeRaw(
+        Prisma.sql`UPDATE "LaunchWaitlist" SET "emailOptOutAt" = COALESCE("emailOptOutAt", NOW())
+          WHERE "userId" = ${subject.userId}
+             OR "email" = (SELECT lower("email") FROM "User" WHERE id = ${subject.userId})`,
+      ),
+    ]);
   } else {
     await prisma.$transaction([
       prisma.$executeRaw(

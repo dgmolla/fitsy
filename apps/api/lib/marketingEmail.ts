@@ -30,13 +30,32 @@ export function isUndeliverableAddress(email: string | null | undefined): boolea
 }
 
 /**
- * Who the email is for, which decides where opt-out lives and which
- * unsubscribe link is minted: an account (User.emailOptOutAt) or a
- * waitlist-only email with no account (LaunchWaitlist.emailOptOutAt).
+ * Who the email is for, which decides which unsubscribe link is minted: an
+ * account (`?u=`) or a waitlist-only email with no account (`?w=`).
+ * Suppression itself is keyed on the address, not the record: see
+ * isEmailOptedOut.
  */
 export type MarketingRecipient =
   | { userId: string; waitlistId?: undefined }
   | { waitlistId: string; userId?: undefined };
+
+/**
+ * True when ANY record for this address has opted out: the User row (set by
+ * `?u=` links) or the LaunchWaitlist row (set by `?w=` links). An address can
+ * exist on both tables, linked or not, and can move between them (a website
+ * signup that later creates an account, or the reverse), so an opt-out
+ * recorded on either must win for every send path.
+ */
+export async function isEmailOptedOut(email: string): Promise<boolean> {
+  const normalized = email.trim().toLowerCase();
+  const rows = await prisma.$queryRaw<{ n: number }[]>(
+    Prisma.sql`SELECT 1 AS n FROM "User" WHERE lower("email") = ${normalized} AND "emailOptOutAt" IS NOT NULL
+      UNION ALL
+      SELECT 1 AS n FROM "LaunchWaitlist" WHERE "email" = ${normalized} AND "emailOptOutAt" IS NOT NULL
+      LIMIT 1`,
+  );
+  return rows.length > 0;
+}
 
 export async function sendMarketingEmail(
   opts: MarketingRecipient & {
@@ -60,21 +79,8 @@ export async function sendMarketingEmail(
   const postalAddress = process.env["FITSY_POSTAL_ADDRESS"];
   if (!postalAddress) return false;
 
-  // Suppression check, against whichever record owns this recipient's opt-out.
-  if (opts.userId !== undefined) {
-    // $queryRaw so we avoid pre-generate client issues with the emailOptOutAt
-    // column added via migration.
-    const rows = await prisma.$queryRaw<{ emailOptOutAt: Date | null }[]>(
-      Prisma.sql`SELECT "emailOptOutAt" FROM "User" WHERE id = ${opts.userId}`,
-    );
-    if (rows[0]?.emailOptOutAt) return false;
-  } else {
-    const row = await prisma.launchWaitlist.findUnique({
-      where: { id: opts.waitlistId },
-      select: { emailOptOutAt: true },
-    });
-    if (!row || row.emailOptOutAt) return false;
-  }
+  // Suppression is keyed on the address so no record-level gap can bypass it.
+  if (await isEmailOptedOut(to)) return false;
 
   // --- Build unsubscribe URL (guaranteed non-null — secret is set above) ---
   const recipient: UnsubscribeSubject =

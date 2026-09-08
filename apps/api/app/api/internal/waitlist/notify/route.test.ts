@@ -44,6 +44,15 @@ const ONBOARDING_NYC = {
   city: "New York",
 };
 
+// Account-linked row in LA whose user never granted push permission.
+const ONBOARDING_NO_TOKEN = {
+  ...ONBOARDING_LA,
+  id: "wl-notoken",
+  userId: "user-3",
+  email: "notoken@fitsy.org",
+  user: { pushToken: null },
+};
+
 // Website row: no account, no location.
 const WEB = {
   id: "wl-web",
@@ -95,10 +104,16 @@ describe("POST /api/internal/waitlist/notify", () => {
     expect((await POST(makeRequest({ lat: 34 }))).status).toBe(400);
   });
 
-  it("only considers rows that are unnotified and not opted out", async () => {
+  it("only considers rows that are unnotified and not opted out on the row or its account", async () => {
     await POST(makeRequest({ ...LA, dryRun: true }));
     expect(prisma.launchWaitlist.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { notifiedAt: null, emailOptOutAt: null } }),
+      expect.objectContaining({
+        where: {
+          notifiedAt: null,
+          emailOptOutAt: null,
+          OR: [{ userId: null }, { user: { emailOptOutAt: null } }],
+        },
+      }),
     );
   });
 
@@ -149,6 +164,20 @@ describe("POST /api/internal/waitlist/notify", () => {
     );
     const sent = (sendMarketingEmail as jest.Mock).mock.calls[0]![0];
     expect(sent).not.toHaveProperty("userId");
+  });
+
+  it("account without a push token: email alone still marks the row notified", async () => {
+    (prisma.launchWaitlist.findMany as jest.Mock).mockResolvedValue([ONBOARDING_NO_TOKEN]);
+    (sendLaunchPush as jest.Mock).mockResolvedValue(false);
+    const res = await POST(makeRequest(LA));
+    expect(await res.json()).toEqual(
+      expect.objectContaining({ matched: 1, viaPush: 0, viaEmail: 1, notified: 1, failed: 0 }),
+    );
+    expect(sendLaunchPush).toHaveBeenCalledWith(null, "Los Angeles");
+    expect(prisma.launchWaitlist.update).toHaveBeenCalledWith({
+      where: { id: "wl-notoken" },
+      data: { notifiedAt: expect.any(Date) },
+    });
   });
 
   it("leaves notifiedAt unset when both channels fail", async () => {

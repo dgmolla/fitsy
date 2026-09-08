@@ -12,13 +12,7 @@ import { LAUNCH_CITY, LAUNCH_DATE_LABEL } from "@/lib/launch";
  *
  * `align="center"` is for the closing section; the hero is left-aligned.
  */
-export function WaitlistForm({
-  align = "start",
-  autoFocus = false,
-}: {
-  align?: "start" | "center";
-  autoFocus?: boolean;
-}) {
+export function WaitlistForm({ align = "start" }: { align?: "start" | "center" }) {
   const [email, setEmail] = useState("");
   const [website, setWebsite] = useState(""); // honeypot
   const [status, setStatus] = useState<"idle" | "submitting" | "done">("idle");
@@ -67,7 +61,6 @@ export function WaitlistForm({
           name="email"
           inputMode="email"
           autoComplete="email"
-          autoFocus={autoFocus}
           placeholder="you@example.com"
           required
           maxLength={254}

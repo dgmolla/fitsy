@@ -74,7 +74,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   };
 
   const pending: WaitlistRow[] = await prisma.launchWaitlist.findMany({
-    where: { notifiedAt: null, emailOptOutAt: null },
+    where: {
+      notifiedAt: null,
+      emailOptOutAt: null,
+      OR: [{ userId: null }, { user: { emailOptOutAt: null } }],
+    },
     select: {
       id: true,
       userId: true,

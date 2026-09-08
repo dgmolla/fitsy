@@ -47,7 +47,7 @@ model LaunchWaitlist {
   id            String         @id @default(cuid())
   email         String         @unique // normalized: trimmed + lowercased at write time
   userId        String?        @unique // null for web-only signups
-  source        WaitlistSource // how the row was first created
+  source        WaitlistSource @default(onboarding) // how the row was first created; DB default keeps the previous bundle inserting during the migrate/deploy window
   lat           Float?         // rounded to ~city precision (1 decimal) at write time; null for web signups
   lng           Float?
   city          String?        // optional human label, best-effort

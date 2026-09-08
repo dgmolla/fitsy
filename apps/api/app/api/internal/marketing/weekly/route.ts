@@ -53,6 +53,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   );
 
   // --- Audience: all users who have not opted out ---
+  // Opt-out is keyed on the address (see lib/marketingEmail.ts
+  // isEmailOptedOut): a waitlist row for the same email that opted out via a
+  // `?w=` link counts, whether or not it ever linked to this account.
   // PRE-GENERATE CONSTRAINT: emailOptOutAt is not in the Prisma client type,
   // so we must use $queryRawUnsafe with an explicit row type.
   // Reserved-TLD addresses are excluded here as well as in sendMarketingEmail so
@@ -60,7 +63,12 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   // accounts that could only ever bounce.
   const rows = (
     await prisma.$queryRawUnsafe<{ id: string; email: string }[]>(
-      'SELECT id, email FROM "User" WHERE "emailOptOutAt" IS NULL',
+      `SELECT u.id, u.email FROM "User" u
+        WHERE u."emailOptOutAt" IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM "LaunchWaitlist" w
+             WHERE w."email" = lower(u."email") AND w."emailOptOutAt" IS NOT NULL
+          )`,
     )
   ).filter((r) => !isUndeliverableAddress(r.email));
 

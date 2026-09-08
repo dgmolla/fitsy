@@ -1,11 +1,10 @@
 jest.mock("@/lib/restaurantService", () => ({
   prisma: {
     $queryRaw: jest.fn(),
-    launchWaitlist: { findUnique: jest.fn() },
   },
 }));
 
-import { isUndeliverableAddress, sendMarketingEmail } from "@/lib/marketingEmail";
+import { isEmailOptedOut, isUndeliverableAddress, sendMarketingEmail } from "@/lib/marketingEmail";
 import { makeUnsubscribeToken } from "@/lib/unsubscribe";
 import { prisma } from "@/lib/restaurantService";
 
@@ -56,8 +55,8 @@ describe("sendMarketingEmail", () => {
     jest.clearAllMocks();
     Object.assign(process.env, ENV);
     global.fetch = fetchMock.mockResolvedValue({ ok: true });
-    (prisma.$queryRaw as jest.Mock).mockResolvedValue([{ emailOptOutAt: null }]);
-    (prisma.launchWaitlist.findUnique as jest.Mock).mockResolvedValue({ emailOptOutAt: null });
+    // No opt-out on either table for this address.
+    (prisma.$queryRaw as jest.Mock).mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -70,10 +69,8 @@ describe("sendMarketingEmail", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("account recipient: checks User opt-out and mints a u= unsubscribe link", async () => {
+  it("account recipient: mints a u= unsubscribe link", async () => {
     expect(await sendMarketingEmail({ userId: "u1", ...base })).toBe(true);
-    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
-    expect(prisma.launchWaitlist.findUnique).not.toHaveBeenCalled();
     const { html, headers } = sentBody();
     const t = makeUnsubscribeToken({ userId: "u1" }) as string;
     expect(html).toContain(`https://fitsy.org/unsubscribe?u=u1&t=${t}`);
@@ -82,19 +79,29 @@ describe("sendMarketingEmail", () => {
     expect(headers["List-Unsubscribe-Post"]).toBe("List-Unsubscribe=One-Click");
   });
 
-  it("account recipient: skips opted-out users", async () => {
-    (prisma.$queryRaw as jest.Mock).mockResolvedValue([{ emailOptOutAt: new Date() }]);
+  it("suppresses by address for BOTH recipient kinds when any record opted out", async () => {
+    // Whether the opt-out lives on the User or the LaunchWaitlist row, and
+    // whichever record we are sending on behalf of, the address wins.
+    (prisma.$queryRaw as jest.Mock).mockResolvedValue([{ n: 1 }]);
     expect(await sendMarketingEmail({ userId: "u1", ...base })).toBe(false);
+    expect(await sendMarketingEmail({ waitlistId: "wl1", ...base })).toBe(false);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("waitlist recipient: checks the waitlist row and mints a w= unsubscribe link", async () => {
+  it("looks the address up normalized, on both tables", async () => {
+    await sendMarketingEmail({ waitlistId: "wl1", to: "  Someone@Fitsy.ORG ", subject: "s", html: "h" });
+    const sql = (prisma.$queryRaw as jest.Mock).mock.calls[0]![0] as {
+      strings: string[];
+      values: unknown[];
+    };
+    const text = sql.strings.join("?");
+    expect(text).toContain('FROM "User"');
+    expect(text).toContain('FROM "LaunchWaitlist"');
+    expect(sql.values).toEqual(["someone@fitsy.org", "someone@fitsy.org"]);
+  });
+
+  it("waitlist recipient: mints a w= unsubscribe link", async () => {
     expect(await sendMarketingEmail({ waitlistId: "wl1", ...base })).toBe(true);
-    expect(prisma.launchWaitlist.findUnique).toHaveBeenCalledWith({
-      where: { id: "wl1" },
-      select: { emailOptOutAt: true },
-    });
-    expect(prisma.$queryRaw).not.toHaveBeenCalled();
     const { html, headers } = sentBody();
     const t = makeUnsubscribeToken({ waitlistId: "wl1" }) as string;
     expect(html).toContain(`https://fitsy.org/unsubscribe?w=wl1&t=${t}`);
@@ -102,14 +109,11 @@ describe("sendMarketingEmail", () => {
     expect(headers["List-Unsubscribe"]).toBe(`<https://fitsy.org/unsubscribe?w=wl1&t=${t}>`);
   });
 
-  it("waitlist recipient: skips opted-out or missing rows", async () => {
-    (prisma.launchWaitlist.findUnique as jest.Mock).mockResolvedValueOnce({
-      emailOptOutAt: new Date(),
-    });
-    expect(await sendMarketingEmail({ waitlistId: "wl1", ...base })).toBe(false);
-    (prisma.launchWaitlist.findUnique as jest.Mock).mockResolvedValueOnce(null);
-    expect(await sendMarketingEmail({ waitlistId: "wl1", ...base })).toBe(false);
-    expect(fetchMock).not.toHaveBeenCalled();
+  it("isEmailOptedOut reflects the query result", async () => {
+    (prisma.$queryRaw as jest.Mock).mockResolvedValueOnce([]);
+    expect(await isEmailOptedOut("a@b.com")).toBe(false);
+    (prisma.$queryRaw as jest.Mock).mockResolvedValueOnce([{ n: 1 }]);
+    expect(await isEmailOptedOut("a@b.com")).toBe(true);
   });
 
   it("returns false when the provider rejects or the request throws", async () => {
