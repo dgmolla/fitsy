@@ -1,10 +1,15 @@
 # Search serving consistency
 
-Search must return one restaurant per result even when a dish has several
+Search and onboarding preview use the same target validation. Search must return one restaurant per result even when a dish has several
 nutrition sources. Confidence must describe the winning source, and search
 must use only complete macro records. Zero targets are inactive; short names
 (`protein`) and gram names (`proteinG`) mean the same target. Invalid, blank,
 negative, excessive or conflicting values return HTTP 400.
+
+New cursors carry PostgreSQL's exact score text as well as the legacy numeric
+key. The numeric round trip through Prisma can move a score by one floating-
+point step and skip tied rows. Old numeric cursors remain accepted; newly
+issued cursors use the exact representation for pagination comparisons.
 
 ```mermaid
 flowchart LR

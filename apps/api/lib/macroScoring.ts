@@ -34,18 +34,6 @@ export interface ScoredItem {
 // ─── Scoring ──────────────────────────────────────────────────────────────────
 
 /**
- * Compute the macro match score for a single menu item against user targets.
- *
- * Only dimensions where the user supplied a target are included in the score.
- * Score is a weighted Euclidean distance normalized by target values:
- *
- *   sqrt( (cal_diff/target_cal)^2 + (p_diff/target_p)^2 + ... )
- *
- * Lower score = better match. Perfect match = 0.
- *
- * Returns null when no targets are specified (caller should sort by distance).
- */
-/**
  * Given a list of scored items, return the one with the lowest score.
  * Returns null if the list is empty.
  */

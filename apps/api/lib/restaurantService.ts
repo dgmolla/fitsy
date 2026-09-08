@@ -65,7 +65,7 @@ export interface NearbyRestaurantsParams {
    * without). Legacy cursors encoded as { id, distanceMiles } still decode
    * correctly — see decodeCursor.
    */
-  cursor?: { id: string; orderKey: number } | undefined;
+  cursor?: PaginationCursor | undefined;
 }
 
 // ─── Cursor encoding ──────────────────────────────────────────────────────────
@@ -74,6 +74,8 @@ export interface PaginationCursor {
   id: string;
   /** The active sort key for the row (composite or distance, depending on mode). */
   orderKey: number;
+  /** Exact PostgreSQL float representation, preserved across Prisma's JSON transport. */
+  orderKeyText?: string;
   /** Kept for backward compat with cursors encoded before composite ranking. */
   distanceMiles?: number;
 }
@@ -91,7 +93,7 @@ export function decodeCursor(raw: string): PaginationCursor | null {
       parsed !== null &&
       typeof (parsed as { id?: unknown }).id === "string"
     ) {
-      const obj = parsed as { id: string; orderKey?: unknown; distanceMiles?: unknown };
+      const obj = parsed as { id: string; orderKey?: unknown; orderKeyText?: unknown; distanceMiles?: unknown };
       // Prefer `orderKey`; fall back to legacy `distanceMiles`.
       const rawKey =
         typeof obj.orderKey === "number" && isFinite(obj.orderKey)
@@ -101,6 +103,11 @@ export function decodeCursor(raw: string): PaginationCursor | null {
             : null;
       if (rawKey === null) return null;
       const out: PaginationCursor = { id: obj.id, orderKey: rawKey };
+      if (obj.orderKeyText !== undefined) {
+        if (typeof obj.orderKeyText !== "string" || !/^-?\d+(\.\d+)?(e[+-]?\d+)?$/i.test(obj.orderKeyText)
+          || !Number.isFinite(Number(obj.orderKeyText))) return null;
+        out.orderKeyText = obj.orderKeyText;
+      }
       if (typeof obj.distanceMiles === "number" && isFinite(obj.distanceMiles)) {
         out.distanceMiles = obj.distanceMiles;
       }
@@ -180,11 +187,12 @@ interface ScoredRow {
   proteinG: number;
   carbsG: number;
   fatG: number;
-  confidence: "HIGH" | "MEDIUM" | "LOW";
+  confidence: "HIGH" | "MEDIUM" | "LOW" | null;
   scoreSum: number;
   distanceMiles: number;
   /** Active sort key — composite (scoreSum + w·distance) or distance-only. */
   orderKey: number;
+  orderKeyText?: string;
 }
 
 // ─── Service: GET /api/restaurants ───────────────────────────────────────────
@@ -312,9 +320,9 @@ export async function findNearbyRestaurants(
   // visible in WHERE, so the expression is repeated here.
   if (cursor !== undefined) {
     filterFrags.push(Prisma.sql`AND (
-      ${orderKeyExpr} > ${cursor.orderKey}::double precision
+      ${orderKeyExpr} > ${cursor.orderKeyText ?? cursor.orderKey}::double precision
       OR (
-        ${orderKeyExpr} = ${cursor.orderKey}::double precision
+        ${orderKeyExpr} = ${cursor.orderKeyText ?? cursor.orderKey}::double precision
         AND r.id > ${cursor.id}
       )
     )`);
@@ -379,7 +387,7 @@ export async function findNearbyRestaurants(
     ORDER BY "orderKey" ASC, r.id ASC
     LIMIT ${limit}
     )
-    SELECT ranked.*, e.confidence
+    SELECT ranked.*, ranked."orderKey"::text AS "orderKeyText", e.confidence
     FROM ranked
     LEFT JOIN LATERAL (
       SELECT e.confidence FROM "MacroEstimate" e
@@ -402,6 +410,7 @@ export async function findNearbyRestaurants(
       ? encodeCursor({
           id: lastRow.restaurantId,
           orderKey: lastRow.orderKey,
+          ...(lastRow.orderKeyText ? { orderKeyText: lastRow.orderKeyText } : {}),
           distanceMiles: lastRow.distanceMiles,
         })
       : null;

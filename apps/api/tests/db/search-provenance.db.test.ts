@@ -8,7 +8,7 @@ const describeIfDb = process.env['POSTGRES_PRISMA_URL'] ? describe : describe.sk
 
 describeIfDb('search nutrition provenance (real PostgreSQL)', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { prisma, findNearbyRestaurants } = require('../../lib/restaurantService') as typeof import('../../lib/restaurantService');
+  const { prisma, findNearbyRestaurants, decodeCursor } = require('../../lib/restaurantService') as typeof import('../../lib/restaurantService');
   const restaurantId = randomUUID();
   const itemId = randomUUID();
   const targets = { calories: 600, proteinG: 40, carbsG: 60, fatG: 20 };
@@ -54,6 +54,25 @@ describeIfDb('search nutrition provenance (real PostgreSQL)', () => {
       const [row] = await prisma.$queryRaw<{ score: number }[]>(Prisma.sql`
         SELECT ${macroScoreSumSql(t)} AS score FROM "MenuItem" m WHERE m.id = ${itemId}`);
       expect(Math.sqrt(row!.score)).toBeCloseTo(computeMatchScore(t, targets) ?? 0, 12);
+    }
+  });
+
+  test('tied fractional scores survive a cursor round trip through Prisma', async () => {
+    const otherId = randomUUID();
+    const macros = { calories: 900, proteinG: 10, carbsG: 100, fatG: 50 };
+    try {
+      await prisma.menuItem.update({ where: { id: itemId }, data: macros });
+      await prisma.restaurant.create({ data: { id: otherId, storeUuid: otherId,
+        name: 'Tied search fixture', address: 'Local fixture', source: 'test',
+        lat: 10, lng: 10, cuisineTags: [], menuItems: { create: { name: 'Bowl', ...macros } } } });
+      const first = await findNearbyRestaurants({ ...params, limit: 1 });
+      expect(first.data).toHaveLength(1);
+      const second = await findNearbyRestaurants({ ...params, limit: 1, cursor: decodeCursor(first.nextCursor!)! });
+      expect(second.data).toHaveLength(1);
+      expect(new Set([...first.data, ...second.data].map(r => r.id)).size).toBe(2);
+    } finally {
+      await prisma.restaurant.deleteMany({ where: { id: otherId } });
+      await prisma.menuItem.update({ where: { id: itemId }, data: targets });
     }
   });
 });

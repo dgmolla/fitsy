@@ -2,7 +2,7 @@ import { MACRO_DIMENSIONS, type MacroTargets } from '@fitsy/shared';
 
 const aliases = { calories: 'calories', proteinG: 'protein', carbsG: 'carbs', fatG: 'fat' } as const;
 
-/** Both serving routes accept existing short names and canonical gram names. */
+/** Normalize serving targets from existing short names and canonical gram names. */
 export function parseMacroTargetParams(params: URLSearchParams): MacroTargets {
   const targets: MacroTargets = {};
   for (const key of MACRO_DIMENSIONS) {

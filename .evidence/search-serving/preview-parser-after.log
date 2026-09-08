@@ -1,0 +1,18 @@
+{"event":"search_query","restaurants":20,"hasTargets":true,"totalMs":22,"paginated":false}
+[api-emitter] AXIOM_TOKEN not set — events will not be sent
+{"event":"search_query","restaurants":20,"hasTargets":true,"totalMs":2,"paginated":false}
+✔ real authenticated search accepts equivalent aliases and keeps a valid wire contract (152.672958ms)
+✔ invalid targets return 400 through the handler (4.754875ms)
+{"event":"search_query","restaurants":20,"hasTargets":true,"totalMs":3,"paginated":false}
+✔ unauthenticated search still strips every best match (3.520667ms)
+{"event":"search_query","restaurants":5,"hasTargets":true,"totalMs":3,"paginated":false}
+{"event":"search_query","restaurants":5,"hasTargets":true,"totalMs":2,"paginated":false}
+✔ onboarding preview uses the same aliases and rejects invalid targets without exposing matches (5.174291ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 455.500958

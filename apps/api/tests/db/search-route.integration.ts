@@ -6,6 +6,7 @@ import { generateKeyPair, exportJWK, SignJWT } from 'jose';
 import { NextRequest } from 'next/server';
 import { restaurantsResponseSchema } from '@fitsy/shared';
 import { GET } from '../../app/api/restaurants/route';
+import { GET as preview } from '../../app/api/restaurants/preview/route';
 import { prisma } from '../../lib/restaurantService';
 
 // Native ESM runner supports jose. Real handlers, JWT verification and Postgres.
@@ -68,4 +69,18 @@ test('unauthenticated search still strips every best match', async () => {
   assert.ok(data.length > 0);
   assert.equal(meta.locked, true);
   assert.ok(data.every((row: { bestMatch?: unknown }) => !row.bestMatch));
+});
+
+test('onboarding preview uses the same aliases and rejects invalid targets without exposing matches', async () => {
+  const a = await preview(request('calories=600&protein=40&carbs=60&fat=20', false));
+  const b = await preview(request('calories=600&proteinG=40&carbsG=60&fatG=20', false));
+  assert.equal(a.status, 200);
+  assert.equal(b.status, 200);
+  const data = await a.json();
+  assert.ok(data.data.length > 0);
+  assert.deepEqual(data, await b.json());
+  assert.ok(data.data.every((row: object) => !('bestMatch' in row)));
+  for (const query of ['protein=NaN', 'proteinG=-1', 'calories=', 'protein=40&proteinG=50']) {
+    assert.equal((await preview(request(query, false))).status, 400, query);
+  }
 });
