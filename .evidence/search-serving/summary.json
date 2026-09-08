@@ -2,7 +2,7 @@
   "base": "54381a2",
   "api_unit_tests": 644,
   "db_tests": 17,
-  "native_route_assertion_tests": 4,
+  "native_route_assertion_tests": 5,
   "scripts_default_tests": 117,
   "mobile_tests": 264,
   "mutation": {
@@ -35,7 +35,14 @@
   "api_coverage_gate": "pass",
   "additional_regressions": {
     "tied_float_cursor": "fails before / passes after",
-    "preview_target_aliases": "fails before / passes after"
+    "preview_target_aliases": "fails before / passes after",
+    "underflowing_cursor": "fails before / passes after (HTTP 500 becomes 400)"
   },
-  "mutation_score": 94.62
+  "mutation_score": 94.62,
+  "preview_smoke": {
+    "deployment": "9bf000b",
+    "locked": true,
+    "results": 20,
+    "invalid_macro_status": 400
+  }
 }

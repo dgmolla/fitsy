@@ -1,0 +1,129 @@
+
+> @fitsy/api@0.1.0 test
+> jest --runInBand lib/restaurantService.test.ts tests/db/search-route.db.test.ts
+
+PASS tests/db/search-route.db.test.ts
+PASS lib/restaurantService.test.ts
+  ● Console
+
+    console.log
+      {"event":"search_query","restaurants":2,"hasTargets":false,"totalMs":1,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:448:11)
+
+    console.log
+      {"event":"search_query","restaurants":2,"hasTargets":true,"totalMs":0,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:448:11)
+
+    console.log
+      {"event":"search_query","restaurants":3,"hasTargets":false,"totalMs":0,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:448:11)
+
+    console.log
+      {"event":"search_query","restaurants":1,"hasTargets":false,"totalMs":0,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:448:11)
+
+    console.log
+      {"event":"search_query","restaurants":1,"hasTargets":true,"totalMs":0,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:448:11)
+
+    console.log
+      {"event":"search_query","restaurants":1,"hasTargets":false,"totalMs":0,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:448:11)
+
+    console.log
+      {"event":"search_query","restaurants":1,"hasTargets":true,"totalMs":0,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:448:11)
+
+    console.log
+      {"event":"search_query","restaurants":1,"hasTargets":true,"totalMs":0,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:448:11)
+
+    console.log
+      {"event":"search_query","restaurants":1,"hasTargets":false,"totalMs":0,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:448:11)
+
+    console.log
+      {"event":"search_query","restaurants":1,"hasTargets":false,"totalMs":0,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:448:11)
+
+    console.log
+      {"event":"search_query","restaurants":0,"hasTargets":false,"totalMs":0,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:448:11)
+
+    console.log
+      {"event":"search_query","restaurants":0,"hasTargets":false,"totalMs":0,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:448:11)
+
+    console.log
+      {"event":"search_query","restaurants":3,"hasTargets":false,"totalMs":0,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:448:11)
+
+    console.log
+      {"event":"search_query","restaurants":0,"hasTargets":false,"totalMs":0,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:448:11)
+
+    console.log
+      {"event":"search_query","restaurants":2,"hasTargets":false,"totalMs":0,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:448:11)
+
+    console.log
+      {"event":"search_query","restaurants":2,"hasTargets":false,"totalMs":0,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:448:11)
+
+    console.log
+      {"event":"search_query","restaurants":1,"hasTargets":false,"totalMs":0,"paginated":true}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:448:11)
+
+    console.log
+      {"event":"search_query","restaurants":0,"hasTargets":false,"totalMs":0,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:448:11)
+
+    console.log
+      {"event":"search_query","restaurants":0,"hasTargets":false,"totalMs":0,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:448:11)
+
+    console.log
+      {"event":"search_query","restaurants":0,"hasTargets":false,"totalMs":0,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:448:11)
+
+    console.log
+      {"event":"search_query","restaurants":0,"hasTargets":false,"totalMs":0,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:448:11)
+
+    console.log
+      {"event":"search_query","restaurants":0,"hasTargets":false,"totalMs":0,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:448:11)
+
+    console.log
+      {"event":"search_query","restaurants":0,"hasTargets":false,"totalMs":0,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:448:11)
+
+
+Test Suites: 2 passed, 2 total
+Tests:       37 passed, 37 total
+Snapshots:   0 total
+Time:        1.347 s, estimated 2 s
+Ran all test suites matching /lib\/restaurantService.test.ts|tests\/db\/search-route.db.test.ts/i.

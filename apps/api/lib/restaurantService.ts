@@ -105,7 +105,8 @@ export function decodeCursor(raw: string): PaginationCursor | null {
       const out: PaginationCursor = { id: obj.id, orderKey: rawKey };
       if (obj.orderKeyText !== undefined) {
         if (typeof obj.orderKeyText !== "string" || !/^-?\d+(\.\d+)?(e[+-]?\d+)?$/i.test(obj.orderKeyText)
-          || !Number.isFinite(Number(obj.orderKeyText))) return null;
+          || !Number.isFinite(Number(obj.orderKeyText))
+          || (Number(obj.orderKeyText) === 0 && /[1-9]/.test(obj.orderKeyText.split(/e/i)[0]!))) return null;
         out.orderKeyText = obj.orderKeyText;
       }
       if (typeof obj.distanceMiles === "number" && isFinite(obj.distanceMiles)) {

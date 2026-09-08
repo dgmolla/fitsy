@@ -130,6 +130,7 @@ See `docs/engineering/architecture/auth.md` for full flow and request/response s
 | `protein` | float | No | — | Target protein (g) |
 | `carbs` | float | No | — | Target carbs (g) |
 | `fat` | float | No | — | Target fat (g) |
+| `proteinG`, `carbsG`, `fatG` | float | No | — | Aliases for the short names; duplicate values must agree |
 | `cuisineType` | string | No | — | Exact match on cuisine tags |
 | `chainOnly` | boolean | No | — | `true` / `false` |
 | `dietary` | string | No | — | Dietary tag filter |
@@ -138,6 +139,8 @@ See `docs/engineering/architecture/auth.md` for full flow and request/response s
 | `q` | string | No | — | Free-text menu search (capped length) |
 | `limit` | int | No | 20 | 1–50 |
 | `cursor` | string | No | — | Opaque pagination cursor from previous page |
+
+Macro targets must be finite numbers from 0 through 100,000. Zero disables a dimension; blank, negative, or conflicting targets return 400.
 
 #### Macro Match Scoring
 
@@ -200,6 +203,7 @@ Macros are read from denormalized `MenuItem` columns — not from a `MacroEstima
 | 400 | `{ "error": "minRating must be between 0 and 5" }` | minRating out of range |
 | 400 | `{ "error": "maxPriceLevel must be one of: …" }` | Invalid price level |
 | 400 | `{ "error": "Invalid cursor" }` | Malformed cursor token |
+| 400 | `{ "error": "Invalid macro target" }` | Blank, non-finite, out-of-range, or conflicting macro target |
 | 500 | `{ "error": "Internal server error" }` | Unhandled exception |
 
 ---

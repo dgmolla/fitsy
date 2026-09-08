@@ -84,3 +84,9 @@ test('onboarding preview uses the same aliases and rejects invalid targets witho
     assert.equal((await preview(request(query, false))).status, 400, query);
   }
 });
+
+// JavaScript silently rounds these to zero; PostgreSQL rejects the float cast.
+test('underflowing search cursor is a client error', async () => {
+  const cursor = Buffer.from(JSON.stringify({ id: 'x', orderKey: 0, orderKeyText: '1e-400' })).toString('base64');
+  assert.equal((await GET(request('cursor=' + encodeURIComponent(cursor)))).status, 400);
+});

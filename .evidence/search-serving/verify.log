@@ -2,14 +2,14 @@
 > fitsy@0.1.0 verify
 > node scripts/verify/run.mjs --layer=0-2 --scope=changed
 
-{"name":"structural","status":"pass","summary":"all structural tests passed","fix":"","duration_ms":8428,"blocking":true}
-{"name":"secrets","status":"pass","summary":"no secrets, env files, or build output in diff","fix":"","duration_ms":351,"blocking":true}
-{"name":"lint","status":"pass","summary":"eslint clean","fix":"","duration_ms":7265,"blocking":true}
-{"name":"typecheck","status":"pass","summary":"tsc clean in all workspaces","fix":"","duration_ms":9666,"blocking":true}
-{"name":"boundaries","status":"pass","summary":"no dependency violations","fix":"","duration_ms":3798,"blocking":true}
-{"name":"context-freshness","status":"pass","summary":"context files reference only real commands and paths","fix":"","duration_ms":244,"blocking":true}
-{"name":"own-code-mocks","status":"fail","summary":"46 own-code jest.mock() calls in apps/api tests","fix":"test against the DB container instead of mocking our own code; the external boundary (services/*, lib/supabase) stays mockable","duration_ms":77,"blocking":false}
-{"name":"test","status":"pass","summary":"api coverage gate + scripts tests green","fix":"","duration_ms":26601,"blocking":true}
+{"name":"structural","status":"pass","summary":"all structural tests passed","fix":"","duration_ms":29572,"blocking":true}
+{"name":"secrets","status":"pass","summary":"no secrets, env files, or build output in diff","fix":"","duration_ms":372,"blocking":true}
+{"name":"lint","status":"pass","summary":"eslint clean","fix":"","duration_ms":26555,"blocking":true}
+{"name":"typecheck","status":"pass","summary":"tsc clean in all workspaces","fix":"","duration_ms":232973,"blocking":true}
+{"name":"boundaries","status":"pass","summary":"no dependency violations","fix":"","duration_ms":11126,"blocking":true}
+{"name":"context-freshness","status":"pass","summary":"context files reference only real commands and paths","fix":"","duration_ms":222,"blocking":true}
+{"name":"own-code-mocks","status":"fail","summary":"46 own-code jest.mock() calls in apps/api tests","fix":"test against the DB container instead of mocking our own code; the external boundary (services/*, lib/supabase) stays mockable","duration_ms":71,"blocking":false}
+{"name":"test","status":"pass","summary":"api coverage gate + scripts tests green","fix":"","duration_ms":234171,"blocking":true}
 {"name":"actionlint","status":"skipped","summary":"no matching changed files"}
 {"name":"migration-safety","status":"skipped","summary":"no matching changed files"}
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse, after } from "next/server";
-import { findNearbyRestaurants, decodeCursor } from "@/lib/restaurantService";
+import { findNearbyRestaurants, decodeCursor, type PaginationCursor } from "@/lib/restaurantService";
 import { optionalSubscription } from "@/lib/subscription";
 import { getApiEmitter } from "@/lib/apiEmitter";
 import type { RestaurantsApiResponse } from "@fitsy/shared";
@@ -123,7 +123,7 @@ export async function GET(
   // Decode + validate before hitting the DB so a malformed cursor returns 400
   // instead of producing silently-wrong pagination.
   const cursorRaw = searchParams.get("cursor");
-  let decodedCursor: { id: string; orderKey: number } | undefined;
+  let decodedCursor: PaginationCursor | undefined;
   if (cursorRaw !== null) {
     const decoded = decodeCursor(cursorRaw);
     if (decoded === null) {
