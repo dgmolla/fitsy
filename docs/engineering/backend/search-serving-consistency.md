@@ -11,6 +11,10 @@ key. The numeric round trip through Prisma can move a score by one floating-
 point step and skip tied rows. Old numeric cursors remain accepted; newly
 issued cursors use the exact representation for pagination comparisons.
 
+If stored macros have no estimate metadata, confidence is LOW (unknown
+provenance), matching the enum contract. Restaurants with no complete macro
+record cannot supply a best match and are omitted from ranked search.
+
 ```mermaid
 flowchart LR
   Q[Query targets] --> V[Validate and normalize]

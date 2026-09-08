@@ -70,9 +70,22 @@ describeIfDb('search nutrition provenance (real PostgreSQL)', () => {
       const second = await findNearbyRestaurants({ ...params, limit: 1, cursor: decodeCursor(first.nextCursor!)! });
       expect(second.data).toHaveLength(1);
       expect(new Set([...first.data, ...second.data].map(r => r.id)).size).toBe(2);
+      const unknownSource = [...first.data, ...second.data].find(r => r.id === otherId)!;
+      expect(unknownSource.bestMatch?.confidence).toBe('LOW');
+      expect(restaurantResultSchema.safeParse(unknownSource).success).toBe(true);
     } finally {
       await prisma.restaurant.deleteMany({ where: { id: otherId } });
       await prisma.menuItem.update({ where: { id: itemId }, data: targets });
     }
+  });
+
+  test('restaurants with only incomplete nutrition cannot supply a best match', async () => {
+    const id = randomUUID();
+    try {
+      await prisma.restaurant.create({ data: { id, storeUuid: id, name: 'Incomplete fixture',
+        address: 'Local fixture', lat: 10, lng: 10, source: 'test', cuisineTags: [],
+        menuItems: { create: { name: 'Incomplete bowl', calories: 600 } } } });
+      expect((await findNearbyRestaurants(params)).data.map(r => r.id)).not.toContain(id);
+    } finally { await prisma.restaurant.deleteMany({ where: { id } }); }
   });
 });

@@ -1,13 +1,13 @@
 
 > @fitsy/api@0.1.0 test
-> jest --runInBand tests/db
+> jest --runInBand tests/db lib/macroTargetParams.test.ts
 
 PASS tests/db/search-route.db.test.ts
 PASS tests/db/search-provenance.db.test.ts
   ● Console
 
     console.log
-      {"event":"search_query","restaurants":1,"hasTargets":true,"totalMs":18,"paginated":false}
+      {"event":"search_query","restaurants":1,"hasTargets":true,"totalMs":17,"paginated":false}
 
       at findNearbyRestaurants (lib/restaurantService.ts:447:11)
 
@@ -27,26 +27,30 @@ PASS tests/db/search-provenance.db.test.ts
       at findNearbyRestaurants (lib/restaurantService.ts:447:11)
 
     console.log
-      {"event":"search_query","restaurants":1,"hasTargets":true,"totalMs":2,"paginated":false}
+      {"event":"search_query","restaurants":1,"hasTargets":true,"totalMs":1,"paginated":false}
 
       at findNearbyRestaurants (lib/restaurantService.ts:447:11)
 
     console.log
-      {"event":"search_query","restaurants":1,"hasTargets":true,"totalMs":3,"paginated":true}
+      {"event":"search_query","restaurants":1,"hasTargets":true,"totalMs":11,"paginated":true}
 
       at findNearbyRestaurants (lib/restaurantService.ts:447:11)
 
-PASS tests/db/subscription.db.test.ts
+    console.log
+      {"event":"search_query","restaurants":1,"hasTargets":true,"totalMs":1,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:447:11)
+
 PASS tests/db/search.db.test.ts
   ● Console
 
     console.log
-      {"event":"search_query","restaurants":20,"hasTargets":false,"totalMs":74,"paginated":false}
+      {"event":"search_query","restaurants":20,"hasTargets":false,"totalMs":69,"paginated":false}
 
       at Object.findNearbyRestaurants (lib/restaurantService.ts:447:11)
 
     console.log
-      {"event":"search_query","restaurants":10,"hasTargets":true,"totalMs":2,"paginated":false}
+      {"event":"search_query","restaurants":10,"hasTargets":true,"totalMs":3,"paginated":false}
 
       at Object.findNearbyRestaurants (lib/restaurantService.ts:447:11)
 
@@ -61,18 +65,20 @@ PASS tests/db/search.db.test.ts
       at Object.findNearbyRestaurants (lib/restaurantService.ts:447:11)
 
     console.log
-      {"event":"search_query","restaurants":5,"hasTargets":false,"totalMs":14,"paginated":false}
+      {"event":"search_query","restaurants":5,"hasTargets":false,"totalMs":30,"paginated":false}
 
       at Object.findNearbyRestaurants (lib/restaurantService.ts:447:11)
 
     console.log
-      {"event":"search_query","restaurants":0,"hasTargets":false,"totalMs":2,"paginated":false}
+      {"event":"search_query","restaurants":0,"hasTargets":false,"totalMs":1,"paginated":false}
 
       at Object.findNearbyRestaurants (lib/restaurantService.ts:447:11)
 
+PASS tests/db/subscription.db.test.ts
+PASS lib/macroTargetParams.test.ts
 
-Test Suites: 4 passed, 4 total
-Tests:       16 passed, 16 total
+Test Suites: 5 passed, 5 total
+Tests:       28 passed, 28 total
 Snapshots:   0 total
-Time:        1.559 s, estimated 2 s
-Ran all test suites matching /tests\/db/i.
+Time:        1.551 s, estimated 4 s
+Ran all test suites matching /tests\/db|lib\/macroTargetParams.test.ts/i.
