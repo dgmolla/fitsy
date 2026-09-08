@@ -1,0 +1,25 @@
+    computeMatchScore happy path returns correct score for all four dimensions
+    computeMatchScore happy path returns a non-negative number
+    computeMatchScore perfect match returns 0 when item exactly matches all specified targets
+  and 8 more tests!
+
+
+Ran 31.95 tests per mutant on average.
+-------------------------|------------------|----------|-----------|------------|----------|----------|
+                         | % Mutation score |          |           |            |          |          |
+File                     |  total | covered | # killed | # timeout | # survived | # no cov | # errors |
+-------------------------|--------|---------|----------|-----------|------------|----------|----------|
+All files                |  93.24 |   93.24 |       67 |         2 |          5 |        0 |        0 |
+ apps                    |  95.00 |   95.00 |       38 |         0 |          2 |        0 |        0 |
+  api                    |  95.00 |   95.00 |       38 |         0 |          2 |        0 |        0 |
+   lib                   |  95.00 |   95.00 |       38 |         0 |          2 |        0 |        0 |
+    macroTargetParams.ts |  95.00 |   95.00 |       38 |         0 |          2 |        0 |        0 |
+ packages                |  91.18 |   91.18 |       29 |         2 |          3 |        0 |        0 |
+  shared                 |  91.18 |   91.18 |       29 |         2 |          3 |        0 |        0 |
+   src                   |  91.18 |   91.18 |       29 |         2 |          3 |        0 |        0 |
+    utils                |  91.18 |   91.18 |       29 |         2 |          3 |        0 |        0 |
+     macroScoring.ts     |  91.18 |   91.18 |       29 |         2 |          3 |        0 |        0 |
+-------------------------|--------|---------|----------|-----------|------------|----------|----------|
+[32m23:32:46 (96836) INFO MutationTestReportHelper[39m Final mutation score of 93.24 is greater than or equal to break threshold 50
+[32m23:32:46 (96836) INFO JsonReporter[39m Your report can be found at: file:///Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-serving/.evidence/mutation/report.json
+[32m23:32:46 (96836) INFO MutationTestExecutor[39m Done in 2 minutes and 3 seconds.

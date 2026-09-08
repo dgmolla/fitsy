@@ -1,0 +1,4 @@
+  health -> 200
+  unauth search locked/results (expect True / >0) -> True 20
+  entitled-account probe -> SKIPPED (set PROD_SMOKE_EMAIL/PASSWORD to activate)
+{"name":"api-e2e","status":"pass","summary":"smoke green against http://localhost:3507 (prod-safe=1)","fix":""}

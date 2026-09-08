@@ -19,6 +19,7 @@ jest.mock("@prisma/client", () => ({
     }),
     join: (items: unknown[], sep = ",") => ({ items, sep }),
     empty: { empty: true },
+    raw: (value: string) => ({ strings: [value], values: [] }),
   },
   PrismaClient: jest.fn().mockImplementation(() => ({
     $queryRaw: mockQueryRaw,

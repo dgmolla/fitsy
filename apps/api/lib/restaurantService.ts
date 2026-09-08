@@ -1,5 +1,7 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { hasTargets, type MacroTargets } from "./macroScoring";
+import { macroScoreSumSql } from "./macroScoreSql";
+import { macroWinnerSqlOrder } from "@fitsy/shared";
 import { pickWinningEstimate, type RestaurantResult, type MenuResponse } from "@fitsy/shared";
 
 // ─── Prisma singleton ─────────────────────────────────────────────────────────
@@ -214,10 +216,6 @@ export async function findNearbyRestaurants(
   );
 
   const targetsActive = hasTargets(targets);
-  const tCal = targets.calories ?? null;
-  const tProt = targets.proteinG ?? null;
-  const tCarb = targets.carbsG ?? null;
-  const tFat = targets.fatG ?? null;
 
   // Dynamic filter fragments — composed via Prisma.sql for safe parameter binding.
   const filterFrags: Prisma.Sql[] = [];
@@ -330,10 +328,11 @@ export async function findNearbyRestaurants(
   // The inner LATERAL reads macros directly from MenuItem (denormalized in
   // pipeline-utils.ts and audited daily by /api/internal/audit-macro-drift),
   // so it never joins MacroEstimate at the per-item level — a ~100× saving
-  // on the hot path. MacroEstimate is joined once per result via a single
-  // LEFT JOIN on best."menuItemId" to surface confidence, which still lives
-  // on MacroEstimate as part of the audit metadata.
+  // on the hot path. Limit restaurants first, then select one winning
+  // estimate per result so multiple sources cannot duplicate restaurants
+  // or consume page slots. Confidence follows the same source as detail.
   const rows = await prisma.$queryRaw<ScoredRow[]>`
+    WITH ranked AS MATERIALIZED (
     SELECT
       r.id            AS "restaurantId",
       r.name          AS name,
@@ -352,7 +351,6 @@ export async function findNearbyRestaurants(
       best."proteinG",
       best."carbsG",
       best."fatG",
-      e.confidence    AS confidence,
       best."scoreSum",
       ${distanceExpr} AS "distanceMiles",
       ${orderKeyExpr} AS "orderKey"
@@ -365,34 +363,31 @@ export async function findNearbyRestaurants(
         m."proteinG"    AS "proteinG",
         m."carbsG"      AS "carbsG",
         m."fatG"        AS "fatG",
-        (
-          CASE WHEN ${tCal}::double precision > 0
-               THEN power((m.calories - ${tCal}::double precision) / ${tCal}::double precision, 2)
-               ELSE 0 END
-          + CASE WHEN ${tProt}::double precision > 0
-               THEN power((m."proteinG" - ${tProt}::double precision) / ${tProt}::double precision, 2)
-               ELSE 0 END
-          + CASE WHEN ${tCarb}::double precision > 0
-               THEN power((m."carbsG" - ${tCarb}::double precision) / ${tCarb}::double precision, 2)
-               ELSE 0 END
-          + CASE WHEN ${tFat}::double precision > 0
-               THEN power((m."fatG" - ${tFat}::double precision) / ${tFat}::double precision, 2)
-               ELSE 0 END
-        )               AS "scoreSum"
+        ${macroScoreSumSql(targets)}               AS "scoreSum"
       FROM "MenuItem" m
       WHERE m."restaurantId" = r.id
-        AND m.calories IS NOT NULL
+        AND m.calories IS NOT NULL AND m."proteinG" IS NOT NULL
+        AND m."carbsG" IS NOT NULL AND m."fatG" IS NOT NULL
         ${menuQueryFilter}
       ORDER BY "scoreSum" ASC, m.id ASC
       LIMIT 1
     ) AS best
-    LEFT JOIN "MacroEstimate" e ON e."menuItemId" = best."menuItemId"
     WHERE r.lat BETWEEN ${latMin} AND ${latMax}
       AND r.lng BETWEEN ${lngMin} AND ${lngMax}
       ${filters}
       AND ${distanceExpr} <= ${radiusMiles}::double precision
     ORDER BY "orderKey" ASC, r.id ASC
     LIMIT ${limit}
+    )
+    SELECT ranked.*, e.confidence
+    FROM ranked
+    LEFT JOIN LATERAL (
+      SELECT e.confidence FROM "MacroEstimate" e
+      WHERE e."menuItemId" = ranked."menuItemId"
+      ORDER BY ${Prisma.raw(macroWinnerSqlOrder("e"))}
+      LIMIT 1
+    ) e ON true
+    ORDER BY ranked."orderKey" ASC, ranked."restaurantId" ASC
   `;
 
   const total = rows.length;
@@ -431,9 +426,7 @@ export async function findNearbyRestaurants(
       proteinG: r.proteinG,
       carbsG: r.carbsG,
       fatG: r.fatG,
-      confidence: r.confidence,
-      // null (not Infinity): there is no score without targets, and JSON was
-      // already coercing Infinity to null on the wire anyway
+      confidence: r.confidence ?? "LOW",
       matchScore: targetsActive
         ? Math.round(Math.sqrt(r.scoreSum) * 10000) / 10000
         : null,

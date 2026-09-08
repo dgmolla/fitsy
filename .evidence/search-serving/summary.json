@@ -1,0 +1,36 @@
+{
+  "base": "54381a2",
+  "api_unit_tests": 642,
+  "db_tests": 15,
+  "native_route_assertion_tests": 3,
+  "scripts_default_tests": 117,
+  "mobile_tests": 264,
+  "api_coverage": {
+    "statements": 82.43,
+    "branches": 74.75,
+    "functions": 83.66,
+    "lines": 84.77
+  },
+  "mutation": {
+    "apps/api/lib/macroTargetParams.ts": {
+      "Killed": 38,
+      "Survived": 2
+    },
+    "packages/shared/src/utils/macroScoring.ts": {
+      "Killed": 29,
+      "Survived": 3,
+      "Timeout": 2
+    }
+  },
+  "before": {
+    "failed": 3,
+    "passed": 1
+  },
+  "after": {
+    "passed": 15
+  },
+  "limitations": [
+    "Existing own-code mocks check is shadow (46 pre-existing calls).",
+    "Optional live Overture mini-hex test fails because hardcoded 2026-03-18.0 S3 release is unavailable. Default scripts suite and remaining DB suite pass; serving code does not use Overture."
+  ]
+}
