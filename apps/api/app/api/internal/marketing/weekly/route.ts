@@ -82,7 +82,13 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     }
 
     const recipient = r.userId !== undefined ? { userId: r.userId } : { waitlistId: r.waitlistId };
-    const ok = await sendMarketingEmail({ ...recipient, to: r.email, subject, html });
+    const ok = await sendMarketingEmail({
+      ...recipient,
+      to: r.email,
+      subject,
+      html,
+      idempotencyKey: `weekly:${step}:${r.email}`,
+    });
 
     if (ok) {
       // Record only after a confirmed send — a failed send must be retried

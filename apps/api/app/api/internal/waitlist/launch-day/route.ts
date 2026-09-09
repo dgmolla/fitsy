@@ -20,7 +20,9 @@ export const maxDuration = 300;
  * short by the time budget, or signups that arrive after launch day, are
  * picked up by the next tick. The blast is processed in bounded batches
  * (lib/launchNotify.ts MAX_PER_RUN); the route keeps calling until nothing
- * remains, a batch makes no progress, or it has used most of its time.
+ * remains, a batch makes no progress, or it has used most of its time. A
+ * row that failed is not retried within the same run (RETRY_COOLDOWN_MS in
+ * lib/launchNotify.ts), so the drain only ever walks forward.
  *
  * Auth: CRON_SECRET Bearer (Vercel cron sends it). ?dryRun=1 previews.
  */

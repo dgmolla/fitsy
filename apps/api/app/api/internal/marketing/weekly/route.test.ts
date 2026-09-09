@@ -87,12 +87,14 @@ describe("GET /api/internal/marketing/weekly", () => {
       to: "alice@example.org",
       subject: "S",
       html: "<p>h</p>",
+      idempotencyKey: "weekly:ed-1:w35:alice@example.org",
     });
     expect(sendMarketingEmail).toHaveBeenNthCalledWith(2, {
       waitlistId: "wl1",
       to: "web@example.org",
       subject: "S",
       html: "<p>h</p>",
+      idempotencyKey: "weekly:ed-1:w35:web@example.org",
     });
     // Step is cycle-aware so the edition can recur next rotation.
     expect(recordSend).toHaveBeenCalledWith("alice@example.org", "weekly", "ed-1:w35");

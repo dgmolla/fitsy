@@ -63,7 +63,7 @@ describe("notifyLaunch: channels and convergence", () => {
     expect(recordSend).toHaveBeenCalledWith("app@fitsy.org", "launch", "LA");
     expect(sendLaunchPush).toHaveBeenCalledWith("ExponentPushToken[abc]", "LA");
     expect(sendMarketingEmail).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: "user-1", to: "app@fitsy.org" }),
+      expect.objectContaining({ userId: "user-1", to: "app@fitsy.org", idempotencyKey: "launch:LA:app@fitsy.org" }),
     );
     expect(prisma.launchWaitlist.update).toHaveBeenCalledWith({
       where: { id: "wl-app" },
@@ -132,11 +132,11 @@ describe("notifyLaunch: channels and convergence", () => {
     const res = await notifyLaunch({ ...LA, includeUnlocated: true });
     expect(prisma.launchWaitlist.update).toHaveBeenCalledWith({
       where: { id: "wl-first" },
-      data: { notifyAttempts: 1 },
+      data: { notifyAttempts: 1, lastNotifyAttemptAt: expect.any(Date) },
     });
     expect(prisma.launchWaitlist.update).toHaveBeenCalledWith({
       where: { id: "wl-last" },
-      data: { notifyAttempts: MAX_NOTIFY_ATTEMPTS },
+      data: { notifyAttempts: MAX_NOTIFY_ATTEMPTS, lastNotifyAttemptAt: expect.any(Date) },
     });
     // Only the retryable failure still counts as remaining work.
     expect(res).toEqual(
@@ -157,7 +157,7 @@ describe("notifyLaunch: channels and convergence", () => {
     expect(prisma.launchWaitlist.update).toHaveBeenCalledTimes(1);
     expect(prisma.launchWaitlist.update).toHaveBeenCalledWith({
       where: { id: "wl-web" },
-      data: { notifyAttempts: 1 },
+      data: { notifyAttempts: 1, lastNotifyAttemptAt: expect.any(Date) },
     });
   });
 
@@ -221,7 +221,7 @@ describe("notifyLaunch: channels and convergence", () => {
     expect(prisma.launchWaitlist.update).toHaveBeenCalledTimes(1);
     expect(prisma.launchWaitlist.update).toHaveBeenCalledWith({
       where: { id: "wl-app" },
-      data: { notifyAttempts: 1 },
+      data: { notifyAttempts: 1, lastNotifyAttemptAt: expect.any(Date) },
     });
   });
 });

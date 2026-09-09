@@ -79,6 +79,12 @@ export async function sendMarketingEmail(
     to: string;
     subject: string;
     html: string;
+    /**
+     * Provider-side dedup for retries (Resend honours it for 24h). Callers
+     * derive it from the ledger key (campaign, step, address) so a retry of
+     * a send whose response was lost cannot deliver twice.
+     */
+    idempotencyKey?: string | undefined;
   },
 ): Promise<boolean> {
   const { to, subject, html } = opts;
@@ -139,10 +145,10 @@ export async function sendMarketingEmail(
   // Sequential cron loops can trip the provider's per-second limit; honour
   // one 429 with its Retry-After (capped) before giving up on this address.
   // A false here is retried by the caller on its next run, never dropped.
-  const first = await postResend(apiKey, body);
+  const first = await postResend(apiKey, body, opts.idempotencyKey);
   if (first.status !== 429) return first.ok;
   await sleep(Math.min(first.retryAfterMs ?? 1000, MAX_RETRY_AFTER_MS));
-  return (await postResend(apiKey, body)).ok;
+  return (await postResend(apiKey, body, opts.idempotencyKey)).ok;
 }
 
 const MAX_RETRY_AFTER_MS = 5000;
@@ -154,6 +160,7 @@ function sleep(ms: number): Promise<void> {
 async function postResend(
   apiKey: string,
   body: string,
+  idempotencyKey?: string,
 ): Promise<{ ok: boolean; status: number; retryAfterMs?: number }> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
@@ -163,6 +170,7 @@ async function postResend(
       headers: {
         authorization: `Bearer ${apiKey}`,
         "content-type": "application/json",
+        ...(idempotencyKey ? { "idempotency-key": idempotencyKey } : {}),
       },
       signal: ctrl.signal,
       body,

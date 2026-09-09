@@ -53,6 +53,13 @@ export const MAX_PER_RUN = 400;
  */
 export const MAX_NOTIFY_ATTEMPTS = 3;
 
+/**
+ * A row that just failed is not retried before this much time has passed,
+ * so attempts are spread across daily ticks rather than burned by the drain
+ * loop of one run during a brief provider outage.
+ */
+export const RETRY_COOLDOWN_MS = 12 * 3600e3;
+
 export type LaunchNotifyResult =
   | { dryRun: true; matched: number; wouldNotify: number; wouldSuppress: number }
   | {
@@ -84,8 +91,13 @@ export async function notifyLaunch(opts: LaunchNotifyOptions): Promise<LaunchNot
   const radius =
     typeof opts.radiusMiles === "number" && opts.radiusMiles > 0 ? opts.radiusMiles : 30;
 
+  const retryBefore = new Date(Date.now() - RETRY_COOLDOWN_MS);
   const pending = await prisma.launchWaitlist.findMany({
-    where: { notifiedAt: null, notifyAttempts: { lt: MAX_NOTIFY_ATTEMPTS } },
+    where: {
+      notifiedAt: null,
+      notifyAttempts: { lt: MAX_NOTIFY_ATTEMPTS },
+      OR: [{ lastNotifyAttemptAt: null }, { lastNotifyAttemptAt: { lt: retryBefore } }],
+    },
     orderBy: { createdAt: "asc" },
     select: {
       id: true,
@@ -148,7 +160,13 @@ export async function notifyLaunch(opts: LaunchNotifyOptions): Promise<LaunchNot
           ? Promise.resolve(true)
           : (async () => {
               const { subject, html } = launchEmailContent(effectiveCity);
-              return sendMarketingEmail({ ...recipient, to: w.email, subject, html });
+              return sendMarketingEmail({
+                ...recipient,
+                to: w.email,
+                subject,
+                html,
+                idempotencyKey: `launch:${step}:${w.email}`,
+              });
             })(),
     ]);
 
@@ -171,7 +189,7 @@ export async function notifyLaunch(opts: LaunchNotifyOptions): Promise<LaunchNot
       const attempts = w.notifyAttempts + 1;
       await prisma.launchWaitlist.update({
         where: { id: w.id },
-        data: { notifyAttempts: attempts },
+        data: { notifyAttempts: attempts, lastNotifyAttemptAt: new Date() },
       });
       if (attempts >= MAX_NOTIFY_ATTEMPTS) exhausted++;
       else failed++;
@@ -186,7 +204,8 @@ export async function notifyLaunch(opts: LaunchNotifyOptions): Promise<LaunchNot
     notified,
     suppressed,
     failed,
-    // Rows still needing work: not yet processed, plus this batch's retryable failures.
+    // Rows still needing work: not yet processed, plus this batch's retryable
+    // failures (which the cooldown defers to a later tick, not this run).
     remaining: inArea.length - batch.length + failed,
     exhausted,
   };

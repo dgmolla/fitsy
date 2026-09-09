@@ -23,7 +23,7 @@ jest.mock("@/lib/marketingLedger", () => ({
   wasSent: jest.fn(),
 }));
 
-import { MAX_NOTIFY_ATTEMPTS, MAX_PER_RUN, milesBetween, notifyLaunch } from "@/lib/launchNotify";
+import { MAX_NOTIFY_ATTEMPTS, MAX_PER_RUN, RETRY_COOLDOWN_MS, milesBetween, notifyLaunch } from "@/lib/launchNotify";
 import { prisma } from "@/lib/restaurantService";
 import { sendLaunchPush } from "@/lib/launchPush";
 import { isEmailOptedOut, optedOutAddresses, sendMarketingEmail } from "@/lib/marketingEmail";
@@ -57,14 +57,18 @@ describe("milesBetween", () => {
 
 
 describe("notifyLaunch: matching, dry run, batching", () => {
-  it("only considers unnotified rows with attempts left, oldest first; opt-out is decided per address at send time", async () => {
+  it("only considers unnotified rows with attempts left and past the retry cooldown, oldest first", async () => {
+    const before = Date.now();
     await notifyLaunch({ ...LA, dryRun: true });
-    expect(prisma.launchWaitlist.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { notifiedAt: null, notifyAttempts: { lt: MAX_NOTIFY_ATTEMPTS } },
-        orderBy: { createdAt: "asc" },
-      }),
-    );
+    const arg = (prisma.launchWaitlist.findMany as jest.Mock).mock.calls[0]![0];
+    expect(arg.orderBy).toEqual({ createdAt: "asc" });
+    expect(arg.where.notifiedAt).toBeNull();
+    expect(arg.where.notifyAttempts).toEqual({ lt: MAX_NOTIFY_ATTEMPTS });
+    const [never, cooled] = arg.where.OR;
+    expect(never).toEqual({ lastNotifyAttemptAt: null });
+    const cutoff = (cooled.lastNotifyAttemptAt.lt as Date).getTime();
+    expect(before - cutoff).toBeGreaterThanOrEqual(RETRY_COOLDOWN_MS - 1000);
+    expect(before - cutoff).toBeLessThanOrEqual(RETRY_COOLDOWN_MS + 1000);
   });
 
   it("radius-matches located rows and excludes unlocated web rows by default", async () => {

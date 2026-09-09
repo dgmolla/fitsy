@@ -78,7 +78,7 @@ sequenceDiagram
   Website rows have no location and never radius-match; `includeUnlocated: true` folds them into the blast (use it for the first city launch).
   With `dryRun: true` it returns `matched`, `wouldNotify`, and `wouldSuppress` without sending anything.
   Live runs process up to 400 rows and report `remaining` (unprocessed rows plus this run's retryable failures); re-run while it is above zero (already-notified rows are skipped).
-  A row that fails three times leaves the blast and is counted in `exhausted`; reset its `notifyAttempts` to re-arm it.
+  A failed row is retried at most once per 12 hours; after three failures it leaves the blast and is counted in `exhausted`. Reset its `notifyAttempts` to re-arm it.
   Idempotent: entries with `notifiedAt` already set are skipped.
   An email opt-out suppresses the email only; the push is a separately requested notification and still goes out.
   Sets `notifiedAt` when either push or email succeeds, and also when an opted-out entry's only allowed channel (push) is absent or failed (reported as `suppressed`) so the job converges.

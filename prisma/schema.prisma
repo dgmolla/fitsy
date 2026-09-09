@@ -57,6 +57,10 @@ model LaunchWaitlist {
   // (lib/launchNotify.ts) leave the blast so a permanently failing address
   // cannot keep every daily tick alerting.
   notifyAttempts Int           @default(0)
+  // When the last failed attempt happened: a row is retried at most once per
+  // RETRY_COOLDOWN (lib/launchNotify.ts), so one outage cannot burn every
+  // attempt inside a single run's drain loop.
+  lastNotifyAttemptAt DateTime?
   emailOptOutAt DateTime?      // set via /unsubscribe?w=<id>; suppresses email to this row
   // SetNull, not Cascade: the row is the address-keyed suppression record and
   // may have been created on the website independently of the account. The
