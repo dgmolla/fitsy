@@ -21,7 +21,12 @@
  */
 import { prisma } from "@/lib/restaurantService";
 import { sendLaunchPush } from "@/lib/launchPush";
-import { isEmailOptedOut, launchEmailContent, sendMarketingEmail } from "@/lib/marketingEmail";
+import {
+  isEmailOptedOut,
+  isUndeliverableAddress,
+  launchEmailContent,
+  sendMarketingEmail,
+} from "@/lib/marketingEmail";
 import { recordSend } from "@/lib/marketingLedger";
 
 export type LaunchNotifyOptions = {
@@ -78,10 +83,14 @@ export async function notifyLaunch(opts: LaunchNotifyOptions): Promise<LaunchNot
     },
   });
 
-  const inArea = pending.filter((w) =>
-    w.lat === null || w.lng === null
-      ? includeUnlocated === true
-      : milesBetween(lat, lng, w.lat, w.lng) <= radius,
+  // Reserved-TLD seed addresses can never be delivered: leave them out so
+  // they are neither previewed as reachable nor retried on every run.
+  const inArea = pending.filter(
+    (w) =>
+      !isUndeliverableAddress(w.email) &&
+      (w.lat === null || w.lng === null
+        ? includeUnlocated === true
+        : milesBetween(lat, lng, w.lat, w.lng) <= radius),
   );
 
   if (dryRun) {

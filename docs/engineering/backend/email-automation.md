@@ -10,7 +10,7 @@ Every send path needs the same guarantees: one send per step per address, never 
 
 Two schedules feed one send ledger.
 
-1. **Static (calendar) schedule.** The Tuesday weekly editorial, now sent to the whole marketing audience (accounts and waitlist-only addresses), plus the launch-day blast, which fires from a daily cron on the date in `apps/api/lib/launch.ts`.
+1. **Static (calendar) schedule.** The Tuesday weekly editorial (accounts now; confirmed waitlist-only addresses once double opt-in ships), plus the launch-day blast, which fires from a daily cron from the date in `apps/api/lib/launch.ts` onward.
 2. **Dynamic (lifecycle) schedule.** A daily cron that walks a table of steps keyed on an anchor event and an offset (waitlist join +3d, +7d; account created +1d, +3d, +7d) and sends whatever is due. Ships in a follow-up PR, together with the double opt-in confirmation that becomes step zero of the waitlist track.
 
 The `MarketingSend` ledger records every marketing send by normalized address, campaign, and step.
@@ -21,7 +21,7 @@ It gives every campaign idempotency and the cross-campaign frequency cap.
 1. The same person is both an account and a waitlist row: the audience helper collapses them to one recipient (the account), so one address is one history.
 2. A lifecycle step and the weekly edition fall due on the same day: the frequency cap (48 hours between marketing emails to one address) makes the weekly skip that address; the next week's edition is different, so nothing is lost.
 3. A send fails at the provider: it is not recorded, so the next run retries it. A launch-day blast that partially fails is safe to re-run; `notifiedAt` makes it idempotent per row.
-4. The cron fires on the wrong day: the launch-day route compares the UTC date with the launch constant and no-ops.
+4. The launch-day cron runs every day: before the launch date it no-ops; on and after it, it runs the blast, which is idempotent per row, so later ticks resume a blast cut short by the time budget and pick up post-launch signups at near-zero cost.
 5. Legacy weekly history: the migration copies the old `_marketing_send` rows (edition per user) into the ledger by address so nobody receives an edition twice. The old table is left in place (expand step); a later migration drops it once the ledger-backed cron has run in production.
 
 ## Out of Scope
@@ -68,7 +68,7 @@ flowchart TD
 
 - `MarketingSend(email, campaign, step, sentAt)` with a unique key on the first three columns. Campaigns: `weekly`, `launch`, `lifecycle`.
 - `lib/marketingLedger.ts`: `wasSent`, `recordSend` (idempotent upsert), `sentWithin` (frequency cap, default 48 hours).
-- `lib/marketingAudience.ts`: accounts not opted out anywhere, union waitlist-only rows not opted out, one recipient per address, undeliverable seeds removed.
+- `lib/marketingAudience.ts`: accounts not opted out anywhere, optionally union waitlist-only rows not opted out anywhere (each branch mirrors the other table's opt-out for the address), one recipient per address, undeliverable seeds removed. The weekly cron passes `includeWaitlistOnly: false` until double opt-in gates those rows on `confirmedAt`.
 - `lib/launchNotify.ts`: the launch blast, shared by the operator route and the launch-day cron. Records successful emails under campaign `launch` with the city as the step.
 - Weekly cron: audience from the helper, edition dedup and pacing from the ledger, recipient kind (`userId` or `waitlistId`) decides which unsubscribe link is minted.
 
@@ -77,7 +77,7 @@ flowchart TD
 | Route | Trigger | Body / query | Response |
 |-------|---------|--------------|----------|
 | `GET /api/internal/marketing/weekly` | cron, Tuesday 16:00 UTC | `?dryRun=1` | `{ ok, edition, eligible, sent, skipped, paced, failed }` |
-| `GET /api/internal/waitlist/launch-day` | cron, daily 16:00 UTC | `?dryRun=1` | `{ ok, skipped, today, launchDate }` off-day; launch result on the day, drained in batches until none remain or a batch makes no progress |
+| `GET /api/internal/waitlist/launch-day` | cron, daily 16:00 UTC | `?dryRun=1` | `{ ok, skipped, today, launchDate }` before launch; from launch day on, the blast result, drained in batches until none remain or a batch makes no progress (`stalled: true`) |
 | `POST /api/internal/waitlist/notify` | operator | `{ lat, lng, radiusMiles?, city?, includeUnlocated?, dryRun? }` | `{ ok, matched, viaPush, viaEmail, notified, suppressed, failed, remaining }`; dry run: `{ matched, wouldNotify, wouldSuppress }` |
 
 All three require the `CRON_SECRET` bearer.

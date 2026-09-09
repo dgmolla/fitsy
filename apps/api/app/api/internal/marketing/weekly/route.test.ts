@@ -95,9 +95,15 @@ describe("GET /api/internal/marketing/weekly", () => {
     expect(recordSend).toHaveBeenCalledWith("web@example.org", "weekly", "ed-1:w35");
   });
 
-  it("skips an address that already has this edition", async () => {
+  it("asks for accounts only until double opt-in gates waitlist-only rows", async () => {
+    await GET(makeRequest());
+    expect(marketingAudience).toHaveBeenCalledWith({ includeWaitlistOnly: false });
+  });
+
+  it("skips an address that already has this edition, reading the same week-stamped key it writes", async () => {
     (wasSent as jest.Mock).mockImplementation(async (email: string) => email === "alice@example.org");
     const res = await GET(makeRequest());
+    expect(wasSent).toHaveBeenCalledWith("alice@example.org", "weekly", "ed-1:w35");
     expect(await res.json()).toEqual(expect.objectContaining({ sent: 1, skipped: 1 }));
     expect(sendMarketingEmail).toHaveBeenCalledTimes(1);
     expect(sendMarketingEmail).toHaveBeenCalledWith(expect.objectContaining({ to: "web@example.org" }));

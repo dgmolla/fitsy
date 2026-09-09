@@ -1,11 +1,22 @@
 /**
  * Who marketing email can go to, across both tables:
  *   - accounts (User) that have not opted out anywhere, and
- *   - waitlist-only addresses (LaunchWaitlist with no account) that have not
- *     opted out.
+ *   - optionally, waitlist-only addresses (LaunchWaitlist with no account)
+ *     that have not opted out anywhere.
  * One address is one recipient: a waitlist row linked to an account is
  * represented by the account. Reserved-TLD seed addresses are excluded so
  * counts reflect the real audience and nothing hard-bounces.
+ *
+ * Opt-out is address-keyed, so each branch mirrors the other table's
+ * opt-out: an account is excluded when a waitlist row for its address opted
+ * out, and a waitlist row is excluded when an account with its address opted
+ * out (the row may be unlinked, e.g. the form was submitted after signup).
+ *
+ * Waitlist-only rows are opt-in (`includeWaitlistOnly`): recurring email to
+ * addresses that only ever typed themselves into a public form waits for the
+ * double opt-in confirmation (next PR), which will gate this on confirmedAt.
+ * The launch blast is the explicitly requested notification and does not go
+ * through this helper.
  */
 import { prisma } from "@/lib/restaurantService";
 import { isUndeliverableAddress } from "@/lib/marketingEmail";
@@ -14,9 +25,9 @@ export type MarketingRecipientRow =
   | { email: string; userId: string; waitlistId?: undefined }
   | { email: string; waitlistId: string; userId?: undefined };
 
-export async function marketingAudience(): Promise<MarketingRecipientRow[]> {
-  // Opt-out is address-keyed: a waitlist row for the same email that opted
-  // out via a ?w= link counts against the account, linked or not.
+export async function marketingAudience(
+  opts: { includeWaitlistOnly: boolean },
+): Promise<MarketingRecipientRow[]> {
   const users = await prisma.$queryRawUnsafe<{ id: string; email: string }[]>(
     `SELECT u.id, lower(u.email) AS email FROM "User" u
       WHERE u."emailOptOutAt" IS NULL
@@ -25,10 +36,17 @@ export async function marketingAudience(): Promise<MarketingRecipientRow[]> {
            WHERE w."email" = lower(u."email") AND w."emailOptOutAt" IS NOT NULL
         )`,
   );
-  const waitlistOnly = await prisma.launchWaitlist.findMany({
-    where: { userId: null, emailOptOutAt: null },
-    select: { id: true, email: true },
-  });
+  const waitlistOnly = opts.includeWaitlistOnly
+    ? await prisma.$queryRawUnsafe<{ id: string; email: string }[]>(
+        `SELECT w.id, w.email FROM "LaunchWaitlist" w
+          WHERE w."userId" IS NULL
+            AND w."emailOptOutAt" IS NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM "User" u
+               WHERE lower(u."email") = w."email" AND u."emailOptOutAt" IS NOT NULL
+            )`,
+      )
+    : [];
 
   const seen = new Set<string>();
   const out: MarketingRecipientRow[] = [];

@@ -11,6 +11,7 @@ jest.mock("@/lib/launchPush", () => ({
 jest.mock("@/lib/marketingEmail", () => ({
   sendMarketingEmail: jest.fn(),
   isEmailOptedOut: jest.fn(),
+  isUndeliverableAddress: jest.requireActual("@/lib/marketingEmail").isUndeliverableAddress,
   launchEmailContent: jest.fn(() => ({ subject: "Fitsy launched", html: "<p>hi</p>" })),
 }));
 
@@ -133,6 +134,26 @@ describe("notifyLaunch", () => {
     expect(sendMarketingEmail).toHaveBeenCalledTimes(MAX_PER_RUN);
   });
 
+  it("honours an explicit radius and falls back to 30 miles for a non-positive one", async () => {
+    // ONBOARDING_LA sits ~4 miles from the LA center.
+    expect(await notifyLaunch({ ...LA, radiusMiles: 1, dryRun: true })).toEqual(
+      expect.objectContaining({ matched: 0 }),
+    );
+    expect(await notifyLaunch({ ...LA, radiusMiles: 0, dryRun: true })).toEqual(
+      expect.objectContaining({ matched: 1 }),
+    );
+  });
+
+  it("never matches an undeliverable seed address", async () => {
+    (prisma.launchWaitlist.findMany as jest.Mock).mockResolvedValue([
+      { ...WEB, id: "wl-seed", email: "seed-1@fitsy.test" },
+      WEB,
+    ]);
+    const res = await notifyLaunch({ ...LA, includeUnlocated: true });
+    expect(res).toEqual(expect.objectContaining({ matched: 1, notified: 1 }));
+    expect(sendMarketingEmail).not.toHaveBeenCalledWith(expect.objectContaining({ to: "seed-1@fitsy.test" }));
+  });
+
   it("folds unlocated web rows in with includeUnlocated", async () => {
     const res = await notifyLaunch({ ...LA, includeUnlocated: true, dryRun: true });
     expect(res).toEqual({ dryRun: true, matched: 2, wouldNotify: 2, wouldSuppress: 0 });
@@ -181,6 +202,8 @@ describe("notifyLaunch", () => {
     );
     const sent = (sendMarketingEmail as jest.Mock).mock.calls[0]![0];
     expect(sent).not.toHaveProperty("userId");
+    // No city anywhere: the ledger step falls back to "launch".
+    expect(recordSend).toHaveBeenCalledWith("web@fitsy.org", "launch", "launch");
   });
 
   it("account without a push token: no push attempt, email alone marks the row notified", async () => {

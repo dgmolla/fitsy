@@ -11,14 +11,15 @@ export const maxDuration = 300;
 /**
  * GET /api/internal/waitlist/launch-day - the scheduled launch blast.
  *
- * Runs daily from Vercel cron and does nothing until the UTC date matches
- * LAUNCH_DATE_ISO (lib/launch.ts, the same constant the website shows). On
- * that day it notifies everyone within the launch radius AND every
- * location-less website signup (includeUnlocated), then is a no-op on every
- * later run because notifiedAt is set. A cron misfire on another day is
- * harmless; a manual re-run on launch day is idempotent. The blast is
- * processed in bounded batches (lib/launchNotify.ts MAX_PER_RUN); the route
- * keeps calling until nothing remains or it has used most of its time.
+ * Runs daily from Vercel cron and does nothing before LAUNCH_DATE_ISO
+ * (lib/launch.ts, the same constant the website shows). From that day on it
+ * notifies everyone within the launch radius AND every location-less website
+ * signup (includeUnlocated). Later days are cheap near-no-ops because
+ * notifiedAt is set per row, and they double as the resume path: a blast cut
+ * short by the time budget, or signups that arrive after launch day, are
+ * picked up by the next tick. The blast is processed in bounded batches
+ * (lib/launchNotify.ts MAX_PER_RUN); the route keeps calling until nothing
+ * remains, a batch makes no progress, or it has used most of its time.
  *
  * Auth: CRON_SECRET Bearer (Vercel cron sends it). ?dryRun=1 previews.
  */
@@ -30,7 +31,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   const today = new Date().toISOString().slice(0, 10);
-  if (today !== LAUNCH_DATE_ISO) {
+  if (today < LAUNCH_DATE_ISO) {
     return NextResponse.json({ ok: true, skipped: true, today, launchDate: LAUNCH_DATE_ISO });
   }
 
@@ -40,12 +41,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   let result = await notifyLaunch(opts);
   // Drain in batches while time allows and each batch makes progress; a
   // batch that closes no rows (provider down) would be re-processed
-  // identically, so stop and leave the remainder for a manual re-run.
-  // `failed` is the last batch's count, not a sum: failed rows are retried
-  // by every batch, so summing would count the same rows repeatedly.
+  // identically, so stop, report it as stalled, and leave the remainder to
+  // the next tick. `failed` is the latest batch's count, not a sum: failed
+  // rows are retried by every batch, so summing would count them repeatedly.
+  let stalled = false;
   while (!result.dryRun && result.remaining > 0 && Date.now() - started < 200_000) {
     const next = await notifyLaunch(opts);
-    if (next.dryRun || next.notified + next.suppressed === 0) break;
+    if (next.dryRun) break;
+    const progressed = next.notified + next.suppressed > 0;
     result = {
       ...next,
       matched: result.matched,
@@ -54,6 +57,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       notified: result.notified + next.notified,
       suppressed: result.suppressed + next.suppressed,
     };
+    if (!progressed) {
+      stalled = true;
+      break;
+    }
   }
-  return NextResponse.json({ ok: true, launchDate: LAUNCH_DATE_ISO, ...result });
+  return NextResponse.json({ ok: true, launchDate: LAUNCH_DATE_ISO, ...result, ...(stalled ? { stalled } : {}) });
 }

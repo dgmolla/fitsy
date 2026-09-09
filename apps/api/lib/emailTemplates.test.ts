@@ -31,6 +31,7 @@ describe("editionForDate", () => {
   });
 
   it("handles dates before the epoch without going out of range", () => {
-    expect(WEEKLY_EDITIONS.map((e) => e.slug)).toContain(editionForDate(new Date("2025-12-01T00:00:00Z")).slug);
+    // 2025-12-01 is week -5: ((-5 % 8) + 8) % 8 = 3.
+    expect(editionForDate(new Date("2025-12-01T00:00:00Z")).slug).toBe(WEEKLY_EDITIONS[3]!.slug);
   });
 });

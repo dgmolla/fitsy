@@ -70,8 +70,8 @@ sequenceDiagram
   Always answers `{ ok: true }` for a well-formed address so membership cannot be probed.
 
 - `GET /api/internal/waitlist/launch-day` (CRON_SECRET, daily cron) - the scheduled first-launch blast.
-  No-op until the UTC date equals `LAUNCH_DATE_ISO` in `apps/api/lib/launch.ts`; on that day it runs the notify logic below with the launch center, the launch city, and `includeUnlocated: true`.
-  Idempotent on later runs because `notifiedAt` is set. See [email-automation.md](email-automation.md).
+  No-op before `LAUNCH_DATE_ISO` in `apps/api/lib/launch.ts`; from that day on it runs the notify logic below with the launch center, the launch city, and `includeUnlocated: true`.
+  Later daily runs are near-no-ops because `notifiedAt` is set, and they resume a blast cut short by the time budget and catch post-launch signups. See [email-automation.md](email-automation.md).
 
 - `POST /api/internal/waitlist/notify` (CRON_SECRET) - run by hand when a later city launches.
   Accepts `{ lat, lng, radiusMiles?, city?, includeUnlocated?, dryRun? }`.

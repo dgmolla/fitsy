@@ -37,13 +37,14 @@ afterEach(() => {
 });
 
 describe("GET /api/internal/waitlist/launch-day", () => {
-  it("requires the CRON_SECRET bearer", async () => {
+  it("requires the CRON_SECRET bearer, even on launch day", async () => {
+    jest.useFakeTimers().setSystemTime(new Date(`${LAUNCH_DATE_ISO}T16:00:00Z`));
     expect((await GET(makeRequest("", null))).status).toBe(401);
     expect((await GET(makeRequest("", "Bearer nope"))).status).toBe(401);
     expect(notifyLaunch).not.toHaveBeenCalled();
   });
 
-  it("is a no-op on any day but the launch date", async () => {
+  it("is a no-op before the launch date", async () => {
     jest.useFakeTimers().setSystemTime(new Date("2026-09-10T16:00:00Z"));
     const res = await GET(makeRequest());
     expect(await res.json()).toEqual({
@@ -53,6 +54,13 @@ describe("GET /api/internal/waitlist/launch-day", () => {
       launchDate: LAUNCH_DATE_ISO,
     });
     expect(notifyLaunch).not.toHaveBeenCalled();
+  });
+
+  it("runs again on later days so a truncated blast and post-launch signups are picked up", async () => {
+    jest.useFakeTimers().setSystemTime(new Date("2026-09-13T16:00:00Z"));
+    const res = await GET(makeRequest());
+    expect(await res.json()).toEqual(expect.objectContaining({ ok: true, notified: 3 }));
+    expect(notifyLaunch).toHaveBeenCalledTimes(1);
   });
 
   it("on launch day blasts the launch radius plus every unlocated website signup", async () => {
@@ -106,8 +114,9 @@ describe("GET /api/internal/waitlist/launch-day", () => {
       .mockResolvedValue(stuck);
     const res = await GET(makeRequest());
     expect(notifyLaunch).toHaveBeenCalledTimes(2);
+    // The stalled batch's own failure count is reported, not dropped.
     expect(await res.json()).toEqual(
-      expect.objectContaining({ notified: 2, failed: 0, remaining: 3 }),
+      expect.objectContaining({ notified: 2, failed: 3, remaining: 3, stalled: true }),
     );
   });
 });

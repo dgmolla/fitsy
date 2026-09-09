@@ -15,15 +15,25 @@ CREATE UNIQUE INDEX "MarketingSend_email_campaign_step_key" ON "MarketingSend"("
 CREATE INDEX "MarketingSend_email_sentAt_idx" ON "MarketingSend"("email", "sentAt");
 
 -- Carry over weekly-edition history so nobody receives an edition twice.
+-- The step is week-stamped exactly like the cron builds it
+-- (<edition>:w<weeks since Mon 2026-01-05 UTC>, see weekIndexForDate in
+-- apps/api/lib/emailTemplates.ts) so the carried-over rows actually match.
 -- The legacy table only exists where the weekly cron has already run.
 DO $$
 BEGIN
   IF to_regclass('"_marketing_send"') IS NOT NULL THEN
     INSERT INTO "MarketingSend" ("id", "email", "campaign", "step", "sentAt")
-      SELECT md5(lower(u."email") || ':weekly:' || m.edition), lower(u."email"), 'weekly', m.edition,
-             COALESCE(m.sent_at, CURRENT_TIMESTAMP)
-        FROM "_marketing_send" m
-        JOIN "User" u ON u."id" = m.user_id
+      SELECT md5(lower(u."email") || ':weekly:' || s.step), lower(u."email"), 'weekly', s.step, s.sent_at
+        FROM (
+          SELECT m.user_id,
+                 COALESCE(m.sent_at, CURRENT_TIMESTAMP) AS sent_at,
+                 m.edition || ':w' || floor(
+                   (extract(epoch FROM COALESCE(m.sent_at, CURRENT_TIMESTAMP))
+                    - extract(epoch FROM timestamptz '2026-01-05 00:00:00+00')) / 604800
+                 )::text AS step
+            FROM "_marketing_send" m
+        ) s
+        JOIN "User" u ON u."id" = s.user_id
       ON CONFLICT ("email", "campaign", "step") DO NOTHING;
   END IF;
 END $$;

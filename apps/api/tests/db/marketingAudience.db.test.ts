@@ -40,6 +40,7 @@ describeIfDb("marketingAudience (DB)", () => {
     await user("optedout", { emailOptOutAt: new Date() });
     await user("rowoptout");
     await user("mixed", { emailCase: (e) => e.toUpperCase() });
+    await user("acctoptout", { emailOptOutAt: new Date() });
     await prisma.launchWaitlist.createMany({
       data: [
         // opted out on the waitlist row only: the account must be excluded
@@ -50,6 +51,8 @@ describeIfDb("marketingAudience (DB)", () => {
         { email: email("webonly"), source: "web" },
         // waitlist-only, opted out
         { email: email("weboptout"), source: "web", emailOptOutAt: new Date() },
+        // unlinked row whose ACCOUNT opted out: the reverse direction
+        { email: email("acctoptout"), source: "web" },
       ],
     });
   });
@@ -61,7 +64,7 @@ describeIfDb("marketingAudience (DB)", () => {
   });
 
   it("includes eligible accounts and waitlist-only rows once each, excludes every opt-out", async () => {
-    const rows = (await aud.marketingAudience()).filter((r) => r.email.startsWith(tag));
+    const rows = (await aud.marketingAudience({ includeWaitlistOnly: true })).filter((r) => r.email.startsWith(tag));
     const byEmail = Object.fromEntries(rows.map((r) => [r.email, r]));
     expect(Object.keys(byEmail).sort()).toEqual([email("mixed"), email("plain"), email("webonly")].sort());
     expect(byEmail[email("plain")]).toEqual({ email: email("plain"), userId: `${tag}-plain` });

@@ -134,7 +134,7 @@ The recipient kind (`userId` or `waitlistId`) decides which unsubscribe link is 
 The weekly cron uses campaign `weekly` with `<edition slug>:w<week index>` as the step, so an edition recurs on the next eight-week rotation but a retry within the same week is a no-op.
 A row is written only after `sendMarketingEmail` returns `true`; a failed send is never recorded, so the next run retries it.
 Before sending, the cron also skips any address that heard from any campaign within the last 48 hours (`paced`), so a lifecycle email and an edition never land back to back.
-The migration that introduced the ledger copied the old `_marketing_send` history into it (bare edition slugs, from before the week-stamped key); the old table is dropped in a later contraction migration.
+The migration that introduced the ledger copied the old `_marketing_send` history into it, week-stamping each row from its `sent_at` so it matches the new key; the old table is dropped in a later contraction migration.
 
 ### Dry run
 
