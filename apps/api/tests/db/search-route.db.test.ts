@@ -13,7 +13,7 @@ testIfDb('search route integration with real JWT and Postgres', () => {
     throw new Error(`Native route tests failed:\n${e.stdout ?? ''}\n${e.stderr ?? ''}`);
   }
   // A successful process with an empty/disabled native suite is not evidence.
-  expect(Number(output.match(/^# tests (\d+)$/m)?.[1])).toBe(5);
+  expect(Number(output.match(/^# tests (\d+)$/m)?.[1])).toBe(13);
   expect(output).toMatch(/^# fail 0$/m);
   expect(output).toMatch(/^# skipped 0$/m);
 }, 35_000);

@@ -142,9 +142,11 @@ test('cursor is bound to restaurant, target values and selection', async () => {
   assert.equal((await getMenu(id, 'calories=500' + suffix)).status, 400);
   assert.equal((await getMenu(id, targetQuery + suffix + '&selectedItemId=another')).status, 400);
   assert.equal((await getMenu(id, 'cursor=garbage')).status, 400);
-  const underflow = JSON.parse(Buffer.from(first.nextCursor, 'base64url').toString());
-  underflow.score = '1e-400';
-  assert.equal((await getMenu(id, targetQuery + '&cursor=' + Buffer.from(JSON.stringify(underflow)).toString('base64url'))).status, 400);
+  for (const score of ['1e-400', '-1e-400', '1e400', '-1e400']) {
+    const invalid = JSON.parse(Buffer.from(first.nextCursor, 'base64url').toString());
+    invalid.score = score;
+    assert.equal((await getMenu(id, targetQuery + '&cursor=' + Buffer.from(JSON.stringify(invalid)).toString('base64url'))).status, 400);
+  }
 });
 
 test('selection pins the searched item without losing or repeating rows', async () => {
@@ -158,7 +160,7 @@ test('selection pins the searched item without losing or repeating rows', async 
 });
 
 test('invalid targets and page sizes return 400 on detail too', async () => {
-  for (const query of ['protein=NaN', 'fatG=-1', 'calories=', 'protein=40&proteinG=50',
+  for (const query of ['protein=NaN', 'protein=1e-300', 'protein=1e-400', 'fatG=-1', 'calories=', 'protein=40&proteinG=50',
     'pageSize=0', 'pageSize=251', 'pageSize=1.5', 'pageSize=']) {
     assert.equal((await getMenu(restaurantIds[0]!, query)).status, 400, query);
   }
