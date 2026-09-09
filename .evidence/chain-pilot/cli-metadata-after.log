@@ -1,0 +1,13 @@
+
+> @fitsy/api@0.1.0 test
+> jest --runInBand --runTestsByPath tests/db/chainPilotCli.db.test.ts
+
+PASS tests/db/chainPilotCli.db.test.ts
+  actual pilot CLI plan, apply and rollback
+    ✓ explicit hashes and target guard writes; complete workflow restores its captured starting state (4623 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       1 passed, 1 total
+Snapshots:   0 total
+Time:        4.938 s
+Ran all test suites within paths "tests/db/chainPilotCli.db.test.ts".

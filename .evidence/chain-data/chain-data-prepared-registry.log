@@ -1,0 +1,25 @@
+{"name":"structural","status":"pass","summary":"all structural tests passed","fix":"","duration_ms":9792,"blocking":true}
+{"name":"secrets","status":"pass","summary":"no secrets, env files, or build output in diff","fix":"","duration_ms":668,"blocking":true}
+{"name":"lint","status":"pass","summary":"eslint clean","fix":"","duration_ms":8771,"blocking":true}
+{"name":"typecheck","status":"pass","summary":"tsc clean in all workspaces","fix":"","duration_ms":13095,"blocking":true}
+{"name":"boundaries","status":"pass","summary":"no dependency violations","fix":"","duration_ms":4262,"blocking":true}
+{"name":"actionlint","status":"pass","summary":"workflows lint clean","fix":"","duration_ms":477,"blocking":true}
+{"name":"context-freshness","status":"pass","summary":"context files reference only real commands and paths","fix":"","duration_ms":459,"blocking":true}
+{"name":"migration-safety","status":"pass","summary":"new migrations are additive or carry down.sql","fix":"","duration_ms":213,"blocking":true}
+{"name":"own-code-mocks","status":"fail","summary":"58 own-code jest.mock() calls in apps/api tests","fix":"test against the DB container instead of mocking our own code; the external boundary (services/*, lib/supabase) stays mockable","duration_ms":188,"blocking":false}
+{"name":"test","status":"pass","summary":"api coverage gate + scripts tests green","fix":"","duration_ms":31772,"blocking":true}
+
+--- own-code-mocks output ---
+apps/api/app/unsubscribe/route.test.ts:1:jest.mock("@/lib/restaurantService", () => ({
+apps/api/app/api/waitlist/web/route.test.ts:1:jest.mock("@/lib/rateLimit", () => ({
+apps/api/app/api/waitlist/web/route.test.ts:5:jest.mock("@/lib/restaurantService", () => ({
+apps/api/app/api/waitlist/route.test.ts:1:jest.mock("@/lib/auth", () => ({
+apps/api/app/api/waitlist/route.test.ts:12:jest.mock("@/lib/restaurantService", () => ({
+apps/api/app/api/saved-items/route.test.ts:9:jest.mock("@/lib/auth", () => ({
+apps/api/app/api/saved-items/route.test.ts:13:jest.mock("@/lib/restaurantService", () => ({
+apps/api/app/api/saved-items/[id]/route.test.ts:7:jest.mock("@/lib/auth", () => ({
+apps/api/app/api/saved-items/[id]/route.test.ts:11:jest.mock("@/lib/restaurantService", () => ({
+apps/api/app/api/auth/apple/route.test.ts:7:jest.mock("@/lib/restaurantService", () => {
+
+
+verify: 9 pass, 0 fail, 1 shadow-fail (own-code-mocks), 0 skipped [layers 0-2, scope changed, runs local]

@@ -1,0 +1,141 @@
+[
+  {
+    "slug": "waba-grill",
+    "key": "chicken-plate",
+    "items": [
+      {
+        "item": {
+          "name": "Chicken Plate",
+          "hasCustomizations": true,
+          "calorieLabel": "820 Cal.",
+          "calories": 820,
+          "description": "Grilled all-natural, never frozen chicken caramelized with our signature WaBa sauce.",
+          "price": 16.19,
+          "section": "Featured items"
+        }
+      }
+    ],
+    "sourceStoreUuid": "45fda32b-8ed3-41c5-b15a-4a7842969634",
+    "sourceRestaurant": "WaBa Grill - Van Nuys (Sepulveda)",
+    "capturedAt": "2026-09-09"
+  },
+  {
+    "slug": "waba-grill",
+    "key": "steak-plate",
+    "items": [
+      {
+        "item": {
+          "name": "Steak Plate",
+          "hasCustomizations": true,
+          "calorieLabel": "980 Cal.",
+          "calories": 980,
+          "description": "Juicy steak marinated in house with our WaBa marinade and grilled to perfection.",
+          "price": 18.19,
+          "section": "Featured items"
+        }
+      }
+    ],
+    "sourceStoreUuid": "45fda32b-8ed3-41c5-b15a-4a7842969634",
+    "sourceRestaurant": "WaBa Grill - Van Nuys (Sepulveda)",
+    "capturedAt": "2026-09-09"
+  },
+  {
+    "slug": "waba-grill",
+    "key": "chicken-veggie-bowl",
+    "items": [
+      {
+        "item": {
+          "name": "Chicken Veggie Bowl",
+          "hasCustomizations": true,
+          "calorieLabel": "590 Cal.",
+          "calories": 590,
+          "description": "Grilled all-natural, never frozen chicken caramelized with our signature WaBa sauce.",
+          "price": 13.59,
+          "section": "Featured items"
+        }
+      }
+    ],
+    "sourceStoreUuid": "45fda32b-8ed3-41c5-b15a-4a7842969634",
+    "sourceRestaurant": "WaBa Grill - Van Nuys (Sepulveda)",
+    "capturedAt": "2026-09-09"
+  },
+  {
+    "slug": "waba-grill",
+    "key": "miso-soup",
+    "items": [
+      {
+        "item": {
+          "name": "Miso Soup",
+          "hasCustomizations": false,
+          "calorieLabel": "30 Cal.",
+          "calories": 30,
+          "price": 2.99,
+          "section": "Sides"
+        }
+      }
+    ],
+    "sourceStoreUuid": "45fda32b-8ed3-41c5-b15a-4a7842969634",
+    "sourceRestaurant": "WaBa Grill - Van Nuys (Sepulveda)",
+    "capturedAt": "2026-09-09"
+  },
+  {
+    "slug": "yoshinoya",
+    "key": "gyudon-beef-side",
+    "items": [
+      {
+        "item": {
+          "name": "Original Gyudon Beef",
+          "hasCustomizations": false,
+          "calorieLabel": "310 Cal.",
+          "calories": 310,
+          "description": "Thin juicy ribbons of Gyudon Beef and chopped onions, slowly simmered in a sweet and savory herb miso soy broth.",
+          "price": 9.79,
+          "section": "Featured items"
+        }
+      }
+    ],
+    "sourceStoreUuid": "dd70b9e1-4042-47a4-ae54-c9a9d4f27b9e",
+    "sourceRestaurant": "Yoshinoya (2850 South Crenshaw Boulevard)",
+    "capturedAt": "2026-09-09"
+  },
+  {
+    "slug": "yoshinoya",
+    "key": "habanero-chicken-side",
+    "items": [
+      {
+        "item": {
+          "name": "Habanero Grilled Chicken",
+          "hasCustomizations": true,
+          "calorieLabel": "290 Cal.",
+          "calories": 290,
+          "description": "Fresh, grilled chicken, glazed with our spicy and sweet habanero sauce and then topped with sesame seeds and green onions.",
+          "price": 9.79,
+          "section": "Ala Carte"
+        }
+      }
+    ],
+    "sourceStoreUuid": "dd70b9e1-4042-47a4-ae54-c9a9d4f27b9e",
+    "sourceRestaurant": "Yoshinoya (2850 South Crenshaw Boulevard)",
+    "capturedAt": "2026-09-09"
+  },
+  {
+    "slug": "yoshinoya",
+    "key": "blount-clam-chowder",
+    "items": [
+      {
+        "item": {
+          "name": "Clam Chowder",
+          "hasCustomizations": false,
+          "calorieLabel": "300 Cal.",
+          "calories": 300,
+          "description": "A creamy soup featuring clams, cooked with potatoes, celery and onion.",
+          "price": 5.59,
+          "section": "Featured items"
+        }
+      }
+    ],
+    "sourceStoreUuid": "dd70b9e1-4042-47a4-ae54-c9a9d4f27b9e",
+    "sourceRestaurant": "Yoshinoya (2850 South Crenshaw Boulevard)",
+    "capturedAt": "2026-09-09"
+  }
+]

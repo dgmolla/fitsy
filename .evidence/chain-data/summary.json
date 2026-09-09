@@ -1,0 +1,30 @@
+{
+  "scope": "Seven reviewed standard-serving facts; WaBa Grill and Yoshinoya only",
+  "localDb": "isolated PostGIS 16 on loopback port 63504",
+  "catalogChanges": 12,
+  "reviewedFacts": 7,
+  "contextualAliases": 11,
+  "capturedAprilRows": 64,
+  "aprilRestaurants": 31,
+  "capturedUEConfigurationsPersisted": 7,
+  "estimatorCallsForReviewedConfigurations": 0,
+  "focusedTestsPassed": 6,
+  "rollback": "actual CLI restored initial catalog/menu state; direct DB tested existing official source restoration and concurrent-edit refusal",
+  "mutationScore": 81.03,
+  "mutationFiles": [
+    "chainPilotPlan.ts",
+    "chainPilotRollback.ts"
+  ],
+  "productionWrites": 0,
+  "fullApiWithDatabase": {
+    "suites": 65,
+    "tests": 707,
+    "skipped": 0,
+    "result": "pass"
+  },
+  "registry": "8 pass, 0 fail; existing own-code-mocks shadow",
+  "build": "pass",
+  "purePlanGuardTests": 4,
+  "quarantinedCatalogRows": 5,
+  "removedLegacyAliasStrings": 6
+}

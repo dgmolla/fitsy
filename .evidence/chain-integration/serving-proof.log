@@ -1,0 +1,48 @@
+  console.log
+    {"event":"search_query","restaurants":1,"hasTargets":true,"totalMs":93,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:450:11)
+
+  console.log
+    {"event":"search_query","restaurants":1,"hasTargets":true,"totalMs":2,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:450:11)
+
+  console.log
+    {"event":"search_query","restaurants":1,"hasTargets":true,"totalMs":1,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:450:11)
+
+  console.log
+    {"event":"search_query","restaurants":1,"hasTargets":true,"totalMs":2,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:450:11)
+
+  console.log
+    {"event":"search_query","restaurants":1,"hasTargets":true,"totalMs":3,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:450:11)
+
+  console.log
+    {"event":"search_query","restaurants":1,"hasTargets":true,"totalMs":1,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:450:11)
+
+  console.log
+    {"event":"search_query","restaurants":1,"hasTargets":true,"totalMs":2,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:450:11)
+
+PASS apps/api/tests/db/chainPilot.db.test.ts
+  official PDF pilot correction against captured April data
+    ✓ 12 catalog corrections are atomic, idempotent after replan, and exactly reversible (269 ms)
+    ✓ stale or altered plans and mismatched rollback records fail without partial writes (127 ms)
+    ✓ all 64 captured April rows match the actual seven-dish correction set; live UE observations agree (1012 ms)
+    ✓ April rollback restores an existing official estimate and rejects any later item or estimate edit (96 ms)
+    ✓ all seven configurations from actual UE menus persist identically at new locations (255 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       5 passed, 5 total
+Snapshots:   0 total
+Time:        2.405 s, estimated 6 s
+Ran all test suites matching /apps\/api\/tests\/db\/chainPilot.db.test.ts/i.

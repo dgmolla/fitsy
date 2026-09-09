@@ -1,0 +1,19 @@
+{
+  "auditedAt": "2026-09-09T06:10:41.462Z",
+  "readOnly": true,
+  "catalogChanges": 12,
+  "reviewedFacts": 7,
+  "contextualAliases": 14,
+  "inspectedItems": 1337,
+  "matchedRows": 64,
+  "restaurants": 31,
+  "byConfiguration": {
+    "chicken-plate": 7,
+    "steak-plate": 25,
+    "chicken-veggie-bowl": 7,
+    "miso-soup": 7,
+    "gyudon-beef-side": 6,
+    "habanero-chicken-side": 6,
+    "blount-clam-chowder": 6
+  }
+}

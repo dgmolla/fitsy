@@ -1,0 +1,28 @@
+{
+  "preparedAdapterParent": "9754a6d1caccc203cd1c8c3cf8c8c5f3a43ca5f9",
+  "databaseTests": 808,
+  "skipped": 0,
+  "fullTestLogSha256": "a0722217f7e157de87a53f0ab3b8f2cbde8d76c165e73b5446eb4fc6dab34e74",
+  "build": "passed after required-backup adapter integration",
+  "aprilRows": 64,
+  "restaurants": 31,
+  "newHexConfigurations": 7,
+  "productionNutritionWrites": 0,
+  "historicalVerboseLogs": "Older API stdout logs are omitted from the PR; the current full-run digest and per-suite summary are retained.",
+  "cli": "scripts/preload-chain-pilot.ts",
+  "suites": 77,
+  "productionBrandPreflight": "31 captured restaurants resolve uniquely among 691 verified brands",
+  "productionReadOnlyPlan": {
+    "changes": 12,
+    "newFacts": 3,
+    "existingFactUpdates": 4,
+    "quarantinedAliasRows": 5,
+    "reviewedFacts": 7,
+    "contextAliases": 14,
+    "writes": 0
+  },
+  "mergedAdapterParent": "1764502ce8228f2c48ed4eca538f4b89317c6bc8",
+  "rebaseCodeDiff": "empty; one data commit rebased onto equivalent squash merge",
+  "releaseRegistry": "8 pass, 0 blocking failures, 1 preexisting mock advisory, 1 skip",
+  "releaseRegistrySha256": "2570108745527cdeb51734ec3c6d2ab4f7fcf980b0781a0da014475988b8dbd7"
+}
