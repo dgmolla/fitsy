@@ -37,7 +37,7 @@ describe("marketingLedger", () => {
   it("sentWithin applies the 48h cross-campaign cap by default", async () => {
     const before = Date.now();
     (prisma.marketingSend.findFirst as jest.Mock).mockResolvedValue({ id: "x" });
-    expect(await sentWithin("alice@example.org")).toBe(true);
+    expect(await sentWithin(" Alice@Example.org ")).toBe(true);
     const arg = (prisma.marketingSend.findFirst as jest.Mock).mock.calls[0]![0];
     expect(arg.where.email).toBe("alice@example.org");
     const since = (arg.where.sentAt.gt as Date).getTime();

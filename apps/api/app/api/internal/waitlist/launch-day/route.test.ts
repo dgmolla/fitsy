@@ -77,27 +77,25 @@ describe("GET /api/internal/waitlist/launch-day", () => {
     expect(notifyLaunch).toHaveBeenCalledWith(expect.objectContaining({ dryRun: true }));
   });
 
-  it("drains the blast in batches while rows remain and sums the counts", async () => {
+  it("drains the blast in batches: matched from the first, failed from the last, the rest summed", async () => {
     jest.useFakeTimers().setSystemTime(new Date(`${LAUNCH_DATE_ISO}T16:00:00Z`));
-    const batch = (notified: number, remaining: number) => ({
-      dryRun: false,
-      matched: 5,
-      viaPush: 0,
-      viaEmail: notified,
-      notified,
-      suppressed: 0,
-      failed: 0,
-      remaining,
-    });
     (notifyLaunch as jest.Mock)
-      .mockResolvedValueOnce(batch(2, 3))
-      .mockResolvedValueOnce(batch(2, 1))
-      .mockResolvedValueOnce(batch(1, 0));
+      .mockResolvedValueOnce({ dryRun: false, matched: 9, viaPush: 1, viaEmail: 2, notified: 2, suppressed: 1, failed: 2, remaining: 4 })
+      .mockResolvedValueOnce({ dryRun: false, matched: 4, viaPush: 2, viaEmail: 3, notified: 4, suppressed: 1, failed: 1, remaining: 0 });
     const res = await GET(makeRequest());
-    expect(notifyLaunch).toHaveBeenCalledTimes(3);
-    expect(await res.json()).toEqual(
-      expect.objectContaining({ matched: 5, viaEmail: 5, notified: 5, remaining: 0 }),
-    );
+    expect(notifyLaunch).toHaveBeenCalledTimes(2);
+    expect(await res.json()).toEqual({
+      ok: true,
+      launchDate: LAUNCH_DATE_ISO,
+      dryRun: false,
+      matched: 9, // the full match count, from the first batch
+      viaPush: 3,
+      viaEmail: 5,
+      notified: 6,
+      suppressed: 2,
+      failed: 1, // failed rows are retried every batch: last batch, not a sum
+      remaining: 0,
+    });
   });
 
   it("stops draining when a batch makes no progress instead of spinning until the time budget", async () => {

@@ -112,6 +112,13 @@ describe("notifyLaunch", () => {
     expect(sendMarketingEmail).not.toHaveBeenCalled();
   });
 
+  it("dry run counts an opted-out address with a push token as notifiable (push is not gated)", async () => {
+    (prisma.launchWaitlist.findMany as jest.Mock).mockResolvedValue([ONBOARDING_LA]);
+    (isEmailOptedOut as jest.Mock).mockResolvedValue(true);
+    const res = await notifyLaunch({ ...LA, dryRun: true });
+    expect(res).toEqual({ dryRun: true, matched: 1, wouldNotify: 1, wouldSuppress: 0 });
+  });
+
   it("processes at most MAX_PER_RUN rows and reports the remainder", async () => {
     const many = Array.from({ length: MAX_PER_RUN + 3 }, (_, i) => ({
       ...WEB,
