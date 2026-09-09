@@ -64,9 +64,17 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - name: Install actionlint + gitleaks
+      - name: Install required actionlint
         run: |
-          curl -sL "$(curl -s https://api.github.com/repos/rhysd/actionlint/releases/latest | grep browser_download_url | grep linux_amd64 | cut -d '"' -f4)" | tar xz -C /usr/local/bin actionlint || echo "actionlint install failed; check will skip"
+          curl --fail --show-error --location --retry 3 \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz \
+            --output "$RUNNER_TEMP/actionlint.tar.gz"
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  $RUNNER_TEMP/actionlint.tar.gz" | sha256sum --check
+          tar xzf "$RUNNER_TEMP/actionlint.tar.gz" -C /usr/local/bin actionlint
+          actionlint --version
+          shellcheck --version
+      - name: Install gitleaks
+        run: |
           curl -sL "$(curl -s https://api.github.com/repos/gitleaks/gitleaks/releases/latest | grep browser_download_url | grep linux_x64.tar.gz | head -1 | cut -d '"' -f4)" | tar xz -C /usr/local/bin gitleaks || echo "gitleaks install failed; grep fallback covers"
       - name: Fetch main for diff scope
         run: git fetch origin main

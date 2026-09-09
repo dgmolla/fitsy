@@ -57,8 +57,7 @@ checks:
     layer: 1
     blocking: true
     runs: [local, ci]
-    paths: [".github/**"]
-    why: Workflow files are tier-high attack surface (prompt-injection mitigations live there); lint them.
+    why: Always lint workflows in L1; filtering to changed workflows allowed green API PRs followed by failing main checks (incident 262).
 
   - name: domain-check
     script: domain-check.sh

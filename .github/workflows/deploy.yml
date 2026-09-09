@@ -49,9 +49,11 @@ jobs:
             CHANGED=$(printf 'prisma/migrations/x\napps/mobile/x\napps/api/x\n')
           fi
           echo "$CHANGED"
-          echo "migrations=$(echo "$CHANGED" | grep -q '^prisma/migrations/' && echo true || echo false)" >> "$GITHUB_OUTPUT"
-          echo "mobile=$(echo "$CHANGED" | grep -qE '^(apps/mobile/|packages/shared/)' && echo true || echo false)" >> "$GITHUB_OUTPUT"
-          echo "api=$(echo "$CHANGED" | grep -qE '^(apps/api/|packages/|prisma/|scripts/|vercel\.json|package\.json|package-lock\.json)' && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          {
+            echo "migrations=$(echo "$CHANGED" | grep -q '^prisma/migrations/' && echo true || echo false)"
+            echo "mobile=$(echo "$CHANGED" | grep -qE '^(apps/mobile/|packages/shared/)' && echo true || echo false)"
+            echo "api=$(echo "$CHANGED" | grep -qE '^(apps/api/|packages/|prisma/|scripts/|vercel\.json|package\.json|package-lock\.json)' && echo true || echo false)"
+          } >> "$GITHUB_OUTPUT"
 
   migrate:
     # Runs on EVERY push: migrate deploy is a no-op when nothing is pending,

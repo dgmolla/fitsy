@@ -1,0 +1,1 @@
+{"lens":"correctness","must_find":"Required workflow validation can turn green when actionlint installation fails or ShellCheck is absent; changed-path filtering also hides the existing deploy.yml SC2129 error from API PR checks."}

@@ -3,9 +3,12 @@
 set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$REPO_ROOT"
 BIN="$(command -v actionlint || true)"
-[ -z "$BIN" ] && [ -x /usr/local/bin/actionlint ] && BIN=/usr/local/bin/actionlint
-if [ -z "$BIN" ]; then
-  printf '{"name":"actionlint","status":"skipped","summary":"actionlint not installed","fix":"brew install actionlint (CI installs it in the static job)"}\n'
+if [ -z "$BIN" ] || ! command -v shellcheck >/dev/null; then
+  if [ "${FITSY_RUNS:-}" = ci ] || [ "${CI:-}" = true ]; then
+    printf '{"name":"actionlint","status":"fail","summary":"actionlint and shellcheck are required in CI","fix":"install both tools before verification; missing tools must not turn CI green"}\n'
+    exit 1
+  fi
+  printf '{"name":"actionlint","status":"skipped","summary":"actionlint or shellcheck not installed","fix":"brew install actionlint shellcheck; CI requires both"}\n'
   exit 2
 fi
 if "$BIN" >&2; then
