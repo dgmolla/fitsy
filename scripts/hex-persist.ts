@@ -31,6 +31,8 @@ type TxClient = Prisma.TransactionClient;
  */
 export interface HexRestaurantData {
   restaurantId: string;
+  /** Reviewed brand resolved from verified identity; persisted with the menu and checkpoint. */
+  brandId?: string;
   items: ValidatedPair[];
   /** Menu hash for incremental update tracking (S-127). */
   menuHash: string;
@@ -61,6 +63,13 @@ export async function persistHex(
     async (tx) => {
       const t1 = Date.now();
       const totalItems = await persistHexBulkInTx(restaurants, tx);
+      const bindings = restaurants.filter(r => r.brandId);
+      if (bindings.length) {
+        const count = await tx.$executeRaw`UPDATE "Restaurant" r SET "brandId" = b.brand, "chainFlag" = true
+          FROM UNNEST(${bindings.map(r => r.restaurantId)}::text[], ${bindings.map(r => r.brandId!)}::text[]) b(id, brand)
+          WHERE r.id = b.id AND (r."brandId" IS NULL OR r."brandId" = b.brand)`;
+        if (count !== bindings.length) throw new Error("Restaurant brand changed; refusing partial chain handoff");
+      }
       bulkMs = Date.now() - t1;
 
       if (opts.validateInTx) await opts.validateInTx(tx, restaurants);

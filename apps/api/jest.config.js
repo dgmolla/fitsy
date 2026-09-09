@@ -3,6 +3,7 @@ const config = {
   preset: "ts-jest",
   testEnvironment: "node",
   moduleNameMapper: {
+    "^(\\.\\.?/.*)\\.js$": "$1",
     "^@fitsy/shared$":
       "<rootDir>/../../packages/shared/src/index.ts",
     "^@fitsy/shared/(.*)$":

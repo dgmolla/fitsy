@@ -1,0 +1,525 @@
+[32m22:49:20 (13565) INFO ProjectReader[39m Found 1 of 957 file(s) to be mutated using incremental report with 236 mutant(s), and 5 test(s).
+Browserslist: browsers data (caniuse-lite) is 6 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+[32m22:49:21 (13565) INFO Instrumenter[39m Instrumented 1 source file(s) with 236 mutant(s)
+[33m22:49:21 (13565) WARN DisableTypeChecksPreprocessor[39m Unable to disable type checking for file "/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-integration/apps/api/services/menuSources/__fixtures__/fatsecret-mcdonalds.html". Shouldn't type checking be disabled for this file? Consider configuring a more restrictive "disableTypeChecks" settings (or turn it completely off with `false`) ParseError: Parse error in /Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-integration/apps/api/services/menuSources/__fixtures__/fatsecret-mcdonalds.html (335:86) Unexpected closing tag "b". It may happen when the tag has already been closed by another tag. For more info see https://www.w3.org/TR/html5/syntax.html#closing-elements-that-have-implied-end-tags
+    at ngHtmlParser (file:///Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-integration/node_modules/@stryker-mutator/instrumenter/dist/src/parsers/html-parser.js:32:15)
+    at async parse (file:///Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-integration/node_modules/@stryker-mutator/instrumenter/dist/src/parsers/html-parser.js:16:18)
+    at async DisableTypeChecksPreprocessor.disableTypeChecks [as impl] (file:///Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-integration/node_modules/@stryker-mutator/instrumenter/dist/src/disable-type-checks.js:28:17)
+    at async file:///Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-integration/node_modules/@stryker-mutator/core/dist/src/sandbox/disable-type-checks-preprocessor.js:27:41
+    at async Promise.all (index 355)
+    at async DisableTypeChecksPreprocessor.preprocess (file:///Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-integration/node_modules/@stryker-mutator/core/dist/src/sandbox/disable-type-checks-preprocessor.js:24:9)
+    at async MultiPreprocessor.preprocess (file:///Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-integration/node_modules/@stryker-mutator/core/dist/src/sandbox/multi-preprocessor.js:8:13)
+    at async MutantInstrumenterExecutor.execute (file:///Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-integration/node_modules/@stryker-mutator/core/dist/src/process/2-mutant-instrumenter-executor.js:30:9)
+    at async Stryker.run (file:///Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-integration/node_modules/@stryker-mutator/core/dist/src/stryker.js:49:48)
+    at async Stryker.runMutationTest (file:///Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-integration/node_modules/@stryker-mutator/core/dist/src/stryker.js:27:20)
+    at async Command.<anonymous> (file:///Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-integration/node_modules/@stryker-mutator/core/dist/src/stryker-cli.js:51:13)
+[33m22:49:21 (13565) WARN DisableTypeChecksPreprocessor[39m (disable "warnings.preprocessorErrors" to ignore this warning
+[32m22:49:22 (13565) INFO ConcurrencyTokenProvider[39m Creating 2 test runner process(es).
+[32m22:49:23 (13565) INFO DryRunExecutor[39m Starting initial test run (jest test runner with "perTest" coverage analysis). This may take a while.
+[32m22:49:26 (13565) INFO DryRunExecutor[39m Initial test run succeeded. Ran 5 tests in 3 seconds (net 2015 ms, overhead 1126 ms).
+[32m22:49:26 (13565) INFO IncrementalDiffer[39m Incremental report:
+	Mutants:	0 files changed (+0 -0)
+	Tests:		2 files changed (+3 -3)
+	Result:		8 of 236 mutant result(s) are reused.
+
+All tests
+  services/chainServing.test.ts
+    ✓ brand handoff accepts verified exact identity and location suffixes, rejects conflicts and near names [line 4] (killed 8)
+    ✓ estimation cardinality cannot silently shift nutrition between items [line 12] (killed 3)
+    ✓ April identity omits absent context and never adopts estimated calories as source evidence [line 19] (killed 3)
+  tests/db/chainServing.db.test.ts
+    ✓ reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts [line 21] (killed 163)
+    ✓ reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts [line 21] (killed 6)
+
+[NoCoverage] StringLiteral
+apps/api/services/chainServing.ts:10:95
+-     const candidates = brands.filter(b => ["high", "llm-confirmed"].includes(b.detectionConf ?? "") && b.menuKind === "restaurant"
++     const candidates = brands.filter(b => ["high", "llm-confirmed"].includes(b.detectionConf ?? "Stryker was here!") && b.menuKind === "restaurant"
+
+[NoCoverage] ArrayDeclaration
+apps/api/services/chainServing.ts:35:69
+-     const fallback = unresolved.length ? await estimate(unresolved) : [];
++     const fallback = unresolved.length ? await estimate(unresolved) : ["Stryker was here"];
+
+[Survived] MethodExpression
+apps/api/services/chainServing.ts:7:37
+-   const brandName = (name: string) => name.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
++   const brandName = (name: string) => name.normalize("NFKC").toUpperCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+    brand handoff accepts verified exact identity and location suffixes, rejects conflicts and near names
+
+
+[Survived] MethodExpression
+apps/api/services/chainServing.ts:7:37
+-   const brandName = (name: string) => name.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
++   const brandName = (name: string) => name.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ");
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+    brand handoff accepts verified exact identity and location suffixes, rejects conflicts and near names
+
+
+[Survived] StringLiteral
+apps/api/services/chainServing.ts:7:102
+-   const brandName = (name: string) => name.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
++   const brandName = (name: string) => name.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "").trim();
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+    brand handoff accepts verified exact identity and location suffixes, rejects conflicts and near names
+
+
+[Survived] Regex
+apps/api/services/chainServing.ts:9:50
+-     const name = brandName(restaurant.name.replace(/\s*\([^()]+\)\s*$/, "").split(/\s+-\s+/)[0]!);
++     const name = brandName(restaurant.name.replace(/\s*\([^()]+\)\s*/, "").split(/\s+-\s+/)[0]!);
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+    brand handoff accepts verified exact identity and location suffixes, rejects conflicts and near names
+
+
+[Survived] Regex
+apps/api/services/chainServing.ts:9:50
+-     const name = brandName(restaurant.name.replace(/\s*\([^()]+\)\s*$/, "").split(/\s+-\s+/)[0]!);
++     const name = brandName(restaurant.name.replace(/\s\([^()]+\)\s*$/, "").split(/\s+-\s+/)[0]!);
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+    brand handoff accepts verified exact identity and location suffixes, rejects conflicts and near names
+
+
+[Survived] Regex
+apps/api/services/chainServing.ts:9:50
+-     const name = brandName(restaurant.name.replace(/\s*\([^()]+\)\s*$/, "").split(/\s+-\s+/)[0]!);
++     const name = brandName(restaurant.name.replace(/\S*\([^()]+\)\s*$/, "").split(/\s+-\s+/)[0]!);
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+    brand handoff accepts verified exact identity and location suffixes, rejects conflicts and near names
+
+
+[Survived] Regex
+apps/api/services/chainServing.ts:9:50
+-     const name = brandName(restaurant.name.replace(/\s*\([^()]+\)\s*$/, "").split(/\s+-\s+/)[0]!);
++     const name = brandName(restaurant.name.replace(/\s*\([^()]+\)\S*$/, "").split(/\s+-\s+/)[0]!);
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+    brand handoff accepts verified exact identity and location suffixes, rejects conflicts and near names
+
+
+[Survived] Regex
+apps/api/services/chainServing.ts:9:81
+-     const name = brandName(restaurant.name.replace(/\s*\([^()]+\)\s*$/, "").split(/\s+-\s+/)[0]!);
++     const name = brandName(restaurant.name.replace(/\s*\([^()]+\)\s*$/, "").split(/\s-\s+/)[0]!);
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+    brand handoff accepts verified exact identity and location suffixes, rejects conflicts and near names
+
+
+[Survived] Regex
+apps/api/services/chainServing.ts:9:81
+-     const name = brandName(restaurant.name.replace(/\s*\([^()]+\)\s*$/, "").split(/\s+-\s+/)[0]!);
++     const name = brandName(restaurant.name.replace(/\s*\([^()]+\)\s*$/, "").split(/\s+-\s/)[0]!);
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+    brand handoff accepts verified exact identity and location suffixes, rejects conflicts and near names
+
+
+[Survived] StringLiteral
+apps/api/services/chainServing.ts:10:50
+-     const candidates = brands.filter(b => ["high", "llm-confirmed"].includes(b.detectionConf ?? "") && b.menuKind === "restaurant"
++     const candidates = brands.filter(b => ["high", ""].includes(b.detectionConf ?? "") && b.menuKind === "restaurant"
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+    brand handoff accepts verified exact identity and location suffixes, rejects conflicts and near names
+
+
+[Survived] ArrayDeclaration
+apps/api/services/chainServing.ts:16:149
+-     return { calories: row.calories, proteinG: row.proteinG, carbsG: row.carbsG, fatG: row.fatG, confidence: "HIGH", source: "official", dietaryTags: [],
++     return { calories: row.calories, proteinG: row.proteinG, carbsG: row.carbsG, fatG: row.fatG, confidence: "HIGH", source: "official", dietaryTags: ["Stryker was here"],
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] ObjectLiteral
+apps/api/services/chainServing.ts:21:46
+-     const brands = await prisma.brand.findMany({ where: { detectionConf: { in: ["high", "llm-confirmed"] }, menuKind: "restaurant" } });
++     const brands = await prisma.brand.findMany({});
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] ObjectLiteral
+apps/api/services/chainServing.ts:21:55
+-     const brands = await prisma.brand.findMany({ where: { detectionConf: { in: ["high", "llm-confirmed"] }, menuKind: "restaurant" } });
++     const brands = await prisma.brand.findMany({ where: {} });
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] ObjectLiteral
+apps/api/services/chainServing.ts:21:72
+-     const brands = await prisma.brand.findMany({ where: { detectionConf: { in: ["high", "llm-confirmed"] }, menuKind: "restaurant" } });
++     const brands = await prisma.brand.findMany({ where: { detectionConf: {}, menuKind: "restaurant" } });
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] StringLiteral
+apps/api/services/chainServing.ts:21:87
+-     const brands = await prisma.brand.findMany({ where: { detectionConf: { in: ["high", "llm-confirmed"] }, menuKind: "restaurant" } });
++     const brands = await prisma.brand.findMany({ where: { detectionConf: { in: ["high", ""] }, menuKind: "restaurant" } });
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] ObjectLiteral
+apps/api/services/chainServing.ts:22:48
+-     const rows = await prisma.chainItem.findMany({ where: { brandId: { in: brands.map(b => b.id) } } });
++     const rows = await prisma.chainItem.findMany({});
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] ObjectLiteral
+apps/api/services/chainServing.ts:22:57
+-     const rows = await prisma.chainItem.findMany({ where: { brandId: { in: brands.map(b => b.id) } } });
++     const rows = await prisma.chainItem.findMany({ where: {} });
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] ObjectLiteral
+apps/api/services/chainServing.ts:22:68
+-     const rows = await prisma.chainItem.findMany({ where: { brandId: { in: brands.map(b => b.id) } } });
++     const rows = await prisma.chainItem.findMany({ where: { brandId: {} } });
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] StringLiteral
+apps/api/services/chainServing.ts:50:23
+-       await tx.$queryRaw`SELECT id FROM "ChainItem" WHERE id = ${approved.id} FOR SHARE`;
++       await tx.$queryRaw``;
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] OptionalChaining
+apps/api/services/chainServing.ts:52:21
+-       if (!current || approvedChainRow(current)?.review.dataHash !== approved.review.dataHash) throw new Error("Chain review changed; rebuild the plan");
++       if (!current || approvedChainRow(current).review.dataHash !== approved.review.dataHash) throw new Error("Chain review changed; rebuild the plan");
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] ConditionalExpression
+apps/api/services/chainServing.ts:55:9
+-       if (!restaurant || !brand || verifiedBrand(restaurant, [brand]) !== approved.brandId) throw new Error("Restaurant brand identity changed");
++       if (false || verifiedBrand(restaurant, [brand]) !== approved.brandId) throw new Error("Restaurant brand identity changed");
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] LogicalOperator
+apps/api/services/chainServing.ts:55:9
+-       if (!restaurant || !brand || verifiedBrand(restaurant, [brand]) !== approved.brandId) throw new Error("Restaurant brand identity changed");
++       if (!restaurant && !brand || verifiedBrand(restaurant, [brand]) !== approved.brandId) throw new Error("Restaurant brand identity changed");
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] ObjectLiteral
+apps/api/services/chainServing.ts:56:49
+-       const catalog = await tx.chainItem.findMany({ where: { brandId: approved.brandId } });
++       const catalog = await tx.chainItem.findMany({});
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] ObjectLiteral
+apps/api/services/chainServing.ts:56:58
+-       const catalog = await tx.chainItem.findMany({ where: { brandId: approved.brandId } });
++       const catalog = await tx.chainItem.findMany({ where: {} });
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] OptionalChaining
+apps/api/services/chainServing.ts:57:83
+-       const item = aprilMenuIdentity(expected), result = buildChainMatcher(catalog)(restaurant?.brandId ?? undefined, item);
++       const item = aprilMenuIdentity(expected), result = buildChainMatcher(catalog)(restaurant.brandId ?? undefined, item);
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] ConditionalExpression
+apps/api/services/chainServing.ts:58:40
+-       if (result.status !== "matched" || result.row.id !== approved.id || result.row.review.dataHash !== approved.review.dataHash) throw new Error("April item has no current reviewed binding");
++       if (result.status !== "matched" || false || result.row.review.dataHash !== approved.review.dataHash) throw new Error("April item has no current reviewed binding");
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] ConditionalExpression
+apps/api/services/chainServing.ts:58:73
+-       if (result.status !== "matched" || result.row.id !== approved.id || result.row.review.dataHash !== approved.review.dataHash) throw new Error("April item has no current reviewed binding");
++       if (result.status !== "matched" || result.row.id !== approved.id || false) throw new Error("April item has no current reviewed binding");
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] ConditionalExpression
+apps/api/services/chainServing.ts:63:83
+-       if (!actual || actual.updatedAt.getTime() !== expected.updatedAt.getTime() || chainMenuFingerprint(aprilMenuIdentity({ ...expected, ...actual })) !== chainMenuFingerprint(item)) throw new Error("April item changed; rebuild the plan");
++       if (!actual || actual.updatedAt.getTime() !== expected.updatedAt.getTime() || false) throw new Error("April item changed; rebuild the plan");
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] ObjectLiteral
+apps/api/services/chainServing.ts:67:102
+-       const estimates = await tx.macroEstimate.findMany({ where: { menuItemId: expected.id }, orderBy: { id: "asc" } });
++       const estimates = await tx.macroEstimate.findMany({ where: { menuItemId: expected.id }, orderBy: {} });
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] ConditionalExpression
+apps/api/services/chainServing.ts:68:36
+-       if (expected.macroEstimates && JSON.stringify(estimates) !== JSON.stringify(expected.macroEstimates)) throw new Error("April estimates changed; rebuild the backup and plan");
++       if (expected.macroEstimates && true) throw new Error("April estimates changed; rebuild the backup and plan");
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] LogicalOperator
+apps/api/services/chainServing.ts:70:23
+-       const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === "HIGH" && !existing.hadPhoto && existing.ingredientBreakdown === null && ["calories", "proteinG", "carbsG", "fatG"].every(key => existing[key as "calories"] === macro[key as "calories"]);
++       const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === "HIGH" && !existing.hadPhoto && existing.ingredientBreakdown === null || ["calories", "proteinG", "carbsG", "fatG"].every(key => existing[key as "calories"] === macro[key as "calories"]);
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] ConditionalExpression
+apps/api/services/chainServing.ts:70:23
+-       const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === "HIGH" && !existing.hadPhoto && existing.ingredientBreakdown === null && ["calories", "proteinG", "carbsG", "fatG"].every(key => existing[key as "calories"] === macro[key as "calories"]);
++       const unchanged = true && ["calories", "proteinG", "carbsG", "fatG"].every(key => existing[key as "calories"] === macro[key as "calories"]);
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] LogicalOperator
+apps/api/services/chainServing.ts:70:23
+-       const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === "HIGH" && !existing.hadPhoto && existing.ingredientBreakdown === null && ["calories", "proteinG", "carbsG", "fatG"].every(key => existing[key as "calories"] === macro[key as "calories"]);
++       const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === "HIGH" && !existing.hadPhoto || existing.ingredientBreakdown === null && ["calories", "proteinG", "carbsG", "fatG"].every(key => existing[key as "calories"] === macro[key as "calories"]);
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] ConditionalExpression
+apps/api/services/chainServing.ts:70:23
+-       const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === "HIGH" && !existing.hadPhoto && existing.ingredientBreakdown === null && ["calories", "proteinG", "carbsG", "fatG"].every(key => existing[key as "calories"] === macro[key as "calories"]);
++       const unchanged = true && existing.ingredientBreakdown === null && ["calories", "proteinG", "carbsG", "fatG"].every(key => existing[key as "calories"] === macro[key as "calories"]);
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] LogicalOperator
+apps/api/services/chainServing.ts:70:23
+-       const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === "HIGH" && !existing.hadPhoto && existing.ingredientBreakdown === null && ["calories", "proteinG", "carbsG", "fatG"].every(key => existing[key as "calories"] === macro[key as "calories"]);
++       const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === "HIGH" || !existing.hadPhoto && existing.ingredientBreakdown === null && ["calories", "proteinG", "carbsG", "fatG"].every(key => existing[key as "calories"] === macro[key as "calories"]);
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] ConditionalExpression
+apps/api/services/chainServing.ts:70:23
+-       const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === "HIGH" && !existing.hadPhoto && existing.ingredientBreakdown === null && ["calories", "proteinG", "carbsG", "fatG"].every(key => existing[key as "calories"] === macro[key as "calories"]);
++       const unchanged = true && !existing.hadPhoto && existing.ingredientBreakdown === null && ["calories", "proteinG", "carbsG", "fatG"].every(key => existing[key as "calories"] === macro[key as "calories"]);
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] LogicalOperator
+apps/api/services/chainServing.ts:70:23
+-       const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === "HIGH" && !existing.hadPhoto && existing.ingredientBreakdown === null && ["calories", "proteinG", "carbsG", "fatG"].every(key => existing[key as "calories"] === macro[key as "calories"]);
++       const unchanged = existing?.reasoning === macro.reasoning || existing.confidence === "HIGH" && !existing.hadPhoto && existing.ingredientBreakdown === null && ["calories", "proteinG", "carbsG", "fatG"].every(key => existing[key as "calories"] === macro[key as "calories"]);
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] ConditionalExpression
+apps/api/services/chainServing.ts:70:23
+-       const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === "HIGH" && !existing.hadPhoto && existing.ingredientBreakdown === null && ["calories", "proteinG", "carbsG", "fatG"].every(key => existing[key as "calories"] === macro[key as "calories"]);
++       const unchanged = true && existing.confidence === "HIGH" && !existing.hadPhoto && existing.ingredientBreakdown === null && ["calories", "proteinG", "carbsG", "fatG"].every(key => existing[key as "calories"] === macro[key as "calories"]);
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] OptionalChaining
+apps/api/services/chainServing.ts:70:23
+-       const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === "HIGH" && !existing.hadPhoto && existing.ingredientBreakdown === null && ["calories", "proteinG", "carbsG", "fatG"].every(key => existing[key as "calories"] === macro[key as "calories"]);
++       const unchanged = existing.reasoning === macro.reasoning && existing.confidence === "HIGH" && !existing.hadPhoto && existing.ingredientBreakdown === null && ["calories", "proteinG", "carbsG", "fatG"].every(key => existing[key as "calories"] === macro[key as "calories"]);
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] ConditionalExpression
+apps/api/services/chainServing.ts:70:66
+-       const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === "HIGH" && !existing.hadPhoto && existing.ingredientBreakdown === null && ["calories", "proteinG", "carbsG", "fatG"].every(key => existing[key as "calories"] === macro[key as "calories"]);
++       const unchanged = existing?.reasoning === macro.reasoning && true && !existing.hadPhoto && existing.ingredientBreakdown === null && ["calories", "proteinG", "carbsG", "fatG"].every(key => existing[key as "calories"] === macro[key as "calories"]);
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] ConditionalExpression
+apps/api/services/chainServing.ts:70:122
+-       const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === "HIGH" && !existing.hadPhoto && existing.ingredientBreakdown === null && ["calories", "proteinG", "carbsG", "fatG"].every(key => existing[key as "calories"] === macro[key as "calories"]);
++       const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === "HIGH" && !existing.hadPhoto && true && ["calories", "proteinG", "carbsG", "fatG"].every(key => existing[key as "calories"] === macro[key as "calories"]);
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] MethodExpression
+apps/api/services/chainServing.ts:70:163
+-       const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === "HIGH" && !existing.hadPhoto && existing.ingredientBreakdown === null && ["calories", "proteinG", "carbsG", "fatG"].every(key => existing[key as "calories"] === macro[key as "calories"]);
++       const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === "HIGH" && !existing.hadPhoto && existing.ingredientBreakdown === null && ["calories", "proteinG", "carbsG", "fatG"].some(key => existing[key as "calories"] === macro[key as "calories"]);
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] ArrayDeclaration
+apps/api/services/chainServing.ts:70:163
+-       const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === "HIGH" && !existing.hadPhoto && existing.ingredientBreakdown === null && ["calories", "proteinG", "carbsG", "fatG"].every(key => existing[key as "calories"] === macro[key as "calories"]);
++       const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === "HIGH" && !existing.hadPhoto && existing.ingredientBreakdown === null && [].every(key => existing[key as "calories"] === macro[key as "calories"]);
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] StringLiteral
+apps/api/services/chainServing.ts:70:164
+-       const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === "HIGH" && !existing.hadPhoto && existing.ingredientBreakdown === null && ["calories", "proteinG", "carbsG", "fatG"].every(key => existing[key as "calories"] === macro[key as "calories"]);
++       const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === "HIGH" && !existing.hadPhoto && existing.ingredientBreakdown === null && ["", "proteinG", "carbsG", "fatG"].every(key => existing[key as "calories"] === macro[key as "calories"]);
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] StringLiteral
+apps/api/services/chainServing.ts:70:176
+-       const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === "HIGH" && !existing.hadPhoto && existing.ingredientBreakdown === null && ["calories", "proteinG", "carbsG", "fatG"].every(key => existing[key as "calories"] === macro[key as "calories"]);
++       const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === "HIGH" && !existing.hadPhoto && existing.ingredientBreakdown === null && ["calories", "", "carbsG", "fatG"].every(key => existing[key as "calories"] === macro[key as "calories"]);
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] StringLiteral
+apps/api/services/chainServing.ts:70:188
+-       const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === "HIGH" && !existing.hadPhoto && existing.ingredientBreakdown === null && ["calories", "proteinG", "carbsG", "fatG"].every(key => existing[key as "calories"] === macro[key as "calories"]);
++       const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === "HIGH" && !existing.hadPhoto && existing.ingredientBreakdown === null && ["calories", "proteinG", "", "fatG"].every(key => existing[key as "calories"] === macro[key as "calories"]);
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] StringLiteral
+apps/api/services/chainServing.ts:70:198
+-       const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === "HIGH" && !existing.hadPhoto && existing.ingredientBreakdown === null && ["calories", "proteinG", "carbsG", "fatG"].every(key => existing[key as "calories"] === macro[key as "calories"]);
++       const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === "HIGH" && !existing.hadPhoto && existing.ingredientBreakdown === null && ["calories", "proteinG", "carbsG", ""].every(key => existing[key as "calories"] === macro[key as "calories"]);
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] ConditionalExpression
+apps/api/services/chainServing.ts:70:219
+-       const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === "HIGH" && !existing.hadPhoto && existing.ingredientBreakdown === null && ["calories", "proteinG", "carbsG", "fatG"].every(key => existing[key as "calories"] === macro[key as "calories"]);
++       const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === "HIGH" && !existing.hadPhoto && existing.ingredientBreakdown === null && ["calories", "proteinG", "carbsG", "fatG"].every(key => true);
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] ObjectLiteral
+apps/api/services/chainServing.ts:76:99
+-       return tx.menuItem.findUniqueOrThrow({ where: { id: expected.id }, include: { macroEstimates: { orderBy: { id: "asc" } } } });
++       return tx.menuItem.findUniqueOrThrow({ where: { id: expected.id }, include: { macroEstimates: {} } });
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] ObjectLiteral
+apps/api/services/chainServing.ts:76:110
+-       return tx.menuItem.findUniqueOrThrow({ where: { id: expected.id }, include: { macroEstimates: { orderBy: { id: "asc" } } } });
++       return tx.menuItem.findUniqueOrThrow({ where: { id: expected.id }, include: { macroEstimates: { orderBy: {} } } });
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+[Survived] ObjectLiteral
+apps/api/services/chainServing.ts:77:6
+-     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30_000 });
++     }, {});
+Tests ran:
+    reviewed chains through April and real new-hex persistence waba-grill: captured April identity and new UE location serve the same PDF facts
+    reviewed chains through April and real new-hex persistence yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+
+Ran 2.31 tests per mutant on average.
+-----------------|------------------|----------|-----------|------------|----------|----------|
+                 | % Mutation score |          |           |            |          |          |
+File             |  total | covered | # killed | # timeout | # survived | # no cov | # errors |
+-----------------|--------|---------|----------|-----------|------------|----------|----------|
+All files        |  77.54 |   78.21 |      183 |         0 |         51 |        2 |        0 |
+ chainServing.ts |  77.54 |   78.21 |      183 |         0 |         51 |        2 |        0 |
+-----------------|--------|---------|----------|-----------|------------|----------|----------|
+[32m22:50:33 (13565) INFO MutationTestReportHelper[39m Final mutation score of 77.54 is greater than or equal to break threshold 50
+[32m22:50:33 (13565) INFO JsonReporter[39m Your report can be found at: file:///Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-integration/.evidence/mutation/report.json
+[32m22:50:33 (13565) INFO MutationTestExecutor[39m Done in 1 minute and 12 seconds.

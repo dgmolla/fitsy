@@ -14,6 +14,7 @@
  * Application → Cookies → `uev2.loc` and update the `UE_LOC_COOKIE` secret.
  */
 
+import { ueNutritionLabel } from "./ueNutritionLabel";
 import type { StructuredMenuItem } from "./types";
 
 const UE_BASE = "https://www.ubereats.com";
@@ -282,6 +283,8 @@ export function decodeStoreUuid(storeUrl: string): string | null {
 // ─── getStoreV1 types ────────────────────────────────────────────────────────
 
 interface UeCatalogItem {
+  priceTagline?: { text?: string };
+  hasCustomizations?: boolean;
   uuid?: string;
   title?: string;
   itemDescription?: string;
@@ -412,7 +415,7 @@ export function classifyStoreV1Response(json: UeStoreResponse): UeStoreParseOutc
         continue;
       }
 
-      const item: StructuredMenuItem = { name: title };
+      const item: StructuredMenuItem = { name: title, ...ueNutritionLabel(raw.priceTagline?.text, raw.hasCustomizations) };
       if (raw.itemDescription) item.description = raw.itemDescription;
       if (typeof raw.price === "number" && raw.price > 0) item.price = raw.price / 100;
       if (sectionName) item.section = sectionName;

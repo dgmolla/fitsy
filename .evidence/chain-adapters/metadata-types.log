@@ -1,0 +1,20 @@
+
+> fitsy@0.1.0 type-check
+> npm run type-check --workspaces --if-present
+
+
+> @fitsy/api@0.1.0 type-check
+> tsc --noEmit
+
+
+> @fitsy/mobile@0.1.0 type-check
+> tsc --noEmit
+
+
+> @fitsy/shared@0.1.0 type-check
+> tsc --noEmit
+
+
+> @fitsy/scripts@0.1.0 type-check
+> tsc --noEmit
+

@@ -56,7 +56,7 @@ export function buildChainMatcher(rows: ChainCatalogRow[]): (brandId: string | u
     const row = candidates.values().next().value!;
     // Source calorie labels corroborate a serving; estimated DB columns must
     // not be passed as source labels by the April adapter.
-    if (item.calorieRange || (item.calories !== undefined && (!Number.isFinite(item.calories)
+    if ((item.calorieLabel && item.calories === undefined) || item.calorieRange || (item.calories !== undefined && (!Number.isFinite(item.calories)
       || item.calories < 0 || Math.abs(item.calories - row.calories) > Math.max(30, .05 * row.calories)))) return { status: "unmatched" };
     return { status: "matched", row };
   };

@@ -1,0 +1,12 @@
+{
+  "testedHead": "372d7be072d9f2e086cf3b3819102ee1904b6366",
+  "preparedCatalogParent": "7a3ece5957c4937a4fda3a7e1dd6d0aae7106406",
+  "databaseApiTests": {
+    "passed": 791,
+    "skipped": 0
+  },
+  "registry": "9 passed; existing own-code-mocks advisory failure",
+  "build": "passed",
+  "fullTestLogSha256": "0e690e75079a9227cfe91fb07c1a93bb73884c839fc34f3dc67a15a0165db509",
+  "finalServingMutation": 77.54
+}

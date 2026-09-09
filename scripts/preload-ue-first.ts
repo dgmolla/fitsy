@@ -1,3 +1,5 @@
+import { validateHexInTx } from "./preload-invariants";
+import { loadChainServing, resolveChainMacros, type ChainServing } from "../apps/api/services/chainServing";
 /**
  * UE-First Preload Orchestrator (Stage 3)
  *
@@ -38,7 +40,7 @@
  *   AXIOM_TOKEN                 optional (pipeline telemetry)
  */
 
-import { PrismaClient, type Prisma } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
 import Anthropic from "@anthropic-ai/sdk";
 import { createHash } from "node:crypto";
 import {
@@ -378,6 +380,7 @@ interface EnrichmentStats {
 }
 
 interface Phase2Restaurant {
+  brandId: string | null;
   id: string;
   storeUuid: string;
   name: string;
@@ -445,7 +448,7 @@ async function loadRestaurantsForEnrichment(
   prisma: PrismaClient,
 ): Promise<Map<string, Phase2Restaurant[]>> {
   const rows = await prisma.$queryRaw<Phase2Restaurant[]>`
-    SELECT "id", "storeUuid", "name", "address", "lat", "lng",
+    SELECT "id", "brandId", "storeUuid", "name", "address", "lat", "lng",
            "homeHex", "photoUrl", "photoSource", "lastScrapedAt", "menuHash"
     FROM "Restaurant"
     WHERE "source" = 'ue_feed' AND "homeHex" IS NOT NULL
@@ -517,43 +520,6 @@ async function assertCookieAliveForHex(hexId: string): Promise<void> {
  * 1:1 MenuItem ↔ MacroEstimate mapping. Throws to roll back the tx if not,
  * so we never commit half-populated restaurants or a phantom checkpoint.
  */
-async function validateHexInTx(
-  tx: Prisma.TransactionClient,
-  restaurants: HexRestaurantData[],
-): Promise<void> {
-  if (restaurants.length === 0) return;
-  const ids = restaurants.map((r) => r.restaurantId);
-  const rows = await tx.$queryRaw<
-    { restaurantId: string; itemCount: bigint; macroCount: bigint }[]
-  >`
-    SELECT r.id AS "restaurantId",
-           COUNT(DISTINCT mi.id)::bigint AS "itemCount",
-           COUNT(DISTINCT me.id)::bigint AS "macroCount"
-    FROM "Restaurant" r
-    LEFT JOIN "MenuItem" mi ON mi."restaurantId" = r.id
-    LEFT JOIN "MacroEstimate" me ON me."menuItemId" = mi.id
-    WHERE r.id = ANY(${ids}::text[])
-    GROUP BY r.id
-  `;
-  const byId = new Map(rows.map((r) => [r.restaurantId, r]));
-  const failures: string[] = [];
-  for (const id of ids) {
-    const row = byId.get(id);
-    if (!row) {
-      failures.push(`${id}: row missing from invariant query`);
-      continue;
-    }
-    const items = Number(row.itemCount);
-    const macros = Number(row.macroCount);
-    if (items === 0) failures.push(`${id}: items=0`);
-    else if (items !== macros) failures.push(`${id}: items=${items} macros=${macros}`);
-  }
-  if (failures.length > 0) {
-    throw new Error(
-      `hex invariant check failed (${failures.length}/${ids.length} restaurants): ${failures.slice(0, 3).join("; ")}${failures.length > 3 ? "…" : ""}`,
-    );
-  }
-}
 
 async function runPhase2(
   prisma: PrismaClient,
@@ -563,6 +529,7 @@ async function runPhase2(
 ): Promise<EnrichmentStats> {
   log(`Phase 2 (enrich): loading ue_feed restaurants grouped by homeHex`);
   const byHex = await loadRestaurantsForEnrichment(prisma);
+  const chainServing = await loadChainServing(prisma);
   const allHexIds = Array.from(byHex.keys());
   log(`  ${allHexIds.length} hexes, ${Array.from(byHex.values()).reduce((s, r) => s + r.length, 0)} restaurants total`);
 
@@ -643,7 +610,7 @@ async function runPhase2(
           const r = restaurants[idx]!;
           const result = await processRestaurant(
             r, idx + 1, restaurants.length,
-            prisma, anthropic, emitter, runId, hexId, stats,
+            prisma, anthropic, emitter, runId, hexId, stats, chainServing,
           );
           if (result != null) hexResults.push(result);
         }
@@ -707,6 +674,7 @@ async function processRestaurant(
   runId: string,
   hexId: string,
   stats: EnrichmentStats,
+  chainServing: ChainServing,
 ): Promise<HexRestaurantData | null> {
   const restaurantStart = Date.now();
   stats.processed++;
@@ -757,8 +725,9 @@ async function processRestaurant(
     return null;
   }
 
+  const brandId = chainServing.brandId(r);
   const resolver = new MenuSourceResolver([
-    new FatSecretSource(),
+    ...(brandId ? [] : [new FatSecretSource()]),
     new UeApiDirectSource(r.storeUuid, {}, API_SEMAPHORES.ubereats),
   ]);
 
@@ -828,7 +797,7 @@ async function processRestaurant(
     }
   }
 
-  // Macro estimation: FatSecret carries official macros; UE needs Haiku.
+  // Reviewed chain matches bypass estimation; unresolved UE items use Haiku.
   let macros: (MacroData | null)[];
   if (resolverResult.macros && resolverResult.macros.size > 0) {
     macros = resolverResult.items.map((item) =>
@@ -836,25 +805,27 @@ async function processRestaurant(
     );
   } else {
     try {
-      const { result } = await withRetry(
-        () => API_SEMAPHORES.haiku.run(() => estimateMacros(resolverResult.items, anthropic)),
-        {
-          label: `${r.name}/haiku`,
-          maxRetries: 5,
-          backoffMs: [1000, 3000, 8000, 15000, 30000],
-          computeDelayMs: (err) => {
-            if (!(err instanceof Anthropic.APIError) || err.status !== 429) return null;
-            const h = err.headers;
-            if (!h || typeof (h as Headers).get !== "function") return null;
-            const ra = (h as Headers).get("retry-after");
-            if (!ra) return null;
-            const sec = parseInt(ra, 10);
-            return Number.isFinite(sec) && sec > 0 ? sec * 1000 : null;
+      macros = await resolveChainMacros(resolverResult.items, brandId, chainServing.match, async unresolved => {
+        stats.anthropicCalls++;
+        const { result } = await withRetry(
+          () => API_SEMAPHORES.haiku.run(() => estimateMacros(unresolved, anthropic)),
+          {
+            label: `${r.name}/haiku`,
+            maxRetries: 5,
+            backoffMs: [1000, 3000, 8000, 15000, 30000],
+            computeDelayMs: (err) => {
+              if (!(err instanceof Anthropic.APIError) || err.status !== 429) return null;
+              const h = err.headers;
+              if (!h || typeof (h as Headers).get !== "function") return null;
+              const ra = (h as Headers).get("retry-after");
+              if (!ra) return null;
+              const sec = parseInt(ra, 10);
+              return Number.isFinite(sec) && sec > 0 ? sec * 1000 : null;
+            },
           },
-        },
-      );
-      macros = result;
-      stats.anthropicCalls++;
+        );
+        return result;
+      });
     } catch (err) {
       // Strict: Haiku retries have already been exhausted by withRetry. A
       // macro estimation failure produces bad data, so abort the hex rather
@@ -897,7 +868,7 @@ async function processRestaurant(
   }
 
   emitEvent("ok", resolverResult.sourceId, valid.length, rejected.length, resolverResult.attempts);
-  return { restaurantId: r.id, items: valid, menuHash };
+  return { restaurantId: r.id, items: valid, menuHash, ...(brandId ? { brandId } : {}) };
 }
 
 // ─── Main ────────────────────────────────────────────────────────────────────

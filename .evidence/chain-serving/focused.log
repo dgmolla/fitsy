@@ -1,0 +1,10 @@
+PASS apps/api/tests/db/chainServing.db.test.ts
+PASS apps/api/services/chainCatalog.test.ts
+PASS apps/api/services/chainServing.test.ts
+PASS apps/api/services/menuSources/ueNutritionLabel.test.ts
+
+Test Suites: 4 passed, 4 total
+Tests:       51 passed, 51 total
+Snapshots:   0 total
+Time:        0.986 s, estimated 4 s
+Ran all test suites matching /apps\/api\/tests\/db\/chainServing.db.test.ts|apps\/api\/services\/chainServing.test.ts|apps\/api\/services\/menuSources\/ueNutritionLabel.test.ts|apps\/api\/services\/chainCatalog.test.ts/i.

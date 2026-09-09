@@ -1,0 +1,41 @@
+FAIL apps/api/tests/db/chainServing.db.test.ts
+  ● reviewed chains through April and real new-hex persistence › waba-grill: captured April identity and new UE location serve the same PDF facts
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "a33ac66d-7b9a-4c37-8d36-0681b77a97e6"
+    Received: undefined
+
+      59 |     await p.restaurant.update({ where: { id: aprilRestaurant.id }, data: { name: aprilRestaurant.name } });
+      60 |     const runtime = await loadChainServing(p), detected = runtime.brandId(newRestaurant);
+    > 61 |     expect(detected).toBe(brandId);
+         |                      ^
+      62 |     const unseen = { name: "Unreviewed seasonal dish" };
+      63 |     const requested: string[] = [];
+      64 |     const macros = await resolveChainMacros([ue, unseen], detected, runtime.match, async items => {
+
+      at tests/db/chainServing.db.test.ts:61:22
+
+FAIL apps/api/services/chainServing.test.ts
+  ● brand handoff accepts verified exact identity and location suffixes, rejects conflicts and near names
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "waba"
+    Received: undefined
+
+      4 | test("brand handoff accepts verified exact identity and location suffixes, rejects conflicts and near names", () => {
+      5 |   expect(verifiedBrand({ name: "WaBa Grill (Main Street)" }, [brand])).toBe("waba");
+    > 6 |   expect(verifiedBrand({ name: "WaBa Grill - Van Nuys (Sepulveda)" }, [brand])).toBe("waba");
+        |                                                                                 ^
+      7 |   for (const input of [{ name: "WaBa Grill Express" }, { name: "Local Deli - WaBa Grill" }, { name: "WaBa Grill", brandId: "other" }]) expect(verifiedBrand(input, [brand])).toBeUndefined();
+      8 |   expect(verifiedBrand({ name: "WaBa Grill" }, [brand, { ...brand, id: "duplicate" }])).toBeUndefined();
+      9 |   for (const update of [{ detectionConf: "medium" }, { menuKind: "grocery" }]) expect(verifiedBrand({ name: "WaBa Grill" }, [{ ...brand, ...update }])).toBeUndefined();
+
+      at Object.<anonymous> (services/chainServing.test.ts:6:81)
+
+Test Suites: 2 failed, 2 total
+Tests:       2 failed, 3 passed, 5 total
+Snapshots:   0 total
+Time:        0.948 s, estimated 1 s
+Ran all test suites matching /apps\/api\/tests\/db\/chainServing.db.test.ts|apps\/api\/services\/chainServing.test.ts/i.

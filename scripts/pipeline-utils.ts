@@ -11,7 +11,7 @@ import type {
   StructuredMenuItem,
 } from "../apps/api/services/menuSources/types.js";
 import { aggregateDietaryOptions, DIETARY_TAG_THRESHOLD } from "./constants.js";
-import { macroWinnerSqlOrder } from "@fitsy/shared";
+import { macroWinnerSqlOrder } from "../packages/shared/src/utils/macroProvenance";
 
 // ─── Item validation (S-111, S-112) ─────────────────────────────────────────
 
@@ -207,6 +207,7 @@ export async function persistItemsInTx(
   const confidences = validPairs.map((p) => p.macro.confidence);
   // COALESCE source to 'llm' defensively for any legacy NULL values.
   const sources = validPairs.map((p) => p.macro.source ?? "llm");
+  const reasonings = validPairs.map(p => p.macro.reasoning ?? null);
   // Candidate IDs for new rows — on conflict the existing id is preserved.
   const candidateIds = validPairs.map(() => randomUUID());
 
@@ -274,17 +275,21 @@ export async function persistItemsInTx(
       AND "name" <> ALL(${names}::text[])
   `;
 
+  // A changed/unmatched serving must not keep an older official binding as its winner.
+  await tx.$executeRaw`DELETE FROM "MacroEstimate" e USING UNNEST(${menuItemIds}::text[], ${sources}::text[]) incoming(id, source)
+    WHERE e."menuItemId" = incoming.id AND e.source = 'official' AND e.reasoning LIKE '{"kind":"reviewed-chain-v1",%' AND incoming.source <> 'official'`;
+
   // Query 3: UPSERT MacroEstimate by (menuItemId, source). Each source gets
   // its own row; re-running the pipeline for the same source updates macros.
   await tx.$executeRaw`
     INSERT INTO "MacroEstimate" (
       "id", "menuItemId", "calories", "proteinG", "carbsG", "fatG",
-      "confidence", "source", "hadPhoto", "estimatedAt"
+      "confidence", "source", "reasoning", "hadPhoto", "estimatedAt"
     )
     SELECT
       gen_random_uuid(),
       "menuItemId", calories, "proteinG", "carbsG", "fatG",
-      confidence::"ConfidenceLevel", COALESCE(source, 'llm'), false, now()
+      confidence::"ConfidenceLevel", COALESCE(source, 'llm'), reasoning, false, now()
     FROM UNNEST(
       ${menuItemIds}::text[],
       ${calories}::int[],
@@ -292,8 +297,9 @@ export async function persistItemsInTx(
       ${carbs}::float[],
       ${fats}::float[],
       ${confidences}::text[],
-      ${sources}::text[]
-    ) AS t("menuItemId", calories, "proteinG", "carbsG", "fatG", confidence, source)
+      ${sources}::text[],
+      ${reasonings}::text[]
+    ) AS t("menuItemId", calories, "proteinG", "carbsG", "fatG", confidence, source, reasoning)
     ON CONFLICT ("menuItemId", "source") DO UPDATE SET
       "calories"    = EXCLUDED."calories",
       "proteinG"    = EXCLUDED."proteinG",
@@ -301,6 +307,8 @@ export async function persistItemsInTx(
       "fatG"        = EXCLUDED."fatG",
       "confidence"  = EXCLUDED."confidence",
       "hadPhoto"    = EXCLUDED."hadPhoto",
+      "reasoning"   = EXCLUDED."reasoning",
+      "ingredientBreakdown" = CASE WHEN EXCLUDED.source = 'official' THEN NULL ELSE "MacroEstimate"."ingredientBreakdown" END,
       "estimatedAt" = now()
   `;
 
@@ -412,6 +420,7 @@ export async function persistHexBulkInTx(
   const flatFats: number[] = [];
   const flatConfidences: string[] = [];
   const flatSources: string[] = [];
+  const flatReasonings: (string | null)[] = [];
 
   // Keep track of per-restaurant incoming names for stale-item deletion.
   const incomingNamesByRestaurant = new Map<string, string[]>();
@@ -442,6 +451,7 @@ export async function persistHexBulkInTx(
       flatConfidences.push(pair.macro.confidence);
       // COALESCE source to 'llm' defensively for any legacy NULL values.
       flatSources.push(pair.macro.source ?? "llm");
+      flatReasonings.push(pair.macro.reasoning ?? null);
       namesForRestaurant.push(name);
     }
     incomingNamesByRestaurant.set(restaurantId, namesForRestaurant);
@@ -527,15 +537,17 @@ export async function persistHexBulkInTx(
   // Q3: UPSERT MacroEstimate by (menuItemId, source). Each source gets its own
   // row; re-running the pipeline for the same source updates macros in-place.
   if (flatMenuItemIds.length > 0) {
+    await tx.$executeRaw`DELETE FROM "MacroEstimate" e USING UNNEST(${flatMenuItemIds}::text[], ${flatSources}::text[]) incoming(id, source)
+      WHERE e."menuItemId" = incoming.id AND e.source = 'official' AND e.reasoning LIKE '{"kind":"reviewed-chain-v1",%' AND incoming.source <> 'official'`;
     await tx.$executeRaw`
       INSERT INTO "MacroEstimate" (
         "id", "menuItemId", "calories", "proteinG", "carbsG", "fatG",
-        "confidence", "source", "hadPhoto", "estimatedAt"
+        "confidence", "source", "reasoning", "hadPhoto", "estimatedAt"
       )
       SELECT
         gen_random_uuid(),
         "menuItemId", calories, "proteinG", "carbsG", "fatG",
-        confidence::"ConfidenceLevel", COALESCE(source, 'llm'), false, now()
+        confidence::"ConfidenceLevel", COALESCE(source, 'llm'), reasoning, false, now()
       FROM UNNEST(
         ${flatMenuItemIds}::text[],
         ${flatCalories}::int[],
@@ -543,8 +555,9 @@ export async function persistHexBulkInTx(
         ${flatCarbs}::float[],
         ${flatFats}::float[],
         ${flatConfidences}::text[],
-        ${flatSources}::text[]
-      ) AS t("menuItemId", calories, "proteinG", "carbsG", "fatG", confidence, source)
+        ${flatSources}::text[],
+        ${flatReasonings}::text[]
+      ) AS t("menuItemId", calories, "proteinG", "carbsG", "fatG", confidence, source, reasoning)
       ON CONFLICT ("menuItemId", "source") DO UPDATE SET
         "calories"    = EXCLUDED."calories",
         "proteinG"    = EXCLUDED."proteinG",
@@ -552,6 +565,8 @@ export async function persistHexBulkInTx(
         "fatG"        = EXCLUDED."fatG",
         "confidence"  = EXCLUDED."confidence",
         "hadPhoto"    = EXCLUDED."hadPhoto",
+        "reasoning"   = EXCLUDED."reasoning",
+        "ingredientBreakdown" = CASE WHEN EXCLUDED.source = 'official' THEN NULL ELSE "MacroEstimate"."ingredientBreakdown" END,
         "estimatedAt" = now()
     `;
 
@@ -609,14 +624,14 @@ export async function persistHexBulkInTx(
     WHERE r.id = u.id
   `;
 
-  // Q7: set chainFlag based on macro source — fatsecret means chain data.
+  // Q7: set chainFlag based on chain macro sources.
   if (restaurantIdsWithItems.length > 0) {
     await tx.$executeRaw`
       UPDATE "Restaurant" r
       SET "chainFlag" = EXISTS (
         SELECT 1 FROM "MenuItem" mi
         JOIN "MacroEstimate" me ON me."menuItemId" = mi.id
-        WHERE mi."restaurantId" = r.id AND me.source = 'fatsecret'
+        WHERE mi."restaurantId" = r.id AND me.source IN ('fatsecret', 'official')
       ),
       "updatedAt" = now()
       WHERE r.id = ANY(${restaurantIdsWithItems}::text[])
