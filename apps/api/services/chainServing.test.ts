@@ -5,7 +5,7 @@ test("brand handoff accepts verified exact identity and location suffixes, rejec
   expect(verifiedBrand({ name: "WaBa Grill (Main Street)" }, [brand])).toBe("waba");
   expect(verifiedBrand({ name: "WaBa Grill - Van Nuys (Sepulveda)" }, [brand])).toBe("waba");
   for (const name of ["WABA GRILL (Main Street)", "ＷａＢａ   Grill - Van Nuys"]) expect(verifiedBrand({ name }, [brand])).toBe("waba");
-  for (const input of [{ name: "WaBa Grill Express" }, { name: "Local Deli - WaBa Grill" }, { name: "WaBa Grill", brandId: "other" }]) expect(verifiedBrand(input, [brand])).toBeUndefined();
+  for (const input of [{ name: "WaBa Grill (Sepulveda) - Van Nuys" }, { name: "WaBa Grill Express" }, { name: "Local Deli - WaBa Grill" }, { name: "WaBa Grill", brandId: "other" }]) expect(verifiedBrand(input, [brand])).toBeUndefined();
   expect(verifiedBrand({ name: "WaBa Grill" }, [brand, { ...brand, id: "duplicate" }])).toBeUndefined();
   for (const update of [{ detectionConf: "medium" }, { menuKind: "grocery" }]) expect(verifiedBrand({ name: "WaBa Grill" }, [{ ...brand, ...update }])).toBeUndefined();
 });

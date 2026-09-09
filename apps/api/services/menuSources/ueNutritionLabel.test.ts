@@ -11,12 +11,12 @@ test.each(["$8 • 640–760 Cal.", "$8 • 640-760 Calories"])("ranges remain r
   expect(ueNutritionLabel(text, true)).toMatchObject({ calorieRange: [640, 760], hasCustomizations: true });
   expect(ueNutritionLabel(text, true).calories).toBeUndefined();
 });
-test.each(["$8 • 500+ Cal.", "$8 • 500 Cal. • 700 Cal.", "$8 • 900-600 Cal.", "$8 • 100001 Cal.", "$8 • -10 Cal."])
+test.each(["$8 • 310 Cal. (regular)", "820 Cal. per serving", "$8 • 500+ Cal.", "$8 • 500 Cal. • 700 Cal.", "$8 • 900-600 Cal.", "$8 • 100001 Cal.", "$8 • -10 Cal."])
 ("unsupported labels retain evidence without inventing an exact serving: %s", text => {
-  expect(ueNutritionLabel(text, undefined)).toEqual({ calorieLabel: expect.any(String) });
+  expect(ueNutritionLabel(text, undefined)).toStrictEqual({ calorieLabel: expect.any(String) });
 });
 test("prices are never calories; separators, zero, thousands and decimals are supported", () => {
-  expect(ueNutritionLabel("$8.20", undefined)).toEqual({});
+  expect(ueNutritionLabel("$8.20", undefined)).toStrictEqual({});
   expect(ueNutritionLabel("$8 · 1,050 Calories", false)).toMatchObject({ calories: 1050 });
   expect(ueNutritionLabel("646.4 Cal.", undefined)).toMatchObject({ calories: 646.4 });
   expect(ueNutritionLabel("0 Cal.", undefined)).toMatchObject({ calories: 0 });

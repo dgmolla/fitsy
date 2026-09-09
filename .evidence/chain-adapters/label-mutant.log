@@ -1,0 +1,62 @@
+FAIL services/menuSources/ueNutritionLabel.test.ts
+  ✓ captured WaBa and Yoshinoya labels survive the actual UE parser (2 ms)
+  ✓ ranges remain ranges: $8 • 640–760 Cal. (1 ms)
+  ✓ ranges remain ranges: $8 • 640-760 Calories
+  ✕ unsupported labels retain evidence without inventing an exact serving: $8 • 310 Cal. (regular) (1 ms)
+  ✕ unsupported labels retain evidence without inventing an exact serving: 820 Cal. per serving
+  ✓ unsupported labels retain evidence without inventing an exact serving: $8 • 500+ Cal.
+  ✓ unsupported labels retain evidence without inventing an exact serving: $8 • 500 Cal. • 700 Cal.
+  ✓ unsupported labels retain evidence without inventing an exact serving: $8 • 900-600 Cal.
+  ✓ unsupported labels retain evidence without inventing an exact serving: $8 • 100001 Cal.
+  ✓ unsupported labels retain evidence without inventing an exact serving: $8 • -10 Cal.
+  ✓ prices are never calories; separators, zero, thousands and decimals are supported (1 ms)
+
+  ● unsupported labels retain evidence without inventing an exact serving: $8 • 310 Cal. (regular)
+
+    expect(received).toStrictEqual(expected) // deep equality
+
+    - Expected  - 0
+    + Received  + 1
+
+      Object {
+        "calorieLabel": Any<String>,
+    +   "calories": 310,
+      }
+
+      14 | test.each(["$8 • 310 Cal. (regular)", "820 Cal. per serving", "$8 • 500+ Cal.", "$8 • 500 Cal. • 700 Cal.", "$8 • 900-600 Cal.", "$8 • 100001 Cal.", "$8 • -10 Cal."])
+      15 | ("unsupported labels retain evidence without inventing an exact serving: %s", text => {
+    > 16 |   expect(ueNutritionLabel(text, undefined)).toStrictEqual({ calorieLabel: expect.any(String) });
+         |                                             ^
+      17 | });
+      18 | test("prices are never calories; separators, zero, thousands and decimals are supported", () => {
+      19 |   expect(ueNutritionLabel("$8.20", undefined)).toStrictEqual({});
+
+      at services/menuSources/ueNutritionLabel.test.ts:16:45
+
+  ● unsupported labels retain evidence without inventing an exact serving: 820 Cal. per serving
+
+    expect(received).toStrictEqual(expected) // deep equality
+
+    - Expected  - 0
+    + Received  + 1
+
+      Object {
+        "calorieLabel": Any<String>,
+    +   "calories": 820,
+      }
+
+      14 | test.each(["$8 • 310 Cal. (regular)", "820 Cal. per serving", "$8 • 500+ Cal.", "$8 • 500 Cal. • 700 Cal.", "$8 • 900-600 Cal.", "$8 • 100001 Cal.", "$8 • -10 Cal."])
+      15 | ("unsupported labels retain evidence without inventing an exact serving: %s", text => {
+    > 16 |   expect(ueNutritionLabel(text, undefined)).toStrictEqual({ calorieLabel: expect.any(String) });
+         |                                             ^
+      17 | });
+      18 | test("prices are never calories; separators, zero, thousands and decimals are supported", () => {
+      19 |   expect(ueNutritionLabel("$8.20", undefined)).toStrictEqual({});
+
+      at services/menuSources/ueNutritionLabel.test.ts:16:45
+
+Test Suites: 1 failed, 1 total
+Tests:       2 failed, 9 passed, 11 total
+Snapshots:   0 total
+Time:        0.203 s, estimated 1 s
+Ran all test suites within paths "services/menuSources/ueNutritionLabel.test.ts".

@@ -1,0 +1,51 @@
+PASS tests/db/chainServing.db.test.ts
+  ● Console
+
+    console.log
+      [resolver] db338b06-4ab9-46c9-b805-b9dbe9ce3995 WaBa Grill - Van Nuys (Sepulveda): ue_api_direct → not_found (1ms)
+
+      at MenuSourceResolver.resolve (services/menuSources/resolver.ts:54:15)
+
+    console.log
+      [resolver] db338b06-4ab9-46c9-b805-b9dbe9ce3995 WaBa Grill - Van Nuys (Sepulveda): ue_api_direct → ok (1ms)
+
+      at MenuSourceResolver.resolve (services/menuSources/resolver.ts:49:17)
+
+    console.log
+      [resolver] Unrelated Deli: fatsecret → not_found (0ms)
+
+      at MenuSourceResolver.resolve (services/menuSources/resolver.ts:54:15)
+
+    console.log
+      [resolver] Unrelated Deli: ue_api_direct → ok (0ms)
+
+      at MenuSourceResolver.resolve (services/menuSources/resolver.ts:49:17)
+
+    console.log
+      [resolver] db338b06-4ab9-46c9-b805-b9dbe9ce3995 Yoshinoya (3081 N. San Fernando Road): ue_api_direct → not_found (0ms)
+
+      at MenuSourceResolver.resolve (services/menuSources/resolver.ts:54:15)
+
+    console.log
+      [resolver] db338b06-4ab9-46c9-b805-b9dbe9ce3995 Yoshinoya (3081 N. San Fernando Road): ue_api_direct → ok (0ms)
+
+      at MenuSourceResolver.resolve (services/menuSources/resolver.ts:49:17)
+
+    console.log
+      [resolver] Unrelated Deli: fatsecret → not_found (0ms)
+
+      at MenuSourceResolver.resolve (services/menuSources/resolver.ts:54:15)
+
+    console.log
+      [resolver] Unrelated Deli: ue_api_direct → ok (0ms)
+
+      at MenuSourceResolver.resolve (services/menuSources/resolver.ts:49:17)
+
+PASS services/chainServing.test.ts
+PASS services/menuSources/ueNutritionLabel.test.ts
+
+Test Suites: 3 passed, 3 total
+Tests:       18 passed, 18 total
+Snapshots:   0 total
+Time:        1.034 s
+Ran all test suites within paths "tests/db/chainServing.db.test.ts", "services/chainServing.test.ts", "services/menuSources/ueNutritionLabel.test.ts".

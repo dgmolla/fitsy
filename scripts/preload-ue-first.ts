@@ -1,5 +1,5 @@
 import { validateHexInTx } from "./preload-invariants";
-import { loadChainServing, resolveChainMacros, type ChainServing } from "../apps/api/services/chainServing";
+import { loadChainServing, resolveChainMacros, chainMenuResolver, type ChainServing } from "../apps/api/services/chainServing";
 /**
  * UE-First Preload Orchestrator (Stage 3)
  *
@@ -50,9 +50,7 @@ import {
   polygonToCells,
 } from "h3-js";
 
-import { MenuSourceResolver, type SourceAttempt } from "../apps/api/services/menuSources/resolver.js";
-import { FatSecretSource } from "../apps/api/services/menuSources/fatSecretSource.js";
-import { UeApiDirectSource } from "../apps/api/services/menuSources/ueApiDirectSource.js";
+import { type SourceAttempt } from "../apps/api/services/menuSources/resolver.js";
 import {
   buildFeedCookieHeader,
   fetchFeedV1,
@@ -725,11 +723,7 @@ async function processRestaurant(
     return null;
   }
 
-  const brandId = chainServing.brandId(r);
-  const resolver = new MenuSourceResolver([
-    ...(brandId ? [] : [new FatSecretSource()]),
-    new UeApiDirectSource(r.storeUuid, {}, API_SEMAPHORES.ubereats),
-  ]);
+  const { brandId, resolver } = chainMenuResolver(r, chainServing, API_SEMAPHORES.ubereats);
 
   // The UE semaphore lives inside UeApiDirectSource now — it only wraps the
   // UE getStoreV1 call. Holding it around the whole resolver wastes UE slots
@@ -761,7 +755,7 @@ async function processRestaurant(
     // Guard 1 (pre-probe) and the UE 403 circuit breaker.
     stats.skippedNoSource++;
     emitEvent("skipped_no_source", "none", 0, 0, resolverResult.attempts);
-    log(`    skipped: [${r.name}] no menu source found (FatSecret + UE both missed)`);
+    log(`    skipped: [${r.name}] no menu source found (${resolverResult.attempts.map(a => a.sourceId).join(" + ")} missed)`);
     return null;
   }
 
@@ -854,6 +848,7 @@ async function processRestaurant(
     }
   }
 
+  if (brandId) log(`    reviewed chain: ${macros.filter(m => m?.source === "official").length}/${resolverResult.items.length} official; remaining items sent to estimation`);
   const { valid, rejected } = validateItems(resolverResult.items, macros);
   stats.rejectedItems += rejected.length;
   if (valid.length === 0) {

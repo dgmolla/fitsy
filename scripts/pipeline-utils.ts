@@ -211,6 +211,7 @@ export async function persistItemsInTx(
   // Candidate IDs for new rows — on conflict the existing id is preserved.
   const candidateIds = validPairs.map(() => randomUUID());
 
+  // Official macro facts make no dietary claim; incoming candidate IDs select tag preservation.
   // Query 1: UPSERT MenuItem by (restaurantId, name). New rows get a fresh
   // UUID; existing rows keep their id (stable for SavedItem FK). Macro columns
   // are written here for brand-new rows; the winner-recompute step (Query 3)
@@ -245,7 +246,8 @@ export async function persistItemsInTx(
       "category"    = EXCLUDED."category",
       "section"     = EXCLUDED."section",
       "price"       = EXCLUDED."price",
-      "dietaryTags" = EXCLUDED."dietaryTags",
+      "dietaryTags" = CASE WHEN EXCLUDED.id = ANY(${candidateIds.filter((_, i) => sources[i] === "official")}::text[])
+        THEN "MenuItem"."dietaryTags" ELSE EXCLUDED."dietaryTags" END,
       "calories"    = EXCLUDED."calories",
       "proteinG"    = EXCLUDED."proteinG",
       "carbsG"      = EXCLUDED."carbsG",
@@ -457,6 +459,7 @@ export async function persistHexBulkInTx(
     incomingNamesByRestaurant.set(restaurantId, namesForRestaurant);
   }
 
+  // Candidate IDs distinguish incoming official rows even across restaurants with identical names.
   // Q1: UPSERT MenuItem by (restaurantId, name). New rows get a fresh UUID
   // (candidateId); existing rows keep their id. Macro columns are written for
   // brand-new rows; the winner-recompute step (Q4) corrects existing rows.
@@ -494,7 +497,8 @@ export async function persistHexBulkInTx(
         "category"    = EXCLUDED."category",
         "section"     = EXCLUDED."section",
         "price"       = EXCLUDED."price",
-        "dietaryTags" = EXCLUDED."dietaryTags",
+        "dietaryTags" = CASE WHEN EXCLUDED.id = ANY(${flatCandidateIds.filter((_, i) => flatSources[i] === "official")}::text[])
+          THEN "MenuItem"."dietaryTags" ELSE EXCLUDED."dietaryTags" END,
         "calories"    = EXCLUDED."calories",
         "proteinG"    = EXCLUDED."proteinG",
         "carbsG"      = EXCLUDED."carbsG",
@@ -624,14 +628,14 @@ export async function persistHexBulkInTx(
     WHERE r.id = u.id
   `;
 
-  // Q7: set chainFlag based on chain macro sources.
+  // Q7: set chainFlag based on FatSecret estimates; verified brand handoff is applied by persistHex.
   if (restaurantIdsWithItems.length > 0) {
     await tx.$executeRaw`
       UPDATE "Restaurant" r
       SET "chainFlag" = EXISTS (
         SELECT 1 FROM "MenuItem" mi
         JOIN "MacroEstimate" me ON me."menuItemId" = mi.id
-        WHERE mi."restaurantId" = r.id AND me.source IN ('fatsecret', 'official')
+        WHERE mi."restaurantId" = r.id AND me.source = 'fatsecret'
       ),
       "updatedAt" = now()
       WHERE r.id = ANY(${restaurantIdsWithItems}::text[])

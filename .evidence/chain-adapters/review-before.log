@@ -1,0 +1,56 @@
+FAIL tests/db/chainServing.db.test.ts
+  reviewed chains through April and real new-hex persistence
+    ✕ official nutrition preserves dietary discovery without changing same-name indie items (bulk=false) (179 ms)
+    ✕ official nutrition preserves dietary discovery without changing same-name indie items (bulk=true) (28 ms)
+    ○ skipped waba-grill: captured April identity and new UE location serve the same PDF facts
+    ○ skipped yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+  ● reviewed chains through April and real new-hex persistence › official nutrition preserves dietary discovery without changing same-name indie items (bulk=false)
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 3
+    + Received  + 1
+
+    - Array [
+    -   "gluten-free",
+    - ]
+    + Array []
+
+      32 |       if (bulk) await persistHex(scope, `tags-${round}`, inputs, p, { validateInTx: validateHexInTx });
+      33 |       else for (const input of inputs) { await persistItems(input.restaurantId, input.items, p); await computeAndStoreDietaryOptions(input.restaurantId, p); }
+    > 34 |       expect((await p.menuItem.findUniqueOrThrow({ where: { restaurantId_name: { restaurantId: ids[0]!, name: "Chicken Plate" } } })).dietaryTags).toEqual(["gluten-free"]);
+         |                                                                                                                                                    ^
+      35 |       expect((await p.menuItem.findUniqueOrThrow({ where: { restaurantId_name: { restaurantId: ids[1]!, name: "Chicken Plate" } } })).dietaryTags).toEqual([]);
+      36 |       expect((await p.restaurant.findUniqueOrThrow({ where: { id: ids[0]! } })).dietaryOptions).toContain("has_gluten-free");
+      37 |       expect((await p.restaurant.findUniqueOrThrow({ where: { id: ids[1]! } })).dietaryOptions).not.toContain("has_gluten-free");
+
+      at tests/db/chainServing.db.test.ts:34:148
+
+  ● reviewed chains through April and real new-hex persistence › official nutrition preserves dietary discovery without changing same-name indie items (bulk=true)
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 3
+    + Received  + 1
+
+    - Array [
+    -   "gluten-free",
+    - ]
+    + Array []
+
+      32 |       if (bulk) await persistHex(scope, `tags-${round}`, inputs, p, { validateInTx: validateHexInTx });
+      33 |       else for (const input of inputs) { await persistItems(input.restaurantId, input.items, p); await computeAndStoreDietaryOptions(input.restaurantId, p); }
+    > 34 |       expect((await p.menuItem.findUniqueOrThrow({ where: { restaurantId_name: { restaurantId: ids[0]!, name: "Chicken Plate" } } })).dietaryTags).toEqual(["gluten-free"]);
+         |                                                                                                                                                    ^
+      35 |       expect((await p.menuItem.findUniqueOrThrow({ where: { restaurantId_name: { restaurantId: ids[1]!, name: "Chicken Plate" } } })).dietaryTags).toEqual([]);
+      36 |       expect((await p.restaurant.findUniqueOrThrow({ where: { id: ids[0]! } })).dietaryOptions).toContain("has_gluten-free");
+      37 |       expect((await p.restaurant.findUniqueOrThrow({ where: { id: ids[1]! } })).dietaryOptions).not.toContain("has_gluten-free");
+
+      at tests/db/chainServing.db.test.ts:34:148
+
+Test Suites: 1 failed, 1 total
+Tests:       2 failed, 2 skipped, 4 total
+Snapshots:   0 total
+Time:        0.521 s, estimated 1 s
+Ran all test suites within paths "tests/db/chainServing.db.test.ts".

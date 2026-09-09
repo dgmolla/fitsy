@@ -1,7 +1,20 @@
 {
-  "preparedCatalogParent": "4f22b3ccc2dfca485836bb473f8e8c4bef9d2bcc",
-  "databaseTests": 794,
+  "catalogParent": "0fcec3b440cc7f3e63c3c7e2ada047308ca0bc75",
+  "databaseTests": 798,
+  "suites": 74,
   "skipped": 0,
-  "fullTestLogSha256": "60122b42dfb839dd9ac8727d7f9c0a13b7d27f574e0db203e25fc70ee362c409",
-  "build": "passed on identical production code; latest base adds only regression tests and evidence"
+  "fullTestLogSha256": "ec310ec67f151c4e7f5ee71d9fcbf620449df75bbdfe5cd761e0c5ba8cf3f35c",
+  "build": "passed on current production code",
+  "registry": "8 blocking checks passed; no migration; existing own-code-mock advisory",
+  "mutation": {
+    "combined": 78.71,
+    "chainServing": 77.82,
+    "ueNutritionLabel": 81.69
+  },
+  "regressionProof": {
+    "oldDietaryWriter": "both real persistence tests fail",
+    "missingCalorieEndAnchor": "both decorated-serving labels fail",
+    "current": "18 focused tests pass"
+  },
+  "productionNutritionWrites": 0
 }

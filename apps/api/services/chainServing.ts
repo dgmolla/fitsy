@@ -1,6 +1,9 @@
 import { Prisma, type PrismaClient, type MacroEstimate } from "@prisma/client";
 import { approvedChainRow, buildChainMatcher, chainMenuFingerprint, type ApprovedChainRow, type ChainMatch } from "./chainCatalog";
 import { macroWinnerSqlOrder } from "../../../packages/shared/src/utils/macroProvenance";
+import { MenuSourceResolver } from "./menuSources/resolver";
+import { FatSecretSource } from "./menuSources/fatSecretSource";
+import { UeApiDirectSource, type UeConcurrencyGate } from "./menuSources/ueApiDirectSource";
 import type { MacroData, StructuredMenuItem } from "./menuSources/types";
 
 interface ChainBrand { id: string; slug: string; displayName: string; aliases: string[]; detectionConf: string | null; menuKind: string }
@@ -27,6 +30,13 @@ export async function loadChainServing(prisma: Pick<PrismaClient, "brand" | "cha
   }, match: matcher };
 }
 export type ChainServing = Awaited<ReturnType<typeof loadChainServing>>;
+/** Reviewed brands require location menu evidence. Empty UE menus deliberately have no national-catalog fallback. */
+export function chainMenuResolver(restaurant: { name: string; brandId?: string | null; storeUuid: string }, runtime: ChainServing, gate?: UeConcurrencyGate) {
+  const brandId = runtime.brandId(restaurant);
+  return { brandId, resolver: new MenuSourceResolver([
+    ...(brandId ? [] : [new FatSecretSource()]), new UeApiDirectSource(restaurant.storeUuid, {}, gate),
+  ]) };
+}
 /** Only unmatched UE items reach estimation; a resolver never invents menu membership. */
 export async function resolveChainMacros(items: StructuredMenuItem[], brandId: string | undefined,
   match: (brandId: string | undefined, item: StructuredMenuItem) => ChainMatch,
@@ -54,7 +64,7 @@ export async function applyAprilChainMatch(prisma: PrismaClient, expected: April
     const brand = await tx.brand.findUnique({ where: { id: approved.brandId } });
     if (!restaurant || !brand || verifiedBrand(restaurant, [brand]) !== approved.brandId) throw new Error("Restaurant brand identity changed");
     const catalog = await tx.chainItem.findMany({ where: { brandId: approved.brandId } });
-    const item = aprilMenuIdentity(expected), result = buildChainMatcher(catalog)(restaurant?.brandId ?? undefined, item);
+    const item = aprilMenuIdentity(expected), result = buildChainMatcher(catalog)(approved.brandId, item);
     if (result.status !== "matched" || result.row.id !== approved.id || result.row.review.dataHash !== approved.review.dataHash) throw new Error("April item has no current reviewed binding");
     // Lock and compare the row before adding an estimate. A concurrent edit fails closed.
     const locked = await tx.$queryRaw<{ updatedAt: Date; name: string; section: string | null; description: string | null }[]>`
