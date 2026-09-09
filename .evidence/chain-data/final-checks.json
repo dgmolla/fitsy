@@ -2,8 +2,8 @@
   "preparedAdapterParent": "9754a6d1caccc203cd1c8c3cf8c8c5f3a43ca5f9",
   "databaseTests": 818,
   "skipped": 0,
-  "fullTestLogSha256": "f256a949c6e4188fa00401100445d0311af044b0f248e21779d8688bb49abad4",
-  "build": "passed after atomic April rollback",
+  "fullTestLogSha256": "111547df558ca53919cfb810425b39d4f24b884907597e82e2d55b34de65d0b2",
+  "build": "passed after stopped-batch and planner-identity fixes",
   "aprilRows": 64,
   "restaurants": 31,
   "newHexConfigurations": 7,
@@ -25,10 +25,13 @@
   "mergedAdapterParent": "1764502ce8228f2c48ed4eca538f4b89317c6bc8",
   "rebaseCodeDiff": "empty; one data commit rebased onto equivalent squash merge",
   "releaseRegistry": "8 pass, 0 blocking failures, 1 preexisting mock advisory, 1 skip",
-  "releaseRegistrySha256": "dad5c289b1947c3d5d89b4c34324305b551d79fc033e8db226ea723213ba52f6",
+  "releaseRegistrySha256": "c7f7384c014295d6b6329b9fa9f6801a0ae33e0f0000eb7808365a298b2acfe6",
   "mutationScore": 86.72,
-  "reviewFollowup": "All PDF tuples and observed aliases pinned; brand/menuKind and cross-brand keys tested; three-item fixture proves two-canary ordering/batching and unchanged third item; exclusive backups, rollback target guards, and incomplete/gapped journals tested. Rollback now refuses incomplete evidence before writes.",
-  "sizeException": "677 lines, override-size label: keep required safety implementation and independent regression proof with the reversible pilot.",
+  "reviewFollowup": "Plan hash tampering, denormalized drift, stored-brand/name disagreement, clean mid-batch rollback and unknown DB errors now have real-CLI regression assertions.",
+  "sizeException": "747 lines, override-size label: retain bounded recovery and identity guard regression proof with the pilot.",
   "additionalFocusedCli": "Missing-first, missing-last and gapped journal cases passed; count/contiguity guard mutants rejected.",
-  "atomicRollback": "One serializable transaction per journal batch; edited last-to-rollback row leaves all rows unchanged. Deliberately reverting the CLI to per-row transactions fails this state assertion."
+  "atomicRollback": "One serializable transaction per journal batch; edited last-to-rollback row leaves all rows unchanged. Deliberately reverting the CLI to per-row transactions fails this state assertion.",
+  "stoppedBatch": "Typed pre-write validation failures record the completed prefix; rollback restores it atomically and preserves the conflicting row. Unknown DB failures have no stopped marker and require inspection.",
+  "plannerIdentity": "Same global verified brand identity as the writer; unresolved restaurants reported and excluded.",
+  "targetedMutationFollowup": "All five additional mutations rejected by assertions: plan integrity, planner brand identity, denormalized drift, missing clean-stop evidence, and incorrectly certifying unknown DB failures."
 }
