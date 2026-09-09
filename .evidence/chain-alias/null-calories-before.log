@@ -1,0 +1,24 @@
+FAIL scripts/phase1-land-payload.test.ts
+  ✕ re-landing a corrected portion replaces serving size alongside macros and aliases (3 ms)
+
+  ● re-landing a corrected portion replaces serving size alongside macros and aliases
+
+    expect(received).toBeNull()
+
+    Received: 0
+
+      10 |   expect(chainLandingUpsert({ ...facts, servingSize: null }).update.servingSize).toBeNull();
+      11 |   const unknown = chainLandingUpsert({ ...facts, calories: null });
+    > 12 |   expect(unknown.create.calories).toBeNull();
+         |                                   ^
+      13 |   expect(unknown.update.calories).toBeNull();
+      14 | });
+      15 |
+
+      at Object.<anonymous> (phase1-land-payload.test.ts:12:35)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 1 total
+Snapshots:   0 total
+Time:        1.699 s, estimated 2 s
+Ran all test suites matching /scripts\/phase1-land-payload.test.ts/i.

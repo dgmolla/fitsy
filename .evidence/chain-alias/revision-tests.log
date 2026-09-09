@@ -1,0 +1,9 @@
+PASS scripts/phase1-land-payload.test.ts
+PASS scripts/phase1-alias-input.test.ts
+PASS scripts/dev/lib/snapshot-row.test.ts
+
+Test Suites: 3 passed, 3 total
+Tests:       12 passed, 12 total
+Snapshots:   0 total
+Time:        1.509 s, estimated 2 s
+Ran all test suites matching /scripts\/phase1-alias-input.test.ts|scripts\/phase1-land-payload.test.ts|scripts\/dev\/lib\/snapshot-row.test.ts/i.

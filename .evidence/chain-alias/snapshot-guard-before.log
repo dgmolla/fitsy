@@ -1,0 +1,39 @@
+FAIL scripts/dev/lib/snapshot-row.test.ts
+  ✕ pre-review snapshots remain unchanged (8 ms)
+  ✓ database null becomes Prisma DbNull rather than JSON null
+  ✓ review objects survive snapshot copying (1 ms)
+
+  ● pre-review snapshots remain unchanged
+
+    expect(received).toStrictEqual(expected) // deep equality
+
+    - Expected  - 0
+    + Received  + 1
+
+    @@ -9,9 +9,10 @@
+        "fatG": 15,
+        "id": "catalog-row",
+        "officialUrl": "https://example.com/nutrition.pdf",
+        "proteinG": 54,
+        "retrievedAt": 2026-09-09T04:01:11.927Z,
+    +   "review": undefined,
+        "servingSize": "1 plate",
+        "source": "official",
+        "updatedAt": 2026-09-09T04:01:11.927Z,
+      }
+
+      3 | const row: Omit<ChainItem, "review"> = { id: "catalog-row", brandId: "waba", canonicalKey: "chicken-plate", aliases: [], servingSize: "1 plate", calories: 820,
+      4 |   proteinG: 54, carbsG: 110, fatG: 15, source: "official", confidence: "HIGH", officialUrl: "https://example.com/nutrition.pdf", retrievedAt: new Date(), createdAt: new Date(), updatedAt: new Date() };
+    > 5 | test("pre-review snapshots remain unchanged", () => { expect(chainSnapshotInput(row)).toStrictEqual(row);
+        |                                                                                       ^
+      6 |   expect("review" in chainSnapshotInput(row)).toBe(false); });
+      7 | test("database null becomes Prisma DbNull rather than JSON null", () => {
+      8 |   expect(chainSnapshotInput({ ...row, review: null })).toEqual({ ...row, review: Prisma.DbNull });
+
+      at Object.<anonymous> (dev/lib/snapshot-row.test.ts:5:87)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 2 passed, 3 total
+Snapshots:   0 total
+Time:        3.136 s
+Ran all test suites matching /scripts\/dev\/lib\/snapshot-row.test.ts/i.

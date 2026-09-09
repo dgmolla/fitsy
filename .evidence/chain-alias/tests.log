@@ -1,0 +1,18 @@
+
+> @fitsy/scripts@0.1.0 test
+> jest --runInBand phase1-alias-input.test.ts
+
+PASS ./phase1-alias-input.test.ts
+  ✓ uses the verifier's HIGH artifact despite conflicting raw and medium candidates (3 ms)
+  ✓ absence of HIGH fails even when historical/raw filenames exist (5 ms)
+  ✓ malformed verified data is rejected: { (1 ms)
+  ✓ malformed verified data is rejected: [] (1 ms)
+  ✓ malformed verified data is rejected: {"waba":{"chicken":"plate"}}
+  ✓ malformed verified data is rejected: {"waba":{"chicken":[""]}} (1 ms)
+  ✓ malformed verified data is rejected: {"waba":{"chicken":[1]}} (4 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       7 passed, 7 total
+Snapshots:   0 total
+Time:        1.319 s
+Ran all test suites matching /phase1-alias-input.test.ts/i.

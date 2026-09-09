@@ -1,0 +1,16 @@
+
+> fitsy@0.1.0 verify
+> node scripts/verify/run.mjs --layer=0-2 --scope=changed
+
+{"name":"structural","status":"pass","summary":"all structural tests passed","fix":"","duration_ms":98509,"blocking":true}
+{"name":"secrets","status":"pass","summary":"no secrets, env files, or build output in diff","fix":"","duration_ms":416,"blocking":true}
+{"name":"lint","status":"pass","summary":"eslint clean","fix":"","duration_ms":97303,"blocking":true}
+{"name":"typecheck","status":"pass","summary":"tsc clean in all workspaces","fix":"","duration_ms":118842,"blocking":true}
+{"name":"boundaries","status":"pass","summary":"no dependency violations","fix":"","duration_ms":90452,"blocking":true}
+{"name":"context-freshness","status":"pass","summary":"context files reference only real commands and paths","fix":"","duration_ms":240,"blocking":true}
+{"name":"test","status":"pass","summary":"api coverage gate + scripts tests green","fix":"","duration_ms":328096,"blocking":true}
+{"name":"actionlint","status":"skipped","summary":"no matching changed files"}
+{"name":"migration-safety","status":"skipped","summary":"no matching changed files"}
+{"name":"own-code-mocks","status":"skipped","summary":"no matching changed files"}
+
+verify: 7 pass, 0 fail, 3 skipped [layers 0-2, scope changed, runs local]

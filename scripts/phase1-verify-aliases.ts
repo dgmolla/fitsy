@@ -15,6 +15,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { PrismaClient } from "@prisma/client";
 import { readFileSync, writeFileSync } from "node:fs";
+import { VERIFIED_ALIASES_FILENAME } from "./phase1-alias-input";
 
 const MODEL = "claude-haiku-4-5" as const;
 const p = new PrismaClient();
@@ -95,7 +96,7 @@ async function main() {
   let nHigh2 = 0, nMed = 0;
   guarded.forEach((c, idx) => { if (votes[idx] === 2) { add(high, c.brandSlug, c.key, c.ueSlug); nHigh2++; } else if (votes[idx] === 1) { add(medium, c.brandSlug, c.key, c.ueSlug); nMed++; } });
 
-  writeFileSync("scripts/phase1-out/aliases-high.json", JSON.stringify(high, null, 2));
+  writeFileSync(`scripts/phase1-out/${VERIFIED_ALIASES_FILENAME}`, JSON.stringify(high, null, 2));
   writeFileSync("scripts/phase1-out/aliases-medium.json", JSON.stringify(medium, null, 2));
   const exact = Object.values(high).reduce((a, b) => a + Object.values(b).reduce((x, y) => x + y.length, 0), 0) - nHigh2;
   console.log(`=== alias verification (confidence tiers) ===`);

@@ -5,7 +5,8 @@
  *   - Reads scripts/phase1-out/run/_coverage.json → official brands.
  *   - Loads each official brand's row file, keeps `valid` rows.
  *   - Resolves Brand.id by slug (read-only DB).
- *   - Writes the consolidated set to scripts/phase1-out/chainitems.json (always).
+ *   - Requires the verifier's aliases-high.json for both dry runs and DB landing.
+ *   - Writes the consolidated set to scripts/phase1-out/chainitems.json after validation.
  *   - With --apply: upserts ChainItem on (brandId, canonicalKey). 🔴 GATED — needs human go
  *     AND the ChainItem model present in prisma/schema.prisma (+ `prisma generate`). Until then
  *     --apply is a no-op-with-warning; the dry run (default) just builds the local artifact.
@@ -18,13 +19,11 @@
 import { PrismaClient } from "@prisma/client";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import { chainLandingUpsert } from "./phase1-land-payload";
+import { loadVerifiedAliases } from "./phase1-alias-input";
 
-// aliases: prefer the VERIFIED, high-precision set (phase1-verify-aliases.ts) so what lands is
-// safe to backfill; fall back to the raw aligner output only if verification hasn't run.
-const ALIAS_PATH = existsSync("scripts/phase1-out/aliases-verified.json") ? "scripts/phase1-out/aliases-verified.json"
-  : existsSync("scripts/phase1-out/aliases.json") ? "scripts/phase1-out/aliases.json" : null;
-const ALIASES: Record<string, Record<string, string[]>> = ALIAS_PATH ? JSON.parse(readFileSync(ALIAS_PATH, "utf8")) : {};
-if (ALIAS_PATH) console.log(`(aliases from ${ALIAS_PATH})`);
+// These legacy name aliases remain candidates, not ChainItem.review approval.
+const ALIASES = loadVerifiedAliases("scripts/phase1-out");
 
 const RUN_DIR = "scripts/phase1-out/run";
 const APPLY = process.argv.includes("--apply");
@@ -74,11 +73,7 @@ async function main() {
       let n = 0;
       for (const o of out) {
         if (!o.brandId) continue;
-        await client.chainItem.upsert({
-          where: { brandId_canonicalKey: { brandId: o.brandId, canonicalKey: o.canonicalKey } },
-          create: { brandId: o.brandId, canonicalKey: o.canonicalKey, aliases: o.aliases, calories: Math.round(o.calories), proteinG: o.proteinG, carbsG: o.carbsG, fatG: o.fatG, servingSize: o.servingSize, source: o.source, confidence: o.confidence, officialUrl: o.officialUrl, retrievedAt: new Date() },
-          update: { aliases: o.aliases, calories: Math.round(o.calories), proteinG: o.proteinG, carbsG: o.carbsG, fatG: o.fatG, source: o.source, confidence: o.confidence, officialUrl: o.officialUrl, retrievedAt: new Date() },
-        });
+        await client.chainItem.upsert(chainLandingUpsert({ ...o, brandId: o.brandId }));
         n++;
       }
       console.log(`  applied ${n} ChainItem rows.`);
