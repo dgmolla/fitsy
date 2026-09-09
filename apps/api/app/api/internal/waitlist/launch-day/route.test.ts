@@ -132,14 +132,17 @@ describe("GET /api/internal/waitlist/launch-day", () => {
   });
 
   it("a batch that only exhausts rows still counts as progress", async () => {
+    // The exhausted-only batch is the SECOND call: the first call is never
+    // subject to the progress check, so only this position exercises it.
     jest.useFakeTimers().setSystemTime(new Date(`${LAUNCH_DATE_ISO}T16:00:00Z`));
     (notifyLaunch as jest.Mock)
+      .mockResolvedValueOnce({ dryRun: false, matched: 6, viaPush: 0, viaEmail: 2, notified: 2, suppressed: 0, failed: 0, remaining: 4, exhausted: 0 })
       .mockResolvedValueOnce({ dryRun: false, matched: 4, viaPush: 0, viaEmail: 0, notified: 0, suppressed: 0, failed: 0, remaining: 2, exhausted: 2 })
       .mockResolvedValueOnce({ dryRun: false, matched: 2, viaPush: 0, viaEmail: 2, notified: 2, suppressed: 0, failed: 0, remaining: 0, exhausted: 0 });
     const res = await GET(makeRequest());
-    expect(notifyLaunch).toHaveBeenCalledTimes(2);
+    expect(notifyLaunch).toHaveBeenCalledTimes(3);
     const body = await res.json();
-    expect(body).toEqual(expect.objectContaining({ notified: 2, exhausted: 2, remaining: 0 }));
+    expect(body).toEqual(expect.objectContaining({ notified: 4, exhausted: 2, remaining: 0 }));
     expect(body).not.toHaveProperty("stalled");
   });
 

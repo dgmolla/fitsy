@@ -31,6 +31,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/restaurantService";
 import { sendMarketingEmail } from "@/lib/marketingEmail";
 import { LAUNCH_DATE_ISO } from "@/lib/launch";
+import { MAX_PER_RUN } from "@/lib/launchNotify";
 import { WEB } from "../../../../../tests/fixtures/launchNotify";
 
 const SECRET = "cron-secret";
@@ -70,6 +71,23 @@ describe("launch-day route with the real notifyLaunch", () => {
       data: { notifyAttempts: 1, lastNotifyAttemptAt: expect.any(Date) },
     });
     expect(mockNotifySlack).toHaveBeenCalledWith("launch blast had failures", expect.stringContaining("failed 1"), { source: "launch-day" });
+  });
+
+  it("drains a match larger than one batch across two real calls", async () => {
+    const rows = Array.from({ length: MAX_PER_RUN + 2 }, (_, i) => ({ ...WEB, id: `wl-${i}`, email: `w${i}@fitsy.org` }));
+    // First call sees everything; the second sees what the first left unprocessed.
+    (prisma.launchWaitlist.findMany as jest.Mock)
+      .mockResolvedValueOnce(rows)
+      .mockResolvedValueOnce(rows.slice(MAX_PER_RUN))
+      .mockResolvedValue([]);
+    (sendMarketingEmail as jest.Mock).mockResolvedValue(true);
+    const body = await (await GET(makeRequest())).json();
+    expect(prisma.launchWaitlist.findMany).toHaveBeenCalledTimes(2);
+    expect(body).toEqual(
+      expect.objectContaining({ matched: MAX_PER_RUN + 2, notified: MAX_PER_RUN + 2, failed: 0, remaining: 0 }),
+    );
+    expect(body).not.toHaveProperty("stalled");
+    expect(mockNotifySlack).not.toHaveBeenCalled();
   });
 
   it("a clean run over the whole match reports nothing to Slack", async () => {
