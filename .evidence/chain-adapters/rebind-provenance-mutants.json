@@ -1,0 +1,14 @@
+[
+  {
+    "mutation": "reject-rebind",
+    "rejected": true
+  },
+  {
+    "mutation": "stale-reasoning-0",
+    "rejected": true
+  },
+  {
+    "mutation": "stale-reasoning-1",
+    "rejected": true
+  }
+]

@@ -3,7 +3,7 @@
   "databaseTests": 798,
   "suites": 74,
   "skipped": 0,
-  "fullTestLogSha256": "9912dfff61fdfb2dbb32ebd04e5df14d08082b9635f876ce2d6b589836ca388b",
+  "fullTestLogSha256": "198bced1de21ed37de06fdb681982a0161c34ff8fd24db1cc45fa70f30653756",
   "build": "passed on current production code; later changes add assertions only",
   "registry": "all blocking checks passed; normal push repeats registry",
   "mutation": {
@@ -28,6 +28,9 @@
     "raw SQL identity edits with unchanged timestamp",
     "wrong approved catalog binding",
     "stored brand changes and preservation of already-bound chain flag",
-    "all-reviewed menus bypass estimation"
+    "all-reviewed menus bypass estimation",
+    "idempotent brand rebind through real hex persistence",
+    "different incoming provenance replaces stale JSON in both writers",
+    "foreign non-null official provenance survives unmatched re-enrichment"
   ]
 }

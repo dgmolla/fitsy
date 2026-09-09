@@ -134,6 +134,8 @@ suite("reviewed chains through April and real new-hex persistence", () => {
     const persisted = await p.macroEstimate.findUniqueOrThrow({ where: { menuItemId_source: { menuItemId: added.id, source: "official" } } });
     expect(JSON.parse(persisted.reasoning!)).toMatchObject({ chainItemId: row.id, reviewHash: approved.review.dataHash });
     expect(await p.restaurant.findUniqueOrThrow({ where: { id: newRestaurant.id } })).toMatchObject({ brandId, chainFlag: true });
+    await persistHex(scope, fixture.slug + "-rebind", [{ restaurantId: newRestaurant.id, brandId: detected!, items: pairs, menuHash: "pilot" }], p, { validateInTx: validateHexInTx });
+    expect(await p.restaurant.findUniqueOrThrow({ where: { id: newRestaurant.id } })).toMatchObject({ brandId, chainFlag: true });
     // Multiple estimates per item are valid; missing estimates must still abort a checkpoint.
     await p.$transaction(tx => validateHexInTx(tx, [{ restaurantId: aprilRestaurant.id, items: [], menuHash: "" }]));
     const missing = await p.menuItem.create({ data: { restaurantId: aprilRestaurant.id, name: "Missing estimate" } });
@@ -143,7 +145,7 @@ suite("reviewed chains through April and real new-hex persistence", () => {
     const changed = { ...ue, description: "Different size and ingredients" };
     for (const bulk of [false, true]) {
       await persistItems(newRestaurant.id, pairs, p);
-      await p.macroEstimate.updateMany({ where: { menuItemId: added.id, source: "official" }, data: { ingredientBreakdown: [{ name: "Old component" }] } });
+      await p.macroEstimate.updateMany({ where: { menuItemId: added.id, source: "official" }, data: { ingredientBreakdown: [{ name: "Old component" }], reasoning: JSON.stringify({ ...JSON.parse(persisted.reasoning!), reviewHash: "0".repeat(64), sourceHash: "0".repeat(64) }) } });
       if (bulk) await persistHex(scope, fixture.slug + "-metadata", [{ restaurantId: newRestaurant.id, items: pairs, menuHash: "pilot" }], p, { validateInTx: validateHexInTx });
       else await persistItems(newRestaurant.id, pairs, p);
       expect((await p.macroEstimate.findUniqueOrThrow({ where: { menuItemId_source: { menuItemId: added.id, source: "official" } } })).ingredientBreakdown).toBeNull();
@@ -151,13 +153,13 @@ suite("reviewed chains through April and real new-hex persistence", () => {
       expect((await p.restaurant.findUniqueOrThrow({ where: { id: newRestaurant.id } })).chainFlag).toBe(true);
       const legacy = await p.menuItem.findUniqueOrThrow({ where: { restaurantId_name: { restaurantId: newRestaurant.id, name: unseen.name } } });
       await p.macroEstimate.upsert({ where: { menuItemId_source: { menuItemId: legacy.id, source: "official" } },
-        create: { menuItemId: legacy.id, source: "official", calories: 450, proteinG: 20, carbsG: 50, fatG: 19, confidence: "HIGH" }, update: {} });
+        create: { menuItemId: legacy.id, source: "official", reasoning: "Other official source", calories: 450, proteinG: 20, carbsG: 50, fatG: 19, confidence: "HIGH" }, update: {} });
       const changedPairs = [{ item: changed, macro: macros[1]! }, { item: unseen, macro: macros[1]! }];
       if (bulk) await persistHex(scope, fixture.slug + "-changed", [{ restaurantId: newRestaurant.id, items: changedPairs, menuHash: "changed" }], p, { validateInTx: validateHexInTx });
       else await persistItems(newRestaurant.id, changedPairs, p);
       expect((await p.menuItem.findUniqueOrThrow({ where: { id: added.id } })).calories).toBe(400);
       expect(await p.macroEstimate.count({ where: { menuItemId: added.id, source: "official" } })).toBe(0);
-      expect(await p.macroEstimate.count({ where: { menuItemId: legacy.id, source: "official", reasoning: null } })).toBe(1);
+      expect(await p.macroEstimate.count({ where: { menuItemId: legacy.id, source: "official", reasoning: "Other official source" } })).toBe(1);
     }
     // Merchant values keep priority even when April's reviewed official source is added.
     await p.macroEstimate.create({ data: { menuItemId: original.id, source: "merchant", confidence: "HIGH", calories: 900, proteinG: 50, carbsG: 100, fatG: 30 } });
