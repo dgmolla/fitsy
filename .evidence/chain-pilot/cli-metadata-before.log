@@ -1,0 +1,39 @@
+
+> @fitsy/api@0.1.0 test
+> jest --runInBand --runTestsByPath tests/db/chainPilotCli.db.test.ts
+
+FAIL tests/db/chainPilotCli.db.test.ts
+  actual pilot CLI plan, apply and rollback
+    ✕ explicit hashes and target guard writes; complete workflow restores its captured starting state (3283 ms)
+
+  ● actual pilot CLI plan, apply and rollback › explicit hashes and target guard writes; complete workflow restores its captured starting state
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 1
+    Received: 0
+
+      46 |         expect(run("april-plan", join(directory, "replan.json")).matched).toBe(0);
+      47 |         await p.macroEstimate.updateMany({ where: { menuItemId: before[0]!.id, source: "official" }, data: { hadPhoto: true } });
+    > 48 |         expect(run("april-plan", join(directory, "metadata-replan.json")).matched).toBe(1);
+         |                                                                                    ^
+      49 |         await p.macroEstimate.updateMany({ where: { menuItemId: before[0]!.id, source: "official" }, data: { hadPhoto: false } });
+      50 |         expect(run("april-rollback", aprilPath + ".journal").rolledBack).toBe(2);
+      51 |         expect(stateHash(await p.menuItem.findMany(query))).toBe(stateHash(before));
+
+      at p.$transaction.timeout (tests/db/chainPilotCli.db.test.ts:48:84)
+      at Proxy._transactionWithCallback (../../node_modules/@prisma/client/src/runtime/getPrismaClient.ts:722:18)
+      at Object.<anonymous> (tests/db/chainPilotCli.db.test.ts:16:5)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 1 total
+Snapshots:   0 total
+Time:        3.715 s, estimated 4 s
+Ran all test suites within paths "tests/db/chainPilotCli.db.test.ts".
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-data/apps/api
+npm error workspace @fitsy/api@0.1.0
+npm error location /Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-data/apps/api
+npm error command failed
+npm error command sh -c jest --runInBand --runTestsByPath tests/db/chainPilotCli.db.test.ts

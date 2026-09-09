@@ -1,0 +1,23 @@
+[
+  {
+    "mutation": "invalid-facts-guard",
+    "rejected": true,
+    "failedAssertions": [
+      "invalid reviewed facts and colliding contextual aliases cannot produce a catalog plan"
+    ]
+  },
+  {
+    "mutation": "ambiguous-alias-guard",
+    "rejected": true,
+    "failedAssertions": [
+      "invalid reviewed facts and colliding contextual aliases cannot produce a catalog plan"
+    ]
+  },
+  {
+    "mutation": "steak-protein-carb-swap",
+    "rejected": true,
+    "failedAssertions": [
+      "published facts for steak-plate agree with the independent PDF transcription"
+    ]
+  }
+]

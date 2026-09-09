@@ -1,0 +1,19 @@
+{
+  "testedHead": "ee897006b08b250a772b89b8e32ce79f279c1deb",
+  "preparedAdapterParent": "4c48630ddd2f2cfb3787de3e1cbcdf1c0a23c459",
+  "databaseApiTests": {
+    "passed": 801,
+    "skipped": 0
+  },
+  "registry": "9 passed; existing own-code-mocks advisory failure",
+  "build": "passed",
+  "fullTestLogSha256": "520724b96980f4a5955e26f4c09394d148239b9b2ee8faed1c149bfb924acc71",
+  "capturedAprilProof": {
+    "rows": 64,
+    "restaurants": 31,
+    "configurations": 7
+  },
+  "newHexProof": "seven dishes from full UE captures persist as official and agree in search/detail",
+  "currentAliases": 14,
+  "productionNutritionWrites": 0
+}

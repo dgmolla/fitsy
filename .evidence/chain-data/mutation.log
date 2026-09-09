@@ -1,0 +1,479 @@
+[32m22:05:34 (40864) INFO ProjectReader[39m No incremental result file found at .evidence/mutation/stryker-incremental.json, a full mutation testing run will be performed.
+[32m22:05:34 (40864) INFO ProjectReader[39m Found 2 of 791 file(s) to be mutated.
+Browserslist: browsers data (caniuse-lite) is 6 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+[32m22:05:34 (40864) INFO Instrumenter[39m Instrumented 2 source file(s) with 253 mutant(s)
+[33m22:05:34 (40864) WARN DisableTypeChecksPreprocessor[39m Unable to disable type checking for file "/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-data/apps/api/services/menuSources/__fixtures__/fatsecret-mcdonalds.html". Shouldn't type checking be disabled for this file? Consider configuring a more restrictive "disableTypeChecks" settings (or turn it completely off with `false`) ParseError: Parse error in /Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-data/apps/api/services/menuSources/__fixtures__/fatsecret-mcdonalds.html (335:86) Unexpected closing tag "b". It may happen when the tag has already been closed by another tag. For more info see https://www.w3.org/TR/html5/syntax.html#closing-elements-that-have-implied-end-tags
+    at ngHtmlParser (file:///Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-data/node_modules/@stryker-mutator/instrumenter/dist/src/parsers/html-parser.js:32:15)
+    at async parse (file:///Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-data/node_modules/@stryker-mutator/instrumenter/dist/src/parsers/html-parser.js:16:18)
+    at async DisableTypeChecksPreprocessor.disableTypeChecks [as impl] (file:///Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-data/node_modules/@stryker-mutator/instrumenter/dist/src/disable-type-checks.js:28:17)
+    at async file:///Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-data/node_modules/@stryker-mutator/core/dist/src/sandbox/disable-type-checks-preprocessor.js:27:41
+    at async Promise.all (index 205)
+    at async DisableTypeChecksPreprocessor.preprocess (file:///Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-data/node_modules/@stryker-mutator/core/dist/src/sandbox/disable-type-checks-preprocessor.js:24:9)
+    at async MultiPreprocessor.preprocess (file:///Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-data/node_modules/@stryker-mutator/core/dist/src/sandbox/multi-preprocessor.js:8:13)
+    at async MutantInstrumenterExecutor.execute (file:///Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-data/node_modules/@stryker-mutator/core/dist/src/process/2-mutant-instrumenter-executor.js:30:9)
+    at async Stryker.run (file:///Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-data/node_modules/@stryker-mutator/core/dist/src/stryker.js:49:48)
+    at async Stryker.runMutationTest (file:///Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-data/node_modules/@stryker-mutator/core/dist/src/stryker.js:27:20)
+    at async Command.<anonymous> (file:///Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-data/node_modules/@stryker-mutator/core/dist/src/stryker-cli.js:51:13)
+[33m22:05:34 (40864) WARN DisableTypeChecksPreprocessor[39m (disable "warnings.preprocessorErrors" to ignore this warning
+[32m22:05:35 (40864) INFO ConcurrencyTokenProvider[39m Creating 2 test runner process(es).
+[32m22:05:35 (40864) INFO DryRunExecutor[39m Starting initial test run (jest test runner with "perTest" coverage analysis). This may take a while.
+[32m22:05:37 (40864) INFO DryRunExecutor[39m Initial test run succeeded. Ran 4 tests in 2 seconds (net 1296 ms, overhead 714 ms).
+
+All tests/chainPilot.db.test.ts
+  ✓ official PDF pilot correction against captured April data 12 catalog corrections are atomic, idempotent after replan, and exactly reversible [line 28] (killed 147)
+  ✓ official PDF pilot correction against captured April data stale or altered plans and mismatched rollback records fail without partial writes [line 40] (killed 12)
+  ✓ official PDF pilot correction against captured April data all 64 captured April rows match the actual seven-dish correction set; live UE observations agree [line 53] (killed 4)
+  ✓ official PDF pilot correction against captured April data April rollback restores an existing official estimate and rejects any later item or estimate edit [line 83] (killed 41)
+
+[NoCoverage] StringLiteral
+apps/api/services/chainPilotPlan.ts:23:111
+-       const found = brands.filter(b => b.slug === slug && ["high", "llm-confirmed"].includes(b.detectionConf ?? "") && b.menuKind === "restaurant");
++       const found = brands.filter(b => b.slug === slug && ["high", "llm-confirmed"].includes(b.detectionConf ?? "Stryker was here!") && b.menuKind === "restaurant");
+
+[NoCoverage] StringLiteral
+apps/api/services/chainPilotPlan.ts:24:45
+-       if (found.length !== 1) throw new Error(`Verified brand missing or ambiguous: ${slug}`);
++       if (found.length !== 1) throw new Error(``);
+
+[NoCoverage] StringLiteral
+apps/api/services/chainPilotPlan.ts:39:64
+-       if (!approvedChainRow({ ...row, review })) throw new Error(`Invalid reviewed facts: ${definition.canonicalKey}`);
++       if (!approvedChainRow({ ...row, review })) throw new Error(``);
+
+[NoCoverage] StringLiteral
+apps/api/services/chainPilotPlan.ts:45:34
+-       if (!before) throw new Error(`Quarantined row missing: ${definition.canonicalKey}`);
++       if (!before) throw new Error(``);
+
+[NoCoverage] StringLiteral
+apps/api/services/chainPilotPlan.ts:60:74
+-         if (match(row.brandId, item).status !== "matched") throw new Error(`Ambiguous reviewed alias: ${alias.name}`);
++         if (match(row.brandId, item).status !== "matched") throw new Error(``);
+
+[NoCoverage] StringLiteral
+apps/api/services/chainPilotPlan.ts:72:91
+-       if (planChainPilot(brands, currentCatalog, pilot).hash !== plan.hash) throw new Error("Catalog or curated definition changed after planning");
++       if (planChainPilot(brands, currentCatalog, pilot).hash !== plan.hash) throw new Error("");
+
+[NoCoverage] StringLiteral
+apps/api/services/chainPilotPlan.ts:78:69
+-         if (stateHash(current) !== stateHash(before)) throw new Error(`Catalog changed after planning: ${desired.canonicalKey}`);
++         if (stateHash(current) !== stateHash(before)) throw new Error(``);
+
+[NoCoverage] StringLiteral
+apps/api/services/chainPilotPlan.ts:88:102
+-     if (after.length !== plan.changes.length || stateHash(plan.changes) !== plan.hash) throw new Error("Incomplete catalog rollback evidence");
++     if (after.length !== plan.changes.length || stateHash(plan.changes) !== plan.hash) throw new Error("");
+
+[Survived] ConditionalExpression
+apps/api/services/chainPilotPlan.ts:9:114
+-       : v !== null && typeof v === "object" ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([k, item]) => [k, sorted(item)])) : v;
++       : v !== null && typeof v === "object" ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a < b ? -1 : false ? 1 : 0).map(([k, item]) => [k, sorted(item)])) : v;
+Tests ran:
+    official PDF pilot correction against captured April data 12 catalog corrections are atomic, idempotent after replan, and exactly reversible
+    official PDF pilot correction against captured April data stale or altered plans and mismatched rollback records fail without partial writes
+    official PDF pilot correction against captured April data all 64 captured April rows match the actual seven-dish correction set; live UE observations agree
+  and 1 more test!
+
+
+[Survived] EqualityOperator
+apps/api/services/chainPilotPlan.ts:9:114
+-       : v !== null && typeof v === "object" ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([k, item]) => [k, sorted(item)])) : v;
++       : v !== null && typeof v === "object" ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a < b ? -1 : a <= b ? 1 : 0).map(([k, item]) => [k, sorted(item)])) : v;
+Tests ran:
+    official PDF pilot correction against captured April data 12 catalog corrections are atomic, idempotent after replan, and exactly reversible
+    official PDF pilot correction against captured April data stale or altered plans and mismatched rollback records fail without partial writes
+    official PDF pilot correction against captured April data all 64 captured April rows match the actual seven-dish correction set; live UE observations agree
+  and 1 more test!
+
+
+[Survived] StringLiteral
+apps/api/services/chainPilotPlan.ts:23:66
+-       const found = brands.filter(b => b.slug === slug && ["high", "llm-confirmed"].includes(b.detectionConf ?? "") && b.menuKind === "restaurant");
++       const found = brands.filter(b => b.slug === slug && ["high", ""].includes(b.detectionConf ?? "") && b.menuKind === "restaurant");
+Tests ran:
+    official PDF pilot correction against captured April data 12 catalog corrections are atomic, idempotent after replan, and exactly reversible
+    official PDF pilot correction against captured April data stale or altered plans and mismatched rollback records fail without partial writes
+    official PDF pilot correction against captured April data all 64 captured April rows match the actual seven-dish correction set; live UE observations agree
+  and 1 more test!
+
+
+[Survived] ConditionalExpression
+apps/api/services/chainPilotPlan.ts:23:118
+-       const found = brands.filter(b => b.slug === slug && ["high", "llm-confirmed"].includes(b.detectionConf ?? "") && b.menuKind === "restaurant");
++       const found = brands.filter(b => b.slug === slug && ["high", "llm-confirmed"].includes(b.detectionConf ?? "") && true);
+Tests ran:
+    official PDF pilot correction against captured April data 12 catalog corrections are atomic, idempotent after replan, and exactly reversible
+    official PDF pilot correction against captured April data stale or altered plans and mismatched rollback records fail without partial writes
+    official PDF pilot correction against captured April data all 64 captured April rows match the actual seven-dish correction set; live UE observations agree
+  and 1 more test!
+
+
+[Survived] ConditionalExpression
+apps/api/services/chainPilotPlan.ts:24:9
+-       if (found.length !== 1) throw new Error(`Verified brand missing or ambiguous: ${slug}`);
++       if (false) throw new Error(`Verified brand missing or ambiguous: ${slug}`);
+Tests ran:
+    official PDF pilot correction against captured April data 12 catalog corrections are atomic, idempotent after replan, and exactly reversible
+    official PDF pilot correction against captured April data stale or altered plans and mismatched rollback records fail without partial writes
+    official PDF pilot correction against captured April data all 64 captured April rows match the actual seven-dish correction set; live UE observations agree
+  and 1 more test!
+
+
+[Survived] ConditionalExpression
+apps/api/services/chainPilotPlan.ts:27:63
+-     const find = (id: string, key: string) => catalog.find(r => r.brandId === id && r.canonicalKey === key) ?? null;
++     const find = (id: string, key: string) => catalog.find(r => true && r.canonicalKey === key) ?? null;
+Tests ran:
+    official PDF pilot correction against captured April data 12 catalog corrections are atomic, idempotent after replan, and exactly reversible
+    official PDF pilot correction against captured April data stale or altered plans and mismatched rollback records fail without partial writes
+    official PDF pilot correction against captured April data all 64 captured April rows match the actual seven-dish correction set; live UE observations agree
+  and 1 more test!
+
+
+[Survived] StringLiteral
+apps/api/services/chainPilotPlan.ts:35:54
+-       const row: ChainCatalogRow = { id: before?.id ?? `${id}:${definition.canonicalKey}`, brandId: id, canonicalKey: definition.canonicalKey,
++       const row: ChainCatalogRow = { id: before?.id ?? ``, brandId: id, canonicalKey: definition.canonicalKey,
+Tests ran:
+    official PDF pilot correction against captured April data 12 catalog corrections are atomic, idempotent after replan, and exactly reversible
+    official PDF pilot correction against captured April data stale or altered plans and mismatched rollback records fail without partial writes
+    official PDF pilot correction against captured April data all 64 captured April rows match the actual seven-dish correction set; live UE observations agree
+  and 1 more test!
+
+
+[Survived] ConditionalExpression
+apps/api/services/chainPilotPlan.ts:39:9
+-       if (!approvedChainRow({ ...row, review })) throw new Error(`Invalid reviewed facts: ${definition.canonicalKey}`);
++       if (false) throw new Error(`Invalid reviewed facts: ${definition.canonicalKey}`);
+Tests ran:
+    official PDF pilot correction against captured April data 12 catalog corrections are atomic, idempotent after replan, and exactly reversible
+    official PDF pilot correction against captured April data stale or altered plans and mismatched rollback records fail without partial writes
+    official PDF pilot correction against captured April data all 64 captured April rows match the actual seven-dish correction set; live UE observations agree
+  and 1 more test!
+
+
+[Survived] ArrayDeclaration
+apps/api/services/chainPilotPlan.ts:41:65
+-         officialUrl: row.officialUrl, aliases: before?.aliases ?? [], review: JSON.parse(JSON.stringify(review)) }, definition.expected);
++         officialUrl: row.officialUrl, aliases: before?.aliases ?? ["Stryker was here"], review: JSON.parse(JSON.stringify(review)) }, definition.expected);
+Tests ran:
+    official PDF pilot correction against captured April data 12 catalog corrections are atomic, idempotent after replan, and exactly reversible
+    official PDF pilot correction against captured April data stale or altered plans and mismatched rollback records fail without partial writes
+    official PDF pilot correction against captured April data all 64 captured April rows match the actual seven-dish correction set; live UE observations agree
+  and 1 more test!
+
+
+[Survived] ConditionalExpression
+apps/api/services/chainPilotPlan.ts:45:9
+-       if (!before) throw new Error(`Quarantined row missing: ${definition.canonicalKey}`);
++       if (false) throw new Error(`Quarantined row missing: ${definition.canonicalKey}`);
+Tests ran:
+    official PDF pilot correction against captured April data 12 catalog corrections are atomic, idempotent after replan, and exactly reversible
+    official PDF pilot correction against captured April data stale or altered plans and mismatched rollback records fail without partial writes
+    official PDF pilot correction against captured April data all 64 captured April rows match the actual seven-dish correction set; live UE observations agree
+  and 1 more test!
+
+
+[Survived] ArrowFunction
+apps/api/services/chainPilotPlan.ts:51:44
+-     const replacements = new Set(changes.map(c => `${c.desired.brandId}:${c.desired.canonicalKey}`));
++     const replacements = new Set(changes.map(() => undefined));
+Tests ran:
+    official PDF pilot correction against captured April data 12 catalog corrections are atomic, idempotent after replan, and exactly reversible
+    official PDF pilot correction against captured April data stale or altered plans and mismatched rollback records fail without partial writes
+    official PDF pilot correction against captured April data all 64 captured April rows match the actual seven-dish correction set; live UE observations agree
+  and 1 more test!
+
+
+[Survived] StringLiteral
+apps/api/services/chainPilotPlan.ts:51:49
+-     const replacements = new Set(changes.map(c => `${c.desired.brandId}:${c.desired.canonicalKey}`));
++     const replacements = new Set(changes.map(c => ``));
+Tests ran:
+    official PDF pilot correction against captured April data 12 catalog corrections are atomic, idempotent after replan, and exactly reversible
+    official PDF pilot correction against captured April data stale or altered plans and mismatched rollback records fail without partial writes
+    official PDF pilot correction against captured April data all 64 captured April rows match the actual seven-dish correction set; live UE observations agree
+  and 1 more test!
+
+
+[Survived] ArrayDeclaration
+apps/api/services/chainPilotPlan.ts:52:36
+-     const final: ChainCatalogRow[] = [...catalog.filter(r => !replacements.has(`${r.brandId}:${r.canonicalKey}`)),
+-       ...changes.map(c => ({ ...c.desired, id: c.before?.id ?? `${c.desired.brandId}:${c.desired.canonicalKey}` }))];
++     const final: ChainCatalogRow[] = [];
+Tests ran:
+    official PDF pilot correction against captured April data 12 catalog corrections are atomic, idempotent after replan, and exactly reversible
+    official PDF pilot correction against captured April data stale or altered plans and mismatched rollback records fail without partial writes
+    official PDF pilot correction against captured April data all 64 captured April rows match the actual seven-dish correction set; live UE observations agree
+  and 1 more test!
+
+
+[Survived] MethodExpression
+apps/api/services/chainPilotPlan.ts:52:40
+-     const final: ChainCatalogRow[] = [...catalog.filter(r => !replacements.has(`${r.brandId}:${r.canonicalKey}`)),
++     const final: ChainCatalogRow[] = [...catalog,
+Tests ran:
+    official PDF pilot correction against captured April data 12 catalog corrections are atomic, idempotent after replan, and exactly reversible
+    official PDF pilot correction against captured April data stale or altered plans and mismatched rollback records fail without partial writes
+    official PDF pilot correction against captured April data all 64 captured April rows match the actual seven-dish correction set; live UE observations agree
+  and 1 more test!
+
+
+[Survived] ArrowFunction
+apps/api/services/chainPilotPlan.ts:52:55
+-     const final: ChainCatalogRow[] = [...catalog.filter(r => !replacements.has(`${r.brandId}:${r.canonicalKey}`)),
++     const final: ChainCatalogRow[] = [...catalog.filter(() => undefined),
+Tests ran:
+    official PDF pilot correction against captured April data 12 catalog corrections are atomic, idempotent after replan, and exactly reversible
+    official PDF pilot correction against captured April data stale or altered plans and mismatched rollback records fail without partial writes
+    official PDF pilot correction against captured April data all 64 captured April rows match the actual seven-dish correction set; live UE observations agree
+  and 1 more test!
+
+
+[Survived] BooleanLiteral
+apps/api/services/chainPilotPlan.ts:52:60
+-     const final: ChainCatalogRow[] = [...catalog.filter(r => !replacements.has(`${r.brandId}:${r.canonicalKey}`)),
++     const final: ChainCatalogRow[] = [...catalog.filter(r => replacements.has(`${r.brandId}:${r.canonicalKey}`)),
+Tests ran:
+    official PDF pilot correction against captured April data 12 catalog corrections are atomic, idempotent after replan, and exactly reversible
+    official PDF pilot correction against captured April data stale or altered plans and mismatched rollback records fail without partial writes
+    official PDF pilot correction against captured April data all 64 captured April rows match the actual seven-dish correction set; live UE observations agree
+  and 1 more test!
+
+
+[Survived] StringLiteral
+apps/api/services/chainPilotPlan.ts:52:78
+-     const final: ChainCatalogRow[] = [...catalog.filter(r => !replacements.has(`${r.brandId}:${r.canonicalKey}`)),
++     const final: ChainCatalogRow[] = [...catalog.filter(r => !replacements.has(``)),
+Tests ran:
+    official PDF pilot correction against captured April data 12 catalog corrections are atomic, idempotent after replan, and exactly reversible
+    official PDF pilot correction against captured April data stale or altered plans and mismatched rollback records fail without partial writes
+    official PDF pilot correction against captured April data all 64 captured April rows match the actual seven-dish correction set; live UE observations agree
+  and 1 more test!
+
+
+[Survived] LogicalOperator
+apps/api/services/chainPilotPlan.ts:53:46
+-       ...changes.map(c => ({ ...c.desired, id: c.before?.id ?? `${c.desired.brandId}:${c.desired.canonicalKey}` }))];
++       ...changes.map(c => ({ ...c.desired, id: c.before?.id && `${c.desired.brandId}:${c.desired.canonicalKey}` }))];
+Tests ran:
+    official PDF pilot correction against captured April data 12 catalog corrections are atomic, idempotent after replan, and exactly reversible
+    official PDF pilot correction against captured April data stale or altered plans and mismatched rollback records fail without partial writes
+    official PDF pilot correction against captured April data all 64 captured April rows match the actual seven-dish correction set; live UE observations agree
+  and 1 more test!
+
+
+[Survived] StringLiteral
+apps/api/services/chainPilotPlan.ts:53:62
+-       ...changes.map(c => ({ ...c.desired, id: c.before?.id ?? `${c.desired.brandId}:${c.desired.canonicalKey}` }))];
++       ...changes.map(c => ({ ...c.desired, id: c.before?.id ?? `` }))];
+Tests ran:
+    official PDF pilot correction against captured April data 12 catalog corrections are atomic, idempotent after replan, and exactly reversible
+    official PDF pilot correction against captured April data stale or altered plans and mismatched rollback records fail without partial writes
+    official PDF pilot correction against captured April data all 64 captured April rows match the actual seven-dish correction set; live UE observations agree
+  and 1 more test!
+
+
+[Survived] ConditionalExpression
+apps/api/services/chainPilotPlan.ts:57:9
+-       if (!approved) continue;
++       if (true) continue;
+Tests ran:
+    official PDF pilot correction against captured April data 12 catalog corrections are atomic, idempotent after replan, and exactly reversible
+    official PDF pilot correction against captured April data stale or altered plans and mismatched rollback records fail without partial writes
+    official PDF pilot correction against captured April data all 64 captured April rows match the actual seven-dish correction set; live UE observations agree
+  and 1 more test!
+
+
+[Survived] BlockStatement
+apps/api/services/chainPilotPlan.ts:58:50
+-       for (const alias of approved.review.aliases) {
+-         const item = { name: alias.name, ...(alias.section !== undefined ? { section: alias.section } : {}), ...(alias.description !== undefined ? { description: alias.description } : {}) };
+-         if (match(row.brandId, item).status !== "matched") throw new Error(`Ambiguous reviewed alias: ${alias.name}`);
+-       }
++       for (const alias of approved.review.aliases) {}
+Tests ran:
+    official PDF pilot correction against captured April data 12 catalog corrections are atomic, idempotent after replan, and exactly reversible
+    official PDF pilot correction against captured April data stale or altered plans and mismatched rollback records fail without partial writes
+    official PDF pilot correction against captured April data all 64 captured April rows match the actual seven-dish correction set; live UE observations agree
+  and 1 more test!
+
+
+[Survived] ConditionalExpression
+apps/api/services/chainPilotPlan.ts:59:44
+-         const item = { name: alias.name, ...(alias.section !== undefined ? { section: alias.section } : {}), ...(alias.description !== undefined ? { description: alias.description } : {}) };
++         const item = { name: alias.name, ...(true ? { section: alias.section } : {}), ...(alias.description !== undefined ? { description: alias.description } : {}) };
+Tests ran:
+    official PDF pilot correction against captured April data 12 catalog corrections are atomic, idempotent after replan, and exactly reversible
+    official PDF pilot correction against captured April data stale or altered plans and mismatched rollback records fail without partial writes
+    official PDF pilot correction against captured April data all 64 captured April rows match the actual seven-dish correction set; live UE observations agree
+  and 1 more test!
+
+
+[Survived] ConditionalExpression
+apps/api/services/chainPilotPlan.ts:60:11
+-         if (match(row.brandId, item).status !== "matched") throw new Error(`Ambiguous reviewed alias: ${alias.name}`);
++         if (false) throw new Error(`Ambiguous reviewed alias: ${alias.name}`);
+Tests ran:
+    official PDF pilot correction against captured April data 12 catalog corrections are atomic, idempotent after replan, and exactly reversible
+    official PDF pilot correction against captured April data stale or altered plans and mismatched rollback records fail without partial writes
+    official PDF pilot correction against captured April data all 64 captured April rows match the actual seven-dish correction set; live UE observations agree
+  and 1 more test!
+
+
+[Survived] ObjectLiteral
+apps/api/services/chainPilotPlan.ts:70:44
+-       const brands = await tx.brand.findMany({ where: { slug: { in: [...new Set([...pilot.changes, ...pilot.quarantine].map(d => d.slug))] } } });
++       const brands = await tx.brand.findMany({});
+Tests ran:
+    official PDF pilot correction against captured April data 12 catalog corrections are atomic, idempotent after replan, and exactly reversible
+    official PDF pilot correction against captured April data stale or altered plans and mismatched rollback records fail without partial writes
+    official PDF pilot correction against captured April data all 64 captured April rows match the actual seven-dish correction set; live UE observations agree
+  and 1 more test!
+
+
+[Survived] ObjectLiteral
+apps/api/services/chainPilotPlan.ts:71:65
+-       const currentCatalog = await tx.chainItem.findMany({ where: { brandId: { in: brands.map(b => b.id) } } });
++       const currentCatalog = await tx.chainItem.findMany({ where: {} });
+Tests ran:
+    official PDF pilot correction against captured April data 12 catalog corrections are atomic, idempotent after replan, and exactly reversible
+    official PDF pilot correction against captured April data stale or altered plans and mismatched rollback records fail without partial writes
+    official PDF pilot correction against captured April data all 64 captured April rows match the actual seven-dish correction set; live UE observations agree
+  and 1 more test!
+
+
+[Survived] ConditionalExpression
+apps/api/services/chainPilotPlan.ts:79:42
+-         const data = { ...desired, review: desired.review === null ? Prisma.DbNull : reviewJson(desired.review), retrievedAt: new Date() };
++         const data = { ...desired, review: false ? Prisma.DbNull : reviewJson(desired.review), retrievedAt: new Date() };
+Tests ran:
+    official PDF pilot correction against captured April data 12 catalog corrections are atomic, idempotent after replan, and exactly reversible
+    official PDF pilot correction against captured April data stale or altered plans and mismatched rollback records fail without partial writes
+    official PDF pilot correction against captured April data all 64 captured April rows match the actual seven-dish correction set; live UE observations agree
+  and 1 more test!
+
+
+[Survived] ObjectLiteral
+apps/api/services/chainPilotPlan.ts:83:6
+-     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30_000 });
++     }, {});
+Tests ran:
+    official PDF pilot correction against captured April data 12 catalog corrections are atomic, idempotent after replan, and exactly reversible
+    official PDF pilot correction against captured April data stale or altered plans and mismatched rollback records fail without partial writes
+    official PDF pilot correction against captured April data all 64 captured April rows match the actual seven-dish correction set; live UE observations agree
+  and 1 more test!
+
+
+[Survived] ConditionalExpression
+apps/api/services/chainPilotPlan.ts:88:7
+-     if (after.length !== plan.changes.length || stateHash(plan.changes) !== plan.hash) throw new Error("Incomplete catalog rollback evidence");
++     if (false) throw new Error("Incomplete catalog rollback evidence");
+Tests ran:
+    official PDF pilot correction against captured April data 12 catalog corrections are atomic, idempotent after replan, and exactly reversible
+    official PDF pilot correction against captured April data stale or altered plans and mismatched rollback records fail without partial writes
+
+
+[Survived] ConditionalExpression
+apps/api/services/chainPilotPlan.ts:98:79
+-           await tx.chainItem.update({ where: { id }, data: { ...before, review: before.review === null ? Prisma.DbNull : reviewJson(before.review) } });
++           await tx.chainItem.update({ where: { id }, data: { ...before, review: true ? Prisma.DbNull : reviewJson(before.review) } });
+Tests ran:
+    official PDF pilot correction against captured April data 12 catalog corrections are atomic, idempotent after replan, and exactly reversible
+
+
+[Survived] ConditionalExpression
+apps/api/services/chainPilotPlan.ts:98:79
+-           await tx.chainItem.update({ where: { id }, data: { ...before, review: before.review === null ? Prisma.DbNull : reviewJson(before.review) } });
++           await tx.chainItem.update({ where: { id }, data: { ...before, review: false ? Prisma.DbNull : reviewJson(before.review) } });
+Tests ran:
+    official PDF pilot correction against captured April data 12 catalog corrections are atomic, idempotent after replan, and exactly reversible
+
+
+[Survived] EqualityOperator
+apps/api/services/chainPilotPlan.ts:98:79
+-           await tx.chainItem.update({ where: { id }, data: { ...before, review: before.review === null ? Prisma.DbNull : reviewJson(before.review) } });
++           await tx.chainItem.update({ where: { id }, data: { ...before, review: before.review !== null ? Prisma.DbNull : reviewJson(before.review) } });
+Tests ran:
+    official PDF pilot correction against captured April data 12 catalog corrections are atomic, idempotent after replan, and exactly reversible
+
+
+[Survived] ObjectLiteral
+apps/api/services/chainPilotPlan.ts:101:6
+-     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30_000 });
++     }, {});
+Tests ran:
+    official PDF pilot correction against captured April data 12 catalog corrections are atomic, idempotent after replan, and exactly reversible
+    official PDF pilot correction against captured April data stale or altered plans and mismatched rollback records fail without partial writes
+
+
+[NoCoverage] ObjectLiteral
+apps/api/services/chainPilotRollback.ts:14:51
+-       if (!prior) await tx.macroEstimate.deleteMany({ where: { menuItemId: after.id, source: "official" } });
++       if (!prior) await tx.macroEstimate.deleteMany({});
+
+[NoCoverage] ObjectLiteral
+apps/api/services/chainPilotRollback.ts:14:60
+-       if (!prior) await tx.macroEstimate.deleteMany({ where: { menuItemId: after.id, source: "official" } });
++       if (!prior) await tx.macroEstimate.deleteMany({ where: {} });
+
+[NoCoverage] StringLiteral
+apps/api/services/chainPilotRollback.ts:14:92
+-       if (!prior) await tx.macroEstimate.deleteMany({ where: { menuItemId: after.id, source: "official" } });
++       if (!prior) await tx.macroEstimate.deleteMany({ where: { menuItemId: after.id, source: "" } });
+
+[Survived] ObjectLiteral
+apps/api/services/chainPilotRollback.ts:11:115
+-       const current = await tx.menuItem.findUnique({ where: { id: after.id }, include: { macroEstimates: { orderBy: { id: "asc" } } } });
++       const current = await tx.menuItem.findUnique({ where: { id: after.id }, include: { macroEstimates: { orderBy: {} } } });
+Tests ran:
+    official PDF pilot correction against captured April data April rollback restores an existing official estimate and rejects any later item or estimate edit
+
+
+[Survived] ConditionalExpression
+apps/api/services/chainPilotRollback.ts:13:51
+-       const prior = before.macroEstimates.find(e => e.source === "official");
++       const prior = before.macroEstimates.find(e => true);
+Tests ran:
+    official PDF pilot correction against captured April data April rollback restores an existing official estimate and rejects any later item or estimate edit
+
+
+[Survived] ConditionalExpression
+apps/api/services/chainPilotRollback.ts:14:9
+-       if (!prior) await tx.macroEstimate.deleteMany({ where: { menuItemId: after.id, source: "official" } });
++       if (false) await tx.macroEstimate.deleteMany({ where: { menuItemId: after.id, source: "official" } });
+Tests ran:
+    official PDF pilot correction against captured April data April rollback restores an existing official estimate and rejects any later item or estimate edit
+
+
+[Survived] ConditionalExpression
+apps/api/services/chainPilotRollback.ts:16:53
+-         const data = { ...prior, ingredientBreakdown: prior.ingredientBreakdown === null ? Prisma.DbNull : prior.ingredientBreakdown as Prisma.InputJsonValue };
++         const data = { ...prior, ingredientBreakdown: false ? Prisma.DbNull : prior.ingredientBreakdown as Prisma.InputJsonValue };
+Tests ran:
+    official PDF pilot correction against captured April data April rollback restores an existing official estimate and rejects any later item or estimate edit
+
+
+[Survived] ObjectLiteral
+apps/api/services/chainPilotRollback.ts:20:6
+-     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30_000 });
++     }, {});
+Tests ran:
+    official PDF pilot correction against captured April data April rollback restores an existing official estimate and rejects any later item or estimate edit
+
+
+Ran 2.97 tests per mutant on average.
+-----------------------|------------------|----------|-----------|------------|----------|----------|
+                       | % Mutation score |          |           |            |          |          |
+File                   |  total | covered | # killed | # timeout | # survived | # no cov | # errors |
+-----------------------|--------|---------|----------|-----------|------------|----------|----------|
+All files              |  81.03 |   84.71 |      204 |         1 |         37 |       11 |        0 |
+ chainPilotPlan.ts     |  80.77 |   84.00 |      167 |         1 |         32 |        8 |        0 |
+ chainPilotRollback.ts |  82.22 |   88.10 |       37 |         0 |          5 |        3 |        0 |
+-----------------------|--------|---------|----------|-----------|------------|----------|----------|
+[32m22:07:20 (40864) INFO JsonReporter[39m Your report can be found at: file:///Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-data/.evidence/mutation/report.json
+[32m22:07:20 (40864) INFO MutationTestReportHelper[39m Final mutation score of 81.03 is greater than or equal to break threshold 50
+[32m22:07:20 (40864) INFO MutationTestExecutor[39m Done in 1 minute and 45 seconds.

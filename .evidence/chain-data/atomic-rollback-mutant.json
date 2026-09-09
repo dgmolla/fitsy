@@ -1,0 +1,5 @@
+{
+  "mutation": "replace one batch transaction with one transaction per journal",
+  "rejected": true,
+  "assertion": "Entire batch state must remain unchanged after a later-edit refusal"
+}

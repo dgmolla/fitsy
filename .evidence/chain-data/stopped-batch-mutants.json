@@ -1,0 +1,22 @@
+[
+  {
+    "mutation": "plan-integrity",
+    "rejectedByAssertion": true
+  },
+  {
+    "mutation": "planner-brand-identity",
+    "rejectedByAssertion": true
+  },
+  {
+    "mutation": "denormalized-drift",
+    "rejectedByAssertion": true
+  },
+  {
+    "mutation": "known-stop-marker",
+    "rejectedByAssertion": true
+  },
+  {
+    "mutation": "unknown-db-stop-marker",
+    "rejectedByAssertion": true
+  }
+]

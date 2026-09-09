@@ -1,0 +1,52 @@
+[
+  {
+    "mutation": "nonrestaurant-brand",
+    "rejected": true,
+    "failedAssertions": [
+      {
+        "name": "unknown brand and source states fail closed before writing a plan",
+        "reason": "Error: expect(received).toThrow(expected)\n\nExpected substring: \"Verified brand\"\n"
+      }
+    ]
+  },
+  {
+    "mutation": "cross-brand-key",
+    "rejected": true,
+    "failedAssertions": [
+      {
+        "name": "identical catalog keys under different brands select the intended brand's row",
+        "reason": "Error: Catalog differs from audited baseline: miso-soup\n    at append (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-data/apps/api/services/chainPilotPlan.ts:30:99)\n    at planChainPilot (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-data/apps/api/services/chainPilotPlan.ts:40:5)\n    at Object.<anonymous> (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-data/apps/api/services/chainPilotPlan.test.ts:22:30)"
+      }
+    ]
+  },
+  {
+    "mutation": "unbounded-apply",
+    "rejected": true,
+    "failedAssertions": [
+      {
+        "name": "actual pilot CLI plan, apply and rollback explicit hashes and target guard writes; complete workflow restores its captured starting state",
+        "reason": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 0\n+ Received  + 1"
+      }
+    ]
+  },
+  {
+    "mutation": "lost-canary-order",
+    "rejected": true,
+    "failedAssertions": [
+      {
+        "name": "actual pilot CLI plan, apply and rollback explicit hashes and target guard writes; complete workflow restores its captured starting state",
+        "reason": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1"
+      }
+    ]
+  },
+  {
+    "mutation": "overwrite-backup",
+    "rejected": true,
+    "failedAssertions": [
+      {
+        "name": "actual pilot CLI plan, apply and rollback explicit hashes and target guard writes; complete workflow restores its captured starting state",
+        "reason": "Error: expect(received).toThrow(expected)\n\nExpected substring: \"EEXIST\"\nReceived message:   \"Command failed: /opt/homebrew/Cellar/node/24.3.0/bin/node /Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-data/node_modules/tsx/dist/cli.mjs --tsconfig /Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-data/apps/api/tsconfig.json /Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-data/scripts/preload-chain-pilot.ts catalog-apply /var/folders/lj/18n0p82d15j47d0vgzy302vm0000gn/T/fitsy-chain-cli-Z5yNyP/catalog.json 5a8d9e7663ddae1a541607199863ea498e110c4393bc38b2a0192ce196d6e898"
+      }
+    ]
+  }
+]

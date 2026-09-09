@@ -1,0 +1,40 @@
+
+> @fitsy/api@0.1.0 test
+> jest --runInBand --runTestsByPath tests/db/chainPilot.db.test.ts -t all seven configurations
+
+FAIL tests/db/chainPilot.db.test.ts
+  official PDF pilot correction against captured April data
+    ✕ all seven configurations from actual UE menus persist identically at new locations (265 ms)
+    ○ skipped 12 catalog corrections are atomic, idempotent after replan, and exactly reversible
+    ○ skipped stale or altered plans and mismatched rollback records fail without partial writes
+    ○ skipped all 64 captured April rows match the actual seven-dish correction set; live UE observations agree
+    ○ skipped April rollback restores an existing official estimate and rejects any later item or estimate edit
+
+  ● official PDF pilot correction against captured April data › all seven configurations from actual UE menus persist identically at new locations
+
+    Reviewed configurations must not call estimation
+
+      115 |       const observations = capturedUE.filter(r => scope + r.slug === brand.slug), items = observations.map(r => r.items[0]!.item);
+      116 |       const brandId = runtime.brandId(restaurant); expect(brandId).toBe(brand.id);
+    > 117 |       const macros = await resolveChainMacros(items, brandId, runtime.match, async () => { throw new Error("Reviewed configurations must not call estimation"); });
+          |                                                                                                  ^
+      118 |       await persistHex(scope, brand.slug, [{ restaurantId: restaurant.id, brandId: brand.id, items: items.map((item, i) => ({ item, macro: macros[i]! })), menuHash: "captured-seven-dish-pilot" }], p, { validateInTx: validateHexInTx });
+      119 |       for (const [index, observation] of observations.entries()) {
+      120 |         const item = await p.menuItem.findUniqueOrThrow({ where: { restaurantId_name: { restaurantId: restaurant.id, name: items[index]!.name } }, include: { macroEstimates: true } });
+
+      at tests/db/chainPilot.db.test.ts:117:98
+      at resolveChainMacros (services/chainServing.ts:35:46)
+      at Object.<anonymous> (tests/db/chainPilot.db.test.ts:117:46)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 4 skipped, 5 total
+Snapshots:   0 total
+Time:        0.779 s, estimated 3 s
+Ran all test suites within paths "tests/db/chainPilot.db.test.ts".
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-data/apps/api
+npm error workspace @fitsy/api@0.1.0
+npm error location /Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-data/apps/api
+npm error command failed
+npm error command sh -c jest --runInBand --runTestsByPath tests/db/chainPilot.db.test.ts -t 'all seven configurations'

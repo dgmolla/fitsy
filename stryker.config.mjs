@@ -14,6 +14,8 @@ export default {
   },
   mutate: [
     "apps/api/lib/restaurantMenuService.ts",
+    "apps/api/services/chainPilotPlan.ts",
+    "apps/api/services/chainPilotRollback.ts",
     "apps/api/services/chainServing.ts",
     "apps/api/services/menuSources/ueNutritionLabel.ts",
     "apps/api/services/chainCatalog.ts",

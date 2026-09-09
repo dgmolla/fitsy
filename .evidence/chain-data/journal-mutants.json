@@ -1,0 +1,12 @@
+[
+  {
+    "mutation": "missing-journal-count",
+    "rejected": true,
+    "assertion": "Incomplete April rollback evidence was not rejected"
+  },
+  {
+    "mutation": "noncontiguous-journals",
+    "rejected": true,
+    "assertion": "Incomplete April rollback evidence was not rejected"
+  }
+]

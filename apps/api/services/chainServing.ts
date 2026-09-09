@@ -55,27 +55,29 @@ export interface AprilItem {
 export const aprilMenuIdentity = (item: AprilItem): StructuredMenuItem => ({ name: item.name,
   ...(item.section !== null ? { section: item.section } : {}), ...(item.description !== null ? { description: item.description } : {}) });
 /** Nutrition-only update. No menu upsert/deletion, tags, photos, prices, or saved-item mutations. */
+// Only pre-write validation failures use this type; callers may journal a safely stopped batch.
+export class AprilPlanChangedError extends Error {}
 export async function applyAprilChainMatch(prisma: PrismaClient, expected: AprilItem & { macroEstimates: MacroEstimate[] }, approved: ApprovedChainRow) {
   return prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT id FROM "ChainItem" WHERE id = ${approved.id} FOR SHARE`;
     const current = await tx.chainItem.findUnique({ where: { id: approved.id } });
-    if (!current || approvedChainRow(current)?.review.dataHash !== approved.review.dataHash) throw new Error("Chain review changed; rebuild the plan");
+    if (!current || approvedChainRow(current)?.review.dataHash !== approved.review.dataHash) throw new AprilPlanChangedError("Chain review changed; rebuild the plan");
     const restaurant = await tx.restaurant.findUnique({ where: { id: expected.restaurantId }, select: { brandId: true, name: true } });
     const brands = await tx.brand.findMany({ where: { detectionConf: { in: ["high", "llm-confirmed"] }, menuKind: "restaurant" } });
-    if (!restaurant || verifiedBrand(restaurant, brands) !== approved.brandId) throw new Error("Restaurant brand identity changed");
+    if (!restaurant || verifiedBrand(restaurant, brands) !== approved.brandId) throw new AprilPlanChangedError("Restaurant brand identity changed");
     const catalog = await tx.chainItem.findMany({ where: { brandId: approved.brandId } });
     const item = aprilMenuIdentity(expected), result = buildChainMatcher(catalog)(approved.brandId, item);
-    if (result.status !== "matched" || result.row.id !== approved.id || result.row.review.dataHash !== approved.review.dataHash) throw new Error("April item has no current reviewed binding");
+    if (result.status !== "matched" || result.row.id !== approved.id || result.row.review.dataHash !== approved.review.dataHash) throw new AprilPlanChangedError("April item has no current reviewed binding");
     // Lock and compare the row before adding an estimate. A concurrent edit fails closed.
     const locked = await tx.$queryRaw<{ updatedAt: Date; name: string; section: string | null; description: string | null }[]>`
       SELECT "updatedAt", name, section, description FROM "MenuItem" WHERE id = ${expected.id} AND "restaurantId" = ${expected.restaurantId} FOR UPDATE`;
     const actual = locked[0];
-    if (!actual || actual.updatedAt.getTime() !== expected.updatedAt.getTime() || chainMenuFingerprint(aprilMenuIdentity({ ...expected, ...actual })) !== chainMenuFingerprint(item)) throw new Error("April item changed; rebuild the plan");
+    if (!actual || actual.updatedAt.getTime() !== expected.updatedAt.getTime() || chainMenuFingerprint(aprilMenuIdentity({ ...expected, ...actual })) !== chainMenuFingerprint(item)) throw new AprilPlanChangedError("April item changed; rebuild the plan");
     const macro = officialMacro(result.row, item);
     const estimate = { calories: macro.calories, proteinG: macro.proteinG, carbsG: macro.carbsG, fatG: macro.fatG,
       confidence: macro.confidence, source: macro.source, reasoning: macro.reasoning, hadPhoto: false, ingredientBreakdown: Prisma.DbNull };
     const estimates = await tx.macroEstimate.findMany({ where: { menuItemId: expected.id }, orderBy: { id: "asc" } });
-    if (JSON.stringify(estimates) !== JSON.stringify(expected.macroEstimates)) throw new Error("April estimates changed; rebuild the backup and plan");
+    if (JSON.stringify(estimates) !== JSON.stringify(expected.macroEstimates)) throw new AprilPlanChangedError("April estimates changed; rebuild the backup and plan");
     const existing = estimates.find(e => e.source === "official");
     const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === "HIGH" && !existing.hadPhoto && existing.ingredientBreakdown === null && ["calories", "proteinG", "carbsG", "fatG"].every(key => existing[key as "calories"] === macro[key as "calories"]);
     if (!unchanged) await tx.macroEstimate.upsert({ where: { menuItemId_source: { menuItemId: expected.id, source: "official" } },

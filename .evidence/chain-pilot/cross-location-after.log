@@ -1,0 +1,12 @@
+
+> @fitsy/api@0.1.0 test
+> jest --runInBand --runTestsByPath tests/db/chainPilot.db.test.ts tests/db/chainPilotCli.db.test.ts
+
+PASS tests/db/chainPilot.db.test.ts
+PASS tests/db/chainPilotCli.db.test.ts
+
+Test Suites: 2 passed, 2 total
+Tests:       6 passed, 6 total
+Snapshots:   0 total
+Time:        5.529 s, estimated 6 s
+Ran all test suites within paths "tests/db/chainPilot.db.test.ts", "tests/db/chainPilotCli.db.test.ts".
