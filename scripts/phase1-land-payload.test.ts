@@ -8,4 +8,7 @@ test("re-landing a corrected portion replaces serving size alongside macros and 
     carbsG: 110, fatG: 15, source: "official", confidence: "HIGH", officialUrl: facts.officialUrl, retrievedAt: expect.any(Date) });
   expect(result.create).toEqual({ ...result.update, brandId: "waba", canonicalKey: "chicken-plate" });
   expect(chainLandingUpsert({ ...facts, servingSize: null }).update.servingSize).toBeNull();
+  const unknown = chainLandingUpsert({ ...facts, calories: null });
+  expect(unknown.create.calories).toBeNull();
+  expect(unknown.update.calories).toBeNull();
 });

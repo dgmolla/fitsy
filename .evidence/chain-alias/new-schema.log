@@ -1,0 +1,10 @@
+PASS scripts/dev/lib/snapshot-row.test.ts
+  ✓ pre-review snapshots remain unchanged (1 ms)
+  ✓ database null becomes Prisma DbNull rather than JSON null
+  ✓ review objects survive snapshot copying
+
+Test Suites: 1 passed, 1 total
+Tests:       3 passed, 3 total
+Snapshots:   0 total
+Time:        1.317 s
+Ran all test suites matching /scripts\/dev\/lib\/snapshot-row.test.ts/i.
