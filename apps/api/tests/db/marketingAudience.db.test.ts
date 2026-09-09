@@ -63,6 +63,23 @@ describeIfDb("marketingAudience (DB)", () => {
     await prisma.$disconnect();
   });
 
+  it("optedOutAddresses returns exactly the opted-out subset across both tables, case-insensitively", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const me = require("@/lib/marketingEmail") as typeof import("../../lib/marketingEmail");
+    const set = await me.optedOutAddresses([
+      email("plain"),
+      email("optedout").toUpperCase(), // User opt-out, mixed-case input
+      email("rowoptout"), // waitlist-row opt-out
+      email("weboptout"),
+      email("acctoptout"),
+      email("mixed"),
+      "nobody-" + email("x"),
+    ]);
+    expect([...set].sort()).toEqual(
+      [email("optedout"), email("rowoptout"), email("weboptout"), email("acctoptout")].sort(),
+    );
+  });
+
   it("includes eligible accounts and waitlist-only rows once each, excludes every opt-out", async () => {
     const rows = (await aud.marketingAudience({ includeWaitlistOnly: true })).filter((r) => r.email.startsWith(tag));
     const byEmail = Object.fromEntries(rows.map((r) => [r.email, r]));

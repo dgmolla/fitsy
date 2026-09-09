@@ -78,8 +78,7 @@ describe("launch-day route with the real notifyLaunch", () => {
     // First call sees everything; the second sees what the first left unprocessed.
     (prisma.launchWaitlist.findMany as jest.Mock)
       .mockResolvedValueOnce(rows)
-      .mockResolvedValueOnce(rows.slice(MAX_PER_RUN))
-      .mockResolvedValue([]);
+      .mockResolvedValueOnce(rows.slice(MAX_PER_RUN));
     (sendMarketingEmail as jest.Mock).mockResolvedValue(true);
     const body = await (await GET(makeRequest())).json();
     expect(prisma.launchWaitlist.findMany).toHaveBeenCalledTimes(2);

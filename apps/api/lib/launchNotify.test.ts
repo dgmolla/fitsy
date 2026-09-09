@@ -69,6 +69,10 @@ describe("notifyLaunch: matching, dry run, batching", () => {
     const cutoff = (cooled.lastNotifyAttemptAt.lt as Date).getTime();
     expect(before - cutoff).toBeGreaterThanOrEqual(RETRY_COOLDOWN_MS - 1000);
     expect(before - cutoff).toBeLessThanOrEqual(RETRY_COOLDOWN_MS + 1000);
+    // The literals are the policy: a cooldown of 0 would reintroduce the
+    // burn-every-attempt-in-one-run bug, and the attempt cap bounds it.
+    expect(RETRY_COOLDOWN_MS).toBe(12 * 3600e3);
+    expect(MAX_NOTIFY_ATTEMPTS).toBe(3);
   });
 
   it("radius-matches located rows and excludes unlocated web rows by default", async () => {
@@ -93,6 +97,7 @@ describe("notifyLaunch: matching, dry run, batching", () => {
   });
 
   it("processes at most MAX_PER_RUN rows and reports the remainder", async () => {
+    expect(MAX_PER_RUN).toBe(400);
     const many = Array.from({ length: MAX_PER_RUN + 3 }, (_, i) => ({
       ...WEB,
       id: `wl-${i}`,

@@ -5,7 +5,14 @@ jest.mock("@/lib/restaurantService", () => ({
 }));
 
 import { prisma } from "@/lib/restaurantService";
-import { MARKETING_MIN_GAP_MS, countSent, recordSend, sentWithin, wasSent } from "@/lib/marketingLedger";
+import {
+  MARKETING_MIN_GAP_MS,
+  MAX_SENDS_PER_RUN,
+  countSent,
+  recordSend,
+  sentWithin,
+  wasSent,
+} from "@/lib/marketingLedger";
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -44,6 +51,7 @@ describe("marketingLedger", () => {
     expect(before - since).toBeGreaterThanOrEqual(MARKETING_MIN_GAP_MS - 1000);
     expect(before - since).toBeLessThanOrEqual(MARKETING_MIN_GAP_MS + 1000);
     expect(MARKETING_MIN_GAP_MS).toBe(48 * 3600e3);
+    expect(MAX_SENDS_PER_RUN).toBe(500);
   });
 
   it("countSent is one set query over normalized addresses, and zero for an empty list", async () => {
