@@ -125,6 +125,19 @@ describe("GET /api/internal/waitlist/launch-day", () => {
     });
   });
 
+  it("a batch that only closes rows as suppressed still counts as progress, not a stall", async () => {
+    jest.useFakeTimers().setSystemTime(new Date(`${LAUNCH_DATE_ISO}T16:00:00Z`));
+    (notifyLaunch as jest.Mock)
+      .mockResolvedValueOnce({ dryRun: false, matched: 4, viaPush: 0, viaEmail: 2, notified: 2, suppressed: 0, failed: 0, remaining: 2, exhausted: 0 })
+      .mockResolvedValueOnce({ dryRun: false, matched: 2, viaPush: 0, viaEmail: 0, notified: 0, suppressed: 2, failed: 0, remaining: 0, exhausted: 0 });
+    const res = await GET(makeRequest());
+    expect(notifyLaunch).toHaveBeenCalledTimes(2);
+    const body = await res.json();
+    expect(body).toEqual(expect.objectContaining({ notified: 2, suppressed: 2, remaining: 0 }));
+    expect(body).not.toHaveProperty("stalled");
+    expect(mockNotifySlack).not.toHaveBeenCalled();
+  });
+
   it("stops at the time budget with rows remaining and no stalled flag", async () => {
     jest.useFakeTimers().setSystemTime(new Date(`${LAUNCH_DATE_ISO}T16:00:00Z`));
     const progressing = { dryRun: false, matched: 900, viaPush: 0, viaEmail: 400, notified: 400, suppressed: 0, failed: 0, remaining: 500, exhausted: 0 };

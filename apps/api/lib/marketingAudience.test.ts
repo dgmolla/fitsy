@@ -53,4 +53,11 @@ describe("marketingAudience", () => {
     expect(waitlistSql).toContain('w."emailOptOutAt" IS NULL');
     expect(waitlistSql).toContain('lower(u."email") = w."email" AND u."emailOptOutAt" IS NOT NULL');
   });
+
+  it("orders both branches deterministically so capped runs walk past the sent prefix", async () => {
+    await marketingAudience({ includeWaitlistOnly: true });
+    const [userSql, waitlistSql] = (prisma.$queryRawUnsafe as jest.Mock).mock.calls.map((c) => c[0] as string);
+    expect(userSql).toMatch(/ORDER BY u\."createdAt" ASC, u\.id ASC\s*$/);
+    expect(waitlistSql).toMatch(/ORDER BY w\."createdAt" ASC, w\.id ASC\s*$/);
+  });
 });
