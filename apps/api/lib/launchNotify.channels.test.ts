@@ -13,6 +13,7 @@ jest.mock("@/lib/launchPush", () => ({
 jest.mock("@/lib/marketingEmail", () => ({
   sendMarketingEmail: jest.fn(),
   isEmailOptedOut: jest.fn(),
+  optedOutAddresses: jest.fn(async () => new Set()),
   isUndeliverableAddress: jest.requireActual("@/lib/marketingEmail").isUndeliverableAddress,
   launchEmailContent: jest.fn(() => ({ subject: "Fitsy launched", html: "<p>hi</p>" })),
 }));

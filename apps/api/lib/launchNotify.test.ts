@@ -13,6 +13,7 @@ jest.mock("@/lib/launchPush", () => ({
 jest.mock("@/lib/marketingEmail", () => ({
   sendMarketingEmail: jest.fn(),
   isEmailOptedOut: jest.fn(),
+  optedOutAddresses: jest.fn(),
   isUndeliverableAddress: jest.requireActual("@/lib/marketingEmail").isUndeliverableAddress,
   launchEmailContent: jest.fn(() => ({ subject: "Fitsy launched", html: "<p>hi</p>" })),
 }));
@@ -25,7 +26,7 @@ jest.mock("@/lib/marketingLedger", () => ({
 import { MAX_PER_RUN, milesBetween, notifyLaunch } from "@/lib/launchNotify";
 import { prisma } from "@/lib/restaurantService";
 import { sendLaunchPush } from "@/lib/launchPush";
-import { isEmailOptedOut, sendMarketingEmail } from "@/lib/marketingEmail";
+import { isEmailOptedOut, optedOutAddresses, sendMarketingEmail } from "@/lib/marketingEmail";
 import { recordSend, wasSent } from "@/lib/marketingLedger";
 import { LA, ONBOARDING_LA, ONBOARDING_NYC, WEB } from "../tests/fixtures/launchNotify";
 
@@ -40,6 +41,7 @@ beforeEach(() => {
   (sendLaunchPush as jest.Mock).mockResolvedValue(true);
   (sendMarketingEmail as jest.Mock).mockResolvedValue(true);
   (isEmailOptedOut as jest.Mock).mockResolvedValue(false);
+  (optedOutAddresses as jest.Mock).mockResolvedValue(new Set());
   (recordSend as jest.Mock).mockResolvedValue(undefined);
   (wasSent as jest.Mock).mockResolvedValue(false);
 });
@@ -67,16 +69,18 @@ describe("notifyLaunch: matching, dry run, batching", () => {
     expect(res).toEqual({ dryRun: true, matched: 1, wouldNotify: 1, wouldSuppress: 0 });
   });
 
-  it("dry run previews the suppressed split so matched never overstates reach", async () => {
-    (isEmailOptedOut as jest.Mock).mockImplementation(async (email: string) => email === "web@fitsy.org");
+  it("dry run previews the suppressed split in one set query so matched never overstates reach", async () => {
+    (optedOutAddresses as jest.Mock).mockResolvedValue(new Set(["web@fitsy.org"]));
     const res = await notifyLaunch({ ...LA, includeUnlocated: true, dryRun: true });
     expect(res).toEqual({ dryRun: true, matched: 2, wouldNotify: 1, wouldSuppress: 1 });
+    expect(optedOutAddresses).toHaveBeenCalledWith(["app@fitsy.org", "web@fitsy.org"]);
+    expect(isEmailOptedOut).not.toHaveBeenCalled();
     expect(sendMarketingEmail).not.toHaveBeenCalled();
   });
 
   it("dry run counts an opted-out address with a push token as notifiable (push is not gated)", async () => {
     (prisma.launchWaitlist.findMany as jest.Mock).mockResolvedValue([ONBOARDING_LA]);
-    (isEmailOptedOut as jest.Mock).mockResolvedValue(true);
+    (optedOutAddresses as jest.Mock).mockResolvedValue(new Set(["app@fitsy.org"]));
     const res = await notifyLaunch({ ...LA, dryRun: true });
     expect(res).toEqual({ dryRun: true, matched: 1, wouldNotify: 1, wouldSuppress: 0 });
   });

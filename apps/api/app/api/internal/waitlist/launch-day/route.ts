@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { notifySlack } from "@fitsy/shared";
 import { notifyLaunch } from "@/lib/launchNotify";
 import { LAUNCH_CENTER, LAUNCH_CITY, LAUNCH_DATE_ISO } from "@/lib/launch";
 
@@ -61,6 +62,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       stalled = true;
       break;
     }
+  }
+  // Unattended cron: a stall or failures must reach a human, not just the log.
+  if (!result.dryRun && (stalled || result.failed > 0)) {
+    await notifySlack(
+      stalled ? "launch blast stalled" : "launch blast had failures",
+      `notified ${result.notified}, suppressed ${result.suppressed}, failed ${result.failed}, remaining ${result.remaining}. ` +
+        `Re-run GET /api/internal/waitlist/launch-day once the provider is healthy; rows already notified are skipped.`,
+      { source: "launch-day" },
+    );
   }
   return NextResponse.json({ ok: true, launchDate: LAUNCH_DATE_ISO, ...result, ...(stalled ? { stalled } : {}) });
 }

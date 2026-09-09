@@ -69,7 +69,7 @@ sequenceDiagram
   Upserts by normalized email with an empty update, so an existing row is untouched.
   Always answers `{ ok: true }` for a well-formed address so membership cannot be probed.
 
-- `GET /api/internal/waitlist/launch-day` (CRON_SECRET, daily cron) - the scheduled first-launch blast.
+- `GET /api/internal/waitlist/launch-day` (CRON_SECRET, daily cron at 16:30 UTC) - the scheduled first-launch blast.
   No-op before `LAUNCH_DATE_ISO` in `apps/api/lib/launch.ts`; from that day on it runs the notify logic below with the launch center, the launch city, and `includeUnlocated: true`.
   Later daily runs are near-no-ops because `notifiedAt` is set, and they resume a blast cut short by the time budget and catch post-launch signups. See [email-automation.md](email-automation.md).
 

@@ -28,6 +28,7 @@ import {
   isEmailOptedOut,
   isUndeliverableAddress,
   launchEmailContent,
+  optedOutAddresses,
   sendMarketingEmail,
 } from "@/lib/marketingEmail";
 import { recordSend, wasSent } from "@/lib/marketingLedger";
@@ -99,10 +100,8 @@ export async function notifyLaunch(opts: LaunchNotifyOptions): Promise<LaunchNot
   if (dryRun) {
     // Preview the same split the live run reports, so `matched` alone never
     // overstates reach: an opted-out row with no push token produces nothing.
-    let wouldSuppress = 0;
-    for (const w of inArea) {
-      if (!w.user?.pushToken && (await isEmailOptedOut(w.email))) wouldSuppress++;
-    }
+    const optedOut = await optedOutAddresses(inArea.map((w) => w.email));
+    const wouldSuppress = inArea.filter((w) => !w.user?.pushToken && optedOut.has(w.email)).length;
     return {
       dryRun: true,
       matched: inArea.length,

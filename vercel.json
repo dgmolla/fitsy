@@ -30,7 +30,7 @@
     },
     {
       "path": "/api/internal/waitlist/launch-day",
-      "schedule": "0 16 * * *"
+      "schedule": "30 16 * * *"
     }
   ]
 }

@@ -2,6 +2,12 @@ jest.mock("@/lib/launchNotify", () => ({
   notifyLaunch: jest.fn(),
 }));
 
+const mockNotifySlack = jest.fn();
+jest.mock("@fitsy/shared", () => ({
+  ...jest.requireActual("@fitsy/shared"),
+  notifySlack: (...args: unknown[]) => mockNotifySlack(...args),
+}));
+
 import { GET } from "./route";
 import { NextRequest } from "next/server";
 import { notifyLaunch } from "@/lib/launchNotify";
@@ -18,6 +24,7 @@ function makeRequest(qs = "", auth: string | null = `Bearer ${SECRET}`): NextReq
 beforeEach(() => {
   jest.clearAllMocks();
   jest.useRealTimers();
+  mockNotifySlack.mockResolvedValue(undefined);
   process.env["CRON_SECRET"] = SECRET;
   (notifyLaunch as jest.Mock).mockResolvedValue({
     dryRun: false,
@@ -75,6 +82,7 @@ describe("GET /api/internal/waitlist/launch-day", () => {
       includeUnlocated: true,
       dryRun: false,
     });
+    expect(mockNotifySlack).not.toHaveBeenCalled();
   });
 
   it("supports a dry run on launch day", async () => {
@@ -133,6 +141,26 @@ describe("GET /api/internal/waitlist/launch-day", () => {
     // The stalled batch's own failure count is reported, not dropped.
     expect(await res.json()).toEqual(
       expect.objectContaining({ notified: 2, failed: 3, remaining: 3, stalled: true }),
+    );
+    // Unattended cron: a human hears about it.
+    expect(mockNotifySlack).toHaveBeenCalledWith(
+      "launch blast stalled",
+      expect.stringContaining("failed 3, remaining 3"),
+      { source: "launch-day" },
+    );
+  });
+
+  it("alerts on failures even when the run did not stall", async () => {
+    jest.useFakeTimers().setSystemTime(new Date(`${LAUNCH_DATE_ISO}T16:00:00Z`));
+    // Two batches, both with a failure; the second finishes the drain.
+    (notifyLaunch as jest.Mock)
+      .mockResolvedValueOnce({ dryRun: false, matched: 3, viaPush: 0, viaEmail: 1, notified: 1, suppressed: 0, failed: 1, remaining: 2 })
+      .mockResolvedValueOnce({ dryRun: false, matched: 3, viaPush: 0, viaEmail: 1, notified: 1, suppressed: 0, failed: 1, remaining: 0 });
+    await GET(makeRequest());
+    expect(mockNotifySlack).toHaveBeenCalledWith(
+      "launch blast had failures",
+      expect.stringContaining("failed 1"),
+      { source: "launch-day" },
     );
   });
 });
