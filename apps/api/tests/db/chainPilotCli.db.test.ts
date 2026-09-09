@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { PrismaClient, type Brand } from "@prisma/client";
@@ -64,7 +64,13 @@ suite("actual pilot CLI plan, apply and rollback", () => {
           const original = readFileSync(record, "utf8"); writeFileSync(record, JSON.stringify({ ...JSON.parse(original), target: "wrong" }));
           try { expect(() => run(command, input)).toThrow("Database target"); } finally { writeFileSync(record, original); }
         }
-        expect(run("april-rollback", aprilPath + ".journal").rolledBack).toBe(2);
+        const intact = stateHash(await p.menuItem.findMany(query));
+        for (const [source, alternative] of [["1.json", "1.saved"], ["1.json", "2.json"], ["0.json", "0.saved"]] as const) {
+          const journalRow = join(aprilPath + ".journal", source), renamed = join(aprilPath + ".journal", alternative); renameSync(journalRow, renamed);
+          try { expect(() => run("april-rollback", aprilPath + ".journal")).toThrow("Incomplete April rollback evidence"); } finally { renameSync(renamed, journalRow); }
+          expect(stateHash(await p.menuItem.findMany(query))).toBe(intact);
+        }
+        expect(run("april-rollback", aprilPath + ".journal")).toEqual({ rolledBack: 2, expected: 2 });
         expect(stateHash(await p.menuItem.findMany(query))).toBe(stateHash(before));
         expect(run("catalog-rollback", catalogPath + ".applied.json").rolledBack).toBe(12);
         expect(await p.chainItem.count({ where: { brandId: { in: brands.map(b => b.id) } } })).toBe(9);

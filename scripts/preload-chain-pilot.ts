@@ -60,11 +60,12 @@ async function main() {
     save(path!, doc); report({ matched: rows.length, inspected: items.length, restaurants: new Set(rows.map(r => r.before.restaurantId)).size, hash: doc.hash }); return;
   }
   if (command === "april-rollback") {
-    const info = read<{ target: string }>(join(path!, "started.json"));
+    const info = read<{ target: string; count: number }>(join(path!, "started.json"));
     if (info.target !== target) throw new Error("Database target differs from the journal");
     const files = readdirSync(path!).filter(f => /^\d+\.json$/.test(f)).sort((a, b) => Number(b.split(".")[0]) - Number(a.split(".")[0]));
+    if (info.count < 1 || files.length !== info.count || files.some((name, index) => name !== `${info.count - index - 1}.json`)) throw new Error(`Incomplete April rollback evidence: expected ${info.count} contiguous journals, found ${files.length}; inspect the saved plan before recovery`);
     for (const file of files) await rollbackAprilPatch(p, read<AprilJournal>(join(path!, file)));
-    report({ rolledBack: files.length }); return;
+    report({ rolledBack: files.length, expected: info.count }); return;
   }
   if (command === "catalog-rollback") {
     const doc = read<{ target: string; plan: CatalogPlan; after: Awaited<ReturnType<typeof applyCatalogPlan>> }>(path!);

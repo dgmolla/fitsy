@@ -1,0 +1,9 @@
+PASS tests/db/chainPilotCli.db.test.ts (5.914 s)
+  actual pilot CLI plan, apply and rollback
+    ✓ explicit hashes and target guard writes; complete workflow restores its captured starting state (5732 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       1 passed, 1 total
+Snapshots:   0 total
+Time:        6.056 s
+Ran all test suites within paths "tests/db/chainPilotCli.db.test.ts".

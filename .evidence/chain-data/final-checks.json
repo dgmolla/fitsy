@@ -1,9 +1,9 @@
 {
   "preparedAdapterParent": "9754a6d1caccc203cd1c8c3cf8c8c5f3a43ca5f9",
-  "databaseTests": 816,
+  "databaseTests": 818,
   "skipped": 0,
-  "fullTestLogSha256": "bf7e5c9eddfe64ff156ab8d35bd9a82451b2b8500e40785a524be49ae82fb74d",
-  "build": "passed after final alias/test revision",
+  "fullTestLogSha256": "0897353b8f9495ccae3a9d97f69974376025a50e269b5fb2f83ecac59194cdb7",
+  "build": "passed after incomplete-journal rollback fix",
   "aprilRows": 64,
   "restaurants": 31,
   "newHexConfigurations": 7,
@@ -25,8 +25,9 @@
   "mergedAdapterParent": "1764502ce8228f2c48ed4eca538f4b89317c6bc8",
   "rebaseCodeDiff": "empty; one data commit rebased onto equivalent squash merge",
   "releaseRegistry": "8 pass, 0 blocking failures, 1 preexisting mock advisory, 1 skip",
-  "releaseRegistrySha256": "eaecf871a717ace4df5fcf6b95bf97b6e4f6745df5a865d282ec24ca84ccf755",
-  "mutationScore": 85.38,
-  "reviewFollowup": "Independent literal PDF truth for seven servings, invalid/ambiguous planner rejection tests, exact 64-row distribution, explicit CLI guard errors; unobserved Appetizers alias removed.",
-  "sizeException": "625 lines, override-size label: keep reviewed PDF expectations and guard regression tests with this single reversible data pilot."
+  "releaseRegistrySha256": "e861554f8762fcd7e8153b815743c67c6f94f1a47adfb86b66d240febb1fd5a6",
+  "mutationScore": 86.56,
+  "reviewFollowup": "All PDF tuples and observed aliases pinned; brand/menuKind and cross-brand keys tested; three-item fixture proves two-canary ordering/batching and unchanged third item; exclusive backups, rollback target guards, and incomplete/gapped journals tested. Rollback now refuses incomplete evidence before writes.",
+  "sizeException": "664 lines, override-size label: keep independent PDF expectations and required guard regression tests with the reversible pilot.",
+  "additionalFocusedCli": "Missing-first, missing-last and gapped journal cases passed; count/contiguity guard mutants rejected."
 }
