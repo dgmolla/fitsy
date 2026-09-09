@@ -10,15 +10,17 @@ Two checks hid the existing error before merge:
 ```mermaid
 flowchart LR
   PR[PR verification] --> Tool[Pinned download + checksum]
-  Tool --> Lint[Always run workflow lint in L1]
+  Tool --> Lint[Blocking checks cannot be path-filtered]
   Lint --> Merge[Reviewed merge]
   Merge --> Verify[Check main Verify]
   Merge --> Deploy[Check deployment and smoke]
 ```
 
-The fix groups the redirects, installs actionlint 1.7.12 from a fixed URL with its published SHA-256, and requires both actionlint and ShellCheck in CI. L1 workflow lint no longer has a changed-path filter. The existing docs-only fast path remains; local callers without the tools receive an explicit skipped result.
+The fix groups the redirects and pins actionlint 1.7.12 and ShellCheck 0.11.0 with verified release hashes. Missing workflow tools fail CI. The runner now reserves changed-path filtering for advisory checks: blocking lint, types, boundaries, tests and builds cannot disappear when a different file changes. Layer, run-context and explicit standalone routing remain intact; checks such as migration safety can still report that they have no applicable work.
 
-`actionlint.test.ts` runs the actual check script with controlled external-tool executables. Missing tools must fail CI, lint failures must propagate, and the registry cannot filter away workflow lint on an API-only change. The tests fail against the old check and registry; actual actionlint with ShellCheck fails on the old deployment YAML and passes the fixed YAML.
+The existing docs-only CI fast path remains. Workflow and verification code cannot enter through it because those paths classify above the docs tier. Local callers missing workflow tools receive an explicit skipped result.
+
+`actionlint.test.ts` runs the actual check script and selector with controlled external-tool executables. It isolates both CI triggers and local skips, tests the real workflow-lint registry entry, injects future nonmatching filters into existing blocking checks, and distinguishes new blocking versus advisory checks. The old selector fails seven of these cases; the fixed selector passes all sixteen. Actual actionlint with ShellCheck also fails on the old deployment YAML and passes the fixed YAML.
 
 The incident eval patch under `scripts/verify/evals/incidents/262/` recreates the shipped bad state by reversing this fix. Before/after evidence is in `.evidence/ci-post-merge/`. No API behavior, database contents, deploy permissions or deployment target changes are included.
 

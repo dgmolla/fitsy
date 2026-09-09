@@ -24,18 +24,32 @@ test.each([false, true])("local callers explicitly skip incomplete tools (action
   if (installed) tool("actionlint");
   const result = run("local"); expect(result.status).toBe(2); expect(JSON.parse(result.stdout).status).toBe("skipped");
 });
-test("workflow lint cannot be scoped away for an API-only PR", () => {
+function registryEntry(name: string) {
   const registry = readFileSync(join(root, "scripts/verify/registry.yml"), "utf8");
-  const entry = registry.split("  - name: actionlint\n")[1]!.split("\n  - name:")[0]!;
+  return "  - name: " + name + "\n" + registry.split("  - name: " + name + "\n")[1]!.split("\n  - name:")[0]!;
+}
+function select(entry: string, layers = "0-1") {
   const verify = join(directory, "scripts/verify"); mkdirSync(verify, { recursive: true });
   copyFileSync(join(root, "scripts/verify/run.mjs"), join(verify, "run.mjs"));
-  writeFileSync(join(verify, "registry.yml"), "checks:\n  - name: actionlint\n" + entry);
-  writeFileSync(join(verify, "actionlint.sh"), '#!/bin/sh\nprintf \'{"name":"actionlint","status":"pass"}\\n\'\n');
+  writeFileSync(join(verify, "registry.yml"), "checks:\n" + entry);
+  const script = entry.match(/script: (\S+)/)![1]!;
+  writeFileSync(join(verify, script), '#!/bin/sh\nprintf \'{"status":"pass"}\\n\'\n');
   // The real selector sees an API-only diff; only external git/tool execution is stubbed.
   writeFileSync(join(directory, "git"), '#!/bin/sh\nprintf "apps/api/services/search.ts\\n"\n', { mode: 0o755 });
   symlinkSync("/bin/bash", join(directory, "bash"));
   symlinkSync(join(root, "node_modules"), join(directory, "node_modules"));
-  const result = spawnSync(process.execPath, [join(verify, "run.mjs"), "--layer=0-1", "--runs=ci", "--scope=changed"], { env: { PATH: directory, CI: "" }, encoding: "utf8" });
+  const result = spawnSync(process.execPath, [join(verify, "run.mjs"), "--layer=" + layers, "--runs=ci", "--scope=changed"], { env: { PATH: directory, CI: "" }, encoding: "utf8" });
   expect(result.status).toBe(0);
-  expect(JSON.parse(result.stdout.trim())).toMatchObject({ name: "actionlint", status: "pass", blocking: true });
+  return JSON.parse(result.stdout.trim());
+}
+test("workflow lint cannot be scoped away for an API-only PR", () => {
+  expect(select(registryEntry("actionlint"))).toMatchObject({ name: "actionlint", status: "pass", blocking: true });
+});
+test.each(["lint", "typecheck", "boundaries", "context-freshness", "test", "build"])("a future path filter cannot disable blocking %s", name => {
+  const entry = registryEntry(name), layer = entry.match(/layer: (\d+)/)![1]!;
+  expect(select(entry + '\n    paths: ["unrelated/**"]\n', "0-" + layer)).toMatchObject({ name, status: "pass", blocking: true });
+});
+test.each(["true", "shadow"])("path selection distinguishes blocking=%s for a new check", blocking => {
+  const entry = `  - name: future-check\n    script: future.sh\n    layer: 1\n    blocking: ${blocking}\n    runs: [ci]\n    paths: ["unrelated/**"]\n`;
+  expect(select(entry)).toMatchObject({ name: "future-check", status: blocking === "shadow" ? "skipped" : "pass" });
 });

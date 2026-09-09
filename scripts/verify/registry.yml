@@ -4,8 +4,8 @@
 #        (numbers align with L-layers in docs/engineering/devops/autonomous-shipping.md)
 # blocking: true | shadow   (shadow = reported, never fails the run)
 # runs: local | ci | scheduled   (contexts this check executes in)
-# paths: [] or absent = always; otherwise the check runs only when --scope=changed
-#        finds a changed file matching a glob.
+# paths: advisory (shadow) checks only; select when --scope=changed matches a glob.
+# Blocking checks always run within their layer/context; path filters cannot hide them.
 checks:
   - name: structural
     script: structural.sh
@@ -26,7 +26,6 @@ checks:
     layer: 1
     blocking: true
     runs: [local, ci]
-    paths: ["apps/**", "packages/**", "scripts/**", "eslint.config.mjs"]
     why: ESLint across workspaces.
 
   - name: typecheck
@@ -34,7 +33,6 @@ checks:
     layer: 1
     blocking: true
     runs: [local, ci]
-    paths: ["apps/**", "packages/**", "scripts/**", "prisma/**", "tsconfig.json"]
     why: tsc --noEmit per workspace (api, mobile, shared, scripts).
 
   - name: boundaries
@@ -42,7 +40,6 @@ checks:
     layer: 1
     blocking: true
     runs: [local, ci]
-    paths: ["apps/**", "packages/**", "scripts/**", ".dependency-cruiser.cjs"]
     why: T3 boundaries as code (dependency-cruiser); added in autoship step 3, 2026-09-07.
 
   - name: size-check
@@ -72,7 +69,6 @@ checks:
     layer: 1
     blocking: true
     runs: [local, ci]
-    paths: ["CLAUDE.md", "apps/**/CLAUDE.md", "scripts/CLAUDE.md", "apps/mobile/FEATURE_MAP.md", "package.json", "apps/**", "packages/**", "scripts/**"]
     why: T14 - a stale command or path in a context file misleads every zero-context author; caught a dead root-CLAUDE.md pointer on its first run (2026-09-07).
 
   - name: migration-safety
@@ -80,7 +76,6 @@ checks:
     layer: 1
     blocking: true
     runs: [local, ci]
-    paths: ["prisma/migrations/**"]
     why: T9 - destructive migrations need a down.sql (expand-migrate-contract otherwise); extends structural check 13. Added in autoship step 6, 2026-09-07.
 
   - name: own-code-mocks
@@ -96,7 +91,6 @@ checks:
     layer: 2
     blocking: true
     runs: [local, ci]
-    paths: ["apps/**", "packages/**", "scripts/**", "prisma/**", "package.json"]
     why: api unit tests with coverage gate + scripts tests. --passWithNoTests removed 2026-09-07 (T5).
 
   - name: build
@@ -104,7 +98,6 @@ checks:
     layer: 3
     blocking: true
     runs: [ci]
-    paths: ["apps/api/**", "packages/**", "prisma/**", "package.json", "package-lock.json", "vercel.json"]
     why: Next.js production build catches what tests miss; asserts no compiled output lands in the tree.
 
   - name: api-e2e

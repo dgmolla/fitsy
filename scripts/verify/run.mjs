@@ -7,7 +7,7 @@
  *                               [--runs=local|ci|scheduled] [--only=name,...]
  *
  * Reads scripts/verify/registry.yml, filters checks by layer, run context and
- * (for --scope=changed) path globs against the diff vs origin/main, runs them
+ * (for advisory checks with --scope=changed) path globs against origin/main, runs them
  * in parallel, and prints one JSON result line per check plus a summary.
  * Exit 1 if any BLOCKING check fails; shadow failures are reported only.
  *
@@ -77,7 +77,10 @@ for (const c of registry.checks) {
     if (c.standalone) continue;
     if (c.layer < layerMin || c.layer > layerMax) continue;
     if (c.runs && !c.runs.includes(runsCtx)) continue;
-    if (files && c.paths?.length) {
+    // Blocking checks must not disappear on PRs and reappear on main.
+    // Layers, run context and explicit standalone invocation still apply;
+    // changed-path optimization is reserved for advisory checks.
+    if (c.blocking === "shadow" && files && c.paths?.length) {
       const regs = c.paths.map(globToRegExp);
       if (!files.some((f) => regs.some((r) => r.test(f)))) {
         skipped.push({ name: c.name, status: "skipped", summary: "no matching changed files" });

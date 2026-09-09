@@ -1,0 +1,27 @@
+
+> @fitsy/scripts@0.1.0 test
+> jest --runInBand verify/actionlint.test.ts
+
+PASS verify/actionlint.test.ts
+  ✓ CI rejects missing actionlint via FITSY_RUNS=ci CI= (14 ms)
+  ✓ CI rejects missing actionlint via FITSY_RUNS=local CI=true (9 ms)
+  ✓ CI rejects missing ShellCheck even when actionlint exists (9 ms)
+  ✓ installed tool exit 0 determines the check verdict (379 ms)
+  ✓ installed tool exit 1 determines the check verdict (174 ms)
+  ✓ local callers explicitly skip incomplete tools (actionlint installed: false) (14 ms)
+  ✓ local callers explicitly skip incomplete tools (actionlint installed: true) (12 ms)
+  ✓ workflow lint cannot be scoped away for an API-only PR (340 ms)
+  ✓ a future path filter cannot disable blocking lint (258 ms)
+  ✓ a future path filter cannot disable blocking typecheck (236 ms)
+  ✓ a future path filter cannot disable blocking boundaries (235 ms)
+  ✓ a future path filter cannot disable blocking context-freshness (237 ms)
+  ✓ a future path filter cannot disable blocking test (233 ms)
+  ✓ a future path filter cannot disable blocking build (237 ms)
+  ✓ path selection distinguishes blocking=true for a new check (241 ms)
+  ✓ path selection distinguishes blocking=shadow for a new check (233 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       16 passed, 16 total
+Snapshots:   0 total
+Time:        4.133 s, estimated 6 s
+Ran all test suites matching /verify\/actionlint.test.ts/i.
