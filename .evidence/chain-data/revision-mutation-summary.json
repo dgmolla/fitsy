@@ -1,11 +1,11 @@
 {
-  "score": 86.56,
+  "score": 86.72,
   "files": {
     "apps/api/services/chainPilotPlan.ts": {
       "counts": {
         "NoCoverage": 3,
-        "Killed": 185,
-        "Survived": 20
+        "Killed": 184,
+        "Survived": 21
       },
       "remaining": [
         {
@@ -33,10 +33,22 @@
           "replacement": "a <= b"
         },
         {
-          "line": 23,
-          "kind": "StringLiteral",
+          "line": 9,
+          "kind": "ConditionalExpression",
           "status": "Survived",
-          "replacement": "\"\""
+          "replacement": "true"
+        },
+        {
+          "line": 9,
+          "kind": "ConditionalExpression",
+          "status": "Survived",
+          "replacement": "false"
+        },
+        {
+          "line": 9,
+          "kind": "EqualityOperator",
+          "status": "Survived",
+          "replacement": "a >= b"
         },
         {
           "line": 35,
@@ -75,18 +87,6 @@
           "replacement": "catalog"
         },
         {
-          "line": 52,
-          "kind": "ArrowFunction",
-          "status": "Survived",
-          "replacement": "() => undefined"
-        },
-        {
-          "line": 52,
-          "kind": "BooleanLiteral",
-          "status": "Survived",
-          "replacement": "replacements.has(`${r.brandId}:${r.canonicalKey}`)"
-        },
-        {
           "line": 59,
           "kind": "ConditionalExpression",
           "status": "Survived",
@@ -100,6 +100,18 @@
         },
         {
           "line": 70,
+          "kind": "ObjectLiteral",
+          "status": "Survived",
+          "replacement": "{}"
+        },
+        {
+          "line": 70,
+          "kind": "ObjectLiteral",
+          "status": "Survived",
+          "replacement": "{}"
+        },
+        {
+          "line": 71,
           "kind": "ObjectLiteral",
           "status": "Survived",
           "replacement": "{}"
@@ -138,85 +150,73 @@
           "line": 98,
           "kind": "ConditionalExpression",
           "status": "Survived",
-          "replacement": "true"
-        },
-        {
-          "line": 98,
-          "kind": "EqualityOperator",
-          "status": "Survived",
-          "replacement": "before.review !== null"
+          "replacement": "false"
         }
       ]
     },
     "apps/api/services/chainPilotRollback.ts": {
       "counts": {
         "NoCoverage": 3,
-        "Killed": 34,
-        "Survived": 8
+        "Killed": 38,
+        "Survived": 7
       },
       "remaining": [
         {
-          "line": 14,
+          "line": 18,
           "kind": "ObjectLiteral",
           "status": "NoCoverage",
           "replacement": "{}"
         },
         {
-          "line": 14,
+          "line": 18,
           "kind": "ObjectLiteral",
           "status": "NoCoverage",
           "replacement": "{}"
         },
         {
-          "line": 14,
+          "line": 18,
           "kind": "StringLiteral",
           "status": "NoCoverage",
           "replacement": "\"\""
         },
         {
-          "line": 8,
+          "line": 11,
           "kind": "ConditionalExpression",
           "status": "Survived",
           "replacement": "false"
         },
         {
-          "line": 10,
+          "line": 14,
           "kind": "StringLiteral",
           "status": "Survived",
           "replacement": "``"
         },
         {
-          "line": 11,
+          "line": 15,
           "kind": "ObjectLiteral",
           "status": "Survived",
           "replacement": "{}"
         },
         {
-          "line": 11,
+          "line": 15,
           "kind": "ObjectLiteral",
           "status": "Survived",
           "replacement": "{}"
         },
         {
-          "line": 13,
-          "kind": "ConditionalExpression",
-          "status": "Survived",
-          "replacement": "true"
-        },
-        {
-          "line": 14,
-          "kind": "ConditionalExpression",
-          "status": "Survived",
-          "replacement": "false"
-        },
-        {
-          "line": 16,
+          "line": 18,
           "kind": "ConditionalExpression",
           "status": "Survived",
           "replacement": "false"
         },
         {
           "line": 20,
+          "kind": "ConditionalExpression",
+          "status": "Survived",
+          "replacement": "false"
+        },
+        {
+          "line": 25,
           "kind": "ObjectLiteral",
           "status": "Survived",
           "replacement": "{}"
@@ -224,5 +224,5 @@
       ]
     }
   },
-  "limits": "Focused planner/rollback mutation; CLI has targeted guard mutations, not exhaustive mutation or concurrent-writer stress coverage."
+  "limits": "Focused planner/rollback mutation; CLI has targeted batch, journal and atomicity mutations, not exhaustive mutation or concurrent-writer stress coverage."
 }

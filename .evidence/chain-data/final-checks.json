@@ -2,8 +2,8 @@
   "preparedAdapterParent": "9754a6d1caccc203cd1c8c3cf8c8c5f3a43ca5f9",
   "databaseTests": 818,
   "skipped": 0,
-  "fullTestLogSha256": "0897353b8f9495ccae3a9d97f69974376025a50e269b5fb2f83ecac59194cdb7",
-  "build": "passed after incomplete-journal rollback fix",
+  "fullTestLogSha256": "f256a949c6e4188fa00401100445d0311af044b0f248e21779d8688bb49abad4",
+  "build": "passed after atomic April rollback",
   "aprilRows": 64,
   "restaurants": 31,
   "newHexConfigurations": 7,
@@ -25,9 +25,10 @@
   "mergedAdapterParent": "1764502ce8228f2c48ed4eca538f4b89317c6bc8",
   "rebaseCodeDiff": "empty; one data commit rebased onto equivalent squash merge",
   "releaseRegistry": "8 pass, 0 blocking failures, 1 preexisting mock advisory, 1 skip",
-  "releaseRegistrySha256": "e861554f8762fcd7e8153b815743c67c6f94f1a47adfb86b66d240febb1fd5a6",
-  "mutationScore": 86.56,
+  "releaseRegistrySha256": "dad5c289b1947c3d5d89b4c34324305b551d79fc033e8db226ea723213ba52f6",
+  "mutationScore": 86.72,
   "reviewFollowup": "All PDF tuples and observed aliases pinned; brand/menuKind and cross-brand keys tested; three-item fixture proves two-canary ordering/batching and unchanged third item; exclusive backups, rollback target guards, and incomplete/gapped journals tested. Rollback now refuses incomplete evidence before writes.",
-  "sizeException": "664 lines, override-size label: keep independent PDF expectations and required guard regression tests with the reversible pilot.",
-  "additionalFocusedCli": "Missing-first, missing-last and gapped journal cases passed; count/contiguity guard mutants rejected."
+  "sizeException": "677 lines, override-size label: keep required safety implementation and independent regression proof with the reversible pilot.",
+  "additionalFocusedCli": "Missing-first, missing-last and gapped journal cases passed; count/contiguity guard mutants rejected.",
+  "atomicRollback": "One serializable transaction per journal batch; edited last-to-rollback row leaves all rows unchanged. Deliberately reverting the CLI to per-row transactions fails this state assertion."
 }

@@ -12,6 +12,7 @@ test.each(Object.entries(chainPilotTruth))("published facts for %s agree with th
   expect(chainPilot.changes.find(row => row.canonicalKey === key)?.facts).toEqual(expected);
 });
 test("every approved contextual alias has a captured menu observation", () => {
+  expect(chainPilot.changes.map(row => row.canonicalKey).sort()).toEqual(Object.keys(chainPilotTruth).sort());
   const observed = new Set([...capturedApril.map(item => item.canonicalKey + ":" + chainMenuFingerprint({ name: item.name, section: item.section ?? "", description: item.description ?? "" })), ...capturedUE.flatMap(row => row.items.map(({ item }) => row.key + ":" + chainMenuFingerprint(item)))]);
   const aliases = new Set(chainPilot.changes.flatMap(row => row.aliases.map(alias => row.canonicalKey + ":" + chainMenuFingerprint(alias))));
   expect(aliases.size).toBe(13); expect(aliases).toEqual(observed);

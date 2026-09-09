@@ -6,7 +6,7 @@ import { chainPilot } from "../apps/api/services/chainPilotData";
 import { planChainPilot, applyCatalogPlan, rollbackCatalogPlan, stateHash, type CatalogPlan } from "../apps/api/services/chainPilotPlan";
 import { applyAprilChainMatch, aprilMenuIdentity, officialMacro } from "../apps/api/services/chainServing";
 import { buildChainMatcher, type ApprovedChainRow } from "../apps/api/services/chainCatalog";
-import { rollbackAprilPatch, type AprilSnapshot, type AprilJournal } from "../apps/api/services/chainPilotRollback";
+import { rollbackAprilBatch, type AprilSnapshot, type AprilJournal } from "../apps/api/services/chainPilotRollback";
 import { pickWinningEstimate } from "../packages/shared/src/utils/macroProvenance";
 
 const [command, path, expectedHash, ...options] = process.argv.slice(2);
@@ -64,7 +64,7 @@ async function main() {
     if (info.target !== target) throw new Error("Database target differs from the journal");
     const files = readdirSync(path!).filter(f => /^\d+\.json$/.test(f)).sort((a, b) => Number(b.split(".")[0]) - Number(a.split(".")[0]));
     if (info.count < 1 || files.length !== info.count || files.some((name, index) => name !== `${info.count - index - 1}.json`)) throw new Error(`Incomplete April rollback evidence: expected ${info.count} contiguous journals, found ${files.length}; inspect the saved plan before recovery`);
-    for (const file of files) await rollbackAprilPatch(p, read<AprilJournal>(join(path!, file)));
+    await rollbackAprilBatch(p, files.map(file => read<AprilJournal>(join(path!, file))));
     report({ rolledBack: files.length, expected: info.count }); return;
   }
   if (command === "catalog-rollback") {

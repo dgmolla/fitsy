@@ -48,7 +48,7 @@ suite("actual pilot CLI plan, apply and rollback", () => {
         expect(() => run("catalog-apply", catalogPath, plan.hash)).toThrow("EEXIST");
         const april = run("april-plan", aprilPath); expect(april.matched).toBe(3);
         expect(JSON.parse(readFileSync(aprilPath, "utf8")).rows.map((row: { approved: { canonicalKey: string } }) => row.approved.canonicalKey)).toEqual(["chicken-plate", "gyudon-beef-side", "steak-plate"]);
-        expect(() => run("april-apply", aprilPath, april.hash, "--limit=0")).toThrow("Invalid apply limit");
+        for (const limit of ["0", "99", "abc", "1.5"]) expect(() => run("april-apply", aprilPath, april.hash, "--limit=" + limit)).toThrow("Invalid apply limit");
         expect(run("april-apply", aprilPath, april.hash, "--limit=2")).toMatchObject({ applied: 2, remainingInPlan: 1 });
         const after = await p.menuItem.findMany(query), canary = before.find(item => item.name === "Chicken Plate")!;
         expect(after.filter(m => m.macroEstimates.some(e => e.source === "official")).map(m => m.calories).sort((a, b) => a! - b!)).toEqual([310, 820]);
@@ -70,6 +70,13 @@ suite("actual pilot CLI plan, apply and rollback", () => {
           try { expect(() => run("april-rollback", aprilPath + ".journal")).toThrow("Incomplete April rollback evidence"); } finally { renameSync(renamed, journalRow); }
           expect(stateHash(await p.menuItem.findMany(query))).toBe(intact);
         }
+        // The edited first canary rolls back last: refusing it must also undo the preceding rollback.
+        const beforeEdit = await p.menuItem.findUniqueOrThrow({ where: { id: canary.id } });
+        await p.menuItem.update({ where: { id: canary.id }, data: { name: "Later edit" } });
+        const edited = stateHash(await p.menuItem.findMany(query));
+        expect(() => run("april-rollback", aprilPath + ".journal")).toThrow("April row changed after apply");
+        expect(stateHash(await p.menuItem.findMany(query))).toBe(edited);
+        await p.menuItem.update({ where: { id: canary.id }, data: { name: beforeEdit.name, updatedAt: beforeEdit.updatedAt } });
         expect(run("april-rollback", aprilPath + ".journal")).toEqual({ rolledBack: 2, expected: 2 });
         expect(stateHash(await p.menuItem.findMany(query))).toBe(stateHash(before));
         expect(run("catalog-rollback", catalogPath + ".applied.json").rolledBack).toBe(12);
