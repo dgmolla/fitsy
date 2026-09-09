@@ -1,0 +1,38 @@
+{
+  "native_route_tests": 13,
+  "before": {
+    "passed": 3,
+    "failed": 7
+  },
+  "after": {
+    "passed": 13,
+    "failed": 0
+  },
+  "build": "pass",
+  "registry": "All checks pass; generated Prisma refreshed after main rebase, final types/build pass",
+  "mobile_retry": {
+    "mode": "runInBand",
+    "suites": 27,
+    "tests": 264,
+    "result": "pass"
+  },
+  "database": "isolated PostGIS 16 fixture, 2 restaurants / 251 items each",
+  "production_writes": false,
+  "schema_migration": false,
+  "additional_regressions": [
+    "cursor underflow rejects before SQL",
+    "missing provenance consistent with search LOW"
+  ],
+  "direct_db_tests": 4,
+  "mutation_score": 93.28,
+  "production_readonly_rehearsal": {
+    "distinct_restaurants": 60,
+    "search_pages": 3,
+    "search_detail_agreements": 5,
+    "search_ms": [
+      460,
+      268,
+      183
+    ]
+  }
+}

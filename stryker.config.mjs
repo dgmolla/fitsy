@@ -13,6 +13,7 @@ export default {
     enableFindRelatedTests: false,
   },
   mutate: [
+    "apps/api/lib/restaurantMenuService.ts",
     "apps/api/lib/macroScoring.ts",
     "apps/api/lib/macroTargetParams.ts",
     "apps/api/lib/macroScoreSql.ts",

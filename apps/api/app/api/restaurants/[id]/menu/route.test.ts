@@ -121,7 +121,7 @@ describe("GET /api/restaurants/[id]/menu — success", () => {
     const body = await res.json();
     expect(body).toEqual({ data: SAMPLE_MENU });
     expect(body.data.menuItems).toHaveLength(5);
-    expect(mockGetRestaurantMenu).toHaveBeenCalledWith("rest-1");
+    expect(mockGetRestaurantMenu).toHaveBeenCalledWith("rest-1", { targets: {}, limit: 200 });
   });
 });
 

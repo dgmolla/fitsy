@@ -2,7 +2,9 @@ import { Prisma, PrismaClient } from "@prisma/client";
 import { hasTargets, type MacroTargets } from "./macroScoring";
 import { macroScoreSumSql } from "./macroScoreSql";
 import { macroWinnerSqlOrder } from "@fitsy/shared";
-import { pickWinningEstimate, type RestaurantResult, type MenuResponse } from "@fitsy/shared";
+import { type RestaurantResult, type MenuResponse } from "@fitsy/shared";
+
+import { getMenuPage, type MenuPageOptions } from "./restaurantMenuService";
 
 // ─── Prisma singleton ─────────────────────────────────────────────────────────
 
@@ -462,77 +464,7 @@ export async function findNearbyRestaurants(
 
 export async function getRestaurantMenu(
   restaurantId: string,
+  options: MenuPageOptions = {},
 ): Promise<MenuResponse | null> {
-  // Macros (calories/proteinG/carbsG/fatG) live on MenuItem itself.
-  // MacroEstimate stays as the audit log — we still pull confidence,
-  // hadPhoto, estimatedAt, and source from it for the menu detail screen.
-  // With provenance, an item can have multiple estimates (one per source);
-  // we fetch all and use pickWinningEstimate() to surface the right one.
-  const restaurant = await prisma.restaurant.findUnique({
-    where: { id: restaurantId },
-    include: {
-      menuItems: {
-        orderBy: { name: "asc" },
-        // Safety bound: menus are expected well under 200 items; this cap
-        // prevents unbounded reads if a restaurant has malformed data.
-        take: 200,
-        include: {
-          macroEstimates: {
-            select: {
-              confidence: true,
-              hadPhoto: true,
-              estimatedAt: true,
-              source: true,
-            },
-          },
-        },
-      },
-    },
-  });
-
-  if (!restaurant) return null;
-
-  return {
-    restaurantId: restaurant.id,
-    restaurantName: restaurant.name,
-    ...(restaurant.rating !== null ? { rating: restaurant.rating } : {}),
-    ...(restaurant.userRatingCount !== null ? { userRatingCount: restaurant.userRatingCount } : {}),
-    // Full, unredacted menu — the route layer (not this service) truncates
-    // and sets `locked: true` for callers who aren't entitled, mirroring how
-    // auth is enforced at the route rather than the data-access layer.
-    locked: false,
-    totalItemCount: restaurant.menuItems.length,
-    menuItems: restaurant.menuItems.map((item) => {
-      // Pick the winning estimate by trust order (merchant > fatsecret > ffn
-      // > haiku > llm/unknown) so confidence/hadPhoto/estimatedAt match the
-      // macros that were denormalized onto the MenuItem.
-      const estimate = pickWinningEstimate(item.macroEstimates);
-      const hasMacros =
-        item.calories !== null &&
-        item.proteinG !== null &&
-        item.carbsG !== null &&
-        item.fatG !== null;
-      return {
-        id: item.id,
-        name: item.name,
-        ...(item.description !== null
-          ? { description: item.description }
-          : {}),
-        ...(item.category !== null ? { category: item.category } : {}),
-        ...(item.price !== null ? { price: item.price } : {}),
-        macros:
-          hasMacros && estimate
-            ? {
-                calories: item.calories!,
-                proteinG: item.proteinG!,
-                carbsG: item.carbsG!,
-                fatG: item.fatG!,
-                confidence: estimate.confidence,
-                hadPhoto: estimate.hadPhoto,
-                estimatedAt: estimate.estimatedAt.toISOString(),
-              }
-            : null,
-      };
-    }),
-  };
+  return getMenuPage(prisma, restaurantId, options);
 }

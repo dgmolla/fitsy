@@ -1,0 +1,138 @@
+{"event":"search_query","restaurants":20,"hasTargets":true,"totalMs":24,"paginated":false}
+[api-emitter] AXIOM_TOKEN not set — events will not be sent
+{"event":"search_query","restaurants":20,"hasTargets":true,"totalMs":2,"paginated":false}
+✔ real authenticated search accepts equivalent aliases and keeps a valid wire contract (722.93675ms)
+✔ invalid targets return 400 through the handler (5.521375ms)
+{"event":"search_query","restaurants":20,"hasTargets":true,"totalMs":3,"paginated":false}
+✔ unauthenticated search still strips every best match (3.449292ms)
+{"event":"search_query","restaurants":2,"hasTargets":true,"totalMs":3,"paginated":false}
+✖ search and detail agree beyond the old 200-item alphabetical cap, with winning metadata (23.255416ms)
+✖ all 251 IDs remain reachable exactly once, including with smaller pages (40.663458ms)
+✖ cursor is bound to restaurant, target values and selection (59.837833ms)
+✖ selection pins the searched item without losing or repeating rows (9.446041ms)
+✖ invalid targets and page sizes return 400 on detail too (7.541625ms)
+✖ locked callers cannot enumerate dishes using targets, selection, page size or cursors (7.05425ms)
+✖ zero targets agree; empty pages keep the real total; unknown restaurants return 404 (53.723125ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 3
+ℹ fail 7
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 32572.939459
+
+✖ failing tests:
+
+test at apps/api/tests/db/search-route.integration.ts:2:5664
+✖ search and detail agree beyond the old 200-item alphabetical cap, with winning metadata (23.255416ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+
+  + '037a4a14-3ea5-4d5a-be6e-4ccf59221b8f-001'
+  - '037a4a14-3ea5-4d5a-be6e-4ccf59221b8f-251'
+
+      at TestContext.<anonymous> (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-serving-menu/apps/api/tests/db/search-route.integration.ts:106:14)
+      at async Test.run (node:internal/test_runner/test:1069:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:752:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '037a4a14-3ea5-4d5a-be6e-4ccf59221b8f-001',
+    expected: '037a4a14-3ea5-4d5a-be6e-4ccf59221b8f-251',
+    operator: 'strictEqual'
+  }
+
+test at apps/api/tests/db/search-route.integration.ts:2:6682
+✖ all 251 IDs remain reachable exactly once, including with smaller pages (40.663458ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  200 !== 251
+
+      at TestContext.<anonymous> (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-serving-menu/apps/api/tests/db/search-route.integration.ts:122:12)
+      at async Test.run (node:internal/test_runner/test:1069:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:752:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 200,
+    expected: 251,
+    operator: 'strictEqual'
+  }
+
+test at apps/api/tests/db/search-route.integration.ts:2:7352
+✖ cursor is bound to restaurant, target values and selection (59.837833ms)
+  AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+
+    getMenu(id, `${targetQuery}&selectedItemId=${chosen}&pageSize=1&cursor=${first.nextCursor}`)
+
+      at TestContext.<anonymous> (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-serving-menu/apps/api/tests/db/search-route.integration.ts:135:10)
+      at async Test.run (node:internal/test_runner/test:1069:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:752:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: true,
+    operator: '=='
+  }
+
+test at apps/api/tests/db/search-route.integration.ts:2:7992
+✖ selection pins the searched item without losing or repeating rows (9.446041ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+
+  + '037a4a14-3ea5-4d5a-be6e-4ccf59221b8f-001'
+  - '037a4a14-3ea5-4d5a-be6e-4ccf59221b8f-200'
+
+      at TestContext.<anonymous> (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-serving-menu/apps/api/tests/db/search-route.integration.ts:147:10)
+      at async Test.run (node:internal/test_runner/test:1069:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:752:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '037a4a14-3ea5-4d5a-be6e-4ccf59221b8f-001',
+    expected: '037a4a14-3ea5-4d5a-be6e-4ccf59221b8f-200',
+    operator: 'strictEqual'
+  }
+
+test at apps/api/tests/db/search-route.integration.ts:2:8528
+✖ invalid targets and page sizes return 400 on detail too (7.541625ms)
+  AssertionError [ERR_ASSERTION]: protein=NaN
+
+  200 !== 400
+
+      at TestContext.<anonymous> (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-serving-menu/apps/api/tests/db/search-route.integration.ts:156:12)
+      at async Test.run (node:internal/test_runner/test:1069:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:752:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 200,
+    expected: 400,
+    operator: 'strictEqual'
+  }
+
+test at apps/api/tests/db/search-route.integration.ts:2:8848
+✖ locked callers cannot enumerate dishes using targets, selection, page size or cursors (7.05425ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  200 !== 251
+
+      at TestContext.<anonymous> (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-serving-menu/apps/api/tests/db/search-route.integration.ts:165:10)
+      at async Test.run (node:internal/test_runner/test:1069:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:752:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 200,
+    expected: 251,
+    operator: 'strictEqual'
+  }
+
+test at apps/api/tests/db/search-route.integration.ts:2:9741
+✖ zero targets agree; empty pages keep the real total; unknown restaurants return 404 (53.723125ms)
+  AssertionError [ERR_ASSERTION]: undefined == true
+      at TestContext.<anonymous> (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-serving-menu/apps/api/tests/db/search-route.integration.ts:180:10)
+      at async Test.run (node:internal/test_runner/test:1069:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:752:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: true,
+    operator: '=='
+  }

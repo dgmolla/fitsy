@@ -1,0 +1,21 @@
+{
+  "searches": [
+    {
+      "page": 1,
+      "rows": 20,
+      "ms": 460
+    },
+    {
+      "page": 2,
+      "rows": 20,
+      "ms": 268
+    },
+    {
+      "page": 3,
+      "rows": 20,
+      "ms": 183
+    }
+  ],
+  "detailChecks": 5,
+  "readonly": true
+}

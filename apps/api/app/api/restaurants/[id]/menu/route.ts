@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getRestaurantMenu } from "@/lib/restaurantService";
 import { optionalSubscription } from "@/lib/subscription";
 import type { MenuApiResponse } from "@fitsy/shared";
+import { parseMacroTargetParams } from "@/lib/macroTargetParams";
 
 // Free-sample size for an unentitled caller — enough to feel like a real
 // look at the menu (with real macro numbers, never fake precision) without
@@ -20,9 +21,26 @@ export async function GET(
   const { entitled } = await optionalSubscription(request);
 
   const { id } = await params;
+  const paramsQuery = request.nextUrl.searchParams;
+  const pageSizeRaw = paramsQuery.get("pageSize");
+  const pageSize = pageSizeRaw === null ? 200 : Number(pageSizeRaw);
+  if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 250) {
+    return NextResponse.json({ error: "Invalid page size" } as never, { status: 400 });
+  }
+  let targets: ReturnType<typeof parseMacroTargetParams>;
+  try {
+    targets = parseMacroTargetParams(paramsQuery);
+  } catch {
+    return NextResponse.json({ error: "Invalid macro target" } as never, { status: 400 });
+  }
 
   try {
-    const menu = await getRestaurantMenu(id);
+    const cursor = entitled ? paramsQuery.get("cursor") : null;
+    const selectedItemId = entitled ? paramsQuery.get("selectedItemId") : null;
+    // A free sample must be stable: selection and target changes cannot be
+    // used as alternate pagination to enumerate the rest of the paid menu.
+    const menu = await getRestaurantMenu(id, { targets: entitled ? targets : {}, limit: entitled ? pageSize : FREE_SAMPLE_ITEM_COUNT,
+      ...(cursor ? { cursor } : {}), ...(selectedItemId ? { selectedItemId } : {}) });
 
     if (!menu) {
       return NextResponse.json(
@@ -33,10 +51,11 @@ export async function GET(
 
     const data = entitled
       ? menu
-      : { ...menu, locked: true, menuItems: menu.menuItems.slice(0, FREE_SAMPLE_ITEM_COUNT) };
+      : { ...menu, locked: true, nextCursor: null, menuItems: menu.menuItems.slice(0, FREE_SAMPLE_ITEM_COUNT) };
 
     return NextResponse.json({ data }, { status: 200 });
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message === "Invalid menu cursor") return NextResponse.json({ error: error.message } as never, { status: 400 });
     return NextResponse.json(
       { error: "Internal server error" } as never,
       { status: 500 },

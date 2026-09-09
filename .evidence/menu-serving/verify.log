@@ -1,0 +1,122 @@
+
+> fitsy@0.1.0 verify
+> node scripts/verify/run.mjs --layer=0-2 --scope=changed
+
+{"name":"structural","status":"pass","summary":"all structural tests passed","fix":"","duration_ms":25995,"blocking":true}
+{"name":"secrets","status":"pass","summary":"no secrets, env files, or build output in diff","fix":"","duration_ms":536,"blocking":true}
+{"name":"lint","status":"pass","summary":"eslint clean","fix":"","duration_ms":26139,"blocking":true}
+{"name":"typecheck","status":"pass","summary":"tsc clean in all workspaces","fix":"","duration_ms":213898,"blocking":true}
+{"name":"boundaries","status":"pass","summary":"no dependency violations","fix":"","duration_ms":11500,"blocking":true}
+{"name":"context-freshness","status":"pass","summary":"context files reference only real commands and paths","fix":"","duration_ms":334,"blocking":true}
+{"name":"own-code-mocks","status":"fail","summary":"46 own-code jest.mock() calls in apps/api tests","fix":"test against the DB container instead of mocking our own code; the external boundary (services/*, lib/supabase) stays mockable","duration_ms":145,"blocking":false}
+{"name":"test","status":"fail","summary":"tests failed in: mobile","fix":"run the failing workspace suite locally (npm run test:coverage -w apps/api or npm test -w @fitsy/scripts) and fix","duration_ms":213433,"blocking":true}
+{"name":"actionlint","status":"skipped","summary":"no matching changed files"}
+{"name":"migration-safety","status":"skipped","summary":"no matching changed files"}
+
+--- own-code-mocks output ---
+apps/api/app/api/saved-items/route.test.ts:9:jest.mock("@/lib/auth", () => ({
+apps/api/app/api/saved-items/route.test.ts:13:jest.mock("@/lib/restaurantService", () => ({
+apps/api/app/api/saved-items/[id]/route.test.ts:7:jest.mock("@/lib/auth", () => ({
+apps/api/app/api/saved-items/[id]/route.test.ts:11:jest.mock("@/lib/restaurantService", () => ({
+apps/api/app/api/auth/apple/route.test.ts:7:jest.mock("@/lib/restaurantService", () => {
+apps/api/app/api/auth/apple/route.test.ts:23:jest.mock("@/lib/rateLimit", () => ({
+apps/api/app/api/auth/google/route.test.ts:7:jest.mock("@/lib/restaurantService", () => {
+apps/api/app/api/auth/google/route.test.ts:23:jest.mock("@/lib/rateLimit", () => ({
+apps/api/app/api/auth/register/route.test.ts:8:jest.mock("@/lib/restaurantService", () => ({
+apps/api/app/api/auth/register/route.test.ts:16:jest.mock("@/lib/rateLimit", () => ({
+
+
+--- test output ---
+es to find leaks. Active timers can also cause this, ensure that .unref() was called on them.
+
+Summary of all failing tests
+FAIL lib/usePurchases.sync.test.tsx (149.803 s)
+  ● sign-in › ignores the SIGNED_IN that session recovery re-emits for the user boot already resolved
+
+    thrown: "Exceeded timeout of 5000 ms for a test.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+      162 |   });
+      163 |
+    > 164 |   it('ignores the SIGNED_IN that session recovery re-emits for the user boot already resolved', async () => {
+          |   ^
+      165 |     mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null });
+      166 |     const { result, seen } = renderProviderTracking();
+      167 |     await waitFor(() => expect(result.current.entitled).toBe(true));
+
+      at it (lib/usePurchases.sync.test.tsx:164:3)
+      at Object.describe (lib/usePurchases.sync.test.tsx:73:1)
+
+FAIL lib/usePurchases.purchase.test.tsx (149.682 s)
+  ● purchase / restore › exposes storeConfirmed while inside the grace window only
+
+    thrown: "Exceeded timeout of 5000 ms for a test.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+      159 |   });
+      160 |
+    > 161 |   it('exposes storeConfirmed while inside the grace window only', async () => {
+          |   ^
+      162 |     const { result } = renderProvider();
+      163 |     await waitFor(() => expect(result.current.ready).toBe(true));
+      164 |     expect(result.current.storeConfirmed).toBe(false);
+
+      at it (lib/usePurchases.purchase.test.tsx:161:3)
+      at Object.describe (lib/usePurchases.purchase.test.tsx:43:1)
+
+  ● purchase / restore › does not ask the server when the store says no
+
+    expect(jest.fn()).not.toHaveBeenCalled()
+
+    Expected number of calls: 0
+    Received number of calls: 1
+
+    1: "mismatch"
+
+      183 |     await act(async () => { got = await result.current.purchase({} as never, 'test'); });
+      184 |     expect(got).toBe(false);
+    > 185 |     expect(mockApi.syncSubscription).not.toHaveBeenCalled();
+          |                                          ^
+      186 |   });
+      187 |
+      188 |   it('exposes the App Store manage sheet through the context (screens never touch the native seam)', async () => {
+
+      at Object.toHaveBeenCalled (lib/usePurchases.purchase.test.tsx:185:42)
+      at asyncGeneratorStep (../../node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:17)
+      at _next (../../node_modules/@babel/runtime/helpers/asyncToGenerator.js:17:9)
+
+FAIL lib/useLocation.test.ts (150.364 s)
+  ● useLocation › falls back to Silver Lake (timeout) when fresh GPS exceeds 3s
+
+    thrown: "Exceeded timeout of 5000 ms for a test.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+      138 |   });
+      139 |
+    > 140 |   it('falls back to Silver Lake (timeout) when fresh GPS exceeds 3s', async () => {
+          |   ^
+      141 |     jest.useFakeTimers();
+      142 |     mockRequestPermissions.mockResolvedValue({ status: 'granted' });
+      143 |     mockGetLastKnown.mockResolvedValue(null);
+
+      at it (lib/useLocation.test.ts:140:3)
+      at Object.describe (lib/useLocation.test.ts:58:1)
+
+
+Test Suites: 3 failed, 24 passed, 27 total
+Tests:       4 failed, 260 passed, 264 total
+Snapshots:   0 total
+Time:        173.906 s
+Ran all test suites in 3 projects.
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-serving-menu/apps/mobile
+npm error workspace @fitsy/mobile@0.1.0
+npm error location /Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-serving-menu/apps/mobile
+npm error command failed
+npm error command sh -c jest
+
+
+verify: 6 pass, 1 fail, 1 shadow-fail (own-code-mocks), 2 skipped [layers 0-2, scope changed, runs local]
+FAIL test: tests failed in: mobile
+  fix: run the failing workspace suite locally (npm run test:coverage -w apps/api or npm test -w @fitsy/scripts) and fix
