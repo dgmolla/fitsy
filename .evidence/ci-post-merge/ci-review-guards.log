@@ -1,0 +1,19 @@
+
+> @fitsy/scripts@0.1.0 test
+> jest --runInBand verify/actionlint.test.ts
+
+PASS verify/actionlint.test.ts
+  ✓ CI rejects missing actionlint via FITSY_RUNS=ci CI= (18 ms)
+  ✓ CI rejects missing actionlint via FITSY_RUNS=local CI=true (21 ms)
+  ✓ CI rejects missing ShellCheck even when actionlint exists (10 ms)
+  ✓ installed tool exit 0 determines the check verdict (292 ms)
+  ✓ installed tool exit 1 determines the check verdict (186 ms)
+  ✓ local callers explicitly skip incomplete tools (actionlint installed: false) (16 ms)
+  ✓ local callers explicitly skip incomplete tools (actionlint installed: true) (12 ms)
+  ✓ workflow lint cannot be scoped away for an API-only PR (386 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       8 passed, 8 total
+Snapshots:   0 total
+Time:        2.361 s
+Ran all test suites matching /verify\/actionlint.test.ts/i.

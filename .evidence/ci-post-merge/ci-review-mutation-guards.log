@@ -1,0 +1,4 @@
+standalone disables lint: CAUGHT
+layer excludes lint: CAUGHT
+FITSY_RUNS gate deleted: CAUGHT
+local gate forced to CI: CAUGHT
