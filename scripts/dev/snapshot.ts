@@ -64,7 +64,11 @@ async function main(): Promise<void> {
       for (let i = 0; i < rows.length; i += size) await write(rows.slice(i, i + size));
     };
     await chunk(brands, (b) => dst.brand.createMany({ data: b, skipDuplicates: true }));
-    await chunk(chainItems, (b) => dst.chainItem.createMany({ data: b, skipDuplicates: true }));
+    await chunk(chainItems.map(row => {
+      if ("review" in row) return { ...row, review: row.review === null ? Prisma.DbNull : row.review as Prisma.InputJsonValue };
+      // The pre-review schema has no nullable JSON column to convert.
+      return row as Prisma.ChainItemCreateManyInput;
+    }), (b) => dst.chainItem.createMany({ data: b, skipDuplicates: true }));
     await chunk(restaurants, (b) => dst.restaurant.createMany({ data: b, skipDuplicates: true }));
     await chunk(menuItems, (b) => dst.menuItem.createMany({ data: b, skipDuplicates: true }));
     await chunk(

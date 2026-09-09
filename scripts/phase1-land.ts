@@ -18,13 +18,10 @@
 import { PrismaClient } from "@prisma/client";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import { loadVerifiedAliases } from "./phase1-alias-input";
 
-// aliases: prefer the VERIFIED, high-precision set (phase1-verify-aliases.ts) so what lands is
-// safe to backfill; fall back to the raw aligner output only if verification hasn't run.
-const ALIAS_PATH = existsSync("scripts/phase1-out/aliases-verified.json") ? "scripts/phase1-out/aliases-verified.json"
-  : existsSync("scripts/phase1-out/aliases.json") ? "scripts/phase1-out/aliases.json" : null;
-const ALIASES: Record<string, Record<string, string[]>> = ALIAS_PATH ? JSON.parse(readFileSync(ALIAS_PATH, "utf8")) : {};
-if (ALIAS_PATH) console.log(`(aliases from ${ALIAS_PATH})`);
+// These legacy name aliases remain candidates, not ChainItem.review approval.
+const ALIASES = loadVerifiedAliases("scripts/phase1-out");
 
 const RUN_DIR = "scripts/phase1-out/run";
 const APPLY = process.argv.includes("--apply");
@@ -77,7 +74,7 @@ async function main() {
         await client.chainItem.upsert({
           where: { brandId_canonicalKey: { brandId: o.brandId, canonicalKey: o.canonicalKey } },
           create: { brandId: o.brandId, canonicalKey: o.canonicalKey, aliases: o.aliases, calories: Math.round(o.calories), proteinG: o.proteinG, carbsG: o.carbsG, fatG: o.fatG, servingSize: o.servingSize, source: o.source, confidence: o.confidence, officialUrl: o.officialUrl, retrievedAt: new Date() },
-          update: { aliases: o.aliases, calories: Math.round(o.calories), proteinG: o.proteinG, carbsG: o.carbsG, fatG: o.fatG, source: o.source, confidence: o.confidence, officialUrl: o.officialUrl, retrievedAt: new Date() },
+          update: { servingSize: o.servingSize, aliases: o.aliases, calories: Math.round(o.calories), proteinG: o.proteinG, carbsG: o.carbsG, fatG: o.fatG, source: o.source, confidence: o.confidence, officialUrl: o.officialUrl, retrievedAt: new Date() },
         });
         n++;
       }
