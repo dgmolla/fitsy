@@ -1,0 +1,56 @@
+
+> @fitsy/scripts@0.1.0 test
+> jest --runInBand phase1-land-payload.test.ts
+
+FAIL ./phase1-land-payload.test.ts
+  ✕ real extraction rows whitelist Prisma columns and replace serving facts on re-landing (3 ms)
+  ✓ a corrected unknown serving size replaces a stale size
+  ✓ unknown calories remain null on both create and update
+
+  ● real extraction rows whitelist Prisma columns and replace serving facts on re-landing
+
+    expect(received).toStrictEqual(expected) // deep equality
+
+    - Expected  - 0
+    + Received  + 3
+
+      Object {
+        "aliases": Array [
+          "chicken-plate",
+        ],
+    +   "brandSlug": "waba-grill",
+        "calories": 820,
+        "carbsG": 110,
+        "confidence": "HIGH",
+        "fatG": 15,
+    +   "name": "Chicken Plate",
+        "officialUrl": "https://example.com/nutrition.pdf",
+        "proteinG": 54,
+        "retrievedAt": Any<Date>,
+        "servingSize": "1 standard plate",
+        "source": "official",
+    +   "valid": true,
+      }
+
+       6 |   const result = chainLandingUpsert(extraction);
+       7 |   expect(result.where).toEqual({ brandId_canonicalKey: { brandId: "waba", canonicalKey: "chicken-plate" } });
+    >  8 |   expect(result.update).toStrictEqual({ aliases: facts.aliases, servingSize: "1 standard plate", calories: 820, proteinG: 54,
+         |                         ^
+       9 |     carbsG: 110, fatG: 15, source: "official", confidence: "HIGH", officialUrl: facts.officialUrl, retrievedAt: expect.any(Date) });
+      10 |   expect(result.create).toStrictEqual({ ...result.update, brandId: "waba", canonicalKey: "chicken-plate" });
+      11 | });
+
+      at Object.<anonymous> (phase1-land-payload.test.ts:8:25)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 2 passed, 3 total
+Snapshots:   0 total
+Time:        1.3 s
+Ran all test suites matching /phase1-land-payload.test.ts/i.
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-alias/scripts
+npm error workspace @fitsy/scripts@0.1.0
+npm error location /Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-alias/scripts
+npm error command failed
+npm error command sh -c jest --runInBand phase1-land-payload.test.ts

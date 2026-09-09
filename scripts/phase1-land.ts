@@ -5,7 +5,8 @@
  *   - Reads scripts/phase1-out/run/_coverage.json → official brands.
  *   - Loads each official brand's row file, keeps `valid` rows.
  *   - Resolves Brand.id by slug (read-only DB).
- *   - Writes the consolidated set to scripts/phase1-out/chainitems.json (always).
+ *   - Requires the verifier's aliases-high.json for both dry runs and DB landing.
+ *   - Writes the consolidated set to scripts/phase1-out/chainitems.json after validation.
  *   - With --apply: upserts ChainItem on (brandId, canonicalKey). 🔴 GATED — needs human go
  *     AND the ChainItem model present in prisma/schema.prisma (+ `prisma generate`). Until then
  *     --apply is a no-op-with-warning; the dry run (default) just builds the local artifact.

@@ -1,0 +1,13 @@
+
+> @fitsy/scripts@0.1.0 test
+> jest --runInBand phase1-alias-input.test.ts phase1-land-payload.test.ts snapshot-row.test.ts
+
+PASS ./phase1-alias-input.test.ts
+PASS dev/lib/snapshot-row.test.ts
+PASS ./phase1-land-payload.test.ts
+
+Test Suites: 3 passed, 3 total
+Tests:       14 passed, 14 total
+Snapshots:   0 total
+Time:        1.43 s
+Ran all test suites matching /phase1-alias-input.test.ts|phase1-land-payload.test.ts|snapshot-row.test.ts/i.
