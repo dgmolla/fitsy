@@ -39,5 +39,6 @@ BEGIN
 END $$;
 
 -- isEmailOptedOut compares lower("email") on User for every marketing send;
--- the plain unique index cannot serve that predicate.
+-- the plain unique index cannot serve that predicate. Not representable in
+-- schema.prisma: `prisma migrate dev` will propose dropping it - keep it.
 CREATE INDEX "User_email_lower_idx" ON "User" (lower("email"));

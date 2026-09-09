@@ -13,9 +13,9 @@
  * every eight weeks by design) while retries within the week stay
  * idempotent. An address that heard from any marketing campaign within the
  * last 48 hours (e.g. a lifecycle step) is skipped this week rather than
- * double-mailed.
- * The cap + ledger together guarantee eventual delivery to the full audience
- * across as many invocations as needed.
+ * double-mailed. Already-sent and paced addresses do not consume the cap,
+ * and the audience is in a stable order, so repeated invocations walk past
+ * the sent prefix and reach everyone eventually.
  *
  * Auth: CRON_SECRET Bearer (same as all other internal cron routes).
  * DryRun: ?dryRun=1 returns stats without sending.
@@ -37,7 +37,7 @@ export const maxDuration = 300;
 // Maximum sends per invocation. Weekly cron + idempotent ledger means the
 // next scheduled run (or a manual retry) will pick up any remainder, so
 // this cap bounds Vercel function wall-time without dropping anyone.
-const MAX_SENDS_PER_INVOCATION = 500;
+export const MAX_SENDS_PER_INVOCATION = 500;
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const expected = process.env["CRON_SECRET"];

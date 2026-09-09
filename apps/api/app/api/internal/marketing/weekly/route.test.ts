@@ -18,7 +18,7 @@ jest.mock("@/lib/marketingLedger", () => ({
   recordSend: jest.fn(),
 }));
 
-import { GET } from "./route";
+import { GET, MAX_SENDS_PER_INVOCATION } from "./route";
 import { NextRequest } from "next/server";
 import { sendMarketingEmail } from "@/lib/marketingEmail";
 import { marketingAudience } from "@/lib/marketingAudience";
@@ -118,6 +118,29 @@ describe("GET /api/internal/marketing/weekly", () => {
     expect(await res.json()).toEqual(expect.objectContaining({ sent: 1, paced: 1 }));
     expect(sendMarketingEmail).not.toHaveBeenCalledWith(expect.objectContaining({ to: "web@example.org" }));
     expect(recordSend).not.toHaveBeenCalledWith("web@example.org", "weekly", "ed-1:w35");
+  });
+
+  it("sends at most MAX_SENDS_PER_INVOCATION per run; skipped rows do not consume the cap", async () => {
+    const many = Array.from({ length: MAX_SENDS_PER_INVOCATION + 3 }, (_, i) => ({
+      email: `u${i}@example.org`,
+      userId: `u${i}`,
+    }));
+    (marketingAudience as jest.Mock).mockResolvedValue(many);
+    let res = await GET(makeRequest());
+    expect(await res.json()).toEqual(expect.objectContaining({ sent: MAX_SENDS_PER_INVOCATION }));
+
+    jest.clearAllMocks();
+    (marketingAudience as jest.Mock).mockResolvedValue(many);
+    (sentWithin as jest.Mock).mockResolvedValue(false);
+    (recordSend as jest.Mock).mockResolvedValue(undefined);
+    (sendMarketingEmail as jest.Mock).mockResolvedValue(true);
+    // The first two addresses already have the edition: they are skipped and
+    // the cap is still filled from the rest.
+    (wasSent as jest.Mock).mockImplementation(async (email: string) => email === "u0@example.org" || email === "u1@example.org");
+    res = await GET(makeRequest());
+    expect(await res.json()).toEqual(
+      expect.objectContaining({ sent: MAX_SENDS_PER_INVOCATION, skipped: 2 }),
+    );
   });
 
   it("does not record a failed send, so it is retried next run", async () => {

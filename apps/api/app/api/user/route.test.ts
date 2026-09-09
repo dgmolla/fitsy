@@ -141,6 +141,14 @@ describe("DELETE /api/user — success", () => {
     expect(mockSupabaseDeleteUser).toHaveBeenCalledWith("user-1");
   });
 
+  it("skips the ledger purge when the user row is already gone", async () => {
+    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+    mockUserFindUnique.mockResolvedValue(null);
+    const res = await DELETE(makeDeleteRequest("Bearer good"));
+    expect(res.status).toBe(204);
+    expect(mockMarketingSendDeleteMany).not.toHaveBeenCalled();
+  });
+
   it("keeps the send ledger when a waitlist row for the address survives", async () => {
     mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
     mockWaitlistCount.mockResolvedValue(1); // website-sourced row remains, still a recipient

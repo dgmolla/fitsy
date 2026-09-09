@@ -45,6 +45,14 @@ export type LaunchNotifyOptions = {
 /** Rows processed per call; the caller re-invokes while `remaining` > 0. */
 export const MAX_PER_RUN = 400;
 
+/**
+ * Failed provider attempts after which a row leaves the blast. Bounds the
+ * retry per row, not per run: a permanently undeliverable address stops
+ * stalling the drain and alerting every daily tick. Such rows are reported
+ * in `exhausted` and can be re-armed by hand (reset notifyAttempts).
+ */
+export const MAX_NOTIFY_ATTEMPTS = 3;
+
 export type LaunchNotifyResult =
   | { dryRun: true; matched: number; wouldNotify: number; wouldSuppress: number }
   | {
@@ -56,6 +64,8 @@ export type LaunchNotifyResult =
       suppressed: number;
       failed: number;
       remaining: number;
+      /** Rows that hit MAX_NOTIFY_ATTEMPTS this run and left the blast. */
+      exhausted: number;
     };
 
 export function milesBetween(aLat: number, aLng: number, bLat: number, bLng: number): number {
@@ -75,7 +85,8 @@ export async function notifyLaunch(opts: LaunchNotifyOptions): Promise<LaunchNot
     typeof opts.radiusMiles === "number" && opts.radiusMiles > 0 ? opts.radiusMiles : 30;
 
   const pending = await prisma.launchWaitlist.findMany({
-    where: { notifiedAt: null },
+    where: { notifiedAt: null, notifyAttempts: { lt: MAX_NOTIFY_ATTEMPTS } },
+    orderBy: { createdAt: "asc" },
     select: {
       id: true,
       userId: true,
@@ -83,6 +94,7 @@ export async function notifyLaunch(opts: LaunchNotifyOptions): Promise<LaunchNot
       lat: true,
       lng: true,
       city: true,
+      notifyAttempts: true,
       user: { select: { pushToken: true } },
     },
   });
@@ -115,6 +127,7 @@ export async function notifyLaunch(opts: LaunchNotifyOptions): Promise<LaunchNot
   let notified = 0;
   let suppressed = 0;
   let failed = 0;
+  let exhausted = 0;
 
   const batch = inArea.slice(0, MAX_PER_RUN);
   for (const w of batch) {
@@ -153,7 +166,15 @@ export async function notifyLaunch(opts: LaunchNotifyOptions): Promise<LaunchNot
       if (pushed || emailed) notified++;
       else suppressed++;
     } else {
-      failed++;
+      // Provider failure: count the attempt; the row is retried next run
+      // until it exhausts MAX_NOTIFY_ATTEMPTS and leaves the blast.
+      const attempts = w.notifyAttempts + 1;
+      await prisma.launchWaitlist.update({
+        where: { id: w.id },
+        data: { notifyAttempts: attempts },
+      });
+      if (attempts >= MAX_NOTIFY_ATTEMPTS) exhausted++;
+      else failed++;
     }
   }
 
@@ -165,7 +186,8 @@ export async function notifyLaunch(opts: LaunchNotifyOptions): Promise<LaunchNot
     notified,
     suppressed,
     failed,
-    // Rows still needing work: not yet processed, plus this batch's failures.
+    // Rows still needing work: not yet processed, plus this batch's retryable failures.
     remaining: inArea.length - batch.length + failed,
+    exhausted,
   };
 }

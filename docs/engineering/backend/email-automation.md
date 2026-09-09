@@ -21,9 +21,9 @@ It gives every campaign idempotency and the cross-campaign frequency cap.
 1. The same person is both an account and a waitlist row: the audience helper collapses them to one recipient (the account), so one address is one history.
 2. A lifecycle step and the weekly edition fall due on the same day: the frequency cap (48 hours between marketing emails to one address) makes the weekly skip that address; the next week's edition is different, so nothing is lost.
 3. A send fails at the provider: it is not recorded, so the next run retries it. A launch-day blast that partially fails is safe to re-run; `notifiedAt` makes it idempotent per row.
-4. The launch-day cron runs every day: before the launch date it no-ops; on and after it, it runs the blast, which is idempotent per row, so later ticks resume a blast cut short by the time budget and pick up post-launch signups at near-zero cost. A stalled run or any failures are reported to Slack from the cron itself.
-6. Provider rate limit: the send wrapper honours one 429 with its `Retry-After` (capped at 5 seconds) before reporting the send as failed; failed sends are retried by the next run.
-5. Legacy weekly history: the migration copies the old `_marketing_send` rows (edition per user) into the ledger by address so nobody receives an edition twice. The old table is left in place (expand step); a later migration drops it once the ledger-backed cron has run in production.
+4. The launch-day cron runs every day: before the launch date it no-ops; on and after it, it runs the blast, which is idempotent per row, so later ticks resume a blast cut short by the time budget and pick up post-launch signups at near-zero cost. A stalled, failing, exhausted, or incomplete run is reported to Slack from the cron itself.
+5. Provider rate limit: the send wrapper honours one 429 with its `Retry-After` (capped at 5 seconds) before reporting the send as failed; failed sends are retried by the next run, up to three attempts per row, after which the row leaves the blast (`exhausted`) and is re-armed by hand by resetting `notifyAttempts`.
+6. Legacy weekly history: the migration copies the old `_marketing_send` rows (edition per user) into the ledger by address so nobody receives an edition twice. The old table is left in place (expand step); a later migration drops it once the ledger-backed cron has run in production.
 
 ## Out of Scope
 
@@ -79,7 +79,7 @@ flowchart TD
 |-------|---------|--------------|----------|
 | `GET /api/internal/marketing/weekly` | cron, Tuesday 16:00 UTC | `?dryRun=1` | `{ ok, edition, eligible, sent, skipped, paced, failed }` |
 | `GET /api/internal/waitlist/launch-day` | cron, daily 16:30 UTC | `?dryRun=1` | `{ ok, skipped, today, launchDate }` before launch; from launch day on, the blast result, drained in batches until none remain or a batch makes no progress (`stalled: true`) |
-| `POST /api/internal/waitlist/notify` | operator | `{ lat, lng, radiusMiles?, city?, includeUnlocated?, dryRun? }` | `{ ok, matched, viaPush, viaEmail, notified, suppressed, failed, remaining }`; dry run: `{ matched, wouldNotify, wouldSuppress }` |
+| `POST /api/internal/waitlist/notify` | operator | `{ lat, lng, radiusMiles?, city?, includeUnlocated?, dryRun? }` | `{ ok, matched, viaPush, viaEmail, notified, suppressed, failed, exhausted, remaining }`; dry run: `{ matched, wouldNotify, wouldSuppress }` |
 
 All three require the `CRON_SECRET` bearer.
 

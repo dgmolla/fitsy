@@ -34,7 +34,8 @@ export async function marketingAudience(
         AND NOT EXISTS (
           SELECT 1 FROM "LaunchWaitlist" w
            WHERE w."email" = lower(u."email") AND w."emailOptOutAt" IS NOT NULL
-        )`,
+        )
+      ORDER BY u."createdAt" ASC, u.id ASC`,
   );
   const waitlistOnly = opts.includeWaitlistOnly
     ? await prisma.$queryRawUnsafe<{ id: string; email: string }[]>(
@@ -44,7 +45,8 @@ export async function marketingAudience(
             AND NOT EXISTS (
               SELECT 1 FROM "User" u
                WHERE lower(u."email") = w."email" AND u."emailOptOutAt" IS NOT NULL
-            )`,
+            )
+          ORDER BY w."createdAt" ASC, w.id ASC`,
       )
     : [];
 

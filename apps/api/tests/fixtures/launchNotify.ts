@@ -12,6 +12,7 @@ export const ONBOARDING_LA = {
   lat: 34.1,
   lng: -118.2,
   city: "Los Angeles",
+  notifyAttempts: 0,
   user: { pushToken: "ExponentPushToken[abc]" },
 };
 
@@ -43,5 +44,6 @@ export const WEB = {
   lat: null,
   lng: null,
   city: null,
+  notifyAttempts: 0,
   user: null,
 };

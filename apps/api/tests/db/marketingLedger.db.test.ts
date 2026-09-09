@@ -20,6 +20,25 @@ describeIfDb("marketingLedger (DB)", () => {
     await svc.prisma.$disconnect();
   });
 
+  it("the migration's week-stamp SQL agrees with weekIndexForDate at the boundaries", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const tpl = require("@/lib/emailTemplates") as typeof import("../../lib/emailTemplates");
+    const stamps = [
+      "2026-01-04T23:59:59Z",
+      "2026-01-05T00:00:00Z",
+      "2026-01-11T23:59:59Z",
+      "2026-01-12T00:00:00Z",
+      "2026-09-08T16:00:00Z",
+    ];
+    for (const ts of stamps) {
+      const rows = await svc.prisma.$queryRawUnsafe<{ w: number }[]>(
+        `SELECT floor((extract(epoch FROM $1::timestamptz) - extract(epoch FROM timestamptz '2026-01-05 00:00:00+00')) / 604800)::int AS w`,
+        ts,
+      );
+      expect(rows[0]!.w).toBe(tpl.weekIndexForDate(new Date(ts)));
+    }
+  });
+
   it("records a step once, reports it sent, and paces within the window only", async () => {
     expect(await ledger.wasSent(email, "weekly", "ed-x:w1")).toBe(false);
     await ledger.recordSend(email.toUpperCase(), "weekly", "ed-x:w1");

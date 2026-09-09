@@ -23,7 +23,7 @@ jest.mock("@/lib/marketingLedger", () => ({
   wasSent: jest.fn(),
 }));
 
-import { MAX_PER_RUN, milesBetween, notifyLaunch } from "@/lib/launchNotify";
+import { MAX_NOTIFY_ATTEMPTS, MAX_PER_RUN, milesBetween, notifyLaunch } from "@/lib/launchNotify";
 import { prisma } from "@/lib/restaurantService";
 import { sendLaunchPush } from "@/lib/launchPush";
 import { isEmailOptedOut, optedOutAddresses, sendMarketingEmail } from "@/lib/marketingEmail";
@@ -57,10 +57,13 @@ describe("milesBetween", () => {
 
 
 describe("notifyLaunch: matching, dry run, batching", () => {
-  it("only considers unnotified rows; opt-out is decided per address at send time", async () => {
+  it("only considers unnotified rows with attempts left, oldest first; opt-out is decided per address at send time", async () => {
     await notifyLaunch({ ...LA, dryRun: true });
     expect(prisma.launchWaitlist.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { notifiedAt: null } }),
+      expect.objectContaining({
+        where: { notifiedAt: null, notifyAttempts: { lt: MAX_NOTIFY_ATTEMPTS } },
+        orderBy: { createdAt: "asc" },
+      }),
     );
   });
 
@@ -94,7 +97,7 @@ describe("notifyLaunch: matching, dry run, batching", () => {
     (prisma.launchWaitlist.findMany as jest.Mock).mockResolvedValue(many);
     const res = await notifyLaunch({ ...LA, includeUnlocated: true });
     expect(res).toEqual(
-      expect.objectContaining({ matched: MAX_PER_RUN + 3, notified: MAX_PER_RUN, remaining: 3 }),
+      expect.objectContaining({ matched: MAX_PER_RUN + 3, notified: MAX_PER_RUN, remaining: 3, exhausted: 0 }),
     );
     expect(sendMarketingEmail).toHaveBeenCalledTimes(MAX_PER_RUN);
   });

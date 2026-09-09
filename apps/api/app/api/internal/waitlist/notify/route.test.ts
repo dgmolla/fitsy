@@ -58,4 +58,11 @@ describe("POST /api/internal/waitlist/notify", () => {
       dryRun: true,
     });
   });
+
+  it("returns the live result body verbatim", async () => {
+    const live = { dryRun: false, matched: 2, viaPush: 1, viaEmail: 2, notified: 2, suppressed: 0, failed: 0, remaining: 0, exhausted: 0 };
+    (notifyLaunch as jest.Mock).mockResolvedValue(live);
+    const res = await POST(makeRequest(LA));
+    expect(await res.json()).toEqual({ ok: true, ...live });
+  });
 });

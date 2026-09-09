@@ -23,7 +23,7 @@ jest.mock("@/lib/marketingLedger", () => ({
   wasSent: jest.fn(),
 }));
 
-import { notifyLaunch } from "@/lib/launchNotify";
+import { MAX_NOTIFY_ATTEMPTS, notifyLaunch } from "@/lib/launchNotify";
 import { prisma } from "@/lib/restaurantService";
 import { sendLaunchPush } from "@/lib/launchPush";
 import { isEmailOptedOut, sendMarketingEmail } from "@/lib/marketingEmail";
@@ -57,6 +57,7 @@ describe("notifyLaunch: channels and convergence", () => {
       suppressed: 0,
       failed: 0,
       remaining: 0,
+      exhausted: 0,
     });
     expect(isEmailOptedOut).toHaveBeenCalledWith("app@fitsy.org");
     expect(recordSend).toHaveBeenCalledWith("app@fitsy.org", "launch", "LA");
@@ -82,6 +83,7 @@ describe("notifyLaunch: channels and convergence", () => {
       suppressed: 0,
       failed: 0,
       remaining: 0,
+      exhausted: 0,
     });
     expect(sendLaunchPush).not.toHaveBeenCalled();
     expect(sendMarketingEmail).toHaveBeenCalledWith(
@@ -121,6 +123,27 @@ describe("notifyLaunch: channels and convergence", () => {
     expect(sendLaunchPush).toHaveBeenCalledWith("ExponentPushToken[abc]", "Los Angeles");
   });
 
+  it("a provider failure counts an attempt; the row leaves the blast once attempts are exhausted", async () => {
+    (prisma.launchWaitlist.findMany as jest.Mock).mockResolvedValue([
+      { ...WEB, id: "wl-first", email: "first@fitsy.org", notifyAttempts: 0 },
+      { ...WEB, id: "wl-last", email: "last@fitsy.org", notifyAttempts: MAX_NOTIFY_ATTEMPTS - 1 },
+    ]);
+    (sendMarketingEmail as jest.Mock).mockResolvedValue(false);
+    const res = await notifyLaunch({ ...LA, includeUnlocated: true });
+    expect(prisma.launchWaitlist.update).toHaveBeenCalledWith({
+      where: { id: "wl-first" },
+      data: { notifyAttempts: 1 },
+    });
+    expect(prisma.launchWaitlist.update).toHaveBeenCalledWith({
+      where: { id: "wl-last" },
+      data: { notifyAttempts: MAX_NOTIFY_ATTEMPTS },
+    });
+    // Only the retryable failure still counts as remaining work.
+    expect(res).toEqual(
+      expect.objectContaining({ matched: 2, notified: 0, failed: 1, exhausted: 1, remaining: 1 }),
+    );
+  });
+
   it("live web row with no push token whose email fails is left for retry, not closed", async () => {
     // Only an opted-out row may be closed without a delivery; a transient
     // provider failure must keep the row eligible for the next run.
@@ -130,7 +153,12 @@ describe("notifyLaunch: channels and convergence", () => {
     expect(res).toEqual(
       expect.objectContaining({ matched: 1, notified: 0, suppressed: 0, failed: 1, remaining: 1 }),
     );
-    expect(prisma.launchWaitlist.update).not.toHaveBeenCalled();
+    // Not closed: only the attempt counter moves.
+    expect(prisma.launchWaitlist.update).toHaveBeenCalledTimes(1);
+    expect(prisma.launchWaitlist.update).toHaveBeenCalledWith({
+      where: { id: "wl-web" },
+      data: { notifyAttempts: 1 },
+    });
   });
 
   it("opted out with a push token whose push fails: closed as suppressed, never retried", async () => {
@@ -183,13 +211,17 @@ describe("notifyLaunch: channels and convergence", () => {
     });
   });
 
-  it("leaves notifiedAt unset when both channels fail", async () => {
+  it("leaves notifiedAt unset when both channels fail, recording only the attempt", async () => {
     (sendLaunchPush as jest.Mock).mockResolvedValue(false);
     (sendMarketingEmail as jest.Mock).mockResolvedValue(false);
     const res = await notifyLaunch(LA);
     expect(res).toEqual(
       expect.objectContaining({ matched: 1, notified: 0, failed: 1 }),
     );
-    expect(prisma.launchWaitlist.update).not.toHaveBeenCalled();
+    expect(prisma.launchWaitlist.update).toHaveBeenCalledTimes(1);
+    expect(prisma.launchWaitlist.update).toHaveBeenCalledWith({
+      where: { id: "wl-app" },
+      data: { notifyAttempts: 1 },
+    });
   });
 });

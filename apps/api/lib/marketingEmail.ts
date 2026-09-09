@@ -46,6 +46,17 @@ export type MarketingRecipient =
  * signup that later creates an account, or the reverse), so an opt-out
  * recorded on either must win for every send path.
  */
+export async function isEmailOptedOut(email: string): Promise<boolean> {
+  const normalized = email.trim().toLowerCase();
+  const rows = await prisma.$queryRaw<{ n: number }[]>(
+    Prisma.sql`SELECT 1 AS n FROM "User" WHERE lower("email") = ${normalized} AND "emailOptOutAt" IS NOT NULL
+      UNION ALL
+      SELECT 1 AS n FROM "LaunchWaitlist" WHERE "email" = ${normalized} AND "emailOptOutAt" IS NOT NULL
+      LIMIT 1`,
+  );
+  return rows.length > 0;
+}
+
 /**
  * Set-query form of isEmailOptedOut for previews: which of `emails` have an
  * opt-out on either table. One round trip regardless of audience size.
@@ -61,17 +72,6 @@ export async function optedOutAddresses(emails: string[]): Promise<Set<string>> 
         WHERE "email" IN (${Prisma.join(normalized)}) AND "emailOptOutAt" IS NOT NULL`,
   );
   return new Set(rows.map((r) => r.email));
-}
-
-export async function isEmailOptedOut(email: string): Promise<boolean> {
-  const normalized = email.trim().toLowerCase();
-  const rows = await prisma.$queryRaw<{ n: number }[]>(
-    Prisma.sql`SELECT 1 AS n FROM "User" WHERE lower("email") = ${normalized} AND "emailOptOutAt" IS NOT NULL
-      UNION ALL
-      SELECT 1 AS n FROM "LaunchWaitlist" WHERE "email" = ${normalized} AND "emailOptOutAt" IS NOT NULL
-      LIMIT 1`,
-  );
-  return rows.length > 0;
 }
 
 export async function sendMarketingEmail(

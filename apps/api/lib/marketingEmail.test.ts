@@ -65,6 +65,7 @@ describe("sendMarketingEmail", () => {
   });
 
   afterEach(() => {
+    jest.useRealTimers();
     for (const k of Object.keys(ENV)) delete process.env[k];
   });
 
@@ -128,13 +129,16 @@ describe("sendMarketingEmail", () => {
     expect(await sendMarketingEmail({ waitlistId: "wl1", ...base })).toBe(false);
   });
 
-  it("retries once after a 429, honouring Retry-After, and gives up on a second 429", async () => {
+  it("retries once after a 429, waiting exactly Retry-After seconds, and gives up on a second 429", async () => {
     jest.useFakeTimers();
     fetchMock
       .mockResolvedValueOnce({ ok: false, status: 429, headers: new Headers({ "retry-after": "2" }) })
       .mockResolvedValueOnce({ ok: true, status: 200, headers: new Headers() });
     const p = sendMarketingEmail({ userId: "u1", ...base });
-    await jest.advanceTimersByTimeAsync(2000);
+    // The retry must not fire before the header's 2 seconds have elapsed.
+    await jest.advanceTimersByTimeAsync(1999);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await jest.advanceTimersByTimeAsync(1);
     expect(await p).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(2);
 
@@ -142,9 +146,24 @@ describe("sendMarketingEmail", () => {
       .mockResolvedValueOnce({ ok: false, status: 429, headers: new Headers() })
       .mockResolvedValueOnce({ ok: false, status: 429, headers: new Headers() });
     const q = sendMarketingEmail({ userId: "u1", ...base });
-    await jest.advanceTimersByTimeAsync(1000);
+    // No header: a 1s default wait, then the second 429 ends it.
+    await jest.advanceTimersByTimeAsync(999);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    await jest.advanceTimersByTimeAsync(1);
     expect(await q).toBe(false);
-    jest.useRealTimers();
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  it("caps an oversized Retry-After at 5 seconds", async () => {
+    jest.useFakeTimers();
+    fetchMock
+      .mockResolvedValueOnce({ ok: false, status: 429, headers: new Headers({ "retry-after": "3600" }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, headers: new Headers() });
+    const p = sendMarketingEmail({ userId: "u1", ...base });
+    await jest.advanceTimersByTimeAsync(4999);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await jest.advanceTimersByTimeAsync(1);
+    expect(await p).toBe(true);
   });
 
   it("optedOutAddresses returns the opted-out subset in one query, normalized", async () => {

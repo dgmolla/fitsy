@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { notifySlack } from "@fitsy/shared";
-import { notifyLaunch } from "@/lib/launchNotify";
+import { MAX_NOTIFY_ATTEMPTS, notifyLaunch } from "@/lib/launchNotify";
 import { LAUNCH_CENTER, LAUNCH_CITY, LAUNCH_DATE_ISO } from "@/lib/launch";
 
 export const runtime = "nodejs";
@@ -57,17 +57,28 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       viaEmail: result.viaEmail + next.viaEmail,
       notified: result.notified + next.notified,
       suppressed: result.suppressed + next.suppressed,
+      exhausted: result.exhausted + next.exhausted,
     };
     if (!progressed) {
       stalled = true;
       break;
     }
   }
-  // Unattended cron: a stall or failures must reach a human, not just the log.
-  if (!result.dryRun && (stalled || result.failed > 0)) {
+  // Unattended cron: a stall, failures, exhausted rows, or work left over
+  // when the time budget ran out must reach a human, not just the log.
+  if (
+    !result.dryRun &&
+    (stalled || result.failed > 0 || result.exhausted > 0 || result.remaining > 0)
+  ) {
+    const title = stalled
+      ? "launch blast stalled"
+      : result.failed > 0 || result.exhausted > 0
+        ? "launch blast had failures"
+        : "launch blast incomplete";
     await notifySlack(
-      stalled ? "launch blast stalled" : "launch blast had failures",
-      `notified ${result.notified}, suppressed ${result.suppressed}, failed ${result.failed}, remaining ${result.remaining}. ` +
+      title,
+      `notified ${result.notified}, suppressed ${result.suppressed}, failed ${result.failed}, ` +
+        `exhausted ${result.exhausted} (gave up after ${MAX_NOTIFY_ATTEMPTS} attempts), remaining ${result.remaining}. ` +
         `Re-run GET /api/internal/waitlist/launch-day once the provider is healthy; rows already notified are skipped.`,
       { source: "launch-day" },
     );

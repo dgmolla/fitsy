@@ -35,6 +35,7 @@ beforeEach(() => {
     suppressed: 0,
     failed: 0,
     remaining: 0,
+    exhausted: 0,
   });
 });
 
@@ -88,16 +89,25 @@ describe("GET /api/internal/waitlist/launch-day", () => {
   it("supports a dry run on launch day", async () => {
     jest.useFakeTimers().setSystemTime(new Date(`${LAUNCH_DATE_ISO}T02:00:00Z`));
     (notifyLaunch as jest.Mock).mockResolvedValue({ dryRun: true, matched: 3, wouldNotify: 3, wouldSuppress: 0 });
-    await GET(makeRequest("?dryRun=1"));
+    const res = await GET(makeRequest("?dryRun=1"));
     expect(notifyLaunch).toHaveBeenCalledTimes(1);
     expect(notifyLaunch).toHaveBeenCalledWith(expect.objectContaining({ dryRun: true }));
+    expect(await res.json()).toEqual({
+      ok: true,
+      launchDate: LAUNCH_DATE_ISO,
+      dryRun: true,
+      matched: 3,
+      wouldNotify: 3,
+      wouldSuppress: 0,
+    });
+    expect(mockNotifySlack).not.toHaveBeenCalled();
   });
 
   it("drains the blast in batches: matched from the first, failed from the last, the rest summed", async () => {
     jest.useFakeTimers().setSystemTime(new Date(`${LAUNCH_DATE_ISO}T16:00:00Z`));
     (notifyLaunch as jest.Mock)
-      .mockResolvedValueOnce({ dryRun: false, matched: 9, viaPush: 1, viaEmail: 2, notified: 2, suppressed: 1, failed: 2, remaining: 4 })
-      .mockResolvedValueOnce({ dryRun: false, matched: 4, viaPush: 2, viaEmail: 3, notified: 4, suppressed: 1, failed: 1, remaining: 0 });
+      .mockResolvedValueOnce({ dryRun: false, matched: 9, viaPush: 1, viaEmail: 2, notified: 2, suppressed: 1, failed: 2, remaining: 4, exhausted: 1 })
+      .mockResolvedValueOnce({ dryRun: false, matched: 4, viaPush: 2, viaEmail: 3, notified: 4, suppressed: 1, failed: 1, remaining: 0, exhausted: 0 });
     const res = await GET(makeRequest());
     expect(notifyLaunch).toHaveBeenCalledTimes(2);
     expect(await res.json()).toEqual({
@@ -111,12 +121,13 @@ describe("GET /api/internal/waitlist/launch-day", () => {
       suppressed: 2,
       failed: 1, // failed rows are retried every batch: last batch, not a sum
       remaining: 0,
+      exhausted: 1,
     });
   });
 
   it("stops at the time budget with rows remaining and no stalled flag", async () => {
     jest.useFakeTimers().setSystemTime(new Date(`${LAUNCH_DATE_ISO}T16:00:00Z`));
-    const progressing = { dryRun: false, matched: 900, viaPush: 0, viaEmail: 400, notified: 400, suppressed: 0, failed: 0, remaining: 500 };
+    const progressing = { dryRun: false, matched: 900, viaPush: 0, viaEmail: 400, notified: 400, suppressed: 0, failed: 0, remaining: 500, exhausted: 0 };
     (notifyLaunch as jest.Mock)
       .mockResolvedValueOnce(progressing)
       .mockImplementationOnce(async () => {
@@ -128,11 +139,17 @@ describe("GET /api/internal/waitlist/launch-day", () => {
     const body = await res.json();
     expect(body).toEqual(expect.objectContaining({ notified: 800, remaining: 100 }));
     expect(body).not.toHaveProperty("stalled");
+    // Incomplete is not silent: the leftover is reported, distinct from a stall.
+    expect(mockNotifySlack).toHaveBeenCalledWith(
+      "launch blast incomplete",
+      expect.stringContaining("remaining 100"),
+      { source: "launch-day" },
+    );
   });
 
   it("stops draining when a batch makes no progress instead of spinning until the time budget", async () => {
     jest.useFakeTimers().setSystemTime(new Date(`${LAUNCH_DATE_ISO}T16:00:00Z`));
-    const stuck = { dryRun: false, matched: 5, viaPush: 0, viaEmail: 0, notified: 0, suppressed: 0, failed: 3, remaining: 3 };
+    const stuck = { dryRun: false, matched: 5, viaPush: 0, viaEmail: 0, notified: 0, suppressed: 0, failed: 3, remaining: 3, exhausted: 0 };
     (notifyLaunch as jest.Mock)
       .mockResolvedValueOnce({ ...stuck, viaEmail: 2, notified: 2, failed: 0 })
       .mockResolvedValue(stuck);
@@ -145,7 +162,7 @@ describe("GET /api/internal/waitlist/launch-day", () => {
     // Unattended cron: a human hears about it.
     expect(mockNotifySlack).toHaveBeenCalledWith(
       "launch blast stalled",
-      expect.stringContaining("failed 3, remaining 3"),
+      expect.stringMatching(/failed 3, .*remaining 3/),
       { source: "launch-day" },
     );
   });
@@ -154,8 +171,8 @@ describe("GET /api/internal/waitlist/launch-day", () => {
     jest.useFakeTimers().setSystemTime(new Date(`${LAUNCH_DATE_ISO}T16:00:00Z`));
     // Two batches, both with a failure; the second finishes the drain.
     (notifyLaunch as jest.Mock)
-      .mockResolvedValueOnce({ dryRun: false, matched: 3, viaPush: 0, viaEmail: 1, notified: 1, suppressed: 0, failed: 1, remaining: 2 })
-      .mockResolvedValueOnce({ dryRun: false, matched: 3, viaPush: 0, viaEmail: 1, notified: 1, suppressed: 0, failed: 1, remaining: 0 });
+      .mockResolvedValueOnce({ dryRun: false, matched: 3, viaPush: 0, viaEmail: 1, notified: 1, suppressed: 0, failed: 1, remaining: 2, exhausted: 0 })
+      .mockResolvedValueOnce({ dryRun: false, matched: 3, viaPush: 0, viaEmail: 1, notified: 1, suppressed: 0, failed: 1, remaining: 0, exhausted: 0 });
     await GET(makeRequest());
     expect(mockNotifySlack).toHaveBeenCalledWith(
       "launch blast had failures",
