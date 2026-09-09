@@ -105,11 +105,13 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     }
   }
 
-  // Anything not reached this run would otherwise wait a whole week.
+  // The cron has no second chance for this edition (next week is a new
+  // step), so anything that did not go out must reach a human: rows not
+  // reached within the budget, and rows the provider refused.
   const unsent = eligible - processed;
-  if (unsent > 0) {
+  if (unsent > 0 || failed > 0) {
     await notifySlack(
-      "weekly editorial incomplete",
+      failed > 0 ? "weekly editorial had failures" : "weekly editorial incomplete",
       `${slug}: sent ${sent}, paced ${paced}, failed ${failed}, ${unsent} not reached within the run budget. ` +
         `Re-run GET /api/internal/marketing/weekly to resume; already-sent addresses are excluded.`,
       { source: "marketing-weekly" },

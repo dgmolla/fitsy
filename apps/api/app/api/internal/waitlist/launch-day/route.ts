@@ -43,8 +43,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   const dryRun = request.nextUrl.searchParams.get("dryRun") === "1";
-  const opts = { ...LAUNCH_CENTER, city: LAUNCH_CITY, includeUnlocated: true, dryRun };
   const started = Date.now();
+  // Every batch shares one deadline so even the first cannot outrun the
+  // function limit; what it does not reach comes back as `remaining`.
+  const opts = {
+    ...LAUNCH_CENTER,
+    city: LAUNCH_CITY,
+    includeUnlocated: true,
+    dryRun,
+    deadline: started + BUDGET_MS,
+  };
   let batchStart = started;
   let result = await notifyLaunch(opts);
   let lastBatchMs = Date.now() - batchStart;

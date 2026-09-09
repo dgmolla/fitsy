@@ -82,6 +82,7 @@ describe("GET /api/internal/waitlist/launch-day", () => {
       city: LAUNCH_CITY,
       includeUnlocated: true,
       dryRun: false,
+      deadline: new Date(`${LAUNCH_DATE_ISO}T16:00:00Z`).getTime() + 240_000,
     });
     expect(mockNotifySlack).not.toHaveBeenCalled();
   });
@@ -208,15 +209,17 @@ describe("GET /api/internal/waitlist/launch-day", () => {
     expect(mockNotifySlack).toHaveBeenCalledWith("launch blast had failures", expect.stringContaining("failed 3"), { source: "launch-day" });
   });
 
-  it("stops draining when a batch touches nothing while rows were expected, and reports a stall", async () => {
+  it("stops draining when a batch touches nothing while rows are still pending, and reports a stall", async () => {
+    // Rows still pending (remaining > 0) but the batch moved none of them:
+    // without the break the loop would spin on this identical result.
     jest.useFakeTimers().setSystemTime(new Date(`${LAUNCH_DATE_ISO}T16:00:00Z`));
-    const nothing = { dryRun: false, matched: 0, viaPush: 0, viaEmail: 0, notified: 0, suppressed: 0, failed: 0, remaining: 0, exhausted: 0 };
+    const nothing = { dryRun: false, matched: 3, viaPush: 0, viaEmail: 0, notified: 0, suppressed: 0, failed: 0, remaining: 3, exhausted: 0 };
     (notifyLaunch as jest.Mock)
       .mockResolvedValueOnce({ dryRun: false, matched: 5, viaPush: 0, viaEmail: 2, notified: 2, suppressed: 0, failed: 0, remaining: 3, exhausted: 0 })
       .mockResolvedValue(nothing);
     const res = await GET(makeRequest());
     expect(notifyLaunch).toHaveBeenCalledTimes(2);
-    expect(await res.json()).toEqual(expect.objectContaining({ notified: 2, remaining: 0, stalled: true }));
+    expect(await res.json()).toEqual(expect.objectContaining({ notified: 2, remaining: 3, stalled: true }));
     expect(mockNotifySlack).toHaveBeenCalledWith("launch blast stalled", expect.any(String), { source: "launch-day" });
   });
 

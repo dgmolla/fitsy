@@ -111,6 +111,21 @@ describe("notifyLaunch: matching, dry run, batching", () => {
     expect(sendMarketingEmail).toHaveBeenCalledTimes(MAX_PER_RUN);
   });
 
+  it("stops starting rows once the caller's deadline has passed and reports them as remaining", async () => {
+    jest.useFakeTimers().setSystemTime(new Date("2026-09-11T16:00:00Z"));
+    const rows = ["a", "b", "c"].map((n) => ({ ...WEB, id: `wl-${n}`, email: `${n}@fitsy.org` }));
+    (prisma.launchWaitlist.findMany as jest.Mock).mockResolvedValue(rows);
+    // Each send takes 100s against a 150s deadline: the third row is never started.
+    (sendMarketingEmail as jest.Mock).mockImplementation(async () => {
+      jest.advanceTimersByTime(100_000);
+      return true;
+    });
+    const res = await notifyLaunch({ ...LA, includeUnlocated: true, deadline: Date.now() + 150_000 });
+    expect(res).toEqual(expect.objectContaining({ matched: 3, notified: 2, remaining: 1, failed: 0 }));
+    expect(sendMarketingEmail).toHaveBeenCalledTimes(2);
+    jest.useRealTimers();
+  });
+
   it("honours an explicit radius and falls back to 30 miles for a non-positive one", async () => {
     // ONBOARDING_LA sits ~4 miles from the LA center.
     expect(await notifyLaunch({ ...LA, radiusMiles: 1, dryRun: true })).toEqual(

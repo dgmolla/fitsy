@@ -151,10 +151,16 @@ describe("GET /api/internal/marketing/weekly", () => {
     );
   });
 
-  it("does not record a failed send, so a re-run picks it up", async () => {
+  it("does not record a failed send, and a run with failures is reported to Slack so it is re-run", async () => {
     (sendMarketingEmail as jest.Mock).mockResolvedValue(false);
     const res = await GET(makeRequest());
     expect(await res.json()).toEqual(expect.objectContaining({ sent: 0, failed: 2, unsent: 0 }));
     expect(recordSend).not.toHaveBeenCalled();
+    // A provider outage is not "complete": the edition has no next week.
+    expect(mockNotifySlack).toHaveBeenCalledWith(
+      "weekly editorial had failures",
+      expect.stringContaining("failed 2"),
+      { source: "marketing-weekly" },
+    );
   });
 });

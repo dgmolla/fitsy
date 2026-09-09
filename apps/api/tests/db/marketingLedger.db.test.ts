@@ -35,28 +35,35 @@ describeIfDb("marketingLedger (DB)", () => {
     const legacyEmail = `legacy-${Date.now()}@fitsy.org`;
     const userId = `legacy-${Date.now()}`;
     const sentAt = new Date("2026-03-03T16:00:00Z");
-    try {
-      await svc.prisma.user.create({ data: { id: userId, email: legacyEmail.toUpperCase() } });
-      await svc.prisma.$executeRawUnsafe(
-        `CREATE TABLE IF NOT EXISTS "_marketing_send" (edition text NOT NULL, user_id text NOT NULL, sent_at timestamptz DEFAULT now(), PRIMARY KEY (edition, user_id))`,
-      );
-      await svc.prisma.$executeRawUnsafe(
-        `INSERT INTO "_marketing_send" (edition, user_id, sent_at) VALUES ($1, $2, $3)`,
-        "sauce-math",
-        userId,
-        sentAt,
-      );
-      await svc.prisma.$executeRawUnsafe(doBlock);
-      const rows = await svc.prisma.marketingSend.findMany({ where: { email: legacyEmail } });
-      expect(rows.map((r) => [r.campaign, r.step])).toEqual([
-        ["weekly", `sauce-math:w${tpl.weekIndexForDate(sentAt)}`],
-      ]);
-      expect(await ledger.wasSent(legacyEmail, "weekly", `sauce-math:w${tpl.weekIndexForDate(sentAt)}`)).toBe(true);
-    } finally {
-      await svc.prisma.$executeRawUnsafe(`DELETE FROM "_marketing_send" WHERE user_id = $1`, userId);
-      await svc.prisma.marketingSend.deleteMany({ where: { email: legacyEmail } });
-      await svc.prisma.user.deleteMany({ where: { id: userId } });
-    }
+    // Everything happens inside one transaction that is rolled back at the
+    // end, so the legacy table, the seeded user, and every row the migration
+    // block copies leave no trace in the shared database.
+    const ROLLBACK = new Error("rollback");
+    let observed: [string, string][] = [];
+    await svc.prisma
+      .$transaction(async (tx) => {
+        await tx.user.create({ data: { id: userId, email: legacyEmail.toUpperCase() } });
+        await tx.$executeRawUnsafe(
+          `CREATE TABLE IF NOT EXISTS "_marketing_send" (edition text NOT NULL, user_id text NOT NULL, sent_at timestamptz DEFAULT now(), PRIMARY KEY (edition, user_id))`,
+        );
+        await tx.$executeRawUnsafe(
+          `INSERT INTO "_marketing_send" (edition, user_id, sent_at) VALUES ($1, $2, $3)`,
+          "sauce-math",
+          userId,
+          sentAt,
+        );
+        await tx.$executeRawUnsafe(doBlock);
+        const rows = await tx.marketingSend.findMany({ where: { email: legacyEmail } });
+        observed = rows.map((r) => [r.campaign, r.step]);
+        throw ROLLBACK;
+      })
+      .catch((e: unknown) => {
+        if (e !== ROLLBACK) throw e;
+      });
+    expect(observed).toEqual([["weekly", `sauce-math:w${tpl.weekIndexForDate(sentAt)}`]]);
+    // Rolled back: nothing left behind.
+    expect(await svc.prisma.marketingSend.count({ where: { email: legacyEmail } })).toBe(0);
+    expect(await svc.prisma.user.count({ where: { id: userId } })).toBe(0);
   });
 
   it("the migration's week-stamp SQL agrees with weekIndexForDate at the boundaries", async () => {

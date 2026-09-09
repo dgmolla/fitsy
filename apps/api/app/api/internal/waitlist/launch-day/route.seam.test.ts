@@ -56,8 +56,7 @@ afterEach(() => {
 describe("launch-day route with the real notifyLaunch", () => {
   it("a partial provider failure ends the run in one batch with failures reported, no stall", async () => {
     const rows = ["a", "b", "c"].map((n) => ({ ...WEB, id: `wl-${n}`, email: `${n}@fitsy.org` }));
-    // The second call models the next tick's view after the cooldown: nothing pending.
-    (prisma.launchWaitlist.findMany as jest.Mock).mockResolvedValueOnce(rows).mockResolvedValue([]);
+    (prisma.launchWaitlist.findMany as jest.Mock).mockResolvedValue(rows);
     (sendMarketingEmail as jest.Mock).mockImplementation(async ({ to }: { to: string }) => to !== "b@fitsy.org");
     const res = await GET(makeRequest());
     const body = await res.json();

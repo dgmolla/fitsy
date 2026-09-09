@@ -40,6 +40,12 @@ export type LaunchNotifyOptions = {
   city?: string | null | undefined;
   includeUnlocated?: boolean | undefined;
   dryRun?: boolean | undefined;
+  /**
+   * Epoch ms after which no further row is started; untouched rows are
+   * reported in `remaining`. Lets a caller with a function time limit stop a
+   * slow batch (provider degrading into retries) before the platform kills it.
+   */
+  deadline?: number | undefined;
 };
 
 /** Rows processed per call; the caller re-invokes while `remaining` > 0. */
@@ -147,7 +153,10 @@ export async function notifyLaunch(opts: LaunchNotifyOptions): Promise<LaunchNot
   let exhausted = 0;
 
   const batch = inArea.slice(0, MAX_PER_RUN);
+  let started = 0;
   for (const w of batch) {
+    if (opts.deadline !== undefined && Date.now() >= opts.deadline) break;
+    started++;
     const effectiveCity = opts.city ?? w.city;
     const pushToken = w.user?.pushToken ?? null;
 
@@ -209,10 +218,11 @@ export async function notifyLaunch(opts: LaunchNotifyOptions): Promise<LaunchNot
     notified,
     suppressed,
     failed,
-    // Only rows this call did not reach. This run's failures are deferred by
-    // the retry cooldown to a later tick, so they are not "remaining" work
-    // for the caller's drain loop; they are reported in `failed`.
-    remaining: inArea.length - batch.length,
+    // Only rows this call did not reach (beyond the batch, or past the
+    // deadline). This run's failures are deferred by the retry cooldown to a
+    // later tick, so they are not "remaining" work for the caller's drain
+    // loop; they are reported in `failed`.
+    remaining: inArea.length - started,
     exhausted,
   };
 }
