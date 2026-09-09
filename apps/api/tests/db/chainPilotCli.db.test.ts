@@ -33,14 +33,14 @@ suite("actual pilot CLI plan, apply and rollback", () => {
         const before = await p.menuItem.findMany(query), catalogPath = join(directory, "catalog.json"), aprilPath = join(directory, "april.json");
         const plan = run("catalog-plan", catalogPath);
         expect(plan.changes).toBe(12);
-        expect(() => run("catalog-apply", catalogPath, "wrong")).toThrow();
+        expect(() => run("catalog-apply", catalogPath, "wrong")).toThrow("plan hash mismatch");
         const wrongTarget = join(directory, "wrong-target.json"), parsed = JSON.parse(readFileSync(catalogPath, "utf8"));
         writeFileSync(wrongTarget, JSON.stringify({ ...parsed, target: "wrong" }));
-        expect(() => run("catalog-apply", wrongTarget, plan.hash)).toThrow();
+        expect(() => run("catalog-apply", wrongTarget, plan.hash)).toThrow("Database target");
         expect(await p.chainItem.count({ where: { brandId: { in: brands.map(b => b.id) } } })).toBe(9);
         expect(run("catalog-apply", catalogPath, plan.hash).applied).toBe(12);
         const april = run("april-plan", aprilPath); expect(april.matched).toBe(2);
-        expect(() => run("april-apply", aprilPath, april.hash, "--limit=0")).toThrow();
+        expect(() => run("april-apply", aprilPath, april.hash, "--limit=0")).toThrow("Invalid apply limit");
         expect(run("april-apply", aprilPath, april.hash, "--limit=2").applied).toBe(2);
         expect((await p.menuItem.findMany(query)).map(m => m.calories).sort((a, b) => a! - b!)).toEqual([310, 820]);
         expect(run("april-plan", join(directory, "replan.json")).matched).toBe(0);

@@ -81,6 +81,8 @@ suite("official PDF pilot correction against captured April data", () => {
       for (const key of ["id", "name", "description", "section", "category", "photoUrl", "price", "dietaryTags", "createdAt"] as const) expect(after[key]).toEqual(item[key]);
     }
     expect(restaurants.size).toBe(31);
+    expect(capturedApril).toHaveLength(64);
+    expect(Object.fromEntries(chainPilot.changes.map(row => [row.canonicalKey, capturedApril.filter(item => item.canonicalKey === row.canonicalKey).length]))).toEqual({ "chicken-plate": 7, "steak-plate": 25, "chicken-veggie-bowl": 7, "miso-soup": 7, "gyudon-beef-side": 6, "habanero-chicken-side": 6, "blount-clam-chowder": 6 });
     for (const capture of capturedChainPilot) {
       const brandId = brands.find(b => b.slug === scope + capture.slug)!.id, item = parseStoreV1Response(capture.ue)!.items[0]!;
       const result = match(brandId, item);

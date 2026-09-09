@@ -77,7 +77,6 @@ export const chainPilot = {
       aliases: [
         {"name": "Clam Chowder", "section": "Featured", "description": "A creamy soup featuring clams, cooked with potatoes, celery and onion."},
         {"name": "Clam Chowder", "section": "Featured items", "description": "A creamy soup featuring clams, cooked with potatoes, celery and onion."},
-        {"name": "Clam Chowder", "section": "Appetizers", "description": "A creamy soup featuring clams, cooked with potatoes, celery and onion."},
       ],
     },
   ],

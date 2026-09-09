@@ -16,7 +16,7 @@ The pilot uses the official PDFs linked in `apps/api/services/chainPilotData.ts`
 | Yoshinoya Habanero Chicken side, 166 g | 290 | 28 / 18 / 11 | 6 |
 | Yoshinoya Clam Chowder, 227 g | 300 | 9 / 18 / 22 | 6 |
 
-These are seven facts and fourteen contextual aliases, covering 64 April rows at 31 restaurants in the captured snapshot. Three facts are new catalog rows; four update existing rows with verified servings and provenance, including the Gyudon Beef numeric correction. Six unsafe WaBa legacy aliases are removed from five catalog rows: family-protein rows were bound to single plates/bowls, and a shrimp taco row was bound to bowls. Their underlying unreviewed facts remain quarantined from this matcher.
+These are seven facts and thirteen contextual aliases, covering 64 April rows at 31 restaurants in the captured snapshot. Three facts are new catalog rows; four update existing rows with verified servings and provenance, including the Gyudon Beef numeric correction. Six unsafe WaBa legacy aliases are removed from five catalog rows: family-protein rows were bound to single plates/bowls, and a shrimp taco row was bound to bowls. Their underlying unreviewed facts remain quarantined from this matcher.
 
 Yoshinoya's side-beef catalog row changes from 686 calories / 27 protein / 8 carbs / 63 fat to the PDF's 310 / 21 / 8 / 21; the captured UE label also says 310. The WaBa family chicken row at 1,050 calories must not supply a Chicken Plate at 820.
 
@@ -42,7 +42,7 @@ Run `npx tsx --tsconfig apps/api/tsconfig.json scripts/preload-chain-pilot.ts` w
 
 Plans and per-row journals are exclusive, mode-600, fsynced files. Every transaction checks the captured state; rollback refuses later edits. The April patch preserves IDs, membership, saved references and non-nutrition fields. Merchant data keeps priority. A started operation without its completion journal requires DB inspection against the saved plan before retrying: filesystem and DB commits cannot be atomic together. Never overwrite artifacts or blindly rerun a partial apply.
 
-New-hex enrichment snapshots the catalog at startup: do not edit approvals during an active run; restart with the corrected catalog if an approval changes. Activation takes effect when enrichment next runs for a location; its existing pre-fetch skip rules still apply. This April pilot uses the separate nutrition-only command.
+New-hex enrichment snapshots the catalog at startup: do not edit approvals during an active run; restart with the corrected catalog if an approval changes. Activation takes effect when enrichment next runs for a location; its existing pre-fetch skip rules still apply. This April pilot uses the separate nutrition-only command. Approving these brands switches all their future enrichment to UE menus: unmatched items use Haiku, and an empty UE menu skips the location, with no FatSecret menu fallback.
 
 ## Local proof
 

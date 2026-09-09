@@ -1,9 +1,9 @@
 {
   "preparedAdapterParent": "9754a6d1caccc203cd1c8c3cf8c8c5f3a43ca5f9",
-  "databaseTests": 808,
+  "databaseTests": 816,
   "skipped": 0,
-  "fullTestLogSha256": "a0722217f7e157de87a53f0ab3b8f2cbde8d76c165e73b5446eb4fc6dab34e74",
-  "build": "passed after required-backup adapter integration",
+  "fullTestLogSha256": "bf7e5c9eddfe64ff156ab8d35bd9a82451b2b8500e40785a524be49ae82fb74d",
+  "build": "passed after final alias/test revision",
   "aprilRows": 64,
   "restaurants": 31,
   "newHexConfigurations": 7,
@@ -18,11 +18,15 @@
     "existingFactUpdates": 4,
     "quarantinedAliasRows": 5,
     "reviewedFacts": 7,
-    "contextAliases": 14,
-    "writes": 0
+    "contextAliases": 13,
+    "writes": 0,
+    "hash": "a4b2d2d6dd02e901901870c0ee73a5777857316c8ca6213945036e5b12dfe34a"
   },
   "mergedAdapterParent": "1764502ce8228f2c48ed4eca538f4b89317c6bc8",
   "rebaseCodeDiff": "empty; one data commit rebased onto equivalent squash merge",
   "releaseRegistry": "8 pass, 0 blocking failures, 1 preexisting mock advisory, 1 skip",
-  "releaseRegistrySha256": "2570108745527cdeb51734ec3c6d2ab4f7fcf980b0781a0da014475988b8dbd7"
+  "releaseRegistrySha256": "eaecf871a717ace4df5fcf6b95bf97b6e4f6745df5a865d282ec24ca84ccf755",
+  "mutationScore": 85.38,
+  "reviewFollowup": "Independent literal PDF truth for seven servings, invalid/ambiguous planner rejection tests, exact 64-row distribution, explicit CLI guard errors; unobserved Appetizers alias removed.",
+  "sizeException": "625 lines, override-size label: keep reviewed PDF expectations and guard regression tests with this single reversible data pilot."
 }
