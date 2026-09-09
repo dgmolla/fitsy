@@ -38,11 +38,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const opts = { ...LAUNCH_CENTER, city: LAUNCH_CITY, includeUnlocated: true, dryRun };
   const started = Date.now();
   let result = await notifyLaunch(opts);
-  // Drain in batches while time allows; anything left is picked up by a
-  // manual re-run (or tomorrow's tick is a no-op, so re-run today).
+  // Drain in batches while time allows and each batch makes progress; a
+  // batch that closes no rows (provider down) would be re-processed
+  // identically, so stop and leave the remainder for a manual re-run.
+  // `failed` is the last batch's count, not a sum: failed rows are retried
+  // by every batch, so summing would count the same rows repeatedly.
   while (!result.dryRun && result.remaining > 0 && Date.now() - started < 200_000) {
     const next = await notifyLaunch(opts);
-    if (next.dryRun) break;
+    if (next.dryRun || next.notified + next.suppressed === 0) break;
     result = {
       ...next,
       matched: result.matched,
@@ -50,7 +53,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       viaEmail: result.viaEmail + next.viaEmail,
       notified: result.notified + next.notified,
       suppressed: result.suppressed + next.suppressed,
-      failed: result.failed + next.failed,
     };
   }
   return NextResponse.json({ ok: true, launchDate: LAUNCH_DATE_ISO, ...result });

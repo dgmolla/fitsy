@@ -529,14 +529,19 @@ export const WEEKLY_EDITIONS: Edition[] = [
  * Week 0 starts on Monday, January 5, 2026.
  * Rotation period: 8 editions (cycles indefinitely).
  */
+/** Whole weeks since the rotation epoch (Mon Jan 5 2026 UTC); the weekly ledger step key uses it. */
+export function weekIndexForDate(date: Date): number {
+  const EPOCH_MS = Date.UTC(2026, 0, 5); // Mon Jan 5 2026 00:00:00 UTC
+  const weekMs = 7 * 86400e3;
+  return Math.floor((date.getTime() - EPOCH_MS) / weekMs);
+}
+
 export function editionForDate(date: Date): {
   slug: string;
   subject: string;
   html: string;
 } {
-  const EPOCH_MS = Date.UTC(2026, 0, 5); // Mon Jan 5 2026 00:00:00 UTC
-  const weekMs = 7 * 86400e3;
-  const weekIndex = Math.floor((date.getTime() - EPOCH_MS) / weekMs);
+  const weekIndex = weekIndexForDate(date);
   const idx = ((weekIndex % 8) + 8) % 8;
   // idx is always in [0, 7] — the double-modulo guarantees it.
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion

@@ -8,9 +8,12 @@
  * 500-send cap per invocation.
  *
  * Idempotency and pacing come from the MarketingSend ledger
- * (lib/marketingLedger.ts): an edition goes to an address once, ever, and an
- * address that heard from any marketing campaign within the last 48 hours
- * (e.g. a lifecycle step) is skipped this week rather than double-mailed.
+ * (lib/marketingLedger.ts). The ledger step is `<edition>:w<week>`, so an
+ * edition goes to an address once per rotation (the eight editions repeat
+ * every eight weeks by design) while retries within the week stay
+ * idempotent. An address that heard from any marketing campaign within the
+ * last 48 hours (e.g. a lifecycle step) is skipped this week rather than
+ * double-mailed.
  * The cap + ledger together guarantee eventual delivery to the full audience
  * across as many invocations as needed.
  *
@@ -21,7 +24,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { sendMarketingEmail } from "@/lib/marketingEmail";
-import { editionForDate } from "@/lib/emailTemplates";
+import { editionForDate, weekIndexForDate } from "@/lib/emailTemplates";
 import { marketingAudience } from "@/lib/marketingAudience";
 import { recordSend, sentWithin, wasSent } from "@/lib/marketingLedger";
 
@@ -44,13 +47,15 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   }
 
   const dryRun = req.nextUrl.searchParams.get("dryRun") === "1";
-  const { slug, subject, html } = editionForDate(new Date());
+  const now = new Date();
+  const { slug, subject, html } = editionForDate(now);
+  const step = `${slug}:w${weekIndexForDate(now)}`;
   const audience = await marketingAudience();
   const eligible = audience.length;
 
   if (dryRun) {
     let alreadySent = 0;
-    for (const r of audience) if (await wasSent(r.email, "weekly", slug)) alreadySent++;
+    for (const r of audience) if (await wasSent(r.email, "weekly", step)) alreadySent++;
     return NextResponse.json({ ok: true, dryRun: true, edition: slug, eligible, alreadySent });
   }
 
@@ -62,7 +67,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   for (const r of audience) {
     if (sent >= MAX_SENDS_PER_INVOCATION) break;
 
-    if (await wasSent(r.email, "weekly", slug)) {
+    if (await wasSent(r.email, "weekly", step)) {
       skipped++;
       continue;
     }
@@ -78,7 +83,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     if (ok) {
       // Record only after a confirmed send — a failed send must be retried
       // on the next run, never silently dropped.
-      await recordSend(r.email, "weekly", slug);
+      await recordSend(r.email, "weekly", step);
       sent++;
     } else {
       failed++;

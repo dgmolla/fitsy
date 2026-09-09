@@ -99,4 +99,17 @@ describe("GET /api/internal/waitlist/launch-day", () => {
       expect.objectContaining({ matched: 5, viaEmail: 5, notified: 5, remaining: 0 }),
     );
   });
+
+  it("stops draining when a batch makes no progress instead of spinning until the time budget", async () => {
+    jest.useFakeTimers().setSystemTime(new Date(`${LAUNCH_DATE_ISO}T16:00:00Z`));
+    const stuck = { dryRun: false, matched: 5, viaPush: 0, viaEmail: 0, notified: 0, suppressed: 0, failed: 3, remaining: 3 };
+    (notifyLaunch as jest.Mock)
+      .mockResolvedValueOnce({ ...stuck, viaEmail: 2, notified: 2, failed: 0 })
+      .mockResolvedValue(stuck);
+    const res = await GET(makeRequest());
+    expect(notifyLaunch).toHaveBeenCalledTimes(2);
+    expect(await res.json()).toEqual(
+      expect.objectContaining({ notified: 2, failed: 0, remaining: 3 }),
+    );
+  });
 });

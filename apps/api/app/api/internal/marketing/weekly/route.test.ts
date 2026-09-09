@@ -4,6 +4,7 @@ jest.mock("@/lib/marketingEmail", () => ({
 
 jest.mock("@/lib/emailTemplates", () => ({
   editionForDate: jest.fn(() => ({ slug: "ed-1", subject: "S", html: "<p>h</p>" })),
+  weekIndexForDate: jest.fn(() => 35),
 }));
 
 jest.mock("@/lib/marketingAudience", () => ({
@@ -89,8 +90,9 @@ describe("GET /api/internal/marketing/weekly", () => {
       subject: "S",
       html: "<p>h</p>",
     });
-    expect(recordSend).toHaveBeenCalledWith("alice@example.org", "weekly", "ed-1");
-    expect(recordSend).toHaveBeenCalledWith("web@example.org", "weekly", "ed-1");
+    // Step is cycle-aware so the edition can recur next rotation.
+    expect(recordSend).toHaveBeenCalledWith("alice@example.org", "weekly", "ed-1:w35");
+    expect(recordSend).toHaveBeenCalledWith("web@example.org", "weekly", "ed-1:w35");
   });
 
   it("skips an address that already has this edition", async () => {
@@ -106,7 +108,7 @@ describe("GET /api/internal/marketing/weekly", () => {
     const res = await GET(makeRequest());
     expect(await res.json()).toEqual(expect.objectContaining({ sent: 1, paced: 1 }));
     expect(sendMarketingEmail).not.toHaveBeenCalledWith(expect.objectContaining({ to: "web@example.org" }));
-    expect(recordSend).not.toHaveBeenCalledWith("web@example.org", "weekly", "ed-1");
+    expect(recordSend).not.toHaveBeenCalledWith("web@example.org", "weekly", "ed-1:w35");
   });
 
   it("does not record a failed send, so it is retried next run", async () => {

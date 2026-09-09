@@ -122,7 +122,7 @@ sequenceDiagram
 
 - `LaunchWaitlist` - one row per email address.
   `userId` is `SET NULL` on account deletion, not cascaded: the row may be a website signup in its own right and is the address-keyed opt-out record.
-  `DELETE /api/user` removes an onboarding-sourced row that never opted out, and strips the coarse location from any row that survives, so what remains is the address and its opt-out only.
+  `DELETE /api/user` removes an onboarding-sourced row that never opted out, strips the coarse location from any row that survives, and purges the address from the `MarketingSend` ledger unless a waitlist row for it remains.
   Columns: `email` (unique, normalized), `userId?` (unique; null for web signups), `source` (`onboarding` | `web`), `lat?` / `lng?` (coarse; null for web signups), `city?`, `notifiedAt?`, `emailOptOutAt?`.
 
 - `User.emailOptOutAt` — nullable timestamp.

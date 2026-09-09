@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/restaurantService";
 import { getSupabaseAdmin } from "@/lib/supabase";
+import { normalizeEmail } from "@/lib/waitlist";
 
 // ─── DELETE /api/user ─────────────────────────────────────────────────────────
 //
@@ -18,7 +19,10 @@ import { getSupabaseAdmin } from "@/lib/supabase";
 // suppression record; only a row this account created via "Notify me" and
 // never opted out is personal data to remove with the account. Any row that
 // survives is stripped of the coarse location the account supplied, so what
-// remains is the email address and the opt-out, nothing else.
+// remains is the email address and the opt-out, nothing else. The
+// MarketingSend ledger (send history by address) is purged too, unless a
+// waitlist row for the address survives: then the address is still a
+// legitimate recipient and its history still prevents double sends.
 //
 // DB is the source of truth. A dangling Supabase auth row is recoverable; a
 // dangling Prisma user is not. Returns 204 on success.
@@ -33,6 +37,8 @@ export async function DELETE(
 
   try {
     await prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({ where: { id: userId }, select: { email: true } });
+      const email = user ? normalizeEmail(user.email) : null;
       await tx.savedItem.deleteMany({ where: { userId } });
       await tx.macroTarget.deleteMany({ where: { userId } });
       await tx.subscription.deleteMany({ where: { userId } });
@@ -43,6 +49,10 @@ export async function DELETE(
         where: { userId },
         data: { lat: null, lng: null, city: null },
       });
+      if (email) {
+        const stillListed = await tx.launchWaitlist.count({ where: { email } });
+        if (stillListed === 0) await tx.marketingSend.deleteMany({ where: { email } });
+      }
       await tx.user.delete({ where: { id: userId } });
     });
   } catch (err) {

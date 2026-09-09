@@ -6,6 +6,9 @@ const mockMacroTargetDeleteMany = jest.fn();
 const mockSubscriptionDeleteMany = jest.fn();
 const mockWaitlistDeleteMany = jest.fn();
 const mockWaitlistUpdateMany = jest.fn();
+const mockWaitlistCount = jest.fn();
+const mockUserFindUnique = jest.fn();
+const mockMarketingSendDeleteMany = jest.fn();
 const mockUserDelete = jest.fn();
 const mockTransaction = jest.fn();
 const mockSupabaseDeleteUser = jest.fn();
@@ -20,8 +23,9 @@ jest.mock("@/lib/restaurantService", () => ({
     savedItem: { deleteMany: mockSavedItemDeleteMany },
     macroTarget: { deleteMany: mockMacroTargetDeleteMany },
     subscription: { deleteMany: mockSubscriptionDeleteMany },
-    launchWaitlist: { deleteMany: mockWaitlistDeleteMany, updateMany: mockWaitlistUpdateMany },
-    user: { delete: mockUserDelete },
+    launchWaitlist: { deleteMany: mockWaitlistDeleteMany, updateMany: mockWaitlistUpdateMany, count: mockWaitlistCount },
+    marketingSend: { deleteMany: mockMarketingSendDeleteMany },
+    user: { delete: mockUserDelete, findUnique: mockUserFindUnique },
     $transaction: mockTransaction,
   },
 }));
@@ -42,6 +46,9 @@ beforeEach(() => {
   mockSubscriptionDeleteMany.mockReset().mockResolvedValue({ count: 0 });
   mockWaitlistDeleteMany.mockReset().mockResolvedValue({ count: 0 });
   mockWaitlistUpdateMany.mockReset().mockResolvedValue({ count: 0 });
+  mockWaitlistCount.mockReset().mockResolvedValue(0);
+  mockUserFindUnique.mockReset().mockResolvedValue({ email: "Alice@Example.com" });
+  mockMarketingSendDeleteMany.mockReset().mockResolvedValue({ count: 0 });
   mockUserDelete.mockReset().mockResolvedValue({ id: "user-1" });
   mockTransaction.mockReset();
   mockSupabaseDeleteUser.mockReset().mockResolvedValue({ data: {}, error: null });
@@ -56,8 +63,9 @@ beforeEach(() => {
       savedItem: { deleteMany: mockSavedItemDeleteMany },
       macroTarget: { deleteMany: mockMacroTargetDeleteMany },
       subscription: { deleteMany: mockSubscriptionDeleteMany },
-      launchWaitlist: { deleteMany: mockWaitlistDeleteMany, updateMany: mockWaitlistUpdateMany },
-      user: { delete: mockUserDelete },
+      launchWaitlist: { deleteMany: mockWaitlistDeleteMany, updateMany: mockWaitlistUpdateMany, count: mockWaitlistCount },
+      marketingSend: { deleteMany: mockMarketingSendDeleteMany },
+      user: { delete: mockUserDelete, findUnique: mockUserFindUnique },
     };
     return fn(tx);
   });
@@ -118,6 +126,8 @@ describe("DELETE /api/user — success", () => {
       where: { userId: "user-1" },
       data: { lat: null, lng: null, city: null },
     });
+    // No waitlist row survives for the address, so its send history goes too.
+    expect(mockMarketingSendDeleteMany).toHaveBeenCalledWith({ where: { email: "alice@example.com" } });
     const deleteOrder = mockWaitlistDeleteMany.mock.invocationCallOrder[0]!;
     const stripOrder = mockWaitlistUpdateMany.mock.invocationCallOrder[0]!;
     const userOrder = mockUserDelete.mock.invocationCallOrder[0]!;
@@ -128,6 +138,14 @@ describe("DELETE /api/user — success", () => {
     });
 
     expect(mockSupabaseDeleteUser).toHaveBeenCalledWith("user-1");
+  });
+
+  it("keeps the send ledger when a waitlist row for the address survives", async () => {
+    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+    mockWaitlistCount.mockResolvedValue(1); // website-sourced row remains, still a recipient
+    const res = await DELETE(makeDeleteRequest("Bearer good"));
+    expect(res.status).toBe(204);
+    expect(mockMarketingSendDeleteMany).not.toHaveBeenCalled();
   });
 
   it("still returns 204 when Supabase auth deletion fails", async () => {
