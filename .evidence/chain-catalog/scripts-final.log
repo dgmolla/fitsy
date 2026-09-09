@@ -1,0 +1,53 @@
+
+> @fitsy/scripts@0.1.0 test
+> jest --runInBand
+
+PASS dev/lib/snapshot-row.test.ts
+PASS ./overture-discovery.test.ts
+  ● Console
+
+    console.log
+      [overture] Cache fresh, reusing: /var/folders/lj/18n0p82d15j47d0vgzy302vm0000gn/T/fitsy-overture-test/test-fixture.parquet
+
+      at downloadOvertureCache (overture-discovery.ts:225:13)
+
+    console.log
+      [overture] Cache fresh, reusing: /var/folders/lj/18n0p82d15j47d0vgzy302vm0000gn/T/fitsy-overture-test/test-fixture.parquet
+
+      at downloadOvertureCache (overture-discovery.ts:225:13)
+
+PASS ./semaphore.test.ts
+PASS ./mini-hex-e2e.test.ts
+  ● Console
+
+    console.log
+      [resume] Run run-partial: 2/4 hexes already complete, skipping
+
+      at filterPendingHexes (hex-resume.ts:44:13)
+
+    console.log
+      [overture] Downloading Overture data for bbox…
+
+      at downloadOvertureCache (overture-discovery.ts:236:11)
+
+    console.log
+      [overture]   south=34 north=34.1 west=-118.3 east=-118.2
+
+      at downloadOvertureCache (overture-discovery.ts:237:11)
+
+PASS ./phase1-alias-input.test.ts
+PASS eval/lib/metrics.test.ts
+PASS ./hex-assignment.test.ts
+PASS ./pipeline-utils.test.ts
+PASS ./checkpoint.test.ts
+PASS ./hex-persist.test.ts
+PASS ./phase1-land-payload.test.ts
+PASS ./hex-resume.test.ts
+PASS dev/lib/guard.test.ts
+PASS ./constants.test.ts
+
+Test Suites: 1 skipped, 14 passed, 14 of 15 total
+Tests:       31 skipped, 129 passed, 160 total
+Snapshots:   0 total
+Time:        2.184 s
+Ran all test suites.

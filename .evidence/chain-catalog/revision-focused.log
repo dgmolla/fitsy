@@ -1,0 +1,405 @@
+
+> @fitsy/api@0.1.0 test
+> jest --runInBand chainCatalog.test.ts chainPriority.test.ts uberEatsSource.test.ts
+
+PASS services/menuSources/uberEatsSource.test.ts (14.262 s)
+  ● Console
+
+    console.log
+      [ubereats] [Thai Orchid] brave-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] firecrawl-ue: trying https://www.ubereats.com/store/thai-orchid/AbCd1234
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] firecrawl-ue: ok (5 items)
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] brave-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] firecrawl-ue: trying https://www.ubereats.com/store/thai-orchid/AbCd1234
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] firecrawl-ue: ok (5 items)
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Unknown Place] brave-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Unknown Place] firecrawl-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Unknown Place] result: all steps failed — not found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] brave-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] firecrawl-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] result: all steps failed — not found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Test] brave-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Test] firecrawl-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Test] result: all steps failed — not found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] brave-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] firecrawl-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] result: all steps failed — not found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] cached-url: trying https://www.ubereats.com/store/thai-orchid/AbCd1234
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] cached-url: ok (5 items)
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] cached-url: trying https://www.ubereats.com/store/wrong/XYZ
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats-debug] saved failed HTML: 2026-09-09T07-44-43-434Z_https-www-ubereats-com-store-wrong-XYZ.html (no-json-ld)
+
+      at saveFailedHtml (services/menuSources/uberEatsSource.ts:460:13)
+
+    console.log
+      [ubereats] [Thai Orchid] cached-url: no JSON-LD or geo/name mismatch
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] brave-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] firecrawl-ue: trying https://www.ubereats.com/store/thai-orchid/AbCd1234
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] firecrawl-ue: ok (5 items)
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] url-cache: trying https://www.ubereats.com/store/thai-orchid/AbCd
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] url-cache: ok (5 items)
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] sitemap: trying https://www.ubereats.com/store/thai-orchid/AbCd
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] sitemap: ok (5 items)
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Nonexistent] sitemap: no slug match
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Nonexistent] brave-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Nonexistent] firecrawl-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Nonexistent] result: all steps failed — not found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.warn
+      [ubereats-fetch] 403 for https://www.ubereats.com/store/test/123 — backing off 2000ms and retrying
+
+      416 |     // S-117: On 403, backoff to 2s and retry once
+      417 |     if (response.status === 403) {
+    > 418 |       console.warn(`[ubereats-fetch] 403 for ${storeUrl} — backing off ${UE_BACKOFF_DELAY_MS}ms and retrying`);
+          |               ^
+      419 |       await new Promise((resolve) => setTimeout(resolve, UE_BACKOFF_DELAY_MS));
+      420 |       _ueLastFetchTime = Date.now();
+      421 |       const retryResponse = await fetch(storeUrl, {
+
+      at fetchUberEatsHtml (services/menuSources/uberEatsSource.ts:418:15)
+      at Object.<anonymous> (services/menuSources/uberEatsSource.test.ts:476:20)
+
+    console.warn
+      [ubereats-fetch] 403 for https://www.ubereats.com/store/test/123 — backing off 2000ms and retrying
+
+      416 |     // S-117: On 403, backoff to 2s and retry once
+      417 |     if (response.status === 403) {
+    > 418 |       console.warn(`[ubereats-fetch] 403 for ${storeUrl} — backing off ${UE_BACKOFF_DELAY_MS}ms and retrying`);
+          |               ^
+      419 |       await new Promise((resolve) => setTimeout(resolve, UE_BACKOFF_DELAY_MS));
+      420 |       _ueLastFetchTime = Date.now();
+      421 |       const retryResponse = await fetch(storeUrl, {
+
+      at fetchUberEatsHtml (services/menuSources/uberEatsSource.ts:418:15)
+      at Object.<anonymous> (services/menuSources/uberEatsSource.test.ts:485:20)
+
+    console.warn
+      [ubereats-fetch] retry failed with 403 for https://www.ubereats.com/store/test/123
+
+      423 |       });
+      424 |       if (!retryResponse.ok) {
+    > 425 |         console.warn(`[ubereats-fetch] retry failed with ${retryResponse.status} for ${storeUrl}`);
+          |                 ^
+      426 |         return null;
+      427 |       }
+      428 |       return await retryResponse.text();
+
+      at fetchUberEatsHtml (services/menuSources/uberEatsSource.ts:425:17)
+      at Object.<anonymous> (services/menuSources/uberEatsSource.test.ts:485:20)
+
+    console.warn
+      [ubereats-fetch] HTTP 500 for https://www.ubereats.com/store/test/123
+
+      430 |
+      431 |     if (!response.ok) {
+    > 432 |       console.warn(`[ubereats-fetch] HTTP ${response.status} for ${storeUrl}`);
+          |               ^
+      433 |       return null;
+      434 |     }
+      435 |     return await response.text();
+
+      at fetchUberEatsHtml (services/menuSources/uberEatsSource.ts:432:15)
+      at Object.<anonymous> (services/menuSources/uberEatsSource.test.ts:491:20)
+
+    console.warn
+      [ubereats-fetch] network error for https://www.ubereats.com/store/test/123: ECONNREFUSED
+
+      435 |     return await response.text();
+      436 |   } catch (err) {
+    > 437 |     console.warn(`[ubereats-fetch] network error for ${storeUrl}: ${err instanceof Error ? err.message : String(err)}`);
+          |             ^
+      438 |     return null;
+      439 |   }
+      440 | }
+
+      at fetchUberEatsHtml (services/menuSources/uberEatsSource.ts:437:13)
+      at Object.<anonymous> (services/menuSources/uberEatsSource.test.ts:497:20)
+
+    console.log
+      [ubereats-debug] saved failed HTML: 2026-09-09T07-44-51-950Z_https-www-ubereats-com-store-test-123.html (bot-defense)
+
+      at saveFailedHtml (services/menuSources/uberEatsSource.ts:460:13)
+
+    console.log
+      [ubereats] [Thai Orchid] url-cache: trying https://www.ubereats.com/store/thai-orchid/AbCd
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] url-cache: ok (2 items)
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] url-cache: trying https://www.ubereats.com/store/thai-orchid/AbCd
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] build-result: geo reject: 5371m apart (expected 34.1400,-118.2889 vs UE 34.0917,-118.2889)
+
+      at log (services/menuSources/uberEatsSource.ts:734:42)
+
+    console.log
+      [ubereats] [Thai Orchid] url-cache: no JSON-LD or geo/name mismatch
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] brave-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] firecrawl-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] result: all steps failed — not found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Orchid Thai Kitchen] url-cache: trying https://www.ubereats.com/store/thai-orchid/AbCd
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Orchid Thai Kitchen] build-result: geo ok (0m) but name differs: "Thai Orchid" vs "Orchid Thai Kitchen"
+
+      at log (services/menuSources/uberEatsSource.ts:734:42)
+
+    console.log
+      [ubereats] [Orchid Thai Kitchen] url-cache: ok (2 items)
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] url-cache: trying https://www.ubereats.com/store/thai-orchid/AbCd
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] url-cache: ok (5 items)
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Totally Different Place] url-cache: trying https://www.ubereats.com/store/thai-orchid/AbCd
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Totally Different Place] build-result: name reject (no geo): "Thai Orchid" vs "Totally Different Place" (0/3 words)
+
+      at log (services/menuSources/uberEatsSource.ts:734:42)
+
+    console.log
+      [ubereats] [Totally Different Place] url-cache: no JSON-LD or geo/name mismatch
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Totally Different Place] brave-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Totally Different Place] firecrawl-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Totally Different Place] result: all steps failed — not found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] url-cache: trying https://www.ubereats.com/store/thai-orchid/AbCd1234-5678-9012-3456
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ue-shadow] [Thai Orchid] API_LOSS jsonld=2 api=0 url=https://www.ubereats.com/store/thai-orchid/AbCd1234-5678-9012-3456
+
+      at logShadowDelta (services/menuSources/uberEatsSource.ts:506:11)
+
+    console.log
+      [ubereats] [Thai Orchid] url-cache: ok (2 items)
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] url-cache: trying https://www.ubereats.com/store/thai-orchid/AbCd
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats-debug] saved failed HTML: 2026-09-09T07-44-55-962Z_https-www-ubereats-com-store-thai-orchid-AbCd.html (bot-defense)
+
+      at saveFailedHtml (services/menuSources/uberEatsSource.ts:460:13)
+
+    console.log
+      [ubereats] [Thai Orchid] url-cache: bot defense detected
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] brave-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] firecrawl-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] firecrawl-fallback: trying https://www.ubereats.com/store/thai-orchid/AbCd via Firecrawl
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] firecrawl-fallback: ok (5 items)
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+PASS services/chainCatalog.test.ts
+PASS services/chainPriority.test.ts
+
+Test Suites: 3 passed, 3 total
+Tests:       97 passed, 97 total
+Snapshots:   0 total
+Time:        14.583 s, estimated 15 s
+Ran all test suites matching /chainCatalog.test.ts|chainPriority.test.ts|uberEatsSource.test.ts/i.

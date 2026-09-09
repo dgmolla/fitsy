@@ -1,0 +1,26 @@
+PASS scripts/pipeline-utils.test.ts
+PASS scripts/hex-persist.test.ts
+PASS scripts/mini-hex-e2e.test.ts
+  ● Console
+
+    console.log
+      [resume] Run run-partial: 2/4 hexes already complete, skipping
+
+      at filterPendingHexes (hex-resume.ts:44:13)
+
+    console.log
+      [overture] Downloading Overture data for bbox…
+
+      at downloadOvertureCache (overture-discovery.ts:236:11)
+
+    console.log
+      [overture]   south=34 north=34.1 west=-118.3 east=-118.2
+
+      at downloadOvertureCache (overture-discovery.ts:237:11)
+
+
+Test Suites: 3 passed, 3 total
+Tests:       20 skipped, 42 passed, 62 total
+Snapshots:   0 total
+Time:        1.718 s, estimated 12 s
+Ran all test suites matching /scripts\/pipeline-utils.test.ts|scripts\/hex-persist.test.ts|scripts\/mini-hex-e2e.test.ts/i.

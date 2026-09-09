@@ -11,6 +11,8 @@ export interface StructuredMenuItem {
   description?: string;
   price?: number;
   calories?: number; // calories extracted from source (e.g. UberEats markdown) — use directly when set
+  calorieRange?: [number, number]; // explicit source range; never an exact published serving
+  hasCustomizations?: boolean; // review signal, not proof of a selected configuration
   category?: string; // "Entree", "Side", "Drink"
   section?: string;  // menu section heading (e.g., "Appetizers", "Salads")
 }

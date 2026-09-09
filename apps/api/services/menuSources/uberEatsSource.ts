@@ -341,8 +341,7 @@ export async function scrapeUberEatsMarkdown(url: string): Promise<string | null
  *   {name}\\\n${price} • {calories} Cal.
  *
  * This parser extracts item name and calories. Price is also extracted when
- * available. Items with calorie ranges (e.g. "430 - 530 Cal.") use the
- * lower bound as the calorie count.
+ * available. Calorie ranges stay ranges; they do not establish an exact serving.
  *
  * Returns an empty array if no items are found (e.g. login-gated page).
  */
@@ -353,13 +352,13 @@ export function parseUberEatsMarkdown(markdown: string): StructuredMenuItem[] {
   // UberEats markdown format (from Firecrawl):
   //   {name}\\\n\\\n${price} • {N} Cal.  (typical — two backslash-newlines between name and price)
   //   {name}\\\n${price} • {N} Cal.  (compact — one backslash-newline)
-  //   {name}\\\n${price} • {N} - {M} Cal.  (range — use lower bound)
+  //   {name}\\\n${price} • {N} - {M} Cal.  (range — retain both bounds)
   //
   // Backslashes are Firecrawl's encoding of markdown hard line breaks.
   // There may be one or more "backslash + newline" sequences between the item
   // name and the price+calorie line (often an empty \ line as a blank separator).
   // We use `(?:\\+[ \t]*\n)+` to consume all of them.
-  const lineBreakPattern = /([^\n\[\]\\|]+?)(?:\\+[ \t]*\n)+[ \t]*\$[\d.]+[ \t]*•[ \t]*(\d+)(?:[ \t]*-[ \t]*\d+)?[ \t]*Cal\./g;
+  const lineBreakPattern = /([^\n\[\]\\|]+?)(?:\\+[ \t]*\n)+[ \t]*\$[\d.]+[ \t]*•[ \t]*(\d+)(?:[ \t]*-[ \t]*(\d+))?[ \t]*Cal\./g;
 
   let match: RegExpExecArray | null;
   while ((match = lineBreakPattern.exec(markdown)) !== null) {
@@ -373,7 +372,8 @@ export function parseUberEatsMarkdown(markdown: string): StructuredMenuItem[] {
     if (seen.has(rawName)) continue;
     seen.add(rawName);
 
-    const item: StructuredMenuItem = { name: rawName, calories };
+    const item: StructuredMenuItem = match[3] === undefined ? { name: rawName, calories }
+      : { name: rawName, calorieRange: [calories, parseInt(match[3], 10)] };
     items.push(item);
   }
 

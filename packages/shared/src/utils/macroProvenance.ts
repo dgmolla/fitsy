@@ -7,7 +7,7 @@
  * highest-trust source available, and its macros are what get denormalized
  * onto MenuItem.{calories,proteinG,carbsG,fatG} and surfaced to users.
  *
- * Trust order (most → least): merchant-verified > FatSecret (structured
+ * Trust order (most → least): merchant-verified > reviewed official > FatSecret (structured
  * chain data) > FFN > Haiku (LLM estimate) > anything else / legacy NULL.
  *
  * Two consumers, one ranking:
@@ -21,9 +21,10 @@
 /** Lower rank = higher trust = wins. */
 export const MACRO_SOURCE_RANK: Readonly<Record<string, number>> = {
   merchant: 0,
-  fatsecret: 1,
-  ffn: 2,
-  haiku: 3,
+  official: 1,
+  fatsecret: 2,
+  ffn: 3,
+  haiku: 4,
 };
 
 /** Fallback rank for unknown or legacy-NULL sources — always loses. */
@@ -62,16 +63,13 @@ export function pickWinningEstimate<
  *   ORDER BY e."menuItemId", ${Prisma.raw(macroWinnerSqlOrder("e"))}
  *
  * `alias` is the table alias for the MacroEstimate row. It is developer-
- * supplied (never user input), so it is safe to interpolate. Keep this
- * CASE list in lockstep with MACRO_SOURCE_RANK above.
+ * supplied (never user input), so it is safe to interpolate. The CASE
+ * entries are derived from MACRO_SOURCE_RANK above.
  */
 export function macroWinnerSqlOrder(alias = "e"): string {
   return (
     `CASE ${alias}.source ` +
-    `WHEN 'merchant' THEN 0 ` +
-    `WHEN 'fatsecret' THEN 1 ` +
-    `WHEN 'ffn' THEN 2 ` +
-    `WHEN 'haiku' THEN 3 ` +
+    Object.entries(MACRO_SOURCE_RANK).map(([source, rank]) => `WHEN '${source}' THEN ${rank} `).join("") +
     `ELSE ${UNKNOWN_SOURCE_RANK} END ASC, ` +
     `${alias}."estimatedAt" DESC`
   );

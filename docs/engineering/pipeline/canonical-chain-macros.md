@@ -43,7 +43,8 @@ per-item fallback. Variation is absorbed at the membership level, not the macro 
 
 The canonical table is a **cache/indirection, not a source** — each entry stores macros
 tagged with their underlying source (`official`/`fatsecret`/`haiku`), so existing
-provenance ranking (`merchant=official > fatsecret > ffn > haiku`) is unchanged.
+provenance ranking is now `merchant > reviewed official > fatsecret > ffn > haiku`;
+see [reviewed matching](reviewed-chain-matcher.md) for the approval gate.
 
 ---
 

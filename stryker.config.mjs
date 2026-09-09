@@ -14,6 +14,7 @@ export default {
   },
   mutate: [
     "apps/api/lib/restaurantMenuService.ts",
+    "apps/api/services/chainCatalog.ts",
     "apps/api/lib/macroScoring.ts",
     "apps/api/lib/macroTargetParams.ts",
     "apps/api/lib/macroScoreSql.ts",

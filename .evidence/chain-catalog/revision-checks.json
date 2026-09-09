@@ -1,0 +1,15 @@
+{
+  "databaseTests": 780,
+  "skipped": 0,
+  "focusedTests": 99,
+  "whitespaceRegression": "fails before, passes after",
+  "rangeRegression": "real markdown parser fails before, passes after",
+  "rankingMocks": "42 pass; 20 legacy live DB/Overture tests intentionally skipped",
+  "productionOfficialEstimates": 0,
+  "sourceAuditTime": "2026-09-09T07:41Z",
+  "fullTestLogSha256": "20389d6a631e5bf0c40e36157ed93fde912bd58be029db88d7561633fb5bc3d4",
+  "secretScan": "gitleaks false positives verified as fixture dish keys and log digests; narrow fixture annotations, compact logs, and rewritten unmerged branch remove false positives without weakening scanner",
+  "additionalReviewTests": "plausible macro edits isolate digest validation; blank alias regression; energy/source boundaries; word boundaries and stable v1 hashes; reversed source order",
+  "mutationScore": 97.62,
+  "catalogMutationScore": 99.28
+}

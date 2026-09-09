@@ -1,0 +1,16 @@
+{
+  "testedHead": "c839bb850896be250d62fa455fc6d14c8563ebdd",
+  "expectedReleaseBase": "4cb0501c5b19eacfa1601818074f4ad2cf19ef29",
+  "databaseApiTests": {
+    "passed": 777,
+    "skipped": 0
+  },
+  "withoutDatabase": {
+    "passed": 754,
+    "skipped": 23
+  },
+  "registry": "9 passed; existing own-code-mocks advisory failure",
+  "build": "passed",
+  "initialLocalRegistryAttempt": "API test command failed while a build also ran; underlying error was truncated by registry runner; isolated suite and normal registry retry passed without code changes",
+  "fullTestLogSha256": "eae5e761be6b0e58b113e50434c65e0a3b3cf89e03926861fbd95d4ca4b4acda"
+}

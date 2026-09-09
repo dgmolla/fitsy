@@ -1,0 +1,22 @@
+{
+  "score": 97.62,
+  "catalogScore": 99.28,
+  "scope": "complete mutation set for chainCatalog.ts and macroProvenance.ts; 42 focused contract tests",
+  "files": {
+    "apps/api/services/chainCatalog.ts": {
+      "mutants": 138,
+      "killed": 137,
+      "survived": 1,
+      "noCoverage": 0
+    },
+    "packages/shared/src/utils/macroProvenance.ts": {
+      "mutants": 30,
+      "killed": 27,
+      "survived": 3,
+      "noCoverage": 0
+    }
+  },
+  "remaining": "three redundant/equivalent guards/comparisons; one equal-timestamp tie changes which otherwise equally ranked estimate is selected (unchanged existing contract)",
+  "macroDigestOmission": "all four small macro-tamper cases reject the deliberate omission",
+  "reportSha256": "3cd7af0c2393ed4c4d1c7bfb5a1435a26039deedcddf20d7540759ee7569e14f"
+}

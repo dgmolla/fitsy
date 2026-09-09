@@ -1,3 +1,4 @@
+import { buildChainMatcher, chainReviewHash, type ChainCatalogRow } from "../chainCatalog";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -188,7 +189,7 @@ $5.79 • 440 Cal.](https://www.ubereats.com/store/test/AbCd?mod=quickView)
     expect(sandwich?.calories).toBe(440);
   });
 
-  it("uses lower bound for calorie ranges", () => {
+  it("preserves calorie ranges so the chain matcher cannot treat the lower bound as a serving", () => {
     const markdown = `
 - [![Happy Meal](https://img.jpg)\\
 Happy Meal\\
@@ -196,7 +197,16 @@ $5.99 • 430 - 530 Cal.](https://ubereats.com/store/test/XYZ)
 `;
     const items = parseUberEatsMarkdown(markdown);
     const happyMeal = items.find((i) => i.name === "Happy Meal");
-    expect(happyMeal?.calories).toBe(430);
+    expect(happyMeal?.calories).toBeUndefined();
+    expect(happyMeal?.calorieRange).toEqual([430, 530]);
+    const row: ChainCatalogRow = { id: "meal", brandId: "brand", canonicalKey: "meal", servingSize: "1 meal",
+      calories: 440, proteinG: 20, carbsG: 45, fatG: 20, source: "official", confidence: "HIGH",
+      officialUrl: "https://example.com/nutrition.pdf", review: null };
+    const review = { version: 1 as const, sourceHash: "a".repeat(64), locator: "page 1", reviewedBy: "fixture", aliases: [{ name: "Happy Meal" }] };
+    row.review = { ...review, dataHash: chainReviewHash(row, review) };
+    const matcher = buildChainMatcher([row]);
+    expect(matcher("brand", { name: "Happy Meal", calories: 440 })).toMatchObject({ status: "matched" });
+    expect(matcher("brand", happyMeal!)).toEqual({ status: "unmatched" });
   });
 
   it("deduplicates items that appear multiple times (featured + section)", () => {

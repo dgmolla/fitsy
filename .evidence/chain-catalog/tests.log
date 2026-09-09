@@ -1,0 +1,13 @@
+
+> @fitsy/api@0.1.0 test
+> jest --runInBand services/chainCatalog.test.ts services/chainPriority.test.ts tests/db/chainCatalog.db.test.ts
+
+PASS tests/db/chainCatalog.db.test.ts
+PASS services/chainCatalog.test.ts
+PASS services/chainPriority.test.ts
+
+Test Suites: 3 passed, 3 total
+Tests:       41 passed, 41 total
+Snapshots:   0 total
+Time:        0.624 s, estimated 2 s
+Ran all test suites matching /services\/chainCatalog.test.ts|services\/chainPriority.test.ts|tests\/db\/chainCatalog.db.test.ts/i.
