@@ -23,6 +23,14 @@ export async function wasSent(email: string, campaign: Campaign, step: string): 
   return row !== null;
 }
 
+/** How many of `emails` already have this step: one set query for dry-run reporting. */
+export async function countSent(emails: string[], campaign: Campaign, step: string): Promise<number> {
+  if (emails.length === 0) return 0;
+  return prisma.marketingSend.count({
+    where: { campaign, step, email: { in: emails.map(normalizeEmail) } },
+  });
+}
+
 /** Records a confirmed send. Safe to call twice: the unique key makes it a no-op. */
 export async function recordSend(email: string, campaign: Campaign, step: string): Promise<void> {
   await prisma.marketingSend.upsert({

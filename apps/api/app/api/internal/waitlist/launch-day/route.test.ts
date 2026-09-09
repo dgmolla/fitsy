@@ -106,6 +106,22 @@ describe("GET /api/internal/waitlist/launch-day", () => {
     });
   });
 
+  it("stops at the time budget with rows remaining and no stalled flag", async () => {
+    jest.useFakeTimers().setSystemTime(new Date(`${LAUNCH_DATE_ISO}T16:00:00Z`));
+    const progressing = { dryRun: false, matched: 900, viaPush: 0, viaEmail: 400, notified: 400, suppressed: 0, failed: 0, remaining: 500 };
+    (notifyLaunch as jest.Mock)
+      .mockResolvedValueOnce(progressing)
+      .mockImplementationOnce(async () => {
+        jest.advanceTimersByTime(210_000);
+        return { ...progressing, remaining: 100 };
+      });
+    const res = await GET(makeRequest());
+    expect(notifyLaunch).toHaveBeenCalledTimes(2);
+    const body = await res.json();
+    expect(body).toEqual(expect.objectContaining({ notified: 800, remaining: 100 }));
+    expect(body).not.toHaveProperty("stalled");
+  });
+
   it("stops draining when a batch makes no progress instead of spinning until the time budget", async () => {
     jest.useFakeTimers().setSystemTime(new Date(`${LAUNCH_DATE_ISO}T16:00:00Z`));
     const stuck = { dryRun: false, matched: 5, viaPush: 0, viaEmail: 0, notified: 0, suppressed: 0, failed: 3, remaining: 3 };

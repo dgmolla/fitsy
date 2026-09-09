@@ -13,6 +13,7 @@ jest.mock("@/lib/marketingAudience", () => ({
 
 jest.mock("@/lib/marketingLedger", () => ({
   wasSent: jest.fn(),
+  countSent: jest.fn(),
   sentWithin: jest.fn(),
   recordSend: jest.fn(),
 }));
@@ -21,7 +22,7 @@ import { GET } from "./route";
 import { NextRequest } from "next/server";
 import { sendMarketingEmail } from "@/lib/marketingEmail";
 import { marketingAudience } from "@/lib/marketingAudience";
-import { recordSend, sentWithin, wasSent } from "@/lib/marketingLedger";
+import { countSent, recordSend, sentWithin, wasSent } from "@/lib/marketingLedger";
 
 const SECRET = "cron-secret";
 const ACCOUNT = { email: "alice@example.org", userId: "u1" };
@@ -38,6 +39,7 @@ beforeEach(() => {
   process.env["CRON_SECRET"] = SECRET;
   (marketingAudience as jest.Mock).mockResolvedValue([ACCOUNT, WAITLIST_ONLY]);
   (wasSent as jest.Mock).mockResolvedValue(false);
+  (countSent as jest.Mock).mockResolvedValue(0);
   (sentWithin as jest.Mock).mockResolvedValue(false);
   (recordSend as jest.Mock).mockResolvedValue(undefined);
   (sendMarketingEmail as jest.Mock).mockResolvedValue(true);
@@ -55,8 +57,9 @@ describe("GET /api/internal/marketing/weekly", () => {
   });
 
   it("dry run reports the audience and how many already have this edition, without sending", async () => {
-    (wasSent as jest.Mock).mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    (countSent as jest.Mock).mockResolvedValue(1);
     const res = await GET(makeRequest("?dryRun=1"));
+    expect(countSent).toHaveBeenCalledWith(["alice@example.org", "web@example.org"], "weekly", "ed-1:w35");
     expect(await res.json()).toEqual({
       ok: true,
       dryRun: true,

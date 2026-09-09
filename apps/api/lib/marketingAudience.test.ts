@@ -29,7 +29,7 @@ beforeEach(() => {
 });
 
 describe("marketingAudience", () => {
-  it("unions accounts and waitlist-only rows, one recipient per address, no undeliverable seeds", async () => {
+  it("with includeWaitlistOnly: unions accounts and waitlist-only rows, one recipient per address, no undeliverable seeds", async () => {
     const audience = await marketingAudience({ includeWaitlistOnly: true });
     expect(audience).toEqual([
       { email: "alice@example.org", userId: "u1" },

@@ -26,7 +26,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { sendMarketingEmail } from "@/lib/marketingEmail";
 import { editionForDate, weekIndexForDate } from "@/lib/emailTemplates";
 import { marketingAudience } from "@/lib/marketingAudience";
-import { recordSend, sentWithin, wasSent } from "@/lib/marketingLedger";
+import { countSent, recordSend, sentWithin, wasSent } from "@/lib/marketingLedger";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -58,8 +58,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const eligible = audience.length;
 
   if (dryRun) {
-    let alreadySent = 0;
-    for (const r of audience) if (await wasSent(r.email, "weekly", step)) alreadySent++;
+    const alreadySent = await countSent(audience.map((r) => r.email), "weekly", step);
     return NextResponse.json({ ok: true, dryRun: true, edition: slug, eligible, alreadySent });
   }
 

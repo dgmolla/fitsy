@@ -77,10 +77,10 @@ sequenceDiagram
   Accepts `{ lat, lng, radiusMiles?, city?, includeUnlocated?, dryRun? }`.
   Website rows have no location and never radius-match; `includeUnlocated: true` folds them into the blast (use it for the first city launch).
   With `dryRun: true` it returns `matched`, `wouldNotify`, and `wouldSuppress` without sending anything.
-  Live runs process up to 400 rows and report `remaining`; re-run while it is above zero (already-notified rows are skipped).
+  Live runs process up to 400 rows and report `remaining` (unprocessed rows plus this run's failures); re-run while it is above zero (already-notified rows are skipped).
   Idempotent: entries with `notifiedAt` already set are skipped.
   An email opt-out suppresses the email only; the push is a separately requested notification and still goes out.
-  Sets `notifiedAt` when either push or email succeeds, and also when an opted-out entry has no push token (reported as `suppressed`) so the job converges.
+  Sets `notifiedAt` when either push or email succeeds, and also when an opted-out entry's only allowed channel (push) is absent or failed (reported as `suppressed`) so the job converges.
 
 - `GET /unsubscribe` - renders a confirmation page with a button.
   Accepts `?u=<userId>` (account) or `?w=<waitlistId>` (web-only email) plus `&t=<token>`.

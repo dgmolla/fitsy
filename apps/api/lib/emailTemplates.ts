@@ -524,11 +524,6 @@ export const WEEKLY_EDITIONS: Edition[] = [
 // Edition picker
 // ---------------------------------------------------------------------------
 
-/**
- * Returns the deterministic weekly edition for a given date.
- * Week 0 starts on Monday, January 5, 2026.
- * Rotation period: 8 editions (cycles indefinitely).
- */
 /** Whole weeks since the rotation epoch (Mon Jan 5 2026 UTC); the weekly ledger step key uses it. */
 export function weekIndexForDate(date: Date): number {
   const EPOCH_MS = Date.UTC(2026, 0, 5); // Mon Jan 5 2026 00:00:00 UTC
@@ -536,6 +531,11 @@ export function weekIndexForDate(date: Date): number {
   return Math.floor((date.getTime() - EPOCH_MS) / weekMs);
 }
 
+/**
+ * Returns the deterministic weekly edition for a given date.
+ * Week 0 starts on Monday, January 5, 2026.
+ * Rotation period: 8 editions (cycles indefinitely).
+ */
 export function editionForDate(date: Date): {
   slug: string;
   subject: string;

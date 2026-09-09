@@ -10,10 +10,13 @@
  * Attempts BOTH push and email per entry. An email opt-out (unsubscribe)
  * suppresses only the email: "Notify me at launch" is a separately requested
  * notification, and the privacy page promises unsubscribing stops marketing
- * email only. notifiedAt is set when either channel succeeds, and also when
- * an opted-out entry has no push token (nothing we may send; `suppressed`)
- * so the job converges instead of re-matching it forever. Successful emails
- * are written to the MarketingSend ledger (campaign "launch").
+ * email only. notifiedAt is set when either channel succeeds. An opted-out
+ * entry is also closed (`suppressed`) when its only allowed channel, push,
+ * cannot deliver: no token, or the attempt failed (stale token). There is
+ * nothing else we may ever send it, so retrying would only starve the
+ * drain loop. Successful emails are written to the MarketingSend ledger
+ * (campaign "launch"), and a ledger hit short-circuits the email so the
+ * ledger backs up notifiedAt rather than merely trailing it.
  *
  * Bounded: at most MAX_PER_RUN rows are processed per call and the result
  * carries `remaining`, so a large blast is several calls (each idempotent
@@ -27,7 +30,7 @@ import {
   launchEmailContent,
   sendMarketingEmail,
 } from "@/lib/marketingEmail";
-import { recordSend } from "@/lib/marketingLedger";
+import { recordSend, wasSent } from "@/lib/marketingLedger";
 
 export type LaunchNotifyOptions = {
   lat: number;
@@ -122,22 +125,26 @@ export async function notifyLaunch(opts: LaunchNotifyOptions): Promise<LaunchNot
     // Opt-out is keyed on the address across both tables; it gates email only.
     const optedOut = await isEmailOptedOut(w.email);
     const recipient = w.userId !== null ? { userId: w.userId } : { waitlistId: w.id };
+    const step = effectiveCity ?? "launch";
+    const alreadyEmailed = !optedOut && (await wasSent(w.email, "launch", step));
 
     const [pushed, emailed] = await Promise.all([
       pushToken ? sendLaunchPush(pushToken, effectiveCity) : Promise.resolve(false),
       optedOut
         ? Promise.resolve(false)
-        : (async () => {
-            const { subject, html } = launchEmailContent(effectiveCity);
-            return sendMarketingEmail({ ...recipient, to: w.email, subject, html });
-          })(),
+        : alreadyEmailed
+          ? Promise.resolve(true)
+          : (async () => {
+              const { subject, html } = launchEmailContent(effectiveCity);
+              return sendMarketingEmail({ ...recipient, to: w.email, subject, html });
+            })(),
     ]);
 
-    if (emailed) await recordSend(w.email, "launch", effectiveCity ?? "launch");
+    if (emailed && !alreadyEmailed) await recordSend(w.email, "launch", step);
 
-    // Terminal when a channel succeeded, or when nothing may ever be sent.
-    const nothingAllowed = optedOut && !pushToken;
-    if (pushed || emailed || nothingAllowed) {
+    // Terminal when a channel succeeded, or when an opted-out row's only
+    // allowed channel (push) is absent or just failed: nothing more to try.
+    if (pushed || emailed || optedOut) {
       await prisma.launchWaitlist.update({
         where: { id: w.id },
         data: { notifiedAt: new Date() },
@@ -159,6 +166,7 @@ export async function notifyLaunch(opts: LaunchNotifyOptions): Promise<LaunchNot
     notified,
     suppressed,
     failed,
-    remaining: inArea.length - batch.length,
+    // Rows still needing work: not yet processed, plus this batch's failures.
+    remaining: inArea.length - batch.length + failed,
   };
 }
