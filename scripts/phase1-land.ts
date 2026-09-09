@@ -18,6 +18,7 @@
 import { PrismaClient } from "@prisma/client";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import { chainLandingUpsert } from "./phase1-land-payload";
 import { loadVerifiedAliases } from "./phase1-alias-input";
 
 // These legacy name aliases remain candidates, not ChainItem.review approval.
@@ -71,11 +72,7 @@ async function main() {
       let n = 0;
       for (const o of out) {
         if (!o.brandId) continue;
-        await client.chainItem.upsert({
-          where: { brandId_canonicalKey: { brandId: o.brandId, canonicalKey: o.canonicalKey } },
-          create: { brandId: o.brandId, canonicalKey: o.canonicalKey, aliases: o.aliases, calories: Math.round(o.calories), proteinG: o.proteinG, carbsG: o.carbsG, fatG: o.fatG, servingSize: o.servingSize, source: o.source, confidence: o.confidence, officialUrl: o.officialUrl, retrievedAt: new Date() },
-          update: { servingSize: o.servingSize, aliases: o.aliases, calories: Math.round(o.calories), proteinG: o.proteinG, carbsG: o.carbsG, fatG: o.fatG, source: o.source, confidence: o.confidence, officialUrl: o.officialUrl, retrievedAt: new Date() },
-        });
+        await client.chainItem.upsert(chainLandingUpsert({ ...o, brandId: o.brandId }));
         n++;
       }
       console.log(`  applied ${n} ChainItem rows.`);

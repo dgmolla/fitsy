@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadVerifiedAliases, VERIFIED_ALIASES_FILENAME } from "./phase1-alias-input";
@@ -21,4 +21,9 @@ test.each(["{", "[]", '{"waba":{"chicken":"plate"}}', '{"waba":{"chicken":[""]}}
 ("malformed verified data is rejected: %s", raw => {
   writeFileSync(join(directory, VERIFIED_ALIASES_FILENAME), raw);
   expect(() => loadVerifiedAliases(directory)).toThrow();
+});
+
+test("non-missing I/O errors preserve their actual cause", () => {
+  mkdirSync(join(directory, VERIFIED_ALIASES_FILENAME));
+  expect(() => loadVerifiedAliases(directory)).toThrow(expect.objectContaining({ code: "EISDIR" }));
 });

@@ -1,0 +1,1901 @@
+
+> @fitsy/api@0.1.0 test:coverage
+> jest --coverage --runInBand
+
+PASS services/menuSources/uberEatsSource.test.ts (14.188 s)
+  ● Console
+
+    console.log
+      [ubereats] [Thai Orchid] brave-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] firecrawl-ue: trying https://www.ubereats.com/store/thai-orchid/AbCd1234
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] firecrawl-ue: ok (5 items)
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] brave-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] firecrawl-ue: trying https://www.ubereats.com/store/thai-orchid/AbCd1234
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] firecrawl-ue: ok (5 items)
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Unknown Place] brave-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Unknown Place] firecrawl-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Unknown Place] result: all steps failed — not found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] brave-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] firecrawl-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] result: all steps failed — not found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Test] brave-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Test] firecrawl-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Test] result: all steps failed — not found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] brave-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] firecrawl-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] result: all steps failed — not found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] cached-url: trying https://www.ubereats.com/store/thai-orchid/AbCd1234
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] cached-url: ok (5 items)
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] cached-url: trying https://www.ubereats.com/store/wrong/XYZ
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats-debug] saved failed HTML: 2026-09-09T03-37-51-364Z_https-www-ubereats-com-store-wrong-XYZ.html (no-json-ld)
+
+      at log (services/menuSources/uberEatsSource.ts:460:13)
+
+    console.log
+      [ubereats] [Thai Orchid] cached-url: no JSON-LD or geo/name mismatch
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] brave-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] firecrawl-ue: trying https://www.ubereats.com/store/thai-orchid/AbCd1234
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] firecrawl-ue: ok (5 items)
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] url-cache: trying https://www.ubereats.com/store/thai-orchid/AbCd
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] url-cache: ok (5 items)
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] sitemap: trying https://www.ubereats.com/store/thai-orchid/AbCd
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] sitemap: ok (5 items)
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Nonexistent] sitemap: no slug match
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Nonexistent] brave-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Nonexistent] firecrawl-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Nonexistent] result: all steps failed — not found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.warn
+      [ubereats-fetch] 403 for https://www.ubereats.com/store/test/123 — backing off 2000ms and retrying
+
+      416 |     // S-117: On 403, backoff to 2s and retry once
+      417 |     if (response.status === 403) {
+    > 418 |       console.warn(`[ubereats-fetch] 403 for ${storeUrl} — backing off ${UE_BACKOFF_DELAY_MS}ms and retrying`);
+          |               ^
+      419 |       await new Promise((resolve) => setTimeout(resolve, UE_BACKOFF_DELAY_MS));
+      420 |       _ueLastFetchTime = Date.now();
+      421 |       const retryResponse = await fetch(storeUrl, {
+
+      at warn (services/menuSources/uberEatsSource.ts:418:15)
+      at Object.<anonymous> (services/menuSources/uberEatsSource.test.ts:466:20)
+
+    console.warn
+      [ubereats-fetch] 403 for https://www.ubereats.com/store/test/123 — backing off 2000ms and retrying
+
+      416 |     // S-117: On 403, backoff to 2s and retry once
+      417 |     if (response.status === 403) {
+    > 418 |       console.warn(`[ubereats-fetch] 403 for ${storeUrl} — backing off ${UE_BACKOFF_DELAY_MS}ms and retrying`);
+          |               ^
+      419 |       await new Promise((resolve) => setTimeout(resolve, UE_BACKOFF_DELAY_MS));
+      420 |       _ueLastFetchTime = Date.now();
+      421 |       const retryResponse = await fetch(storeUrl, {
+
+      at warn (services/menuSources/uberEatsSource.ts:418:15)
+      at Object.<anonymous> (services/menuSources/uberEatsSource.test.ts:475:20)
+
+    console.warn
+      [ubereats-fetch] retry failed with 403 for https://www.ubereats.com/store/test/123
+
+      423 |       });
+      424 |       if (!retryResponse.ok) {
+    > 425 |         console.warn(`[ubereats-fetch] retry failed with ${retryResponse.status} for ${storeUrl}`);
+          |                 ^
+      426 |         return null;
+      427 |       }
+      428 |       return await retryResponse.text();
+
+      at warn (services/menuSources/uberEatsSource.ts:425:17)
+      at Object.<anonymous> (services/menuSources/uberEatsSource.test.ts:475:20)
+
+    console.warn
+      [ubereats-fetch] HTTP 500 for https://www.ubereats.com/store/test/123
+
+      430 |
+      431 |     if (!response.ok) {
+    > 432 |       console.warn(`[ubereats-fetch] HTTP ${response.status} for ${storeUrl}`);
+          |               ^
+      433 |       return null;
+      434 |     }
+      435 |     return await response.text();
+
+      at warn (services/menuSources/uberEatsSource.ts:432:15)
+      at Object.<anonymous> (services/menuSources/uberEatsSource.test.ts:481:20)
+
+    console.warn
+      [ubereats-fetch] network error for https://www.ubereats.com/store/test/123: ECONNREFUSED
+
+      435 |     return await response.text();
+      436 |   } catch (err) {
+    > 437 |     console.warn(`[ubereats-fetch] network error for ${storeUrl}: ${err instanceof Error ? err.message : String(err)}`);
+          |             ^
+      438 |     return null;
+      439 |   }
+      440 | }
+
+      at warn (services/menuSources/uberEatsSource.ts:437:13)
+      at Object.<anonymous> (services/menuSources/uberEatsSource.test.ts:487:20)
+
+    console.log
+      [ubereats-debug] saved failed HTML: 2026-09-09T03-37-59-885Z_https-www-ubereats-com-store-test-123.html (bot-defense)
+
+      at log (services/menuSources/uberEatsSource.ts:460:13)
+
+    console.log
+      [ubereats] [Thai Orchid] url-cache: trying https://www.ubereats.com/store/thai-orchid/AbCd
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] url-cache: ok (2 items)
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] url-cache: trying https://www.ubereats.com/store/thai-orchid/AbCd
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] build-result: geo reject: 5371m apart (expected 34.1400,-118.2889 vs UE 34.0917,-118.2889)
+
+      at log (services/menuSources/uberEatsSource.ts:734:42)
+
+    console.log
+      [ubereats] [Thai Orchid] url-cache: no JSON-LD or geo/name mismatch
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] brave-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] firecrawl-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] result: all steps failed — not found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Orchid Thai Kitchen] url-cache: trying https://www.ubereats.com/store/thai-orchid/AbCd
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Orchid Thai Kitchen] build-result: geo ok (0m) but name differs: "Thai Orchid" vs "Orchid Thai Kitchen"
+
+      at log (services/menuSources/uberEatsSource.ts:734:42)
+
+    console.log
+      [ubereats] [Orchid Thai Kitchen] url-cache: ok (2 items)
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] url-cache: trying https://www.ubereats.com/store/thai-orchid/AbCd
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] url-cache: ok (5 items)
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Totally Different Place] url-cache: trying https://www.ubereats.com/store/thai-orchid/AbCd
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Totally Different Place] build-result: name reject (no geo): "Thai Orchid" vs "Totally Different Place" (0/3 words)
+
+      at log (services/menuSources/uberEatsSource.ts:734:42)
+
+    console.log
+      [ubereats] [Totally Different Place] url-cache: no JSON-LD or geo/name mismatch
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Totally Different Place] brave-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Totally Different Place] firecrawl-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Totally Different Place] result: all steps failed — not found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] url-cache: trying https://www.ubereats.com/store/thai-orchid/AbCd1234-5678-9012-3456
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ue-shadow] [Thai Orchid] API_LOSS jsonld=2 api=0 url=https://www.ubereats.com/store/thai-orchid/AbCd1234-5678-9012-3456
+
+      at log (services/menuSources/uberEatsSource.ts:506:11)
+
+    console.log
+      [ubereats] [Thai Orchid] url-cache: ok (2 items)
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] url-cache: trying https://www.ubereats.com/store/thai-orchid/AbCd
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats-debug] saved failed HTML: 2026-09-09T03-38-03-898Z_https-www-ubereats-com-store-thai-orchid-AbCd.html (bot-defense)
+
+      at log (services/menuSources/uberEatsSource.ts:460:13)
+
+    console.log
+      [ubereats] [Thai Orchid] url-cache: bot defense detected
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] brave-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] firecrawl-ue: no UE URL found
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] firecrawl-fallback: trying https://www.ubereats.com/store/thai-orchid/AbCd via Firecrawl
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+    console.log
+      [ubereats] [Thai Orchid] firecrawl-fallback: ok (5 items)
+
+      at log (services/menuSources/uberEatsSource.ts:872:56)
+
+PASS services/menuSources/ueApiClient.test.ts (137.864 s)
+  ● Console
+
+    console.warn
+      [ue-api] HTTP 403 for 5290fdd8-cd11-44e8-b2de-40be81a6e0d3 (attempt 1/3, retrying): <unreadable>
+
+      225 |       const retriable = RETRY_STATUSES.has(response.status) && attempt < maxRetries;
+      226 |       if (retriable) {
+    > 227 |         console.warn(`[ue-api] HTTP ${response.status} for ${opts.logLabel} (${tag}, retrying): ${preview}`);
+          |                 ^
+      228 |       } else {
+      229 |         console.warn(`[ue-api] HTTP ${response.status} for ${opts.logLabel} (${tag}, giving up): ${preview}`);
+      230 |         return null;
+
+      at warn (services/menuSources/ueApiClient.ts:227:17)
+      at Object.<anonymous> (services/menuSources/ueApiClient.test.ts:84:20)
+
+    console.warn
+      [ue-api] network error for 5290fdd8-cd11-44e8-b2de-40be81a6e0d3 (attempt 2/3, retrying): Cannot read properties of undefined (reading 'ok')
+
+      236 |         return null;
+      237 |       }
+    > 238 |       console.warn(`[ue-api] network error for ${opts.logLabel} (${tag}, retrying): ${msg}`);
+          |               ^
+      239 |     } finally {
+      240 |       clearTimeout(timeout);
+      241 |     }
+
+      at warn (services/menuSources/ueApiClient.ts:238:15)
+      at Object.<anonymous> (services/menuSources/ueApiClient.test.ts:84:20)
+
+    console.warn
+      [ue-api] network error for 5290fdd8-cd11-44e8-b2de-40be81a6e0d3 (attempt 3/3, giving up): Cannot read properties of undefined (reading 'ok')
+
+      233 |       const msg = err instanceof Error ? err.message : String(err);
+      234 |       if (attempt >= maxRetries) {
+    > 235 |         console.warn(`[ue-api] network error for ${opts.logLabel} (${tag}, giving up): ${msg}`);
+          |                 ^
+      236 |         return null;
+      237 |       }
+      238 |       console.warn(`[ue-api] network error for ${opts.logLabel} (${tag}, retrying): ${msg}`);
+
+      at warn (services/menuSources/ueApiClient.ts:235:17)
+      at Object.<anonymous> (services/menuSources/ueApiClient.test.ts:84:20)
+
+    console.warn
+      [ue-api] network error for 5290fdd8-cd11-44e8-b2de-40be81a6e0d3 (attempt 1/3, retrying): network
+
+      236 |         return null;
+      237 |       }
+    > 238 |       console.warn(`[ue-api] network error for ${opts.logLabel} (${tag}, retrying): ${msg}`);
+          |               ^
+      239 |     } finally {
+      240 |       clearTimeout(timeout);
+      241 |     }
+
+      at warn (services/menuSources/ueApiClient.ts:238:15)
+
+    console.warn
+      [ue-api] network error for 5290fdd8-cd11-44e8-b2de-40be81a6e0d3 (attempt 2/3, retrying): Cannot read properties of undefined (reading 'ok')
+
+      236 |         return null;
+      237 |       }
+    > 238 |       console.warn(`[ue-api] network error for ${opts.logLabel} (${tag}, retrying): ${msg}`);
+          |               ^
+      239 |     } finally {
+      240 |       clearTimeout(timeout);
+      241 |     }
+
+      at warn (services/menuSources/ueApiClient.ts:238:15)
+      at Object.<anonymous> (services/menuSources/ueApiClient.test.ts:90:20)
+
+    console.warn
+      [ue-api] network error for 5290fdd8-cd11-44e8-b2de-40be81a6e0d3 (attempt 3/3, giving up): Cannot read properties of undefined (reading 'ok')
+
+      233 |       const msg = err instanceof Error ? err.message : String(err);
+      234 |       if (attempt >= maxRetries) {
+    > 235 |         console.warn(`[ue-api] network error for ${opts.logLabel} (${tag}, giving up): ${msg}`);
+          |                 ^
+      236 |         return null;
+      237 |       }
+      238 |       console.warn(`[ue-api] network error for ${opts.logLabel} (${tag}, retrying): ${msg}`);
+
+      at warn (services/menuSources/ueApiClient.ts:235:17)
+      at Object.<anonymous> (services/menuSources/ueApiClient.test.ts:90:20)
+
+    console.warn
+      [ue-api] network error for x (attempt 1/3, retrying): aborted
+
+      236 |         return null;
+      237 |       }
+    > 238 |       console.warn(`[ue-api] network error for ${opts.logLabel} (${tag}, retrying): ${msg}`);
+          |               ^
+      239 |     } finally {
+      240 |       clearTimeout(timeout);
+      241 |     }
+
+      at warn (services/menuSources/ueApiClient.ts:238:15)
+      at Object.<anonymous> (services/menuSources/ueApiClient.test.ts:103:20)
+
+    console.warn
+      [ue-api] network error for x (attempt 2/3, retrying): Cannot read properties of undefined (reading 'ok')
+
+      236 |         return null;
+      237 |       }
+    > 238 |       console.warn(`[ue-api] network error for ${opts.logLabel} (${tag}, retrying): ${msg}`);
+          |               ^
+      239 |     } finally {
+      240 |       clearTimeout(timeout);
+      241 |     }
+
+      at warn (services/menuSources/ueApiClient.ts:238:15)
+      at Object.<anonymous> (services/menuSources/ueApiClient.test.ts:103:20)
+
+    console.warn
+      [ue-api] network error for x (attempt 3/3, giving up): Cannot read properties of undefined (reading 'ok')
+
+      233 |       const msg = err instanceof Error ? err.message : String(err);
+      234 |       if (attempt >= maxRetries) {
+    > 235 |         console.warn(`[ue-api] network error for ${opts.logLabel} (${tag}, giving up): ${msg}`);
+          |                 ^
+      236 |         return null;
+      237 |       }
+      238 |       console.warn(`[ue-api] network error for ${opts.logLabel} (${tag}, retrying): ${msg}`);
+
+      at warn (services/menuSources/ueApiClient.ts:235:17)
+      at Object.<anonymous> (services/menuSources/ueApiClient.test.ts:103:20)
+
+    console.warn
+      [ue-api] HTTP undefined for 5290fdd8-cd11-44e8-b2de-40be81a6e0d3 (attempt 1/3, giving up): <unreadable>
+
+      227 |         console.warn(`[ue-api] HTTP ${response.status} for ${opts.logLabel} (${tag}, retrying): ${preview}`);
+      228 |       } else {
+    > 229 |         console.warn(`[ue-api] HTTP ${response.status} for ${opts.logLabel} (${tag}, giving up): ${preview}`);
+          |                 ^
+      230 |         return null;
+      231 |       }
+      232 |     } catch (err) {
+
+      at warn (services/menuSources/ueApiClient.ts:229:17)
+      at extractMenuViaApi (services/menuSources/ueApiClient.ts:470:16)
+      at Object.<anonymous> (services/menuSources/ueApiClient.test.ts:266:20)
+
+PASS app/api/auth/integration.test.ts
+PASS app/api/restaurants/route.test.ts
+  ● Console
+
+    console.warn
+      [api-emitter] AXIOM_TOKEN not set — events will not be sent
+
+      29 |     this.axiom = token ? new Axiom({ token }) : null;
+      30 |     if (!this.axiom) {
+    > 31 |       console.warn("[api-emitter] AXIOM_TOKEN not set — events will not be sent");
+         |               ^
+      32 |     }
+      33 |   }
+      34 |
+
+      at new warn (lib/apiEmitter.ts:31:15)
+      at getApiEmitter (lib/apiEmitter.ts:49:29)
+      at GET (app/api/restaurants/route.ts:161:34)
+      at Object.<anonymous> (app/api/restaurants/route.test.ts:60:17)
+
+PASS lib/restaurantService.test.ts
+  ● Console
+
+    console.log
+      {"event":"search_query","restaurants":2,"hasTargets":false,"totalMs":0,"paginated":false}
+
+      at log (lib/restaurantService.ts:445:11)
+
+    console.log
+      {"event":"search_query","restaurants":2,"hasTargets":true,"totalMs":0,"paginated":false}
+
+      at log (lib/restaurantService.ts:445:11)
+
+    console.log
+      {"event":"search_query","restaurants":3,"hasTargets":false,"totalMs":0,"paginated":false}
+
+      at log (lib/restaurantService.ts:445:11)
+
+    console.log
+      {"event":"search_query","restaurants":1,"hasTargets":false,"totalMs":0,"paginated":false}
+
+      at log (lib/restaurantService.ts:445:11)
+
+    console.log
+      {"event":"search_query","restaurants":1,"hasTargets":true,"totalMs":0,"paginated":false}
+
+      at log (lib/restaurantService.ts:445:11)
+
+    console.log
+      {"event":"search_query","restaurants":1,"hasTargets":false,"totalMs":0,"paginated":false}
+
+      at log (lib/restaurantService.ts:445:11)
+
+    console.log
+      {"event":"search_query","restaurants":1,"hasTargets":true,"totalMs":0,"paginated":false}
+
+      at log (lib/restaurantService.ts:445:11)
+
+    console.log
+      {"event":"search_query","restaurants":1,"hasTargets":true,"totalMs":0,"paginated":false}
+
+      at log (lib/restaurantService.ts:445:11)
+
+    console.log
+      {"event":"search_query","restaurants":1,"hasTargets":false,"totalMs":0,"paginated":false}
+
+      at log (lib/restaurantService.ts:445:11)
+
+    console.log
+      {"event":"search_query","restaurants":1,"hasTargets":false,"totalMs":0,"paginated":false}
+
+      at log (lib/restaurantService.ts:445:11)
+
+    console.log
+      {"event":"search_query","restaurants":0,"hasTargets":false,"totalMs":0,"paginated":false}
+
+      at log (lib/restaurantService.ts:445:11)
+
+    console.log
+      {"event":"search_query","restaurants":0,"hasTargets":false,"totalMs":0,"paginated":false}
+
+      at log (lib/restaurantService.ts:445:11)
+
+    console.log
+      {"event":"search_query","restaurants":3,"hasTargets":false,"totalMs":0,"paginated":false}
+
+      at log (lib/restaurantService.ts:445:11)
+
+    console.log
+      {"event":"search_query","restaurants":0,"hasTargets":false,"totalMs":0,"paginated":false}
+
+      at log (lib/restaurantService.ts:445:11)
+
+    console.log
+      {"event":"search_query","restaurants":2,"hasTargets":false,"totalMs":0,"paginated":false}
+
+      at log (lib/restaurantService.ts:445:11)
+
+    console.log
+      {"event":"search_query","restaurants":2,"hasTargets":false,"totalMs":0,"paginated":false}
+
+      at log (lib/restaurantService.ts:445:11)
+
+    console.log
+      {"event":"search_query","restaurants":1,"hasTargets":false,"totalMs":0,"paginated":true}
+
+      at log (lib/restaurantService.ts:445:11)
+
+    console.log
+      {"event":"search_query","restaurants":0,"hasTargets":false,"totalMs":0,"paginated":false}
+
+      at log (lib/restaurantService.ts:445:11)
+
+    console.log
+      {"event":"search_query","restaurants":0,"hasTargets":false,"totalMs":0,"paginated":false}
+
+      at log (lib/restaurantService.ts:445:11)
+
+    console.log
+      {"event":"search_query","restaurants":0,"hasTargets":false,"totalMs":0,"paginated":false}
+
+      at log (lib/restaurantService.ts:445:11)
+
+    console.log
+      {"event":"search_query","restaurants":0,"hasTargets":false,"totalMs":0,"paginated":false}
+
+      at log (lib/restaurantService.ts:445:11)
+
+    console.log
+      {"event":"search_query","restaurants":0,"hasTargets":false,"totalMs":0,"paginated":false}
+
+      at log (lib/restaurantService.ts:445:11)
+
+    console.log
+      {"event":"search_query","restaurants":0,"hasTargets":false,"totalMs":0,"paginated":false}
+
+      at log (lib/restaurantService.ts:445:11)
+
+PASS services/menuSources/ueApiClient.feed.test.ts
+PASS lib/pricing.test.ts
+PASS app/api/feedback/route.test.ts
+PASS services/scrapers/braveSearchScraper.test.ts
+PASS app/api/user/profile/route.test.ts
+PASS app/api/saved-items/route.test.ts
+PASS services/menuSources/fatSecretSource.test.ts
+PASS app/api/subscriptions/status/route.test.ts
+PASS app/api/internal/weekly-scoreboard/route.test.ts
+PASS app/api/revenuecat/webhook/route.idempotency.test.ts
+PASS services/macroEstimationService.test.ts
+  ● Console
+
+    console.warn
+      [macroEstimation] Haiku returned 1 items for 2 inputs
+
+      229 |   // exceptional — reconcile() is what makes it safe.
+      230 |   if (parsed.length !== items.length) {
+    > 231 |     console.warn(
+          |             ^
+      232 |       `[macroEstimation] Haiku returned ${parsed.length} items for ${items.length} inputs`,
+      233 |     );
+      234 |   }
+
+      at warn (services/macroEstimationService.ts:231:13)
+      at Object.<anonymous> (services/macroEstimationService.test.ts:159:20)
+
+    console.warn
+      [macroEstimation] positional fallback on a mismatched batch — alignment is unverified
+
+      238 |     // No usable names AND a count mismatch: entries after the first drift are
+      239 |     // very likely attributed to the wrong dish, and we cannot tell which.
+    > 240 |     console.warn(
+          |             ^
+      241 |       "[macroEstimation] positional fallback on a mismatched batch — alignment is unverified",
+      242 |     );
+      243 |   }
+
+      at warn (services/macroEstimationService.ts:240:13)
+      at Object.<anonymous> (services/macroEstimationService.test.ts:159:20)
+
+    console.warn
+      [macroEstimation] Haiku returned 3 items for 2 inputs
+
+      229 |   // exceptional — reconcile() is what makes it safe.
+      230 |   if (parsed.length !== items.length) {
+    > 231 |     console.warn(
+          |             ^
+      232 |       `[macroEstimation] Haiku returned ${parsed.length} items for ${items.length} inputs`,
+      233 |     );
+      234 |   }
+
+      at warn (services/macroEstimationService.ts:231:13)
+      at Object.<anonymous> (services/macroEstimationService.test.ts:173:20)
+
+    console.warn
+      [macroEstimation] positional fallback on a mismatched batch — alignment is unverified
+
+      238 |     // No usable names AND a count mismatch: entries after the first drift are
+      239 |     // very likely attributed to the wrong dish, and we cannot tell which.
+    > 240 |     console.warn(
+          |             ^
+      241 |       "[macroEstimation] positional fallback on a mismatched batch — alignment is unverified",
+      242 |     );
+      243 |   }
+
+      at warn (services/macroEstimationService.ts:240:13)
+      at Object.<anonymous> (services/macroEstimationService.test.ts:173:20)
+
+    console.warn
+      [macroEstimation] Haiku returned 1 items for 2 inputs
+
+      229 |   // exceptional — reconcile() is what makes it safe.
+      230 |   if (parsed.length !== items.length) {
+    > 231 |     console.warn(
+          |             ^
+      232 |       `[macroEstimation] Haiku returned ${parsed.length} items for ${items.length} inputs`,
+      233 |     );
+      234 |   }
+
+      at warn (services/macroEstimationService.ts:231:13)
+      at Object.<anonymous> (services/macroEstimationService.test.ts:353:20)
+
+    console.warn
+      [macroEstimation] 1/2 items had no matching name in the response
+
+      243 |   }
+      244 |   if (unmatched > 0) {
+    > 245 |     console.warn(
+          |             ^
+      246 |       `[macroEstimation] ${unmatched}/${items.length} items had no matching name in the response`,
+      247 |     );
+      248 |   }
+
+      at warn (services/macroEstimationService.ts:245:13)
+      at Object.<anonymous> (services/macroEstimationService.test.ts:353:20)
+
+    console.warn
+      [macroEstimation] Haiku returned 3 items for 2 inputs
+
+      229 |   // exceptional — reconcile() is what makes it safe.
+      230 |   if (parsed.length !== items.length) {
+    > 231 |     console.warn(
+          |             ^
+      232 |       `[macroEstimation] Haiku returned ${parsed.length} items for ${items.length} inputs`,
+      233 |     );
+      234 |   }
+
+      at warn (services/macroEstimationService.ts:231:13)
+      at Object.<anonymous> (services/macroEstimationService.test.ts:370:20)
+
+    console.warn
+      [macroEstimation] 1/2 items had no matching name in the response
+
+      243 |   }
+      244 |   if (unmatched > 0) {
+    > 245 |     console.warn(
+          |             ^
+      246 |       `[macroEstimation] ${unmatched}/${items.length} items had no matching name in the response`,
+      247 |     );
+      248 |   }
+
+      at warn (services/macroEstimationService.ts:245:13)
+      at Object.<anonymous> (services/macroEstimationService.test.ts:413:20)
+
+PASS app/api/auth/register/route.test.ts
+  ● Console
+
+    console.error
+      Error: Email down
+          at Object.<anonymous> (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-alias/apps/api/app/api/auth/register/route.test.ts:177:55)
+          at Promise.then.completed (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-alias/node_modules/jest-circus/build/utils.js:298:28)
+          at new Promise (<anonymous>)
+          at callAsyncCircusFn (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-alias/node_modules/jest-circus/build/utils.js:231:10)
+          at _callCircusTest (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-alias/node_modules/jest-circus/build/run.js:316:40)
+          at _runTest (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-alias/node_modules/jest-circus/build/run.js:252:3)
+          at _runTestsForDescribeBlock (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-alias/node_modules/jest-circus/build/run.js:126:9)
+          at _runTestsForDescribeBlock (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-alias/node_modules/jest-circus/build/run.js:121:9)
+          at run (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-alias/node_modules/jest-circus/build/run.js:71:3)
+          at runAndTransformResultsToJestFormat (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-alias/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+          at jestAdapter (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-alias/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+          at runTestInternal (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-alias/node_modules/jest-runner/build/runTest.js:367:16)
+          at runTest (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-chain-alias/node_modules/jest-runner/build/runTest.js:444:34)
+
+PASS app/api/feedback/[id]/vote/route.test.ts
+PASS services/menuSources/ueApiDirectSource.test.ts
+  ● Console
+
+    console.warn
+      [ue-api] HTTP 403 for db1c9d53-e420-599f-b903-fb3102e6bb9e (attempt 1/1, giving up): blocked
+
+      227 |         console.warn(`[ue-api] HTTP ${response.status} for ${opts.logLabel} (${tag}, retrying): ${preview}`);
+      228 |       } else {
+    > 229 |         console.warn(`[ue-api] HTTP ${response.status} for ${opts.logLabel} (${tag}, giving up): ${preview}`);
+          |                 ^
+      230 |         return null;
+      231 |       }
+      232 |     } catch (err) {
+
+      at warn (services/menuSources/ueApiClient.ts:229:17)
+      at UeApiDirectSource.lookup (services/menuSources/ueApiDirectSource.ts:41:61)
+      at Object.<anonymous> (services/menuSources/ueApiDirectSource.test.ts:76:5)
+
+PASS lib/subscription.sync.test.ts
+PASS app/api/health/route.test.ts
+PASS app/api/auth/google/route.test.ts
+PASS app/api/user/push-token/route.test.ts
+PASS lib/scoreboard.test.ts
+PASS app/api/saved-items/[id]/route.test.ts
+PASS lib/feedbackDigest.test.ts
+PASS lib/dateUtils.test.ts
+PASS app/api/subscriptions/sync/route.test.ts
+PASS lib/subscription.test.ts
+PASS services/revenuecatService.test.ts
+PASS lib/auth.test.ts
+PASS app/api/user/route.test.ts
+PASS services/ascService.test.ts
+PASS app/api/auth/apple/route.test.ts
+PASS lib/marketingEmail.test.ts
+PASS app/api/revenuecat/webhook/route.test.ts
+PASS services/emailService.test.ts
+PASS lib/macroScoring.test.ts
+PASS services/menuSources/ueSitemapIndex.test.ts
+  ● Console
+
+    console.log
+      [UESitemapIndex] Downloading sitemap shards...
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:43:13)
+
+    console.log
+      [UESitemapIndex] Shard 000: 3 store URLs
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:74:17)
+
+    console.log
+      [UESitemapIndex] Shard 001: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 002: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 003: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 004: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 005: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 006: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 007: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 008: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 009: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 010: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 011: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 012: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 013: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 014: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 015: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 016: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 017: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 018: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 019: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 020: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 021: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 022: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 023: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 024: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 025: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Indexed 3 unique slugs from 3 URLs
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:80:13)
+
+    console.log
+      [UESitemapIndex] Saved cache (3 slugs)
+
+      at UESitemapIndex.saveToCache (services/menuSources/ueSitemapIndex.ts:162:15)
+
+    console.log
+      [UESitemapIndex] Downloading sitemap shards...
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:43:13)
+
+    console.log
+      [UESitemapIndex] Shard 000: 3 store URLs
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:74:17)
+
+    console.log
+      [UESitemapIndex] Shard 001: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 002: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 003: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 004: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 005: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 006: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 007: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 008: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 009: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 010: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 011: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 012: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 013: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 014: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 015: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 016: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 017: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 018: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 019: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 020: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 021: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 022: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 023: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 024: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 025: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Indexed 3 unique slugs from 3 URLs
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:80:13)
+
+    console.log
+      [UESitemapIndex] Saved cache (3 slugs)
+
+      at UESitemapIndex.saveToCache (services/menuSources/ueSitemapIndex.ts:162:15)
+
+    console.log
+      [UESitemapIndex] Downloading sitemap shards...
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:43:13)
+
+    console.log
+      [UESitemapIndex] Shard 000: 3 store URLs
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:74:17)
+
+    console.log
+      [UESitemapIndex] Shard 001: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 002: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 003: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 004: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 005: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 006: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 007: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 008: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 009: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 010: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 011: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 012: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 013: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 014: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 015: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 016: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 017: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 018: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 019: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 020: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 021: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 022: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 023: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 024: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 025: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Indexed 3 unique slugs from 3 URLs
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:80:13)
+
+    console.log
+      [UESitemapIndex] Saved cache (3 slugs)
+
+      at UESitemapIndex.saveToCache (services/menuSources/ueSitemapIndex.ts:162:15)
+
+    console.log
+      [UESitemapIndex] Downloading sitemap shards...
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:43:13)
+
+    console.log
+      [UESitemapIndex] Shard 000: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 001: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 002: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 003: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 004: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 005: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 006: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 007: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 008: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 009: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 010: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 011: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 012: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 013: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 014: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 015: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 016: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 017: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 018: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 019: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 020: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 021: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 022: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 023: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 024: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 025: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Indexed 0 unique slugs from 0 URLs
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:80:13)
+
+    console.log
+      [UESitemapIndex] Saved cache (0 slugs)
+
+      at UESitemapIndex.saveToCache (services/menuSources/ueSitemapIndex.ts:162:15)
+
+    console.log
+      [UESitemapIndex] Downloading sitemap shards...
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:43:13)
+
+    console.log
+      [UESitemapIndex] Shard 000: Error: Network error
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:76:17)
+
+    console.log
+      [UESitemapIndex] Shard 001: Error: Network error
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:76:17)
+
+    console.log
+      [UESitemapIndex] Shard 002: Error: Network error
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:76:17)
+
+    console.log
+      [UESitemapIndex] Shard 003: Error: Network error
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:76:17)
+
+    console.log
+      [UESitemapIndex] Shard 004: Error: Network error
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:76:17)
+
+    console.log
+      [UESitemapIndex] Shard 005: Error: Network error
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:76:17)
+
+    console.log
+      [UESitemapIndex] Shard 006: Error: Network error
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:76:17)
+
+    console.log
+      [UESitemapIndex] Shard 007: Error: Network error
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:76:17)
+
+    console.log
+      [UESitemapIndex] Shard 008: Error: Network error
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:76:17)
+
+    console.log
+      [UESitemapIndex] Shard 009: Error: Network error
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:76:17)
+
+    console.log
+      [UESitemapIndex] Shard 010: Error: Network error
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:76:17)
+
+    console.log
+      [UESitemapIndex] Shard 011: Error: Network error
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:76:17)
+
+    console.log
+      [UESitemapIndex] Shard 012: Error: Network error
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:76:17)
+
+    console.log
+      [UESitemapIndex] Shard 013: Error: Network error
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:76:17)
+
+    console.log
+      [UESitemapIndex] Shard 014: Error: Network error
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:76:17)
+
+    console.log
+      [UESitemapIndex] Shard 015: Error: Network error
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:76:17)
+
+    console.log
+      [UESitemapIndex] Shard 016: Error: Network error
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:76:17)
+
+    console.log
+      [UESitemapIndex] Shard 017: Error: Network error
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:76:17)
+
+    console.log
+      [UESitemapIndex] Shard 018: Error: Network error
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:76:17)
+
+    console.log
+      [UESitemapIndex] Shard 019: Error: Network error
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:76:17)
+
+    console.log
+      [UESitemapIndex] Shard 020: Error: Network error
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:76:17)
+
+    console.log
+      [UESitemapIndex] Shard 021: Error: Network error
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:76:17)
+
+    console.log
+      [UESitemapIndex] Shard 022: Error: Network error
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:76:17)
+
+    console.log
+      [UESitemapIndex] Shard 023: Error: Network error
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:76:17)
+
+    console.log
+      [UESitemapIndex] Shard 024: Error: Network error
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:76:17)
+
+    console.log
+      [UESitemapIndex] Shard 025: Error: Network error
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:76:17)
+
+    console.log
+      [UESitemapIndex] Indexed 0 unique slugs from 0 URLs
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:80:13)
+
+    console.log
+      [UESitemapIndex] Saved cache (0 slugs)
+
+      at UESitemapIndex.saveToCache (services/menuSources/ueSitemapIndex.ts:162:15)
+
+    console.log
+      [UESitemapIndex] Downloading sitemap shards...
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:43:13)
+
+    console.log
+      [UESitemapIndex] Shard 000: 3 store URLs
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:74:17)
+
+    console.log
+      [UESitemapIndex] Shard 001: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 002: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 003: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 004: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 005: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 006: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 007: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 008: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 009: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 010: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 011: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 012: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 013: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 014: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 015: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 016: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 017: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 018: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 019: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 020: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 021: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 022: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 023: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 024: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Shard 025: HTTP 404
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:53:19)
+
+    console.log
+      [UESitemapIndex] Indexed 3 unique slugs from 3 URLs
+
+      at UESitemapIndex.load (services/menuSources/ueSitemapIndex.ts:80:13)
+
+    console.log
+      [UESitemapIndex] Saved cache (3 slugs)
+
+      at UESitemapIndex.saveToCache (services/menuSources/ueSitemapIndex.ts:162:15)
+
+PASS services/posthogService.test.ts
+PASS lib/landingDemo.test.ts
+PASS lib/errorAlert.test.ts
+PASS app/api/auth/login/route.test.ts
+PASS services/menuSources/webScraperSource.test.ts
+PASS app/api/restaurants/[id]/menu/route.test.ts
+PASS app/api/internal/feedback-digest/route.test.ts
+PASS services/authService.test.ts
+PASS services/menuSources/resolver.test.ts
+  ● Console
+
+    console.log
+      [resolver] McDonald's: ffn → ok (0ms)
+
+      at MenuSourceResolver.log [as resolve] (services/menuSources/resolver.ts:49:17)
+
+    console.log
+      [resolver] Thai Orchid: ffn → not_found (0ms)
+
+      at MenuSourceResolver.log [as resolve] (services/menuSources/resolver.ts:54:15)
+
+    console.log
+      [resolver] Thai Orchid: ubereats → ok (0ms)
+
+      at MenuSourceResolver.log [as resolve] (services/menuSources/resolver.ts:49:17)
+
+    console.log
+      [resolver] Ghost Restaurant: ffn → not_found (0ms)
+
+      at MenuSourceResolver.log [as resolve] (services/menuSources/resolver.ts:54:15)
+
+    console.log
+      [resolver] Ghost Restaurant: ubereats → not_found (0ms)
+
+      at MenuSourceResolver.log [as resolve] (services/menuSources/resolver.ts:54:15)
+
+    console.log
+      [resolver] Ghost Restaurant: firecrawl → not_found (0ms)
+
+      at MenuSourceResolver.log [as resolve] (services/menuSources/resolver.ts:54:15)
+
+    console.log
+      [resolver] Thai Orchid: ffn → error (0ms) Source error
+
+      at MenuSourceResolver.log [as resolve] (services/menuSources/resolver.ts:42:17)
+
+    console.log
+      [resolver] Thai Orchid: ubereats → ok (0ms)
+
+      at MenuSourceResolver.log [as resolve] (services/menuSources/resolver.ts:49:17)
+
+    console.log
+      [resolver] Test: ffn → error (0ms) Source error
+
+      at MenuSourceResolver.log [as resolve] (services/menuSources/resolver.ts:42:17)
+
+    console.log
+      [resolver] Test: ubereats → error (0ms) Source error
+
+      at MenuSourceResolver.log [as resolve] (services/menuSources/resolver.ts:42:17)
+
+    console.log
+      [resolver] Nobu: ffn → not_found (1ms)
+
+      at MenuSourceResolver.log [as resolve] (services/menuSources/resolver.ts:54:15)
+
+    console.log
+      [resolver] Nobu: ubereats → ok (0ms)
+
+      at MenuSourceResolver.log [as resolve] (services/menuSources/resolver.ts:49:17)
+
+    console.log
+      [resolver] Test: ffn → ok (0ms)
+
+      at MenuSourceResolver.log [as resolve] (services/menuSources/resolver.ts:49:17)
+
+    console.log
+      [resolver] Test: ffn → not_found (0ms)
+
+      at MenuSourceResolver.log [as resolve] (services/menuSources/resolver.ts:54:15)
+
+    console.log
+      [resolver] Test: ubereats → ok (0ms)
+
+      at MenuSourceResolver.log [as resolve] (services/menuSources/resolver.ts:49:17)
+
+    console.log
+      [resolver] Test: ffn → error (0ms) Source error
+
+      at MenuSourceResolver.log [as resolve] (services/menuSources/resolver.ts:42:17)
+
+    console.log
+      [resolver] Test: ubereats → ok (0ms)
+
+      at MenuSourceResolver.log [as resolve] (services/menuSources/resolver.ts:49:17)
+
+    console.log
+      [resolver] Ghost: ffn → not_found (0ms)
+
+      at MenuSourceResolver.log [as resolve] (services/menuSources/resolver.ts:54:15)
+
+    console.log
+      [resolver] Ghost: ubereats → not_found (0ms)
+
+      at MenuSourceResolver.log [as resolve] (services/menuSources/resolver.ts:54:15)
+
+PASS lib/seoUtils.test.ts
+PASS lib/rateLimit.test.ts
+PASS lib/tdeeCalculator.test.ts
+PASS app/api/internal/audit-macro-drift/route.test.ts
+PASS lib/supabase.test.ts
+PASS services/scrapers/jinaScraper.test.ts
+----------------------------|---------|----------|---------|---------|--------------------------------------------------------------------------------------------------------------
+File                        | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s                                                                                            
+----------------------------|---------|----------|---------|---------|--------------------------------------------------------------------------------------------------------------
+All files                   |    82.3 |       75 |   83.33 |   84.69 |                                                                                                              
+ app/api/auth/apple         |   94.73 |    88.46 |     100 |   94.73 |                                                                                                              
+  route.ts                  |   94.73 |    88.46 |     100 |   94.73 | 19,36                                                                                                        
+ app/api/auth/google        |   91.66 |    78.94 |     100 |   91.66 |                                                                                                              
+  route.ts                  |   91.66 |    78.94 |     100 |   91.66 | 19,36,67                                                                                                     
+ app/api/auth/login         |    91.3 |    81.25 |     100 |    91.3 |                                                                                                              
+  route.ts                  |    91.3 |    81.25 |     100 |    91.3 | 18,37                                                                                                        
+ app/api/auth/register      |   84.21 |    89.28 |      50 |   84.21 |                                                                                                              
+  route.ts                  |   84.21 |    89.28 |      50 |   84.21 | 19,38,84,103-106,121                                                                                         
+ lib                        |   78.97 |    79.07 |   77.98 |   80.23 |                                                                                                              
+  apiEmitter.ts             |   81.25 |    66.66 |      75 |   84.61 | 37-43                                                                                                        
+  appLinks.ts               |       0 |      100 |     100 |       0 | 8                                                                                                            
+  auth.ts                   |   91.66 |       75 |     100 |   91.66 | 27                                                                                                           
+  emailTemplates.ts         |   11.11 |        0 |       0 |   11.11 | 20-44,99-117,136-510,537-545                                                                                 
+  errorAlert.ts             |   70.58 |     37.5 |   66.66 |   73.33 | 32-40                                                                                                        
+  feedbackDigest.ts         |     100 |      100 |     100 |     100 |                                                                                                              
+  landingDemo.ts            |     100 |      100 |     100 |     100 |                                                                                                              
+  launchPush.ts             |       0 |        0 |       0 |       0 | 12-48                                                                                                        
+  macroScoring.ts           |     100 |      100 |     100 |     100 |                                                                                                              
+  marketingEmail.ts         |   34.88 |       30 |      25 |   37.14 | 38-105                                                                                                       
+  moderation.ts             |       0 |      100 |       0 |       0 | 9-21                                                                                                         
+  pricing.ts                |    90.9 |    62.79 |     100 |   96.49 | 106,123                                                                                                      
+  rateLimit.ts              |     100 |      100 |     100 |     100 |                                                                                                              
+  restaurantService.ts      |   90.36 |    86.74 |   88.88 |      90 | 107,118-121,225,228,231,236,241                                                                              
+  scoreboard.ts             |   97.87 |    94.44 |     100 |   97.67 | 113                                                                                                          
+  seoUtils.ts               |     100 |      100 |     100 |     100 |                                                                                                              
+  subscription.ts           |     100 |      100 |     100 |     100 |                                                                                                              
+  supabase.ts               |     100 |      100 |     100 |     100 |                                                                                                              
+  tdeeCalculator.ts         |     100 |      100 |     100 |     100 |                                                                                                              
+  unsubscribe.ts            |      20 |        0 |       0 |      25 | 11-13,21-28,37-39                                                                                            
+ services                   |   93.65 |    90.76 |    90.9 |   95.21 |                                                                                                              
+  ascService.ts             |     100 |    93.33 |     100 |     100 | 85                                                                                                           
+  authService.ts            |    92.3 |       50 |     100 |     100 | 7                                                                                                            
+  emailService.ts           |     100 |      100 |     100 |     100 |                                                                                                              
+  macroEstimationService.ts |    87.5 |       92 |    90.9 |   88.15 | 142-145,177-183                                                                                              
+  posthogService.ts         |   96.77 |       90 |   83.33 |     100 | 107-110                                                                                                      
+  revenuecatService.ts      |   96.96 |    88.88 |   66.66 |     100 | 124-125,135                                                                                                  
+ services/menuSources       |   79.97 |    64.78 |   86.02 |   83.48 |                                                                                                              
+  fatSecretSource.ts        |   96.77 |    89.47 |     100 |     100 | 99-111                                                                                                       
+  resolver.ts               |     100 |    66.66 |     100 |     100 | 41                                                                                                           
+  uberEatsSource.ts         |   72.56 |    56.48 |      86 |   76.37 | 135-139,150,479-484,503-504,584,598-629,696-697,710-717,766,809,829-831,913-914,925-934,952-953,969,986-1040 
+  ueApiClient.ts            |   83.74 |    71.66 |   79.31 |   86.32 | 50-51,76,80-81,90,99-100,186-187,246,271,621-642,769-789                                                     
+  ueApiDirectSource.ts      |      95 |    57.14 |     100 |   94.73 | 57                                                                                                           
+  webScraperSource.ts       |   91.48 |     87.5 |     100 |   97.61 | 119                                                                                                          
+ services/scrapers          |   95.55 |    69.23 |     100 |   97.36 |                                                                                                              
+  braveSearchScraper.ts     |   95.55 |    69.23 |     100 |   97.36 | 133                                                                                                          
+----------------------------|---------|----------|---------|---------|--------------------------------------------------------------------------------------------------------------
+
+Test Suites: 2 skipped, 54 passed, 54 of 56 total
+Tests:       10 skipped, 632 passed, 642 total
+Snapshots:   0 total
+Time:        154.071 s
+Ran all test suites.

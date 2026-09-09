@@ -9,6 +9,9 @@ export function loadVerifiedAliases(directory: string): Record<string, Record<st
   const path = join(directory, VERIFIED_ALIASES_FILENAME);
   let raw: string;
   try { raw = readFileSync(path, "utf8"); }
-  catch { throw new Error(`Missing verified aliases: ${path}. Run phase1-verify-aliases.ts first; raw aliases cannot be landed.`); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    throw new Error(`Missing verified aliases: ${path}. Run phase1-verify-aliases.ts first; raw aliases cannot be landed.`);
+  }
   return aliasesSchema.parse(JSON.parse(raw));
 }

@@ -1,0 +1,35 @@
+FAIL scripts/phase1-land-payload.test.ts
+  ✕ re-landing a corrected portion replaces serving size alongside macros and aliases (3 ms)
+
+  ● re-landing a corrected portion replaces serving size alongside macros and aliases
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 0
+
+    @@ -7,8 +7,7 @@
+        "confidence": "HIGH",
+        "fatG": 15,
+        "officialUrl": "https://example.com/nutrition.pdf",
+        "proteinG": 54,
+        "retrievedAt": Any<Date>,
+    -   "servingSize": "1 standard plate",
+        "source": "official",
+      }
+
+       5 |   const result = chainLandingUpsert(facts);
+       6 |   expect(result.where).toEqual({ brandId_canonicalKey: { brandId: "waba", canonicalKey: "chicken-plate" } });
+    >  7 |   expect(result.update).toEqual({ aliases: facts.aliases, servingSize: "1 standard plate", calories: 820, proteinG: 54,
+         |                         ^
+       8 |     carbsG: 110, fatG: 15, source: "official", confidence: "HIGH", officialUrl: facts.officialUrl, retrievedAt: expect.any(Date) });
+       9 |   expect(result.create).toEqual({ ...result.update, brandId: "waba", canonicalKey: "chicken-plate" });
+      10 |   expect(chainLandingUpsert({ ...facts, servingSize: null }).update.servingSize).toBeNull();
+
+      at Object.<anonymous> (phase1-land-payload.test.ts:7:25)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 1 total
+Snapshots:   0 total
+Time:        1.756 s
+Ran all test suites matching /scripts\/phase1-land-payload.test.ts/i.
