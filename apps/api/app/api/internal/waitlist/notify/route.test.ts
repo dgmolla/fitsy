@@ -59,6 +59,17 @@ describe("POST /api/internal/waitlist/notify", () => {
     });
   });
 
+  it("passes only the launch center when the operator gives nothing else", async () => {
+    await POST(makeRequest(LA));
+    expect(notifyLaunch).toHaveBeenCalledWith({
+      ...LA,
+      radiusMiles: undefined,
+      city: undefined,
+      includeUnlocated: undefined,
+      dryRun: undefined,
+    });
+  });
+
   it("returns the live result body verbatim", async () => {
     const live = { dryRun: false, matched: 2, viaPush: 1, viaEmail: 2, notified: 2, suppressed: 0, failed: 0, remaining: 0, exhausted: 0 };
     (notifyLaunch as jest.Mock).mockResolvedValue(live);

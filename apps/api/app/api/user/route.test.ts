@@ -131,9 +131,16 @@ describe("DELETE /api/user — success", () => {
     expect(mockMarketingSendDeleteMany).toHaveBeenCalledWith({ where: { email: "alice@example.com" } });
     const deleteOrder = mockWaitlistDeleteMany.mock.invocationCallOrder[0]!;
     const stripOrder = mockWaitlistUpdateMany.mock.invocationCallOrder[0]!;
+    const countOrder = mockWaitlistCount.mock.invocationCallOrder[0]!;
+    const purgeOrder = mockMarketingSendDeleteMany.mock.invocationCallOrder[0]!;
     const userOrder = mockUserDelete.mock.invocationCallOrder[0]!;
     expect(deleteOrder).toBeLessThan(userOrder);
     expect(stripOrder).toBeLessThan(userOrder);
+    // The survivor count must run AFTER the onboarding row is deleted, or a
+    // row about to be removed would keep the ledger history alive.
+    expect(countOrder).toBeGreaterThan(deleteOrder);
+    expect(purgeOrder).toBeGreaterThan(countOrder);
+    expect(purgeOrder).toBeLessThan(userOrder);
     expect(mockUserDelete).toHaveBeenCalledWith({
       where: { id: "user-1" },
     });

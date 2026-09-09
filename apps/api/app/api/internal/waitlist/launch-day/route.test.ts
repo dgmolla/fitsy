@@ -180,6 +180,19 @@ describe("GET /api/internal/waitlist/launch-day", () => {
     );
   });
 
+  it("alerts when rows were exhausted even with no retryable failures", async () => {
+    jest.useFakeTimers().setSystemTime(new Date(`${LAUNCH_DATE_ISO}T16:00:00Z`));
+    (notifyLaunch as jest.Mock).mockResolvedValue({
+      dryRun: false, matched: 3, viaPush: 0, viaEmail: 1, notified: 1, suppressed: 0, failed: 0, remaining: 0, exhausted: 2,
+    });
+    await GET(makeRequest());
+    expect(mockNotifySlack).toHaveBeenCalledWith(
+      "launch blast had failures",
+      expect.stringContaining("exhausted 2"),
+      { source: "launch-day" },
+    );
+  });
+
   it("alerts on failures even when the run did not stall", async () => {
     jest.useFakeTimers().setSystemTime(new Date(`${LAUNCH_DATE_ISO}T16:00:00Z`));
     // Two batches, both with a failure; the second finishes the drain.

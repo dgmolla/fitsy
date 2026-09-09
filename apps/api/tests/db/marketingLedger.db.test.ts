@@ -20,6 +20,45 @@ describeIfDb("marketingLedger (DB)", () => {
     await svc.prisma.$disconnect();
   });
 
+  it("the migration's legacy backfill block produces the week-stamped key the cron reads", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fs = require("node:fs") as typeof import("node:fs");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const path = require("node:path") as typeof import("node:path");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const tpl = require("@/lib/emailTemplates") as typeof import("../../lib/emailTemplates");
+    const sql = fs.readFileSync(
+      path.join(__dirname, "../../../../prisma/migrations/20260908100000_marketing_send_ledger/migration.sql"),
+      "utf8",
+    );
+    const doBlock = sql.slice(sql.indexOf("DO $$"), sql.indexOf("END $$;") + "END $$;".length);
+    const legacyEmail = `legacy-${Date.now()}@fitsy.org`;
+    const userId = `legacy-${Date.now()}`;
+    const sentAt = new Date("2026-03-03T16:00:00Z");
+    try {
+      await svc.prisma.user.create({ data: { id: userId, email: legacyEmail.toUpperCase() } });
+      await svc.prisma.$executeRawUnsafe(
+        `CREATE TABLE IF NOT EXISTS "_marketing_send" (edition text NOT NULL, user_id text NOT NULL, sent_at timestamptz DEFAULT now(), PRIMARY KEY (edition, user_id))`,
+      );
+      await svc.prisma.$executeRawUnsafe(
+        `INSERT INTO "_marketing_send" (edition, user_id, sent_at) VALUES ($1, $2, $3)`,
+        "sauce-math",
+        userId,
+        sentAt,
+      );
+      await svc.prisma.$executeRawUnsafe(doBlock);
+      const rows = await svc.prisma.marketingSend.findMany({ where: { email: legacyEmail } });
+      expect(rows.map((r) => [r.campaign, r.step])).toEqual([
+        ["weekly", `sauce-math:w${tpl.weekIndexForDate(sentAt)}`],
+      ]);
+      expect(await ledger.wasSent(legacyEmail, "weekly", `sauce-math:w${tpl.weekIndexForDate(sentAt)}`)).toBe(true);
+    } finally {
+      await svc.prisma.$executeRawUnsafe(`DELETE FROM "_marketing_send" WHERE user_id = $1`, userId);
+      await svc.prisma.marketingSend.deleteMany({ where: { email: legacyEmail } });
+      await svc.prisma.user.deleteMany({ where: { id: userId } });
+    }
+  });
+
   it("the migration's week-stamp SQL agrees with weekIndexForDate at the boundaries", async () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const tpl = require("@/lib/emailTemplates") as typeof import("../../lib/emailTemplates");

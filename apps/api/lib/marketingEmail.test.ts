@@ -154,13 +154,21 @@ describe("sendMarketingEmail", () => {
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
-  it("sends the caller's idempotency key as a header on every attempt, and none when absent", async () => {
-    await sendMarketingEmail({ userId: "u1", ...base, idempotencyKey: "weekly:ed-1:w3:someone@fitsy.org" });
-    const headers = (fetchMock.mock.calls[0]![1] as { headers: Record<string, string> }).headers;
-    expect(headers["idempotency-key"]).toBe("weekly:ed-1:w3:someone@fitsy.org");
+  it("sends the caller's idempotency key on the first attempt AND the post-429 retry, and none when absent", async () => {
+    jest.useFakeTimers();
+    fetchMock
+      .mockResolvedValueOnce({ ok: false, status: 429, headers: new Headers({ "retry-after": "1" }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, headers: new Headers() });
+    const p = sendMarketingEmail({ userId: "u1", ...base, idempotencyKey: "weekly:ed-1:w3:someone@fitsy.org" });
+    await jest.advanceTimersByTimeAsync(1000);
+    expect(await p).toBe(true);
+    const headerOf = (i: number) => (fetchMock.mock.calls[i]![1] as { headers: Record<string, string> }).headers;
+    expect(headerOf(0)["idempotency-key"]).toBe("weekly:ed-1:w3:someone@fitsy.org");
+    expect(headerOf(1)["idempotency-key"]).toBe("weekly:ed-1:w3:someone@fitsy.org");
+    jest.useRealTimers();
+
     await sendMarketingEmail({ userId: "u1", ...base });
-    const plain = (fetchMock.mock.calls[1]![1] as { headers: Record<string, string> }).headers;
-    expect(plain).not.toHaveProperty("idempotency-key");
+    expect(headerOf(2)).not.toHaveProperty("idempotency-key");
   });
 
   it("caps an oversized Retry-After at 5 seconds", async () => {
