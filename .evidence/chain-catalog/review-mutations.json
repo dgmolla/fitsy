@@ -1,0 +1,18 @@
+[
+  {
+    "mutation": "metadata trim",
+    "result": "rejected"
+  },
+  {
+    "mutation": "source hash anchors",
+    "result": "rejected"
+  },
+  {
+    "mutation": "alias order independence",
+    "result": "rejected"
+  },
+  {
+    "mutation": "zero calorie label",
+    "result": "rejected"
+  }
+]

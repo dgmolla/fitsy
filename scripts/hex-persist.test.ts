@@ -11,8 +11,7 @@ jest.mock("./constants", () => ({
 // pipeline-utils imports @fitsy/shared (for macroWinnerSqlOrder) which pulls
 // in env.ts with @t3-oss/env-core — not available in scripts test context.
 jest.mock("@fitsy/shared", () => ({
-  macroWinnerSqlOrder: (alias = "e") =>
-    `CASE ${alias}.source WHEN 'merchant' THEN 0 WHEN 'fatsecret' THEN 1 WHEN 'ffn' THEN 2 WHEN 'haiku' THEN 3 ELSE 99 END ASC, ${alias}."estimatedAt" DESC`,
+  macroWinnerSqlOrder: jest.requireActual("../packages/shared/src/utils/macroProvenance").macroWinnerSqlOrder,
 }));
 
 // Mock pipeline-utils DB functions for unit tests.

@@ -1,0 +1,1 @@
+ALTER TABLE "ChainItem" ADD COLUMN "review" JSONB;

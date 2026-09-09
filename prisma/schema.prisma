@@ -139,6 +139,9 @@ model Brand {
 model ChainItem {
   id           String   @id @default(cuid())
   brandId      String
+  // Reviewed source snapshot, full item aliases, and digest binding approval to facts.
+  // Null means legacy/unreviewed: never eligible for automatic chain overrides.
+  review       Json?
   canonicalKey String                       // normalized resolver key, e.g. "chicken-bowl"
   aliases      String[] @default([])         // per-location name variants that map here
   calories     Int?
