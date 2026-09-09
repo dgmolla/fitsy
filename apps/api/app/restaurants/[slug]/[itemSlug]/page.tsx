@@ -10,7 +10,7 @@ import {
   formatTag,
 } from "@/lib/seoUtils";
 import { Nav } from "@/components/Nav";
-import { APP_STORE_URL } from "@/lib/appLinks";
+import { WAITLIST_URL } from "@/lib/appLinks";
 
 export const revalidate = 86400;
 
@@ -291,7 +291,7 @@ export default async function MenuItemPage({
         )}
         <FaqItem
           q={`Is the ${item.name} good for macro tracking?`}
-          a={`The ${item.name} at ${restaurantName} has complete macro data available in the Fitsy app. Download Fitsy to get personalized recommendations based on your protein, carb, and fat targets.`}
+          a={`The ${item.name} at ${restaurantName} has complete macro data available in the Fitsy app. Join the Fitsy waitlist to get personalized recommendations based on your protein, carb, and fat targets when the app launches.`}
         />
       </section>
 
@@ -338,8 +338,8 @@ function CtaBanner({
             that fit your exact macro targets.
           </p>
         </div>
-        <a href={APP_STORE_URL} className={styles.ctaButton}>
-          Download Fitsy
+        <a href={WAITLIST_URL} className={styles.ctaButton}>
+          Join the waitlist
         </a>
       </div>
     </div>

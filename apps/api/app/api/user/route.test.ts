@@ -4,6 +4,8 @@ const mockRequireAuth = jest.fn();
 const mockSavedItemDeleteMany = jest.fn();
 const mockMacroTargetDeleteMany = jest.fn();
 const mockSubscriptionDeleteMany = jest.fn();
+const mockWaitlistDeleteMany = jest.fn();
+const mockWaitlistUpdateMany = jest.fn();
 const mockUserDelete = jest.fn();
 const mockTransaction = jest.fn();
 const mockSupabaseDeleteUser = jest.fn();
@@ -18,6 +20,7 @@ jest.mock("@/lib/restaurantService", () => ({
     savedItem: { deleteMany: mockSavedItemDeleteMany },
     macroTarget: { deleteMany: mockMacroTargetDeleteMany },
     subscription: { deleteMany: mockSubscriptionDeleteMany },
+    launchWaitlist: { deleteMany: mockWaitlistDeleteMany, updateMany: mockWaitlistUpdateMany },
     user: { delete: mockUserDelete },
     $transaction: mockTransaction,
   },
@@ -37,6 +40,8 @@ beforeEach(() => {
   mockSavedItemDeleteMany.mockReset().mockResolvedValue({ count: 0 });
   mockMacroTargetDeleteMany.mockReset().mockResolvedValue({ count: 0 });
   mockSubscriptionDeleteMany.mockReset().mockResolvedValue({ count: 0 });
+  mockWaitlistDeleteMany.mockReset().mockResolvedValue({ count: 0 });
+  mockWaitlistUpdateMany.mockReset().mockResolvedValue({ count: 0 });
   mockUserDelete.mockReset().mockResolvedValue({ id: "user-1" });
   mockTransaction.mockReset();
   mockSupabaseDeleteUser.mockReset().mockResolvedValue({ data: {}, error: null });
@@ -51,6 +56,7 @@ beforeEach(() => {
       savedItem: { deleteMany: mockSavedItemDeleteMany },
       macroTarget: { deleteMany: mockMacroTargetDeleteMany },
       subscription: { deleteMany: mockSubscriptionDeleteMany },
+      launchWaitlist: { deleteMany: mockWaitlistDeleteMany, updateMany: mockWaitlistUpdateMany },
       user: { delete: mockUserDelete },
     };
     return fn(tx);
@@ -101,6 +107,22 @@ describe("DELETE /api/user — success", () => {
     expect(mockSubscriptionDeleteMany).toHaveBeenCalledWith({
       where: { userId: "user-1" },
     });
+    // Only the onboarding-only, never-opted-out waitlist row goes with the
+    // account; website rows and opt-out records survive, unlinked.
+    expect(mockWaitlistDeleteMany).toHaveBeenCalledWith({
+      where: { userId: "user-1", source: "onboarding", emailOptOutAt: null },
+    });
+    // Whatever survives keeps only the email + opt-out: the location the
+    // account supplied goes with the account.
+    expect(mockWaitlistUpdateMany).toHaveBeenCalledWith({
+      where: { userId: "user-1" },
+      data: { lat: null, lng: null, city: null },
+    });
+    const deleteOrder = mockWaitlistDeleteMany.mock.invocationCallOrder[0]!;
+    const stripOrder = mockWaitlistUpdateMany.mock.invocationCallOrder[0]!;
+    const userOrder = mockUserDelete.mock.invocationCallOrder[0]!;
+    expect(deleteOrder).toBeLessThan(userOrder);
+    expect(stripOrder).toBeLessThan(userOrder);
     expect(mockUserDelete).toHaveBeenCalledWith({
       where: { id: "user-1" },
     });

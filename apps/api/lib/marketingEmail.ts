@@ -9,7 +9,7 @@
  */
 import { prisma } from "@/lib/restaurantService";
 import { Prisma } from "@prisma/client";
-import { unsubscribeUrl } from "@/lib/unsubscribe";
+import { unsubscribeUrl, type UnsubscribeSubject } from "@/lib/unsubscribe";
 export { launchEmailContent } from "@/lib/emailTemplates";
 
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
@@ -29,13 +29,42 @@ export function isUndeliverableAddress(email: string | null | undefined): boolea
   return !tld || UNDELIVERABLE_TLDS.has(tld);
 }
 
-export async function sendMarketingEmail(opts: {
-  userId: string;
-  to: string;
-  subject: string;
-  html: string;
-}): Promise<boolean> {
-  const { userId, to, subject, html } = opts;
+/**
+ * Who the email is for, which decides which unsubscribe link is minted: an
+ * account (`?u=`) or a waitlist-only email with no account (`?w=`).
+ * Suppression itself is keyed on the address, not the record: see
+ * isEmailOptedOut.
+ */
+export type MarketingRecipient =
+  | { userId: string; waitlistId?: undefined }
+  | { waitlistId: string; userId?: undefined };
+
+/**
+ * True when ANY record for this address has opted out: the User row (set by
+ * `?u=` links) or the LaunchWaitlist row (set by `?w=` links). An address can
+ * exist on both tables, linked or not, and can move between them (a website
+ * signup that later creates an account, or the reverse), so an opt-out
+ * recorded on either must win for every send path.
+ */
+export async function isEmailOptedOut(email: string): Promise<boolean> {
+  const normalized = email.trim().toLowerCase();
+  const rows = await prisma.$queryRaw<{ n: number }[]>(
+    Prisma.sql`SELECT 1 AS n FROM "User" WHERE lower("email") = ${normalized} AND "emailOptOutAt" IS NOT NULL
+      UNION ALL
+      SELECT 1 AS n FROM "LaunchWaitlist" WHERE "email" = ${normalized} AND "emailOptOutAt" IS NOT NULL
+      LIMIT 1`,
+  );
+  return rows.length > 0;
+}
+
+export async function sendMarketingEmail(
+  opts: MarketingRecipient & {
+    to: string;
+    subject: string;
+    html: string;
+  },
+): Promise<boolean> {
+  const { to, subject, html } = opts;
 
   // --- Compliance gates (fail-closed) ---
 
@@ -50,21 +79,23 @@ export async function sendMarketingEmail(opts: {
   const postalAddress = process.env["FITSY_POSTAL_ADDRESS"];
   if (!postalAddress) return false;
 
-  // Suppression check — use $queryRaw so we avoid pre-generate client issues
-  // with the emailOptOutAt column added via migration.
-  const rows = await prisma.$queryRaw<{ emailOptOutAt: Date | null }[]>(
-    Prisma.sql`SELECT "emailOptOutAt" FROM "User" WHERE id = ${userId}`,
-  );
-  if (rows[0]?.emailOptOutAt) return false;
+  // Suppression is keyed on the address so no record-level gap can bypass it.
+  if (await isEmailOptedOut(to)) return false;
 
   // --- Build unsubscribe URL (guaranteed non-null — secret is set above) ---
-  const unsub = unsubscribeUrl(userId) as string;
+  const recipient: UnsubscribeSubject =
+    opts.userId !== undefined ? { userId: opts.userId } : { waitlistId: opts.waitlistId };
+  const unsub = unsubscribeUrl(recipient) as string;
+  const why =
+    opts.userId !== undefined
+      ? "You're receiving this because you have a Fitsy account and joined our launch list."
+      : "You're receiving this because you joined the Fitsy launch list at fitsy.org.";
 
   // --- Compliance footer ---
   const footer = [
     `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e5e5;`,
     `color:#888;font-size:12px;line-height:1.6;">`,
-    `<p>You're receiving this because you have a Fitsy account and joined our launch list.</p>`,
+    `<p>${why}</p>`,
     `<p>${postalAddress}</p>`,
     `<p><a href="${unsub}" style="color:#888;">Unsubscribe</a></p>`,
     `</div>`,

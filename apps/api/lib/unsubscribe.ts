@@ -1,25 +1,40 @@
 /**
  * HMAC-based unsubscribe tokens for one-click email opt-out (RFC 8058).
  *
- * Tokens are hex-encoded HMAC-SHA256 of userId, keyed by UNSUBSCRIBE_SECRET.
+ * Two kinds of recipient can be unsubscribed:
+ *   - an account:            /unsubscribe?u=<userId>&t=<token>
+ *   - a waitlist-only email: /unsubscribe?w=<waitlistId>&t=<token>
+ *
+ * Tokens are hex-encoded HMAC-SHA256 over a subject string, keyed by
+ * UNSUBSCRIBE_SECRET. Account subjects are the bare userId (unchanged since
+ * launch so existing links keep working); waitlist subjects are prefixed so a
+ * token minted for one kind can never validate the other.
  * All functions are synchronous; never throw.
  */
 import { createHmac, timingSafeEqual } from "node:crypto";
 
+export type UnsubscribeSubject = { userId: string } | { waitlistId: string };
+
+const WAITLIST_PREFIX = "waitlist:";
+
+function subjectString(subject: UnsubscribeSubject): string {
+  return "userId" in subject ? subject.userId : `${WAITLIST_PREFIX}${subject.waitlistId}`;
+}
+
 /** Returns a hex HMAC-SHA256 token, or null if UNSUBSCRIBE_SECRET is unset. */
-export function makeUnsubscribeToken(userId: string): string | null {
+export function makeUnsubscribeToken(subject: UnsubscribeSubject): string | null {
   const secret = process.env["UNSUBSCRIBE_SECRET"];
   if (!secret) return null;
-  return createHmac("sha256", secret).update(userId).digest("hex");
+  return createHmac("sha256", secret).update(subjectString(subject)).digest("hex");
 }
 
 /**
  * Verifies a token in constant time.
  * Returns false on any mismatch or error — never throws.
  */
-export function verifyUnsubscribeToken(userId: string, token: string): boolean {
+export function verifyUnsubscribeToken(subject: UnsubscribeSubject, token: string): boolean {
   try {
-    const expected = makeUnsubscribeToken(userId);
+    const expected = makeUnsubscribeToken(subject);
     if (!expected) return false;
     // Guard against length mismatch before timingSafeEqual (which requires equal lengths)
     if (expected.length !== token.length) return false;
@@ -31,10 +46,16 @@ export function verifyUnsubscribeToken(userId: string, token: string): boolean {
 
 /**
  * Returns a fully-qualified unsubscribe URL, or null if UNSUBSCRIBE_SECRET is unset.
- * Example: https://fitsy.org/unsubscribe?u=<userId>&t=<token>
+ * Examples:
+ *   https://fitsy.org/unsubscribe?u=<userId>&t=<token>
+ *   https://fitsy.org/unsubscribe?w=<waitlistId>&t=<token>
  */
-export function unsubscribeUrl(userId: string): string | null {
-  const token = makeUnsubscribeToken(userId);
+export function unsubscribeUrl(subject: UnsubscribeSubject): string | null {
+  const token = makeUnsubscribeToken(subject);
   if (!token) return null;
-  return `https://fitsy.org/unsubscribe?u=${encodeURIComponent(userId)}&t=${encodeURIComponent(token)}`;
+  const param =
+    "userId" in subject
+      ? `u=${encodeURIComponent(subject.userId)}`
+      : `w=${encodeURIComponent(subject.waitlistId)}`;
+  return `https://fitsy.org/unsubscribe?${param}&t=${encodeURIComponent(token)}`;
 }

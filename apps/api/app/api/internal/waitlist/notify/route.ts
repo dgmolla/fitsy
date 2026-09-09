@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/restaurantService";
 import { sendLaunchPush } from "@/lib/launchPush";
-import { sendMarketingEmail, launchEmailContent } from "@/lib/marketingEmail";
+import { isEmailOptedOut, launchEmailContent, sendMarketingEmail } from "@/lib/marketingEmail";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,12 +9,22 @@ export const dynamic = "force-dynamic";
 /**
  * POST /api/internal/waitlist/notify - notify waitlist users when a city launches.
  *
+ * Matches entries whose coarse location is within `radiusMiles` of the launch
+ * center. Website signups (POST /api/waitlist/web) carry no location, so they
+ * never radius-match; pass `includeUnlocated: true` to fold them into a
+ * launch blast (typically the first city launch).
+ *
  * Attempts BOTH push and email for every matched entry (not push-primary/email-fallback).
- * Marks notifiedAt when EITHER channel succeeds.
+ * Push needs a linked account with a token. An email opt-out (unsubscribe)
+ * suppresses only the email: "Notify me at launch" is a separately requested
+ * notification, and the privacy page promises unsubscribing stops marketing
+ * email only. Marks notifiedAt when EITHER channel succeeds, and also when an
+ * opted-out entry has no push token (nothing we may send; counted as
+ * `suppressed`) so the job converges instead of re-matching it forever.
  *
  * Auth: CRON_SECRET Bearer (same as other internal endpoints).
- * Body: { lat, lng, radiusMiles?, city?, dryRun? }
- * Response: { ok, matched, viaPush, viaEmail, notified, failed }
+ * Body: { lat, lng, radiusMiles?, city?, includeUnlocated?, dryRun? }
+ * Response: { ok, matched, viaPush, viaEmail, notified, suppressed, failed }
  */
 
 function milesBetween(aLat: number, aLng: number, bLat: number, bLng: number): number {
@@ -41,11 +51,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
-  const { lat, lng, radiusMiles, city, dryRun } = (body ?? {}) as {
+  const { lat, lng, radiusMiles, city, includeUnlocated, dryRun } = (body ?? {}) as {
     lat?: number;
     lng?: number;
     radiusMiles?: number;
     city?: string;
+    includeUnlocated?: boolean;
     dryRun?: boolean;
   };
   if (typeof lat !== "number" || typeof lng !== "number") {
@@ -58,12 +69,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   type WaitlistRow = {
     id: string;
-    userId: string;
+    userId: string | null;
     email: string;
-    lat: number;
-    lng: number;
+    lat: number | null;
+    lng: number | null;
     city: string | null;
-    user: { pushToken: string | null };
+    user: { pushToken: string | null } | null;
   };
 
   const pending: WaitlistRow[] = await prisma.launchWaitlist.findMany({
@@ -79,8 +90,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     },
   });
 
-  const inArea = pending.filter(
-    (w) => milesBetween(lat, lng, w.lat, w.lng) <= radius,
+  const inArea = pending.filter((w) =>
+    w.lat === null || w.lng === null
+      ? includeUnlocated === true
+      : milesBetween(lat, lng, w.lat, w.lng) <= radius,
   );
 
   if (dryRun) {
@@ -90,30 +103,39 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   let viaPush = 0;
   let viaEmail = 0;
   let notified = 0;
+  let suppressed = 0;
   let failed = 0;
 
   for (const w of inArea) {
     const effectiveCity = city ?? w.city;
+    const pushToken = w.user?.pushToken ?? null;
 
-    // Attempt both channels in parallel
+    // Opt-out is keyed on the address across both tables; it gates email only.
+    const optedOut = await isEmailOptedOut(w.email);
+    const recipient =
+      w.userId !== null ? { userId: w.userId } : { waitlistId: w.id };
+
     const [pushed, emailed] = await Promise.all([
-      sendLaunchPush(w.user.pushToken, effectiveCity),
-      (async () => {
-        const { subject, html } = launchEmailContent(effectiveCity);
-        return sendMarketingEmail({ userId: w.userId, to: w.email, subject, html });
-      })(),
+      pushToken ? sendLaunchPush(pushToken, effectiveCity) : Promise.resolve(false),
+      optedOut
+        ? Promise.resolve(false)
+        : (async () => {
+            const { subject, html } = launchEmailContent(effectiveCity);
+            return sendMarketingEmail({ ...recipient, to: w.email, subject, html });
+          })(),
     ]);
 
-    const either = pushed || emailed;
-
-    if (either) {
+    // Terminal when a channel succeeded, or when nothing may ever be sent.
+    const nothingAllowed = optedOut && !pushToken;
+    if (pushed || emailed || nothingAllowed) {
       await prisma.launchWaitlist.update({
         where: { id: w.id },
         data: { notifiedAt: new Date() },
       });
-      notified++;
       if (pushed) viaPush++;
       if (emailed) viaEmail++;
+      if (pushed || emailed) notified++;
+      else suppressed++;
     } else {
       failed++;
     }
@@ -125,6 +147,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     viaPush,
     viaEmail,
     notified,
+    suppressed,
     failed,
   });
 }

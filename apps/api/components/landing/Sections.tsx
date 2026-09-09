@@ -1,6 +1,7 @@
 import s from "@/app/landing-sections.module.css";
-import { AppleIcon } from "@/components/AppleIcon";
+import { WaitlistForm } from "@/components/landing/WaitlistForm";
 import type { DisplayPricing } from "@/lib/pricing";
+import { LAUNCH_CITY, LAUNCH_DATE_ISO, LAUNCH_DATE_LABEL } from "@/lib/launch";
 
 /**
  * Static landing-page sections below the feature grid. Server components:
@@ -176,38 +177,39 @@ export function Faq({ pricing }: { pricing: DisplayPricing }) {
   );
 }
 
-export function Closing({ href }: { href: string }) {
+/**
+ * Closing CTA. Anchored as #waitlist: every "Join the waitlist" link on the
+ * site (stats splash, footer, restaurant pages) lands here. At App Store
+ * launch this becomes the store badge again (see lib/appLinks.ts).
+ */
+export function Closing() {
   return (
-    <section className={s.closing} id="download">
+    <section className={s.closing} id="waitlist">
       <div className={s.container}>
-        <span className={s.eyebrow}>Free for 3 days</span>
+        <span className={s.eyebrow}>
+          Launching <time dateTime={LAUNCH_DATE_ISO}>{LAUNCH_DATE_LABEL}</time>
+        </span>
         <h2 className={`${s.sectionTitle} ${s.closingTitle}`}>
           Eat out.
           <br />
           <em>Stay on plan.</em>
         </h2>
         <p className={s.sectionLead}>
-          Join the Los Angeles beta. Cancel anytime, and nothing is charged
-          until your trial ends.
+          Fitsy opens in {LAUNCH_CITY} on {LAUNCH_DATE_LABEL}. Join the
+          waitlist to be first in. More cities follow.
         </p>
         <div className={s.closingCtas}>
-          <a href={href} className={s.storeBadge}>
-            <AppleIcon />
-            <span className={s.sb}>
-              <small>Download on the</small>
-              <b>App Store</b>
-            </span>
-          </a>
+          <WaitlistForm align="center" />
         </div>
         <p className={s.closingFine}>
-          Available on iPhone. Android coming soon.
+          iPhone first. Android coming later.
         </p>
       </div>
     </section>
   );
 }
 
-export function FooterCols({ downloadHref }: { downloadHref: string }) {
+export function FooterCols({ waitlistHref }: { waitlistHref: string }) {
   return (
     <footer className={s.footerCols}>
       <div className={s.footerColsInner}>
@@ -216,12 +218,13 @@ export function FooterCols({ downloadHref }: { downloadHref: string }) {
             fitsy<span className={s.logoDot}>.</span>
           </span>
           <p className={s.footerTag}>
-            Find food that fits your macros. Now in beta in Los Angeles.
+            Find food that fits your macros. Launching in {LAUNCH_CITY} on{" "}
+            {LAUNCH_DATE_LABEL}.
           </p>
         </div>
         <div className={s.footerCol}>
           <h4>Product</h4>
-          <a href={downloadHref}>Download the app</a>
+          <a href={waitlistHref}>Join the waitlist</a>
           <a href="/restaurants">Browse restaurants</a>
         </div>
         <div className={s.footerCol}>

@@ -1,11 +1,12 @@
 import styles from "./landing.module.css";
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/restaurantService";
-import { APP_STORE_URL } from "@/lib/appLinks";
+import { WAITLIST_URL } from "@/lib/appLinks";
+import { LAUNCH_CITY, LAUNCH_DATE_ISO, LAUNCH_DATE_LABEL } from "@/lib/launch";
 import { getDisplayPricing } from "@/lib/pricing";
 import { Nav } from "@/components/Nav";
 import { FeatureGrid } from "@/components/landing/FeatureGrid";
-import { AppleIcon } from "@/components/AppleIcon";
+import { WaitlistForm } from "@/components/landing/WaitlistForm";
 import {
   Closing,
   Faq,
@@ -52,7 +53,10 @@ export default async function LandingPage() {
       <section className={styles.hero}>
         <div className={styles.heroContent}>
           <div className={styles.heroText}>
-            <span className={styles.badge}>Now in Beta (Los Angeles)</span>
+            <span className={styles.badge}>
+              Launching in {LAUNCH_CITY} on{" "}
+              <time dateTime={LAUNCH_DATE_ISO}>{LAUNCH_DATE_LABEL}</time>
+            </span>
             <h1 className={styles.headline}>
               Find food that fits
               <br />
@@ -63,10 +67,7 @@ export default async function LandingPage() {
               protein, carb, and fat targets. Eat out without blowing your plan.
             </p>
             <div className={styles.heroCtas}>
-              <a href={APP_STORE_URL} className={styles.ctaPrimary}>
-                <AppleIcon />
-                Download the App
-              </a>
+              <WaitlistForm />
               <a href="#features" className={styles.ctaGhost}>
                 Learn more
                 <span className={styles.ctaArrow}>&#8595;</span>
@@ -111,18 +112,18 @@ export default async function LandingPage() {
           <span className={styles.statSub}>
             across {restaurantCount.toLocaleString()} local restaurants
           </span>
-          <a href={APP_STORE_URL} className={styles.statCta}>
-            Find Food For Me
+          <a href={WAITLIST_URL} className={styles.statCta}>
+            Join the waitlist
           </a>
         </div>
       </section>
 
       {/* ─── FAQ + closing CTA ───────────────────────────────────── */}
       <Faq pricing={pricing} />
-      <Closing href={APP_STORE_URL} />
+      <Closing />
 
       {/* ─── Footer ──────────────────────────────────────────────── */}
-      <FooterCols downloadHref={APP_STORE_URL} />
+      <FooterCols waitlistHref={WAITLIST_URL} />
     </main>
   );
 }

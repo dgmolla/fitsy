@@ -9,8 +9,16 @@ import { getSupabaseAdmin } from "@/lib/supabase";
 // and GDPR compliance.
 //
 // Order of operations:
-//   1. DB transaction — savedItem, macroTarget, subscription, user (in that order)
+//   1. DB transaction — savedItem, macroTarget, subscription, the user's
+//      onboarding-only waitlist row (if it never opted out), then user
 //   2. Best-effort Supabase auth admin deleteUser (logged but non-blocking)
+//
+// LaunchWaitlist is unlinked (SET NULL), not cascaded: a row that was created
+// on fitsy.org, or that carries an email opt-out, is kept as the address-keyed
+// suppression record; only a row this account created via "Notify me" and
+// never opted out is personal data to remove with the account. Any row that
+// survives is stripped of the coarse location the account supplied, so what
+// remains is the email address and the opt-out, nothing else.
 //
 // DB is the source of truth. A dangling Supabase auth row is recoverable; a
 // dangling Prisma user is not. Returns 204 on success.
@@ -28,6 +36,13 @@ export async function DELETE(
       await tx.savedItem.deleteMany({ where: { userId } });
       await tx.macroTarget.deleteMany({ where: { userId } });
       await tx.subscription.deleteMany({ where: { userId } });
+      await tx.launchWaitlist.deleteMany({
+        where: { userId, source: "onboarding", emailOptOutAt: null },
+      });
+      await tx.launchWaitlist.updateMany({
+        where: { userId },
+        data: { lat: null, lng: null, city: null },
+      });
       await tx.user.delete({ where: { id: userId } });
     });
   } catch (err) {

@@ -1,8 +1,10 @@
 /**
- * Single source for the "download the app" destination used across the web
- * app (hero, closing CTA, footer, restaurant pages).
+ * Single source for the primary call-to-action destination used across the
+ * web app (stats splash, footer, restaurant pages).
  *
- * Placeholder until the App Store listing is released; swap once so every
- * surface updates together.
+ * Until the App Store listing is live, every CTA sends visitors to the
+ * waitlist form on the landing page (POST /api/waitlist/web). At launch, swap
+ * this once for the App Store URL and restore the store badge in
+ * components/landing/Sections.tsx so every surface updates together.
  */
-export const APP_STORE_URL = "https://testflight.apple.com/join/fitsy";
+export const WAITLIST_URL = "/#waitlist";

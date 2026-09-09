@@ -34,24 +34,38 @@ model User {
   launchWaitlist  LaunchWaitlist?
 }
 
-// Users who hit "we're not in your area yet" during onboarding. We hold their
-// email + a COARSE (city-level, rounded) location so we can email them once
-// Fitsy launches near them. Email is denormalized so the notify job needs no
-// User join and the record survives account changes. See
-// docs/engineering/backend/launch-waitlist.md for the ASC privacy disclosures.
+// The launch email list. One row per email address, from either of two
+// sources: (1) onboarding users who hit "we're not in your area yet" and tap
+// "Notify me" (userId + a COARSE, city-level rounded location), or (2) visitors
+// who join the waitlist on fitsy.org (email only, no account, no location).
+// Email is the natural key so the same person joining from both surfaces is
+// one row; an onboarding join links userId + location onto an existing web row.
+// Email is denormalized so the notify job needs no User join and the record
+// survives account changes. See docs/engineering/backend/launch-waitlist.md
+// for the ASC privacy disclosures.
 model LaunchWaitlist {
-  id         String    @id @default(cuid())
-  userId     String    @unique
-  email      String
-  lat        Float     // rounded to ~city precision (1 decimal) at write time
-  lng        Float
-  city       String?   // optional human label, best-effort
-  createdAt  DateTime  @default(now())
-  notifiedAt DateTime? // set when we email them about their city launching
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id            String         @id @default(cuid())
+  email         String         @unique // normalized: trimmed + lowercased at write time
+  userId        String?        @unique // null for web-only signups
+  source        WaitlistSource @default(onboarding) // how the row was first created; DB default keeps the previous bundle inserting during the migrate/deploy window
+  lat           Float?         // rounded to ~city precision (1 decimal) at write time; null for web signups
+  lng           Float?
+  city          String?        // optional human label, best-effort
+  createdAt     DateTime       @default(now())
+  notifiedAt    DateTime?      // set when we email them about their city launching
+  emailOptOutAt DateTime?      // set via /unsubscribe?w=<id>; suppresses email to this row
+  // SetNull, not Cascade: the row is the address-keyed suppression record and
+  // may have been created on the website independently of the account. The
+  // delete-account route removes onboarding-only rows that never opted out.
+  user          User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([notifiedAt])
   @@index([lat, lng])
+}
+
+enum WaitlistSource {
+  onboarding
+  web
 }
 
 model MacroTarget {

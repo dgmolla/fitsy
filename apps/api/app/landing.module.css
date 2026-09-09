@@ -170,33 +170,13 @@
   animation: fadeUp 0.6s ease 0.3s both;
 }
 
+/* Waitlist form (components/landing/WaitlistForm) stacked over "Learn more". */
 .heroCtas {
   display: flex;
-  gap: 0.75rem;
-  align-items: center;
-  flex-wrap: wrap;
-  animation: fadeUp 0.6s ease 0.4s both;
-}
-
-.ctaPrimary {
-  display: inline-flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 0.5rem;
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: var(--cream);
-  background: var(--green);
-  padding: 0.8125rem 1.625rem;
-  border-radius: 999px;
-  text-decoration: none;
-  letter-spacing: -0.01em;
-  transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.ctaPrimary:hover {
-  background: var(--green-mid);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 28px rgba(27, 58, 38, 0.22);
+  animation: fadeUp 0.6s ease 0.4s both;
 }
 
 .ctaGhost {
@@ -207,7 +187,7 @@
   font-weight: 500;
   color: var(--text-mid);
   text-decoration: none;
-  padding: 0.8125rem 0.75rem;
+  padding: 0.5rem 0;
   transition: color 0.2s ease;
 }
 
@@ -591,7 +571,7 @@
   }
 
   .heroCtas {
-    justify-content: center;
+    align-items: center;
   }
 
   .heroPhone {
@@ -715,10 +695,5 @@
     width: 64px;
     height: 18px;
     top: 9px;
-  }
-
-  .heroCtas {
-    flex-direction: column;
-    align-items: center;
   }
 }
