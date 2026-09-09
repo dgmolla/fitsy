@@ -98,7 +98,7 @@ test("source calorie labels corroborate a binding; ranges or conflicts cannot ov
   const small = buildChainMatcher([fixture({ calories: 30, proteinG: 2, carbsG: 3, fatG: 0 })]);
   expect(small("waba", { ...item, calories: 60 })).toMatchObject({ status: "matched" }); // exactly the 30-calorie floor
   expect(small("waba", { ...item, calories: 61 })).toEqual({ status: "unmatched" });
-  for (const update of [{ calories: 640 }, { calories: NaN }, { calories: -1 }, { calorieRange: [640, 820] as [number, number] }]) {
+  for (const update of [{ calorieLabel: "500+ Cal." }, { calories: 640 }, { calories: NaN }, { calories: -1 }, { calorieRange: [640, 820] as [number, number] }]) {
     expect(match("waba", { ...item, ...update })).toEqual({ status: "unmatched" });
   }
 });

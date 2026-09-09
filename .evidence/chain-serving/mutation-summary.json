@@ -1,0 +1,6 @@
+{
+  "scope": "chainServing.ts and ueNutritionLabel.ts",
+  "score": 83.09,
+  "status": "historical combined run; later serving-only result is 77.54",
+  "rawLogs": "Verbose mutant traces preserved in task scratch."
+}

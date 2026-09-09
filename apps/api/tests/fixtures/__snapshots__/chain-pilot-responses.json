@@ -1,0 +1,68 @@
+[
+  {
+    "status": "success",
+    "data": {
+      "title": "WaBa Grill - Van Nuys (Sepulveda)",
+      "catalogSectionsMap": {
+        "captured": [
+          {
+            "payload": {
+              "standardItemsPayload": {
+                "title": {
+                  "text": "Plates"
+                },
+                "catalogItems": [
+                  {
+                    "uuid": "e787ad1a-86b2-52f1-b801-b5231306c304",
+                    "title": "Chicken Plate",
+                    "itemDescription": "Grilled all-natural, never frozen chicken caramelized with our signature WaBa sauce.",
+                    "price": 1619,
+                    "priceTagline": {
+                      "text": "$16.19 \u2022 820 Cal.",
+                      "textFormat": "<span>$16.19<span style=\"color:#757575\"> \u2022 820 Cal.</span></span>",
+                      "accessibilityText": "$16.19, 820 Cal."
+                    },
+                    "hasCustomizations": true
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "status": "success",
+    "data": {
+      "title": "Yoshinoya (3081 N. San Fernando Road)",
+      "catalogSectionsMap": {
+        "captured": [
+          {
+            "payload": {
+              "standardItemsPayload": {
+                "title": {
+                  "text": "Featured items"
+                },
+                "catalogItems": [
+                  {
+                    "uuid": "25cfccae-5f2c-5836-a1d6-bd65a42db000",
+                    "title": "Original Gyudon Beef",
+                    "itemDescription": "Thin juicy ribbons of Gyudon Beef and chopped onions, slowly simmered in a sweet and savory herb miso soy broth.",
+                    "price": 859,
+                    "priceTagline": {
+                      "text": "$8.59 \u2022 310 Cal.",
+                      "textFormat": "<span>$8.59<span style=\"color:#757575\"> \u2022 310 Cal.</span></span>",
+                      "accessibilityText": "$8.59, 310 Cal."
+                    },
+                    "hasCustomizations": false
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+]

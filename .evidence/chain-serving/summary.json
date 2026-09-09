@@ -1,0 +1,26 @@
+{
+  "focused_tests": 51,
+  "database": "isolated PostGIS 16, random fixture IDs with cleanup",
+  "captured_cases": [
+    "WaBa Chicken Plate: April and new hex both 820/54/110/15",
+    "Yoshinoya Original Gyudon Beef side: April and new hex both 310/21/8/21"
+  ],
+  "checks": [
+    "stable IDs and saved references",
+    "April metadata and menu membership preserved",
+    "current reviewed catalog and brand required",
+    "unmatched estimation order",
+    "provenance survives both SQL writers",
+    "changed serving clears prior reviewed estimate",
+    "merchant precedence",
+    "idempotent replan",
+    "alias ambiguity rejected",
+    "brand conflict rolls back menu and checkpoint",
+    "multiple estimates allowed, missing estimate rejected"
+  ],
+  "registry": "8 pass; existing own-code mocks remain shadow",
+  "mutation_score_before_final_extra_assertions": 83.09,
+  "build": "pass after commit",
+  "production_writes": false,
+  "backup_guards": "optional full estimate snapshot checked inside transaction; returned after-state captured before commit"
+}

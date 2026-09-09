@@ -1,0 +1,66 @@
+FAIL apps/api/tests/db/chainServing.db.test.ts
+  reviewed chains through April and real new-hex persistence
+    ✕ waba-grill: captured April identity and new UE location serve the same PDF facts (297 ms)
+    ✕ yoshinoya: captured April identity and new UE location serve the same PDF facts (35 ms)
+
+  ● reviewed chains through April and real new-hex persistence › waba-grill: captured April identity and new UE location serve the same PDF facts
+
+    expect(received).toMatchObject(expected)
+
+    - Expected  - 2
+    + Received  + 6
+
+      Object {
+    -   "hadPhoto": false,
+    -   "ingredientBreakdown": null,
+    +   "hadPhoto": true,
+    +   "ingredientBreakdown": Array [
+    +     Object {
+    +       "name": "Old component",
+    +     },
+    +   ],
+      }
+
+      51 |     expect(await p.menuItem.count({ where: { restaurantId: aprilRestaurant.id } })).toBe(1);
+      52 |     const estimate = await p.macroEstimate.findUniqueOrThrow({ where: { menuItemId_source: { menuItemId: original.id, source: "official" } } });
+    > 53 |     expect(estimate).toMatchObject({ hadPhoto: false, ingredientBreakdown: null });
+         |                      ^
+      54 |     await applyAprilChainMatch(p, after, approved);
+      55 |     expect(await p.macroEstimate.findUniqueOrThrow({ where: { id: estimate.id } })).toEqual(estimate);
+      56 |     expect(await p.menuItem.findUniqueOrThrow({ where: { id: original.id } })).toEqual(after);
+
+      at tests/db/chainServing.db.test.ts:53:22
+
+  ● reviewed chains through April and real new-hex persistence › yoshinoya: captured April identity and new UE location serve the same PDF facts
+
+    expect(received).toMatchObject(expected)
+
+    - Expected  - 2
+    + Received  + 6
+
+      Object {
+    -   "hadPhoto": false,
+    -   "ingredientBreakdown": null,
+    +   "hadPhoto": true,
+    +   "ingredientBreakdown": Array [
+    +     Object {
+    +       "name": "Old component",
+    +     },
+    +   ],
+      }
+
+      51 |     expect(await p.menuItem.count({ where: { restaurantId: aprilRestaurant.id } })).toBe(1);
+      52 |     const estimate = await p.macroEstimate.findUniqueOrThrow({ where: { menuItemId_source: { menuItemId: original.id, source: "official" } } });
+    > 53 |     expect(estimate).toMatchObject({ hadPhoto: false, ingredientBreakdown: null });
+         |                      ^
+      54 |     await applyAprilChainMatch(p, after, approved);
+      55 |     expect(await p.macroEstimate.findUniqueOrThrow({ where: { id: estimate.id } })).toEqual(estimate);
+      56 |     expect(await p.menuItem.findUniqueOrThrow({ where: { id: original.id } })).toEqual(after);
+
+      at tests/db/chainServing.db.test.ts:53:22
+
+Test Suites: 1 failed, 1 total
+Tests:       2 failed, 2 total
+Snapshots:   0 total
+Time:        0.764 s, estimated 1 s
+Ran all test suites matching /apps\/api\/tests\/db\/chainServing.db.test.ts/i.

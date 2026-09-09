@@ -1,0 +1,8 @@
+PASS apps/api/tests/db/chainServing.db.test.ts
+PASS apps/api/services/chainServing.test.ts
+
+Test Suites: 2 passed, 2 total
+Tests:       5 passed, 5 total
+Snapshots:   0 total
+Time:        1.045 s
+Ran all test suites matching /apps\/api\/tests\/db\/chainServing.db.test.ts|apps\/api\/services\/chainServing.test.ts/i.
