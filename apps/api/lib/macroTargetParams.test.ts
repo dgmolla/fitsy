@@ -10,10 +10,11 @@ test('short and gram target names describe the same meal', () => {
   expect(parse('calories=600&proteinG=40&carbsG=60&fatG=20')).toEqual(expected);
   expect(parse('protein=40&proteinG=40&protein=40')).toEqual({ proteinG: 40 });
   expect(parse('calories=100000')).toEqual({ calories: 100000 });
+  expect(parse('proteinG=0.01')).toEqual({ proteinG: .01 });
 });
 
 test.each(['protein=NaN', 'proteinG=-1', 'fat=Infinity', 'calories=100001',
-  'carbs=', 'calories=+', 'protein=40&proteinG=50', 'fat=10&fat=20'])('%s is rejected', query => {
+  'carbs=', 'carbs=%20', 'protein=1e-300', 'protein=1e-400', 'fat=.009', 'calories=+', 'protein=40&proteinG=50', 'fat=10&fat=20'])('%s is rejected', query => {
   expect(() => parse(query)).toThrow('Invalid macro target');
 });
 

@@ -36,7 +36,8 @@
   "additional_regressions": {
     "tied_float_cursor": "fails before / passes after",
     "preview_target_aliases": "fails before / passes after",
-    "underflowing_cursor": "fails before / passes after (HTTP 500 becomes 400)"
+    "underflowing_cursor": "fails before / passes after (HTTP 500 becomes 400)",
+    "tiny_target": "fails before / passes after; search + preview 400"
   },
   "mutation_score": 94.62,
   "preview_smoke": {
@@ -44,5 +45,6 @@
     "locked": true,
     "results": 20,
     "invalid_macro_status": 400
-  }
+  },
+  "parser_final_mutation_score": 94.44
 }

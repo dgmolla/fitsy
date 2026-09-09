@@ -50,11 +50,16 @@ describeIfDb('search nutrition provenance (real PostgreSQL)', () => {
   });
 
   test('SQL and JavaScript score each active dimension identically', async () => {
-    for (const t of [{}, { calories: 0 }, { proteinG: 45 }, targets]) {
-      const [row] = await prisma.$queryRaw<{ score: number }[]>(Prisma.sql`
-        SELECT ${macroScoreSumSql(t)} AS score FROM "MenuItem" m WHERE m.id = ${itemId}`);
-      expect(Math.sqrt(row!.score)).toBeCloseTo(computeMatchScore(t, targets) ?? 0, 12);
-    }
+    const observed = { calories: 660, proteinG: 44, carbsG: 66, fatG: 22 };
+    await prisma.menuItem.update({ where: { id: itemId }, data: observed });
+    try {
+      for (const t of [{ calories: 500 }, { proteinG: 45 }, { carbsG: 50, fatG: 15 }, targets]) {
+        const [row] = await prisma.$queryRaw<{ score: number }[]>(Prisma.sql`
+          SELECT ${macroScoreSumSql(t)} AS score FROM "MenuItem" m WHERE m.id = ${itemId}`);
+        expect(row!.score).toBeGreaterThan(0);
+        expect(Math.sqrt(row!.score)).toBeCloseTo(computeMatchScore(t, observed)!, 12);
+      }
+    } finally { await prisma.menuItem.update({ where: { id: itemId }, data: targets }); }
   });
 
   test('tied fractional scores survive a cursor round trip through Prisma', async () => {

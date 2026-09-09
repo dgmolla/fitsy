@@ -116,7 +116,8 @@ See `docs/engineering/architecture/auth.md` for full flow and request/response s
 
 ### GET /api/restaurants
 
-**Auth:** Bearer JWT required (`requireAuth`)  
+**Auth:** Optional JWT; macro matches require an entitled account.
+
 **File:** `apps/api/app/api/restaurants/route.ts`
 
 #### Query Parameters
@@ -140,7 +141,7 @@ See `docs/engineering/architecture/auth.md` for full flow and request/response s
 | `limit` | int | No | 20 | 1–50 |
 | `cursor` | string | No | — | Opaque pagination cursor from previous page |
 
-Macro targets must be finite numbers from 0 through 100,000. Zero disables a dimension; blank, negative, or conflicting targets return 400.
+Active macro targets must be finite numbers from 0.01 through 100,000. Zero disables a dimension; blank, negative, or conflicting targets return 400.
 
 #### Macro Match Scoring
 
@@ -189,13 +190,12 @@ Macros are read from denormalized `MenuItem` columns — not from a `MacroEstima
 }
 ```
 
-`bestMatch` is `null` when no macro targets are specified or no macro data exists for the restaurant.
+`bestMatch` is present on entitled responses; its `matchScore` is null when no target is active. Restaurants without a complete macro record are omitted. Missing provenance falls back to LOW confidence. Unentitled responses omit `bestMatch` and set `meta.locked` to true.
 
 #### Error Responses
 
 | Status | Body | Trigger |
 |---|---|---|
-| 401 | `{ "error": "Unauthorized" }` | Missing / invalid JWT |
 | 400 | `{ "error": "lat and lng are required" }` | Missing lat/lng |
 | 400 | `{ "error": "Invalid lat/lng values" }` | Non-numeric |
 | 400 | `{ "error": "lat must be between -90 and 90" }` | Out of range |

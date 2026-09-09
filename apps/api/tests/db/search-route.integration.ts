@@ -57,7 +57,7 @@ test('real authenticated search accepts equivalent aliases and keeps a valid wir
 });
 
 test('invalid targets return 400 through the handler', async () => {
-  for (const q of ['protein=NaN', 'fatG=-1', 'calories=', 'protein=40&proteinG=50']) {
+  for (const q of ['protein=NaN', 'protein=1e-300', 'protein=1e-400', 'carbs=%20', 'fatG=-1', 'calories=', 'protein=40&proteinG=50']) {
     assert.equal((await GET(request(q))).status, 400, q);
   }
 });
@@ -80,13 +80,15 @@ test('onboarding preview uses the same aliases and rejects invalid targets witho
   assert.ok(data.data.length > 0);
   assert.deepEqual(data, await b.json());
   assert.ok(data.data.every((row: object) => !('bestMatch' in row)));
-  for (const query of ['protein=NaN', 'proteinG=-1', 'calories=', 'protein=40&proteinG=50']) {
+  for (const query of ['protein=NaN', 'protein=1e-300', 'protein=1e-400', 'carbs=%20', 'proteinG=-1', 'calories=', 'protein=40&proteinG=50']) {
     assert.equal((await preview(request(query, false))).status, 400, query);
   }
 });
 
 // JavaScript silently rounds these to zero; PostgreSQL rejects the float cast.
-test('underflowing search cursor is a client error', async () => {
-  const cursor = Buffer.from(JSON.stringify({ id: 'x', orderKey: 0, orderKeyText: '1e-400' })).toString('base64');
-  assert.equal((await GET(request('cursor=' + encodeURIComponent(cursor)))).status, 400);
+test('out-of-range cursor numbers are client errors, while genuine zero is accepted', async () => {
+  for (const orderKeyText of ['1e-400', '-1e-400', '1e400', '-1e400', '0']) {
+    const cursor = Buffer.from(JSON.stringify({ id: 'x', orderKey: 0, orderKeyText })).toString('base64');
+    assert.equal((await GET(request('cursor=' + encodeURIComponent(cursor)))).status, orderKeyText === '0' ? 200 : 400);
+  }
 });
