@@ -1,0 +1,201 @@
+
+> @fitsy/scripts@0.1.0 test
+> jest --runInBand verify/actionlint.test.ts
+
+FAIL verify/actionlint.test.ts
+  ✓ CI rejects missing actionlint via FITSY_RUNS=ci CI= (13 ms)
+  ✓ CI rejects missing actionlint via FITSY_RUNS=local CI=true (9 ms)
+  ✓ CI rejects missing ShellCheck even when actionlint exists (9 ms)
+  ✓ installed tool exit 0 determines the check verdict (197 ms)
+  ✓ installed tool exit 1 determines the check verdict (150 ms)
+  ✓ local callers explicitly skip incomplete tools (actionlint installed: false) (15 ms)
+  ✓ local callers explicitly skip incomplete tools (actionlint installed: true) (13 ms)
+  ✓ workflow lint cannot be scoped away for an API-only change (ci) (253 ms)
+  ✓ workflow lint cannot be scoped away for an API-only change (local) (239 ms)
+  ✕ a future path filter cannot disable blocking lint (259 ms)
+  ✕ a future path filter cannot disable blocking typecheck (240 ms)
+  ✕ a future path filter cannot disable blocking boundaries (227 ms)
+  ✕ a future path filter cannot disable blocking context-freshness (223 ms)
+  ✕ a future path filter cannot disable blocking test (225 ms)
+  ✕ a future path filter cannot disable blocking build (205 ms)
+  ✕ path selection distinguishes blocking=true for a new check (222 ms)
+  ✓ path selection distinguishes blocking=shadow for a new check (232 ms)
+
+  ● a future path filter cannot disable blocking lint
+
+    expect(received).toMatchObject(expected)
+
+    - Expected  - 2
+    + Received  + 1
+
+      Object {
+    -   "blocking": true,
+        "name": "lint",
+    -   "status": "pass",
+    +   "status": "skipped",
+      }
+
+      49 | test.each(["lint", "typecheck", "boundaries", "context-freshness", "test", "build"])("a future path filter cannot disable blocking %s", name => {
+      50 |   const entry = registryEntry(name), layer = entry.match(/layer: (\d+)/)![1]!;
+    > 51 |   expect(select(entry + '\n    paths: ["unrelated/**"]\n', "0-" + layer)).toMatchObject({ name, status: "pass", blocking: true });
+         |                                                                           ^
+      52 | });
+      53 | test.each(["true", "shadow"])("path selection distinguishes blocking=%s for a new check", blocking => {
+      54 |   const entry = `  - name: future-check\n    script: future.sh\n    layer: 1\n    blocking: ${blocking}\n    runs: [ci]\n    paths: ["unrelated/**"]\n`;
+
+      at verify/actionlint.test.ts:51:75
+
+  ● a future path filter cannot disable blocking typecheck
+
+    expect(received).toMatchObject(expected)
+
+    - Expected  - 2
+    + Received  + 1
+
+      Object {
+    -   "blocking": true,
+        "name": "typecheck",
+    -   "status": "pass",
+    +   "status": "skipped",
+      }
+
+      49 | test.each(["lint", "typecheck", "boundaries", "context-freshness", "test", "build"])("a future path filter cannot disable blocking %s", name => {
+      50 |   const entry = registryEntry(name), layer = entry.match(/layer: (\d+)/)![1]!;
+    > 51 |   expect(select(entry + '\n    paths: ["unrelated/**"]\n', "0-" + layer)).toMatchObject({ name, status: "pass", blocking: true });
+         |                                                                           ^
+      52 | });
+      53 | test.each(["true", "shadow"])("path selection distinguishes blocking=%s for a new check", blocking => {
+      54 |   const entry = `  - name: future-check\n    script: future.sh\n    layer: 1\n    blocking: ${blocking}\n    runs: [ci]\n    paths: ["unrelated/**"]\n`;
+
+      at verify/actionlint.test.ts:51:75
+
+  ● a future path filter cannot disable blocking boundaries
+
+    expect(received).toMatchObject(expected)
+
+    - Expected  - 2
+    + Received  + 1
+
+      Object {
+    -   "blocking": true,
+        "name": "boundaries",
+    -   "status": "pass",
+    +   "status": "skipped",
+      }
+
+      49 | test.each(["lint", "typecheck", "boundaries", "context-freshness", "test", "build"])("a future path filter cannot disable blocking %s", name => {
+      50 |   const entry = registryEntry(name), layer = entry.match(/layer: (\d+)/)![1]!;
+    > 51 |   expect(select(entry + '\n    paths: ["unrelated/**"]\n', "0-" + layer)).toMatchObject({ name, status: "pass", blocking: true });
+         |                                                                           ^
+      52 | });
+      53 | test.each(["true", "shadow"])("path selection distinguishes blocking=%s for a new check", blocking => {
+      54 |   const entry = `  - name: future-check\n    script: future.sh\n    layer: 1\n    blocking: ${blocking}\n    runs: [ci]\n    paths: ["unrelated/**"]\n`;
+
+      at verify/actionlint.test.ts:51:75
+
+  ● a future path filter cannot disable blocking context-freshness
+
+    expect(received).toMatchObject(expected)
+
+    - Expected  - 2
+    + Received  + 1
+
+      Object {
+    -   "blocking": true,
+        "name": "context-freshness",
+    -   "status": "pass",
+    +   "status": "skipped",
+      }
+
+      49 | test.each(["lint", "typecheck", "boundaries", "context-freshness", "test", "build"])("a future path filter cannot disable blocking %s", name => {
+      50 |   const entry = registryEntry(name), layer = entry.match(/layer: (\d+)/)![1]!;
+    > 51 |   expect(select(entry + '\n    paths: ["unrelated/**"]\n', "0-" + layer)).toMatchObject({ name, status: "pass", blocking: true });
+         |                                                                           ^
+      52 | });
+      53 | test.each(["true", "shadow"])("path selection distinguishes blocking=%s for a new check", blocking => {
+      54 |   const entry = `  - name: future-check\n    script: future.sh\n    layer: 1\n    blocking: ${blocking}\n    runs: [ci]\n    paths: ["unrelated/**"]\n`;
+
+      at verify/actionlint.test.ts:51:75
+
+  ● a future path filter cannot disable blocking test
+
+    expect(received).toMatchObject(expected)
+
+    - Expected  - 2
+    + Received  + 1
+
+      Object {
+    -   "blocking": true,
+        "name": "test",
+    -   "status": "pass",
+    +   "status": "skipped",
+      }
+
+      49 | test.each(["lint", "typecheck", "boundaries", "context-freshness", "test", "build"])("a future path filter cannot disable blocking %s", name => {
+      50 |   const entry = registryEntry(name), layer = entry.match(/layer: (\d+)/)![1]!;
+    > 51 |   expect(select(entry + '\n    paths: ["unrelated/**"]\n', "0-" + layer)).toMatchObject({ name, status: "pass", blocking: true });
+         |                                                                           ^
+      52 | });
+      53 | test.each(["true", "shadow"])("path selection distinguishes blocking=%s for a new check", blocking => {
+      54 |   const entry = `  - name: future-check\n    script: future.sh\n    layer: 1\n    blocking: ${blocking}\n    runs: [ci]\n    paths: ["unrelated/**"]\n`;
+
+      at verify/actionlint.test.ts:51:75
+
+  ● a future path filter cannot disable blocking build
+
+    expect(received).toMatchObject(expected)
+
+    - Expected  - 2
+    + Received  + 1
+
+      Object {
+    -   "blocking": true,
+        "name": "build",
+    -   "status": "pass",
+    +   "status": "skipped",
+      }
+
+      49 | test.each(["lint", "typecheck", "boundaries", "context-freshness", "test", "build"])("a future path filter cannot disable blocking %s", name => {
+      50 |   const entry = registryEntry(name), layer = entry.match(/layer: (\d+)/)![1]!;
+    > 51 |   expect(select(entry + '\n    paths: ["unrelated/**"]\n', "0-" + layer)).toMatchObject({ name, status: "pass", blocking: true });
+         |                                                                           ^
+      52 | });
+      53 | test.each(["true", "shadow"])("path selection distinguishes blocking=%s for a new check", blocking => {
+      54 |   const entry = `  - name: future-check\n    script: future.sh\n    layer: 1\n    blocking: ${blocking}\n    runs: [ci]\n    paths: ["unrelated/**"]\n`;
+
+      at verify/actionlint.test.ts:51:75
+
+  ● path selection distinguishes blocking=true for a new check
+
+    expect(received).toMatchObject(expected)
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "name": "future-check",
+    -   "status": "pass",
+    +   "status": "skipped",
+      }
+
+      53 | test.each(["true", "shadow"])("path selection distinguishes blocking=%s for a new check", blocking => {
+      54 |   const entry = `  - name: future-check\n    script: future.sh\n    layer: 1\n    blocking: ${blocking}\n    runs: [ci]\n    paths: ["unrelated/**"]\n`;
+    > 55 |   expect(select(entry)).toMatchObject({ name: "future-check", status: blocking === "shadow" ? "skipped" : "pass" });
+         |                         ^
+      56 | });
+      57 |
+
+      at verify/actionlint.test.ts:55:25
+
+Test Suites: 1 failed, 1 total
+Tests:       7 failed, 10 passed, 17 total
+Snapshots:   0 total
+Time:        3.627 s, estimated 4 s
+Ran all test suites matching /verify\/actionlint.test.ts/i.
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-ci-rollout/scripts
+npm error workspace @fitsy/scripts@0.1.0
+npm error location /Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-ci-rollout/scripts
+npm error command failed
+npm error command sh -c jest --runInBand verify/actionlint.test.ts

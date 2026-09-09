@@ -1,0 +1,49 @@
+{
+  "incident": 262,
+  "actionlint": "1.7.12",
+  "shellcheck": "0.11.0",
+  "oldDeploymentYaml": "fails SC2129",
+  "fixedDeploymentYaml": "pass",
+  "guardTests": {
+    "before": {
+      "failed": 3,
+      "passed": 2
+    },
+    "after": {
+      "passed": 17,
+      "failed": 0
+    }
+  },
+  "changedScopeRegistry": "8 pass, 0 fail",
+  "fullScopeStatic": "7 pass, 0 fail",
+  "productionBuild": "pass",
+  "affectedMainRuns": [
+    34312580776,
+    34314379440
+  ],
+  "priorSilentlySkippedRun": 34301104105,
+  "apiBehaviorChanges": false,
+  "productionDataWrites": false,
+  "reviewRegressionProof": {
+    "actualRegistrySelector": true,
+    "environmentIsolated": true,
+    "deliberateRegressionsCaught": [
+      "standalone removes selection",
+      "layer removes selection",
+      "FITSY_RUNS CI gate deletion",
+      "forcing local callers into CI failure"
+    ]
+  },
+  "classConstraint": {
+    "before": {
+      "failed": 7,
+      "passed": 10
+    },
+    "after": {
+      "failed": 0,
+      "passed": 17
+    },
+    "behavior": "blocking checks ignore changed-path filters; advisory checks retain them"
+  },
+  "shellcheckReleaseSha256": "8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198"
+}

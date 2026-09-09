@@ -1,0 +1,10 @@
+{"name":"structural","status":"pass","summary":"all structural tests passed","fix":"","duration_ms":9040,"blocking":true}
+{"name":"secrets","status":"pass","summary":"no secrets, env files, or build output in diff","fix":"","duration_ms":482,"blocking":true}
+{"name":"lint","status":"pass","summary":"eslint clean","fix":"","duration_ms":6248,"blocking":true}
+{"name":"typecheck","status":"pass","summary":"tsc clean in all workspaces","fix":"","duration_ms":9246,"blocking":true}
+{"name":"boundaries","status":"pass","summary":"no dependency violations","fix":"","duration_ms":2589,"blocking":true}
+{"name":"actionlint","status":"pass","summary":"workflows lint clean","fix":"","duration_ms":394,"blocking":true}
+{"name":"context-freshness","status":"pass","summary":"context files reference only real commands and paths","fix":"","duration_ms":381,"blocking":true}
+{"name":"migration-safety","status":"skipped","summary":"no new migrations in branch","fix":"","duration_ms":107,"blocking":true}
+
+verify: 7 pass, 0 fail, 1 skipped [layers 0-1, scope all, runs local]
