@@ -1,0 +1,57 @@
+[
+  {
+    "status": "Killed",
+    "mutation": "[\"Stryker was here\"]",
+    "line": "return { calories: row.calories, proteinG: row.proteinG, carbsG: row.carbsG, fatG: row.fatG, confidence: \"HIGH\", source: \"official\", dietaryTags: [],"
+  },
+  {
+    "status": "Killed",
+    "mutation": "true",
+    "line": "if (expected.macroEstimates && JSON.stringify(estimates) !== JSON.stringify(expected.macroEstimates)) throw new Error(\"April estimates changed; rebuild the backup and plan\");"
+  },
+  {
+    "status": "Killed",
+    "mutation": "true",
+    "line": "if (expected.macroEstimates && JSON.stringify(estimates) !== JSON.stringify(expected.macroEstimates)) throw new Error(\"April estimates changed; rebuild the backup and plan\");"
+  },
+  {
+    "status": "Killed",
+    "mutation": "true",
+    "line": "const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === \"HIGH\" && !existing.hadPhoto && existing.ingredientBreakdown === null && [\"calories\", \"proteinG\", \"carbsG\", \"fatG\"].every(key => existing[key as \"calories\"] === macro[key as \"calories\"]);"
+  },
+  {
+    "status": "Killed",
+    "mutation": "true",
+    "line": "const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === \"HIGH\" && !existing.hadPhoto && existing.ingredientBreakdown === null && [\"calories\", \"proteinG\", \"carbsG\", \"fatG\"].every(key => existing[key as \"calories\"] === macro[key as \"calories\"]);"
+  },
+  {
+    "status": "Killed",
+    "mutation": "true",
+    "line": "const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === \"HIGH\" && !existing.hadPhoto && existing.ingredientBreakdown === null && [\"calories\", \"proteinG\", \"carbsG\", \"fatG\"].every(key => existing[key as \"calories\"] === macro[key as \"calories\"]);"
+  },
+  {
+    "status": "Killed",
+    "mutation": "true",
+    "line": "const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === \"HIGH\" && !existing.hadPhoto && existing.ingredientBreakdown === null && [\"calories\", \"proteinG\", \"carbsG\", \"fatG\"].every(key => existing[key as \"calories\"] === macro[key as \"calories\"]);"
+  },
+  {
+    "status": "Killed",
+    "mutation": "true",
+    "line": "const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === \"HIGH\" && !existing.hadPhoto && existing.ingredientBreakdown === null && [\"calories\", \"proteinG\", \"carbsG\", \"fatG\"].every(key => existing[key as \"calories\"] === macro[key as \"calories\"]);"
+  },
+  {
+    "status": "Killed",
+    "mutation": "true",
+    "line": "const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === \"HIGH\" && !existing.hadPhoto && existing.ingredientBreakdown === null && [\"calories\", \"proteinG\", \"carbsG\", \"fatG\"].every(key => existing[key as \"calories\"] === macro[key as \"calories\"]);"
+  },
+  {
+    "status": "Killed",
+    "mutation": "true",
+    "line": "const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === \"HIGH\" && !existing.hadPhoto && existing.ingredientBreakdown === null && [\"calories\", \"proteinG\", \"carbsG\", \"fatG\"].every(key => existing[key as \"calories\"] === macro[key as \"calories\"]);"
+  },
+  {
+    "status": "Killed",
+    "mutation": "true",
+    "line": "const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === \"HIGH\" && !existing.hadPhoto && existing.ingredientBreakdown === null && [\"calories\", \"proteinG\", \"carbsG\", \"fatG\"].every(key => existing[key as \"calories\"] === macro[key as \"calories\"]);"
+  }
+]

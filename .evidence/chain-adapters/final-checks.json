@@ -3,12 +3,12 @@
   "databaseTests": 798,
   "suites": 74,
   "skipped": 0,
-  "fullTestLogSha256": "ec310ec67f151c4e7f5ee71d9fcbf620449df75bbdfe5cd761e0c5ba8cf3f35c",
-  "build": "passed on current production code",
-  "registry": "8 blocking checks passed; no migration; existing own-code-mock advisory",
+  "fullTestLogSha256": "0c4fe5239112e9afd999ae39d8fab08b60d20fd632233d35aac8c89011914521",
+  "build": "passed on final production code",
+  "registry": "All blocking checks passed; the normal push repeats the full registry",
   "mutation": {
-    "combined": 78.71,
-    "chainServing": 77.82,
+    "combined": 84.24,
+    "chainServing": 85,
     "ueNutritionLabel": 81.69
   },
   "regressionProof": {
@@ -16,5 +16,12 @@
     "missingCalorieEndAnchor": "both decorated-serving labels fail",
     "current": "18 focused tests pass"
   },
-  "productionNutritionWrites": 0
+  "productionNutritionWrites": 0,
+  "reviewCorrections": [
+    "matching captured backup accepted",
+    "new official items have no inferred dietary tags",
+    "all four stale facts and source metadata repaired",
+    "same global brand-ambiguity decision in both paths",
+    "PDF facts reviewed in TypeScript; only raw UE responses stored as captures"
+  ]
 }

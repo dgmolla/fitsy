@@ -74,9 +74,17 @@ suite("reviewed chains through April and real new-hex persistence", () => {
     expect(await p.menuItem.count({ where: { restaurantId: aprilRestaurant.id } })).toBe(1);
     const estimate = await p.macroEstimate.findUniqueOrThrow({ where: { menuItemId_source: { menuItemId: original.id, source: "official" } } });
     expect(estimate).toMatchObject({ hadPhoto: false, ingredientBreakdown: null });
-    await applyAprilChainMatch(p, after, approved);
+    expect(await applyAprilChainMatch(p, written, approved)).toMatchObject({ id: original.id });
     expect(await p.macroEstimate.findUniqueOrThrow({ where: { id: estimate.id } })).toEqual(estimate);
     expect(await p.menuItem.findUniqueOrThrow({ where: { id: original.id } })).toEqual(after);
+    // A current binding still repairs source facts/metadata changed independently of MenuItem.
+    for (const patch of [{ calories: facts.calories + 1 }, { proteinG: facts.proteinG + 1 }, { carbsG: facts.carbsG + 1 }, { fatG: facts.fatG + 1 },
+      { hadPhoto: true }, { ingredientBreakdown: [{ name: "Old component" }] }, { confidence: "LOW" as const }, { reasoning: "legacy evidence" }]) {
+      await p.macroEstimate.update({ where: { id: estimate.id }, data: patch });
+      const captured = await p.menuItem.findUniqueOrThrow({ where: { id: original.id }, include: { macroEstimates: { orderBy: { id: "asc" } } } });
+      await applyAprilChainMatch(p, captured, approved);
+      expect(await p.macroEstimate.findUniqueOrThrow({ where: { id: estimate.id } })).toMatchObject({ ...facts, confidence: "HIGH", hadPhoto: false, ingredientBreakdown: null, reasoning: estimate.reasoning });
+    }
     // A stale edit plan aborts without changing the already-correct estimate.
     await expect(applyAprilChainMatch(p, { ...after, updatedAt: new Date(0) }, approved)).rejects.toThrow("changed");
     await p.restaurant.update({ where: { id: aprilRestaurant.id }, data: { name: "Unrelated restaurant" } });
@@ -111,7 +119,7 @@ suite("reviewed chains through April and real new-hex persistence", () => {
     const pairs: ValidatedPair[] = [ue, unseen].map((item, i) => ({ item, macro: macros[i]! }));
     await persistHex(scope, fixture.slug, [{ restaurantId: newRestaurant.id, brandId: detected!, items: pairs, menuHash: "pilot" }], p, { validateInTx: validateHexInTx });
     const added = await p.menuItem.findUniqueOrThrow({ where: { restaurantId_name: { restaurantId: newRestaurant.id, name: ue.name } } });
-    expect(added).toMatchObject(facts);
+    expect(added).toMatchObject({ ...facts, dietaryTags: [] });
     const persisted = await p.macroEstimate.findUniqueOrThrow({ where: { menuItemId_source: { menuItemId: added.id, source: "official" } } });
     expect(JSON.parse(persisted.reasoning!)).toMatchObject({ chainItemId: row.id, reviewHash: approved.review.dataHash });
     expect(await p.restaurant.findUniqueOrThrow({ where: { id: newRestaurant.id } })).toMatchObject({ brandId, chainFlag: true });
@@ -143,6 +151,10 @@ suite("reviewed chains through April and real new-hex persistence", () => {
     await p.macroEstimate.create({ data: { menuItemId: original.id, source: "merchant", confidence: "HIGH", calories: 900, proteinG: 50, carbsG: 100, fatG: 30 } });
     await applyAprilChainMatch(p, after, approved);
     expect((await p.menuItem.findUniqueOrThrow({ where: { id: original.id } })).calories).toBe(900);
+    const competingBrand = await p.brand.create({ data: { slug: randomUUID(), displayName: "Other chain", aliases: [brand.displayName], detectionConf: "high" } });
+    brands.push(competingBrand.id);
+    await expect(applyAprilChainMatch(p, await p.menuItem.findUniqueOrThrow({ where: { id: original.id } }), approved)).rejects.toThrow("brand identity");
+    await p.brand.delete({ where: { id: competingBrand.id } });
     // An alias collision appearing after planning must not be hidden by checking only one row.
     const duplicate = { ...row, id: randomUUID(), canonicalKey: "other" };
     await p.chainItem.create({ data: { ...duplicate, review: { ...review, dataHash: chainReviewHash(duplicate, review) } } });

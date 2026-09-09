@@ -11,6 +11,7 @@ import type {
   StructuredMenuItem,
 } from "../apps/api/services/menuSources/types.js";
 import { aggregateDietaryOptions, DIETARY_TAG_THRESHOLD } from "./constants.js";
+// Keep offline persistence independent of the shared barrel's environment initialization.
 import { macroWinnerSqlOrder } from "../packages/shared/src/utils/macroProvenance";
 
 // ─── Item validation (S-111, S-112) ─────────────────────────────────────────

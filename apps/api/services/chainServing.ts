@@ -1,5 +1,6 @@
 import { Prisma, type PrismaClient, type MacroEstimate } from "@prisma/client";
 import { approvedChainRow, buildChainMatcher, chainMenuFingerprint, type ApprovedChainRow, type ChainMatch } from "./chainCatalog";
+// Offline adapters need the pure ordering utility without the shared barrel's environment initialization.
 import { macroWinnerSqlOrder } from "../../../packages/shared/src/utils/macroProvenance";
 import { MenuSourceResolver } from "./menuSources/resolver";
 import { FatSecretSource } from "./menuSources/fatSecretSource";
@@ -30,7 +31,7 @@ export async function loadChainServing(prisma: Pick<PrismaClient, "brand" | "cha
   }, match: matcher };
 }
 export type ChainServing = Awaited<ReturnType<typeof loadChainServing>>;
-/** Reviewed brands require location menu evidence. Empty UE menus deliberately have no national-catalog fallback. */
+/** Reviewed brands require location menu evidence. Empty UE menus have no national-catalog fallback; unmatched UE items use estimation, not unverified FatSecret servings. */
 export function chainMenuResolver(restaurant: { name: string; brandId?: string | null; storeUuid: string }, runtime: ChainServing, gate?: UeConcurrencyGate) {
   const brandId = runtime.brandId(restaurant);
   return { brandId, resolver: new MenuSourceResolver([
@@ -61,8 +62,8 @@ export async function applyAprilChainMatch(prisma: PrismaClient, expected: April
     const current = await tx.chainItem.findUnique({ where: { id: approved.id } });
     if (!current || approvedChainRow(current)?.review.dataHash !== approved.review.dataHash) throw new Error("Chain review changed; rebuild the plan");
     const restaurant = await tx.restaurant.findUnique({ where: { id: expected.restaurantId }, select: { brandId: true, name: true } });
-    const brand = await tx.brand.findUnique({ where: { id: approved.brandId } });
-    if (!restaurant || !brand || verifiedBrand(restaurant, [brand]) !== approved.brandId) throw new Error("Restaurant brand identity changed");
+    const brands = await tx.brand.findMany({ where: { detectionConf: { in: ["high", "llm-confirmed"] }, menuKind: "restaurant" } });
+    if (!restaurant || verifiedBrand(restaurant, brands) !== approved.brandId) throw new Error("Restaurant brand identity changed");
     const catalog = await tx.chainItem.findMany({ where: { brandId: approved.brandId } });
     const item = aprilMenuIdentity(expected), result = buildChainMatcher(catalog)(approved.brandId, item);
     if (result.status !== "matched" || result.row.id !== approved.id || result.row.review.dataHash !== approved.review.dataHash) throw new Error("April item has no current reviewed binding");
