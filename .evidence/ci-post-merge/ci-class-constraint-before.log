@@ -4,21 +4,22 @@
 
 FAIL verify/actionlint.test.ts
   ✓ CI rejects missing actionlint via FITSY_RUNS=ci CI= (13 ms)
-  ✓ CI rejects missing actionlint via FITSY_RUNS=local CI=true (8 ms)
-  ✓ CI rejects missing ShellCheck even when actionlint exists (12 ms)
-  ✓ installed tool exit 0 determines the check verdict (312 ms)
-  ✓ installed tool exit 1 determines the check verdict (171 ms)
-  ✓ local callers explicitly skip incomplete tools (actionlint installed: false) (11 ms)
-  ✓ local callers explicitly skip incomplete tools (actionlint installed: true) (9 ms)
-  ✓ workflow lint cannot be scoped away for an API-only PR (209 ms)
-  ✕ a future path filter cannot disable blocking lint (226 ms)
-  ✕ a future path filter cannot disable blocking typecheck (219 ms)
-  ✕ a future path filter cannot disable blocking boundaries (231 ms)
-  ✕ a future path filter cannot disable blocking context-freshness (219 ms)
-  ✕ a future path filter cannot disable blocking test (369 ms)
-  ✕ a future path filter cannot disable blocking build (346 ms)
-  ✕ path selection distinguishes blocking=true for a new check (256 ms)
-  ✓ path selection distinguishes blocking=shadow for a new check (233 ms)
+  ✓ CI rejects missing actionlint via FITSY_RUNS=local CI=true (9 ms)
+  ✓ CI rejects missing ShellCheck even when actionlint exists (9 ms)
+  ✓ installed tool exit 0 determines the check verdict (197 ms)
+  ✓ installed tool exit 1 determines the check verdict (150 ms)
+  ✓ local callers explicitly skip incomplete tools (actionlint installed: false) (15 ms)
+  ✓ local callers explicitly skip incomplete tools (actionlint installed: true) (13 ms)
+  ✓ workflow lint cannot be scoped away for an API-only change (ci) (253 ms)
+  ✓ workflow lint cannot be scoped away for an API-only change (local) (239 ms)
+  ✕ a future path filter cannot disable blocking lint (259 ms)
+  ✕ a future path filter cannot disable blocking typecheck (240 ms)
+  ✕ a future path filter cannot disable blocking boundaries (227 ms)
+  ✕ a future path filter cannot disable blocking context-freshness (223 ms)
+  ✕ a future path filter cannot disable blocking test (225 ms)
+  ✕ a future path filter cannot disable blocking build (205 ms)
+  ✕ path selection distinguishes blocking=true for a new check (222 ms)
+  ✓ path selection distinguishes blocking=shadow for a new check (232 ms)
 
   ● a future path filter cannot disable blocking lint
 
@@ -34,15 +35,15 @@ FAIL verify/actionlint.test.ts
     +   "status": "skipped",
       }
 
-      48 | test.each(["lint", "typecheck", "boundaries", "context-freshness", "test", "build"])("a future path filter cannot disable blocking %s", name => {
-      49 |   const entry = registryEntry(name), layer = entry.match(/layer: (\d+)/)![1]!;
-    > 50 |   expect(select(entry + '\n    paths: ["unrelated/**"]\n', "0-" + layer)).toMatchObject({ name, status: "pass", blocking: true });
+      49 | test.each(["lint", "typecheck", "boundaries", "context-freshness", "test", "build"])("a future path filter cannot disable blocking %s", name => {
+      50 |   const entry = registryEntry(name), layer = entry.match(/layer: (\d+)/)![1]!;
+    > 51 |   expect(select(entry + '\n    paths: ["unrelated/**"]\n', "0-" + layer)).toMatchObject({ name, status: "pass", blocking: true });
          |                                                                           ^
-      51 | });
-      52 | test.each(["true", "shadow"])("path selection distinguishes blocking=%s for a new check", blocking => {
-      53 |   const entry = `  - name: future-check\n    script: future.sh\n    layer: 1\n    blocking: ${blocking}\n    runs: [ci]\n    paths: ["unrelated/**"]\n`;
+      52 | });
+      53 | test.each(["true", "shadow"])("path selection distinguishes blocking=%s for a new check", blocking => {
+      54 |   const entry = `  - name: future-check\n    script: future.sh\n    layer: 1\n    blocking: ${blocking}\n    runs: [ci]\n    paths: ["unrelated/**"]\n`;
 
-      at verify/actionlint.test.ts:50:75
+      at verify/actionlint.test.ts:51:75
 
   ● a future path filter cannot disable blocking typecheck
 
@@ -58,15 +59,15 @@ FAIL verify/actionlint.test.ts
     +   "status": "skipped",
       }
 
-      48 | test.each(["lint", "typecheck", "boundaries", "context-freshness", "test", "build"])("a future path filter cannot disable blocking %s", name => {
-      49 |   const entry = registryEntry(name), layer = entry.match(/layer: (\d+)/)![1]!;
-    > 50 |   expect(select(entry + '\n    paths: ["unrelated/**"]\n', "0-" + layer)).toMatchObject({ name, status: "pass", blocking: true });
+      49 | test.each(["lint", "typecheck", "boundaries", "context-freshness", "test", "build"])("a future path filter cannot disable blocking %s", name => {
+      50 |   const entry = registryEntry(name), layer = entry.match(/layer: (\d+)/)![1]!;
+    > 51 |   expect(select(entry + '\n    paths: ["unrelated/**"]\n', "0-" + layer)).toMatchObject({ name, status: "pass", blocking: true });
          |                                                                           ^
-      51 | });
-      52 | test.each(["true", "shadow"])("path selection distinguishes blocking=%s for a new check", blocking => {
-      53 |   const entry = `  - name: future-check\n    script: future.sh\n    layer: 1\n    blocking: ${blocking}\n    runs: [ci]\n    paths: ["unrelated/**"]\n`;
+      52 | });
+      53 | test.each(["true", "shadow"])("path selection distinguishes blocking=%s for a new check", blocking => {
+      54 |   const entry = `  - name: future-check\n    script: future.sh\n    layer: 1\n    blocking: ${blocking}\n    runs: [ci]\n    paths: ["unrelated/**"]\n`;
 
-      at verify/actionlint.test.ts:50:75
+      at verify/actionlint.test.ts:51:75
 
   ● a future path filter cannot disable blocking boundaries
 
@@ -82,15 +83,15 @@ FAIL verify/actionlint.test.ts
     +   "status": "skipped",
       }
 
-      48 | test.each(["lint", "typecheck", "boundaries", "context-freshness", "test", "build"])("a future path filter cannot disable blocking %s", name => {
-      49 |   const entry = registryEntry(name), layer = entry.match(/layer: (\d+)/)![1]!;
-    > 50 |   expect(select(entry + '\n    paths: ["unrelated/**"]\n', "0-" + layer)).toMatchObject({ name, status: "pass", blocking: true });
+      49 | test.each(["lint", "typecheck", "boundaries", "context-freshness", "test", "build"])("a future path filter cannot disable blocking %s", name => {
+      50 |   const entry = registryEntry(name), layer = entry.match(/layer: (\d+)/)![1]!;
+    > 51 |   expect(select(entry + '\n    paths: ["unrelated/**"]\n', "0-" + layer)).toMatchObject({ name, status: "pass", blocking: true });
          |                                                                           ^
-      51 | });
-      52 | test.each(["true", "shadow"])("path selection distinguishes blocking=%s for a new check", blocking => {
-      53 |   const entry = `  - name: future-check\n    script: future.sh\n    layer: 1\n    blocking: ${blocking}\n    runs: [ci]\n    paths: ["unrelated/**"]\n`;
+      52 | });
+      53 | test.each(["true", "shadow"])("path selection distinguishes blocking=%s for a new check", blocking => {
+      54 |   const entry = `  - name: future-check\n    script: future.sh\n    layer: 1\n    blocking: ${blocking}\n    runs: [ci]\n    paths: ["unrelated/**"]\n`;
 
-      at verify/actionlint.test.ts:50:75
+      at verify/actionlint.test.ts:51:75
 
   ● a future path filter cannot disable blocking context-freshness
 
@@ -106,15 +107,15 @@ FAIL verify/actionlint.test.ts
     +   "status": "skipped",
       }
 
-      48 | test.each(["lint", "typecheck", "boundaries", "context-freshness", "test", "build"])("a future path filter cannot disable blocking %s", name => {
-      49 |   const entry = registryEntry(name), layer = entry.match(/layer: (\d+)/)![1]!;
-    > 50 |   expect(select(entry + '\n    paths: ["unrelated/**"]\n', "0-" + layer)).toMatchObject({ name, status: "pass", blocking: true });
+      49 | test.each(["lint", "typecheck", "boundaries", "context-freshness", "test", "build"])("a future path filter cannot disable blocking %s", name => {
+      50 |   const entry = registryEntry(name), layer = entry.match(/layer: (\d+)/)![1]!;
+    > 51 |   expect(select(entry + '\n    paths: ["unrelated/**"]\n', "0-" + layer)).toMatchObject({ name, status: "pass", blocking: true });
          |                                                                           ^
-      51 | });
-      52 | test.each(["true", "shadow"])("path selection distinguishes blocking=%s for a new check", blocking => {
-      53 |   const entry = `  - name: future-check\n    script: future.sh\n    layer: 1\n    blocking: ${blocking}\n    runs: [ci]\n    paths: ["unrelated/**"]\n`;
+      52 | });
+      53 | test.each(["true", "shadow"])("path selection distinguishes blocking=%s for a new check", blocking => {
+      54 |   const entry = `  - name: future-check\n    script: future.sh\n    layer: 1\n    blocking: ${blocking}\n    runs: [ci]\n    paths: ["unrelated/**"]\n`;
 
-      at verify/actionlint.test.ts:50:75
+      at verify/actionlint.test.ts:51:75
 
   ● a future path filter cannot disable blocking test
 
@@ -130,15 +131,15 @@ FAIL verify/actionlint.test.ts
     +   "status": "skipped",
       }
 
-      48 | test.each(["lint", "typecheck", "boundaries", "context-freshness", "test", "build"])("a future path filter cannot disable blocking %s", name => {
-      49 |   const entry = registryEntry(name), layer = entry.match(/layer: (\d+)/)![1]!;
-    > 50 |   expect(select(entry + '\n    paths: ["unrelated/**"]\n', "0-" + layer)).toMatchObject({ name, status: "pass", blocking: true });
+      49 | test.each(["lint", "typecheck", "boundaries", "context-freshness", "test", "build"])("a future path filter cannot disable blocking %s", name => {
+      50 |   const entry = registryEntry(name), layer = entry.match(/layer: (\d+)/)![1]!;
+    > 51 |   expect(select(entry + '\n    paths: ["unrelated/**"]\n', "0-" + layer)).toMatchObject({ name, status: "pass", blocking: true });
          |                                                                           ^
-      51 | });
-      52 | test.each(["true", "shadow"])("path selection distinguishes blocking=%s for a new check", blocking => {
-      53 |   const entry = `  - name: future-check\n    script: future.sh\n    layer: 1\n    blocking: ${blocking}\n    runs: [ci]\n    paths: ["unrelated/**"]\n`;
+      52 | });
+      53 | test.each(["true", "shadow"])("path selection distinguishes blocking=%s for a new check", blocking => {
+      54 |   const entry = `  - name: future-check\n    script: future.sh\n    layer: 1\n    blocking: ${blocking}\n    runs: [ci]\n    paths: ["unrelated/**"]\n`;
 
-      at verify/actionlint.test.ts:50:75
+      at verify/actionlint.test.ts:51:75
 
   ● a future path filter cannot disable blocking build
 
@@ -154,15 +155,15 @@ FAIL verify/actionlint.test.ts
     +   "status": "skipped",
       }
 
-      48 | test.each(["lint", "typecheck", "boundaries", "context-freshness", "test", "build"])("a future path filter cannot disable blocking %s", name => {
-      49 |   const entry = registryEntry(name), layer = entry.match(/layer: (\d+)/)![1]!;
-    > 50 |   expect(select(entry + '\n    paths: ["unrelated/**"]\n', "0-" + layer)).toMatchObject({ name, status: "pass", blocking: true });
+      49 | test.each(["lint", "typecheck", "boundaries", "context-freshness", "test", "build"])("a future path filter cannot disable blocking %s", name => {
+      50 |   const entry = registryEntry(name), layer = entry.match(/layer: (\d+)/)![1]!;
+    > 51 |   expect(select(entry + '\n    paths: ["unrelated/**"]\n', "0-" + layer)).toMatchObject({ name, status: "pass", blocking: true });
          |                                                                           ^
-      51 | });
-      52 | test.each(["true", "shadow"])("path selection distinguishes blocking=%s for a new check", blocking => {
-      53 |   const entry = `  - name: future-check\n    script: future.sh\n    layer: 1\n    blocking: ${blocking}\n    runs: [ci]\n    paths: ["unrelated/**"]\n`;
+      52 | });
+      53 | test.each(["true", "shadow"])("path selection distinguishes blocking=%s for a new check", blocking => {
+      54 |   const entry = `  - name: future-check\n    script: future.sh\n    layer: 1\n    blocking: ${blocking}\n    runs: [ci]\n    paths: ["unrelated/**"]\n`;
 
-      at verify/actionlint.test.ts:50:75
+      at verify/actionlint.test.ts:51:75
 
   ● path selection distinguishes blocking=true for a new check
 
@@ -177,19 +178,19 @@ FAIL verify/actionlint.test.ts
     +   "status": "skipped",
       }
 
-      52 | test.each(["true", "shadow"])("path selection distinguishes blocking=%s for a new check", blocking => {
-      53 |   const entry = `  - name: future-check\n    script: future.sh\n    layer: 1\n    blocking: ${blocking}\n    runs: [ci]\n    paths: ["unrelated/**"]\n`;
-    > 54 |   expect(select(entry)).toMatchObject({ name: "future-check", status: blocking === "shadow" ? "skipped" : "pass" });
+      53 | test.each(["true", "shadow"])("path selection distinguishes blocking=%s for a new check", blocking => {
+      54 |   const entry = `  - name: future-check\n    script: future.sh\n    layer: 1\n    blocking: ${blocking}\n    runs: [ci]\n    paths: ["unrelated/**"]\n`;
+    > 55 |   expect(select(entry)).toMatchObject({ name: "future-check", status: blocking === "shadow" ? "skipped" : "pass" });
          |                         ^
-      55 | });
-      56 |
+      56 | });
+      57 |
 
-      at verify/actionlint.test.ts:54:25
+      at verify/actionlint.test.ts:55:25
 
 Test Suites: 1 failed, 1 total
-Tests:       7 failed, 9 passed, 16 total
+Tests:       7 failed, 10 passed, 17 total
 Snapshots:   0 total
-Time:        4.086 s
+Time:        3.627 s, estimated 4 s
 Ran all test suites matching /verify\/actionlint.test.ts/i.
 npm error Lifecycle script `test` failed with error:
 npm error code 1

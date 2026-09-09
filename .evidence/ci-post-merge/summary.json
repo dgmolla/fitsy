@@ -10,7 +10,7 @@
       "passed": 2
     },
     "after": {
-      "passed": 16,
+      "passed": 17,
       "failed": 0
     }
   },
@@ -37,11 +37,11 @@
   "classConstraint": {
     "before": {
       "failed": 7,
-      "passed": 9
+      "passed": 10
     },
     "after": {
       "failed": 0,
-      "passed": 16
+      "passed": 17
     },
     "behavior": "blocking checks ignore changed-path filters; advisory checks retain them"
   },

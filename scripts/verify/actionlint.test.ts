@@ -28,22 +28,23 @@ function registryEntry(name: string) {
   const registry = readFileSync(join(root, "scripts/verify/registry.yml"), "utf8");
   return "  - name: " + name + "\n" + registry.split("  - name: " + name + "\n")[1]!.split("\n  - name:")[0]!;
 }
-function select(entry: string, layers = "0-1") {
+function select(entry: string, layers = "0-1", runs = "ci") {
   const verify = join(directory, "scripts/verify"); mkdirSync(verify, { recursive: true });
   copyFileSync(join(root, "scripts/verify/run.mjs"), join(verify, "run.mjs"));
   writeFileSync(join(verify, "registry.yml"), "checks:\n" + entry);
   const script = entry.match(/script: (\S+)/)![1]!;
   writeFileSync(join(verify, script), '#!/bin/sh\nprintf \'{"status":"pass"}\\n\'\n');
-  // The real selector sees an API-only diff; only external git/tool execution is stubbed.
+  // The real selector sees an API-only diff and constant-pass fixture checks.
+  // The separate tests above execute the actual workflow check against external-tool stubs.
   writeFileSync(join(directory, "git"), '#!/bin/sh\nprintf "apps/api/services/search.ts\\n"\n', { mode: 0o755 });
   symlinkSync("/bin/bash", join(directory, "bash"));
   symlinkSync(join(root, "node_modules"), join(directory, "node_modules"));
-  const result = spawnSync(process.execPath, [join(verify, "run.mjs"), "--layer=" + layers, "--runs=ci", "--scope=changed"], { env: { PATH: directory, CI: "" }, encoding: "utf8" });
+  const result = spawnSync(process.execPath, [join(verify, "run.mjs"), "--layer=" + layers, "--runs=" + runs, "--scope=changed"], { env: { PATH: directory, CI: "" }, encoding: "utf8" });
   expect(result.status).toBe(0);
   return JSON.parse(result.stdout.trim());
 }
-test("workflow lint cannot be scoped away for an API-only PR", () => {
-  expect(select(registryEntry("actionlint"))).toMatchObject({ name: "actionlint", status: "pass", blocking: true });
+test.each(["ci", "local"])("workflow lint cannot be scoped away for an API-only change (%s)", runs => {
+  expect(select(registryEntry("actionlint"), "0-1", runs)).toMatchObject({ name: "actionlint", status: "pass", blocking: true });
 });
 test.each(["lint", "typecheck", "boundaries", "context-freshness", "test", "build"])("a future path filter cannot disable blocking %s", name => {
   const entry = registryEntry(name), layer = entry.match(/layer: (\d+)/)![1]!;

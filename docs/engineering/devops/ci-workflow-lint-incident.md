@@ -20,7 +20,7 @@ The fix groups the redirects and pins actionlint 1.7.12 and ShellCheck 0.11.0 wi
 
 The existing docs-only CI fast path remains. Workflow and verification code cannot enter through it because those paths classify above the docs tier. Local callers missing workflow tools receive an explicit skipped result.
 
-`actionlint.test.ts` runs the actual check script and selector with controlled external-tool executables. It isolates both CI triggers and local skips, tests the real workflow-lint registry entry, injects future nonmatching filters into existing blocking checks, and distinguishes new blocking versus advisory checks. The old selector fails seven of these cases; the fixed selector passes all sixteen. Actual actionlint with ShellCheck also fails on the old deployment YAML and passes the fixed YAML.
+`actionlint.test.ts` runs the actual check script and selector with controlled external-tool executables. It isolates both CI triggers and local skips, tests the real workflow-lint registry entry, injects future nonmatching filters into existing blocking checks, and distinguishes new blocking versus advisory checks. The old selector fails seven of these cases; the fixed selector passes all seventeen. Actual actionlint with ShellCheck also fails on the old deployment YAML and passes the fixed YAML.
 
 The incident eval patch under `scripts/verify/evals/incidents/262/` recreates the shipped bad state by reversing this fix. Before/after evidence is in `.evidence/ci-post-merge/`. No API behavior, database contents, deploy permissions or deployment target changes are included.
 
