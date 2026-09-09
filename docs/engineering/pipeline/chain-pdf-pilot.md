@@ -1,5 +1,19 @@
 # WaBa + Yoshinoya: official-PDF correction pilot
 
+## Production result — September 9, 2026
+
+[PR266](https://github.com/dgmolla/fitsy/pull/266) shipped after 818 local API tests, four independent reviews, CI, preview smoke, and both main Verify and Deploy passed. Production application finished at 13:34 UTC, starting with one WaBa and one Yoshinoya canary.
+
+| Check | Verified result |
+|---|---|
+| Catalog | 12 changes; 7 approved facts / 13 contextual aliases; 166 other rows unchanged |
+| April data | 64 menu rows corrected across 31 already brand-linked restaurants |
+| Serving | All 64 detail-service checks passed; both chain canaries agreed between search and detail |
+| Preservation | All 1,337 menu IDs/membership preserved; 1,273 untouched rows and their estimates unchanged; all 62 restaurant records unchanged |
+| Completion | Catalog and April replans both returned zero pending changes within the pilot scope |
+
+Matched rows retained their non-nutrition fields. Public production HTTP smoke passed; entitled behavior was tested locally and through read-only production service calls. No live hex expansion or menu refresh was run. New-location proof uses fresh UE captures through the real writer in isolated Postgres. Private baseline, plan and rollback journals were retained.
+
 ## Audit result
 
 The catalog is not safe to wire wholesale. The September audit found 4,667 rows across 52 brands; 2,275 lacked serving sizes. A calorie-versus-macro check flagged 379 rows for investigation, not 379 proven errors. WaBa's 48 rows and Yoshinoya's 127 rows reproduce their HTML tables, but copying a table correctly does not establish the right serving or UE item.
@@ -38,11 +52,13 @@ Run `npx tsx --tsconfig apps/api/tsconfig.json scripts/preload-chain-pilot.ts` w
 1. `catalog-plan <catalog.json>`; inspect twelve changes, then `catalog-apply <catalog.json> <hash>`.
 2. `april-plan <april.json>`; inspect matches and reported unresolved restaurants, then `april-apply <april.json> <hash> --limit=2`. Planning uses the same verified brand identity as the writer. The first two rows exercise Chicken Plate and Gyudon Beef side when present.
 3. Verify both canaries and serving-source agreement. Replan to a new file, apply the remaining count, then require another plan to return zero changes.
-4. Rollback if needed: `april-rollback <april.json.journal>` in reverse batch order, then `catalog-rollback <catalog.json.applied.json>`.
+4. Rollback if needed: `april-rollback <replan.json.journal>` for the remaining batch, then `april-rollback <april.json.journal>` for the canaries, then `catalog-rollback <catalog.json.applied.json>`.
 
 Plans and per-row journals are exclusive, mode-600, fsynced files. Every transaction checks the captured state. April rollback is atomic per journal batch: any later edit aborts the entire rollback, and incomplete or noncontiguous journals are rejected before it starts. A known pre-write validation failure records `stopped.json` with the completed prefix count, allowing those committed rows to be rolled back while preserving the conflicting row. Unknown DB errors or crashes do not create this marker: incomplete evidence requires DB inspection against the saved plan because filesystem and DB commits cannot be atomic together. Never overwrite artifacts or blindly rerun a partial apply.
 
 The April patch preserves IDs, membership, saved references and non-nutrition fields. Merchant data keeps priority. The batch limit defaults to 2 and must be between 1 and the plan's row count. Rollback order is an operator responsibility: reverse the April batches before rolling back their catalog approvals.
+
+The April CLI intentionally selects already brand-linked restaurants; a zero replan certifies this pilot scope, not unlinked locations or all chain dishes. If catalog apply commits but `.applied.json` is missing, inspect the saved `.started.json` and current rows by `(brandId, canonicalKey)` before reconstructing the after-state evidence for `rollbackCatalogPlan`. Do not blindly rerun apply or assume an unrelated later catalog edit belongs to this operation.
 
 New-hex enrichment snapshots the catalog at startup: do not edit approvals during an active run; restart with the corrected catalog if an approval changes. Activation takes effect when enrichment next runs for a location; its existing pre-fetch skip rules still apply. This April pilot uses the separate nutrition-only command. Approving these brands switches all their future enrichment to UE menus: unmatched items use Haiku, and an empty UE menu skips the location, with no FatSecret menu fallback.
 
