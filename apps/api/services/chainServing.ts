@@ -50,13 +50,12 @@ export async function resolveChainMacros(items: StructuredMenuItem[], brandId: s
 }
 export interface AprilItem {
   id: string; restaurantId: string; name: string; section: string | null; description: string | null; updatedAt: Date;
-  macroEstimates?: MacroEstimate[];
 }
 /** Deliberately excludes denormalized estimated calories: they are not UE source labels. */
 export const aprilMenuIdentity = (item: AprilItem): StructuredMenuItem => ({ name: item.name,
   ...(item.section !== null ? { section: item.section } : {}), ...(item.description !== null ? { description: item.description } : {}) });
 /** Nutrition-only update. No menu upsert/deletion, tags, photos, prices, or saved-item mutations. */
-export async function applyAprilChainMatch(prisma: PrismaClient, expected: AprilItem, approved: ApprovedChainRow) {
+export async function applyAprilChainMatch(prisma: PrismaClient, expected: AprilItem & { macroEstimates: MacroEstimate[] }, approved: ApprovedChainRow) {
   return prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT id FROM "ChainItem" WHERE id = ${approved.id} FOR SHARE`;
     const current = await tx.chainItem.findUnique({ where: { id: approved.id } });
@@ -76,7 +75,7 @@ export async function applyAprilChainMatch(prisma: PrismaClient, expected: April
     const estimate = { calories: macro.calories, proteinG: macro.proteinG, carbsG: macro.carbsG, fatG: macro.fatG,
       confidence: macro.confidence, source: macro.source, reasoning: macro.reasoning, hadPhoto: false, ingredientBreakdown: Prisma.DbNull };
     const estimates = await tx.macroEstimate.findMany({ where: { menuItemId: expected.id }, orderBy: { id: "asc" } });
-    if (expected.macroEstimates && JSON.stringify(estimates) !== JSON.stringify(expected.macroEstimates)) throw new Error("April estimates changed; rebuild the backup and plan");
+    if (JSON.stringify(estimates) !== JSON.stringify(expected.macroEstimates)) throw new Error("April estimates changed; rebuild the backup and plan");
     const existing = estimates.find(e => e.source === "official");
     const unchanged = existing?.reasoning === macro.reasoning && existing.confidence === "HIGH" && !existing.hadPhoto && existing.ingredientBreakdown === null && ["calories", "proteinG", "carbsG", "fatG"].every(key => existing[key as "calories"] === macro[key as "calories"]);
     if (!unchanged) await tx.macroEstimate.upsert({ where: { menuItemId_source: { menuItemId: expected.id, source: "official" } },

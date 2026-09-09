@@ -1,0 +1,14 @@
+[
+  {
+    "mutation": "wrong-create",
+    "rejected": true
+  },
+  {
+    "mutation": "missing-identity-guard",
+    "rejected": true
+  },
+  {
+    "mutation": "missing-binding-guards",
+    "rejected": true
+  }
+]

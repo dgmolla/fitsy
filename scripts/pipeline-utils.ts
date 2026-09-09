@@ -629,11 +629,11 @@ export async function persistHexBulkInTx(
     WHERE r.id = u.id
   `;
 
-  // Q7: set chainFlag based on FatSecret estimates; verified brand handoff is applied by persistHex.
+  // Q7: preserve a bound chain identity; FatSecret and current verified handoff can establish new ones.
   if (restaurantIdsWithItems.length > 0) {
     await tx.$executeRaw`
       UPDATE "Restaurant" r
-      SET "chainFlag" = EXISTS (
+      SET "chainFlag" = (r."brandId" IS NOT NULL AND r."chainFlag") OR EXISTS (
         SELECT 1 FROM "MenuItem" mi
         JOIN "MacroEstimate" me ON me."menuItemId" = mi.id
         WHERE mi."restaurantId" = r.id AND me.source = 'fatsecret'

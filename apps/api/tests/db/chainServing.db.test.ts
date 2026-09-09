@@ -1,15 +1,16 @@
 import { randomUUID } from "node:crypto";
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import { capturedChainPilot } from "../fixtures/chain-pilot";
 import { parseStoreV1Response } from "../../services/menuSources/ueApiClient";
-import { chainReviewHash, approvedChainRow } from "../../services/chainCatalog";
-import { applyAprilChainMatch, loadChainServing, resolveChainMacros, chainMenuResolver } from "../../services/chainServing";
+import { chainReviewHash, approvedChainRow, chainMenuFingerprint } from "../../services/chainCatalog";
+import { applyAprilChainMatch, loadChainServing, resolveChainMacros, chainMenuResolver, aprilMenuIdentity } from "../../services/chainServing";
 import { persistHex } from "../../../../scripts/hex-persist";
 import { persistItems, computeAndStoreDietaryOptions, type ValidatedPair } from "../../../../scripts/pipeline-utils";
 import { validateHexInTx } from "../../../../scripts/preload-invariants";
 const suite = process.env["POSTGRES_PRISMA_URL"] ? describe : describe.skip;
 suite("reviewed chains through April and real new-hex persistence", () => {
   const p = new PrismaClient(), scope = randomUUID(), brands: string[] = [], restaurants: string[] = [];
+  const backup = async <T extends { id: string }>(item: T) => ({ ...item, macroEstimates: await p.macroEstimate.findMany({ where: { menuItemId: item.id }, orderBy: { id: "asc" } }) });
   afterAll(async () => {
     await p.user.deleteMany({ where: { id: { startsWith: scope } } });
     await p.restaurant.deleteMany({ where: { id: { in: restaurants } } });
@@ -40,7 +41,7 @@ suite("reviewed chains through April and real new-hex persistence", () => {
   });
   test.each(capturedChainPilot)("$slug: captured April identity and new UE location serve the same PDF facts", async fixture => {
     const brandId = randomUUID(); brands.push(brandId);
-    const brand = await p.brand.create({ data: { id: brandId, slug: `${fixture.slug}-${scope}`, displayName: scope + (fixture.slug === "waba-grill" ? " WaBa Grill" : " Yoshinoya"), detectionConf: "high" } });
+    const brand = await p.brand.create({ data: { id: brandId, slug: `${fixture.slug}-${scope}`, displayName: scope + (fixture.slug === "waba-grill" ? " WaBa Grill" : " Yoshinoya"), detectionConf: fixture.slug === "waba-grill" ? "high" : "llm-confirmed" } });
     const ue = parseStoreV1Response(fixture.ue)!.items[0]!;
     const row = await p.chainItem.create({ data: { brandId, canonicalKey: "reviewed/pilot", ...fixture.official, source: "official", confidence: "HIGH", officialUrl: fixture.source.url } });
     const aliases = [{ name: fixture.april.name, section: fixture.april.section, description: fixture.april.description },
@@ -58,13 +59,13 @@ suite("reviewed chains through April and real new-hex persistence", () => {
     const aprilRestaurant = await makeRestaurant(true), newRestaurant = await makeRestaurant(false);
     const original = await p.menuItem.create({ data: { restaurantId: aprilRestaurant.id, ...fixture.april, price: 12.34, photoUrl: "https://example.com/photo", dietaryTags: ["gluten-free"], category: "Entree" } });
     await p.macroEstimate.create({ data: { menuItemId: original.id, source: "haiku", confidence: "MEDIUM", calories: original.calories!, proteinG: original.proteinG!, carbsG: original.carbsG!, fatG: original.fatG! } });
-    await p.macroEstimate.create({ data: { menuItemId: original.id, source: "official", confidence: "LOW", calories: 1, proteinG: 0, carbsG: 0, fatG: 0, hadPhoto: true, ingredientBreakdown: [{ name: "Old component" }] } });
+    if (fixture.slug === "waba-grill") await p.macroEstimate.create({ data: { menuItemId: original.id, source: "official", confidence: "LOW", calories: 1, proteinG: 0, carbsG: 0, fatG: 0, hadPhoto: true, ingredientBreakdown: [{ name: "Old component" }] } });
     const userId = scope + fixture.slug;
     await p.user.create({ data: { id: userId, email: `${userId}@example.test` } });
     const saved = await p.savedItem.create({ data: { userId, menuItemId: original.id, itemType: "menu_item" } });
-    await expect(applyAprilChainMatch(p, original, { ...approved, review: { ...approved.review, dataHash: "0".repeat(64) } })).rejects.toThrow("review changed");
+    await expect(applyAprilChainMatch(p, await backup(original), { ...approved, review: { ...approved.review, dataHash: "0".repeat(64) } })).rejects.toThrow("review changed");
     await expect(applyAprilChainMatch(p, { ...original, macroEstimates: [] }, approved)).rejects.toThrow("estimates changed");
-    const written = await applyAprilChainMatch(p, original, approved);
+    const written = await applyAprilChainMatch(p, await backup(original), approved);
     expect(written).toMatchObject({ id: original.id, macroEstimates: expect.arrayContaining([expect.objectContaining({ source: "official" })]) });
     const after = await p.menuItem.findUniqueOrThrow({ where: { id: original.id } });
     const facts = { calories: fixture.official.calories, proteinG: fixture.official.proteinG, carbsG: fixture.official.carbsG, fatG: fixture.official.fatG };
@@ -73,7 +74,8 @@ suite("reviewed chains through April and real new-hex persistence", () => {
     expect((await p.savedItem.findUniqueOrThrow({ where: { id: saved.id } })).menuItemId).toBe(original.id);
     expect(await p.menuItem.count({ where: { restaurantId: aprilRestaurant.id } })).toBe(1);
     const estimate = await p.macroEstimate.findUniqueOrThrow({ where: { menuItemId_source: { menuItemId: original.id, source: "official" } } });
-    expect(estimate).toMatchObject({ hadPhoto: false, ingredientBreakdown: null });
+    expect(estimate).toMatchObject({ ...facts, confidence: "HIGH", hadPhoto: false, ingredientBreakdown: null });
+    expect(JSON.parse(estimate.reasoning!)).toEqual({ kind: "reviewed-chain-v1", chainItemId: row.id, reviewHash: approved.review.dataHash, sourceHash: fixture.source.sha256, sourceUrl: fixture.source.url, servingSize: fixture.official.servingSize, menuFingerprint: chainMenuFingerprint(aprilMenuIdentity(original)) });
     expect(await applyAprilChainMatch(p, written, approved)).toMatchObject({ id: original.id });
     expect(await p.macroEstimate.findUniqueOrThrow({ where: { id: estimate.id } })).toEqual(estimate);
     expect(await p.menuItem.findUniqueOrThrow({ where: { id: original.id } })).toEqual(after);
@@ -86,9 +88,17 @@ suite("reviewed chains through April and real new-hex persistence", () => {
       expect(await p.macroEstimate.findUniqueOrThrow({ where: { id: estimate.id } })).toMatchObject({ ...facts, confidence: "HIGH", hadPhoto: false, ingredientBreakdown: null, reasoning: estimate.reasoning });
     }
     // A stale edit plan aborts without changing the already-correct estimate.
-    await expect(applyAprilChainMatch(p, { ...after, updatedAt: new Date(0) }, approved)).rejects.toThrow("changed");
+    await expect(applyAprilChainMatch(p, await backup({ ...after, updatedAt: new Date(0) }), approved)).rejects.toThrow("changed");
+    for (const key of ["name", "section", "description"] as const) {
+      await p.$executeRaw`UPDATE "MenuItem" SET ${Prisma.raw(`"${key}"`)} = ${"Different serving"} WHERE id = ${original.id}`;
+      await expect(applyAprilChainMatch(p, await backup(after), approved)).rejects.toThrow("April item changed");
+      await p.$executeRaw`UPDATE "MenuItem" SET ${Prisma.raw(`"${key}"`)} = ${original[key]} WHERE id = ${original.id}`;
+    }
+    const wrongRow = { ...row, id: randomUUID(), canonicalKey: "wrong-binding" }, wrongEvidence = { ...review, aliases: [{ name: "Unrelated dish" }] };
+    const wrongApproved = approvedChainRow(await p.chainItem.create({ data: { ...wrongRow, review: { ...wrongEvidence, dataHash: chainReviewHash(wrongRow, wrongEvidence) } } }))!;
+    await expect(applyAprilChainMatch(p, await backup(after), wrongApproved)).rejects.toThrow("binding");
     await p.restaurant.update({ where: { id: aprilRestaurant.id }, data: { name: "Unrelated restaurant" } });
-    await expect(applyAprilChainMatch(p, after, approved)).rejects.toThrow("brand identity");
+    await expect(applyAprilChainMatch(p, await backup(after), approved)).rejects.toThrow("brand identity");
     await p.restaurant.update({ where: { id: aprilRestaurant.id }, data: { name: aprilRestaurant.name } });
     const runtime = await loadChainServing(p), request = { ...newRestaurant, storeUuid: newRestaurant.storeUuid! };
     const { resolver, brandId: detected } = chainMenuResolver(request, runtime);
@@ -107,8 +117,9 @@ suite("reviewed chains through April and real new-hex persistence", () => {
       expect(await unreviewed.resolver.resolve("Unrelated Deli", "Fixture")).toMatchObject({ found: true, items: [ue], attempts: [{ sourceId: "fatsecret", status: "not_found" }, { sourceId: "ue_api_direct", status: "ok" }] });
     } finally { fetchSpy.mockRestore(); }
     await p.restaurant.update({ where: { id: aprilRestaurant.id }, data: { brandId: null } });
-    await expect(applyAprilChainMatch(p, after, approved)).resolves.toMatchObject({ id: after.id });
+    await expect(applyAprilChainMatch(p, await backup(after), approved)).resolves.toMatchObject({ id: after.id });
     await p.restaurant.update({ where: { id: aprilRestaurant.id }, data: { brandId } });
+    expect(await resolveChainMacros([ue], detected, runtime.match, async () => { throw new Error("Reviewed-only menus must skip estimation"); })).toMatchObject([{ ...facts, source: "official", dietaryTags: [] }]);
     const unseen = { name: "Unreviewed seasonal dish" };
     const requested: string[] = [];
     const macros = await resolveChainMacros([ue, unseen], detected, runtime.match, async items => {
@@ -137,6 +148,7 @@ suite("reviewed chains through April and real new-hex persistence", () => {
       else await persistItems(newRestaurant.id, pairs, p);
       expect((await p.macroEstimate.findUniqueOrThrow({ where: { menuItemId_source: { menuItemId: added.id, source: "official" } } })).ingredientBreakdown).toBeNull();
       expect((await p.macroEstimate.findUniqueOrThrow({ where: { menuItemId_source: { menuItemId: added.id, source: "official" } } })).reasoning).toBe(persisted.reasoning);
+      expect((await p.restaurant.findUniqueOrThrow({ where: { id: newRestaurant.id } })).chainFlag).toBe(true);
       const legacy = await p.menuItem.findUniqueOrThrow({ where: { restaurantId_name: { restaurantId: newRestaurant.id, name: unseen.name } } });
       await p.macroEstimate.upsert({ where: { menuItemId_source: { menuItemId: legacy.id, source: "official" } },
         create: { menuItemId: legacy.id, source: "official", calories: 450, proteinG: 20, carbsG: 50, fatG: 19, confidence: "HIGH" }, update: {} });
@@ -149,16 +161,20 @@ suite("reviewed chains through April and real new-hex persistence", () => {
     }
     // Merchant values keep priority even when April's reviewed official source is added.
     await p.macroEstimate.create({ data: { menuItemId: original.id, source: "merchant", confidence: "HIGH", calories: 900, proteinG: 50, carbsG: 100, fatG: 30 } });
-    await applyAprilChainMatch(p, after, approved);
+    await applyAprilChainMatch(p, await backup(after), approved);
     expect((await p.menuItem.findUniqueOrThrow({ where: { id: original.id } })).calories).toBe(900);
-    const competingBrand = await p.brand.create({ data: { slug: randomUUID(), displayName: "Other chain", aliases: [brand.displayName], detectionConf: "high" } });
+    const competingBrand = await p.brand.create({ data: { slug: randomUUID(), displayName: "Other chain", aliases: [], detectionConf: "high" } });
     brands.push(competingBrand.id);
-    await expect(applyAprilChainMatch(p, await p.menuItem.findUniqueOrThrow({ where: { id: original.id } }), approved)).rejects.toThrow("brand identity");
+    await p.restaurant.update({ where: { id: aprilRestaurant.id }, data: { brandId: competingBrand.id } });
+    await expect(applyAprilChainMatch(p, await backup(await p.menuItem.findUniqueOrThrow({ where: { id: original.id } })), approved)).rejects.toThrow("brand identity");
+    await p.restaurant.update({ where: { id: aprilRestaurant.id }, data: { brandId } });
+    await p.brand.update({ where: { id: competingBrand.id }, data: { aliases: [brand.displayName] } });
+    await expect(applyAprilChainMatch(p, await backup(await p.menuItem.findUniqueOrThrow({ where: { id: original.id } })), approved)).rejects.toThrow("brand identity");
     await p.brand.delete({ where: { id: competingBrand.id } });
     // An alias collision appearing after planning must not be hidden by checking only one row.
     const duplicate = { ...row, id: randomUUID(), canonicalKey: "other" };
     await p.chainItem.create({ data: { ...duplicate, review: { ...review, dataHash: chainReviewHash(duplicate, review) } } });
-    await expect(applyAprilChainMatch(p, await p.menuItem.findUniqueOrThrow({ where: { id: original.id } }), approved)).rejects.toThrow("binding");
+    await expect(applyAprilChainMatch(p, await backup(await p.menuItem.findUniqueOrThrow({ where: { id: original.id } })), approved)).rejects.toThrow("binding");
     // A conflicting brand handoff rolls back menu inserts and the hex checkpoint together.
     await expect(persistHex(scope, fixture.slug + "-conflict", [{ restaurantId: aprilRestaurant.id, brandId: randomUUID(), items: pairs, menuHash: "bad" }], p)).rejects.toThrow("brand changed");
     expect(await p.pipelineCompletedHex.count({ where: { runId: scope, hexId: fixture.slug + "-conflict" } })).toBe(0);
