@@ -26,18 +26,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { sendMarketingEmail } from "@/lib/marketingEmail";
 import { editionForDate, weekIndexForDate } from "@/lib/emailTemplates";
 import { marketingAudience } from "@/lib/marketingAudience";
-import { countSent, recordSend, sentWithin, wasSent } from "@/lib/marketingLedger";
+import {
+  MAX_SENDS_PER_RUN,
+  countSent,
+  recordSend,
+  sentWithin,
+  wasSent,
+} from "@/lib/marketingLedger";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 // Sequential sends with provider timeouts: give the function the room it
 // needs rather than dying mid-loop at the platform default.
 export const maxDuration = 300;
-
-// Maximum sends per invocation. Weekly cron + idempotent ledger means the
-// next scheduled run (or a manual retry) will pick up any remainder, so
-// this cap bounds Vercel function wall-time without dropping anyone.
-export const MAX_SENDS_PER_INVOCATION = 500;
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const expected = process.env["CRON_SECRET"];
@@ -68,7 +69,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   let failed = 0;
 
   for (const r of audience) {
-    if (sent >= MAX_SENDS_PER_INVOCATION) break;
+    if (sent >= MAX_SENDS_PER_RUN) break;
 
     if (await wasSent(r.email, "weekly", step)) {
       skipped++;

@@ -12,17 +12,18 @@ jest.mock("@/lib/marketingAudience", () => ({
 }));
 
 jest.mock("@/lib/marketingLedger", () => ({
+  ...jest.requireActual("@/lib/marketingLedger"),
   wasSent: jest.fn(),
   countSent: jest.fn(),
   sentWithin: jest.fn(),
   recordSend: jest.fn(),
 }));
 
-import { GET, MAX_SENDS_PER_INVOCATION } from "./route";
+import { GET } from "./route";
 import { NextRequest } from "next/server";
 import { sendMarketingEmail } from "@/lib/marketingEmail";
 import { marketingAudience } from "@/lib/marketingAudience";
-import { countSent, recordSend, sentWithin, wasSent } from "@/lib/marketingLedger";
+import { MAX_SENDS_PER_RUN, countSent, recordSend, sentWithin, wasSent } from "@/lib/marketingLedger";
 
 const SECRET = "cron-secret";
 const ACCOUNT = { email: "alice@example.org", userId: "u1" };
@@ -120,14 +121,14 @@ describe("GET /api/internal/marketing/weekly", () => {
     expect(recordSend).not.toHaveBeenCalledWith("web@example.org", "weekly", "ed-1:w35");
   });
 
-  it("sends at most MAX_SENDS_PER_INVOCATION per run; skipped rows do not consume the cap", async () => {
-    const many = Array.from({ length: MAX_SENDS_PER_INVOCATION + 3 }, (_, i) => ({
+  it("sends at most MAX_SENDS_PER_RUN per run; skipped rows do not consume the cap", async () => {
+    const many = Array.from({ length: MAX_SENDS_PER_RUN + 3 }, (_, i) => ({
       email: `u${i}@example.org`,
       userId: `u${i}`,
     }));
     (marketingAudience as jest.Mock).mockResolvedValue(many);
     let res = await GET(makeRequest());
-    expect(await res.json()).toEqual(expect.objectContaining({ sent: MAX_SENDS_PER_INVOCATION }));
+    expect(await res.json()).toEqual(expect.objectContaining({ sent: MAX_SENDS_PER_RUN }));
 
     jest.clearAllMocks();
     (marketingAudience as jest.Mock).mockResolvedValue(many);
@@ -139,7 +140,7 @@ describe("GET /api/internal/marketing/weekly", () => {
     (wasSent as jest.Mock).mockImplementation(async (email: string) => email === "u0@example.org" || email === "u1@example.org");
     res = await GET(makeRequest());
     expect(await res.json()).toEqual(
-      expect.objectContaining({ sent: MAX_SENDS_PER_INVOCATION, skipped: 2 }),
+      expect.objectContaining({ sent: MAX_SENDS_PER_RUN, skipped: 2 }),
     );
   });
 

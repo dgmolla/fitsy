@@ -13,6 +13,13 @@ import { normalizeEmail } from "@/lib/waitlist";
 /** Minimum gap between two marketing emails to one address. */
 export const MARKETING_MIN_GAP_MS = 48 * 3600e3;
 
+/**
+ * Sends per cron invocation. Bounds function wall-time; the ledger makes
+ * the next invocation pick up the remainder. Lives here (not in a route
+ * file) because Next.js route modules may only export handlers and config.
+ */
+export const MAX_SENDS_PER_RUN = 500;
+
 export type Campaign = "weekly" | "launch" | "lifecycle";
 
 export async function wasSent(email: string, campaign: Campaign, step: string): Promise<boolean> {
