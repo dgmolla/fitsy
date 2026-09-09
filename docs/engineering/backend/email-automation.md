@@ -77,7 +77,7 @@ flowchart TD
 
 | Route | Trigger | Body / query | Response |
 |-------|---------|--------------|----------|
-| `GET /api/internal/marketing/weekly` | cron, Tuesday 16:00 UTC | `?dryRun=1` | `{ ok, edition, eligible, sent, skipped, paced, failed }` |
+| `GET /api/internal/marketing/weekly` | cron, Tuesday 16:00 UTC | `?dryRun=1` | `{ ok, edition, eligible, sent, paced, failed, unsent }`; `eligible` is the audience not yet sent this step; `unsent > 0` is alerted to Slack and a re-run resumes |
 | `GET /api/internal/waitlist/launch-day` | cron, daily 16:30 UTC | `?dryRun=1` | `{ ok, skipped, today, launchDate }` before launch; from launch day on, the blast result summed over batches, drained until no unprocessed rows remain, a batch moves nothing, or another batch would not fit the budget (`stalled: true` on the second) |
 | `POST /api/internal/waitlist/notify` | operator | `{ lat, lng, radiusMiles?, city?, includeUnlocated?, dryRun? }` | `{ ok, matched, viaPush, viaEmail, notified, suppressed, failed, exhausted, remaining }`; dry run: `{ matched, wouldNotify, wouldSuppress }` |
 
@@ -89,5 +89,5 @@ All three require the `CRON_SECRET` bearer.
 - Every marketing email carries the CAN-SPAM footer and RFC 8058 one-click headers (see [marketing-emails.md](marketing-emails.md)).
 - One send per (address, campaign, step), ever; the weekly step carries the week index so editions recur per rotation. The launch blast is additionally idempotent per row via `notifiedAt`.
 - No marketing email to an address within 48 hours of another one, except the launch blast, which is the one email people explicitly asked for.
-- Sends are sequential and bounded per invocation (500 for the crons, 400 per launch batch); the ledger, or `notifiedAt` for the launch blast, makes the next invocation pick up the remainder. Every send route sets `maxDuration = 300`.
+- Sends are sequential. The weekly run walks the whole not-yet-sent audience within a wall-time budget and a hard ceiling (500), reports and alerts on anything it did not reach, and a re-run resumes because sent addresses are excluded at query time. The launch blast is batched (400 per batch) and drained by the cron; `notifiedAt` makes later runs pick up the remainder. Every send route sets `maxDuration = 300`.
 - The address-keyed opt-out lookup is served by a functional index on `lower("User"."email")`.

@@ -119,9 +119,8 @@ The rotation repeats every 8 weeks indefinitely.
 
 ### Send cap
 
-The route processes at most 500 sends per invocation.
-The ledger ensures subsequent runs (next week's cron, or a manual retry) pick up where the previous one left off.
-This bounds Vercel function wall-time while guaranteeing eventual delivery to the whole audience.
+The route walks the whole audience not yet sent this edition, within a wall-time budget and a hard ceiling of 500 sends.
+The cron fires once a week, so the run is not paged: anything it does not reach is reported as `unsent` and alerted to Slack, and a manual re-run resumes because already-sent addresses are excluded at query time.
 
 ### Audience
 
@@ -134,11 +133,12 @@ The recipient kind (`userId` or `waitlistId`) decides which unsubscribe link is 
 The weekly cron uses campaign `weekly` with `<edition slug>:w<week index>` as the step, so an edition recurs on the next eight-week rotation but a retry within the same week is a no-op.
 A row is written only after `sendMarketingEmail` returns `true`; a failed send is never recorded, so the next run retries it.
 Before sending, the cron also skips any address that heard from any campaign within the last 48 hours (`paced`), so a lifecycle email and an edition never land back to back.
+Addresses already recorded for this edition's step are excluded from the audience query itself.
 The migration that introduced the ledger copied the old `_marketing_send` history into it, week-stamping each row from its `sent_at` so it matches the new key; the old table is dropped in a later contraction migration.
 
 ### Dry run
 
-`GET /api/internal/marketing/weekly?dryRun=1` returns `{ ok, dryRun: true, edition, eligible, alreadySent }` without sending any email.
+`GET /api/internal/marketing/weekly?dryRun=1` returns `{ ok, dryRun: true, edition, eligible }` (the audience not yet sent this edition) without sending any email.
 Useful for verifying audience size and edition selection before a live run.
 
 ### Response
@@ -149,9 +149,9 @@ Useful for verifying audience size and edition selection before a live run.
   "edition": "restaurant-calorie-gap",
   "eligible": 1200,
   "sent": 500,
-  "skipped": 0,
   "paced": 4,
-  "failed": 3
+  "failed": 3,
+  "unsent": 693
 }
 ```
 

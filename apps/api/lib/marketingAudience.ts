@@ -25,9 +25,23 @@ export type MarketingRecipientRow =
   | { email: string; userId: string; waitlistId?: undefined }
   | { email: string; waitlistId: string; userId?: undefined };
 
-export async function marketingAudience(
-  opts: { includeWaitlistOnly: boolean },
-): Promise<MarketingRecipientRow[]> {
+export async function marketingAudience(opts: {
+  includeWaitlistOnly: boolean;
+  /**
+   * Leave out addresses the ledger already records for this campaign step,
+   * so a run (or a re-run after an incomplete one) only walks what is left.
+   */
+  excludeSent?: { campaign: string; step: string } | undefined;
+}): Promise<MarketingRecipientRow[]> {
+  const ex = opts.excludeSent;
+  const notSentUser = ex
+    ? `AND NOT EXISTS (SELECT 1 FROM "MarketingSend" m WHERE m."email" = lower(u."email") AND m."campaign" = $1 AND m."step" = $2)`
+    : "";
+  const notSentWaitlist = ex
+    ? `AND NOT EXISTS (SELECT 1 FROM "MarketingSend" m WHERE m."email" = w."email" AND m."campaign" = $1 AND m."step" = $2)`
+    : "";
+  const params = ex ? [ex.campaign, ex.step] : [];
+
   const users = await prisma.$queryRawUnsafe<{ id: string; email: string }[]>(
     `SELECT u.id, lower(u.email) AS email FROM "User" u
       WHERE u."emailOptOutAt" IS NULL
@@ -35,7 +49,9 @@ export async function marketingAudience(
           SELECT 1 FROM "LaunchWaitlist" w
            WHERE w."email" = lower(u."email") AND w."emailOptOutAt" IS NOT NULL
         )
+        ${notSentUser}
       ORDER BY u."createdAt" ASC, u.id ASC`,
+    ...params,
   );
   const waitlistOnly = opts.includeWaitlistOnly
     ? await prisma.$queryRawUnsafe<{ id: string; email: string }[]>(
@@ -46,7 +62,9 @@ export async function marketingAudience(
               SELECT 1 FROM "User" u
                WHERE lower(u."email") = w."email" AND u."emailOptOutAt" IS NOT NULL
             )
+            ${notSentWaitlist}
           ORDER BY w."createdAt" ASC, w.id ASC`,
+        ...params,
       )
     : [];
 

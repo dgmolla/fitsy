@@ -84,7 +84,6 @@ describeIfDb("marketingLedger (DB)", () => {
     await ledger.recordSend(email, "weekly", "ed-x:w1");
     expect(await svc.prisma.marketingSend.count({ where: { email } })).toBe(1);
     expect(await ledger.wasSent(email, "weekly", "ed-x:w1")).toBe(true);
-    expect(await ledger.countSent([email, "nobody@fitsy.org"], "weekly", "ed-x:w1")).toBe(1);
     expect(await ledger.sentWithin(email)).toBe(true);
     expect(await ledger.sentWithin(email, 1)).toBe(false);
   });

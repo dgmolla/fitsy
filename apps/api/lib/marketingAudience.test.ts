@@ -54,6 +54,27 @@ describe("marketingAudience", () => {
     expect(waitlistSql).toContain('lower(u."email") = w."email" AND u."emailOptOutAt" IS NOT NULL');
   });
 
+  it("excludes addresses the ledger already records for a step, in both branches, with bound params", async () => {
+    await marketingAudience({ includeWaitlistOnly: true, excludeSent: { campaign: "weekly", step: "ed-1:w35" } });
+    const calls = (prisma.$queryRawUnsafe as jest.Mock).mock.calls;
+    for (const c of calls) {
+      const sql = c[0] as string;
+      expect(sql).toContain('FROM "MarketingSend" m');
+      expect(sql).toContain('m."campaign" = $1 AND m."step" = $2');
+      expect(c.slice(1)).toEqual(["weekly", "ed-1:w35"]);
+    }
+    expect(calls[0]![0]).toContain('m."email" = lower(u."email")');
+    expect(calls[1]![0]).toContain('m."email" = w."email"');
+  });
+
+  it("does not mention the ledger when no exclusion is requested", async () => {
+    await marketingAudience({ includeWaitlistOnly: true });
+    for (const c of (prisma.$queryRawUnsafe as jest.Mock).mock.calls) {
+      expect(c[0] as string).not.toContain("MarketingSend");
+      expect(c.slice(1)).toEqual([]);
+    }
+  });
+
   it("orders both branches deterministically so capped runs walk past the sent prefix", async () => {
     await marketingAudience({ includeWaitlistOnly: true });
     const [userSql, waitlistSql] = (prisma.$queryRawUnsafe as jest.Mock).mock.calls.map((c) => c[0] as string);

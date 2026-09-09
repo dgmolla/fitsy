@@ -1,6 +1,6 @@
 jest.mock("@/lib/restaurantService", () => ({
   prisma: {
-    marketingSend: { findUnique: jest.fn(), upsert: jest.fn(), findFirst: jest.fn(), count: jest.fn() },
+    marketingSend: { findUnique: jest.fn(), upsert: jest.fn(), findFirst: jest.fn() },
   },
 }));
 
@@ -8,7 +8,6 @@ import { prisma } from "@/lib/restaurantService";
 import {
   MARKETING_MIN_GAP_MS,
   MAX_SENDS_PER_RUN,
-  countSent,
   recordSend,
   sentWithin,
   wasSent,
@@ -52,16 +51,6 @@ describe("marketingLedger", () => {
     expect(before - since).toBeLessThanOrEqual(MARKETING_MIN_GAP_MS + 1000);
     expect(MARKETING_MIN_GAP_MS).toBe(48 * 3600e3);
     expect(MAX_SENDS_PER_RUN).toBe(500);
-  });
-
-  it("countSent is one set query over normalized addresses, and zero for an empty list", async () => {
-    (prisma.marketingSend.count as jest.Mock).mockResolvedValue(2);
-    expect(await countSent([" A@X.org", "b@x.org"], "weekly", "ed-1:w3")).toBe(2);
-    expect(prisma.marketingSend.count).toHaveBeenCalledWith({
-      where: { campaign: "weekly", step: "ed-1:w3", email: { in: ["a@x.org", "b@x.org"] } },
-    });
-    expect(await countSent([], "weekly", "ed-1:w3")).toBe(0);
-    expect(prisma.marketingSend.count).toHaveBeenCalledTimes(1);
   });
 
   it("sentWithin is false when nothing was sent in the window", async () => {

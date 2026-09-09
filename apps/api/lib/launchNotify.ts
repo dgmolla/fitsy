@@ -93,6 +93,9 @@ export async function notifyLaunch(opts: LaunchNotifyOptions): Promise<LaunchNot
   const radius =
     typeof opts.radiusMiles === "number" && opts.radiusMiles > 0 ? opts.radiusMiles : 30;
 
+  // The radius match is computed here, not in SQL, so the fetch is the whole
+  // pending set (unnotified, attempts left, past cooldown). That set shrinks
+  // with every batch, so the repeated fetch is bounded by the work left.
   const retryBefore = new Date(Date.now() - RETRY_COOLDOWN_MS);
   const pending = await prisma.launchWaitlist.findMany({
     where: {

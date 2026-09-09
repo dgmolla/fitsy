@@ -195,26 +195,29 @@ describe("GET /api/internal/waitlist/launch-day", () => {
     );
   });
 
-  it("stops draining when a batch makes no progress instead of spinning until the time budget", async () => {
+  it("a batch of pure failures is progress (those rows are cooling down), not a stall", async () => {
     jest.useFakeTimers().setSystemTime(new Date(`${LAUNCH_DATE_ISO}T16:00:00Z`));
-    // Rows remain unprocessed, but a batch moves nothing out of the pending
-    // set (e.g. every row it reaches fails): repeating would be identical.
-    const stuck = { dryRun: false, matched: 5, viaPush: 0, viaEmail: 0, notified: 0, suppressed: 0, failed: 3, remaining: 3, exhausted: 0 };
     (notifyLaunch as jest.Mock)
-      .mockResolvedValueOnce({ ...stuck, viaEmail: 2, notified: 2, failed: 0 })
-      .mockResolvedValue(stuck);
+      .mockResolvedValueOnce({ dryRun: false, matched: 5, viaPush: 0, viaEmail: 2, notified: 2, suppressed: 0, failed: 0, remaining: 3, exhausted: 0 })
+      .mockResolvedValueOnce({ dryRun: false, matched: 3, viaPush: 0, viaEmail: 0, notified: 0, suppressed: 0, failed: 3, remaining: 0, exhausted: 0 });
     const res = await GET(makeRequest());
     expect(notifyLaunch).toHaveBeenCalledTimes(2);
-    // The stalled batch's failures are kept (summed), not dropped.
-    expect(await res.json()).toEqual(
-      expect.objectContaining({ notified: 2, failed: 3, remaining: 3, stalled: true }),
-    );
-    // Unattended cron: a human hears about it.
-    expect(mockNotifySlack).toHaveBeenCalledWith(
-      "launch blast stalled",
-      expect.stringMatching(/failed 3, .*remaining 3/),
-      { source: "launch-day" },
-    );
+    const body = await res.json();
+    expect(body).toEqual(expect.objectContaining({ notified: 2, failed: 3, remaining: 0 }));
+    expect(body).not.toHaveProperty("stalled");
+    expect(mockNotifySlack).toHaveBeenCalledWith("launch blast had failures", expect.stringContaining("failed 3"), { source: "launch-day" });
+  });
+
+  it("stops draining when a batch touches nothing while rows were expected, and reports a stall", async () => {
+    jest.useFakeTimers().setSystemTime(new Date(`${LAUNCH_DATE_ISO}T16:00:00Z`));
+    const nothing = { dryRun: false, matched: 0, viaPush: 0, viaEmail: 0, notified: 0, suppressed: 0, failed: 0, remaining: 0, exhausted: 0 };
+    (notifyLaunch as jest.Mock)
+      .mockResolvedValueOnce({ dryRun: false, matched: 5, viaPush: 0, viaEmail: 2, notified: 2, suppressed: 0, failed: 0, remaining: 3, exhausted: 0 })
+      .mockResolvedValue(nothing);
+    const res = await GET(makeRequest());
+    expect(notifyLaunch).toHaveBeenCalledTimes(2);
+    expect(await res.json()).toEqual(expect.objectContaining({ notified: 2, remaining: 0, stalled: true }));
+    expect(mockNotifySlack).toHaveBeenCalledWith("launch blast stalled", expect.any(String), { source: "launch-day" });
   });
 
   it("alerts when rows were exhausted even with no retryable failures", async () => {

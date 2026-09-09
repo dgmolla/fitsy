@@ -48,19 +48,20 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   let batchStart = started;
   let result = await notifyLaunch(opts);
   let lastBatchMs = Date.now() - batchStart;
-  // Drain while unprocessed rows remain, each batch makes progress, and a
+  // Drain while unprocessed rows remain, each batch touches something, and a
   // whole further batch fits in the budget. Every counter is summed across
   // batches: with the retry cooldown a failed row is never re-attempted in
-  // this run, so nothing is double counted. A batch that moves no row out
-  // of the pending set (provider down) would repeat identically, so stop
-  // and report it as stalled; the next tick resumes.
+  // this run, so nothing is double counted and every touched row (sent,
+  // suppressed, exhausted, or failed-and-cooling-down) has left the pending
+  // set. A batch that touched nothing while rows were expected cannot make
+  // headway, so stop and report it as stalled; the next tick resumes.
   let stalled = false;
   while (!result.dryRun && result.remaining > 0 && Date.now() - started + lastBatchMs < BUDGET_MS) {
     batchStart = Date.now();
     const next = await notifyLaunch(opts);
     lastBatchMs = Date.now() - batchStart;
     if (next.dryRun) break;
-    const progressed = next.notified + next.suppressed + next.exhausted > 0;
+    const progressed = next.notified + next.suppressed + next.exhausted + next.failed > 0;
     result = {
       ...next,
       matched: result.matched,

@@ -1,11 +1,12 @@
 /**
  * GET /api/internal/marketing/weekly
  *
- * Weekly marketing email cron — triggered every Tuesday at 16:00 UTC.
+ * Weekly marketing email cron - triggered every Tuesday at 16:00 UTC.
  * Picks the deterministic edition for the current week, loads the marketing
- * audience (lib/marketingAudience.ts; accounts only until the double opt-in
- * confirmation ships, then confirmed waitlist-only addresses too), and sends
- * sequentially (no fan-out) with a 500-send cap per invocation.
+ * audience that has NOT yet received it (lib/marketingAudience.ts: accounts,
+ * and waitlist-only addresses once the double opt-in confirmation ships,
+ * minus every opt-out, minus the ledger rows for this step), and sends
+ * sequentially (no fan-out).
  *
  * Idempotency and pacing come from the MarketingSend ledger
  * (lib/marketingLedger.ts). The ledger step is `<edition>:w<week>`, so an
@@ -13,32 +14,34 @@
  * every eight weeks by design) while retries within the week stay
  * idempotent. An address that heard from any marketing campaign within the
  * last 48 hours (e.g. a lifecycle step) is skipped this week rather than
- * double-mailed. Already-sent and paced addresses do not consume the cap,
- * and the audience is in a stable order, so repeated invocations walk past
- * the sent prefix and reach everyone eventually.
+ * double-mailed.
+ *
+ * The run is bounded by wall time (BUDGET_MS) and a hard send ceiling, not
+ * paged: the cron fires once a week, so anything not sent in this run would
+ * otherwise never go out. If the audience outgrows one run the response
+ * carries `unsent` and Slack is told; a manual re-run resumes from the
+ * ledger (already-sent addresses are excluded at query time).
  *
  * Auth: CRON_SECRET Bearer (same as all other internal cron routes).
  * DryRun: ?dryRun=1 returns stats without sending.
- * Response: { ok, edition, eligible, sent, skipped, paced, failed }
+ * Response: { ok, edition, eligible, sent, paced, failed, unsent }
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { notifySlack } from "@fitsy/shared";
 import { sendMarketingEmail } from "@/lib/marketingEmail";
 import { editionForDate, weekIndexForDate } from "@/lib/emailTemplates";
 import { marketingAudience } from "@/lib/marketingAudience";
-import {
-  MAX_SENDS_PER_RUN,
-  countSent,
-  recordSend,
-  sentWithin,
-  wasSent,
-} from "@/lib/marketingLedger";
+import { MAX_SENDS_PER_RUN, recordSend, sentWithin } from "@/lib/marketingLedger";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 // Sequential sends with provider timeouts: give the function the room it
 // needs rather than dying mid-loop at the platform default.
 export const maxDuration = 300;
+
+/** Wall-clock budget for the send loop, under maxDuration with headroom. */
+const BUDGET_MS = 240_000;
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const expected = process.env["CRON_SECRET"];
@@ -55,26 +58,28 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const step = `${slug}:w${weekIndexForDate(now)}`;
 
   // Recurring email to waitlist-only addresses waits for double opt-in.
-  const audience = await marketingAudience({ includeWaitlistOnly: false });
+  // Addresses already recorded for this step are excluded at query time, so
+  // a re-run walks only what is left.
+  const audience = await marketingAudience({
+    includeWaitlistOnly: false,
+    excludeSent: { campaign: "weekly", step },
+  });
   const eligible = audience.length;
 
   if (dryRun) {
-    const alreadySent = await countSent(audience.map((r) => r.email), "weekly", step);
-    return NextResponse.json({ ok: true, dryRun: true, edition: slug, eligible, alreadySent });
+    return NextResponse.json({ ok: true, dryRun: true, edition: slug, eligible });
   }
 
+  const started = Date.now();
   let sent = 0;
-  let skipped = 0;
   let paced = 0;
   let failed = 0;
+  let processed = 0;
 
   for (const r of audience) {
-    if (sent >= MAX_SENDS_PER_RUN) break;
+    if (sent >= MAX_SENDS_PER_RUN || Date.now() - started > BUDGET_MS) break;
+    processed++;
 
-    if (await wasSent(r.email, "weekly", step)) {
-      skipped++;
-      continue;
-    }
     // Frequency cap across campaigns: never two marketing emails within 48h.
     if (await sentWithin(r.email)) {
       paced++;
@@ -91,7 +96,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     });
 
     if (ok) {
-      // Record only after a confirmed send — a failed send must be retried
+      // Record only after a confirmed send - a failed send must be retried
       // on the next run, never silently dropped.
       await recordSend(r.email, "weekly", step);
       sent++;
@@ -100,5 +105,16 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     }
   }
 
-  return NextResponse.json({ ok: true, edition: slug, eligible, sent, skipped, paced, failed });
+  // Anything not reached this run would otherwise wait a whole week.
+  const unsent = eligible - processed;
+  if (unsent > 0) {
+    await notifySlack(
+      "weekly editorial incomplete",
+      `${slug}: sent ${sent}, paced ${paced}, failed ${failed}, ${unsent} not reached within the run budget. ` +
+        `Re-run GET /api/internal/marketing/weekly to resume; already-sent addresses are excluded.`,
+      { source: "marketing-weekly" },
+    );
+  }
+
+  return NextResponse.json({ ok: true, edition: slug, eligible, sent, paced, failed, unsent });
 }

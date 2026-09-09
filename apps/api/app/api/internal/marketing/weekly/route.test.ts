@@ -13,17 +13,21 @@ jest.mock("@/lib/marketingAudience", () => ({
 
 jest.mock("@/lib/marketingLedger", () => ({
   ...jest.requireActual("@/lib/marketingLedger"),
-  wasSent: jest.fn(),
-  countSent: jest.fn(),
   sentWithin: jest.fn(),
   recordSend: jest.fn(),
+}));
+
+const mockNotifySlack = jest.fn();
+jest.mock("@fitsy/shared", () => ({
+  ...jest.requireActual("@fitsy/shared"),
+  notifySlack: (...args: unknown[]) => mockNotifySlack(...args),
 }));
 
 import { GET } from "./route";
 import { NextRequest } from "next/server";
 import { sendMarketingEmail } from "@/lib/marketingEmail";
 import { marketingAudience } from "@/lib/marketingAudience";
-import { MAX_SENDS_PER_RUN, countSent, recordSend, sentWithin, wasSent } from "@/lib/marketingLedger";
+import { MAX_SENDS_PER_RUN, recordSend, sentWithin } from "@/lib/marketingLedger";
 
 const SECRET = "cron-secret";
 const ACCOUNT = { email: "alice@example.org", userId: "u1" };
@@ -37,16 +41,17 @@ function makeRequest(qs = "", auth: string | null = `Bearer ${SECRET}`): NextReq
 
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.useRealTimers();
   process.env["CRON_SECRET"] = SECRET;
+  mockNotifySlack.mockResolvedValue(undefined);
   (marketingAudience as jest.Mock).mockResolvedValue([ACCOUNT, WAITLIST_ONLY]);
-  (wasSent as jest.Mock).mockResolvedValue(false);
-  (countSent as jest.Mock).mockResolvedValue(0);
   (sentWithin as jest.Mock).mockResolvedValue(false);
   (recordSend as jest.Mock).mockResolvedValue(undefined);
   (sendMarketingEmail as jest.Mock).mockResolvedValue(true);
 });
 
 afterEach(() => {
+  jest.useRealTimers();
   delete process.env["CRON_SECRET"];
 });
 
@@ -57,30 +62,30 @@ describe("GET /api/internal/marketing/weekly", () => {
     expect(marketingAudience).not.toHaveBeenCalled();
   });
 
-  it("dry run reports the audience and how many already have this edition, without sending", async () => {
-    (countSent as jest.Mock).mockResolvedValue(1);
-    const res = await GET(makeRequest("?dryRun=1"));
-    expect(countSent).toHaveBeenCalledWith(["alice@example.org", "web@example.org"], "weekly", "ed-1:w35");
-    expect(await res.json()).toEqual({
-      ok: true,
-      dryRun: true,
-      edition: "ed-1",
-      eligible: 2,
-      alreadySent: 1,
+  it("asks for accounts only until double opt-in, excluding addresses already sent this week-stamped step", async () => {
+    await GET(makeRequest());
+    expect(marketingAudience).toHaveBeenCalledWith({
+      includeWaitlistOnly: false,
+      excludeSent: { campaign: "weekly", step: "ed-1:w35" },
     });
+  });
+
+  it("dry run reports the unsent audience without sending", async () => {
+    const res = await GET(makeRequest("?dryRun=1"));
+    expect(await res.json()).toEqual({ ok: true, dryRun: true, edition: "ed-1", eligible: 2 });
     expect(sendMarketingEmail).not.toHaveBeenCalled();
   });
 
-  it("sends to accounts and waitlist-only addresses with the matching recipient kind, then records the ledger", async () => {
+  it("sends with the matching recipient kind and week-stamped key, then records the ledger", async () => {
     const res = await GET(makeRequest());
     expect(await res.json()).toEqual({
       ok: true,
       edition: "ed-1",
       eligible: 2,
       sent: 2,
-      skipped: 0,
       paced: 0,
       failed: 0,
+      unsent: 0,
     });
     expect(sendMarketingEmail).toHaveBeenNthCalledWith(1, {
       userId: "u1",
@@ -99,57 +104,57 @@ describe("GET /api/internal/marketing/weekly", () => {
     // Step is cycle-aware so the edition can recur next rotation.
     expect(recordSend).toHaveBeenCalledWith("alice@example.org", "weekly", "ed-1:w35");
     expect(recordSend).toHaveBeenCalledWith("web@example.org", "weekly", "ed-1:w35");
-  });
-
-  it("asks for accounts only until double opt-in gates waitlist-only rows", async () => {
-    await GET(makeRequest());
-    expect(marketingAudience).toHaveBeenCalledWith({ includeWaitlistOnly: false });
-  });
-
-  it("skips an address that already has this edition, reading the same week-stamped key it writes", async () => {
-    (wasSent as jest.Mock).mockImplementation(async (email: string) => email === "alice@example.org");
-    const res = await GET(makeRequest());
-    expect(wasSent).toHaveBeenCalledWith("alice@example.org", "weekly", "ed-1:w35");
-    expect(await res.json()).toEqual(expect.objectContaining({ sent: 1, skipped: 1 }));
-    expect(sendMarketingEmail).toHaveBeenCalledTimes(1);
-    expect(sendMarketingEmail).toHaveBeenCalledWith(expect.objectContaining({ to: "web@example.org" }));
+    expect(mockNotifySlack).not.toHaveBeenCalled();
   });
 
   it("paces an address that heard from any campaign within the frequency cap, without recording", async () => {
     (sentWithin as jest.Mock).mockImplementation(async (email: string) => email === "web@example.org");
     const res = await GET(makeRequest());
-    expect(await res.json()).toEqual(expect.objectContaining({ sent: 1, paced: 1 }));
+    expect(await res.json()).toEqual(expect.objectContaining({ sent: 1, paced: 1, unsent: 0 }));
     expect(sendMarketingEmail).not.toHaveBeenCalledWith(expect.objectContaining({ to: "web@example.org" }));
     expect(recordSend).not.toHaveBeenCalledWith("web@example.org", "weekly", "ed-1:w35");
   });
 
-  it("sends at most MAX_SENDS_PER_RUN per run; skipped rows do not consume the cap", async () => {
+  it("stops at the hard send ceiling, reports the rest as unsent, and tells Slack", async () => {
+    expect(MAX_SENDS_PER_RUN).toBe(500);
     const many = Array.from({ length: MAX_SENDS_PER_RUN + 3 }, (_, i) => ({
       email: `u${i}@example.org`,
       userId: `u${i}`,
     }));
     (marketingAudience as jest.Mock).mockResolvedValue(many);
-    let res = await GET(makeRequest());
-    expect(await res.json()).toEqual(expect.objectContaining({ sent: MAX_SENDS_PER_RUN }));
-
-    jest.clearAllMocks();
-    (marketingAudience as jest.Mock).mockResolvedValue(many);
-    (sentWithin as jest.Mock).mockResolvedValue(false);
-    (recordSend as jest.Mock).mockResolvedValue(undefined);
-    (sendMarketingEmail as jest.Mock).mockResolvedValue(true);
-    // The first two addresses already have the edition: they are skipped and
-    // the cap is still filled from the rest.
-    (wasSent as jest.Mock).mockImplementation(async (email: string) => email === "u0@example.org" || email === "u1@example.org");
-    res = await GET(makeRequest());
+    const res = await GET(makeRequest());
     expect(await res.json()).toEqual(
-      expect.objectContaining({ sent: MAX_SENDS_PER_RUN, skipped: 2 }),
+      expect.objectContaining({ eligible: MAX_SENDS_PER_RUN + 3, sent: MAX_SENDS_PER_RUN, unsent: 3 }),
+    );
+    expect(mockNotifySlack).toHaveBeenCalledWith(
+      "weekly editorial incomplete",
+      expect.stringContaining("3 not reached"),
+      { source: "marketing-weekly" },
     );
   });
 
-  it("does not record a failed send, so it is retried next run", async () => {
+  it("stops at the wall-time budget and reports what it did not reach", async () => {
+    jest.useFakeTimers().setSystemTime(new Date("2026-09-08T16:00:00Z"));
+    const many = Array.from({ length: 5 }, (_, i) => ({ email: `u${i}@example.org`, userId: `u${i}` }));
+    (marketingAudience as jest.Mock).mockResolvedValue(many);
+    // Each send "takes" 100s: after three the 240s budget is spent.
+    (sendMarketingEmail as jest.Mock).mockImplementation(async () => {
+      jest.advanceTimersByTime(100_000);
+      return true;
+    });
+    const res = await GET(makeRequest());
+    expect(await res.json()).toEqual(expect.objectContaining({ sent: 3, unsent: 2 }));
+    expect(mockNotifySlack).toHaveBeenCalledWith(
+      "weekly editorial incomplete",
+      expect.stringContaining("2 not reached"),
+      { source: "marketing-weekly" },
+    );
+  });
+
+  it("does not record a failed send, so a re-run picks it up", async () => {
     (sendMarketingEmail as jest.Mock).mockResolvedValue(false);
     const res = await GET(makeRequest());
-    expect(await res.json()).toEqual(expect.objectContaining({ sent: 0, failed: 2 }));
+    expect(await res.json()).toEqual(expect.objectContaining({ sent: 0, failed: 2, unsent: 0 }));
     expect(recordSend).not.toHaveBeenCalled();
   });
 });
