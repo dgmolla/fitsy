@@ -57,11 +57,34 @@ export async function isEmailOptedOut(email: string): Promise<boolean> {
   return rows.length > 0;
 }
 
+/**
+ * Set-query form of isEmailOptedOut for previews: which of `emails` have an
+ * opt-out on either table. One round trip regardless of audience size.
+ */
+export async function optedOutAddresses(emails: string[]): Promise<Set<string>> {
+  const normalized = [...new Set(emails.map((e) => e.trim().toLowerCase()))];
+  if (normalized.length === 0) return new Set();
+  const rows = await prisma.$queryRaw<{ email: string }[]>(
+    Prisma.sql`SELECT lower("email") AS email FROM "User"
+        WHERE lower("email") IN (${Prisma.join(normalized)}) AND "emailOptOutAt" IS NOT NULL
+      UNION
+      SELECT "email" FROM "LaunchWaitlist"
+        WHERE "email" IN (${Prisma.join(normalized)}) AND "emailOptOutAt" IS NOT NULL`,
+  );
+  return new Set(rows.map((r) => r.email));
+}
+
 export async function sendMarketingEmail(
   opts: MarketingRecipient & {
     to: string;
     subject: string;
     html: string;
+    /**
+     * Provider-side dedup for retries (Resend honours it for 24h). Callers
+     * derive it from the ledger key (campaign, step, address) so a retry of
+     * a send whose response was lost cannot deliver twice.
+     */
+    idempotencyKey?: string | undefined;
   },
 ): Promise<boolean> {
   const { to, subject, html } = opts;
@@ -108,6 +131,37 @@ export async function sendMarketingEmail(
 
   const from = process.env["FITSY_FROM_EMAIL"] ?? "Fitsy <hello@fitsy.org>";
 
+  const body = JSON.stringify({
+    from,
+    to,
+    subject,
+    html: fullHtml,
+    headers: {
+      "List-Unsubscribe": listUnsubscribeHeader,
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    },
+  });
+
+  // Sequential cron loops can trip the provider's per-second limit; honour
+  // one 429 with its Retry-After (capped) before giving up on this address.
+  // A false here is retried by the caller on its next run, never dropped.
+  const first = await postResend(apiKey, body, opts.idempotencyKey);
+  if (first.status !== 429) return first.ok;
+  await sleep(Math.min(first.retryAfterMs ?? 1000, MAX_RETRY_AFTER_MS));
+  return (await postResend(apiKey, body, opts.idempotencyKey)).ok;
+}
+
+const MAX_RETRY_AFTER_MS = 5000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function postResend(
+  apiKey: string,
+  body: string,
+  idempotencyKey?: string,
+): Promise<{ ok: boolean; status: number; retryAfterMs?: number }> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {
@@ -116,22 +170,19 @@ export async function sendMarketingEmail(
       headers: {
         authorization: `Bearer ${apiKey}`,
         "content-type": "application/json",
+        ...(idempotencyKey ? { "idempotency-key": idempotencyKey } : {}),
       },
       signal: ctrl.signal,
-      body: JSON.stringify({
-        from,
-        to,
-        subject,
-        html: fullHtml,
-        headers: {
-          "List-Unsubscribe": listUnsubscribeHeader,
-          "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-        },
-      }),
+      body,
     });
-    return res.ok;
+    const retryAfter = Number(res.headers?.get?.("retry-after"));
+    return {
+      ok: res.ok,
+      status: res.status,
+      ...(Number.isFinite(retryAfter) && retryAfter > 0 ? { retryAfterMs: retryAfter * 1000 } : {}),
+    };
   } catch {
-    return false;
+    return { ok: false, status: 0 };
   } finally {
     clearTimeout(timer);
   }

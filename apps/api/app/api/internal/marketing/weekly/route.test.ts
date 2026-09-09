@@ -1,25 +1,37 @@
-jest.mock("@/lib/restaurantService", () => ({
-  prisma: {
-    $queryRawUnsafe: jest.fn(),
-    $executeRawUnsafe: jest.fn(),
-  },
-}));
-
 jest.mock("@/lib/marketingEmail", () => ({
   sendMarketingEmail: jest.fn(),
-  isUndeliverableAddress: jest.requireActual("@/lib/marketingEmail").isUndeliverableAddress,
 }));
 
 jest.mock("@/lib/emailTemplates", () => ({
   editionForDate: jest.fn(() => ({ slug: "ed-1", subject: "S", html: "<p>h</p>" })),
+  weekIndexForDate: jest.fn(() => 35),
+}));
+
+jest.mock("@/lib/marketingAudience", () => ({
+  marketingAudience: jest.fn(),
+}));
+
+jest.mock("@/lib/marketingLedger", () => ({
+  ...jest.requireActual("@/lib/marketingLedger"),
+  sentWithin: jest.fn(),
+  recordSend: jest.fn(),
+}));
+
+const mockNotifySlack = jest.fn();
+jest.mock("@fitsy/shared", () => ({
+  ...jest.requireActual("@fitsy/shared"),
+  notifySlack: (...args: unknown[]) => mockNotifySlack(...args),
 }));
 
 import { GET } from "./route";
 import { NextRequest } from "next/server";
-import { prisma } from "@/lib/restaurantService";
 import { sendMarketingEmail } from "@/lib/marketingEmail";
+import { marketingAudience } from "@/lib/marketingAudience";
+import { MAX_SENDS_PER_RUN, recordSend, sentWithin } from "@/lib/marketingLedger";
 
 const SECRET = "cron-secret";
+const ACCOUNT = { email: "alice@example.org", userId: "u1" };
+const WAITLIST_ONLY = { email: "web@example.org", waitlistId: "wl1" };
 
 function makeRequest(qs = "", auth: string | null = `Bearer ${SECRET}`): NextRequest {
   const headers: Record<string, string> = {};
@@ -27,29 +39,19 @@ function makeRequest(qs = "", auth: string | null = `Bearer ${SECRET}`): NextReq
   return new NextRequest(`http://localhost/api/internal/marketing/weekly${qs}`, { headers });
 }
 
-/** The audience query is the first $queryRawUnsafe call after the dedup DDL. */
-function audienceSql(): string {
-  return (prisma.$queryRawUnsafe as jest.Mock).mock.calls[0]![0] as string;
-}
-
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.useRealTimers();
   process.env["CRON_SECRET"] = SECRET;
-  (prisma.$executeRawUnsafe as jest.Mock).mockResolvedValue(0);
-  (prisma.$queryRawUnsafe as jest.Mock).mockImplementation(async (sql: string) => {
-    if (sql.includes('FROM "User"')) {
-      return [
-        { id: "u1", email: "real@fitsy.org" },
-        { id: "u2", email: "seed@fitsy.test" },
-      ];
-    }
-    if (sql.includes("COUNT(*)")) return [{ count: "0" }];
-    return []; // dedup lookup: nothing sent yet
-  });
+  mockNotifySlack.mockResolvedValue(undefined);
+  (marketingAudience as jest.Mock).mockResolvedValue([ACCOUNT, WAITLIST_ONLY]);
+  (sentWithin as jest.Mock).mockResolvedValue(false);
+  (recordSend as jest.Mock).mockResolvedValue(undefined);
   (sendMarketingEmail as jest.Mock).mockResolvedValue(true);
 });
 
 afterEach(() => {
+  jest.useRealTimers();
   delete process.env["CRON_SECRET"];
 });
 
@@ -57,61 +59,108 @@ describe("GET /api/internal/marketing/weekly", () => {
   it("requires the CRON_SECRET bearer", async () => {
     expect((await GET(makeRequest("", null))).status).toBe(401);
     expect((await GET(makeRequest("", "Bearer nope"))).status).toBe(401);
+    expect(marketingAudience).not.toHaveBeenCalled();
   });
 
-  it("audience excludes addresses opted out on a LaunchWaitlist row, not just on the User", async () => {
-    await GET(makeRequest("?dryRun=1"));
-    const sql = audienceSql();
-    expect(sql).toContain('u."emailOptOutAt" IS NULL');
-    expect(sql).toContain("NOT EXISTS");
-    expect(sql).toContain('FROM "LaunchWaitlist" w');
-    expect(sql).toContain('w."email" = lower(u."email")');
-    expect(sql).toContain('w."emailOptOutAt" IS NOT NULL');
-  });
-
-  it("dry run reports the deliverable audience without sending", async () => {
-    const res = await GET(makeRequest("?dryRun=1"));
-    // The reserved-TLD seed account is not counted as eligible.
-    expect(await res.json()).toEqual({
-      ok: true,
-      dryRun: true,
-      edition: "ed-1",
-      eligible: 1,
-      alreadySent: 0,
+  it("asks for accounts only until double opt-in, excluding addresses already sent this week-stamped step", async () => {
+    await GET(makeRequest());
+    expect(marketingAudience).toHaveBeenCalledWith({
+      includeWaitlistOnly: false,
+      excludeSent: { campaign: "weekly", step: "ed-1:w35" },
     });
+  });
+
+  it("dry run reports the unsent audience without sending", async () => {
+    const res = await GET(makeRequest("?dryRun=1"));
+    expect(await res.json()).toEqual({ ok: true, dryRun: true, edition: "ed-1", eligible: 2 });
     expect(sendMarketingEmail).not.toHaveBeenCalled();
   });
 
-  it("sends to each eligible user as an account recipient and records the dedup row", async () => {
+  it("sends with the matching recipient kind and week-stamped key, then records the ledger", async () => {
     const res = await GET(makeRequest());
     expect(await res.json()).toEqual({
       ok: true,
       edition: "ed-1",
-      eligible: 1,
-      sent: 1,
-      skipped: 0,
+      eligible: 2,
+      sent: 2,
+      paced: 0,
       failed: 0,
+      unsent: 0,
     });
-    expect(sendMarketingEmail).toHaveBeenCalledWith({
+    expect(sendMarketingEmail).toHaveBeenNthCalledWith(1, {
       userId: "u1",
-      to: "real@fitsy.org",
+      to: "alice@example.org",
       subject: "S",
       html: "<p>h</p>",
+      idempotencyKey: "weekly:ed-1:w35:alice@example.org",
     });
-    const inserts = (prisma.$executeRawUnsafe as jest.Mock).mock.calls.filter(
-      (c) => String(c[0]).includes("INSERT INTO"),
-    );
-    expect(inserts).toHaveLength(1);
-    expect(inserts[0]!.slice(1)).toEqual(["ed-1", "u1"]);
+    expect(sendMarketingEmail).toHaveBeenNthCalledWith(2, {
+      waitlistId: "wl1",
+      to: "web@example.org",
+      subject: "S",
+      html: "<p>h</p>",
+      idempotencyKey: "weekly:ed-1:w35:web@example.org",
+    });
+    // Step is cycle-aware so the edition can recur next rotation.
+    expect(recordSend).toHaveBeenCalledWith("alice@example.org", "weekly", "ed-1:w35");
+    expect(recordSend).toHaveBeenCalledWith("web@example.org", "weekly", "ed-1:w35");
+    expect(mockNotifySlack).not.toHaveBeenCalled();
   });
 
-  it("does not record a dedup row for a failed send, so it is retried next run", async () => {
+  it("paces an address that heard from any campaign within the frequency cap, without recording", async () => {
+    (sentWithin as jest.Mock).mockImplementation(async (email: string) => email === "web@example.org");
+    const res = await GET(makeRequest());
+    expect(await res.json()).toEqual(expect.objectContaining({ sent: 1, paced: 1, unsent: 0 }));
+    expect(sendMarketingEmail).not.toHaveBeenCalledWith(expect.objectContaining({ to: "web@example.org" }));
+    expect(recordSend).not.toHaveBeenCalledWith("web@example.org", "weekly", "ed-1:w35");
+  });
+
+  it("stops at the hard send ceiling, reports the rest as unsent, and tells Slack", async () => {
+    expect(MAX_SENDS_PER_RUN).toBe(500);
+    const many = Array.from({ length: MAX_SENDS_PER_RUN + 3 }, (_, i) => ({
+      email: `u${i}@example.org`,
+      userId: `u${i}`,
+    }));
+    (marketingAudience as jest.Mock).mockResolvedValue(many);
+    const res = await GET(makeRequest());
+    expect(await res.json()).toEqual(
+      expect.objectContaining({ eligible: MAX_SENDS_PER_RUN + 3, sent: MAX_SENDS_PER_RUN, unsent: 3 }),
+    );
+    expect(mockNotifySlack).toHaveBeenCalledWith(
+      "weekly editorial incomplete",
+      expect.stringContaining("3 not reached"),
+      { source: "marketing-weekly" },
+    );
+  });
+
+  it("stops at the wall-time budget and reports what it did not reach", async () => {
+    jest.useFakeTimers().setSystemTime(new Date("2026-09-08T16:00:00Z"));
+    const many = Array.from({ length: 5 }, (_, i) => ({ email: `u${i}@example.org`, userId: `u${i}` }));
+    (marketingAudience as jest.Mock).mockResolvedValue(many);
+    // Each send "takes" 100s: after three the 240s budget is spent.
+    (sendMarketingEmail as jest.Mock).mockImplementation(async () => {
+      jest.advanceTimersByTime(100_000);
+      return true;
+    });
+    const res = await GET(makeRequest());
+    expect(await res.json()).toEqual(expect.objectContaining({ sent: 3, unsent: 2 }));
+    expect(mockNotifySlack).toHaveBeenCalledWith(
+      "weekly editorial incomplete",
+      expect.stringContaining("2 not reached"),
+      { source: "marketing-weekly" },
+    );
+  });
+
+  it("does not record a failed send, and a run with failures is reported to Slack so it is re-run", async () => {
     (sendMarketingEmail as jest.Mock).mockResolvedValue(false);
     const res = await GET(makeRequest());
-    expect(await res.json()).toEqual(expect.objectContaining({ sent: 0, failed: 1 }));
-    const inserts = (prisma.$executeRawUnsafe as jest.Mock).mock.calls.filter(
-      (c) => String(c[0]).includes("INSERT INTO"),
+    expect(await res.json()).toEqual(expect.objectContaining({ sent: 0, failed: 2, unsent: 0 }));
+    expect(recordSend).not.toHaveBeenCalled();
+    // A provider outage is not "complete": the edition has no next week.
+    expect(mockNotifySlack).toHaveBeenCalledWith(
+      "weekly editorial had failures",
+      expect.stringContaining("failed 2"),
+      { source: "marketing-weekly" },
     );
-    expect(inserts).toHaveLength(0);
   });
 });

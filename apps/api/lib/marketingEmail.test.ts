@@ -4,7 +4,12 @@ jest.mock("@/lib/restaurantService", () => ({
   },
 }));
 
-import { isEmailOptedOut, isUndeliverableAddress, sendMarketingEmail } from "@/lib/marketingEmail";
+import {
+  isEmailOptedOut,
+  isUndeliverableAddress,
+  optedOutAddresses,
+  sendMarketingEmail,
+} from "@/lib/marketingEmail";
 import { makeUnsubscribeToken } from "@/lib/unsubscribe";
 import { prisma } from "@/lib/restaurantService";
 
@@ -54,12 +59,13 @@ describe("sendMarketingEmail", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     Object.assign(process.env, ENV);
-    global.fetch = fetchMock.mockResolvedValue({ ok: true });
+    global.fetch = fetchMock.mockResolvedValue({ ok: true, status: 200, headers: new Headers() });
     // No opt-out on either table for this address.
     (prisma.$queryRaw as jest.Mock).mockResolvedValue([]);
   });
 
   afterEach(() => {
+    jest.useRealTimers();
     for (const k of Object.keys(ENV)) delete process.env[k];
   });
 
@@ -117,9 +123,73 @@ describe("sendMarketingEmail", () => {
   });
 
   it("returns false when the provider rejects or the request throws", async () => {
-    fetchMock.mockResolvedValueOnce({ ok: false });
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 500, headers: new Headers() });
     expect(await sendMarketingEmail({ waitlistId: "wl1", ...base })).toBe(false);
     fetchMock.mockRejectedValueOnce(new Error("network"));
     expect(await sendMarketingEmail({ waitlistId: "wl1", ...base })).toBe(false);
+  });
+
+  it("retries once after a 429, waiting exactly Retry-After seconds, and gives up on a second 429", async () => {
+    jest.useFakeTimers();
+    fetchMock
+      .mockResolvedValueOnce({ ok: false, status: 429, headers: new Headers({ "retry-after": "2" }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, headers: new Headers() });
+    const p = sendMarketingEmail({ userId: "u1", ...base });
+    // The retry must not fire before the header's 2 seconds have elapsed.
+    await jest.advanceTimersByTimeAsync(1999);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await jest.advanceTimersByTimeAsync(1);
+    expect(await p).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    fetchMock
+      .mockResolvedValueOnce({ ok: false, status: 429, headers: new Headers() })
+      .mockResolvedValueOnce({ ok: false, status: 429, headers: new Headers() });
+    const q = sendMarketingEmail({ userId: "u1", ...base });
+    // No header: a 1s default wait, then the second 429 ends it.
+    await jest.advanceTimersByTimeAsync(999);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    await jest.advanceTimersByTimeAsync(1);
+    expect(await q).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  it("sends the caller's idempotency key on the first attempt AND the post-429 retry, and none when absent", async () => {
+    jest.useFakeTimers();
+    fetchMock
+      .mockResolvedValueOnce({ ok: false, status: 429, headers: new Headers({ "retry-after": "1" }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, headers: new Headers() });
+    const p = sendMarketingEmail({ userId: "u1", ...base, idempotencyKey: "weekly:ed-1:w3:someone@fitsy.org" });
+    await jest.advanceTimersByTimeAsync(1000);
+    expect(await p).toBe(true);
+    const headerOf = (i: number) => (fetchMock.mock.calls[i]![1] as { headers: Record<string, string> }).headers;
+    expect(headerOf(0)["idempotency-key"]).toBe("weekly:ed-1:w3:someone@fitsy.org");
+    expect(headerOf(1)["idempotency-key"]).toBe("weekly:ed-1:w3:someone@fitsy.org");
+    jest.useRealTimers();
+
+    await sendMarketingEmail({ userId: "u1", ...base });
+    expect(headerOf(2)).not.toHaveProperty("idempotency-key");
+  });
+
+  it("caps an oversized Retry-After at 5 seconds", async () => {
+    jest.useFakeTimers();
+    fetchMock
+      .mockResolvedValueOnce({ ok: false, status: 429, headers: new Headers({ "retry-after": "3600" }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, headers: new Headers() });
+    const p = sendMarketingEmail({ userId: "u1", ...base });
+    await jest.advanceTimersByTimeAsync(4999);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await jest.advanceTimersByTimeAsync(1);
+    expect(await p).toBe(true);
+  });
+
+  it("optedOutAddresses returns the opted-out subset in one query, normalized", async () => {
+    (prisma.$queryRaw as jest.Mock).mockResolvedValueOnce([{ email: "b@x.org" }]);
+    const set = await optedOutAddresses([" A@X.org", "b@x.org", "B@X.ORG"]);
+    expect(set).toEqual(new Set(["b@x.org"]));
+    const sql = (prisma.$queryRaw as jest.Mock).mock.calls[0]![0] as { values: unknown[] };
+    expect(sql.values).toEqual(["a@x.org", "b@x.org", "a@x.org", "b@x.org"]);
+    expect(await optedOutAddresses([])).toEqual(new Set());
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
   });
 });

@@ -53,6 +53,14 @@ model LaunchWaitlist {
   city          String?        // optional human label, best-effort
   createdAt     DateTime       @default(now())
   notifiedAt    DateTime?      // set when we email them about their city launching
+  // Failed launch attempts (provider errors). Rows at MAX_NOTIFY_ATTEMPTS
+  // (lib/launchNotify.ts) leave the blast so a permanently failing address
+  // cannot keep every daily tick alerting.
+  notifyAttempts Int           @default(0)
+  // When the last failed attempt happened: a row is retried at most once per
+  // RETRY_COOLDOWN (lib/launchNotify.ts), so one outage cannot burn every
+  // attempt inside a single run's drain loop.
+  lastNotifyAttemptAt DateTime?
   emailOptOutAt DateTime?      // set via /unsubscribe?w=<id>; suppresses email to this row
   // SetNull, not Cascade: the row is the address-keyed suppression record and
   // may have been created on the website independently of the account. The
@@ -66,6 +74,26 @@ model LaunchWaitlist {
 enum WaitlistSource {
   onboarding
   web
+}
+
+// NOTE: migration 20260908100000_marketing_send_ledger also creates a
+// functional index "User_email_lower_idx" ON "User" (lower("email")) that
+// Prisma cannot express here. `prisma migrate dev` will propose dropping it;
+// keep it (re-add it in the generated migration).
+//
+// Ledger of every marketing email sent, keyed on the normalized address so
+// the same person is one history whether they are an account, a waitlist
+// row, or both. Gives every campaign idempotency (unique per step) and the
+// cross-campaign frequency cap. See docs/engineering/backend/email-automation.md.
+model MarketingSend {
+  id       String   @id @default(cuid())
+  email    String   // normalized: trimmed + lowercased
+  campaign String   // "weekly" | "launch" | "lifecycle"
+  step     String   // edition slug, city, or lifecycle step key
+  sentAt   DateTime @default(now())
+
+  @@unique([email, campaign, step])
+  @@index([email, sentAt])
 }
 
 model MacroTarget {
