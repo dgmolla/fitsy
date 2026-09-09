@@ -9,6 +9,9 @@ export const dynamic = "force-dynamic";
 // needs rather than dying mid-loop at the platform default.
 export const maxDuration = 300;
 
+/** Wall-clock budget for the drain; a further batch only starts if it fits. */
+const BUDGET_MS = 240_000;
+
 /**
  * GET /api/internal/waitlist/launch-day - the scheduled launch blast.
  *
@@ -20,9 +23,10 @@ export const maxDuration = 300;
  * short by the time budget, or signups that arrive after launch day, are
  * picked up by the next tick. The blast is processed in bounded batches
  * (lib/launchNotify.ts MAX_PER_RUN); the route keeps calling until nothing
- * remains, a batch makes no progress, or it has used most of its time. A
- * row that failed is not retried within the same run (RETRY_COOLDOWN_MS in
- * lib/launchNotify.ts), so the drain only ever walks forward.
+ * remains, a batch makes no progress, or another batch would not fit in the
+ * time budget. A row that failed is not retried within the same run
+ * (RETRY_COOLDOWN_MS in lib/launchNotify.ts), so the drain only ever walks
+ * forward and every counter is a plain sum across batches.
  *
  * Auth: CRON_SECRET Bearer (Vercel cron sends it). ?dryRun=1 previews.
  */
@@ -41,17 +45,22 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const dryRun = request.nextUrl.searchParams.get("dryRun") === "1";
   const opts = { ...LAUNCH_CENTER, city: LAUNCH_CITY, includeUnlocated: true, dryRun };
   const started = Date.now();
+  let batchStart = started;
   let result = await notifyLaunch(opts);
-  // Drain in batches while time allows and each batch makes progress; a
-  // batch that closes no rows (provider down) would be re-processed
-  // identically, so stop, report it as stalled, and leave the remainder to
-  // the next tick. `failed` is the latest batch's count, not a sum: failed
-  // rows are retried by every batch, so summing would count them repeatedly.
+  let lastBatchMs = Date.now() - batchStart;
+  // Drain while unprocessed rows remain, each batch makes progress, and a
+  // whole further batch fits in the budget. Every counter is summed across
+  // batches: with the retry cooldown a failed row is never re-attempted in
+  // this run, so nothing is double counted. A batch that moves no row out
+  // of the pending set (provider down) would repeat identically, so stop
+  // and report it as stalled; the next tick resumes.
   let stalled = false;
-  while (!result.dryRun && result.remaining > 0 && Date.now() - started < 200_000) {
+  while (!result.dryRun && result.remaining > 0 && Date.now() - started + lastBatchMs < BUDGET_MS) {
+    batchStart = Date.now();
     const next = await notifyLaunch(opts);
+    lastBatchMs = Date.now() - batchStart;
     if (next.dryRun) break;
-    const progressed = next.notified + next.suppressed > 0;
+    const progressed = next.notified + next.suppressed + next.exhausted > 0;
     result = {
       ...next,
       matched: result.matched,
@@ -59,6 +68,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       viaEmail: result.viaEmail + next.viaEmail,
       notified: result.notified + next.notified,
       suppressed: result.suppressed + next.suppressed,
+      failed: result.failed + next.failed,
       exhausted: result.exhausted + next.exhausted,
     };
     if (!progressed) {

@@ -127,7 +127,7 @@ describe("DELETE /api/user — success", () => {
       data: { lat: null, lng: null, city: null },
     });
     // No waitlist row survives for the address, so its send history goes too.
-    expect(mockWaitlistCount).toHaveBeenCalledWith({ where: { email: "alice@example.com" } });
+    expect(mockWaitlistCount).toHaveBeenCalledWith({ where: { email: "alice@example.com", source: "web" } });
     expect(mockMarketingSendDeleteMany).toHaveBeenCalledWith({ where: { email: "alice@example.com" } });
     const deleteOrder = mockWaitlistDeleteMany.mock.invocationCallOrder[0]!;
     const stripOrder = mockWaitlistUpdateMany.mock.invocationCallOrder[0]!;
@@ -161,7 +161,7 @@ describe("DELETE /api/user — success", () => {
     mockWaitlistCount.mockResolvedValue(1); // website-sourced row remains, still a recipient
     const res = await DELETE(makeDeleteRequest("Bearer good"));
     expect(res.status).toBe(204);
-    expect(mockWaitlistCount).toHaveBeenCalledWith({ where: { email: "alice@example.com" } });
+    expect(mockWaitlistCount).toHaveBeenCalledWith({ where: { email: "alice@example.com", source: "web" } });
     expect(mockMarketingSendDeleteMany).not.toHaveBeenCalled();
   });
 

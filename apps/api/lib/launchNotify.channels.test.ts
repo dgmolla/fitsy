@@ -138,9 +138,9 @@ describe("notifyLaunch: channels and convergence", () => {
       where: { id: "wl-last" },
       data: { notifyAttempts: MAX_NOTIFY_ATTEMPTS, lastNotifyAttemptAt: expect.any(Date) },
     });
-    // Only the retryable failure still counts as remaining work.
+    // Failures are deferred to a later tick by the cooldown: not "remaining".
     expect(res).toEqual(
-      expect.objectContaining({ matched: 2, notified: 0, failed: 1, exhausted: 1, remaining: 1 }),
+      expect.objectContaining({ matched: 2, notified: 0, failed: 1, exhausted: 1, remaining: 0 }),
     );
   });
 
@@ -151,7 +151,7 @@ describe("notifyLaunch: channels and convergence", () => {
     (sendMarketingEmail as jest.Mock).mockResolvedValue(false);
     const res = await notifyLaunch({ ...LA, includeUnlocated: true });
     expect(res).toEqual(
-      expect.objectContaining({ matched: 1, notified: 0, suppressed: 0, failed: 1, remaining: 1 }),
+      expect.objectContaining({ matched: 1, notified: 0, suppressed: 0, failed: 1, remaining: 0 }),
     );
     // Not closed: only the attempt counter moves.
     expect(prisma.launchWaitlist.update).toHaveBeenCalledTimes(1);
@@ -187,11 +187,11 @@ describe("notifyLaunch: channels and convergence", () => {
     expect(res).toEqual(expect.objectContaining({ viaEmail: 1, notified: 1, failed: 0 }));
   });
 
-  it("remaining counts unprocessed rows plus this batch's failures", async () => {
+  it("a failure is reported in failed, not remaining: the cooldown defers it to a later tick", async () => {
     (prisma.launchWaitlist.findMany as jest.Mock).mockResolvedValue([WEB]);
     (sendMarketingEmail as jest.Mock).mockResolvedValue(false);
     const res = await notifyLaunch({ ...LA, includeUnlocated: true });
-    expect(res).toEqual(expect.objectContaining({ failed: 1, remaining: 1 }));
+    expect(res).toEqual(expect.objectContaining({ failed: 1, remaining: 0 }));
   });
 
   it("opted out with no push token: nothing may be sent, so the row is closed as suppressed", async () => {

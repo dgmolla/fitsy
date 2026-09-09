@@ -103,7 +103,7 @@ describe("GET /api/internal/waitlist/launch-day", () => {
     expect(mockNotifySlack).not.toHaveBeenCalled();
   });
 
-  it("drains the blast in batches: matched from the first, failed from the last, the rest summed", async () => {
+  it("drains the blast in batches: matched from the first, every other counter summed", async () => {
     jest.useFakeTimers().setSystemTime(new Date(`${LAUNCH_DATE_ISO}T16:00:00Z`));
     (notifyLaunch as jest.Mock)
       .mockResolvedValueOnce({ dryRun: false, matched: 9, viaPush: 1, viaEmail: 2, notified: 2, suppressed: 1, failed: 2, remaining: 4, exhausted: 1 })
@@ -119,10 +119,42 @@ describe("GET /api/internal/waitlist/launch-day", () => {
       viaEmail: 5,
       notified: 6,
       suppressed: 2,
-      failed: 1, // failed rows are retried every batch: last batch, not a sum
+      failed: 3, // a failed row is never re-attempted in this run, so a plain sum
       remaining: 0,
       exhausted: 1,
     });
+    // Failures alone do not drive another batch: nothing was left unprocessed.
+    expect(mockNotifySlack).toHaveBeenCalledWith(
+      "launch blast had failures",
+      expect.stringContaining("failed 3"),
+      { source: "launch-day" },
+    );
+  });
+
+  it("a batch that only exhausts rows still counts as progress", async () => {
+    jest.useFakeTimers().setSystemTime(new Date(`${LAUNCH_DATE_ISO}T16:00:00Z`));
+    (notifyLaunch as jest.Mock)
+      .mockResolvedValueOnce({ dryRun: false, matched: 4, viaPush: 0, viaEmail: 0, notified: 0, suppressed: 0, failed: 0, remaining: 2, exhausted: 2 })
+      .mockResolvedValueOnce({ dryRun: false, matched: 2, viaPush: 0, viaEmail: 2, notified: 2, suppressed: 0, failed: 0, remaining: 0, exhausted: 0 });
+    const res = await GET(makeRequest());
+    expect(notifyLaunch).toHaveBeenCalledTimes(2);
+    const body = await res.json();
+    expect(body).toEqual(expect.objectContaining({ notified: 2, exhausted: 2, remaining: 0 }));
+    expect(body).not.toHaveProperty("stalled");
+  });
+
+  it("a partial failure is reported as failures, never as a phantom stall", async () => {
+    // One batch: two sends fail (deferred by the cooldown), the rest succeed.
+    jest.useFakeTimers().setSystemTime(new Date(`${LAUNCH_DATE_ISO}T16:00:00Z`));
+    (notifyLaunch as jest.Mock).mockResolvedValue({
+      dryRun: false, matched: 5, viaPush: 0, viaEmail: 3, notified: 3, suppressed: 0, failed: 2, remaining: 0, exhausted: 0,
+    });
+    const res = await GET(makeRequest());
+    expect(notifyLaunch).toHaveBeenCalledTimes(1);
+    const body = await res.json();
+    expect(body).toEqual(expect.objectContaining({ notified: 3, failed: 2, remaining: 0 }));
+    expect(body).not.toHaveProperty("stalled");
+    expect(mockNotifySlack).toHaveBeenCalledWith("launch blast had failures", expect.stringContaining("failed 2"), { source: "launch-day" });
   });
 
   it("a batch that only closes rows as suppressed still counts as progress, not a stall", async () => {
@@ -138,15 +170,15 @@ describe("GET /api/internal/waitlist/launch-day", () => {
     expect(mockNotifySlack).not.toHaveBeenCalled();
   });
 
-  it("stops at the time budget with rows remaining and no stalled flag", async () => {
+  it("stops when another batch would not fit the time budget, with rows remaining and no stalled flag", async () => {
     jest.useFakeTimers().setSystemTime(new Date(`${LAUNCH_DATE_ISO}T16:00:00Z`));
     const progressing = { dryRun: false, matched: 900, viaPush: 0, viaEmail: 400, notified: 400, suppressed: 0, failed: 0, remaining: 500, exhausted: 0 };
-    (notifyLaunch as jest.Mock)
-      .mockResolvedValueOnce(progressing)
-      .mockImplementationOnce(async () => {
-        jest.advanceTimersByTime(210_000);
-        return { ...progressing, remaining: 100 };
-      });
+    // Each batch takes 100s: after two (200s elapsed) a third would end at
+    // 300s, past the 240s budget, so the drain stops with 100 remaining.
+    (notifyLaunch as jest.Mock).mockImplementation(async () => {
+      jest.advanceTimersByTime(100_000);
+      return { ...progressing, remaining: (notifyLaunch as jest.Mock).mock.calls.length === 1 ? 500 : 100 };
+    });
     const res = await GET(makeRequest());
     expect(notifyLaunch).toHaveBeenCalledTimes(2);
     const body = await res.json();
@@ -162,13 +194,15 @@ describe("GET /api/internal/waitlist/launch-day", () => {
 
   it("stops draining when a batch makes no progress instead of spinning until the time budget", async () => {
     jest.useFakeTimers().setSystemTime(new Date(`${LAUNCH_DATE_ISO}T16:00:00Z`));
+    // Rows remain unprocessed, but a batch moves nothing out of the pending
+    // set (e.g. every row it reaches fails): repeating would be identical.
     const stuck = { dryRun: false, matched: 5, viaPush: 0, viaEmail: 0, notified: 0, suppressed: 0, failed: 3, remaining: 3, exhausted: 0 };
     (notifyLaunch as jest.Mock)
       .mockResolvedValueOnce({ ...stuck, viaEmail: 2, notified: 2, failed: 0 })
       .mockResolvedValue(stuck);
     const res = await GET(makeRequest());
     expect(notifyLaunch).toHaveBeenCalledTimes(2);
-    // The stalled batch's own failure count is reported, not dropped.
+    // The stalled batch's failures are kept (summed), not dropped.
     expect(await res.json()).toEqual(
       expect.objectContaining({ notified: 2, failed: 3, remaining: 3, stalled: true }),
     );
@@ -200,9 +234,10 @@ describe("GET /api/internal/waitlist/launch-day", () => {
       .mockResolvedValueOnce({ dryRun: false, matched: 3, viaPush: 0, viaEmail: 1, notified: 1, suppressed: 0, failed: 1, remaining: 2, exhausted: 0 })
       .mockResolvedValueOnce({ dryRun: false, matched: 3, viaPush: 0, viaEmail: 1, notified: 1, suppressed: 0, failed: 1, remaining: 0, exhausted: 0 });
     await GET(makeRequest());
+    // Summed across both batches.
     expect(mockNotifySlack).toHaveBeenCalledWith(
       "launch blast had failures",
-      expect.stringContaining("failed 1"),
+      expect.stringContaining("failed 2"),
       { source: "launch-day" },
     );
   });

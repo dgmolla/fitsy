@@ -50,8 +50,10 @@ export async function DELETE(
         data: { lat: null, lng: null, city: null },
       });
       if (email) {
-        const stillListed = await tx.launchWaitlist.count({ where: { email } });
-        if (stillListed === 0) await tx.marketingSend.deleteMany({ where: { email } });
+        // Retention is for a website signup in its own right; an opted-out
+        // onboarding row that survives is only a suppression record.
+        const websiteRow = await tx.launchWaitlist.count({ where: { email, source: "web" } });
+        if (websiteRow === 0) await tx.marketingSend.deleteMany({ where: { email } });
       }
       await tx.user.delete({ where: { id: userId } });
     });

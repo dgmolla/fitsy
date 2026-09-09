@@ -69,7 +69,9 @@ export type LaunchNotifyResult =
       viaEmail: number;
       notified: number;
       suppressed: number;
+      /** Provider failures this run; retried by a later tick after the cooldown. */
       failed: number;
+      /** Matched rows this call did not get to (beyond MAX_PER_RUN): call again now. */
       remaining: number;
       /** Rows that hit MAX_NOTIFY_ATTEMPTS this run and left the blast. */
       exhausted: number;
@@ -204,9 +206,10 @@ export async function notifyLaunch(opts: LaunchNotifyOptions): Promise<LaunchNot
     notified,
     suppressed,
     failed,
-    // Rows still needing work: not yet processed, plus this batch's retryable
-    // failures (which the cooldown defers to a later tick, not this run).
-    remaining: inArea.length - batch.length + failed,
+    // Only rows this call did not reach. This run's failures are deferred by
+    // the retry cooldown to a later tick, so they are not "remaining" work
+    // for the caller's drain loop; they are reported in `failed`.
+    remaining: inArea.length - batch.length,
     exhausted,
   };
 }
