@@ -1,5 +1,7 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { hasTargets, type MacroTargets } from "./macroScoring";
+import { macroScoreSumSql } from "./macroScoreSql";
+import { macroWinnerSqlOrder } from "@fitsy/shared";
 import { pickWinningEstimate, type RestaurantResult, type MenuResponse } from "@fitsy/shared";
 
 // ─── Prisma singleton ─────────────────────────────────────────────────────────
@@ -63,7 +65,7 @@ export interface NearbyRestaurantsParams {
    * without). Legacy cursors encoded as { id, distanceMiles } still decode
    * correctly — see decodeCursor.
    */
-  cursor?: { id: string; orderKey: number } | undefined;
+  cursor?: PaginationCursor | undefined;
 }
 
 // ─── Cursor encoding ──────────────────────────────────────────────────────────
@@ -72,6 +74,8 @@ export interface PaginationCursor {
   id: string;
   /** The active sort key for the row (composite or distance, depending on mode). */
   orderKey: number;
+  /** Exact PostgreSQL float representation, preserved across Prisma's JSON transport. */
+  orderKeyText?: string;
   /** Kept for backward compat with cursors encoded before composite ranking. */
   distanceMiles?: number;
 }
@@ -89,7 +93,7 @@ export function decodeCursor(raw: string): PaginationCursor | null {
       parsed !== null &&
       typeof (parsed as { id?: unknown }).id === "string"
     ) {
-      const obj = parsed as { id: string; orderKey?: unknown; distanceMiles?: unknown };
+      const obj = parsed as { id: string; orderKey?: unknown; orderKeyText?: unknown; distanceMiles?: unknown };
       // Prefer `orderKey`; fall back to legacy `distanceMiles`.
       const rawKey =
         typeof obj.orderKey === "number" && isFinite(obj.orderKey)
@@ -99,6 +103,12 @@ export function decodeCursor(raw: string): PaginationCursor | null {
             : null;
       if (rawKey === null) return null;
       const out: PaginationCursor = { id: obj.id, orderKey: rawKey };
+      if (obj.orderKeyText !== undefined) {
+        if (typeof obj.orderKeyText !== "string" || !/^-?\d+(\.\d+)?(e[+-]?\d+)?$/i.test(obj.orderKeyText)
+          || !Number.isFinite(Number(obj.orderKeyText))
+          || (Number(obj.orderKeyText) === 0 && /[1-9]/.test(obj.orderKeyText.split(/e/i)[0]!))) return null;
+        out.orderKeyText = obj.orderKeyText;
+      }
       if (typeof obj.distanceMiles === "number" && isFinite(obj.distanceMiles)) {
         out.distanceMiles = obj.distanceMiles;
       }
@@ -178,11 +188,12 @@ interface ScoredRow {
   proteinG: number;
   carbsG: number;
   fatG: number;
-  confidence: "HIGH" | "MEDIUM" | "LOW";
+  confidence: "HIGH" | "MEDIUM" | "LOW" | null;
   scoreSum: number;
   distanceMiles: number;
   /** Active sort key — composite (scoreSum + w·distance) or distance-only. */
   orderKey: number;
+  orderKeyText?: string;
 }
 
 // ─── Service: GET /api/restaurants ───────────────────────────────────────────
@@ -214,10 +225,6 @@ export async function findNearbyRestaurants(
   );
 
   const targetsActive = hasTargets(targets);
-  const tCal = targets.calories ?? null;
-  const tProt = targets.proteinG ?? null;
-  const tCarb = targets.carbsG ?? null;
-  const tFat = targets.fatG ?? null;
 
   // Dynamic filter fragments — composed via Prisma.sql for safe parameter binding.
   const filterFrags: Prisma.Sql[] = [];
@@ -314,9 +321,9 @@ export async function findNearbyRestaurants(
   // visible in WHERE, so the expression is repeated here.
   if (cursor !== undefined) {
     filterFrags.push(Prisma.sql`AND (
-      ${orderKeyExpr} > ${cursor.orderKey}::double precision
+      ${orderKeyExpr} > ${cursor.orderKeyText ?? cursor.orderKey}::double precision
       OR (
-        ${orderKeyExpr} = ${cursor.orderKey}::double precision
+        ${orderKeyExpr} = ${cursor.orderKeyText ?? cursor.orderKey}::double precision
         AND r.id > ${cursor.id}
       )
     )`);
@@ -330,10 +337,11 @@ export async function findNearbyRestaurants(
   // The inner LATERAL reads macros directly from MenuItem (denormalized in
   // pipeline-utils.ts and audited daily by /api/internal/audit-macro-drift),
   // so it never joins MacroEstimate at the per-item level — a ~100× saving
-  // on the hot path. MacroEstimate is joined once per result via a single
-  // LEFT JOIN on best."menuItemId" to surface confidence, which still lives
-  // on MacroEstimate as part of the audit metadata.
+  // on the hot path. Limit restaurants first, then select one winning
+  // estimate per result so multiple sources cannot duplicate restaurants
+  // or consume page slots. Confidence follows the same source as detail.
   const rows = await prisma.$queryRaw<ScoredRow[]>`
+    WITH ranked AS MATERIALIZED (
     SELECT
       r.id            AS "restaurantId",
       r.name          AS name,
@@ -352,7 +360,6 @@ export async function findNearbyRestaurants(
       best."proteinG",
       best."carbsG",
       best."fatG",
-      e.confidence    AS confidence,
       best."scoreSum",
       ${distanceExpr} AS "distanceMiles",
       ${orderKeyExpr} AS "orderKey"
@@ -365,34 +372,31 @@ export async function findNearbyRestaurants(
         m."proteinG"    AS "proteinG",
         m."carbsG"      AS "carbsG",
         m."fatG"        AS "fatG",
-        (
-          CASE WHEN ${tCal}::double precision > 0
-               THEN power((m.calories - ${tCal}::double precision) / ${tCal}::double precision, 2)
-               ELSE 0 END
-          + CASE WHEN ${tProt}::double precision > 0
-               THEN power((m."proteinG" - ${tProt}::double precision) / ${tProt}::double precision, 2)
-               ELSE 0 END
-          + CASE WHEN ${tCarb}::double precision > 0
-               THEN power((m."carbsG" - ${tCarb}::double precision) / ${tCarb}::double precision, 2)
-               ELSE 0 END
-          + CASE WHEN ${tFat}::double precision > 0
-               THEN power((m."fatG" - ${tFat}::double precision) / ${tFat}::double precision, 2)
-               ELSE 0 END
-        )               AS "scoreSum"
+        ${macroScoreSumSql(targets)}               AS "scoreSum"
       FROM "MenuItem" m
       WHERE m."restaurantId" = r.id
-        AND m.calories IS NOT NULL
+        AND m.calories IS NOT NULL AND m."proteinG" IS NOT NULL
+        AND m."carbsG" IS NOT NULL AND m."fatG" IS NOT NULL
         ${menuQueryFilter}
       ORDER BY "scoreSum" ASC, m.id ASC
       LIMIT 1
     ) AS best
-    LEFT JOIN "MacroEstimate" e ON e."menuItemId" = best."menuItemId"
     WHERE r.lat BETWEEN ${latMin} AND ${latMax}
       AND r.lng BETWEEN ${lngMin} AND ${lngMax}
       ${filters}
       AND ${distanceExpr} <= ${radiusMiles}::double precision
     ORDER BY "orderKey" ASC, r.id ASC
     LIMIT ${limit}
+    )
+    SELECT ranked.*, ranked."orderKey"::text AS "orderKeyText", e.confidence
+    FROM ranked
+    LEFT JOIN LATERAL (
+      SELECT e.confidence FROM "MacroEstimate" e
+      WHERE e."menuItemId" = ranked."menuItemId"
+      ORDER BY ${Prisma.raw(macroWinnerSqlOrder("e"))}
+      LIMIT 1
+    ) e ON true
+    ORDER BY ranked."orderKey" ASC, ranked."restaurantId" ASC
   `;
 
   const total = rows.length;
@@ -407,6 +411,7 @@ export async function findNearbyRestaurants(
       ? encodeCursor({
           id: lastRow.restaurantId,
           orderKey: lastRow.orderKey,
+          ...(lastRow.orderKeyText ? { orderKeyText: lastRow.orderKeyText } : {}),
           distanceMiles: lastRow.distanceMiles,
         })
       : null;
@@ -431,9 +436,7 @@ export async function findNearbyRestaurants(
       proteinG: r.proteinG,
       carbsG: r.carbsG,
       fatG: r.fatG,
-      confidence: r.confidence,
-      // null (not Infinity): there is no score without targets, and JSON was
-      // already coercing Infinity to null on the wire anyway
+      confidence: r.confidence ?? "LOW",
       matchScore: targetsActive
         ? Math.round(Math.sqrt(r.scoreSum) * 10000) / 10000
         : null,

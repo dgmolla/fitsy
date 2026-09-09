@@ -1,0 +1,122 @@
+
+> @fitsy/api@0.1.0 test
+> jest --runInBand tests/db/search-provenance.db.test.ts
+
+  console.log
+    {"event":"search_query","restaurants":2,"hasTargets":true,"totalMs":33,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:445:11)
+
+  console.log
+    {"event":"search_query","restaurants":1,"hasTargets":true,"totalMs":9,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:445:11)
+
+  console.log
+    {"event":"search_query","restaurants":2,"hasTargets":false,"totalMs":9,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:445:11)
+
+  console.log
+    {"event":"search_query","restaurants":2,"hasTargets":true,"totalMs":3,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:445:11)
+
+FAIL tests/db/search-provenance.db.test.ts
+  search nutrition provenance (real PostgreSQL)
+    ✕ multiple estimates produce one restaurant with the winning source metadata (57 ms)
+    ✕ a partially missing macro record cannot become the best match (25 ms)
+    ✕ no targets and zero targets produce the same contract-valid response (19 ms)
+    ✓ SQL and JavaScript score each active dimension identically (11 ms)
+
+  ● search nutrition provenance (real PostgreSQL) › multiple estimates produce one restaurant with the winning source metadata
+
+    expect(received).toHaveLength(expected)
+
+    Expected length: 1
+    Received length: 2
+    Received array:  [{"address": "Isolated test fixture", "bestMatch": {"calories": 600, "carbsG": 60, "confidence": "LOW", "fatG": 20, "matchScore": 0, "menuItemId": "6f8c22cc-2af9-4ba2-a2b7-b6f5b0c5e60b", "name": "Chicken bowl", "proteinG": 40}, "chainFlag": false, "cuisineTags": [], "distanceMiles": 0, "id": "9d77dbe0-c033-4a13-a14f-ba292b29aef0", "lat": 10, "lng": 10, "name": "Provenance regression"}, {"address": "Isolated test fixture", "bestMatch": {"calories": 600, "carbsG": 60, "confidence": "HIGH", "fatG": 20, "matchScore": 0, "menuItemId": "6f8c22cc-2af9-4ba2-a2b7-b6f5b0c5e60b", "name": "Chicken bowl", "proteinG": 40}, "chainFlag": false, "cuisineTags": [], "distanceMiles": 0, "id": "9d77dbe0-c033-4a13-a14f-ba292b29aef0", "lat": 10, "lng": 10, "name": "Provenance regression"}]
+
+      31 |   test('multiple estimates produce one restaurant with the winning source metadata', async () => {
+      32 |     const result = await findNearbyRestaurants(params);
+    > 33 |     expect(result.data).toHaveLength(1);
+         |                         ^
+      34 |     expect(result.data[0]?.bestMatch).toMatchObject({ menuItemId: itemId, confidence: 'HIGH', matchScore: 0, ...targets });
+      35 |     expect(restaurantResultSchema.safeParse(result.data[0]).success).toBe(true);
+      36 |   });
+
+      at Object.<anonymous> (tests/db/search-provenance.db.test.ts:33:25)
+
+  ● search nutrition provenance (real PostgreSQL) › a partially missing macro record cannot become the best match
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "6f8c22cc-2af9-4ba2-a2b7-b6f5b0c5e60b"
+    Received: "cmtsam3w00003s81j3oj6uypw"
+
+      40 |     const result = await findNearbyRestaurants({ ...params, targets: { calories: 500 } });
+      41 |     expect(result.data).toHaveLength(1);
+    > 42 |     expect(result.data[0]?.bestMatch?.menuItemId).toBe(itemId);
+         |                                                   ^
+      43 |   });
+      44 |
+      45 |   test('no targets and zero targets produce the same contract-valid response', async () => {
+
+      at Object.<anonymous> (tests/db/search-provenance.db.test.ts:42:51)
+
+  ● search nutrition provenance (real PostgreSQL) › no targets and zero targets produce the same contract-valid response
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 2
+    + Received  + 2
+
+    @@ -4,11 +4,11 @@
+          "bestMatch": Object {
+            "calories": 600,
+            "carbsG": 60,
+            "confidence": "LOW",
+            "fatG": 20,
+    -       "matchScore": null,
+    +       "matchScore": 0,
+            "menuItemId": "6f8c22cc-2af9-4ba2-a2b7-b6f5b0c5e60b",
+            "name": "Chicken bowl",
+            "proteinG": 40,
+          },
+          "chainFlag": false,
+    @@ -24,11 +24,11 @@
+          "bestMatch": Object {
+            "calories": 600,
+            "carbsG": 60,
+            "confidence": "HIGH",
+            "fatG": 20,
+    -       "matchScore": null,
+    +       "matchScore": 0,
+            "menuItemId": "6f8c22cc-2af9-4ba2-a2b7-b6f5b0c5e60b",
+            "name": "Chicken bowl",
+            "proteinG": 40,
+          },
+          "chainFlag": false,
+
+      46 |     const a = await findNearbyRestaurants({ ...params, targets: {} });
+      47 |     const b = await findNearbyRestaurants({ ...params, targets: { calories: 0 } });
+    > 48 |     expect(b.data).toEqual(a.data);
+         |                    ^
+      49 |     expect(a.data[0]?.bestMatch?.matchScore).toBeNull();
+      50 |   });
+      51 |
+
+      at Object.<anonymous> (tests/db/search-provenance.db.test.ts:48:20)
+
+Test Suites: 1 failed, 1 total
+Tests:       3 failed, 1 passed, 4 total
+Snapshots:   0 total
+Time:        0.779 s, estimated 1 s
+Ran all test suites matching /tests\/db\/search-provenance.db.test.ts/i.
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-serving/apps/api
+npm error workspace @fitsy/api@0.1.0
+npm error location /Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-serving/apps/api
+npm error command failed
+npm error command sh -c jest --runInBand tests/db/search-provenance.db.test.ts

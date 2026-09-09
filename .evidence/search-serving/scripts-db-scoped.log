@@ -1,0 +1,45 @@
+
+> @fitsy/scripts@0.1.0 test
+> jest --runInBand --testPathIgnorePatterns=mini-hex-e2e
+
+PASS ./overture-discovery.test.ts
+  ● Console
+
+    console.log
+      [overture] Cache fresh, reusing: /var/folders/lj/18n0p82d15j47d0vgzy302vm0000gn/T/fitsy-overture-test/test-fixture.parquet
+
+      at downloadOvertureCache (overture-discovery.ts:225:13)
+
+    console.log
+      [overture] Cache fresh, reusing: /var/folders/lj/18n0p82d15j47d0vgzy302vm0000gn/T/fitsy-overture-test/test-fixture.parquet
+
+      at downloadOvertureCache (overture-discovery.ts:225:13)
+
+PASS ./hex-resume.test.ts
+  ● Console
+
+    console.log
+      [resume] Run test-resume-1788849179036: 3/5 hexes already complete, skipping
+
+      at filterPendingHexes (hex-resume.ts:44:13)
+
+    console.log
+      [resume] Run test-resume-1788849179036: 3/3 hexes already complete, skipping
+
+      at filterPendingHexes (hex-resume.ts:44:13)
+
+PASS dev/lib/guard.test.ts
+PASS ./semaphore.test.ts
+PASS ./pipeline-utils.test.ts
+PASS ./hex-persist.test.ts
+PASS eval/lib/metrics.test.ts
+PASS ./hex-assignment.test.ts
+PASS ./checkpoint.test.ts
+PASS ./pipeline-completed-hex.test.ts
+PASS ./constants.test.ts
+
+Test Suites: 11 passed, 11 total
+Tests:       127 passed, 127 total
+Snapshots:   0 total
+Time:        4.506 s, estimated 52 s
+Ran all test suites.

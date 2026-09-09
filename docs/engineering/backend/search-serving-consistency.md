@@ -1,0 +1,44 @@
+# Search serving consistency
+
+Search and onboarding preview use the same target validation. Search must return one restaurant per result even when a dish has several
+nutrition sources. Confidence must describe the winning source, and search
+must use only complete macro records. Zero targets are inactive; short names
+(`protein`) and gram names (`proteinG`) mean the same target. Invalid, blank,
+negative, excessive or conflicting values return HTTP 400. Active targets must
+be at least 0.01 and at most 100,000; tiny values can overflow SQL scoring.
+
+New cursors carry PostgreSQL's exact score text as well as the legacy numeric
+key. The numeric round trip through Prisma can move a score by one floating-
+point step and skip tied rows. Old numeric cursors remain accepted; newly
+issued cursors use the exact representation for pagination comparisons.
+
+If stored macros have no estimate metadata, confidence is LOW (unknown
+provenance), matching the enum contract. Restaurants with no complete macro
+record cannot supply a best match and are omitted from ranked search.
+
+```mermaid
+flowchart LR
+  Q[Query targets] --> V[Validate and normalize]
+  V --> R[Rank complete menu items and limit restaurants]
+  R --> W[Select one winning nutrition source per result]
+  W --> A[Contract-valid search response]
+```
+
+The scoring formula lives in shared code; SQL uses the same active dimensions.
+Restaurant/menu IDs and stored nutrition are unchanged. This release requires
+no schema migration and does not enable chain sourcing or change estimation.
+
+Verification: `macroTargetParams.test.ts` covers aliases and invalid targets;
+`search-provenance.db.test.ts` runs real SQL with multiple sources, partial
+macros and zero targets. The existing DB search/entitlement tests, all local
+workspace tests, coverage gate, static checks and production build must pass.
+`search-route.db.test.ts` runs the five real-JWT/SQL cases in
+`search-route.integration.ts`, preserving native TAP failures. Mutation config
+now includes the shared scorer and parser/SQL helpers; related-test discovery is
+disabled because it misses the shared barrel export. This increases mutation run time.
+Before deployment, the new database regression runs against the old service
+to prove that it detects the original failures. After deployment, run the
+production-safe API smoke and compare short/gram target responses.
+
+Menu ordering, pagination and locked-sample behavior follow as a separate
+serving release using the same scoring and parsing helpers.

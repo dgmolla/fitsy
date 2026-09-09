@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { findNearbyRestaurants } from "@/lib/restaurantService";
+import { parseMacroTargetParams } from "@/lib/macroTargetParams";
 import type { RestaurantResult } from "@fitsy/shared";
 
 interface PreviewRestaurant {
@@ -43,17 +44,12 @@ export async function GET(
     return NextResponse.json({ error: "Invalid lat/lng values" }, { status: 400 });
   }
 
-  const caloriesRaw = searchParams.get("calories");
-  const proteinRaw = searchParams.get("protein");
-  const carbsRaw = searchParams.get("carbs");
-  const fatRaw = searchParams.get("fat");
-
-  const targets = {
-    ...(caloriesRaw !== null ? { calories: Number(caloriesRaw) } : {}),
-    ...(proteinRaw !== null ? { proteinG: Number(proteinRaw) } : {}),
-    ...(carbsRaw !== null ? { carbsG: Number(carbsRaw) } : {}),
-    ...(fatRaw !== null ? { fatG: Number(fatRaw) } : {}),
-  };
+  let targets: ReturnType<typeof parseMacroTargetParams>;
+  try {
+    targets = parseMacroTargetParams(searchParams);
+  } catch {
+    return NextResponse.json({ error: "Invalid macro target" }, { status: 400 });
+  }
 
   try {
     // Prefer indie restaurants for the teaser — chains are less compelling as

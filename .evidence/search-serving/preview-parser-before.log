@@ -1,0 +1,37 @@
+{"event":"search_query","restaurants":20,"hasTargets":true,"totalMs":32,"paginated":false}
+[api-emitter] AXIOM_TOKEN not set — events will not be sent
+{"event":"search_query","restaurants":20,"hasTargets":true,"totalMs":2,"paginated":false}
+✔ real authenticated search accepts equivalent aliases and keeps a valid wire contract (235.7635ms)
+✔ invalid targets return 400 through the handler (4.477916ms)
+{"event":"search_query","restaurants":20,"hasTargets":true,"totalMs":5,"paginated":false}
+✔ unauthenticated search still strips every best match (5.04925ms)
+{"event":"search_query","restaurants":5,"hasTargets":true,"totalMs":3,"paginated":false}
+{"event":"search_query","restaurants":5,"hasTargets":true,"totalMs":2,"paginated":false}
+{"event":"search_query","restaurants":5,"hasTargets":false,"totalMs":2,"paginated":false}
+✖ onboarding preview uses the same aliases and rejects invalid targets without exposing matches (8.333792ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 3
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 674.395416
+
+✖ failing tests:
+
+test at apps/api/tests/db/search-route.integration.ts:2:4359
+✖ onboarding preview uses the same aliases and rejects invalid targets without exposing matches (8.333792ms)
+  AssertionError [ERR_ASSERTION]: protein=NaN
+
+  200 !== 400
+
+      at TestContext.<anonymous> (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-serving/apps/api/tests/db/search-route.integration.ts:84:12)
+      at async Test.run (node:internal/test_runner/test:1069:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:752:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 200,
+    expected: 400,
+    operator: 'strictEqual'
+  }

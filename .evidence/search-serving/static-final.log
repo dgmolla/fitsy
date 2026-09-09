@@ -1,0 +1,8 @@
+{"name":"structural","status":"pass","summary":"all structural tests passed","fix":"","duration_ms":400189,"blocking":true}
+{"name":"secrets","status":"pass","summary":"no secrets, env files, or build output in diff","fix":"","duration_ms":334,"blocking":true}
+{"name":"lint","status":"pass","summary":"eslint clean","fix":"","duration_ms":11009,"blocking":true}
+{"name":"typecheck","status":"pass","summary":"tsc clean in all workspaces","fix":"","duration_ms":401499,"blocking":true}
+{"name":"boundaries","status":"pass","summary":"no dependency violations","fix":"","duration_ms":3160,"blocking":true}
+{"name":"context-freshness","status":"pass","summary":"context files reference only real commands and paths","fix":"","duration_ms":219,"blocking":true}
+
+verify: 6 pass, 0 fail, 0 skipped [layers all, scope changed, runs local]

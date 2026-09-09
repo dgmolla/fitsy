@@ -1,0 +1,144 @@
+
+> @fitsy/api@0.1.0 test
+> jest --runInBand tests/db/search-route.db.test.ts
+
+FAIL tests/db/search-route.db.test.ts
+  ✕ search route integration with real JWT and Postgres (781 ms)
+
+  ● search route integration with real JWT and Postgres
+
+    Native route tests failed:
+    TAP version 13
+    # {"event":"search_query","restaurants":20,"hasTargets":true,"totalMs":34,"paginated":false}
+    # [api-emitter] AXIOM_TOKEN not set — events will not be sent
+    # {"event":"search_query","restaurants":20,"hasTargets":true,"totalMs":2,"paginated":false}
+    # Subtest: real authenticated search accepts equivalent aliases and keeps a valid wire contract
+    ok 1 - real authenticated search accepts equivalent aliases and keeps a valid wire contract
+      ---
+      duration_ms: 241.567583
+      type: 'test'
+      ...
+    # [GET /api/restaurants] Error: PrismaClientKnownRequestError: 
+    # Invalid `prisma.$queryRaw()` invocation:
+    # Raw query failed. Code: `22003`. Message: `ERROR: value out of range: overflow`
+    #     at ei.handleRequestError (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-serving/node_modules/@prisma/client/src/runtime/RequestHandler.ts:228:13)
+    #     at ei.handleAndLogRequestError (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-serving/node_modules/@prisma/client/src/runtime/RequestHandler.ts:174:12)
+    #     at ei.request (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-serving/node_modules/@prisma/client/src/runtime/RequestHandler.ts:143:12)
+    #     at async a (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-serving/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:833:24)
+    #     at async findNearbyRestaurants (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-serving/apps/api/lib/restaurantService.ts:343:16)
+    #     at async GET (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-serving/apps/api/app/api/restaurants/route.ts:142:41)
+    #     at async TestContext.<anonymous> (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-serving/apps/api/tests/db/search-route.integration.ts:61:19)
+    #     at async Test.run (node:internal/test_runner/test:1069:7)
+    #     at async Test.processPendingSubtests (node:internal/test_runner/test:752:7) {
+    #   code: 'P2010',
+    #   meta: { code: '22003', message: 'ERROR: value out of range: overflow' },
+    #   clientVersion: '6.19.2'
+    # }
+    # Subtest: invalid targets return 400 through the handler
+    not ok 2 - invalid targets return 400 through the handler
+      ---
+      duration_ms: 24.045292
+      type: 'test'
+      location: '/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-serving/apps/api/tests/db/search-route.integration.ts:2:3715'
+      failureType: 'testCodeFailure'
+      error: |-
+        protein=1e-300
+        
+        500 !== 400
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 400
+      actual: 500
+      operator: 'strictEqual'
+      stack: |-
+        TestContext.<anonymous> (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-serving/apps/api/tests/db/search-route.integration.ts:61:12)
+        async Test.run (node:internal/test_runner/test:1069:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:752:7)
+      ...
+    # {"event":"search_query","restaurants":20,"hasTargets":true,"totalMs":3,"paginated":false}
+    # Subtest: unauthenticated search still strips every best match
+    ok 3 - unauthenticated search still strips every best match
+      ---
+      duration_ms: 4.315375
+      type: 'test'
+      ...
+    # {"event":"search_query","restaurants":5,"hasTargets":true,"totalMs":3,"paginated":false}
+    # {"event":"search_query","restaurants":5,"hasTargets":true,"totalMs":2,"paginated":false}
+    # [GET /api/restaurants/preview] Error: PrismaClientKnownRequestError: 
+    # Invalid `prisma.$queryRaw()` invocation:
+    # Raw query failed. Code: `22003`. Message: `ERROR: value out of range: overflow`
+    #     at ei.handleRequestError (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-serving/node_modules/@prisma/client/src/runtime/RequestHandler.ts:228:13)
+    #     at ei.handleAndLogRequestError (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-serving/node_modules/@prisma/client/src/runtime/RequestHandler.ts:174:12)
+    #     at ei.request (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-serving/node_modules/@prisma/client/src/runtime/RequestHandler.ts:143:12)
+    #     at async a (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-serving/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:833:24)
+    #     at async findNearbyRestaurants (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-serving/apps/api/lib/restaurantService.ts:343:16)
+    #     at async GET (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-serving/apps/api/app/api/restaurants/preview/route.ts:57:20)
+    #     at async TestContext.<anonymous> (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-serving/apps/api/tests/db/search-route.integration.ts:84:19)
+    #     at async Test.run (node:internal/test_runner/test:1069:7)
+    #     at async Test.processPendingSubtests (node:internal/test_runner/test:752:7) {
+    #   code: 'P2010',
+    #   meta: { code: '22003', message: 'ERROR: value out of range: overflow' },
+    #   clientVersion: '6.19.2'
+    # }
+    # Subtest: onboarding preview uses the same aliases and rejects invalid targets without exposing matches
+    not ok 4 - onboarding preview uses the same aliases and rejects invalid targets without exposing matches
+      ---
+      duration_ms: 9.152667
+      type: 'test'
+      location: '/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-serving/apps/api/tests/db/search-route.integration.ts:2:4405'
+      failureType: 'testCodeFailure'
+      error: |-
+        protein=1e-300
+        
+        500 !== 400
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 400
+      actual: 500
+      operator: 'strictEqual'
+      stack: |-
+        TestContext.<anonymous> (/Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-serving/apps/api/tests/db/search-route.integration.ts:84:12)
+        async Test.run (node:internal/test_runner/test:1069:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:752:7)
+      ...
+    # {"event":"search_query","restaurants":20,"hasTargets":false,"totalMs":5,"paginated":true}
+    # Subtest: out-of-range cursor numbers are client errors, while genuine zero is accepted
+    ok 5 - out-of-range cursor numbers are client errors, while genuine zero is accepted
+      ---
+      duration_ms: 10.168333
+      type: 'test'
+      ...
+    1..5
+    # tests 5
+    # suites 0
+    # pass 3
+    # fail 2
+    # cancelled 0
+    # skipped 0
+    # todo 0
+    # duration_ms 662.7975
+
+      11 |   }); } catch (error) {
+      12 |     const e = error as { stdout?: string; stderr?: string };
+    > 13 |     throw new Error(`Native route tests failed:\n${e.stdout ?? ''}\n${e.stderr ?? ''}`);
+         |           ^
+      14 |   }
+      15 |   // A successful process with an empty/disabled native suite is not evidence.
+      16 |   expect(Number(output.match(/^# tests (\d+)$/m)?.[1])).toBe(5);
+
+      at Object.<anonymous> (tests/db/search-route.db.test.ts:13:11)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 1 total
+Snapshots:   0 total
+Time:        1.021 s, estimated 2 s
+Ran all test suites matching /tests\/db\/search-route.db.test.ts/i.
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-serving/apps/api
+npm error workspace @fitsy/api@0.1.0
+npm error location /Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-serving/apps/api
+npm error command failed
+npm error command sh -c jest --runInBand tests/db/search-route.db.test.ts

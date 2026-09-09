@@ -1,0 +1,53 @@
+
+> @fitsy/api@0.1.0 test
+> jest --runInBand tests/db/search-provenance.db.test.ts
+
+  console.log
+    {"event":"search_query","restaurants":1,"hasTargets":true,"totalMs":21,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:448:11)
+
+  console.log
+    {"event":"search_query","restaurants":1,"hasTargets":true,"totalMs":2,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:448:11)
+
+  console.log
+    {"event":"search_query","restaurants":1,"hasTargets":false,"totalMs":2,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:448:11)
+
+  console.log
+    {"event":"search_query","restaurants":1,"hasTargets":false,"totalMs":2,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:448:11)
+
+  console.log
+    {"event":"search_query","restaurants":1,"hasTargets":true,"totalMs":2,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:448:11)
+
+  console.log
+    {"event":"search_query","restaurants":1,"hasTargets":true,"totalMs":4,"paginated":true}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:448:11)
+
+  console.log
+    {"event":"search_query","restaurants":1,"hasTargets":true,"totalMs":1,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:448:11)
+
+PASS tests/db/search-provenance.db.test.ts
+  search nutrition provenance (real PostgreSQL)
+    ✓ multiple estimates produce one restaurant with the winning source metadata (45 ms)
+    ✓ a partially missing macro record cannot become the best match (7 ms)
+    ✓ no targets and zero targets produce the same contract-valid response (4 ms)
+    ✓ SQL and JavaScript score each active dimension identically (13 ms)
+    ✓ tied fractional scores survive a cursor round trip through Prisma (14 ms)
+    ✓ restaurants with only incomplete nutrition cannot supply a best match (6 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       6 passed, 6 total
+Snapshots:   0 total
+Time:        0.637 s, estimated 1 s
+Ran all test suites matching /tests\/db\/search-provenance.db.test.ts/i.

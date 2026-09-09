@@ -116,7 +116,8 @@ See `docs/engineering/architecture/auth.md` for full flow and request/response s
 
 ### GET /api/restaurants
 
-**Auth:** Bearer JWT required (`requireAuth`)  
+**Auth:** Optional JWT; macro matches require an entitled account.
+
 **File:** `apps/api/app/api/restaurants/route.ts`
 
 #### Query Parameters
@@ -130,6 +131,7 @@ See `docs/engineering/architecture/auth.md` for full flow and request/response s
 | `protein` | float | No | — | Target protein (g) |
 | `carbs` | float | No | — | Target carbs (g) |
 | `fat` | float | No | — | Target fat (g) |
+| `proteinG`, `carbsG`, `fatG` | float | No | — | Aliases for the short names; duplicate values must agree |
 | `cuisineType` | string | No | — | Exact match on cuisine tags |
 | `chainOnly` | boolean | No | — | `true` / `false` |
 | `dietary` | string | No | — | Dietary tag filter |
@@ -138,6 +140,8 @@ See `docs/engineering/architecture/auth.md` for full flow and request/response s
 | `q` | string | No | — | Free-text menu search (capped length) |
 | `limit` | int | No | 20 | 1–50 |
 | `cursor` | string | No | — | Opaque pagination cursor from previous page |
+
+Active macro targets must be finite numbers from 0.01 through 100,000. Zero disables a dimension; blank, negative, or conflicting targets return 400.
 
 #### Macro Match Scoring
 
@@ -186,13 +190,12 @@ Macros are read from denormalized `MenuItem` columns — not from a `MacroEstima
 }
 ```
 
-`bestMatch` is `null` when no macro targets are specified or no macro data exists for the restaurant.
+`bestMatch` is present on entitled responses; its `matchScore` is null when no target is active. Restaurants without a complete macro record are omitted. Missing provenance falls back to LOW confidence. Unentitled responses omit `bestMatch` and set `meta.locked` to true.
 
 #### Error Responses
 
 | Status | Body | Trigger |
 |---|---|---|
-| 401 | `{ "error": "Unauthorized" }` | Missing / invalid JWT |
 | 400 | `{ "error": "lat and lng are required" }` | Missing lat/lng |
 | 400 | `{ "error": "Invalid lat/lng values" }` | Non-numeric |
 | 400 | `{ "error": "lat must be between -90 and 90" }` | Out of range |
@@ -200,6 +203,7 @@ Macros are read from denormalized `MenuItem` columns — not from a `MacroEstima
 | 400 | `{ "error": "minRating must be between 0 and 5" }` | minRating out of range |
 | 400 | `{ "error": "maxPriceLevel must be one of: …" }` | Invalid price level |
 | 400 | `{ "error": "Invalid cursor" }` | Malformed cursor token |
+| 400 | `{ "error": "Invalid macro target" }` | Blank, non-finite, out-of-range, or conflicting macro target |
 | 500 | `{ "error": "Internal server error" }` | Unhandled exception |
 
 ---

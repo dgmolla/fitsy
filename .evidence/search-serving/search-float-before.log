@@ -1,0 +1,72 @@
+
+> @fitsy/api@0.1.0 test
+> jest --runInBand tests/db/search-provenance.db.test.ts
+
+  console.log
+    {"event":"search_query","restaurants":1,"hasTargets":true,"totalMs":19,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:438:11)
+
+  console.log
+    {"event":"search_query","restaurants":1,"hasTargets":true,"totalMs":2,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:438:11)
+
+  console.log
+    {"event":"search_query","restaurants":1,"hasTargets":false,"totalMs":2,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:438:11)
+
+  console.log
+    {"event":"search_query","restaurants":1,"hasTargets":false,"totalMs":1,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:438:11)
+
+  console.log
+    {"event":"search_query","restaurants":1,"hasTargets":true,"totalMs":1,"paginated":false}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:438:11)
+
+  console.log
+    {"event":"search_query","restaurants":0,"hasTargets":true,"totalMs":3,"paginated":true}
+
+      at findNearbyRestaurants (lib/restaurantService.ts:438:11)
+
+FAIL tests/db/search-provenance.db.test.ts
+  search nutrition provenance (real PostgreSQL)
+    ✓ multiple estimates produce one restaurant with the winning source metadata (40 ms)
+    ✓ a partially missing macro record cannot become the best match (5 ms)
+    ✓ no targets and zero targets produce the same contract-valid response (4 ms)
+    ✓ SQL and JavaScript score each active dimension identically (4 ms)
+    ✕ tied fractional scores survive a cursor round trip through Prisma (17 ms)
+
+  ● search nutrition provenance (real PostgreSQL) › tied fractional scores survive a cursor round trip through Prisma
+
+    expect(received).toHaveLength(expected)
+
+    Expected length: 1
+    Received length: 0
+    Received array:  []
+
+      69 |       expect(first.data).toHaveLength(1);
+      70 |       const second = await findNearbyRestaurants({ ...params, limit: 1, cursor: decodeCursor(first.nextCursor!)! });
+    > 71 |       expect(second.data).toHaveLength(1);
+         |                           ^
+      72 |       expect(new Set([...first.data, ...second.data].map(r => r.id)).size).toBe(2);
+      73 |     } finally {
+      74 |       await prisma.restaurant.deleteMany({ where: { id: otherId } });
+
+      at Object.<anonymous> (tests/db/search-provenance.db.test.ts:71:27)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 4 passed, 5 total
+Snapshots:   0 total
+Time:        0.536 s, estimated 1 s
+Ran all test suites matching /tests\/db\/search-provenance.db.test.ts/i.
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-serving/apps/api
+npm error workspace @fitsy/api@0.1.0
+npm error location /Users/dawitmolla/Documents/Codex/2026-09-06/check/work/fitsy-serving/apps/api
+npm error command failed
+npm error command sh -c jest --runInBand tests/db/search-provenance.db.test.ts

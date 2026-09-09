@@ -9,9 +9,14 @@ export default {
   jest: {
     projectType: "custom",
     configFile: "apps/api/jest.config.js",
+    // Jest's related-test discovery misses consumers through the shared barrel.
+    enableFindRelatedTests: false,
   },
   mutate: [
     "apps/api/lib/macroScoring.ts",
+    "apps/api/lib/macroTargetParams.ts",
+    "apps/api/lib/macroScoreSql.ts",
+    "packages/shared/src/utils/macroScoring.ts",
     "apps/api/lib/rateLimit.ts",
     "apps/api/lib/pricing.ts",
     "packages/shared/src/utils/dateUtils.ts",

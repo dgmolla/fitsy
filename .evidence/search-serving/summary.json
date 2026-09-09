@@ -1,0 +1,50 @@
+{
+  "base": "54381a2",
+  "api_unit_tests": 644,
+  "db_tests": 17,
+  "native_route_assertion_tests": 5,
+  "scripts_default_tests": 117,
+  "mobile_tests": 264,
+  "mutation": {
+    "apps/api/lib/macroScoreSql.ts": {
+      "Killed": 16,
+      "Timeout": 1,
+      "Survived": 2
+    },
+    "apps/api/lib/macroTargetParams.ts": {
+      "Killed": 39,
+      "Survived": 1
+    },
+    "packages/shared/src/utils/macroScoring.ts": {
+      "Killed": 30,
+      "Timeout": 2,
+      "Survived": 2
+    }
+  },
+  "before": {
+    "failed": 3,
+    "passed": 1
+  },
+  "after": {
+    "passed": 17
+  },
+  "limitations": [
+    "Existing own-code mocks check is shadow (46 pre-existing calls).",
+    "Optional live Overture mini-hex test fails because hardcoded 2026-03-18.0 S3 release is unavailable. Default scripts suite and remaining DB suite pass; serving code does not use Overture."
+  ],
+  "api_coverage_gate": "pass",
+  "additional_regressions": {
+    "tied_float_cursor": "fails before / passes after",
+    "preview_target_aliases": "fails before / passes after",
+    "underflowing_cursor": "fails before / passes after (HTTP 500 becomes 400)",
+    "tiny_target": "fails before / passes after; search + preview 400"
+  },
+  "mutation_score": 94.62,
+  "preview_smoke": {
+    "deployment": "9bf000b",
+    "locked": true,
+    "results": 20,
+    "invalid_macro_status": 400
+  },
+  "parser_final_mutation_score": 94.44
+}

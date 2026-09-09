@@ -19,6 +19,7 @@ jest.mock("@prisma/client", () => ({
     }),
     join: (items: unknown[], sep = ",") => ({ items, sep }),
     empty: { empty: true },
+    raw: (value: string) => ({ strings: [value], values: [] }),
   },
   PrismaClient: jest.fn().mockImplementation(() => ({
     $queryRaw: mockQueryRaw,
@@ -454,6 +455,14 @@ describe("findNearbyRestaurants", () => {
 // ─── Cursor encoding ──────────────────────────────────────────────────────────
 
 describe("encodeCursor / decodeCursor", () => {
+  it("preserves exact score text while retaining legacy numeric cursors", () => {
+    const cursor = { id: "r", orderKey: 3.5069444444444446, orderKeyText: "3.5069444444444446" };
+    expect(decodeCursor(encodeCursor(cursor))).toEqual(cursor);
+    expect(decodeCursor(encodeCursor({ id: "r", orderKey: 0, orderKeyText: "0" }))).toEqual({ id: "r", orderKey: 0, orderKeyText: "0" });
+    for (const orderKeyText of ["NaN", "Infinity", "", " ", "1; SELECT 1", "1e-400", "-1e-400", "1e400", "-1e400", 1, null]) {
+      expect(decodeCursor(Buffer.from(JSON.stringify({ ...cursor, orderKeyText })).toString('base64'))).toBeNull();
+    }
+  });
   it("round-trips { id, orderKey, distanceMiles }", () => {
     const original = { id: "rest-42", orderKey: 2.5, distanceMiles: 2.5 };
     const encoded = encodeCursor(original);
