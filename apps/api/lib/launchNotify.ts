@@ -107,7 +107,12 @@ export async function notifyLaunch(opts: LaunchNotifyOptions): Promise<LaunchNot
     where: {
       notifiedAt: null,
       notifyAttempts: { lt: MAX_NOTIFY_ATTEMPTS },
-      OR: [{ lastNotifyAttemptAt: null }, { lastNotifyAttemptAt: { lt: retryBefore } }],
+      AND: [
+        // Confirmed, or the single opt-in cohort that asked for exactly this.
+        { OR: [{ confirmedAt: { not: null } }, { legacyConsent: true }] },
+        // Past the retry cooldown (or never attempted).
+        { OR: [{ lastNotifyAttemptAt: null }, { lastNotifyAttemptAt: { lt: retryBefore } }] },
+      ],
     },
     orderBy: { createdAt: "asc" },
     select: {

@@ -66,7 +66,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   await prisma.$transaction(async (tx) => {
     const existing = await tx.launchWaitlist.findUnique({
       where: { email },
-      select: { lat: true, lng: true, emailOptOutAt: true },
+      select: { lat: true, lng: true, emailOptOutAt: true, confirmedAt: true },
     });
 
     // Opting in from a different coarse location is a fresh, per-city opt-in:
@@ -79,12 +79,23 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // Upsert by email so re-hitting the screen refreshes the location without
     // spamming rows, and a prior website signup becomes this account's row.
     // emailOptOutAt is never reset here.
+    // The account email was verified by Apple/Google, so the row is
+    // confirmed by construction; linking also confirms a pending web row.
+    const now = new Date();
     await tx.launchWaitlist.upsert({
       where: { email },
-      create: { email, userId: auth.sub, source: "onboarding", ...location },
+      create: {
+        email,
+        userId: auth.sub,
+        source: "onboarding",
+        confirmedAt: now,
+        legacyConsent: false,
+        ...location,
+      },
       update: {
         userId: auth.sub,
         ...location,
+        ...(existing?.confirmedAt ? {} : { confirmedAt: now }),
         ...(newCity ? { notifiedAt: null } : {}),
       },
     });

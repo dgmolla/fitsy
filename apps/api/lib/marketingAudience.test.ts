@@ -38,7 +38,7 @@ describe("marketingAudience", () => {
     ]);
   });
 
-  it("leaves waitlist-only rows out unless asked (recurring email waits for double opt-in)", async () => {
+  it("leaves waitlist-only rows out unless asked", async () => {
     const audience = await marketingAudience({ includeWaitlistOnly: false });
     expect(audience.map((r) => r.email)).toEqual(["alice@example.org", "both@example.org"]);
     expect(prisma.$queryRawUnsafe).toHaveBeenCalledTimes(1);
@@ -51,6 +51,7 @@ describe("marketingAudience", () => {
     expect(userSql).toContain('w."email" = lower(u."email") AND w."emailOptOutAt" IS NOT NULL');
     expect(waitlistSql).toContain('w."userId" IS NULL');
     expect(waitlistSql).toContain('w."emailOptOutAt" IS NULL');
+    expect(waitlistSql).toContain('w."confirmedAt" IS NOT NULL');
     expect(waitlistSql).toContain('lower(u."email") = w."email" AND u."emailOptOutAt" IS NOT NULL');
   });
 

@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { prisma } from "@/lib/restaurantService";
 import { waitlistLimiter } from "@/lib/rateLimit";
 import { isValidWaitlistEmail, normalizeEmail } from "@/lib/waitlist";
+import { sendWaitlistConfirmation } from "@/lib/waitlistConfirmSend";
 
 export const runtime = "nodejs";
 
@@ -11,6 +12,11 @@ export const runtime = "nodejs";
  * Public (no account). Body: { email, hp? }. Stores the email only: no
  * location, no name. Writes to the same LaunchWaitlist table as onboarding's
  * "Notify me" so there is exactly one launch email list.
+ *
+ * Double opt-in: a new row is unconfirmed and gets a confirmation email
+ * (deferred with after() so the response is not held on the provider).
+ * Nothing else is ever sent to an unconfirmed row. Re-submitting an
+ * unconfirmed address re-sends the confirmation at most once a day.
  *
  * Abuse controls: per-IP rate limit, strict-ish email validation, and a
  * honeypot field (`hp`) that real users never see; bots that fill it get a
@@ -63,11 +69,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   // No-op update: an existing row (from either surface) is left untouched,
   // including notifiedAt and emailOptOutAt.
-  await prisma.launchWaitlist.upsert({
+  // legacyConsent is set explicitly (not omitted): its DB default is for
+  // rows the previous bundle inserts during the migrate/promote window and
+  // must not apply to a fresh website signup, which starts unconfirmed.
+  const row = await prisma.launchWaitlist.upsert({
     where: { email },
-    create: { email, source: "web" },
+    create: { email, source: "web", confirmedAt: null, legacyConsent: false },
     update: {},
+    select: { id: true, confirmedAt: true },
   });
+
+  if (row.confirmedAt === null) {
+    after(() => sendWaitlistConfirmation({ id: row.id, email }));
+  }
 
   return NextResponse.json({ ok: true }, { status: 200 });
 }

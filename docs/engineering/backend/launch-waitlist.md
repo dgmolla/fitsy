@@ -33,7 +33,12 @@ sequenceDiagram
 
     Note over Web: visitor submits "Join the waitlist" form
     Web->>API: POST /api/waitlist/web { email, hp (honeypot) }  (public, rate-limited)
-    API->>DB: upsert LaunchWaitlist by email { source: web } (no-op if already listed)
+    API->>DB: upsert LaunchWaitlist by email { source: web, confirmedAt: null } (no-op if already listed)
+    API->>Resend: confirmation email (double opt-in), deferred after the response
+    Resend-->>Web: /waitlist/confirm?w=<id>&t=<hmac>
+    Web->>API: GET /waitlist/confirm
+    API->>DB: set LaunchWaitlist.confirmedAt
+    Note over API,DB: unconfirmed rows receive nothing but the confirmation
 
     Note over API: operator calls when a city goes live
     API->>API: POST /api/internal/waitlist/notify { lat, lng, radiusMiles?, city?, includeUnlocated?, dryRun? }
@@ -68,6 +73,15 @@ sequenceDiagram
   Per-IP rate limit (5 per 10 minutes), email shape check, reserved-TLD rejection.
   Upserts by normalized email with an empty update, so an existing row is untouched.
   Always answers `{ ok: true }` for a well-formed address so membership cannot be probed.
+  A new (or still unconfirmed) row gets a double opt-in confirmation email, deferred with `after()`, at most once a day per address; the once-a-day slot is claimed with a conditional write on `confirmSentAt`, so concurrent submissions cannot each send one. A failed confirmation keeps the slot (an ambiguous provider outcome must never become two deliveries) and is reported to Slack, deduped per 15 minutes; a re-submit after the slot expires retries, and only a success is written to the ledger, which is how a retry tells a failed claim from a sent one.
+
+- `GET /waitlist/confirm` (signed link) - sets `confirmedAt` and renders a confirmation page.
+  Onboarding rows are confirmed at creation (Apple/Google verified the account email), and linking an account confirms a pending website row.
+  Unconfirmed rows are excluded from the launch blast and from every marketing audience, so a third party cannot put someone else's address on the list.
+  Rows that existed when double opt-in shipped (the single opt-in cohort) carry `legacyConsent`: they get the launch notification they asked for, but recurring marketing email still requires the confirmation click, so `confirmedAt` stays null for them.
+  Nothing prompts that cohort to confirm today: the only paths are a fresh submit on fitsy.org (which sends the confirmation) and creating an account (onboarding links and confirms the row).
+  The lifecycle cron ([email-automation.md](email-automation.md)) is where a one-time confirmation request to this cohort belongs.
+  Prod migrates before the new bundle is promoted, so `legacyConsent` carries a temporary DB default of true for rows the previous bundle inserts in that window; the new code sets the column explicitly (false) and the next release's contraction migration drops the default.
 
 - `GET /api/internal/waitlist/launch-day` (CRON_SECRET, daily cron at 16:30 UTC) - the scheduled first-launch blast.
   No-op before `LAUNCH_DATE_ISO` in `apps/api/lib/launch.ts`; from that day on it runs the notify logic below with the launch center, the launch city, and `includeUnlocated: true`.
@@ -124,7 +138,7 @@ sequenceDiagram
 - `LaunchWaitlist` - one row per email address.
   `userId` is `SET NULL` on account deletion, not cascaded: the row may be a website signup in its own right and is the address-keyed opt-out record.
   `DELETE /api/user` removes an onboarding-sourced row that never opted out, strips the coarse location from any row that survives, and purges the address from the `MarketingSend` ledger unless a waitlist row for it remains.
-  Columns: `email` (unique, normalized), `userId?` (unique; null for web signups), `source` (`onboarding` | `web`), `lat?` / `lng?` (coarse; null for web signups), `city?`, `notifiedAt?`, `emailOptOutAt?`.
+  Columns: `email` (unique, normalized), `userId?` (unique; null for web signups), `source` (`onboarding` | `web`), `lat?` / `lng?` (coarse; null for web signups), `city?`, `notifiedAt?`, `emailOptOutAt?`, `confirmedAt?` (double opt-in).
 
 - `User.emailOptOutAt` — nullable timestamp.
   Set by the POST /unsubscribe handler.
