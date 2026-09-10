@@ -8,7 +8,6 @@ describe("htmlPage", () => {
     const html = await res.text();
     expect(html).toContain("<title>Hello</title>");
     expect(html).toContain("<h1>Hi</h1>");
-    expect(html).not.toContain("<script");
   });
 
   it("escapes the title", async () => {

@@ -14,13 +14,14 @@ jest.mock("@/lib/waitlistConfirmSend", () => ({
 
 // after() needs the Next.js request context, which jest lacks. Run the
 // callback immediately so the deferred confirmation send is observable.
+const mockAfter = jest.fn((cb: () => unknown) => {
+  void cb();
+});
 jest.mock("next/server", () => {
   const actual = jest.requireActual("next/server");
   return {
     ...actual,
-    after: (cb: () => unknown) => {
-      void cb();
-    },
+    after: (cb: () => unknown) => mockAfter(cb),
   };
 });
 
@@ -101,8 +102,9 @@ describe("POST /api/waitlist/web (public form)", () => {
     });
   });
 
-  it("sends the double opt-in confirmation for an unconfirmed row", async () => {
+  it("sends the double opt-in confirmation for an unconfirmed row, deferred after the response", async () => {
     await POST(makeRequest({ email: "dawit@gmail.com" }));
+    expect(mockAfter).toHaveBeenCalledTimes(1);
     expect(sendWaitlistConfirmation).toHaveBeenCalledWith({ id: "wl-new", email: "dawit@gmail.com" });
   });
 

@@ -64,6 +64,14 @@ describe("marketingLedger", () => {
       step: "confirm",
       sentAt: { gt: expect.any(Date) },
     });
+    const since = (arg.where.sentAt.gt as Date).getTime();
+    expect(Date.now() - since).toBeGreaterThanOrEqual(5000 - 1000);
+    expect(Date.now() - since).toBeLessThanOrEqual(5000 + 1000);
+  });
+
+  it("sentStepWithin is false when that step was not sent in the window", async () => {
+    (prisma.marketingSend.findFirst as jest.Mock).mockResolvedValue(null);
+    expect(await sentStepWithin("alice@example.org", "lifecycle", "confirm", 24 * 3600e3)).toBe(false);
   });
 
   it("sentWithin is false when nothing was sent in the window", async () => {

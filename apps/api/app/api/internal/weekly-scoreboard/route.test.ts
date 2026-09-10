@@ -57,6 +57,11 @@ function makeRequest(authHeader?: string, query = ""): NextRequest {
 }
 
 describe("GET /api/internal/weekly-scoreboard", () => {
+  it("counts confirmed waitlist rows with the same predicate the launch blast uses", async () => {
+    await GET(makeRequest("Bearer test-secret", "?dry=1"));
+    expect(mockCount).toHaveBeenCalledWith("launchWaitlist", { where: { confirmedAt: { not: null } } });
+  });
+
   it("rejects requests without a CRON_SECRET bearer token", async () => {
     const res = await GET(makeRequest());
     expect(res.status).toBe(401);

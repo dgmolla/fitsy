@@ -38,7 +38,7 @@ describe("marketingAudience", () => {
     ]);
   });
 
-  it("leaves waitlist-only rows out unless asked (recurring email waits for double opt-in)", async () => {
+  it("leaves waitlist-only rows out unless asked", async () => {
     const audience = await marketingAudience({ includeWaitlistOnly: false });
     expect(audience.map((r) => r.email)).toEqual(["alice@example.org", "both@example.org"]);
     expect(prisma.$queryRawUnsafe).toHaveBeenCalledTimes(1);
