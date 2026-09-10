@@ -86,7 +86,8 @@ async function loadDbMetrics(now: Date): Promise<DbMetrics> {
       now,
     ),
     prisma.launchWaitlist.count(),
-    // What the launch blast and recurring email will actually reach.
+    // Double opt-in confirmed: what recurring email reaches. The launch
+    // blast additionally reaches the legacyConsent cohort (lib/launchNotify.ts).
     prisma.launchWaitlist.count({ where: { confirmedAt: { not: null } } }),
   ]);
   return {

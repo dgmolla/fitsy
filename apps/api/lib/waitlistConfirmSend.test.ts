@@ -107,6 +107,16 @@ describe("sendWaitlistConfirmation", () => {
     );
   });
 
+  it("a ledger write that fails after the provider accepted the email keeps the claim, so a resubmit cannot deliver twice", async () => {
+    (recordSend as jest.Mock).mockRejectedValue(new Error("db blip"));
+    expect(await sendWaitlistConfirmation(ROW)).toBe(true);
+    expect(sendMarketingEmail).toHaveBeenCalledTimes(1);
+    expect(prisma.launchWaitlist.updateMany).toHaveBeenCalledTimes(1);
+    expect(prisma.launchWaitlist.updateMany).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: { confirmSentAt: null } }),
+    );
+  });
+
   it("a throw before the claim releases nothing", async () => {
     (isEmailOptedOut as jest.Mock).mockRejectedValue(new Error("db down"));
     expect(await sendWaitlistConfirmation(ROW)).toBe(false);

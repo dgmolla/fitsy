@@ -78,7 +78,9 @@ sequenceDiagram
 - `GET /waitlist/confirm` (signed link) - sets `confirmedAt` and renders a confirmation page.
   Onboarding rows are confirmed at creation (Apple/Google verified the account email), and linking an account confirms a pending website row.
   Unconfirmed rows are excluded from the launch blast and from every marketing audience, so a third party cannot put someone else's address on the list.
-  Rows that existed when double opt-in shipped (the single opt-in cohort) carry `legacyConsent`: they get the launch notification they asked for, but recurring marketing email still requires the confirmation click, so `confirmedAt` stays null for them until they confirm.
+  Rows that existed when double opt-in shipped (the single opt-in cohort) carry `legacyConsent`: they get the launch notification they asked for, but recurring marketing email still requires the confirmation click, so `confirmedAt` stays null for them.
+  Nothing prompts that cohort to confirm today: the only paths are a fresh submit on fitsy.org (which sends the confirmation) and creating an account (onboarding links and confirms the row).
+  The lifecycle cron ([email-automation.md](email-automation.md)) is where a one-time confirmation request to this cohort belongs.
   Prod migrates before the new bundle is promoted, so `legacyConsent` carries a temporary DB default of true for rows the previous bundle inserts in that window; the new code sets the column explicitly (false) and the next release's contraction migration drops the default.
 
 - `GET /api/internal/waitlist/launch-day` (CRON_SECRET, daily cron at 16:30 UTC) - the scheduled first-launch blast.

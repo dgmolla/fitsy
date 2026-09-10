@@ -57,7 +57,7 @@ function makeRequest(authHeader?: string, query = ""): NextRequest {
 }
 
 describe("GET /api/internal/weekly-scoreboard", () => {
-  it("counts confirmed waitlist rows with the same predicate the launch blast uses, and prints them apart from the total", async () => {
+  it("counts double opt-in confirmed waitlist rows (the recurring-email audience) and prints them apart from the total", async () => {
     mockCount.mockImplementation(async (model: string, arg?: { where?: Record<string, unknown> }) => {
       if (model !== "launchWaitlist") return 0;
       if (arg?.where && "confirmedAt" in arg.where) return 31;

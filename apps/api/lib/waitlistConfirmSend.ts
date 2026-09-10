@@ -12,7 +12,9 @@
  * marketing touch, so it does NOT sit behind the cross-campaign frequency
  * cap. A transient provider failure releases the claim (a later submit can
  * retry) and is reported to Slack with the row id, because an unconfirmed
- * row never receives anything else. A missing signing secret is reported
+ * row never receives anything else. Once the provider has accepted the
+ * email the claim is kept no matter what fails afterwards (the ledger
+ * write is bookkeeping, not the throttle), so a retry cannot deliver twice. A missing signing secret is reported
  * the same way: without it no website signup can ever be confirmed, and the
  * form still answered "check your inbox". Never throws.
  */
@@ -28,6 +30,7 @@ export const CONFIRM_RESEND_GAP_MS = 24 * 3600e3;
 export async function sendWaitlistConfirmation(row: { id: string; email: string }): Promise<boolean> {
   const now = new Date();
   let claimed = false;
+  let delivered = false;
   try {
     const url = confirmUrl(row.id);
     if (!url) {
@@ -65,6 +68,7 @@ export async function sendWaitlistConfirmation(row: { id: string; email: string 
       idempotencyKey: `lifecycle:confirm:${row.email}:${now.toISOString()}`,
     });
     if (ok) {
+      delivered = true;
       await recordSend(row.email, "lifecycle", "confirm");
       return true;
     }
@@ -77,8 +81,8 @@ export async function sendWaitlistConfirmation(row: { id: string; email: string 
     );
     return false;
   } catch {
-    if (claimed) await releaseClaim(row.id, now).catch(() => undefined);
-    return false;
+    if (claimed && !delivered) await releaseClaim(row.id, now).catch(() => undefined);
+    return delivered;
   }
 }
 
