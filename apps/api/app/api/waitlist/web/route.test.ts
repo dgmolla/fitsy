@@ -96,7 +96,7 @@ describe("POST /api/waitlist/web (public form)", () => {
     expect(await res.json()).toEqual({ ok: true });
     expect(prisma.launchWaitlist.upsert).toHaveBeenCalledWith({
       where: { email: "dawit@gmail.com" },
-      create: { email: "dawit@gmail.com", source: "web" },
+      create: { email: "dawit@gmail.com", source: "web", confirmedAt: null },
       update: {},
       select: { id: true, confirmedAt: true },
     });

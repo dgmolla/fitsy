@@ -66,6 +66,10 @@ model LaunchWaitlist {
   // verified the account email); website rows are confirmed by the link in
   // the confirmation email. Unconfirmed rows receive nothing but that email.
   confirmedAt   DateTime?
+  // When the confirmation email was last claimed for sending. The claim is a
+  // conditional write (compare-and-set), so concurrent form posts for one
+  // address cannot each send a confirmation.
+  confirmSentAt DateTime?
   // SetNull, not Cascade: the row is the address-keyed suppression record and
   // may have been created on the website independently of the account. The
   // delete-account route removes onboarding-only rows that never opted out.

@@ -73,12 +73,13 @@ sequenceDiagram
   Per-IP rate limit (5 per 10 minutes), email shape check, reserved-TLD rejection.
   Upserts by normalized email with an empty update, so an existing row is untouched.
   Always answers `{ ok: true }` for a well-formed address so membership cannot be probed.
-  A new (or still unconfirmed) row gets a double opt-in confirmation email, deferred with `after()`, at most once a day per address.
+  A new (or still unconfirmed) row gets a double opt-in confirmation email, deferred with `after()`, at most once a day per address; the once-a-day slot is claimed with a conditional write on `confirmSentAt`, so concurrent submissions cannot each send one. A failed confirmation releases the claim and is reported to Slack.
 
 - `GET /waitlist/confirm` (signed link) - sets `confirmedAt` and renders a confirmation page.
   Onboarding rows are confirmed at creation (Apple/Google verified the account email), and linking an account confirms a pending website row.
   Unconfirmed rows are excluded from the launch blast and from every marketing audience, so a third party cannot put someone else's address on the list.
   Rows that existed when double opt-in shipped (the single opt-in cohort) were grandfathered as confirmed at their creation time by the migration, since nothing could ever confirm them afterwards.
+  Prod migrates before the new bundle is promoted, so `confirmedAt` carries a temporary DB default for rows the previous bundle inserts in that window; the new code sets the column explicitly and a follow-up contraction migration drops the default.
 
 - `GET /api/internal/waitlist/launch-day` (CRON_SECRET, daily cron at 16:30 UTC) - the scheduled first-launch blast.
   No-op before `LAUNCH_DATE_ISO` in `apps/api/lib/launch.ts`; from that day on it runs the notify logic below with the launch center, the launch city, and `includeUnlocated: true`.
