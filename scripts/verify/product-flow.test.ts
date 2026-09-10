@@ -71,11 +71,32 @@ test.each(['stale', 'future', 'expired', 'wrong-native', 'unknown-backend', 'pro
   if (condition === 'missing-recovery') report.exploration[0]!.branches = ['primary'];
   expect(validate(report).status).toBe(1);
 });
-test('baseline-only evidence cannot claim billing coverage by adding report tags', () => {
+test('baseline flows cannot cover billing even when their YAML tags include billing', () => {
   const report = fixture(); report.flows.pop();
-  const claimed = JSON.parse(JSON.stringify(report));
-  for (const flow of claimed.flows) flow.categories = ['billing'];
-  expect(validate(claimed).status).toBe(1);
+  expect(validate(report).status).toBe(1);
+});
+test.each(['appId', 'name'])('rejects wrong command-report %s even with a matching artifact digest', field => {
+  const report = fixture(), flow = report.flows[2]!;
+  const commands = JSON.parse(readFileSync(join(dir, flow.commands), 'utf8'));
+  commands[0].command.applyConfigurationCommand.config[field] = 'wrong';
+  const raw = JSON.stringify(commands); writeFileSync(join(dir, flow.commands), raw); flow.sha256 = sha(raw);
+  expect(validate(report).status).toBe(1);
+});
+test('rejects a non-image screenshot even when its digest matches', () => {
+  const report = fixture(), flow = report.flows[2]!;
+  writeFileSync(join(dir, flow.screenshot), 'not a PNG'); flow.screenshotHash = sha('not a PNG');
+  expect(validate(report).status).toBe(1);
+});
+test.each(['no-actions', 'no-observations', 'old', 'tool-error'])('rejects %s walkthrough evidence with a matching digest', problem => {
+  const report = fixture(), o = report.exploration[0]!;
+  let events = readFileSync(join(dir, o.trace), 'utf8').split('\n').map(line => JSON.parse(line));
+  if (problem === 'no-actions') events = events.slice(1);
+  if (problem === 'no-observations') events = events.slice(0, 1);
+  if (problem === 'old') events[0].at = '2000-01-01T00:00:00Z';
+  if (problem === 'tool-error') events[0].result.isError = true;
+  const raw = events.map(e => JSON.stringify(e)).join('\n');
+  writeFileSync(join(dir, o.trace), raw); o.sha256 = sha(raw);
+  expect(validate(report).status).toBe(1);
 });
 test('an artifact symlink cannot read outside the evidence directory', () => {
   const report = fixture(); symlinkSync(modulePath, join(dir, 'escape')); report.flows[0]!.commands = 'escape';
