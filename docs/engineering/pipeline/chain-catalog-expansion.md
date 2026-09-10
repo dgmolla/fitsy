@@ -7,7 +7,7 @@ flowchart LR
   P[197 rows in official source tables] --> A[181 accepted published facts]
   P --> H[16 source exceptions held]
   A --> C[182 catalog servings including a two-cookie derivation]
-  C --> M[71 servings bound to 97 observed menu variants]
+  C --> M[71 servings bound to 95 observed menu variants]
   M --> E[April nutrition-only updates]
   M --> U[Future UE imports use the same matcher]
 ```
@@ -16,14 +16,14 @@ flowchart LR
 
 | Scope | Before | After | Unresolved after |
 |---|---:|---:|---:|
-| WaBa April menu rows | 46 / 795 | 394 / 795 | 401 |
-| Yoshinoya April menu rows | 18 / 542 | 254 / 542 | 288 |
-| Total April rows | 64 / 1,337 (4.8%) | 648 / 1,337 (48.5%) | 689 |
+| WaBa April menu rows | 46 / 795 | 387 / 795 | 408 |
+| Yoshinoya April menu rows | 18 / 542 | 223 / 542 | 319 |
+| Total April rows | 64 / 1,337 (4.8%) | 610 / 1,337 (45.6%) | 727 |
 | Two captured UE menus | 7 / 151 | 52 / 151 (34.4%) | 99 |
 
-**Main dishes:** 403 of the 648 April matches are bowls, plates or salads (337 WaBa, 66 Yoshinoya). In the current UE captures, only 19 of the 52 matches are main dishes (17 WaBa, 2 Yoshinoya). Most current Yoshinoya matches are sides, drinks or desserts; its generic grilled entrée names allow sauce choices, so those are held. This is not broad current-entrée coverage for Yoshinoya.
+**Main dishes:** 396 of the 610 April matches are bowls, plates or salads (330 WaBa, 66 Yoshinoya). In the current UE captures, only 19 of the 52 matches are main dishes (17 WaBa, 2 Yoshinoya). Most current Yoshinoya matches are sides, drinks or desserts; its generic grilled entrée names allow sauce choices, so those are held. This is not broad current-entrée coverage for Yoshinoya.
 
-The batch adds 175 catalog records; the seven prior approvals remain identical. It should update 584 additional April items across the same 62-location inventory. Facts without aliases remain available for later serving review, without assigning components to meals. Legacy flat catalog records are preserved; unreviewed rows do not participate in the shared matcher.
+The batch adds 175 catalog records; the seven prior approvals remain identical. It should update 546 additional April items across the same 62-location inventory. Facts without aliases remain available for later serving review, without assigning components to meals. Legacy flat catalog records are preserved; unreviewed rows do not participate in the shared matcher.
 
 ## What was reviewed
 
@@ -45,13 +45,13 @@ The batch adds 175 catalog records; the seven prior approvals remain identical. 
 | Yoshinoya 3/5/10-piece crispy gyoza | 3 | Published saturated fat exceeds total fat |
 | Yoshinoya sweet-and-sour sauce | 1 | 13 g sugar exceeds 1 g total carbohydrate |
 
-Additional unmatched menu items include configurable family/combo/taco meals, size ranges, source-missing dishes, and changed salad/sauce-choice descriptions. Regular Gyudon beef disagrees with UE calories; rice component portions do not match UE side labels. No source component is silently used as a full bowl. Published facts can be retained without an approved menu binding.
+The 31 generic April `Cheesecake` rows are also held because the flavor is unspecified. Additional unmatched menu items include configurable family/combo/taco meals, size ranges, source-missing dishes, and changed salad/sauce-choice descriptions. Regular Gyudon beef disagrees with UE calories; rice component portions do not match UE side labels. No source component is silently used as a full bowl. Published facts can be retained without an approved menu binding.
 
 ## Proof and limits
 
-Aliases known to carry a calorie range (including the current featured Chicken Bowl) are not approved even for a later input lacking that label. April rows use their reviewed historical context; their estimated calories are not treated as source evidence.
+Aliases known to carry a calorie range (including Chicken Bowl in both Featured items and Rice Bowls) are not approved even for a later input lacking that label. April rows use their reviewed historical context; their estimated calories are not treated as source evidence.
 
-Local tests replay every observed April variant, preserve unmatched records and non-nutrition fields, and verify served macros against the separate transcription. Both complete UE responses are parsed and sent through the production matcher and hex writer; the external estimator is stubbed only for unresolved items. All 52 matched items persist official values, and all 99 unresolved items take the fallback path.
+A frozen, independently checked menu-to-serving table pins all 95 alias bindings, including their descriptions; expectations never follow the matcher's chosen key. Local tests replay every observed April variant, preserve unmatched records and non-nutrition fields, and verify served macros against the separate transcription. Both complete UE responses are parsed and sent through the production matcher and hex writer; the external estimator is stubbed only for unresolved items. All 52 matched items persist official values, and all 99 unresolved items take the fallback path.
 
 These captures represent two menus, not a nationwide accuracy estimate. A new location with the same reviewed identity uses the same facts; new wording or conflicting labels abstain. No new production hex or city is imported by this rollout. Refresh remains outside scope.
 
