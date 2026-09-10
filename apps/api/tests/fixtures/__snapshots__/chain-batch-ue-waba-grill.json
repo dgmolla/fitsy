@@ -1,0 +1,1607 @@
+{
+  "data": {
+    "title": "WaBa Grill - Van Nuys (Sepulveda)",
+    "heroImageUrls": [
+      {
+        "url": "https://tb-static.uber.com/prod/image-proc/processed_images/8940818535712abaf98b52b75b07435b/811141f8f192e16f7ae3ad5ab7d1de57.jpeg",
+        "width": 240
+      },
+      {
+        "url": "https://tb-static.uber.com/prod/image-proc/processed_images/8940818535712abaf98b52b75b07435b/e2547b97411a0fc403ec67ec324fe9e5.jpeg",
+        "width": 550
+      },
+      {
+        "url": "https://tb-static.uber.com/prod/image-proc/processed_images/8940818535712abaf98b52b75b07435b/af9ffb4e8dc417d7a0ead088a326b27b.jpeg",
+        "width": 640
+      },
+      {
+        "url": "https://tb-static.uber.com/prod/image-proc/processed_images/8940818535712abaf98b52b75b07435b/0a6dd7f0d0c3e12d43151296ac7703ef.jpeg",
+        "width": 750
+      },
+      {
+        "url": "https://tb-static.uber.com/prod/image-proc/processed_images/8940818535712abaf98b52b75b07435b/3d6a90d5a1201fa9b18624b830505f40.jpeg",
+        "width": 1080
+      },
+      {
+        "url": "https://tb-static.uber.com/prod/image-proc/processed_images/8940818535712abaf98b52b75b07435b/9c4d3adb393f25706b737484dc73677e.jpeg",
+        "width": 2880
+      }
+    ],
+    "location": {
+      "address": "7135 Sepulvedad Blvd, Van Nuys, CA 91406",
+      "streetAddress": "7135 Sepulvedad Blvd",
+      "city": "Van Nuys",
+      "country": "US",
+      "postalCode": "91406",
+      "region": "CA",
+      "latitude": 34.2003005,
+      "longitude": -118.4664404,
+      "geo": {
+        "city": "los-angeles-ca",
+        "country": "us",
+        "neighborhood": "van-nuys-los-angeles-ca",
+        "region": "ca"
+      },
+      "locationType": "DEFAULT"
+    },
+    "catalogSectionsMap": {
+      "5c7d8f20-627d-5d0d-9678-5ecc8fb541e5": [
+        {
+          "payload": {
+            "eaterMessagingPayload": {
+              "eaterMessage": {
+                "uuid": "f2ef7cf3-78b3-427e-a368-536c4d4bfe80",
+                "payload": {
+                  "cardCarousel": {
+                    "uuid": "38f191f3-a60c-4a71-8b9f-072588439174",
+                    "carouselItems": [
+                      {
+                        "card": {
+                          "uuid": "4e0a413a-9556-4c35-935b-cc962a8b7779",
+                          "metadata": {
+                            "trackingID": "consumer-gateway-storefront-saving"
+                          },
+                          "title": "Save $7 when you order $20 or more",
+                          "subtitle": "Valid for current order while supplies last",
+                          "cta": {
+                            "action": {
+                              "openBottomSheetView": {
+                                "bottomSheet": {
+                                  "standardBottomSheet": {
+                                    "title": "Save $7 when you order $20 or more at WaBa Grill",
+                                    "standardBottomSheetParagraphs": [
+                                      {
+                                        "title": "Details",
+                                        "subtitle": "• $20 minimum order (excluding promotions)\n• This promotion does not apply to taxes, fees and customizations. Service Fee (where applicable) is calculated based on order value (before discount or promotion). Cannot be combined with other promotions.\n• Alcohol or other regulated items may not be eligible for this promotion\n• Other local fees/taxes may still apply.",
+                                        "textLines": null
+                                      },
+                                      {
+                                        "title": "Expiration",
+                                        "subtitle": "Valid for current order while supplies last",
+                                        "textLines": null
+                                      },
+                                      {
+                                        "title": "Location",
+                                        "subtitle": "Valid for this merchant only",
+                                        "textLines": null
+                                      }
+                                    ],
+                                    "primaryCTA": {
+                                      "text": "Got It",
+                                      "action": {
+                                        "dismissView": {
+                                          "dismissType": "GO_BACK"
+                                        },
+                                        "type": "dismissView"
+                                      }
+                                    },
+                                    "uuid": "163a5f20-b51f-49fd-a02e-959bbdd73ff5"
+                                  },
+                                  "type": "standardBottomSheet"
+                                }
+                              },
+                              "type": "openBottomSheetView"
+                            },
+                            "trackingID": ""
+                          },
+                          "textColor": {
+                            "color": {
+                              "alpha": 1,
+                              "color": "#000000"
+                            },
+                            "type": "color"
+                          },
+                          "backgroundImage": {
+                            "url": "https://cn-geo1.uber.com/static/mobile-content/eats/storefront_promo_cards/savings_card_icons/eats_new/dealsBackground-happy_red.png",
+                            "overlayOpacity": 0,
+                            "scaleAspect": "SCALE_ASPECT_RESIZE_TO_FIT"
+                          },
+                          "trailingImage": {
+                            "url": "https://cn-geo1.uber.com/static/mobile-content/eats/storefront_promo_cards/savings_card_icons/eats_new/transparentTrailingImage.png",
+                            "overlayOpacity": 0,
+                            "scaleAspect": "SCALE_ASPECT_RESIZE_TO_FILL"
+                          },
+                          "isBackgroundDark": false,
+                          "tier": "TIER_INVALID",
+                          "category": "CATEGORY_INVALID",
+                          "stores": {
+                            "storeUUIDs": [
+                              "45fda32b-8ed3-41c5-b15a-4a7842969634"
+                            ]
+                          },
+                          "cardMetadata": {
+                            "promotionCardMetadata": {
+                              "promotionProjectType": "UNKNOWN",
+                              "productCategory": "PRODUCT_CATEGORY_OTHER",
+                              "promotionUuid": "4e0a413a-9556-4c35-935b-cc962a8b7779",
+                              "isHappyHourOffer": false,
+                              "benefitMetadata": {
+                                "IsRestaurantSaving": true
+                              }
+                            },
+                            "type": "promotionCardMetadata"
+                          },
+                          "viewType": "VIEW_TYPE_INVALID",
+                          "viewID": "",
+                          "viewData": {
+                            "metadata": {
+                              "OFFER_TYPE": "FLAT",
+                              "OFFER_UUID": "4e0a413a-9556-4c35-935b-cc962a8b7779",
+                              "STORE_UUID": "45fda32b-8ed3-41c5-b15a-4a7842969634"
+                            }
+                          }
+                        },
+                        "type": "card"
+                      },
+                      {
+                        "card": {
+                          "uuid": "0dca8b97-78c4-4e7b-aee3-892026746e45",
+                          "metadata": {
+                            "trackingID": "consumer-gateway-storefront-saving"
+                          },
+                          "title": "Save $5 when you order $20 or more",
+                          "subtitle": "Valid for current order while supplies last",
+                          "cta": {
+                            "action": {
+                              "openBottomSheetView": {
+                                "bottomSheet": {
+                                  "standardBottomSheet": {
+                                    "title": "Save $5 when you order $20 or more at WaBa Grill",
+                                    "standardBottomSheetParagraphs": [
+                                      {
+                                        "title": "Details",
+                                        "subtitle": "• Unlimited until Sep 30\n• $20 minimum order (excluding promotions)\n• This promotion does not apply to taxes, fees and customizations. Service Fee (where applicable) is calculated based on order value (before discount or promotion). Cannot be combined with other promotions.\n• Alcohol or other regulated items may not be eligible for this promotion\n• Other local fees/taxes may still apply.",
+                                        "textLines": null
+                                      },
+                                      {
+                                        "title": "Expiration",
+                                        "subtitle": "Valid for current order while supplies last",
+                                        "textLines": null
+                                      },
+                                      {
+                                        "title": "Location",
+                                        "subtitle": "Valid for this merchant only",
+                                        "textLines": null
+                                      }
+                                    ],
+                                    "primaryCTA": {
+                                      "text": "Got It",
+                                      "action": {
+                                        "dismissView": {
+                                          "dismissType": "GO_BACK"
+                                        },
+                                        "type": "dismissView"
+                                      }
+                                    },
+                                    "uuid": "4a4b4150-b878-4b81-a2dd-f6cbcff3c75a"
+                                  },
+                                  "type": "standardBottomSheet"
+                                }
+                              },
+                              "type": "openBottomSheetView"
+                            },
+                            "trackingID": ""
+                          },
+                          "textColor": {
+                            "color": {
+                              "alpha": 1,
+                              "color": "#000000"
+                            },
+                            "type": "color"
+                          },
+                          "backgroundImage": {
+                            "url": "https://cn-geo1.uber.com/static/mobile-content/eats/storefront_promo_cards/savings_card_icons/eats_new/dealsBackground-happy_red.png",
+                            "overlayOpacity": 0,
+                            "scaleAspect": "SCALE_ASPECT_RESIZE_TO_FIT"
+                          },
+                          "trailingImage": {
+                            "url": "https://cn-geo1.uber.com/static/mobile-content/eats/storefront_promo_cards/savings_card_icons/eats_new/transparentTrailingImage.png",
+                            "overlayOpacity": 0,
+                            "scaleAspect": "SCALE_ASPECT_RESIZE_TO_FILL"
+                          },
+                          "isBackgroundDark": false,
+                          "tier": "TIER_INVALID",
+                          "category": "CATEGORY_INVALID",
+                          "stores": {
+                            "storeUUIDs": [
+                              "45fda32b-8ed3-41c5-b15a-4a7842969634"
+                            ]
+                          },
+                          "cardMetadata": {
+                            "promotionCardMetadata": {
+                              "promotionProjectType": "UNKNOWN",
+                              "productCategory": "PRODUCT_CATEGORY_OTHER",
+                              "promotionUuid": "0dca8b97-78c4-4e7b-aee3-892026746e45",
+                              "isHappyHourOffer": false,
+                              "benefitMetadata": {
+                                "IsRestaurantSaving": true
+                              }
+                            },
+                            "type": "promotionCardMetadata"
+                          },
+                          "viewType": "VIEW_TYPE_INVALID",
+                          "viewID": "",
+                          "viewData": {
+                            "metadata": {
+                              "OFFER_TYPE": "FLAT",
+                              "OFFER_UUID": "0dca8b97-78c4-4e7b-aee3-892026746e45",
+                              "STORE_UUID": "45fda32b-8ed3-41c5-b15a-4a7842969634"
+                            }
+                          }
+                        },
+                        "type": "card"
+                      }
+                    ],
+                    "template": "SMALL",
+                    "metadata": {
+                      "maxDisplayCount": 0,
+                      "trackingID": ""
+                    },
+                    "peekValue": "SPACING_UNIT_5X"
+                  },
+                  "type": "cardCarousel"
+                },
+                "surface": "STOREFRONT_CATALOG_ITEM",
+                "surfaceId": "STOREFRONT_CATALOG_ITEM"
+              }
+            },
+            "type": "eaterMessagingPayload"
+          }
+        },
+        {
+          "payload": {
+            "standardItemsPayload": {
+              "title": {
+                "text": "Featured items"
+              },
+              "catalogItems": [
+                {
+                  "uuid": "046ab573-2fa0-5bdf-a72d-5547c06d8680",
+                  "title": "WaBa Chicken & Steak Bowl",
+                  "itemDescription": "A bold savory dual-protein pairing of in-house marinated steak and tender chicken, served over steamed rice and WaBa Sauce",
+                  "price": 1439,
+                  "priceTagline": {
+                    "text": "$14.39 • 710 Cal.",
+                    "textFormat": "<span>$14.39<span style=\"color:#757575\"> • 710 Cal.</span></span>",
+                    "accessibilityText": "$14.39, 710 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "f19e50fc-ace2-56f5-af43-255d8345e15a",
+                  "title": "Chicken Bowl",
+                  "itemDescription": "Grilled all-natural, never frozen chicken caramelized with our signature WaBa sauce.",
+                  "price": 1239,
+                  "priceTagline": {
+                    "text": "$12.39 • 640 - 760 Cal.",
+                    "textFormat": "<span>$12.39<span style=\"color:#757575\"> • 640 - 760 Cal.</span></span>",
+                    "accessibilityText": "$12.39, 640 - 760 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "88a92f8e-4d73-5441-b28c-8a7d222b27b6",
+                  "title": "Steak Bowl",
+                  "itemDescription": "Juicy steak marinated in house with our WaBa marinade and grilled to perfection.",
+                  "price": 1439,
+                  "priceTagline": {
+                    "text": "$14.39 • 720 Cal.",
+                    "textFormat": "<span>$14.39<span style=\"color:#757575\"> • 720 Cal.</span></span>",
+                    "accessibilityText": "$14.39, 720 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "881d3057-ff78-5b33-ae32-27748b8bc566",
+                  "title": "WaBa Chicken & Steak Veggie Bowl",
+                  "itemDescription": "A popular pairing of our in-house marinated steak and our grilled all-natural chicken basted with our signature WaBa Sauce.",
+                  "price": 1569,
+                  "priceTagline": {
+                    "text": "$15.69 • 660 Cal.",
+                    "textFormat": "<span>$15.69<span style=\"color:#757575\"> • 660 Cal.</span></span>",
+                    "accessibilityText": "$15.69, 660 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "f0ce1e5d-e0cb-50c9-8cf4-0047bb15793c",
+                  "title": "WaBa Chicken & Steak Plate",
+                  "itemDescription": "A popular pairing of our in-house marinated steak and our grilled all-natural chicken basted with our signature WaBa Sauce.",
+                  "price": 1819,
+                  "priceTagline": {
+                    "text": "$18.19 • 890 Cal.",
+                    "textFormat": "<span>$18.19<span style=\"color:#757575\"> • 890 Cal.</span></span>",
+                    "accessibilityText": "$18.19, 890 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "e787ad1a-86b2-52f1-b801-b5231306c304",
+                  "title": "Chicken Plate",
+                  "itemDescription": "Grilled all-natural, never frozen chicken caramelized with our signature WaBa sauce.",
+                  "price": 1619,
+                  "priceTagline": {
+                    "text": "$16.19 • 820 Cal.",
+                    "textFormat": "<span>$16.19<span style=\"color:#757575\"> • 820 Cal.</span></span>",
+                    "accessibilityText": "$16.19, 820 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "ee1d62cf-ebf3-564f-a793-3890a8177565",
+                  "title": "Chicken Veggie Bowl",
+                  "itemDescription": "Grilled all-natural, never frozen chicken caramelized with our signature WaBa sauce.",
+                  "price": 1359,
+                  "priceTagline": {
+                    "text": "$13.59 • 590 Cal.",
+                    "textFormat": "<span>$13.59<span style=\"color:#757575\"> • 590 Cal.</span></span>",
+                    "accessibilityText": "$13.59, 590 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "7ceb9e14-7760-57bc-93a4-d20b96503d12",
+                  "title": "Steak Plate",
+                  "itemDescription": "Juicy steak marinated in house with our WaBa marinade and grilled to perfection.",
+                  "price": 1819,
+                  "priceTagline": {
+                    "text": "$18.19 • 980 Cal.",
+                    "textFormat": "<span>$18.19<span style=\"color:#757575\"> • 980 Cal.</span></span>",
+                    "accessibilityText": "$18.19, 980 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "2689a22a-c216-5218-bc57-991b9eaa57da",
+                  "title": "Steak Veggie Bowl",
+                  "itemDescription": "Juicy steak marinated in-house with our WaBa marinade and grilled to perfection.",
+                  "price": 1569,
+                  "priceTagline": {
+                    "text": "$15.69 • 620 Cal.",
+                    "textFormat": "<span>$15.69<span style=\"color:#757575\"> • 620 Cal.</span></span>",
+                    "accessibilityText": "$15.69, 620 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "9ec30191-09ae-5537-b114-d00e20b9194c",
+                  "title": "5 Dumplings",
+                  "itemDescription": "A savory veggie and pork filling encased in a soft, yet crisp wheat dough. Served with Sweet Chili Dipping Sauce.",
+                  "price": 499,
+                  "priceTagline": {
+                    "text": "$4.99 • 210 Cal.",
+                    "textFormat": "<span>$4.99<span style=\"color:#757575\"> • 210 Cal.</span></span>",
+                    "accessibilityText": "$4.99, 210 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "f6e5a0d1-4a24-572c-a708-4c3cfeecbd1c",
+                  "title": "Proteins",
+                  "itemDescription": "",
+                  "price": 509,
+                  "priceTagline": {
+                    "text": "$5.09 • 50 - 290 Cal.",
+                    "textFormat": "<span>$5.09<span style=\"color:#757575\"> • 50 - 290 Cal.</span></span>",
+                    "accessibilityText": "$5.09, 50 - 290 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "f16c9e4a-6c39-55b4-9b45-a12758e21c03",
+                  "title": "5 Chili Crisp Dumplings",
+                  "itemDescription": "Discover our NEW Chili Crisp Dumplings, a bold new take on a WaBa classic! Our signature Pork and Veggie Dumplings are tossed in a fiery blend of chilies, sesame oil, crispy green onions, sesame seeds, and garlic.",
+                  "price": 539,
+                  "priceTagline": {
+                    "text": "$5.39",
+                    "textFormat": "<span>$5.39</span>",
+                    "accessibilityText": "$5.39"
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "3c7250a5-dd4a-59b7-a1e7-18480c694b56",
+                  "title": "Dragon Fruit Mango Lemonade",
+                  "itemDescription": "A perfect balance of tangy lemonade, sweet dragon fruit and juicy mango. Made with real fruits and topped with a fresh lemon wedge.",
+                  "price": 449,
+                  "priceTagline": {
+                    "text": "$4.49 • 160 - 360 Cal.",
+                    "textFormat": "<span>$4.49<span style=\"color:#757575\"> • 160 - 360 Cal.</span></span>",
+                    "accessibilityText": "$4.49, 160 - 360 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "c71d68ad-5060-523a-83f6-0404ffd8919e",
+                  "title": "Steak & Shrimp Plate",
+                  "itemDescription": "A savory pairing of in-house marinated steak and tailless, fully peeled shrimp, hand-basted with our signature WaBa Sauce.",
+                  "price": 1819,
+                  "priceTagline": {
+                    "text": "$18.19",
+                    "textFormat": "<span>$18.19</span>",
+                    "accessibilityText": "$18.19"
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "b6e7e722-f0c1-5f37-8853-08862fc1432d",
+                  "title": "Thai Tea",
+                  "itemDescription": "Premium black tea with cinnamon, cardamom, star anise, and lactose-free milk for a lightly sweet, refreshing treat.",
+                  "price": 449,
+                  "priceTagline": {
+                    "text": "$4.49 • 240 Cal.",
+                    "textFormat": "<span>$4.49<span style=\"color:#757575\"> • 240 Cal.</span></span>",
+                    "accessibilityText": "$4.49, 240 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "13a7aa88-b790-5aec-a101-9d45a6d42b97",
+                  "title": "10 Dumplings",
+                  "itemDescription": "A savory veggie and pork filling encased in a soft, yet crisp wheat dough. Served with Sweet Chili Dipping Sauce.",
+                  "price": 979,
+                  "priceTagline": {
+                    "text": "$9.79 • 420 Cal.",
+                    "textFormat": "<span>$9.79<span style=\"color:#757575\"> • 420 Cal.</span></span>",
+                    "accessibilityText": "$9.79, 420 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "f0e7b4ed-879a-5712-b078-0b5a9fea911c",
+                  "title": "Steak & Shrimp Veggie Bowl",
+                  "itemDescription": "A savory pairing of in-house marinated steak and tender shrimp, hand-basted served the Signature WaBa Way with steamed veggies & WaBa Sauce.",
+                  "price": 1569,
+                  "priceTagline": {
+                    "text": "$15.69",
+                    "textFormat": "<span>$15.69</span>",
+                    "accessibilityText": "$15.69"
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "09cb1b82-0693-5354-b639-f2a14fe43b3d",
+                  "title": "Salmon Veggie Bowl",
+                  "itemDescription": "Grilled wild-caught Pacific salmon basted with our signature WaBa sauce.",
+                  "price": 1709,
+                  "priceTagline": {
+                    "text": "$17.09 • 500 Cal.",
+                    "textFormat": "<span>$17.09<span style=\"color:#757575\"> • 500 Cal.</span></span>",
+                    "accessibilityText": "$17.09, 500 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "b099de10-c77b-56ac-a19f-5c3ddc3a55ef",
+                  "title": "Sweet & Spicy Chicken Plate",
+                  "itemDescription": "Grilled all-natural, never frozen chicken caramelized with WaBa's sweet chili sauce.",
+                  "price": 1619,
+                  "priceTagline": {
+                    "text": "$16.19 • 860 Cal.",
+                    "textFormat": "<span>$16.19<span style=\"color:#757575\"> • 860 Cal.</span></span>",
+                    "accessibilityText": "$16.19, 860 Cal."
+                  },
+                  "hasCustomizations": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "payload": {
+            "standardItemsPayload": {
+              "title": {
+                "text": "Tacos"
+              },
+              "catalogItems": [
+                {
+                  "uuid": "374915ab-8357-5964-8a6d-50a9399fe874",
+                  "title": "Tacos",
+                  "itemDescription": "Choose a grilled chicken, marinated steak, or shrimp taco in a corn-flour blend tortilla with Shredded Cabbage Blend, green onions, and spicy Boom Boom sauce.",
+                  "price": 349,
+                  "priceTagline": {
+                    "text": "$3.49 • 170 - 240 Cal.",
+                    "textFormat": "<span>$3.49<span style=\"color:#757575\"> • 170 - 240 Cal.</span></span>",
+                    "accessibilityText": "$3.49, 170 - 240 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "a7ca7fa6-b1d9-5386-b896-20bd3c4ed29e",
+                  "title": "Taco Trio",
+                  "itemDescription": "Choose 3x grilled chicken, marinated steak, or shrimp tacos in a corn-flour blend tortilla with Shredded Cabbage Blend, green onions, and spicy Boom Boom sauce; plant-based options available.",
+                  "price": 989,
+                  "priceTagline": {
+                    "text": "$9.89 • 510 - 720 Cal.",
+                    "textFormat": "<span>$9.89<span style=\"color:#757575\"> • 510 - 720 Cal.</span></span>",
+                    "accessibilityText": "$9.89, 510 - 720 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "03ee5c72-3c3e-53c9-91b4-2e274dac4efc",
+                  "title": "Mixed Taco Trio",
+                  "itemDescription": "Pick your trio: chicken, marinated steak, or shrimp, nestled in a corn and flour blend tortilla with Shredded Cabbage Blend, green onions, and spicy Boom Boom sauce.",
+                  "price": 0,
+                  "priceTagline": {
+                    "text": "Priced by add-ons",
+                    "textFormat": "<span>Priced by add-ons</span>",
+                    "accessibilityText": "Priced by add-ons"
+                  },
+                  "hasCustomizations": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "payload": {
+            "standardItemsPayload": {
+              "title": {
+                "text": "Rice Bowls"
+              },
+              "catalogItems": [
+                {
+                  "uuid": "f19e50fc-ace2-56f5-af43-255d8345e15a",
+                  "title": "Chicken Bowl",
+                  "itemDescription": "Grilled all-natural, never frozen chicken caramelized with our signature WaBa sauce.",
+                  "price": 1239,
+                  "priceTagline": {
+                    "text": "$12.39 • 640 - 760 Cal.",
+                    "textFormat": "<span>$12.39<span style=\"color:#757575\"> • 640 - 760 Cal.</span></span>",
+                    "accessibilityText": "$12.39, 640 - 760 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "88a92f8e-4d73-5441-b28c-8a7d222b27b6",
+                  "title": "Steak Bowl",
+                  "itemDescription": "Juicy steak marinated in house with our WaBa marinade and grilled to perfection.",
+                  "price": 1439,
+                  "priceTagline": {
+                    "text": "$14.39 • 720 Cal.",
+                    "textFormat": "<span>$14.39<span style=\"color:#757575\"> • 720 Cal.</span></span>",
+                    "accessibilityText": "$14.39, 720 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "046ab573-2fa0-5bdf-a72d-5547c06d8680",
+                  "title": "WaBa Chicken & Steak Bowl",
+                  "itemDescription": "A bold savory dual-protein pairing of in-house marinated steak and tender chicken, served over steamed rice and WaBa Sauce",
+                  "price": 1439,
+                  "priceTagline": {
+                    "text": "$14.39 • 710 Cal.",
+                    "textFormat": "<span>$14.39<span style=\"color:#757575\"> • 710 Cal.</span></span>",
+                    "accessibilityText": "$14.39, 710 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "53898bac-0376-5db6-92ae-84b3738146b2",
+                  "title": "Sweet & Spicy Chicken Bowl",
+                  "itemDescription": "Grilled all-natural, never frozen chicken caramelized with WaBa's sweet chili sauce.",
+                  "price": 1239,
+                  "priceTagline": {
+                    "text": "$12.39 • 680 Cal.",
+                    "textFormat": "<span>$12.39<span style=\"color:#757575\"> • 680 Cal.</span></span>",
+                    "accessibilityText": "$12.39, 680 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "f162b239-d408-510a-93c5-2b98e4ba92f4",
+                  "title": "Salmon Bowl",
+                  "itemDescription": "Grilled wild-caught Pacific salmon basted with our signature WaBa sauce.",
+                  "price": 1579,
+                  "priceTagline": {
+                    "text": "$15.79 • 540 Cal.",
+                    "textFormat": "<span>$15.79<span style=\"color:#757575\"> • 540 Cal.</span></span>",
+                    "accessibilityText": "$15.79, 540 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "8b19e04b-c8a6-53ea-9613-b39032b10461",
+                  "title": "Shrimp Bowl",
+                  "itemDescription": "Grilled to perfection, tailless, fully peeled shrimp hand-basted with our signature WaBa sauce.",
+                  "price": 1579,
+                  "priceTagline": {
+                    "text": "$15.79 • 470 Cal.",
+                    "textFormat": "<span>$15.79<span style=\"color:#757575\"> • 470 Cal.</span></span>",
+                    "accessibilityText": "$15.79, 470 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "ea4c05c3-fc21-540a-9333-bd1b6952f3e9",
+                  "title": "Tofu Bowl",
+                  "itemDescription": "Grilled organic tofu hand-basted in our flavorful signature WaBa sauce.",
+                  "price": 1239,
+                  "priceTagline": {
+                    "text": "$12.39 • 590 Cal.",
+                    "textFormat": "<span>$12.39<span style=\"color:#757575\"> • 590 Cal.</span></span>",
+                    "accessibilityText": "$12.39, 590 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "5689aa89-90d8-58d9-8563-4503712d3910",
+                  "title": "Chicken & Shrimp Bowl",
+                  "itemDescription": "A flavorful duo of tender shrimp and grilled all-natural chicken, lightly basted with our signature WaBa Sauce.",
+                  "price": 1379,
+                  "priceTagline": {
+                    "text": "$13.79 • 600 Cal.",
+                    "textFormat": "<span>$13.79<span style=\"color:#757575\"> • 600 Cal.</span></span>",
+                    "accessibilityText": "$13.79, 600 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "7af1014f-1582-5a63-8c65-9681b1fd2cd5",
+                  "title": "Steak & Shrimp Bowl",
+                  "itemDescription": "A savory pairing of in-house marinated steak and tender shrimp, hand-basted with our signature WaBa Sauce, served over steamed rice.",
+                  "price": 1439,
+                  "priceTagline": {
+                    "text": "$14.39 • 600 Cal.",
+                    "textFormat": "<span>$14.39<span style=\"color:#757575\"> • 600 Cal.</span></span>",
+                    "accessibilityText": "$14.39, 600 Cal."
+                  },
+                  "hasCustomizations": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "payload": {
+            "standardItemsPayload": {
+              "title": {
+                "text": "Rice Veggie Bowls"
+              },
+              "catalogItems": [
+                {
+                  "uuid": "2689a22a-c216-5218-bc57-991b9eaa57da",
+                  "title": "Steak Veggie Bowl",
+                  "itemDescription": "Juicy steak marinated in-house with our WaBa marinade and grilled to perfection.",
+                  "price": 1569,
+                  "priceTagline": {
+                    "text": "$15.69 • 620 Cal.",
+                    "textFormat": "<span>$15.69<span style=\"color:#757575\"> • 620 Cal.</span></span>",
+                    "accessibilityText": "$15.69, 620 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "ee1d62cf-ebf3-564f-a793-3890a8177565",
+                  "title": "Chicken Veggie Bowl",
+                  "itemDescription": "Grilled all-natural, never frozen chicken caramelized with our signature WaBa sauce.",
+                  "price": 1359,
+                  "priceTagline": {
+                    "text": "$13.59 • 590 Cal.",
+                    "textFormat": "<span>$13.59<span style=\"color:#757575\"> • 590 Cal.</span></span>",
+                    "accessibilityText": "$13.59, 590 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "a3ad2a58-3585-59ab-abf4-8b9e6e2ae334",
+                  "title": "Sweet & Spicy Chicken Veggie Bowl",
+                  "itemDescription": "Grilled all-natural, never frozen chicken caramelized with WaBa's sweet chili sauce.",
+                  "price": 1359,
+                  "priceTagline": {
+                    "text": "$13.59 • 640 Cal.",
+                    "textFormat": "<span>$13.59<span style=\"color:#757575\"> • 640 Cal.</span></span>",
+                    "accessibilityText": "$13.59, 640 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "881d3057-ff78-5b33-ae32-27748b8bc566",
+                  "title": "WaBa Chicken & Steak Veggie Bowl",
+                  "itemDescription": "A popular pairing of our in-house marinated steak and our grilled all-natural chicken basted with our signature WaBa Sauce.",
+                  "price": 1569,
+                  "priceTagline": {
+                    "text": "$15.69 • 660 Cal.",
+                    "textFormat": "<span>$15.69<span style=\"color:#757575\"> • 660 Cal.</span></span>",
+                    "accessibilityText": "$15.69, 660 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "4822e24a-7092-5649-beda-c70306bc73dc",
+                  "title": "Shrimp Veggie Bowl",
+                  "itemDescription": "Grilled to perfection, tailless, fully peeled shrimp hand-basted with our signature WaBa sauce.",
+                  "price": 1709,
+                  "priceTagline": {
+                    "text": "$17.09 • 420 Cal.",
+                    "textFormat": "<span>$17.09<span style=\"color:#757575\"> • 420 Cal.</span></span>",
+                    "accessibilityText": "$17.09, 420 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "09cb1b82-0693-5354-b639-f2a14fe43b3d",
+                  "title": "Salmon Veggie Bowl",
+                  "itemDescription": "Grilled wild-caught Pacific salmon basted with our signature WaBa sauce.",
+                  "price": 1709,
+                  "priceTagline": {
+                    "text": "$17.09 • 500 Cal.",
+                    "textFormat": "<span>$17.09<span style=\"color:#757575\"> • 500 Cal.</span></span>",
+                    "accessibilityText": "$17.09, 500 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "a87f14d3-1c16-522a-a7d6-0bbf0bbdc20c",
+                  "title": "Tofu Veggie Bowl",
+                  "itemDescription": "Grilled organic tofu hand-basted in our flavorful signature WaBa sauce.",
+                  "price": 1359,
+                  "priceTagline": {
+                    "text": "$13.59 • 520 Cal.",
+                    "textFormat": "<span>$13.59<span style=\"color:#757575\"> • 520 Cal.</span></span>",
+                    "accessibilityText": "$13.59, 520 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "30053ff3-62b4-50fd-97c8-516f5c278995",
+                  "title": "Veggie Bowl",
+                  "itemDescription": "A combination of fresh carrots, broccoli, and cabbage steamed to the perfect crispness.",
+                  "price": 979,
+                  "priceTagline": {
+                    "text": "$9.79 • 356 Cal.",
+                    "textFormat": "<span>$9.79<span style=\"color:#757575\"> • 356 Cal.</span></span>",
+                    "accessibilityText": "$9.79, 356 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "30667ac1-b71d-54c5-83e9-3c228354a4f2",
+                  "title": "Chicken & Shrimp Veggie Bowl",
+                  "itemDescription": "A fresh dual-protein pairing of tender shrimp and grilled all-natural chicken, served the Signature WaBa Way with steamed veggies & WaBa Sauce.",
+                  "price": 1499,
+                  "priceTagline": {
+                    "text": "$14.99",
+                    "textFormat": "<span>$14.99</span>",
+                    "accessibilityText": "$14.99"
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "f0e7b4ed-879a-5712-b078-0b5a9fea911c",
+                  "title": "Steak & Shrimp Veggie Bowl",
+                  "itemDescription": "A savory pairing of in-house marinated steak and tender shrimp, hand-basted served the Signature WaBa Way with steamed veggies & WaBa Sauce.",
+                  "price": 1569,
+                  "priceTagline": {
+                    "text": "$15.69",
+                    "textFormat": "<span>$15.69</span>",
+                    "accessibilityText": "$15.69"
+                  },
+                  "hasCustomizations": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "payload": {
+            "standardItemsPayload": {
+              "title": {
+                "text": "Plates"
+              },
+              "catalogItems": [
+                {
+                  "uuid": "f0ce1e5d-e0cb-50c9-8cf4-0047bb15793c",
+                  "title": "WaBa Chicken & Steak Plate",
+                  "itemDescription": "A popular pairing of our in-house marinated steak and our grilled all-natural chicken basted with our signature WaBa Sauce.",
+                  "price": 1819,
+                  "priceTagline": {
+                    "text": "$18.19 • 890 Cal.",
+                    "textFormat": "<span>$18.19<span style=\"color:#757575\"> • 890 Cal.</span></span>",
+                    "accessibilityText": "$18.19, 890 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "7ceb9e14-7760-57bc-93a4-d20b96503d12",
+                  "title": "Steak Plate",
+                  "itemDescription": "Juicy steak marinated in house with our WaBa marinade and grilled to perfection.",
+                  "price": 1819,
+                  "priceTagline": {
+                    "text": "$18.19 • 980 Cal.",
+                    "textFormat": "<span>$18.19<span style=\"color:#757575\"> • 980 Cal.</span></span>",
+                    "accessibilityText": "$18.19, 980 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "e787ad1a-86b2-52f1-b801-b5231306c304",
+                  "title": "Chicken Plate",
+                  "itemDescription": "Grilled all-natural, never frozen chicken caramelized with our signature WaBa sauce.",
+                  "price": 1619,
+                  "priceTagline": {
+                    "text": "$16.19 • 820 Cal.",
+                    "textFormat": "<span>$16.19<span style=\"color:#757575\"> • 820 Cal.</span></span>",
+                    "accessibilityText": "$16.19, 820 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "b099de10-c77b-56ac-a19f-5c3ddc3a55ef",
+                  "title": "Sweet & Spicy Chicken Plate",
+                  "itemDescription": "Grilled all-natural, never frozen chicken caramelized with WaBa's sweet chili sauce.",
+                  "price": 1619,
+                  "priceTagline": {
+                    "text": "$16.19 • 860 Cal.",
+                    "textFormat": "<span>$16.19<span style=\"color:#757575\"> • 860 Cal.</span></span>",
+                    "accessibilityText": "$16.19, 860 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "32836a4b-968a-51e6-bcb3-71b16ec1d81d",
+                  "title": "Salmon Plate",
+                  "itemDescription": "Grilled wild-caught Pacific salmon basted with our signature WaBa sauce.",
+                  "price": 1959,
+                  "priceTagline": {
+                    "text": "$19.59 • 700 Cal.",
+                    "textFormat": "<span>$19.59<span style=\"color:#757575\"> • 700 Cal.</span></span>",
+                    "accessibilityText": "$19.59, 700 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "d2b736f7-3ae0-56a8-a302-ecac085f47dc",
+                  "title": "Shrimp Plate",
+                  "itemDescription": "Grilled to perfection, tailless, fully peeled shrimp hand-basted with our signature WaBa sauce.",
+                  "price": 1959,
+                  "priceTagline": {
+                    "text": "$19.59 • 570 Cal.",
+                    "textFormat": "<span>$19.59<span style=\"color:#757575\"> • 570 Cal.</span></span>",
+                    "accessibilityText": "$19.59, 570 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "551cab7d-171d-5ae6-a013-4a33bcb33fac",
+                  "title": "Tofu Plate",
+                  "itemDescription": "Grilled organic tofu hand-basted in our flavorful signature WaBa sauce.",
+                  "price": 1619,
+                  "priceTagline": {
+                    "text": "$16.19 • 740 Cal.",
+                    "textFormat": "<span>$16.19<span style=\"color:#757575\"> • 740 Cal.</span></span>",
+                    "accessibilityText": "$16.19, 740 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "d690d873-0d0e-581b-a143-e8516094fe6f",
+                  "title": "Chicken & Shrimp Plate",
+                  "itemDescription": "A flavorful pairing of grilled all-natural, never frozen chicken and tailless, fully peeled shrimp, hand-basted with our signature WaBa Sauce.",
+                  "price": 1819,
+                  "priceTagline": {
+                    "text": "$18.19",
+                    "textFormat": "<span>$18.19</span>",
+                    "accessibilityText": "$18.19"
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "c71d68ad-5060-523a-83f6-0404ffd8919e",
+                  "title": "Steak & Shrimp Plate",
+                  "itemDescription": "A savory pairing of in-house marinated steak and tailless, fully peeled shrimp, hand-basted with our signature WaBa Sauce.",
+                  "price": 1819,
+                  "priceTagline": {
+                    "text": "$18.19",
+                    "textFormat": "<span>$18.19</span>",
+                    "accessibilityText": "$18.19"
+                  },
+                  "hasCustomizations": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "payload": {
+            "standardItemsPayload": {
+              "title": {
+                "text": "Family Meals"
+              },
+              "catalogItems": [
+                {
+                  "uuid": "77a03a6d-98b8-5789-8d36-a2defb2239f8",
+                  "title": "Chicken & Steak Family Meal",
+                  "itemDescription": "A popular pairing of our in-house marinated steak and our grilled all-natural chicken basted with our signature WaBa Sauce.",
+                  "price": 5339,
+                  "priceTagline": {
+                    "text": "$53.39 • 2350 Cal.",
+                    "textFormat": "<span>$53.39<span style=\"color:#757575\"> • 2350 Cal.</span></span>",
+                    "accessibilityText": "$53.39, 2350 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "fe2ada84-2601-5f56-8328-1f5ed9e85f4a",
+                  "title": "Family Sized Proteins",
+                  "itemDescription": "Family-size sharable portions of your WaBa favorites.",
+                  "price": 2489,
+                  "priceTagline": {
+                    "text": "$24.89 • 720 - 1570 Cal.",
+                    "textFormat": "<span>$24.89<span style=\"color:#757575\"> • 720 - 1570 Cal.</span></span>",
+                    "accessibilityText": "$24.89, 720 - 1570 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "860de0ab-578e-53f5-9b62-34f5104967cb",
+                  "title": "20 Dumplings",
+                  "itemDescription": "20 savory pork and veggie-filled dumplings that are soft and crisp in all the right places.",
+                  "price": 1909,
+                  "priceTagline": {
+                    "text": "$19.09 • 840 Cal.",
+                    "textFormat": "<span>$19.09<span style=\"color:#757575\"> • 840 Cal.</span></span>",
+                    "accessibilityText": "$19.09, 840 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "4d9f1cdb-e508-5e32-802e-9b98aeacaded",
+                  "title": "Chicken Family Meal",
+                  "itemDescription": "Grilled all-natural, never frozen chicken caramelized with our signature WaBa sauce.",
+                  "price": 4189,
+                  "priceTagline": {
+                    "text": "$41.89 • 2120 Cal.",
+                    "textFormat": "<span>$41.89<span style=\"color:#757575\"> • 2120 Cal.</span></span>",
+                    "accessibilityText": "$41.89, 2120 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "026721fe-c43c-5b7f-957f-001ea410c72e",
+                  "title": "White Meat Chicken & Marinated Steak Family Meal",
+                  "itemDescription": "A popular pairing of grilled-all natural, never frozen chicken breast hand-basted with our signature WaBa sauce and our marinated steak.",
+                  "price": 5339,
+                  "priceTagline": {
+                    "text": "$53.39 • 2030 Cal.",
+                    "textFormat": "<span>$53.39<span style=\"color:#757575\"> • 2030 Cal.</span></span>",
+                    "accessibilityText": "$53.39, 2030 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "893cc964-8914-51d1-a226-c0eedbeb24cc",
+                  "title": "Marinated Steak Family Meal",
+                  "itemDescription": "Juicy steak marinated in house with our WaBa marinade and grilled to perfection.",
+                  "price": 5339,
+                  "priceTagline": {
+                    "text": "$53.39 • 2400 Cal.",
+                    "textFormat": "<span>$53.39<span style=\"color:#757575\"> • 2400 Cal.</span></span>",
+                    "accessibilityText": "$53.39, 2400 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "42da07f2-3445-5aca-afae-cc20f5bd5934",
+                  "title": "Family Sized Veggies",
+                  "itemDescription": "A selection of our Family Meal Veggies. Serves 4.",
+                  "price": 1169,
+                  "priceTagline": {
+                    "text": "$11.69 • 50 - 130 Cal.",
+                    "textFormat": "<span>$11.69<span style=\"color:#757575\"> • 50 - 130 Cal.</span></span>",
+                    "accessibilityText": "$11.69, 50 - 130 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "7518d872-3271-5bde-81e5-8b06596d5eef",
+                  "title": "Sweet & Spicy Chicken Family Meal",
+                  "itemDescription": "Grilled all-natural, never frozen chicken caramelized with WaBa's sweet chili sauce.",
+                  "price": 4189,
+                  "priceTagline": {
+                    "text": "$41.89 • 1990 Cal.",
+                    "textFormat": "<span>$41.89<span style=\"color:#757575\"> • 1990 Cal.</span></span>",
+                    "accessibilityText": "$41.89, 1990 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "48eec3ab-456a-5fb2-9232-9c7eef32f556",
+                  "title": "Family Sized Rice",
+                  "itemDescription": "A selection of our Family Meal Rices. Serves 4.",
+                  "price": 849,
+                  "priceTagline": {
+                    "text": "$8.49 • 640 - 740 Cal.",
+                    "textFormat": "<span>$8.49<span style=\"color:#757575\"> • 640 - 740 Cal.</span></span>",
+                    "accessibilityText": "$8.49, 640 - 740 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "ec79d4af-de0a-5821-b7f9-7da0968ba033",
+                  "title": "White Meat Chicken Family Meal",
+                  "itemDescription": "Grilled all-natural, never frozen chicken caramelized with our signature WaBa sauce.",
+                  "price": 4579,
+                  "priceTagline": {
+                    "text": "$45.79 • 1990 Cal.",
+                    "textFormat": "<span>$45.79<span style=\"color:#757575\"> • 1990 Cal.</span></span>",
+                    "accessibilityText": "$45.79, 1990 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "9e57061b-3fa3-518f-9a62-a3fe3b549bff",
+                  "title": "Family Sized Salad",
+                  "itemDescription": "A fresh leafy salad with carrots, and cucumber, served with a side of sweet & tangy WaBa Sesame dressing, serves 2.",
+                  "price": 849,
+                  "priceTagline": {
+                    "text": "$8.49 • 360 Cal.",
+                    "textFormat": "<span>$8.49<span style=\"color:#757575\"> • 360 Cal.</span></span>",
+                    "accessibilityText": "$8.49, 360 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "4dc66473-5f8f-5f1b-9b35-930ef67e4831",
+                  "title": "Organic Tofu Family Meal",
+                  "itemDescription": "Grilled organic tofu hand-basted in our flavorful signature WaBa sauce.",
+                  "price": 4189,
+                  "priceTagline": {
+                    "text": "$41.89 • 1790 Cal.",
+                    "textFormat": "<span>$41.89<span style=\"color:#757575\"> • 1790 Cal.</span></span>",
+                    "accessibilityText": "$41.89, 1790 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "d7a0af7b-410b-52e6-9e83-09d7d7de02d3",
+                  "title": "20 Chili Crisp Dumplings",
+                  "itemDescription": "Discover our NEW Chili Crisp Dumplings, a bold new take on a WaBa classic! Our signature Pork and Veggie Dumplings are tossed in a fiery blend of chilies, sesame oil, crispy green onions, sesame seeds, and garlic.",
+                  "price": 2019,
+                  "priceTagline": {
+                    "text": "$20.19",
+                    "textFormat": "<span>$20.19</span>",
+                    "accessibilityText": "$20.19"
+                  },
+                  "hasCustomizations": false
+                }
+              ]
+            }
+          }
+        },
+        {
+          "payload": {
+            "standardItemsPayload": {
+              "title": {
+                "text": "Dumplings"
+              },
+              "catalogItems": [
+                {
+                  "uuid": "13a7aa88-b790-5aec-a101-9d45a6d42b97",
+                  "title": "10 Dumplings",
+                  "itemDescription": "A savory veggie and pork filling encased in a soft, yet crisp wheat dough. Served with Sweet Chili Dipping Sauce.",
+                  "price": 979,
+                  "priceTagline": {
+                    "text": "$9.79 • 420 Cal.",
+                    "textFormat": "<span>$9.79<span style=\"color:#757575\"> • 420 Cal.</span></span>",
+                    "accessibilityText": "$9.79, 420 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "de55368e-ad57-5bc5-8ad9-8c33ea924d4b",
+                  "title": "5 Dumplings",
+                  "itemDescription": "A savory veggie and pork filling encased in a soft, yet crisp wheat dough. Served with Sweet Chili Dipping Sauce.",
+                  "price": 499,
+                  "priceTagline": {
+                    "text": "$4.99 • 210 Cal.",
+                    "textFormat": "<span>$4.99<span style=\"color:#757575\"> • 210 Cal.</span></span>",
+                    "accessibilityText": "$4.99, 210 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "c8488086-93a6-503a-ad96-d0f97434e66b",
+                  "title": "20 Dumplings",
+                  "itemDescription": "A savory veggie and pork filling encased in a soft, yet crisp wheat dough. Served with Sweet Chili Dipping Sauce.",
+                  "price": 1909,
+                  "priceTagline": {
+                    "text": "$19.09 • 840 Cal.",
+                    "textFormat": "<span>$19.09<span style=\"color:#757575\"> • 840 Cal.</span></span>",
+                    "accessibilityText": "$19.09, 840 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "f16c9e4a-6c39-55b4-9b45-a12758e21c03",
+                  "title": "5 Chili Crisp Dumplings",
+                  "itemDescription": "Discover our NEW Chili Crisp Dumplings, a bold new take on a WaBa classic! Our signature Pork and Veggie Dumplings are tossed in a fiery blend of chilies, sesame oil, crispy green onions, sesame seeds, and garlic.",
+                  "price": 539,
+                  "priceTagline": {
+                    "text": "$5.39",
+                    "textFormat": "<span>$5.39</span>",
+                    "accessibilityText": "$5.39"
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "fe6aa7db-41c5-507f-9b1e-1eaa542109f2",
+                  "title": "10 Chili Crisp Dumplings",
+                  "itemDescription": "Discover our NEW Chili Crisp Dumplings, a bold new take on a WaBa classic! Our signature Pork and Veggie Dumplings are tossed in a fiery blend of chilies, sesame oil, crispy green onions, sesame seeds, and garlic.",
+                  "price": 1059,
+                  "priceTagline": {
+                    "text": "$10.59",
+                    "textFormat": "<span>$10.59</span>",
+                    "accessibilityText": "$10.59"
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "a3c666ac-25c5-52af-badc-3c423f959187",
+                  "title": "20 Chili Crisp Dumplings",
+                  "itemDescription": "Discover our NEW Chili Crisp Dumplings, a bold new take on a WaBa classic! Our signature Pork and Veggie Dumplings are tossed in a fiery blend of chilies, sesame oil, crispy green onions, sesame seeds, and garlic.",
+                  "price": 2019,
+                  "priceTagline": {
+                    "text": "$20.19",
+                    "textFormat": "<span>$20.19</span>",
+                    "accessibilityText": "$20.19"
+                  },
+                  "hasCustomizations": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "payload": {
+            "standardItemsPayload": {
+              "title": {
+                "text": "Salads"
+              },
+              "catalogItems": [
+                {
+                  "uuid": "77628f9f-66ed-58a1-a0ec-42e91f6c3b0f",
+                  "title": "Signature House",
+                  "itemDescription": "A fresh blend of crisp leafy greens and kale with cool cucumbers, garlic serrano edamame, and shredded cabbage, served with WaBa Sesame Dressing on the side.",
+                  "price": 0,
+                  "priceTagline": {
+                    "text": "Priced by add-ons",
+                    "textFormat": "<span>Priced by add-ons</span>",
+                    "accessibilityText": "Priced by add-ons"
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "ba47e23d-b33d-586a-b33a-dc3f69cae5e3",
+                  "title": "Spicy Asian Salad",
+                  "itemDescription": "A fresh blend of crisp leafy greens and kale with cool cucumbers, garlic serrano edamame, and shredded cabbage, served with WaBa Sesame Dressing on the side.",
+                  "price": 0,
+                  "priceTagline": {
+                    "text": "Priced by add-ons",
+                    "textFormat": "<span>Priced by add-ons</span>",
+                    "accessibilityText": "Priced by add-ons"
+                  },
+                  "hasCustomizations": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "payload": {
+            "standardItemsPayload": {
+              "title": {
+                "text": "Sides"
+              },
+              "catalogItems": [
+                {
+                  "uuid": "e31232f9-5b81-5b59-96a1-19e67c863a56",
+                  "title": "Miso Soup",
+                  "itemDescription": "",
+                  "price": 299,
+                  "priceTagline": {
+                    "text": "$2.99 • 30 Cal.",
+                    "textFormat": "<span>$2.99<span style=\"color:#757575\"> • 30 Cal.</span></span>",
+                    "accessibilityText": "$2.99, 30 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "8219a1df-4b25-57e3-a78f-c5a6c69686eb",
+                  "title": "Sauces",
+                  "itemDescription": "Forget secret sauces, we think our WaBa sauces deserve total recognition! Special blends of fruits and spices that make it sweet, savory, or spicy. These sauces offer a perfect balance or extra flavor to any WaBa dish.",
+                  "price": 39,
+                  "priceTagline": {
+                    "text": "$0.39 • 50 - 60 Cal.",
+                    "textFormat": "<span>$0.39<span style=\"color:#757575\"> • 50 - 60 Cal.</span></span>",
+                    "accessibilityText": "$0.39, 50 - 60 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "387d8c05-3e6d-54fb-9c4f-2fbb9381fc8c",
+                  "title": "Side Wonton Strips",
+                  "itemDescription": "",
+                  "price": 109,
+                  "priceTagline": {
+                    "text": "$1.09 • 75 Cal.",
+                    "textFormat": "<span>$1.09<span style=\"color:#757575\"> • 75 Cal.</span></span>",
+                    "accessibilityText": "$1.09, 75 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "ce183dc8-9ec6-5deb-a77f-6196946dc36b",
+                  "title": "Boom Boom Tacos",
+                  "itemDescription": "Choose a grilled chicken, marinated steak, or shrimp taco in a corn-flour blend tortilla with Shredded Cabbage Blend, green onions, and spicy Boom Boom sauce; plant-based options available.",
+                  "price": 349,
+                  "priceTagline": {
+                    "text": "$3.49 • 170 - 240 Cal.",
+                    "textFormat": "<span>$3.49<span style=\"color:#757575\"> • 170 - 240 Cal.</span></span>",
+                    "accessibilityText": "$3.49, 170 - 240 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "9ec30191-09ae-5537-b114-d00e20b9194c",
+                  "title": "5 Dumplings",
+                  "itemDescription": "A savory veggie and pork filling encased in a soft, yet crisp wheat dough. Served with Sweet Chili Dipping Sauce.",
+                  "price": 499,
+                  "priceTagline": {
+                    "text": "$4.99 • 210 Cal.",
+                    "textFormat": "<span>$4.99<span style=\"color:#757575\"> • 210 Cal.</span></span>",
+                    "accessibilityText": "$4.99, 210 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "3cd4e966-0404-5762-a47d-efefea02e79f",
+                  "title": "Veggies",
+                  "itemDescription": "",
+                  "price": 189,
+                  "priceTagline": {
+                    "text": "$1.89 • 50 Cal.",
+                    "textFormat": "<span>$1.89<span style=\"color:#757575\"> • 50 Cal.</span></span>",
+                    "accessibilityText": "$1.89, 50 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "0bc26635-77f9-55c0-82e9-43b27d6ad198",
+                  "title": "Edamame Kimchi",
+                  "itemDescription": "",
+                  "price": 269,
+                  "priceTagline": {
+                    "text": "$2.69 • 100 Cal.",
+                    "textFormat": "<span>$2.69<span style=\"color:#757575\"> • 100 Cal.</span></span>",
+                    "accessibilityText": "$2.69, 100 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "0b0a3b95-ab0c-5be1-b4dd-8496b5e05ca1",
+                  "title": "Side of Rice",
+                  "itemDescription": "White, brown or half-half.",
+                  "price": 509,
+                  "priceTagline": {
+                    "text": "$5.09 • 320 - 370 Cal.",
+                    "textFormat": "<span>$5.09<span style=\"color:#757575\"> • 320 - 370 Cal.</span></span>",
+                    "accessibilityText": "$5.09, 320 - 370 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "3897c754-753f-5788-a497-9962e58923a7",
+                  "title": "Half-Ocado",
+                  "itemDescription": "Side of avocado",
+                  "price": 349,
+                  "priceTagline": {
+                    "text": "$3.49 • 150 Cal.",
+                    "textFormat": "<span>$3.49<span style=\"color:#757575\"> • 150 Cal.</span></span>",
+                    "accessibilityText": "$3.49, 150 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "401c18d3-b5ae-59a9-82cb-2abae97e162b",
+                  "title": "Side Salad",
+                  "itemDescription": "A fresh blend of crisp leafy greens and kale with cool cucumbers, garlic serrano edamame, and shredded cabbage, served with WaBa Sesame Dressing on the side.",
+                  "price": 509,
+                  "priceTagline": {
+                    "text": "$5.09 • 190 Cal.",
+                    "textFormat": "<span>$5.09<span style=\"color:#757575\"> • 190 Cal.</span></span>",
+                    "accessibilityText": "$5.09, 190 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "f6e5a0d1-4a24-572c-a708-4c3cfeecbd1c",
+                  "title": "Proteins",
+                  "itemDescription": "",
+                  "price": 509,
+                  "priceTagline": {
+                    "text": "$5.09 • 50 - 290 Cal.",
+                    "textFormat": "<span>$5.09<span style=\"color:#757575\"> • 50 - 290 Cal.</span></span>",
+                    "accessibilityText": "$5.09, 50 - 290 Cal."
+                  },
+                  "hasCustomizations": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "payload": {
+            "standardItemsPayload": {
+              "title": {
+                "text": "Desserts"
+              },
+              "catalogItems": [
+                {
+                  "uuid": "5f81bf65-2dac-52cf-92f7-3e003e43b793",
+                  "title": "Chocolate Chunk Cookie",
+                  "itemDescription": "This brown butter cookie was crafted with non-GMO ingredients, cage free eggs, and pure cane sugar. It is chock full of decadent chocolate chunks and crunchy pretzel bits, a perfect combination of salty and sweet!",
+                  "price": 379,
+                  "priceTagline": {
+                    "text": "$3.79 • 380 Cal.",
+                    "textFormat": "<span>$3.79<span style=\"color:#757575\"> • 380 Cal.</span></span>",
+                    "accessibilityText": "$3.79, 380 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "993235af-82f8-5018-8cc4-32ec03e3d786",
+                  "title": "Chewy Marshmallow Bar",
+                  "itemDescription": "This sweet treat is made with crispy rice puffs, marshmallow cream, brown butter, sea salt, and even more mini marshmallows folded in! It’s certified gluten free and free of GMO’s and additives.",
+                  "price": 379,
+                  "priceTagline": {
+                    "text": "$3.79 • 230 Cal.",
+                    "textFormat": "<span>$3.79<span style=\"color:#757575\"> • 230 Cal.</span></span>",
+                    "accessibilityText": "$3.79, 230 Cal."
+                  },
+                  "hasCustomizations": false
+                }
+              ]
+            }
+          }
+        },
+        {
+          "payload": {
+            "standardItemsPayload": {
+              "title": {
+                "text": "Beverages"
+              },
+              "catalogItems": [
+                {
+                  "uuid": "c7448db9-1a32-5944-bb34-3d10c790c45f",
+                  "title": "Pepsi - 20oz Bottle",
+                  "itemDescription": "The bold, refreshing, robust cola.",
+                  "price": 419,
+                  "priceTagline": {
+                    "text": "$4.19 • 250 Cal.",
+                    "textFormat": "<span>$4.19<span style=\"color:#757575\"> • 250 Cal.</span></span>",
+                    "accessibilityText": "$4.19, 250 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "3c4be729-05d2-5fff-8e68-ee96e6972dad",
+                  "title": "Gatorade Cool Blue - 20oz Bottle",
+                  "itemDescription": "Cool, satisfying taste to quench thirst and energize without caffeine",
+                  "price": 419,
+                  "priceTagline": {
+                    "text": "$4.19 • 140 Cal.",
+                    "textFormat": "<span>$4.19<span style=\"color:#757575\"> • 140 Cal.</span></span>",
+                    "accessibilityText": "$4.19, 140 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "ba7b247b-4152-55b9-8f46-50df38fe8957",
+                  "title": "Aloe Vera Premium Drink",
+                  "itemDescription": "A WaBa Better-For-You-Beverage",
+                  "price": 419,
+                  "priceTagline": {
+                    "text": "$4.19 • 165 Cal.",
+                    "textFormat": "<span>$4.19<span style=\"color:#757575\"> • 165 Cal.</span></span>",
+                    "accessibilityText": "$4.19, 165 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "97eb3dbe-4089-5761-97a5-457968f03787",
+                  "title": "Diet Pepsi - 20oz Bottle",
+                  "itemDescription": "A crisp tasting, refreshing pop of sweet, fizzy bubbles without calories.",
+                  "price": 419,
+                  "priceTagline": {
+                    "text": "$4.19 • 0 Cal.",
+                    "textFormat": "<span>$4.19<span style=\"color:#757575\"> • 0 Cal.</span></span>",
+                    "accessibilityText": "$4.19, 0 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "b0fab883-9313-5ea5-bc44-61b158ebc364",
+                  "title": "Bubly Lime - 16oz Can",
+                  "itemDescription": "Lime flavored sparkling water - no calories, no sweeteners, all smiles.",
+                  "price": 419,
+                  "priceTagline": {
+                    "text": "$4.19 • 0 Cal.",
+                    "textFormat": "<span>$4.19<span style=\"color:#757575\"> • 0 Cal.</span></span>",
+                    "accessibilityText": "$4.19, 0 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "be17234c-9475-5d3b-8f55-ace52ecbc320",
+                  "title": "Gatorade Fruit Punch - 20oz Bottle",
+                  "itemDescription": "The thirst quenching taste of fruit punch to rehydrate and energize without caffeine",
+                  "price": 419,
+                  "priceTagline": {
+                    "text": "$4.19 • 140 Cal.",
+                    "textFormat": "<span>$4.19<span style=\"color:#757575\"> • 140 Cal.</span></span>",
+                    "accessibilityText": "$4.19, 140 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "0bd3735d-0790-570e-9175-d6ee9cbebc28",
+                  "title": "Dole Lemonade - 20oz Bottle",
+                  "itemDescription": "Lemonade made with real lemon juice and real sugar",
+                  "price": 419,
+                  "priceTagline": {
+                    "text": "$4.19 • 190 Cal.",
+                    "textFormat": "<span>$4.19<span style=\"color:#757575\"> • 190 Cal.</span></span>",
+                    "accessibilityText": "$4.19, 190 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "b67520bd-8655-53e7-879e-a40dee9f9caa",
+                  "title": "Pure Leaf Brewed Iced Tea Unsweet - 16.9oz Bottle",
+                  "itemDescription": "Iced tea brewed from real tea leaves steeped in water and bottled without adding sugar or color.",
+                  "price": 419,
+                  "priceTagline": {
+                    "text": "$4.19 • 0 Cal.",
+                    "textFormat": "<span>$4.19<span style=\"color:#757575\"> • 0 Cal.</span></span>",
+                    "accessibilityText": "$4.19, 0 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "27d78348-dc4b-5c9d-b1ae-740331f880bc",
+                  "title": "Dole 100% Apple Juice - 15.2oz Bottle",
+                  "itemDescription": "Dole apple juice is made with 100% juice and 100% of your daily Vitamin C",
+                  "price": 419,
+                  "priceTagline": {
+                    "text": "$4.19 • 210 Cal.",
+                    "textFormat": "<span>$4.19<span style=\"color:#757575\"> • 210 Cal.</span></span>",
+                    "accessibilityText": "$4.19, 210 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "cc8b4e2e-e2e7-5b2b-ae41-100874a4e398",
+                  "title": "Aquafina - 20oz Bottle",
+                  "itemDescription": "Pure water for a perfect taste.",
+                  "price": 419,
+                  "priceTagline": {
+                    "text": "$4.19 • 0 Cal.",
+                    "textFormat": "<span>$4.19<span style=\"color:#757575\"> • 0 Cal.</span></span>",
+                    "accessibilityText": "$4.19, 0 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "3c7250a5-dd4a-59b7-a1e7-18480c694b56",
+                  "title": "Dragon Fruit Mango Lemonade",
+                  "itemDescription": "A perfect balance of tangy lemonade, sweet dragon fruit and juicy mango. Made with real fruits and topped with a fresh lemon wedge.",
+                  "price": 449,
+                  "priceTagline": {
+                    "text": "$4.49 • 160 - 360 Cal.",
+                    "textFormat": "<span>$4.49<span style=\"color:#757575\"> • 160 - 360 Cal.</span></span>",
+                    "accessibilityText": "$4.49, 160 - 360 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "465c321d-06b0-58bf-8156-abd636bdf0f6",
+                  "title": "Strawberry Watermelon Lemonade Energy Refresher",
+                  "itemDescription": "A refreshing mix of real strawberry and watermelon with crisp lemonade and natural caffeine. Fruity, light, and energizing—this flavorful refresher powers up any meal. Contains 56mg (Value), 88mg (Regular), 126mg (Large) caffeine.",
+                  "price": 449,
+                  "priceTagline": {
+                    "text": "$4.49 • 160 - 350 Cal.",
+                    "textFormat": "<span>$4.49<span style=\"color:#757575\"> • 160 - 350 Cal.</span></span>",
+                    "accessibilityText": "$4.49, 160 - 350 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "b6e7e722-f0c1-5f37-8853-08862fc1432d",
+                  "title": "Thai Tea",
+                  "itemDescription": "Premium black tea with cinnamon, cardamom, star anise, and lactose-free milk for a lightly sweet, refreshing treat.",
+                  "price": 449,
+                  "priceTagline": {
+                    "text": "$4.49 • 240 Cal.",
+                    "textFormat": "<span>$4.49<span style=\"color:#757575\"> • 240 Cal.</span></span>",
+                    "accessibilityText": "$4.49, 240 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "d2325e06-5ec0-5638-885b-ae1f8bbe9822",
+                  "title": "Fountain Drink",
+                  "itemDescription": "",
+                  "price": 0,
+                  "priceTagline": {
+                    "text": "Priced by add-ons",
+                    "textFormat": "<span>Priced by add-ons</span>",
+                    "accessibilityText": "Priced by add-ons"
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "b63a24f8-024a-5cd7-bdfe-237b6e7b4db1",
+                  "title": "Pure Leaf Brewed Iced Tea Raspberry - 16.9oz Bottle",
+                  "itemDescription": "Sweet and tangy raspberry pairs perfectly with classic iced tea.",
+                  "price": 419,
+                  "priceTagline": {
+                    "text": "$4.19",
+                    "textFormat": "<span>$4.19</span>",
+                    "accessibilityText": "$4.19"
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "325271ad-c5f0-56f3-a389-4ff84c154c1e",
+                  "title": "Poppi Raspberry Rose - 12oz Can",
+                  "itemDescription": "Mouthwatering flavor and all the soda feels. Contains Apple Cider Vinegar and prebiotics from agave inulin and cassava root fiber. 5g of sugar and 35 calories or less per can. Perfect for everyday, on-the-go refreshment or as a drink mixer. Great alternative to diet soda soft drinks, kombucha, juice, seltzer & flavored water, energy drink, coconut water, tonic water, sports drinks, etc. Verified SHARK TANK brand.",
+                  "price": 379,
+                  "priceTagline": {
+                    "text": "$3.79 • 30 Cal.",
+                    "textFormat": "<span>$3.79<span style=\"color:#757575\"> • 30 Cal.</span></span>",
+                    "accessibilityText": "$3.79, 30 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "341b5d31-3fa7-54f9-ab51-8f3ef3083a0a",
+                  "title": "Poppi Strawberry Lemon - 12oz Can",
+                  "itemDescription": "Mouthwatering flavor and all the soda feels. Contains Apple Cider Vinegar and prebiotics from agave inulin and cassava root fiber. 5g of sugar and 35 calories or less per can. Perfect for everyday, on-the-go refreshment or as a drink mixer. Great alternative to diet soda soft drinks, kombucha, juice, seltzer & flavored water, energy drink, coconut water, tonic water, sports drinks, etc. Verified SHARK TANK brand.",
+                  "price": 379,
+                  "priceTagline": {
+                    "text": "$3.79 • 30 Cal.",
+                    "textFormat": "<span>$3.79<span style=\"color:#757575\"> • 30 Cal.</span></span>",
+                    "accessibilityText": "$3.79, 30 Cal."
+                  },
+                  "hasCustomizations": false
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

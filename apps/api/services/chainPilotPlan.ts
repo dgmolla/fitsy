@@ -101,5 +101,5 @@ export async function rollbackCatalogPlan(prisma: PrismaClient, plan: CatalogPla
         await tx.chainItem.update({ where: { id }, data: { ...before, review: before.review === null ? Prisma.DbNull : reviewJson(before.review) } });
       }
     }
-  });
+  }, 120_000);
 }

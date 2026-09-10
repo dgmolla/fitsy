@@ -17,7 +17,7 @@ flowchart LR
 ## Batch workflow
 
 1. Discover the official source, retain its URL, SHA-256, page/table, and serving. An extraction agent can prepare a complete candidate table; a URL alone is not approval.
-2. Export existing variants with `menu-inventory`. Add captured UE menus and group by brand + name + section + description. Inspect each unique configuration once, reusing it across stores.
+2. Start a draft batch from those source facts with empty aliases, then export existing variants with `menu-inventory`. Add captured UE menus and group by brand + name + section + description. Inspect each unique configuration once, reusing it across stores.
 3. Prepare a version-1 JSON batch. `changes` contain brand slug, serving-specific canonical key, four macros, source evidence, exact contextual aliases, and the expected prior catalog fields. New keys use `expected: null`. `quarantine` clears known bad legacy aliases.
 4. Inspect the catalog plan and tests, then apply the exact saved hash. Previously reviewed rows can change only when the batch includes their exact old review as well as their facts. Competing alias bindings fail planning.
 5. Plan the existing-menu update, apply a small canary, read back serving/search results and preservation, then apply the remaining reviewed rows. The first pending row per brand leads a custom batch.
@@ -34,7 +34,7 @@ npx tsx scripts/preload-chain-pilot.ts april-plan work/april-plan.json --batch=w
 npx tsx scripts/preload-chain-pilot.ts april-apply work/april-plan.json PLAN_HASH --limit=2 --batch=work/batch.json
 ```
 
-Use fresh artifact names; plans and rollback journals never overwrite existing evidence. Replan after each successful batch. Roll back April journals before the catalog journal, following [the pilot recovery rules](chain-pdf-pilot.md). Catalog writes are atomic; April writes are journaled per item. Database serialization conflicts (Prisma P2034) retry the entire guarded transaction at most twice, rechecking the original plan each time. Other errors are not retried. Do not change catalog approvals during an active UE enrichment run.
+Use fresh artifact names; plans and rollback journals never overwrite existing evidence. Replan after each successful batch. Roll back April journals before the catalog journal, following [the pilot recovery rules](chain-pdf-pilot.md). Catalog writes are atomic; April writes are journaled per item. Database serialization conflicts (Prisma P2034 or raw-query P2010 / SQLSTATE 40001) retry the entire guarded transaction at most twice, rechecking the original plan each time. Other errors are not retried. Do not change catalog approvals during an active UE enrichment run.
 
 ## Acceptance and limits
 
