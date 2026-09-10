@@ -5,7 +5,7 @@ const suite = process.env['POSTGRES_PRISMA_URL'] ? describe : describe.skip;
 suite('chain transaction conflict recovery', () => {
   const p = new PrismaClient();
   afterAll(async () => p.$disconnect());
-  test('real concurrent serializable writes retry the aborted transaction and retain both updates', async () => {
+  test.each(['orm', 'raw'])('%s concurrent serializable writes retry the aborted transaction and retain both updates', async mode => {
     const slug = 'conflict-' + randomUUID(), attempts = [0, 0];
     const brand = await p.brand.create({ data: { slug, displayName: slug, locationCount: 0 } });
     let firstReads = 0;
@@ -16,7 +16,8 @@ suite('chain transaction conflict recovery', () => {
         attempts[i]!++;
         const before = await tx.brand.findUniqueOrThrow({ where: { id: brand.id } });
         if (attempts[i] === 1) { firstReads++; if (firstReads === 2) release(); await bothRead; }
-        await tx.brand.update({ where: { id: brand.id }, data: { locationCount: before.locationCount + 1 } });
+        if (mode === 'raw') await tx.$executeRaw`UPDATE "Brand" SET "locationCount" = ${before.locationCount + 1} WHERE id = ${brand.id}`;
+        else await tx.brand.update({ where: { id: brand.id }, data: { locationCount: before.locationCount + 1 } });
       })));
       expect(attempts.reduce((a, b) => a + b)).toBeGreaterThan(2);
       expect((await p.brand.findUniqueOrThrow({ where: { id: brand.id } })).locationCount).toBe(2);
@@ -27,6 +28,8 @@ suite('chain transaction conflict recovery', () => {
     try {
       for (const [error, expected] of [[new Error('stale plan'), 1],
         [new Prisma.PrismaClientKnownRequestError('uncertain result', { code: 'P2028', clientVersion: '6' }), 1],
+        [new Prisma.PrismaClientKnownRequestError('raw serialization', { code: 'P2010', meta: { code: '40001' }, clientVersion: '6' }), 3],
+        [new Prisma.PrismaClientKnownRequestError('other SQL error', { code: 'P2010', meta: { code: '42601' }, clientVersion: '6' }), 1],
         [new Prisma.PrismaClientKnownRequestError('write conflict', { code: 'P2034', clientVersion: '6' }), 3]] as const) {
         let calls = 0;
         await expect(chainTransaction(p, async tx => {
