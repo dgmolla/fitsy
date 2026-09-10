@@ -73,7 +73,7 @@ sequenceDiagram
   Per-IP rate limit (5 per 10 minutes), email shape check, reserved-TLD rejection.
   Upserts by normalized email with an empty update, so an existing row is untouched.
   Always answers `{ ok: true }` for a well-formed address so membership cannot be probed.
-  A new (or still unconfirmed) row gets a double opt-in confirmation email, deferred with `after()`, at most once a day per address; the once-a-day slot is claimed with a conditional write on `confirmSentAt`, so concurrent submissions cannot each send one. A failed confirmation releases the claim and is reported to Slack.
+  A new (or still unconfirmed) row gets a double opt-in confirmation email, deferred with `after()`, at most once a day per address; the once-a-day slot is claimed with a conditional write on `confirmSentAt`, so concurrent submissions cannot each send one. A failed confirmation keeps the slot (an ambiguous provider outcome must never become two deliveries) and is reported to Slack, deduped per 15 minutes; a re-submit after the slot expires retries, and only a success is written to the ledger, which is how a retry tells a failed claim from a sent one.
 
 - `GET /waitlist/confirm` (signed link) - sets `confirmedAt` and renders a confirmation page.
   Onboarding rows are confirmed at creation (Apple/Google verified the account email), and linking an account confirms a pending website row.

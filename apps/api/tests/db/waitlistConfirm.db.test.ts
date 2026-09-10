@@ -75,6 +75,26 @@ describeIfDb("waitlist confirmation claim (DB)", () => {
     expect(providerCalls).toHaveLength(1);
   });
 
+  it("a provider failure keeps the 24h slot: the next submit inside the gap sends nothing and nothing is recorded", async () => {
+    const failing = await svc.prisma.launchWaitlist.create({
+      data: { email: `failing-${email}`, source: "web", confirmedAt: null, legacyConsent: false },
+      select: { id: true, email: true },
+    });
+    const okFetch = global.fetch;
+    global.fetch = (async () => new Response("{}", { status: 500 })) as typeof fetch;
+    try {
+      expect(await sender.sendWaitlistConfirmation(failing)).toBe(false);
+    } finally {
+      global.fetch = okFetch;
+    }
+    const after = await svc.prisma.launchWaitlist.findUniqueOrThrow({ where: { id: failing.id } });
+    expect(after.confirmSentAt).not.toBeNull();
+    expect(await svc.prisma.marketingSend.count({ where: { email: failing.email } })).toBe(0);
+    expect(await sender.sendWaitlistConfirmation(failing)).toBe(false);
+    expect(providerCalls).toHaveLength(1);
+    await svc.prisma.launchWaitlist.delete({ where: { id: failing.id } });
+  });
+
   it("a repeat click on the confirmation link keeps the first confirmedAt and still lands on the confirmed page", async () => {
     const row = await svc.prisma.launchWaitlist.findUniqueOrThrow({ where: { email }, select: { id: true } });
     const url = confirm.confirmUrl(row.id) as string;

@@ -10,13 +10,17 @@
  * the claim sends, so concurrent form posts for the same address cannot each
  * deliver a confirmation. The consent request is a prerequisite, not a
  * marketing touch, so it does NOT sit behind the cross-campaign frequency
- * cap. A transient provider failure releases the claim (a later submit can
- * retry) and is reported to Slack with the row id, because an unconfirmed
- * row never receives anything else. Once the provider has accepted the
- * email the claim is kept no matter what fails afterwards (the ledger
- * write is bookkeeping, not the throttle), so a retry cannot deliver twice. A missing signing secret is reported
- * the same way: without it no website signup can ever be confirmed, and the
- * form still answered "check your inbox". Both alerts sit behind the same
+ * cap. The claim is never given back, whatever happens after it: a provider
+ * failure, a timeout after the provider accepted, a thrown ledger write.
+ * The slot simply expires after CONFIRM_RESEND_GAP_MS, so no two attempts
+ * for one row can ever be closer than that, and an ambiguous outcome cannot
+ * turn into two deliveries. A failed attempt is reported to Slack with the
+ * row id, because an unconfirmed row never receives anything else; the
+ * ledger records only successes, which is how a retry (a re-submit after
+ * the gap, or the daily lifecycle run) tells a failed claim from a sent one.
+ * A missing signing secret is reported the same way: without it no website
+ * signup can ever be confirmed, and the form still answered "check your
+ * inbox". Both alerts sit behind the same
  * per-key dedup window as server-error alerts (lib/errorAlert.ts): this runs
  * from the unauthenticated form, so a burst of submissions during a provider
  * outage must not flood the channel the launch blast reports to. Never throws.
@@ -33,7 +37,6 @@ export const CONFIRM_RESEND_GAP_MS = 24 * 3600e3;
 
 export async function sendWaitlistConfirmation(row: { id: string; email: string }): Promise<boolean> {
   const now = new Date();
-  let claimed = false;
   let delivered = false;
   try {
     const url = confirmUrl(row.id);
@@ -61,7 +64,6 @@ export async function sendWaitlistConfirmation(row: { id: string; email: string 
       data: { confirmSentAt: now },
     });
     if (claim.count !== 1) return false;
-    claimed = true;
 
     const { subject, html } = waitlistConfirmEmailContent(url);
     const ok = await sendMarketingEmail({
@@ -69,37 +71,26 @@ export async function sendWaitlistConfirmation(row: { id: string; email: string 
       to: row.email,
       subject,
       html,
-      // Keyed by the claim window, not the attempt instant: a re-send a day
-      // later gets a new key (the provider's idempotency window is 24h), but
-      // a retry after an ambiguous outcome (timeout after the provider
-      // accepted) inside the same window is deduped by the provider.
-      idempotencyKey: `lifecycle:confirm:${row.email}:${Math.floor(now.getTime() / CONFIRM_RESEND_GAP_MS)}`,
+      // One key per claim. Claims for a row are at least CONFIRM_RESEND_GAP_MS
+      // apart, so a later attempt is never inside the provider's 24h
+      // idempotency window with the same key, and never needs to be.
+      idempotencyKey: `lifecycle:confirm:${row.email}:${now.toISOString()}`,
     });
     if (ok) {
       delivered = true;
       await recordSend(row.email, "lifecycle", "confirm");
       return true;
     }
-    await releaseClaim(row.id, now);
     if (shouldAlert("waitlist-confirm", now.getTime())) {
       await notifySlack(
         "waitlist confirmation not sent",
         `Confirmation email for waitlist row ${row.id} failed at the provider; the row stays unconfirmed and gets nothing else. ` +
-          `The claim was released, so re-submitting the form retries.`,
+          `The 24h slot is kept, so a re-submit of the form retries after it expires.`,
         { source: "waitlist-confirm" },
       );
     }
     return false;
   } catch {
-    if (claimed && !delivered) await releaseClaim(row.id, now).catch(() => undefined);
     return delivered;
   }
-}
-
-/** Give the slot back only if it is still ours (another request may have re-claimed). */
-async function releaseClaim(id: string, ours: Date): Promise<void> {
-  await prisma.launchWaitlist.updateMany({
-    where: { id, confirmSentAt: ours },
-    data: { confirmSentAt: null },
-  });
 }

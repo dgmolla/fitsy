@@ -42,7 +42,7 @@ afterEach(() => {
 });
 
 describe("sendWaitlistConfirmation", () => {
-  it("claims the slot atomically, sends with the signed link and a per-attempt idempotency key, then records", async () => {
+  it("claims the slot atomically, sends with the signed link and a per-claim idempotency key, then records", async () => {
     expect(CONFIRM_RESEND_GAP_MS).toBe(24 * 3600e3);
     expect(await sendWaitlistConfirmation(ROW)).toBe(true);
     expect(prisma.launchWaitlist.updateMany).toHaveBeenCalledWith({
@@ -58,7 +58,7 @@ describe("sendWaitlistConfirmation", () => {
     expect(arg.to).toBe("web@example.org");
     expect(arg.subject).toContain("Confirm");
     expect(arg.html).toContain(confirmUrl("wl1"));
-    expect(arg.idempotencyKey).toBe(`lifecycle:confirm:web@example.org:${Math.floor(NOW.getTime() / CONFIRM_RESEND_GAP_MS)}`);
+    expect(arg.idempotencyKey).toBe(`lifecycle:confirm:web@example.org:${NOW.toISOString()}`);
     expect(recordSend).toHaveBeenCalledWith("web@example.org", "lifecycle", "confirm");
     expect(mockNotifySlack).not.toHaveBeenCalled();
   });
@@ -86,14 +86,11 @@ describe("sendWaitlistConfirmation", () => {
     expect(mockNotifySlack).not.toHaveBeenCalled();
   });
 
-  it("a transient provider failure releases the claim (only if still ours), is not recorded, and reaches Slack with the row id", async () => {
+  it("a provider failure keeps the claim (an ambiguous outcome must not be retried inside the gap), is not recorded, and reaches Slack with the row id", async () => {
     (sendMarketingEmail as jest.Mock).mockResolvedValue(false);
     expect(await sendWaitlistConfirmation(ROW)).toBe(false);
     expect(recordSend).not.toHaveBeenCalled();
-    expect(prisma.launchWaitlist.updateMany).toHaveBeenLastCalledWith({
-      where: { id: "wl1", confirmSentAt: NOW },
-      data: { confirmSentAt: null },
-    });
+    expect(prisma.launchWaitlist.updateMany).toHaveBeenCalledTimes(1);
     expect(mockNotifySlack).toHaveBeenCalledWith(
       "waitlist confirmation not sent",
       expect.stringContaining("row wl1"),
@@ -101,15 +98,13 @@ describe("sendWaitlistConfirmation", () => {
     );
   });
 
-  it("a retry inside the same claim window reuses the idempotency key; the next window gets a new one", async () => {
-    await sendWaitlistConfirmation(ROW);
-    jest.setSystemTime(new Date(NOW.getTime() + 60_000));
+  it("each claim mints its own idempotency key, so a retry after the gap is never deduped by the provider", async () => {
     await sendWaitlistConfirmation(ROW);
     jest.setSystemTime(new Date(NOW.getTime() + CONFIRM_RESEND_GAP_MS + 60_000));
     await sendWaitlistConfirmation(ROW);
     const keys = (sendMarketingEmail as jest.Mock).mock.calls.map((c) => c[0].idempotencyKey as string);
-    expect(keys[0]).toBe(keys[1]);
-    expect(keys[2]).not.toBe(keys[0]);
+    expect(keys).toHaveLength(2);
+    expect(keys[0]).not.toBe(keys[1]);
   });
 
   it("alerts at most once per dedup window: a burst of public submissions during an outage cannot flood Slack", async () => {
@@ -121,22 +116,18 @@ describe("sendWaitlistConfirmation", () => {
     expect(mockNotifySlack).toHaveBeenCalledTimes(2);
   });
 
-  it("never throws: a thrown send releases the claim and reports false", async () => {
+  it("never throws: a thrown send keeps the claim and reports false", async () => {
     (sendMarketingEmail as jest.Mock).mockRejectedValue(new Error("boom"));
     expect(await sendWaitlistConfirmation(ROW)).toBe(false);
-    expect(prisma.launchWaitlist.updateMany).toHaveBeenLastCalledWith(
-      expect.objectContaining({ data: { confirmSentAt: null } }),
-    );
+    expect(prisma.launchWaitlist.updateMany).toHaveBeenCalledTimes(1);
+    expect(recordSend).not.toHaveBeenCalled();
   });
 
-  it("a ledger write that fails after the provider accepted the email keeps the claim, so a resubmit cannot deliver twice", async () => {
+  it("a ledger write that fails after the provider accepted the email still reports success and keeps the claim", async () => {
     (recordSend as jest.Mock).mockRejectedValue(new Error("db blip"));
     expect(await sendWaitlistConfirmation(ROW)).toBe(true);
     expect(sendMarketingEmail).toHaveBeenCalledTimes(1);
     expect(prisma.launchWaitlist.updateMany).toHaveBeenCalledTimes(1);
-    expect(prisma.launchWaitlist.updateMany).not.toHaveBeenCalledWith(
-      expect.objectContaining({ data: { confirmSentAt: null } }),
-    );
   });
 
   it("a throw before the claim releases nothing", async () => {
@@ -155,5 +146,12 @@ describe("sendWaitlistConfirmation", () => {
       expect.stringMatching(/wl1.*UNSUBSCRIBE_SECRET/),
       { source: "waitlist-confirm" },
     );
+    // A missing secret is a persistent state: the alert is deduped like the provider one.
+    await sendWaitlistConfirmation({ id: "wl2", email: "p2@example.org" });
+    await sendWaitlistConfirmation({ id: "wl3", email: "p3@example.org" });
+    expect(mockNotifySlack).toHaveBeenCalledTimes(1);
+    jest.setSystemTime(new Date(NOW.getTime() + 16 * 60_000));
+    await sendWaitlistConfirmation({ id: "wl4", email: "p4@example.org" });
+    expect(mockNotifySlack).toHaveBeenCalledTimes(2);
   });
 });
