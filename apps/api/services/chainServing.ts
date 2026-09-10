@@ -1,3 +1,4 @@
+import { chainTransaction } from "./chainTransaction";
 import { Prisma, type PrismaClient, type MacroEstimate } from "@prisma/client";
 import { approvedChainRow, buildChainMatcher, chainMenuFingerprint, type ApprovedChainRow, type ChainMatch } from "./chainCatalog";
 // Offline adapters need the pure ordering utility without the shared barrel's environment initialization.
@@ -58,7 +59,7 @@ export const aprilMenuIdentity = (item: AprilItem): StructuredMenuItem => ({ nam
 // Only pre-write validation failures use this type; callers may journal a safely stopped batch.
 export class AprilPlanChangedError extends Error {}
 export async function applyAprilChainMatch(prisma: PrismaClient, expected: AprilItem & { macroEstimates: MacroEstimate[] }, approved: ApprovedChainRow) {
-  return prisma.$transaction(async tx => {
+  return chainTransaction(prisma, async tx => {
     await tx.$queryRaw`SELECT id FROM "ChainItem" WHERE id = ${approved.id} FOR SHARE`;
     const current = await tx.chainItem.findUnique({ where: { id: approved.id } });
     if (!current || approvedChainRow(current)?.review.dataHash !== approved.review.dataHash) throw new AprilPlanChangedError("Chain review changed; rebuild the plan");
@@ -86,5 +87,5 @@ export async function applyAprilChainMatch(prisma: PrismaClient, expected: April
       FROM (SELECT e.* FROM "MacroEstimate" e WHERE e."menuItemId" = ${expected.id} ORDER BY ${Prisma.raw(macroWinnerSqlOrder("e"))} LIMIT 1) w WHERE m.id = ${expected.id}
       AND (m.calories, m."proteinG", m."carbsG", m."fatG") IS DISTINCT FROM (w.calories, w."proteinG", w."carbsG", w."fatG")`;
     return tx.menuItem.findUniqueOrThrow({ where: { id: expected.id }, include: { macroEstimates: { orderBy: { id: "asc" } } } });
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30_000 });
+  });
 }

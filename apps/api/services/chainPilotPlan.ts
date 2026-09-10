@@ -1,7 +1,9 @@
+import { chainTransaction } from "./chainTransaction";
 import { createHash } from "node:crypto";
 import { Prisma, type PrismaClient, type Brand, type ChainItem } from "@prisma/client";
 import { approvedChainRow, buildChainMatcher, chainReviewHash, type ChainCatalogRow } from "./chainCatalog";
 import { chainPilot } from "./chainPilotData";
+import { chainCatalogBatchSchema, type ChainCatalogBatch } from "./chainCatalogBatch";
 
 /** Stable for both Prisma Dates and the same snapshot parsed from a JSON backup. */
 export function stateHash(value: unknown): string {
@@ -17,7 +19,8 @@ export interface CatalogPlan { changes: CatalogChange[]; hash: string }
 const reviewJson = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 
 /** The audited old values are a guard against overwriting concurrent or unaudited catalog edits. */
-export function planChainPilot(brands: Brand[], catalog: ChainItem[], pilot = chainPilot): CatalogPlan {
+export function planChainPilot(brands: Brand[], catalog: ChainItem[], input: ChainCatalogBatch = chainPilot): CatalogPlan {
+  const pilot = chainCatalogBatchSchema.parse(input);
   const changes: CatalogChange[] = [];
   const brandId = (slug: string) => {
     const found = brands.filter(b => b.slug === slug && ["high", "llm-confirmed"].includes(b.detectionConf ?? "") && b.menuKind === "restaurant");
@@ -25,9 +28,9 @@ export function planChainPilot(brands: Brand[], catalog: ChainItem[], pilot = ch
     return found[0]!.id;
   };
   const find = (id: string, key: string) => catalog.find(r => r.brandId === id && r.canonicalKey === key) ?? null;
-  const append = (before: ChainItem | null, desired: Desired, expected: unknown) => {
+  const append = (before: ChainItem | null, desired: Desired, expected: ChainCatalogBatch["changes"][number]["expected"]) => {
     if (before && stateHash({ ...facts(before), brandId: before.brandId, review: before.review }) === stateHash(desired)) return;
-    if (before?.review || stateHash(before ? facts(before) : null) !== stateHash(expected)) throw new Error(`Catalog differs from audited baseline: ${desired.canonicalKey}`);
+    if (stateHash(before ? { ...facts(before), review: before.review } : null) !== stateHash(expected ? { ...expected, review: expected.review ?? null } : null)) throw new Error(`Catalog differs from audited baseline: ${desired.canonicalKey}`);
     changes.push({ before, desired });
   };
   for (const definition of pilot.changes) {
@@ -64,9 +67,9 @@ export function planChainPilot(brands: Brand[], catalog: ChainItem[], pilot = ch
 }
 
 /** Atomic catalog apply. The caller must durably save the plan before invoking this. */
-export async function applyCatalogPlan(prisma: PrismaClient, plan: CatalogPlan, pilot = chainPilot): Promise<ChainItem[]> {
+export async function applyCatalogPlan(prisma: PrismaClient, plan: CatalogPlan, pilot: ChainCatalogBatch = chainPilot): Promise<ChainItem[]> {
   if (stateHash(plan.changes) !== plan.hash) throw new Error("Plan digest mismatch");
-  return prisma.$transaction(async tx => {
+  return chainTransaction(prisma, async tx => {
     const brands = await tx.brand.findMany({ where: { slug: { in: [...new Set([...pilot.changes, ...pilot.quarantine].map(d => d.slug))] } } });
     const currentCatalog = await tx.chainItem.findMany({ where: { brandId: { in: brands.map(b => b.id) } } });
     if (planChainPilot(brands, currentCatalog, pilot).hash !== plan.hash) throw new Error("Catalog or curated definition changed after planning");
@@ -74,19 +77,19 @@ export async function applyCatalogPlan(prisma: PrismaClient, plan: CatalogPlan, 
     for (const change of plan.changes) {
       const { desired, before } = change;
       const where = { brandId_canonicalKey: { brandId: desired.brandId, canonicalKey: desired.canonicalKey } };
-      const current = await tx.chainItem.findUnique({ where });
+      const current = currentCatalog.find(r => r.brandId === desired.brandId && r.canonicalKey === desired.canonicalKey) ?? null;
       if (stateHash(current) !== stateHash(before)) throw new Error(`Catalog changed after planning: ${desired.canonicalKey}`);
       const data = { ...desired, review: desired.review === null ? Prisma.DbNull : reviewJson(desired.review), retrievedAt: new Date() };
       after.push(await tx.chainItem.upsert({ where, create: data, update: data }));
     }
     return after;
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30_000 });
+  }, 120_000);
 }
 
 /** Roll back only the exact rows we wrote; concurrent edits require a new plan. */
 export async function rollbackCatalogPlan(prisma: PrismaClient, plan: CatalogPlan, after: ChainItem[]): Promise<void> {
   if (after.length !== plan.changes.length || stateHash(plan.changes) !== plan.hash) throw new Error("Incomplete catalog rollback evidence");
-  await prisma.$transaction(async tx => {
+  await chainTransaction(prisma, async tx => {
     for (const [index, change] of plan.changes.entries()) {
       const written = after[index]!;
       if (stateHash({ ...facts(written), brandId: written.brandId, review: written.review }) !== stateHash(change.desired)) throw new Error("Rollback row does not match its planned change");
@@ -98,5 +101,5 @@ export async function rollbackCatalogPlan(prisma: PrismaClient, plan: CatalogPla
         await tx.chainItem.update({ where: { id }, data: { ...before, review: before.review === null ? Prisma.DbNull : reviewJson(before.review) } });
       }
     }
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30_000 });
+  });
 }

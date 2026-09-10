@@ -1,18 +1,24 @@
-/** Offline, explicit plan/apply/rollback for the reviewed WaBa + Yoshinoya pilot. No writes by default. */
+/** Offline catalog batches + existing-menu updates. The original seven-serving pilot remains the default. */
 import { readFileSync, openSync, writeFileSync, fsyncSync, closeSync, mkdirSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { chainPilot } from "../apps/api/services/chainPilotData";
+import { chainCatalogBatchSchema } from "../apps/api/services/chainCatalogBatch";
 import { planChainPilot, applyCatalogPlan, rollbackCatalogPlan, stateHash, type CatalogPlan } from "../apps/api/services/chainPilotPlan";
 import { applyAprilChainMatch, aprilMenuIdentity, officialMacro, AprilPlanChangedError, verifiedBrand } from "../apps/api/services/chainServing";
-import { buildChainMatcher, type ApprovedChainRow } from "../apps/api/services/chainCatalog";
+import { buildChainMatcher, chainMenuFingerprint, type ApprovedChainRow } from "../apps/api/services/chainCatalog";
 import { rollbackAprilBatch, type AprilSnapshot, type AprilJournal } from "../apps/api/services/chainPilotRollback";
 import { pickWinningEstimate } from "../packages/shared/src/utils/macroProvenance";
 
-const [command, path, expectedHash, ...options] = process.argv.slice(2);
-if (!path || !["catalog-plan", "catalog-apply", "catalog-rollback", "april-plan", "april-apply", "april-rollback"].includes(command ?? "")) {
-  throw new Error("Usage: preload-chain-pilot.ts <catalog|april>-<plan|apply|rollback> <path> [plan-hash] [--limit=N]");
+const args = process.argv.slice(2), options = args.filter(a => a.startsWith("--"));
+const [command, path, expectedHash] = args.filter(a => !a.startsWith("--"));
+if (!path || !["menu-inventory", "catalog-plan", "catalog-apply", "catalog-rollback", "april-plan", "april-apply", "april-rollback"].includes(command ?? "")) {
+  throw new Error("Usage: preload-chain-pilot.ts <menu-inventory|catalog-plan|catalog-apply|catalog-rollback|april-plan|april-apply|april-rollback> <path> [plan-hash] [--batch=manifest.json] [--limit=N]");
 }
+if (options.some(a => !a.startsWith("--batch=") && !a.startsWith("--limit=")) || options.filter(a => a.startsWith("--batch=")).length > 1) throw new Error("Unknown or duplicate batch option");
+const batchPath = options.find(a => a.startsWith("--batch="))?.slice(8);
+const batch = chainCatalogBatchSchema.parse(batchPath === undefined ? chainPilot : JSON.parse(readFileSync(batchPath, "utf8")));
+const slugs = [...new Set([...batch.changes, ...batch.quarantine].map(row => row.slug))];
 const rawUrl = process.env["POSTGRES_URL_NON_POOLING"];
 if (!rawUrl) throw new Error("POSTGRES_URL_NON_POOLING is required; choose the target explicitly");
 let url: URL;
@@ -29,19 +35,32 @@ const read = <T>(file: string) => JSON.parse(readFileSync(file, "utf8")) as T;
 interface AprilEntry { before: AprilSnapshot; approved: ApprovedChainRow }
 interface PlanFile { target: string; kind: "catalog" | "april"; hash: string; catalog?: CatalogPlan; rows?: AprilEntry[] }
 async function inventory() {
-  const brands = await p.brand.findMany({ where: { slug: { in: ["waba-grill", "yoshinoya"] } } });
+  const brands = await p.brand.findMany({ where: { slug: { in: slugs } } });
   const catalog = await p.chainItem.findMany({ where: { brandId: { in: brands.map(b => b.id) } } });
   return { brands, catalog };
 }
 async function main() {
+  if (command === "menu-inventory") {
+    const { brands } = await inventory();
+    const items = await p.menuItem.findMany({ where: { restaurant: { brandId: { in: brands.map(b => b.id) } } },
+      select: { id: true, name: true, section: true, description: true, restaurant: { select: { brandId: true } } }, orderBy: { id: "asc" } });
+    const variants = new Map<string, { slug: string; name: string; section: string; description: string; itemIds: string[] }>();
+    for (const item of items) {
+      const identity = { name: item.name, section: item.section ?? "", description: item.description ?? "" };
+      const slug = brands.find(b => b.id === item.restaurant.brandId)!.slug, key = slug + ":" + chainMenuFingerprint(identity);
+      const group = variants.get(key) ?? { slug, ...identity, itemIds: [] };
+      group.itemIds.push(item.id); variants.set(key, group);
+    }
+    save(path!, { target, variants: [...variants.values()] }); report({ inspected: items.length, uniqueVariants: variants.size }); return;
+  }
   if (command === "catalog-plan") {
-    const { brands, catalog } = await inventory(), plan = planChainPilot(brands, catalog);
+    const { brands, catalog } = await inventory(), plan = planChainPilot(brands, catalog, batch);
     const doc = { target, kind: "catalog" as const, hash: plan.hash, catalog: plan };
     save(path!, doc); report({ changes: plan.changes.length, hash: doc.hash }); return;
   }
   if (command === "april-plan") {
     const { brands, catalog } = await inventory();
-    if (planChainPilot(brands, catalog).changes.length) throw new Error("Apply and verify the catalog pilot first");
+    if (planChainPilot(brands, catalog, batch).changes.length) throw new Error("Apply and verify the catalog pilot first (or the selected batch)");
     const verified = await p.brand.findMany({ where: { detectionConf: { in: ["high", "llm-confirmed"] }, menuKind: "restaurant" } });
     const restaurants = await p.restaurant.findMany({ where: { brandId: { in: brands.map(b => b.id) } }, select: { id: true, name: true, brandId: true } });
     const match = buildChainMatcher(catalog), byRestaurant = new Map(restaurants.map(r => [r.id, verifiedBrand(r, verified)]));
@@ -50,14 +69,15 @@ async function main() {
     const rows: AprilEntry[] = [];
     for (const before of items) {
       const result = match(byRestaurant.get(before.restaurantId), aprilMenuIdentity(before));
-      if (result.status !== "matched" || !chainPilot.changes.some(c => c.canonicalKey === result.row.canonicalKey)) continue;
+      if (result.status !== "matched" || !batch.changes.some(c => c.canonicalKey === result.row.canonicalKey && brands.find(b => b.slug === c.slug)?.id === result.row.brandId)) continue;
       const expected = officialMacro(result.row, aprilMenuIdentity(before)), prior = before.macroEstimates.find(e => e.source === "official"), winner = pickWinningEstimate(before.macroEstimates);
       const keys = ["calories", "proteinG", "carbsG", "fatG"] as const;
       if (prior?.reasoning === expected.reasoning && prior.confidence === "HIGH" && !prior.hadPhoto && prior.ingredientBreakdown === null && keys.every(k => prior[k] === expected[k] && before[k] === winner?.[k])) continue;
       rows.push({ before, approved: result.row });
     }
     // Canary order exercises one published configuration from each brand first.
-    const leaders = ["chicken-plate", "gyudon-beef-side"].map(key => rows.find(r => r.approved.canonicalKey === key)).filter((r): r is AprilEntry => !!r);
+    const leaders = (batchPath === undefined ? ["chicken-plate", "gyudon-beef-side"].map(key => rows.find(r => r.approved.canonicalKey === key))
+      : brands.map(brand => rows.find(r => r.approved.brandId === brand.id))).filter((r): r is AprilEntry => !!r);
     const ordered = [...leaders, ...rows.filter(r => !leaders.includes(r))];
     const doc: PlanFile = { target, kind: "april", hash: stateHash(ordered), rows: ordered };
     save(path!, doc); report({ matched: rows.length, inspected: items.length, restaurants: new Set(rows.map(r => r.before.restaurantId)).size, unresolvedRestaurants, hash: doc.hash }); return;
@@ -84,7 +104,7 @@ async function main() {
   if (command === "catalog-apply") {
     if (doc.kind !== "catalog" || !doc.catalog) throw new Error("Expected a catalog plan");
     save(path! + ".started.json", doc);
-    const after = await applyCatalogPlan(p, doc.catalog);
+    const after = await applyCatalogPlan(p, doc.catalog, batch);
     save(path! + ".applied.json", { target, plan: doc.catalog, after });
     report({ applied: after.length }); return;
   }
