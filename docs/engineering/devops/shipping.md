@@ -33,6 +33,77 @@ The pre-push hook runs layers 0–2 plus size/domain checks.
 A hook pass does not replace the applicable product-flow verification or independent review.
 The registry determines which checks apply and whether a check is blocking or shadow.
 
+## Local product-flow gate
+
+Local iPhone simulator E2E is the blocking baseline. CI continues static checks,
+unit tests and builds; it does not need a cloud simulator. The optional L7 smoke
+and experimental EAS workflow cannot satisfy `product-flow/local`.
+
+`npm run verify` and pre-push validate `.evidence/product-flow/report.json` for
+mobile, mobile-facing API, shared, schema and dependency changes. No relevant
+changes produces an explicit `not_applicable` pass. Missing tools, missing
+coverage, skipped/failed assertions, or stale/modified evidence are failures.
+
+Use an owned worktree and the dev configuration from `npm run dev:env`. Keep
+`EXPO_PUBLIC_*` values in its ignored mobile environment file; never put them in
+evidence or PR text. The builder generates native iOS files, disables downloaded
+OTA updates, and produces an embedded Release bundle. It records source, native
+app, JS bundle, public-config digest, simulator and store identity. A keyless
+build can check welcome navigation but cannot satisfy billing coverage.
+
+```sh
+node scripts/verify/product-flow.mjs --plan
+export FITSY_SIM_OWNER=my-task
+export MAESTRO_BIN="$HOME/.maestro/bin/maestro"
+node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs build <UDID>
+node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs run <UDID> <affected-flow-name>
+# Capture the affected primary and recovery paths through Mobile MCP.
+node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs finish .evidence/walkthrough.json
+npm run verify
+```
+
+The runner always executes cold-start and sign-in baseline flows. Add/select
+Maestro scenarios in `apps/mobile/e2e/flows/` with YAML tags matching every
+category in `--plan`; baseline flows alone never cover a changed journey.
+Each changed-journey flow needs at least two non-optional assertions. Assert
+the user outcome and recovery state, not just the existence of a screen.
+Known regressions found through exploration become deterministic scenarios.
+
+The walkthrough file is a JSON array, one entry per affected category:
+`category`, `expected`, `observed`, `branches: ["primary", "recovery"]`,
+`result: "pass"`, and `trace` (relative to `.evidence/product-flow/`). The trace
+contains the actual timestamped Mobile MCP actions and screen observations.
+Use run-owned synthetic accounts, identify fixtures with `FITSY_FIXTURE`, and
+inspect artifacts for personal data/credentials before publication. Reviewers
+judge scenario relevance and visual quality; a manifest cannot establish those.
+
+The collector verifies that dev's deployed API/shared/schema matches the
+candidate and remains unchanged during the run. Deploy those changes to dev
+first; testing an older dev API cannot verify a candidate backend change.
+Use a configured Apple simulator/store environment for subscription evidence
+and explicitly record which real-store paths still need device/sandbox testing.
+
+After committing, reviewing, pushing and opening the PR, publish the verdict:
+
+```sh
+node scripts/sim/publish-product-flow.mjs <PR_NUMBER>
+```
+
+The publisher requires a clean checkout matching the current PR head and current
+main, validates evidence no more than 24 hours old, and attaches command reports,
+screenshots and walkthrough traces to a **private draft** GitHub release. Keep
+these drafts unpublished. It sets `product-flow/local` on that exact head.
+Non-product PRs publish an explicit N/A result without needing a simulator.
+Republish before merge; any code/test change requires new evidence. Required
+status checks bind commits, not elapsed time; GitHub does not revoke an old
+success automatically when its local report ages past 24 hours.
+
+Main's required `product-flow/local` status enforces this local result remotely.
+It shares the trusted developer/agent credential boundary of local review;
+it is not a security attestation against a repository administrator. Preserve
+existing required checks when configuring branch protection. Cloud simulator
+execution can be promoted separately once reliable; it is not a launch blocker.
+
 Commit the tested change locally before reviewing it with the local review runner; `--local` reviews committed `origin/main...HEAD`, not uncommitted edits.
 Fetch the base first and ensure the branch contains the current review definitions.
 If it predates the harness, rebase/update it deliberately in its own worktree before review; do not silently skip missing lenses.
