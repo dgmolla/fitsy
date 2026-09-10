@@ -12,14 +12,16 @@ import { parseStoreV1Response } from '../../services/menuSources/ueApiClient';
 import { persistHex } from '../../../../scripts/hex-persist';
 import { validateHexInTx } from '../../../../scripts/preload-invariants';
 import { rollbackAprilBatch, type AprilJournal } from '../../services/chainPilotRollback';
-import { chainMenuFingerprint } from '../../services/chainCatalog';
+import { chainMenuFingerprint, chainReviewHash } from '../../services/chainCatalog';
 import { getMenuPage } from '../../lib/restaurantMenuService';
 const suite = process.env['POSTGRES_PRISMA_URL'] ? describe : describe.skip;
 const facts = (r: { calories: number | null; proteinG: number | null; carbsG: number | null; fatG: number | null }) => ({ calories: r.calories, proteinG: r.proteinG, carbsG: r.carbsG, fatG: r.fatG });
 suite('full two-chain catalog replay', () => {
   const p = new PrismaClient(), scope = randomUUID(), brandIds: string[] = [];
   afterAll(async () => { await p.$disconnect(); });
-  test('April variants and complete captured UE menus use the same reviewed servings, with explicit abstentions', async () => {
+  test('April variants and complete captured UE menus use the same reviewed servings, with explicit abstentions', async () => p.$transaction(async tx => {
+    // Share the CLI fixture lock; production conflict handling is tested with deliberate concurrent writers separately.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(78343218)`;
     const batch = chainCatalogBatchSchema.parse(manifest), slugs = ['waba-grill', 'yoshinoya'];
     const truth = new Map(chainBatchTruth.map(([slug, key, calories, proteinG, carbsG, fatG]) => [slug + ':' + key, { calories, proteinG, carbsG, fatG }]));
     const bindings = new Map(chainBindingTruth.map(([slug, key, item]) => [slug + ':' + chainMenuFingerprint(item), key]));
@@ -29,12 +31,17 @@ suite('full two-chain catalog replay', () => {
         const b = await p.brand.create({ data: { slug: scope + slug, displayName: scope + slug, detectionConf: 'high' } });
         brands.push(b); brandIds.push(b.id);
       }
-      for (const row of batch.changes) row.slug = scope + row.slug;
+      for (const row of batch.changes) {
+        row.slug = scope + row.slug;
+        if (row.expected?.review) row.expected.review.dataHash = chainReviewHash({ id: 'baseline', brandId: brands.find(b => b.slug === row.slug)!.id, ...row.expected, review: row.expected.review }, row.expected.review);
+      }
       await p.chainItem.createMany({ data: batch.changes.filter(r => r.expected).map(r => ({ ...r.expected!, brandId: brands.find(b => b.slug === r.slug)!.id, review: r.expected!.review ?? Prisma.DbNull })) });
       const beforeCatalog = await p.chainItem.findMany({ where: { brandId: { in: brandIds } } });
       const catalogPlan = planChainPilot(brands, beforeCatalog, batch);
+      expect(catalogPlan.changes).toHaveLength(175);
       const catalogAfter = await applyCatalogPlan(p, catalogPlan, batch);
       const stored = await p.chainItem.findMany({ where: { brandId: { in: brandIds } } });
+      for (const row of beforeCatalog) expect(stored.find(r => r.id === row.id)).toEqual(row);
       expect(planChainPilot(brands, stored, batch).changes).toEqual([]);
       const runtime = await loadChainServing(p);
       const variants = observations.filter(o => o.count > 0).map(o => ({ ...o, restaurantId: randomUUID(), id: randomUUID() }));
@@ -63,8 +70,8 @@ suite('full two-chain catalog replay', () => {
           expect(stateHash(after)).toBe(stateHash(item));
         }
       }
-      expect(aprilCounts).toEqual({ 'waba-grill': 387, yoshinoya: 223 });
-      expect(mainCounts).toEqual({ 'waba-grill': 330, yoshinoya: 66 });
+      expect(aprilCounts).toEqual({ 'waba-grill': 369, yoshinoya: 223 });
+      expect(mainCounts).toEqual({ 'waba-grill': 312, yoshinoya: 66 });
       for (const [index, raw] of [wabaUE, yoshiUE].entries()) {
         const slug = slugs[index]!, brand = brands[index]!, items = parseStoreV1Response(raw)!.items;
         const r = await p.restaurant.create({ data: { storeUuid: scope + 'new-' + slug, name: brand.displayName + ' (New Location)', address: 'New hex fixture', lat: 34, lng: -118, cuisineTags: [], source: 'ue_feed' } });
@@ -104,5 +111,5 @@ suite('full two-chain catalog replay', () => {
       await p.brand.deleteMany({ where: { id: { in: brandIds } } });
       await p.pipelineCompletedHex.deleteMany({ where: { runId: scope } });
     }
-  }, 120_000);
+  }, { timeout: 120_000, maxWait: 120_000 }), 125_000);
 });

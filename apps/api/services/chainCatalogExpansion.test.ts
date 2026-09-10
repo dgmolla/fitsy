@@ -27,7 +27,7 @@ test('all 197 extracted source rows are accounted for; held facts are absent and
 test('every approved binding has an actual menu observation, and no unseen name-only aliases are created', () => {
   const seen = new Set(observations.map(r => r.slug + ':' + chainMenuFingerprint(r)));
   const aliases = batch.changes.flatMap(r => r.aliases.map(a => r.slug + ':' + chainMenuFingerprint(a)));
-  expect(aliases).toHaveLength(95);
+  expect(aliases).toHaveLength(94);
   for (const alias of aliases) expect(seen.has(alias)).toBe(true);
 });
 
@@ -43,7 +43,7 @@ test.each(chainBindingTruth)('%s %s keeps its reviewed menu identity', (slug, ke
 test('binding oracle covers every approved alias exactly once', () => {
   const expected = chainBindingTruth.map(([slug, key, item]) => slug + ':' + key + ':' + chainMenuFingerprint(item));
   const actual = batch.changes.flatMap(r => r.aliases.map(a => r.slug + ':' + r.canonicalKey + ':' + chainMenuFingerprint(a)));
-  expect(new Set(expected).size).toBe(95); expect(actual.sort()).toEqual(expected.sort());
+  expect(new Set(expected).size).toBe(94); expect(actual.sort()).toEqual(expected.sort());
 });
 test('every ranged raw listing stays unbound even without its label, including duplicate sections', () => {
   let checked = 0;
@@ -61,7 +61,7 @@ test('known conflicts, configurable dishes and changed recipes remain unresolved
   const held = observations.filter(o => (o.slug === 'waba-grill' && ['Shrimp Bowl', 'Shrimp Veggie Bowl', 'Shrimp Plate', '10 Dumplings', 'Chicken Family Meal', 'Family Sized Proteins', 'Tacos'].includes(o.name))
     || (o.slug === 'yoshinoya' && ['Combo Bowl', 'Combo XL Bowl', 'Kids Original Gyudon Beef', 'Kids Teriyaki Grilled Chicken', 'Original Gyudon Beef Bowl®', 'White Rice', 'Brown Rice', 'Crispy Gyoza', 'Grilled Chicken', 'Cheesecake'].includes(o.name))
     || (o.slug === 'waba-grill' && o.name === 'Chicken Bowl' && ['Featured items', 'Rice Bowls'].includes(o.section))
-    || (o.slug === 'waba-grill' && o.name === 'Signature House' && !o.description.includes('white meat chicken')));
-  expect(held).toHaveLength(29);
+    || (o.slug === 'waba-grill' && ['Signature House', 'Signature House Salad'].includes(o.name) && !o.description.includes('white meat chicken')));
+  expect(held).toHaveLength(30);
   for (const row of held) expect(match(row.slug, row).status).toBe('unmatched');
 });

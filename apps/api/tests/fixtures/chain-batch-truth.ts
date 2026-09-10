@@ -93,7 +93,6 @@ export const chainBindingTruth: [string, string, { name: string; section: string
   ["waba-grill","plates/organic-tofu",{"name":"Tofu Plate","section":"Plates","description":"Grilled organic tofu hand-basted in our flavorful signature WaBa sauce."}],
   ["waba-grill","plates/plantspired-steak",{"name":"Plantspired Plate","section":"Plates","description":"Marinated plant-based steak slices fire-grilled-to-order."}],
   ["waba-grill","salad-entrees/signature-house-served-w-wm-chicken",{"name":"Signature House","section":"Salads","description":"Arcadian blend salad topped with cucumber, cherry tomatoes, carrots, and grilled white meat chicken. Served with WaBa’s Sesame Dressing and wonton strips on the side."}],
-  ["waba-grill","salad-entrees/signature-house-served-w-wm-chicken",{"name":"Signature House Salad","section":"Salads","description":""}],
   ["waba-grill","salad-entrees/spicy-asian-served-w-wm-chicken",{"name":"Spicy Asian Salad","section":"Salads","description":"Arcadian blend salad topped with Cucumber & Edamame Kimchi, cherry tomatoes, carrots, cilantro, and grilled White Meat chicken. Served with Spicy Sesame Dressing and wonton strips on the side."}],
   ["waba-grill","miso-soup",{"name":"Miso Soup","section":"Sides","description":""}],
   ["waba-grill","sides/half-ocado",{"name":"Half-Ocado","section":"Sides","description":"Side of avocado"}],
