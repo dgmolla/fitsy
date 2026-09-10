@@ -25,7 +25,9 @@ export async function GET(request: NextRequest): Promise<Response> {
     return badLinkPage("confirmation link");
   }
 
-  // COALESCE keeps the first confirmation time on repeat clicks.
+  // The `confirmedAt: null` filter makes a repeat click a zero-row update, so
+  // the first confirmation time is kept; the existence probe below keeps a
+  // repeat click a 200 rather than a bad-link page.
   const updated = await prisma.launchWaitlist.updateMany({
     where: { id: waitlistId, confirmedAt: null },
     data: { confirmedAt: new Date() },

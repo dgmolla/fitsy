@@ -9,6 +9,7 @@ import {
   MARKETING_MIN_GAP_MS,
   MAX_SENDS_PER_RUN,
   recordSend,
+  sentStepWithin,
   sentWithin,
   wasSent,
 } from "@/lib/marketingLedger";
@@ -51,6 +52,18 @@ describe("marketingLedger", () => {
     expect(before - since).toBeLessThanOrEqual(MARKETING_MIN_GAP_MS + 1000);
     expect(MARKETING_MIN_GAP_MS).toBe(48 * 3600e3);
     expect(MAX_SENDS_PER_RUN).toBe(500);
+  });
+
+  it("sentStepWithin scopes the window to one campaign step", async () => {
+    (prisma.marketingSend.findFirst as jest.Mock).mockResolvedValue({ id: "x" });
+    expect(await sentStepWithin(" Alice@Example.org ", "lifecycle", "confirm", 5000)).toBe(true);
+    const arg = (prisma.marketingSend.findFirst as jest.Mock).mock.calls[0]![0];
+    expect(arg.where).toEqual({
+      email: "alice@example.org",
+      campaign: "lifecycle",
+      step: "confirm",
+      sentAt: { gt: expect.any(Date) },
+    });
   });
 
   it("sentWithin is false when nothing was sent in the window", async () => {

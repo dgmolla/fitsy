@@ -3,12 +3,12 @@ jest.mock("@/lib/marketingEmail", () => ({
 }));
 jest.mock("@/lib/marketingLedger", () => ({
   recordSend: jest.fn(),
-  sentWithin: jest.fn(),
+  sentStepWithin: jest.fn(),
 }));
 
 import { sendWaitlistConfirmation } from "@/lib/waitlistConfirmSend";
 import { sendMarketingEmail } from "@/lib/marketingEmail";
-import { recordSend, sentWithin } from "@/lib/marketingLedger";
+import { recordSend, sentStepWithin } from "@/lib/marketingLedger";
 import { confirmUrl } from "@/lib/waitlistConfirm";
 
 const ROW = { id: "wl1", email: "web@example.org" };
@@ -16,7 +16,7 @@ const ROW = { id: "wl1", email: "web@example.org" };
 beforeEach(() => {
   jest.clearAllMocks();
   process.env["UNSUBSCRIBE_SECRET"] = "secret";
-  (sentWithin as jest.Mock).mockResolvedValue(false);
+  (sentStepWithin as jest.Mock).mockResolvedValue(false);
   (sendMarketingEmail as jest.Mock).mockResolvedValue(true);
   (recordSend as jest.Mock).mockResolvedValue(undefined);
 });
@@ -32,12 +32,13 @@ describe("sendWaitlistConfirmation", () => {
     expect(arg.to).toBe("web@example.org");
     expect(arg.subject).toContain("Confirm");
     expect(arg.html).toContain(confirmUrl("wl1"));
-    expect(sentWithin).toHaveBeenCalledWith("web@example.org", 24 * 3600e3);
+    // Scoped to the confirmation step: an unrelated marketing email must not block consent.
+    expect(sentStepWithin).toHaveBeenCalledWith("web@example.org", "lifecycle", "confirm", 24 * 3600e3);
     expect(recordSend).toHaveBeenCalledWith("web@example.org", "lifecycle", "confirm");
   });
 
   it("throttles to one confirmation per address per day", async () => {
-    (sentWithin as jest.Mock).mockResolvedValue(true);
+    (sentStepWithin as jest.Mock).mockResolvedValue(true);
     expect(await sendWaitlistConfirmation(ROW)).toBe(false);
     expect(sendMarketingEmail).not.toHaveBeenCalled();
   });

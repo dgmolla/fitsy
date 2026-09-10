@@ -78,6 +78,7 @@ sequenceDiagram
 - `GET /waitlist/confirm` (signed link) - sets `confirmedAt` and renders a confirmation page.
   Onboarding rows are confirmed at creation (Apple/Google verified the account email), and linking an account confirms a pending website row.
   Unconfirmed rows are excluded from the launch blast and from every marketing audience, so a third party cannot put someone else's address on the list.
+  Rows that existed when double opt-in shipped (the single opt-in cohort) were grandfathered as confirmed at their creation time by the migration, since nothing could ever confirm them afterwards.
 
 - `GET /api/internal/waitlist/launch-day` (CRON_SECRET, daily cron at 16:30 UTC) - the scheduled first-launch blast.
   No-op before `LAUNCH_DATE_ISO` in `apps/api/lib/launch.ts`; from that day on it runs the notify logic below with the launch center, the launch city, and `includeUnlocated: true`.

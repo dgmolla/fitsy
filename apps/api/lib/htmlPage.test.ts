@@ -11,6 +11,11 @@ describe("htmlPage", () => {
     expect(html).not.toContain("<script");
   });
 
+  it("escapes the title", async () => {
+    const html = await htmlPage('A <b>"t"</b> & co', "<p>x</p>").text();
+    expect(html).toContain("<title>A &lt;b&gt;&quot;t&quot;&lt;/b&gt; &amp; co</title>");
+  });
+
   it("badLinkPage is a 400 that names the link kind", async () => {
     const res = badLinkPage("confirmation link");
     expect(res.status).toBe(400);

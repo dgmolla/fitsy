@@ -12,6 +12,7 @@ const DB: DbMetrics = {
   feedback: { thisWeek: 3, lastWeek: 3 },
   waitlist: { thisWeek: 12, lastWeek: 5 },
   waitlistTotal: 40,
+  waitlistConfirmed: 31,
 };
 
 const PH: PostHogMetrics = {

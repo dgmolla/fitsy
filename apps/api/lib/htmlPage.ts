@@ -2,7 +2,14 @@
  * Minimal branded HTML pages for email-link landings (unsubscribe, waitlist
  * confirmation). Inline CSS only: these pages are opened from mail clients
  * and must render with no app bundle.
+ *
+ * `title` is escaped. `body` is trusted, caller-built markup (like
+ * brandEmailShell in emailTemplates.ts): never interpolate request data
+ * into it unescaped.
  */
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
 const BRAND_GREEN = "#1B3A26";
 const BG = "#FDFBF7";
 
@@ -12,7 +19,7 @@ export function htmlPage(title: string, body: string, status = 200): Response {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${title}</title>
+<title>${escapeHtml(title)}</title>
 <style>
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
   body{background:${BG};color:#222;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;padding:24px}
