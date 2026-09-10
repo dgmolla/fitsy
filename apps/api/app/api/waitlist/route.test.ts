@@ -145,20 +145,30 @@ describe("POST /api/waitlist (onboarding)", () => {
 
   it("opting in again from a different city is also a fresh opt-in: notifiedAt clears", async () => {
     // Notified for LA, then moved to Chicago and tapped again.
-    tx.launchWaitlist.findUnique.mockResolvedValue({ lat: 34.1, lng: -118.2, emailOptOutAt: null });
+    tx.launchWaitlist.findUnique.mockResolvedValue({
+      lat: 34.1,
+      lng: -118.2,
+      emailOptOutAt: null,
+      confirmedAt: new Date("2026-09-01T00:00:00.000Z"),
+    });
     await POST(makeRequest({ lat: 41.88, lng: -87.63, city: "Chicago" }));
     expect(upsertArg().update).toHaveProperty("notifiedAt", null);
   });
 
   it("a move along one axis only (same coarse latitude) still counts as a new city", async () => {
-    tx.launchWaitlist.findUnique.mockResolvedValue({ lat: 34.1, lng: -118.2, emailOptOutAt: null });
+    tx.launchWaitlist.findUnique.mockResolvedValue({
+      lat: 34.1,
+      lng: -118.2,
+      emailOptOutAt: null,
+      confirmedAt: new Date("2026-09-01T00:00:00.000Z"),
+    });
     await POST(makeRequest({ lat: 34.1, lng: -96.0, city: "Dallas" }));
     expect(upsertArg().update).toHaveProperty("notifiedAt", null);
   });
 
   it("linking onto a row that already opted out carries the opt-out onto the account", async () => {
     const optedOut = new Date("2026-09-01T00:00:00.000Z");
-    tx.launchWaitlist.findUnique.mockResolvedValue({ lat: null, lng: null, emailOptOutAt: optedOut });
+    tx.launchWaitlist.findUnique.mockResolvedValue({ lat: null, lng: null, emailOptOutAt: optedOut, confirmedAt: null });
     await POST(makeRequest(LA));
     expect(upsertArg().update).not.toHaveProperty("emailOptOutAt");
     expect(tx.user.updateMany).toHaveBeenCalledWith({

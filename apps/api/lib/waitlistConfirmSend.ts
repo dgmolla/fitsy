@@ -12,7 +12,9 @@
  * marketing touch, so it does NOT sit behind the cross-campaign frequency
  * cap. A transient provider failure releases the claim (a later submit can
  * retry) and is reported to Slack with the row id, because an unconfirmed
- * row never receives anything else. Never throws.
+ * row never receives anything else. A missing signing secret is reported
+ * the same way: without it no website signup can ever be confirmed, and the
+ * form still answered "check your inbox". Never throws.
  */
 import { notifySlack } from "@fitsy/shared";
 import { prisma } from "@/lib/restaurantService";
@@ -28,7 +30,15 @@ export async function sendWaitlistConfirmation(row: { id: string; email: string 
   let claimed = false;
   try {
     const url = confirmUrl(row.id);
-    if (!url) return false;
+    if (!url) {
+      await notifySlack(
+        "waitlist confirmation not sent",
+        `Cannot mint a confirmation link for waitlist row ${row.id}: UNSUBSCRIBE_SECRET is not set. ` +
+          `Every website signup stays unconfirmed until it is.`,
+        { source: "waitlist-confirm" },
+      );
+      return false;
+    }
 
     // Permanent: nothing to send, ever. No claim, no alert.
     if (isUndeliverableAddress(row.email) || (await isEmailOptedOut(row.email))) return false;

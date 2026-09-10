@@ -113,10 +113,15 @@ describe("sendWaitlistConfirmation", () => {
     expect(prisma.launchWaitlist.updateMany).not.toHaveBeenCalled();
   });
 
-  it("cannot mint a link without the signing secret, so it claims and sends nothing", async () => {
+  it("cannot mint a link without the signing secret: claims and sends nothing, but tells Slack the configuration is missing", async () => {
     delete process.env["UNSUBSCRIBE_SECRET"];
     expect(await sendWaitlistConfirmation(ROW)).toBe(false);
     expect(prisma.launchWaitlist.updateMany).not.toHaveBeenCalled();
     expect(sendMarketingEmail).not.toHaveBeenCalled();
+    expect(mockNotifySlack).toHaveBeenCalledWith(
+      "waitlist confirmation not sent",
+      expect.stringMatching(/wl1.*UNSUBSCRIBE_SECRET/),
+      { source: "waitlist-confirm" },
+    );
   });
 });

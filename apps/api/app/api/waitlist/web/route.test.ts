@@ -102,7 +102,7 @@ describe("POST /api/waitlist/web (public form)", () => {
     });
   });
 
-  it("sends the double opt-in confirmation for an unconfirmed row, deferred after the response", async () => {
+  it("hands the double opt-in confirmation for an unconfirmed row to after()", async () => {
     await POST(makeRequest({ email: "dawit@gmail.com" }));
     expect(mockAfter).toHaveBeenCalledTimes(1);
     expect(sendWaitlistConfirmation).toHaveBeenCalledWith({ id: "wl-new", email: "dawit@gmail.com" });
