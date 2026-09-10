@@ -1,6 +1,6 @@
 # WaBa + Yoshinoya: full-source catalog expansion
 
-Status: tested candidate; production rollout pending. This expands the seven-serving pilot using the [reusable batch workflow](chain-catalog-batches.md).
+Status: production rollout verified, 2026-09-10 UTC. This expands the seven-serving pilot using the [reusable batch workflow](chain-catalog-batches.md).
 
 ```mermaid
 flowchart LR
@@ -12,18 +12,37 @@ flowchart LR
   M --> U[Future UE imports use the same matcher]
 ```
 
-## Candidate results
+## Production and import replay results
 
 | Scope | Before | After | Unresolved after |
 |---|---:|---:|---:|
 | WaBa April menu rows | 46 / 795 | 369 / 795 | 426 |
 | Yoshinoya April menu rows | 18 / 542 | 223 / 542 | 319 |
 | Total April rows | 64 / 1,337 (4.8%) | 592 / 1,337 (44.3%) | 745 |
-| Two captured UE menus | 7 / 151 | 52 / 151 (34.4%) | 99 |
+| Two captured UE menus (local replay) | 7 / 151 | 52 / 151 (34.4%) | 99 |
 
 **Main dishes:** 378 of the 592 April matches are bowls, plates or salads (312 WaBa, 66 Yoshinoya). In the current UE captures, only 19 of the 52 matches are main dishes (17 WaBa, 2 Yoshinoya). Most current Yoshinoya matches are sides, drinks or desserts; its generic grilled entrée names allow sauce choices, so those are held. This is not broad current-entrée coverage for Yoshinoya.
 
-The batch adds 175 catalog records; the seven prior approvals remain identical. It should update 528 additional April items across the same 62-location inventory. Facts without aliases remain available for later serving review, without assigning components to meals. Legacy flat catalog records are preserved; unreviewed rows do not participate in the shared matcher.
+The batch added 175 catalog records; the seven prior approvals remain identical. The April update changed 528 items across 31 of the 62 inspected locations: 510 changed at least one numeric macro, while 18 already had the published numbers and gained official attribution. Facts without aliases remain available for later serving review, without assigning components to meals. Legacy flat catalog records are preserved; unreviewed rows do not participate in the shared matcher.
+
+## Production verification
+
+Release [#272](https://github.com/dgmolla/fitsy/pull/272), merge `7b52f5e`, passed both [main Verify](https://github.com/dgmolla/fitsy/actions/runs/34441828997) and [Deploy](https://github.com/dgmolla/fitsy/actions/runs/34441829051), plus preview and production public smoke checks. Local validation passed 985 API tests across 91 suites, the production build, and all blocking local gates.
+
+After a two-item canary, five batches of 100 and one of 26 were applied. Each batch passed cumulative readback before the next write.
+
+| Final production check | Result |
+|---|---|
+| Catalog | 175 additions; all 178 prior rows unchanged; 182 approved servings, 94 aliases |
+| Menu updates | 528 items verified against committed journals |
+| Untouched items and estimates | 809 unchanged: 745 unmatched plus 64 prior official items |
+| Identity and restaurants | All 1,337 menu IDs and all 62 restaurant records unchanged |
+| Serving | All 528 updated detail values verified; two search/detail consistency checks passed |
+| Remaining work in this batch | Catalog and April replans both returned zero changes |
+
+One final read-only replan hit a dropped connection (`P1017`); a fresh read succeeded with zero pending changes. All writes and their readback had already succeeded; no write was repeated. Plans and per-item rollback journals were retained locally. Recovery applies April journals in reverse batch order before the catalog journal.
+
+Production serving checks invoke the real services against the production database in read-only transactions. Public HTTP smoke passed; an entitled production-account HTTP probe was unavailable. Future-hex proof remains the local captured-menu replay described below.
 
 ## What was reviewed
 
