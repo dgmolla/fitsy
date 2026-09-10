@@ -16,9 +16,13 @@
  * email the claim is kept no matter what fails afterwards (the ledger
  * write is bookkeeping, not the throttle), so a retry cannot deliver twice. A missing signing secret is reported
  * the same way: without it no website signup can ever be confirmed, and the
- * form still answered "check your inbox". Never throws.
+ * form still answered "check your inbox". Both alerts sit behind the same
+ * per-key dedup window as server-error alerts (lib/errorAlert.ts): this runs
+ * from the unauthenticated form, so a burst of submissions during a provider
+ * outage must not flood the channel the launch blast reports to. Never throws.
  */
 import { notifySlack } from "@fitsy/shared";
+import { shouldAlert } from "@/lib/errorAlert";
 import { prisma } from "@/lib/restaurantService";
 import { isEmailOptedOut, isUndeliverableAddress, sendMarketingEmail } from "@/lib/marketingEmail";
 import { recordSend } from "@/lib/marketingLedger";
@@ -34,12 +38,14 @@ export async function sendWaitlistConfirmation(row: { id: string; email: string 
   try {
     const url = confirmUrl(row.id);
     if (!url) {
-      await notifySlack(
-        "waitlist confirmation not sent",
-        `Cannot mint a confirmation link for waitlist row ${row.id}: UNSUBSCRIBE_SECRET is not set. ` +
-          `Every website signup stays unconfirmed until it is.`,
-        { source: "waitlist-confirm" },
-      );
+      if (shouldAlert("waitlist-confirm-secret", now.getTime())) {
+        await notifySlack(
+          "waitlist confirmation not sent",
+          `Cannot mint a confirmation link for waitlist row ${row.id}: UNSUBSCRIBE_SECRET is not set. ` +
+            `Every website signup stays unconfirmed until it is.`,
+          { source: "waitlist-confirm" },
+        );
+      }
       return false;
     }
 
@@ -63,9 +69,11 @@ export async function sendWaitlistConfirmation(row: { id: string; email: string 
       to: row.email,
       subject,
       html,
-      // Per attempt: a re-send a day later must not be deduped away by the
-      // provider's 24h idempotency window.
-      idempotencyKey: `lifecycle:confirm:${row.email}:${now.toISOString()}`,
+      // Keyed by the claim window, not the attempt instant: a re-send a day
+      // later gets a new key (the provider's idempotency window is 24h), but
+      // a retry after an ambiguous outcome (timeout after the provider
+      // accepted) inside the same window is deduped by the provider.
+      idempotencyKey: `lifecycle:confirm:${row.email}:${Math.floor(now.getTime() / CONFIRM_RESEND_GAP_MS)}`,
     });
     if (ok) {
       delivered = true;
@@ -73,12 +81,14 @@ export async function sendWaitlistConfirmation(row: { id: string; email: string 
       return true;
     }
     await releaseClaim(row.id, now);
-    await notifySlack(
-      "waitlist confirmation not sent",
-      `Confirmation email for waitlist row ${row.id} failed at the provider; the row stays unconfirmed and gets nothing else. ` +
-        `The claim was released, so re-submitting the form retries.`,
-      { source: "waitlist-confirm" },
-    );
+    if (shouldAlert("waitlist-confirm", now.getTime())) {
+      await notifySlack(
+        "waitlist confirmation not sent",
+        `Confirmation email for waitlist row ${row.id} failed at the provider; the row stays unconfirmed and gets nothing else. ` +
+          `The claim was released, so re-submitting the form retries.`,
+        { source: "waitlist-confirm" },
+      );
+    }
     return false;
   } catch {
     if (claimed && !delivered) await releaseClaim(row.id, now).catch(() => undefined);

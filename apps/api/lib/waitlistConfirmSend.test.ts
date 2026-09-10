@@ -20,12 +20,14 @@ import { prisma } from "@/lib/restaurantService";
 import { isEmailOptedOut, sendMarketingEmail } from "@/lib/marketingEmail";
 import { recordSend } from "@/lib/marketingLedger";
 import { confirmUrl } from "@/lib/waitlistConfirm";
+import { resetAlertDedup } from "@/lib/errorAlert";
 
 const ROW = { id: "wl1", email: "web@example.org" };
 const NOW = new Date("2026-09-09T12:00:00Z");
 
 beforeEach(() => {
   jest.clearAllMocks();
+  resetAlertDedup();
   jest.useFakeTimers().setSystemTime(NOW);
   process.env["UNSUBSCRIBE_SECRET"] = "secret";
   (prisma.launchWaitlist.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
@@ -56,7 +58,7 @@ describe("sendWaitlistConfirmation", () => {
     expect(arg.to).toBe("web@example.org");
     expect(arg.subject).toContain("Confirm");
     expect(arg.html).toContain(confirmUrl("wl1"));
-    expect(arg.idempotencyKey).toBe(`lifecycle:confirm:web@example.org:${NOW.toISOString()}`);
+    expect(arg.idempotencyKey).toBe(`lifecycle:confirm:web@example.org:${Math.floor(NOW.getTime() / CONFIRM_RESEND_GAP_MS)}`);
     expect(recordSend).toHaveBeenCalledWith("web@example.org", "lifecycle", "confirm");
     expect(mockNotifySlack).not.toHaveBeenCalled();
   });
@@ -97,6 +99,26 @@ describe("sendWaitlistConfirmation", () => {
       expect.stringContaining("row wl1"),
       { source: "waitlist-confirm" },
     );
+  });
+
+  it("a retry inside the same claim window reuses the idempotency key; the next window gets a new one", async () => {
+    await sendWaitlistConfirmation(ROW);
+    jest.setSystemTime(new Date(NOW.getTime() + 60_000));
+    await sendWaitlistConfirmation(ROW);
+    jest.setSystemTime(new Date(NOW.getTime() + CONFIRM_RESEND_GAP_MS + 60_000));
+    await sendWaitlistConfirmation(ROW);
+    const keys = (sendMarketingEmail as jest.Mock).mock.calls.map((c) => c[0].idempotencyKey as string);
+    expect(keys[0]).toBe(keys[1]);
+    expect(keys[2]).not.toBe(keys[0]);
+  });
+
+  it("alerts at most once per dedup window: a burst of public submissions during an outage cannot flood Slack", async () => {
+    (sendMarketingEmail as jest.Mock).mockResolvedValue(false);
+    for (let i = 0; i < 5; i++) await sendWaitlistConfirmation({ id: `wl${i}`, email: `p${i}@example.org` });
+    expect(mockNotifySlack).toHaveBeenCalledTimes(1);
+    jest.setSystemTime(new Date(NOW.getTime() + 16 * 60_000));
+    await sendWaitlistConfirmation({ id: "wl9", email: "p9@example.org" });
+    expect(mockNotifySlack).toHaveBeenCalledTimes(2);
   });
 
   it("never throws: a thrown send releases the claim and reports false", async () => {
