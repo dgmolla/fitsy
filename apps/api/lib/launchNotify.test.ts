@@ -62,9 +62,10 @@ describe("notifyLaunch: matching, dry run, batching", () => {
     const arg = (prisma.launchWaitlist.findMany as jest.Mock).mock.calls[0]![0];
     expect(arg.orderBy).toEqual({ createdAt: "asc" });
     expect(arg.where.notifiedAt).toBeNull();
-    expect(arg.where.confirmedAt).toEqual({ not: null });
     expect(arg.where.notifyAttempts).toEqual({ lt: MAX_NOTIFY_ATTEMPTS });
-    const [never, cooled] = arg.where.OR;
+    const [consent, cooldown] = arg.where.AND;
+    expect(consent).toEqual({ OR: [{ confirmedAt: { not: null } }, { legacyConsent: true }] });
+    const [never, cooled] = cooldown.OR;
     expect(never).toEqual({ lastNotifyAttemptAt: null });
     const cutoff = (cooled.lastNotifyAttemptAt.lt as Date).getTime();
     expect(before - cutoff).toBeGreaterThanOrEqual(RETRY_COOLDOWN_MS - 1000);

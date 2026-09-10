@@ -78,8 +78,8 @@ sequenceDiagram
 - `GET /waitlist/confirm` (signed link) - sets `confirmedAt` and renders a confirmation page.
   Onboarding rows are confirmed at creation (Apple/Google verified the account email), and linking an account confirms a pending website row.
   Unconfirmed rows are excluded from the launch blast and from every marketing audience, so a third party cannot put someone else's address on the list.
-  Rows that existed when double opt-in shipped (the single opt-in cohort) were grandfathered as confirmed at their creation time by the migration, since nothing could ever confirm them afterwards.
-  Prod migrates before the new bundle is promoted, so `confirmedAt` carries a temporary DB default for rows the previous bundle inserts in that window; the new code sets the column explicitly and a follow-up contraction migration drops the default.
+  Rows that existed when double opt-in shipped (the single opt-in cohort) carry `legacyConsent`: they get the launch notification they asked for, but recurring marketing email still requires the confirmation click, so `confirmedAt` stays null for them until they confirm.
+  Prod migrates before the new bundle is promoted, so `legacyConsent` carries a temporary DB default of true for rows the previous bundle inserts in that window; the new code sets the column explicitly (false) and the next release's contraction migration drops the default.
 
 - `GET /api/internal/waitlist/launch-day` (CRON_SECRET, daily cron at 16:30 UTC) - the scheduled first-launch blast.
   No-op before `LAUNCH_DATE_ISO` in `apps/api/lib/launch.ts`; from that day on it runs the notify logic below with the launch center, the launch city, and `includeUnlocated: true`.

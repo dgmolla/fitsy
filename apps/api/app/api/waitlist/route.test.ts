@@ -97,6 +97,7 @@ describe("POST /api/waitlist (onboarding)", () => {
         userId: "user-1",
         source: "onboarding",
         confirmedAt: expect.any(Date),
+        legacyConsent: false,
         ...COARSE_LA,
       },
       update: { userId: "user-1", confirmedAt: expect.any(Date), ...COARSE_LA },

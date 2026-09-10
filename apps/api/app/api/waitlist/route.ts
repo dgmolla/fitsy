@@ -84,7 +84,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const now = new Date();
     await tx.launchWaitlist.upsert({
       where: { email },
-      create: { email, userId: auth.sub, source: "onboarding", confirmedAt: now, ...location },
+      create: {
+        email,
+        userId: auth.sub,
+        source: "onboarding",
+        confirmedAt: now,
+        legacyConsent: false,
+        ...location,
+      },
       update: {
         userId: auth.sub,
         ...location,

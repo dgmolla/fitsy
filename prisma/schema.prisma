@@ -64,8 +64,15 @@ model LaunchWaitlist {
   emailOptOutAt DateTime?      // set via /unsubscribe?w=<id>; suppresses email to this row
   // Double opt-in. Onboarding rows are confirmed at creation (the provider
   // verified the account email); website rows are confirmed by the link in
-  // the confirmation email. Unconfirmed rows receive nothing but that email.
+  // the confirmation email. Unconfirmed rows receive nothing but that email
+  // and, if legacyConsent is set, the launch blast.
   confirmedAt   DateTime?
+  // Single opt-in cohort: rows collected before double opt-in existed (and
+  // rows the previous bundle inserts during the migrate/promote window, via
+  // a temporary DB default). They asked for the launch notification and get
+  // it; recurring email still requires confirmedAt. Dropped default: see the
+  // contraction migration that follows the promotion.
+  legacyConsent Boolean        @default(false)
   // When the confirmation email was last claimed for sending. The claim is a
   // conditional write (compare-and-set), so concurrent form posts for one
   // address cannot each send a confirmation.

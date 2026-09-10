@@ -81,7 +81,7 @@ flowchart TD
 |-------|---------|--------------|----------|
 | `GET /api/internal/marketing/weekly` | cron, Tuesday 16:00 UTC | `?dryRun=1` | `{ ok, edition, eligible, sent, paced, failed, unsent }`; `eligible` is the audience not yet sent this step; `unsent > 0` is alerted to Slack and a re-run resumes |
 | `GET /api/internal/waitlist/launch-day` | cron, daily 16:30 UTC | `?dryRun=1` | `{ ok, skipped, today, launchDate }` before launch; from launch day on, the blast result summed over batches, drained until no unprocessed rows remain, a batch moves nothing, or another batch would not fit the budget (`stalled: true` on the second) |
-| `POST /api/internal/waitlist/notify` | operator | `{ lat, lng, radiusMiles?, city?, includeUnlocated?, dryRun? }` | `{ ok, matched, viaPush, viaEmail, notified, suppressed, failed, exhausted, remaining }`; dry run: `{ matched, wouldNotify, wouldSuppress }` |
+| `POST /api/internal/waitlist/notify` | operator (matches confirmed rows and the `legacyConsent` cohort) | `{ lat, lng, radiusMiles?, city?, includeUnlocated?, dryRun? }` | `{ ok, matched, viaPush, viaEmail, notified, suppressed, failed, exhausted, remaining }`; dry run: `{ matched, wouldNotify, wouldSuppress }` |
 
 All three require the `CRON_SECRET` bearer.
 

@@ -42,20 +42,6 @@ export async function recordSend(email: string, campaign: Campaign, step: string
   });
 }
 
-/** True when this exact campaign step went to the address within `gapMs` (e.g. a re-sent confirmation). */
-export async function sentStepWithin(
-  email: string,
-  campaign: Campaign,
-  step: string,
-  gapMs: number,
-): Promise<boolean> {
-  const row = await prisma.marketingSend.findFirst({
-    where: { email: normalizeEmail(email), campaign, step, sentAt: { gt: new Date(Date.now() - gapMs) } },
-    select: { id: true },
-  });
-  return row !== null;
-}
-
 /** True when any marketing email went to this address within the last `gapMs`. */
 export async function sentWithin(email: string, gapMs: number = MARKETING_MIN_GAP_MS): Promise<boolean> {
   const row = await prisma.marketingSend.findFirst({

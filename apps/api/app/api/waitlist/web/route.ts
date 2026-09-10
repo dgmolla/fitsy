@@ -69,12 +69,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   // No-op update: an existing row (from either surface) is left untouched,
   // including notifiedAt and emailOptOutAt.
-  // confirmedAt is set explicitly (not omitted): the column carries a
-  // cutover DB default for rows the previous bundle inserts during the
-  // migrate/promote window, which must not apply to a fresh website signup.
+  // legacyConsent is set explicitly (not omitted): its DB default is for
+  // rows the previous bundle inserts during the migrate/promote window and
+  // must not apply to a fresh website signup, which starts unconfirmed.
   const row = await prisma.launchWaitlist.upsert({
     where: { email },
-    create: { email, source: "web", confirmedAt: null },
+    create: { email, source: "web", confirmedAt: null, legacyConsent: false },
     update: {},
     select: { id: true, confirmedAt: true },
   });
