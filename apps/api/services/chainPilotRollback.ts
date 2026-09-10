@@ -1,3 +1,4 @@
+import { chainTransaction } from "./chainTransaction";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { stateHash } from "./chainPilotPlan";
 export type AprilSnapshot = Prisma.MenuItemGetPayload<{ include: { macroEstimates: true } }>;
@@ -9,7 +10,7 @@ export function rollbackAprilPatch(prisma: PrismaClient, journal: AprilJournal):
 /** A journal batch commits entirely or leaves every row unchanged. */
 export async function rollbackAprilBatch(prisma: PrismaClient, journals: AprilJournal[]): Promise<void> {
   for (const { before, after } of journals) if (before.id !== after.id || before.restaurantId !== after.restaurantId) throw new Error("April rollback identity mismatch");
-  await prisma.$transaction(async tx => {
+  await chainTransaction(prisma, async tx => {
     for (const { before, after } of journals) {
       await tx.$queryRaw`SELECT id FROM "MenuItem" WHERE id = ${after.id} FOR UPDATE`;
       const current = await tx.menuItem.findUnique({ where: { id: after.id }, include: { macroEstimates: { orderBy: { id: "asc" } } } });
@@ -22,5 +23,5 @@ export async function rollbackAprilBatch(prisma: PrismaClient, journals: AprilJo
       }
       await tx.menuItem.update({ where: { id: before.id }, data: { calories: before.calories, proteinG: before.proteinG, carbsG: before.carbsG, fatG: before.fatG, updatedAt: before.updatedAt } });
     }
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 120_000 });
+  }, 120_000);
 }

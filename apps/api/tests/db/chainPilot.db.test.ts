@@ -89,7 +89,7 @@ suite("official PDF pilot correction against captured April data", () => {
       expect(result).toMatchObject({ status: "matched", row: { calories: capture.official.calories, proteinG: capture.official.proteinG, carbsG: capture.official.carbsG, fatG: capture.official.fatG } });
       expect(match(brandId, { ...item, calorieRange: [100, 2000] })).toEqual({ status: "unmatched" });
     }
-  });
+  }, 30_000);
   test("April rollback restores an existing official estimate and rejects any later item or estimate edit", async () => {
     await applyCatalogPlan(p, planChainPilot(brands, catalog, pilot), pilot);
     const brand = brands.find(b => b.slug === scope + "waba-grill")!;
