@@ -2,6 +2,8 @@
 
 Official nutrition is onboarded once per chain and published serving. UE still discovers locations and supplies their menus. Importing a new location does not fetch PDFs.
 
+Onboard chains incrementally; finding every US chain source is not a prerequisite for adding coverage. UE discovery can precede catalog onboarding, with existing menus corrected afterward through the same matcher. Source discovery and extraction stay outside the UE run and API requests.
+
 ```mermaid
 flowchart LR
   P[Official PDF or nutrition page] --> E[Extract all rows with serving context]
@@ -35,6 +37,8 @@ npx tsx scripts/preload-chain-pilot.ts april-apply work/april-plan.json PLAN_HAS
 ```
 
 Use fresh artifact names; plans and rollback journals never overwrite existing evidence. Replan after each successful batch. Roll back April journals before the catalog journal, following [the pilot recovery rules](chain-pdf-pilot.md). Catalog writes are atomic; April writes are journaled per item. Database serialization conflicts (Prisma P2034 or raw-query P2010 / SQLSTATE 40001) retry the entire guarded transaction at most twice, rechecking the original plan each time. Other errors are not retried. Do not change catalog approvals during an active UE enrichment run.
+
+Catalog apply and rollback each use a 120-second transaction bound. The shared transaction helper otherwise defaults to 30 seconds. These bounds describe recovery behavior; local rollback tests verify restored data, not production network timing.
 
 ## Acceptance and limits
 
