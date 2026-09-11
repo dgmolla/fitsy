@@ -33,36 +33,28 @@ The pre-push hook runs layers 0–2 plus size/domain checks.
 A hook pass does not replace the applicable product-flow verification or independent review.
 The registry determines which checks apply and whether a check is blocking or shadow.
 
-## Local product-flow gate
-
-Local iPhone E2E is blocking for mobile-facing changes. CI runs static checks, unit tests and builds; its optional simulator workflow remains experimental. `npm run verify` and pre-push require fresh `.evidence/product-flow/report.json` when impact selection applies. Missing tools, skipped/failed assertions, missing coverage and stale evidence fail; unrelated changes get explicit `not_applicable`.
+**Local product-flow gate.** Local iPhone E2E is blocking for mobile-facing changes. CI runs static checks, unit tests and builds; its optional simulator workflow remains experimental. `npm run verify` and pre-push require fresh `.evidence/product-flow/report.json` when impact selection applies. Missing tools, skipped/failed assertions, missing coverage and stale evidence fail; unrelated changes get explicit `not_applicable`.
 
 Use an owned worktree, `npm run dev:env`, and an explicit simulator UDID. Keep public configuration in the ignored mobile environment file. The builder generates an embedded Release app, disables downloaded OTA updates, and records source/native/JS/configuration identities. A keyless build proves navigation only and cannot cover billing. Never publish credentials or personal data in evidence.
 
 ```sh
 node scripts/verify/product-flow.mjs --plan
-export FITSY_SIM_OWNER=my-task
-export MAESTRO_BIN="$HOME/.maestro/bin/maestro"
+export FITSY_SIM_OWNER=my-task MAESTRO_BIN="$HOME/.maestro/bin/maestro"
 node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs build <UDID>
 node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs run <UDID> <affected-flow-name>
 # Capture affected primary and recovery paths through Mobile MCP, then:
 node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs finish .evidence/walkthrough.json
-npm run verify
 ```
 
 Cold-start and sign-in always run. Add/select flows in `apps/mobile/e2e/flows/` tagged for every category in `--plan`, with at least two non-optional outcome assertions per changed journey. Baseline flows cannot cover a paywall change. Promote discovered regressions into deterministic scenarios.
 
-The walkthrough JSON is an array with one entry per category: `category`, `expected`, `observed`, `branches: ["primary", "recovery"]`, `result: "pass"`, and `trace` relative to `.evidence/product-flow/`. Traces contain actual timestamped Mobile MCP actions and screen observations. Identify run-owned synthetic fixtures with `FITSY_FIXTURE`; reviewers judge scenario relevance and visual quality.
-
-The collector verifies dev's deployed API/shared/schema against the candidate and checks deployment stability. Deploy candidate backend changes to dev first. Explicitly record remaining device/sandbox/store paths: simulator navigation is not purchase or remote-push verification.
-
-After committing, reviewing, pushing and opening the PR:
+The walkthrough JSON is an array with one entry per category: `category`, `expected`, `observed`, `branches: ["primary", "recovery"]`, `result: "pass"`, and `trace` relative to `.evidence/product-flow/`. Traces are JSONL: one `{at, command: {name}, result: {content}}` object per line, recording actual Mobile MCP actions and screen observations. Identify run-owned synthetic fixtures with `FITSY_FIXTURE`; reviewers judge scenario relevance and visual quality.
 
 ```sh
 node scripts/sim/publish-product-flow.mjs <PR_NUMBER>
 ```
 
-The publisher requires a clean checkout matching the PR head and current main. It rechecks source, app/configuration and backend identity, validates evidence no more than 24 hours old, and attaches verified commands, screenshots and traces to a **private draft** GitHub release. Keep drafts unpublished. Non-product PRs publish N/A without a simulator; `--include-baseline` optionally attaches a baseline validation run.
+The publisher requires a clean checkout matching the PR head and current main. Deploy candidate backend changes to dev before testing. The publisher rechecks source, app/configuration and backend identity, validates evidence no more than 24 hours old, and attaches verified commands, screenshots and traces to a **private draft** GitHub release. Keep drafts unpublished. Non-product PRs publish N/A without a simulator; `--include-baseline` optionally attaches a baseline validation run.
 
 Main requires `product-flow/local` on the exact head. Republish before merge; code/test changes require fresh evidence. GitHub does not automatically expire an old success after 24 hours. This trusts repository writers like the existing local reviews; it is not an attestation against an administrator. Preserve existing required checks when configuring protection. The shadow L7 smoke cannot satisfy this gate; cloud execution is not a launch requirement.
 

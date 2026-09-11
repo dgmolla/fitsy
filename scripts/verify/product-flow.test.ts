@@ -8,8 +8,7 @@ const modulePath = resolve(__dirname, 'product-flow.mjs');
 const sha = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
 let dir: string;
 const png = Buffer.from('89504e470d0a1a0a00000000', 'hex');
-// Git hooks export repository-local variables; never let fixture subprocesses
-// inherit a pointer to the real checkout's refs or index.
+// Never inherit Git-hook repository pointers into fixture subprocesses.
 const fixtureEnv = () => Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
 const fixtureGit = (args: string[]) => execFileSync('git', args, { env: fixtureEnv() });
 const evaluate = (expression: string) => spawnSync(process.execPath, ['--input-type=module', '-e',
@@ -62,7 +61,7 @@ test.each(['source', 'commands', 'screenshot', 'trace'])('rejects changed %s art
   const file = field === 'trace' ? 'trace.json' : report.flows[2]![field as 'source' | 'commands' | 'screenshot'];
   writeFileSync(join(dir, file), 'changed'); expect(validate(report).status).toBe(1);
 });
-test.each(['stale', 'future', 'expired', 'wrong-native', 'unknown-backend', 'prod', 'missing-flow', 'missing-walkthrough', 'missing-recovery'])('rejects %s proof', condition => {
+test.each(['stale', 'future', 'expired', 'wrong-native', 'unknown-backend', 'prod', 'unconfigured', 'missing-flow', 'missing-walkthrough', 'missing-recovery'])('rejects %s proof', condition => {
   const report = fixture();
   if (condition === 'stale') report.inputHash = 'previous-inputs';
   if (condition === 'future') report.finishedAt = new Date(Date.now() + 3600_000).toISOString();
@@ -70,6 +69,7 @@ test.each(['stale', 'future', 'expired', 'wrong-native', 'unknown-backend', 'pro
   if (condition === 'wrong-native') report.nativeSourceHash = 'old-native-source';
   if (condition === 'unknown-backend') report.backendRevision = 'unknown';
   if (condition === 'prod') report.backend = 'https://fitsy.org';
+  if (condition === 'unconfigured') report.storeMode = 'unconfigured';
   if (condition === 'missing-flow') report.flows.pop();
   if (condition === 'missing-walkthrough') report.exploration = [];
   if (condition === 'missing-recovery') report.exploration[0]!.branches = ['primary'];
@@ -112,6 +112,7 @@ test.each([
   [['apps/api/app/api/revenuecat/webhook/route.ts'], ['billing']],
   [['packages/shared/src/search.ts'], ['discovery']],
   [['apps/mobile/components/UnknownButton.tsx'], ['changed-journey']],
+  [['apps/api/next.config.ts'], ['changed-journey']],
 ])('routes %j through product impact selection', (paths, categories) => {
   const result = evaluate(`gate.impact(${JSON.stringify(paths)})`);
   expect(JSON.parse(result.stdout).categories).toEqual(categories);

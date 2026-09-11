@@ -22,7 +22,7 @@ const rules = [
 
 export function impact(paths) {
   const source = paths.filter(p => !/\.md$/.test(p));
-  const affected = source.filter(p => /^(apps\/mobile\/|packages\/shared\/|apps\/api\/(app\/api\/|lib\/|services\/)|prisma\/|package(-lock)?\.json$)/.test(p));
+  const affected = source.filter(p => /^(apps\/mobile\/|packages\/shared\/|apps\/api\/(app\/api\/|lib\/|services\/|[^/]+$)|prisma\/|package(-lock)?\.json$)/.test(p));
   const categories = new Set();
   for (const path of affected) {
     const matched = rules.filter(([, pattern]) => pattern.test(path));
@@ -75,6 +75,7 @@ export function validate(report, plan, hash, directory, now = Date.now(), cwd = 
     insist(typeof report[field] === 'string' && report[field].trim() && !/^(unknown|none|n\/a)$/i.test(report[field]), `missing ${field}`);
   }
   insist(report.nativeSourceHash === nativeHash, 'native build was not produced from these inputs');
+  insist(!plan.categories.includes('billing') || report.storeMode !== 'unconfigured', 'billing requires a configured store');
   insist(/^https:\/\/dev\.fitsy\.org\/?$|^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(report.backend), 'product tests require an identified dev backend');
   insist(Array.isArray(report.flows) && report.flows.length > 0, 'no flows executed');
   const covered = new Set();
