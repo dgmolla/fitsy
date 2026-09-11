@@ -123,6 +123,7 @@ tags: [billing, onboarding, changed-journey]
     timeout: 15000
 - tapOn: "Test failed purchase"
 - assertVisible: "Purchase not completed"
+- assertVisible: "Please try again. You can also restore an existing subscription."
 - tapOn: "OK"
 - extendedWaitUntil:
     visible:
