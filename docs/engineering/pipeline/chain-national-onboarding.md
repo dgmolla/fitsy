@@ -2,10 +2,12 @@
 
 The largest immediate opportunity is to improve chain menus already in production.
 The September 11 read-only inventory found 297,506 menu rows across 688 brand groups and 3,811 locations with menus that pass the shared brand-name guard.
-Only WaBa and Yoshinoya currently produce matches through the reviewed chain matcher: 592 rows before this candidate rollout.
+At that pre-rollout snapshot, only WaBa and Yoshinoya produced matches through the reviewed chain matcher: 592 rows.
+The completed batch increased their official rows to 658, with all 1,337 menu items verified through production HTTP.
 This measures adoption of the reviewed override workflow, not the accuracy of the remaining estimates.
 
-The inventory contains 4,845 catalog rows labeled `official`, but only 182 facts pass the approval validator.
+The pre-rollout inventory contained 4,845 catalog rows labeled `official`, but only 182 facts passed the approval validator.
+The completed batch adds nine approved manufacturer facts, bringing approved facts to 191.
 Do not enable the remaining catalog in bulk based on its source label.
 Source transcription, sold serving and menu binding still need evidence.
 The snapshot and script are read-only; no additional brands were approved or updated.
@@ -70,10 +72,12 @@ flowchart LR
    The current brand-name guard also scans that brand list for each restaurant.
    For national runs, a brand-alias index and catalogs scoped to participating brands are sensible next optimizations; this audit did not measure a current latency problem.
    The inventory excludes 53 linked locations that fail the name guard; review legitimate name aliases instead of removing that guard.
+10. **Validate other user-facing claims separately.** Official macros do not establish gluten-free or vegan status.
+    The native walkthrough exposed unsupported dietary inference from generic dish words; this was handed to the overlapping frontend task and is not covered by this catalog approval.
 
 The first human review packet covers [nine contexts affecting 190 rows](chain-quality-next-review.md): 36 already-applied protein-side rows with weak portion evidence and 154 unresolved near-identity rows.
 The read-only inventory counted qualified brand-linked locations after applying the production brand-name guard.
 The counts describe the current production cohort, not a national restaurant inventory or verified geographic coverage.
 Refresh scheduling, new menu providers and adding cities remain outside this batch.
 
-The [WaBa/Yoshinoya batch report](chain-quality-scale-out.md) records the candidate changes, evidence bands and release constraints.
+The [WaBa/Yoshinoya batch report](chain-quality-scale-out.md) records the deployed changes, production verification, evidence bands and rollback order.

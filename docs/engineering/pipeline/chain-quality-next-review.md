@@ -29,5 +29,5 @@ The reviewed official distributor pages identified the packages but did not expo
 Finding those exact labels would be an easier factual task, but would expand drink coverage rather than resolve the meal questions above.
 
 The [batch report](chain-quality-scale-out.md) summarizes all 168 contexts and the remaining evidence bands.
-The accompanying task review dataset retains current stored facts as of the audit snapshot, candidate facts, source evidence and blank human-review fields.
+The accompanying task review dataset retains before-rollout stored facts, candidate facts, source evidence, verified production status and blank human-review fields.
 For each future batch, preserve those same fields so a reviewer can assess prior matches alongside proposed additions.
