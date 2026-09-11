@@ -47,7 +47,7 @@ async function seed() {
         items: items.map((item, i) => ({ item, macro: macros[i]! })) }], p, { validateInTx: validateHexInTx });
     } else for (const item of items) {
       const { calories, proteinG, carbsG, fatG } = estimate;
-      const before = await p.menuItem.create({ data: { restaurantId: id, name: item.name, section: item.section, description: item.description,
+      const before = await p.menuItem.create({ data: { restaurantId: id, name: item.name, section: item.section ?? null, description: item.description ?? null,
         calories, proteinG, carbsG, fatG, macroEstimates: { create: { calories, proteinG, carbsG, fatG, confidence: 'MEDIUM', source: 'haiku' } } },
         include: { macroEstimates: { orderBy: { id: 'asc' } } } });
       const match = runtime.match(brand.id, aprilMenuIdentity(before));
