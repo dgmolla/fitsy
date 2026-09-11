@@ -5,7 +5,14 @@ tags: [billing, onboarding, changed-journey]
 ---
 - launchApp:
     clearState: true
-- assertVisible: "continue"
+# XCTest can reject an accessibility read while the first React frame enters.
+# Retry only this startup read; every billing interaction remains single-pass.
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - assertVisible: "continue"
 # Fresh welcome has no controls in this corner. Dismiss the Debug warning
 # window here; native LogBox is absent from the app accessibility hierarchy.
 - waitForAnimationToEnd:

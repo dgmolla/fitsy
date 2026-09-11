@@ -136,10 +136,19 @@ export function hasLapsedEntitlement(
 // follow the account across devices and reinstalls (rather than living on an
 // anonymous, device-local id).
 
+// Native logIn can finish after a later logOut (which sees an anonymous user).
+// Serialize identity mutations so the last auth event owns the SDK account.
+let identityWork: Promise<void> = Promise.resolve();
+function changeIdentity<T>(operation: () => Promise<T>): Promise<T> {
+  const result = identityWork.then(operation);
+  identityWork = result.then(() => undefined, () => undefined);
+  return result;
+}
+
 export async function identifyPurchasesUser(userId: string): Promise<CustomerInfo | null> {
   if (!configured) return null;
   try {
-    const { customerInfo } = await Purchases.logIn(userId);
+    const { customerInfo } = await changeIdentity(() => Purchases.logIn(userId));
     return customerInfo;
   } catch (err) {
     // eslint-disable-next-line no-console
@@ -151,7 +160,7 @@ export async function identifyPurchasesUser(userId: string): Promise<CustomerInf
 export async function logoutPurchasesUser(): Promise<void> {
   if (!configured) return;
   try {
-    await Purchases.logOut();
+    await changeIdentity(() => Purchases.logOut());
   } catch {
     // logOut throws when the current user is already anonymous - expected, ignore.
   }
