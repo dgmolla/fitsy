@@ -13,7 +13,8 @@ afterAll(() => {
   else Reflect.deleteProperty(globalThis, '__DEV__');
 });
 
-it('finishes an in-flight login before logout and a subsequent account login', async () => {
+it.each([false, true])('orders logout and the next login after the first login settles (failure=%s)', async failFirst => {
+  jest.spyOn(console, 'warn').mockImplementation(() => {});
   let finishLogin!: () => void;
   const pending = new Promise<void>(resolve => { finishLogin = resolve; });
   let nativeUser: string | null = null;
@@ -21,8 +22,9 @@ it('finishes an in-flight login before logout and a subsequent account login', a
   jest.spyOn(Purchases, 'logIn').mockImplementation(async user => {
     events.push(`start:${user}`);
     if (user === 'first') await pending;
-    nativeUser = user;
     events.push(`end:${user}`);
+    if (user === 'first' && failFirst) throw new Error('Offline');
+    nativeUser = user;
     return { customerInfo: emptyInfo, created: false };
   });
   jest.spyOn(Purchases, 'logOut').mockImplementation(async () => {
@@ -44,10 +46,3 @@ it('finishes an in-flight login before logout and a subsequent account login', a
   expect(nativeUser).toBe('next');
 });
 
-it('still logs out after a failed login', async () => {
-  jest.spyOn(console, 'warn').mockImplementation(() => {});
-  jest.spyOn(Purchases, 'logIn').mockRejectedValueOnce(new Error('Offline'));
-  const logout = jest.spyOn(Purchases, 'logOut').mockResolvedValueOnce(emptyInfo);
-  await Promise.all([identifyPurchasesUser('first'), logoutPurchasesUser()]);
-  expect(logout).toHaveBeenCalledTimes(1);
-});

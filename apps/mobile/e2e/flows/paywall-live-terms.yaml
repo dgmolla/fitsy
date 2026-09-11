@@ -13,7 +13,6 @@ tags: [billing, onboarding, changed-journey]
       - waitForAnimationToEnd:
           timeout: 10000
       - assertVisible: "continue"
-- assertVisible: "continue"
 # Fresh welcome has no controls in this corner. Dismiss the Debug warning
 # window here; native LogBox is absent from the app accessibility hierarchy.
 - waitForAnimationToEnd:
