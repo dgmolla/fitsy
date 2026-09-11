@@ -46,10 +46,10 @@ export interface BoundingBox {
 // ---------------------------------------------------------------------------
 
 const DEFAULT_CACHE_PATH = resolve(__dirname, "cache/overture-discovery.parquet");
-
 const CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-
-const OVERTURE_RELEASE = "2026-03-18.0";
+// Old public releases are retired. Allow an explicitly pinned supported release.
+const OVERTURE_RELEASE = process.env["OVERTURE_RELEASE"] ?? "2026-08-19.0";
+if (!/^\d{4}-\d{2}-\d{2}\.\d+$/.test(OVERTURE_RELEASE)) throw new Error("Invalid OVERTURE_RELEASE");
 const OVERTURE_S3_PATH =
   `s3://overturemaps-us-west-2/release/${OVERTURE_RELEASE}/theme=places/type=place/*`;
 
