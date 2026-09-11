@@ -50,7 +50,13 @@ Cold-start and sign-in always run. Add/select flows in `apps/mobile/e2e/flows/` 
 
 The walkthrough JSON is an array with one entry per category: `category`, `expected`, `observed`, `branches: ["primary", "recovery"]`, `result: "pass"`, and `trace` relative to `.evidence/product-flow/`. Traces are JSONL: one `{at, command: {name}, result: {content}}` object per line, recording actual Mobile MCP actions and screen observations. Identify run-owned synthetic fixtures with `FITSY_FIXTURE`; reviewers judge scenario relevance and visual quality.
 
-Deploy candidate backend changes to dev before testing. The local gate rechecks source, app/configuration and backend identity and accepts evidence no more than 24 hours old. Code/test changes require fresh evidence. The shadow L7 smoke cannot satisfy this gate; cloud execution is not a launch requirement. Remote status publication and branch protection are a separate rollout step; this check currently blocks local verification and pre-push.
+```sh
+node scripts/sim/publish-product-flow.mjs <PR_NUMBER>
+```
+
+The publisher requires a clean checkout matching the PR head and current main. Deploy candidate backend changes to dev before testing. The publisher rechecks source, app/configuration and backend identity, validates evidence no more than 24 hours old, and attaches verified commands, screenshots and traces to a **private draft** GitHub release. Keep drafts unpublished. Non-product PRs publish N/A without a simulator; `--include-baseline` optionally attaches a baseline validation run.
+
+Main requires `product-flow/local` on the exact head. Republish before merge; code/test changes require fresh evidence. GitHub does not automatically expire an old success after 24 hours. This trusts repository writers like the existing local reviews; it is not an attestation against an administrator. Preserve existing required checks when configuring protection. The shadow L7 smoke cannot satisfy this gate; cloud execution is not a launch requirement.
 
 Commit the tested change locally before reviewing it with the local review runner; `--local` reviews committed `origin/main...HEAD`, not uncommitted edits.
 Fetch the base first and ensure the branch contains the current review definitions.
