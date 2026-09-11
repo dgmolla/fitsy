@@ -1,0 +1,84 @@
+# Permission and preference checks use the unentitled shared dev account.
+# The MCP walkthrough buys only on a separate run-owned Test Store account,
+# then verifies logout cleanup and explicitly synthetic native date delivery.
+# No shared account purchase or invented store trial expiry is used here.
+appId: com.fitsy.mobile
+tags: [billing, onboarding, discovery, notifications, changed-journey]
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true # Disposable simulator: isolate auth between flows.
+    permissions:
+      notifications: unset
+# Retry only the first accessibility read through the Debug launch transition.
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - extendedWaitUntil:
+          visible: "continue"
+          timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn:
+    point: "92%,93%"
+- openLink: com.fitsy.mobile://notification-settings
+- assertVisible: "Reminders that fit."
+# iOS reports enabled=true for this disabled RN Switch; verify behavior.
+- assertVisible: "Sign in to choose reminders for your account."
+- tapOn:
+    id: reminder-meals-toggle
+- assertVisible:
+    id: reminder-meals-toggle
+    checked: false
+- assertNotVisible: "Allow"
+- assertVisible:
+    id: reminders-empty
+- openLink: com.fitsy.mobile://welcome/signin
+- tapOn: "Dev login"
+- extendedWaitUntil:
+    visible:
+      id: notification-allow
+    timeout: 30000
+- tapOn:
+    id: notification-allow
+- tapOn: "Allow"
+- openLink: com.fitsy.mobile://notification-settings
+- assertVisible: "Device notifications allowed"
+- assertVisible:
+    id: reminders-empty
+- assertVisible:
+    id: reminder-meals-toggle
+    checked: true
+- tapOn:
+    id: reminder-meals-toggle
+- assertVisible:
+    id: reminder-meals-toggle
+    checked: false
+- tapOn:
+    id: reminder-meals-toggle
+- assertVisible:
+    id: reminder-meals-toggle
+    checked: true
+- stopApp
+- launchApp
+- openLink: com.fitsy.mobile://notification-settings
+- assertVisible:
+    id: reminder-meals-toggle
+    checked: true
+- assertVisible:
+    id: reminders-empty
+- assertVisible: "Reminders start with your active Fitsy subscription."
+- tapOn:
+    id: reminder-meals-toggle
+- tapOn:
+    id: reminder-trial-toggle
+- assertVisible:
+    id: reminder-meals-toggle
+    checked: false
+- assertVisible:
+    id: reminder-trial-toggle
+    checked: false
+- assertVisible:
+    id: reminders-empty

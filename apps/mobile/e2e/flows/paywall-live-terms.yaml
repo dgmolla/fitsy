@@ -5,6 +5,7 @@ tags: [billing, onboarding, changed-journey]
 ---
 - launchApp:
     clearState: true
+    clearKeychain: true # Disposable simulator: isolate auth between flows.
 # XCTest can reject an accessibility read while the first React frame enters.
 # Retry only this startup read; every billing interaction remains single-pass.
 - retry:

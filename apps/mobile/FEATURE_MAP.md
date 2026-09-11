@@ -24,6 +24,7 @@ signed in without targets -> `/macro-setup`.
 | `/welcome/leave-review` | legacy links only | redirects to permission/out-of-area | no rating prompt in onboarding |
 | `/welcome/resubscribe` | cold start when lapsed | - | win-back screen |
 | out-of-area state | search preview returns 0 nearby | "Keep me posted" (inline on the search screen, not a separate route) | LA-only launch teaser; `/welcome/out-of-area` also exists in the onboarding flow |
+| `/notification-settings` | Profile → Reminders | "Reminders that fit." | opt-in meal/trial reminders, actual upcoming schedule, device/subscription settings |
 | `/feedback-board` | profile | - | feedback list |
 
 Known flake: first cold start after install animates for ~2s before "continue"

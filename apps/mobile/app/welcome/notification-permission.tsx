@@ -6,8 +6,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { api } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
+import { saveReminderPreferences } from '@/lib/notificationSchedule';
 import { getExpoPushTokenAsync, requestPermissionsAsync } from '@/lib/useNotifications';
 import {
+  trackReminderAction,
   trackNotificationPermissionDenied,
   trackNotificationPermissionGranted,
   trackNotificationPrimingAllowTapped,
@@ -15,24 +18,8 @@ import {
   trackNotificationPrimingSkipTapped,
 } from '@/lib/analytics';
 
-/**
- * Notification-permission priming screen (S-226b).
- *
- * Inserted between the location-permission screen (S-225) and the search tab.
- * Mirrors S-225's priming pattern: explain *why* before the OS dialog fires
- * so we lift grant rate above the cold-prompt baseline. iOS only allows
- * `Notifications.requestPermissionsAsync()` to surface the system dialog
- * once per install — this screen is the only opportunity.
- *
- * Critical: the OS prompt is NOT triggered on mount — only on the explicit
- * "Allow notifications" CTA. "Maybe later" advances without consuming the
- * one-shot prompt; users can re-grant via Settings later.
- *
- * On grant we POST the Expo push token to `/api/user/push-token` (S-226a) so
- * we have a token registry ready when notification campaigns ship. Token
- * fetch failures (Expo Go, simulator without push entitlement) are silent —
- * the user still completes the redirect.
- */
+/** Ask only after the user chooses Allow. Local reminders work without an
+ * APNs token; token registration remains available for future push campaigns. */
 export default function NotificationPermissionScreen() {
   const [busy, setBusy] = useState(false);
   const pulse = useRef(new RNAnimated.Value(0.45)).current;
@@ -58,6 +45,11 @@ export default function NotificationPermissionScreen() {
       const { status } = await requestPermissionsAsync();
       if (status === 'granted') {
         trackNotificationPermissionGranted();
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          await saveReminderPreferences(session.user.id, { meals: true, trial: true });
+          trackReminderAction({ action: 'preferences_changed', meals: true, trial: true });
+        }
         // Fire-and-forget the token POST. Token fetch returns null in Expo Go
         // and on push-incapable simulators — we don't want to block the
         // redirect on either, so swallow errors and let the next session
@@ -97,12 +89,13 @@ export default function NotificationPermissionScreen() {
           </Animated.View>
 
           <Animated.Text entering={FadeInDown.duration(500).delay(120)} style={s.title}>
-            Stay on{'\n'}your macros.
+            Your next meal,{'\n'}made easier.
           </Animated.Text>
 
           <Animated.Text entering={FadeInDown.duration(500).delay(240)} style={s.subtitle}>
-            Get reminders to log meals and nudges when you&apos;re near a
-            high-protein spot. Off by default — turn on anytime.
+            Turn on two weekly meal-planning nudges and a reminder before an
+            eligible trial renews. No more than one a day, with quiet hours
+            from 8pm to 9am. Change these in Profile anytime.
           </Animated.Text>
         </View>
 
@@ -114,6 +107,7 @@ export default function NotificationPermissionScreen() {
             haptic
             accessibilityRole="button"
             accessibilityLabel="Allow notifications"
+            testID="notification-allow"
           >
             <Text style={s.allowTxt}>{busy ? 'Asking…' : 'Allow notifications'}</Text>
             <Ionicons name="arrow-forward" size={15} color={EDITORIAL.cream} />
@@ -125,6 +119,7 @@ export default function NotificationPermissionScreen() {
             disabled={busy}
             accessibilityRole="button"
             accessibilityLabel="Maybe later"
+            testID="notification-skip"
           >
             <Text style={s.skipTxt}>Maybe later</Text>
           </AnimatedPress>

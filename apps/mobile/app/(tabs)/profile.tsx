@@ -331,6 +331,11 @@ export default function ProfileScreen() {
           <Ionicons name="chevron-forward" size={14} color={EDITORIAL.creamDeep} />
         </Pressable>
 
+        {/* Reminders */}
+        <Pressable style={s.feedbackBanner} onPress={() => router.push('/notification-settings')} accessibilityRole="button" testID="profile-reminders">
+          <Text style={s.feedbackValue}>Reminders</Text>
+          <Ionicons name="chevron-forward" size={14} color={EDITORIAL.creamDeep} />
+        </Pressable>
         {/* Logout */}
         <Pressable style={s.logoutBtn} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={16} color="#B85450" />
