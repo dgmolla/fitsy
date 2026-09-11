@@ -48,3 +48,19 @@ test('unknown native bundle wiring fails instead of testing an unidentified app'
   expect(r.status).toBe(1);
   expect(r.stderr).toContain('Unrecognized bundle delegate');
 });
+
+const fixture = (name: string | undefined, reset: boolean) => spawnSync(process.execPath, ['--input-type=module', '-e',
+  `import { fixtureLabel } from ${JSON.stringify(resolve(__dirname, 'build-profile.mjs'))}; process.stdout.write(fixtureLabel(${JSON.stringify(name)}, ${reset}));`,
+], { encoding: 'utf8' });
+test.each([[true, 'fresh-install-no-account'], [false, 'reinstall-preserving-keychain']] as const)('default fixture describes reset=%s', (reset, expected) => {
+  const r = fixture(undefined, reset);
+  expect(r.status).toBe(0); expect(r.stdout).toBe(expected);
+});
+test.each([['fresh-install-no-account', false, 'requires an explicit keychain reset'], ['reinstall-preserving-keychain', true, 'cannot request a keychain reset']] as const)('reserved fixture cannot contradict native state: %s', (name, reset, error) => {
+  const r = fixture(name, reset);
+  expect(r.status).toBe(1); expect(r.stderr).toContain(error);
+});
+test.each([true, false])('custom account/scenario names remain usable with reset=%s', reset => {
+  const r = fixture('paywall-cancel-retry-account', reset);
+  expect(r.status).toBe(0); expect(r.stdout).toBe('paywall-cancel-retry-account');
+});

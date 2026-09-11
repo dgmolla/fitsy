@@ -8,7 +8,7 @@ import { resolve, relative, join } from 'node:path';
 import { createRequire } from 'node:module';
 import { root, inputHash, changedPaths, impact, digest, validate, baseline, repoEnv } from '../verify/product-flow.mjs';
 import { backendRevision } from './backend-identity.mjs';
-import { buildProfile, bundleDelegate, metroRoute } from './build-profile.mjs';
+import { buildProfile, bundleDelegate, fixtureLabel, metroRoute } from './build-profile.mjs';
 const yaml = createRequire(import.meta.url)('js-yaml');
 const out = resolve(root, '.evidence/product-flow');
 const buildDir = resolve(root, '.evidence/product-build');
@@ -175,7 +175,7 @@ async function build(udid, testStore) {
 }
 async function execute(udid, names) {
   const r = receipt(), identity = device(udid), server = backend();
-  assert(process.env.FITSY_FIXTURE !== 'fresh-install-no-account' || process.env.FITSY_SIM_RESET_KEYCHAIN === udid, 'A fresh-account fixture requires an explicit keychain reset');
+  const fixture = fixtureLabel(process.env.FITSY_FIXTURE, process.env.FITSY_SIM_RESET_KEYCHAIN === udid);
   const hash = inputHash(), plan = impact(changedPaths(process.env.FITSY_DIFF_BASE));
   assert(!plan.categories.includes('billing') || r.storeMode !== 'unconfigured', 'Billing evidence requires a configured store');
   const selected = [...new Set([...baseline, ...names])];
@@ -192,13 +192,12 @@ async function execute(udid, names) {
     rmSync(out, { recursive: true, force: true }); mkdirSync(out, { recursive: true });
     const { app, ...buildIdentity } = r;
     const report = { version: 1, ...buildIdentity, ...identity, ...server, inputHash: hash, result: 'running', startedAt: new Date().toISOString(),
-      fixture: process.env.FITSY_FIXTURE || 'reinstall-preserving-keychain', maestroVersion: run(process.env.MAESTRO_BIN || 'maestro', ['--version']), flows: [], exploration: [] };
+      fixture, keychainReset: false, maestroVersion: run(process.env.MAESTRO_BIN || 'maestro', ['--version']), flows: [], exploration: [] };
     save(join(out, 'report.json'), report);
     if (process.env.FITSY_SIM_RESET_KEYCHAIN) {
       assert(process.env.FITSY_SIM_RESET_KEYCHAIN === udid, 'Keychain reset must explicitly name the selected disposable simulator');
       run('xcrun', ['simctl', 'keychain', udid, 'reset']);
       report.keychainReset = true;
-      if (!process.env.FITSY_FIXTURE) report.fixture = 'fresh-install-no-account';
       save(join(out, 'report.json'), report);
     }
     if (r.buildMode === 'owned-metro-test-store') {

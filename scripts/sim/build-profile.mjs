@@ -13,6 +13,13 @@ export function buildProfile(testStore, env) {
 }
 
 export const metroRoute = '/.expo/.virtual-metro-entry.bundle?platform=ios&dev=true&minify=false';
+// The two reserved baseline labels describe starting state. Custom fixture
+// names identify the synthetic scenario/account and may be used with either.
+export function fixtureLabel(name, resetKeychain) {
+  if (name === 'fresh-install-no-account' && !resetKeychain) throw new Error('A fresh-account fixture requires an explicit keychain reset');
+  if (name === 'reinstall-preserving-keychain' && resetKeychain) throw new Error('A preserved-keychain fixture cannot request a keychain reset');
+  return name || (resetKeychain ? 'fresh-install-no-account' : 'reinstall-preserving-keychain');
+}
 const embedded = 'Bundle.main.url(forResource: "main", withExtension: "jsbundle")';
 export function bundleDelegate(source, profile) {
   const normalized = source
