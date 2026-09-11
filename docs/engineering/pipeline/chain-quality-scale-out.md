@@ -1,10 +1,10 @@
 # Chain match quality and scale-out
 
-The candidate batch adds 66 official matches across the existing WaBa and Yoshinoya April menus.
+The batch is live in production and adds 66 official matches across the existing WaBa and Yoshinoya April menus.
 This is agent-reviewed source and serving evidence, not a measured human-reviewed nutrition accuracy score.
-Production rollout evidence is recorded separately after shipping.
+The code shipped in [PR #283](https://github.com/dgmolla/fitsy/pull/283), followed by guarded catalog and April updates on September 11, 2026.
 
-| Measure | Before | Candidate after | Meaning |
+| Measure | Before | Verified after | Meaning |
 |---|---:|---:|---|
 | April official rows | 592 / 1,337 | 658 / 1,337 | +59 exact packaged drinks and +7 Chicken Bowls |
 | April estimated rows | 745 | 679 | Unresolved cases stay estimated |
@@ -12,20 +12,50 @@ Production rollout evidence is recorded separately after shipping.
 | New manufacturer facts | 0 in this batch | 9 | Reusable across chains through explicit bindings |
 | Existing approvals reversed | 0 | 0 | No confirmed contradiction found for the applied contexts |
 
-The batch also updates the approval reference on 18 already-official historical Chicken Bowls without changing their nutrients.
-The expected production write set is therefore 84 rows: 66 new matches plus 18 attribution updates.
+The batch also updated the approval reference on 18 already-official historical Chicken Bowls without changing their nutrients.
+The completed production write set is therefore 84 rows: 66 new matches plus 18 attribution updates.
 Current-menu replay proves the importer behavior using captured menus and an isolated database; it does not create production locations.
 
-The production snapshot shows numeric corrections on 61 of the 66 newly matched rows; five already have the correct numbers and gain official attribution.
+The before/after production comparison confirms numeric corrections on 61 of the 66 newly matched rows; five already had the correct numbers and gained official attribution.
 Ten corrections change calories by at least 100 kcal.
-Identical branded products currently receive different estimates across locations, so these are consistency and accuracy improvements as well as coverage gains.
+The corrected rows now agree with the reviewed published facts across locations; actual kitchen portion accuracy remains unmeasured.
 
-| Item | Current estimated calories across locations | Published candidate | Rows |
+| Item | Before: estimated calories across locations | After: published facts | Rows |
 |---|---:|---:|---:|
 | Chicken Bowl | 514-588 | 640, with 38 g protein / 100 g carbs / 11 g fat | 7 |
 | Pepsi 20 oz | 147-281 | 250 | 7 |
 | Dole Apple Juice 15.2 oz | 65-156 | 210 | 6 |
 | Unsweet Pure Leaf 16.9 oz | 0-91 | 0 | 7 |
+
+## Production proof and limits
+
+| Check | Verified result | Limit |
+|---|---|---|
+| Catalog apply and readback | Nine facts added, one approval extended; 191 approved facts and 105 contextual aliases; 352 unrelated rows unchanged | Published-source review is agent review |
+| Two-row canary, then 82-row remainder | All 84 writes match independent source transcriptions; 62 restaurant records and all 1,337 menu IDs preserved | 61 numeric corrections; 23 attribution-only changes |
+| Unaffected data | All 1,253 other menu rows and estimates unchanged | Existing weak serving evidence is not strengthened by preservation |
+| Authenticated production HTTP | All 62 full menus / 1,337 items checked, including all 84 changed items; two search/detail comparisons pass | Existing allowlisted App Review account; not a paid-subscription test |
+| Native serving before release | Three Maestro flows plus actual Mobile MCP checks of both writer fixtures and filter/search recovery pass | Owned simulator and synthetic dev fixtures |
+| Both real writers locally | 168 April contexts representing 1,337 rows; 151 captured UE items physically persisted, 62 official | Repeated locations are weighted coverage, not independent quality labels |
+| Idempotence | Fresh catalog and April plans both contain zero changes | Applies to the reviewed batch and captured production state |
+
+The canary corrected one Chicken Bowl from 535 to 640 kcal and one Lime Cucumber Gatorade from 95 to 140 kcal before the remaining writes.
+Full authenticated HTTP verification completed at `2026-09-11T12:03:36Z`.
+Local checks passed 9/9 blocking checks; the pre-existing own-code-mocks check remains shadow.
+Required reviews, exact-head PR checks, main [Verify](https://github.com/dgmolla/fitsy/actions/runs/34595842495) and [Deploy](https://github.com/dgmolla/fitsy/actions/runs/34595842488) passed.
+The first final HTTP harness attempt used an unsupported search limit of 100; correcting the harness to the API's maximum of 50 produced the complete passing run without a product change.
+
+| Release identity | Value |
+|---|---|
+| Reviewed PR head | `f704b951e4da9ffac64f47e0e409e229b94bc653` |
+| Merged code | `32b4a7c743ab2ef980df13f7b4f938ce4ef5aa52` |
+| Production deployment | `dpl_CWNHpQgz3NoyUPpbXx4ghMUg9t5Y`, READY |
+| Previous production deployment | `dpl_3ShwX3paQ2fTiRsVr1Bwky62TSuy`, revision `8b8d49f939d739d6eb92164c07ecd057fe79407f` |
+
+The task's retained `work/chain-quality/` evidence includes `production-final-readback.json`, `production-auth-http-final.json`, both no-op plans, and the catalog/canary/remainder journals.
+For rollback, restore the April remainder and canary journals, then `production-catalog-rollout-plan.json.applied.json`, before restoring older matcher code.
+No new production locations, hexes or mobile OTA were created by this batch.
+Offline UE imports must also run revision `32b4a7c` or a compatible successor; an API deployment does not update an operator's older checkout.
 
 ## What the audit found
 
@@ -98,6 +128,7 @@ Track approved distinct contexts, affected rows, meal versus drink coverage, hel
 For the next review, prioritize the 36 already-applied sparse protein-side rows, then repeated unresolved main dishes; more drink matches alone do not establish better meal recommendations.
 Menu-source provenance is a remaining improvement: record discovery source, menu source and nutrition source separately when importing future menus.
 Refresh scheduling and additional menu providers remain outside scope.
+See the [national onboarding playbook](chain-national-onboarding.md) for the next-chain ranking and the [nine-context review queue](chain-quality-next-review.md) for unresolved meal and serving questions.
 
 ## Reproduce the batch
 
