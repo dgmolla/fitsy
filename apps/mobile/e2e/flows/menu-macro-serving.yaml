@@ -1,7 +1,7 @@
 # Uses the standard dev data from prisma/seed.ts --data-only.
 # These are synthetic seed expectations, not a nutrition-accuracy reference.
 # Checks serving and recovery by editing the query.
-# The separate chain-menu-serving scenario owns the first-tap clear-button regression.
+# First-tap clear-button behavior is outside this query-edit scenario.
 appId: com.fitsy.mobile
 tags:
   - changed-journey
@@ -33,10 +33,12 @@ tags:
     text: Got it
     optional: true
 - assertVisible: "8 items"
+- assertVisible: "3 dishes match"
 - assertVisible: ".*dish name hidden, subscribe to unlock.*"
 - tapOn: "Search the menu.*"
 - inputText: fitsy-no-such-dish
 - assertVisible: "No dishes match these filters."
 - eraseText
 - assertNotVisible: "No dishes match these filters."
+- assertVisible: "3 dishes match"
 - assertVisible: ".*dish name hidden, subscribe to unlock.*"
