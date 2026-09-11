@@ -8,8 +8,12 @@ const modulePath = resolve(__dirname, 'product-flow.mjs');
 const sha = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
 let dir: string;
 const png = Buffer.from('89504e470d0a1a0a00000000', 'hex');
+// Git hooks export repository-local variables; never let fixture subprocesses
+// inherit a pointer to the real checkout's refs or index.
+const fixtureEnv = () => Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
+const fixtureGit = (args: string[]) => execFileSync('git', args, { env: fixtureEnv() });
 const evaluate = (expression: string) => spawnSync(process.execPath, ['--input-type=module', '-e',
-  `import * as gate from ${JSON.stringify(modulePath)}; process.stdout.write(JSON.stringify(${expression}));`], { encoding: 'utf8' });
+  `import * as gate from ${JSON.stringify(modulePath)}; process.stdout.write(JSON.stringify(${expression}));`], { encoding: 'utf8', env: fixtureEnv() });
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'fitsy-product-flow-')); });
 afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
 
@@ -113,8 +117,8 @@ test.each([
   expect(JSON.parse(result.stdout).categories).toEqual(categories);
 });
 test('working changes and deletions invalidate the source identity', () => {
-  execFileSync('git', ['init', '-q', dir]); writeFileSync(join(dir, 'app.ts'), 'original');
-  execFileSync('git', ['-C', dir, 'add', 'app.ts']);
+  fixtureGit(['init', '-q', dir]); writeFileSync(join(dir, 'app.ts'), 'original');
+  fixtureGit(['-C', dir, 'add', 'app.ts']);
   const hash = () => evaluate(`gate.inputHash(${JSON.stringify(dir)})`).stdout;
   const first = hash(); writeFileSync(join(dir, 'app.ts'), 'changed'); expect(hash()).not.toBe(first);
   const second = hash(); rmSync(join(dir, 'app.ts')); expect(hash()).not.toBe(second);
@@ -127,12 +131,12 @@ test('the real local registry blocks missing evidence but permits explicit non-p
   }
   symlinkSync(resolve(__dirname, '../../node_modules'), join(dir, 'node_modules'));
   writeFileSync(join(dir, '.gitignore'), 'node_modules\n.evidence/\n');
-  execFileSync('git', ['init', '-q', dir]);
-  execFileSync('git', ['-C', dir, 'add', '.']);
-  execFileSync('git', ['-C', dir, '-c', 'user.name=Gate Test', '-c', 'user.email=gate@example.invalid', 'commit', '-qm', 'baseline']);
-  execFileSync('git', ['-C', dir, 'update-ref', 'refs/remotes/origin/main', 'HEAD']);
+  fixtureGit(['init', '-q', dir]);
+  fixtureGit(['-C', dir, 'add', '.']);
+  fixtureGit(['-C', dir, '-c', 'user.name=Gate Test', '-c', 'user.email=gate@example.invalid', 'commit', '-qm', 'baseline']);
+  fixtureGit(['-C', dir, 'update-ref', 'refs/remotes/origin/main', 'HEAD']);
   const check = () => spawnSync(process.execPath, [join(verify, 'run.mjs'), '--only=product-flow', '--runs=local'], {
-    cwd: dir, encoding: 'utf8', env: { ...process.env, CI: '', FITSY_DIFF_BASE: '', FITSY_PRODUCT_EVIDENCE: '' },
+    cwd: dir, encoding: 'utf8', env: { ...fixtureEnv(), CI: '', FITSY_DIFF_BASE: '' },
   });
   writeFileSync(join(dir, 'notes.md'), 'Documentation change');
   let result = check();
@@ -142,4 +146,25 @@ test('the real local registry blocks missing evidence but permits explicit non-p
   result = check();
   expect(result.status).toBe(1); expect(result.stdout).toContain('"status":"fail"');
   expect(result.stdout).toContain('"blocking":true'); expect(result.stdout).not.toContain('"status":"skipped"');
+});
+
+test('temporary repositories stay isolated when invoked from a Git hook', () => {
+  const sentinel = join(dir, 'sentinel'), target = join(dir, 'fixture');
+  fixtureGit(['init', '-q', sentinel]);
+  const head = readFileSync(join(sentinel, '.git/HEAD'), 'utf8');
+  const variables = { GIT_DIR: join(sentinel, '.git'), GIT_WORK_TREE: sentinel, GIT_INDEX_FILE: join(sentinel, '.git/index') };
+  const previous = Object.fromEntries(Object.keys(variables).map(key => [key, process.env[key]]));
+  try {
+    Object.assign(process.env, variables);
+    fixtureGit(['init', '-q', target]);
+    writeFileSync(join(target, 'fixture.txt'), 'fixture data');
+    fixtureGit(['-C', target, 'add', '.']);
+    expect(fixtureGit(['-C', target, 'ls-files']).toString().trim()).toBe('fixture.txt');
+    expect(readFileSync(join(sentinel, '.git/HEAD'), 'utf8')).toBe(head);
+    expect(fixtureGit(['-C', sentinel, 'ls-files']).toString()).toBe('');
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+  }
 });
