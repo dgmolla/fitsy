@@ -88,6 +88,9 @@ flowchart LR
 
 The same approved facts feed both writers, with no extra model, network or per-item database calls in matching.
 The manufacturer compiler is offline and deterministic; it does not discover sources or automatically approve fuzzy bindings.
+Enabling a brand also changes new-import menu resolution: reviewed brands use UE without the legacy FatSecret menu fallback.
+Replay a complete captured UE menu before activating a new brand, including empty-menu behavior, unmatched estimation volume and duplicate listings.
+The April nutrition-only update preserves existing menu membership; it does not replace historical FatSecret-built menus with UE menus.
 National onboarding can proceed chain by chain, reusing manufacturer facts and contextual aliases across stores.
 After this matcher/schema release, compatible facts and aliases can ship as guarded data batches without an API deployment or a separate implementation per chain.
 New serving or matching behavior still requires a code release and regression coverage.
