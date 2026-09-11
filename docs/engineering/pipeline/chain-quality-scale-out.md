@@ -61,6 +61,10 @@ The other 154 source-gap rows need recipe-specific evidence, including Yoshinoya
 
 ## Repeatable operating flow
 
+The 1,337 April rows reduce to 168 distinct menu contexts.
+The 66 new matches come from ten reviewed contexts, which is the useful unit of onboarding work.
+Sample locations separately to detect exceptions; repeated rows are coverage, not independent accuracy evidence.
+
 ```mermaid
 flowchart LR
   A[Unique menu contexts and counts] --> B[Candidate official facts]

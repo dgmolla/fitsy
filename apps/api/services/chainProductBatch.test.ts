@@ -19,6 +19,8 @@ test('manufacturer facts compile once and can bind multiple chains without shari
   const compiled = compileChainProductBatch(another);
   expect(compiled.changes.map(c => c.slug)).toEqual(['waba-grill', 'another-chain']);
   expect(compiled.changes[0]!.facts).toEqual(compiled.changes[1]!.facts);
+  expect(compiled.changes[0]!.source).toEqual(input.products[0]!.source);
+  expect(compiled.changes[0]!.locator).toBe(`US product ${input.products[0]!.key} (Pepsi); ${input.products[0]!.locator}`);
   expect(() => compileChainProductBatch({ ...input, products: [...input.products, input.products[0]] })).toThrow('Duplicate manufacturer product key');
   expect(() => compileChainProductBatch({ ...input, products: [] })).toThrow('Unknown manufacturer product');
   expect(() => compileChainProductBatch({ ...input, bindings: [input.bindings[0], input.bindings[0]] })).toThrow('Duplicate catalog key');
@@ -32,6 +34,7 @@ test('a reviewed default accepts only its exact captured context and range, pres
     { calorieRange: [NaN, 760] as [number, number] }, { description: item.description + ' Choose any protein.' }, { calories: 640 }])
     expect(match('waba', { ...item, ...update })).toEqual({ status: 'unmatched' });
   expect(match('other-chain', item)).toEqual({ status: 'unmatched' });
+  expect(match('waba', { ...definition.aliases[0]!, calorieRange: [640, 760] })).toEqual({ status: 'unmatched' });
   const bare = definition.aliases.map(({ defaultServing: _defaultServing, ...identity }) => identity);
   expect(buildChainMatcher([chicken(bare)])('waba', item)).toEqual({ status: 'unmatched' });
 });
