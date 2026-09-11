@@ -1,0 +1,156 @@
+{
+  "version": 1,
+  "reviewedBy": "Codex source and default-configuration audit, September 10 2026 (agent-reviewed; human precision review pending)",
+  "products": [
+    {
+      "key": "us/pepsi/original/20-fl-oz",
+      "market": "US",
+      "name": "Pepsi",
+      "facts": {"calories": 250, "proteinG": 0, "carbsG": 69, "fatG": 0, "servingSize": "1 bottle (20 US fl oz)"},
+      "source": {"url": "https://www.pepsicopartners.com/pepsico/en/USD/BEVERAGES/Soft-Drinks/Pepsi/p/1-HYK-8425", "sha256": "2e19e0c8e8b299bd533159e56fbffd4f618c6d08b5a97ffff0df00b9e4c79ff7"},
+      "locator": "Nutrition Information, per 1 bottle; label SHA-256 e276c86f66f0fb5e6c29bb9f5e1a623513e7cb7f0680e9ccd1989f51be0a2554; label URL https://www.pepsicopartners.com/medias/Nutrition-1-HYK-8425.jpg?context=bWFzdGVyfHJvb3R8NDA0NTIxfGltYWdlL2pwZWd8YURJeEwyaGpNeTh4TVRZMU5qTXlNemt5TXprNU9DOU9kWFJ5YVhScGIyNHRNUzFJV1VzdE9EUXlOUzVxY0djfDFhN2U0NzUzYjA5YTYyYjYxOWVkOWFiN2E5ZTI0YTJlMDEwM2ZjZTdiM2U2YWY4MjdkNzc2ODE0ZjZkNWM1NDE"
+    },
+    {
+      "key": "us/gatorade/cool-blue/20-fl-oz",
+      "market": "US",
+      "name": "Gatorade Cool Blue",
+      "facts": {"calories": 140, "proteinG": 0, "carbsG": 36, "fatG": 0, "servingSize": "1 bottle (20 US fl oz / 591 mL)"},
+      "source": {"url": "https://www.pepsicopartners.com/pepsico/en/USD/BEVERAGES/Sports-Drinks/Gatorade-Cool-Blue/p/1-HYK-50627", "sha256": "63ab394bbac8fe06e73dae433498e1c2857c2d10cd0b0560c5308d3ea81c323d"},
+      "locator": "Nutrition Information, per 1 bottle; label SHA-256 65174a8471144a950aeca988b388b06a6554fd34f6cd63cb4df737657c089a93; label URL https://www.pepsicopartners.com/medias/Nutrition-1-HYK-50627.jpg?context=bWFzdGVyfHJvb3R8MzE1MDk4fGltYWdlL2pwZWd8YURRMkwyZ3dOUzh4TVRZME9EQTNNall4TXpreE9DOU9kWFJ5YVhScGIyNHRNUzFJV1VzdE5UQTJNamN1YW5CbnwzN2EzMTFiNDg5MDlhNTY0ZmU2ZDE3NjFmNTgyNzRjNTRhZjcxM2FmZDMxZGMxODk3NGQ2ZWU0NDIxNTRiYTRh"
+    },
+    {
+      "key": "us/gatorade/fruit-punch/20-fl-oz",
+      "market": "US",
+      "name": "Gatorade Fruit Punch",
+      "facts": {"calories": 140, "proteinG": 0, "carbsG": 36, "fatG": 0, "servingSize": "1 bottle (20 US fl oz / 591 mL)"},
+      "source": {"url": "https://www.pepsicopartners.com/pepsico/en/USD/BEVERAGES/Sports-Drinks/Gatorade-Fruit-Punch/p/1-4WG82-4", "sha256": "af459f91576dabb10e8ed7ba45c45f3e8b538478f7ac6add213c7b5aea68cc0c"},
+      "locator": "Nutrition Information, per 1 bottle; label SHA-256 ff25690710c9c1dbae16f3b8f231dc390405d904b4299f29a37e6c8dbef8001a; label URL https://www.pepsicopartners.com/medias/Nutrition-1-4WG82-4.jpg?context=bWFzdGVyfHJvb3R8MzM5MzE0fGltYWdlL2pwZWd8YUdRMEwyaGpNaTh4TVRZM016VXhNekUyTkRnek1DOU9kWFJ5YVhScGIyNHRNUzAwVjBjNE1pMDBMbXB3Wnd8MTkwZDFlNWJiZWEzODE3NDNmYzIyZTkzMjAzZGY1ZDU2NzJiYjc3YmExNzlhYjNkNWQ1YThlNjZmNDBmZWEzMw"
+    },
+    {
+      "key": "us/gatorade/lime-cucumber/20-fl-oz",
+      "market": "US",
+      "name": "Gatorade Lime Cucumber",
+      "facts": {"calories": 140, "proteinG": 0, "carbsG": 36, "fatG": 0, "servingSize": "1 bottle (20 US fl oz / 591 mL)"},
+      "source": {"url": "https://www.pepsicopartners.com/pepsico/en/USD/BEVERAGES/Sports-Drinks/Gatorade-Lime-Cucumber/p/1-DQN49-12", "sha256": "d9538222cbdd81f07dea05f395acef7f0125f0fda30d9e89a0bbd984860221d6"},
+      "locator": "Nutrition Information, per 1 bottle; label SHA-256 43dc614f31658a9da1dc9e551d859b9b0ac9f530e7ead5fd7f464c6d853a3473; label URL https://www.pepsicopartners.com/medias/Nutrition-1-DQN49-12.jpg?context=bWFzdGVyfHJvb3R8NDAzNDQ0fGltYWdlL2pwZWd8YUdWa0wyaG1NQzg1TVRFME1qa3dNVFU1TmpRMkxtcHdad3xiZWI1Mjk2MGM5MjA1ZDdhYTVjMDA5ODQyZTk1YWQ3ZjhkNjY3ZTVjNTQwODk0Y2YyZTg2OWY3MmE4NTQzMDg2"
+    },
+    {
+      "key": "us/pure-leaf/raspberry/16-9-fl-oz",
+      "market": "US",
+      "name": "Pure Leaf Raspberry",
+      "facts": {"calories": 160, "proteinG": 0, "carbsG": 42, "fatG": 0, "servingSize": "1 bottle (16.9 US fl oz)"},
+      "source": {"url": "https://www.pepsicopartners.com/pepsico/en/USD/BEVERAGES/Coffees-Teas/Pure-Leaf-Raspberry/p/1-YW28R-1", "sha256": "043d7386a45369dc971353eca8a35ca230fbe3832d9d95968c01396ef751f2f5"},
+      "locator": "Nutrition Information, per 1 bottle; label SHA-256 2eba41c56a9e485436e09248b7517c0683fe2169eaa627b70fc4af022fac9d4c; label URL https://www.pepsicopartners.com/medias/Nutrition-1-YW28R-1.jpg?context=bWFzdGVyfHJvb3R8MzU2MDg4fGltYWdlL2pwZWd8YURCbUwyaGlOeTh4TVRZM016VTFNRFExTkRneE5DOU9kWFJ5YVhScGIyNHRNUzFaVnpJNFVpMHhMbXB3Wnd8YTZjZjZmOTFhNjM4ZDFlMmYwMWQ0MGJlYTkzN2E2ZjM3YjYyNTRmODU3YTg1OTE0ODU4MGFmN2RmZjM1ZmMzOA"
+    },
+    {
+      "key": "us/pure-leaf/unsweetened/16-9-fl-oz",
+      "market": "US",
+      "name": "Pure Leaf Unsweetened",
+      "facts": {"calories": 0, "proteinG": 0, "carbsG": 0, "fatG": 0, "servingSize": "1 bottle (16.9 US fl oz)"},
+      "source": {"url": "https://www.pepsicopartners.com/pepsico/en/USD/BEVERAGES/Coffees-Teas/Pure-Leaf-Unsweetened/p/1-MQ0RW-2", "sha256": "c583b1d98b358a85673356f1bdc7968708b2deb2639051b7ad64acb4ef818016"},
+      "locator": "Nutrition Information, per 1 bottle; label SHA-256 70fb23dfe5645a73e9b18483b56f16507064c56f031cb89f4d4859f48248c4fe; label URL https://www.pepsicopartners.com/medias/Nutrition-1-MQ0RW-2.jpg?context=bWFzdGVyfHJvb3R8Mzk3NDE1fGltYWdlL2pwZWd8YURnMUwyaGpPUzh4TVRVM056ZzFOakkyTWpFM05DOU9kWFJ5YVhScGIyNHRNUzFOVVRCU1Z5MHlMbXB3Wnd8ZTY0MzY5ZjEwODczMjc2ZmMzMzM2OWM1ODljMDcwYzRlODFiZmQ1YWViMzBhNmY5NGZhYTAxMWZiZmY3OGE1NA"
+    },
+    {
+      "key": "us/dole/apple-100-percent/15-2-fl-oz",
+      "market": "US",
+      "name": "Dole 100% Apple Juice",
+      "facts": {"calories": 210, "proteinG": 1, "carbsG": 51, "fatG": 0, "servingSize": "1 bottle (15.2 US fl oz)"},
+      "source": {"url": "https://www.pepsicopartners.com/pepsico/en/USD/OTHER-BRANDS/DOLE%C2%AE/APPLE/Dole-Apple-100%25-Juice/p/1-3Q1DN-7", "sha256": "8dc8069486d5979ab9780e1b9c72c2f32426c9f5977dd974987d1b34a20e4d6b"},
+      "locator": "Nutrition Information, per 1 bottle; label SHA-256 60fb2107ae7fba6ace1ae1ffb99e5d5571f688b791f3fc443285952919b549b7; label URL https://www.pepsicopartners.com/medias/Nutrition-1-3Q1DN-7.jpg?context=bWFzdGVyfHJvb3R8NTQ2MTAyfGltYWdlL2pwZWd8YUdJM0wyZzRNQzh4TVRVM056YzNORGd3TURreU5pOU9kWFJ5YVhScGIyNHRNUzB6VVRGRVRpMDNMbXB3Wnd8NDcwYTRiZmI5NDQ4MDE0M2FhNWY4N2IyZTMwMTZjMjUwNGE0ZjAzZTI1OWE1NGM3MDE1NGZiYmJkZmRiOGNlMg"
+    },
+    {
+      "key": "us/poppi/raspberry-rose/12-fl-oz",
+      "market": "US",
+      "name": "Poppi Raspberry Rose",
+      "facts": {"calories": 30, "proteinG": 0, "carbsG": 9, "fatG": 0, "servingSize": "1 can (12 US fl oz)"},
+      "source": {"url": "https://www.drinkpoppi.com/products/raspberry-rose", "sha256": "51796e39c101206a31c88be0accda60a3d081d4cfa75bda83a8919e4493df4e5"},
+      "locator": "Poppi Raspberry Rose nutrition table: Serving Size 1 can; 12 oz package corroboration: https://www.pepsicopartners.com/pepsico/en/USD/PEPSICO-BRANDS/POPPI/RASPBERRY-ROSE/poppi-Raspberry-Rose/p/1-1HQV7N-1"
+    },
+    {
+      "key": "us/poppi/strawberry-lemon/12-fl-oz",
+      "market": "US",
+      "name": "Poppi Strawberry Lemon",
+      "facts": {"calories": 30, "proteinG": 0, "carbsG": 9, "fatG": 0, "servingSize": "1 can (12 US fl oz)"},
+      "source": {"url": "https://www.drinkpoppi.com/products/strawberry-lemon", "sha256": "d26973288e31662794aa4e5af0fc2d6d2740361ca01189dccfa06c1a987f6ef1"},
+      "locator": "Poppi Strawberry Lemon nutrition table: Serving Size 1 can; 12 oz package corroboration: https://www.pepsicopartners.com/pepsico/en/USD/PEPSICO-BRANDS/POPPI/STRAWBERRY-LEMON/poppi-Strawberry-Lemon/p/1-1HQV8Q-1"
+    }
+  ],
+  "bindings": [
+    {
+      "productKey": "us/pepsi/original/20-fl-oz",
+      "slug": "waba-grill",
+      "canonicalKey": "packaged/pepsi/original/20-fl-oz",
+      "expected": null,
+      "aliases": [{"name": "Pepsi - 20oz Bottle", "section": "Beverages", "description": "The bold, refreshing, robust cola."}]
+    },
+    {
+      "productKey": "us/gatorade/cool-blue/20-fl-oz",
+      "slug": "waba-grill",
+      "canonicalKey": "packaged/gatorade/cool-blue/20-fl-oz",
+      "expected": null,
+      "aliases": [{"name": "Gatorade Cool Blue - 20oz Bottle", "section": "Beverages", "description": "Cool, satisfying taste to quench thirst and energize without caffeine"}]
+    },
+    {
+      "productKey": "us/gatorade/fruit-punch/20-fl-oz",
+      "slug": "waba-grill",
+      "canonicalKey": "packaged/gatorade/fruit-punch/20-fl-oz",
+      "expected": null,
+      "aliases": [{"name": "Gatorade Fruit Punch - 20oz Bottle", "section": "Beverages", "description": "The thirst quenching taste of fruit punch to rehydrate and energize without caffeine"}]
+    },
+    {
+      "productKey": "us/gatorade/lime-cucumber/20-fl-oz",
+      "slug": "yoshinoya",
+      "canonicalKey": "packaged/gatorade/lime-cucumber/20-fl-oz",
+      "expected": null,
+      "aliases": [{"name": "Gatorade Lime Cucumber", "section": "Sips", "description": "The thirst-quenching tastes of lime and cucumber to rehydrate and energize without caffeine, 20oz bottle."}]
+    },
+    {
+      "productKey": "us/pure-leaf/raspberry/16-9-fl-oz",
+      "slug": "waba-grill",
+      "canonicalKey": "packaged/pure-leaf/raspberry/16-9-fl-oz",
+      "expected": null,
+      "aliases": [{"name": "Pure Leaf Brewed Iced Tea Raspberry - 16.9oz Bottle", "section": "Beverages", "description": "Sweet and tangy raspberry pairs perfectly with classic iced tea."}]
+    },
+    {
+      "productKey": "us/pure-leaf/unsweetened/16-9-fl-oz",
+      "slug": "waba-grill",
+      "canonicalKey": "packaged/pure-leaf/unsweetened/16-9-fl-oz",
+      "expected": null,
+      "aliases": [{"name": "Pure Leaf Brewed Iced Tea Unsweet - 16.9oz Bottle", "section": "Beverages", "description": "Iced tea brewed from real tea leaves steeped in water and bottled without adding sugar or color."}]
+    },
+    {
+      "productKey": "us/dole/apple-100-percent/15-2-fl-oz",
+      "slug": "waba-grill",
+      "canonicalKey": "packaged/dole/apple-100-percent/15-2-fl-oz",
+      "expected": null,
+      "aliases": [{"name": "Dole 100% Apple Juice - 15.2oz Bottle", "section": "Beverages", "description": "Dole apple juice is made with 100% juice and 100% of your daily Vitamin C"}]
+    },
+    {
+      "productKey": "us/poppi/raspberry-rose/12-fl-oz",
+      "slug": "waba-grill",
+      "canonicalKey": "packaged/poppi/raspberry-rose/12-fl-oz",
+      "expected": null,
+      "aliases": [{"name": "Poppi Raspberry Rose - 12oz Can", "section": "Beverages", "description": "Mouthwatering flavor and all the soda feels. Contains Apple Cider Vinegar and prebiotics from agave inulin and cassava root fiber. 5g of sugar and 35 calories or less per can. Perfect for everyday, on-the-go refreshment or as a drink mixer. Great alternative to diet soda soft drinks, kombucha, juice, seltzer & flavored water, energy drink, coconut water, tonic water, sports drinks, etc. Verified SHARK TANK brand."}]
+    },
+    {
+      "productKey": "us/poppi/strawberry-lemon/12-fl-oz",
+      "slug": "waba-grill",
+      "canonicalKey": "packaged/poppi/strawberry-lemon/12-fl-oz",
+      "expected": null,
+      "aliases": [{"name": "Poppi Strawberry Lemon - 12oz Can", "section": "Beverages", "description": "Mouthwatering flavor and all the soda feels. Contains Apple Cider Vinegar and prebiotics from agave inulin and cassava root fiber. 5g of sugar and 35 calories or less per can. Perfect for everyday, on-the-go refreshment or as a drink mixer. Great alternative to diet soda soft drinks, kombucha, juice, seltzer & flavored water, energy drink, coconut water, tonic water, sports drinks, etc. Verified SHARK TANK brand."}]
+    }
+  ],
+  "changes": [
+    {
+      "slug": "waba-grill",
+      "canonicalKey": "chicken-bowl",
+      "expected": {"review": {"aliases": [{"name": "Chicken Bowl", "section": "Chicken", "description": ""}], "locator": "page 1, Bowls, Chicken", "version": 1, "dataHash": "d6aaa3a5ae9f1b978c2661e227fc00b32a1099dd17e3d8e744f2e8805c77df55", "reviewedBy": "Codex official-PDF audit, September 2026", "sourceHash": "813243b3b287e7898340173675b94a0ece7d1116a236a78f313661fec8473e6d"}, "canonicalKey": "chicken-bowl", "aliases": [], "calories": 640, "proteinG": 38, "carbsG": 100, "fatG": 11, "servingSize": "1 published bowls serving: Chicken", "source": "official", "confidence": "HIGH", "officialUrl": "https://cp1.inkrefuge.com/admin/asset/uploads/296/on_page_element/pdf/jan2025-nutrition-chart-final.pdf"},
+      "facts": {"calories": 640, "proteinG": 38, "carbsG": 100, "fatG": 11, "servingSize": "1 published bowls serving: Chicken"},
+      "source": {"url": "https://cp1.inkrefuge.com/admin/asset/uploads/296/on_page_element/pdf/jan2025-nutrition-chart-final.pdf", "sha256": "813243b3b287e7898340173675b94a0ece7d1116a236a78f313661fec8473e6d"},
+      "locator": "page 1, Bowls, Chicken",
+      "aliases": [{"name": "Chicken Bowl", "section": "Chicken", "description": ""}, {"name": "Chicken Bowl", "section": "Rice Bowls", "description": "Grilled all-natural, never frozen chicken caramelized with our signature WaBa sauce.", "defaultServing": {"calorieRange": [640, 760], "sourceUrl": "https://order.wabagrill.com/store/6006/Ontario%20(N%20Mountain)/27547/Rice%20Bowls/11555707/Chicken%20Bowl?filter=195", "sourceHash": "08133f1469a184f3689fc489b73ebf89a90c3c5712d8edb0f48bd3092bbbfa4f", "locator": "Chicken Bowl options: all required food choices have these selected defaults; no optional add-ons selected. PDF Bowls / Chicken supplies the 640 kcal recipe, not the range endpoint alone.", "selections": ["Choice of Rice: White Rice", "Choice of Sauce: WaBa Sauce", "Regular or White Meat Chicken?: Regular Chicken"]}}, {"name": "Chicken Bowl", "section": "Featured items", "description": "Grilled all-natural, never frozen chicken caramelized with our signature WaBa sauce.", "defaultServing": {"calorieRange": [640, 760], "sourceUrl": "https://order.wabagrill.com/store/6006/Ontario%20(N%20Mountain)/27547/Rice%20Bowls/11555707/Chicken%20Bowl?filter=195", "sourceHash": "08133f1469a184f3689fc489b73ebf89a90c3c5712d8edb0f48bd3092bbbfa4f", "locator": "Chicken Bowl options: all required food choices have these selected defaults; no optional add-ons selected. PDF Bowls / Chicken supplies the 640 kcal recipe, not the range endpoint alone.", "selections": ["Choice of Rice: White Rice", "Choice of Sauce: WaBa Sauce", "Regular or White Meat Chicken?: Regular Chicken"]}}]
+    }
+  ],
+  "quarantine": [
+  ]
+}

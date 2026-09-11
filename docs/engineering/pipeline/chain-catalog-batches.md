@@ -42,10 +42,14 @@ Catalog apply and rollback each use a 120-second transaction bound. The shared t
 
 ## Acceptance and limits
 
-- Full meal, side, mini, regular, large, family and combo-component servings keep distinct keys. Published calorie ranges and conflicting source labels do not resolve to one official serving.
+- Full meal, side, mini, regular, large, family and combo-component servings keep distinct keys. Conflicting source labels do not resolve to one official serving.
+  A calorie range requires a reviewed `defaultServing` on the exact contextual alias, with the exact approved range, source URL/hash, locator and selected options.
+  The default metadata is approval-bound; changed ranges, missing evidence and unresolved choices stay estimated.
 - Approval fingerprints retain descriptions and sections. New wording becomes an unmatched variant until checked; no fuzzy match silently changes portions.
 - Both serving paths use the same stored facts. Existing-menu updates preserve IDs and non-nutrition fields; new UE imports keep their existing menu replacement semantics.
 - The importer works for any verified restaurant brand. Source discovery/extraction and alias proposal are still offline onboarding work; this change does not implement an unattended nationwide crawler.
 - No PDF calls, model calls, or extra per-item database lookups are added to matching. Refresh scheduling is outside this work.
 
 Regression coverage includes arbitrary brands sharing a canonical key, deduplicated inventory, edited-manifest refusal, existing approval changes, canary ordering, real database apply, no-op replans and rollback. Source-specific catalog expansion must add captured-menu and independently transcribed nutrition expectations before rollout.
+
+See [the match-quality audit and scale-out workflow](chain-quality-scale-out.md) for manufacturer fact reuse and documented-default evidence.
