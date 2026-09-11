@@ -114,6 +114,7 @@ test('an artifact symlink cannot read outside the evidence directory', () => {
 test.each([
   [['docs/product/paywall.md'], []],
   [['apps/mobile/app/welcome/payment.tsx'], ['billing', 'onboarding']],
+  ...['apps/mobile/lib/teaserGate.ts', 'apps/mobile/components/LockedUnlockCard.tsx'].map(path => [[path], ['billing']]),
   [['apps/api/app/api/revenuecat/webhook/route.ts'], ['billing']],
   [['apps/api/services/revenuecatService.ts'], ['billing']],
   [['apps/api/app/api/subscriptions/status/route.ts'], ['billing']],
