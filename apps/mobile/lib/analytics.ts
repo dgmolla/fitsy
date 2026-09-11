@@ -869,3 +869,9 @@ export function trackEntitlementSyncFailed(props: { reason: string }): void {
 export function __resetForTesting(): void {
   _client = null;
 }
+
+/** Offering assignment is supplied by RevenueCat; this records the shown UI. */
+export function trackPaywallExperimentExposure(props: { offering_id: string; access_variant: 'hard' | 'preview'; image_variant: 'none' | 'meal' }): void {
+  try { getPostHogClient().capture('paywall_experiment_exposed', props); }
+  catch (error) { logCaptureError('paywall_experiment_exposed', error); }
+}

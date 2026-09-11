@@ -4,6 +4,7 @@ import { Tabs, Redirect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, EDITORIAL, FONTS } from '@/lib/brand';
 import { usePurchases } from '@/lib/usePurchases';
+import { usePreviewAccess } from '@/lib/usePreviewAccess';
 import { useIsReviewer } from '@/lib/reviewAccess';
 import { trackTabSwitched, type TabId } from '@/lib/analytics';
 
@@ -18,12 +19,13 @@ export default function TabLayout() {
   // SERVER's verdict (`purchases.entitled`; null while boot / sign-in /
   // sign-out is settling it, which is the hold below), the same truth the
   // API uses to lock data (optionalSubscription), so the two cannot disagree
-  // for longer than one sync. The phone's RevenueCat state is never the gate. `__DEV__`
-  // bypasses local development; App Review demo accounts (`useIsReviewer`,
+  // for longer than one sync. Local development exercises this same gate.
+  // App Review demo accounts (`useIsReviewer`,
   // mirroring the server `DEMO_REVIEW_EMAILS` allowlist) skip the paywall so the
   // reviewer can see the app without a subscription - the API still gates data.
   const purchases = usePurchases();
   const reviewer = useIsReviewer();
+  const previewAccess = usePreviewAccess();
   const entitled = purchases.entitled === true || reviewer.isReviewer;
   // `useLocalSearchParams`, not `useGlobalSearchParams` - the latter updates
   // for every navigation anywhere in the app (including this navigator being
@@ -33,24 +35,16 @@ export default function TabLayout() {
   // redirect underneath the screen the user is actually looking at.
   const { preview } = useLocalSearchParams<{ preview?: string }>();
 
-  // Onboarding / lapsed-subscriber / declined-paywall teaser: an unentitled
-  // visitor who arrives with `?preview=1` may browse the search tab with
-  // server-locked results (`/api/restaurants` `meta.locked`). Entry is never
-  // gated on the one-free-look flag (lib/teaserGate) - that flag only decides
-  // whether tapping a top-3 row opens a real detail sample or goes straight
-  // to the paywall (see search.tsx). Gating entry on it too would bounce a
-  // returning visitor to /welcome/payment, whose own "Maybe later" comes
-  // right back here: an infinite redirect loop with no way to just browse.
-  const allowTeaser = !entitled && preview === '1';
+  // Keep the onboarding sample; post-decline browsing requires the explicit
+  // live offering experiment. The launch baseline is a hard paywall.
+  const allowTeaser = !entitled && preview === '1' && previewAccess.canPreview;
   // A lapsed subscriber can reach the tabs first (cached verdict, or the
   // win-back screen's own entitled redirect) and be bounced by a later
   // server "false": they belong on the win-back screen, not the free-trial
   // paywall, which promises a trial Apple won't grant them twice.
   const unentitledTarget = purchases.isLapsed ? '/welcome/resubscribe' : '/welcome/payment';
-  if (!__DEV__) {
-    if (purchases.entitled === null || !reviewer.ready) return null; // hold until the verdict + session settle, avoids a flash
-    if (!entitled && !allowTeaser) return <Redirect href={unentitledTarget} />;
-  }
+  if (purchases.entitled === null || !reviewer.ready || !previewAccess.ready) return null;
+  if (!entitled && !allowTeaser) return <Redirect href={unentitledTarget} />;
 
   function emitTabSwitched(next: TabId) {
     if (lastTabRef.current === next) return;

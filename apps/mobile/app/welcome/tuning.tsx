@@ -55,7 +55,7 @@ export default function PlanReadyScreen() {
       subtitle="We've set per-meal targets based on your goals. You can adjust them anytime in search."
       onContinue={() => router.push('/welcome/location-permission')}
       canContinue={macros !== null}
-      continueLabel="See Restaurants"
+      continueLabel="Find meals that fit"
     >
       {macros && (
         <>

@@ -245,10 +245,12 @@ export function useEntitlementVerdict({
       // Hold the gates: the sign-in screen replaces to the tabs before the
       // server has answered, and a stale "false" would bounce a returning
       // subscriber to the paywall for the length of a round trip.
-      signInEpochRef.current += 1;
+      const epoch = ++signInEpochRef.current;
       setEntitled(null);
       const info = await identify();
+      if (epoch !== signInEpochRef.current) return;
       const server = await withinMs(syncEntitlement('sign_in'), BOOT_VERDICT_CAP_MS);
+      if (epoch !== signInEpochRef.current) return;
       // Same fallback rule as boot; the still-running sync applies the late answer.
       if (server === null) setEntitled((current) => current ?? isProActive(info));
     },
@@ -265,7 +267,8 @@ export function useEntitlementVerdict({
     // Null, not false: a false here would have the still-mounted tabs layout
     // redirect to the paywall before the caller's own navigation lands. The
     // cache and grace window belong to the user who just left.
-    signOutEpochRef.current = signInEpochRef.current;
+    // Invalidate a pending sign-in fallback before it can reopen the gates.
+    signOutEpochRef.current = ++signInEpochRef.current;
     setEntitled(null);
     void clearCachedEntitlement();
     storeConfirmedAtRef.current = 0;
