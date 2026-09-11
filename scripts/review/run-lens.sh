@@ -46,7 +46,7 @@ esac
 # --local and PR mode for the same diff, and keying them would defeat the
 # pre-PR -> PR cache reuse. Tradeoff: a title edited after review does not
 # re-trigger; the diff is the reviewed object.
-KEY="$(printf '%s' "$DIFF" | cat - "$LENS_FILE" REVIEW.md <(echo "$MODEL") | shasum -a 256 | cut -d' ' -f1)"
+KEY="$(printf '%s' "$DIFF" | cat - "$LENS_FILE" REVIEW.md "$REPO_ROOT/scripts/review/run-lens.sh" <(echo "$MODEL") | shasum -a 256 | cut -d' ' -f1)"
 CACHE_FILE="$CACHE_DIR/$KEY.json"
 if [ -f "$CACHE_FILE" ]; then
   echo "[run-lens] cache hit ($KEY)" >&2
@@ -68,8 +68,11 @@ else
   echo "[run-lens] $LENS on ${TARGET} (tier=$TIER model=$MODEL)" >&2
   # stdin must be explicit: claude -p inherits the caller's stdin and can hang
   # or read loop data (poller); prompt goes via stdin, not argv (size limits)
-  RAW="$(claude -p --model "$MODEL" --output-format json \
-    --allowedTools "Read" "Glob" "Grep" "Bash(git diff:*)" "Bash(git log:*)" \
+  # Tool availability, not auto-approval alone, keeps reviews read-only.
+  RAW="$(claude -p --restricted --model "$MODEL" --output-format json \
+    --tools "Read,Glob,Grep" --allowedTools "Read" "Glob" "Grep" \
+    --strict-mcp-config --mcp-config '{"mcpServers":{}}' \
+    --disable-slash-commands --settings '{"disableAllHooks":true}' \
     < "$PROMPT_FILE" 2>>"$CACHE_DIR/errors.log" || true)"
   printf '%s' "$RAW" > "$CACHE_DIR/last-raw.json"
   rm -f "$PROMPT_FILE"
