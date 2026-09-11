@@ -10,6 +10,7 @@ import { useRedirectOnceEntitled } from '@/lib/useRedirectOnceEntitled';
 import { ensureSessionForPurchase } from '@/lib/purchaseSession';
 import { fetchPreviewRestaurants, type PreviewRestaurant } from '@/lib/previewSearch';
 import { openLegalLink } from '@/lib/legalLinks';
+import { purchaseTerms } from '@/lib/purchaseTerms';
 
 /**
  * Shown instead of the search tab when a signed-in user's Fitsy Pro
@@ -54,10 +55,7 @@ export default function ResubscribeScreen() {
     if (!offering) void refreshOffering();
   }, [offering, refreshOffering]);
 
-  // Live, store-localized price with the designed copy as a fallback. The
-  // fallback carries no period: the button and disclosure add "/yr" once
-  // themselves, and the live priceString never includes it either.
-  const annualPrice = offering?.annual?.product.priceString ?? '$39.99';
+  const terms = purchaseTerms(offering?.annual?.product);
 
   async function handleResubscribe() {
     const annual = offering?.annual ?? (await refreshOffering())?.annual;
@@ -99,8 +97,8 @@ export default function ResubscribeScreen() {
       title={'Welcome back.'}
       subtitle="Your Fitsy Pro subscription ended. Resubscribe to keep finding restaurants that fit your macros."
       onContinue={handleResubscribe}
-      canContinue={!loading}
-      continueLabel={loading ? 'Resubscribing…' : `Resubscribe - ${annualPrice}/yr`}
+      canContinue={!loading && !restoring && !!terms}
+      continueLabel={loading ? 'Resubscribing…' : 'Find meals that fit again'}
       // Declining resubscribe still gets the locked search teaser (real
       // browsing, blurred macro-match data) rather than a dead end - same
       // mechanic as a first-time visitor who hasn't paid yet.
@@ -135,10 +133,13 @@ export default function ResubscribeScreen() {
       </Pressable>
 
       <Text style={s.disclosure}>
-        Fitsy Pro is an auto-renewing subscription ({annualPrice}/yr). Payment is charged to your
-        Apple ID at confirmation. It renews automatically unless cancelled at least 24 hours
-        before the period ends. Manage or cancel in your App Store account settings.
+        {terms?.disclosure ?? 'Fetching current prices and subscription terms from the store…'}
       </Text>
+      {!terms && (
+        <Pressable style={s.restore} onPress={() => { void refreshOffering(); }} accessibilityRole="button" testID="resubscribe-retry-pricing">
+          <Text style={s.restoreTxt}>Retry loading plans</Text>
+        </Pressable>
+      )}
       <View style={s.legalRow}>
         <Pressable hitSlop={8} onPress={() => openLegalLink('terms')} accessibilityRole="link">
           <Text style={s.legalLink}>Terms of Use</Text>

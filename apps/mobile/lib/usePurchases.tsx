@@ -23,6 +23,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { Alert } from 'react-native';
 import type {
   CustomerInfo,
   PurchasesOffering,
@@ -37,6 +38,7 @@ import {
   addCustomerInfoListener,
   configurePurchases,
   fetchCurrentOffering,
+  fetchIntroEligibility,
   fetchCustomerInfo,
   hasLapsedEntitlement,
   identifyPurchasesUser,
@@ -72,6 +74,8 @@ export interface PurchasesContextValue {
   customerInfo: CustomerInfo | null;
   /** Current offering; its `.annual`/`.monthly` packages back the in-app paywall. */
   offering: PurchasesOffering | null;
+  /** Empty while checking, or when the store cannot establish eligibility. */
+  introEligibility: Record<string, boolean>;
   /**
    * Ask the server for its verdict and store it. Resolves to the verdict now
    * in effect; `null` when it couldn't be asked (`entitled` unchanged);
@@ -107,6 +111,9 @@ const PurchasesContext = createContext<PurchasesContextValue | undefined>(undefi
 export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   const [customerInfo, setCustomerInfoState] = useState<CustomerInfo | null>(null);
   const [offering, setOffering] = useState<PurchasesOffering | null>(null);
+  const [introResult, setIntroResult] = useState<{
+    info: CustomerInfo; offering: PurchasesOffering; values: Record<string, boolean>;
+  } | null>(null);
   // Mirror of `customerInfo` for async callbacks (the boot sync runs before
   // the first render that would carry it in state).
   const customerInfoRef = useRef<CustomerInfo | null>(null);
@@ -174,6 +181,21 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     return off;
   }, []);
 
+  useEffect(() => {
+    let current = true;
+    if (offering && customerInfo) {
+      void fetchIntroEligibility(offering.availablePackages.map(pkg => pkg.product.identifier)).then(values => {
+        if (current) setIntroResult({ info: customerInfo, offering, values });
+      });
+    }
+    return () => { current = false; };
+  }, [offering, customerInfo]);
+
+  // Reject an earlier account/offering result during the render before effects run.
+  const introEligibility = useMemo(() =>
+    introResult?.info === customerInfo && introResult?.offering === offering ? introResult.values : {},
+  [introResult, customerInfo, offering]);
+
   // After RevenueCat reports Pro right out of the StoreKit flow: the user
   // just paid, so `entitled` flips true immediately (cached) and the caller
   // gets `true` whatever the server says; otherwise a stalled or lagging
@@ -197,6 +219,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     async (pkg: PurchasesPackage, source: string): Promise<boolean> => {
       const { outcome, customerInfo: info } = await rcPurchasePackage(pkg);
       trackPaywallResult({ source, outcome });
+      if (outcome === 'error') Alert.alert('Purchase not completed', 'Please try again. You can also restore an existing subscription.');
       if (!info) return false;
       setCustomerInfo(info);
       return settleAfterStore(info, 'purchase');
@@ -234,6 +257,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
       isLapsed: hasLapsedEntitlement(customerInfo),
       customerInfo,
       offering,
+      introEligibility,
       syncEntitlement,
       refresh,
       refreshOffering,
@@ -242,7 +266,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
       showManageSubscriptions: rcShowManageSubscriptions,
       restore,
     }),
-    [entitled, storeConfirmed, customerInfo, offering, syncEntitlement, refresh, refreshOffering, purchase, presentPaywall, restore],
+    [entitled, storeConfirmed, customerInfo, offering, introEligibility, syncEntitlement, refresh, refreshOffering, purchase, presentPaywall, restore],
   );
 
   return <PurchasesContext.Provider value={value}>{children}</PurchasesContext.Provider>;

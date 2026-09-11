@@ -68,6 +68,7 @@ export function WelcomeScreen({
               hitSlop={16}
               accessibilityRole="button"
               accessibilityLabel="Go back"
+              testID="welcome-back"
               style={styles.backHit}
             >
               <Ionicons name="chevron-back" size={22} color={EDITORIAL.textMid} />
@@ -121,6 +122,7 @@ export function WelcomeScreen({
                 style={styles.skipHit}
                 accessibilityRole="button"
                 accessibilityLabel="Skip"
+                testID="welcome-skip"
               >
                 <Text style={styles.skipTxt}>Skip</Text>
               </Pressable>
@@ -135,6 +137,7 @@ export function WelcomeScreen({
               haptic
               accessibilityRole="button"
               accessibilityLabel={continueLabel}
+              testID="welcome-continue"
             >
               <Text style={styles.continueTxt}>{continueLabel}</Text>
               <Ionicons name="arrow-forward" size={15} color={EDITORIAL.cream} />
@@ -200,6 +203,7 @@ const styles = StyleSheet.create({
   skipTxt: { ...TEXT.body, color: EDITORIAL.textSoft },
 
   continueBtn: {
+    flexShrink: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -209,5 +213,5 @@ const styles = StyleSheet.create({
     borderRadius: 32,
   },
   continueDim: { opacity: 0.25 },
-  continueTxt: TEXT.cta,
+  continueTxt: { ...TEXT.cta, flexShrink: 1, textAlign: 'center' },
 });

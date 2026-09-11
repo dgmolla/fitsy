@@ -1,0 +1,128 @@
+# Run with an identified Test Store build and a freshly reset disposable keychain.
+# Compare each disclosure to the price actually returned by the store.
+appId: com.fitsy.mobile
+tags: [billing, onboarding, changed-journey]
+---
+- launchApp:
+    clearState: true
+# Fresh welcome has no controls in this corner. Dismiss the Debug warning
+# window here; native LogBox is absent from the app accessibility hierarchy.
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn:
+    point: "92%,93%"
+- openLink: com.fitsy.mobile://welcome/trial
+- extendedWaitUntil:
+    visible: "Enjoy the meal. Keep your goals."
+    timeout: 15000
+- assertVisible: "Enjoy the meal. Keep your goals."
+- scrollUntilVisible:
+    element:
+      id: trial-see-plans
+    direction: DOWN
+- tapOn:
+    id: trial-see-plans
+- extendedWaitUntil:
+    visible:
+      id: paywall-price-yearly
+    timeout: 15000
+- extendedWaitUntil:
+    notVisible: "Loading…"
+    timeout: 30000
+- copyTextFrom:
+    id: paywall-price-yearly
+- evalScript: ${output.annualPrice = maestro.copiedText}
+- scrollUntilVisible:
+    element:
+      id: paywall-plan-monthly
+    direction: DOWN
+- tapOn:
+    id: paywall-plan-monthly
+- copyTextFrom:
+    id: paywall-price-monthly
+- evalScript: ${output.monthlyPrice = maestro.copiedText}
+- scrollUntilVisible:
+    element:
+      id: paywall-terms
+    direction: DOWN
+- copyTextFrom:
+    id: paywall-terms
+- assertTrue: ${maestro.copiedText.includes(output.monthlyPrice) && maestro.copiedText.includes('Renews automatically')}
+- scrollUntilVisible:
+    element:
+      id: paywall-plan-yearly
+    direction: UP
+- tapOn:
+    id: paywall-plan-yearly
+- scrollUntilVisible:
+    element:
+      id: paywall-terms
+    direction: DOWN
+- copyTextFrom:
+    id: paywall-terms
+- assertTrue: ${maestro.copiedText.includes(output.annualPrice) && maestro.copiedText.includes('Renews automatically')}
+- tapOn:
+    id: welcome-skip
+- assertVisible: "Eat well for less."
+- tapOn:
+    id: paywall-back-to-plans
+- assertVisible:
+    id: paywall-restore
+- tapOn:
+    id: welcome-skip
+- tapOn:
+    id: paywall-discount-decline
+- assertVisible: "Your next meal,.*"
+- tapOn:
+    id: paywall-back-to-plans
+- assertVisible:
+    id: paywall-terms
+- tapOn:
+    id: paywall-restore
+- assertVisible: "Create an account"
+- tapOn: "Dev login"
+- extendedWaitUntil:
+    visible: "Allow notifications"
+    timeout: 30000
+- assertNotVisible: "Leave a review"
+- tapOn: "Maybe later"
+- scrollUntilVisible:
+    element:
+      id: trial-see-plans
+    direction: DOWN
+- tapOn:
+    id: trial-see-plans
+- tapOn:
+    id: welcome-skip
+- tapOn:
+    id: paywall-discount-buy
+- extendedWaitUntil:
+    visible: "Test Store Purchase"
+    timeout: 15000
+- tapOn: "Cancel"
+- extendedWaitUntil:
+    visible:
+      id: welcome-continue
+      enabled: true
+    timeout: 15000
+- assertNotVisible: "Test Store Purchase"
+# RevenueCat emits a Debug console-error toast for this expected cancellation.
+# This corner is outside the payment CTA when no toast is present.
+- tapOn:
+    point: "92%,93%"
+- tapOn:
+    id: welcome-skip
+- tapOn:
+    id: paywall-discount-buy
+- extendedWaitUntil:
+    visible: "Test Store Purchase"
+    timeout: 15000
+- tapOn: "Test failed purchase"
+- assertVisible: "Purchase not completed"
+- tapOn: "OK"
+- extendedWaitUntil:
+    visible:
+      id: welcome-continue
+      enabled: true
+    timeout: 15000
+- assertNotVisible: "Test Store Purchase"

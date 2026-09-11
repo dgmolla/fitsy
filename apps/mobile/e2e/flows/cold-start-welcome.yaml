@@ -6,6 +6,9 @@ appId: com.fitsy.mobile
 ---
 - launchApp:
     clearState: true
+# The initial native/React transition can return an invalid AX element.
+- waitForAnimationToEnd:
+    timeout: 3000
 - extendedWaitUntil:
     visible: "continue"
     timeout: 15000

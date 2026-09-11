@@ -1,38 +1,43 @@
 import React, { useEffect } from 'react';
-import { Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { EDITORIAL, FONTS, TEXT } from '@/lib/brand';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { trackOnboardingScreenView } from '@/lib/analytics';
+import { usePurchases } from '@/lib/usePurchases';
+import { purchaseTerms } from '@/lib/purchaseTerms';
 
 const STEPS = [
   {
     icon: 'lock-open-outline' as const,
-    title: 'Today: Full access',
-    desc: 'Unlock macro-matched restaurant search, personalized targets, and confidence scores.',
+    title: 'Find a meal you’ll enjoy',
+    desc: 'See nearby restaurant meals matched to your macros and preferences.',
   },
   {
     icon: 'notifications-outline' as const,
-    title: 'Day 2: Reminder',
-    desc: "We'll notify you before your trial ends. No surprises.",
+    title: 'Choose the plan that fits',
+    desc: 'Review the current price and any eligible trial before confirming in the store.',
   },
   {
     icon: 'star-outline' as const,
-    title: 'Day 3: Trial ends',
-    desc: 'Choose a plan that works for you, or cancel — no charge.',
+    title: 'Stay in control',
+    desc: 'Subscriptions renew automatically. Manage or cancel in your subscription settings at least 24 hours before renewal.',
   },
 ];
 
 export default function TrialScreen() {
+  const { offering, introEligibility } = usePurchases();
+  const annual = offering?.annual;
+  const terms = purchaseTerms(annual?.product, annual ? introEligibility[annual.product.identifier] : false);
   useEffect(() => {
     trackOnboardingScreenView('trial');
   }, []);
 
   return (
     <SafeAreaView style={s.safe}>
-      <View style={s.content}>
+      <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
         {/* Top bar */}
         <View style={s.topBar}>
           <Pressable onPress={() => router.back()} hitSlop={16} style={s.close} accessibilityRole="button">
@@ -45,10 +50,10 @@ export default function TrialScreen() {
 
         {/* Hero */}
         <Animated.Text entering={FadeInDown.duration(500)} style={s.hero}>
-          3 days on us.
+          {terms?.trial ? `${terms.trial} to find your fit.` : 'Make room for eating out.'}
         </Animated.Text>
         <Animated.Text entering={FadeInDown.duration(500).delay(100)} style={s.subtitle}>
-          Here's how your free trial works.
+          Enjoy the meal. Keep your goals.
         </Animated.Text>
 
         {/* Timeline */}
@@ -74,7 +79,7 @@ export default function TrialScreen() {
         </View>
 
         <Animated.Text entering={FadeIn.duration(400).delay(600)} style={s.legal}>
-          Cancel anytime in the App Store. Terms of Service and Privacy Policy apply.
+          {terms?.disclosure ?? 'Your selected plan’s current price and terms will appear before purchase.'}
         </Animated.Text>
 
         <View style={{ flex: 1 }} />
@@ -86,19 +91,20 @@ export default function TrialScreen() {
             onPress={() => router.push('/welcome/payment')}
             haptic
             accessibilityRole="button"
+            testID="trial-see-plans"
           >
-            <Text style={s.ctaTxt}>See plans</Text>
+            <Text style={s.ctaTxt}>See plans for meals that fit</Text>
             <Ionicons name="arrow-forward" size={15} color={EDITORIAL.cream} />
           </AnimatedPress>
         </Animated.View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: EDITORIAL.cream },
-  content: { flex: 1, paddingHorizontal: 32, paddingBottom: 20 },
+  content: { flexGrow: 1, paddingHorizontal: 32, paddingBottom: 20 },
 
   topBar: {
     flexDirection: 'row',

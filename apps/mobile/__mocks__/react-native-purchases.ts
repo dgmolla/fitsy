@@ -18,6 +18,13 @@ export enum LOG_LEVEL {
 
 const emptyCustomerInfo = { entitlements: { active: {}, all: {} } };
 
+export enum INTRO_ELIGIBILITY_STATUS {
+  INTRO_ELIGIBILITY_STATUS_UNKNOWN = 0,
+  INTRO_ELIGIBILITY_STATUS_INELIGIBLE = 1,
+  INTRO_ELIGIBILITY_STATUS_ELIGIBLE = 2,
+  INTRO_ELIGIBILITY_STATUS_NO_INTRO_OFFER_EXISTS = 3,
+}
+
 const Purchases = {
   setLogLevel: async () => undefined,
   configure: () => undefined,
@@ -25,6 +32,7 @@ const Purchases = {
   logOut: async () => emptyCustomerInfo,
   getCustomerInfo: async () => emptyCustomerInfo,
   getOfferings: async () => ({ current: null, all: {} }),
+  checkTrialOrIntroductoryPriceEligibility: async (_ids: string[]): Promise<Record<string, { status: number; description: string }>> => ({}),
   restorePurchases: async () => emptyCustomerInfo,
   addCustomerInfoUpdateListener: () => undefined,
   removeCustomerInfoUpdateListener: () => false,
