@@ -89,6 +89,8 @@ npx tsx scripts/build-chain-product-batch.ts apps/api/services/chainCatalogs/cha
 ```
 
 Use a new output path; the compiler refuses to overwrite an existing artifact.
+Deploy the matcher code before applying this catalog: older code rejects the new default-serving approval fields.
+For a code rollback, first roll back the April writes and then the catalog, using their saved journals, before restoring the older code.
 The regression fixture independently transcribes all nine product labels and the Chicken Bowl facts.
 The database replay covers all April variants, both complete captured UE menus, search/detail consistency, catalog identity, unrelated-row preservation and rollback.
 Tests do not establish that customers receive exactly the published portion or choose the documented default.

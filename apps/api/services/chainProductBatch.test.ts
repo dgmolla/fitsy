@@ -19,9 +19,10 @@ test('manufacturer facts compile once and can bind multiple chains without shari
   const compiled = compileChainProductBatch(another);
   expect(compiled.changes.map(c => c.slug)).toEqual(['waba-grill', 'another-chain']);
   expect(compiled.changes[0]!.facts).toEqual(compiled.changes[1]!.facts);
-  for (const invalid of [{ ...input, products: [input.products[0], input.products[0]] },
-    { ...input, products: [] }, { ...input, bindings: [input.bindings[0], input.bindings[0]] },
-    { ...input, products: [{ ...input.products[0], market: 'CA' }] }]) expect(() => compileChainProductBatch(invalid)).toThrow();
+  expect(() => compileChainProductBatch({ ...input, products: [...input.products, input.products[0]] })).toThrow('Duplicate manufacturer product key');
+  expect(() => compileChainProductBatch({ ...input, products: [] })).toThrow('Unknown manufacturer product');
+  expect(() => compileChainProductBatch({ ...input, bindings: [input.bindings[0], input.bindings[0]] })).toThrow('Duplicate catalog key');
+  expect(() => compileChainProductBatch({ ...input, products: input.products.map((p, i) => i === 0 ? { ...p, market: 'CA' } : p) })).toThrow('"market"');
 });
 test('a reviewed default accepts only its exact captured context and range, preserving the old alias', () => {
   const item = parseStoreV1Response(wabaUE)!.items.find(i => i.name === 'Chicken Bowl')!, match = buildChainMatcher([chicken()]);
@@ -41,7 +42,7 @@ test('all default evidence is approval-bound and malformed or duplicate defaults
     const aliases = review.aliases.map(a => a.defaultServing ? { ...a, defaultServing: { ...a.defaultServing, ...patch } } : a);
     expect(approvedChainRow({ ...row, review: { ...review, aliases } })).toBeNull();
   }
-  for (const patch of [{ calorieRange: [650, 760] }, { calorieRange: [760, 640] }, { selections: [] }, { selections: [' '] }]) {
+  for (const patch of [{ calorieRange: [650, 760] }, { calorieRange: [500, 600] }, { calorieRange: [760, 640] }, { selections: [] }, { selections: [' '] }]) {
     const invalid = JSON.parse(JSON.stringify(review)) as ChainReview;
     Object.assign(invalid.aliases[1]!.defaultServing!, patch);
     expect(approvedChainRow({ ...row, review: { ...invalid, dataHash: chainReviewHash(row, invalid) } })).toBeNull();
