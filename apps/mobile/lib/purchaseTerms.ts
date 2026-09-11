@@ -33,7 +33,7 @@ export function purchaseTerms(product: ProductTerms | null | undefined, eligible
   }
   return {
     price, period, recurring, trial,
-    disclosure: `${charge} Renews automatically at ${recurring} unless canceled at least 24 hours before renewal. Manage or cancel in your device's subscription settings.`,
+    disclosure: `Fitsy Pro. ${charge} Renews automatically at ${recurring} unless canceled at least 24 hours before renewal. Manage or cancel in your device's subscription settings.`,
   };
 }
 

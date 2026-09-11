@@ -7,6 +7,7 @@ const annual = {
 
 test('eligible trial terms use the live duration and localized price', () => {
   expect(purchaseTerms(annual, true)).toMatchObject({ trial: '7 days', price: '€54,99', recurring: '€54,99 every 1 year' });
+  expect(purchaseTerms(annual, true)?.disclosure).toContain('Fitsy Pro.');
   expect(purchaseTerms(annual, true)?.disclosure).toContain('No charge until the trial ends');
   expect(purchaseTerms(annual, true)?.disclosure).not.toContain('when you confirm');
 });
