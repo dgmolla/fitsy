@@ -13,7 +13,8 @@ const git = (args, cwd = root) => execFileSync('git', args, { cwd, encoding: 'ut
 export const digest = value => createHash('sha256').update(value).digest('hex');
 export const baseline = ['cold-start-welcome', 'signin-options'];
 const rules = [
-  ['billing', /^(apps\/mobile\/(.*(payment|paywall|Paywall|purchase|Purchase|entitlement|Entitlement|resubscribe|trial|teaserGate|LockedUnlock)|app\/welcome\/notification)|apps\/api\/(app\/api\/(revenuecat|subscriptions)|lib\/subscription|services\/revenuecat))/],
+  // Include the screens/routes that apply entitlement guards, not just their helpers.
+  ['billing', /^(apps\/mobile\/(.*(payment|paywall|Paywall|purchase|Purchase|entitlement|Entitlement|resubscribe|trial|teaserGate|LockedUnlock)|app\/(welcome\/notification|_layout|index|\(tabs\)\/|restaurant\/|auth\/reviewer)|lib\/(reviewAccess|authClient))|apps\/api\/(app\/api\/(revenuecat|subscriptions|restaurants)|lib\/subscription|services\/revenuecat))/],
   ['notifications', /^(apps\/mobile\/.*([Nn]otification|push)|apps\/api\/.*([Nn]otification|push-token|launchPush|trialReminder))/],
   ['auth', /^(apps\/mobile\/(app\/auth|lib\/.*([Aa]uth|[Ss]ession|supabase))|apps\/api\/(app\/api\/auth|lib\/auth))/],
   ['onboarding', /^apps\/mobile\/(app\/welcome\/|components\/Welcome|lib\/(onboarding|macroCalculator))/],

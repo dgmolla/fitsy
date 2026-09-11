@@ -60,7 +60,16 @@ test.each(['failed', 'skipped', 'empty', 'one'])("rejects %s required assertions
 test.each(['source', 'commands', 'screenshot', 'trace'])('rejects changed %s artifacts', field => {
   const report = fixture();
   const file = field === 'trace' ? 'trace.json' : report.flows[2]![field as 'source' | 'commands' | 'screenshot'];
-  writeFileSync(join(dir, file), 'changed'); expect(validate(report).status).toBe(1);
+  const original = readFileSync(join(dir, file));
+  // Preserve valid content so parsing or coverage cannot mask a missing digest check.
+  const changed = field === 'source' ? original + '\n# changed source\n'
+    : field === 'commands' ? JSON.stringify(JSON.parse(original.toString()), null, 2)
+    : field === 'screenshot' ? Buffer.concat([original, Buffer.from([1])])
+    : original.toString().replaceAll('Paywall visible', 'Paywall and cancel visible');
+  writeFileSync(join(dir, file), changed);
+  const result = validate(report); expect(result.status).toBe(1);
+  const message = { source: 'changed flow source', commands: 'changed command artifact', screenshot: 'missing/changed/non-PNG screenshot', trace: 'changed walkthrough trace' };
+  expect(result.stderr).toContain(message[field as keyof typeof message]);
 });
 test.each(['stale', 'future', 'expired', 'wrong-native', 'unknown-backend', 'prod', 'unconfigured', 'missing-flow', 'missing-walkthrough', 'missing-recovery'])('rejects %s proof', condition => {
   const report = fixture();
@@ -76,6 +85,7 @@ test.each(['stale', 'future', 'expired', 'wrong-native', 'unknown-backend', 'pro
   if (condition === 'missing-recovery') report.exploration[0]!.branches = ['primary'];
   const result = validate(report); expect(result.status).toBe(1);
   if (condition === 'missing-flow') expect(result.stderr).toContain('missing baseline flow');
+  if (condition === 'expired') expect(result.stderr).toContain('evidence expired');
 });
 test('baseline flows cannot cover billing even when their YAML tags include billing', () => {
   const report = fixture(); report.flows.pop();
@@ -119,6 +129,11 @@ test.each([
   [['apps/api/services/revenuecatService.ts'], ['billing']],
   [['apps/api/app/api/subscriptions/status/route.ts'], ['billing']],
   [['apps/api/app/api/subscriptions/sync/route.ts'], ['billing']],
+  ...['apps/mobile/app/index.tsx', 'apps/mobile/app/_layout.tsx', 'apps/mobile/lib/reviewAccess.ts', 'apps/mobile/lib/useEntitlement.ts'].map(path => [[path], ['billing']]),
+  ...['apps/mobile/app/(tabs)/_layout.tsx', 'apps/mobile/app/(tabs)/search.tsx', 'apps/mobile/app/(tabs)/profile.tsx', 'apps/mobile/app/restaurant/[id].tsx', 'apps/api/app/api/restaurants/route.ts', 'apps/api/app/api/restaurants/[id]/menu/route.ts'].map(path => [[path], ['billing', 'discovery']]),
+  ...['apps/mobile/app/auth/reviewer.tsx', 'apps/mobile/lib/authClient.ts'].map(path => [[path], ['auth', 'billing']]),
+  [['apps/mobile/app/auth/signin.tsx'], ['auth']],
+  [['apps/api/app/api/push-token/route.ts'], ['notifications']],
   [['packages/shared/src/search.ts'], ['discovery']],
   [['apps/mobile/components/UnknownButton.tsx'], ['changed-journey']],
   [['apps/api/next.config.ts'], ['changed-journey']],
