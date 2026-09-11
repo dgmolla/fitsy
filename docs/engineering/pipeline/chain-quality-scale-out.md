@@ -89,6 +89,10 @@ flowchart LR
 The same approved facts feed both writers, with no extra model, network or per-item database calls in matching.
 The manufacturer compiler is offline and deterministic; it does not discover sources or automatically approve fuzzy bindings.
 National onboarding can proceed chain by chain, reusing manufacturer facts and contextual aliases across stores.
+After this matcher/schema release, compatible facts and aliases can ship as guarded data batches without an API deployment or a separate implementation per chain.
+New serving or matching behavior still requires a code release and regression coverage.
+Track approved distinct contexts, affected rows, meal versus drink coverage, held reasons, and human-reviewed recipe/serving/transcription precision separately.
+For the next review, prioritize the 36 already-applied sparse protein-side rows, then repeated unresolved main dishes; more drink matches alone do not establish better meal recommendations.
 Menu-source provenance is a remaining improvement: record discovery source, menu source and nutrition source separately when importing future menus.
 Refresh scheduling and additional menu providers remain outside scope.
 
