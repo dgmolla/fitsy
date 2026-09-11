@@ -49,12 +49,13 @@ function validate(report: ReturnType<typeof fixture>) {
 test('accepts identified baseline and billing outcomes with matching artifacts', () => {
   const result = validate(fixture()); expect(result.status).toBe(0); expect(JSON.parse(result.stdout).status).toBe('pass');
 });
-test.each(['failed', 'skipped', 'empty'])("rejects %s required assertions even if the summary says pass", kind => {
+test.each(['failed', 'skipped', 'empty', 'one'])("rejects %s required assertions even if the summary says pass", kind => {
   const report = fixture(), flow = report.flows[2]!;
   const commands = JSON.parse(readFileSync(join(dir, flow.commands), 'utf8'));
-  const changed = kind === 'empty' ? [commands[0]] : commands.map((c: { metadata: {status: string} }, i: number) => i ? { ...c, metadata: {status: kind.toUpperCase()} } : c);
+  const changed = kind === 'one' ? commands.slice(0, 2) : kind === 'empty' ? [commands[0]] : commands.map((c: { metadata: {status: string} }, i: number) => i ? { ...c, metadata: {status: kind.toUpperCase()} } : c);
   const raw = JSON.stringify(changed); writeFileSync(join(dir, flow.commands), raw); flow.sha256 = sha(raw);
-  expect(validate(report).status).toBe(1);
+  const result = validate(report); expect(result.status).toBe(1);
+  expect(result.stderr).toContain(kind === 'one' ? 'no deterministic coverage for billing' : 'missing/skipped/failed assertions');
 });
 test.each(['source', 'commands', 'screenshot', 'trace'])('rejects changed %s artifacts', field => {
   const report = fixture();
@@ -70,10 +71,11 @@ test.each(['stale', 'future', 'expired', 'wrong-native', 'unknown-backend', 'pro
   if (condition === 'unknown-backend') report.backendRevision = 'unknown';
   if (condition === 'prod') report.backend = 'https://fitsy.org';
   if (condition === 'unconfigured') report.storeMode = 'unconfigured';
-  if (condition === 'missing-flow') report.flows.pop();
+  if (condition === 'missing-flow') report.flows.shift();
   if (condition === 'missing-walkthrough') report.exploration = [];
   if (condition === 'missing-recovery') report.exploration[0]!.branches = ['primary'];
-  expect(validate(report).status).toBe(1);
+  const result = validate(report); expect(result.status).toBe(1);
+  if (condition === 'missing-flow') expect(result.stderr).toContain('missing baseline flow');
 });
 test('baseline flows cannot cover billing even when their YAML tags include billing', () => {
   const report = fixture(); report.flows.pop();
@@ -91,12 +93,13 @@ test('rejects a non-image screenshot even when its digest matches', () => {
   writeFileSync(join(dir, flow.screenshot), 'not a PNG'); flow.screenshotHash = sha('not a PNG');
   expect(validate(report).status).toBe(1);
 });
-test.each(['no-actions', 'no-observations', 'old', 'tool-error'])('rejects %s walkthrough evidence with a matching digest', problem => {
+test.each(['no-actions', 'no-observations', 'old', 'late', 'tool-error'])('rejects %s walkthrough evidence with a matching digest', problem => {
   const report = fixture(), o = report.exploration[0]!;
   let events = readFileSync(join(dir, o.trace), 'utf8').split('\n').map(line => JSON.parse(line));
   if (problem === 'no-actions') events = events.slice(1);
   if (problem === 'no-observations') events = events.slice(0, 1);
   if (problem === 'old') events[0].at = '2000-01-01T00:00:00Z';
+  if (problem === 'late') events[0].at = new Date(Date.parse(report.finishedAt) + 1_000).toISOString();
   if (problem === 'tool-error') events[0].result.isError = true;
   const raw = events.map(e => JSON.stringify(e)).join('\n');
   writeFileSync(join(dir, o.trace), raw); o.sha256 = sha(raw);
@@ -104,12 +107,17 @@ test.each(['no-actions', 'no-observations', 'old', 'tool-error'])('rejects %s wa
 });
 test('an artifact symlink cannot read outside the evidence directory', () => {
   const report = fixture(); symlinkSync(modulePath, join(dir, 'escape')); report.flows[0]!.commands = 'escape';
-  expect(validate(report).status).toBe(1);
+  report.flows[0]!.sha256 = sha(readFileSync(modulePath));
+  const result = validate(report); expect(result.status).toBe(1);
+  expect(result.stderr).toContain('artifact escapes evidence directory');
 });
 test.each([
   [['docs/product/paywall.md'], []],
   [['apps/mobile/app/welcome/payment.tsx'], ['billing', 'onboarding']],
   [['apps/api/app/api/revenuecat/webhook/route.ts'], ['billing']],
+  [['apps/api/services/revenuecatService.ts'], ['billing']],
+  [['apps/api/app/api/subscriptions/status/route.ts'], ['billing']],
+  [['apps/api/app/api/subscriptions/sync/route.ts'], ['billing']],
   [['packages/shared/src/search.ts'], ['discovery']],
   [['apps/mobile/components/UnknownButton.tsx'], ['changed-journey']],
   [['apps/api/next.config.ts'], ['changed-journey']],
