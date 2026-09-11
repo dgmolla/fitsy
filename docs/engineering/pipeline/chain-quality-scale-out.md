@@ -16,6 +16,17 @@ The batch also updates the approval reference on 18 already-official historical 
 The expected production write set is therefore 84 rows: 66 new matches plus 18 attribution updates.
 Current-menu replay proves the importer behavior using captured menus and an isolated database; it does not create production locations.
 
+The production snapshot shows numeric corrections on 61 of the 66 newly matched rows; five already have the correct numbers and gain official attribution.
+Ten corrections change calories by at least 100 kcal.
+Identical branded products currently receive different estimates across locations, so these are consistency and accuracy improvements as well as coverage gains.
+
+| Item | Current estimated calories across locations | Published candidate | Rows |
+|---|---:|---:|---:|
+| Chicken Bowl | 514-588 | 640, with 38 g protein / 100 g carbs / 11 g fat | 7 |
+| Pepsi 20 oz | 147-281 | 250 | 7 |
+| Dole Apple Juice 15.2 oz | 65-156 | 210 | 6 |
+| Unsweet Pure Leaf 16.9 oz | 0-91 | 0 | 7 |
+
 ## What the audit found
 
 | Finding | Concrete example | Decision |
@@ -83,7 +94,7 @@ The reviewed input is `apps/api/services/chainCatalogs/chain-quality-2026-09-inp
 It contains source URLs, content hashes, label locators and the exact default selections.
 
 ```sh
-npx tsx scripts/build-chain-product-batch.ts apps/api/services/chainCatalogs/chain-quality-2026-09-input.json work/chain-quality-batch.json
+npx tsx scripts/preload-chain-product-batch.ts apps/api/services/chainCatalogs/chain-quality-2026-09-input.json work/chain-quality-batch.json
 # Then follow the guarded catalog-plan/apply and april-plan/apply procedure:
 # docs/engineering/pipeline/chain-catalog-batches.md
 ```

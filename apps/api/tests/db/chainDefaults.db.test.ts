@@ -66,7 +66,10 @@ suite('manufacturer products and documented default through both real writers', 
             const search = await findNearbyRestaurants({ lat: 34, lng: -118, radiusMiles: .1, targets: expected, query: r.name, limit: 200 });
             expect(search.data.find(result => result.id === r.id)?.bestMatch).toMatchObject({ menuItemId: after.id, ...expected, confidence: 'HIGH' });
           }
-        } else expect(await p.menuItem.findUnique({ where: { id: before.id }, include: { macroEstimates: { orderBy: { id: 'asc' } } } })).toEqual(before);
+        } else {
+          expect(match).toEqual(old);
+          expect(await p.menuItem.findUnique({ where: { id: before.id }, include: { macroEstimates: { orderBy: { id: 'asc' } } } })).toEqual(before);
+        }
       }
       expect({ beforeCount, afterCount, added }).toEqual({ beforeCount: 592, afterCount: 658, added: 66 });
       for (const [index, raw] of [wabaUE, yoshiUE].entries()) {

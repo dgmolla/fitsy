@@ -1,16 +1,17 @@
 /** Synthetic, task-owned dev menus for the chain-quality simulator scenario. */
 import { PrismaClient } from '@prisma/client';
 import { readFileSync } from 'node:fs';
-import { compileChainProductBatch } from '../../apps/api/services/chainProductBatch';
-import { applyCatalogPlan, planChainPilot } from '../../apps/api/services/chainPilotPlan';
-import { loadChainServing, resolveChainMacros, applyAprilChainMatch, aprilMenuIdentity } from '../../apps/api/services/chainServing';
-import { parseStoreV1Response } from '../../apps/api/services/menuSources/ueApiClient';
-import { persistHex } from '../hex-persist';
-import { validateHexInTx } from '../preload-invariants';
+import { compileChainProductBatch } from '../apps/api/services/chainProductBatch';
+import { applyCatalogPlan, planChainPilot } from '../apps/api/services/chainPilotPlan';
+import { loadChainServing, resolveChainMacros, applyAprilChainMatch, aprilMenuIdentity } from '../apps/api/services/chainServing';
+import { parseStoreV1Response } from '../apps/api/services/menuSources/ueApiClient';
+import { persistHex } from './hex-persist';
+import { validateHexInTx } from './preload-invariants';
+import { PROD_PROJECT_REF } from './dev/lib/guard';
 
 const scope = 'e2e-chain-quality-';
 const url = process.env['POSTGRES_PRISMA_URL'];
-if (!url || url.includes('zaxkmjqozvmbifiwbxps')) throw new Error('Load the dev environment; production is forbidden');
+if (!url || url.includes(PROD_PROJECT_REF)) throw new Error('Load the dev environment; production is forbidden');
 const command = process.argv[2];
 if (!['seed', 'clean'].includes(command ?? '')) throw new Error('Use seed or clean');
 if (command === 'seed' && !process.argv[3]) throw new Error('Pass the captured WaBa UE fixture JSON path');

@@ -48,5 +48,7 @@ test('all default evidence is approval-bound and malformed or duplicate defaults
     expect(approvedChainRow({ ...row, review: { ...invalid, dataHash: chainReviewHash(row, invalid) } })).toBeNull();
   }
   expect(approvedChainRow(chicken([...definition.aliases, definition.aliases[1]!]))).not.toBeNull();
+  const upperBoundary = chicken(definition.aliases.map(a => a.defaultServing ? { ...a, defaultServing: { ...a.defaultServing, calorieRange: [600, 640] as [number, number] } } : a));
+  expect(approvedChainRow(upperBoundary)).not.toBeNull();
   expect(approvedChainRow(chicken([...definition.aliases, { ...definition.aliases[1]!, defaultServing: undefined }]))).toBeNull();
 });
