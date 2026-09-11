@@ -6,7 +6,7 @@ export function backendRevision(deployment) {
     throw new Error('Dev deployment must be ready and non-production');
   }
   const dirty = deployment.meta?.gitDirty;
-  if (dirty !== undefined && ![false, 'false', '0'].includes(dirty)) {
+  if (deployment.source === 'cli' && dirty !== undefined && ![false, 'false', '0'].includes(dirty)) {
     throw new Error('Dev CLI deployment contains uncommitted changes');
   }
   const revision = deployment.gitSource
