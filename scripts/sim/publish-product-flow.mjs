@@ -34,7 +34,7 @@ try {
     const tag = `product-flow-${head}`;
     const artifacts = new Set(['report.json']);
     for (const f of report.flows) { artifacts.add(f.commands); artifacts.add(f.screenshot); }
-    for (const o of report.exploration) artifacts.add(o.trace);
+    for (const category of plan.categories) artifacts.add(report.exploration.find(o => o.category === category).trace);
     mkdirSync(resolve(root, '.evidence/publication'), { recursive: true });
     const archive = resolve(root, '.evidence/publication/local-evidence.tar.gz');
     // Only verified relative artifact paths; no build, environment or debug logs.
