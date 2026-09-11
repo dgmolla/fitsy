@@ -17,8 +17,9 @@ interface Props {
   onDeclineDiscount: () => void;
   /** Second skip: last chance to start the trial. */
   onStartTrial: () => void;
-  /** Declining every offer: falls through to the locked search teaser. */
+  /** Declining every offer follows the assigned access policy. */
   onMaybeLater: () => void;
+  declineLabel?: string;
 }
 
 /**
@@ -36,6 +37,7 @@ export function PaywallExitModals({
   onDeclineDiscount,
   onStartTrial,
   onMaybeLater,
+  declineLabel = 'Maybe later',
 }: Props) {
   useEffect(() => {
     if (modal === 'none') return;
@@ -68,7 +70,7 @@ export function PaywallExitModals({
               <Text style={s.modalCtaTxt}>{trialAvailable ? 'Find meals that fit — free' : 'Find meals that fit'}</Text>
             </AnimatedPress>
             <AnimatedPress style={s.modalSkip} onPress={onMaybeLater} accessibilityRole="button" testID="paywall-decline">
-              <Text style={s.modalSkipTxt}>Maybe later</Text>
+              <Text style={s.modalSkipTxt}>{declineLabel}</Text>
             </AnimatedPress>
           </Animated.View>
       )}

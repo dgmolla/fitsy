@@ -1,9 +1,10 @@
 # Uses the standard dev data from prisma/seed.ts --data-only.
 # These are synthetic seed expectations, not a nutrition-accuracy reference.
-# Checks serving and recovery by editing the query.
-# First-tap clear-button behavior is outside this query-edit scenario.
+# Pipeline writer replays and source review remain separate data checks.
 appId: com.fitsy.mobile
 tags:
+  - billing
+  - discovery
   - changed-journey
 ---
 - evalScript: ${output.search = http.get('https://dev.fitsy.org/api/restaurants?lat=34.0522&lng=-118.2437&radius=5&q=Seed%20Bowl%20Co')}
@@ -22,7 +23,7 @@ tags:
 - extendedWaitUntil:
     visible: "continue"
     timeout: 15000
-- openLink: ${'fitsy://restaurant/' + output.seed.id}
+- openLink: ${'com.fitsy.mobile://restaurant/' + output.seed.id}
 - tapOn:
     text: Open
     optional: true
@@ -33,12 +34,18 @@ tags:
     text: Got it
     optional: true
 - assertVisible: "8 items"
-- assertVisible: "3 dishes match"
 - assertVisible: ".*dish name hidden, view plans to find this meal.*"
 - tapOn: "Search the menu.*"
 - inputText: fitsy-no-such-dish
 - assertVisible: "No dishes match these filters."
-- eraseText
+- tapOn: "Clear search"
 - assertNotVisible: "No dishes match these filters."
-- assertVisible: "3 dishes match"
 - assertVisible: ".*dish name hidden, view plans to find this meal.*"
+- tapOn: "Search the menu.*"
+- inputText: Grilled Chicken Bowl
+- assertVisible: "1 dish matches"
+- tapOn: "Clear search"
+- assertVisible: "3 dishes match"
+- tapOn:
+    id: ${"menu-item-" + output.chicken.id}
+- assertVisible: "Create an account"

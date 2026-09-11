@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
@@ -11,13 +11,17 @@ import { usePurchases } from '@/lib/usePurchases';
 import { useRedirectOnceEntitled } from '@/lib/useRedirectOnceEntitled';
 import { ensureSessionForPurchase } from '@/lib/purchaseSession';
 import { openLegalLink } from '@/lib/legalLinks';
-import { trackOnboardingScreenView } from '@/lib/analytics';
+import { trackOnboardingScreenView, trackPaywallExperimentExposure } from '@/lib/analytics';
+import { usePreviewAccess } from '@/lib/usePreviewAccess';
+import { rememberPaywallDecline } from '@/lib/paywallAccess';
 import { purchaseTerms, savingPercent } from '@/lib/purchaseTerms';
 
 type PlanId = 'monthly' | 'yearly';
 
 export default function PaymentScreen() {
   const [plan, setPlan] = useState<PlanId>('yearly');
+  const variants = usePreviewAccess();
+  const exposure = useRef('');
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [modal, setModal] = useState<PaywallExitModal>('none');
@@ -53,6 +57,22 @@ export default function PaymentScreen() {
   useEffect(() => {
     if (!offering) void refreshOffering();
   }, [offering, refreshOffering]);
+
+  useEffect(() => {
+    if (!offering) return;
+    const key = `${offering.identifier}:${variants.access}:${variants.image}`;
+    if (exposure.current === key) return;
+    exposure.current = key;
+    trackPaywallExperimentExposure({ offering_id: offering.identifier, access_variant: variants.access, image_variant: variants.image });
+  }, [offering, variants.access, variants.image]);
+
+  async function declineSubscription() {
+    try {
+      await rememberPaywallDecline();
+      setModal('none');
+      if (variants.access === 'preview') router.replace('/(tabs)/search?preview=1');
+    } catch { Alert.alert('Could not save your choice', 'Please try again.'); }
+  }
 
   // Onboarding completes once the user holds Pro - whether freshly purchased or
   // restored. Shared by handleStart and handleRestore.
@@ -130,6 +150,7 @@ export default function PaymentScreen() {
         continueLabel={loading ? 'Setting up…' : terms?.trial ? 'Find meals that fit — free' : 'Find meals that fit'}
         onSkip={() => { if (!loading && !restoring) setModal(discountTerms && discountPercent ? 'discount' : 'goodbye'); }}
       >
+        {variants.image === 'meal' && <Image source={require('@/assets/dishes/19.jpg')} style={s.mealImage} accessibilityLabel="Meal inspiration" testID="paywall-meal-image" />}
         <View style={s.features}>
           <Text style={s.feature}>Find restaurants near you by macros</Text>
           <Text style={s.feature}>Tweak your targets anytime</Text>
@@ -217,17 +238,15 @@ export default function PaymentScreen() {
         onClaimDiscount={() => { setModal('none'); handleStart(true); }}
         onDeclineDiscount={() => setModal('goodbye')}
         onStartTrial={() => { setModal('none'); handleStart(false); }}
-        // Declining every offer still gets the locked search teaser -
-        // real browsing with macro-match data blurred - rather than a
-        // dead end. Same mechanic a first-time visitor gets before
-        // signing up, and what resubscribe.tsx's skip does too.
-        onMaybeLater={() => { setModal('none'); router.replace('/(tabs)/search?preview=1'); }}
+        declineLabel={variants.access === 'hard' ? 'Close' : 'Browse the preview'}
+        onMaybeLater={() => { void declineSubscription(); }}
       />
     </>
   );
 }
 
 const s = StyleSheet.create({
+  mealImage: { width: '100%', height: 150, borderRadius: 20, marginBottom: 24, resizeMode: 'cover' },
   features: { gap: 14, marginBottom: 40 },
   feature: { fontFamily: FONTS.nunitoSans, fontSize: 15, color: EDITORIAL.textSoft, paddingLeft: 12, borderLeftWidth: 2, borderLeftColor: EDITORIAL.border },
   plans: { gap: 12 },

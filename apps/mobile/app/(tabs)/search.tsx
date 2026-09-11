@@ -1133,9 +1133,10 @@ export default function SearchScreen() {
         // as a call to action, so it must act like one.
         <Pressable
           style={s.lockedBanner}
+          testID="search-value-cta"
           onPress={unlocking ? resyncNow : () => { void routeToPaywall(); }}
           accessibilityRole="button"
-          accessibilityLabel={unlocking ? unlockLabel : 'Subscribe to unlock all restaurants'}
+          accessibilityLabel={unlocking ? unlockLabel : 'Find meals that fit — view subscription plans'}
         >
           {unlocking
             ? <ActivityIndicator size="small" color={EDITORIAL.greenAccent} />
@@ -1143,7 +1144,7 @@ export default function SearchScreen() {
           <Text style={s.lockedBannerText}>
             {unlocking
               ? `${unlockTitle} ${unlockSubtitle}`
-              : 'Subscribe to see exactly which meals at each spot fit your macros.'}
+              : 'Find meals that fit your macros. View plans →'}
           </Text>
         </Pressable>
       )}
@@ -1167,6 +1168,7 @@ export default function SearchScreen() {
             title={unlockTitle}
             subtitle={unlockSubtitle}
             onPress={resyncNow}
+            ctaLabel="Refresh my subscription"
             accessibilityLabel={unlockLabel}
             style={s.lockedCard}
           />
@@ -1175,9 +1177,9 @@ export default function SearchScreen() {
       return (
         <LockedUnlockCard
           title={hiddenCount > 0 ? `${hiddenCount}${nextCursor ? '+' : ''} more restaurants` : 'Unlock every match near you'}
-          subtitle="Subscribe to unlock every match near you, with the dish that fits your macros at each."
+          subtitle="Find your next meal nearby, matched to your macros."
           onPress={() => { void routeToPaywall(); }}
-          accessibilityLabel="Subscribe to unlock all restaurants"
+          accessibilityLabel="Find meals that fit — view subscription plans"
           style={s.lockedCard}
         />
       );
@@ -1240,9 +1242,10 @@ export default function SearchScreen() {
                 title={unlocking ? unlockTitle : 'Unlock every match near you'}
                 subtitle={unlocking
                   ? unlockSubtitle
-                  : 'Subscribe to search restaurants by your macros, with the dish that fits at each.'}
+                  : 'Find your next meal nearby, matched to your macros.'}
+                ctaLabel={unlocking ? "Refresh my subscription" : "Find meals that fit"}
                 onPress={unlocking ? resyncNow : () => { void routeToPaywall(); }}
-                accessibilityLabel={unlocking ? unlockLabel : 'Subscribe to unlock all restaurants'}
+                accessibilityLabel={unlocking ? unlockLabel : 'Find meals that fit — view subscription plans'}
                 style={s.lockedCard}
               />
             ) : null

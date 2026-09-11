@@ -1,0 +1,70 @@
+# Standard dev seed, read-only menu; no purchase or synthetic entitlement.
+appId: com.fitsy.mobile
+tags: [billing, discovery, onboarding, changed-journey]
+---
+- evalScript: ${output.search = http.get('https://dev.fitsy.org/api/restaurants?lat=34.0522&lng=-118.2437&radius=5&q=Seed%20Bowl%20Co')}
+- assertTrue: ${output.search.status === 200}
+- evalScript: >-
+    ${output.seed = json(output.search.body).data.filter(function (r) { return r.name === 'Seed Bowl Co #01'; })[0]}
+- assertTrue: ${!!output.seed}
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "continue"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 3000
+# Dismiss the Debug-only warning window outside the welcome controls.
+- tapOn:
+    point: "92%,93%"
+- openLink: ${'com.fitsy.mobile://restaurant/' + output.seed.id}
+- extendedWaitUntil:
+    visible: "Seed Bowl Co #01"
+    timeout: 20000
+- tapOn:
+    text: Got it
+    optional: true
+- tapOn:
+    id: restaurant-back
+- assertVisible: "continue"
+- assertNotVisible: "Create an account"
+- openLink: ${'com.fitsy.mobile://restaurant/' + output.seed.id}
+- scrollUntilVisible:
+    element:
+      id: locked-value-cta
+    direction: DOWN
+- assertVisible: "Find meals that fit.*"
+- tapOn:
+    id: locked-value-cta
+- assertVisible: "Create an account"
+- openLink: com.fitsy.mobile://welcome/leave-review
+- assertVisible: "Allow notifications"
+- assertNotVisible: "Leave a review"
+- tapOn: "Maybe later"
+- openLink: com.fitsy.mobile://welcome/payment
+- extendedWaitUntil:
+    visible:
+      id: paywall-price-yearly
+    timeout: 15000
+- tapOn:
+    id: welcome-skip
+- tapOn:
+    id: paywall-discount-decline
+- tapOn:
+    id: paywall-decline
+- assertVisible:
+    id: paywall-plan-yearly
+- openLink: com.fitsy.mobile://search?preview=1
+- assertVisible:
+    id: paywall-plan-yearly
+- assertNotVisible: "Search restaurants or dishes"
+- openLink: ${'com.fitsy.mobile://restaurant/' + output.seed.id}
+- assertVisible:
+    id: paywall-plan-yearly
+- assertNotVisible: "Seed Bowl Co #01"
+- stopApp
+- launchApp
+- openLink: com.fitsy.mobile://search?preview=1
+- assertVisible:
+    id: paywall-plan-yearly
+- assertNotVisible: "Search restaurants or dishes"

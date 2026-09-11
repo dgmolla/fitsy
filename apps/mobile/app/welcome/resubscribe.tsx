@@ -6,6 +6,8 @@ import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { RestaurantCard, SkeletonCard } from '@/components/PreviewRestaurantCard';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { usePurchases } from '@/lib/usePurchases';
+import { usePreviewAccess } from '@/lib/usePreviewAccess';
+import { rememberPaywallDecline } from '@/lib/paywallAccess';
 import { useRedirectOnceEntitled } from '@/lib/useRedirectOnceEntitled';
 import { ensureSessionForPurchase } from '@/lib/purchaseSession';
 import { fetchPreviewRestaurants, type PreviewRestaurant } from '@/lib/previewSearch';
@@ -23,6 +25,7 @@ import { purchaseTerms } from '@/lib/purchaseTerms';
  * introductory eligibility. Only the live store result can promise a trial.
  */
 export default function ResubscribeScreen() {
+  const variants = usePreviewAccess();
   const { offering, refreshOffering, purchase, restore, entitled, introEligibility } = usePurchases();
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
@@ -97,10 +100,10 @@ export default function ResubscribeScreen() {
       onContinue={handleResubscribe}
       canContinue={!loading && !restoring && !!terms}
       continueLabel={loading ? 'Resubscribing…' : 'Find meals that fit again'}
-      // Declining resubscribe still gets the locked search teaser (real
-      // browsing, blurred macro-match data) rather than a dead end - same
-      // mechanic as a first-time visitor who hasn't paid yet.
-      onSkip={() => router.replace('/(tabs)/search?preview=1')}
+      onSkip={variants.access === 'preview' ? () => {
+        void rememberPaywallDecline().then(() => router.replace('/(tabs)/search?preview=1'))
+          .catch(() => Alert.alert('Could not save your choice', 'Please try again.'));
+      } : undefined}
       showBack={false}
     >
       {(teaserLoading || restaurants.length > 0) && (

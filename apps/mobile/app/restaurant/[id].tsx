@@ -11,7 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Stack, router, useLocalSearchParams, useNavigation } from 'expo-router';
+import { Redirect, Stack, router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { MenuItemResult, MenuResponse } from '@fitsy/shared';
 import { BookmarkButton, FitsyLoader, LockedUnlockCard, MenuItemCard } from '@/components';
 import { fetchMenu, getSavedItems, saveItem, unsaveItem } from '@/lib/apiClient';
@@ -22,6 +22,9 @@ import { supabase } from '@/lib/supabase';
 import type { MacroValues } from '@/lib/macroPresets';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { useTheme } from '@/lib/theme';
+import { usePurchases } from '@/lib/usePurchases';
+import { useIsReviewer } from '@/lib/reviewAccess';
+import { usePreviewAccess } from '@/lib/usePreviewAccess';
 import {
   trackItemSaved,
   trackMenuFilterChipToggled,
@@ -69,6 +72,9 @@ const PCT_TIP_KEY = '@fitsy/pctTipDismissed';
 
 export default function RestaurantDetailScreen() {
   const { colors } = useTheme();
+  const purchases = usePurchases();
+  const reviewer = useIsReviewer();
+  const previewAccess = usePreviewAccess();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const params = useLocalSearchParams<{ id: string; distance?: string }>();
@@ -149,30 +155,11 @@ export default function RestaurantDetailScreen() {
   const isLockedRef = useRef(isLocked);
   useEffect(() => { isLockedRef.current = isLocked; }, [isLocked]);
 
-  // A locked (truncated, unentitled) menu is the "one free look" teaser - the
-  // API never sends more than a small real sample. Leaving this screen (back
-  // button, hardware back, swipe-back, or any other removal) spends that
-  // sample and sends the user to the paywall instead of back to the search
-  // list. Every removal is intercepted while locked; the one exception is
-  // our own redirect, which sets `redirectingRef` right before it dispatches
-  // so it isn't cancelled by this same listener (that self-cancel is exactly
-  // what stranded users on this screen before). `leftRef` makes the
-  // mark-and-redirect fire once, so a repeated back while the redirect is
-  // still in flight stays blocked rather than slipping through.
-  const leftRef = useRef(false);
-  const redirectingRef = useRef(false);
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
-      if (!isLockedRef.current || redirectingRef.current) return;
-      e.preventDefault();
-      if (leftRef.current) return;
-      leftRef.current = true;
-      markPreviewSampleUsed();
-      redirectingRef.current = true;
-      void routeToPaywall({ replace: true });
-    });
-    return unsubscribe;
-  }, [navigation]);
+  // Leaving consumes the sample, while Back keeps its normal destination.
+  // Buying is an explicit action on the unlock CTA, never a navigation trap.
+  useEffect(() => navigation.addListener('beforeRemove', () => {
+    if (isLockedRef.current) markPreviewSampleUsed();
+  }), [navigation]);
 
   const handleToggleSave = useCallback(async (menuItemId: string) => {
     // Saving requires a real account. A session-less caller tapping the
@@ -261,6 +248,11 @@ export default function RestaurantDetailScreen() {
     trackMenuSortChanged({ sort: s });
   }, []);
 
+  if (!purchases.ready || !reviewer.ready || !previewAccess.ready) return null;
+  if (!purchases.entitled && !reviewer.isReviewer && !previewAccess.canPreview) {
+    return <Redirect href={purchases.isLapsed ? '/welcome/resubscribe' : '/welcome/payment'} />;
+  }
+
   if (loading) {
     return (
       <>
@@ -289,7 +281,7 @@ export default function RestaurantDetailScreen() {
       <View style={[s.container, { paddingTop: insets.top }]}>
         {/* Compact top nav: back · name · heart (saves top match) */}
         <View style={s.nav}>
-          <Pressable onPress={() => router.back()} style={s.navBtn} hitSlop={8} accessibilityRole="button" accessibilityLabel="Go back">
+          <Pressable onPress={() => router.back()} style={s.navBtn} hitSlop={8} accessibilityRole="button" accessibilityLabel="Go back" testID="restaurant-back">
             <Ionicons name="chevron-back" size={18} color={EDITORIAL.text} />
           </Pressable>
           <View style={s.navBtn}>
@@ -307,6 +299,7 @@ export default function RestaurantDetailScreen() {
 
         <FlatList
           data={filtered}
+          keyboardShouldPersistTaps="handled"
           keyExtractor={({ item }) => item.id}
           renderItem={({ item: scoredItem, index }) => (
             <MenuItemCard
@@ -321,6 +314,7 @@ export default function RestaurantDetailScreen() {
                   restaurant_id: id ?? '',
                   position: index,
                 });
+                if (isLocked) void routeToPaywall();
               }}
               onToggleSave={() => handleToggleSave(scoredItem.item.id)}
             />
@@ -407,7 +401,7 @@ export default function RestaurantDetailScreen() {
               {/* Dark sort bar */}
               <View style={s.sortBar}>
                 <View style={{ flex: 1 }}>
-                  <Text style={s.sortBarTitle}>{matchCount} dishes match</Text>
+                  <Text style={s.sortBarTitle}>{matchCount} {matchCount === 1 ? 'dish matches' : 'dishes match'}</Text>
                   <Text style={s.sortBarSub}>
                     filtered from {totalCount} · sorted by {SORT_DEFS.find((d) => d.id === sort)?.label.toLowerCase()}
                   </Text>
@@ -460,9 +454,9 @@ export default function RestaurantDetailScreen() {
             isLocked && menu && hiddenItemCount > 0 ? (
               <LockedUnlockCard
                 title={`+${hiddenItemCount} more dishes`}
-                subtitle="Subscribe to unlock the full menu, with macros for every item."
+                subtitle="See the full menu and choose a meal that fits your macros."
                 onPress={() => { void routeToPaywall(); }}
-                accessibilityLabel="Subscribe to unlock the full menu"
+                accessibilityLabel="Find meals that fit — view subscription plans"
               />
             ) : null
           }

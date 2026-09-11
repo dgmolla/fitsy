@@ -175,6 +175,29 @@ describe('sign-in', () => {
 });
 
 describe('sign-out', () => {
+  it('rejects a late sign-in fallback while sign-out is still settling', async () => {
+    mockAuth.session = null;
+    const { result } = renderProvider();
+    await waitFor(() => expect(result.current.entitled).toBe(false));
+    const sync = deferred<SyncResult>();
+    const logout = deferred<undefined>();
+    mockRc.identifyPurchasesUser.mockResolvedValue(proInfo);
+    mockApi.syncSubscription.mockReturnValueOnce(sync.promise);
+    mockRc.logoutPurchasesUser.mockReturnValueOnce(logout.promise);
+    mockAuth.session = { user: { id: 'u2' } };
+    await act(async () => { mockAuth.listener?.('SIGNED_IN', mockAuth.session); });
+    await waitFor(() => expect(mockApi.syncSubscription).toHaveBeenCalled());
+    mockAuth.session = null;
+    await act(async () => { mockAuth.listener?.('SIGNED_OUT', null); });
+    await act(async () => { sync.resolve({ active: true, synced: true }); });
+    await flush();
+    expect(result.current.entitled).toBeNull();
+    await act(async () => { logout.resolve(undefined); });
+    await waitFor(() => expect(result.current.entitled).toBe(false));
+    expect(result.current.isPro).toBe(false);
+    expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBeUndefined();
+  });
+
   it('goes false -> null (gates hold while the caller navigates) -> false once the logout settles', async () => {
     mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null });
     const { result, seen } = renderProviderTracking();

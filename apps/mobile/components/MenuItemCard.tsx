@@ -48,7 +48,7 @@ export function MenuItemCard({
   onToggleSave: () => void;
   /** True for the free-sample items on a locked (unentitled) menu - the name
    * itself is the thing being teased, so it renders blurred (real text
-   * underneath, not blanked) with a "Subscribe to unlock" caption. */
+   * underneath, not blanked) with a "Find this meal" caption. */
   nameLocked?: boolean;
 }) {
   const tags = deriveTags(item);
@@ -62,9 +62,10 @@ export function MenuItemCard({
       onPress={onPress}
       style={[s.card, dim && s.cardDim]}
       accessibilityRole="button"
+      testID={`menu-item-${item.id}`}
       // The blur hides the name visually; without an explicit label VoiceOver
       // would still read the real dish name out of the (blurred) child text.
-      accessibilityLabel={nameLocked ? `${hasMatch ? `${pct}% match, ` : ''}dish name hidden, subscribe to unlock` : undefined}
+      accessibilityLabel={nameLocked ? `${hasMatch ? `${pct}% match, ` : ''}dish name hidden, view plans to find this meal` : undefined}
     >
       <View style={[s.pct, badgeColor ? { borderColor: badgeColor } : null]}>
         <Text style={[s.pctTxt, badgeColor ? { color: badgeColor } : null]}>
@@ -98,7 +99,7 @@ export function MenuItemCard({
         {nameLocked ? (
           <View style={s.nameLockedTooltip}>
             <Ionicons name="lock-closed" size={10} color={EDITORIAL.greenAccent} />
-            <Text style={s.nameLockedTooltipText}>Subscribe to unlock</Text>
+            <Text style={s.nameLockedTooltipText}>Find this meal</Text>
           </View>
         ) : null}
         {item.description ? (
