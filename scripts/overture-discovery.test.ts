@@ -33,6 +33,7 @@ const describeIfDuckDB = hasDuckDB ? describe : describe.skip;
 const TEST_DIR = join(tmpdir(), "fitsy-overture-test");
 const FIXTURE_PATH = join(TEST_DIR, "test-fixture.parquet");
 const CACHE_TEST_PATH = join(TEST_DIR, "cache-test.parquet");
+const TEST_RELEASE = process.env['OVERTURE_RELEASE'] ?? '2026-08-19.0';
 
 function createFixtureParquet(): void {
   mkdirSync(TEST_DIR, { recursive: true });
@@ -186,10 +187,17 @@ describe("isCacheFresh", () => {
 
 describeIfDuckDB("isCacheFresh (with fixture)", () => {
   const TEST_BBOX = { south: 33.9, north: 34.2, west: -118.5, east: -118.1 };
+  it.each([undefined, '1900-01-01.0'])("rejects a warm same-bbox cache with release %s", release => {
+    execSync(`cp '${FIXTURE_PATH}' '${CACHE_TEST_PATH}'`);
+    writeFileSync(CACHE_TEST_PATH + '.meta.json', JSON.stringify({ ...TEST_BBOX, release }));
+    expect(isCacheFresh(CACHE_TEST_PATH, TEST_BBOX)).toBe(false);
+    expect(isCacheFresh(CACHE_TEST_PATH)).toBe(false);
+  });
 
   it("returns true when file was just created (no bbox check)", () => {
-    // Our fixture was just created — should be fresh without bbox check
-    expect(isCacheFresh(FIXTURE_PATH)).toBe(true);
+    execSync(`cp '${FIXTURE_PATH}' '${CACHE_TEST_PATH}'`);
+    writeFileSync(CACHE_TEST_PATH + '.meta.json', JSON.stringify({ release: TEST_RELEASE }));
+    expect(isCacheFresh(CACHE_TEST_PATH)).toBe(true);
   });
 
   it("returns false when file is older than 7 days", () => {
@@ -207,14 +215,14 @@ describeIfDuckDB("isCacheFresh (with fixture)", () => {
 
   it("returns true when bbox matches meta file", () => {
     execSync(`cp '${FIXTURE_PATH}' '${CACHE_TEST_PATH}'`);
-    writeFileSync(CACHE_TEST_PATH + ".meta.json", JSON.stringify(TEST_BBOX), "utf-8");
+    writeFileSync(CACHE_TEST_PATH + ".meta.json", JSON.stringify({ ...TEST_BBOX, release: TEST_RELEASE }), "utf-8");
 
     expect(isCacheFresh(CACHE_TEST_PATH, TEST_BBOX)).toBe(true);
   });
 
   it("returns false when bbox does not match meta file", () => {
     execSync(`cp '${FIXTURE_PATH}' '${CACHE_TEST_PATH}'`);
-    writeFileSync(CACHE_TEST_PATH + ".meta.json", JSON.stringify(TEST_BBOX), "utf-8");
+    writeFileSync(CACHE_TEST_PATH + ".meta.json", JSON.stringify({ ...TEST_BBOX, release: TEST_RELEASE }), "utf-8");
 
     const differentBbox = { south: 34.0, north: 34.3, west: -118.6, east: -118.2 };
     expect(isCacheFresh(CACHE_TEST_PATH, differentBbox)).toBe(false);
@@ -300,7 +308,7 @@ describeIfDuckDB("downloadOvertureCache", () => {
 
   beforeEach(() => {
     // Write meta file so isCacheFresh sees matching bbox
-    writeFileSync(FIXTURE_PATH + ".meta.json", JSON.stringify(DOWNLOAD_BBOX), "utf-8");
+    writeFileSync(FIXTURE_PATH + ".meta.json", JSON.stringify({ ...DOWNLOAD_BBOX, release: TEST_RELEASE }), "utf-8");
   });
 
   afterAll(() => {

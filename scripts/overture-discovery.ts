@@ -46,10 +46,10 @@ export interface BoundingBox {
 // ---------------------------------------------------------------------------
 
 const DEFAULT_CACHE_PATH = resolve(__dirname, "cache/overture-discovery.parquet");
-
 const CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-
-const OVERTURE_RELEASE = "2026-03-18.0";
+// Old public releases are retired. Allow an explicitly pinned supported release.
+const OVERTURE_RELEASE = process.env["OVERTURE_RELEASE"] ?? "2026-08-19.0";
+if (!/^\d{4}-\d{2}-\d{2}\.\d+$/.test(OVERTURE_RELEASE)) throw new Error("Invalid OVERTURE_RELEASE");
 const OVERTURE_S3_PATH =
   `s3://overturemaps-us-west-2/release/${OVERTURE_RELEASE}/theme=places/type=place/*`;
 
@@ -153,34 +153,33 @@ WHERE
 
 /**
  * Returns true if `cachePath` exists, was modified less than 7 days ago,
- * AND was downloaded for the same bounding box.
+ * AND was downloaded from the selected release and, when supplied, bounding box.
  *
- * A sidecar file (`<cachePath>.meta.json`) stores the bbox used for
- * the download. If the bbox doesn't match, the cache is stale.
+ * The sidecar stores the source release and bbox; legacy metadata cannot
+ * establish which release supplied a cache and requires a new download.
  */
 export function isCacheFresh(cachePath: string, bbox?: BoundingBox): boolean {
   if (!existsSync(cachePath)) return false;
   const mtime = statSync(cachePath).mtimeMs;
   if (Date.now() - mtime >= CACHE_MAX_AGE_MS) return false;
 
-  if (bbox) {
-    const metaPath = cachePath + ".meta.json";
-    if (!existsSync(metaPath)) return false;
-    try {
-      const meta = JSON.parse(readFileSync(metaPath, "utf-8"));
-      if (meta.south !== bbox.south || meta.north !== bbox.north ||
-          meta.west !== bbox.west || meta.east !== bbox.east) return false;
-    } catch {
-      return false;
-    }
+  const metaPath = cachePath + ".meta.json";
+  if (!existsSync(metaPath)) return false;
+  try {
+    const meta = JSON.parse(readFileSync(metaPath, "utf-8"));
+    if (meta.release !== OVERTURE_RELEASE) return false;
+    if (bbox && (meta.south !== bbox.south || meta.north !== bbox.north ||
+        meta.west !== bbox.west || meta.east !== bbox.east)) return false;
+  } catch {
+    return false;
   }
 
   return true;
 }
 
-/** Write bbox metadata next to the cache file. */
+/** Write source release and bbox metadata next to the cache file. */
 function writeCacheMeta(cachePath: string, bbox: BoundingBox): void {
-  writeFileSync(cachePath + ".meta.json", JSON.stringify(bbox), "utf-8");
+  writeFileSync(cachePath + ".meta.json", JSON.stringify({ ...bbox, release: OVERTURE_RELEASE }), "utf-8");
 }
 
 /**
