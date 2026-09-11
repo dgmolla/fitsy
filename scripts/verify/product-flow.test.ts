@@ -11,8 +11,8 @@ const png = Buffer.from('89504e470d0a1a0a00000000', 'hex');
 // Never inherit Git-hook repository pointers into fixture subprocesses.
 const fixtureEnv = () => Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
 const fixtureGit = (args: string[]) => execFileSync('git', args, { env: fixtureEnv() });
-const evaluate = (expression: string) => spawnSync(process.execPath, ['--input-type=module', '-e',
-  `import * as gate from ${JSON.stringify(modulePath)}; process.stdout.write(JSON.stringify(${expression}));`], { encoding: 'utf8', env: fixtureEnv() });
+const evaluate = (expression: string, env = fixtureEnv()) => spawnSync(process.execPath, ['--input-type=module', '-e',
+  `import * as gate from ${JSON.stringify(modulePath)}; process.stdout.write(JSON.stringify(${expression}));`], { encoding: 'utf8', env });
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'fitsy-product-flow-')); });
 afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
 
@@ -186,6 +186,10 @@ test('temporary repositories stay isolated when invoked from a Git hook', () => 
     writeFileSync(join(target, 'fixture.txt'), 'fixture data');
     fixtureGit(['-C', target, 'add', '.']);
     expect(fixtureGit(['-C', target, 'ls-files']).toString().trim()).toBe('fixture.txt');
+    const expression = `gate.inputHash(${JSON.stringify(target)})`;
+    const clean = evaluate(expression), inherited = evaluate(expression, process.env);
+    expect(clean.status).toBe(0); expect(inherited.status).toBe(0);
+    expect(inherited.stdout).toBe(clean.stdout);
     expect(readFileSync(join(sentinel, '.git/HEAD'), 'utf8')).toBe(head);
     expect(readFileSync(join(sentinel, '.git/config'), 'utf8')).toBe(config);
     expect(fixtureGit(['-C', sentinel, 'ls-files']).toString()).toBe('');
