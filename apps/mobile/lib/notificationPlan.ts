@@ -47,7 +47,7 @@ export function planReminders({ now, userId, entitled, preferences, subscription
     for (let day = 0; day < 14; day++) {
       const date = new Date(now);
       date.setDate(date.getDate() + day); date.setHours(11, 30, 0, 0);
-      if (![2, 5].includes(date.getDay()) || date.getTime() <= now.getTime() + 4 * HOUR || date.getTime() >= until) continue;
+      if (![2, 5].includes(date.getDay()) || date.getTime() <= now.getTime() || date.getTime() >= until) continue;
       if (reminders.some(r => localDay(r.date) === localDay(date))) continue;
       reminders.push({ identifier: `${REMINDER_PREFIX}meal.${localDay(date)}`, kind: 'meal', date,
         title: 'Eating out today?', body: 'Find a nearby meal that fits your macros and your appetite.' });

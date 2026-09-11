@@ -48,11 +48,12 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let live = true;
+    const userId = account.ready && ready && loaded?.id === account.id ? account.id : undefined;
     const plan = planReminders({ now: new Date(), userId: account.id, entitled: entitled === true, preferences, subscription: customerInfo?.entitlements.all.pro });
-    void replaceReminders(account.id, plan).then(() => readScheduledReminders(account.id))
+    void replaceReminders(userId, plan).then(() => readScheduledReminders(account.id))
       .then(values => { if (live) setScheduled({ id: account.id, values }); }).catch(reportFailure);
     return () => { live = false; };
-  }, [account.id, entitled, preferences, customerInfo, revision]);
+  }, [account, ready, loaded, entitled, preferences, customerInfo, revision]);
 
   useEffect(() => {
     let live = true; let received = false;

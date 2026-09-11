@@ -30,7 +30,8 @@ let queue: Promise<unknown> = Promise.resolve();
 let generation = 0;
 /** Serialize replacement, so a late schedule cannot survive a later opt-out or
  * account change. Cancel only this feature's requests; other push flows survive. */
-export function replaceReminders(userId: string | null, reminders: PlannedReminder[]): Promise<void> {
+export function replaceReminders(userId: string | null | undefined, reminders: PlannedReminder[]): Promise<void> {
+  if (userId === undefined) return Promise.resolve(); // Still loading; null alone means signed out.
   const revision = ++generation;
   const work = queue.catch(() => undefined).then(async () => {
     if (Platform.OS === 'web' || revision !== generation) return;

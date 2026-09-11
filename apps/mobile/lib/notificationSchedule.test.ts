@@ -75,11 +75,16 @@ test('Android gets a channel and portable date triggers', async () => {
   expect(request.trigger).toMatchObject({ type: 'date', channelId: REMINDER_CHANNEL });
   expect(request.content.data).toMatchObject({ userId: 'one', kind: 'meal' });
 });
-test('sign-out clears already delivered reminders without dismissing other features', async () => {
+test('loading preserves pending and delivered reminders; sign-out clears only this feature', async () => {
   sdk.getPresentedNotificationsAsync.mockResolvedValue([
     { request: { identifier: REMINDER_PREFIX + 'old', content: { data: { userId: 'one', kind: 'meal' } } } },
     { request: { identifier: 'launch-announcement', content: { data: {} } } },
   ] as Notifications.Notification[]);
+  await replaceReminders('one', plan());
+  const before = [...pending.keys()];
+  await replaceReminders(undefined, []);
+  expect([...pending.keys()]).toEqual(before);
+  expect(sdk.dismissNotificationAsync).not.toHaveBeenCalled();
   await replaceReminders(null, []);
   expect(sdk.dismissNotificationAsync.mock.calls).toEqual([[REMINDER_PREFIX + 'old']]);
 });

@@ -48,9 +48,10 @@ test('a trial reminder replaces a meal nudge on the same local day', () => {
   const reminders = planReminders({ ...input, subscription: { ...active, expirationDate: new Date(2026, 8, 13, 12).toISOString() } });
   expect(reminders.filter(r => r.date.getDate() === 11).map(r => r.kind)).toEqual(['trial']);
 });
-test('no meal nudge fires immediately after opt-in, and toggles work independently', () => {
-  const reminders = planReminders({ ...input, now: new Date(2026, 8, 8, 10), preferences: { meals: true, trial: false } });
-  expect(reminders.map(r => r.kind)).toEqual(['meal']);
-  expect(reminders[0].date.getDate()).toBe(11);
+test('reopening before a meal keeps its due time; past dates expire and toggles are independent', () => {
+  for (const hour of [8, 10, 11, 12]) {
+    const reminders = planReminders({ ...input, now: new Date(2026, 8, 8, hour), preferences: { meals: true, trial: false } });
+    expect(reminders[0].date).toEqual(new Date(2026, 8, hour < 12 ? 8 : 11, 11, 30));
+  }
   expect(planReminders({ ...input, preferences: { meals: false, trial: true } }).map(r => r.kind)).toEqual(['trial']);
 });
