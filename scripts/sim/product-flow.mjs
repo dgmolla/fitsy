@@ -56,12 +56,20 @@ function claim() {
 const release = () => run('bash', ['scripts/sim/sim', 'release'], { stdio: 'inherit' });
 const metroFile = join(buildDir, 'metro.json');
 const processIdentity = pid => run('ps', ['-p', String(pid), '-o', 'lstart=,command=']);
-function stopMetro() {
+async function stopMetro() {
   if (!existsSync(metroFile)) return;
   const m = read(metroFile);
   let current;
   try { current = processIdentity(m.pid); } catch { current = ''; }
-  if (current === m.processIdentity) process.kill(m.pid, 'SIGTERM');
+  if (current === m.processIdentity) {
+    process.kill(m.pid, 'SIGTERM');
+    for (let attempt = 0; attempt < 100; attempt++) {
+      await new Promise(done => setTimeout(done, 50));
+      try { current = processIdentity(m.pid); } catch { current = ''; }
+      if (!current) break;
+    }
+    assert(!current, 'Owned Metro did not stop; retaining its receipt for cleanup');
+  }
   else assert(!current, 'Owned Metro PID was reused; inspect before stopping it');
   rmSync(metroFile);
 }
@@ -73,7 +81,7 @@ async function metroBundle(m) {
   return digest(Buffer.from(await response.arrayBuffer()));
 }
 async function startMetro(r) {
-  stopMetro();
+  await stopMetro();
   // Refuse a busy port; never attach to or terminate another task's server.
   await new Promise((resolvePort, reject) => {
     const server = createServer(); server.once('error', reject);
@@ -90,10 +98,12 @@ async function startMetro(r) {
   const m = { pid: child.pid, port: r.metroPort, processIdentity: processIdentity(child.pid), nativeSourceHash: r.nativeSourceHash, configHash: r.configHash };
   save(metroFile, m);
   for (let attempt = 0; attempt < 120; attempt++) {
+    let ready = false;
     try {
       const response = await fetch(`http://localhost:${m.port}/status`, { signal: AbortSignal.timeout(1000) });
-      if (await response.text() === 'packager-status:running') return { ...m, bundleHash: await metroBundle(m) };
+      ready = await response.text() === 'packager-status:running';
     } catch { /* startup only; failure below remains blocking */ }
+    if (ready) return { ...m, bundleHash: await metroBundle(m) };
     assert(processIdentity(m.pid) === m.processIdentity, 'Owned Metro exited during startup; inspect metro.log');
     await new Promise(done => setTimeout(done, 500));
   }
@@ -147,14 +157,19 @@ async function build(udid, testStore) {
     const log = join(buildDir, 'build.log');
     const fd = openSync(log, 'w');
     try {
-      run('xcodebuild', ['-workspace', 'ios/Fitsy.xcworkspace', '-scheme', 'Fitsy', '-configuration', profile.configuration, '-sdk', 'iphonesimulator', '-destination', `id=${udid}`, '-derivedDataPath', buildDir, '-jobs', '4', 'ONLY_ACTIVE_ARCH=YES', 'CODE_SIGNING_ALLOWED=NO', 'build'], { cwd: mobile, env, stdio: ['ignore', fd, fd] });
+      run('xcodebuild', ['-workspace', 'ios/Fitsy.xcworkspace', '-scheme', 'Fitsy', '-configuration', profile.configuration, '-sdk', 'iphonesimulator', '-destination', `id=${udid}`, '-derivedDataPath', buildDir, '-jobs', '4', 'ONLY_ACTIVE_ARCH=YES', 'CODE_SIGNING_ALLOWED=YES', 'CODE_SIGN_IDENTITY=-', 'build'], { cwd: mobile, env, stdio: ['ignore', fd, fd] });
     } finally { closeSync(fd); }
     const app = join(buildDir, `Build/Products/${profile.configuration}-iphonesimulator/Fitsy.app`);
+    // Xcode embeds these simulated entitlements in the Mach-O image; unsigned
+    // builds omitted them and SecureStore failed with ERR_KEY_CHAIN.
+    const entitlementsFile = join(buildDir, `Build/Intermediates.noindex/Fitsy.build/${profile.configuration}-iphonesimulator/Fitsy.build/Fitsy.app-Simulated.xcent`);
+    const entitlements = JSON.parse(run('plutil', ['-convert', 'json', '-o', '-', entitlementsFile]));
+    assert(entitlements['application-identifier']?.endsWith('.com.fitsy.mobile'), 'Simulator keychain application entitlement is missing');
     assert(source === inputHash(root, true), 'Build changed source inputs; inspect changes and rebuild');
     assert(buildRecipeHash === recipeHash(), 'Build recipe changed during compilation');
     const bundleHash = digest(readFileSync(join(app, 'main.jsbundle')));
     save(join(buildDir, 'receipt.json'), { ...config, ...identity, nativeSourceHash: source, app, appHash: treeHash(app), bundleHash,
-      ...profile, buildRecipeHash, builtAt: new Date().toISOString() });
+      ...profile, buildRecipeHash, simulatorApplicationIdentifier: entitlements['application-identifier'], builtAt: new Date().toISOString() });
     console.log('Built identified simulator app. Next: run <UDID> [flow names].');
   } finally { release(); }
 }
@@ -178,6 +193,12 @@ async function execute(udid, names) {
     const report = { version: 1, ...buildIdentity, ...identity, ...server, inputHash: hash, result: 'running', startedAt: new Date().toISOString(),
       fixture: process.env.FITSY_FIXTURE || 'fresh-install-no-account', maestroVersion: run(process.env.MAESTRO_BIN || 'maestro', ['--version']), flows: [], exploration: [] };
     save(join(out, 'report.json'), report);
+    if (process.env.FITSY_SIM_RESET_KEYCHAIN) {
+      assert(process.env.FITSY_SIM_RESET_KEYCHAIN === udid, 'Keychain reset must explicitly name the selected disposable simulator');
+      run('xcrun', ['simctl', 'keychain', udid, 'reset']);
+      report.keychainReset = true;
+      save(join(out, 'report.json'), report);
+    }
     if (r.buildMode === 'owned-metro-test-store') {
       report.metro = await startMetro(r);
       report.bundleHash = report.metro.bundleHash;
@@ -239,6 +260,6 @@ try {
   else if (command === 'run') await execute(args[0], args.slice(1));
   else if (command === 'finish') await finish(args[0]);
   else if (command === 'check') await check();
-  else if (command === 'stop-metro') stopMetro();
+  else if (command === 'stop-metro') await stopMetro();
   else throw new Error('Usage: node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs build UDID | run UDID [flow names] | finish [walkthrough.json]');
 } catch (e) { console.error(e.message); process.exitCode = 1; }

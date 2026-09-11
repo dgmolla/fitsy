@@ -39,6 +39,8 @@ Use an owned worktree, `npm run dev:env`, and an explicit simulator UDID. Keep p
 
 For RevenueCat Test Store, add `--test-store` to `build` and configure the public `EXPO_PUBLIC_REVENUECAT_TEST_KEY`. This builds Debug without the dev launcher and uses an owned Metro server on port 8099. Expo development bundles require a server connection; an embedded Debug bundle cannot initialize. Each run starts its own server, refuses a busy port, and records its process, source, configuration and served-bundle hashes. Keep that server running through walkthrough, publication and merge; the gate rechecks its identity and bundle. Use `node scripts/sim/product-flow.mjs stop-metro` after shipping. It only stops the recorded process; the usual development server is untouched. Test Store evidence does not establish Apple sandbox billing behavior.
 
+Both configurations use local simulator signing with Xcode's application entitlement so SecureStore can read and persist sessions. Use a disposable simulator: iOS app reinstalls preserve keychain sessions. For a fresh-account run, explicitly set `FITSY_SIM_RESET_KEYCHAIN` to that simulator's UDID. This clears its entire keychain before the baseline and records the reset. Never set it for a simulator containing accounts you need to keep.
+
 ```sh
 node scripts/verify/product-flow.mjs --plan
 export FITSY_SIM_OWNER=my-task MAESTRO_BIN="$HOME/.maestro/bin/maestro"
