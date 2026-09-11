@@ -152,6 +152,7 @@ test('temporary repositories stay isolated when invoked from a Git hook', () => 
   const sentinel = join(dir, 'sentinel'), target = join(dir, 'fixture');
   fixtureGit(['init', '-q', sentinel]);
   const head = readFileSync(join(sentinel, '.git/HEAD'), 'utf8');
+  const config = readFileSync(join(sentinel, '.git/config'), 'utf8');
   const variables = { GIT_DIR: join(sentinel, '.git'), GIT_WORK_TREE: sentinel, GIT_INDEX_FILE: join(sentinel, '.git/index') };
   const previous = Object.fromEntries(Object.keys(variables).map(key => [key, process.env[key]]));
   try {
@@ -161,6 +162,7 @@ test('temporary repositories stay isolated when invoked from a Git hook', () => 
     fixtureGit(['-C', target, 'add', '.']);
     expect(fixtureGit(['-C', target, 'ls-files']).toString().trim()).toBe('fixture.txt');
     expect(readFileSync(join(sentinel, '.git/HEAD'), 'utf8')).toBe(head);
+    expect(readFileSync(join(sentinel, '.git/config'), 'utf8')).toBe(config);
     expect(fixtureGit(['-C', sentinel, 'ls-files']).toString()).toBe('');
   } finally {
     for (const [key, value] of Object.entries(previous)) {
