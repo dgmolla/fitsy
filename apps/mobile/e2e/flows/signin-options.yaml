@@ -6,12 +6,15 @@ appId: com.fitsy.mobile
 ---
 - launchApp:
     clearState: true
-# Let the initial native/React transition settle before reading accessibility.
-- waitForAnimationToEnd:
-    timeout: 3000
-- extendedWaitUntil:
-    visible: ".*Log in.*"
-    timeout: 15000
+# Retry only the first accessibility read: XCTest can reject a moving React frame.
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - extendedWaitUntil:
+          visible: ".*Log in.*"
+          timeout: 15000
 - tapOn: ".*Log in.*"
 - extendedWaitUntil:
     visible: "Welcome back"

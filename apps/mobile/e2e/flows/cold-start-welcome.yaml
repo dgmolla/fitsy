@@ -6,10 +6,13 @@ appId: com.fitsy.mobile
 ---
 - launchApp:
     clearState: true
-# The initial native/React transition can return an invalid AX element.
-- waitForAnimationToEnd:
-    timeout: 3000
-- extendedWaitUntil:
-    visible: "continue"
-    timeout: 15000
+# Retry only the first accessibility read: XCTest can reject a moving React frame.
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - extendedWaitUntil:
+          visible: "continue"
+          timeout: 15000
 - assertVisible: ".*Log in.*"
