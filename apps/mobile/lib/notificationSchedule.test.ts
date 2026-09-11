@@ -65,6 +65,7 @@ test('an opt-out queued during a native schedule removes that late request', asy
   });
   const old = replaceReminders('one', plan()); await entered;
   const latest = replaceReminders(null, []); release(); await Promise.all([old, latest]);
+  expect(sdk.scheduleNotificationAsync).toHaveBeenCalledTimes(1);
   expect(pending.size).toBe(0);
 });
 test('Android gets a channel and portable date triggers', async () => {
