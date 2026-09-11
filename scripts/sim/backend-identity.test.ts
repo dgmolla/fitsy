@@ -9,7 +9,8 @@ function run(deployment: unknown) {
     `import {backendRevision} from ${JSON.stringify(modulePath)}; process.stdout.write(backendRevision(${JSON.stringify(deployment)}));`], { encoding: 'utf8' });
 }
 test('accepts real CLI identity and existing Git builds', () => {
-  for (const d of [cli, { ...cli, source: 'git', meta: {}, gitSource: { sha } }]) {
+  for (const d of [cli, { ...cli, source: 'git', meta: {}, gitSource: { sha } },
+    ...[false, 'false', '0'].map(gitDirty => ({ ...cli, meta: { ...cli.meta, gitDirty } }))]) {
     const result = run(d); expect(result.status).toBe(0); expect(result.stdout.trim()).toBe(sha);
   }
 });
