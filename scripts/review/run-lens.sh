@@ -20,7 +20,7 @@ mkdir -p "$CACHE_DIR"
 
 # ── Gather the diff and context ─────────────────────────────────────────────
 if [ "$TARGET" = "--local" ]; then
-  DIFF="$(git diff origin/main...HEAD)"
+  DIFF="$(git diff --abbrev=8 origin/main...HEAD)"
   TITLE="$(git log -1 --format=%s)"; BODY=""
   HEAD_SHA=""
 else
