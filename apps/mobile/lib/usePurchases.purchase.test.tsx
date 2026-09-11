@@ -2,6 +2,8 @@
  * PurchasesProvider purchase / restore: a confirmed store flow lets the user
  * in at once, and inside STORE_GRACE_MS a lagging server cannot bounce them
  * (the sync resolves to the verdict in effect, true).
+ * Error alerts and cancellation recovery run against the native Test Store
+ * in e2e/flows/paywall-live-terms.yaml, including the failed-purchase assertion.
  */
 import {
   deferred,

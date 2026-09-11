@@ -25,6 +25,16 @@ setupPurchasesMocks();
 type StatusResult = { active: boolean; status: null; expiresAt: null };
 
 describe('boot', () => {
+  it('a loaded offering without configured store eligibility never promises a trial', async () => {
+    const offering = { identifier: 'test', availablePackages: [{ product: { identifier: 'annual' } }] };
+    mockRc.fetchCurrentOffering.mockResolvedValueOnce(offering as never);
+    const { result } = renderProvider();
+    await waitFor(() => expect(result.current.offering).toEqual(offering));
+    await flush();
+    expect(result.current.ready).toBe(true);
+    expect(result.current.introEligibility).toEqual({});
+  });
+
   it('reads the stored verdict (status, not sync), stores it, caches it, and only then becomes ready', async () => {
     mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null });
     const { result } = renderProvider();

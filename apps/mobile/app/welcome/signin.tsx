@@ -39,7 +39,7 @@ export default function SignInScreen() {
   const [devLoading, setDevLoading] = useState(false);
 
   // Continue from the preview to optional permissions and live plan terms.
-  // Ask for a review only after meaningful engagement inside the app.
+  // Skip onboarding review; existing in-app prompts use lib/ratingPrompt.ts.
   const { outOfArea } = useLocalSearchParams<{ outOfArea?: string }>();
   const newUserDestination = outOfArea === '1' ? '/welcome/out-of-area' : '/welcome/notification-permission';
 

@@ -5,6 +5,7 @@ tags: [billing, onboarding, changed-journey]
 ---
 - launchApp:
     clearState: true
+- assertVisible: "continue"
 # Fresh welcome has no controls in this corner. Dismiss the Debug warning
 # window here; native LogBox is absent from the app accessibility hierarchy.
 - waitForAnimationToEnd:
@@ -16,6 +17,9 @@ tags: [billing, onboarding, changed-journey]
     visible: "Enjoy the meal. Keep your goals."
     timeout: 15000
 - assertVisible: "Enjoy the meal. Keep your goals."
+# A late startup warning can arrive after the welcome cleanup; outside the CTA.
+- tapOn:
+    point: "93%,93%"
 - scrollUntilVisible:
     element:
       id: trial-see-plans

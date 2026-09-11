@@ -19,13 +19,11 @@ import { purchaseTerms } from '@/lib/purchaseTerms';
  * regular inline paywall card on the search tab instead. See app/index.tsx
  * for the routing decision and lib/purchases.ts `hasLapsedEntitlement`.
  *
- * Deliberately avoids "free trial" language: Apple won't grant a second free
- * trial to the same Apple ID, so promising one here (like the first-time
- * paywall does) would be misleading and can end in a confusing full-price
- * charge with no explanation.
+ * A lapsed Fitsy account does not establish the current store account's
+ * introductory eligibility. Only the live store result can promise a trial.
  */
 export default function ResubscribeScreen() {
-  const { offering, refreshOffering, purchase, restore, entitled } = usePurchases();
+  const { offering, refreshOffering, purchase, restore, entitled, introEligibility } = usePurchases();
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
 
@@ -55,7 +53,7 @@ export default function ResubscribeScreen() {
     if (!offering) void refreshOffering();
   }, [offering, refreshOffering]);
 
-  const terms = purchaseTerms(offering?.annual?.product);
+  const terms = purchaseTerms(offering?.annual?.product, introEligibility[offering?.annual?.product.identifier ?? '']);
 
   async function handleResubscribe() {
     const annual = offering?.annual ?? (await refreshOffering())?.annual;

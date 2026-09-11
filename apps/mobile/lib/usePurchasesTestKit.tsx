@@ -32,6 +32,9 @@ export const mockRc = {
   identifyPurchasesUser: jest.fn(async () => freeInfo),
   fetchCustomerInfo: jest.fn(async () => freeInfo),
   fetchCurrentOffering: jest.fn(async () => null),
+  // Exercise the real new seam; do not add another mock of our own code.
+  fetchIntroEligibility: (ids: string[]) =>
+    jest.requireActual<typeof import('./purchases')>('./purchases').fetchIntroEligibility(ids),
   addCustomerInfoListener: jest.fn(() => () => undefined),
   logoutPurchasesUser: jest.fn(async () => undefined),
   purchasePackage: jest.fn(),
