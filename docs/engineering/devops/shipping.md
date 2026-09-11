@@ -37,6 +37,8 @@ The registry determines which checks apply and whether a check is blocking or sh
 
 Use an owned worktree, `npm run dev:env`, and an explicit simulator UDID. Keep public configuration in the ignored mobile environment file. The builder generates an embedded Release app, disables downloaded OTA updates, and records source/native/JS/configuration identities. A keyless build proves navigation only and cannot cover billing. Never publish credentials or personal data in evidence.
 
+For RevenueCat Test Store, add `--test-store` to `build` and configure the public `EXPO_PUBLIC_REVENUECAT_TEST_KEY`. This builds Debug without the dev launcher and uses an owned Metro server on port 8099. Expo development bundles require a server connection; an embedded Debug bundle cannot initialize. Each run starts its own server, refuses a busy port, and records its process, source, configuration and served-bundle hashes. Keep that server running through walkthrough, publication and merge; the gate rechecks its identity and bundle. Use `node scripts/sim/product-flow.mjs stop-metro` after shipping. It only stops the recorded process; the usual development server is untouched. Test Store evidence does not establish Apple sandbox billing behavior.
+
 ```sh
 node scripts/verify/product-flow.mjs --plan
 export FITSY_SIM_OWNER=my-task MAESTRO_BIN="$HOME/.maestro/bin/maestro"
