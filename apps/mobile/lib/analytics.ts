@@ -875,3 +875,8 @@ export function trackPaywallExperimentExposure(props: { offering_id: string; acc
   try { getPostHogClient().capture('paywall_experiment_exposed', props); }
   catch (error) { logCaptureError('paywall_experiment_exposed', error); }
 }
+
+export function trackReminderAction(props: { action: 'opened'; kind: 'meal' | 'trial' } | { action: 'preferences_changed'; meals: boolean; trial: boolean }): void {
+  try { getPostHogClient().capture('reminder_action', props); }
+  catch (error) { logCaptureError('reminder_action', error); }
+}
