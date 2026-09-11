@@ -34,7 +34,8 @@ test('a reviewed default accepts only its exact captured context and range, pres
     { calorieRange: [NaN, 760] as [number, number] }, { description: item.description + ' Choose any protein.' }, { calories: 640 }])
     expect(match('waba', { ...item, ...update })).toEqual({ status: 'unmatched' });
   expect(match('other-chain', item)).toEqual({ status: 'unmatched' });
-  expect(match('waba', { ...definition.aliases[0]!, calorieRange: [640, 760] })).toEqual({ status: 'unmatched' });
+  const legacy = definition.aliases[0]!;
+  expect(match('waba', { name: legacy.name, section: legacy.section ?? '', description: legacy.description ?? '', calorieRange: [640, 760] })).toEqual({ status: 'unmatched' });
   const bare = definition.aliases.map(({ defaultServing: _defaultServing, ...identity }) => identity);
   expect(buildChainMatcher([chicken(bare)])('waba', item)).toEqual({ status: 'unmatched' });
 });
