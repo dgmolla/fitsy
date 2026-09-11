@@ -1,0 +1,44 @@
+# Uses the standard dev data from prisma/seed.ts --data-only.
+# These are synthetic seed expectations, not a nutrition-accuracy reference.
+# Checks serving and recovery by editing the query.
+# First-tap clear-button behavior is outside this query-edit scenario.
+appId: com.fitsy.mobile
+tags:
+  - changed-journey
+---
+- evalScript: ${output.search = http.get('https://dev.fitsy.org/api/restaurants?lat=34.0522&lng=-118.2437&radius=5&q=Seed%20Bowl%20Co')}
+- assertTrue: ${output.search.status === 200}
+- evalScript: >-
+    ${output.seed = json(output.search.body).data.filter(function (r) { return r.name === 'Seed Bowl Co #01'; })[0]}
+- assertTrue: ${!!output.seed}
+- evalScript: ${output.response = http.get('https://dev.fitsy.org/api/restaurants/' + output.seed.id + '/menu')}
+- assertTrue: ${output.response.status === 200}
+- evalScript: ${output.menu = json(output.response.body).data}
+- assertTrue: ${output.menu.totalItemCount === 8 && output.menu.locked && output.menu.menuItems.length === 3}
+- evalScript: ${output.chicken = output.menu.menuItems.filter(function (i) { return i.name === 'Grilled Chicken Bowl'; })[0]}
+- assertTrue: ${!!output.chicken && output.chicken.macros.calories === 520 && output.chicken.macros.proteinG === 42 && output.chicken.macros.carbsG === 48 && output.chicken.macros.fatG === 14 && output.chicken.macros.confidence === 'HIGH'}
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "continue"
+    timeout: 15000
+- openLink: ${'fitsy://restaurant/' + output.seed.id}
+- tapOn:
+    text: Open
+    optional: true
+- extendedWaitUntil:
+    visible: "Seed Bowl Co #01"
+    timeout: 20000
+- tapOn:
+    text: Got it
+    optional: true
+- assertVisible: "8 items"
+- assertVisible: "3 dishes match"
+- assertVisible: ".*dish name hidden, subscribe to unlock.*"
+- tapOn: "Search the menu.*"
+- inputText: fitsy-no-such-dish
+- assertVisible: "No dishes match these filters."
+- eraseText
+- assertNotVisible: "No dishes match these filters."
+- assertVisible: "3 dishes match"
+- assertVisible: ".*dish name hidden, subscribe to unlock.*"
