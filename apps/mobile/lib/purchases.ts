@@ -20,6 +20,7 @@
 import { Linking, Platform } from 'react-native';
 import Constants from 'expo-constants';
 import Purchases, {
+  INTRO_ELIGIBILITY_STATUS,
   LOG_LEVEL,
   type CustomerInfo,
   type PurchasesOffering,
@@ -200,6 +201,23 @@ export async function restorePurchases(): Promise<CustomerInfo | null> {
 export async function fetchCurrentOffering(): Promise<PurchasesOffering | null> {
   const offerings = await fetchOfferings();
   return offerings?.current ?? null;
+}
+
+/** A free-trial promise requires an affirmative store eligibility result. */
+export async function fetchIntroEligibility(productIds: string[]): Promise<Record<string, boolean>> {
+  if (!configured || Platform.OS !== 'ios' || productIds.length === 0) return {};
+  try {
+    const result = await Purchases.checkTrialOrIntroductoryPriceEligibility(productIds);
+    return Object.fromEntries(productIds.flatMap<[string, boolean]>(id => {
+      const status = result[id]?.status;
+      if (status === INTRO_ELIGIBILITY_STATUS.INTRO_ELIGIBILITY_STATUS_ELIGIBLE) return [[id, true]];
+      if (status === INTRO_ELIGIBILITY_STATUS.INTRO_ELIGIBILITY_STATUS_INELIGIBLE ||
+        status === INTRO_ELIGIBILITY_STATUS.INTRO_ELIGIBILITY_STATUS_NO_INTRO_OFFER_EXISTS) return [[id, false]];
+      return []; // An unknown answer must not be presented as ineligible.
+    }));
+  } catch {
+    return {};
+  }
 }
 
 export type PurchaseOutcome = 'purchased' | 'cancelled' | 'error';

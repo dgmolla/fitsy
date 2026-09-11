@@ -17,6 +17,9 @@ import {
   useFakeTimersKeepingFlush,
 } from './usePurchasesTestKit';
 import { act, waitFor } from '@testing-library/react-native';
+import Purchases from 'react-native-purchases';
+jest.mock('react-native-purchases', () => jest.requireActual('../__mocks__/react-native-purchases'));
+jest.mock('expo-constants', () => jest.requireActual('../__mocks__/expo-constants'));
 import { ENTITLEMENT_CACHE_KEY } from './entitlement';
 import { BOOT_VERDICT_CAP_MS } from './usePurchases';
 
@@ -25,6 +28,46 @@ setupPurchasesMocks();
 type StatusResult = { active: boolean; status: null; expiresAt: null };
 
 describe('boot', () => {
+  it('maps live store eligibility into the provider and clears it after a failed offering refresh', async () => {
+    const seam = jest.requireActual<typeof import('./purchases')>('./purchases');
+    expect(seam.configurePurchases()).toBe(true);
+    const ids = ['annual', 'monthly', 'discount', 'unknown', 'missing'];
+    const offering = { identifier: 'test', availablePackages: ids.map(identifier => ({ product: { identifier } })) };
+    const sdk = jest.spyOn(Purchases, 'checkTrialOrIntroductoryPriceEligibility').mockResolvedValue({
+      annual: { status: 2, description: 'Eligible' },
+      monthly: { status: 1, description: 'Ineligible' },
+      discount: { status: 3, description: 'No introductory offer' },
+      unknown: { status: 0, description: 'Unknown' },
+    });
+    mockRc.fetchCurrentOffering.mockResolvedValueOnce(offering as never);
+    const { result } = renderProvider();
+    await waitFor(() => expect(result.current.introEligibility).toEqual({ annual: true, monthly: false, discount: false }));
+    expect(sdk).toHaveBeenCalledWith(ids);
+    sdk.mockRejectedValueOnce(new Error('Store unavailable'));
+    mockRc.fetchCurrentOffering.mockResolvedValueOnce({ ...offering, identifier: 'refreshed' } as never);
+    await act(async () => { await result.current.refreshOffering(); });
+    await flush();
+    expect(result.current.introEligibility).toEqual({});
+    await expect(seam.fetchIntroEligibility([])).resolves.toEqual({});
+    expect(sdk).toHaveBeenCalledTimes(2);
+  });
+
+  it('ignores an old eligibility response after the offering changes', async () => {
+    expect(jest.requireActual<typeof import('./purchases')>('./purchases').configurePurchases()).toBe(true);
+    const pending = deferred<Record<string, { status: number; description: string }>>();
+    const sdk = jest.spyOn(Purchases, 'checkTrialOrIntroductoryPriceEligibility').mockReturnValueOnce(pending.promise);
+    mockRc.fetchCurrentOffering.mockResolvedValueOnce({ availablePackages: [{ product: { identifier: 'annual' } }] } as never);
+    const { result } = renderProvider();
+    await waitFor(() => expect(sdk).toHaveBeenCalledWith(['annual']));
+    mockRc.fetchCurrentOffering.mockResolvedValueOnce({ availablePackages: [{ product: { identifier: 'monthly' } }] } as never);
+    sdk.mockResolvedValueOnce({ monthly: { status: 1, description: 'Ineligible' } });
+    await act(async () => { await result.current.refreshOffering(); });
+    await waitFor(() => expect(result.current.introEligibility).toEqual({ monthly: false }));
+    await act(async () => { pending.resolve({ annual: { status: 2, description: 'Eligible' } }); });
+    await flush();
+    expect(result.current.introEligibility).toEqual({ monthly: false });
+  });
+
   it('reads the stored verdict (status, not sync), stores it, caches it, and only then becomes ready', async () => {
     mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null });
     const { result } = renderProvider();

@@ -6,6 +6,9 @@ appId: com.fitsy.mobile
 ---
 - launchApp:
     clearState: true
+# Let the initial native/React transition settle before reading accessibility.
+- waitForAnimationToEnd:
+    timeout: 3000
 - extendedWaitUntil:
     visible: ".*Log in.*"
     timeout: 15000

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
@@ -12,6 +12,7 @@ import { useRedirectOnceEntitled } from '@/lib/useRedirectOnceEntitled';
 import { ensureSessionForPurchase } from '@/lib/purchaseSession';
 import { openLegalLink } from '@/lib/legalLinks';
 import { trackOnboardingScreenView } from '@/lib/analytics';
+import { purchaseTerms, savingPercent } from '@/lib/purchaseTerms';
 
 type PlanId = 'monthly' | 'yearly';
 
@@ -20,7 +21,8 @@ export default function PaymentScreen() {
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [modal, setModal] = useState<PaywallExitModal>('none');
-  const { offering, refreshOffering, purchase, restore, entitled } = usePurchases();
+  const { offering, introEligibility, refreshOffering, purchase, restore, entitled } = usePurchases();
+  const purchaseBusy = useRef(false);
 
   // A verdict that turns true while this screen is up (late boot / sign-in
   // answer, a subscription bought on another device) goes through
@@ -33,22 +35,14 @@ export default function PaymentScreen() {
     onEntitled: () => { void completeOnboarding(false); },
   });
 
-  // Live, store-localized prices from the current RevenueCat offering, with the
-  // designed copy as a fallback while offerings load (or in Expo Go / no key).
-  // Fallbacks carry no period, matching the live priceString: the period is
-  // added once where it is displayed, so the copy reads the same either way.
-  const annualPrice = offering?.annual?.product.priceString ?? '$39.99';
-  const monthlyPrice = offering?.monthly?.product.priceString ?? '$7.99';
-  // Exit-intent discount: a dedicated, lower-priced annual package (RevenueCat
-  // package id `annual_discount`, backed by the ASC product
-  // `com.fitsy.mobile.yearly_discount` - 25% off, billed immediately: that
-  // product has NO introductory offer, so the copy below must not promise a
-  // trial). Live price with the designed copy as fallback; if the package
-  // isn't configured the discount CTA says so rather than silently charging
-  // full price (see handleStart).
+  const annualPrice = offering?.annual?.product.priceString ?? 'Loading…';
+  const monthlyPrice = offering?.monthly?.product.priceString ?? 'Loading…';
   const discountedAnnual =
     offering?.availablePackages.find((p) => p.identifier === 'annual_discount') ?? null;
-  const discountPrice = discountedAnnual?.product.priceString ?? '$29.99';
+  const selected = plan === 'yearly' ? offering?.annual : offering?.monthly;
+  const terms = purchaseTerms(selected?.product, selected ? introEligibility[selected.product.identifier] : false);
+  const discountTerms = purchaseTerms(discountedAnnual?.product, discountedAnnual ? introEligibility[discountedAnnual.product.identifier] : false);
+  const discountPercent = savingPercent(offering?.annual?.product, discountedAnnual?.product);
 
   useEffect(() => {
     trackOnboardingScreenView('payment');
@@ -75,34 +69,33 @@ export default function PaymentScreen() {
   // selected package directly through the RevenueCat SDK (no dashboard-designed
   // hosted paywall).
   async function handleStart(discounted = false) {
-    // The discount CTA buys the dedicated discounted annual package; the normal
-    // CTA buys the selected plan. Buying the regular annual here would charge
-    // full price despite the "25% off" promise, so a missing discount package
-    // is surfaced, not silently substituted.
-    const pick = (off: typeof offering) =>
-      discounted
-        ? off?.availablePackages.find((p) => p.identifier === 'annual_discount') ?? null
-        : plan === 'yearly'
-          ? off?.annual
-          : off?.monthly;
-    // One live retry before giving up: the boot-time fetch may have failed.
-    const pkg = pick(offering) ?? pick(await refreshOffering());
-    if (!pkg) {
-      Alert.alert(
-        'Just a moment',
-        discounted
-          ? "This offer isn't available right now - you can still start your free trial."
-          : 'Plans are still loading, please try again.',
-      );
-      return;
-    }
-    if (!(await ensureSessionForPurchase())) return;
+    if (purchaseBusy.current || restoring) return;
+    purchaseBusy.current = true;
     setLoading(true);
     try {
+      const pick = (off: typeof offering) =>
+        discounted
+          ? off?.availablePackages.find((p) => p.identifier === 'annual_discount') ?? null
+          : plan === 'yearly'
+            ? off?.annual
+            : off?.monthly;
+      // One live retry before giving up: the boot-time fetch may have failed.
+      const pkg = pick(offering) ?? pick(await refreshOffering());
+      if (!pkg || !purchaseTerms(pkg.product)) {
+        Alert.alert(
+          'Just a moment',
+          discounted
+            ? 'This offer is unavailable. You can choose one of the plans shown here.'
+            : 'Plans are still loading, please try again.',
+        );
+        return;
+      }
+      if (!(await ensureSessionForPurchase())) return;
       const isPro = await purchase(pkg, discounted ? 'onboarding_discount' : 'onboarding');
       if (!isPro) return; // cancelled or errored - stay on screen
       await completeOnboarding(discounted);
     } finally {
+      purchaseBusy.current = false;
       setLoading(false);
     }
   }
@@ -110,9 +103,11 @@ export default function PaymentScreen() {
   // Apple requires a Restore Purchases path. It lives here (the paywall) rather
   // than in-app, since a reinstalled subscriber re-runs onboarding.
   async function handleRestore() {
-    if (!(await ensureSessionForPurchase())) return;
+    if (purchaseBusy.current || restoring) return;
+    purchaseBusy.current = true;
     setRestoring(true);
     try {
+      if (!(await ensureSessionForPurchase())) return;
       const isPro = await restore();
       if (isPro) {
         await completeOnboarding();
@@ -120,6 +115,7 @@ export default function PaymentScreen() {
         Alert.alert('Nothing to restore', "We couldn't find an active subscription for this account.");
       }
     } finally {
+      purchaseBusy.current = false;
       setRestoring(false);
     }
   }
@@ -127,12 +123,12 @@ export default function PaymentScreen() {
   return (
     <>
       <WelcomeScreen
-        title={`Try Fitsy free\nfor 3 days.`}
-        subtitle="Cancel anytime. No charge until your trial ends."
+        title={`Eat out.\nStay on track.`}
+        subtitle={terms?.trial ? `${terms.trial} free to find meals that fit your goals.` : 'Find nearby meals that fit your macros and your appetite.'}
         onContinue={() => handleStart(false)}
-        canContinue={!loading}
-        continueLabel={loading ? 'Setting up...' : 'Start Free Trial'}
-        onSkip={() => setModal('discount')}
+        canContinue={!loading && !restoring && !!terms}
+        continueLabel={loading ? 'Setting up…' : terms?.trial ? 'Find meals that fit — free' : 'Find meals that fit'}
+        onSkip={() => { if (!loading && !restoring) setModal(discountTerms && discountPercent ? 'discount' : 'goodbye'); }}
       >
         <View style={s.features}>
           <Text style={s.feature}>Find restaurants near you by macros</Text>
@@ -148,15 +144,17 @@ export default function PaymentScreen() {
               haptic
               accessibilityRole="button"
               accessibilityState={{ selected: plan === 'yearly' }}
+              testID="paywall-plan-yearly"
+              disabled={loading || restoring}
             >
               <View>
                 <View style={s.planRow}>
                   <Text style={[s.planName, plan === 'yearly' && s.planNameOn]}>Annual</Text>
                   <View style={s.badge}><Text style={s.badgeTxt}>Best Value</Text></View>
                 </View>
-                <Text style={s.planSub}>Billed yearly</Text>
+                <Text style={s.planSub}>{purchaseTerms(offering?.annual?.product)?.period ? `Billed every ${purchaseTerms(offering?.annual?.product)?.period}` : 'Fetching store terms…'}</Text>
               </View>
-              <Text style={[s.planPrice, plan === 'yearly' && s.planPriceOn]}>{annualPrice}</Text>
+              <Text testID="paywall-price-yearly" style={[s.planPrice, plan === 'yearly' && s.planPriceOn]}>{annualPrice}</Text>
             </AnimatedPress>
           </Animated.View>
 
@@ -167,18 +165,27 @@ export default function PaymentScreen() {
               haptic
               accessibilityRole="button"
               accessibilityState={{ selected: plan === 'monthly' }}
+              testID="paywall-plan-monthly"
+              disabled={loading || restoring}
             >
               <Text style={[s.planName, plan === 'monthly' && s.planNameOn]}>Monthly</Text>
-              <Text style={[s.planPrice, plan === 'monthly' && s.planPriceOn]}>{monthlyPrice}</Text>
+              <Text testID="paywall-price-monthly" style={[s.planPrice, plan === 'monthly' && s.planPriceOn]}>{monthlyPrice}</Text>
             </AnimatedPress>
           </Animated.View>
         </View>
 
+        {!terms && (
+          <AnimatedPress style={s.restore} onPress={() => { void refreshOffering(); }} accessibilityRole="button" testID="paywall-retry-pricing">
+            <Text style={s.restoreTxt}>Retry loading plans</Text>
+          </AnimatedPress>
+        )}
+
         <AnimatedPress
           style={s.restore}
           onPress={handleRestore}
-          disabled={restoring}
+          disabled={loading || restoring}
           accessibilityRole="button"
+          testID="paywall-restore"
         >
           <Text style={s.restoreTxt}>{restoring ? 'Restoring…' : 'Restore purchases'}</Text>
         </AnimatedPress>
@@ -187,11 +194,8 @@ export default function PaymentScreen() {
             Guideline 3.1.2(c). Title, length, and price of the auto-renewing
             subscription, plus functional Terms of Use (EULA) and Privacy
             Policy links, must appear in the purchase flow. */}
-        <Text style={s.disclosure}>
-          Fitsy Pro is an auto-renewing subscription ({annualPrice}/yr or {monthlyPrice}/mo after a
-          3-day free trial). Payment is charged to your Apple ID at confirmation. It renews
-          automatically unless cancelled at least 24 hours before the period ends. Manage or
-          cancel in your App Store account settings.
+        <Text style={s.disclosure} testID="paywall-terms">
+          {terms?.disclosure ?? 'Fetching current prices and subscription terms from the store…'}
         </Text>
         <View style={s.legalRow}>
           <Pressable hitSlop={8} onPress={() => openLegalLink('terms')} accessibilityRole="link">
@@ -206,7 +210,9 @@ export default function PaymentScreen() {
 
       <PaywallExitModals
         modal={modal}
-        discountPrice={discountPrice}
+        discountPercent={discountPercent}
+        discountDisclosure={discountTerms?.disclosure ?? ''}
+        trialAvailable={!!terms?.trial}
         onClose={() => setModal('none')}
         onClaimDiscount={() => { setModal('none'); handleStart(true); }}
         onDeclineDiscount={() => setModal('goodbye')}

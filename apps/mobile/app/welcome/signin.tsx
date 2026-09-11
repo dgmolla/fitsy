@@ -38,14 +38,10 @@ export default function SignInScreen() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [devLoading, setDevLoading] = useState(false);
 
-  // Sign-in now happens AFTER the anonymous onboarding narrative + the locked
-  // search-screen teaser (`/(tabs)/search?preview=1` - see welcome/finding.tsx),
-  // so a new user continues into a forced review ask (welcome/leave-review)
-  // right after account creation, then into location/notification setup.
-  // `outOfArea` is legacy plumbing from the old dedicated teaser screen; the
-  // search screen's own empty state now covers "no matches nearby" instead.
+  // Continue from the preview to optional permissions and live plan terms.
+  // Skip onboarding review; existing in-app prompts use lib/ratingPrompt.ts.
   const { outOfArea } = useLocalSearchParams<{ outOfArea?: string }>();
-  const newUserDestination = outOfArea === '1' ? '/welcome/leave-review?outOfArea=1' : '/welcome/leave-review';
+  const newUserDestination = outOfArea === '1' ? '/welcome/out-of-area' : '/welcome/notification-permission';
 
   const [, response, promptGoogleAsync] = Google.useIdTokenAuthRequest({
     iosClientId: GOOGLE_IOS_CLIENT_ID ?? 'not-configured',
