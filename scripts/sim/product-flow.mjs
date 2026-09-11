@@ -63,7 +63,7 @@ async function build(udid) {
   try {
     mkdirSync(buildDir, { recursive: true });
     // Keyless Release is useful for baseline navigation, but cannot verify billing.
-    const env = { ...process.env, EXPO_NO_DOTENV: '1', NODE_ENV: 'production', FITSY_ALLOW_MISSING_PUBLIC_ENV: '1', CI: '1' };
+    const env = { ...repoEnv(), EXPO_NO_DOTENV: '1', NODE_ENV: 'production', FITSY_ALLOW_MISSING_PUBLIC_ENV: '1', CI: '1' };
     const packageFile = join(mobile, 'package.json'), packageBefore = readFileSync(packageFile);
     try {
       run('npx', ['expo', 'prebuild', '--platform', 'ios', '--no-install'], { cwd: mobile, env, stdio: 'inherit' });
