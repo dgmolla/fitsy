@@ -6,7 +6,6 @@ import { createHash } from 'node:crypto';
 import { resolve, relative, join } from 'node:path';
 import { createRequire } from 'node:module';
 import { root, inputHash, changedPaths, impact, digest, validate, baseline, repoEnv } from '../verify/product-flow.mjs';
-import { backendRevision } from './backend-identity.mjs';
 const yaml = createRequire(import.meta.url)('js-yaml');
 const out = resolve(root, '.evidence/product-flow');
 const buildDir = resolve(root, '.evidence/product-build');
@@ -32,12 +31,12 @@ function environment() {
 }
 function backend() {
   const d = JSON.parse(run('vercel', ['api', '/v13/deployments/dev.fitsy.org', '--raw']));
-  const revision = backendRevision(d);
+  assert(d.readyState === 'READY' && d.target !== 'production' && /^[a-f0-9]{40}$/.test(d.gitSource?.sha), 'Dev deployment has no verified Git identity');
   // A different backend revision is safe only if its API/shared/schema contents match.
-  const diff = run('git', ['diff', '--name-only', revision, '--', 'apps/api', 'packages/shared', 'prisma', 'package.json', 'package-lock.json']);
+  const diff = run('git', ['diff', '--name-only', d.gitSource.sha, '--', 'apps/api', 'packages/shared', 'prisma', 'package.json', 'package-lock.json']);
   const untracked = run('git', ['ls-files', '--others', '--exclude-standard', '--', 'apps/api', 'packages/shared', 'prisma']);
   assert(!diff && !untracked, 'Deploy candidate backend/shared/schema changes to dev before running product flows');
-  return { backendRevision: revision, backendDeployment: d.id };
+  return { backendRevision: d.gitSource.sha, backendDeployment: d.id };
 }
 function device(udid) {
   assert(/^[A-F0-9-]{36}$/i.test(udid || ''), 'Pass an explicit simulator UDID');

@@ -58,9 +58,6 @@ The publisher requires a clean checkout matching the PR head and current main. D
 
 Main requires `product-flow/local` on the exact head. Republish before merge; code/test changes require fresh evidence. GitHub does not automatically expire an old success after 24 hours. This trusts repository writers like the existing local reviews; it is not an attestation against an administrator. Preserve existing required checks when configuring protection. The shadow L7 smoke cannot satisfy this gate; cloud execution is not a launch requirement.
 
-For a backend change before its first push, deploy a clean committed checkout with `vercel deploy --target=preview`, then assign the ready preview to dev during a coordinated test window.
-The gate accepts Vercel's CLI `meta.gitCommitSha` identity as well as a Git deployment's `gitSource.sha`, rejects dirty CLI uploads, and still compares candidate backend contents and pins the deployment across the test and publication.
-
 Commit the tested change locally before reviewing it with the local review runner; `--local` reviews committed `origin/main...HEAD`, not uncommitted edits.
 Fetch the base first and ensure the branch contains the current review definitions.
 If it predates the harness, rebase/update it deliberately in its own worktree before review; do not silently skip missing lenses.
