@@ -33,6 +33,25 @@ The pre-push hook runs layers 0–2 plus size/domain checks.
 A hook pass does not replace the applicable product-flow verification or independent review.
 The registry determines which checks apply and whether a check is blocking or shadow.
 
+**Local product-flow gate.** Local iPhone E2E is blocking for mobile-facing changes. CI runs static checks, unit tests and builds; its optional simulator workflow remains experimental. `npm run verify` and pre-push require fresh `.evidence/product-flow/report.json` when impact selection applies. Missing tools, skipped/failed assertions, missing coverage and stale evidence fail; unrelated changes get explicit `not_applicable`.
+
+Use an owned worktree, `npm run dev:env`, and an explicit simulator UDID. Keep public configuration in the ignored mobile environment file. The builder generates an embedded Release app, disables downloaded OTA updates, and records source/native/JS/configuration identities. A keyless build proves navigation only and cannot cover billing. Never publish credentials or personal data in evidence.
+
+```sh
+node scripts/verify/product-flow.mjs --plan
+export FITSY_SIM_OWNER=my-task MAESTRO_BIN="$HOME/.maestro/bin/maestro"
+node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs build <UDID>
+node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs run <UDID> <affected-flow-name>
+# Capture affected primary and recovery paths through Mobile MCP, then:
+node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs finish .evidence/walkthrough.json
+```
+
+Cold-start and sign-in always run. Add/select flows in `apps/mobile/e2e/flows/` tagged for every category in `--plan`, with at least two non-optional outcome assertions per changed journey. Baseline flows cannot cover a paywall change. Promote discovered regressions into deterministic scenarios.
+
+The walkthrough JSON is an array with one entry per category: `category`, `expected`, `observed`, `branches: ["primary", "recovery"]`, `result: "pass"`, and `trace` relative to `.evidence/product-flow/`. Traces are JSONL: one `{at, command: {name}, result: {content}}` object per line, recording actual Mobile MCP actions and screen observations. Identify run-owned synthetic fixtures with `FITSY_FIXTURE`; reviewers judge scenario relevance and visual quality.
+
+Deploy candidate backend changes to dev before testing. The local gate rechecks source, app/configuration and backend identity and accepts evidence no more than 24 hours old. Code/test changes require fresh evidence. The shadow L7 smoke cannot satisfy this gate; cloud execution is not a launch requirement. Remote status publication and branch protection are a separate rollout step; this check currently blocks local verification and pre-push.
+
 Commit the tested change locally before reviewing it with the local review runner; `--local` reviews committed `origin/main...HEAD`, not uncommitted edits.
 Fetch the base first and ensure the branch contains the current review definitions.
 If it predates the harness, rebase/update it deliberately in its own worktree before review; do not silently skip missing lenses.

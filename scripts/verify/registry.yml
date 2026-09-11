@@ -35,6 +35,13 @@ checks:
     runs: [local, ci]
     why: tsc --noEmit per workspace (api, mobile, shared, scripts).
 
+  - name: product-flow
+    script: product-flow.sh
+    layer: 1
+    blocking: true
+    runs: [local]
+    why: Local simulator evidence for mobile-facing changes; missing, stale, failed, or incomplete evidence fails. CI does not run a simulator.
+
   - name: boundaries
     script: boundaries.sh
     layer: 1
@@ -129,9 +136,8 @@ checks:
     runs: [scheduled, local]
     paths: ["apps/mobile/**"]
     why: >
-      Maestro flows on the simulator (autoship L7 deterministic mode). Skips
-      without maestro or a booted sim; EAS Workflows runs it in the cloud so
-      it never depends on a developer Mac. Added in autoship step 7, 2026-09-07.
+      Optional broad smoke. Its skip/pass cannot satisfy the blocking local
+      product-flow evidence gate. Cloud execution remains experimental.
 
   - name: dev-drift
     script: dev-drift.sh
