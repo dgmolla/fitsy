@@ -59,7 +59,7 @@ export default function TrialScreen() {
             >
               <View style={s.stepLeft}>
                 <View style={[s.dot, i === 0 && s.dotActive]}>
-                  {terms?.trial ? <Text style={[s.number, i === 0 && s.numberActive]}>{i + 1}</Text> : <Ionicons name="checkmark" size={16} color={i === 0 ? EDITORIAL.cream : EDITORIAL.greenAccent} />}
+                  {terms?.trial ? <Text maxFontSizeMultiplier={2} style={[s.number, i === 0 && s.numberActive]}>{i + 1}</Text> : <Ionicons name="checkmark" size={16} color={i === 0 ? EDITORIAL.cream : EDITORIAL.greenAccent} />}
                 </View>
                 {!!terms?.trial && i < steps.length - 1 && <View style={s.line} />}
               </View>

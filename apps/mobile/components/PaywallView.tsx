@@ -26,7 +26,8 @@ interface Props {
 
 /** The store supplies all offer copy; this component owns only presentation. */
 export function PaywallView(props: Props) {
-  const { height } = useWindowDimensions();
+  const { height, fontScale } = useWindowDimensions();
+  const largeText = fontScale > 1.35;
   const { plan, annual, monthly, loading, restoring } = props;
   const selected = plan === 'yearly' ? annual : monthly;
   const busy = loading || restoring;
@@ -38,7 +39,7 @@ export function PaywallView(props: Props) {
         <Pressable onPress={props.onBack} style={s.navAction} accessibilityRole="button" accessibilityLabel="Go back" testID="welcome-back">
           <Ionicons name="chevron-back" size={23} color={EDITORIAL.textMid} />
         </Pressable>
-        <Text style={s.wordmark} accessibilityLabel="Fitsy Pro">fitsy pro</Text>
+        {!largeText && <Text style={s.wordmark} accessibilityLabel="Fitsy Pro">fitsy pro</Text>}
         <Pressable onPress={props.onRestore} disabled={busy} style={s.navAction} accessibilityRole="button" testID="paywall-restore">
           <Text style={[s.restore, busy && s.disabled]}>{restoring ? 'Restoring…' : 'Restore'}</Text>
         </Pressable>
@@ -59,7 +60,7 @@ export function PaywallView(props: Props) {
             {([{ id: 'yearly', name: 'Annual', terms: annual }, { id: 'monthly', name: 'Monthly', terms: monthly }] as const).map(option => {
               const active = option.id === plan;
               return (
-                <AnimatedPress key={option.id} style={[s.plan, active && s.planSelected]} onPress={() => props.onSelect(option.id)}
+                <AnimatedPress key={option.id} style={[s.plan, largeText && s.planLarge, active && s.planSelected]} onPress={() => props.onSelect(option.id)}
                   disabled={busy} haptic accessibilityRole="radio" accessibilityState={{ checked: active, disabled: busy }} testID={`paywall-plan-${option.id}`}>
                   <View style={[s.radio, active && s.radioSelected]} accessible={false}>
                     {active && <Ionicons name="checkmark" size={13} color={EDITORIAL.cream} />}
@@ -68,7 +69,7 @@ export function PaywallView(props: Props) {
                     <Text style={s.planName}>{option.name}</Text>
                     <Text style={s.planNote}>{option.terms?.trial ? `${option.terms.trial} free` : option.terms ? `Billed every ${option.terms.period}` : 'Fetching store terms…'}</Text>
                   </View>
-                  <View style={s.priceWrap}>
+                  <View style={[s.priceWrap, largeText && s.priceWrapLarge]}>
                     <Text testID={`paywall-price-${option.id}`} style={s.price}>{option.terms?.price ?? 'Loading…'}</Text>
                     {!!option.terms && <Text style={s.pricePeriod}>/{option.terms.periodShort}</Text>}
                   </View>
@@ -116,12 +117,14 @@ const s = StyleSheet.create({
   plans: { gap: 8 },
   plan: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, minHeight: 62, borderRadius: 15, borderWidth: 1, borderColor: EDITORIAL.border },
   planSelected: { backgroundColor: EDITORIAL.greenAccentTint, borderColor: EDITORIAL.greenMid },
+  planLarge: { flexWrap: 'wrap' },
   radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 1, borderColor: EDITORIAL.textSoft, alignItems: 'center', justifyContent: 'center' },
   radioSelected: { backgroundColor: EDITORIAL.greenMid, borderColor: EDITORIAL.greenMid },
   planInfo: { flex: 1 },
   planName: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 15, lineHeight: 20, color: EDITORIAL.green },
   planNote: { fontFamily: FONTS.nunitoSans, fontSize: 11, lineHeight: 15, color: EDITORIAL.textMid, marginTop: 1 },
   priceWrap: { alignItems: 'flex-end', flexShrink: 1, maxWidth: '48%' },
+  priceWrapLarge: { width: '100%', maxWidth: '100%', alignItems: 'flex-start', paddingLeft: 30, flexShrink: 0 },
   price: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 19, color: EDITORIAL.green },
   pricePeriod: { fontFamily: FONTS.nunitoSans, fontSize: 11, color: EDITORIAL.textMid },
   retry: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
