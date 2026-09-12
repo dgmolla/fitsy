@@ -32,8 +32,7 @@ suite("official PDF pilot correction against captured April data", () => {
   };
   const chainTest = (name: string, body: () => Promise<void>) => test(name, () => p.$transaction(async tx => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(78343218)`;
-    await setup();
-    try { await body(); } finally { await cleanup(); }
+    try { await setup(); await body(); } finally { await cleanup(); }
   }, { timeout: 120_000, maxWait: 120_000 }), 125_000);
   afterAll(async () => { await p.$disconnect(); await servingPrisma.$disconnect(); });
   chainTest("12 catalog corrections are atomic, idempotent after replan, and exactly reversible", async () => {

@@ -18,7 +18,11 @@ suite('bounded April bulk writer with real serving and recovery', () => {
   let queryDrained: (() => void) | undefined;
   p.$on('query', event => {
     if (event.query.includes('chain_april_test_drain')) queryDrained?.();
-    else queries++;
+    else {
+      // Measure the successful transaction's round trips, excluding aborted retries.
+      if (event.query.trim().toUpperCase() === 'BEGIN') queries = 0;
+      queries++;
+    }
   });
   const drainQueryEvents = async () => {
     const observed = new Promise<void>(resolve => { queryDrained = resolve; });
