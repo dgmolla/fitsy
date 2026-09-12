@@ -1,19 +1,19 @@
 {
   "generated": true,
-  "asOf": "2026-09-12T22:09:53.747004+00:00",
-  "scope": "22 completed source batches; earlier WaBa/Yoshinoya excluded",
+  "asOf": "2026-09-12T23:33:21.991473+00:00",
+  "scope": "24 completed source batches; earlier WaBa/Yoshinoya excluded",
   "reviewedCodeHead": "179be20e9a26eda262c428149630f72092730302",
   "mergeCommit": "848f117952b60b62bd1ee03291151e73a1184e55",
   "pr": "https://github.com/dgmolla/fitsy/pull/289",
   "totals": {
-    "facts": 1275,
-    "aliases": 1805,
-    "patchedRows": 35285,
-    "numericChanges": 13192,
-    "attributionOnly": 22093,
-    "preservedMenuIds": 104702,
-    "unchangedUnselectedRows": 69417,
-    "restaurants": 1053
+    "facts": 1360,
+    "aliases": 1907,
+    "patchedRows": 35908,
+    "numericChanges": 13625,
+    "attributionOnly": 22283,
+    "preservedMenuIds": 107806,
+    "unchangedUnselectedRows": 71898,
+    "restaurants": 1072
   },
   "batches": [
     {
@@ -579,6 +579,56 @@
         "popeyes-approved.json": "ac6e837029a2459ee979241a0aa0e8c779429c6fdb882e1562d3b313b603cf3c",
         "popeyes-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "popeyes-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "cpk",
+      "chains": "California Pizza Kitchen",
+      "brandSlugs": [
+        "california-pizza-kitchen"
+      ],
+      "facts": 50,
+      "aliases": 66,
+      "patchedRows": 380,
+      "numericChanges": 190,
+      "attributionOnly": 190,
+      "preservedMenuIds": 1660,
+      "unchangedUnselectedRows": 1280,
+      "restaurants": 12,
+      "httpVerifiedAt": "2026-09-12T22:54:52.118057+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "cpk-segments/000310.json.verified.json": "89a3839b2fc004cd541b7bee8bdf89ec4959f4695b3743e6c052d73a06c31786",
+        "cpk-complete-http.json": "45d7f78b70acbcc94b18106049bfbbe0d652a36df5701ea9d0cd3fb22b78cbc9",
+        "cpk-approved.json": "2921d1a3c9098e73ab889b772adfd6369c91bd2182aa120841e9bf7395dfdf3c",
+        "cpk-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "cpk-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "bjs",
+      "chains": "BJ's Restaurant & Brewhouse",
+      "brandSlugs": [
+        "bj-s-restaurant-brewhouse"
+      ],
+      "facts": 35,
+      "aliases": 36,
+      "patchedRows": 243,
+      "numericChanges": 243,
+      "attributionOnly": 0,
+      "preservedMenuIds": 1444,
+      "unchangedUnselectedRows": 1201,
+      "restaurants": 7,
+      "httpVerifiedAt": "2026-09-12T23:33:21.991473+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "bjs-segments/000210.json.verified.json": "7353bf27004447bb83a02d426374e68f856dfbfd4095f2ce14743607dade72fe",
+        "bjs-complete-http.json": "1628fc270dbc17bf30b8b3c11496eccf190251b92e0130d349df27dde0553b68",
+        "bjs-approved.json": "dc7be6c423698e8dc3a718b5208cf9843d13bf310c9f4e7f3c6a276847cf2fa0",
+        "bjs-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "bjs-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
       }
     }
   ],
