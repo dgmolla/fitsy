@@ -18,6 +18,7 @@ export function purchaseTerms(product: ProductTerms | null | undefined, eligible
   const period = periodLabel(product?.subscriptionPeriod ?? null);
   if (!product?.priceString || !period) return null;
   const price = product.priceString;
+  const periodShort = period.replace(/^1 /, '');
   const recurring = `${price} every ${period}`;
   const intro = eligible ? product.introPrice : null;
   const introductoryDuration = intro ? periodLabel(intro.period, intro.cycles, true) : null;
@@ -31,8 +32,15 @@ export function purchaseTerms(product: ProductTerms | null | undefined, eligible
   else if (intro && introductoryDuration && introPeriod && intro.price > 0) {
     charge = `${intro.priceString} every ${introPeriod} for ${introductoryDuration}, then ${recurring}.`;
   }
+  // The compact paywall keeps the first charge, renewal and cancellation
+  // together. Unknown and paid introductory offers retain the full wording.
+  const compactDisclosure = trial
+    ? `Fitsy Pro. ${trial} free, then ${price}/${periodShort}. Renews automatically. Cancel in subscription settings at least 24 hours before your trial ends or next renewal.`
+    : !intro && !(eligible === undefined && product.introPrice)
+      ? `Fitsy Pro. ${price} when you confirm, then ${price}/${periodShort}. Renews automatically. Cancel in subscription settings at least 24 hours before renewal.`
+      : `Fitsy Pro. ${charge} Renews automatically at ${recurring}. Cancel in subscription settings at least 24 hours before renewal.`;
   return {
-    price, period, recurring, trial,
+    price, period, periodShort, recurring, trial, compactDisclosure,
     disclosure: `Fitsy Pro. ${charge} Renews automatically at ${recurring} unless canceled at least 24 hours before renewal. Manage or cancel in your device's subscription settings.`,
   };
 }

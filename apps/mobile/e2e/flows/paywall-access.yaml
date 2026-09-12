@@ -9,9 +9,15 @@ tags: [billing, discovery, onboarding, changed-journey]
 - assertTrue: ${!!output.seed}
 - launchApp:
     clearState: true
-- extendedWaitUntil:
-    visible: "continue"
-    timeout: 15000
+    clearKeychain: true # Disposable simulator: earlier billing flows sign in.
+# XCTest may reject the first accessibility snapshot after a clean reinstall.
+# Retry startup only; keep the access-control interactions single-pass.
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - assertVisible: "continue"
 - waitForAnimationToEnd:
     timeout: 3000
 # Dismiss the Debug-only warning window outside the welcome controls.

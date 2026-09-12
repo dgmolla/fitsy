@@ -11,7 +11,7 @@ export const subscribePaywallAccess = (listener: () => void) => { listeners.add(
 export function paywallVariants(metadata?: Record<string, unknown> | null) {
   return {
     access: metadata?.paywall_access_variant === 'preview' ? 'preview' as const : 'hard' as const,
-    image: metadata?.paywall_image_variant === 'meal' ? 'meal' as const : 'none' as const,
+    image: metadata?.paywall_image_variant === 'none' ? 'none' as const : 'meal' as const,
   };
 }
 export function canPreviewAfterDecline(hasDeclined: boolean, access: 'hard' | 'preview') {
