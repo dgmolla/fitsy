@@ -3,9 +3,10 @@ import { canPreviewAfterDecline, paywallVariants, readPaywallDecline, rememberPa
 
 jest.mock('@react-native-async-storage/async-storage', () => ({ __esModule: true, default: { getItem: jest.fn(), setItem: jest.fn() } }));
 
-test('launch defaults are a hard paywall without imagery; only explicit offering variants opt in', () => {
-  expect(paywallVariants()).toEqual({ access: 'hard', image: 'none' });
-  expect(paywallVariants({ paywall_access_variant: true, paywall_image_variant: 'unknown' })).toEqual({ access: 'hard', image: 'none' });
+test('approved launch defaults use meal imagery and a hard paywall; explicit variants remain available', () => {
+  expect(paywallVariants()).toEqual({ access: 'hard', image: 'meal' });
+  expect(paywallVariants({ paywall_access_variant: true, paywall_image_variant: 'unknown' })).toEqual({ access: 'hard', image: 'meal' });
+  expect(paywallVariants({ paywall_image_variant: 'none' })).toEqual({ access: 'hard', image: 'none' });
   expect(paywallVariants({ paywall_access_variant: 'preview', paywall_image_variant: 'meal' })).toEqual({ access: 'preview', image: 'meal' });
   expect(canPreviewAfterDecline(false, 'hard')).toBe(true);
   expect(canPreviewAfterDecline(true, 'hard')).toBe(false);

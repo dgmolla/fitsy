@@ -9,6 +9,7 @@ tags: [billing, discovery, onboarding, changed-journey]
 - assertTrue: ${!!output.seed}
 - launchApp:
     clearState: true
+    clearKeychain: true # Disposable simulator: earlier billing flows sign in.
 - extendedWaitUntil:
     visible: "continue"
     timeout: 15000

@@ -10,21 +10,28 @@ test('eligible trial terms use the live duration and localized price', () => {
   expect(purchaseTerms(annual, true)?.disclosure).toContain('Fitsy Pro.');
   expect(purchaseTerms(annual, true)?.disclosure).toContain('No charge until the trial ends');
   expect(purchaseTerms(annual, true)?.disclosure).not.toContain('when you confirm');
+  expect(purchaseTerms(annual, true)?.compactDisclosure).toContain('7 days free, then €54,99/year');
+  expect(purchaseTerms(annual, true)?.compactDisclosure).toContain('24 hours before your trial ends');
 });
 test('ineligible store result discloses payment on confirmation without a trial', () => {
   const terms = purchaseTerms(annual, false);
   expect(terms?.trial).toBeNull();
   expect(terms?.disclosure).toContain('€54,99 charged when you confirm');
   expect(terms?.disclosure).not.toMatch(/free|trial/);
+  expect(terms?.compactDisclosure).toContain('€54,99 when you confirm');
+  expect(terms?.compactDisclosure).not.toMatch(/free|trial/);
 });
 test('unknown eligibility promises neither a trial nor an immediate charge', () => {
   const terms = purchaseTerms(annual);
   expect(terms?.trial).toBeNull();
   expect(terms?.disclosure).toContain('confirm any eligible introductory offer and the first charge before purchase');
   expect(terms?.disclosure).not.toMatch(/free|charged when|No charge/);
+  expect(terms?.compactDisclosure).toContain('store will confirm');
+  expect(terms?.compactDisclosure).not.toMatch(/free|when you confirm|No charge/);
 });
 test('a changed store offer changes the trial without an app update', () => {
   expect(purchaseTerms({ ...annual, introPrice: { ...annual.introPrice, period: 'P2W' } }, true)?.trial).toBe('14 days');
+  expect(purchaseTerms({ ...annual, subscriptionPeriod: 'P3M', introPrice: { ...annual.introPrice, period: 'P2W' } }, true)?.compactDisclosure).toContain('14 days free, then €54,99/3 months');
   expect(purchaseTerms({ ...annual, introPrice: null }, true)?.trial).toBeNull();
 });
 test.each([null, { ...annual, priceString: '' }, { ...annual, subscriptionPeriod: null }])('missing store terms have no invented fallback: %j', product => {
@@ -34,6 +41,8 @@ test('paid introductory pricing is disclosed without calling it free', () => {
   const terms = purchaseTerms({ ...annual, introPrice: { ...annual.introPrice, price: 2.99, priceString: '€2,99', period: 'P1M', cycles: 3 } }, true);
   expect(terms?.trial).toBeNull();
   expect(terms?.disclosure).toContain('€2,99 every 1 month for 3 months, then €54,99 every 1 year');
+  expect(terms?.compactDisclosure).toContain('€2,99 every 1 month for 3 months, then €54,99 every 1 year');
+  expect(terms?.compactDisclosure).not.toContain('free');
 });
 test('period parsing preserves calendar months and rejects unsupported or invalid periods', () => {
   expect(periodLabel('P1M', 1, true)).toBe('1 month');

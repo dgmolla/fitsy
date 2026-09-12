@@ -1,16 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import { Alert } from 'react-native';
 import { router } from 'expo-router';
-import { WelcomeScreen } from '@/components/WelcomeScreen';
-import { AnimatedPress } from '@/components/AnimatedPress';
+import { PaywallView } from '@/components/PaywallView';
 import { PaywallExitModals, type PaywallExitModal } from '@/components/PaywallExitModals';
-import { EDITORIAL, FONTS } from '@/lib/brand';
 import { recordOnboardingComplete } from '@/lib/onboardingCompletion';
 import { usePurchases } from '@/lib/usePurchases';
 import { useRedirectOnceEntitled } from '@/lib/useRedirectOnceEntitled';
 import { ensureSessionForPurchase } from '@/lib/purchaseSession';
-import { openLegalLink } from '@/lib/legalLinks';
 import { trackOnboardingScreenView, trackPaywallExperimentExposure } from '@/lib/analytics';
 import { usePreviewAccess } from '@/lib/usePreviewAccess';
 import { rememberPaywallDecline } from '@/lib/paywallAccess';
@@ -39,8 +35,8 @@ export default function PaymentScreen() {
     onEntitled: () => { void completeOnboarding(false); },
   });
 
-  const annualPrice = offering?.annual?.product.priceString ?? 'Loading…';
-  const monthlyPrice = offering?.monthly?.product.priceString ?? 'Loading…';
+  const annualTerms = purchaseTerms(offering?.annual?.product, offering?.annual ? introEligibility[offering.annual.product.identifier] : false);
+  const monthlyTerms = purchaseTerms(offering?.monthly?.product, offering?.monthly ? introEligibility[offering.monthly.product.identifier] : false);
   const discountedAnnual =
     offering?.availablePackages.find((p) => p.identifier === 'annual_discount') ?? null;
   const selected = plan === 'yearly' ? offering?.annual : offering?.monthly;
@@ -142,92 +138,20 @@ export default function PaymentScreen() {
 
   return (
     <>
-      <WelcomeScreen
-        title={`Eat out.\nStay on track.`}
-        subtitle={terms?.trial ? `${terms.trial} free to find meals that fit your goals.` : 'Find nearby meals that fit your macros and your appetite.'}
-        onContinue={() => handleStart(false)}
-        canContinue={!loading && !restoring && !!terms}
-        continueLabel={loading ? 'Setting up…' : terms?.trial ? 'Find meals that fit — free' : 'Find meals that fit'}
-        onSkip={() => { if (!loading && !restoring) setModal(discountTerms && discountPercent ? 'discount' : 'goodbye'); }}
-      >
-        {variants.image === 'meal' && <Image source={require('@/assets/dishes/19.jpg')} style={s.mealImage} accessibilityLabel="Meal inspiration" testID="paywall-meal-image" />}
-        <View style={s.features}>
-          <Text style={s.feature}>Find restaurants near you by macros</Text>
-          <Text style={s.feature}>Tweak your targets anytime</Text>
-          <Text style={s.feature}>Save meals you love</Text>
-        </View>
-
-        <View style={s.plans}>
-          <Animated.View entering={FadeInDown.duration(400).delay(100)}>
-            <AnimatedPress
-              style={[s.plan, plan === 'yearly' && s.planOn]}
-              onPress={() => setPlan('yearly')}
-              haptic
-              accessibilityRole="button"
-              accessibilityState={{ selected: plan === 'yearly' }}
-              testID="paywall-plan-yearly"
-              disabled={loading || restoring}
-            >
-              <View>
-                <View style={s.planRow}>
-                  <Text style={[s.planName, plan === 'yearly' && s.planNameOn]}>Annual</Text>
-                  <View style={s.badge}><Text style={s.badgeTxt}>Best Value</Text></View>
-                </View>
-                <Text style={s.planSub}>{purchaseTerms(offering?.annual?.product)?.period ? `Billed every ${purchaseTerms(offering?.annual?.product)?.period}` : 'Fetching store terms…'}</Text>
-              </View>
-              <Text testID="paywall-price-yearly" style={[s.planPrice, plan === 'yearly' && s.planPriceOn]}>{annualPrice}</Text>
-            </AnimatedPress>
-          </Animated.View>
-
-          <Animated.View entering={FadeInDown.duration(400).delay(180)}>
-            <AnimatedPress
-              style={[s.plan, plan === 'monthly' && s.planOn]}
-              onPress={() => setPlan('monthly')}
-              haptic
-              accessibilityRole="button"
-              accessibilityState={{ selected: plan === 'monthly' }}
-              testID="paywall-plan-monthly"
-              disabled={loading || restoring}
-            >
-              <Text style={[s.planName, plan === 'monthly' && s.planNameOn]}>Monthly</Text>
-              <Text testID="paywall-price-monthly" style={[s.planPrice, plan === 'monthly' && s.planPriceOn]}>{monthlyPrice}</Text>
-            </AnimatedPress>
-          </Animated.View>
-        </View>
-
-        {!terms && (
-          <AnimatedPress style={s.restore} onPress={() => { void refreshOffering(); }} accessibilityRole="button" testID="paywall-retry-pricing">
-            <Text style={s.restoreTxt}>Retry loading plans</Text>
-          </AnimatedPress>
-        )}
-
-        <AnimatedPress
-          style={s.restore}
-          onPress={handleRestore}
-          disabled={loading || restoring}
-          accessibilityRole="button"
-          testID="paywall-restore"
-        >
-          <Text style={s.restoreTxt}>{restoring ? 'Restoring…' : 'Restore purchases'}</Text>
-        </AnimatedPress>
-
-        {/* Subscription disclosure + legal links - required by App Store
-            Guideline 3.1.2(c). Title, length, and price of the auto-renewing
-            subscription, plus functional Terms of Use (EULA) and Privacy
-            Policy links, must appear in the purchase flow. */}
-        <Text style={s.disclosure} testID="paywall-terms">
-          {terms?.disclosure ?? 'Fetching current prices and subscription terms from the store…'}
-        </Text>
-        <View style={s.legalRow}>
-          <Pressable hitSlop={8} onPress={() => openLegalLink('terms')} accessibilityRole="link">
-            <Text style={s.legalLink}>Terms of Use</Text>
-          </Pressable>
-          <Text style={s.legalDot}>·</Text>
-          <Pressable hitSlop={8} onPress={() => openLegalLink('privacy')} accessibilityRole="link">
-            <Text style={s.legalLink}>Privacy Policy</Text>
-          </Pressable>
-        </View>
-      </WelcomeScreen>
+      <PaywallView
+        plan={plan}
+        annual={annualTerms}
+        monthly={monthlyTerms}
+        showImage={variants.image === 'meal'}
+        loading={loading}
+        restoring={restoring}
+        onSelect={setPlan}
+        onBack={() => { if (router.canGoBack()) router.back(); else router.navigate('/welcome/trial'); }}
+        onRestore={() => { void handleRestore(); }}
+        onRetry={() => { void refreshOffering(); }}
+        onPurchase={() => { void handleStart(false); }}
+        onDecline={() => { if (!loading && !restoring) setModal(discountTerms && discountPercent ? 'discount' : 'goodbye'); }}
+      />
 
       <PaywallExitModals
         modal={modal}
@@ -244,41 +168,3 @@ export default function PaymentScreen() {
     </>
   );
 }
-
-const s = StyleSheet.create({
-  mealImage: { width: '100%', height: 150, borderRadius: 20, marginBottom: 24, resizeMode: 'cover' },
-  features: { gap: 14, marginBottom: 40 },
-  feature: { fontFamily: FONTS.nunitoSans, fontSize: 15, color: EDITORIAL.textSoft, paddingLeft: 12, borderLeftWidth: 2, borderLeftColor: EDITORIAL.border },
-  plans: { gap: 12 },
-  plan: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: EDITORIAL.creamCard,
-    borderRadius: 18,
-    padding: 22,
-  },
-  planOn: { backgroundColor: EDITORIAL.green },
-  restore: { alignItems: 'center', paddingVertical: 14, marginTop: 4 },
-  restoreTxt: { fontFamily: FONTS.nunitoSans, fontSize: 14, color: EDITORIAL.textSoft },
-  disclosure: {
-    fontFamily: FONTS.nunitoSans,
-    fontSize: 11,
-    lineHeight: 16,
-    color: EDITORIAL.textSoft,
-    textAlign: 'center',
-    marginTop: 12,
-  },
-  legalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 10 },
-  legalLink: { fontFamily: FONTS.nunitoSans, fontSize: 12, fontWeight: '500', color: EDITORIAL.text, textDecorationLine: 'underline' },
-  legalDot: { fontSize: 12, color: EDITORIAL.creamDeep },
-  planRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  planName: { fontFamily: FONTS.frauncesDisplay, fontSize: 18, color: EDITORIAL.text },
-  planNameOn: { color: EDITORIAL.cream },
-  planSub: { fontFamily: FONTS.nunitoSans, fontSize: 13, color: EDITORIAL.textSoft, marginTop: 2 },
-  badge: { backgroundColor: 'rgba(253,251,247,0.2)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
-  badgeTxt: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 10, fontWeight: '700', color: EDITORIAL.cream, letterSpacing: 0.5 },
-  planPrice: { fontFamily: FONTS.frauncesDisplay, fontSize: 17, color: EDITORIAL.text },
-  planPriceOn: { color: EDITORIAL.cream },
-
-});

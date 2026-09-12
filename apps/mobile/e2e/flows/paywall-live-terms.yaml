@@ -22,9 +22,11 @@ tags: [billing, onboarding, changed-journey]
     point: "92%,93%"
 - openLink: com.fitsy.mobile://welcome/trial
 - extendedWaitUntil:
-    visible: "Enjoy the meal. Keep your goals."
+    visible:
+      id: trial-title
     timeout: 15000
-- assertVisible: "Enjoy the meal. Keep your goals."
+- assertVisible:
+    id: trial-title
 # A late startup warning can arrive after the welcome cleanup; outside the CTA.
 - tapOn:
     point: "93%,93%"
@@ -50,6 +52,8 @@ tags: [billing, onboarding, changed-journey]
     direction: DOWN
 - tapOn:
     id: paywall-plan-monthly
+- assertVisible:
+    id: paywall-meal-image
 - copyTextFrom:
     id: paywall-price-monthly
 - evalScript: ${output.monthlyPrice = maestro.copiedText}
