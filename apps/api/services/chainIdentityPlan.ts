@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Brand, Prisma, PrismaClient } from "@prisma/client";
 import { stateHash } from "./chainPilotPlan";
-import { verifiedBrand } from "./chainServing";
+import { brandName, buildBrandIdentityMatcher } from "./chainServing";
 import { chainTransaction } from "./chainTransaction";
 
 const text = z.string().trim().min(1);
@@ -29,7 +29,10 @@ export function planChainIdentity(brands: Brand[], restaurants: RestaurantIdenti
   const batch = chainIdentityBatchSchema.parse(input), changes: BrandChange[] = [], links: LinkChange[] = [];
   unique(batch.brands.map(b => b.id), "brand ID"); unique(batch.brands.map(b => b.slug), "brand slug");
   unique(batch.links.map(l => l.expected.id), "restaurant link");
-  const final = brands.map(brandIdentity), brandStateHash = stateHash(final.slice().sort((a, b) => a.id.localeCompare(b.id)));
+  const final = brands.map(brandIdentity), selectedIds = new Set(batch.brands.map(b => b.id));
+  // Replanning still checks every current claim and restaurant. Unrelated brands
+  // must not invalidate a plan merely because their independent state changed.
+  const brandStateHash = stateHash(final.filter(b => selectedIds.has(b.id)).sort((a, b) => a.id.localeCompare(b.id)));
   for (const definition of batch.brands) {
     const before = brands.find(b => b.id === definition.id) ?? null;
     if (brands.some(b => b.slug === definition.slug && b.id !== definition.id)) throw new Error("Brand slug already has another identity");
@@ -51,24 +54,25 @@ export function planChainIdentity(brands: Brand[], restaurants: RestaurantIdenti
   const claims = new Map<string, Set<string>>();
   for (const b of final.filter(b => b.menuKind === "restaurant" && ["high", "llm-confirmed"].includes(b.detectionConf ?? ""))) {
     for (const name of [b.displayName, b.slug, ...b.aliases]) {
-      const normalized = name.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+      const normalized = brandName(name);
       const ids = claims.get(normalized) ?? new Set<string>(); ids.add(b.id); claims.set(normalized, ids);
     }
   }
   for (const change of changes) for (const name of [change.desired.displayName, change.desired.slug, ...change.desired.aliases]) {
-    const normalized = name.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+    const normalized = brandName(name);
     if (claims.get(normalized)!.size > 1) throw new Error("Reviewed brand alias collides with another brand");
   }
   const allowed = new Map(batch.links.map(l => [l.expected.id, l]));
+  const beforeIdentity = buildBrandIdentityMatcher(brands), afterIdentity = buildBrandIdentityMatcher(final);
   for (const r of restaurants) {
-    const before = verifiedBrand(r, brands), after = verifiedBrand(r, final);
+    const before = beforeIdentity(r), after = afterIdentity(r);
     if (before !== after && (!allowed.has(r.id) || allowed.get(r.id)!.brandId !== after)) throw new Error(`Unreviewed restaurant would change identity: ${r.id}`);
   }
   for (const link of batch.links) {
     if (!batch.brands.some(b => b.id === link.brandId)) throw new Error("Link refers to a brand outside the reviewed batch");
     const before = restaurants.find(r => r.id === link.expected.id);
     if (!before || before.menuKind !== "restaurant" || (before.brandId && before.brandId !== link.brandId)
-      || verifiedBrand(before, final) !== link.brandId) throw new Error("Restaurant does not have the reviewed unique identity");
+      || afterIdentity(before) !== link.brandId) throw new Error("Restaurant does not have the reviewed unique identity");
     const desired = { ...link.expected, brandId: link.brandId, chainFlag: true };
     if (stateHash(before) === stateHash(desired)) continue;
     if (stateHash(before) !== stateHash(link.expected)) throw new Error("Restaurant differs from reviewed baseline");

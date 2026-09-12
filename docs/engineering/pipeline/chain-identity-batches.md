@@ -19,6 +19,7 @@ The schema is `apps/api/services/chainIdentityPlan.ts`.
 Keep the reviewed JSON batch and source captures with the rollout evidence.
 Record the reviewer, HTTPS source URL, capture SHA-256 and a locator explaining the chain/store relationship.
 Search results and similar restaurant names are candidate evidence only.
+Identity review provenance lives in the retained batch and journal files; it is not stored in `Brand` as a nutrition review blob.
 
 | Input | Meaning |
 |---|---|
@@ -38,6 +39,8 @@ An explicit alias still passes through the production `verifiedBrand` function; 
 
 Set `POSTGRES_URL_NON_POOLING` explicitly for the intended database.
 Use an isolated local database for tests; the primary checkout's production environment is not a development target.
+Do not apply identity or catalog changes during an active UE enrichment run.
+The serializable identity check reads all restaurant identities and may otherwise conflict with the pipeline's writes.
 
 ```sh
 npx tsx scripts/preload-chain-identity.ts plan work/identity-plan.json work/identity-batch.json

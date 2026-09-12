@@ -12,7 +12,9 @@ if (!path || !input || process.argv.length !== 5 || !["plan", "apply", "rollback
 }
 const raw = process.env["POSTGRES_URL_NON_POOLING"];
 if (!raw) throw new Error("POSTGRES_URL_NON_POOLING required; choose the target explicitly");
-const url = new URL(raw.trim()), target = stateHash([url.host, url.pathname, url.username]);
+let url: URL;
+try { url = new URL(raw.trim()); } catch { throw new Error("Invalid database URL"); }
+const target = stateHash([url.host, url.pathname, url.username]);
 url.searchParams.set("connection_limit", "1");
 const p = new PrismaClient({ datasources: { db: { url: url.toString() } } });
 function save(file: string, value: unknown) {

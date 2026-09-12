@@ -12,12 +12,20 @@ import { rollbackAprilBatch } from "../../services/chainPilotRollback";
 import { getMenuPage } from "../../lib/restaurantMenuService";
 import { persistHex } from "../../../../scripts/hex-persist";
 import { validateHexInTx } from "../../../../scripts/preload-invariants";
-const suite = process.env["POSTGRES_PRISMA_URL"] ? describe : describe.skip;
+const url = process.env["POSTGRES_PRISMA_URL"];
+// This suite invokes the mutating CLI, so only an explicit local DB is allowed.
+const suite = url && ["localhost", "postgres"].includes(new URL(url).hostname) ? describe : describe.skip;
 const facts = { calories: 500, proteinG: 30, carbsG: 50, fatG: 20 };
 const evidence = { url: "https://example.com/synthetic-identity", sha256: "1".repeat(64), locator: "Synthetic identity fixture, not nutrition ground truth" };
 const identity = (b: Brand) => ({ id: b.id, slug: b.slug, displayName: b.displayName, aliases: b.aliases, detectionConf: b.detectionConf, menuKind: b.menuKind });
 suite("reviewed chain identities through existing menu and new-hex serving", () => {
   const p = new PrismaClient(), scope = randomUUID(), brands: string[] = [], restaurants: string[] = [];
+  const serialized = <T>(operation: () => Promise<T>) => p.$transaction(async tx => {
+    // The identity sweep reads all restaurants. Share the full-catalog/CLI
+    // fixture lock so unrelated test writes cannot exhaust SERIALIZABLE retries.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(78343218)`;
+    return operation();
+  }, { timeout: 120_000, maxWait: 120_000 });
   const createRestaurant = async (name: string, brandId?: string) => {
     const r = await p.restaurant.create({ data: { name, ...(brandId ? { brandId } : {}), storeUuid: randomUUID(),
       address: "Synthetic local fixture", lat: 34, lng: -118, source: "ue_feed", cuisineTags: [] } });
@@ -31,7 +39,7 @@ suite("reviewed chain identities through existing menu and new-hex serving", () 
     await p.pipelineCompletedHex.deleteMany({ where: { runId: scope } });
     await p.$disconnect();
   });
-  test.each([false, true])("sparse menu or explicit store alias can be onboarded without replacing menu IDs (existing brand=%s)", async existing => {
+  test.each([false, true])("sparse menu or explicit store alias can be onboarded without replacing menu IDs (existing brand=%s)", async existing => serialized(async () => {
     const id = randomUUID(), slug = `${scope}-${existing}`, displayName = `${scope} ${existing ? "Existing" : "New"} Cafe`;
     brands.push(id);
     const oldBrand = existing ? await p.brand.create({ data: { id, slug, displayName, detectionConf: "high" } }) : null;
@@ -89,8 +97,8 @@ suite("reviewed chain identities through existing menu and new-hex serving", () 
     expect(await p.restaurant.findUniqueOrThrow({ where: { id: r.id }, select: restaurantIdentitySelect })).toEqual(r);
     expect(await p.menuItem.findUniqueOrThrow({ where: { id: original.id }, include: { macroEstimates: { orderBy: { id: "asc" } } } })).toEqual(before);
     expect((await p.brand.findUnique({ where: { id } }))?.aliases ?? null).toEqual(oldBrand?.aliases ?? null);
-  });
-  test("collision, unreviewed locations, and concurrent edits fail before any identity mutation", async () => {
+  }), 125_000);
+  test("collision, unreviewed locations, and concurrent edits fail before any identity mutation", async () => serialized(async () => {
     const id = randomUUID(), slug = `${scope}-guarded`, displayName = `${scope} Guarded Cafe`; brands.push(id);
     const a = await createRestaurant(displayName), b = await createRestaurant(`${displayName} (Other Location)`);
     const batch: ChainIdentityBatch = { version: 1, reviewedBy: "Synthetic guards", brands: [{ id, slug, displayName, expected: null, addAliases: [], evidence }], links: [{ brandId: id, expected: a }] };
@@ -98,13 +106,14 @@ suite("reviewed chain identities through existing menu and new-hex serving", () 
     batch.links.push({ brandId: id, expected: b });
     const planned = await plan(batch);
     await p.restaurant.update({ where: { id: a.id }, data: { name: "Changed after review" } });
-    await expect(applyChainIdentity(p, planned)).rejects.toThrow();
+    await expect(applyChainIdentity(p, planned)).rejects.toThrow("Restaurant does not have the reviewed unique identity");
     expect(await p.brand.findUnique({ where: { id } })).toBeNull();
     expect((await p.restaurant.findUniqueOrThrow({ where: { id: b.id } })).brandId).toBeNull();
     await p.restaurant.update({ where: { id: a.id }, data: { name: a.name } });
     const collisionId = randomUUID(); brands.push(collisionId);
     await p.brand.create({ data: { id: collisionId, slug: `${scope}-collision`, displayName, detectionConf: "high" } });
     await expect(plan(batch)).rejects.toThrow("collides");
+    await expect(applyChainIdentity(p, planned)).rejects.toThrow("collides");
     await p.brand.delete({ where: { id: collisionId } });
     const journal = await applyChainIdentity(p, await plan(batch));
     await p.restaurant.update({ where: { id: b.id }, data: { name: "Changed after apply" } });
@@ -113,8 +122,8 @@ suite("reviewed chain identities through existing menu and new-hex serving", () 
     await p.restaurant.update({ where: { id: b.id }, data: { name: b.name } });
     await rollbackChainIdentity(p, journal);
     expect(await p.brand.findUnique({ where: { id } })).toBeNull();
-  });
-  test("CLI binds private immutable plans and journals to the target and explicit hash", async () => {
+  }), 125_000);
+  test("CLI binds private immutable plans and journals to the target and explicit hash", async () => serialized(async () => {
     const dir = mkdtempSync(join(tmpdir(), "chain-identity-")), root = resolve(__dirname, "../../../.."), id = randomUUID(); brands.push(id);
     const displayName = `${scope} CLI Cafe`, r = await createRestaurant(displayName);
     const batch: ChainIdentityBatch = { version: 1, reviewedBy: "Synthetic CLI test", brands: [{ id, slug: `${scope}-cli`, displayName,
@@ -127,18 +136,18 @@ suite("reviewed chain identities through existing menu and new-hex serving", () 
       expect(report).toMatchObject({ brands: 1, restaurantLinks: 1 });
       expect(statSync(planFile).mode & 0o777).toBe(0o600);
       expect(await p.brand.findUnique({ where: { id } })).toBeNull();
-      expect(() => cli("plan", planFile, batchFile)).toThrow();
-      expect(() => cli("apply", planFile, "wrong-hash")).toThrow();
+      expect(() => cli("plan", planFile, batchFile)).toThrow("EEXIST");
+      expect(() => cli("apply", planFile, "wrong-hash")).toThrow("Identity target or explicit hash mismatch");
       const mismatched = join(dir, "wrong-target.json"), doc = JSON.parse(readFileSync(planFile, "utf8"));
       writeFileSync(mismatched, JSON.stringify({ ...doc, target: "different-target" }));
-      expect(() => cli("apply", mismatched, report.hash)).toThrow();
+      expect(() => cli("apply", mismatched, report.hash)).toThrow("Identity target or explicit hash mismatch");
       expect(await p.brand.findUnique({ where: { id } })).toBeNull();
       expect(JSON.parse(cli("apply", planFile, report.hash))).toEqual({ brands: 1, restaurantLinks: 1 });
-      expect(() => cli("apply", planFile, report.hash)).toThrow();
+      expect(() => cli("apply", planFile, report.hash)).toThrow("EEXIST");
       expect(JSON.parse(cli("plan", join(dir, "noop.json"), batchFile))).toMatchObject({ brands: 0, restaurantLinks: 0 });
       expect(JSON.parse(cli("rollback", planFile + ".applied.json", report.hash))).toEqual({ rolledBackBrands: 1, rolledBackRestaurantLinks: 1 });
       expect(await p.brand.findUnique({ where: { id } })).toBeNull();
       expect(await p.restaurant.findUniqueOrThrow({ where: { id: r.id }, select: restaurantIdentitySelect })).toEqual(r);
     } finally { rmSync(dir, { recursive: true, force: true }); }
-  }, 30000);
+  }), 125_000);
 });
