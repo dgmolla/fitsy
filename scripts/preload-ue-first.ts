@@ -819,7 +819,7 @@ async function processRestaurant(
           },
         );
         return result;
-      });
+      }, r);
     } catch (err) {
       // Strict: Haiku retries have already been exhausted by withRetry. A
       // macro estimation failure produces bad data, so abort the hex rather

@@ -13,6 +13,8 @@ import type {
 import { aggregateDietaryOptions, DIETARY_TAG_THRESHOLD } from "./constants.js";
 // Keep offline persistence independent of the shared barrel's environment initialization.
 import { macroWinnerSqlOrder } from "../packages/shared/src/utils/macroProvenance";
+import { validateReviewedChainWrites } from '../apps/api/services/chainWriteGuard';
+import { chainTransaction } from '../apps/api/services/chainTransaction';
 
 // ─── Item validation (S-111, S-112) ─────────────────────────────────────────
 
@@ -190,6 +192,7 @@ export async function persistItemsInTx(
   // S-133: Dedup by item name — source data (esp. FatSecret) can have
   // duplicate names which violate the @@unique([restaurantId, name]) constraint.
   const validPairs = dedupByName(inputPairs);
+  await validateReviewedChainWrites(tx, [{ restaurantId, items: validPairs }]);
   if (validPairs.length < inputPairs.length) {
     console.log(`[persist] Deduped ${inputPairs.length - validPairs.length} duplicate item names for restaurant ${restaurantId}`); // eslint-disable-line no-console
   }
@@ -343,9 +346,9 @@ export async function persistItems(
   inputPairs: ValidatedPair[],
   prisma: PrismaClient,
 ): Promise<number> {
-  return prisma.$transaction(async (tx) => {
+  return chainTransaction(prisma, async (tx) => {
     return persistItemsInTx(restaurantId, inputPairs, tx);
-  });
+  }, 5_000);
 }
 
 // ─── Dietary summary ────────────────────────────────────────────────────────
@@ -401,6 +404,7 @@ export async function persistHexBulkInTx(
   tx: TxClient,
 ): Promise<number> {
   if (restaurants.length === 0) return 0;
+  await validateReviewedChainWrites(tx, restaurants.map(r => ({ ...r, items: dedupByName(r.items) })));
 
   const restaurantIds = restaurants.map((r) => r.restaurantId);
   const menuHashes = restaurants.map((r) => r.menuHash);

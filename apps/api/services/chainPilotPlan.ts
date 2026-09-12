@@ -1,7 +1,7 @@
 import { chainTransaction } from "./chainTransaction";
 import { createHash } from "node:crypto";
 import { Prisma, type PrismaClient, type Brand, type ChainItem } from "@prisma/client";
-import { approvedChainRow, buildChainMatcher, chainReviewHash, type ChainCatalogRow } from "./chainCatalog";
+import { approvedChainRow, assertUnambiguousChainAliases, chainReviewHash, type ChainCatalogRow } from "./chainCatalog";
 import { chainPilot } from "./chainPilotData";
 import { chainCatalogBatchSchema, type ChainCatalogBatch } from "./chainCatalogBatch";
 
@@ -37,7 +37,8 @@ export function planChainPilot(brands: Brand[], catalog: ChainItem[], input: Cha
     const id = brandId(definition.slug), before = find(id, definition.canonicalKey);
     const row: ChainCatalogRow = { id: before?.id ?? `${id}:${definition.canonicalKey}`, brandId: id, canonicalKey: definition.canonicalKey,
       ...definition.facts, source: "official", confidence: "HIGH", officialUrl: definition.source.url, review: null };
-    const evidence = { version: 1 as const, sourceHash: definition.source.sha256, locator: definition.locator, reviewedBy: pilot.reviewedBy, aliases: definition.aliases };
+    const evidence = { version: 1 as const, sourceHash: definition.source.sha256, locator: definition.locator, reviewedBy: pilot.reviewedBy, aliases: definition.aliases,
+      ...(definition.usStates ? { usStates: definition.usStates } : {}) };
     const review = { ...evidence, dataHash: chainReviewHash(row, evidence) };
     if (!approvedChainRow({ ...row, review })) throw new Error(`Invalid reviewed facts: ${definition.canonicalKey}`);
     append(before, { brandId: id, canonicalKey: row.canonicalKey, ...definition.facts, source: "official", confidence: "HIGH",
@@ -54,15 +55,7 @@ export function planChainPilot(brands: Brand[], catalog: ChainItem[], input: Cha
   const replacements = new Set(changes.map(c => `${c.desired.brandId}:${c.desired.canonicalKey}`));
   const final: ChainCatalogRow[] = [...catalog.filter(r => !replacements.has(`${r.brandId}:${r.canonicalKey}`)),
     ...changes.map(c => ({ ...c.desired, id: c.before?.id ?? `${c.desired.brandId}:${c.desired.canonicalKey}` }))];
-  const match = buildChainMatcher(final);
-  for (const row of final) {
-    const approved = approvedChainRow(row);
-    if (!approved) continue;
-    for (const alias of approved.review.aliases) {
-      const item = { name: alias.name, ...(alias.section !== undefined ? { section: alias.section } : {}), ...(alias.description !== undefined ? { description: alias.description } : {}) };
-      if (match(row.brandId, item).status !== "matched") throw new Error(`Ambiguous reviewed alias: ${alias.name}`);
-    }
-  }
+  assertUnambiguousChainAliases(final);
   return { changes, hash: stateHash(changes) };
 }
 

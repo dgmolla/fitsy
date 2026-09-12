@@ -68,13 +68,14 @@ async function main() {
     const { brands, catalog } = await inventory();
     if (planChainPilot(brands, catalog, batch).changes.length) throw new Error("Apply and verify the catalog pilot first (or the selected batch)");
     const verified = await p.brand.findMany({ where: { detectionConf: { in: ["high", "llm-confirmed"] }, menuKind: "restaurant" } });
-    const restaurants = await p.restaurant.findMany({ where: { brandId: { in: brands.map(b => b.id) } }, select: { id: true, name: true, brandId: true } });
+    const restaurants = await p.restaurant.findMany({ where: { brandId: { in: brands.map(b => b.id) } }, select: { id: true, name: true, brandId: true, lat: true, lng: true } });
     const match = buildChainMatcher(catalog), byRestaurant = new Map(restaurants.map(r => [r.id, verifiedBrand(r, verified)]));
-    const unresolvedRestaurants = restaurants.filter(r => !byRestaurant.get(r.id));
+    const locations = new Map(restaurants.map(r => [r.id, r]));
+    const unresolvedRestaurants = restaurants.filter(r => !byRestaurant.get(r.id)).map(({ id, name, brandId }) => ({ id, name, brandId }));
     const items = await p.menuItem.findMany({ where: { restaurantId: { in: [...byRestaurant.keys()] } }, include: { macroEstimates: { orderBy: { id: "asc" } } }, orderBy: { id: "asc" } });
     const rows: AprilEntry[] = [];
     for (const before of items) {
-      const result = match(byRestaurant.get(before.restaurantId), aprilMenuIdentity(before));
+      const result = match(byRestaurant.get(before.restaurantId), aprilMenuIdentity(before), locations.get(before.restaurantId));
       if (result.status !== "matched" || !batch.changes.some(c => c.canonicalKey === result.row.canonicalKey && brands.find(b => b.slug === c.slug)?.id === result.row.brandId)) continue;
       const expected = officialMacro(result.row, aprilMenuIdentity(before)), prior = before.macroEstimates.find(e => e.source === "official"), winner = pickWinningEstimate(before.macroEstimates);
       const keys = ["calories", "proteinG", "carbsG", "fatG"] as const;

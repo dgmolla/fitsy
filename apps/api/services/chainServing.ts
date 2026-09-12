@@ -7,6 +7,7 @@ import { MenuSourceResolver } from "./menuSources/resolver";
 import { FatSecretSource } from "./menuSources/fatSecretSource";
 import { UeApiDirectSource, type UeConcurrencyGate } from "./menuSources/ueApiDirectSource";
 import type { MacroData, StructuredMenuItem } from "./menuSources/types";
+import type { ChainLocation } from './chainGeography';
 
 interface ChainBrand { id: string; slug: string; displayName: string; aliases: string[]; detectionConf: string | null; menuKind: string }
 export const brandName = (name: string) => name.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
@@ -54,9 +55,9 @@ export function chainMenuResolver(restaurant: { name: string; brandId?: string |
 }
 /** Only unmatched UE items reach estimation; a resolver never invents menu membership. */
 export async function resolveChainMacros(items: StructuredMenuItem[], brandId: string | undefined,
-  match: (brandId: string | undefined, item: StructuredMenuItem) => ChainMatch,
-  estimate: (items: StructuredMenuItem[]) => Promise<(MacroData | null)[]>): Promise<(MacroData | null)[]> {
-  const matches = items.map(item => match(brandId, item)), unresolved = items.filter((_, i) => matches[i]!.status !== "matched");
+  match: (brandId: string | undefined, item: StructuredMenuItem, location?: ChainLocation) => ChainMatch,
+  estimate: (items: StructuredMenuItem[]) => Promise<(MacroData | null)[]>, location?: ChainLocation): Promise<(MacroData | null)[]> {
+  const matches = items.map(item => match(brandId, item, location)), unresolved = items.filter((_, i) => matches[i]!.status !== "matched");
   const fallback = unresolved.length ? await estimate(unresolved) : [];
   if (fallback.length !== unresolved.length) throw new Error("Estimator result count does not match unresolved menu items");
   let next = 0;
@@ -76,11 +77,12 @@ export async function applyAprilChainMatch(prisma: PrismaClient, expected: April
     await tx.$queryRaw`SELECT id FROM "ChainItem" WHERE id = ${approved.id} FOR SHARE`;
     const current = await tx.chainItem.findUnique({ where: { id: approved.id } });
     if (!current || approvedChainRow(current)?.review.dataHash !== approved.review.dataHash) throw new AprilPlanChangedError("Chain review changed; rebuild the plan");
-    const restaurant = await tx.restaurant.findUnique({ where: { id: expected.restaurantId }, select: { brandId: true, name: true } });
+    await tx.$queryRaw`SELECT id FROM "Restaurant" WHERE id = ${expected.restaurantId} FOR SHARE`;
+    const restaurant = await tx.restaurant.findUnique({ where: { id: expected.restaurantId }, select: { brandId: true, name: true, lat: true, lng: true } });
     const brands = await tx.brand.findMany({ where: { detectionConf: { in: ["high", "llm-confirmed"] }, menuKind: "restaurant" } });
     if (!restaurant || verifiedBrand(restaurant, brands) !== approved.brandId) throw new AprilPlanChangedError("Restaurant brand identity changed");
     const catalog = await tx.chainItem.findMany({ where: { brandId: approved.brandId } });
-    const item = aprilMenuIdentity(expected), result = buildChainMatcher(catalog)(approved.brandId, item);
+    const item = aprilMenuIdentity(expected), result = buildChainMatcher(catalog)(approved.brandId, item, restaurant);
     if (result.status !== "matched" || result.row.id !== approved.id || result.row.review.dataHash !== approved.review.dataHash) throw new AprilPlanChangedError("April item has no current reviewed binding");
     // Lock and compare the row before adding an estimate. A concurrent edit fails closed.
     const locked = await tx.$queryRaw<{ updatedAt: Date; name: string; section: string | null; description: string | null }[]>`

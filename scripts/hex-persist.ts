@@ -12,6 +12,7 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import type { ValidatedPair } from "./pipeline-utils.js";
 import { persistHexBulkInTx } from "./pipeline-utils.js";
+import { chainTransaction } from '../apps/api/services/chainTransaction';
 
 type TxClient = Prisma.TransactionClient;
 
@@ -59,7 +60,7 @@ export async function persistHex(
   let bulkMs = 0;
   let checkpointMs = 0;
 
-  const result = await prisma.$transaction(
+  const result = await chainTransaction(prisma,
     async (tx) => {
       const t1 = Date.now();
       const totalItems = await persistHexBulkInTx(restaurants, tx);
@@ -88,7 +89,7 @@ export async function persistHex(
     // validation + checkpoint insert without false-positive timeouts.
     // maxWait raised from the 2s default so we don't fail acquiring a tx slot
     // under sustained pipeline pressure.
-    { timeout: 300_000, maxWait: 30_000 },
+    300_000, 30_000,
   );
 
   opts.onTiming?.({
