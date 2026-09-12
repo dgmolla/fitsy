@@ -1,0 +1,76 @@
+import { randomUUID } from 'node:crypto';
+import { PrismaClient } from '@prisma/client';
+import { planChainPilot, applyCatalogPlan, stateHash } from '../../services/chainPilotPlan';
+import { applyAprilChainBatch } from '../../services/chainAprilBatch';
+import { rollbackAprilBatch } from '../../services/chainPilotRollback';
+import { approvedChainRow } from '../../services/chainCatalog';
+import { applyAprilChainMatch } from '../../services/chainServing';
+import { getMenuPage } from '../../lib/restaurantMenuService';
+const url = process.env['POSTGRES_PRISMA_URL'];
+const suite = url && ['localhost', 'postgres'].includes(new URL(url).hostname) ? describe : describe.skip;
+suite('bounded April bulk writer with real serving and recovery', () => {
+  const p = new PrismaClient({ log: [{ emit: 'event', level: 'query' }] });
+  let queries = 0;
+  p.$on('query', () => queries++);
+  afterAll(async () => p.$disconnect());
+  test('serves a 100-item chunk, preserves prior estimates, no-ops and atomically restores all records', async () => {
+    const slug = 'bulk-' + randomUUID();
+    const b = await p.brand.create({ data: { slug, displayName: slug, detectionConf: 'high', menuKind: 'restaurant' } });
+    const r = await p.restaurant.create({ data: { name: slug, brandId: b.id, storeUuid: randomUUID(), source: slug, address: 'Local fixture', lat: 34, lng: -118, cuisineTags: [] } });
+    try {
+      const batch = { version: 1 as const, reviewedBy: 'Independent synthetic fixture facts', quarantine: [], changes: [{ slug, canonicalKey: 'bowl', expected: null,
+        facts: { calories: 500, proteinG: 30, carbsG: 50, fatG: 20, servingSize: 'one bowl' }, source: { url: 'https://example.com/nutrition', sha256: 'a'.repeat(64) }, locator: 'Fixture label',
+        aliases: Array.from({ length: 100 }, (_, i) => ({ name: 'Bowl ' + i, section: 'Bowls' })) }] };
+      await applyCatalogPlan(p, planChainPilot([b], [], batch), batch);
+      const approved = approvedChainRow((await p.chainItem.findFirstOrThrow({ where: { brandId: b.id } })))!;
+      for (let i = 0; i < 100; i++) await p.menuItem.create({ data: { restaurantId: r.id, name: 'Bowl ' + i, section: 'Bowls', price: 12, dietaryTags: ['fixture'], calories: 400, proteinG: 20, carbsG: 50, fatG: 13,
+        macroEstimates: { create: [{ source: 'haiku', calories: 400, proteinG: 20, carbsG: 50, fatG: 13, confidence: 'MEDIUM' },
+          ...(i === 0 ? [{ source: 'official', calories: 350, proteinG: 15, carbsG: 40, fatG: 10, confidence: 'LOW' as const, reasoning: 'Old source', hadPhoto: true, ingredientBreakdown: [{ name: 'old' }] }] : [])] } } });
+      const read = () => p.menuItem.findMany({ where: { restaurantId: r.id }, include: { macroEstimates: { orderBy: { id: 'asc' as const } } }, orderBy: { id: 'asc' as const } });
+      const before = await read();
+      const stale = before.map(before => ({ before, approved }));
+      stale[99] = { before: { ...before[99]!, updatedAt: new Date(0) }, approved };
+      await expect(applyAprilChainBatch(p, stale)).rejects.toThrow('April item changed');
+      expect(stateHash(await read())).toBe(stateHash(before));
+      const estimate = before[99]!.macroEstimates[0]!;
+      await p.macroEstimate.update({ where: { id: estimate.id }, data: { reasoning: 'Concurrent edit' } });
+      const concurrentlyEdited = await read();
+      await expect(applyAprilChainBatch(p, before.map(before => ({ before, approved })))).rejects.toThrow('April estimates changed');
+      expect(stateHash(await read())).toBe(stateHash(concurrentlyEdited));
+      await p.macroEstimate.update({ where: { id: estimate.id }, data: { reasoning: estimate.reasoning } });
+      queries = 0;
+      const legacy = await applyAprilChainMatch(p, before[0]!, approved);
+      const singleItemQueries = queries;
+      await rollbackAprilBatch(p, [{ before: before[0]!, after: legacy }]);
+      queries = 0;
+      const after = await applyAprilChainBatch(p, before.map(before => ({ before, approved })));
+      expect(queries).toBeLessThan(25);
+      expect(queries).toBeLessThan(singleItemQueries * 2);
+      const page = await getMenuPage(p, r.id, { limit: 250 });
+      expect(page!.menuItems).toHaveLength(100);
+      for (const item of page!.menuItems) expect(item.macros).toMatchObject({ calories: 500, proteinG: 30, carbsG: 50, fatG: 20, confidence: 'HIGH' });
+      for (const item of after) {
+        const previous = before.find(b => b.id === item.id)!;
+        expect(item.macroEstimates.find(e => e.source === 'haiku')).toEqual(previous.macroEstimates.find(e => e.source === 'haiku'));
+        for (const key of ['id', 'name', 'price', 'dietaryTags', 'createdAt'] as const) expect(item[key]).toEqual(previous[key]);
+      }
+      expect(stateHash(await applyAprilChainBatch(p, after.map(before => ({ before, approved }))))).toBe(stateHash(after));
+      await expect(applyAprilChainBatch(p, before.map(before => ({ before, approved })))).rejects.toThrow('April item changed');
+      expect(stateHash(await read())).toBe(stateHash(after));
+      const journals = before.map((before, i) => ({ before, after: after[i]! }));
+      await p.menuItem.update({ where: { id: after[99]!.id }, data: { price: 99 } });
+      const edited = await read();
+      await expect(rollbackAprilBatch(p, journals)).rejects.toThrow('changed after apply');
+      expect(stateHash(await read())).toBe(stateHash(edited));
+      await p.menuItem.update({ where: { id: after[99]!.id }, data: { price: after[99]!.price, updatedAt: after[99]!.updatedAt } });
+      queries = 0;
+      await rollbackAprilBatch(p, journals);
+      expect(queries).toBeLessThan(15);
+      expect(stateHash(await read())).toBe(stateHash(before));
+    } finally {
+      await p.restaurant.delete({ where: { id: r.id } });
+      await p.chainItem.deleteMany({ where: { brandId: b.id } });
+      await p.brand.delete({ where: { id: b.id } });
+    }
+  }, 60_000);
+});

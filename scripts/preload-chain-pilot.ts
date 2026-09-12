@@ -1,5 +1,5 @@
 /** Offline catalog batches + existing-menu updates. The original seven-serving pilot remains the default. */
-import { readFileSync, openSync, writeFileSync, fsyncSync, closeSync, mkdirSync, readdirSync, existsSync } from "node:fs";
+import { readFileSync, openSync, writeFileSync, fsyncSync, closeSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { chainPilot } from "../apps/api/services/chainPilotData";
@@ -7,15 +7,21 @@ import { chainCatalogBatchSchema } from "../apps/api/services/chainCatalogBatch"
 import { planChainPilot, applyCatalogPlan, rollbackCatalogPlan, stateHash, type CatalogPlan } from "../apps/api/services/chainPilotPlan";
 import { applyAprilChainMatch, aprilMenuIdentity, officialMacro, AprilPlanChangedError, verifiedBrand } from "../apps/api/services/chainServing";
 import { buildChainMatcher, chainMenuFingerprint, type ApprovedChainRow } from "../apps/api/services/chainCatalog";
-import { rollbackAprilBatch, type AprilSnapshot, type AprilJournal } from "../apps/api/services/chainPilotRollback";
+import { rollbackAprilBatch, type AprilSnapshot } from "../apps/api/services/chainPilotRollback";
+import { applyAprilChainBatch, MAX_APRIL_CHUNK } from "../apps/api/services/chainAprilBatch";
+import { readAprilJournals } from "./chain-april-journal";
 import { pickWinningEstimate } from "../packages/shared/src/utils/macroProvenance";
 
 const args = process.argv.slice(2), options = args.filter(a => a.startsWith("--"));
 const [command, path, expectedHash] = args.filter(a => !a.startsWith("--"));
 if (!path || !["menu-inventory", "catalog-plan", "catalog-apply", "catalog-rollback", "april-plan", "april-apply", "april-rollback"].includes(command ?? "")) {
-  throw new Error("Usage: preload-chain-pilot.ts <menu-inventory|catalog-plan|catalog-apply|catalog-rollback|april-plan|april-apply|april-rollback> <path> [plan-hash] [--batch=manifest.json] [--limit=N]");
+  throw new Error("Usage: preload-chain-pilot.ts <menu-inventory|catalog-plan|catalog-apply|catalog-rollback|april-plan|april-apply|april-rollback> <path> [plan-hash] [--batch=manifest.json] [--limit=N] [--chunk-size=1..100]");
 }
-if (options.some(a => !a.startsWith("--batch=") && !a.startsWith("--limit=")) || options.filter(a => a.startsWith("--batch=")).length > 1) throw new Error("Unknown or duplicate batch option");
+if (options.some(a => !a.startsWith("--batch=") && !a.startsWith("--limit=") && !a.startsWith("--chunk-size=")) || options.filter(a => a.startsWith("--batch=")).length > 1) throw new Error("Unknown or duplicate batch option");
+if (options.filter(a => a.startsWith("--chunk-size=")).length > 1 || (command !== "april-apply" && options.some(a => a.startsWith("--chunk-size=")))) throw new Error("Chunk size applies only to April apply");
+const chunkText = options.find(a => a.startsWith("--chunk-size="))?.slice(13) ?? "1";
+const chunkSize = Number(chunkText);
+if (!/^\d+$/.test(chunkText) || !Number.isSafeInteger(chunkSize) || chunkSize < 1 || chunkSize > MAX_APRIL_CHUNK) throw new Error("Invalid April chunk size");
 const batchPath = options.find(a => a.startsWith("--batch="))?.slice(8);
 const batch = chainCatalogBatchSchema.parse(batchPath === undefined ? chainPilot : JSON.parse(readFileSync(batchPath, "utf8")));
 const slugs = [...new Set([...batch.changes, ...batch.quarantine].map(row => row.slug))];
@@ -83,15 +89,9 @@ async function main() {
     save(path!, doc); report({ matched: rows.length, inspected: items.length, restaurants: new Set(rows.map(r => r.before.restaurantId)).size, unresolvedRestaurants, hash: doc.hash }); return;
   }
   if (command === "april-rollback") {
-    const info = read<{ target: string; planHash: string; count: number }>(join(path!, "started.json"));
-    if (info.target !== target) throw new Error("Database target differs from the journal");
-    const stoppedPath = join(path!, "stopped.json"), stopped = existsSync(stoppedPath) ? read<typeof info>(stoppedPath) : undefined;
-    if (stopped && (stopped.target !== target || stopped.planHash !== info.planHash || !Number.isSafeInteger(stopped.count) || stopped.count < 0 || stopped.count >= info.count)) throw new Error("Invalid stopped-batch evidence");
-    const count = stopped?.count ?? info.count;
-    const files = readdirSync(path!).filter(f => /^\d+\.json$/.test(f)).sort((a, b) => Number(b.split(".")[0]) - Number(a.split(".")[0]));
-    if (!Number.isSafeInteger(info.count) || info.count < 1 || files.length !== count || files.some((name, index) => name !== `${count - index - 1}.json`)) throw new Error(`Incomplete April rollback evidence: expected ${count} contiguous journals, found ${files.length}; inspect the saved plan before recovery`);
-    await rollbackAprilBatch(p, files.map(file => read<AprilJournal>(join(path!, file))));
-    report({ rolledBack: files.length, expected: count }); return;
+    const journals = readAprilJournals(path!, target);
+    await rollbackAprilBatch(p, journals);
+    report({ rolledBack: journals.length, expected: journals.length }); return;
   }
   if (command === "catalog-rollback") {
     // Operator ordering is deliberate: roll back all April batches before their catalog approvals.
@@ -113,7 +113,27 @@ async function main() {
   const limit = Number(limitText);
   if (!/^\d+$/.test(limitText) || !Number.isSafeInteger(limit) || limit < 1 || limit > doc.rows.length) throw new Error("Invalid apply limit");
   const directory = path! + ".journal"; mkdirSync(directory);
-  save(join(directory, "started.json"), { target, planHash: doc.hash, count: limit });
+  save(join(directory, "started.json"), { target, planHash: doc.hash, count: limit, ...(chunkSize > 1 ? { chunkSize } : {}) });
+  if (chunkSize > 1) {
+    for (let start = 0; start < limit; start += chunkSize) {
+      const selected = doc.rows.slice(start, Math.min(start + chunkSize, limit));
+      save(join(directory, `chunk-${start}.started.json`), { target, planHash: doc.hash, start, count: selected.length });
+      let after: AprilSnapshot[];
+      try { after = await applyAprilChainBatch(p, selected); }
+      catch (error) {
+        if (error instanceof AprilPlanChangedError) save(join(directory, "stopped.json"), { target, planHash: doc.hash, count: start });
+        throw error;
+      }
+      const entries = selected.map((entry, i) => ({ before: entry.before, after: after[i]! }));
+      save(join(directory, `chunk-${start}.json`), { target, planHash: doc.hash, start, entries, hash: stateHash({ start, entries }) });
+      for (const entry of entries) {
+        const winner = pickWinningEstimate(entry.after.macroEstimates);
+        if (!winner || ["calories", "proteinG", "carbsG", "fatG"].some(key => entry.after[key as "calories"] !== winner[key as "calories"])) throw new Error("Post-write winner mismatch; roll back the journal");
+      }
+      report({ appliedSoFar: start + selected.length, total: limit });
+    }
+    report({ applied: limit, remainingInPlan: doc.rows.length - limit, journal: directory }); return;
+  }
   for (const [index, entry] of doc.rows.slice(0, limit).entries()) {
     let after: AprilSnapshot;
     try { after = await applyAprilChainMatch(p, { ...entry.before, updatedAt: new Date(entry.before.updatedAt) }, entry.approved); }

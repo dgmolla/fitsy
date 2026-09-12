@@ -1,27 +1,12 @@
-import { chainTransaction } from "./chainTransaction";
-import { Prisma, type PrismaClient } from "@prisma/client";
-import { stateHash } from "./chainPilotPlan";
-export type AprilSnapshot = Prisma.MenuItemGetPayload<{ include: { macroEstimates: true } }>;
-export interface AprilJournal { before: AprilSnapshot; after: AprilSnapshot }
+import type { PrismaClient } from "@prisma/client";
+import { restoreAprilChainBatch } from "./chainAprilBatch";
+import type { AprilJournal } from "./chainAprilTypes";
+export type { AprilSnapshot, AprilJournal } from "./chainAprilTypes";
 /** Restore only nutrition written by this operation. Any subsequent edit blocks rollback. */
 export function rollbackAprilPatch(prisma: PrismaClient, journal: AprilJournal): Promise<void> {
   return rollbackAprilBatch(prisma, [journal]);
 }
 /** A journal batch commits entirely or leaves every row unchanged. */
-export async function rollbackAprilBatch(prisma: PrismaClient, journals: AprilJournal[]): Promise<void> {
-  for (const { before, after } of journals) if (before.id !== after.id || before.restaurantId !== after.restaurantId) throw new Error("April rollback identity mismatch");
-  await chainTransaction(prisma, async tx => {
-    for (const { before, after } of journals) {
-      await tx.$queryRaw`SELECT id FROM "MenuItem" WHERE id = ${after.id} FOR UPDATE`;
-      const current = await tx.menuItem.findUnique({ where: { id: after.id }, include: { macroEstimates: { orderBy: { id: "asc" } } } });
-      if (stateHash(current) !== stateHash(after)) throw new Error("April row changed after apply; refusing rollback");
-      const prior = before.macroEstimates.find(e => e.source === "official");
-      if (!prior) await tx.macroEstimate.deleteMany({ where: { menuItemId: after.id, source: "official" } });
-      else {
-        const data = { ...prior, ingredientBreakdown: prior.ingredientBreakdown === null ? Prisma.DbNull : prior.ingredientBreakdown as Prisma.InputJsonValue };
-        await tx.macroEstimate.upsert({ where: { menuItemId_source: { menuItemId: before.id, source: "official" } }, create: data, update: data });
-      }
-      await tx.menuItem.update({ where: { id: before.id }, data: { calories: before.calories, proteinG: before.proteinG, carbsG: before.carbsG, fatG: before.fatG, updatedAt: before.updatedAt } });
-    }
-  }, 120_000);
+export function rollbackAprilBatch(prisma: PrismaClient, journals: AprilJournal[]): Promise<void> {
+  return restoreAprilChainBatch(prisma, journals);
 }
