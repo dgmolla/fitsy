@@ -1,7 +1,7 @@
 # Chain nutrition rollout: production results
 
-**33,890 existing menu rows now use reviewed official nutrition across 27 brand identities.**
-These thirteen completed batches are separate from the earlier WaBa/Yoshinoya rollout.
+**34,613 existing menu rows now use reviewed official nutrition across 30 brand identities.**
+These sixteen completed batches are separate from the earlier WaBa/Yoshinoya rollout.
 National onboarding is still in progress.
 
 ## What changed
@@ -21,15 +21,18 @@ National onboarding is still in progress.
 | Wingstop | 382 | 12 | 370 |
 | Burger King | 3,033 | 1,673 | 1,360 |
 | IHOP | 1,421 | 224 | 1,197 |
-| **Total** | **33,890** | **12,406** | **21,484** |
+| Shake Shack | 446 | 56 | 390 |
+| CAVA | 170 | 71 | 99 |
+| Habit Burger & Grill | 107 | 107 | 0 |
+| **Total** | **34,613** | **12,640** | **21,973** |
 
 “Nutrition values changed” means at least one of calories, protein, carbs or fat changed.
 “Attribution only” means those four values stayed the same and reviewed official attribution was applied.
 These counts measure rollout behavior, not accuracy against measured food.
 
-The batches loaded **1,165 approved facts and 1,652 exact menu aliases** into the chain catalog.
+The batches loaded **1,221 approved facts and 1,728 exact menu aliases** into the chain catalog.
 Existing menu items and their winning macro estimates then received the same facts through the shared matcher.
-Jamba and Panera each have two stored brand identities, so 27 identities are not 27 distinct consumer brands.
+Jamba and Panera each have two stored brand identities, so 30 identities represent 28 distinct consumer brands.
 Two additional identities, Dave's Hot Chicken and Nothing Bundt Cakes, were linked to 23 existing restaurants; their 232 menu items and estimates stayed unchanged, with no official nutrition activated yet.
 
 ## Both paths use the same catalog
@@ -54,14 +57,14 @@ Offline UE runs must use a checkout containing that release.
 
 | Check | Result and limit |
 |---|---|
-| Production preservation | All **89,301 menu IDs across 882 restaurants** preserved; all **55,411 unselected rows** unchanged. |
+| Production preservation | All **94,066 menu IDs across 936 restaurants** preserved; all **59,453 unselected rows** unchanged. |
 | Serving API | Complete authenticated menu reads checked every selected restaurant and changed row; search/detail checks passed per changed brand. |
 | Repeat execution | Every completed batch produced zero pending catalog and April changes. |
 | Recovery | Local exact rollback passed; production writes have bounded transaction journals and before/after snapshots. Production was not rolled back as a test. |
 | Future imports | Local tests used the real parser, resolver, brand handoff, `persistHex` and serving layer. Current UE captures and simulated historical menus are separate evidence. No production hex was added. |
 | Source quality | Automated transcription checks plus independent source/binding review. Review depth varies; this is not measured restaurant nutrition or an exhaustive human audit. |
 
-Burger King, IHOP and Wingstop had no current UE capture because ordinary fetches were challenged and stopped.
+Several batches, including Shake Shack, CAVA and Habit, have no current UE capture.
 Their import proof uses complete historical menus, so current availability and naming coverage remain unverified.
 Activating an approved catalog routes new imports through UE; it does not guarantee UE will return a menu.
 
@@ -79,12 +82,18 @@ The aggregate record alone cannot perform a rollback.
 | Incomplete meal values | IHOP omelette calories exclude a required side. Meal categories remain held; standalone pancakes, waffles and French toast have three product-page checks, with the omelette as a positive control. |
 | Wrong serving unit | Wingstop per-wing facts cannot match unspecified wing orders. Only explicit-size sides and single brownies were approved; missing beverage protein was not inferred as zero. |
 | Wrong source scope | Pizza Hut's Canadian guide and Express breakfast items were excluded from ordinary US bindings. |
+| Changed recipes | CAVA's older Greek Chicken and Spicy Chicken + Avocado descriptions differ from the current recipe. Only the matching descriptions were approved; 28 old or empty-description rows stayed held. |
+| Conflicting official pages | Habit menu calories disagree with detailed nutrition for 321 mapped rows. Five consistent facts were approved; fries were excluded after discovering an unspecified ketchup serving. |
 
 Burger King's 225 visible panels passed a full automated comparison with captured per-serving observations; independent review sampled raw macros and reviewed every proposed alias.
 IHOP's automated checks cover all 417 source rows, while independent raw-source and alias review was sampled.
 Its three standalone product pages support a stated category inference for 13 further variants, not direct checks of every variant or location.
 Wingstop's 11 approved facts and aliases were independently checked against PDF text and a rendered page.
 All three retain unresolved cases as estimates.
+Shake Shack's 35 facts and 44 aliases were independently reviewed in full.
+CAVA and Habit review covered all 21 approved facts and 32 aliases; local tests also checked all 37 stored restaurant names with and without a prelinked brand.
+Their production plans selected exactly the expected IDs and preserved Habit's 100 existing catalog rows.
+Del Taco remains unpublished because its guide limits nutrition coverage to company-owned restaurants, and location eligibility has not been established.
 
 ## Remaining work
 
