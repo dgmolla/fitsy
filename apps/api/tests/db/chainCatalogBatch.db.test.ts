@@ -57,6 +57,8 @@ suite('catalog batch CLI with arbitrary brands', () => {
         const last = planned[3].before;
         await p.menuItem.update({ where: { id: last.id }, data: { price: 99 } });
         for (const bad of ['0', '101', '1.5', 'abc']) expect(() => run('april-apply', 'stopped.json', stopped.hash, '--limit=4', '--chunk-size=' + bad)).toThrow('Invalid April chunk size');
+        expect(() => run('april-apply', 'stopped.json', stopped.hash, '--chunk-size=3', '--chunk-size=3')).toThrow('Chunk size applies only to April apply');
+        expect(() => run('april-plan', 'wrong-command.json', '--chunk-size=3')).toThrow('Chunk size applies only to April apply');
         expect(() => run('april-apply', 'stopped.json', stopped.hash, '--limit=4', '--chunk-size=3')).toThrow('April item changed');
         expect(JSON.parse(readFileSync(join(directory, 'stopped.json.journal/stopped.json'), 'utf8')).count).toBe(3);
         expect(run('april-rollback', 'stopped.json.journal')).toEqual({ rolledBack: 3, expected: 3 });
@@ -80,6 +82,10 @@ suite('catalog batch CLI with arbitrary brands', () => {
         renameSync(receipt, misplaced);
         try { expect(() => run('april-rollback', 'complete.json.journal')).toThrow('Incomplete or mixed April chunk evidence'); }
         finally { renameSync(misplaced, receipt); }
+        expect(stateHash(await p.menuItem.findMany(query))).toBe(stateHash(completedRows));
+        const stray = join(directory, 'complete.json.journal/0.json'); writeFileSync(stray, '{}');
+        try { expect(() => run('april-rollback', 'complete.json.journal')).toThrow('Incomplete or mixed April chunk evidence'); }
+        finally { rmSync(stray); }
         const intent = join(directory, 'complete.json.journal/chunk-3.started.json'), exactIntent = readFileSync(intent, 'utf8');
         renameSync(intent, intent + '.saved');
         try { expect(() => run('april-rollback', 'complete.json.journal')).toThrow('Missing April chunk intent'); }

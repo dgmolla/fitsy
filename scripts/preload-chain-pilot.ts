@@ -128,7 +128,7 @@ async function main() {
       save(join(directory, `chunk-${start}.json`), { target, planHash: doc.hash, start, entries, hash: stateHash({ start, entries }) });
       for (const entry of entries) {
         const winner = pickWinningEstimate(entry.after.macroEstimates);
-        if (!winner || ["calories", "proteinG", "carbsG", "fatG"].some(key => entry.after[key as "calories"] !== winner[key as "calories"])) throw new Error("Post-write winner mismatch; roll back the journal");
+        if (!winner || ["calories", "proteinG", "carbsG", "fatG"].some(key => entry.after[key as "calories"] !== winner[key as "calories"])) throw new Error("Post-write winner mismatch; inspect the saved plan and chunk receipts before recovery");
       }
       report({ appliedSoFar: start + selected.length, total: limit });
     }

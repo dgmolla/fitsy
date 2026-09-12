@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { planChainPilot, applyCatalogPlan, stateHash } from '../../services/chainPilotPlan';
 import { applyAprilChainBatch } from '../../services/chainAprilBatch';
 import { rollbackAprilBatch } from '../../services/chainPilotRollback';
@@ -10,9 +10,12 @@ const url = process.env['POSTGRES_PRISMA_URL'];
 const suite = url && ['localhost', 'postgres'].includes(new URL(url).hostname) ? describe : describe.skip;
 suite('bounded April bulk writer with real serving and recovery', () => {
   const p = new PrismaClient({ log: [{ emit: 'event', level: 'query' }] });
+  const guardClient = new PrismaClient({ log: [{ emit: 'event', level: 'query' }] });
   let queries = 0;
+  let guardQueries = 0;
   p.$on('query', () => queries++);
-  afterAll(async () => p.$disconnect());
+  guardClient.$on('query', () => guardQueries++);
+  afterAll(async () => { await p.$disconnect(); await guardClient.$disconnect(); });
   test('serves a 100-item chunk, preserves prior estimates, no-ops and atomically restores all records', async () => {
     const slug = 'bulk-' + randomUUID();
     const b = await p.brand.create({ data: { slug, displayName: slug, detectionConf: 'high', menuKind: 'restaurant' } });
@@ -22,6 +25,7 @@ suite('bounded April bulk writer with real serving and recovery', () => {
         facts: { calories: 500, proteinG: 30, carbsG: 50, fatG: 20, servingSize: 'one bowl' }, source: { url: 'https://example.com/nutrition', sha256: 'a'.repeat(64) }, locator: 'Fixture label',
         aliases: Array.from({ length: 100 }, (_, i) => ({ name: 'Bowl ' + i, section: 'Bowls' })) }] };
       batch.changes.push({ ...batch.changes[0]!, canonicalKey: 'other', aliases: [{ name: 'Other dish', section: 'Sides' }] });
+      batch.changes[0]!.aliases.push({ name: 'Renamed Bowl', section: 'Bowls' });
       await applyCatalogPlan(p, planChainPilot([b], [], batch), batch);
       const approved = approvedChainRow((await p.chainItem.findFirstOrThrow({ where: { brandId: b.id, canonicalKey: 'bowl' } })))!;
       const other = approvedChainRow((await p.chainItem.findFirstOrThrow({ where: { brandId: b.id, canonicalKey: 'other' } })))!;
@@ -31,10 +35,10 @@ suite('bounded April bulk writer with real serving and recovery', () => {
       const read = () => p.menuItem.findMany({ where: { restaurantId: r.id }, include: { macroEstimates: { orderBy: { id: 'asc' as const } } }, orderBy: { id: 'asc' as const } });
       const before = await read();
       const entries = before.map(before => ({ before, approved }));
-      for (const invalid of [[], [...entries, entries[0]!], [entries[0]!, entries[0]!]]) {
-        queries = 0;
-        await expect(applyAprilChainBatch(p, invalid)).rejects.toThrow('Invalid April chunk size or duplicate item');
-        expect(queries).toBe(0);
+      const oversized = Array.from({ length: 101 }, () => ({ before: { ...before[0]!, id: randomUUID() }, approved }));
+      for (const invalid of [[], oversized, [entries[0]!, entries[0]!]]) {
+        await expect(applyAprilChainBatch(guardClient, invalid)).rejects.toThrow('Invalid April chunk size or duplicate item');
+        expect(guardQueries).toBe(0);
       }
       // A valid early item must not commit when the final item's planned binding fails.
       await expect(applyAprilChainBatch(p, [...entries.slice(0, 99), { before: before[99]!, approved: other }])).rejects.toThrow('no current reviewed binding');
@@ -47,6 +51,12 @@ suite('bounded April bulk writer with real serving and recovery', () => {
       await expect(applyAprilChainBatch(p, entries)).rejects.toThrow('Chain review changed');
       expect(stateHash(await read())).toBe(stateHash(before));
       await p.chainItem.update({ where: { id: approved.id }, data: { calories: approved.calories } });
+      await p.$executeRaw`UPDATE "MenuItem" SET name = 'Renamed Bowl' WHERE id = ${before[99]!.id}`;
+      const renamed = await read();
+      expect(renamed[99]!.updatedAt).toEqual(before[99]!.updatedAt);
+      await expect(applyAprilChainBatch(p, entries)).rejects.toThrow('April item changed');
+      expect(stateHash(await read())).toBe(stateHash(renamed));
+      await p.$executeRaw`UPDATE "MenuItem" SET name = ${before[99]!.name} WHERE id = ${before[99]!.id}`;
       const stale = before.map(before => ({ before, approved }));
       stale[99] = { before: { ...before[99]!, updatedAt: new Date(0) }, approved };
       await expect(applyAprilChainBatch(p, stale)).rejects.toThrow('April item changed');
@@ -62,9 +72,19 @@ suite('bounded April bulk writer with real serving and recovery', () => {
       const singleItemQueries = queries;
       await rollbackAprilBatch(p, [{ before: before[0]!, after: legacy }]);
       queries = 0;
-      const after = await applyAprilChainBatch(p, before.map(before => ({ before, approved })));
+      let after = await applyAprilChainBatch(p, before.map(before => ({ before, approved })));
       expect(queries).toBeLessThan(25);
       expect(queries).toBeLessThan(singleItemQueries + 5);
+      // Each stale field must independently defeat the no-op shortcut.
+      for (const patch of [{ hadPhoto: true }, { ingredientBreakdown: [{ name: 'old' }] }, { confidence: 'LOW' as const },
+        { reasoning: 'Outdated source proof' }, { calories: 499 }, { proteinG: 29 }, { carbsG: 49 }, { fatG: 19 }] satisfies Prisma.MacroEstimateUpdateInput[]) {
+        const official = after[0]!.macroEstimates.find(e => e.source === 'official')!;
+        await p.macroEstimate.update({ where: { id: official.id }, data: patch });
+        after = await applyAprilChainBatch(p, (await read()).map(before => ({ before, approved })));
+        expect(after[0]!.macroEstimates.find(e => e.source === 'official')).toMatchObject({
+          calories: 500, proteinG: 30, carbsG: 50, fatG: 20, reasoning: official.reasoning, confidence: 'HIGH', hadPhoto: false, ingredientBreakdown: null,
+        });
+      }
       const page = await getMenuPage(p, r.id, { limit: 250 });
       expect(page!.menuItems).toHaveLength(100);
       for (const item of page!.menuItems) expect(item.macros).toMatchObject({ calories: 500, proteinG: 30, carbsG: 50, fatG: 20, confidence: 'HIGH' });
@@ -84,9 +104,8 @@ suite('bounded April bulk writer with real serving and recovery', () => {
       await expect(applyAprilChainBatch(p, before.map(before => ({ before, approved })))).rejects.toThrow('April item changed');
       expect(stateHash(await read())).toBe(stateHash(after));
       const journals = before.map((before, i) => ({ before, after: after[i]! }));
-      queries = 0;
-      await expect(rollbackAprilBatch(p, [journals[0]!, journals[0]!])).rejects.toThrow('April rollback identity mismatch');
-      expect(queries).toBe(0);
+      await expect(rollbackAprilBatch(guardClient, [journals[0]!, journals[0]!])).rejects.toThrow('April rollback identity mismatch');
+      expect(guardQueries).toBe(0);
       await p.menuItem.update({ where: { id: after[99]!.id }, data: { price: 99 } });
       const edited = await read();
       await expect(rollbackAprilBatch(p, journals)).rejects.toThrow('changed after apply');
