@@ -10,13 +10,18 @@ const url = process.env['POSTGRES_PRISMA_URL'];
 const suite = url && ['localhost', 'postgres'].includes(new URL(url).hostname) ? describe : describe.skip;
 suite('bounded April bulk writer with real serving and recovery', () => {
   const p = new PrismaClient({ log: [{ emit: 'event', level: 'query' }] });
-  const guardClient = new PrismaClient({ log: [{ emit: 'event', level: 'query' }] });
+  const guardClient = new Proxy(p, { get(target, property, receiver) {
+    if (property === '$transaction') throw new Error('Guard must reject before reaching the database');
+    return Reflect.get(target, property, receiver);
+  } });
   let queries = 0;
-  let guardQueries = 0;
   p.$on('query', () => queries++);
-  guardClient.$on('query', () => guardQueries++);
-  afterAll(async () => { await p.$disconnect(); await guardClient.$disconnect(); });
-  test('serves a 100-item chunk, preserves prior estimates, no-ops and atomically restores all records', async () => {
+  const drainQueryEvents = () => new Promise<void>(resolve => setImmediate(resolve));
+  afterAll(async () => p.$disconnect());
+  test('serves a 100-item chunk, preserves prior estimates, no-ops and atomically restores all records', async () => p.$transaction(async tx => {
+    // Full-catalog readers in other chain suites share this fixture lock.
+    // Their unrelated writes must not add serialization retries to this budget.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(78343218)`;
     const slug = 'bulk-' + randomUUID();
     const b = await p.brand.create({ data: { slug, displayName: slug, detectionConf: 'high', menuKind: 'restaurant' } });
     const r = await p.restaurant.create({ data: { name: slug, brandId: b.id, storeUuid: randomUUID(), source: slug, address: 'Local fixture', lat: 34, lng: -118, cuisineTags: [] } });
@@ -38,7 +43,6 @@ suite('bounded April bulk writer with real serving and recovery', () => {
       const oversized = Array.from({ length: 101 }, () => ({ before: { ...before[0]!, id: randomUUID() }, approved }));
       for (const invalid of [[], oversized, [entries[0]!, entries[0]!]]) {
         await expect(applyAprilChainBatch(guardClient, invalid)).rejects.toThrow('Invalid April chunk size or duplicate item');
-        expect(guardQueries).toBe(0);
       }
       // A valid early item must not commit when the final item's planned binding fails.
       await expect(applyAprilChainBatch(p, [...entries.slice(0, 99), { before: before[99]!, approved: other }])).rejects.toThrow('no current reviewed binding');
@@ -67,14 +71,18 @@ suite('bounded April bulk writer with real serving and recovery', () => {
       await expect(applyAprilChainBatch(p, before.map(before => ({ before, approved })))).rejects.toThrow('April estimates changed');
       expect(stateHash(await read())).toBe(stateHash(concurrentlyEdited));
       await p.macroEstimate.update({ where: { id: estimate.id }, data: { reasoning: estimate.reasoning } });
-      queries = 0;
+      await drainQueryEvents(); queries = 0;
       const legacy = await applyAprilChainMatch(p, before[0]!, approved);
+      await drainQueryEvents();
       const singleItemQueries = queries;
       await rollbackAprilBatch(p, [{ before: before[0]!, after: legacy }]);
-      queries = 0;
-      let after = await applyAprilChainBatch(p, before.map(before => ({ before, approved })));
+      await drainQueryEvents(); queries = 0;
+      const shuffled = [...entries].reverse(), written = await applyAprilChainBatch(p, shuffled);
+      await drainQueryEvents();
       expect(queries).toBeLessThan(25);
       expect(queries).toBeLessThan(singleItemQueries + 5);
+      expect(written.map(i => i.id)).toEqual(shuffled.map(e => e.before.id));
+      let after = before.map(b => written.find(i => i.id === b.id)!);
       // Each stale field must independently defeat the no-op shortcut.
       for (const patch of [{ hadPhoto: true }, { ingredientBreakdown: [{ name: 'old' }] }, { confidence: 'LOW' as const },
         { reasoning: 'Outdated source proof' }, { calories: 499 }, { proteinG: 29 }, { carbsG: 49 }, { fatG: 19 }] satisfies Prisma.MacroEstimateUpdateInput[]) {
@@ -104,15 +112,21 @@ suite('bounded April bulk writer with real serving and recovery', () => {
       await expect(applyAprilChainBatch(p, before.map(before => ({ before, approved })))).rejects.toThrow('April item changed');
       expect(stateHash(await read())).toBe(stateHash(after));
       const journals = before.map((before, i) => ({ before, after: after[i]! }));
+      await expect(rollbackAprilBatch(guardClient, [])).resolves.toBeUndefined();
       await expect(rollbackAprilBatch(guardClient, [journals[0]!, journals[0]!])).rejects.toThrow('April rollback identity mismatch');
-      expect(guardQueries).toBe(0);
+      // Exercise the same JSON/date representation the rollback CLI reads.
+      const malformed = JSON.parse(JSON.stringify(journals)) as typeof journals;
+      malformed.find(j => j.before.macroEstimates.some(e => e.source === 'official'))!.before.macroEstimates.find(e => e.source === 'official')!.id = randomUUID();
+      await expect(rollbackAprilBatch(p, malformed)).rejects.toThrow('April rollback readback mismatch');
+      expect(stateHash(await read())).toBe(stateHash(after));
       await p.menuItem.update({ where: { id: after[99]!.id }, data: { price: 99 } });
       const edited = await read();
       await expect(rollbackAprilBatch(p, journals)).rejects.toThrow('changed after apply');
       expect(stateHash(await read())).toBe(stateHash(edited));
       await p.menuItem.update({ where: { id: after[99]!.id }, data: { price: after[99]!.price, updatedAt: after[99]!.updatedAt } });
-      queries = 0;
+      await drainQueryEvents(); queries = 0;
       await rollbackAprilBatch(p, journals);
+      await drainQueryEvents();
       expect(queries).toBeLessThan(15);
       expect(stateHash(await read())).toBe(stateHash(before));
     } finally {
@@ -120,5 +134,5 @@ suite('bounded April bulk writer with real serving and recovery', () => {
       await p.chainItem.deleteMany({ where: { brandId: b.id } });
       await p.brand.delete({ where: { id: b.id } });
     }
-  }, 60_000);
+  }, { timeout: 120_000, maxWait: 120_000 }), 125_000);
 });

@@ -11,7 +11,8 @@ const suite = url && ['localhost', 'postgres'].includes(new URL(url).hostname) ?
 suite('catalog batch CLI with arbitrary brands', () => {
   const p = new PrismaClient();
   afterAll(async () => p.$disconnect());
-  test.each([1, 3])('catalog batch preserves serving and rollback with chunk size %i', async (chunkSize) => {
+  test.each([1, 3])('catalog batch preserves serving and rollback with chunk size %i', async (chunkSize) => p.$transaction(async tx => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(78343218)`;
     const directory = mkdtempSync(join(tmpdir(), 'fitsy-batch-')), root = resolve(__dirname, '../../../..');
     const slugs = ['a', 'b'].map(letter => 'batch-' + letter + '-' + randomUUID());
     const file = join(directory, 'batch.json');
@@ -66,7 +67,7 @@ suite('catalog batch CLI with arbitrary brands', () => {
         await p.menuItem.update({ where: { id: last.id }, data: { price: last.price, updatedAt: new Date(last.updatedAt) } });
         expect(stateHash(await p.menuItem.findMany(query))).toBe(stateHash(before));
         const complete = run('april-plan', 'complete.json');
-        run('april-apply', 'complete.json', complete.hash, '--limit=4', '--chunk-size=3');
+        expect(run('april-apply', 'complete.json', complete.hash, '--limit=4', '--chunk-size=3').applied).toBe(4);
         const completedRows = await p.menuItem.findMany(query);
         const receipt = join(directory, 'complete.json.journal/chunk-3.json');
         renameSync(receipt, receipt + '.saved');
@@ -114,5 +115,5 @@ suite('catalog batch CLI with arbitrary brands', () => {
       await p.brand.deleteMany({ where: { slug: { in: slugs } } });
       rmSync(directory, { recursive: true, force: true });
     }
-  }, 120_000);
+  }, { timeout: 120_000, maxWait: 120_000 }), 125_000);
 });
