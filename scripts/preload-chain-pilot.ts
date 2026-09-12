@@ -9,7 +9,7 @@ import { applyAprilChainMatch, aprilMenuIdentity, officialMacro, AprilPlanChange
 import { buildChainMatcher, chainMenuFingerprint, type ApprovedChainRow } from "../apps/api/services/chainCatalog";
 import { rollbackAprilBatch, type AprilSnapshot } from "../apps/api/services/chainPilotRollback";
 import { applyAprilChainBatch, MAX_APRIL_CHUNK } from "../apps/api/services/chainAprilBatch";
-import { readAprilJournals } from "./chain-april-journal";
+import { readAprilJournals } from "./preload-chain-april-journal";
 import { pickWinningEstimate } from "../packages/shared/src/utils/macroProvenance";
 
 const args = process.argv.slice(2), options = args.filter(a => a.startsWith("--"));
