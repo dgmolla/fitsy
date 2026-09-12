@@ -1,19 +1,19 @@
 {
   "generated": true,
-  "asOf": "2026-09-12T16:49:00Z",
-  "scope": "Seven completed source batches; earlier WaBa/Yoshinoya excluded",
+  "asOf": "2026-09-12T19:15:29.956593+00:00",
+  "scope": "Thirteen completed source batches; earlier WaBa/Yoshinoya excluded",
   "reviewedCodeHead": "179be20e9a26eda262c428149630f72092730302",
   "mergeCommit": "848f117952b60b62bd1ee03291151e73a1184e55",
   "pr": "https://github.com/dgmolla/fitsy/pull/289",
   "totals": {
-    "facts": 795,
-    "aliases": 1189,
-    "patchedRows": 26902,
-    "numericChanges": 9476,
-    "attributionOnly": 17426,
-    "preservedMenuIds": 67444,
-    "unchangedUnselectedRows": 40542,
-    "restaurants": 628
+    "facts": 1165,
+    "aliases": 1652,
+    "patchedRows": 33890,
+    "numericChanges": 12406,
+    "attributionOnly": 21484,
+    "preservedMenuIds": 89301,
+    "unchangedUnselectedRows": 55411,
+    "restaurants": 882
   },
   "batches": [
     {
@@ -198,6 +198,161 @@
         "dominos-approved.json": "6f0ba9d4c2fa21259031cf39cf9a0f5c65e99d51a620ef5cd3dd7db8bf1576d6",
         "dominos-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "dominos-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "cafe",
+      "chains": "Jamba, Panera, Robeks",
+      "brandSlugs": [
+        "jamba",
+        "jamba-juice",
+        "panera",
+        "panera-bread",
+        "robeks-fresh-juices-smoothies"
+      ],
+      "facts": 91,
+      "aliases": 112,
+      "patchedRows": 858,
+      "numericChanges": 546,
+      "attributionOnly": 312,
+      "preservedMenuIds": 5720,
+      "unchangedUnselectedRows": 4862,
+      "restaurants": 59,
+      "httpVerifiedAt": "2026-09-12T17:28:57.741948+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "cafe-production-segments/000810.json.verified.json": "5631611d0fe4360928914390b765cb12d95a455f53e429272296339f31bb5700",
+        "cafe-complete-http.json": "d4845f3a67d5caec1fbfa8ab529db99ea37e8474d77f427ae3f1a1cd66fc2072",
+        "cafe-approved.json": "e90766ebb8b99dba23bedb83a98e71948a8813d8ac4c4078185a1cb7353ba64b",
+        "cafe-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "cafe-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "pizza-chain",
+      "chains": "Little Caesars, Papa Johns",
+      "brandSlugs": [
+        "little-caesars",
+        "papa-johns-pizza"
+      ],
+      "facts": 36,
+      "aliases": 55,
+      "patchedRows": 1213,
+      "numericChanges": 397,
+      "attributionOnly": 816,
+      "preservedMenuIds": 3769,
+      "unchangedUnselectedRows": 2556,
+      "restaurants": 68,
+      "httpVerifiedAt": "2026-09-12T17:41:39.047358+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "pizza-chain-segments/001210.json.verified.json": "f4d29c3ec5193a193fa9ce5048056035fbf288501e379e1472619e4a52051e08",
+        "pizza-chain-complete-http.json": "c9e1946b1ac0ebe15dfa415271762526836633f7c4d394fd965e52e492535e92",
+        "pizza-chain-approved.json": "9873cc1ab630f81d17537dd2e5b4d0034e48f2d40cbcae5a4d038ccb3caf2a87",
+        "pizza-chain-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "pizza-chain-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "jimmyjohns",
+      "chains": "Jimmy Johns",
+      "brandSlugs": [
+        "jimmy-john-s"
+      ],
+      "facts": 70,
+      "aliases": 79,
+      "patchedRows": 81,
+      "numericChanges": 78,
+      "attributionOnly": 3,
+      "preservedMenuIds": 532,
+      "unchangedUnselectedRows": 451,
+      "restaurants": 5,
+      "httpVerifiedAt": "2026-09-12T17:56:20.636546+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "jimmyjohns-segments/000010.json.verified.json": "7e15d6b12f13bfc720313fce0fb2f814775d2ff2b0a1256b1fa69006f45ce807",
+        "jimmyjohns-complete-http.json": "12b054fd3155d156938df9dd3423f3d6a81e26ec93e692dc5d8c3b2bc0cb48f3",
+        "jimmyjohns-approved.json": "068a7dfd891a306b29322a3f77fd8ce2ec9c9e6475965fbc3ccc4a88e2c417bc",
+        "jimmyjohns-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "jimmyjohns-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "wingstop",
+      "chains": "Wingstop",
+      "brandSlugs": [
+        "wingstop"
+      ],
+      "facts": 11,
+      "aliases": 11,
+      "patchedRows": 382,
+      "numericChanges": 12,
+      "attributionOnly": 370,
+      "preservedMenuIds": 2997,
+      "unchangedUnselectedRows": 2615,
+      "restaurants": 51,
+      "httpVerifiedAt": "2026-09-12T18:58:16.022993+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "wingstop-segments/000310.json.verified.json": "de3e2033db694642d2a5d52d20e4a9a331eb782a943593405e4c6f4bf68c1a9b",
+        "wingstop-complete-http.json": "e16a130f9d5fc9f91bcc5923c85b39789a8c0c61d9907aafe86465ad8a9ce103",
+        "wingstop-approved.json": "75ad4b10798b7b5227cd6e13556441e236797f7493d40ea358ec7273a727c73e",
+        "wingstop-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "wingstop-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "burgerking",
+      "chains": "Burger King",
+      "brandSlugs": [
+        "burger-king"
+      ],
+      "facts": 94,
+      "aliases": 124,
+      "patchedRows": 3033,
+      "numericChanges": 1673,
+      "attributionOnly": 1360,
+      "preservedMenuIds": 4544,
+      "unchangedUnselectedRows": 1511,
+      "restaurants": 42,
+      "httpVerifiedAt": "2026-09-12T19:11:02.770506+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "burgerking-segments/003010.json.verified.json": "b0b3549086f747139e96c8c438edcdc9e0c4024e833ea1162e1864589d223a2e",
+        "burgerking-complete-http.json": "dce91988d461e0918c4d6c1b4a3c3b6f1295db967ecb266cbe1bf11d5eb83201",
+        "burgerking-approved.json": "740c3eeb7919575840d35e5499a537bf71c14712f6b377c3f2a4b9d386d670cf",
+        "burgerking-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "burgerking-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "ihop",
+      "chains": "IHOP",
+      "brandSlugs": [
+        "ihop"
+      ],
+      "facts": 68,
+      "aliases": 82,
+      "patchedRows": 1421,
+      "numericChanges": 224,
+      "attributionOnly": 1197,
+      "preservedMenuIds": 4295,
+      "unchangedUnselectedRows": 2874,
+      "restaurants": 29,
+      "httpVerifiedAt": "2026-09-12T19:15:29.956593+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "ihop-segments/001410.json.verified.json": "e2dde0488961544aa66bb1482395a9d6cac065c300689ad9a4532e0d37fbdcc8",
+        "ihop-complete-http.json": "4174efa41efd743d7a7ac804f76059f6295d9f536bfc28aa62f51acd6cb0f1af",
+        "ihop-approved.json": "c915e2a8999f9361d8469c35c3df1a3f8a10120fd1ba1291179b011b6a9f73ca",
+        "ihop-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "ihop-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
       }
     }
   ],
