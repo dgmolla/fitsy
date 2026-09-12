@@ -16,22 +16,27 @@ import { parseStoreV1Response } from "../../services/menuSources/ueApiClient";
 const suite = process.env["POSTGRES_PRISMA_URL"] ? describe : describe.skip;
 suite("official PDF pilot correction against captured April data", () => {
   const p = new PrismaClient(); let scope: string, brands: Brand[], catalog: ChainItem[], pilot: typeof chainPilot;
-  beforeEach(async () => {
+  const setup = async () => {
     scope = randomUUID(); brands = [];
     pilot = { ...chainPilot, changes: chainPilot.changes.map(c => ({ ...c, slug: scope + c.slug })), quarantine: chainPilot.quarantine.map(c => ({ ...c, slug: scope + c.slug })) };
     for (const slug of ["waba-grill", "yoshinoya"]) brands.push(await p.brand.create({ data: { slug: scope + slug, displayName: scope + (slug === "waba-grill" ? " WaBa Grill" : " Yoshinoya"), detectionConf: "high" } }));
     for (const row of [...pilot.changes, ...pilot.quarantine]) if (row.expected) await p.chainItem.create({ data: { brandId: brands.find(b => b.slug === row.slug)!.id, ...row.expected } });
     catalog = await p.chainItem.findMany({ where: { brandId: { in: brands.map(b => b.id) } } });
-  });
-  afterEach(async () => {
+  };
+  const cleanup = async () => {
     const ids = brands.map(b => b.id);
     await p.restaurant.deleteMany({ where: { OR: [{ brandId: { in: ids } }, { storeUuid: { startsWith: scope } }] } });
     await p.chainItem.deleteMany({ where: { brandId: { in: ids } } });
     await p.brand.deleteMany({ where: { id: { in: ids } } });
     await p.pipelineCompletedHex.deleteMany({ where: { runId: scope } });
-  });
+  };
+  const chainTest = (name: string, body: () => Promise<void>) => test(name, () => p.$transaction(async tx => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(78343218)`;
+    await setup();
+    try { await body(); } finally { await cleanup(); }
+  }, { timeout: 120_000, maxWait: 120_000 }), 125_000);
   afterAll(async () => { await p.$disconnect(); await servingPrisma.$disconnect(); });
-  test("12 catalog corrections are atomic, idempotent after replan, and exactly reversible", async () => {
+  chainTest("12 catalog corrections are atomic, idempotent after replan, and exactly reversible", async () => {
     const plan = planChainPilot(brands, catalog, pilot);
     expect(plan.changes).toHaveLength(12);
     const after = await applyCatalogPlan(p, plan, pilot);
@@ -43,7 +48,7 @@ suite("official PDF pilot correction against captured April data", () => {
     const restored = await p.chainItem.findMany({ where: { brandId: { in: brands.map(b => b.id) } }, orderBy: { id: "asc" } });
     expect(stateHash(restored)).toBe(stateHash([...catalog].sort((a, b) => a.id.localeCompare(b.id))));
   });
-  test("stale or altered plans and mismatched rollback records fail without partial writes", async () => {
+  chainTest("stale or altered plans and mismatched rollback records fail without partial writes", async () => {
     const plan = planChainPilot(brands, catalog, pilot);
     await expect(applyCatalogPlan(p, { ...plan, hash: "wrong" }, pilot)).rejects.toThrow("digest");
     const changed = catalog[0]!;
@@ -56,7 +61,7 @@ suite("official PDF pilot correction against captured April data", () => {
     await p.chainItem.update({ where: { id: after[0]!.id }, data: { servingSize: "Concurrent edit" } });
     await expect(rollbackCatalogPlan(p, plan, after)).rejects.toThrow("changed after apply");
   });
-  test("all 64 captured April rows match the actual seven-dish correction set; live UE observations agree", async () => {
+  chainTest("all 64 captured April rows match the actual seven-dish correction set; live UE observations agree", async () => {
     await applyCatalogPlan(p, planChainPilot(brands, catalog, pilot), pilot);
     const stored = await p.chainItem.findMany({ where: { brandId: { in: brands.map(b => b.id) } } });
     const match = buildChainMatcher(stored), restaurants = new Map<string, string>();
@@ -89,8 +94,8 @@ suite("official PDF pilot correction against captured April data", () => {
       expect(result).toMatchObject({ status: "matched", row: { calories: capture.official.calories, proteinG: capture.official.proteinG, carbsG: capture.official.carbsG, fatG: capture.official.fatG } });
       expect(match(brandId, { ...item, calorieRange: [100, 2000] })).toEqual({ status: "unmatched" });
     }
-  }, 30_000);
-  test("April rollback restores an existing official estimate and rejects any later item or estimate edit", async () => {
+  });
+  chainTest("April rollback restores an existing official estimate and rejects any later item or estimate edit", async () => {
     await applyCatalogPlan(p, planChainPilot(brands, catalog, pilot), pilot);
     const brand = brands.find(b => b.slug === scope + "waba-grill")!;
     const restaurant = await p.restaurant.create({ data: { storeUuid: scope, brandId: brand.id, name: brand.displayName, address: "Rollback fixture", lat: 34, lng: -118, cuisineTags: [], source: "ue_feed" } });
@@ -113,7 +118,7 @@ suite("official PDF pilot correction against captured April data", () => {
     expect(stateHash(restored)).toBe(stateHash(before));
     expect(restored.macroEstimates[0]).toEqual(old);
   });
-  test("all seven configurations from actual UE menus persist identically at new locations", async () => {
+  chainTest("all seven configurations from actual UE menus persist identically at new locations", async () => {
     await applyCatalogPlan(p, planChainPilot(brands, catalog, pilot), pilot);
     const runtime = await loadChainServing(p); let count = 0;
     for (const brand of brands) {

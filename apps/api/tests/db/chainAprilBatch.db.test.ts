@@ -15,8 +15,17 @@ suite('bounded April bulk writer with real serving and recovery', () => {
     return Reflect.get(target, property, receiver);
   } });
   let queries = 0;
-  p.$on('query', () => queries++);
-  const drainQueryEvents = () => new Promise<void>(resolve => setImmediate(resolve));
+  let queryDrained: (() => void) | undefined;
+  p.$on('query', event => {
+    if (event.query.includes('chain_april_test_drain')) queryDrained?.();
+    else queries++;
+  });
+  const drainQueryEvents = async () => {
+    const observed = new Promise<void>(resolve => { queryDrained = resolve; });
+    await p.$queryRaw`SELECT 1 AS chain_april_test_drain`;
+    await observed;
+    queryDrained = undefined;
+  };
   afterAll(async () => p.$disconnect());
   test('serves a 100-item chunk, preserves prior estimates, no-ops and atomically restores all records', async () => p.$transaction(async tx => {
     // Full-catalog readers in other chain suites share this fixture lock.
