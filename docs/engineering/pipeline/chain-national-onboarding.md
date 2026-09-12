@@ -1,5 +1,8 @@
 # Scaling the reviewed chain pipeline
 
+This document records the September 11 baseline and operating method.
+For completed production changes, see the [September 12 rollout results](chain-production-rollout-2026-09-12.md).
+
 The largest immediate opportunity is to improve chain menus already in production.
 The September 11 read-only inventory found 297,506 menu rows across 688 brand groups and 3,811 locations with menus that pass the shared brand-name guard.
 At that pre-rollout snapshot, only WaBa and Yoshinoya produced matches through the reviewed chain matcher: 592 rows.
