@@ -1,19 +1,19 @@
 {
   "generated": true,
-  "asOf": "2026-09-12T20:19:05.121211+00:00",
-  "scope": "Sixteen completed source batches; earlier WaBa/Yoshinoya excluded",
+  "asOf": "2026-09-12T22:09:53.747004+00:00",
+  "scope": "22 completed source batches; earlier WaBa/Yoshinoya excluded",
   "reviewedCodeHead": "179be20e9a26eda262c428149630f72092730302",
   "mergeCommit": "848f117952b60b62bd1ee03291151e73a1184e55",
   "pr": "https://github.com/dgmolla/fitsy/pull/289",
   "totals": {
-    "facts": 1221,
-    "aliases": 1728,
-    "patchedRows": 34613,
-    "numericChanges": 12640,
-    "attributionOnly": 21973,
-    "preservedMenuIds": 94066,
-    "unchangedUnselectedRows": 59453,
-    "restaurants": 936
+    "facts": 1275,
+    "aliases": 1805,
+    "patchedRows": 35285,
+    "numericChanges": 13192,
+    "attributionOnly": 22093,
+    "preservedMenuIds": 104702,
+    "unchangedUnselectedRows": 69417,
+    "restaurants": 1053
   },
   "batches": [
     {
@@ -428,6 +428,157 @@
         "habit-approved.json": "c13d06744e26cddfe5f7d57c5f8484355cbcf7abf389b1aa56d28c314df53369",
         "habit-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "habit-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "wendys",
+      "chains": "Wendy's",
+      "brandSlugs": [
+        "wendy-s"
+      ],
+      "facts": 12,
+      "aliases": 23,
+      "patchedRows": 201,
+      "numericChanges": 111,
+      "attributionOnly": 90,
+      "preservedMenuIds": 1923,
+      "unchangedUnselectedRows": 1722,
+      "restaurants": 18,
+      "httpVerifiedAt": "2026-09-12T20:36:44.532159+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "wendys-segments/000110.json.verified.json": "ca6d104c3ec679971d9418bcb84eb8dfdcf78d65ccc34b2edec3d7689713af74",
+        "wendys-complete-http.json": "e11f03a4ce6fd96950d52c6da286e93502a07560eca21bd1f658e460344545d4",
+        "wendys-approved.json": "9632eb3c5aa3b7e575410be234c43ee7623c11377f44532e38ce67a217ac5dda",
+        "wendys-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "wendys-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "freshbrothers",
+      "chains": "Fresh Brothers",
+      "brandSlugs": [
+        "fresh-brothers"
+      ],
+      "facts": 2,
+      "aliases": 6,
+      "patchedRows": 18,
+      "numericChanges": 18,
+      "attributionOnly": 0,
+      "preservedMenuIds": 3284,
+      "unchangedUnselectedRows": 3266,
+      "restaurants": 10,
+      "httpVerifiedAt": "2026-09-12T21:02:56.811069+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "freshbrothers-segments/000010.json.verified.json": "7e025eb2f06692c2ceb1bdee16bf51fff7eb6b45212b7cca314757cff5d188f6",
+        "freshbrothers-complete-http.json": "46740b804bb933253114994d9ab1a303a3848c285ee9a0a9236caa39095db34b",
+        "freshbrothers-approved.json": "1a22c4b643c9ae75eed3ac792b8ec306563112d87878019ffa2d81250d1f3af2",
+        "freshbrothers-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "freshbrothers-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "bww",
+      "chains": "Buffalo Wild Wings",
+      "brandSlugs": [
+        "buffalo-wild-wings"
+      ],
+      "facts": 17,
+      "aliases": 19,
+      "patchedRows": 55,
+      "numericChanges": 25,
+      "attributionOnly": 30,
+      "preservedMenuIds": 1537,
+      "unchangedUnselectedRows": 1482,
+      "restaurants": 11,
+      "httpVerifiedAt": "2026-09-12T21:13:48.576125+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "bww-segments/000010.json.verified.json": "ee5e9b4900b00dc29f13d89026847f526fcac54a5e84b4e0aa23b71d3e58dd5d",
+        "bww-complete-http.json": "4b091f6bff5d2a9d3e99f70dce6fb1e02a237faa9c9248794b1ddc338284354f",
+        "bww-approved.json": "aebee161a1cdcb656a2dfc76b28b90ed4dc3b43ba42aaea32668ee3ec33f44b3",
+        "bww-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "bww-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "dunkin",
+      "chains": "Dunkin",
+      "brandSlugs": [
+        "dunkin"
+      ],
+      "facts": 13,
+      "aliases": 13,
+      "patchedRows": 230,
+      "numericChanges": 230,
+      "attributionOnly": 0,
+      "preservedMenuIds": 1378,
+      "unchangedUnselectedRows": 1148,
+      "restaurants": 19,
+      "httpVerifiedAt": "2026-09-12T21:32:32.262026+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "dunkin-segments/000210.json.verified.json": "bd9c2558de1e26b8cde76544da3bd34abe972c4290a278aabb8bcc2e155f8b84",
+        "dunkin-complete-http.json": "3ee6215b42aa004702213a80de6711529687746fdf1278be3aaa92306c98fee1",
+        "dunkin-approved.json": "cf9095ef0a53f83540e9dab70309ede03ee675af1919072c6a7187e91c2c50ec",
+        "dunkin-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "dunkin-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "jerseymikes",
+      "chains": "Jersey Mike's",
+      "brandSlugs": [
+        "jersey-mike-s-subs"
+      ],
+      "facts": 2,
+      "aliases": 2,
+      "patchedRows": 60,
+      "numericChanges": 60,
+      "attributionOnly": 0,
+      "preservedMenuIds": 1049,
+      "unchangedUnselectedRows": 989,
+      "restaurants": 31,
+      "httpVerifiedAt": "2026-09-12T21:41:07.328420+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "jerseymikes-segments/000010.json.verified.json": "7f86bfa51be8ce0934949fabaa1c41e84a44fc123bafc3317e423781cc2600cf",
+        "jerseymikes-complete-http.json": "b4289c94fa0a6b059988670eeaae88f2f6f7ac29f4e765622a5d6745f26b8712",
+        "jerseymikes-approved.json": "31e694b98830e9e7b5a6eaaa341f7f7c1d5ddf649b8980495c30c2632d9cb3ad",
+        "jerseymikes-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "jerseymikes-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "popeyes",
+      "chains": "Popeyes",
+      "brandSlugs": [
+        "popeyes",
+        "popeyes-louisiana-chicken"
+      ],
+      "facts": 8,
+      "aliases": 14,
+      "patchedRows": 108,
+      "numericChanges": 108,
+      "attributionOnly": 0,
+      "preservedMenuIds": 1465,
+      "unchangedUnselectedRows": 1357,
+      "restaurants": 28,
+      "httpVerifiedAt": "2026-09-12T22:09:53.747004+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "popeyes-segments/000010.json.verified.json": "9ab3d10cf60fcc9ce5a969c78387df8655d27ded75bf5afec93a740e31be78a6",
+        "popeyes-complete-http.json": "77438875deb8064629faeaa1163af70f1a9df4a510c85c28507fd4b47142a58e",
+        "popeyes-approved.json": "ac6e837029a2459ee979241a0aa0e8c779429c6fdb882e1562d3b313b603cf3c",
+        "popeyes-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "popeyes-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
       }
     }
   ],

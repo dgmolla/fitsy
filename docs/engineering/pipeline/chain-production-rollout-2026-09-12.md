@@ -1,7 +1,7 @@
 # Chain nutrition rollout: production results
 
-**34,613 existing menu rows now use reviewed official nutrition across 30 brand identities.**
-These sixteen completed batches are separate from the earlier WaBa/Yoshinoya rollout.
+**35,285 existing menu rows now use reviewed official nutrition across 37 brand identities.**
+These 22 completed batches are separate from the earlier WaBa/Yoshinoya rollout.
 National onboarding is still in progress.
 
 ## What changed
@@ -24,15 +24,21 @@ National onboarding is still in progress.
 | Shake Shack | 446 | 56 | 390 |
 | CAVA | 170 | 71 | 99 |
 | Habit Burger & Grill | 107 | 107 | 0 |
-| **Total** | **34,613** | **12,640** | **21,973** |
+| Wendy's | 201 | 111 | 90 |
+| Fresh Brothers | 18 | 18 | 0 |
+| Buffalo Wild Wings | 55 | 25 | 30 |
+| Dunkin | 230 | 230 | 0 |
+| Jersey Mike's | 60 | 60 | 0 |
+| Popeyes | 108 | 108 | 0 |
+| **Total** | **35,285** | **13,192** | **22,093** |
 
 “Nutrition values changed” means at least one of calories, protein, carbs or fat changed.
 “Attribution only” means those four values stayed the same and reviewed official attribution was applied.
 These counts measure rollout behavior, not accuracy against measured food.
 
-The batches loaded **1,221 approved facts and 1,728 exact menu aliases** into the chain catalog.
+The batches loaded **1,275 approved facts and 1,805 exact menu aliases** into the chain catalog.
 Existing menu items and their winning macro estimates then received the same facts through the shared matcher.
-Jamba and Panera each have two stored brand identities, so 30 identities represent 28 distinct consumer brands.
+Jamba, Panera and Popeyes each have two stored brand identities, so 37 identities represent 34 distinct consumer brands.
 Two additional identities, Dave's Hot Chicken and Nothing Bundt Cakes, were linked to 23 existing restaurants; their 232 menu items and estimates stayed unchanged, with no official nutrition activated yet.
 
 ## Both paths use the same catalog
@@ -57,14 +63,14 @@ Offline UE runs must use a checkout containing that release.
 
 | Check | Result and limit |
 |---|---|
-| Production preservation | All **94,066 menu IDs across 936 restaurants** preserved; all **59,453 unselected rows** unchanged. |
+| Production preservation | All **104,702 menu IDs across 1,053 restaurants** preserved; all **69,417 unselected rows** unchanged. |
 | Serving API | Complete authenticated menu reads checked every selected restaurant and changed row; search/detail checks passed per changed brand. |
 | Repeat execution | Every completed batch produced zero pending catalog and April changes. |
 | Recovery | Local exact rollback passed; production writes have bounded transaction journals and before/after snapshots. Production was not rolled back as a test. |
 | Future imports | Local tests used the real parser, resolver, brand handoff, `persistHex` and serving layer. Current UE captures and simulated historical menus are separate evidence. No production hex was added. |
 | Source quality | Automated transcription checks plus independent source/binding review. Review depth varies; this is not measured restaurant nutrition or an exhaustive human audit. |
 
-Several batches, including Shake Shack, CAVA and Habit, have no current UE capture.
+Several batches, including all six additions after Habit, have no current UE capture.
 Their import proof uses complete historical menus, so current availability and naming coverage remain unverified.
 Activating an approved catalog routes new imports through UE; it does not guarantee UE will return a menu.
 
@@ -84,6 +90,9 @@ The aggregate record alone cannot perform a rollback.
 | Wrong source scope | Pizza Hut's Canadian guide and Express breakfast items were excluded from ordinary US bindings. |
 | Changed recipes | CAVA's older Greek Chicken and Spicy Chicken + Avocado descriptions differ from the current recipe. Only the matching descriptions were approved; 28 old or empty-description rows stayed held. |
 | Conflicting official pages | Habit menu calories disagree with detailed nutrition for 321 mapped rows. Five consistent facts were approved; fries were excluded after discovering an unspecified ketchup serving. |
+| Two current sources disagree | Buffalo Wild Wings nachos and carrots/celery disagreed with its current dine-in menu. Both bindings were removed; five other facts lacked a second label, which was recorded as absence rather than agreement. |
+| Recipe and serving ambiguity | Dunkin ingredient blocks distinguish Swiss cheese from other sandwiches and standard from Kosher recipes. Jersey Mike's generic cookie and unspecified sub sizes stayed held. Fresh Brothers pizzas stayed held because whole-order slice counts were unavailable. |
+| Duplicate chain identities | Popeyes had two additional locations under a second brand. Their eight eligible rows used the same reviewed facts, with separate brand-scoped aliases and both importer paths tested. |
 
 Burger King's 225 visible panels passed a full automated comparison with captured per-serving observations; independent review sampled raw macros and reviewed every proposed alias.
 IHOP's automated checks cover all 417 source rows, while independent raw-source and alias review was sampled.
@@ -93,6 +102,9 @@ All three retain unresolved cases as estimates.
 Shake Shack's 35 facts and 44 aliases were independently reviewed in full.
 CAVA and Habit review covered all 21 approved facts and 32 aliases; local tests also checked all 37 stored restaurant names with and without a prelinked brand.
 Their production plans selected exactly the expected IDs and preserved Habit's 100 existing catalog rows.
+Wendy's, Fresh Brothers, Buffalo Wild Wings, Dunkin, Jersey Mike's and Popeyes received independent review of every proposed fact and alias.
+Their holds include changed recipes, unknown container quantities, mixed chicken orders, dip choices and unsized drinks.
+Published standard servings and singular product assumptions remain distinct from measured portions.
 Del Taco remains unpublished because its guide limits nutrition coverage to company-owned restaurants, and location eligibility has not been established.
 
 ## Remaining work
