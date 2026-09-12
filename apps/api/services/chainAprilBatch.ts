@@ -67,7 +67,7 @@ export async function restoreAprilChainBatch(prisma: PrismaClient, journals: Apr
   await chainTransaction(prisma, async tx => {
     await tx.$queryRaw`SELECT id FROM "MenuItem" WHERE id IN (${Prisma.join(ids)}) ORDER BY id FOR UPDATE`;
     const current = new Map((await tx.menuItem.findMany({ where: { id: { in: ids } }, include })).map(r => [r.id, r]));
-    for (const { after } of journals) if (stateHash(current.get(after.id)) !== stateHash(after)) throw new Error("April row changed after apply; refusing rollback");
+    for (const { after } of journals) if (stateHash(current.get(after.id) ?? null) !== stateHash(after)) throw new Error("April row changed after apply; refusing rollback");
     const remove = journals.filter(j => !j.before.macroEstimates.some(e => e.source === "official")).map(j => j.before.id);
     const restore = journals.flatMap(j => j.before.macroEstimates.filter(e => e.source === "official"));
     if (remove.length) await tx.macroEstimate.deleteMany({ where: { menuItemId: { in: remove }, source: "official" } });
@@ -84,6 +84,6 @@ export async function restoreAprilChainBatch(prisma: PrismaClient, journals: Apr
       FROM jsonb_to_recordset(${JSON.stringify(menu)}::jsonb) AS v(id text, calories int, "proteinG" double precision, "carbsG" double precision, "fatG" double precision, "updatedAt" timestamp)
       WHERE m.id = v.id`;
     const restored = new Map((await tx.menuItem.findMany({ where: { id: { in: ids } }, include })).map(r => [r.id, r]));
-    for (const { before } of journals) if (stateHash(restored.get(before.id)) !== stateHash(before)) throw new Error("April rollback readback mismatch");
+    for (const { before } of journals) if (stateHash(restored.get(before.id) ?? null) !== stateHash(before)) throw new Error("April rollback readback mismatch");
   }, 120_000);
 }

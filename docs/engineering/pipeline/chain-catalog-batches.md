@@ -42,13 +42,13 @@ npx tsx scripts/preload-chain-pilot.ts april-apply work/remainder.json PLAN_HASH
 ```
 
 Use fresh artifact names; plans and rollback journals never overwrite existing evidence. Replan after each successful batch. Roll back April journals before the catalog journal, following [the pilot recovery rules](chain-pdf-pilot.md). Catalog writes are atomic.
-April applies default to one guarded item at a time.
-`--chunk-size=2..100` validates every row in a chunk before any write and commits that chunk atomically.
+`--chunk-size=1..100` defaults to one guarded item at a time, retaining the original numbered per-item journals.
+Sizes 2 through 100 validate every row in a chunk before any write and commit that chunk atomically.
 It reuses one catalog/brand snapshot per transaction and writes estimates and winning menu macros in bulk.
 The next chunk starts only after the complete prior chunk receipt is flushed to disk.
 A stale item or estimate stops the whole pending chunk; previously committed chunks remain recorded.
 Rollback accepts both journal formats and restores the selected journal atomically after comparing every recorded post-write row.
-Missing or corrupt chunk receipts block rollback until commit state is inspected from the saved plan.
+Missing or corrupt chunk intents or receipts block rollback until commit state is inspected from the saved plan.
 A started marker without a completion receipt never proves that no rows committed.
 Database serialization conflicts (Prisma P2034 or raw-query P2010 / SQLSTATE 40001) retry the entire guarded transaction at most twice, rechecking the original plan each time. Other errors are not retried. Do not change catalog approvals during an active UE enrichment run.
 

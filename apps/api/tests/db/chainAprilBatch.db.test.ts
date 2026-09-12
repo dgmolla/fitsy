@@ -21,13 +21,32 @@ suite('bounded April bulk writer with real serving and recovery', () => {
       const batch = { version: 1 as const, reviewedBy: 'Independent synthetic fixture facts', quarantine: [], changes: [{ slug, canonicalKey: 'bowl', expected: null,
         facts: { calories: 500, proteinG: 30, carbsG: 50, fatG: 20, servingSize: 'one bowl' }, source: { url: 'https://example.com/nutrition', sha256: 'a'.repeat(64) }, locator: 'Fixture label',
         aliases: Array.from({ length: 100 }, (_, i) => ({ name: 'Bowl ' + i, section: 'Bowls' })) }] };
+      batch.changes.push({ ...batch.changes[0]!, canonicalKey: 'other', aliases: [{ name: 'Other dish', section: 'Sides' }] });
       await applyCatalogPlan(p, planChainPilot([b], [], batch), batch);
-      const approved = approvedChainRow((await p.chainItem.findFirstOrThrow({ where: { brandId: b.id } })))!;
+      const approved = approvedChainRow((await p.chainItem.findFirstOrThrow({ where: { brandId: b.id, canonicalKey: 'bowl' } })))!;
+      const other = approvedChainRow((await p.chainItem.findFirstOrThrow({ where: { brandId: b.id, canonicalKey: 'other' } })))!;
       for (let i = 0; i < 100; i++) await p.menuItem.create({ data: { restaurantId: r.id, name: 'Bowl ' + i, section: 'Bowls', price: 12, dietaryTags: ['fixture'], calories: 400, proteinG: 20, carbsG: 50, fatG: 13,
         macroEstimates: { create: [{ source: 'haiku', calories: 400, proteinG: 20, carbsG: 50, fatG: 13, confidence: 'MEDIUM' },
-          ...(i === 0 ? [{ source: 'official', calories: 350, proteinG: 15, carbsG: 40, fatG: 10, confidence: 'LOW' as const, reasoning: 'Old source', hadPhoto: true, ingredientBreakdown: [{ name: 'old' }] }] : [])] } } });
+          ...(i === 0 ? [{ source: 'official', calories: 350, proteinG: 15, carbsG: 40, fatG: 10, confidence: 'LOW' as const, reasoning: 'Old source', hadPhoto: true, ingredientBreakdown: [{ name: 'old' }], estimatedAt: new Date('2020-01-01'), expiresAt: new Date('2030-01-01') }] : [])] } } });
       const read = () => p.menuItem.findMany({ where: { restaurantId: r.id }, include: { macroEstimates: { orderBy: { id: 'asc' as const } } }, orderBy: { id: 'asc' as const } });
       const before = await read();
+      const entries = before.map(before => ({ before, approved }));
+      for (const invalid of [[], [...entries, entries[0]!], [entries[0]!, entries[0]!]]) {
+        queries = 0;
+        await expect(applyAprilChainBatch(p, invalid)).rejects.toThrow('Invalid April chunk size or duplicate item');
+        expect(queries).toBe(0);
+      }
+      // A valid early item must not commit when the final item's planned binding fails.
+      await expect(applyAprilChainBatch(p, [...entries.slice(0, 99), { before: before[99]!, approved: other }])).rejects.toThrow('no current reviewed binding');
+      expect(stateHash(await read())).toBe(stateHash(before));
+      await p.restaurant.update({ where: { id: r.id }, data: { name: 'Different brand' } });
+      await expect(applyAprilChainBatch(p, entries)).rejects.toThrow('Restaurant brand identity changed');
+      expect(stateHash(await read())).toBe(stateHash(before));
+      await p.restaurant.update({ where: { id: r.id }, data: { name: r.name } });
+      await p.chainItem.update({ where: { id: approved.id }, data: { calories: approved.calories + 1 } });
+      await expect(applyAprilChainBatch(p, entries)).rejects.toThrow('Chain review changed');
+      expect(stateHash(await read())).toBe(stateHash(before));
+      await p.chainItem.update({ where: { id: approved.id }, data: { calories: approved.calories } });
       const stale = before.map(before => ({ before, approved }));
       stale[99] = { before: { ...before[99]!, updatedAt: new Date(0) }, approved };
       await expect(applyAprilChainBatch(p, stale)).rejects.toThrow('April item changed');
@@ -45,7 +64,7 @@ suite('bounded April bulk writer with real serving and recovery', () => {
       queries = 0;
       const after = await applyAprilChainBatch(p, before.map(before => ({ before, approved })));
       expect(queries).toBeLessThan(25);
-      expect(queries).toBeLessThan(singleItemQueries * 2);
+      expect(queries).toBeLessThan(singleItemQueries + 5);
       const page = await getMenuPage(p, r.id, { limit: 250 });
       expect(page!.menuItems).toHaveLength(100);
       for (const item of page!.menuItems) expect(item.macros).toMatchObject({ calories: 500, proteinG: 30, carbsG: 50, fatG: 20, confidence: 'HIGH' });
@@ -53,11 +72,21 @@ suite('bounded April bulk writer with real serving and recovery', () => {
         const previous = before.find(b => b.id === item.id)!;
         expect(item.macroEstimates.find(e => e.source === 'haiku')).toEqual(previous.macroEstimates.find(e => e.source === 'haiku'));
         for (const key of ['id', 'name', 'price', 'dietaryTags', 'createdAt'] as const) expect(item[key]).toEqual(previous[key]);
+        const oldOfficial = previous.macroEstimates.find(e => e.source === 'official');
+        if (oldOfficial) {
+          const refreshed = item.macroEstimates.find(e => e.source === 'official')!;
+          expect(refreshed.id).toBe(oldOfficial.id);
+          expect(refreshed.estimatedAt.getTime()).toBeGreaterThan(oldOfficial.estimatedAt.getTime());
+          expect(refreshed.expiresAt).toEqual(oldOfficial.expiresAt);
+        }
       }
       expect(stateHash(await applyAprilChainBatch(p, after.map(before => ({ before, approved }))))).toBe(stateHash(after));
       await expect(applyAprilChainBatch(p, before.map(before => ({ before, approved })))).rejects.toThrow('April item changed');
       expect(stateHash(await read())).toBe(stateHash(after));
       const journals = before.map((before, i) => ({ before, after: after[i]! }));
+      queries = 0;
+      await expect(rollbackAprilBatch(p, [journals[0]!, journals[0]!])).rejects.toThrow('April rollback identity mismatch');
+      expect(queries).toBe(0);
       await p.menuItem.update({ where: { id: after[99]!.id }, data: { price: 99 } });
       const edited = await read();
       await expect(rollbackAprilBatch(p, journals)).rejects.toThrow('changed after apply');

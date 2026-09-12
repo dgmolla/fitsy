@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, renameSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { chainPilot } from '../../services/chainPilotData';
 import { stateHash } from '../../services/chainPilotPlan';
 const url = process.env['POSTGRES_PRISMA_URL'];
@@ -76,6 +76,28 @@ suite('catalog batch CLI with arbitrary brands', () => {
         try { expect(() => run('april-rollback', 'complete.json.journal')).toThrow('Invalid April chunk receipt'); }
         finally { writeFileSync(receipt, exactReceipt); }
         expect(stateHash(await p.menuItem.findMany(query))).toBe(stateHash(completedRows));
+        const misplaced = join(directory, 'complete.json.journal/chunk-4.json');
+        renameSync(receipt, misplaced);
+        try { expect(() => run('april-rollback', 'complete.json.journal')).toThrow('Incomplete or mixed April chunk evidence'); }
+        finally { renameSync(misplaced, receipt); }
+        const intent = join(directory, 'complete.json.journal/chunk-3.started.json'), exactIntent = readFileSync(intent, 'utf8');
+        renameSync(intent, intent + '.saved');
+        try { expect(() => run('april-rollback', 'complete.json.journal')).toThrow('Missing April chunk intent'); }
+        finally { renameSync(intent + '.saved', intent); }
+        writeFileSync(intent, JSON.stringify({ ...JSON.parse(exactIntent), count: 99 }));
+        try { expect(() => run('april-rollback', 'complete.json.journal')).toThrow('Invalid April chunk intent'); }
+        finally { writeFileSync(intent, exactIntent); }
+        const started = join(directory, 'complete.json.journal/started.json'), exactStarted = readFileSync(started, 'utf8');
+        const legacy = JSON.parse(exactStarted); delete legacy.chunkSize; writeFileSync(started, JSON.stringify(legacy));
+        try { expect(() => run('april-rollback', 'complete.json.journal')).toThrow('Mixed April journal evidence'); }
+        finally { writeFileSync(started, exactStarted); }
+        expect(stateHash(await p.menuItem.findMany(query))).toBe(stateHash(completedRows));
+        const removed = completedRows[3]!;
+        await p.menuItem.delete({ where: { id: removed.id } });
+        expect(() => run('april-rollback', 'complete.json.journal')).toThrow('April row changed after apply; refusing rollback');
+        expect(stateHash(await p.menuItem.findMany(query))).toBe(stateHash(completedRows.filter(i => i.id !== removed.id)));
+        const { macroEstimates, ...menu } = removed;
+        await p.menuItem.create({ data: { ...menu, macroEstimates: { create: macroEstimates.map(({ menuItemId: _menuItemId, ingredientBreakdown: _ingredientBreakdown, ...estimate }) => ({ ...estimate, ingredientBreakdown: Prisma.DbNull })) } } });
         expect(run('april-rollback', 'complete.json.journal').rolledBack).toBe(4);
         expect(stateHash(await p.menuItem.findMany(query))).toBe(stateHash(before));
       }
@@ -86,5 +108,5 @@ suite('catalog batch CLI with arbitrary brands', () => {
       await p.brand.deleteMany({ where: { slug: { in: slugs } } });
       rmSync(directory, { recursive: true, force: true });
     }
-  }, 60_000);
+  }, 120_000);
 });
