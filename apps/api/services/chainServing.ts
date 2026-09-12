@@ -9,13 +9,25 @@ import { UeApiDirectSource, type UeConcurrencyGate } from "./menuSources/ueApiDi
 import type { MacroData, StructuredMenuItem } from "./menuSources/types";
 
 interface ChainBrand { id: string; slug: string; displayName: string; aliases: string[]; detectionConf: string | null; menuKind: string }
-const brandName = (name: string) => name.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
-export function verifiedBrand(restaurant: { name: string; brandId?: string | null }, brands: ChainBrand[]): string | undefined {
-  const name = brandName(restaurant.name.replace(/\s*\([^()]+\)\s*$/, "").split(/\s+-\s+/)[0]!);
-  const candidates = brands.filter(b => ["high", "llm-confirmed"].includes(b.detectionConf ?? "") && b.menuKind === "restaurant"
-    && [b.displayName, b.slug, ...b.aliases].some(alias => brandName(alias) === name));
-  if (candidates.length !== 1 || (restaurant.brandId && restaurant.brandId !== candidates[0]!.id)) return undefined;
-  return candidates[0]!.id;
+export const brandName = (name: string) => name.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+type RestaurantBrandIdentity = { name: string; brandId?: string | null };
+/** Build once per catalog/snapshot; duplicate claims remain ambiguous. */
+export function buildBrandIdentityMatcher(brands: ChainBrand[]) {
+  const claims = new Map<string, string[]>();
+  for (const b of brands.filter(b => ["high", "llm-confirmed"].includes(b.detectionConf ?? "") && b.menuKind === "restaurant")) {
+    for (const name of new Set([b.displayName, b.slug, ...b.aliases].map(brandName))) {
+      claims.set(name, [...(claims.get(name) ?? []), b.id]);
+    }
+  }
+  return (restaurant: RestaurantBrandIdentity): string | undefined => {
+    const name = brandName(restaurant.name.replace(/\s*\([^()]+\)\s*$/, "").split(/\s+-\s+/)[0]!);
+    const candidates = claims.get(name) ?? [];
+    if (candidates.length !== 1 || (restaurant.brandId && restaurant.brandId !== candidates[0])) return undefined;
+    return candidates[0];
+  };
+}
+export function verifiedBrand(restaurant: RestaurantBrandIdentity, brands: ChainBrand[]): string | undefined {
+  return buildBrandIdentityMatcher(brands)(restaurant);
 }
 export function officialMacro(row: ApprovedChainRow, item: StructuredMenuItem): MacroData & { reasoning: string } {
   return { calories: row.calories, proteinG: row.proteinG, carbsG: row.carbsG, fatG: row.fatG, confidence: "HIGH", source: "official", dietaryTags: [],
@@ -27,8 +39,9 @@ export async function loadChainServing(prisma: Pick<PrismaClient, "brand" | "cha
   const rows = await prisma.chainItem.findMany({ where: { brandId: { in: brands.map(b => b.id) } } });
   const enabled = new Set(rows.filter(r => (approvedChainRow(r)?.review.aliases.length ?? 0) > 0).map(r => r.brandId));
   const matcher = buildChainMatcher(rows);
+  const identity = buildBrandIdentityMatcher(brands);
   return { brandId: (restaurant: { name: string; brandId?: string | null }) => {
-    const id = verifiedBrand(restaurant, brands); return id && enabled.has(id) ? id : undefined;
+    const id = identity(restaurant); return id && enabled.has(id) ? id : undefined;
   }, match: matcher };
 }
 export type ChainServing = Awaited<ReturnType<typeof loadChainServing>>;

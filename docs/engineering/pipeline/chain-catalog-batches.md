@@ -18,6 +18,9 @@ flowchart LR
 
 ## Batch workflow
 
+For missing brands, missing restaurant links or verified store-name variants, run [reviewed identity onboarding](chain-identity-batches.md) first.
+The identity batch preserves menu rows and leaves a brand inactive until its nutrition catalog contains approved bindings.
+
 1. Discover the official source, retain its URL, SHA-256, page/table, and serving. An extraction agent can prepare a complete candidate table; a URL alone is not approval.
 2. Start a draft batch from those source facts with empty aliases, then export existing variants with `menu-inventory`. Add captured UE menus and group by brand + name + section + description. Inspect each unique configuration once, reusing it across stores.
 3. Prepare a version-1 JSON batch. `changes` contain brand slug, serving-specific canonical key, four macros, source evidence, exact contextual aliases, and the expected prior catalog fields. New keys use `expected: null`. `quarantine` clears known bad legacy aliases.
