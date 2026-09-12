@@ -1,19 +1,19 @@
 {
   "generated": true,
-  "asOf": "2026-09-12T19:15:29.956593+00:00",
-  "scope": "Thirteen completed source batches; earlier WaBa/Yoshinoya excluded",
+  "asOf": "2026-09-12T20:19:05.121211+00:00",
+  "scope": "Sixteen completed source batches; earlier WaBa/Yoshinoya excluded",
   "reviewedCodeHead": "179be20e9a26eda262c428149630f72092730302",
   "mergeCommit": "848f117952b60b62bd1ee03291151e73a1184e55",
   "pr": "https://github.com/dgmolla/fitsy/pull/289",
   "totals": {
-    "facts": 1165,
-    "aliases": 1652,
-    "patchedRows": 33890,
-    "numericChanges": 12406,
-    "attributionOnly": 21484,
-    "preservedMenuIds": 89301,
-    "unchangedUnselectedRows": 55411,
-    "restaurants": 882
+    "facts": 1221,
+    "aliases": 1728,
+    "patchedRows": 34613,
+    "numericChanges": 12640,
+    "attributionOnly": 21973,
+    "preservedMenuIds": 94066,
+    "unchangedUnselectedRows": 59453,
+    "restaurants": 936
   },
   "batches": [
     {
@@ -353,6 +353,81 @@
         "ihop-approved.json": "c915e2a8999f9361d8469c35c3df1a3f8a10120fd1ba1291179b011b6a9f73ca",
         "ihop-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "ihop-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "shakeshack",
+      "chains": "Shake Shack",
+      "brandSlugs": [
+        "shake-shack"
+      ],
+      "facts": 35,
+      "aliases": 44,
+      "patchedRows": 446,
+      "numericChanges": 56,
+      "attributionOnly": 390,
+      "preservedMenuIds": 2031,
+      "unchangedUnselectedRows": 1585,
+      "restaurants": 17,
+      "httpVerifiedAt": "2026-09-12T19:53:29.709652+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "shakeshack-segments/000410.json.verified.json": "4da99738aa0974f79363dd79c9736572251129b16f00d21dbda9c47fef322fc7",
+        "shakeshack-http.json": "0c0a17f641856c52c1ce49e9b8315d4c0bf5853c3330a5ba5bc38d8612a33837",
+        "shakeshack-approved.json": "08cf31d2190565dd79b5f37388065bbf0c4ccf525511f9f552c9dfb309fcba71",
+        "shakeshack-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "shakeshack-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "cava",
+      "chains": "CAVA",
+      "brandSlugs": [
+        "cava"
+      ],
+      "facts": 16,
+      "aliases": 27,
+      "patchedRows": 170,
+      "numericChanges": 71,
+      "attributionOnly": 99,
+      "preservedMenuIds": 1240,
+      "unchangedUnselectedRows": 1070,
+      "restaurants": 15,
+      "httpVerifiedAt": "2026-09-12T20:16:18.273920+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "cava-segments/000110.json.verified.json": "ca5ecb82aaf3f161cb7c86327db1d89170b6a3cc4bad7ca1857d68e065b82a25",
+        "cava-complete-http.json": "c8da7a2cbced888e861b41caee22216ee248af8769d5f887b8bdf517b1932f4f",
+        "cava-approved.json": "343061c318ca62457a0ab24f77fce3a965cc7c667aab645862d679b2d384abbc",
+        "cava-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "cava-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "habit",
+      "chains": "Habit Burger & Grill",
+      "brandSlugs": [
+        "habit-burger-grill"
+      ],
+      "facts": 5,
+      "aliases": 5,
+      "patchedRows": 107,
+      "numericChanges": 107,
+      "attributionOnly": 0,
+      "preservedMenuIds": 1494,
+      "unchangedUnselectedRows": 1387,
+      "restaurants": 22,
+      "httpVerifiedAt": "2026-09-12T20:19:05.121211+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "habit-segments/000010.json.verified.json": "fdb4c1ffa31ed67a802d53c10fcc8bbd7f8b8c6927916d24fe8b3e3ab3f6eccf",
+        "habit-complete-http.json": "769e79fc3436f0962d5839952af0c8e8d1e9e6aaeb9ace60a956d7e3b419fdb5",
+        "habit-approved.json": "c13d06744e26cddfe5f7d57c5f8484355cbcf7abf389b1aa56d28c314df53369",
+        "habit-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "habit-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
       }
     }
   ],
