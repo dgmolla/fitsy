@@ -1,0 +1,211 @@
+{
+  "generated": true,
+  "asOf": "2026-09-12T16:49:00Z",
+  "scope": "Seven completed source batches; earlier WaBa/Yoshinoya excluded",
+  "reviewedCodeHead": "179be20e9a26eda262c428149630f72092730302",
+  "mergeCommit": "848f117952b60b62bd1ee03291151e73a1184e55",
+  "pr": "https://github.com/dgmolla/fitsy/pull/289",
+  "totals": {
+    "facts": 795,
+    "aliases": 1189,
+    "patchedRows": 26902,
+    "numericChanges": 9476,
+    "attributionOnly": 17426,
+    "preservedMenuIds": 67444,
+    "unchangedUnselectedRows": 40542,
+    "restaurants": 628
+  },
+  "batches": [
+    {
+      "batch": "first-batch",
+      "chains": "McDonald's, Panda Express, El Pollo Loco",
+      "brandSlugs": [
+        "el-pollo-loco",
+        "mcdonald-s",
+        "panda-express"
+      ],
+      "facts": 276,
+      "aliases": 365,
+      "patchedRows": 11972,
+      "numericChanges": 2076,
+      "attributionOnly": 9896,
+      "preservedMenuIds": 19580,
+      "unchangedUnselectedRows": 7608,
+      "restaurants": 195,
+      "httpVerifiedAt": "2026-09-12T06:47:32.918865+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "first-batch-resume-segments/007410.json.verified.json": "660b94a0c2f1776693507ca1347e73fb2391f7793971ee4fbe0728f110506853",
+        "first-batch-complete-http.json": "c4f9d6da38c37f3f717638f4ad0bc3bff99d010a14b98e68cb7f4a720470bf4f",
+        "first-batch-approved.json": "b424c9dc48a39322fb46722d1879bc1ff0b89d21382fdfe54bfeac6864533904",
+        "first-batch-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "first-batch-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "second-batch",
+      "chains": "Subway, Fatburger, Five Guys, Carl's Jr.",
+      "brandSlugs": [
+        "carl-s-jr",
+        "fatburger",
+        "five-guys",
+        "subway"
+      ],
+      "facts": 200,
+      "aliases": 275,
+      "patchedRows": 7165,
+      "numericChanges": 2246,
+      "attributionOnly": 4919,
+      "preservedMenuIds": 17266,
+      "unchangedUnselectedRows": 10101,
+      "restaurants": 164,
+      "httpVerifiedAt": "2026-09-12T07:09:13.725234+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "second-batch-segments/007110.json.verified.json": "c22384cc4878e7ee72642b3a409369d57c95fc37421a50233d2465e16b813602",
+        "second-batch-complete-http.json": "f68fb7f4ff7d3ac037d696754ad6040de96f2a02a2d954cc6168f4389e605ebc",
+        "second-batch-approved.json": "e6addb9f9d26b1b205d17033bcdc0d0177aa6518ec4a28d5443a7535da476bfa",
+        "second-batch-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "second-batch-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "tacobell",
+      "chains": "Taco Bell",
+      "brandSlugs": [
+        "taco-bell"
+      ],
+      "facts": 53,
+      "aliases": 89,
+      "patchedRows": 1861,
+      "numericChanges": 1487,
+      "attributionOnly": 374,
+      "preservedMenuIds": 5945,
+      "unchangedUnselectedRows": 4084,
+      "restaurants": 48,
+      "httpVerifiedAt": "2026-09-12T15:44:48.353735+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "tacobell-segments/001810.json.verified.json": "5ec4abcebaaf8478d8e344213bb2e3e650d1bfe6650117057798b2a9ff651efe",
+        "tacobell-complete-http.json": "614aa899f4192fd6ec817e41cfb0c4842173076bb7746cdbd1ef0f801de27414",
+        "tacobell-approved.json": "b9946eac7074d528f1783b7ba802fefe923731b51eb7c1ab7d8db3a372e1d4ae",
+        "tacobell-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "tacobell-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "starbucks",
+      "chains": "Starbucks",
+      "brandSlugs": [
+        "starbucks"
+      ],
+      "facts": 56,
+      "aliases": 83,
+      "patchedRows": 2309,
+      "numericChanges": 1087,
+      "attributionOnly": 1222,
+      "preservedMenuIds": 8953,
+      "unchangedUnselectedRows": 6644,
+      "restaurants": 64,
+      "httpVerifiedAt": "2026-09-12T16:02:22.542712+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "starbucks-segments/002210.json.verified.json": "72e74d47bab1eb2ec7de4ad55e18f3d752ac73afd6da4e66303d073d33fada6e",
+        "starbucks-complete-http.json": "ed169a9f3c278fca1baacd97517409f4c034e328ade3f17132b8a86e952c8fac",
+        "starbucks-approved.json": "949026c1b5892b9cfcdf7fdb1efba500b78f5cad6df20b40ae95828d3b12f7dd",
+        "starbucks-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "starbucks-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "next-source",
+      "chains": "Boba Time, Pizza Hut",
+      "brandSlugs": [
+        "boba-time",
+        "pizza-hut"
+      ],
+      "facts": 85,
+      "aliases": 206,
+      "patchedRows": 2141,
+      "numericChanges": 1304,
+      "attributionOnly": 837,
+      "preservedMenuIds": 10322,
+      "unchangedUnselectedRows": 8181,
+      "restaurants": 72,
+      "httpVerifiedAt": "2026-09-12T16:10:50.272742+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "next-source-segments/002110.json.verified.json": "911fc25110a48770bc1149ff016e70ffbef37c80ade08a65c274d2586fcdc6e6",
+        "next-source-complete-http.json": "ef9d99cbf9e9a5a47bfe598b5c70641c4016bfdd760707c8f23804eebad6ec54",
+        "next-source-approved.json": "5f414265bb6accc05f41be3d01c18c4b85dce6111323c85ce00695bec5ffca97",
+        "next-source-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "next-source-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "standard-chain",
+      "chains": "Jollibee, Goop Kitchen, Rubio's, Farmer Boys",
+      "brandSlugs": [
+        "farmer-boys",
+        "goop-kitchen",
+        "jollibee",
+        "rubio-s-coastal-grill"
+      ],
+      "facts": 106,
+      "aliases": 148,
+      "patchedRows": 423,
+      "numericChanges": 246,
+      "attributionOnly": 177,
+      "preservedMenuIds": 1582,
+      "unchangedUnselectedRows": 1159,
+      "restaurants": 23,
+      "httpVerifiedAt": "2026-09-12T16:42:09.083982+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "standard-chain-segments/000410.json.verified.json": "ef9cdf50c5edb47459c9ea0c7da96776a91a9e6b6872f7b532b0b81bab330720",
+        "standard-chain-complete-http.json": "06ac13e394495439b518ead9bbd8e030c00bbbb81f677d18ca024883c9919ece",
+        "standard-chain-approved.json": "376b0b25e65883c3c20e6dd389b77dc37bb2fdc0f6ef8b0cb6729a426dfbd418",
+        "standard-chain-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "standard-chain-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "dominos",
+      "chains": "Domino's",
+      "brandSlugs": [
+        "domino-s"
+      ],
+      "facts": 19,
+      "aliases": 23,
+      "patchedRows": 1031,
+      "numericChanges": 1030,
+      "attributionOnly": 1,
+      "preservedMenuIds": 3796,
+      "unchangedUnselectedRows": 2765,
+      "restaurants": 62,
+      "httpVerifiedAt": "2026-09-12T16:48:41.606599+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "dominos-segments/001010.json.verified.json": "07484bffed903f57ef6df83fd6c45fa066b9f6eca1f68b999ee17d98c1379adf",
+        "dominos-complete-http.json": "492af7be497859969d83add1420dc0fdcad93a3e05aa8b186b10d76325194006",
+        "dominos-approved.json": "6f0ba9d4c2fa21259031cf39cf9a0f5c65e99d51a620ef5cd3dd7db8bf1576d6",
+        "dominos-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "dominos-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    }
+  ],
+  "receiptArchive": "Local task work/chain-national; full journals and baselines are intentionally excluded from this aggregate repository record",
+  "limits": [
+    "Exact serving and preserved identity consistency, not measured restaurant nutrition",
+    "Source review coverage varies by batch; retained independent reviews distinguish exhaustive source transcription checks from samples",
+    "Current captured UE menus and simulated historical imports are different evidence",
+    "No actual production new hex created"
+  ]
+}
