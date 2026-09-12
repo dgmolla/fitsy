@@ -34,7 +34,7 @@ export function PaywallView(props: Props) {
   const label = loading ? 'Setting up…' : selected?.trial ? 'Try meals that fit for free' : 'Unlock meals that fit';
 
   return (
-    <SafeAreaView style={s.safe}>
+    <SafeAreaView key={fontScale} style={s.safe}>
       <View style={s.nav}>
         <Pressable onPress={props.onBack} style={s.navAction} accessibilityRole="button" accessibilityLabel="Go back" testID="welcome-back">
           <Ionicons name="chevron-back" size={23} color={EDITORIAL.textMid} />

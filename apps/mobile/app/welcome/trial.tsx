@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,7 @@ import { purchaseTerms } from '@/lib/purchaseTerms';
 
 
 export default function TrialScreen() {
+  const { fontScale } = useWindowDimensions();
   const { offering, introEligibility } = usePurchases();
   const annual = offering?.annual;
   const terms = purchaseTerms(annual?.product, annual ? introEligibility[annual.product.identifier] : false);
@@ -29,7 +30,7 @@ export default function TrialScreen() {
   }, []);
 
   return (
-    <SafeAreaView style={s.safe}>
+    <SafeAreaView key={fontScale} style={s.safe}>
       <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
         {/* Top bar */}
         <View style={s.topBar}>
