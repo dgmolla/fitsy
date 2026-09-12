@@ -146,18 +146,21 @@ describe('useLocation', () => {
 
     const { result } = renderHook(() => useLocation());
 
-    // Flush SecureStore hydration + permission + lastKnown promises so the
-    // GPS-vs-setTimeout race is actually armed before we advance the clock.
-    // Without this, the 3001ms advance happens before the setTimeout(3000)
-    // is installed, and the test sees 'fallback-denied' from the initial state.
-    await jest.advanceTimersByTimeAsync(0);
-    await jest.advanceTimersByTimeAsync(0);
-    await jest.advanceTimersByTimeAsync(3001);
-    jest.useRealTimers();
+    try {
+      // Observe the GPS request before advancing its timeout. Waiting through
+      // the hook lifecycle also lets React apply hydration and loading updates.
+      await waitFor(() => expect(mockGetPosition).toHaveBeenCalled());
+      expect(result.current.loading).toBe(true);
 
-    await waitFor(() => {
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(3000);
+      });
+
       expect(result.current.source).toBe('fallback-timeout');
-    });
+      expect(result.current.loading).toBe(false);
+    } finally {
+      jest.useRealTimers();
+    }
 
     expect(result.current.lat).toBe(FALLBACK_LAT);
     expect(result.current.lng).toBe(FALLBACK_LNG);
