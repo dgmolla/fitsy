@@ -33,7 +33,7 @@ export default function TrialScreen() {
       <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
         {/* Top bar */}
         <View style={s.topBar}>
-          <Pressable onPress={() => { if (router.canGoBack()) router.back(); else router.navigate('/welcome/notifications'); }} style={s.close} accessibilityRole="button" accessibilityLabel="Go back" testID="trial-back">
+          <Pressable onPress={() => { if (router.canGoBack()) router.back(); else router.navigate('/welcome/notification-permission'); }} style={s.close} accessibilityRole="button" accessibilityLabel="Go back" testID="trial-back">
             <Ionicons name="chevron-back" size={22} color={EDITORIAL.textMid} />
           </Pressable>
           <View style={s.progressTrack}>

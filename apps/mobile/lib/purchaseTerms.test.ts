@@ -34,6 +34,11 @@ test('a changed store offer changes the trial without an app update', () => {
   expect(purchaseTerms({ ...annual, subscriptionPeriod: 'P3M', introPrice: { ...annual.introPrice, period: 'P2W' } }, true)?.compactDisclosure).toContain('14 days free, then €54,99/3 months');
   expect(purchaseTerms({ ...annual, introPrice: null }, true)?.trial).toBeNull();
 });
+test('monthly purchase terms keep the live price and monthly billing cadence', () => {
+  const terms = purchaseTerms({ ...annual, priceString: '€7,99', subscriptionPeriod: 'P1M' }, true);
+  expect(terms?.compactDisclosure).toContain('7 days free, then €7,99/month');
+  expect(terms?.periodShort).toBe('month');
+});
 test.each([null, { ...annual, priceString: '' }, { ...annual, subscriptionPeriod: null }])('missing store terms have no invented fallback: %j', product => {
   expect(purchaseTerms(product, true)).toBeNull();
 });
