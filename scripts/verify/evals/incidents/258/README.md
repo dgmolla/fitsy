@@ -5,15 +5,16 @@ The same unmodified CLI reproduced that failure under GNU coreutils against DEV,
 
 PostgreSQL's migration ordering need not match the shell's ordering.
 The fix sorts both sets under the same C locale before comparison.
-A failed database read remains a distinct failure, and the success count reports migrations rather than string length.
-The workflow captures exit status safely under Bash errexit so its documented skipped status can be handled.
+A failed migration or seed-count read remains a distinct failure, and the success count reports migrations rather than string length.
+The scheduled workflow requires a completed pass; a missing tool or skipped check cannot certify dev health.
 
 The registered scripts test suite discovers `verify/dev-drift.test.ts`.
-Before the fix, four assertions failed: unordered migrations, the read-error distinction, skipped-check handling and preservation of an early workspace failure.
-All seven tests pass with the fix; missing migrations and a genuine failed check still fail.
+The original unordered-migration detector failed before the fix and passes afterward.
+All nine current regression cases pass, including failed migration reads, a dropped seed-query connection, missing migrations, scheduled pass/fail/skip handling and retention of early workspace errors for two failure exit codes.
 The corrected real CLI against DEV passed with 34 migrations, 550 restaurants, 38,938 menu rows and three seed users.
 
-Constraint: shared C sorting removes dependence on database collation, and the guarded workflow invocation avoids automatic exit before status handling.
+Constraint: local sorting removes dependence on database return order, the explicit C locale pins shell ordering, and guarded database reads cannot turn a connection failure into a skipped check.
+The scheduled workflow accepts only exit zero.
 The executable tests also exercise the actual shell and workflow step instead of duplicating a status rule.
 The reverse diff is the retained bad-state replay for the correctness lens.
 

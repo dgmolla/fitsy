@@ -7,7 +7,7 @@
 # Env: POSTGRES_URL_NON_POOLING (dev). Skips (exit 2) when unset so the check
 # is harmless in contexts without dev credentials.
 set -euo pipefail
-# PostgreSQL's collation need not match the runner's. Compare both sets in C order.
+# Sort both inputs locally; pin C defensively so host locale changes cannot alter ordering.
 export LC_ALL=C
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 NAME="dev-drift"
@@ -46,10 +46,13 @@ if [ -n "$missing" ]; then
 fi
 
 # 2. Seed data present.
-r="$(Q 'select count(*) from "Restaurant"')"
-m="$(Q 'select count(*) from "MenuItem"')"
-e="$(Q 'select count(*) from "MacroEstimate"')"
-u="$(Q 'select count(*) from "User" where email like '"'"'seed-%@fitsy.dev'"'"'')"
+if ! r="$(Q 'select count(*) from "Restaurant"')" \
+  || ! m="$(Q 'select count(*) from "MenuItem"')" \
+  || ! e="$(Q 'select count(*) from "MacroEstimate"')" \
+  || ! u="$(Q 'select count(*) from "User" where email like '"'"'seed-%@fitsy.dev'"'"'')"; then
+  emit fail "could not read dev seed counts" "check the dev database connection and seed tables"
+  exit 1
+fi
 if [ "$r" -lt 50 ] || [ "$m" -lt 400 ] || [ "$e" -lt 400 ]; then
   emit fail "dev data below seed floor (restaurants=$r items=$m estimates=$e)" "npx prisma db seed  (then scripts/dev/snapshot.ts for real-shaped data)"
   exit 1
