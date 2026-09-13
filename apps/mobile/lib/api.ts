@@ -4,6 +4,10 @@ import { clearToken } from './authClient';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
 
+export class ApiRequestError extends Error {
+  constructor(readonly status: number, message: string) { super(message); }
+}
+
 /**
  * Source the access token from the Supabase SDK rather than the legacy
  * SecureStore key. The SDK proactively refreshes ~5 min before expiry and
@@ -19,7 +23,7 @@ async function handleUnauthorized(): Promise<never> {
   // wipes the legacy fitsy_authToken key for users mid-upgrade.
   await clearToken();
   router.replace('/welcome/problem');
-  throw new Error('Session expired');
+  throw new ApiRequestError(401, 'Session expired');
 }
 
 async function get<T>(path: string, authenticated = false): Promise<T> {
@@ -43,7 +47,7 @@ async function get<T>(path: string, authenticated = false): Promise<T> {
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({})) as { error?: string };
-    throw new Error(body.error ?? `Request failed: ${res.status}`);
+    throw new ApiRequestError(res.status, body.error ?? `Request failed: ${res.status}`);
   }
   return res.json() as Promise<T>;
 }

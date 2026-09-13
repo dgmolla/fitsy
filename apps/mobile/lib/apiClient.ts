@@ -1,5 +1,6 @@
 import { FeedbackBoardPost, FeedbackBoardResponse, FeedbackVoteResponse, MenuApiResponse, MenuResponse, RestaurantResult, RestaurantsApiResponse, SavedItemResponse, SavedItemsResponse } from '@fitsy/shared';
-import { api } from './api';
+import { api, ApiRequestError } from './api';
+import { getMacroTargets } from './macroStorage';
 
 export interface FetchRestaurantsParams {
   protein?: number;
@@ -97,19 +98,48 @@ export async function fetchRestaurants(
   return data;
 }
 
-export async function fetchMenu(restaurantId: string): Promise<MenuResponse | null> {
+export async function fetchMenu(restaurantId: string, options: { selectedItemId?: string } = {}): Promise<MenuResponse | null> {
+  return (await fetchMenuOutcome(restaurantId, options)).menu;
+}
+
+export type MenuLoadOutcome = { menu: MenuResponse; error: null } | { menu: null; error: 'transient' | 'unavailable' };
+export async function fetchMenuOutcome(restaurantId: string, options: { selectedItemId?: string } = {}): Promise<MenuLoadOutcome> {
   try {
-    const response = await api.get<MenuApiResponse>(
-      `/api/restaurants/${restaurantId}/menu`, true
-    );
-
-    if ('error' in response) {
-      return null;
+    const targets = await getMacroTargets();
+    const params = new URLSearchParams();
+    if (targets) for (const [key, value] of Object.entries(targets)) if (value) params.set(key, value);
+    if (options.selectedItemId) params.set('selectedItemId', options.selectedItemId);
+    const page = async () => {
+      // React Native's URLSearchParams supports serialization but not .size.
+      const query = params.toString();
+      const response = await api.get<MenuApiResponse>(`/api/restaurants/${restaurantId}/menu${query ? `?${query}` : ''}`, true);
+      // An error envelope is not proof that cached unlocked data remains valid.
+      if ('error' in response) throw new ApiRequestError(400, 'Menu unavailable');
+      return response.data;
+    };
+    const result = await page();
+    const cursors = new Set<string>();
+    while (!result.locked && result.nextCursor) {
+      if (cursors.has(result.nextCursor)) return { menu: result, error: null };
+      cursors.add(result.nextCursor);
+      params.set('cursor', result.nextCursor);
+      let next: MenuResponse;
+      try { next = await page(); }
+      catch (error) {
+        // Keep available dishes on a transient failure, with nextCursor so
+        // the screen labels the partial menu and offers Retry. Access errors
+        // must discard unlocked pages instead of preserving stale access.
+        if (error instanceof ApiRequestError && error.status < 500) throw error;
+        return { menu: result, error: null };
+      }
+      if (next.locked) return { menu: next, error: null };
+      if (next.nextCursor && cursors.has(next.nextCursor)) return { menu: result, error: null };
+      result.menuItems.push(...next.menuItems);
+      result.nextCursor = next.nextCursor;
     }
-
-    return response.data;
-  } catch {
-    return null;
+    return { menu: result, error: null };
+  } catch (error) {
+    return { menu: null, error: error instanceof ApiRequestError && error.status < 500 ? 'unavailable' : 'transient' };
   }
 }
 

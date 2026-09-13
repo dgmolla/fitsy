@@ -11,8 +11,14 @@ signed in without targets -> `/macro-setup`.
 
 | Route | Reached by | Anchor (visible text) | Notes |
 |---|---|---|---|
-| `/welcome/problem` | fresh install | "continue" (lowercase CTA); login link reads "Have an account? Log in" | animated dish columns; first onboarding screen |
-| `/welcome/*` (story flow) | tapping continue repeatedly | per-screen headlines | ~20 screens: tried, promise, how-it-works, value-*, data-scale, sex, age, height, weight, activity, goal, dietary, macros-*, tuning, finding, response, location/notification permission, trial, payment; email signup at `/auth/register` |
+| `/welcome/problem` | fresh install | "Find meals that fit"; login link reads "Have an account? Log in" | animated dish columns; first onboarding screen |
+| `/welcome/location-permission` | welcome CTA | `location-choose-area` | Coverage before setup; explicit GPS or manual neighborhood |
+| `/welcome/target-setup` | covered area | `target-mode-known`, `target-mode-estimate` | Enter meal targets or get an estimate |
+| `/welcome/tuning` | known-target choice or profile questions | `meal-target-calories` | Editable per-meal targets; goal and edits persist |
+| `/welcome/preview` | confirm meal targets | `preview-pick-1`, `preview-guide` | Three named picks; one craving search; menus and saves open plans |
+| `/welcome/trial` | sign in from a preview action | `trial-see-plans` | Live trial terms; Back returns through real history |
+| `/welcome/payment` | trial CTA or locked action | `paywall-plan-yearly` | Root launch has no fabricated Back; explicit decline resets the stack |
+| `/welcome/notification-permission` | confirmed purchase or restore | `notification-allow` | Optional reminders, then return to the selected meal |
 | `/auth/login` | "Have an account? Log in" link on the problem screen (router.push, no intermediate screen) | "Welcome back", "Continue with Apple" | Apple/Google/email in one screen |
 | `/welcome/signin` | within the onboarding story flow | "Continue with Apple" | onboarding-time account creation |
 | `/auth/reviewer` | App Store review deep link | - | demo access |

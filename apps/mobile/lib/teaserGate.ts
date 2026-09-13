@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { supabase } from './supabase';
+import { rememberPaywallIntent, type PaywallIntent } from './paywallIntent';
 import { fetchCustomerInfo, hasLapsedEntitlement } from './purchases';
 
 const PREVIEW_SAMPLE_USED_KEY = '@fitsy/previewSampleUsed';
@@ -94,7 +95,7 @@ let navigating = false;
  * use this when leaving a screen that's "spent" (e.g. the one free detail
  * view) so backing out of the paywall doesn't land the user back on it.
  */
-export async function routeToPaywall(options: { replace?: boolean } = {}): Promise<void> {
+export async function routeToPaywall(options: { replace?: boolean; intent?: PaywallIntent } = {}): Promise<void> {
   if (navigating) return;
   navigating = true;
   const replace = options.replace ?? false;
@@ -105,6 +106,7 @@ export async function routeToPaywall(options: { replace?: boolean } = {}): Promi
   // rather than landing straight on payment.
   let target: '/welcome/payment' | '/welcome/resubscribe' | '/welcome/signin' = '/welcome/signin';
   try {
+    if (options.intent) await rememberPaywallIntent(options.intent);
     try {
       const { data } = await supabase.auth.getSession();
       if (data.session) {

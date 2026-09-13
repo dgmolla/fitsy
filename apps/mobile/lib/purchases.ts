@@ -160,7 +160,11 @@ export async function identifyPurchasesUser(userId: string): Promise<CustomerInf
 export async function logoutPurchasesUser(): Promise<void> {
   if (!configured) return;
   try {
-    await changeIdentity(() => Purchases.logOut());
+    await changeIdentity(async () => {
+      // Check inside the queue: an earlier login may still be settling.
+      // Anonymous logout is a native SDK error, even when its rejection is caught.
+      if (!(await Purchases.isAnonymous())) await Purchases.logOut();
+    });
   } catch {
     // logOut throws when the current user is already anonymous - expected, ignore.
   }

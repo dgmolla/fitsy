@@ -1,3 +1,4 @@
+import { useOnboardingStep } from '@/lib/onboardingResume';
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -19,6 +20,7 @@ const KG_MAX = 180;
 const KG_DEFAULT = 77;
 
 export default function WeightScreen() {
+  useOnboardingStep('weight');
   const [unit, setUnit] = useState<Unit>('lbs');
   const [lbs, setLbs] = useState(LB_DEFAULT);
   const [kg, setKg] = useState(KG_DEFAULT);
@@ -45,7 +47,7 @@ export default function WeightScreen() {
 
   return (
     <WelcomeScreen
-      progress={12 / 18}
+      progress={3 / 7}
       title="What do you weigh?"
       subtitle="Roughly is fine. We'll fine-tune later."
       onContinue={async () => {

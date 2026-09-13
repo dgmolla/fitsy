@@ -1,5 +1,6 @@
+import { useOnboardingStep } from '@/lib/onboardingResume';
 import React, { useEffect, useState } from 'react';
-import { Linking, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,7 +8,8 @@ import { EDITORIAL, FONTS } from '@/lib/brand';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { trackOnboardingScreenView } from '@/lib/analytics';
 import { api } from '@/lib/api';
-import { getCachedCoords } from '@/lib/locationCache';
+import { getOnboardingData } from '@/lib/onboardingStorage';
+import { supabase } from '@/lib/supabase';
 
 const FITSY_INSTAGRAM = 'https://instagram.com/fitsy.lyfe';
 
@@ -21,6 +23,7 @@ const FITSY_INSTAGRAM = 'https://instagram.com/fitsy.lyfe';
  * channel. See docs/engineering/backend/launch-waitlist.md.
  */
 export default function OutOfAreaScreen() {
+  useOnboardingStep('out-of-area');
   const [joined, setJoined] = useState(false);
   const [joining, setJoining] = useState(false);
 
@@ -32,15 +35,14 @@ export default function OutOfAreaScreen() {
     if (joining || joined) return;
     setJoining(true);
     try {
-      const coords = await getCachedCoords();
-      if (coords) {
-        await api.post('/api/waitlist', { lat: coords.lat, lng: coords.lng }, true);
-      }
+      const { area } = await getOnboardingData();
+      if (!area) { Alert.alert('Choose your area first', 'We need your selected area to register your interest.'); return; }
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { router.push('/welcome/signin?outOfArea=1'); return; }
+      await api.post('/api/waitlist', { lat: area.lat, lng: area.lng }, true);
       setJoined(true);
     } catch {
-      // Non-fatal: they can still follow on Instagram. Show as joined so we
-      // don't nag; the account email is already on file for a retry path.
-      setJoined(true);
+      Alert.alert('Could not join the waitlist', 'You have not been added. Please try again.');
     } finally {
       setJoining(false);
     }
@@ -55,12 +57,11 @@ export default function OutOfAreaScreen() {
           </Animated.View>
 
           <Animated.Text entering={FadeInDown.duration(500).delay(120)} style={s.title}>
-            Fitsy isn't in your{'\n'}city yet.
+            More menus are{'\n'}on the way.
           </Animated.Text>
 
           <Animated.Text entering={FadeInDown.duration(500).delay(240)} style={s.subtitle}>
-            We're launching in Los Angeles first. Want us to let you know the
-            moment we go live near you?
+            We don't have dishes with nutrition in your selected area yet. Join the waitlist for coverage updates.
           </Animated.Text>
         </View>
 
@@ -72,6 +73,7 @@ export default function OutOfAreaScreen() {
             haptic
             accessibilityRole="button"
             accessibilityLabel="Notify me when Fitsy launches nearby"
+            testID="waitlist-join"
           >
             <Ionicons
               name={joined ? 'checkmark-circle' : 'notifications-outline'}
@@ -95,11 +97,12 @@ export default function OutOfAreaScreen() {
 
           <AnimatedPress
             style={s.done}
-            onPress={() => router.replace('/welcome/problem')}
+            onPress={() => router.dismissTo('/welcome/location-permission')}
             accessibilityRole="button"
-            accessibilityLabel="Done"
+            accessibilityLabel="Choose another area"
+            testID="waitlist-change-area"
           >
-            <Text style={s.doneTxt}>Done</Text>
+            <Text style={s.doneTxt}>Choose another area</Text>
           </AnimatedPress>
         </Animated.View>
       </View>

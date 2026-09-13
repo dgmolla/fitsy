@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useOnboardingStep } from '@/lib/onboardingResume';
+import { useIsFocused } from '@react-navigation/native';
 import { Alert } from 'react-native';
-import { router } from 'expo-router';
+import { router, useNavigation } from 'expo-router';
 import { PaywallView } from '@/components/PaywallView';
 import { PaywallExitModals, type PaywallExitModal } from '@/components/PaywallExitModals';
 import { recordOnboardingComplete } from '@/lib/onboardingCompletion';
@@ -10,11 +12,19 @@ import { ensureSessionForPurchase } from '@/lib/purchaseSession';
 import { trackOnboardingScreenView, trackPaywallExperimentExposure } from '@/lib/analytics';
 import { usePreviewAccess } from '@/lib/usePreviewAccess';
 import { rememberPaywallDecline } from '@/lib/paywallAccess';
+import { getOnboardingData } from '@/lib/onboardingStorage';
+import { fetchGuidedPreview } from '@/lib/guidedPreview';
+import { openPurchasedDestination, resetWelcomeJourney } from '@/lib/paywallJourney';
+import { getPaywallIntent, type PaywallIntent } from '@/lib/paywallIntent';
 import { purchaseTerms, savingPercent } from '@/lib/purchaseTerms';
 
 type PlanId = 'monthly' | 'yearly';
 
 export default function PaymentScreen() {
+  useOnboardingStep('payment');
+  const navigation = useNavigation();
+  const focused = useIsFocused();
+  const [intent, setIntent] = useState<PaywallIntent | null>(null);
   const [plan, setPlan] = useState<PlanId>('yearly');
   const variants = usePreviewAccess();
   const exposure = useRef('');
@@ -31,7 +41,7 @@ export default function PaymentScreen() {
   // helper tracks no purchase event. See useRedirectOnceEntitled.
   const { claim } = useRedirectOnceEntitled({
     entitled,
-    busy: loading || restoring,
+    busy: loading || restoring || !focused,
     onEntitled: () => { void completeOnboarding(false); },
   });
 
@@ -46,6 +56,18 @@ export default function PaymentScreen() {
 
   useEffect(() => {
     trackOnboardingScreenView('payment');
+    let live = true;
+    void Promise.all([getPaywallIntent(), getOnboardingData()]).then(async ([saved, data]) => {
+      if (!live || !saved) return;
+      setIntent({ ...saved, nearbyDishCount: undefined });
+      if (data.area && data.area.name === saved.areaName) {
+        try {
+          const preview = await fetchGuidedPreview(data.area);
+          if (live) setIntent({ ...saved, nearbyDishCount: preview.meta.nearbyDishCount });
+        } catch { /* Count is optional; never substitute a fabricated total. */ }
+      }
+    });
+    return () => { live = false; };
   }, []);
 
   // The boot-time offering fetch can fail (offline at launch, StoreKit hiccup).
@@ -66,7 +88,7 @@ export default function PaymentScreen() {
     try {
       await rememberPaywallDecline();
       setModal('none');
-      if (variants.access === 'preview') router.replace('/(tabs)/search?preview=1');
+      resetWelcomeJourney(navigation, variants.access === 'preview' ? 'preview' : 'payment');
     } catch { Alert.alert('Could not save your choice', 'Please try again.'); }
   }
 
@@ -77,8 +99,9 @@ export default function PaymentScreen() {
     // cannot fire a second replace once `loading` flips back. The recording
     // itself is idempotent (a re-entered paywall must not double-count).
     claim();
-    await recordOnboardingComplete(discounted);
-    router.replace('/(tabs)/search');
+    const firstCompletion = await recordOnboardingComplete(discounted);
+    if (firstCompletion) resetWelcomeJourney(navigation, 'notification-permission');
+    else await openPurchasedDestination(navigation);
   }
 
   // This screen IS the paywall - it renders Fitsy's own design and buys the
@@ -146,7 +169,9 @@ export default function PaymentScreen() {
         loading={loading}
         restoring={restoring}
         onSelect={setPlan}
-        onBack={() => { if (router.canGoBack()) router.back(); else router.navigate('/welcome/trial'); }}
+        onBack={navigation.canGoBack() ? () => router.back() : undefined}
+        context={intent?.mealName ? `${intent.action === 'save' ? 'Save' : 'See the full menu for'} ${intent.mealName}. Plus craving search and meals that fit.` : undefined}
+        localProof={intent?.nearbyDishCount ? `${intent.nearbyDishCount.toLocaleString()} dishes with nutrition within 3 miles of ${intent.areaName ?? 'your selected area'}.` : undefined}
         onRestore={() => { void handleRestore(); }}
         onRetry={() => { void refreshOffering(); }}
         onPurchase={() => { void handleStart(false); }}

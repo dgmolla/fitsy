@@ -84,17 +84,20 @@ export default function ProblemScreen() {
       <SafeAreaView style={s.content}>
         <View style={s.center}>
           <Animated.Text entering={FadeIn.duration(600)} style={s.text}>
-            restaurants near you{'\n'}that fit your{'\n'}fitness goals.
+            Eat what you crave.{'\n'}Find what fits.
           </Animated.Text>
+
+          <Text style={s.subtitle}>Nearby dishes. Clear macros. More confidence eating out.</Text>
 
           <Animated.View entering={FadeIn.duration(500).delay(400)} style={s.footerInner}>
             <AnimatedPress
               style={s.cta}
-              onPress={() => router.push('/welcome/promise')}
+              onPress={() => router.push('/welcome/location-permission')}
+              testID="welcome-start"
               haptic
               accessibilityRole="button"
             >
-              <Text style={s.ctaTxt}>continue</Text>
+              <Text style={s.ctaTxt}>Find meals that fit</Text>
             </AnimatedPress>
             <Pressable onPress={() => router.push('/auth/login')} hitSlop={12} accessibilityRole="button">
               <Text style={s.login}>
@@ -132,11 +135,12 @@ const s = StyleSheet.create({
 
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.55)' },
   content: { flex: 1, paddingHorizontal: 36, paddingBottom: 20 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 28 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 28, paddingHorizontal: 36 },
   text: { fontFamily: FONTS.frauncesDisplayBold, fontSize: 28, color: EDITORIAL.cream, letterSpacing: -1, lineHeight: 40, textAlign: 'center' },
+  subtitle: { fontFamily: FONTS.nunitoSans, fontSize: 16, lineHeight: 24, textAlign: 'center', color: EDITORIAL.cream },
   footerInner: { alignItems: 'center', gap: 20 },
-  cta: { backgroundColor: 'rgba(253,251,247,0.15)', borderRadius: 32, paddingVertical: 14, paddingHorizontal: 32 },
-  ctaTxt: { fontFamily: FONTS.nunitoSans, fontSize: 15, fontWeight: '500', color: EDITORIAL.cream },
-  login: { fontFamily: FONTS.nunitoSans, fontSize: 13, color: 'rgba(253,251,247,0.4)' },
-  loginLink: { color: 'rgba(253,251,247,0.65)', fontWeight: '600' },
+  cta: { backgroundColor: EDITORIAL.cream, borderRadius: 32, paddingVertical: 18, paddingHorizontal: 32 },
+  ctaTxt: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 16, color: EDITORIAL.green },
+  login: { fontFamily: FONTS.nunitoSans, fontSize: 13, color: 'rgba(253,251,247,0.8)' },
+  loginLink: { color: EDITORIAL.cream, fontWeight: '600' },
 });

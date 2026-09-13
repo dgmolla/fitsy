@@ -1,167 +1,97 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import { useOnboardingStep } from '@/lib/onboardingResume';
+import React, { useCallback, useState } from 'react';
+import { Alert, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
-import { EDITORIAL, FONTS } from '@/lib/brand';
-import { getOnboardingData, type Goal } from '@/lib/onboardingStorage';
-import { saveMacroTargets } from '@/lib/macroStorage';
-import { calculateMacros, MEALS_PER_DAY } from '@/lib/macroCalculator';
-import { trackOnboardingScreenView } from '@/lib/analytics';
+import { EDITORIAL, TEXT } from '@/lib/brand';
+import { getOnboardingData, saveOnboardingField, type Goal } from '@/lib/onboardingStorage';
+import { getMacroTargets, saveMacroTargets, type StoredMacroTargets } from '@/lib/macroStorage';
+import { calculateMacros } from '@/lib/macroCalculator';
 
-interface Macros { protein: number; carbs: number; fat: number; calories: number }
-
-function calcMacros(data: Awaited<ReturnType<typeof getOnboardingData>>, goalOverride?: Goal): Macros {
-  return calculateMacros(goalOverride ? { ...data, goal: goalOverride } : data);
-}
-
-type Traj = 'lose_fat' | 'maintain' | 'build_muscle';
+const FIELDS = [['calories', 'Calories', 'kcal'], ['protein', 'Protein', 'g'], ['carbs', 'Carbs', 'g'], ['fat', 'Fat', 'g']] as const;
+const GOALS = [['lose_fat', 'Lose fat'], ['maintain', 'Maintain'], ['build_muscle', 'Build muscle']] as const;
+const empty: StoredMacroTargets = { calories: '', protein: '', carbs: '', fat: '' };
+const asStrings = (values: ReturnType<typeof calculateMacros>): StoredMacroTargets => ({
+  calories: String(values.calories), protein: String(values.protein), carbs: String(values.carbs), fat: String(values.fat),
+});
 
 export default function PlanReadyScreen() {
-  const [macros, setMacros] = useState<Macros | null>(null);
-  const [traj, setTraj] = useState<Traj>('maintain');
+  useOnboardingStep('tuning');
+  const [targets, setTargets] = useState(empty);
   const [data, setData] = useState<Awaited<ReturnType<typeof getOnboardingData>>>({});
+  const [ready, setReady] = useState(false);
+  const [busy, setBusy] = useState(false);
+  // Store the profile basis separately from edited targets. Back must not
+  // silently replace manual edits unless the underlying answers changed.
+  const basisOf = (d: typeof data) => JSON.stringify([d.targetMode, d.goal, d.heightCm, d.weightKg, d.birthday, d.sex, d.activity]);
+  useFocusEffect(useCallback(() => {
+    let cancelled = false;
+    void Promise.all([getOnboardingData(), getMacroTargets()]).then(([d, saved]) => {
+      if (cancelled) return;
+      setData(d);
+      setTargets(saved && (d.targetMode === 'known' || d.targetBasis === basisOf(d)) ? saved : d.targetMode === 'known' ? empty : asStrings(calculateMacros(d)));
+      setReady(true);
+    });
+    return () => { cancelled = true; };
+  }, []));
 
-  useEffect(() => {
-    trackOnboardingScreenView('tuning');
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      (async () => {
-        const d = await getOnboardingData();
-        setData(d);
-        const g = (d.goal ?? 'maintain') as Traj;
-        setTraj(g);
-        const m = calcMacros(d);
-        setMacros(m);
-        await saveMacroTargets({ protein: String(m.protein), carbs: String(m.carbs), fat: String(m.fat), calories: String(m.calories) });
-      })();
-    }, []),
-  );
-
-  async function pick(t: Traj) {
-    setTraj(t);
-    const m = calcMacros(data, t);
-    setMacros(m);
-    await saveMacroTargets({ protein: String(m.protein), carbs: String(m.carbs), fat: String(m.fat), calories: String(m.calories) });
+  const valid = FIELDS.every(([key]) => targets[key].trim() !== '' && Number.isFinite(Number(targets[key]))
+    && Number(targets[key]) >= (key === 'calories' ? 1 : 0) && Number(targets[key]) <= (key === 'calories' ? 4000 : 500));
+  async function pickGoal(goal: Goal) {
+    const next = { ...data, goal };
+    setData(next);
+    setTargets(asStrings(calculateMacros(next)));
+    await saveOnboardingField('goal', goal);
+  }
+  async function proceed() {
+    if (!valid || busy) return;
+    setBusy(true);
+    try {
+      await saveMacroTargets(targets);
+      await saveOnboardingField('targetBasis', basisOf(data));
+      router.push('/welcome/preview');
+    } catch { Alert.alert('Could not save targets', 'Please try again.'); }
+    finally { setBusy(false); }
   }
 
   return (
-    <WelcomeScreen
-      progress={16 / 18}
-      title="Your daily targets."
-      subtitle="We've set per-meal targets based on your goals. You can adjust them anytime in search."
-      onContinue={() => router.push('/welcome/location-permission')}
-      canContinue={macros !== null}
-      continueLabel="Find meals that fit"
-    >
-      {macros && (
-        <>
-          {/* Hero food image strip */}
-          <Animated.View entering={FadeIn.duration(600).delay(100)} style={s.imgStrip}>
-            <Image
-              source={{ uri: 'https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=600&q=75' }}
-              style={s.heroImg}
-              resizeMode="cover"
-            />
-          </Animated.View>
-
-          {/* Macro grid — display daily values (stored per-meal × MEALS_PER_DAY) */}
-          <View style={s.grid}>
-            <MacroNum label="Protein" value={macros.protein * MEALS_PER_DAY} unit="g" delay={200} accent />
-            <MacroNum label="Carbs" value={macros.carbs * MEALS_PER_DAY} unit="g" delay={260} />
-            <MacroNum label="Fat" value={macros.fat * MEALS_PER_DAY} unit="g" delay={320} />
-            <MacroNum label="Calories" value={macros.calories * MEALS_PER_DAY} unit="" delay={380} accent />
-          </View>
-
-          {/* Trajectory */}
-          <Animated.View entering={FadeInDown.duration(400).delay(450)} style={s.trajWrap}>
-            <Text style={s.trajLabel}>Trajectory</Text>
-            <View style={s.trajRow}>
-              {([
-                ['lose_fat', 'Cut'],
-                ['maintain', 'Maintain'],
-                ['build_muscle', 'Bulk'],
-              ] as [Traj, string][]).map(([id, label]) => (
-                <AnimatedPress
-                  key={id}
-                  style={[s.trajBtn, traj === id ? s.trajOn : undefined]}
-                  onPress={() => pick(id)}
-                  haptic
-                >
-                  <Text style={[s.trajTxt, traj === id ? s.trajTxtOn : undefined]}>{label}</Text>
-                </AnimatedPress>
-              ))}
+    <WelcomeScreen title={"A target for\nyour next meal."} subtitle={data.targetMode === 'known' ? 'Enter per-meal targets. You can change these anytime.' : 'Estimated from your answers, with room for snacks. Tap any number to make it yours.'}
+      onContinue={proceed} canContinue={ready && valid && !busy} continueLabel="Find my meal picks">
+      <View style={s.grid}>
+        {FIELDS.map(([key, label, unit]) => (
+          <View key={key} style={s.cell}>
+            <Text style={s.label}>{label} / meal</Text>
+            <View style={s.inputRow}>
+              <TextInput style={s.input} keyboardType="decimal-pad" value={targets[key]} editable={ready && !busy} selectTextOnFocus
+                onChangeText={value => setTargets(previous => ({ ...previous, [key]: value.replace(/[^0-9.]/g, '') }))}
+                accessibilityLabel={`${label} per meal`} testID={`meal-target-${key}`} placeholder="0" maxLength={7} />
+              <Text style={s.unit}>{unit}</Text>
             </View>
-          </Animated.View>
-        </>
-      )}
+          </View>
+        ))}
+      </View>
+      {data.targetMode !== 'known' && <View style={s.goals}>
+        {GOALS.map(([goal, label]) => <AnimatedPress key={goal} style={[s.goal, (data.goal ?? 'maintain') === goal && s.selected]}
+          disabled={busy} onPress={() => pickGoal(goal)} accessibilityRole="button" accessibilityState={{ selected: (data.goal ?? 'maintain') === goal }} testID={`meal-goal-${goal}`}>
+          <Text style={[s.goalText, (data.goal ?? 'maintain') === goal && s.selectedText]}>{label}</Text>
+        </AnimatedPress>)}
+      </View>}
+      <Text style={s.note}>Fitsy ranks dishes against these meal targets. Nutrition estimates and portion sizes can vary.</Text>
     </WelcomeScreen>
   );
 }
-
-function MacroNum({ label, value, unit, delay, accent }: { label: string; value: number; unit: string; delay: number; accent?: boolean }) {
-  return (
-    <Animated.View entering={FadeInDown.duration(400).delay(delay)} style={s.macroCell}>
-      <Text style={[s.macroLabel, accent && { color: EDITORIAL.greenAccent }]}>{label}</Text>
-      <Text style={s.macroValue}>
-        {value.toLocaleString()}
-        {unit ? <Text style={s.macroUnit}>{unit}</Text> : null}
-      </Text>
-    </Animated.View>
-  );
-}
-
 const s = StyleSheet.create({
-  imgStrip: {
-    borderRadius: 20,
-    overflow: 'hidden',
-    marginBottom: 20,
-  },
-  heroImg: { width: '100%', height: 110, borderRadius: 20 },
-
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    rowGap: 16,
-    marginBottom: 20,
-  },
-  macroCell: { width: '50%', gap: 2 },
-  macroLabel: {
-    fontFamily: FONTS.nunitoSansSemiBold,
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 2,
-    color: EDITORIAL.textSoft,
-    textTransform: 'uppercase',
-  },
-  macroValue: {
-    fontFamily: FONTS.frauncesDisplay,
-    fontSize: 36,
-    color: EDITORIAL.green,
-    letterSpacing: -1.5,
-  },
-  macroUnit: { fontFamily: FONTS.nunitoSans, fontSize: 20, color: EDITORIAL.textSoft, letterSpacing: 0 },
-
-  trajWrap: { gap: 14 },
-  trajLabel: {
-    fontFamily: FONTS.nunitoSansSemiBold,
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 2,
-    color: EDITORIAL.textSoft,
-    textTransform: 'uppercase',
-  },
-  trajRow: {
-    flexDirection: 'row',
-    backgroundColor: EDITORIAL.creamCard,
-    borderRadius: 16,
-    padding: 4,
-  },
-  trajBtn: { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 14 },
-  trajOn: { backgroundColor: EDITORIAL.green },
-  trajTxt: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 15, fontWeight: '600', color: EDITORIAL.textSoft },
-  trajTxtOn: { color: EDITORIAL.cream },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 24 },
+  cell: { width: '47%', padding: 14, backgroundColor: EDITORIAL.creamCard, borderRadius: 16 },
+  label: { ...TEXT.bodySmall, fontSize: 12 },
+  inputRow: { flexDirection: 'row', alignItems: 'center' },
+  input: { ...TEXT.headline, fontSize: 30, flex: 1, minHeight: 52 },
+  unit: { ...TEXT.bodySmall },
+  goals: { gap: 8 },
+  goal: { borderRadius: 16, padding: 14, borderWidth: 1, borderColor: EDITORIAL.border },
+  selected: { backgroundColor: EDITORIAL.green },
+  goalText: { ...TEXT.body, textAlign: 'center' },
+  selectedText: { color: EDITORIAL.cream },
+  note: { ...TEXT.bodySmall, fontSize: 12, lineHeight: 18, marginTop: 24 },
 });

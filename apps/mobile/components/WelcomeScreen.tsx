@@ -51,7 +51,6 @@ export function WelcomeScreen({
 
   const handleBack = onBack ?? (() => {
     if (navigation.canGoBack()) router.back();
-    else router.navigate('/welcome/problem');
   });
 
   return (
@@ -62,7 +61,7 @@ export function WelcomeScreen({
       >
         {/* ── Top bar ── */}
         <View style={styles.topBar}>
-          {showBack ? (
+          {showBack && (navigation.canGoBack() || onBack) ? (
             <Pressable
               onPress={handleBack}
               hitSlop={16}

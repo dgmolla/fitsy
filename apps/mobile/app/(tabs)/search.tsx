@@ -144,10 +144,7 @@ function MacroStrip({ macros, onEdit, editRef }: { macros: MacroValues; onEdit: 
   const p = macros.protein || '—';
   const c = macros.carbs || '—';
   const f = macros.fat || '—';
-  const protein = parseFloat(macros.protein) || 0;
-  const carbs = parseFloat(macros.carbs) || 0;
-  const fat = parseFloat(macros.fat) || 0;
-  const cal = protein + carbs + fat > 0 ? String(Math.round(protein * 4 + carbs * 4 + fat * 9)) : '—';
+  const cal = macros.calories || '-';
 
   return (
     <View style={s.macroStrip}>
@@ -1383,7 +1380,7 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 10,
   },
   searchIco: { fontFamily: FONTS.nunitoSans, fontSize: 16, color: EDITORIAL.textSoft },
-  searchInput: { fontFamily: FONTS.nunitoSans, flex: 1, fontSize: 13.5, color: EDITORIAL.text, padding: 0 },
+  searchInput: { fontFamily: FONTS.nunitoSans, flex: 1, fontSize: 13.5, lineHeight: 20, minHeight: 24, color: EDITORIAL.text, padding: 0, textAlignVertical: 'center' },
   searchClear: { fontFamily: FONTS.nunitoSans, fontSize: 18, color: EDITORIAL.textSoft, paddingHorizontal: 4 },
 
   restSection: { marginTop: 22 },

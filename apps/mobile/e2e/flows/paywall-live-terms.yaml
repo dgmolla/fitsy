@@ -13,7 +13,7 @@ tags: [billing, onboarding, changed-journey]
     commands:
       - waitForAnimationToEnd:
           timeout: 10000
-      - assertVisible: "continue"
+      - assertVisible: "Find meals that fit"
 # Fresh welcome has no controls in this corner. Dismiss the Debug warning
 # window here; native LogBox is absent from the app accessibility hierarchy.
 - waitForAnimationToEnd:
@@ -106,14 +106,15 @@ tags: [billing, onboarding, changed-journey]
 - assertVisible: "Create an account"
 - tapOn: "Dev login"
 - extendedWaitUntil:
-    visible: "Allow notifications"
+    visible:
+      id: paywall-plan-yearly
     timeout: 30000
 - assertNotVisible: "Leave a review"
-- tapOn: "Maybe later"
-- scrollUntilVisible:
-    element:
-      id: trial-see-plans
-    direction: DOWN
+# Re-authentication returns to the existing paywall, with its real trial page behind it.
+- tapOn:
+    id: welcome-back
+- assertVisible:
+    id: trial-title
 - tapOn:
     id: trial-see-plans
 - tapOn:

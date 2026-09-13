@@ -1,19 +1,34 @@
+import { useOnboardingStep } from '@/lib/onboardingResume';
 import React, { useEffect } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useNavigation } from 'expo-router';
 import { EDITORIAL, FONTS, TEXT } from '@/lib/brand';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { trackOnboardingScreenView } from '@/lib/analytics';
 import { usePurchases } from '@/lib/usePurchases';
 import { purchaseTerms } from '@/lib/purchaseTerms';
+import { useIsFocused } from '@react-navigation/native';
+import { useRedirectOnceEntitled } from '@/lib/useRedirectOnceEntitled';
+import { recordOnboardingComplete } from '@/lib/onboardingCompletion';
+import { openPurchasedDestination } from '@/lib/paywallJourney';
 
 
 export default function TrialScreen() {
+  useOnboardingStep('trial');
+  const navigation = useNavigation();
+  const focused = useIsFocused();
   const { fontScale } = useWindowDimensions();
-  const { offering, introEligibility } = usePurchases();
+  const { offering, introEligibility, entitled } = usePurchases();
+  useRedirectOnceEntitled({
+    entitled,
+    busy: !focused,
+    onEntitled: () => {
+      void recordOnboardingComplete(false).then(() => openPurchasedDestination(navigation));
+    },
+  });
   const annual = offering?.annual;
   const terms = purchaseTerms(annual?.product, annual ? introEligibility[annual.product.identifier] : false);
   const steps = terms?.trial ? [
@@ -34,12 +49,10 @@ export default function TrialScreen() {
       <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
         {/* Top bar */}
         <View style={s.topBar}>
-          <Pressable onPress={() => { if (router.canGoBack()) router.back(); else router.navigate('/welcome/notification-permission'); }} style={s.close} accessibilityRole="button" accessibilityLabel="Go back" testID="trial-back">
+          {navigation.canGoBack() ? <Pressable onPress={() => router.back()} style={s.close} accessibilityRole="button" accessibilityLabel="Go back" testID="trial-back">
             <Ionicons name="chevron-back" size={22} color={EDITORIAL.textMid} />
-          </Pressable>
-          <View style={s.progressTrack}>
-            <View style={[s.progressFill, { width: `${Math.round((17 / 18) * 100)}%` }]} />
-          </View>
+          </Pressable> : <View style={s.close} />}
+          <Text style={s.next}>Fitsy Pro</Text>
         </View>
 
         {/* Hero */}

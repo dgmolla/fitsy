@@ -1,3 +1,4 @@
+import { useOnboardingStep } from '@/lib/onboardingResume';
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -25,6 +26,7 @@ function fmtFtIn(totalInches: number): string {
 }
 
 export default function HeightScreen() {
+  useOnboardingStep('height');
   const [unit, setUnit] = useState<Unit>('ft');
   const [inches, setInches] = useState(FT_DEFAULT_IN);
   const [cm, setCm] = useState(CM_DEFAULT);
@@ -50,7 +52,7 @@ export default function HeightScreen() {
 
   return (
     <WelcomeScreen
-      progress={11 / 18}
+      progress={2 / 7}
       title="How tall are you?"
       subtitle="Scroll to your height."
       onContinue={async () => {
