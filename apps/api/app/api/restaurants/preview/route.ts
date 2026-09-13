@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { countNearbyDishes, findNearbyRestaurants } from "@/lib/restaurantService";
+import { createRateLimiter } from "@/lib/rateLimit";
 import { parseMacroTargetParams } from "@/lib/macroTargetParams";
 import type { GuidedPreviewResponse, RestaurantResult } from "@fitsy/shared";
+
+const guidedLimiter = createRateLimiter({ windowMs: 60_000, max: 30 });
 
 interface PreviewRestaurant {
   id: string;
@@ -35,7 +38,7 @@ export async function GET(
   const latRaw = searchParams.get("lat");
   const lngRaw = searchParams.get("lng");
 
-  if (latRaw === null || lngRaw === null) {
+  if (latRaw === null || lngRaw === null || !latRaw.trim() || !lngRaw.trim()) {
     return NextResponse.json({ error: "lat and lng are required" }, { status: 400 });
   }
 
@@ -61,6 +64,16 @@ export async function GET(
 
   try {
     if (guided) {
+      // The launch preview deliberately makes these three meal summaries public,
+      // including names and macros, before account creation. Standard search
+      // still redacts bestMatch; this sample has no cursor or full-menu data.
+      // The per-instance IP brake limits bursts, not determined scraping across
+      // serverless instances. The app's one-craving tour is a UX limit only.
+      const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+      const quota = guidedLimiter.check(ip);
+      if (!quota.ok) return NextResponse.json({ error: "Too many preview searches. Please try again shortly." }, {
+        status: 429, headers: { "Retry-After": String(Math.ceil(quota.retryAfterMs / 1000)) },
+      });
       const [{ data }, nearbyDishCount] = await Promise.all([
         findNearbyRestaurants({ lat, lng, radiusMiles: 3, targets, query, limit: 3 }),
         countNearbyDishes(lat, lng, 3),

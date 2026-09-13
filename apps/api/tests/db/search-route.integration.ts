@@ -220,7 +220,9 @@ test('out-of-range cursor numbers are client errors, while genuine zero is accep
 
 test('search and detail expose the same LOW confidence when provenance is missing', async () => {
   const id = restaurantIds[0]!;
+  const estimates = await prisma.macroEstimate.findMany({ where: { menuItemId: `${id}-251` } });
   await prisma.macroEstimate.deleteMany({ where: { menuItemId: `${id}-251` } });
+  try {
   const response = await GET(new NextRequest(`http://localhost/api/restaurants?lat=12&lng=12&${targetQuery}`,
     { headers: { authorization: `Bearer ${token}` } }));
   const results = (await response.json()).data as RestaurantResult[];
@@ -230,6 +232,7 @@ test('search and detail expose the same LOW confidence when provenance is missin
   assert.equal(detail.menuItems[0]!.id, best.menuItemId);
   assert.equal(detail.menuItems[0]!.macros!.confidence, 'LOW');
   assert.equal(detail.menuItems[0]!.macros!.calories, best.calories);
+  } finally { await prisma.macroEstimate.createMany({ data: estimates }); }
 });
 
 
@@ -240,16 +243,17 @@ const guidedRequest = (query = '') => new NextRequest(
 test('guided preview reveals three real ranked meal summaries with provenance and a full area count', async () => {
   const response = await preview(guidedRequest('q=zucchini'));
   assert.equal(response.status, 200);
-  const result = guidedPreviewResponseSchema.parse(await response.json());
+  const raw = await response.json();
+  assert.ok(!('nextCursor' in raw.meta));
+  const result = guidedPreviewResponseSchema.parse(raw);
   assert.equal(result.data.length, 3);
   assert.equal(result.meta.nearbyDishCount, 1004, 'four restaurants, 251 dishes each, regardless of the craving');
   assert.equal(result.meta.radiusMiles, 3);
   for (const restaurant of result.data) {
     assert.equal(restaurant.bestMatch!.name, 'Zucchini chicken');
     assert.equal(restaurant.bestMatch!.calories, 600);
-    if (restaurant.id !== restaurantIds[0]) assert.equal(restaurant.bestMatch!.source, 'merchant');
+    assert.equal(restaurant.bestMatch!.source, 'merchant');
   }
-  assert.ok(!('nextCursor' in result.meta));
 });
 
 test('guided sample cannot expand its page or geographic scope and validates its craving', async () => {
@@ -277,4 +281,19 @@ test('local count excludes dishes without complete nutrition and does not multip
     const result = guidedPreviewResponseSchema.parse(await (await preview(guidedRequest())).json());
     assert.equal(result.meta.nearbyDishCount, 1004);
   } finally { await prisma.menuItem.delete({ where: { id: incomplete.id } }); }
+});
+
+
+test('guided preview applies a real burst limit with retry information, without changing legacy preview', async () => {
+  const request = () => new NextRequest('http://localhost/api/restaurants/preview?lat=-40&lng=60&guided=1', {
+    headers: { 'x-forwarded-for': '192.0.2.43' },
+  });
+  for (let i = 0; i < 30; i++) assert.equal((await preview(request())).status, 200);
+  const limited = await preview(request());
+  assert.equal(limited.status, 429);
+  assert.ok(Number(limited.headers.get('Retry-After')) > 0);
+  const legacy = await preview(new NextRequest('http://localhost/api/restaurants/preview?lat=-40&lng=60', {
+    headers: { 'x-forwarded-for': '192.0.2.43' },
+  }));
+  assert.equal(legacy.status, 200);
 });
