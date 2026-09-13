@@ -3,10 +3,10 @@ import { useCallback } from 'react';
 import { useFocusEffect } from 'expo-router';
 
 const KEY = '@fitsy/onboardingStep';
-const STEPS = ['location-permission', 'target-setup', 'goal', 'height', 'weight', 'age', 'sex', 'activity', 'tuning', 'preview', 'signin', 'trial', 'payment', 'out-of-area'] as const;
+const STEPS = ['promise', 'tried', 'response', 'location-permission', 'value-abundance', 'how-it-works', 'target-setup', 'macros-intro', 'goal', 'height', 'weight', 'age', 'sex', 'activity', 'tuning', 'preview', 'signin', 'trial', 'payment', 'out-of-area'] as const;
 type Step = typeof STEPS[number];
-export function useOnboardingStep(step: Step): void {
-  useFocusEffect(useCallback(() => { void AsyncStorage.setItem(KEY, step); }, [step]));
+export function useOnboardingStep(step?: Step): void {
+  useFocusEffect(useCallback(() => { if (step) void AsyncStorage.setItem(KEY, step); }, [step]));
 }
 export async function getOnboardingResume(): Promise<`/welcome/${Step}` | null> {
   const step = await AsyncStorage.getItem(KEY);

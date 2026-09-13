@@ -12,7 +12,6 @@ import { setCachedCoords } from '@/lib/locationCache';
 import { MANUAL_LOCATION_KEY } from '@/lib/useLocation';
 import { getOnboardingData, saveOnboardingField, type OnboardingArea } from '@/lib/onboardingStorage';
 import { fetchGuidedPreview } from '@/lib/guidedPreview';
-import { getMacroTargets } from '@/lib/macroStorage';
 import { trackLocationPrimingShown, trackLocationPermissionGranted, trackLocationPermissionDenied } from '@/lib/analytics';
 
 export default function LocationPermissionScreen() {
@@ -36,8 +35,8 @@ export default function LocationPermissionScreen() {
       await setCachedCoords(next);
       if (next.source === 'manual') await SecureStore.setItemAsync(MANUAL_LOCATION_KEY, JSON.stringify(next));
       else if (next.source === 'gps') await SecureStore.deleteItemAsync(MANUAL_LOCATION_KEY);
-      const [result, targets] = await Promise.all([fetchGuidedPreview(next), getMacroTargets()]);
-      router.push(result.meta.nearbyDishCount > 0 ? targets ? '/welcome/preview' : '/welcome/target-setup' : '/welcome/out-of-area');
+      const result = await fetchGuidedPreview(next, '', null);
+      router.push(result.meta.nearbyDishCount > 0 ? '/welcome/value-abundance' : '/welcome/out-of-area');
     } catch { Alert.alert('Could not check this area', 'Please try again. Your selected area is saved.'); }
     finally { setBusy(false); }
   }
@@ -65,7 +64,7 @@ export default function LocationPermissionScreen() {
   }
 
   return (
-    <WelcomeScreen title={"Where are we\neating?"} subtitle="Check nearby menus before setting up your plan." hideFooter canContinue onContinue={() => {}}>
+    <WelcomeScreen progress={0.4} title={"Where would you\nlike to eat?"} subtitle="Find a few options in an area you choose." hideFooter canContinue onContinue={() => {}}>
       <View style={s.actions}>
         <Text style={s.area}>{area ? `Selected: ${area.name}` : 'Start with a Los Angeles neighborhood or your current location.'}</Text>
         <AnimatedPress style={s.primary} disabled={busy} onPress={() => setPicker(true)} accessibilityRole="button" testID="location-choose-area"><Text style={s.primaryText}>Choose an area</Text></AnimatedPress>

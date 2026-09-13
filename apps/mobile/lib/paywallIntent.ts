@@ -10,6 +10,7 @@ const schema = z.object({
   action: z.enum(['menu', 'save', 'discovery']),
   nearbyDishCount: z.number().int().nonnegative().optional(),
   areaName: z.string().optional(),
+  query: z.string().max(100).optional(),
 });
 export type PaywallIntent = z.infer<typeof schema>;
 const recordSchema = z.object({ intent: schema, userId: z.string().nullable(), createdAt: z.number().finite() });
@@ -53,4 +54,3 @@ export async function claimPaywallIntent(userId: string): Promise<void> {
   });
 }
 export async function clearPaywallIntent(): Promise<void> { await writeIntent(() => AsyncStorage.removeItem(KEY)); }
-

@@ -92,14 +92,14 @@ export default function ProblemScreen() {
           <Animated.View entering={FadeIn.duration(500).delay(400)} style={s.footerInner}>
             <AnimatedPress
               style={s.cta}
-              onPress={() => router.push('/welcome/location-permission')}
+              onPress={() => router.push('/welcome/promise')}
               testID="welcome-start"
               haptic
               accessibilityRole="button"
             >
               <Text style={s.ctaTxt}>Find meals that fit</Text>
             </AnimatedPress>
-            <Pressable onPress={() => router.push('/auth/login')} hitSlop={12} accessibilityRole="button">
+            <Pressable testID="welcome-login" onPress={() => router.push('/auth/login')} hitSlop={12} accessibilityRole="button">
               <Text style={s.login}>
                 Have an account? <Text style={s.loginLink}>Log in</Text>
               </Text>
@@ -135,7 +135,7 @@ const s = StyleSheet.create({
 
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.55)' },
   content: { flex: 1, paddingHorizontal: 36, paddingBottom: 20 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 28, paddingHorizontal: 36 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 28 },
   text: { fontFamily: FONTS.frauncesDisplayBold, fontSize: 28, color: EDITORIAL.cream, letterSpacing: -1, lineHeight: 40, textAlign: 'center' },
   subtitle: { fontFamily: FONTS.nunitoSans, fontSize: 16, lineHeight: 24, textAlign: 'center', color: EDITORIAL.cream },
   footerInner: { alignItems: 'center', gap: 20 },

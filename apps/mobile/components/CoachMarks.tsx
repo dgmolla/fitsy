@@ -123,17 +123,17 @@ export function CoachMarks({ visible, steps, onDone, onStepShown }: CoachMarksPr
       <View style={StyleSheet.absoluteFill} accessibilityViewIsModal>
         {cutout ? (
           <>
-            <Pressable style={[s.scrim, { top: 0, left: 0, right: 0, height: cutout.y }]} onPress={next} />
-            <Pressable style={[s.scrim, { top: cutout.y + cutout.height, left: 0, right: 0, bottom: 0 }]} onPress={next} />
-            <Pressable style={[s.scrim, { top: cutout.y, left: 0, width: cutout.x, height: cutout.height }]} onPress={next} />
-            <Pressable style={[s.scrim, { top: cutout.y, left: cutout.x + cutout.width, right: 0, height: cutout.height }]} onPress={next} />
+            <Pressable accessible={false} testID="coachmark-scrim" style={[s.scrim, { top: 0, left: 0, right: 0, height: cutout.y }]} onPress={next} />
+            <Pressable accessible={false} testID="coachmark-scrim" style={[s.scrim, { top: cutout.y + cutout.height, left: 0, right: 0, bottom: 0 }]} onPress={next} />
+            <Pressable accessible={false} testID="coachmark-scrim" style={[s.scrim, { top: cutout.y, left: 0, width: cutout.x, height: cutout.height }]} onPress={next} />
+            <Pressable accessible={false} testID="coachmark-scrim" style={[s.scrim, { top: cutout.y, left: cutout.x + cutout.width, right: 0, height: cutout.height }]} onPress={next} />
             <View
               pointerEvents="none"
               style={[s.ring, { top: cutout.y, left: cutout.x, width: cutout.width, height: cutout.height }]}
             />
           </>
         ) : (
-          <Pressable style={[s.scrim, StyleSheet.absoluteFill]} onPress={next} />
+          <Pressable accessible={false} testID="coachmark-scrim" style={[s.scrim, StyleSheet.absoluteFill]} onPress={next} />
         )}
 
         {bubbleStyle && arrowStyle && (
@@ -145,7 +145,7 @@ export function CoachMarks({ visible, steps, onDone, onStepShown }: CoachMarksPr
               <Text style={s.body}>{step.body}</Text>
               <View style={s.actions}>
                 {!isLast && (
-                  <Pressable onPress={onDone} hitSlop={8} accessibilityRole="button" accessibilityLabel="Skip tour">
+                  <Pressable testID="coachmark-skip" onPress={onDone} hitSlop={8} accessibilityRole="button" accessibilityLabel="Skip tour">
                     <Text style={s.skip}>Skip</Text>
                   </Pressable>
                 )}
@@ -153,6 +153,7 @@ export function CoachMarks({ visible, steps, onDone, onStepShown }: CoachMarksPr
                   style={({ pressed }) => [s.nextBtn, pressed && s.nextBtnPressed]}
                   onPress={next}
                   accessibilityRole="button"
+                  testID="coachmark-next"
                   accessibilityLabel={isLast ? 'Got it' : 'Next tip'}
                 >
                   <Text style={s.nextTxt}>{isLast ? 'Got it' : 'Next'}</Text>

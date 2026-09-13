@@ -84,7 +84,7 @@ function parseStoredManualLocation(raw: string | null): ManualLocation | null {
   return null;
 }
 
-export function useLocation(): UseLocationResult {
+export function useLocation({ enabled = true }: { enabled?: boolean } = {}): UseLocationResult {
   const [state, setState] = useState<LocationState>({
     lat: FALLBACK_LAT,
     lng: FALLBACK_LNG,
@@ -103,6 +103,7 @@ export function useLocation(): UseLocationResult {
   // work runs. This is what makes the override survive cold restarts —
   // without it the GPS effect would race ahead and stomp the persisted value.
   useEffect(() => {
+    if (!enabled) return;
     let cancelled = false;
     SecureStore.getItemAsync(MANUAL_LOCATION_KEY)
       .then((raw) => {
@@ -128,22 +129,21 @@ export function useLocation(): UseLocationResult {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [enabled]);
 
   // Step 2: GPS resolution. Skipped while we're still hydrating SecureStore
   // (so we don't fire two competing setStates) and skipped entirely when
   // a manual override is active (so the user's choice isn't overwritten).
   useEffect(() => {
+    if (!enabled) return;
     if (!hydrated) return;
     if (manualOverride) return;
 
     cancelledRef.current = false;
-    const t0 = Date.now();
 
     async function resolve() {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
-        console.log(`[location] permission: ${Date.now() - t0}ms`);
         if (cancelledRef.current) return;
         if (status !== 'granted') {
           trackLocationPermissionDenied({ had_last_known: false });
@@ -157,7 +157,6 @@ export function useLocation(): UseLocationResult {
         }
 
         const lastKnown = await Location.getLastKnownPositionAsync();
-        console.log(`[location] lastKnown: ${Date.now() - t0}ms (${lastKnown ? 'hit' : 'miss'})`);
         if (lastKnown && !cancelledRef.current) {
           setState({
             lat: lastKnown.coords.latitude,
@@ -174,7 +173,6 @@ export function useLocation(): UseLocationResult {
         ]);
         if (cancelledRef.current) return;
         if (!position) {
-          console.log(`[location] fresh GPS timed out: ${Date.now() - t0}ms`);
           trackLocationTimeout({ had_last_known: lastKnown !== null });
           setState({
             lat: FALLBACK_LAT,
@@ -184,7 +182,6 @@ export function useLocation(): UseLocationResult {
           });
           return;
         }
-        console.log(`[location] fresh GPS: ${Date.now() - t0}ms`);
         setState({
           lat: position.coords.latitude,
           lng: position.coords.longitude,
@@ -192,7 +189,6 @@ export function useLocation(): UseLocationResult {
           loading: false,
         });
       } catch (err) {
-        console.log(`[location] failed, using fallback: ${Date.now() - t0}ms`);
         if (cancelledRef.current) return;
         trackLocationError({
           error_message: err instanceof Error ? err.message : String(err),
@@ -214,7 +210,7 @@ export function useLocation(): UseLocationResult {
     return () => {
       cancelledRef.current = true;
     };
-  }, [hydrated, manualOverride]);
+  }, [enabled, hydrated, manualOverride]);
 
   const setManualLocation = useCallback(async (loc: ManualLocation) => {
     await SecureStore.setItemAsync(MANUAL_LOCATION_KEY, JSON.stringify(loc));

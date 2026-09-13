@@ -1,0 +1,120 @@
+# A fresh user explicitly chooses an estimate and completes every profile question.
+appId: com.fitsy.mobile
+tags: [onboarding, discovery, changed-journey]
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- extendedWaitUntil:
+    visible: "Find meals that fit"
+    timeout: 30000
+- waitForAnimationToEnd
+- tapOn:
+    point: "92%,93%"
+- tapOn:
+    id: welcome-start
+- tapOn:
+    id: welcome-continue
+- tapOn:
+    id: tried-meal_prep
+- tapOn:
+    id: welcome-continue
+- assertVisible: "For the meals.*"
+- tapOn:
+    id: welcome-back
+- assertVisible:
+    id: tried-meal_prep
+    selected: true
+- tapOn:
+    id: welcome-continue
+- assertVisible: "For the meals.*"
+- tapOn:
+    id: welcome-continue
+- assertVisible: "Where would you.*"
+- tapOn:
+    id: location-choose-area
+- tapOn: "Search near DTLA"
+- extendedWaitUntil:
+    visible:
+      id: welcome-continue
+      enabled: true
+    timeout: 30000
+- assertVisible: "About the nutrition"
+- tapOn:
+    id: welcome-continue
+- assertVisible: "Know your numbers.*"
+- tapOn:
+    id: welcome-continue
+- tapOn:
+    id: target-macro-help
+- assertVisible: ".*macros.*"
+- tapOn:
+    id: welcome-continue
+- assertVisible:
+    id: target-mode-estimate
+- tapOn:
+    id: target-mode-estimate
+- assertVisible: "What's your goal.*"
+- tapOn:
+    id: goal-maintain
+- tapOn:
+    id: welcome-continue
+- assertVisible: "How tall are you.*"
+- tapOn:
+    id: welcome-continue
+- assertVisible: "What do you weigh.*"
+- tapOn:
+    id: welcome-continue
+- assertVisible: "How old are you.*"
+- tapOn:
+    id: welcome-continue
+- assertVisible: "What's your biological sex.*"
+- tapOn: "Male"
+- tapOn:
+    id: welcome-continue
+- assertVisible: "How active are you.*"
+- tapOn: ".*Moderate.*"
+- tapOn:
+    id: welcome-continue
+- assertVisible: "Estimated from your answers.*"
+- tapOn:
+    id: meal-goal-build_muscle
+- tapOn:
+    id: meal-target-calories
+- eraseText: 7
+- inputText: "700"
+- tapOn:
+    id: welcome-continue
+- extendedWaitUntil:
+    visible:
+      id: coachmark-next
+    timeout: 30000
+- assertVisible: "Search anything"
+- tapOn:
+    id: coachmark-next
+- tapOn:
+    id: coachmark-next
+- tapOn:
+    id: coachmark-next
+- assertVisible: "700"
+- assertVisible:
+    id: discovery-hero
+- tapOn:
+    id: preview-back
+- assertVisible: "700"
+- assertVisible:
+    id: meal-goal-build_muscle
+    selected: true
+- tapOn:
+    id: welcome-back
+- assertVisible: "How active are you.*"
+- tapOn:
+    id: welcome-continue
+- assertVisible: "700"
+- tapOn:
+    id: welcome-continue
+- extendedWaitUntil:
+    visible:
+      id: discovery-hero
+    timeout: 30000
+- assertVisible: "700"

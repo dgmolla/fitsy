@@ -12,10 +12,17 @@ signed in without targets -> `/macro-setup`.
 | Route | Reached by | Anchor (visible text) | Notes |
 |---|---|---|---|
 | `/welcome/problem` | fresh install | "Find meals that fit"; login link reads "Have an account? Log in" | animated dish columns; first onboarding screen |
-| `/welcome/location-permission` | welcome CTA | `location-choose-area` | Coverage before setup; explicit GPS or manual neighborhood |
-| `/welcome/target-setup` | covered area | `target-mode-known`, `target-mode-estimate` | Enter meal targets or get an estimate |
+| `/welcome/promise` | welcome CTA | `welcome-continue` | Original visual value introduction; illustrative meals labeled as examples |
+| `/welcome/tried` | promise CTA | `tried-meal_prep`, `tried-calorie_apps` | Four prior approaches; answer persists and personalizes the response and tour |
+| `/welcome/response` | prior approach | `welcome-continue` | One relevant payoff, then find local options |
+| `/welcome/location-permission` | personalized response | `location-choose-area` | Where would you like to eat? Explicit GPS or manual neighborhood |
+| `/welcome/value-abundance` | covered area | `welcome-continue` | Real local restaurant photos, names and unfiltered coverage count |
+| `/welcome/how-it-works` | local coverage | `welcome-continue` | Published versus estimated nutrition, with portion uncertainty |
+| `/welcome/target-setup` | nutrition explanation | `target-mode-known`, `target-mode-estimate`, `target-use-saved` | Enter meal targets, estimate, or explicitly confirm/edit/recalculate saved targets |
+| `/welcome/macros-intro` | optional target help | `welcome-continue` | Returns to target choice |
+| `/welcome/goal`, `/welcome/height`, `/welcome/weight`, `/welcome/age`, `/welcome/sex`, `/welcome/activity` | estimate choice only | `welcome-continue` | Original profile questions; known targets bypass all six |
 | `/welcome/tuning` | known-target choice or profile questions | `meal-target-calories` | Editable per-meal targets; goal and edits persist |
-| `/welcome/preview` | confirm meal targets | `preview-pick-1`, `preview-guide` | Three named picks; one craving search; menus and saves open plans |
+| `/welcome/preview` | confirm meal targets | `preview-pick-1`, `preview-guide` | Shared real search screen, restaurant images, three named picks, repeatable craving search, full guided tour; menus and extra results open plans |
 | `/welcome/trial` | sign in from a preview action | `trial-see-plans` | Live trial terms; Back returns through real history |
 | `/welcome/payment` | trial CTA or locked action | `paywall-plan-yearly` | Root launch has no fabricated Back; explicit decline resets the stack |
 | `/welcome/notification-permission` | confirmed purchase or restore | `notification-allow` | Optional reminders, then return to the selected meal |
@@ -23,7 +30,7 @@ signed in without targets -> `/macro-setup`.
 | `/welcome/signin` | within the onboarding story flow | "Continue with Apple" | onboarding-time account creation |
 | `/auth/reviewer` | App Store review deep link | - | demo access |
 | `/macro-setup` | signed in, no targets | - | standalone target editor |
-| `/(tabs)/search` | cold start when entitled; tab bar | "Search restaurants or dishes" | main surface; onboarding sample before decline, hard paywall afterward by default |
+| `/(tabs)/search` | cold start when entitled; tab bar | "Search restaurants or dishes" | same discovery component as preview; tabs require entitlement; hard paywall after decline by default |
 | `/(tabs)/saved` | tab bar | - | saved restaurants/items |
 | `/(tabs)/profile` | tab bar | "YOUR GOAL" | targets, plan, sign out |
 | `/restaurant/[id]` | tapping a search result | restaurant name | menu + macro detail |

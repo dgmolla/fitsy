@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { calculateAge } from '../../../packages/shared/src/utils/dateUtils';
+import type { TriedApproach } from './onboardingPersonalization';
 
 const KEY = '@fitsy/onboarding';
 
@@ -10,6 +11,7 @@ export type Sex = 'female' | 'male';
 export interface OnboardingArea { lat: number; lng: number; name: string; source: 'gps' | 'manual' | 'saved' }
 
 export interface OnboardingData {
+  tried?: TriedApproach;
   area?: OnboardingArea;
   targetMode?: 'known' | 'estimate';
   targetBasis?: string;

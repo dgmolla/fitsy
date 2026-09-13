@@ -3,6 +3,9 @@ import {
   Animated,
   Easing,
   Modal,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
   Pressable,
   StyleSheet,
   Text,
@@ -23,23 +26,16 @@ interface FilterPopupProps {
 }
 
 const MACROS: {
-  key: keyof Pick<MacroValues, "protein" | "carbs" | "fat">;
+  key: keyof MacroValues;
   label: string;
   color: string;
   step: number;
 }[] = [
+  { key: "calories", label: "Calories", color: EDITORIAL.green, step: 50 },
   { key: "protein", label: "Protein", color: MACRO_COLORS.protein, step: 5 },
   { key: "carbs", label: "Carbs", color: MACRO_COLORS.carbs, step: 5 },
   { key: "fat", label: "Fat", color: MACRO_COLORS.fat, step: 5 },
 ];
-
-function calcCal(p: string, c: string, f: string): string {
-  const pn = parseFloat(p) || 0;
-  const cn = parseFloat(c) || 0;
-  const fn = parseFloat(f) || 0;
-  const total = pn * 4 + cn * 4 + fn * 9;
-  return total > 0 ? String(Math.round(total)) : "";
-}
 
 export function FilterPopup({
   visible,
@@ -108,13 +104,12 @@ export function FilterPopup({
   function update(key: keyof MacroValues, val: string) {
     setDraft((prev) => {
       const next = { ...prev, [key]: val };
-      next.calories = calcCal(next.protein, next.carbs, next.fat);
       return next;
     });
   }
 
   function step(
-    key: keyof Pick<MacroValues, "protein" | "carbs" | "fat">,
+    key: keyof MacroValues,
     delta: number,
   ) {
     setDraft((prev) => {
@@ -124,7 +119,6 @@ export function FilterPopup({
         ...prev,
         [key]: String(Math.max(0, current + delta * macro.step)),
       };
-      next.calories = calcCal(next.protein, next.carbs, next.fat);
       return next;
     });
   }
@@ -135,10 +129,9 @@ export function FilterPopup({
     extrapolate: "clamp",
   });
 
-  const cal = calcCal(draft.protein, draft.carbs, draft.fat);
 
   return (
-    <Modal visible={visible} transparent animationType="none">
+    <Modal visible={visible} transparent animationType="none" onRequestClose={() => dismiss(onClose)}>
       <Animated.View
         style={[StyleSheet.absoluteFill, { opacity: blurOpacity }]}
       >
@@ -159,10 +152,11 @@ export function FilterPopup({
         style={StyleSheet.absoluteFill}
         onPress={() => dismiss(onClose)}
         accessibilityLabel="Close filters"
+        testID="meal-filter-close"
         accessibilityRole="button"
       />
 
-      <View style={s.overlay} pointerEvents="box-none">
+      <KeyboardAvoidingView style={s.overlay} pointerEvents="box-none" behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <Animated.View
           style={[
             s.card,
@@ -173,6 +167,7 @@ export function FilterPopup({
           ]}
         >
           <Text style={s.title}>Per-meal targets</Text>
+          <ScrollView keyboardShouldPersistTaps="handled" bounces={false}>
 
           {MACROS.map(({ key, label, color }, i) => (
             <View key={key}>
@@ -185,9 +180,9 @@ export function FilterPopup({
 
                 <StepperControl
                   label={label}
-                  fieldLabel={`${label} grams`}
+                  fieldLabel={key === "calories" ? "Calories per meal" : `${label} grams`}
                   value={draft[key]}
-                  unit="g"
+                  unit={key === "calories" ? undefined : "g"}
                   onChangeText={(t) => update(key, t)}
                   onStep={(dir) => step(key, dir)}
                 />
@@ -195,24 +190,20 @@ export function FilterPopup({
             </View>
           ))}
 
-          {/* Per-meal total */}
-          <View style={s.calRow}>
-            <Text style={s.calLabel}>Per meal</Text>
-            <View style={s.calValue}>
-              <Text style={s.calNum}>{cal || "—"}</Text>
-              <Text style={s.calUnit}>kcal</Text>
-            </View>
-          </View>
+          </ScrollView>
 
           {/* Apply */}
           <Pressable
             style={s.applyBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Apply meal targets"
+            testID="meal-filter-apply"
             onPress={() => dismiss(() => onApply(draft))}
           >
             <Text style={s.applyText}>Apply</Text>
           </Pressable>
         </Animated.View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -224,12 +215,11 @@ const s = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 20,
   },
-  // Mirrors the "Tweak macros" tile on fitsy.org (apps/api landing
-  // MacroDemo): cream card, serif title, right-aligned stepper cluster,
-  // serif figures, per-meal total row, full-width dark Apply.
+  // Keep each target independent so editing a macro preserves an entered calorie target.
   card: {
     width: "100%",
     maxWidth: 356,
+    maxHeight: "90%",
     borderRadius: 24,
     backgroundColor: EDITORIAL.cream,
     borderWidth: 1,
@@ -256,7 +246,7 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: 16,
+    paddingVertical: 12,
   },
   labelCol: {
     flexDirection: "row",
@@ -280,37 +270,6 @@ const s = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: EDITORIAL.border,
-  },
-
-  calRow: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    justifyContent: "space-between",
-    paddingTop: 22,
-    paddingBottom: 18,
-  },
-  calLabel: {
-    fontFamily: FONTS.nunitoSansSemiBold,
-    fontSize: 13,
-    fontWeight: "600",
-    color: EDITORIAL.textSoft,
-  },
-  calValue: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    gap: 5,
-  },
-  calNum: {
-    fontFamily: FONTS.frauncesMedium,
-    fontSize: 40,
-    color: EDITORIAL.green,
-    letterSpacing: -1.2,
-  },
-  calUnit: {
-    fontFamily: FONTS.nunitoSansSemiBold,
-    fontSize: 14,
-    fontWeight: "600",
-    color: EDITORIAL.textSoft,
   },
 
   applyBtn: {

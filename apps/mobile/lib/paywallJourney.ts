@@ -49,7 +49,7 @@ export function resetWelcomeJourney(navigation: Navigation, screen: 'payment' | 
 }
 export async function openPurchasedDestination(navigation: Navigation): Promise<void> {
   const intent = await getPaywallIntent();
-  const routes = [nestedRoute('(tabs)', { index: 0, routes: [{ name: 'search' }] }),
+  const routes = [nestedRoute('(tabs)', { index: 0, routes: [{ name: 'search', ...(intent?.query ? { params: { query: intent.query } } : {}) }] }),
     ...(intent?.restaurantId ? [{ name: 'restaurant/[id]', params: {
       id: intent.restaurantId,
       ...(intent.menuItemId ? { selectedItemId: intent.menuItemId } : {}),

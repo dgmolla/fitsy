@@ -1,0 +1,134 @@
+import React from 'react';
+import { Pressable, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import type { MacroValues } from '@/lib/macroPresets';
+import { EDITORIAL } from '@/lib/brand';
+import { s } from './DiscoveryScreen.styles';
+
+function getSelectionLabel(): string {
+  const hour = new Date().getHours();
+  if (hour < 11) return 'THE MORNING SELECTION';
+  if (hour < 17) return 'THE MIDDAY SELECTION';
+  return 'THE EVENING SELECTION';
+}
+
+export function Masthead({
+  locationLabel,
+  onLocationPress,
+}: {
+  locationLabel: string;
+  onLocationPress: () => void;
+}) {
+  return (
+    <View style={s.masthead}>
+      <View style={s.mastheadTop}>
+        <View style={s.logoRow}>
+          <View style={s.logoDot} />
+          <Text style={s.logo}>fitsy</Text>
+        </View>
+        <TouchableOpacity
+          style={s.locationChip}
+          onPress={onLocationPress}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={`Location: ${locationLabel}`}
+          accessibilityHint="Double-tap to change location"
+          testID="discovery-location"
+        >
+          <Ionicons name="location" size={11} color={EDITORIAL.greenAccent} />
+          <Text style={s.locationText}>{locationLabel}</Text>
+          <Ionicons name="chevron-down" size={10} color={EDITORIAL.textSoft} />
+        </TouchableOpacity>
+      </View>
+      <Text style={s.issueLabel}>{getSelectionLabel()}</Text>
+    </View>
+  );
+}
+
+// ─── Macro strip ──────────────────────────────────────────────────────────────
+
+export function MacroStrip({ macros, onEdit, editRef }: { macros: MacroValues; onEdit: () => void; editRef?: React.RefObject<View | null> }) {
+  const p = macros.protein || '-';
+  const c = macros.carbs || '-';
+  const f = macros.fat || '-';
+  const cal = macros.calories || '-';
+
+  return (
+    <View style={s.macroStrip}>
+      <View style={s.macroItem}>
+        <Text style={s.macroVal}>{p}g</Text>
+        <Text style={s.macroLbl}>protein</Text>
+      </View>
+      <View style={s.macroDivider} />
+      <View style={s.macroItem}>
+        <Text style={s.macroVal}>{c}g</Text>
+        <Text style={s.macroLbl}>carbs</Text>
+      </View>
+      <View style={s.macroDivider} />
+      <View style={s.macroItem}>
+        <Text style={s.macroVal}>{f}g</Text>
+        <Text style={s.macroLbl}>fat</Text>
+      </View>
+      <View style={s.macroDivider} />
+      <View style={s.macroItem}>
+        <Text style={s.macroVal}>{cal}</Text>
+        <Text style={s.macroLbl}>kcal/meal</Text>
+      </View>
+      <View ref={editRef} collapsable={false}>
+        <TouchableOpacity
+          style={s.editBtn}
+          onPress={onEdit}
+          activeOpacity={0.7}
+          accessibilityLabel="Edit macro targets"
+          testID="preview-edit-targets"
+          accessibilityRole="button"
+        >
+          <Text style={s.editBtnText}>Edit</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+// ─── Search bar ───────────────────────────────────────────────────────────────
+
+// Persistent horizontal search row. Styled to match the restaurant detail
+// screen's menu search input (⌕ glyph + × clear, creamCard pill, see
+// app/restaurant/[id].tsx).
+export function SearchBar({
+  value,
+  onChangeText,
+  onClear,
+  containerRef,
+}: {
+  value: string;
+  onChangeText: (text: string) => void;
+  onClear: () => void;
+  containerRef?: React.RefObject<View | null>;
+}) {
+  return (
+    <View ref={containerRef} collapsable={false} style={s.search}>
+      <Text style={s.searchIco}>⌕</Text>
+      <TextInput
+        style={s.searchInput}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder="Search restaurants or dishes"
+        placeholderTextColor={EDITORIAL.textSoft}
+        returnKeyType="search"
+        maxLength={100}
+        autoCorrect={false}
+        autoCapitalize="none"
+        clearButtonMode="never"
+        accessibilityLabel="Search restaurants or dishes"
+        testID="discovery-search"
+      />
+      {value !== '' && (
+        <Pressable onPress={onClear} testID="discovery-clear-search" hitSlop={8} accessibilityRole="button" accessibilityLabel="Clear search">
+          <Text style={s.searchClear}>×</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+

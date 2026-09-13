@@ -10,11 +10,13 @@ import { getMacroTargets, saveMacroTargets, type StoredMacroTargets } from '@/li
 import { calculateMacros } from '@/lib/macroCalculator';
 
 const FIELDS = [['calories', 'Calories', 'kcal'], ['protein', 'Protein', 'g'], ['carbs', 'Carbs', 'g'], ['fat', 'Fat', 'g']] as const;
-const GOALS = [['lose_fat', 'Lose fat'], ['maintain', 'Maintain'], ['build_muscle', 'Build muscle']] as const;
+const GOALS = [['lose_fat', 'Lose weight'], ['maintain', 'Maintain weight'], ['build_muscle', 'Build muscle']] as const;
 const empty: StoredMacroTargets = { calories: '', protein: '', carbs: '', fat: '' };
 const asStrings = (values: ReturnType<typeof calculateMacros>): StoredMacroTargets => ({
   calories: String(values.calories), protein: String(values.protein), carbs: String(values.carbs), fat: String(values.fat),
 });
+
+const basisOf = (d: Awaited<ReturnType<typeof getOnboardingData>>) => JSON.stringify([d.targetMode, d.goal, d.heightCm, d.weightKg, d.birthday, d.sex, d.activity]);
 
 export default function PlanReadyScreen() {
   useOnboardingStep('tuning');
@@ -24,7 +26,6 @@ export default function PlanReadyScreen() {
   const [busy, setBusy] = useState(false);
   // Store the profile basis separately from edited targets. Back must not
   // silently replace manual edits unless the underlying answers changed.
-  const basisOf = (d: typeof data) => JSON.stringify([d.targetMode, d.goal, d.heightCm, d.weightKg, d.birthday, d.sex, d.activity]);
   useFocusEffect(useCallback(() => {
     let cancelled = false;
     void Promise.all([getOnboardingData(), getMacroTargets()]).then(([d, saved]) => {
@@ -56,7 +57,7 @@ export default function PlanReadyScreen() {
   }
 
   return (
-    <WelcomeScreen title={"A target for\nyour next meal."} subtitle={data.targetMode === 'known' ? 'Enter per-meal targets. You can change these anytime.' : 'Estimated from your answers, with room for snacks. Tap any number to make it yours.'}
+    <WelcomeScreen progress={0.9} title="Your meal targets." subtitle={data.targetMode === 'known' ? 'Enter per-meal targets. You can change these anytime.' : 'Estimated from your answers, with room for snacks. Tap any number to make it yours.'}
       onContinue={proceed} canContinue={ready && valid && !busy} continueLabel="Find my meal picks">
       <View style={s.grid}>
         {FIELDS.map(([key, label, unit]) => (
@@ -72,6 +73,7 @@ export default function PlanReadyScreen() {
         ))}
       </View>
       {data.targetMode !== 'known' && <View style={s.goals}>
+        <Text style={s.note}>Your goal · Tap to change</Text>
         {GOALS.map(([goal, label]) => <AnimatedPress key={goal} style={[s.goal, (data.goal ?? 'maintain') === goal && s.selected]}
           disabled={busy} onPress={() => pickGoal(goal)} accessibilityRole="button" accessibilityState={{ selected: (data.goal ?? 'maintain') === goal }} testID={`meal-goal-${goal}`}>
           <Text style={[s.goalText, (data.goal ?? 'maintain') === goal && s.selectedText]}>{label}</Text>
