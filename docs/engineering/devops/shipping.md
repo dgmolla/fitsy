@@ -32,6 +32,8 @@ npm run verify:all
 The pre-push hook runs layers 0–2 plus size/domain checks.
 A hook pass does not replace the applicable product-flow verification or independent review.
 The registry determines which checks apply and whether a check is blocking or shadow.
+Removing obsolete structural exceptions belongs to the changed product domain only when every removed entry names a file in the same diff.
+Allowlist additions, unrelated removals, deletion of the allowlist and unreadable history retain infrastructure ownership.
 
 **Local product-flow gate.** Local iPhone E2E is blocking for mobile-facing changes. CI runs static checks, unit tests and builds; its optional simulator workflow remains experimental. `npm run verify` and pre-push require fresh `.evidence/product-flow/report.json` when impact selection applies. Missing tools, skipped/failed assertions, missing coverage and stale evidence fail; unrelated changes get explicit `not_applicable`.
 

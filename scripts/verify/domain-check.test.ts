@@ -1,0 +1,94 @@
+import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { execFileSync, spawnSync } from 'node:child_process';
+const root = resolve(__dirname, '../..');
+let directory: string;
+// Git hooks export repository-local variables; fixture commands must not inherit them.
+const fixtureEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
+const allowlist = 'scripts/verify/structural-allowlist.txt';
+const mobile = 'apps/mobile/app/search.tsx';
+const git = (...args: string[]) => execFileSync('git', args, { cwd: directory, stdio: 'pipe', encoding: 'utf8', env: fixtureEnv }).trim();
+const write = (path: string, value: string) => writeFileSync(join(directory, path), value);
+const commit = () => { git('add', '.'); git('commit', '-qm', 'fixture'); };
+beforeEach(() => {
+  directory = mkdtempSync(join(tmpdir(), 'fitsy-domain-'));
+  mkdirSync(join(directory, 'scripts/verify'), { recursive: true });
+  mkdirSync(join(directory, 'apps/mobile/app'), { recursive: true });
+  for (const path of ['scripts/route-reviewers.sh', 'scripts/verify/domain-check.sh', 'scripts/verify/domain-allowlist-paths.mjs']) copyFileSync(join(root, path), join(directory, path));
+  write(allowlist, `long-file ${mobile}\nconsole-log ${mobile}\n`);
+  write(mobile, 'old screen');
+  git('init', '-q'); git('config', 'user.name', 'Local E2E'); git('config', 'user.email', 'e2e@example.test'); git('config', 'core.hooksPath', '/dev/null');
+  commit(); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+});
+afterEach(() => rmSync(directory, { recursive: true, force: true }));
+function check(extraEnv: Record<string, string> = {}) {
+  return spawnSync('bash', ['scripts/verify/domain-check.sh'], { cwd: directory, encoding: 'utf8', env: { ...fixtureEnv, PR_NUMBER: '', ...extraEnv } });
+}
+test('the real domain gate accepts a frontend fix that retires only its own exceptions', () => {
+  write(mobile, 'shorter screen'); write(allowlist, ''); commit();
+  const result = check();
+  expect(result.status).toBe(0); expect(JSON.parse(result.stdout).summary).toBe('single domain: frontend');
+});
+test.each(['addition', 'unrelated removal', 'file deletion'])('the real gate retains infrastructure review for %s', scenario => {
+  write(mobile, 'changed screen');
+  if (scenario === 'addition') write(allowlist, readFileSync(join(directory, allowlist), 'utf8') + 'long-file apps/mobile/app/new.tsx\n');
+  if (scenario === 'unrelated removal') { write(allowlist, ''); write(mobile, 'old screen'); write('apps/mobile/app/other.tsx', 'different screen'); }
+  if (scenario === 'file deletion') rmSync(join(directory, allowlist));
+  commit(); const result = check();
+  expect(result.status).toBe(1); expect(JSON.parse(result.stdout).summary).toContain('cto frontend');
+});
+test('an allowlist-only cleanup retains its infrastructure owner', () => {
+  write(allowlist, ''); commit(); const result = check();
+  expect(result.status).toBe(0); expect(JSON.parse(result.stdout).summary).toBe('single domain: cto');
+});
+test('unreadable comparison history fails closed', () => {
+  write(mobile, 'changed screen'); write(allowlist, ''); commit();
+  const paths = `${mobile}\n${allowlist}\n`;
+  const result = spawnSync(process.execPath, ['scripts/verify/domain-allowlist-paths.mjs', 'missing-head'], { cwd: directory, encoding: 'utf8', input: paths, env: fixtureEnv });
+  expect(result.status).toBe(0); expect(result.stdout).toBe(paths);
+});
+
+test.each(['addition', 'cleanup', 'unavailable', 'missing history'])('PR mode uses the remote head and fails closed for %s', scenario => {
+  write(mobile, 'remote screen');
+  write(allowlist, readFileSync(join(directory, allowlist), 'utf8') + `long-file apps/mobile/app/new.tsx\n`);
+  commit(); const remoteHead = git('rev-parse', 'HEAD');
+  git('checkout', '--detach', 'origin/main');
+  write(mobile, 'local screen'); write(allowlist, ''); commit();
+  expect(check().status).toBe(0);
+  const bin = join(directory, 'bin'); mkdirSync(bin);
+  const program = `#!/usr/bin/env node\nif (JSON.stringify(process.argv.slice(2)) !== JSON.stringify(['pr', 'view', '1', '--json', 'headRefOid', '--jq', '.headRefOid'])) process.exit(2);\nprocess.stdout.write(process.env.FIXTURE_PR_HEAD || '');\n`;
+  writeFileSync(join(bin, 'gh'), program, { mode: 0o755 });
+  const head = scenario === 'addition' ? remoteHead : scenario === 'cleanup' ? git('rev-parse', 'HEAD') : scenario === 'missing history' ? 'a'.repeat(40) : '';
+  const result = check({ PR_NUMBER: '1', FIXTURE_PR_HEAD: head, PATH: bin + ':' + fixtureEnv.PATH });
+  expect(result.status).toBe(scenario === 'cleanup' ? 0 : 1);
+  expect(JSON.parse(result.stdout).summary).toBe(scenario === 'cleanup' ? 'single domain: frontend' : scenario === 'addition' ? 'PR touches 2 domains: cto frontend' : 'Unable to resolve PR files and head');
+});
+test('unrecognized exception categories keep infrastructure ownership', () => {
+  write(allowlist, `future-rule ${mobile}\n`); commit(); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  write(mobile, 'changed screen'); write(allowlist, ''); commit();
+  const result = check(); expect(result.status).toBe(1); expect(JSON.parse(result.stdout).summary).toContain('cto frontend');
+});
+
+test('a PR beyond the API file page still checks every changed domain', () => {
+  for (let n = 0; n < 101; n++) write(`apps/mobile/app/screen-${n}.tsx`, 'new screen');
+  write('scripts/extra-check.sh', 'infrastructure'); commit();
+  const head = git('rev-parse', 'HEAD');
+  const truncated = git('diff', '--name-only', 'origin/main...HEAD').split('\n').slice(0, 100).join('\n');
+  const bin = join(directory, 'bin'); mkdirSync(bin);
+  const program = `#!/usr/bin/env node\nprocess.stdout.write(${JSON.stringify(head)} + (process.argv.includes('headRefOid,files') ? '\\n' + ${JSON.stringify(truncated)} : ''));\n`;
+  writeFileSync(join(bin, 'gh'), program, { mode: 0o755 });
+  const result = check({ PR_NUMBER: '1', PATH: bin + ':' + fixtureEnv.PATH });
+  expect(result.status).toBe(1); expect(JSON.parse(result.stdout).summary).toBe('PR touches 2 domains: cto frontend');
+});
+
+test('changed routing uses the reviewed commit instead of a different local checkout', () => {
+  write('scripts/route-reviewers.sh', `cat >/dev/null\necho '["cto","frontend"]'\n`); commit();
+  const head = git('rev-parse', 'HEAD');
+  git('checkout', '--detach', 'origin/main');
+  write('scripts/route-reviewers.sh', `cat >/dev/null\necho '["frontend"]'\n`); commit();
+  const bin = join(directory, 'bin'); mkdirSync(bin);
+  writeFileSync(join(bin, 'gh'), `#!/usr/bin/env node\nprocess.stdout.write(${JSON.stringify(head)});\n`, { mode: 0o755 });
+  const result = check({ PR_NUMBER: '1', PATH: bin + ':' + fixtureEnv.PATH });
+  expect(result.status).toBe(1); expect(JSON.parse(result.stdout).summary).toBe('PR touches 2 domains: cto frontend');
+});
