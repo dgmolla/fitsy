@@ -36,10 +36,16 @@ tags: [onboarding, auth, changed-journey]
 # Interrupting waitlist signup must keep its destination across a cold launch.
 - stopApp
 - launchApp
-- extendedWaitUntil:
-    visible:
-      id: waitlist-join
-    timeout: 30000
+# XCTest can reject a transient startup frame. Retry the read, not navigation.
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - extendedWaitUntil:
+          visible:
+            id: waitlist-join
+          timeout: 30000
 - assertVisible: "More menus are.*"
 - assertNotVisible: "Create an account"
 - tapOn:
@@ -71,10 +77,15 @@ tags: [onboarding, auth, changed-journey]
 # The selected manual area survives another restart, independent of GPS.
 - stopApp
 - launchApp
-- extendedWaitUntil:
-    visible:
-      id: welcome-continue
-      enabled: true
-    timeout: 30000
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - extendedWaitUntil:
+          visible:
+            id: welcome-continue
+            enabled: true
+          timeout: 30000
 - assertVisible: ".*dishes with nutrition within 3 miles.*"
 - assertVisible: "About the nutrition"
