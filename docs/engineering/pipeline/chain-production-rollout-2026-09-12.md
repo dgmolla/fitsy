@@ -1,35 +1,36 @@
 # Chain nutrition rollout: production results
 
-**37,572 existing menu rows now use reviewed official nutrition across 42 consumer brands.**
-The 31 completed batches cover 46 stored brand identities and exclude the earlier WaBa/Yoshinoya rollout.
+**37,705 existing menu rows now use reviewed official nutrition across 43 consumer brands.**
+The 32 completed batches cover 47 stored brand identities and exclude the earlier WaBa/Yoshinoya rollout.
 National onboarding is still in progress.
 
-## Latest result: Cold Stone Creamery
+## Latest result: NORMS
 
-**917 rows are production verified: 32 macro corrections and 885 attribution-only confirmations.**
-The 61 reviewed facts and 63 exact aliases cover explicitly sized ice creams, sorbets, selected creations and drinks, empty cones and two standard sundaes.
-All 2,389 menu IDs across 18 restaurants were preserved; the 1,472 unselected rows stayed unchanged.
+**133 rows are production verified, all with numeric corrections.**
+The 19 reviewed facts and 19 exact aliases cover standalone breakfast sides, fries, potatoes, rice and selected macaroni-and-cheese sides.
+All 1,031 menu IDs across seven restaurants were preserved; the other 898 rows stayed unchanged.
 
-| Serving issue | Reviewed treatment |
-|---|---|
-| Chocolate Cupcake ice cream, Like It | 370 to 360 calories; fat, carbs and protein corrected to the published serving |
-| Chocolate Cupcake ice cream, Love It | 590 to 580 calories; carbs corrected to the published serving |
-| Two detailed standard sundae rows | 485 to 610 and 531 to 660 calories for the complete published recipe |
-| Guide and current menu disagree | Hold the affected families, including 225 historical rows |
-| Current UE title has no selected size | Keep the estimate; all 158 items in the two current captures abstained |
+| Item | Before | Reviewed published serving |
+|---|---:|---:|
+| Four bacon strips | 291 calories | 160 calories |
+| Side of fries | 373 calories | 170 calories |
+| Basket of fries | 589 calories | 341 calories |
+| Three turkey sausage patties | 103 calories | 210 calories |
 
-The canary exercised all 61 facts before the remaining 856 rows were applied in transactions of at most 100 rows.
-Final authenticated reads checked all 2,389 items and all 917 updates; repeat catalog and April plans returned zero changes.
-Root and independent source review covered all 61 selected rows and 671 nutrient cells against the original PDF pages.
-The draft review first withheld approval over provenance wording and the draft-to-approved handoff; both were resolved and independently passed before production writes.
+The 19-row canary exercised every fact before the remaining 114 rows were applied.
+Final authenticated reads checked all 1,031 items and all 133 updates; repeat catalog and April plans returned zero changes.
+All 19 aliases passed local April and import checks, including seven complete historical menu shapes.
+Two current UE captures matched 36 of 279 items; the other 243 remained estimated.
 
-All 63 aliases are historical.
-Local imports cover four historical menu shapes and all 18 restaurant names linked and unlinked; the two current menus provide abstention proof, not new official-match coverage.
-The two standard sundaes assume the sole published default recipe, and known source conflicts remain held.
+Source review checked the publisher's static nutrition table, current menu portion labels and the calculator's default ingredients.
+Separate HTML parsers agreed on all 285 selected nutrient cells; independent review checked all 19 macro rows against the original capture.
+Published static integers were retained, with calculator fractions corroborating within half a gram.
+Calculator observations were manually transferred from actual browser tool output, not raw browser exports.
+Eggs and black beans with conflicting calorie values, onion rings missing included ranch, and a questionable 1,523-calorie mac-and-cheese portion remain held.
 
-The preceding Baskin batch is also production verified: 481 rows, with 143 numeric changes and 338 attribution confirmations.
-All 1,190 menu IDs, 709 unselected menu rows and ten older unreviewed catalog records were preserved.
-Its whole-pack totals sum rounded published servings and remain approximate.
+The preceding Cold Stone batch is also production verified: 917 rows, with 32 numeric changes and 885 attribution confirmations.
+All 2,389 IDs and the other 1,472 rows were preserved; all 61 facts and 63 historical aliases passed source and wiring review.
+Cold Stone's two current UE captures abstained on all 158 items because selected size was missing; guide/menu conflicts remain held.
 Both batches use the released matcher and writer, so catalog additions required no API deployment.
 
 ## Completed batches
@@ -67,13 +68,14 @@ Both batches use the released matcher and writer, so catalog additions required 
 | Panini Kabob Grill | 150 | 150 | 0 |
 | Baskin-Robbins | 481 | 143 | 338 |
 | Cold Stone Creamery | 917 | 32 | 885 |
-| **Total** | **37,572** | **14,018** | **23,554** |
+| NORMS | 133 | 133 | 0 |
+| **Total** | **37,705** | **14,151** | **23,554** |
 
 “Values changed” means at least one of calories, protein, carbs or fat changed.
 “Attribution only” means those four values stayed the same and reviewed official attribution was applied.
 These counts measure rollout behavior, not accuracy against measured food.
 
-The batches loaded **1,496 approved facts and 2,077 exact menu aliases** into the chain catalog.
+The batches loaded **1,515 approved facts and 2,096 exact menu aliases** into the chain catalog.
 Jamba, Panera, Popeyes and Jersey Mike's each have two stored identities; their facts remain scoped to the correct identity.
 Dave's and Nothing Bundt Cakes were also linked to 23 existing restaurants without changing their menu identities.
 
@@ -98,7 +100,7 @@ Offline UE runs must use a checkout containing it.
 
 | Check | Result and limit |
 |---|---|
-| Production preservation | All **114,040 menu IDs across 1,178 restaurants** preserved; all **76,468 unselected rows** unchanged |
+| Production preservation | All **115,071 menu IDs across 1,185 restaurants** preserved; all **77,366 unselected rows** unchanged |
 | Serving | Authenticated reads checked every selected restaurant's complete menu and every changed row; search/detail checks passed per brand |
 | Repeated execution | All completed batches produced zero pending catalog and April changes |
 | Recovery | Exact local rollback passed; bounded production transactions retain before/after journals; production was not rolled back as a test |
@@ -107,7 +109,7 @@ Offline UE runs must use a checkout containing it.
 
 Current UE captures and simulated historical imports are separate evidence.
 Nine batches after Habit have no current UE capture; their proof does not establish current naming or availability.
-Dave's, Charleys, the second Jersey Mike's identity, Panini, Baskin and Cold Stone have additional current-capture replays.
+Dave's, Charleys, the second Jersey Mike's identity, Panini, Baskin, Cold Stone and NORMS have additional current-capture replays.
 Activating a catalog routes imports through UE but does not guarantee UE returns a menu.
 Authenticated checks use the existing allowlisted review account, not a paid-subscription test.
 
@@ -116,7 +118,7 @@ Authenticated checks use the existing allowlisted review account, not a paid-sub
 | Risk | Rule demonstrated by the rollout |
 |---|---|
 | Same name, different serving | Require the exact item, size and complete order; Wingstop per-wing facts cannot represent an unsized wing order |
-| Missing accompaniments | Check included sides and sauces; hold unresolved IHOP omelette sides and Burger King onion-ring sauce |
+| Missing accompaniments | Check included sides and sauces; hold unresolved IHOP omelette sides and Burger King/NORMS onion-ring sauces |
 | Calculator controls | Check actions, displayed selections and totals together; Panini has stale checked classes, and Jersey Mike's Markdown lists unselected extras |
 | Conflicting source values | Hold disagreements instead of choosing the convenient number; examples include Habit, Charleys, CAVA, Buffalo Wild Wings and Cold Stone |
 | Wrong source scope | Respect country, region and restaurant eligibility; Peet's and Del Taco remain inactive for separate scope/release reasons |

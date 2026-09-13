@@ -1,19 +1,19 @@
 {
   "generated": true,
-  "asOf": "2026-09-13T09:54:20.617640+00:00",
-  "scope": "31 completed source batches; earlier WaBa/Yoshinoya excluded",
+  "asOf": "2026-09-13T10:25:21.597558+00:00",
+  "scope": "32 completed source batches; earlier WaBa/Yoshinoya excluded",
   "reviewedCodeHead": "179be20e9a26eda262c428149630f72092730302",
   "mergeCommit": "848f117952b60b62bd1ee03291151e73a1184e55",
   "pr": "https://github.com/dgmolla/fitsy/pull/289",
   "totals": {
-    "facts": 1496,
-    "aliases": 2077,
-    "patchedRows": 37572,
-    "numericChanges": 14018,
+    "facts": 1515,
+    "aliases": 2096,
+    "patchedRows": 37705,
+    "numericChanges": 14151,
     "attributionOnly": 23554,
-    "preservedMenuIds": 114040,
-    "unchangedUnselectedRows": 76468,
-    "restaurants": 1178
+    "preservedMenuIds": 115071,
+    "unchangedUnselectedRows": 77366,
+    "restaurants": 1185
   },
   "batches": [
     {
@@ -834,6 +834,32 @@
         "coldstone-fixed-v2-approved.json": "15e348acc7cb6ac87c2868cbd365ad1f908ec1706f8eaf56d5ce0a42c284640f",
         "coldstone-fixed-v2-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "coldstone-fixed-v2-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "norms-fixed",
+      "chains": "NORMS",
+      "brandSlugs": [
+        "norms"
+      ],
+      "facts": 19,
+      "aliases": 19,
+      "patchedRows": 133,
+      "numericChanges": 133,
+      "attributionOnly": 0,
+      "preservedMenuIds": 1031,
+      "unchangedUnselectedRows": 898,
+      "restaurants": 7,
+      "httpVerifiedAt": "2026-09-13T10:25:21.597558+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "norms-fixed-segments/000119.json.verified.json": "9b797e9fc546f77d6de9e34e5d797a6d34b9d98e9ea0efb53e078060da4116b5",
+        "norms-fixed-complete-http.json": "76dda2511801f3fd765722b6e8e37dd2493352ab5d958af62d1aa23689f002ab",
+        "norms-fixed-approved.json": "ef797b5223e5ee12ff83e28f980d66adbfb92603bec3ae32a58d1d27508adf8d",
+        "norms-fixed-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "norms-fixed-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
       },
       "originalCatalogRowsPreserved": 0
     }
