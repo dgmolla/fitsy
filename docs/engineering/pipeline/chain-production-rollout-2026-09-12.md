@@ -1,50 +1,50 @@
 # Chain nutrition rollout: production results
 
-**38,076 existing menu rows now use reviewed official nutrition across 45 consumer brands.**
-The 36 completed batches cover 51 stored brand identities and exclude the earlier WaBa/Yoshinoya rollout.
+**38,300 existing menu rows now use reviewed official nutrition across 46 consumer brands.**
+The 37 completed batches cover 52 stored brand identities and exclude the earlier WaBa/Yoshinoya rollout.
 National onboarding is still in progress.
 
-## Latest result: Pressed
+## Latest result: Paris Baguette
 
-**289 rows across 11 restaurants are production verified, all with numeric corrections.**
-The catalog contains 33 new facts and 57 exact aliases; all 1,267 menu IDs were preserved and 978 unselected rows stayed unchanged.
+**224 rows across seven restaurants are production verified: 97 numeric corrections and 127 attribution-only updates.**
+65 reviewed facts and 103 exact aliases were added to the chain catalog.
+All 789 menu IDs, 565 unselected rows and 249 older unreviewed catalog records were preserved.
 
-| Example row | Previous calories | Published single bottle |
+| Example row | Previous calories | Published standard item |
 |---|---:|---:|
-| Unwind Tonic | 997 | 90 |
-| Carrot Juice | 436 | 120 |
-| Blue Pineapple Probiotic Lemonade | 382 | 90 |
+| Macadamia Nut Cookie | 167 | 580 |
+| Triple Chocolate Chip Cookie | 156 | 530 |
+| Blueberry Yogurt Cake Slice | 109 | 460 |
 
 These examples show correction magnitude, not accuracy against measured food.
-The median absolute calorie change across the 289 rows was 36.
-Root and independent review read all 37 original labels and 148 macro fields.
-The proposed facts use one complete 450 mL bottle or 59 mL shot, without scaling.
-Unsized UE items use the single packaged bottle assumption; April Carrot's missing description is a disclosed weaker binding.
+Root and independent review checked all 65 four-macro tuples on the original US nutrition chart.
+The 715 selected nutrient cells were also checked with a separate PDF extraction method, and official product pages corroborated calories and recipes.
 
 | Evidence | Result |
 |---|---|
-| Current captured UE imports | 64 official / 162 estimated across 226 items |
-| Historical menu simulations | 289 official / 978 estimated across all 11 menus |
-| Exact alias coverage | All 57: 54 historical and 3 current-only |
-| Identity boundaries | 749 brands, all 11 actual names, 397 negative mutations and 321 held contexts |
-| Production | 32-fact canary, full authenticated menu/search checks, preservation and zero-change reruns |
+| Current captured UE imports | 68 official / 251 estimated across 319 items |
+| Historical simulations | 79 matched / 200 unchanged contexts, weighted to 224 April rows |
+| Exact alias coverage | All 103: 79 historical and 24 current-only |
+| Identity boundaries | 749 brands, all seven restaurant names, 689 negative mutations and 451 held contexts |
+| Production | 54-fact canary, complete authenticated menu/search checks, preservation and zero-change reruns |
 
-Mango Sunshine is an evidenced rename of Tropical Wellness Smoothie: official and UE text explicitly say the recipe is unchanged.
-Old matcha Avocado descriptions and the old Hydration formula remain held.
-Chocolate Banana's one April 20 g/coconut-cream context matches, while eight April rows and both current UE captures still say 21 g and remain estimated.
-Current Vanilla matches the 30 g label; April's 20 g version conflicts.
-Stale official SEO metadata was distinguished from visible product descriptions and attached labels.
+Seven restaurants share two distinct historical menu shapes; both were replayed and every restaurant name was checked separately.
+All 68 matched current UE items publish a single calorie value agreeing with the reference.
+Some expose a generic customization flag; the facts describe only the named unmodified item.
+Blank April descriptions explicitly assume the same standard product.
 
-Three label-verified products remain held by the released calorie validator: Dark Chocolate, Simple Cleanse and Vanilla.
-Their allulose/fiber labels do not fit its naive 4/4/9 check; the rejection and resulting UE estimator fallback were reproduced locally.
-No publisher value was changed to pass the check, and no validator was bypassed.
+22 product calorie panels disagree with the linked PDF, and those conflicts were held.
+Whole cakes, loaves, multipacks, fractional Choux Cream Bread, drinks and Tiramisu Cake Slice's sugar/carbohydrate contradiction were also excluded.
+The separately named Tiramisu Tart has its own corroborated source row.
+PDF warning footnotes were removed using their glyph position; menu quantities were retained.
+Labeled packs were kept separate from individual items.
 
-The remaining 978 April rows include 431 packs/programs, 191 third-party packaged products, 154 prepared products, 150 single products needing sources and 52 specific recipe/protein/validator holds.
-This is title-based follow-up triage, not proof that all those products have usable official facts.
-34 additional official pack pages were retained for separate quantity and serving review.
+The remaining 565 April rows include 317 drinks, 82 products needing a whole-order serving review, 68 without a reviewed current source binding, 61 official calorie conflicts, 30 source rows needing product corroboration and seven Tiramisu contradictions.
+These categories prioritize follow-up; they do not establish eligibility.
 
-Kreation's preceding 82 corrections across 19 restaurants remain production verified.
-Both chains use the released matcher and writer, so these catalog additions required no API deployment.
+Pressed's preceding 289 numeric corrections and Kreation's 82 remain production verified.
+Pressed's allulose/fiber validator limitation remains reproduced and unfixed; no publisher macros were altered to pass the check.
+All these catalog updates use the released matcher and writer without a new API deployment.
 
 ## Completed batches
 
@@ -86,13 +86,14 @@ Both chains use the released matcher and writer, so these catalog additions requ
 | Kreation Organic | 9 | 9 | 0 |
 | Kreation Kafe & Juicery | 10 | 10 | 0 |
 | Pressed | 289 | 289 | 0 |
-| **Total** | **38,076** | **14,522** | **23,554** |
+| Paris Baguette | 224 | 97 | 127 |
+| **Total** | **38,300** | **14,619** | **23,681** |
 
 “Values changed” means at least one of calories, protein, carbs or fat changed.
 “Attribution only” means those four values stayed the same and reviewed official attribution was applied.
 These counts measure rollout behavior, not accuracy against measured food.
 
-The batches loaded **1,563 approved facts and 2,176 exact menu aliases** into the chain catalog.
+The batches loaded **1,628 approved facts and 2,279 exact menu aliases** into the chain catalog.
 Jamba, Panera, Popeyes and Jersey Mike's each have two stored identities; Kreation has three.
 Their facts remain scoped to the correct identity.
 Dave's and Nothing Bundt Cakes were also linked to 23 existing restaurants without changing their menu identities.
@@ -118,7 +119,7 @@ Offline UE runs must use a checkout containing it.
 
 | Check | Result and limit |
 |---|---|
-| Production preservation | All **120,115 menu IDs across 1,215 restaurants** preserved; all **82,039 unselected rows** unchanged |
+| Production preservation | All **120,904 menu IDs across 1,222 restaurants** preserved; all **82,604 unselected rows** unchanged |
 | Serving | Authenticated reads checked every selected restaurant's complete menu and every changed row; search/detail checks passed per brand |
 | Repeated execution | All completed batches produced zero pending catalog and April changes |
 | Recovery | Exact local rollback passed; bounded production transactions retain before/after journals; production was not rolled back as a test |
@@ -127,7 +128,7 @@ Offline UE runs must use a checkout containing it.
 
 Current UE captures and simulated historical imports are separate evidence.
 Nine batches after Habit have no current UE capture; their proof does not establish current naming or availability.
-Dave's, Charleys, the second Jersey Mike's identity, Panini, Baskin, Cold Stone, NORMS, Kreation and Pressed have additional current-capture replays.
+Dave's, Charleys, the second Jersey Mike's identity, Panini, Baskin, Cold Stone, NORMS, Kreation, Pressed and Paris Baguette have additional current-capture replays.
 Activating a catalog routes imports through UE but does not guarantee UE returns a menu.
 Authenticated checks use the existing allowlisted review account, not a paid-subscription test.
 
@@ -140,11 +141,14 @@ Authenticated checks use the existing allowlisted review account, not a paid-sub
 | Calculator controls | Check actions, displayed selections and totals together; Panini has stale checked classes, and Jersey Mike's Markdown lists unselected extras |
 | Stale page metadata | Compare visible descriptions and attached labels; Pressed SEO retained old formulas while the product panel had changed |
 | Energy consistency | Keep a reviewed path for allulose/fiber labels; do not alter source macros to satisfy a naive 4/4/9 equation |
-| Conflicting source values | Hold disagreements instead of choosing the convenient number; examples include Habit, Charleys, CAVA, Buffalo Wild Wings and Cold Stone |
+| Conflicting source values | Hold disagreements instead of choosing the convenient number; examples include Habit, Charleys, CAVA, Buffalo Wild Wings, Cold Stone and Paris Baguette |
 | Wrong source scope | Respect country, region and restaurant eligibility; Peet's and Del Taco remain inactive for separate scope/release reasons |
 | Different portion conventions | Use nutrition servings for whole cakes and bottles; Kreation labels require two servings per bottle |
 | Duplicate brand identity | Reuse verified source facts through separate brand-scoped bindings; test each identity without merging unrelated restaurants |
-| Existing catalog says “official” | Require a valid review and serving binding; Charleys' 39 and Baskin's 10 older unreviewed chain catalog records were preserved and not implicitly promoted |
+| Existing catalog says “official” | Require a valid review and serving binding; Charleys' 39, Baskin's 10 and Paris Baguette's 249 older unreviewed chain catalog records were preserved and not implicitly promoted |
+
+The approval tool now accepts a completed terminal JSON review verdict while preserving the original reviewer output.
+Failed, partial, conditional and malformed verdicts are rejected; root review of findings remains required.
 
 Published default servings remain an explicit assumption where historical menus lack weights or ingredients.
 Unresolved cases retain estimates; replay consistency is not evidence that an estimate or published portion is accurate for every order.

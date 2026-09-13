@@ -1,19 +1,19 @@
 {
   "generated": true,
-  "asOf": "2026-09-13T11:50:50.057621+00:00",
-  "scope": "36 completed source batches; earlier WaBa/Yoshinoya excluded",
+  "asOf": "2026-09-13T12:31:30.486189+00:00",
+  "scope": "37 completed source batches; earlier WaBa/Yoshinoya excluded",
   "reviewedCodeHead": "179be20e9a26eda262c428149630f72092730302",
   "mergeCommit": "848f117952b60b62bd1ee03291151e73a1184e55",
   "pr": "https://github.com/dgmolla/fitsy/pull/289",
   "totals": {
-    "facts": 1563,
-    "aliases": 2176,
-    "patchedRows": 38076,
-    "numericChanges": 14522,
-    "attributionOnly": 23554,
-    "preservedMenuIds": 120115,
-    "unchangedUnselectedRows": 82039,
-    "restaurants": 1215
+    "facts": 1628,
+    "aliases": 2279,
+    "patchedRows": 38300,
+    "numericChanges": 14619,
+    "attributionOnly": 23681,
+    "preservedMenuIds": 120904,
+    "unchangedUnselectedRows": 82604,
+    "restaurants": 1222
   },
   "batches": [
     {
@@ -966,6 +966,32 @@
         "pressed-bottles-v2-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
       },
       "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "paris-fixed",
+      "chains": "Paris Baguette",
+      "brandSlugs": [
+        "paris-baguette"
+      ],
+      "facts": 65,
+      "aliases": 103,
+      "patchedRows": 224,
+      "numericChanges": 97,
+      "attributionOnly": 127,
+      "preservedMenuIds": 789,
+      "unchangedUnselectedRows": 565,
+      "restaurants": 7,
+      "httpVerifiedAt": "2026-09-13T12:31:30.486189+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "paris-fixed-segments/000154.json.verified.json": "efe8119fb73c12f1204e19f4175a6cd5ced21a65e77cf6ce8f6130ffc8dbeffc",
+        "paris-fixed-complete-http.json": "83fa0ee84f25d721253e2f2a94acdd64078102ca4e336433f2577f13e871734c",
+        "paris-fixed-approved.json": "de40ae1fae97e137c4cce60a4e3ccade997b050df2cf372e1168301e0a9a3767",
+        "paris-fixed-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "paris-fixed-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 249
     }
   ],
   "receiptArchive": "Local task work/chain-national; full journals and baselines are intentionally excluded from this aggregate repository record",
