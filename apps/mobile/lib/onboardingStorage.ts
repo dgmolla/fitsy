@@ -7,7 +7,7 @@ export type ActivityLevel = 'sedentary' | 'lightly_active' | 'active' | 'very_ac
 export type Goal = 'lose_fat' | 'maintain' | 'build_muscle';
 export type Sex = 'female' | 'male';
 
-export interface OnboardingArea { lat: number; lng: number; name: string; source: 'gps' | 'manual' }
+export interface OnboardingArea { lat: number; lng: number; name: string; source: 'gps' | 'manual' | 'saved' }
 
 export interface OnboardingData {
   area?: OnboardingArea;

@@ -7,8 +7,9 @@ import { useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import type { GuidedPreviewResponse, RestaurantResult } from '@fitsy/shared';
 import { EDITORIAL, TEXT } from '@/lib/brand';
-import { getOnboardingData, saveOnboardingField, type OnboardingArea } from '@/lib/onboardingStorage';
-import { getMacroTargets, type StoredMacroTargets } from '@/lib/macroStorage';
+import { saveOnboardingField, type OnboardingArea } from '@/lib/onboardingStorage';
+import { type StoredMacroTargets } from '@/lib/macroStorage';
+import { getPreviewSetup } from '@/lib/previewSetup';
 import { fetchGuidedPreview } from '@/lib/guidedPreview';
 import { hasSeenPreviewTour, markPreviewTourSeen, routeToPaywall } from '@/lib/teaserGate';
 import { usePreviewAccess } from '@/lib/usePreviewAccess';
@@ -48,7 +49,7 @@ export default function GuidedPreviewScreen() {
     const sequence = ++request.current;
     setBusy(true); setError(false);
     try {
-      const [data, macros, seen] = await Promise.all([getOnboardingData(), getMacroTargets(), hasSeenPreviewTour()]);
+      const [{ data, targets: macros }, seen] = await Promise.all([getPreviewSetup(), hasSeenPreviewTour()]);
       if (!data.area) { router.replace('/welcome/location-permission'); return; }
       const areaKey = `${data.area.lat}:${data.area.lng}`;
       const craving = data.previewArea === areaKey ? data.previewCraving ?? '' : '';

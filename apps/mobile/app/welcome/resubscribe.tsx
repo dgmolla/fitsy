@@ -105,7 +105,7 @@ export default function ResubscribeScreen() {
       canContinue={!loading && !restoring && !!terms}
       continueLabel={loading ? 'Resubscribing…' : 'Find meals that fit again'}
       onSkip={variants.access === 'preview' ? () => {
-        void rememberPaywallDecline().then(() => router.replace('/(tabs)/search?preview=1'))
+        void rememberPaywallDecline().then(() => router.replace('/welcome/preview'))
           .catch(() => Alert.alert('Could not save your choice', 'Please try again.'));
       } : undefined}
       showBack
@@ -133,6 +133,7 @@ export default function ResubscribeScreen() {
         onPress={handleRestore}
         disabled={restoring}
         accessibilityRole="button"
+        testID="resubscribe-restore"
       >
         <Text style={s.restoreTxt}>{restoring ? 'Restoring…' : 'Restore purchases'}</Text>
       </Pressable>
@@ -146,11 +147,11 @@ export default function ResubscribeScreen() {
         </Pressable>
       )}
       <View style={s.legalRow}>
-        <Pressable hitSlop={8} onPress={() => openLegalLink('terms')} accessibilityRole="link">
+        <Pressable hitSlop={8} onPress={() => openLegalLink('terms')} accessibilityRole="link" testID="resubscribe-terms-link">
           <Text style={s.legalLink}>Terms of Use</Text>
         </Pressable>
         <Text style={s.legalDot}>·</Text>
-        <Pressable hitSlop={8} onPress={() => openLegalLink('privacy')} accessibilityRole="link">
+        <Pressable hitSlop={8} onPress={() => openLegalLink('privacy')} accessibilityRole="link" testID="resubscribe-privacy-link">
           <Text style={s.legalLink}>Privacy Policy</Text>
         </Pressable>
       </View>

@@ -59,21 +59,49 @@ tags: [billing, discovery, onboarding, changed-journey]
     id: paywall-discount-decline
 - tapOn:
     id: paywall-decline
-- assertVisible:
-    id: paywall-plan-yearly
+# iOS can invalidate AX elements while the redirect replaces its navigator.
+# Retry only the settled observation, never the access-control action.
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - assertVisible:
+          id: paywall-plan-yearly
 - assertNotVisible:
     id: welcome-back
 - openLink: com.fitsy.mobile://search?preview=1
-- assertVisible:
-    id: paywall-plan-yearly
+# iOS can invalidate AX elements while the redirect replaces its navigator.
+# Retry only the settled observation, never the access-control action.
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - assertVisible:
+          id: paywall-plan-yearly
 - assertNotVisible: "Search restaurants or dishes"
 - openLink: ${'com.fitsy.mobile://restaurant/' + output.seed.id}
-- assertVisible:
-    id: paywall-plan-yearly
+# iOS can invalidate AX elements while the redirect replaces its navigator.
+# Retry only the settled observation, never the access-control action.
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - assertVisible:
+          id: paywall-plan-yearly
 - assertNotVisible: "Seed Bowl Co #01"
 - stopApp
 - launchApp
 - openLink: com.fitsy.mobile://search?preview=1
-- assertVisible:
-    id: paywall-plan-yearly
+# iOS can invalidate AX elements while the redirect replaces its navigator.
+# Retry only the settled observation, never the access-control action.
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - assertVisible:
+          id: paywall-plan-yearly
 - assertNotVisible: "Search restaurants or dishes"

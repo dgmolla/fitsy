@@ -12,6 +12,7 @@ import { setCachedCoords } from '@/lib/locationCache';
 import { MANUAL_LOCATION_KEY } from '@/lib/useLocation';
 import { getOnboardingData, saveOnboardingField, type OnboardingArea } from '@/lib/onboardingStorage';
 import { fetchGuidedPreview } from '@/lib/guidedPreview';
+import { getMacroTargets } from '@/lib/macroStorage';
 import { trackLocationPrimingShown, trackLocationPermissionGranted, trackLocationPermissionDenied } from '@/lib/analytics';
 
 export default function LocationPermissionScreen() {
@@ -34,9 +35,9 @@ export default function LocationPermissionScreen() {
       await saveOnboardingField('area', next);
       await setCachedCoords(next);
       if (next.source === 'manual') await SecureStore.setItemAsync(MANUAL_LOCATION_KEY, JSON.stringify(next));
-      else await SecureStore.deleteItemAsync(MANUAL_LOCATION_KEY);
-      const result = await fetchGuidedPreview(next);
-      router.push(result.meta.nearbyDishCount > 0 ? '/welcome/target-setup' : '/welcome/out-of-area');
+      else if (next.source === 'gps') await SecureStore.deleteItemAsync(MANUAL_LOCATION_KEY);
+      const [result, targets] = await Promise.all([fetchGuidedPreview(next), getMacroTargets()]);
+      router.push(result.meta.nearbyDishCount > 0 ? targets ? '/welcome/preview' : '/welcome/target-setup' : '/welcome/out-of-area');
     } catch { Alert.alert('Could not check this area', 'Please try again. Your selected area is saved.'); }
     finally { setBusy(false); }
   }
