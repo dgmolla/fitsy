@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# API coverage plus scripts and mobile tests. Database-backed API suites share
-# one schema, so run those suites in one worker to avoid unrelated SERIALIZABLE
-# transactions exhausting each other's retry budget. In-test concurrency remains.
+# API coverage plus scripts and mobile tests. With a DB configured, serialize the
+# whole API run: shared-schema suites can exhaust each other's SERIALIZABLE retry
+# budget. Explicit concurrency inside a test remains unchanged.
 set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$REPO_ROOT"
 FAIL=""
