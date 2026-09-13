@@ -56,6 +56,18 @@ beforeEach(() => {
 });
 
 describe('useLocation', () => {
+  it('does not request GPS while discovery uses an explicitly chosen preview area', async () => {
+    mockRequestPermissions.mockResolvedValue({ status: 'granted' });
+    mockGetLastKnown.mockResolvedValue({ coords: GPS_COORDS });
+    const { rerender, result } = renderHook(({ enabled }) => useLocation({ enabled }), { initialProps: { enabled: false } });
+    await act(async () => {});
+    expect(mockRequestPermissions).not.toHaveBeenCalled();
+    expect(SecureStore.getItemAsync).not.toHaveBeenCalled();
+    rerender({ enabled: true });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.source).toBe('gps');
+  });
+
   it('exports the correct Silver Lake fallback coordinates', () => {
     expect(FALLBACK_LAT).toBe(34.0868);
     expect(FALLBACK_LNG).toBe(-118.3273);

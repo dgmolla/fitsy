@@ -60,7 +60,11 @@ function Preview() {
   </>;
 }
 function Notifications() { return <Text>Optional reminders</Text>; }
-function Search() { return <Text>Meal search</Text>; }
+function Search() {
+  const route = useRoute();
+  const query = (route.params as { query?: string } | undefined)?.query;
+  return <Text>{query ? `Meal search: ${query}` : 'Meal search'}</Text>;
+}
 function Saved() { return <Text>Saved tab</Text>; }
 function Meal() {
   const route = useRoute();
@@ -120,4 +124,13 @@ it('opens the chosen meal and save action and consumes the intent', async () => 
   const screen = render(<Journey />);
   await waitFor(() => expect(screen.getByText(JSON.stringify({ id: 'restaurant', selectedItemId: 'meal', saveSelected: '1' }))).toBeTruthy());
   expect(await getPaywallIntent()).toBeNull();
+});
+
+it('continues the preview craving in the real search tab after purchase', async () => {
+  action = 'purchased';
+  await rememberPaywallIntent({ action: 'discovery', query: 'chicken' });
+  const screen = render(<Journey />);
+  await waitFor(() => expect(screen.getByText('Meal search: chicken')).toBeTruthy());
+  expect(await getPaywallIntent()).toBeNull();
+  expect(screen.queryByText('Decline subscription')).toBeNull();
 });

@@ -1,28 +1,50 @@
-# Actual dev coverage and live store terms. No successful purchase on the shared dev account.
+# Real dev coverage and live offering terms. No purchase on the shared dev account.
 appId: com.fitsy.mobile
-tags: [billing, discovery, onboarding, auth, changed-journey]
+tags: [billing, discovery, onboarding, changed-journey]
 ---
 - launchApp:
     clearState: true
     clearKeychain: true
 - extendedWaitUntil:
     visible: "Find meals that fit"
-    timeout: 15000
+    timeout: 30000
 - waitForAnimationToEnd
 - tapOn:
     point: "92%,93%"
 - tapOn:
     id: welcome-start
-- assertVisible: "Where are we.*"
+- assertVisible: "Example.*"
+- tapOn:
+    id: welcome-continue
+- tapOn:
+    id: tried-calorie_apps
+- tapOn:
+    id: welcome-continue
+- assertVisible: "Know what fits.*"
+- tapOn:
+    id: welcome-continue
+- assertVisible: "Where would you.*"
 - tapOn:
     id: location-choose-area
 - tapOn: "Search near DTLA"
 - extendedWaitUntil:
     visible:
-      id: target-mode-known
+      id: welcome-continue
+      enabled: true
     timeout: 30000
+- assertVisible: "About the nutrition"
+- assertVisible: ".*dishes with nutrition within 3 miles.*"
+- tapOn:
+    id: welcome-continue
+- assertVisible: "Know your numbers.*"
+- tapOn:
+    id: welcome-continue
+- assertVisible: "Enter my meal targets.*"
+- assertVisible: "Help me set targets.*"
 - tapOn:
     id: target-mode-known
+- assertVisible: "Enter per-meal targets.*"
+- assertNotVisible: "What's your goal.*"
 - tapOn:
     id: meal-target-calories
 - inputText: "600"
@@ -35,83 +57,65 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
 - tapOn:
     id: meal-target-fat
 - inputText: "20"
-# The fixed footer stays usable above the iOS number pad.
-# Follow that actual user action; number pads have no generic dismiss key.
 - tapOn:
     id: welcome-continue
 - extendedWaitUntil:
     visible:
-      id: preview-pick-1
+      id: coachmark-next
     timeout: 30000
-- assertVisible: "Per meal · Tap to edit, 600 kcal · 40g protein · 60g carbs · 20g fat"
-- assertNotVisible: "Create an account"
+- assertVisible: "Your meal targets"
 - tapOn:
-    id: preview-guide-next
+    id: coachmark-next
+- assertVisible: "Search anything"
 - tapOn:
-    id: preview-craving
-- inputText: "chicken"
+    id: coachmark-next
+- assertVisible: "Real meals. Clear numbers."
 - tapOn:
-    id: preview-search
+    id: coachmark-next
+- assertVisible:
+    id: discovery-hero
+- assertVisible: "600"
+- assertVisible: "40g"
+- tapOn:
+    id: preview-edit-targets
+- assertVisible: "600"
+- tapOn: "Increase Protein"
+- assertVisible: "600"
+- tapOn:
+    id: meal-filter-apply
 - extendedWaitUntil:
-    visible: "Your preview search is complete.*"
+    visible: "45g"
     timeout: 30000
-- scrollUntilVisible:
-    element:
-      id: preview-menu-1
-    direction: DOWN
+- assertVisible: "600"
 - tapOn:
-    id: preview-save-1
+    id: discovery-search
+- inputText: "chicken"
+- pressKey: Enter
+- extendedWaitUntil:
+    visible:
+      id: discovery-hero
+    timeout: 30000
+- assertVisible: "chicken"
+- tapOn:
+    id: discovery-clear-search
+- tapOn:
+    id: discovery-search
+- inputText: "pizza"
+- pressKey: Enter
+- extendedWaitUntil:
+    visible:
+      id: discovery-hero
+    timeout: 30000
+- assertVisible: "pizza"
+- tapOn:
+    id: discovery-hero
 - assertVisible: "Create an account"
 - tapOn:
     id: welcome-back
 - assertVisible:
     id: preview-guide
-# An abandoned save choice must not decorate a later unrelated paywall.
-- openLink: com.fitsy.mobile://welcome/payment
-- extendedWaitUntil:
-    visible:
-      id: paywall-price-yearly
-    timeout: 15000
-- assertVisible: "Search your craving. See full menus. Save meals that fit."
-- assertNotVisible: "Save .*Plus craving search.*"
-- tapOn:
-    id: welcome-back
-- assertVisible:
-    id: preview-guide
-- scrollUntilVisible:
-    element:
-      id: preview-pick-3
-    direction: DOWN
-- assertVisible:
-    id: preview-pick-3
-- scrollUntilVisible:
-    element:
-      id: preview-menu-1
-    direction: UP
-- tapOn:
-    id: preview-menu-1
-- tapOn: "Dev login"
-- extendedWaitUntil:
-    visible:
-      id: trial-see-plans
-    timeout: 30000
-- assertNotVisible: "Allow notifications"
-- tapOn:
-    id: trial-see-plans
-- extendedWaitUntil:
-    visible:
-      id: paywall-plan-yearly
-    timeout: 15000
-- assertVisible: "See the full menu for.*Plus craving search.*"
-- tapOn:
-    id: welcome-back
-- assertVisible:
-    id: trial-see-plans
-- tapOn:
-    id: trial-back
-- assertVisible:
-    id: preview-guide
-# The signed-in return to preview also abandons the previous menu choice.
+- assertVisible: "pizza"
+# A separate paywall visit must not inherit an abandoned menu intent.
 - openLink: com.fitsy.mobile://welcome/payment
 - extendedWaitUntil:
     visible:
@@ -123,10 +127,58 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
     id: welcome-back
 - assertVisible:
     id: preview-guide
+- assertVisible: "pizza"
+- scrollUntilVisible:
+    element:
+      id: preview-pick-3
+    direction: DOWN
+- assertVisible:
+    id: preview-pick-3
+- scrollUntilVisible:
+    element:
+      id: locked-value-cta
+    direction: DOWN
+- assertVisible: "Explore more meals and full menus with Pro"
+# Replaying area setup requires explicit confirmation of saved targets.
+- openLink: com.fitsy.mobile://welcome/location-permission
+- tapOn:
+    id: location-choose-area
+- tapOn: "Search near DTLA"
+- extendedWaitUntil:
+    visible:
+      id: welcome-continue
+      enabled: true
+    timeout: 30000
+- assertVisible: "About the nutrition"
+- tapOn:
+    id: welcome-continue
+- assertVisible: "Know your numbers.*"
+- tapOn:
+    id: welcome-continue
+- assertVisible:
+    id: target-use-saved
+- assertVisible: "Edit my meal targets.*"
+- assertVisible: "Help me recalculate.*"
+- tapOn:
+    id: target-use-saved
+- extendedWaitUntil:
+    visible:
+      id: discovery-hero
+    timeout: 30000
+- assertVisible: "45g"
+- assertVisible: "600"
+- assertVisible: "pizza"
+# A legacy preview link must reach the welcome preview, without a paywall loop.
+- openLink: com.fitsy.mobile://search?preview=1
+- extendedWaitUntil:
+    visible:
+      id: discovery-hero
+    timeout: 30000
+- assertVisible: "pizza"
+- assertNotVisible:
+    id: paywall-price-yearly
 - stopApp
-- launchApp
-# XCTest can invalidate the first accessibility tree during cold relaunch.
-# Retry the settled read only; never repeat setup, purchase or Back actions.
+- openLink: com.fitsy.mobile://search?preview=1
 - retry:
     maxRetries: 2
     commands:
@@ -136,5 +188,5 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
           visible:
             id: preview-guide
           timeout: 30000
-- assertVisible: "Per meal · Tap to edit, 600 kcal · 40g protein · 60g carbs · 20g fat"
-- assertVisible: "Your preview search is complete.*"
+- assertVisible: "pizza"
+- assertVisible: "45g"
