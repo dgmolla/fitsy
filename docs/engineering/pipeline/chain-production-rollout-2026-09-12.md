@@ -1,7 +1,7 @@
 # Chain nutrition rollout: production results
 
-**35,908 existing menu rows now use reviewed official nutrition across 39 brand identities.**
-These 24 completed batches are separate from the earlier WaBa/Yoshinoya rollout.
+**35,957 existing menu rows now use reviewed official nutrition across 40 brand identities.**
+These 25 completed batches are separate from the earlier WaBa/Yoshinoya rollout.
 National onboarding is still in progress.
 
 ## What changed
@@ -32,16 +32,18 @@ National onboarding is still in progress.
 | Popeyes | 108 | 108 | 0 |
 | California Pizza Kitchen | 380 | 190 | 190 |
 | BJ's Restaurant & Brewhouse | 243 | 243 | 0 |
-| **Total** | **35,908** | **13,625** | **22,283** |
+| Nothing Bundt Cakes | 49 | 49 | 0 |
+| **Total** | **35,957** | **13,674** | **22,283** |
 
 “Nutrition values changed” means at least one of calories, protein, carbs or fat changed.
 “Attribution only” means those four values stayed the same and reviewed official attribution was applied.
 These counts measure rollout behavior, not accuracy against measured food.
 
-The batches loaded **1,360 approved facts and 1,907 exact menu aliases** into the chain catalog.
+The batches loaded **1,383 approved facts and 1,948 exact menu aliases** into the chain catalog.
 Existing menu items and their winning macro estimates then received the same facts through the shared matcher.
-Jamba, Panera and Popeyes each have two stored brand identities, so 39 identities represent 36 distinct consumer brands.
-Two additional identities, Dave's Hot Chicken and Nothing Bundt Cakes, were linked to 23 existing restaurants; their 232 menu items and estimates stayed unchanged, with no official nutrition activated yet.
+Jamba, Panera and Popeyes each have two stored brand identities, so 40 identities represent 37 distinct consumer brands.
+Dave's Hot Chicken and Nothing Bundt Cakes were also linked to 23 existing restaurants while preserving all 232 menu items and estimates.
+Nothing Bundt Cakes now has 49 official nutrition updates across 10 locations; Dave's 128 items remain estimated.
 
 ## Both paths use the same catalog
 
@@ -65,14 +67,14 @@ Offline UE runs must use a checkout containing that release.
 
 | Check | Result and limit |
 |---|---|
-| Production preservation | All **107,806 menu IDs across 1,072 restaurants** preserved; all **71,898 unselected rows** unchanged. |
+| Production preservation | All **107,910 menu IDs across 1,082 restaurants** preserved; all **71,953 unselected rows** unchanged. |
 | Serving API | Complete authenticated menu reads checked every selected restaurant and changed row; search/detail checks passed per changed brand. |
 | Repeat execution | Every completed batch produced zero pending catalog and April changes. |
 | Recovery | Local exact rollback passed; production writes have bounded transaction journals and before/after snapshots. Production was not rolled back as a test. |
 | Future imports | Local tests used the real parser, resolver, brand handoff, `persistHex` and serving layer. Current UE captures and simulated historical menus are separate evidence. No production hex was added. |
 | Source quality | Automated transcription checks plus independent source/binding review. Review depth varies; this is not measured restaurant nutrition or an exhaustive human audit. |
 
-Several batches, including all eight additions after Habit, have no current UE capture.
+Several batches, including all nine additions after Habit, have no current UE capture.
 Their import proof uses complete historical menus, so current availability and naming coverage remain unverified.
 Activating an approved catalog routes new imports through UE; it does not guarantee UE will return a menu.
 
@@ -97,6 +99,7 @@ The aggregate record alone cannot perform a rollback.
 | Duplicate chain identities | Popeyes had two additional locations under a second brand. Their eight eligible rows used the same reviewed facts, with separate brand-scoped aliases and both importer paths tested. |
 | Default configuration and recipe scope | CPK whole pizzas use the explicit six-slice rule; seven-inch pizzas remain whole single pizzas. Three conflicting recipes affecting 15 rows were held. |
 | Conflicting portion evidence | BJ’s four floats stayed held because the scoop descriptions and nutrition imply different quantities. Appetizers, sides, five pastas including garlic knots, and seven full-size Pizookies were reviewed separately. |
+| Nutrition servings versus guests | Nothing Bundt Cakes publishes nutrition servings per cake separately from approximate guest counts. Whole products use the flavor-specific nutrition count; generic cakes without a size remain held. |
 
 Burger King's 225 visible panels passed a full automated comparison with captured per-serving observations; independent review sampled raw macros and reviewed every proposed alias.
 IHOP's automated checks cover all 417 source rows, while independent raw-source and alias review was sampled.
@@ -112,6 +115,10 @@ Published standard servings and singular product assumptions remain distinct fro
 CPK’s 50 facts and 66 aliases and BJ’s 35 facts and 36 aliases passed independent review and complete historical menu replays.
 CPK’s 380 updates preserved 1,660 IDs; BJ’s 243 updates preserved 1,444 IDs.
 Both batches passed authenticated complete-menu checks and empty repeat plans.
+Nothing Bundt Cakes passed independent review of 26 source rows, 23 whole-order facts and 41 aliases.
+Its 49 updates preserved all 104 menu IDs; 43 unclear configurations and 12 non-food candles stayed unchanged.
+The fixed 12-Bundtini assortment includes three each of four named flavors; decorative toppers are treated as non-food accessories based on the product descriptions.
+Peet’s regional catalog is prepared but inactive; its location-aware runtime still requires the repository’s simulator release gate.
 Del Taco remains unpublished because its guide limits nutrition coverage to company-owned restaurants, and location eligibility has not been established.
 
 ## Remaining work
