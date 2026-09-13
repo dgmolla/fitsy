@@ -1,19 +1,19 @@
 {
   "generated": true,
-  "asOf": "2026-09-13T06:49:35.269070+00:00",
-  "scope": "26 completed source batches; earlier WaBa/Yoshinoya excluded",
+  "asOf": "2026-09-13T07:39:16.553941+00:00",
+  "scope": "28 completed source batches; earlier WaBa/Yoshinoya excluded",
   "reviewedCodeHead": "179be20e9a26eda262c428149630f72092730302",
   "mergeCommit": "848f117952b60b62bd1ee03291151e73a1184e55",
   "pr": "https://github.com/dgmolla/fitsy/pull/289",
   "totals": {
-    "facts": 1387,
-    "aliases": 1956,
-    "patchedRows": 35985,
-    "numericChanges": 13678,
-    "attributionOnly": 22307,
-    "preservedMenuIds": 108038,
-    "unchangedUnselectedRows": 72053,
-    "restaurants": 1095
+    "facts": 1395,
+    "aliases": 1965,
+    "patchedRows": 36024,
+    "numericChanges": 13693,
+    "attributionOnly": 22331,
+    "preservedMenuIds": 109352,
+    "unchangedUnselectedRows": 73328,
+    "restaurants": 1114
   },
   "batches": [
     {
@@ -679,6 +679,56 @@
         "daves-sides-approved.json": "04461959affae73135c2f8d6d08a25666a512f6f0580dac3c0331cda68baa042",
         "daves-sides-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "daves-sides-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "charleys-fixed",
+      "chains": "Charleys",
+      "brandSlugs": [
+        "charleys-cheesesteaks-and-wings"
+      ],
+      "facts": 2,
+      "aliases": 3,
+      "patchedRows": 8,
+      "numericChanges": 8,
+      "attributionOnly": 0,
+      "preservedMenuIds": 558,
+      "unchangedUnselectedRows": 550,
+      "restaurants": 8,
+      "httpVerifiedAt": "2026-09-13T07:31:24.003549+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "charleys-fixed-segments/000000.json.verified.json": "66e6848f22dfc7abb54057021cdbf0d5f8346e326cfa689398b6b9bc5915dd68",
+        "charleys-fixed-complete-http.json": "75d9b962bcabcb25ab9f919fe75458620749c3d52a7ca2597b5412a7f3412780",
+        "charleys-fixed-approved.json": "4568a3ef3d6d4f191f9ea1ceb156d93d42c3432026fdf1779db7a501c3e86aeb",
+        "charleys-fixed-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "charleys-fixed-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "jerseymikes-expanded",
+      "chains": "Jersey Mike's (second identity)",
+      "brandSlugs": [
+        "jersey-mike-s"
+      ],
+      "facts": 6,
+      "aliases": 6,
+      "patchedRows": 31,
+      "numericChanges": 7,
+      "attributionOnly": 24,
+      "preservedMenuIds": 756,
+      "unchangedUnselectedRows": 725,
+      "restaurants": 11,
+      "httpVerifiedAt": "2026-09-13T07:39:16.553941+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "jerseymikes-expanded-segments/000010.json.verified.json": "24cd81408364cb4d7d8f50c2a54fd3399afc0a55715edd6e244cf02a8293e6c6",
+        "jerseymikes-expanded-complete-http.json": "f9ca29fafa8870c118e35725d20dc94d83388780340789baab7d7547d132f4dd",
+        "jerseymikes-expanded-approved.json": "6d44249c5041e1e905340ca4b6e9b77c01bcde3d3132ea5e3f97cfe3d6a0e0b3",
+        "jerseymikes-expanded-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "jerseymikes-expanded-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
       }
     }
   ],
