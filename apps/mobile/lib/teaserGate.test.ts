@@ -85,11 +85,21 @@ describe('preview tour flag', () => {
     expect(await g.hasSeenPreviewTour()).toBe(false);
   });
 
+  it('shows the refreshed story once to a device that completed the old tour', async () => {
+    store.set('@fitsy/previewTourSeen', '1');
+    const g = await load();
+    expect(await g.hasSeenPreviewTour()).toBe(false);
+    g.markPreviewTourSeen();
+    await Promise.resolve();
+    const restarted = await load();
+    expect(await restarted.hasSeenPreviewTour()).toBe(true);
+  });
+
   it('persists the mark', async () => {
     const g = await load();
     g.markPreviewTourSeen();
     await Promise.resolve();
-    expect(setItem).toHaveBeenCalledWith('@fitsy/previewTourSeen', '1');
+    expect(setItem).toHaveBeenCalledWith('@fitsy/previewTourSeen', '2');
   });
 
   it('fails closed (seen) when storage cannot be read, so a bad disk never traps the user under the scrim', async () => {

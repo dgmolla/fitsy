@@ -15,9 +15,11 @@ function getSelectionLabel(): string {
 export function Masthead({
   locationLabel,
   onLocationPress,
+  locationRef,
 }: {
   locationLabel: string;
   onLocationPress: () => void;
+  locationRef?: React.RefObject<View | null>;
 }) {
   return (
     <View style={s.masthead}>
@@ -26,7 +28,7 @@ export function Masthead({
           <View style={s.logoDot} />
           <Text style={s.logo}>fitsy</Text>
         </View>
-        <TouchableOpacity
+        <View ref={locationRef} collapsable={false}><TouchableOpacity
           style={s.locationChip}
           onPress={onLocationPress}
           activeOpacity={0.7}
@@ -38,7 +40,7 @@ export function Masthead({
           <Ionicons name="location" size={11} color={EDITORIAL.greenAccent} />
           <Text style={s.locationText}>{locationLabel}</Text>
           <Ionicons name="chevron-down" size={10} color={EDITORIAL.textSoft} />
-        </TouchableOpacity>
+        </TouchableOpacity></View>
       </View>
       <Text style={s.issueLabel}>{getSelectionLabel()}</Text>
     </View>

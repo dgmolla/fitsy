@@ -66,12 +66,31 @@ tags: [billing, discovery, onboarding, changed-journey]
 - assertVisible: "Your meal targets"
 - tapOn:
     id: coachmark-next
-- assertVisible: "Search anything"
+- assertVisible: "Follow your craving"
+- tapOn:
+    id: coachmark-back
+- assertVisible: "Your meal targets"
 - tapOn:
     id: coachmark-next
-- assertVisible: "Real meals. Clear numbers."
+- assertVisible: "Follow your craving"
 - tapOn:
     id: coachmark-next
+- assertVisible: "Real meals. Know the source."
+- tapOn:
+    id: coachmark-next
+- assertVisible: "Wherever your day takes you"
+- tapOn:
+    id: coachmark-next
+- assertVisible: "5 OF 5"
+- assertVisible: ".*Try your first craving now.*"
+- tapOn: "Find my meal"
+- assertNotVisible:
+    id: coachmark-next
+- tapOn:
+    id: preview-show-tour
+- assertVisible: "1 OF 5"
+- tapOn:
+    id: coachmark-skip
 - assertVisible:
     id: discovery-hero
 - assertVisible: "600"
@@ -190,3 +209,11 @@ tags: [billing, discovery, onboarding, changed-journey]
           timeout: 30000
 - assertVisible: "pizza"
 - assertVisible: "45g"
+
+- assertNotVisible:
+    id: coachmark-next
+- tapOn:
+    id: preview-show-tour
+- assertVisible: "1 OF 5"
+- tapOn:
+    id: coachmark-skip
