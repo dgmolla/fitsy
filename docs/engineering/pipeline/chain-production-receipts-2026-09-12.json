@@ -1,19 +1,19 @@
 {
   "generated": true,
-  "asOf": "2026-09-13T07:39:16.553941+00:00",
-  "scope": "28 completed source batches; earlier WaBa/Yoshinoya excluded",
+  "asOf": "2026-09-13T08:28:47.194882+00:00",
+  "scope": "29 completed source batches; earlier WaBa/Yoshinoya excluded",
   "reviewedCodeHead": "179be20e9a26eda262c428149630f72092730302",
   "mergeCommit": "848f117952b60b62bd1ee03291151e73a1184e55",
   "pr": "https://github.com/dgmolla/fitsy/pull/289",
   "totals": {
-    "facts": 1395,
-    "aliases": 1965,
-    "patchedRows": 36024,
-    "numericChanges": 13693,
+    "facts": 1410,
+    "aliases": 1985,
+    "patchedRows": 36174,
+    "numericChanges": 13843,
     "attributionOnly": 22331,
-    "preservedMenuIds": 109352,
-    "unchangedUnselectedRows": 73328,
-    "restaurants": 1114
+    "preservedMenuIds": 110461,
+    "unchangedUnselectedRows": 74287,
+    "restaurants": 1124
   },
   "batches": [
     {
@@ -729,6 +729,31 @@
         "jerseymikes-expanded-approved.json": "6d44249c5041e1e905340ca4b6e9b77c01bcde3d3132ea5e3f97cfe3d6a0e0b3",
         "jerseymikes-expanded-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "jerseymikes-expanded-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "paninikabob-meals-v2",
+      "chains": "Panini Kabob Grill",
+      "brandSlugs": [
+        "panini-kabob-grill"
+      ],
+      "facts": 15,
+      "aliases": 20,
+      "patchedRows": 150,
+      "numericChanges": 150,
+      "attributionOnly": 0,
+      "preservedMenuIds": 1109,
+      "unchangedUnselectedRows": 959,
+      "restaurants": 10,
+      "httpVerifiedAt": "2026-09-13T08:28:47.194882+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "paninikabob-meals-v2-segments/000115.json.verified.json": "cb362c4d20c6d5656f10ed62b1fe9435c6ba8698441da6d691bbb32ada3375ed",
+        "paninikabob-meals-v2-complete-http.json": "0ac5f0971721b2b3563c6569c801f5c8a3c7942ebdc47d9b540c272f07696766",
+        "paninikabob-meals-v2-approved.json": "f744e64c2471eb32c1e84a6cc31cebbdcc2cf3d3c3ba80bb5485f28e36739b0d",
+        "paninikabob-meals-v2-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "paninikabob-meals-v2-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
       }
     }
   ],
