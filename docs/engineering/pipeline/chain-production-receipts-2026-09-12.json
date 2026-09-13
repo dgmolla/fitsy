@@ -1,19 +1,19 @@
 {
   "generated": true,
-  "asOf": "2026-09-12T23:33:21.991473+00:00",
-  "scope": "24 completed source batches; earlier WaBa/Yoshinoya excluded",
+  "asOf": "2026-09-13T06:13:40.370852+00:00",
+  "scope": "25 completed source batches; earlier WaBa/Yoshinoya excluded",
   "reviewedCodeHead": "179be20e9a26eda262c428149630f72092730302",
   "mergeCommit": "848f117952b60b62bd1ee03291151e73a1184e55",
   "pr": "https://github.com/dgmolla/fitsy/pull/289",
   "totals": {
-    "facts": 1360,
-    "aliases": 1907,
-    "patchedRows": 35908,
-    "numericChanges": 13625,
+    "facts": 1383,
+    "aliases": 1948,
+    "patchedRows": 35957,
+    "numericChanges": 13674,
     "attributionOnly": 22283,
-    "preservedMenuIds": 107806,
-    "unchangedUnselectedRows": 71898,
-    "restaurants": 1072
+    "preservedMenuIds": 107910,
+    "unchangedUnselectedRows": 71953,
+    "restaurants": 1082
   },
   "batches": [
     {
@@ -629,6 +629,31 @@
         "bjs-approved.json": "dc7be6c423698e8dc3a718b5208cf9843d13bf310c9f4e7f3c6a276847cf2fa0",
         "bjs-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "bjs-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "nothing-bundt",
+      "chains": "Nothing Bundt Cakes",
+      "brandSlugs": [
+        "nothing-bundt-cakes"
+      ],
+      "facts": 23,
+      "aliases": 41,
+      "patchedRows": 49,
+      "numericChanges": 49,
+      "attributionOnly": 0,
+      "preservedMenuIds": 104,
+      "unchangedUnselectedRows": 55,
+      "restaurants": 10,
+      "httpVerifiedAt": "2026-09-13T06:13:40.370852+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "nothing-bundt-segments/000010.json.verified.json": "919f516573efd11117169609c0c4afbfa3769ecc67c8c433ad06d0680bf85474",
+        "nothing-bundt-complete-http.json": "b4050fba56778c92c46f846c8dde7af074dc57c67dc57dd952777528ddd205b8",
+        "nothing-bundt-approved.json": "f43f236e30e0f6c5bf9ba933c9e5d78d070cd3ed267bd9e06ae7b9d52d932d33",
+        "nothing-bundt-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "nothing-bundt-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
       }
     }
   ],
