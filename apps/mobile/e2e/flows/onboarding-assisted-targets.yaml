@@ -60,19 +60,24 @@ tags: [onboarding, discovery, changed-journey]
 - tapOn:
     id: welcome-continue
 - assertVisible: "How tall are you.*"
+- waitForAnimationToEnd
 - tapOn:
     id: welcome-continue
 - assertVisible: "What do you weigh.*"
+- waitForAnimationToEnd
 - tapOn:
     id: welcome-continue
 - assertVisible: "How old are you.*"
+- waitForAnimationToEnd
 - tapOn:
     id: welcome-continue
 - assertVisible: "What's your biological sex.*"
+- waitForAnimationToEnd
 - tapOn: "Male"
 - tapOn:
     id: welcome-continue
 - assertVisible: "How active are you.*"
+- waitForAnimationToEnd
 - tapOn: ".*Moderate.*"
 - tapOn:
     id: welcome-continue
@@ -112,6 +117,7 @@ tags: [onboarding, discovery, changed-journey]
 - tapOn:
     id: welcome-back
 - assertVisible: "How active are you.*"
+- waitForAnimationToEnd
 - tapOn:
     id: welcome-continue
 - assertVisible: "700"

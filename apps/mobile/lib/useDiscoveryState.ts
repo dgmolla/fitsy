@@ -60,6 +60,7 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
   const discovery = useDiscoveryResults({ inputs, query, location, canSearch, targetsLoaded, previewReady, isOnboardingPreview });
   const { results, nextCursor, loading, loadingMore, refreshing, error, locked, fetchSeq, outOfArea, nearbyDishCount, doFetch, handleRefresh, handleEndReached } = discovery;
   const tour = usePreviewTour(isOnboardingPreview && locked === true && !loading && !error && results.length > 0 && !filterVisible && !locationPickerVisible);
+  const { finish: finishTour } = tour;
   useFocusEffect(
     useCallback(() => {
       getMacroTargets()
@@ -96,6 +97,7 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
     return () => { live = false; };
   }, [isOnboardingPreview]));
   const unlockPreview = useCallback(async (restaurant?: RestaurantResult) => {
+    finishTour();
     try {
       await saveOnboardingField('previewArea', `${location.lat}:${location.lng}`);
       await saveOnboardingField('previewCraving', query.trim());
@@ -105,7 +107,7 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
         areaName: location.name, nearbyDishCount, query: query.trim(),
       } });
     } catch { Alert.alert('Could not open plans', 'Please try again. Your picks are still here.'); }
-  }, [location.lat, location.lng, location.name, nearbyDishCount, query]);
+  }, [location.lat, location.lng, location.name, nearbyDishCount, query, finishTour]);
   const mismatchArgsRef = useRef({ inputs, location, query, doFetch });
   mismatchArgsRef.current = { inputs, location, query, doFetch };
   const mismatchRefetch = useCallback(() => {
@@ -196,7 +198,7 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
   return { navigation, isOnboardingPreview, tried, inputs, query, setQuery, canSearch, hasQuery, location,
     locationLabel, results, heroResult, listResults, nextCursor, loading, loadingMore, refreshing, error, locked, outOfArea, nearbyDishCount,
     filterVisible, setFilterVisible, locationPickerVisible, setLocationPickerVisible, tourVisible: tour.visible, startTour: tour.start,
-    tourEditRef, tourSearchRef, tourHeroRef, tourLocationRef, tourMoreRef, tourSteps, finishTour: tour.finish, handleClearQuery, handleApplyFilters,
+    tourEditRef, tourSearchRef, tourHeroRef, tourLocationRef, tourMoreRef, tourSteps, finishTour, handleClearQuery, handleApplyFilters,
     handleJoinWaitlist, handleOpenLocationPicker, handlePickLocation, handleUseCurrentLocation, unlockPreview,
     unlocking, resyncNow, onLockedTap, unlockTitle, unlockSubtitle, unlockLabel, handleRefresh, handleEndReached };
 }
