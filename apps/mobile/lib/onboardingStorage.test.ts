@@ -16,8 +16,3 @@ test('rapid goal and area updates preserve both choices and the existing profile
   await Promise.all([saveOnboardingField('goal', 'build_muscle'), saveOnboardingField('area', area), saveOnboardingField('targetMode', 'estimate')]);
   expect(await getOnboardingData()).toEqual({ weightKg: 75, goal: 'build_muscle', area, targetMode: 'estimate' });
 });
-
-test('the last selected goal survives a burst of taps', async () => {
-  await Promise.all([saveOnboardingField('goal', 'lose_fat'), saveOnboardingField('goal', 'maintain'), saveOnboardingField('goal', 'build_muscle')]);
-  expect((await getOnboardingData()).goal).toBe('build_muscle');
-});

@@ -17,6 +17,7 @@ import { MenuItemResult, MenuResponse } from '@fitsy/shared';
 import { BookmarkButton, FitsyLoader, LockedUnlockCard, MenuItemCard } from '@/components';
 import { fetchMenu, getSavedItems, saveItem, unsaveItem } from '@/lib/apiClient';
 import { getMacroTargets } from '@/lib/macroStorage';
+import { reconcileMenuBookmarks } from '@/lib/menuBookmarks';
 import { recordSaveAndMaybePrompt } from '@/lib/ratingPrompt';
 import { markPreviewSampleUsed, routeToPaywall } from '@/lib/teaserGate';
 import { supabase } from '@/lib/supabase';
@@ -136,19 +137,20 @@ export default function RestaurantDetailScreen() {
         trackRestaurantDetailViewed({ restaurant_id: id, item_count: result.menuItems.length });
       }
       setTargets(macroTargets);
-      const m = new Map<string, string>();
-      for (const saved of savedResult?.data ?? []) { if (saved.menuItemId) m.set(saved.menuItemId, saved.id); }
+      const fetchedBookmarks = savedResult ? new Map<string, string>() : null;
+      for (const saved of savedResult?.data ?? []) { if (saved.menuItemId) fetchedBookmarks?.set(saved.menuItemId, saved.id); }
+      let confirmedSave: { menuItemId: string; id: string } | undefined;
       // A failed saved-list read must not silently consume a purchase's save
       // intent. The save endpoint is idempotent and returns an existing save.
-      if (session && params.saveSelected === '1' && params.selectedItemId && result && !result.locked && result.menuItems.some(item => item.id === params.selectedItemId) && !m.has(params.selectedItemId)) {
+      if (session && params.saveSelected === '1' && params.selectedItemId && result && !result.locked && result.menuItems.some(item => item.id === params.selectedItemId) && !fetchedBookmarks?.has(params.selectedItemId)) {
         const saved = await saveItem(params.selectedItemId);
         if (cancelled) return;
-        if (saved) m.set(params.selectedItemId, saved.id);
+        if (saved) confirmedSave = { menuItemId: params.selectedItemId, id: saved.id };
         else Alert.alert('Could not save this meal', 'The selected meal is shown first. Tap its bookmark to try again.');
       }
       // A failed read is not an empty saved list. Preserve known bookmarks
       // through Retry, while merging any newly completed save intent.
-      setSavedMap(previous => savedResult ? m : new Map([...previous, ...m]));
+      setSavedMap(previous => reconcileMenuBookmarks(previous, fetchedBookmarks, confirmedSave));
       setLoading(false);
     }
     void load();
