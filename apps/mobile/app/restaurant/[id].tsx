@@ -136,16 +136,17 @@ export default function RestaurantDetailScreen() {
         trackRestaurantDetailViewed({ restaurant_id: id, item_count: result.menuItems.length });
       }
       setTargets(macroTargets);
-      if (savedResult) {
-        const m = new Map<string, string>();
-        for (const saved of savedResult.data) { if (saved.menuItemId) m.set(saved.menuItemId, saved.id); }
-        if (params.saveSelected === '1' && params.selectedItemId && result && !result.locked && result.menuItems.some(item => item.id === params.selectedItemId) && !m.has(params.selectedItemId)) {
-          const saved = await saveItem(params.selectedItemId);
-          if (saved) m.set(params.selectedItemId, saved.id);
-          else Alert.alert('Could not save this meal', 'The selected meal is shown first. Tap its bookmark to try again.');
-        }
-        if (!cancelled) setSavedMap(m);
+      const m = new Map<string, string>();
+      for (const saved of savedResult?.data ?? []) { if (saved.menuItemId) m.set(saved.menuItemId, saved.id); }
+      // A failed saved-list read must not silently consume a purchase's save
+      // intent. The save endpoint is idempotent and returns an existing save.
+      if (session && params.saveSelected === '1' && params.selectedItemId && result && !result.locked && result.menuItems.some(item => item.id === params.selectedItemId) && !m.has(params.selectedItemId)) {
+        const saved = await saveItem(params.selectedItemId);
+        if (cancelled) return;
+        if (saved) m.set(params.selectedItemId, saved.id);
+        else Alert.alert('Could not save this meal', 'The selected meal is shown first. Tap its bookmark to try again.');
       }
+      setSavedMap(m);
       setLoading(false);
     }
     void load();
