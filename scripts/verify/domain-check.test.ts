@@ -49,7 +49,7 @@ test('unreadable comparison history fails closed', () => {
   expect(result.status).toBe(0); expect(result.stdout).toBe(paths);
 });
 
-test.each(['addition', 'cleanup', 'unavailable'])('PR mode uses the remote head and fails closed for %s', scenario => {
+test.each(['addition', 'cleanup', 'unavailable', 'missing history'])('PR mode uses the remote head and fails closed for %s', scenario => {
   write(mobile, 'remote screen');
   write(allowlist, readFileSync(join(directory, allowlist), 'utf8') + `long-file apps/mobile/app/new.tsx\n`);
   commit(); const remoteHead = git('rev-parse', 'HEAD');
@@ -57,9 +57,9 @@ test.each(['addition', 'cleanup', 'unavailable'])('PR mode uses the remote head 
   write(mobile, 'local screen'); write(allowlist, ''); commit();
   expect(check().status).toBe(0);
   const bin = join(directory, 'bin'); mkdirSync(bin);
-  const program = `#!/usr/bin/env node\nprocess.stdout.write((process.env.FIXTURE_PR_HEAD || '') + '\\n' + ${JSON.stringify(mobile + '\n' + allowlist + '\n')});\n`;
+  const program = `#!/usr/bin/env node\nif (JSON.stringify(process.argv.slice(2)) !== JSON.stringify(['pr', 'view', '1', '--json', 'headRefOid', '--jq', '.headRefOid'])) process.exit(2);\nprocess.stdout.write(process.env.FIXTURE_PR_HEAD || '');\n`;
   writeFileSync(join(bin, 'gh'), program, { mode: 0o755 });
-  const head = scenario === 'addition' ? remoteHead : scenario === 'cleanup' ? git('rev-parse', 'HEAD') : '';
+  const head = scenario === 'addition' ? remoteHead : scenario === 'cleanup' ? git('rev-parse', 'HEAD') : scenario === 'missing history' ? 'a'.repeat(40) : '';
   const result = check({ PR_NUMBER: '1', FIXTURE_PR_HEAD: head, PATH: bin + ':' + fixtureEnv.PATH });
   expect(result.status).toBe(scenario === 'cleanup' ? 0 : 1);
   expect(JSON.parse(result.stdout).summary).toBe(scenario === 'cleanup' ? 'single domain: frontend' : scenario === 'addition' ? 'PR touches 2 domains: cto frontend' : 'Unable to resolve PR files and head');
@@ -68,4 +68,27 @@ test('unrecognized exception categories keep infrastructure ownership', () => {
   write(allowlist, `future-rule ${mobile}\n`); commit(); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
   write(mobile, 'changed screen'); write(allowlist, ''); commit();
   const result = check(); expect(result.status).toBe(1); expect(JSON.parse(result.stdout).summary).toContain('cto frontend');
+});
+
+test('a PR beyond the API file page still checks every changed domain', () => {
+  for (let n = 0; n < 101; n++) write(`apps/mobile/app/screen-${n}.tsx`, 'new screen');
+  write('scripts/extra-check.sh', 'infrastructure'); commit();
+  const head = git('rev-parse', 'HEAD');
+  const truncated = git('diff', '--name-only', 'origin/main...HEAD').split('\n').slice(0, 100).join('\n');
+  const bin = join(directory, 'bin'); mkdirSync(bin);
+  const program = `#!/usr/bin/env node\nprocess.stdout.write(${JSON.stringify(head)} + (process.argv.includes('headRefOid,files') ? '\\n' + ${JSON.stringify(truncated)} : ''));\n`;
+  writeFileSync(join(bin, 'gh'), program, { mode: 0o755 });
+  const result = check({ PR_NUMBER: '1', PATH: bin + ':' + fixtureEnv.PATH });
+  expect(result.status).toBe(1); expect(JSON.parse(result.stdout).summary).toBe('PR touches 2 domains: cto frontend');
+});
+
+test('changed routing uses the reviewed commit instead of a different local checkout', () => {
+  write('scripts/route-reviewers.sh', `cat >/dev/null\necho '["cto","frontend"]'\n`); commit();
+  const head = git('rev-parse', 'HEAD');
+  git('checkout', '--detach', 'origin/main');
+  write('scripts/route-reviewers.sh', `cat >/dev/null\necho '["frontend"]'\n`); commit();
+  const bin = join(directory, 'bin'); mkdirSync(bin);
+  writeFileSync(join(bin, 'gh'), `#!/usr/bin/env node\nprocess.stdout.write(${JSON.stringify(head)});\n`, { mode: 0o755 });
+  const result = check({ PR_NUMBER: '1', PATH: bin + ':' + fixtureEnv.PATH });
+  expect(result.status).toBe(1); expect(JSON.parse(result.stdout).summary).toBe('PR touches 2 domains: cto frontend');
 });
