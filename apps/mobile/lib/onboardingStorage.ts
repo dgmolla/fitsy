@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { calculateAge } from '@fitsy/shared';
+import { calculateAge } from '../../../packages/shared/src/utils/dateUtils';
 
 const KEY = '@fitsy/onboarding';
 
@@ -7,7 +7,14 @@ export type ActivityLevel = 'sedentary' | 'lightly_active' | 'active' | 'very_ac
 export type Goal = 'lose_fat' | 'maintain' | 'build_muscle';
 export type Sex = 'female' | 'male';
 
+export interface OnboardingArea { lat: number; lng: number; name: string; source: 'gps' | 'manual' }
+
 export interface OnboardingData {
+  area?: OnboardingArea;
+  targetMode?: 'known' | 'estimate';
+  targetBasis?: string;
+  previewCraving?: string;
+  previewArea?: string;
   birthday?: string;
   heightCm?: number;
   weightKg?: number;
@@ -17,12 +24,18 @@ export interface OnboardingData {
   dietary?: string[];
 }
 
+let pendingWrite: Promise<void> = Promise.resolve();
+
 export async function saveOnboardingField<K extends keyof OnboardingData>(
   field: K,
   value: OnboardingData[K],
 ): Promise<void> {
-  const existing = await getOnboardingData();
-  await AsyncStorage.setItem(KEY, JSON.stringify({ ...existing, [field]: value }));
+  const write = pendingWrite.catch(() => {}).then(async () => {
+    const existing = await getOnboardingData();
+    await AsyncStorage.setItem(KEY, JSON.stringify({ ...existing, [field]: value }));
+  });
+  pendingWrite = write;
+  return write;
 }
 
 export async function getOnboardingData(): Promise<OnboardingData> {

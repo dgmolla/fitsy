@@ -11,9 +11,9 @@ import { supabase } from './supabase';
  * lib/teaserGate uses for session-less callers). Resolves to whether the
  * store flow may proceed.
  */
-export async function ensureSessionForPurchase(): Promise<boolean> {
+export async function ensureSessionForPurchase(returnTo: 'payment' | 'resubscribe' = 'payment'): Promise<boolean> {
   const { data } = await supabase.auth.getSession();
   if (data.session) return true;
-  router.replace('/welcome/signin');
+  router.push(`/welcome/signin?returnTo=${returnTo}`);
   return false;
 }

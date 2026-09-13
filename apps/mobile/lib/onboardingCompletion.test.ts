@@ -8,6 +8,7 @@ const mockTrack = jest.fn();
 jest.mock('@react-native-async-storage/async-storage', () => ({
   __esModule: true,
   default: {
+    removeItem: async (key: string) => { delete store[key]; },
     getItem: async (key: string) => store[key] ?? null,
     setItem: async (key: string, value: string) => { store[key] = value; },
   },
@@ -28,7 +29,9 @@ beforeEach(() => {
 
 describe('recordOnboardingComplete', () => {
   it('records once: flag, profile push, one event with the profile shape', async () => {
+    store['@fitsy/onboardingStep'] = 'trial';
     expect(await recordOnboardingComplete(false)).toBe(true);
+    expect(store['@fitsy/onboardingStep']).toBeUndefined();
     expect(store[ONBOARDING_COMPLETE_KEY]).toBe('true');
     expect(store[DISCOUNT_APPLIED_KEY]).toBeUndefined();
     expect(mockPush).toHaveBeenCalledTimes(1);

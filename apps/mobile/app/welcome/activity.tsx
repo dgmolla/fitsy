@@ -1,10 +1,11 @@
+import { useOnboardingStep } from '@/lib/onboardingResume';
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
-import { saveOnboardingField, type ActivityLevel } from '@/lib/onboardingStorage';
+import { getOnboardingData, saveOnboardingField, type ActivityLevel } from '@/lib/onboardingStorage';
 import { trackOnboardingChoiceSelected, trackOnboardingScreenView } from '@/lib/analytics';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 
@@ -16,23 +17,25 @@ const OPTIONS: { id: ActivityLevel; label: string; desc: string; days: string }[
 ];
 
 export default function ActivityScreen() {
+  useOnboardingStep('activity');
   const [selected, setSelected] = useState<ActivityLevel | null>(null);
 
   useEffect(() => {
     trackOnboardingScreenView('activity');
+    void getOnboardingData().then(data => setSelected(data.activity ?? null));
   }, []);
 
   return (
     <WelcomeScreen
-      progress={14 / 18}
+      progress={6 / 7}
       title="How active are you?"
       subtitle="How many days per week are you active?"
       onContinue={async () => {
         if (selected) await saveOnboardingField('activity', selected);
-        router.push('/welcome/dietary');
+        router.push('/welcome/tuning');
       }}
       canContinue={selected !== null}
-      onSkip={() => router.push('/welcome/dietary')}
+      onSkip={() => router.push('/welcome/tuning')}
     >
       <View style={s.list}>
         {OPTIONS.map((opt, i) => {

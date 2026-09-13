@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated as RNAnimated, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
-import { router } from 'expo-router';
+import { useNavigation } from 'expo-router';
+import { openPurchasedDestination } from '@/lib/paywallJourney';
 import { Ionicons } from '@expo/vector-icons';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { AnimatedPress } from '@/components/AnimatedPress';
@@ -21,6 +22,7 @@ import {
 /** Ask only after the user chooses Allow. Local reminders work without an
  * APNs token; token registration remains available for future push campaigns. */
 export default function NotificationPermissionScreen() {
+  const navigation = useNavigation();
   const [busy, setBusy] = useState(false);
   const pulse = useRef(new RNAnimated.Value(0.45)).current;
 
@@ -68,14 +70,14 @@ export default function NotificationPermissionScreen() {
     } catch {
       // OS prompt failures are rare and non-actionable — proceed to paywall.
     } finally {
-      router.replace('/welcome/trial');
+      void openPurchasedDestination(navigation);
     }
   }
 
   function handleSkip() {
     if (busy) return;
     trackNotificationPrimingSkipTapped();
-    router.replace('/welcome/trial');
+    void openPurchasedDestination(navigation);
   }
 
   return (

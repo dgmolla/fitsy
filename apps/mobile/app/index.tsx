@@ -2,12 +2,16 @@ import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { Redirect } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getOnboardingResume } from '@/lib/onboardingResume';
+import { readPaywallDecline } from '@/lib/paywallAccess';
+import { ONBOARDING_COMPLETE_KEY } from '@/lib/onboardingCompletion';
 import { getStoredToken } from '@/lib/authClient';
 import { getMacroTargets } from '@/lib/macroStorage';
 import { usePurchases } from '@/lib/usePurchases';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 
-type Destination = '/(tabs)/search' | '/welcome/problem' | '/macro-setup' | '/welcome/resubscribe';
+type Destination = Awaited<ReturnType<typeof getOnboardingResume>> | '/welcome/payment' | '/(tabs)/search' | '/welcome/problem' | '/macro-setup' | '/welcome/resubscribe';
 
 export default function Index() {
   const [destination, setDestination] = useState<Destination | null>(null);
@@ -16,7 +20,14 @@ export default function Index() {
   useEffect(() => {
     async function resolve() {
       try {
-        const token = await getStoredToken();
+        const [token, resume, declined, completed] = await Promise.all([
+          getStoredToken(), getOnboardingResume(), readPaywallDecline(), AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY),
+        ]);
+        if (!isLapsed && completed !== 'true' && resume && !declined && entitled !== true) {
+          setDestination(token && resume === '/welcome/signin' ? '/welcome/trial' : resume);
+          return;
+        }
+        if (declined && !token) { setDestination('/welcome/payment'); return; }
         if (!token) {
           setDestination('/welcome/problem');
           return;

@@ -1,3 +1,4 @@
+import { useOnboardingStep } from '@/lib/onboardingResume';
 import React, { useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -10,6 +11,7 @@ import { appleSignIn, completeGoogleSignIn, devLogin } from '@/lib/authClient';
 import { pullProfileFromServer } from '@/lib/profileSync';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
+import { getPaywallIntent } from '@/lib/paywallJourney';
 import { getMacroTargets } from '@/lib/macroStorage';
 import { getOnboardingData } from '@/lib/onboardingStorage';
 import { identifyUser, trackAuthFailure, trackAuthSuccess, trackOnboardingScreenView } from '@/lib/analytics';
@@ -34,14 +36,23 @@ async function captureIdentity(userId: string, email?: string | null): Promise<v
 }
 
 export default function SignInScreen() {
+  useOnboardingStep('signin');
   const [appleLoading, setAppleLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [devLoading, setDevLoading] = useState(false);
 
-  // Continue from the preview to optional permissions and live plan terms.
+  // Continue from the preview to live plan terms. Permissions follow purchase.
   // Skip onboarding review; existing in-app prompts use lib/ratingPrompt.ts.
-  const { outOfArea } = useLocalSearchParams<{ outOfArea?: string }>();
-  const newUserDestination = outOfArea === '1' ? '/welcome/out-of-area' : '/welcome/notification-permission';
+  const { outOfArea, returnTo } = useLocalSearchParams<{ outOfArea?: string; returnTo?: string }>();
+  const newUserDestination = outOfArea === '1' ? '/welcome/out-of-area' : '/welcome/trial';
+
+  async function navigateAfterAuth(isNewUser: boolean) {
+    if (returnTo === 'payment' || returnTo === 'resubscribe') {
+      router.dismissTo(`/welcome/${returnTo}`);
+      return;
+    }
+    router.replace(isNewUser || await getPaywallIntent() ? newUserDestination : '/(tabs)/search');
+  }
 
   const [, response, promptGoogleAsync] = Google.useIdTokenAuthRequest({
     iosClientId: GOOGLE_IOS_CLIENT_ID ?? 'not-configured',
@@ -61,12 +72,11 @@ export default function SignInScreen() {
           .then(async (r) => {
             trackAuthSuccess({ provider: 'google', is_new_user: r.isNewUser });
             await captureIdentity(r.user.id, r.user.email);
-            if (!r.isNewUser) await pullProfileFromServer();
+            if (!r.isNewUser && !(await getPaywallIntent())) await pullProfileFromServer();
             setGoogleLoading(false);
-            // A NEW user just finished the anonymous narrative + teaser, so they
-            // continue into location/notification setup; a RETURNING user already
-            // has a profile and skips straight to the app.
-            router.replace(r.isNewUser ? newUserDestination : '/(tabs)/search');
+            // Preserve the selected meal through sign-in; returning subscribers
+            // without a preview intent continue to their existing account.
+            await navigateAfterAuth(r.isNewUser);
           })
           .catch((err: Error) => {
             trackAuthFailure({ provider: 'google', error_message: err.message });
@@ -86,9 +96,8 @@ export default function SignInScreen() {
       const r = await appleSignIn();
       trackAuthSuccess({ provider: 'apple', is_new_user: r.isNewUser });
       await captureIdentity(r.user.id, r.user.email);
-      if (!r.isNewUser) await pullProfileFromServer();
-      // New user → continue into location/notification setup; returning user → straight to the app.
-      router.replace(r.isNewUser ? newUserDestination : '/(tabs)/search');
+      if (!r.isNewUser && !(await getPaywallIntent())) await pullProfileFromServer();
+      await navigateAfterAuth(r.isNewUser);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Apple Sign In failed';
       if (!msg.includes('canceled')) {
@@ -113,7 +122,7 @@ export default function SignInScreen() {
       trackAuthSuccess({ provider: 'dev', is_new_user: false });
       await captureIdentity(r.user.id, r.user.email);
       // Continue where a new user would land, so the full flow is testable on the sim.
-      router.replace(newUserDestination);
+      await navigateAfterAuth(true);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Dev login failed';
       trackAuthFailure({ provider: 'dev', error_message: msg });
@@ -128,7 +137,7 @@ export default function SignInScreen() {
   return (
     <WelcomeScreen
       title="Create an account"
-      subtitle="One tap with Apple or Google — no password to remember."
+      subtitle="Keep your meal picks and targets with one sign-in."
       onContinue={() => {}}
       canContinue={false}
       hideFooter

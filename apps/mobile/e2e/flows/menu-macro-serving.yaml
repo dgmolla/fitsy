@@ -20,7 +20,7 @@ tags:
 - launchApp:
     clearState: true
 - extendedWaitUntil:
-    visible: "continue"
+    visible: "Find meals that fit"
     timeout: 15000
 - openLink: ${'fitsy://restaurant/' + output.seed.id}
 - tapOn:

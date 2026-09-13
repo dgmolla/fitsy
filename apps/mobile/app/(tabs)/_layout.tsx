@@ -44,6 +44,7 @@ export default function TabLayout() {
   // paywall, which promises a trial Apple won't grant them twice.
   const unentitledTarget = purchases.isLapsed ? '/welcome/resubscribe' : '/welcome/payment';
   if (purchases.entitled === null || !reviewer.ready || !previewAccess.ready) return null;
+  if (allowTeaser) return <Redirect href="/welcome/preview" />;
   if (!entitled && !allowTeaser) return <Redirect href={unentitledTarget} />;
 
   function emitTabSwitched(next: TabId) {

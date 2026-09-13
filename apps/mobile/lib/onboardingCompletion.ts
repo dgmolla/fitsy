@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { clearOnboardingResume } from './onboardingResume';
 import { pushProfileToServer } from './profileSync';
 import { getOnboardingData } from './onboardingStorage';
 import { trackOnboardingCompleted } from './analytics';
@@ -15,6 +16,7 @@ export const DISCOUNT_APPLIED_KEY = 'discountApplied';
  * event. Resolves to whether this call did the recording.
  */
 export async function recordOnboardingComplete(discounted: boolean): Promise<boolean> {
+  await clearOnboardingResume();
   if ((await AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY)) === 'true') return false;
   await AsyncStorage.setItem(ONBOARDING_COMPLETE_KEY, 'true');
   if (discounted) await AsyncStorage.setItem(DISCOUNT_APPLIED_KEY, 'true');

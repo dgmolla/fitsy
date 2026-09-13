@@ -1,3 +1,4 @@
+import { useOnboardingStep } from '@/lib/onboardingResume';
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -14,6 +15,7 @@ const OPTIONS: { id: Sex; label: string }[] = [
 ];
 
 export default function SexScreen() {
+  useOnboardingStep('sex');
   const [selected, setSelected] = useState<Sex | null>(null);
 
   useEffect(() => {

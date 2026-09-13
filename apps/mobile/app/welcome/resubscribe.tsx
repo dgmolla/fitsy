@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
+import { openPurchasedDestination } from '@/lib/paywallJourney';
+import { router, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { RestaurantCard, SkeletonCard } from '@/components/PreviewRestaurantCard';
@@ -25,6 +27,8 @@ import { purchaseTerms } from '@/lib/purchaseTerms';
  * introductory eligibility. Only the live store result can promise a trial.
  */
 export default function ResubscribeScreen() {
+  const navigation = useNavigation();
+  const focused = useIsFocused();
   const variants = usePreviewAccess();
   const { offering, refreshOffering, purchase, restore, entitled, introEligibility } = usePurchases();
   const [loading, setLoading] = useState(false);
@@ -35,8 +39,8 @@ export default function ResubscribeScreen() {
   // without a relaunch. See useRedirectOnceEntitled.
   const { claim } = useRedirectOnceEntitled({
     entitled,
-    busy: loading || restoring,
-    onEntitled: () => router.replace('/(tabs)/search'),
+    busy: loading || restoring || !focused,
+    onEntitled: () => { void openPurchasedDestination(navigation); },
   });
   // A locked teaser of what resubscribing unlocks, same cards + fetch as the
   // onboarding teaser (welcome/results.tsx). A fetch failure just hides the
@@ -64,13 +68,13 @@ export default function ResubscribeScreen() {
       Alert.alert('Just a moment', 'Plans are still loading, please try again.');
       return;
     }
-    if (!(await ensureSessionForPurchase())) return;
+    if (!(await ensureSessionForPurchase('resubscribe'))) return;
     setLoading(true);
     try {
       const isPro = await purchase(annual, 'resubscribe');
       if (isPro) {
         claim();
-        router.replace('/(tabs)/search');
+        await openPurchasedDestination(navigation);
       }
     } finally {
       setLoading(false);
@@ -78,13 +82,13 @@ export default function ResubscribeScreen() {
   }
 
   async function handleRestore() {
-    if (!(await ensureSessionForPurchase())) return;
+    if (!(await ensureSessionForPurchase('resubscribe'))) return;
     setRestoring(true);
     try {
       const isPro = await restore();
       if (isPro) {
         claim();
-        router.replace('/(tabs)/search');
+        await openPurchasedDestination(navigation);
       } else {
         Alert.alert('Nothing to restore', "We couldn't find an active subscription for this account.");
       }
@@ -104,7 +108,7 @@ export default function ResubscribeScreen() {
         void rememberPaywallDecline().then(() => router.replace('/(tabs)/search?preview=1'))
           .catch(() => Alert.alert('Could not save your choice', 'Please try again.'));
       } : undefined}
-      showBack={false}
+      showBack
     >
       {(teaserLoading || restaurants.length > 0) && (
         <View style={s.teaserWrap}>

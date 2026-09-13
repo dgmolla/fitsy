@@ -21,7 +21,7 @@ tags:
 - launchApp:
     clearState: true
 - extendedWaitUntil:
-    visible: "continue"
+    visible: "Find meals that fit"
     timeout: 15000
 - openLink: ${'com.fitsy.mobile://restaurant/' + output.seed.id}
 - tapOn:

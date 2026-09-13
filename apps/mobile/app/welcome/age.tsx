@@ -1,3 +1,4 @@
+import { useOnboardingStep } from '@/lib/onboardingResume';
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -14,6 +15,7 @@ const AGE_MAX = 80;
 const AGE_DEFAULT = 28;
 
 export default function AgeScreen() {
+  useOnboardingStep('age');
   const [age, setAge] = useState(AGE_DEFAULT);
 
   useEffect(() => {
@@ -32,7 +34,7 @@ export default function AgeScreen() {
 
   return (
     <WelcomeScreen
-      progress={13 / 18}
+      progress={4 / 7}
       title="How old are you?"
       subtitle="Used to set your baseline metabolic rate."
       onContinue={async () => {

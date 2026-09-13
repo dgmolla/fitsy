@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   FlatList,
   Pressable,
   ScrollView,
@@ -77,7 +78,7 @@ export default function RestaurantDetailScreen() {
   const previewAccess = usePreviewAccess();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
-  const params = useLocalSearchParams<{ id: string; distance?: string }>();
+  const params = useLocalSearchParams<{ id: string; distance?: string; selectedItemId?: string; saveSelected?: string }>();
   const id = params.id;
 
   const [menu, setMenu] = useState<MenuResponse | null>(null);
@@ -118,7 +119,7 @@ export default function RestaurantDetailScreen() {
       // runs inside the same Promise.all as the menu fetch (rather than
       // ahead of it) so it doesn't add latency to every detail-screen open.
       const [result, session, macroTargets] = await Promise.all([
-        fetchMenu(id), supabase.auth.getSession().then((r) => r.data.session), getMacroTargets(),
+        fetchMenu(id, { selectedItemId: params.selectedItemId }), supabase.auth.getSession().then((r) => r.data.session), getMacroTargets(),
       ]);
       const savedResult = session ? await getSavedItems() : null;
       if (cancelled) return;
@@ -138,13 +139,18 @@ export default function RestaurantDetailScreen() {
       if (savedResult) {
         const m = new Map<string, string>();
         for (const saved of savedResult.data) { if (saved.menuItemId) m.set(saved.menuItemId, saved.id); }
-        setSavedMap(m);
+        if (params.saveSelected === '1' && params.selectedItemId && !result?.locked && !m.has(params.selectedItemId)) {
+          const saved = await saveItem(params.selectedItemId);
+          if (saved) m.set(params.selectedItemId, saved.id);
+          else Alert.alert('Could not save this meal', 'The selected meal is shown first. Tap its bookmark to try again.');
+        }
+        if (!cancelled) setSavedMap(m);
       }
       setLoading(false);
     }
     void load();
     return () => { cancelled = true; };
-  }, [id]);
+  }, [id, params.selectedItemId, params.saveSelected]);
 
   const isLocked = menu?.locked === true;
   // `beforeRemove` closures capture whatever `isLocked` was when the
@@ -210,8 +216,8 @@ export default function RestaurantDetailScreen() {
         }
         return true;
       })
-      .sort((a, b) => compareBySort(a, b, sort));
-  }, [scored, query, activeChips, sort, targets]);
+      .sort((a, b) => a.item.id === params.selectedItemId ? -1 : b.item.id === params.selectedItemId ? 1 : compareBySort(a, b, sort));
+  }, [scored, query, activeChips, sort, targets, params.selectedItemId]);
 
   // `totalCount` is the loaded set (the free sample, when locked) - used for
   // the sort bar's "filtered from N" math, which only ever operates over what's
@@ -281,7 +287,7 @@ export default function RestaurantDetailScreen() {
       <View style={[s.container, { paddingTop: insets.top }]}>
         {/* Compact top nav: back · name · heart (saves top match) */}
         <View style={s.nav}>
-          <Pressable onPress={() => router.back()} style={s.navBtn} hitSlop={8} accessibilityRole="button" accessibilityLabel="Go back" testID="restaurant-back">
+          <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/search')} style={s.navBtn} hitSlop={8} accessibilityRole="button" accessibilityLabel="Go back" testID="restaurant-back">
             <Ionicons name="chevron-back" size={18} color={EDITORIAL.text} />
           </Pressable>
           <View style={s.navBtn}>
@@ -421,7 +427,7 @@ export default function RestaurantDetailScreen() {
                   <View style={{ flex: 1 }}>
                     <Text style={s.pctTipText}>
                       The <Text style={s.pctTipStrong}>%</Text> is each dish's macro fit — how closely it
-                      matches your daily targets. 100% is a perfect fit.
+                      matches your per-meal targets. 100% is a perfect fit.
                     </Text>
                     <Pressable onPress={dismissPctTip} hitSlop={8} accessibilityRole="button">
                       <Text style={s.pctTipDismiss}>Got it</Text>

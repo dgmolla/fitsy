@@ -1,37 +1,37 @@
+import { useOnboardingStep } from '@/lib/onboardingResume';
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
-import { saveOnboardingField } from '@/lib/onboardingStorage';
+import { getOnboardingData, saveOnboardingField, type Goal } from '@/lib/onboardingStorage';
 import { trackOnboardingChoiceSelected, trackOnboardingScreenView } from '@/lib/analytics';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 
-type Goal = 'lose_fat' | 'maintain' | 'build_muscle' | 'explore';
 
 const GOALS: { id: Goal; label: string }[] = [
   { id: 'lose_fat', label: 'Lose weight' },
   { id: 'build_muscle', label: 'Build muscle' },
-  { id: 'maintain', label: 'Eat healthier' },
-  { id: 'explore', label: 'Explore cuisines' },
+  { id: 'maintain', label: 'Maintain weight' },
 ];
 
 export default function GoalScreen() {
+  useOnboardingStep('goal');
   const [selected, setSelected] = useState<Goal | null>(null);
 
   useEffect(() => {
     trackOnboardingScreenView('goal');
+    void getOnboardingData().then(data => setSelected(data.goal ?? null));
   }, []);
 
   return (
     <WelcomeScreen
-      progress={10 / 18}
+      progress={1 / 7}
       title="What's your goal?"
       onContinue={async () => {
         if (selected) {
-          const mapped = selected === 'explore' ? 'maintain' : selected;
-          await saveOnboardingField('goal', mapped);
+          await saveOnboardingField('goal', selected);
         }
         router.push('/welcome/height');
       }}
@@ -49,6 +49,7 @@ export default function GoalScreen() {
                   setSelected(g.id);
                   trackOnboardingChoiceSelected({ screen: 'goal', value: g.id });
                 }}
+                testID={`goal-${g.id}`}
                 haptic
                 accessibilityRole="button"
                 accessibilityState={{ selected: on }}

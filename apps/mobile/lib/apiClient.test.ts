@@ -5,6 +5,11 @@ jest.mock('./authClient', () => ({
   getStoredToken: jest.fn().mockResolvedValue('test-token'),
 }));
 
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  __esModule: true, default: { getItem: jest.fn().mockResolvedValue(null) },
+}));
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import { fetchMenu, fetchRestaurants, fetchRestaurantsPage, fetchSubscriptionStatus, syncSubscription } from './apiClient';
 import type { MenuApiResponseBody, MenuResponse, RestaurantsResponse } from '@fitsy/shared';
 
@@ -176,6 +181,7 @@ const sampleMenuResponse: MenuResponse = {
 
 describe('fetchMenu', () => {
   const originalFetch = global.fetch;
+  beforeEach(() => { (AsyncStorage.getItem as jest.Mock).mockResolvedValue(null); });
 
   afterEach(() => {
     global.fetch = originalFetch;
@@ -203,6 +209,29 @@ describe('fetchMenu', () => {
     expect(result?.restaurantId).toBe('r1');
     expect(result?.restaurantName).toBe('Test Bistro');
     expect(result?.menuItems).toHaveLength(2);
+  });
+
+  it('keeps the selected dish and meal targets on every page of a full menu', async () => {
+    (AsyncStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify({ calories: '600', protein: '40', carbs: '60', fat: '20' }));
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ data: { ...sampleMenuResponse, menuItems: [sampleMenuResponse.menuItems[0]], nextCursor: 'next-page', totalItemCount: 2 } }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ data: { ...sampleMenuResponse, menuItems: [sampleMenuResponse.menuItems[1]], nextCursor: null, totalItemCount: 2 } }) });
+    const result = await fetchMenu('r1', { selectedItemId: 'mi1' });
+    expect(result?.menuItems.map(item => item.id)).toEqual(['mi1', 'mi2']);
+    const urls = (global.fetch as jest.Mock).mock.calls.map(call => new URL(call[0]));
+    expect(urls).toHaveLength(2);
+    for (const url of urls) {
+      expect(url.searchParams.get('selectedItemId')).toBe('mi1');
+      expect(url.searchParams.get('calories')).toBe('600');
+      expect(url.searchParams.get('protein')).toBe('40');
+    }
+    expect(urls[1]!.searchParams.get('cursor')).toBe('next-page');
+  });
+
+  it('does not paginate a locked menu even if a cursor is present', async () => {
+    global.fetch = makeMockFetch({ ok: true, body: { data: { ...sampleMenuResponse, locked: true, nextCursor: 'ignored' } } });
+    expect((await fetchMenu('r1'))?.locked).toBe(true);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 
   it('returns null on API error response', async () => {

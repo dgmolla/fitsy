@@ -1,0 +1,107 @@
+# Actual dev coverage and live store terms. No successful purchase on the shared dev account.
+appId: com.fitsy.mobile
+tags: [billing, discovery, onboarding, auth, changed-journey]
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- extendedWaitUntil:
+    visible: "Find meals that fit"
+    timeout: 15000
+- waitForAnimationToEnd
+- tapOn:
+    point: "92%,93%"
+- tapOn:
+    id: welcome-start
+- assertVisible: "Where are we.*"
+- tapOn:
+    id: location-choose-area
+- tapOn: "Search near DTLA"
+- extendedWaitUntil:
+    visible:
+      id: target-mode-known
+    timeout: 30000
+- tapOn:
+    id: target-mode-known
+- tapOn:
+    id: meal-target-calories
+- inputText: "600"
+- tapOn:
+    id: meal-target-protein
+- inputText: "40"
+- tapOn:
+    id: meal-target-carbs
+- inputText: "60"
+- tapOn:
+    id: meal-target-fat
+- inputText: "20"
+- hideKeyboard
+- tapOn:
+    id: welcome-continue
+- extendedWaitUntil:
+    visible:
+      id: preview-pick-1
+    timeout: 30000
+- assertVisible: "600 kcal.*40g protein.*"
+- assertNotVisible: "Create an account"
+- tapOn:
+    id: preview-guide-next
+- tapOn:
+    id: preview-craving
+- inputText: "chicken"
+- tapOn:
+    id: preview-search
+- extendedWaitUntil:
+    visible: "Your preview search is complete.*"
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: preview-menu-1
+    direction: DOWN
+- tapOn:
+    id: preview-menu-1
+- assertVisible: "Create an account"
+- tapOn:
+    id: welcome-back
+- assertVisible:
+    id: preview-guide
+- scrollUntilVisible:
+    element:
+      id: preview-pick-3
+    direction: DOWN
+- assertVisible:
+    id: preview-pick-3
+- scrollUntilVisible:
+    element:
+      id: preview-menu-1
+    direction: UP
+- tapOn:
+    id: preview-menu-1
+- tapOn: "Dev login"
+- extendedWaitUntil:
+    visible:
+      id: trial-see-plans
+    timeout: 30000
+- assertNotVisible: "Allow notifications"
+- tapOn:
+    id: trial-see-plans
+- extendedWaitUntil:
+    visible:
+      id: paywall-plan-yearly
+    timeout: 15000
+- tapOn:
+    id: welcome-back
+- assertVisible:
+    id: trial-see-plans
+- tapOn:
+    id: trial-back
+- assertVisible:
+    id: preview-guide
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: preview-guide
+    timeout: 30000
+- assertVisible: "600 kcal.*40g protein.*"
+- assertVisible: "Your preview search is complete.*"

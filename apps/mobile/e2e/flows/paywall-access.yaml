@@ -17,7 +17,7 @@ tags: [billing, discovery, onboarding, changed-journey]
     commands:
       - waitForAnimationToEnd:
           timeout: 10000
-      - assertVisible: "continue"
+      - assertVisible: "Find meals that fit"
 - waitForAnimationToEnd:
     timeout: 3000
 # Dismiss the Debug-only warning window outside the welcome controls.
@@ -32,7 +32,7 @@ tags: [billing, discovery, onboarding, changed-journey]
     optional: true
 - tapOn:
     id: restaurant-back
-- assertVisible: "continue"
+- assertVisible: "Find meals that fit"
 - assertNotVisible: "Create an account"
 - openLink: ${'com.fitsy.mobile://restaurant/' + output.seed.id}
 - scrollUntilVisible:

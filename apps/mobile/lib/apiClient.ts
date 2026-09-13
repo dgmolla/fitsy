@@ -1,5 +1,6 @@
 import { FeedbackBoardPost, FeedbackBoardResponse, FeedbackVoteResponse, MenuApiResponse, MenuResponse, RestaurantResult, RestaurantsApiResponse, SavedItemResponse, SavedItemsResponse } from '@fitsy/shared';
 import { api } from './api';
+import { getMacroTargets } from './macroStorage';
 
 export interface FetchRestaurantsParams {
   protein?: number;
@@ -97,20 +98,30 @@ export async function fetchRestaurants(
   return data;
 }
 
-export async function fetchMenu(restaurantId: string): Promise<MenuResponse | null> {
+export async function fetchMenu(restaurantId: string, options: { selectedItemId?: string } = {}): Promise<MenuResponse | null> {
   try {
-    const response = await api.get<MenuApiResponse>(
-      `/api/restaurants/${restaurantId}/menu`, true
-    );
-
-    if ('error' in response) {
-      return null;
+    const targets = await getMacroTargets();
+    const params = new URLSearchParams();
+    if (targets) for (const [key, value] of Object.entries(targets)) if (value) params.set(key, value);
+    if (options.selectedItemId) params.set('selectedItemId', options.selectedItemId);
+    const page = async () => {
+      const response = await api.get<MenuApiResponse>(`/api/restaurants/${restaurantId}/menu${params.size ? `?${params}` : ''}`, true);
+      if ('error' in response) throw new Error('Menu unavailable');
+      return response.data;
+    };
+    const result = await page();
+    const cursors = new Set<string>();
+    while (!result.locked && result.nextCursor) {
+      if (cursors.has(result.nextCursor)) throw new Error('Repeated menu cursor');
+      cursors.add(result.nextCursor);
+      params.set('cursor', result.nextCursor);
+      const next = await page();
+      if (next.locked) return next;
+      result.menuItems.push(...next.menuItems);
+      result.nextCursor = next.nextCursor;
     }
-
-    return response.data;
-  } catch {
-    return null;
-  }
+    return result;
+  } catch { return null; }
 }
 
 export async function getSavedItems(cursor?: string): Promise<SavedItemsResponse | null> {

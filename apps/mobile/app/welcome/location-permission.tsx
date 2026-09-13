@@ -1,204 +1,88 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Animated as RNAnimated, SafeAreaView, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
-import { router } from 'expo-router';
+import { useOnboardingStep } from '@/lib/onboardingResume';
+import React, { useEffect, useState } from 'react';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 import * as Location from 'expo-location';
-import { Ionicons } from '@expo/vector-icons';
-import { EDITORIAL, FONTS } from '@/lib/brand';
+import * as SecureStore from 'expo-secure-store';
+import { router } from 'expo-router';
+import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
+import { LocationPickerSheet } from '@/components/LocationPickerSheet';
+import { EDITORIAL, TEXT } from '@/lib/brand';
 import { setCachedCoords } from '@/lib/locationCache';
-import {
-  trackLocationPermissionDenied,
-  trackLocationPermissionGranted,
-  trackLocationPrimingAllowTapped,
-  trackLocationPrimingShown,
-  trackLocationPrimingSkipTapped,
-} from '@/lib/analytics';
+import { MANUAL_LOCATION_KEY } from '@/lib/useLocation';
+import { getOnboardingData, saveOnboardingField, type OnboardingArea } from '@/lib/onboardingStorage';
+import { fetchGuidedPreview } from '@/lib/guidedPreview';
+import { trackLocationPrimingShown, trackLocationPermissionGranted, trackLocationPermissionDenied } from '@/lib/analytics';
 
-/**
- * Location-permission priming screen (S-225).
- *
- * Inserted between the macro-tuning screen and `welcome/finding` so the OS
- * prompt fires before the teaser prefetch — the teaser uses the granted
- * coords to surface restaurants actually near the user, not the Silver Lake
- * fallback. iOS only allows calling `requestForegroundPermissionsAsync()`
- * once per install, so this priming screen is the only opportunity to lift
- * grant rate above the cold-prompt baseline.
- *
- * Critical: the OS prompt is NOT triggered on mount — only on the explicit
- * "Allow location" CTA. "Maybe later" advances without consuming the one-shot
- * prompt; the teaser then falls back to Silver Lake until the user grants
- * permission via Settings.
- */
 export default function LocationPermissionScreen() {
+  useOnboardingStep('location-permission');
   const [busy, setBusy] = useState(false);
-  const pulse = useRef(new RNAnimated.Value(0.45)).current;
-
+  const [picker, setPicker] = useState(false);
+  const [area, setArea] = useState<OnboardingArea>();
   useEffect(() => {
     trackLocationPrimingShown();
+    void getOnboardingData().then(data => setArea(data.area));
   }, []);
 
-  useEffect(() => {
-    RNAnimated.loop(
-      RNAnimated.sequence([
-        RNAnimated.timing(pulse, { toValue: 1, duration: 900, useNativeDriver: true }),
-        RNAnimated.timing(pulse, { toValue: 0.45, duration: 900, useNativeDriver: true }),
-      ]),
-    ).start();
-  }, [pulse]);
-
-  async function handleAllow() {
-    if (busy) return;
+  async function choose(next: OnboardingArea) {
+    setPicker(false);
     setBusy(true);
-    trackLocationPrimingAllowTapped();
+    setArea(next);
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        trackLocationPermissionGranted();
-        // Cache coords now so the next screen's teaser prefetch can use them
-        // instead of the Silver Lake fallback. Prefer last-known for speed
-        // (often instant); fall back to a fresh fix only if there's nothing
-        // cached yet. Race the fresh fix against a 3s timeout so cold-install
-        // / simulator / slow-GPS users aren't stuck on "Asking..." — mirrors
-        // the pattern used by lib/useLocation.ts. Failures and timeouts are
-        // non-fatal; teaser just renders Silver Lake content as before.
-        try {
-          const lastKnown = await Location.getLastKnownPositionAsync();
-          const fix =
-            lastKnown ??
-            (await Promise.race([
-              Location.getCurrentPositionAsync({
-                accuracy: Location.Accuracy.Balanced,
-              }),
-              new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
-            ]));
-          if (fix?.coords) {
-            await setCachedCoords({
-              lat: fix.coords.latitude,
-              lng: fix.coords.longitude,
-            });
-          }
-        } catch {
-          // Coord lookup failed (hardware off, etc.) — proceed without a
-          // cached fix; teaser falls back to Silver Lake.
-        }
-      } else {
-        // Mirrors useLocation's denied event so the funnel reads as a single
-        // permission_denied tally regardless of which surface fired the prompt.
-        trackLocationPermissionDenied({ had_last_known: false });
-      }
-    } catch {
-      // OS prompt failures are rare and non-actionable here — let useLocation's
-      // error path on the search screen handle telemetry on the next attempt.
-    } finally {
-      router.replace('/welcome/finding');
-    }
+      // Persist the user's area even when coverage is empty, so the waitlist
+      // can submit it explicitly. A failed lookup never substitutes an area.
+      await saveOnboardingField('area', next);
+      await setCachedCoords(next);
+      if (next.source === 'manual') await SecureStore.setItemAsync(MANUAL_LOCATION_KEY, JSON.stringify(next));
+      else await SecureStore.deleteItemAsync(MANUAL_LOCATION_KEY);
+      const result = await fetchGuidedPreview(next);
+      router.push(result.meta.nearbyDishCount > 0 ? '/welcome/target-setup' : '/welcome/out-of-area');
+    } catch { Alert.alert('Could not check this area', 'Please try again. Your selected area is saved.'); }
+    finally { setBusy(false); }
   }
 
-  function handleSkip() {
+  async function useCurrent() {
     if (busy) return;
-    trackLocationPrimingSkipTapped();
-    router.replace('/welcome/finding');
+    setPicker(false);
+    setBusy(true);
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status !== 'granted') {
+        trackLocationPermissionDenied({ had_last_known: false });
+        Alert.alert('Choose an area instead', 'You can search a neighborhood without sharing your device location.');
+        setPicker(true);
+        return;
+      }
+      trackLocationPermissionGranted();
+      const fix = await Promise.race([
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Location timed out')), 8000)),
+      ]);
+      await choose({ lat: fix.coords.latitude, lng: fix.coords.longitude, name: 'Your location', source: 'gps' });
+    } catch { Alert.alert('Location unavailable', 'Choose an area, or try your location again.'); }
+    finally { setBusy(false); }
   }
 
   return (
-    <SafeAreaView style={s.safe}>
-      <View style={s.content}>
-        <View style={s.center}>
-          <Animated.View entering={FadeIn.duration(500)}>
-            <RNAnimated.View style={[s.pin, { opacity: pulse }]}>
-              <Ionicons name="location" size={36} color={EDITORIAL.greenAccent} />
-            </RNAnimated.View>
-          </Animated.View>
-
-          <Animated.Text entering={FadeInDown.duration(500).delay(120)} style={s.title}>
-            Find restaurants{'\n'}near you.
-          </Animated.Text>
-
-          <Animated.Text entering={FadeInDown.duration(500).delay(240)} style={s.subtitle}>
-            We use your location to surface nearby spots that match your macros.
-            We never store or share it.
-          </Animated.Text>
-        </View>
-
-        <Animated.View entering={FadeIn.duration(400).delay(360)} style={s.ctas}>
-          <AnimatedPress
-            style={[s.allow, busy ? s.dim : undefined]}
-            onPress={handleAllow}
-            disabled={busy}
-            haptic
-            accessibilityRole="button"
-            accessibilityLabel="Allow location"
-          >
-            <Text style={s.allowTxt}>{busy ? 'Asking…' : 'Allow location'}</Text>
-            <Ionicons name="arrow-forward" size={15} color={EDITORIAL.cream} />
-          </AnimatedPress>
-
-          <AnimatedPress
-            style={s.skip}
-            onPress={handleSkip}
-            disabled={busy}
-            accessibilityRole="button"
-            accessibilityLabel="Maybe later"
-          >
-            <Text style={s.skipTxt}>Maybe later</Text>
-          </AnimatedPress>
-        </Animated.View>
+    <WelcomeScreen title={"Where are we\neating?"} subtitle="Check nearby menus before setting up your plan." hideFooter canContinue onContinue={() => {}}>
+      <View style={s.actions}>
+        <Text style={s.area}>{area ? `Selected: ${area.name}` : 'Start with a Los Angeles neighborhood or your current location.'}</Text>
+        <AnimatedPress style={s.primary} disabled={busy} onPress={() => setPicker(true)} accessibilityRole="button" testID="location-choose-area"><Text style={s.primaryText}>Choose an area</Text></AnimatedPress>
+        <AnimatedPress style={s.secondary} disabled={busy} onPress={useCurrent} accessibilityRole="button" testID="location-use-current"><Text style={s.secondaryText}>Use my location</Text></AnimatedPress>
+        {area && <AnimatedPress style={s.secondary} disabled={busy} onPress={() => choose(area)} accessibilityRole="button" testID="location-continue-area"><Text style={s.secondaryText}>Continue with {area.name}</Text></AnimatedPress>}
+        {busy && <Text style={s.area} accessibilityLiveRegion="polite">Checking nearby dishes…</Text>}
+        <Text style={s.privacy}>We remember your selected area on this device and send coordinates to Fitsy to find nearby meals. Device location is optional.</Text>
       </View>
-    </SafeAreaView>
+      <LocationPickerSheet visible={picker} activeName={area?.name} onClose={() => setPicker(false)} onUseCurrent={useCurrent} onPick={loc => choose({ ...loc, source: 'manual' })} />
+    </WelcomeScreen>
   );
 }
-
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: EDITORIAL.cream },
-  content: { flex: 1, paddingHorizontal: 36, paddingBottom: 40, paddingTop: 24 },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  pin: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    backgroundColor: EDITORIAL.creamCard,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 32,
-  },
-  title: {
-    fontFamily: FONTS.frauncesDisplay,
-    fontSize: 32,
-    color: EDITORIAL.text,
-    letterSpacing: -1,
-    lineHeight: 40,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  subtitle: {
-    fontFamily: FONTS.nunitoSans,
-    fontSize: 15,
-    lineHeight: 22,
-    color: EDITORIAL.textSoft,
-    textAlign: 'center',
-    paddingHorizontal: 8,
-  },
-  ctas: { gap: 12 },
-  allow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: EDITORIAL.green,
-    borderRadius: 32,
-    paddingVertical: 18,
-  },
-  allowTxt: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 16, fontWeight: '600', color: EDITORIAL.cream },
-  dim: { opacity: 0.4 },
-  skip: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-  },
-  skipTxt: { fontFamily: FONTS.nunitoSans, fontSize: 15, fontWeight: '500', color: EDITORIAL.textSoft },
+  actions: { gap: 12, marginTop: 24 },
+  area: { ...TEXT.bodySmall, marginBottom: 12 },
+  primary: { backgroundColor: EDITORIAL.green, padding: 18, borderRadius: 30, alignItems: 'center' },
+  primaryText: { ...TEXT.cta },
+  secondary: { padding: 16, borderRadius: 30, borderWidth: 1, borderColor: EDITORIAL.border, alignItems: 'center' },
+  secondaryText: { ...TEXT.body, color: EDITORIAL.green, textAlign: 'center' },
+  privacy: { ...TEXT.bodySmall, fontSize: 12, lineHeight: 18, marginTop: 20 },
 });

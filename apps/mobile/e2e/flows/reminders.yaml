@@ -17,7 +17,7 @@ tags: [billing, onboarding, discovery, notifications, changed-journey]
       - waitForAnimationToEnd:
           timeout: 10000
       - extendedWaitUntil:
-          visible: "continue"
+          visible: "Find meals that fit"
           timeout: 15000
 - waitForAnimationToEnd:
     timeout: 3000
@@ -39,8 +39,13 @@ tags: [billing, onboarding, discovery, notifications, changed-journey]
 - tapOn: "Dev login"
 - extendedWaitUntil:
     visible:
-      id: notification-allow
+      id: trial-see-plans
     timeout: 30000
+# The normal journey requests reminders after purchase. This explicit link
+# covers the permission/settings recovery path without buying on a shared user.
+- openLink: com.fitsy.mobile://welcome/notification-permission
+- assertVisible:
+    id: notification-allow
 - tapOn:
     id: notification-allow
 - tapOn: "Allow"

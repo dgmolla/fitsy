@@ -17,7 +17,9 @@ interface Props {
   loading: boolean;
   restoring: boolean;
   onSelect: (plan: PlanId) => void;
-  onBack: () => void;
+  onBack?: () => void;
+  context?: string;
+  localProof?: string;
   onRestore: () => void;
   onRetry: () => void;
   onPurchase: () => void;
@@ -36,9 +38,9 @@ export function PaywallView(props: Props) {
   return (
     <SafeAreaView key={fontScale} style={s.safe}>
       <View style={s.nav}>
-        <Pressable onPress={props.onBack} style={s.navAction} accessibilityRole="button" accessibilityLabel="Go back" testID="welcome-back">
+        {props.onBack ? <Pressable disabled={busy} onPress={props.onBack} style={s.navAction} accessibilityRole="button" accessibilityLabel="Go back" testID="welcome-back">
           <Ionicons name="chevron-back" size={23} color={EDITORIAL.textMid} />
-        </Pressable>
+        </Pressable> : <View style={s.navAction} />}
         {!largeText && <Text style={s.wordmark} accessibilityLabel="Fitsy Pro">fitsy pro</Text>}
         <Pressable onPress={props.onRestore} disabled={busy} style={s.navAction} accessibilityRole="button" testID="paywall-restore">
           <Text style={[s.restore, busy && s.disabled]}>{restoring ? 'Restoring…' : 'Restore'}</Text>
@@ -54,7 +56,8 @@ export function PaywallView(props: Props) {
             </View>
           )}
           <Text style={s.hero}>Eat out.{'\n'}Stay on track.</Text>
-          <Text style={s.subtitle}>Find nearby dishes that fit your macros.</Text>
+          <Text style={s.subtitle}>{props.context ?? 'Search your craving. See full menus. Save meals that fit.'}</Text>
+          {!!props.localProof && <Text style={s.proof} testID="paywall-local-proof">{props.localProof}</Text>}
 
           <View style={s.plans}>
             {([{ id: 'yearly', name: 'Annual', terms: annual }, { id: 'monthly', name: 'Monthly', terms: monthly }] as const).map(option => {
@@ -114,6 +117,7 @@ const s = StyleSheet.create({
   imageLabel: { position: 'absolute', left: 10, bottom: 10, backgroundColor: EDITORIAL.cream, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 12, fontFamily: FONTS.nunitoSansSemiBold, fontSize: 9, color: EDITORIAL.green },
   hero: { fontFamily: FONTS.frauncesDisplay, fontSize: 34, lineHeight: 37, letterSpacing: -0.8, color: EDITORIAL.green },
   subtitle: { fontFamily: FONTS.nunitoSans, fontSize: 14, lineHeight: 20, color: EDITORIAL.textMid, marginTop: 8, marginBottom: 16 },
+  proof: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 12, lineHeight: 18, color: EDITORIAL.greenMid, marginBottom: 12 },
   plans: { gap: 8 },
   plan: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, minHeight: 62, borderRadius: 15, borderWidth: 1, borderColor: EDITORIAL.border },
   planSelected: { backgroundColor: EDITORIAL.greenAccentTint, borderColor: EDITORIAL.greenMid },

@@ -1,9 +1,10 @@
+import { useOnboardingStep } from '@/lib/onboardingResume';
 import React, { useEffect } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useNavigation } from 'expo-router';
 import { EDITORIAL, FONTS, TEXT } from '@/lib/brand';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { trackOnboardingScreenView } from '@/lib/analytics';
@@ -12,6 +13,8 @@ import { purchaseTerms } from '@/lib/purchaseTerms';
 
 
 export default function TrialScreen() {
+  useOnboardingStep('trial');
+  const navigation = useNavigation();
   const { fontScale } = useWindowDimensions();
   const { offering, introEligibility } = usePurchases();
   const annual = offering?.annual;
@@ -34,12 +37,10 @@ export default function TrialScreen() {
       <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
         {/* Top bar */}
         <View style={s.topBar}>
-          <Pressable onPress={() => { if (router.canGoBack()) router.back(); else router.navigate('/welcome/notification-permission'); }} style={s.close} accessibilityRole="button" accessibilityLabel="Go back" testID="trial-back">
+          {navigation.canGoBack() ? <Pressable onPress={() => router.back()} style={s.close} accessibilityRole="button" accessibilityLabel="Go back" testID="trial-back">
             <Ionicons name="chevron-back" size={22} color={EDITORIAL.textMid} />
-          </Pressable>
-          <View style={s.progressTrack}>
-            <View style={[s.progressFill, { width: `${Math.round((17 / 18) * 100)}%` }]} />
-          </View>
+          </Pressable> : <View style={s.close} />}
+          <Text style={s.next}>Fitsy Pro</Text>
         </View>
 
         {/* Hero */}
