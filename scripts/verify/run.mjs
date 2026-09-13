@@ -109,13 +109,16 @@ function runCheck(c) {
       } catch {
         parsed = { name: c.name, summary: (stderr || stdout).trim().split("\n").at(-1)?.slice(0, 200) ?? "" };
       }
+      const status = code === 0 ? "pass" : code === 2 ? "skipped" : "fail";
       resolve({
         ...parsed,
         name: c.name,
-        status: code === 0 ? "pass" : code === 2 ? "skipped" : "fail",
+        status,
         duration_ms: Date.now() - t0,
         blocking: c.blocking !== "shadow",
-        stderr: code === 1 ? stderr.slice(-4000) : undefined,
+        // Keep the original failing workspace, even when later suites print a long passing log.
+        // execFile's maxBuffer above bounds output; CI applies its normal log secret masking.
+        stderr: status === "fail" ? stderr : undefined,
       });
     });
   });
