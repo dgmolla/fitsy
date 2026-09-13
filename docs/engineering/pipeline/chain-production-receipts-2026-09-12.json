@@ -1,19 +1,19 @@
 {
   "generated": true,
-  "asOf": "2026-09-13T20:20:09.638369+00:00",
-  "scope": "41 completed source batches; earlier WaBa/Yoshinoya excluded",
+  "asOf": "2026-09-13T21:19:31.950567+00:00",
+  "scope": "42 completed source batches; earlier WaBa/Yoshinoya excluded",
   "reviewedCodeHead": "179be20e9a26eda262c428149630f72092730302",
   "mergeCommit": "848f117952b60b62bd1ee03291151e73a1184e55",
   "pr": "https://github.com/dgmolla/fitsy/pull/289",
   "totals": {
-    "facts": 1732,
-    "aliases": 2426,
-    "patchedRows": 38785,
-    "numericChanges": 15068,
-    "attributionOnly": 23717,
-    "preservedMenuIds": 124148,
-    "unchangedUnselectedRows": 85363,
-    "restaurants": 1247
+    "facts": 1767,
+    "aliases": 2488,
+    "patchedRows": 39847,
+    "numericChanges": 16001,
+    "attributionOnly": 23846,
+    "preservedMenuIds": 130327,
+    "unchangedUnselectedRows": 90480,
+    "restaurants": 1303
   },
   "batches": [
     {
@@ -1096,6 +1096,32 @@
         "noahs-2026-standard-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "noahs-2026-standard-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
       }
+    },
+    {
+      "batch": "jack-2026-standard",
+      "chains": "Jack in the Box",
+      "brandSlugs": [
+        "jack-in-the-box"
+      ],
+      "facts": 35,
+      "aliases": 62,
+      "patchedRows": 1062,
+      "numericChanges": 933,
+      "attributionOnly": 129,
+      "preservedMenuIds": 6179,
+      "unchangedUnselectedRows": 5117,
+      "restaurants": 56,
+      "httpVerifiedAt": "2026-09-13T21:19:31.950567+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "originalCatalogRowsPreserved": 24,
+      "receiptHashes": {
+        "jack-2026-standard-segments/001034.json.verified.json": "3266a5e70c6edc2ce6cee4f1b95a289468b028f697dd54de90d6f262d8bf77a0",
+        "jack-2026-standard-complete-http.json": "e81ebc6acc98baef9ad1dc9e9fa377151b6333b30ba30a58a8d3bea2001a63e7",
+        "jack-2026-standard-approved.json": "551cd670a6d83a4852811ef120273875cdcfa4a274d81bb8caf5f2b2af86be46",
+        "jack-2026-standard-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "jack-2026-standard-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
     }
   ],
   "receiptArchive": "Local task work/chain-national; full journals and baselines are intentionally excluded from this aggregate repository record",
@@ -1114,7 +1140,8 @@
     "appliesToBatches": [
       "peets",
       "jinya-revised",
-      "noahs-2026-standard"
+      "noahs-2026-standard",
+      "jack-2026-standard"
     ],
     "productionDeploymentNote": "Historical runtime release deployment, not a claim that this deployment ID remains the latest production deployment."
   }
