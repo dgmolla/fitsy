@@ -1,64 +1,16 @@
-import { test, before, after } from 'node:test';
+import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { createServer } from 'node:http';
-import { generateKeyPair, exportJWK, SignJWT } from 'jose';
+import { Prisma } from '@prisma/client';
 import { NextRequest } from 'next/server';
-import { restaurantsResponseSchema, menuResponseSchema } from '@fitsy/shared';
+import { restaurantsResponseSchema, menuResponseSchema, guidedPreviewResponseSchema } from '@fitsy/shared';
 import { GET } from '../../app/api/restaurants/route';
 import { GET as preview } from '../../app/api/restaurants/preview/route';
 import { GET as menu } from '../../app/api/restaurants/[id]/menu/route';
 import type { RestaurantResult } from '@fitsy/shared';
 import { prisma } from '../../lib/restaurantService';
 
-// Native ESM runner supports jose. Real handlers, JWT verification and Postgres.
-const keys = createServer();
-const userId = randomUUID();
-let token: string;
-const restaurantIds = [randomUUID(), randomUUID()];
-const targets = { calories: 600, proteinG: 40, carbsG: 60, fatG: 20 };
-before(async () => {
-  const { publicKey, privateKey } = await generateKeyPair('ES256');
-  const jwk = { ...await exportJWK(publicKey), kid: 'fixture', alg: 'ES256', use: 'sig' };
-  keys.on('request', (_req, res) => {
-    res.setHeader('content-type', 'application/json');
-    res.end(JSON.stringify({ keys: [jwk] }));
-  });
-  await new Promise<void>(resolve => keys.listen(0, 'localhost', resolve));
-  const address = keys.address();
-  assert.ok(address && typeof address !== 'string');
-  process.env['SUPABASE_URL'] = `http://localhost:${address.port}`;
-  delete process.env['ALLOW_STUB_SUBSCRIPTIONS'];
-  delete process.env['DEMO_REVIEW_EMAILS'];
-  const email = `${userId}@example.test`;
-  await prisma.user.create({ data: { id: userId, email,
-    subscription: { create: { plan: 'monthly', status: 'active' } } } });
-  for (const id of restaurantIds) {
-    await prisma.restaurant.create({ data: { id, storeUuid: id, name: 'Menu regression',
-      address: 'Local fixture', lat: 12, lng: 12, source: 'test', cuisineTags: [],
-      menuItems: { create: Array.from({ length: 251 }, (_, i) => ({
-        id: `${id}-${String(i + 1).padStart(3, '0')}`,
-        name: i === 250 ? 'Zucchini chicken' : `A dish ${i + 1}`,
-        ...(i === 250 ? targets : { calories: 900, proteinG: 10, carbsG: 100, fatG: 50 }),
-        macroEstimates: { create: { ...targets, source: 'haiku', confidence: 'MEDIUM' } },
-      })) } } });
-    await prisma.macroEstimate.create({ data: { menuItemId: `${id}-251`, ...targets,
-      source: 'merchant', confidence: 'HIGH', estimatedAt: new Date('2026-01-01') } });
-  }
-  token = await new SignJWT({ email }).setProtectedHeader({ alg: 'ES256', kid: 'fixture' })
-    .setSubject(userId).setIssuer(`${process.env['SUPABASE_URL']}/auth/v1`)
-    .setAudience('authenticated').setExpirationTime('5m').sign(privateKey);
-});
-after(async () => {
-  await prisma.restaurant.deleteMany({ where: { id: { in: restaurantIds } } });
-  await prisma.user.deleteMany({ where: { id: userId } });
-  await prisma.$disconnect();
-  await new Promise<void>((resolve, reject) => keys.close(err => err ? reject(err) : resolve()));
-});
-const request = (query: string, authenticated = true) => new NextRequest(
-  `http://localhost/api/restaurants?lat=34.05&lng=-118.25&${query}`,
-  authenticated ? { headers: { authorization: `Bearer ${token}` } } : {},
-);
+import { userId, token, restaurantIds, request } from './search-route.fixture';
 
 test('real authenticated search accepts equivalent aliases and keeps a valid wire contract', async () => {
   const short = await GET(request('calories=600&protein=40&carbs=60&fat=20'));
@@ -220,14 +172,86 @@ test('out-of-range cursor numbers are client errors, while genuine zero is accep
 
 test('search and detail expose the same LOW confidence when provenance is missing', async () => {
   const id = restaurantIds[0]!;
+  const estimates = await prisma.macroEstimate.findMany({ where: { menuItemId: `${id}-251` } });
   await prisma.macroEstimate.deleteMany({ where: { menuItemId: `${id}-251` } });
+  try {
   const response = await GET(new NextRequest(`http://localhost/api/restaurants?lat=12&lng=12&${targetQuery}`,
     { headers: { authorization: `Bearer ${token}` } }));
   const results = (await response.json()).data as RestaurantResult[];
   const best = results.find(r => r.id === id)!.bestMatch!;
   const detail = await body(await getMenu(id, targetQuery));
   assert.equal(best.confidence, 'LOW');
+  assert.equal('source' in best, false);
+  assert.equal('nutritionBasis' in best, false);
   assert.equal(detail.menuItems[0]!.id, best.menuItemId);
   assert.equal(detail.menuItems[0]!.macros!.confidence, 'LOW');
   assert.equal(detail.menuItems[0]!.macros!.calories, best.calories);
+  } finally { await prisma.macroEstimate.createMany({ data: estimates.map(row => ({ ...row, ingredientBreakdown: row.ingredientBreakdown === null ? Prisma.DbNull : row.ingredientBreakdown })) }); }
+});
+
+
+const guidedRequest = (query = '') => new NextRequest(
+  `http://localhost/api/restaurants/preview?lat=12&lng=12&guided=1&${targetQuery}&${query}`,
+);
+
+test('guided preview reveals three real ranked meal summaries with provenance and a full area count', async () => {
+  const response = await preview(guidedRequest('q=zucchini'));
+  assert.equal(response.status, 200);
+  const raw = await response.json();
+  assert.ok(!('nextCursor' in raw.meta));
+  for (const restaurant of raw.data) assert.equal('source' in restaurant.bestMatch, false);
+  const result = guidedPreviewResponseSchema.parse(raw);
+  assert.equal(result.data.length, 3);
+  assert.equal(result.meta.nearbyDishCount, 1004, 'four restaurants, 251 dishes each, regardless of the craving');
+  assert.equal(result.meta.radiusMiles, 3);
+  const estimated = guidedPreviewResponseSchema.parse(await (await preview(guidedRequest('q=dish'))).json());
+  assert.ok(estimated.data.length);
+  assert.ok(estimated.data.every(restaurant => restaurant.bestMatch!.nutritionBasis === 'estimated'));
+  for (const restaurant of result.data) {
+    assert.equal(restaurant.bestMatch!.name, 'Zucchini chicken');
+    assert.equal(restaurant.bestMatch!.calories, 600);
+    assert.equal(restaurant.bestMatch!.nutritionBasis, 'published');
+  }
+});
+
+test('guided sample cannot expand its page or geographic scope and validates its craving', async () => {
+  for (const query of ['cursor=x', 'limit=50', 'pageSize=50', 'selectedItemId=x', 'radiusMiles=50', 'q=' + 'x'.repeat(101)]) {
+    assert.equal((await preview(guidedRequest(query))).status, 400, query);
+  }
+});
+
+test('no craving matches preserve coverage count; genuinely uncovered areas return zero', async () => {
+  const noMatches = guidedPreviewResponseSchema.parse(await (await preview(guidedRequest('q=unfindablecravingxyz'))).json());
+  assert.equal(noMatches.data.length, 0);
+  assert.equal(noMatches.meta.nearbyDishCount, 1004);
+  const uncovered = guidedPreviewResponseSchema.parse(await (await preview(new NextRequest(
+    'http://localhost/api/restaurants/preview?lat=-40&lng=60&guided=1',
+  ))).json());
+  assert.deepEqual(uncovered, { data: [], meta: { nearbyDishCount: 0, radiusMiles: 3 } });
+});
+
+test('local count excludes dishes without complete nutrition', async () => {
+  const id = restaurantIds[1]!;
+  const incomplete = await prisma.menuItem.create({ data: {
+    restaurantId: id, name: 'Missing protein', calories: 500, carbsG: 40, fatG: 20,
+  } });
+  try {
+    const result = guidedPreviewResponseSchema.parse(await (await preview(guidedRequest())).json());
+    assert.equal(result.meta.nearbyDishCount, 1004);
+  } finally { await prisma.menuItem.delete({ where: { id: incomplete.id } }); }
+});
+
+
+test('guided preview applies a real burst limit with retry information, without changing legacy preview', async () => {
+  const request = () => new NextRequest('http://localhost/api/restaurants/preview?lat=-40&lng=60&guided=1', {
+    headers: { 'x-forwarded-for': '192.0.2.43' },
+  });
+  for (let i = 0; i < 30; i++) assert.equal((await preview(request())).status, 200);
+  const limited = await preview(request());
+  assert.equal(limited.status, 429);
+  assert.ok(Number(limited.headers.get('Retry-After')) > 0);
+  const legacy = await preview(new NextRequest('http://localhost/api/restaurants/preview?lat=-40&lng=60', {
+    headers: { 'x-forwarded-for': '192.0.2.43' },
+  }));
+  assert.equal(legacy.status, 200);
 });

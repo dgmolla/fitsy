@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { findNearbyRestaurants } from "@/lib/restaurantService";
+import { countNearbyDishes, findNearbyRestaurants } from "@/lib/restaurantService";
+import { createRateLimiter } from "@/lib/rateLimit";
 import { parseMacroTargetParams } from "@/lib/macroTargetParams";
-import type { RestaurantResult } from "@fitsy/shared";
+import type { GuidedPreviewResponse, RestaurantResult } from "@fitsy/shared";
+
+const guidedLimiter = createRateLimiter({ windowMs: 60_000, max: 30 });
 
 interface PreviewRestaurant {
   id: string;
@@ -18,22 +21,24 @@ interface PreviewResponse {
 /**
  * GET /api/restaurants/preview
  *
- * Public (no auth required) — returns a short list of restaurant names that
+ * Public (no auth required) - returns a short list of restaurant names that
  * match the caller's macro targets. Used in the onboarding teaser screen to
  * show prospective users real restaurants before they subscribe.
  *
  * Returns only name + cuisine info. bestMatch / meal details are intentionally
- * omitted so the screen acts as a teaser.
+ * omitted for legacy clients. guided=1 explicitly exposes three meal summaries
+ * for the onboarding tour, with an unfiltered local dish count.
+ * Full menus and continued discovery remain subscription features.
  */
 export async function GET(
   request: NextRequest,
-): Promise<NextResponse<PreviewResponse | { error: string }>> {
+): Promise<NextResponse<PreviewResponse | GuidedPreviewResponse | { error: string }>> {
   const { searchParams } = request.nextUrl;
 
   const latRaw = searchParams.get("lat");
   const lngRaw = searchParams.get("lng");
 
-  if (latRaw === null || lngRaw === null) {
+  if (latRaw === null || lngRaw === null || !latRaw.trim() || !lngRaw.trim()) {
     return NextResponse.json({ error: "lat and lng are required" }, { status: 400 });
   }
 
@@ -51,7 +56,30 @@ export async function GET(
     return NextResponse.json({ error: "Invalid macro target" }, { status: 400 });
   }
 
+  const guided = searchParams.get("guided") === "1";
+  const query = searchParams.get("q")?.trim();
+  if (guided && ((query?.length ?? 0) > 100 || ["cursor", "limit", "pageSize", "selectedItemId", "radiusMiles"].some(key => searchParams.has(key)))) {
+    return NextResponse.json({ error: "Guided preview supports a craving and a fixed three-pick sample" }, { status: 400 });
+  }
+
   try {
+    if (guided) {
+      // The launch preview deliberately makes these three meal summaries public,
+      // including names and macros, before account creation. Standard search
+      // still redacts bestMatch; this sample has no cursor or full-menu data.
+      // The per-instance IP brake limits bursts, not determined scraping across
+      // serverless instances. The app's one-craving tour is a UX limit only.
+      const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";
+      const quota = guidedLimiter.check(ip);
+      if (!quota.ok) return NextResponse.json({ error: "Too many preview searches. Please try again shortly." }, {
+        status: 429, headers: { "Retry-After": String(Math.ceil(quota.retryAfterMs / 1000)) },
+      });
+      const [{ data }, nearbyDishCount] = await Promise.all([
+        findNearbyRestaurants({ lat, lng, radiusMiles: 3, targets, query, limit: 3, includeNutritionBasis: true }),
+        countNearbyDishes(lat, lng, 3),
+      ]);
+      return NextResponse.json({ data, meta: { nearbyDishCount, radiusMiles: 3 } });
+    }
     // Prefer indie restaurants for the teaser — chains are less compelling as
     // a hook. Fall back to all restaurants only if the DB is too sparse locally.
     let { data } = await findNearbyRestaurants({
