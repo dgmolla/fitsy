@@ -1,0 +1,30 @@
+# Real dev API not-found response, with no subscription or HTTP fixture.
+appId: com.fitsy.mobile
+tags: [discovery, changed-journey]
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - assertVisible: "Find meals that fit"
+- openLink: com.fitsy.mobile://restaurant/00000000-0000-4000-8000-000000000000
+- extendedWaitUntil:
+    visible: "Could not load menu."
+    timeout: 30000
+- assertVisible:
+    id: menu-retry
+- assertVisible:
+    id: restaurant-back
+- tapOn:
+    id: menu-retry
+- extendedWaitUntil:
+    visible: "Could not load menu."
+    timeout: 30000
+- tapOn:
+    id: restaurant-back
+- assertVisible: "Find meals that fit"
+- assertNotVisible: "Could not load menu."

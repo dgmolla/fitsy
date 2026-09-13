@@ -234,6 +234,58 @@ describe('fetchMenu', () => {
     expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 
+  it('sends selection, targets and cursors on the native URLSearchParams without size', async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(URLSearchParams.prototype, 'size');
+    Object.defineProperty(URLSearchParams.prototype, 'size', { configurable: true, get: () => undefined });
+    try {
+      (AsyncStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify({ calories: '600' }));
+      global.fetch = jest.fn()
+        .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ data: { ...sampleMenuResponse, menuItems: [sampleMenuResponse.menuItems[0]], nextCursor: 'second' } }) })
+        .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ data: { ...sampleMenuResponse, menuItems: [sampleMenuResponse.menuItems[1]], nextCursor: null } }) });
+      const result = await fetchMenu('r1', { selectedItemId: 'mi1' });
+      const urls = (global.fetch as jest.Mock).mock.calls.map(call => new URL(call[0]));
+      expect(result?.menuItems.map(item => item.id)).toEqual(['mi1', 'mi2']);
+      expect(urls[1]!.searchParams.get('cursor')).toBe('second');
+      for (const url of urls) {
+        expect(url.searchParams.get('selectedItemId')).toBe('mi1');
+        expect(url.searchParams.get('calories')).toBe('600');
+      }
+    } finally {
+      if (descriptor) Object.defineProperty(URLSearchParams.prototype, 'size', descriptor);
+      else Reflect.deleteProperty(URLSearchParams.prototype, 'size');
+    }
+  });
+
+  it('preserves available dishes and a retry cursor when a later page fails', async () => {
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ data: { ...sampleMenuResponse, menuItems: [sampleMenuResponse.menuItems[0]], nextCursor: 'second' } }) })
+      .mockResolvedValueOnce({ ok: false, status: 503, json: async () => ({ error: 'Temporarily unavailable' }) });
+    const result = await fetchMenu('r1');
+    expect(result?.menuItems.map(item => item.id)).toEqual(['mi1']);
+    expect(result?.nextCursor).toBe('second');
+  });
+
+  it('stops a repeated cursor without duplicating dishes or claiming a complete menu', async () => {
+    global.fetch = makeMockFetch({ ok: true, body: { data: { ...sampleMenuResponse, nextCursor: 'repeated' } } });
+    const result = await fetchMenu('r1');
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(result?.menuItems).toHaveLength(2);
+    expect(result?.nextCursor).toBe('repeated');
+  });
+
+  it('discards unlocked pages when the next page locks or rejects access', async () => {
+    const first = { ...sampleMenuResponse, nextCursor: 'second' };
+    const locked = { ...sampleMenuResponse, locked: true, menuItems: [] };
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ data: first }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ data: locked }) });
+    expect(await fetchMenu('r1')).toEqual(locked);
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ data: first }) })
+      .mockResolvedValueOnce({ ok: false, status: 403, json: async () => ({ error: 'Access expired' }) });
+    expect(await fetchMenu('r1')).toBeNull();
+  });
+
   it('returns null on API error response', async () => {
     global.fetch = makeMockFetch({ ok: false, status: 404, body: { error: 'Not found' } });
 

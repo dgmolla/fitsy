@@ -1,5 +1,5 @@
 import { FeedbackBoardPost, FeedbackBoardResponse, FeedbackVoteResponse, MenuApiResponse, MenuResponse, RestaurantResult, RestaurantsApiResponse, SavedItemResponse, SavedItemsResponse } from '@fitsy/shared';
-import { api } from './api';
+import { api, ApiRequestError } from './api';
 import { getMacroTargets } from './macroStorage';
 
 export interface FetchRestaurantsParams {
@@ -105,18 +105,29 @@ export async function fetchMenu(restaurantId: string, options: { selectedItemId?
     if (targets) for (const [key, value] of Object.entries(targets)) if (value) params.set(key, value);
     if (options.selectedItemId) params.set('selectedItemId', options.selectedItemId);
     const page = async () => {
-      const response = await api.get<MenuApiResponse>(`/api/restaurants/${restaurantId}/menu${params.size ? `?${params}` : ''}`, true);
+      // React Native's URLSearchParams supports serialization but not .size.
+      const query = params.toString();
+      const response = await api.get<MenuApiResponse>(`/api/restaurants/${restaurantId}/menu${query ? `?${query}` : ''}`, true);
       if ('error' in response) throw new Error('Menu unavailable');
       return response.data;
     };
     const result = await page();
     const cursors = new Set<string>();
     while (!result.locked && result.nextCursor) {
-      if (cursors.has(result.nextCursor)) throw new Error('Repeated menu cursor');
+      if (cursors.has(result.nextCursor)) return result;
       cursors.add(result.nextCursor);
       params.set('cursor', result.nextCursor);
-      const next = await page();
+      let next: MenuResponse;
+      try { next = await page(); }
+      catch (error) {
+        // Keep available dishes on a transient failure, with nextCursor so
+        // the screen labels the partial menu and offers Retry. Access errors
+        // must discard unlocked pages instead of preserving stale access.
+        if (error instanceof ApiRequestError && error.status < 500) throw error;
+        return result;
+      }
       if (next.locked) return next;
+      if (next.nextCursor && cursors.has(next.nextCursor)) return result;
       result.menuItems.push(...next.menuItems);
       result.nextCursor = next.nextCursor;
     }

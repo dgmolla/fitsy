@@ -85,6 +85,7 @@ export default function RestaurantDetailScreen() {
   const [targets, setTargets] = useState<MacroValues | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
   const [savedMap, setSavedMap] = useState<Map<string, string>>(new Map());
   const [query, setQuery] = useState('');
   const [activeChips, setActiveChips] = useState<Set<ChipId>>(new Set());
@@ -124,11 +125,10 @@ export default function RestaurantDetailScreen() {
       const savedResult = session ? await getSavedItems() : null;
       if (cancelled) return;
       if (result === null) {
+        setMenu(null);
         setError('Could not load menu.');
-        // `fetchMenu` swallows errors and returns null on any failure (network
-        // error, non-2xx response). We can't distinguish failure modes from
-        // here, but the event itself is enough to monitor detail-screen
-        // reliability without server-side log diving.
+        // Initial-page or access failures cannot leave a usable menu.
+        // Later transient failures retain a cursor and render a retry banner.
         trackRestaurantDetailFailed({ restaurant_id: id });
       }
       else {
@@ -139,7 +139,7 @@ export default function RestaurantDetailScreen() {
       if (savedResult) {
         const m = new Map<string, string>();
         for (const saved of savedResult.data) { if (saved.menuItemId) m.set(saved.menuItemId, saved.id); }
-        if (params.saveSelected === '1' && params.selectedItemId && !result?.locked && !m.has(params.selectedItemId)) {
+        if (params.saveSelected === '1' && params.selectedItemId && result && !result.locked && result.menuItems.some(item => item.id === params.selectedItemId) && !m.has(params.selectedItemId)) {
           const saved = await saveItem(params.selectedItemId);
           if (saved) m.set(params.selectedItemId, saved.id);
           else Alert.alert('Could not save this meal', 'The selected meal is shown first. Tap its bookmark to try again.');
@@ -150,7 +150,7 @@ export default function RestaurantDetailScreen() {
     }
     void load();
     return () => { cancelled = true; };
-  }, [id, params.selectedItemId, params.saveSelected]);
+  }, [id, params.selectedItemId, params.saveSelected, reload]);
 
   const isLocked = menu?.locked === true;
   // `beforeRemove` closures capture whatever `isLocked` was when the
@@ -259,23 +259,35 @@ export default function RestaurantDetailScreen() {
     return <Redirect href={purchases.isLapsed ? '/welcome/resubscribe' : '/welcome/payment'} />;
   }
 
-  if (loading) {
+  const backControl = <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/search')} style={s.navBtn} hitSlop={8} accessibilityRole="button" accessibilityLabel="Go back" testID="restaurant-back">
+    <Ionicons name="chevron-back" size={18} color={EDITORIAL.text} />
+  </Pressable>;
+  const retryControl = <Pressable onPress={() => setReload(value => value + 1)} disabled={loading} style={s.retryButton} accessibilityRole="button" testID="menu-retry">
+    <Text style={s.retryText}>{loading ? 'Loading remaining dishes…' : 'Retry loading menu'}</Text>
+  </Pressable>;
+
+  if (loading && (!menu || menu.restaurantId !== id)) {
     return (
       <>
         <Stack.Screen options={{ headerShown: false }} />
-        <View style={[s.container, s.centered]}><FitsyLoader size="md" /></View>
+        <View style={[s.container, { paddingTop: insets.top }]}>
+          <View style={s.nav}>{backControl}</View>
+          <View style={[s.container, s.centered]}><FitsyLoader size="md" /></View>
+        </View>
       </>
     );
   }
-  if (error || !menu) {
+  if (!menu || menu.restaurantId !== id) {
     return (
       <>
         <Stack.Screen options={{ headerShown: false }} />
-        <View style={s.container}>
+        <View style={[s.container, { paddingTop: insets.top }]}>
+          <View style={s.nav}>{backControl}</View>
           <View style={[s.errorBanner, { backgroundColor: colors.errorBg }]}>
             <Ionicons name="alert-circle" size={16} color={colors.error} />
             <Text style={[s.errorText, { color: colors.error }]}>{error ?? 'Could not load menu.'}</Text>
           </View>
+          {retryControl}
         </View>
       </>
     );
@@ -287,9 +299,7 @@ export default function RestaurantDetailScreen() {
       <View style={[s.container, { paddingTop: insets.top }]}>
         {/* Compact top nav: back · name · heart (saves top match) */}
         <View style={s.nav}>
-          <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/search')} style={s.navBtn} hitSlop={8} accessibilityRole="button" accessibilityLabel="Go back" testID="restaurant-back">
-            <Ionicons name="chevron-back" size={18} color={EDITORIAL.text} />
-          </Pressable>
+          {backControl}
           <View style={s.navBtn}>
             {topPickId ? (
               <BookmarkButton
@@ -362,6 +372,11 @@ export default function RestaurantDetailScreen() {
                 </View>
               </View>
 
+              {!isLocked && !!menu.nextCursor && <View style={s.partialMenu} testID="menu-incomplete">
+                <Text style={s.partialText}>Showing {menu.menuItems.length} of {fullMenuCount} dishes. Some dishes couldn&apos;t load.</Text>
+                {retryControl}
+              </View>}
+
               {/* Search input pill */}
               <View style={s.search}>
                 <Text style={s.searchIco}>⌕</Text>
@@ -370,13 +385,14 @@ export default function RestaurantDetailScreen() {
                   onChangeText={onChangeQuery}
                   placeholder="Search the menu…"
                   accessibilityLabel="Search the menu"
+                  testID="menu-search"
                   placeholderTextColor={EDITORIAL.textSoft}
                   style={s.searchInput}
                   autoCorrect={false}
                   autoCapitalize="none"
                 />
                 {query.length > 0 ? (
-                  <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityLabel="Clear search">
+                  <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityLabel="Clear search" testID="menu-search-clear">
                     <Text style={s.searchClear}>×</Text>
                   </Pressable>
                 ) : null}
@@ -393,6 +409,7 @@ export default function RestaurantDetailScreen() {
                   return (
                     <Pressable
                       key={def.id}
+                      testID={`menu-filter-${def.id}`}
                       onPress={() => toggleChip(def.id)}
                       style={[s.chip, on && s.chipOn]}
                       accessibilityRole="button"
@@ -418,6 +435,7 @@ export default function RestaurantDetailScreen() {
                   style={s.sortBtn}
                   accessibilityRole="button"
                   accessibilityLabel="Change sort"
+                  testID="menu-sort"
                 >
                   <Text style={s.sortBtnTxt}>Sort ↓</Text>
                 </Pressable>
@@ -430,7 +448,7 @@ export default function RestaurantDetailScreen() {
                       The <Text style={s.pctTipStrong}>%</Text> is each dish's macro fit — how closely it
                       matches your per-meal targets. 100% is a perfect fit.
                     </Text>
-                    <Pressable onPress={dismissPctTip} hitSlop={8} accessibilityRole="button">
+                    <Pressable onPress={dismissPctTip} hitSlop={8} accessibilityRole="button" testID="menu-tip-dismiss">
                       <Text style={s.pctTipDismiss}>Got it</Text>
                     </Pressable>
                   </View>
@@ -441,6 +459,7 @@ export default function RestaurantDetailScreen() {
                   {SORT_DEFS.map((def) => (
                     <Pressable
                       key={def.id}
+                      testID={`menu-sort-${def.id}`}
                       onPress={() => onSelectSort(def.id)}
                       style={[s.sortOpt, sort === def.id && s.sortOptOn]}
                     >
@@ -482,6 +501,10 @@ const s = StyleSheet.create({
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
   errorBanner: { margin: 16, borderRadius: 10, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
   errorText: { fontFamily: FONTS.nunitoSans, fontSize: 14, flex: 1 },
+  partialMenu: { marginHorizontal: 18, marginBottom: 12, padding: 14, borderRadius: 14, backgroundColor: EDITORIAL.creamCard },
+  partialText: { fontFamily: FONTS.nunitoSans, fontSize: 13, lineHeight: 19, color: EDITORIAL.textMid },
+  retryButton: { minHeight: 44, paddingHorizontal: 18, justifyContent: 'center' },
+  retryText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 13, color: EDITORIAL.green },
 
   nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingVertical: 10 },
   navBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: EDITORIAL.creamCard, alignItems: 'center', justifyContent: 'center' },
