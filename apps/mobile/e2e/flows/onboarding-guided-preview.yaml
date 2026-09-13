@@ -47,16 +47,25 @@ tags: [billing, discovery, onboarding, changed-journey]
 - assertNotVisible: "What's your goal.*"
 - tapOn:
     id: meal-target-calories
+# Let the native keyboard and initial selection settle before automated typing.
+- waitForAnimationToEnd
 - inputText: "600"
+- assertVisible: "600"
 - tapOn:
     id: meal-target-protein
+- waitForAnimationToEnd
 - inputText: "40"
+- assertVisible: "40"
 - tapOn:
     id: meal-target-carbs
+- waitForAnimationToEnd
 - inputText: "60"
+- assertVisible: "60"
 - tapOn:
     id: meal-target-fat
+- waitForAnimationToEnd
 - inputText: "20"
+- assertVisible: "20"
 - tapOn:
     id: welcome-continue
 - extendedWaitUntil:
