@@ -68,6 +68,15 @@ test("classification corrections require explicit brand and store review and kee
   expect(() => planChainIdentity([{ ...grocery, detectionConf: "low" }], [store], low)).toThrow("Unqualified brand identity");
 });
 
+test("a restaurant-only classification correction preserves the already qualified brand", () => {
+  const b = batch(), store = { ...restaurant, name: brand.displayName, menuKind: "grocery/convenience" };
+  b.brands[0]!.addAliases = [];
+  b.links[0] = { brandId: brand.id, expected: store, classifyAsRestaurant: true };
+  const plan = planChainIdentity([brand], [store], b);
+  expect(plan.brands).toEqual([]);
+  expect(plan.links).toEqual([{ before: store, desired: { ...store, brandId: brand.id, chainFlag: true, menuKind: "restaurant" } }]);
+});
+
 test("malformed CLI database configuration does not echo its secret", () => {
   const marker = "synthetic-secret-must-not-appear", root = resolve(__dirname, "../../..");
   try {

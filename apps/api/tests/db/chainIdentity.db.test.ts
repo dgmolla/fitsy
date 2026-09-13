@@ -60,8 +60,8 @@ suite("reviewed chain identities through existing menu and new-hex serving", () 
       expected: oldBrand ? identity(oldBrand) : null, addAliases: existing ? [name] : [], evidence }], links: [{ brandId: id, expected: r }] };
     if (misclassified) {
       await expect(plan(batch)).rejects.toThrow("Unqualified brand identity");
-      Object.assign(batch.brands[0]!, { classifyAsRestaurant: true });
-      Object.assign(batch.links[0]!, { classifyAsRestaurant: true });
+      batch.brands[0]!.classifyAsRestaurant = true;
+      batch.links[0]!.classifyAsRestaurant = true;
     }
     const planned = await plan(batch), journal = await applyChainIdentity(p, planned);
     expect(journal.brands).toHaveLength(1); expect(journal.restaurants).toHaveLength(1);
@@ -114,7 +114,22 @@ suite("reviewed chain identities through existing menu and new-hex serving", () 
     await rollbackChainIdentity(p, JSON.parse(JSON.stringify(journal)));
     expect(await p.restaurant.findUniqueOrThrow({ where: { id: r.id }, select: restaurantIdentitySelect })).toEqual(r);
     expect(await p.menuItem.findUniqueOrThrow({ where: { id: original.id }, include: { macroEstimates: { orderBy: { id: "asc" } } } })).toEqual(before);
-    expect((await p.brand.findUnique({ where: { id } }))?.aliases ?? null).toEqual(oldBrand?.aliases ?? null);
+    expect(oldBrand ? identity(await p.brand.findUniqueOrThrow({ where: { id } })) : await p.brand.findUnique({ where: { id } })).toEqual(oldBrand ? identity(oldBrand) : null);
+  }), 125_000);
+  test("rolling back an unused alias preserves an existing reviewed catalog", async () => serialized(async () => {
+    const brand = await p.brand.create({ data: { slug: `${scope}-unused-alias`, displayName: `${scope} Standalone Catalog Cafe`, detectionConf: "high" } });
+    brands.push(brand.id);
+    const catalog = { version: 1 as const, reviewedBy: "Synthetic independent catalog", changes: [{ slug: brand.slug, canonicalKey: "bowl", expected: null,
+      facts: { ...facts, servingSize: "one synthetic bowl" }, source: { url: evidence.url, sha256: evidence.sha256 }, locator: evidence.locator,
+      aliases: [{ name: "Fixed Bowl" }] }], quarantine: [] };
+    await applyCatalogPlan(p, planChainPilot([brand], [], catalog), catalog);
+    const beforeCatalog = await p.chainItem.findMany({ where: { brandId: brand.id } });
+    const batch: ChainIdentityBatch = { version: 1, reviewedBy: "Synthetic unused alias", brands: [{ id: brand.id, slug: brand.slug,
+      displayName: brand.displayName, expected: identity(brand), addAliases: [`${scope} Unused Alias`], evidence }], links: [] };
+    const journal = await applyChainIdentity(p, await plan(batch));
+    await rollbackChainIdentity(p, journal);
+    expect(identity(await p.brand.findUniqueOrThrow({ where: { id: brand.id } }))).toEqual(identity(brand));
+    expect(await p.chainItem.findMany({ where: { brandId: brand.id } })).toEqual(beforeCatalog);
   }), 125_000);
   test("collision, unreviewed locations, and concurrent edits fail before any identity mutation", async () => serialized(async () => {
     const id = randomUUID(), slug = `${scope}-guarded`, displayName = `${scope} Guarded Cafe`; brands.push(id);
@@ -167,26 +182,5 @@ suite("reviewed chain identities through existing menu and new-hex serving", () 
       expect(await p.brand.findUnique({ where: { id } })).toBeNull();
       expect(await p.restaurant.findUniqueOrThrow({ where: { id: r.id }, select: restaurantIdentitySelect })).toEqual(r);
     } finally { rmSync(dir, { recursive: true, force: true }); }
-  }), 125_000);
-  test("legacy population refuses to overwrite a reviewed chain classification", async () => serialized(async () => {
-    const slug = `${scope}-reviewed-cafe`, displayName = `${scope} Reviewed Cafe`;
-    const brand = await p.brand.create({ data: { slug, displayName, detectionConf: "high", menuKind: "restaurant" } });
-    brands.push(brand.id);
-    const a = await createRestaurant(displayName, brand.id), b = await createRestaurant(displayName, brand.id);
-    const names = ["Chicken breast (1 oz)", "Chicken thigh (1 oz)", "Chicken leg (1 oz)", "Chicken wing (1 oz)", "Chicken tender (1 oz)"];
-    await p.menuItem.createMany({ data: [a, b].flatMap(r => names.map(name => ({ restaurantId: r.id, name, ...facts }))) });
-    const catalog = { version: 1 as const, reviewedBy: "Synthetic legacy-writer regression", changes: [{ slug, canonicalKey: "chicken",
-      expected: null, facts: { ...facts, servingSize: "synthetic test serving" }, source: { url: evidence.url, sha256: evidence.sha256 },
-      locator: evidence.locator, aliases: [{ name: names[0]! }] }], quarantine: [] };
-    await applyCatalogPlan(p, planChainPilot([brand], [], catalog), catalog);
-    const root = resolve(__dirname, "../../../..");
-    const cli = (...args: string[]) => execFileSync(process.execPath, ["--import", "tsx", "scripts/phase0-populate-brands.ts", ...args], {
-      cwd: root, env: { ...process.env, POSTGRES_URL_NON_POOLING: process.env["POSTGRES_PRISMA_URL"] }, stdio: "pipe" }).toString();
-    expect(cli()).toContain("DRY RUN");
-    expect(() => cli("--apply")).toThrow("Reviewed chain catalog exists");
-    expect(await p.brand.findUniqueOrThrow({ where: { id: brand.id } })).toEqual(brand);
-    expect(await p.restaurant.findUniqueOrThrow({ where: { id: a.id }, select: restaurantIdentitySelect })).toEqual(a);
-    expect(await p.restaurant.findUniqueOrThrow({ where: { id: b.id }, select: restaurantIdentitySelect })).toEqual(b);
-    expect(await p.menuItem.count({ where: { restaurantId: { in: [a.id, b.id] } } })).toBe(10);
   }), 125_000);
 });

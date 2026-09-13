@@ -66,7 +66,9 @@ After identity readback, follow [catalog onboarding](chain-catalog-batches.md).
 An identity with no approved nutrition aliases stays inactive in the official macro resolver.
 Replay a complete captured UE menu and an existing-menu update before activating the catalog.
 The UE importer uses the corrected identities through the existing shared matcher; it does not rerun the old menu-kind classifier.
-`phase0-populate-brands.ts --apply` refuses databases containing reviewed catalog rows because its heuristic updates can undo reviewed identities and classifications.
+`phase0-populate-brands.ts --apply` is an initial bootstrap and refuses databases containing any brand identities.
+This also protects identity corrections before their first nutrition catalog is loaded.
+The legacy command requires an explicit `POSTGRES_URL_NON_POOLING` target for dry-run and apply.
 Its read-only dry-run remains available for candidate discovery; apply reviewed changes through this workflow.
 
 ## Rollback
