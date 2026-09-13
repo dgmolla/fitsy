@@ -379,6 +379,7 @@ export async function computeAndStoreDietaryOptions(
 
 export interface BulkRestaurantPersist {
   restaurantId: string;
+  brandId?: string;
   items: ValidatedPair[];
   /** Menu hash for incremental update tracking (S-127). */
   menuHash: string;

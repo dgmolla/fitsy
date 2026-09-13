@@ -9,6 +9,7 @@ function fixture(id: string, usStates?: string[]): ChainCatalogRow {
 }
 test('scope is hash-bound; ordering is cosmetic but adding/removing states is not', () => {
   const row = fixture('west', ['CA', 'OR']), review = approvedChainRow(row)!.review;
+  expect(review.dataHash).toBe('c61aa67f81967d6d9929b968d84a4eda6918890d8c459a3ea8be824d5742c4ea');
   expect(approvedChainRow({ ...row, review: { ...review, usStates: ['OR', 'CA'] } })).not.toBeNull();
   for (const usStates of [undefined, [], ['CA'], ['CA', 'OR', 'OH']]) expect(approvedChainRow({ ...row, review: { ...review, usStates } })).toBeNull();
   const batch = { version: 1, reviewedBy: 'Fixture', changes: [{ slug: 'bakery', canonicalKey: 'west', expected: null,

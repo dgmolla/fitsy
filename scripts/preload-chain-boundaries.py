@@ -15,7 +15,8 @@ import zipfile
 SHA = '4295a503ff47e6787adfb520ad6706557e41c2ce57ced5a134087f8e35143a02'
 URL = 'https://www2.census.gov/geo/tiger/GENZ2025/kml/cb_2025_us_state_500k.zip'
 archive = Path(sys.argv[1])
-assert hashlib.sha256(archive.read_bytes()).hexdigest() == SHA, 'Unexpected Census archive'
+if hashlib.sha256(archive.read_bytes()).hexdigest() != SHA:
+    raise ValueError('Unexpected Census archive')
 with zipfile.ZipFile(archive) as source:
     root = ET.fromstring(source.read('cb_2025_us_state_500k.kml'))
 ns = {'k': 'http://www.opengis.net/kml/2.2'}
