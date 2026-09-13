@@ -100,9 +100,16 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
     id: preview-guide
 - stopApp
 - launchApp
-- extendedWaitUntil:
-    visible:
-      id: preview-guide
-    timeout: 30000
+# XCTest can invalidate the first accessibility tree during cold relaunch.
+# Retry the settled read only; never repeat setup, purchase or Back actions.
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - extendedWaitUntil:
+          visible:
+            id: preview-guide
+          timeout: 30000
 - assertVisible: "Per meal · Tap to edit, 600 kcal · 40g protein · 60g carbs · 20g fat"
 - assertVisible: "Your preview search is complete.*"
