@@ -146,7 +146,9 @@ export default function RestaurantDetailScreen() {
         if (saved) m.set(params.selectedItemId, saved.id);
         else Alert.alert('Could not save this meal', 'The selected meal is shown first. Tap its bookmark to try again.');
       }
-      setSavedMap(m);
+      // A failed read is not an empty saved list. Preserve known bookmarks
+      // through Retry, while merging any newly completed save intent.
+      setSavedMap(previous => savedResult ? m : new Map([...previous, ...m]));
       setLoading(false);
     }
     void load();
