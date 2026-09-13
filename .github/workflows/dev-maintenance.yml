@@ -31,7 +31,7 @@ jobs:
         env:
           POSTGRES_URL_NON_POOLING: ${{ secrets.DEV_DATABASE_URL }}
         run: |
-          sudo apt-get install -y -q postgresql-client >/dev/null 2>&1 || true
+          sudo apt-get install -y -q postgresql-client || true
           # Scheduled verification requires an actual pass, including when a tool is missing.
           bash scripts/verify/dev-drift.sh
       - name: File incident on failure
@@ -39,10 +39,21 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          incident_body=$(mktemp)
+          trap 'rm -f "$incident_body"' EXIT
+          cat > "$incident_body" <<'EOF'
+          Nightly dev reset or drift check failed (see the Dev maintenance workflow logs).
+          E2E against dev is unreliable until fixed.
+
+          Layer: L6
+
+          This is the initial runtime attribution; refine it after identifying the defect and its missing detector.
+          Closing PR must add fix + detector + constraint.
+          EOF
           gh issue list --label incident --state open --search "dev maintenance" --json number --jq length | grep -qv '^0$' || \
           gh issue create --label incident \
             --title "incident: dev maintenance failed $(date -u +%F)" \
-            --body "Nightly dev reset or drift check failed (see the Dev maintenance workflow logs). E2E against dev is unreliable until fixed. Layer: L6. Closing PR must add fix + detector + constraint."
+            --body-file "$incident_body"
 
   monthly-snapshot:
     if: github.event.schedule == '0 10 1 * *' || github.event_name == 'workflow_dispatch'

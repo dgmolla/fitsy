@@ -6,15 +6,18 @@ The same unmodified CLI reproduced that failure under GNU coreutils against DEV,
 PostgreSQL's migration ordering need not match the shell's ordering.
 The fix sorts both sets under the same C locale before comparison.
 A failed migration or seed-count read remains a distinct failure, and the success count reports migrations rather than string length.
-The scheduled workflow requires a completed pass; a missing tool or skipped check cannot certify dev health.
+Both the script and scheduled workflow require a completed pass in unattended contexts; a missing tool or connection setting fails inside the check itself.
+Local optional checks retain their skipped status.
 
 The registered scripts test suite discovers `verify/dev-drift.test.ts`.
 The original unordered-migration detector failed before the fix and passes afterward.
-All nine current regression cases pass, including failed migration reads, a dropped seed-query connection, missing migrations, scheduled pass/fail/skip handling and retention of early workspace errors for two failure exit codes.
+All 20 current regression cases pass, including failed migration reads, a dropped seed-query connection, malformed successful count output, missing migrations, required-context setup failures, scheduled pass/fail/skip handling, machine-readable incident attribution and complete failure-log retention for two exit codes.
+Eight new guard cases failed before the final hardening: six required-context setup cases and two invalid-count cases.
 The corrected real CLI against DEV passed with 34 migrations, 550 restaurants, 38,938 menu rows and three seed users.
 
 Constraint: local sorting removes dependence on database return order, the explicit C locale pins shell ordering, and guarded database reads cannot turn a connection failure into a skipped check.
 The scheduled workflow accepts only exit zero.
+The script's required-context guard eliminates skip-as-success even when another unattended caller accepts the conventional skipped exit code.
 The executable tests also exercise the actual shell and workflow step instead of duplicating a status rule.
 The reverse diff is the retained bad-state replay for the correctness lens.
 

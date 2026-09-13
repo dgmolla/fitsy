@@ -4,8 +4,8 @@
 # Contract (scripts/verify/README.md): exit 0 pass, 1 fail, 2 skipped;
 # one JSON line on stdout with name/status/summary/fix.
 #
-# Env: POSTGRES_URL_NON_POOLING (dev). Skips (exit 2) when unset so the check
-# is harmless in contexts without dev credentials.
+# Env: POSTGRES_URL_NON_POOLING (dev). Local checks can skip missing setup;
+# CI and scheduled checks require an actual pass.
 set -euo pipefail
 # Sort both inputs locally; pin C defensively so host locale changes cannot alter ordering.
 export LC_ALL=C
@@ -15,19 +15,25 @@ NAME="dev-drift"
 emit() { # status summary fix
   printf '{"name":"%s","status":"%s","summary":"%s","fix":"%s"}\n' "$NAME" "$1" "$2" "$3"
 }
+unavailable() { # summary fix
+  if [ "${CI:-}" = true ] || [ "${FITSY_RUNS:-}" = ci ] || [ "${FITSY_RUNS:-}" = scheduled ]; then
+    emit fail "$1" "$2"
+    exit 1
+  fi
+  emit skipped "$1" "$2"
+  exit 2
+}
 
 URL="${POSTGRES_URL_NON_POOLING:-}"
 if [ -z "$URL" ]; then
-  emit skipped "POSTGRES_URL_NON_POOLING not set" "vercel env pull --environment=preview .env.dev"
-  exit 2
+  unavailable "POSTGRES_URL_NON_POOLING not set" "vercel env pull --environment=preview .env.dev"
 fi
 if [[ "$URL" == *zaxkmjqozvmbifiwbxps* ]]; then
   emit fail "POSTGRES_URL_NON_POOLING points at production" "point it at the fitsy-dev project (vercel env pull --environment=preview)"
   exit 1
 fi
 if ! command -v psql >/dev/null; then
-  emit skipped "psql not installed" "brew install libpq && brew link --force libpq"
-  exit 2
+  unavailable "psql not installed" "brew install libpq && brew link --force libpq"
 fi
 
 Q() { psql "$URL" -Atqc "$1"; }
@@ -53,6 +59,11 @@ if ! r="$(Q 'select count(*) from "Restaurant"')" \
   emit fail "could not read dev seed counts" "check the dev database connection and seed tables"
   exit 1
 fi
+for count in "$r" "$m" "$e" "$u"; do
+  case "$count" in
+    ''|*[!0-9]*) emit fail "invalid dev seed count" "check the dev database connection and client output"; exit 1 ;;
+  esac
+done
 if [ "$r" -lt 50 ] || [ "$m" -lt 400 ] || [ "$e" -lt 400 ]; then
   emit fail "dev data below seed floor (restaurants=$r items=$m estimates=$e)" "npx prisma db seed  (then scripts/dev/snapshot.ts for real-shaped data)"
   exit 1
