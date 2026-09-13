@@ -4,7 +4,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { Redirect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getOnboardingResume } from '@/lib/onboardingResume';
-import { readPaywallDecline } from '@/lib/paywallAccess';
+import { paywallVariants, readPaywallDecline } from '@/lib/paywallAccess';
 import { ONBOARDING_COMPLETE_KEY } from '@/lib/onboardingCompletion';
 import { getStoredToken } from '@/lib/authClient';
 import { getMacroTargets } from '@/lib/macroStorage';
@@ -15,7 +15,7 @@ type Destination = Awaited<ReturnType<typeof getOnboardingResume>> | '/welcome/p
 
 export default function Index() {
   const [destination, setDestination] = useState<Destination | null>(null);
-  const { ready: purchasesReady, entitled, isLapsed } = usePurchases();
+  const { ready: purchasesReady, entitled, isLapsed, offering } = usePurchases();
 
   useEffect(() => {
     async function resolve() {
@@ -27,7 +27,13 @@ export default function Index() {
           setDestination(token && resume === '/welcome/signin' ? '/welcome/trial' : resume);
           return;
         }
-        if (declined && !token) { setDestination('/welcome/payment'); return; }
+        if (declined && !token) {
+          // Boot resolves the current offering before settling its verdict.
+          // Do not route a preview cohort using the temporary hard default.
+          if (!purchasesReady) return;
+          setDestination(paywallVariants(offering?.metadata).access === 'preview' ? '/welcome/preview' : '/welcome/payment');
+          return;
+        }
         if (!token) {
           setDestination('/welcome/problem');
           return;
@@ -52,7 +58,7 @@ export default function Index() {
       }
     }
     resolve();
-  }, [purchasesReady, entitled, isLapsed]);
+  }, [purchasesReady, entitled, isLapsed, offering]);
 
   if (!destination) {
     return (

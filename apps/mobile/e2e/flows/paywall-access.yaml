@@ -44,9 +44,10 @@ tags: [billing, discovery, onboarding, changed-journey]
     id: locked-value-cta
 - assertVisible: "Create an account"
 - openLink: com.fitsy.mobile://welcome/leave-review
-- assertVisible: "Allow notifications"
+- assertVisible:
+    id: trial-see-plans
 - assertNotVisible: "Leave a review"
-- tapOn: "Maybe later"
+- assertNotVisible: "Allow notifications"
 - openLink: com.fitsy.mobile://welcome/payment
 - extendedWaitUntil:
     visible:
@@ -60,6 +61,8 @@ tags: [billing, discovery, onboarding, changed-journey]
     id: paywall-decline
 - assertVisible:
     id: paywall-plan-yearly
+- assertNotVisible:
+    id: welcome-back
 - openLink: com.fitsy.mobile://search?preview=1
 - assertVisible:
     id: paywall-plan-yearly

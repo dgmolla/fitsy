@@ -44,14 +44,17 @@ export default function SignInScreen() {
   // Continue from the preview to live plan terms. Permissions follow purchase.
   // Skip onboarding review; existing in-app prompts use lib/ratingPrompt.ts.
   const { outOfArea, returnTo } = useLocalSearchParams<{ outOfArea?: string; returnTo?: string }>();
-  const newUserDestination = outOfArea === '1' ? '/welcome/out-of-area' : '/welcome/trial';
 
   async function navigateAfterAuth(isNewUser: boolean) {
+    if (outOfArea === '1') {
+      router.dismissTo('/welcome/out-of-area');
+      return;
+    }
     if (returnTo === 'payment' || returnTo === 'resubscribe') {
       router.dismissTo(`/welcome/${returnTo}`);
       return;
     }
-    router.replace(isNewUser || await getPaywallIntent() ? newUserDestination : '/(tabs)/search');
+    router.replace(isNewUser || await getPaywallIntent() ? '/welcome/trial' : '/(tabs)/search');
   }
 
   const [, response, promptGoogleAsync] = Google.useIdTokenAuthRequest({
@@ -72,7 +75,7 @@ export default function SignInScreen() {
           .then(async (r) => {
             trackAuthSuccess({ provider: 'google', is_new_user: r.isNewUser });
             await captureIdentity(r.user.id, r.user.email);
-            if (!r.isNewUser && !(await getPaywallIntent())) await pullProfileFromServer();
+            if (!r.isNewUser && outOfArea !== '1' && !(await getPaywallIntent())) await pullProfileFromServer();
             setGoogleLoading(false);
             // Preserve the selected meal through sign-in; returning subscribers
             // without a preview intent continue to their existing account.
@@ -96,7 +99,7 @@ export default function SignInScreen() {
       const r = await appleSignIn();
       trackAuthSuccess({ provider: 'apple', is_new_user: r.isNewUser });
       await captureIdentity(r.user.id, r.user.email);
-      if (!r.isNewUser && !(await getPaywallIntent())) await pullProfileFromServer();
+      if (!r.isNewUser && outOfArea !== '1' && !(await getPaywallIntent())) await pullProfileFromServer();
       await navigateAfterAuth(r.isNewUser);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Apple Sign In failed';

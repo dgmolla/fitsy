@@ -35,14 +35,15 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
 - tapOn:
     id: meal-target-fat
 - inputText: "20"
-- hideKeyboard
+# The fixed footer stays usable above the iOS number pad.
+# Follow that actual user action; number pads have no generic dismiss key.
 - tapOn:
     id: welcome-continue
 - extendedWaitUntil:
     visible:
       id: preview-pick-1
     timeout: 30000
-- assertVisible: "600 kcal.*40g protein.*"
+- assertVisible: "Per meal · Tap to edit, 600 kcal · 40g protein · 60g carbs · 20g fat"
 - assertNotVisible: "Create an account"
 - tapOn:
     id: preview-guide-next
@@ -103,5 +104,5 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
     visible:
       id: preview-guide
     timeout: 30000
-- assertVisible: "600 kcal.*40g protein.*"
+- assertVisible: "Per meal · Tap to edit, 600 kcal · 40g protein · 60g carbs · 20g fat"
 - assertVisible: "Your preview search is complete.*"

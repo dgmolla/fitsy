@@ -144,10 +144,7 @@ function MacroStrip({ macros, onEdit, editRef }: { macros: MacroValues; onEdit: 
   const p = macros.protein || '—';
   const c = macros.carbs || '—';
   const f = macros.fat || '—';
-  const protein = parseFloat(macros.protein) || 0;
-  const carbs = parseFloat(macros.carbs) || 0;
-  const fat = parseFloat(macros.fat) || 0;
-  const cal = protein + carbs + fat > 0 ? String(Math.round(protein * 4 + carbs * 4 + fat * 9)) : '—';
+  const cal = macros.calories || '-';
 
   return (
     <View style={s.macroStrip}>

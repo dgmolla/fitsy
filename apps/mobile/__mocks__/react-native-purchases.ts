@@ -30,6 +30,7 @@ const Purchases = {
   configure: () => undefined,
   logIn: async () => ({ customerInfo: emptyCustomerInfo, created: false }),
   logOut: async () => emptyCustomerInfo,
+  isAnonymous: async () => true,
   getCustomerInfo: async () => emptyCustomerInfo,
   getOfferings: async () => ({ current: null, all: {} }),
   checkTrialOrIntroductoryPriceEligibility: async (_ids: string[]): Promise<Record<string, { status: number; description: string }>> => ({}),

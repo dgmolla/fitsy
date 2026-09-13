@@ -19,6 +19,7 @@ it.each([false, true])('orders logout and the next login after the first login s
   const pending = new Promise<void>(resolve => { finishLogin = resolve; });
   let nativeUser: string | null = null;
   const events: string[] = [];
+  jest.spyOn(Purchases, 'isAnonymous').mockImplementation(async () => nativeUser === null);
   jest.spyOn(Purchases, 'logIn').mockImplementation(async user => {
     events.push(`start:${user}`);
     if (user === 'first') await pending;
@@ -42,7 +43,6 @@ it.each([false, true])('orders logout and the next login after the first login s
   finishLogin();
   await Promise.all([first, logout, next]);
   expect(whilePending).toEqual(['start:first']);
-  expect(events).toEqual(['start:first', 'end:first', 'logout', 'start:next', 'end:next']);
+  expect(events).toEqual(['start:first', 'end:first', ...(!failFirst ? ['logout'] : []), 'start:next', 'end:next']);
   expect(nativeUser).toBe('next');
 });
-

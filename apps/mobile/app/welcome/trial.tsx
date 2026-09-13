@@ -10,13 +10,25 @@ import { AnimatedPress } from '@/components/AnimatedPress';
 import { trackOnboardingScreenView } from '@/lib/analytics';
 import { usePurchases } from '@/lib/usePurchases';
 import { purchaseTerms } from '@/lib/purchaseTerms';
+import { useIsFocused } from '@react-navigation/native';
+import { useRedirectOnceEntitled } from '@/lib/useRedirectOnceEntitled';
+import { recordOnboardingComplete } from '@/lib/onboardingCompletion';
+import { openPurchasedDestination } from '@/lib/paywallJourney';
 
 
 export default function TrialScreen() {
   useOnboardingStep('trial');
   const navigation = useNavigation();
+  const focused = useIsFocused();
   const { fontScale } = useWindowDimensions();
-  const { offering, introEligibility } = usePurchases();
+  const { offering, introEligibility, entitled } = usePurchases();
+  useRedirectOnceEntitled({
+    entitled,
+    busy: !focused,
+    onEntitled: () => {
+      void recordOnboardingComplete(false).then(() => openPurchasedDestination(navigation));
+    },
+  });
   const annual = offering?.annual;
   const terms = purchaseTerms(annual?.product, annual ? introEligibility[annual.product.identifier] : false);
   const steps = terms?.trial ? [

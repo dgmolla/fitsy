@@ -31,7 +31,7 @@ export default function SexScreen() {
 
   return (
     <WelcomeScreen
-      progress={13.5 / 18}
+      progress={5 / 7}
       title="What's your biological sex?"
       subtitle="Used to calculate your metabolic rate more accurately."
       onContinue={async () => {

@@ -23,20 +23,27 @@ export async function getPaywallIntent(): Promise<PaywallIntent | null> {
 }
 export async function clearPaywallIntent(): Promise<void> { await AsyncStorage.removeItem(KEY); }
 
-type Navigation = Pick<NavigationProp<ParamListBase>, 'reset' | 'getParent'>;
-function rootOf(navigation: Navigation): Navigation {
-  let root = navigation;
-  while (root.getParent()) root = root.getParent()!;
-  return root;
+type Navigation = Pick<NavigationProp<ParamListBase>, 'reset' | 'getParent'> & {
+  getState: () => ReturnType<NavigationProp<ParamListBase>['getState']> | undefined;
+};
+function appStackOf(navigation: Navigation): Navigation {
+  // Expo has an outer navigator whose only app route is __root.
+  // Reset the stack that actually owns Fitsy's routes, not that wrapper.
+  let current: Navigation | undefined = navigation;
+  while (current) {
+    const names = current.getState()?.routeNames;
+    if (names?.includes('welcome') && names.includes('(tabs)')) return current;
+    current = current.getParent();
+  }
+  throw new Error('Fitsy application navigator is unavailable');
 }
 
 /** These are completion actions, never Back actions. Reset the entire stack. */
 export function resetWelcomeJourney(navigation: Navigation, screen: 'payment' | 'notification-permission'): void {
-  rootOf(navigation).reset({ index: 0, routes: [{ name: 'welcome', state: { index: 0, routes: [{ name: screen }] } }] });
+  appStackOf(navigation).reset({ index: 0, routes: [{ name: 'welcome', state: { index: 0, routes: [{ name: screen }] } }] });
 }
 export async function openPurchasedDestination(navigation: Navigation): Promise<void> {
   const intent = await getPaywallIntent();
-  await clearPaywallIntent();
   const routes = [{ name: '(tabs)', state: { index: 0, routes: [{ name: 'search' }] } },
     ...(intent?.restaurantId ? [{ name: 'restaurant/[id]', params: {
       id: intent.restaurantId,
@@ -44,5 +51,6 @@ export async function openPurchasedDestination(navigation: Navigation): Promise<
       ...(intent.action === 'save' ? { saveSelected: '1' } : {}),
     } }] : []),
   ];
-  rootOf(navigation).reset({ index: routes.length - 1, routes });
+  appStackOf(navigation).reset({ index: routes.length - 1, routes });
+  await clearPaywallIntent();
 }
