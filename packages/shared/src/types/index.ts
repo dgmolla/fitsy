@@ -134,6 +134,7 @@ export interface BestMatchSummary {
    * Infinity here, which JSON.stringify silently turned into null on the wire;
    * the type now tells the truth. Found by the response contract, 2026-09-07.)
    */
+  source?: string;
   matchScore: number | null;
 }
 

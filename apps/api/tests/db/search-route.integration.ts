@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { generateKeyPair, exportJWK, SignJWT } from 'jose';
 import { NextRequest } from 'next/server';
-import { restaurantsResponseSchema, menuResponseSchema } from '@fitsy/shared';
+import { restaurantsResponseSchema, menuResponseSchema, guidedPreviewResponseSchema } from '@fitsy/shared';
 import { GET } from '../../app/api/restaurants/route';
 import { GET as preview } from '../../app/api/restaurants/preview/route';
 import { GET as menu } from '../../app/api/restaurants/[id]/menu/route';
@@ -15,7 +15,7 @@ import { prisma } from '../../lib/restaurantService';
 const keys = createServer();
 const userId = randomUUID();
 let token: string;
-const restaurantIds = [randomUUID(), randomUUID()];
+const restaurantIds = Array.from({ length: 4 }, () => randomUUID());
 const targets = { calories: 600, proteinG: 40, carbsG: 60, fatG: 20 };
 before(async () => {
   const { publicKey, privateKey } = await generateKeyPair('ES256');
@@ -230,4 +230,51 @@ test('search and detail expose the same LOW confidence when provenance is missin
   assert.equal(detail.menuItems[0]!.id, best.menuItemId);
   assert.equal(detail.menuItems[0]!.macros!.confidence, 'LOW');
   assert.equal(detail.menuItems[0]!.macros!.calories, best.calories);
+});
+
+
+const guidedRequest = (query = '') => new NextRequest(
+  `http://localhost/api/restaurants/preview?lat=12&lng=12&guided=1&${targetQuery}&${query}`,
+);
+
+test('guided preview reveals three real ranked meal summaries with provenance and a full area count', async () => {
+  const response = await preview(guidedRequest('q=zucchini'));
+  assert.equal(response.status, 200);
+  const result = guidedPreviewResponseSchema.parse(await response.json());
+  assert.equal(result.data.length, 3);
+  assert.equal(result.meta.nearbyDishCount, 1004, 'four restaurants, 251 dishes each, regardless of the craving');
+  assert.equal(result.meta.radiusMiles, 3);
+  for (const restaurant of result.data) {
+    assert.equal(restaurant.bestMatch!.name, 'Zucchini chicken');
+    assert.equal(restaurant.bestMatch!.calories, 600);
+    if (restaurant.id !== restaurantIds[0]) assert.equal(restaurant.bestMatch!.source, 'merchant');
+  }
+  assert.ok(!('nextCursor' in result.meta));
+});
+
+test('guided sample cannot expand its page or geographic scope and validates its craving', async () => {
+  for (const query of ['cursor=x', 'limit=50', 'pageSize=50', 'selectedItemId=x', 'radiusMiles=50', 'q=' + 'x'.repeat(101)]) {
+    assert.equal((await preview(guidedRequest(query))).status, 400, query);
+  }
+});
+
+test('no craving matches preserve coverage count; genuinely uncovered areas return zero', async () => {
+  const noMatches = guidedPreviewResponseSchema.parse(await (await preview(guidedRequest('q=unfindablecravingxyz'))).json());
+  assert.equal(noMatches.data.length, 0);
+  assert.equal(noMatches.meta.nearbyDishCount, 1004);
+  const uncovered = guidedPreviewResponseSchema.parse(await (await preview(new NextRequest(
+    'http://localhost/api/restaurants/preview?lat=-40&lng=60&guided=1',
+  ))).json());
+  assert.deepEqual(uncovered, { data: [], meta: { nearbyDishCount: 0, radiusMiles: 3 } });
+});
+
+test('local count excludes dishes without complete nutrition and does not multiply estimate sources', async () => {
+  const id = restaurantIds[1]!;
+  const incomplete = await prisma.menuItem.create({ data: {
+    restaurantId: id, name: 'Missing protein', calories: 500, carbsG: 40, fatG: 20,
+  } });
+  try {
+    const result = guidedPreviewResponseSchema.parse(await (await preview(guidedRequest())).json());
+    assert.equal(result.meta.nearbyDishCount, 1004);
+  } finally { await prisma.menuItem.delete({ where: { id: incomplete.id } }); }
 });

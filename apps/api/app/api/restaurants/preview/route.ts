@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { findNearbyRestaurants } from "@/lib/restaurantService";
+import { countNearbyDishes, findNearbyRestaurants } from "@/lib/restaurantService";
 import { parseMacroTargetParams } from "@/lib/macroTargetParams";
-import type { RestaurantResult } from "@fitsy/shared";
+import type { GuidedPreviewResponse, RestaurantResult } from "@fitsy/shared";
 
 interface PreviewRestaurant {
   id: string;
@@ -18,16 +18,18 @@ interface PreviewResponse {
 /**
  * GET /api/restaurants/preview
  *
- * Public (no auth required) — returns a short list of restaurant names that
+ * Public (no auth required) - returns a short list of restaurant names that
  * match the caller's macro targets. Used in the onboarding teaser screen to
  * show prospective users real restaurants before they subscribe.
  *
  * Returns only name + cuisine info. bestMatch / meal details are intentionally
- * omitted so the screen acts as a teaser.
+ * omitted for legacy clients. guided=1 explicitly exposes three meal summaries
+ * for the onboarding tour, with an unfiltered local dish count.
+ * Full menus and continued discovery remain subscription features.
  */
 export async function GET(
   request: NextRequest,
-): Promise<NextResponse<PreviewResponse | { error: string }>> {
+): Promise<NextResponse<PreviewResponse | GuidedPreviewResponse | { error: string }>> {
   const { searchParams } = request.nextUrl;
 
   const latRaw = searchParams.get("lat");
@@ -51,7 +53,20 @@ export async function GET(
     return NextResponse.json({ error: "Invalid macro target" }, { status: 400 });
   }
 
+  const guided = searchParams.get("guided") === "1";
+  const query = searchParams.get("q")?.trim();
+  if (guided && ((query?.length ?? 0) > 100 || ["cursor", "limit", "pageSize", "selectedItemId", "radiusMiles"].some(key => searchParams.has(key)))) {
+    return NextResponse.json({ error: "Guided preview supports a craving and a fixed three-pick sample" }, { status: 400 });
+  }
+
   try {
+    if (guided) {
+      const [{ data }, nearbyDishCount] = await Promise.all([
+        findNearbyRestaurants({ lat, lng, radiusMiles: 3, targets, query, limit: 3 }),
+        countNearbyDishes(lat, lng, 3),
+      ]);
+      return NextResponse.json({ data, meta: { nearbyDishCount, radiusMiles: 3 } });
+    }
     // Prefer indie restaurants for the teaser — chains are less compelling as
     // a hook. Fall back to all restaurants only if the DB is too sparse locally.
     let { data } = await findNearbyRestaurants({

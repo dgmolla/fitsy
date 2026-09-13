@@ -191,6 +191,7 @@ interface ScoredRow {
   carbsG: number;
   fatG: number;
   confidence: "HIGH" | "MEDIUM" | "LOW" | null;
+  source: string | null;
   scoreSum: number;
   distanceMiles: number;
   /** Active sort key — composite (scoreSum + w·distance) or distance-only. */
@@ -302,12 +303,7 @@ export async function findNearbyRestaurants(
       : Prisma.empty;
   // Shared distance expression — reused in SELECT, ORDER BY, and the cursor
   // WHERE filter so all three agree exactly.
-  const distanceExpr = Prisma.sql`(
-    sqrt(
-      power(r.lat - ${lat}::double precision, 2)
-      + power((r.lng - ${lng}::double precision) * cos(${lat}::double precision * pi() / 180), 2)
-    ) * 69
-  )`;
+  const distanceExpr = nearbyDistanceSql(lat, lng);
 
   // Composite ranking expression. When the user has targets, ordering is
   // `scoreSum + DISTANCE_WEIGHT * distance` so good macro matches a bit
@@ -390,10 +386,10 @@ export async function findNearbyRestaurants(
     ORDER BY "orderKey" ASC, r.id ASC
     LIMIT ${limit}
     )
-    SELECT ranked.*, ranked."orderKey"::text AS "orderKeyText", e.confidence
+    SELECT ranked.*, ranked."orderKey"::text AS "orderKeyText", e.confidence, e.source
     FROM ranked
     LEFT JOIN LATERAL (
-      SELECT e.confidence FROM "MacroEstimate" e
+      SELECT e.confidence, e.source FROM "MacroEstimate" e
       WHERE e."menuItemId" = ranked."menuItemId"
       ORDER BY ${Prisma.raw(macroWinnerSqlOrder("e"))}
       LIMIT 1
@@ -439,6 +435,7 @@ export async function findNearbyRestaurants(
       carbsG: r.carbsG,
       fatG: r.fatG,
       confidence: r.confidence ?? "LOW",
+      ...(r.source ? { source: r.source } : {}),
       matchScore: targetsActive
         ? Math.round(Math.sqrt(r.scoreSum) * 10000) / 10000
         : null,
@@ -467,4 +464,24 @@ export async function getRestaurantMenu(
   options: MenuPageOptions = {},
 ): Promise<MenuResponse | null> {
   return getMenuPage(prisma, restaurantId, options);
+}
+
+/** Same geographic boundary as search; count dishes with usable nutrition once. */
+export async function countNearbyDishes(lat: number, lng: number, radiusMiles: number): Promise<number> {
+  const { latMin, latMax, lngMin, lngMax } = computeBoundingBox(lat, lng, radiusMiles);
+  const rows = await prisma.$queryRaw<{ count: number }[]>`
+    SELECT count(*)::integer AS count FROM "MenuItem" m
+    JOIN "Restaurant" r ON r.id = m."restaurantId"
+    WHERE r.lat BETWEEN ${latMin} AND ${latMax}
+      AND r.lng BETWEEN ${lngMin} AND ${lngMax}
+      AND ${nearbyDistanceSql(lat, lng)} <= ${radiusMiles}::double precision
+      AND m.calories IS NOT NULL AND m."proteinG" IS NOT NULL
+      AND m."carbsG" IS NOT NULL AND m."fatG" IS NOT NULL
+  `;
+  return rows[0]!.count;
+}
+
+function nearbyDistanceSql(lat: number, lng: number): Prisma.Sql {
+  return Prisma.sql`(sqrt(power(r.lat - ${lat}::double precision, 2)
+    + power((r.lng - ${lng}::double precision) * cos(${lat}::double precision * pi() / 180), 2)) * 69)`;
 }
