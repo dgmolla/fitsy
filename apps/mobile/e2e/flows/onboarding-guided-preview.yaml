@@ -60,8 +60,20 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
       id: preview-menu-1
     direction: DOWN
 - tapOn:
-    id: preview-menu-1
+    id: preview-save-1
 - assertVisible: "Create an account"
+- tapOn:
+    id: welcome-back
+- assertVisible:
+    id: preview-guide
+# An abandoned save choice must not decorate a later unrelated paywall.
+- openLink: com.fitsy.mobile://welcome/payment
+- extendedWaitUntil:
+    visible:
+      id: paywall-price-yearly
+    timeout: 15000
+- assertVisible: "Search your craving. See full menus. Save meals that fit."
+- assertNotVisible: "Save .*Plus craving search.*"
 - tapOn:
     id: welcome-back
 - assertVisible:

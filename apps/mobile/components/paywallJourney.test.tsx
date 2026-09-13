@@ -9,6 +9,15 @@ import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { getPaywallIntent, openPurchasedDestination, rememberPaywallIntent, resetWelcomeJourney } from '../lib/paywallJourney';
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
+jest.mock('@supabase/supabase-js', () => {
+  process.env.EXPO_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'unit-test-anon-key';
+  return { createClient: () => ({ auth: {
+  getSession: async () => ({ data: { session: null } }),
+  startAutoRefresh: () => undefined,
+  stopAutoRefresh: () => undefined,
+  } }) };
+});
 
 type NavigatorProps = { children: React.ReactNode; initialRouteName?: string };
 function StackNavigator(props: NavigatorProps) {

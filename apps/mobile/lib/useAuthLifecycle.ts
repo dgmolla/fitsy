@@ -14,6 +14,7 @@ import type { CustomerInfo } from 'react-native-purchases';
 import { supabase } from './supabase';
 import type { EntitlementVerdict } from './useEntitlementVerdict';
 import { fetchCustomerInfo, identifyPurchasesUser, logoutPurchasesUser } from './purchases';
+import { clearPaywallIntent } from './paywallJourney';
 
 export interface AuthLifecycle {
   /** Boot has started: SIGNED_IN events are noted, not acted on, until finishBoot. */
@@ -65,6 +66,7 @@ export function useAuthLifecycle({
         if (session.user.id === bootUserIdRef.current && entitledRef.current !== null) return;
         signIn(session.user.id);
       } else if (event === 'SIGNED_OUT') {
+        void clearPaywallIntent().catch(() => undefined);
         bootUserIdRef.current = null;
         beginSignOut();
         void (async () => {

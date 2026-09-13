@@ -1,5 +1,5 @@
 import { useOnboardingStep } from '@/lib/onboardingResume';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -11,7 +11,7 @@ import { appleSignIn, completeGoogleSignIn, devLogin } from '@/lib/authClient';
 import { pullProfileFromServer } from '@/lib/profileSync';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
-import { getPaywallIntent } from '@/lib/paywallJourney';
+import { claimPaywallIntent, clearPaywallIntent, getPaywallIntent } from '@/lib/paywallJourney';
 import { getMacroTargets } from '@/lib/macroStorage';
 import { getOnboardingData } from '@/lib/onboardingStorage';
 import { identifyUser, trackAuthFailure, trackAuthSuccess, trackOnboardingScreenView } from '@/lib/analytics';
@@ -45,7 +45,7 @@ export default function SignInScreen() {
   // Skip onboarding review; existing in-app prompts use lib/ratingPrompt.ts.
   const { outOfArea, returnTo } = useLocalSearchParams<{ outOfArea?: string; returnTo?: string }>();
 
-  async function navigateAfterAuth(isNewUser: boolean) {
+  const navigateAfterAuth = useCallback(async (isNewUser: boolean) => {
     if (outOfArea === '1') {
       router.dismissTo('/welcome/out-of-area');
       return;
@@ -55,7 +55,7 @@ export default function SignInScreen() {
       return;
     }
     router.replace(isNewUser || await getPaywallIntent() ? '/welcome/trial' : '/(tabs)/search');
-  }
+  }, [outOfArea, returnTo]);
 
   const [, response, promptGoogleAsync] = Google.useIdTokenAuthRequest({
     iosClientId: GOOGLE_IOS_CLIENT_ID ?? 'not-configured',
@@ -73,6 +73,7 @@ export default function SignInScreen() {
         setGoogleLoading(true);
         completeGoogleSignIn(idToken)
           .then(async (r) => {
+            await claimPaywallIntent(r.user.id);
             trackAuthSuccess({ provider: 'google', is_new_user: r.isNewUser });
             await captureIdentity(r.user.id, r.user.email);
             if (!r.isNewUser && outOfArea !== '1' && !(await getPaywallIntent())) await pullProfileFromServer();
@@ -91,12 +92,13 @@ export default function SignInScreen() {
       trackAuthFailure({ provider: 'google', error_message: response.error?.message });
       Alert.alert('Google Sign In Error', response.error?.message ?? 'Unknown error');
     }
-  }, [response]);
+  }, [response, navigateAfterAuth, outOfArea]);
 
   async function handleApple() {
     setAppleLoading(true);
     try {
       const r = await appleSignIn();
+      await claimPaywallIntent(r.user.id);
       trackAuthSuccess({ provider: 'apple', is_new_user: r.isNewUser });
       await captureIdentity(r.user.id, r.user.email);
       if (!r.isNewUser && outOfArea !== '1' && !(await getPaywallIntent())) await pullProfileFromServer();
@@ -122,6 +124,7 @@ export default function SignInScreen() {
     setDevLoading(true);
     try {
       const r = await devLogin();
+      await claimPaywallIntent(r.user.id);
       trackAuthSuccess({ provider: 'dev', is_new_user: false });
       await captureIdentity(r.user.id, r.user.email);
       // Continue where a new user would land, so the full flow is testable on the sim.
@@ -144,7 +147,7 @@ export default function SignInScreen() {
       onContinue={() => {}}
       canContinue={false}
       hideFooter
-      onBack={() => router.back()}
+      onBack={() => { void clearPaywallIntent().then(() => router.back(), () => router.back()); }}
     >
       <View style={s.wrap}>
         <Animated.View entering={FadeInDown.duration(400).delay(100)} style={s.btns}>
