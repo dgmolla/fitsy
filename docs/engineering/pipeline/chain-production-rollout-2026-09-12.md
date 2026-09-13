@@ -1,31 +1,35 @@
 # Chain nutrition rollout: production results
 
-**36,655 existing menu rows now use reviewed official nutrition across 41 consumer brands.**
-The 30 completed batches cover 45 stored brand identities and exclude the earlier WaBa/Yoshinoya rollout.
+**37,572 existing menu rows now use reviewed official nutrition across 42 consumer brands.**
+The 31 completed batches cover 46 stored brand identities and exclude the earlier WaBa/Yoshinoya rollout.
 National onboarding is still in progress.
 
-## Latest result: Baskin-Robbins
+## Latest result: Cold Stone Creamery
 
-**481 rows are production verified: 143 macro corrections and 338 attribution-only confirmations.**
-The 25 reviewed facts and 29 exact aliases cover empty cones, explicitly sized drinks, one 4 oz scoop, four-bar boxes and whole Polar Pizzas.
-All 1,190 menu IDs across 36 restaurants were preserved; the 709 unselected menu rows stayed unchanged.
-Separately, all ten older unreviewed records in the chain catalog were preserved.
+**917 rows are production verified: 32 macro corrections and 885 attribution-only confirmations.**
+The 61 reviewed facts and 63 exact aliases cover explicitly sized ice creams, sorbets, selected creations and drinks, empty cones and two standard sundaes.
+All 2,389 menu IDs across 18 restaurants were preserved; the 1,472 unselected rows stayed unchanged.
 
 | Serving issue | Reviewed treatment |
 |---|---|
-| OREO Cookies 'n Cream, explicit 4 oz scoop | Correct fat from 10 g to 15 g; keep the other published macros |
-| A box explicitly containing four bars | Multiply the official one-bar facts by four |
-| A whole Polar Pizza explicitly serving eight | Multiply the official one-eighth-pie facts by eight |
-| Unknown flavor, size or recipe | Retain the existing estimate |
+| Chocolate Cupcake ice cream, Like It | 370 to 360 calories; fat, carbs and protein corrected to the published serving |
+| Chocolate Cupcake ice cream, Love It | 590 to 580 calories; carbs corrected to the published serving |
+| Two detailed standard sundae rows | 485 to 610 and 531 to 660 calories for the complete published recipe |
+| Guide and current menu disagree | Hold the affected families, including 225 historical rows |
+| Current UE title has no selected size | Keep the estimate; all 158 items in the two current captures abstained |
 
-The 24-row canary covered every fact used by April rows; Cotton Candy's four-bar box is the one current-import-only fact.
-Final authenticated reads checked all 1,190 items and all 481 updates, with zero remaining catalog or April changes.
-Local proof covered all 29 aliases using two current captures and ten historical menu shapes.
-Whole-pack totals sum rounded published servings and remain approximate.
-Mangonada's conflicting fat fields, ambiguous whipped-cream recipes and the separate Kosher identity were excluded.
+The canary exercised all 61 facts before the remaining 856 rows were applied in transactions of at most 100 rows.
+Final authenticated reads checked all 2,389 items and all 917 updates; repeat catalog and April plans returned zero changes.
+Root and independent source review covered all 61 selected rows and 671 nutrient cells against the original PDF pages.
+The draft review first withheld approval over provenance wording and the draft-to-approved handoff; both were resolved and independently passed before production writes.
 
-The preceding Panini batch is also production verified: 150 corrections across ten restaurants, covering eight individual pastas with included bread and seven single-skewer items.
-All 1,109 IDs and the other 959 rows were preserved; repeat plans returned zero changes.
+All 63 aliases are historical.
+Local imports cover four historical menu shapes and all 18 restaurant names linked and unlinked; the two current menus provide abstention proof, not new official-match coverage.
+The two standard sundaes assume the sole published default recipe, and known source conflicts remain held.
+
+The preceding Baskin batch is also production verified: 481 rows, with 143 numeric changes and 338 attribution confirmations.
+All 1,190 menu IDs, 709 unselected menu rows and ten older unreviewed catalog records were preserved.
+Its whole-pack totals sum rounded published servings and remain approximate.
 Both batches use the released matcher and writer, so catalog additions required no API deployment.
 
 ## Completed batches
@@ -62,13 +66,14 @@ Both batches use the released matcher and writer, so catalog additions required 
 | Jersey Mike's (second identity) | 31 | 7 | 24 |
 | Panini Kabob Grill | 150 | 150 | 0 |
 | Baskin-Robbins | 481 | 143 | 338 |
-| **Total** | **36,655** | **13,986** | **22,669** |
+| Cold Stone Creamery | 917 | 32 | 885 |
+| **Total** | **37,572** | **14,018** | **23,554** |
 
 “Values changed” means at least one of calories, protein, carbs or fat changed.
 “Attribution only” means those four values stayed the same and reviewed official attribution was applied.
 These counts measure rollout behavior, not accuracy against measured food.
 
-The batches loaded **1,435 approved facts and 2,014 exact menu aliases** into the chain catalog.
+The batches loaded **1,496 approved facts and 2,077 exact menu aliases** into the chain catalog.
 Jamba, Panera, Popeyes and Jersey Mike's each have two stored identities; their facts remain scoped to the correct identity.
 Dave's and Nothing Bundt Cakes were also linked to 23 existing restaurants without changing their menu identities.
 
@@ -93,7 +98,7 @@ Offline UE runs must use a checkout containing it.
 
 | Check | Result and limit |
 |---|---|
-| Production preservation | All **111,651 menu IDs across 1,160 restaurants** preserved; all **74,996 unselected rows** unchanged |
+| Production preservation | All **114,040 menu IDs across 1,178 restaurants** preserved; all **76,468 unselected rows** unchanged |
 | Serving | Authenticated reads checked every selected restaurant's complete menu and every changed row; search/detail checks passed per brand |
 | Repeated execution | All completed batches produced zero pending catalog and April changes |
 | Recovery | Exact local rollback passed; bounded production transactions retain before/after journals; production was not rolled back as a test |
@@ -102,7 +107,7 @@ Offline UE runs must use a checkout containing it.
 
 Current UE captures and simulated historical imports are separate evidence.
 Nine batches after Habit have no current UE capture; their proof does not establish current naming or availability.
-Dave's, Charleys, the second Jersey Mike's identity Panini and Baskin have additional current-capture replays.
+Dave's, Charleys, the second Jersey Mike's identity, Panini, Baskin and Cold Stone have additional current-capture replays.
 Activating a catalog routes imports through UE but does not guarantee UE returns a menu.
 Authenticated checks use the existing allowlisted review account, not a paid-subscription test.
 
@@ -113,7 +118,7 @@ Authenticated checks use the existing allowlisted review account, not a paid-sub
 | Same name, different serving | Require the exact item, size and complete order; Wingstop per-wing facts cannot represent an unsized wing order |
 | Missing accompaniments | Check included sides and sauces; hold unresolved IHOP omelette sides and Burger King onion-ring sauce |
 | Calculator controls | Check actions, displayed selections and totals together; Panini has stale checked classes, and Jersey Mike's Markdown lists unselected extras |
-| Conflicting source values | Hold disagreements instead of choosing the convenient number; examples include Habit, Charleys, CAVA and Buffalo Wild Wings |
+| Conflicting source values | Hold disagreements instead of choosing the convenient number; examples include Habit, Charleys, CAVA, Buffalo Wild Wings and Cold Stone |
 | Wrong source scope | Respect country, region and restaurant eligibility; Peet's and Del Taco remain inactive for separate scope/release reasons |
 | Different portion conventions | Use nutrition servings, not guest counts, for whole Nothing Bundt Cakes products |
 | Duplicate brand identity | Reuse verified source facts through separate brand-scoped bindings; test each identity without merging unrelated restaurants |

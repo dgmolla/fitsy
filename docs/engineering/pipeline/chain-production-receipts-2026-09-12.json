@@ -1,19 +1,19 @@
 {
   "generated": true,
-  "asOf": "2026-09-13T09:13:18.730480+00:00",
-  "scope": "30 completed source batches; earlier WaBa/Yoshinoya excluded",
+  "asOf": "2026-09-13T09:54:20.617640+00:00",
+  "scope": "31 completed source batches; earlier WaBa/Yoshinoya excluded",
   "reviewedCodeHead": "179be20e9a26eda262c428149630f72092730302",
   "mergeCommit": "848f117952b60b62bd1ee03291151e73a1184e55",
   "pr": "https://github.com/dgmolla/fitsy/pull/289",
   "totals": {
-    "facts": 1435,
-    "aliases": 2014,
-    "patchedRows": 36655,
-    "numericChanges": 13986,
-    "attributionOnly": 22669,
-    "preservedMenuIds": 111651,
-    "unchangedUnselectedRows": 74996,
-    "restaurants": 1160
+    "facts": 1496,
+    "aliases": 2077,
+    "patchedRows": 37572,
+    "numericChanges": 14018,
+    "attributionOnly": 23554,
+    "preservedMenuIds": 114040,
+    "unchangedUnselectedRows": 76468,
+    "restaurants": 1178
   },
   "batches": [
     {
@@ -810,6 +810,32 @@
         "baskin-fixed-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
       },
       "originalCatalogRowsPreserved": 10
+    },
+    {
+      "batch": "coldstone-fixed-v2",
+      "chains": "Cold Stone Creamery",
+      "brandSlugs": [
+        "cold-stone-creamery"
+      ],
+      "facts": 61,
+      "aliases": 63,
+      "patchedRows": 917,
+      "numericChanges": 32,
+      "attributionOnly": 885,
+      "preservedMenuIds": 2389,
+      "unchangedUnselectedRows": 1472,
+      "restaurants": 18,
+      "httpVerifiedAt": "2026-09-13T09:54:20.617640+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "coldstone-fixed-v2-segments/000861.json.verified.json": "50ed6f772090a3e63777f5c66484098c11ff9f7f0991d860e42c91f79c1cbb36",
+        "coldstone-fixed-v2-complete-http.json": "a62e62ecccbff65bb4b0cd799670bf2782d7b56d0efd139da5f18c7286905812",
+        "coldstone-fixed-v2-approved.json": "15e348acc7cb6ac87c2868cbd365ad1f908ec1706f8eaf56d5ce0a42c284640f",
+        "coldstone-fixed-v2-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "coldstone-fixed-v2-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
     }
   ],
   "receiptArchive": "Local task work/chain-national; full journals and baselines are intentionally excluded from this aggregate repository record",
