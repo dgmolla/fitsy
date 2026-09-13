@@ -1,12 +1,23 @@
 # Chain nutrition rollout: production results
 
-**35,985 existing menu rows now use reviewed official nutrition across 41 brand identities.**
-These 26 completed batches are separate from the earlier WaBa/Yoshinoya rollout.
+**36,024 existing menu rows now use reviewed official nutrition across 39 consumer brands.**
+The 28 completed batches cover 43 stored brand identities and exclude the earlier WaBa/Yoshinoya rollout.
 National onboarding is still in progress.
 
-## What changed
+## Latest results
 
-| Completed batch | Rows updated | Nutrition values changed | Attribution only |
+| Batch | Production result | Import proof | Still estimated |
+|---|---|---|---|
+| Charleys | 8 nutrition corrections; all 558 menu IDs and 39 older catalog rows preserved | All 3 aliases verified across historical menus and 2 current UE captures | 550 April rows; unresolved sandwich builds, portions and source disagreements |
+| Jersey Mike's second identity | 31 updates, including 24 bowl rows; all 756 menu IDs preserved | All 6 aliases verified through historical imports; 2 current UE captures verify desserts | 725 April rows; unsized subs, bread/wrap choices and other unreviewed products |
+
+Both batches passed authenticated complete-menu reads, search/detail checks and zero-change repeat plans.
+They use the already released matcher and writer, so no API deployment was needed for these catalog additions.
+The Jersey Mike's bowl values are the publisher's default recipes for explicitly named bowls; their historical menus do not establish customized ingredients or weighed portions.
+
+## Completed batches
+
+| Completed batch | Rows updated | Values changed | Attribution only |
 |---|---:|---:|---:|
 | McDonald's, Panda Express, El Pollo Loco | 11,972 | 2,076 | 9,896 |
 | Subway, Fatburger, Five Guys, Carl's Jr. | 7,165 | 2,246 | 4,919 |
@@ -34,17 +45,17 @@ National onboarding is still in progress.
 | BJ's Restaurant & Brewhouse | 243 | 243 | 0 |
 | Nothing Bundt Cakes | 49 | 49 | 0 |
 | Dave's Hot Chicken | 28 | 4 | 24 |
-| **Total** | **35,985** | **13,678** | **22,307** |
+| Charleys | 8 | 8 | 0 |
+| Jersey Mike's (second identity) | 31 | 7 | 24 |
+| **Total** | **36,024** | **13,693** | **22,331** |
 
-“Nutrition values changed” means at least one of calories, protein, carbs or fat changed.
+“Values changed” means at least one of calories, protein, carbs or fat changed.
 “Attribution only” means those four values stayed the same and reviewed official attribution was applied.
 These counts measure rollout behavior, not accuracy against measured food.
 
-The batches loaded **1,387 approved facts and 1,956 exact menu aliases** into the chain catalog.
-Existing menu items and their winning macro estimates then received the same facts through the shared matcher.
-Jamba, Panera and Popeyes each have two stored brand identities, so 41 identities represent 38 distinct consumer brands.
-Dave's Hot Chicken and Nothing Bundt Cakes were also linked to 23 existing restaurants while preserving all 232 menu items and estimates.
-Nothing Bundt Cakes now has 49 official nutrition updates across 10 locations; Dave's has 28 across 13 locations, with 100 rows still estimated.
+The batches loaded **1,395 approved facts and 1,965 exact menu aliases** into the chain catalog.
+Jamba, Panera, Popeyes and Jersey Mike's each have two stored identities; their facts remain scoped to the correct identity.
+Dave's and Nothing Bundt Cakes were also linked to 23 existing restaurants without changing their menu identities.
 
 ## Both paths use the same catalog
 
@@ -58,83 +69,54 @@ flowchart LR
   P --> API[Search and restaurant detail]
 ```
 
-The matcher, identity handoff and guarded bulk writer are merged through [PR 289](https://github.com/dgmolla/fitsy/pull/289).
-The reviewed writer is commit `179be20e9a26eda262c428149630f72092730302`, merged as `848f117952b60b62bd1ee03291151e73a1184e55`.
-Main Verify and Deploy passed for that release, followed by authenticated production checks.
-Compatible source batches are data operations and need no API deployment per chain.
-Offline UE runs must use a checkout containing that release.
+The shared matcher, identity handoff and guarded bulk writer are merged through [PR 289](https://github.com/dgmolla/fitsy/pull/289).
+The reviewed writer is `179be20e9a26eda262c428149630f72092730302`, merged as `848f117952b60b62bd1ee03291151e73a1184e55`.
+Main Verify, Deploy and authenticated production checks passed for that runtime release.
+Offline UE runs must use a checkout containing it.
 
 ## What was proved
 
 | Check | Result and limit |
 |---|---|
-| Production preservation | All **108,038 menu IDs across 1,095 restaurants** preserved; all **72,053 unselected rows** unchanged. |
-| Serving API | Complete authenticated menu reads checked every selected restaurant and changed row; search/detail checks passed per changed brand. |
-| Repeat execution | Every completed batch produced zero pending catalog and April changes. |
-| Recovery | Local exact rollback passed; production writes have bounded transaction journals and before/after snapshots. Production was not rolled back as a test. |
-| Future imports | Local tests used the real parser, resolver, brand handoff, `persistHex` and serving layer. Current UE captures and simulated historical menus are separate evidence. No production hex was added. |
-| Source quality | Automated transcription checks plus independent source/binding review. Review depth varies; this is not measured restaurant nutrition or an exhaustive human audit. |
+| Production preservation | All **109,352 menu IDs across 1,114 restaurants** preserved; all **73,328 unselected rows** unchanged |
+| Serving | Authenticated reads checked every selected restaurant's complete menu and every changed row; search/detail checks passed per brand |
+| Repeated execution | All completed batches produced zero pending catalog and April changes |
+| Recovery | Exact local rollback passed; bounded production transactions retain before/after journals; production was not rolled back as a test |
+| Future imports | Real parser, resolver, brand handoff, `persistHex` and serving layer exercised locally; no actual production hex added |
+| Nutrition reference | Official published facts plus source/binding review; review depth varies by batch and is not measured restaurant nutrition |
 
-Nine batches after Habit have no current UE capture.
-Those batches use complete historical menus for import proof, so current availability and naming coverage remain unverified.
-Dave's additionally passed replay of two current UE menus with 185 items: eight official matches and 177 retained estimates.
-Activating an approved catalog routes new imports through UE; it does not guarantee UE will return a menu.
+Current UE captures and simulated historical imports are separate evidence.
+Nine batches after Habit have no current UE capture; their proof does not establish current naming or availability.
+Dave's, Charleys and the second Jersey Mike's identity have additional current-capture replays.
+Activating a catalog routes imports through UE but does not guarantee UE returns a menu.
+Authenticated checks use the existing allowlisted review account, not a paid-subscription test.
 
-The [receipt record](chain-production-receipts-2026-09-12.json) contains counts, verification times and hashes of approvals and readbacks.
-Full source captures, baselines and rollback journals remain in the task archive `work/chain-national`.
-The aggregate record alone cannot perform a rollback.
+## Repeatable lessons
 
-## Errors caught before publication
-
-| Failure pattern | Example and resolution |
+| Risk | Rule demonstrated by the rollout |
 |---|---|
-| Wrong recipe or item class | Domino's Philly pizza proposed against a sandwich; current and April sandwich recipes also differed. Conflicting bindings were excluded. |
-| Source disagreement | Panera whole-item labels disagreed with two source rows; those facts were held. Little Caesars pretzel variants were separated and conflicting category bindings removed. |
-| Hidden accompaniments | Burger King onion rings had unresolved default sauce groups. Four facts affecting 136 rows were removed before rollout; sauce/syrup checks now inspect option-group roles. |
-| Incomplete meal values | IHOP omelette calories exclude a required side. Meal categories remain held; standalone pancakes, waffles and French toast have three product-page checks, with the omelette as a positive control. |
-| Wrong serving unit | Wingstop per-wing facts cannot match unspecified wing orders. Only explicit-size sides and single brownies were approved; missing beverage protein was not inferred as zero. |
-| Wrong source scope | Pizza Hut's Canadian guide and Express breakfast items were excluded from ordinary US bindings. |
-| Changed recipes | CAVA's older Greek Chicken and Spicy Chicken + Avocado descriptions differ from the current recipe. Only the matching descriptions were approved; 28 old or empty-description rows stayed held. |
-| Conflicting official pages | Habit menu calories disagree with detailed nutrition for 321 mapped rows. Five consistent facts were approved; fries were excluded after discovering an unspecified ketchup serving. |
-| Two current sources disagree | Buffalo Wild Wings nachos and carrots/celery disagreed with its current dine-in menu. Both bindings were removed; five other facts lacked a second label, which was recorded as absence rather than agreement. |
-| Recipe and serving ambiguity | Dunkin ingredient blocks distinguish Swiss cheese from other sandwiches and standard from Kosher recipes. Jersey Mike's generic cookie and unspecified sub sizes stayed held. Fresh Brothers pizzas stayed held because whole-order slice counts were unavailable. |
-| Duplicate chain identities | Popeyes had two additional locations under a second brand. Their eight eligible rows used the same reviewed facts, with separate brand-scoped aliases and both importer paths tested. |
-| Default configuration and recipe scope | CPK whole pizzas use the explicit six-slice rule; seven-inch pizzas remain whole single pizzas. Three conflicting recipes affecting 15 rows were held. |
-| Conflicting portion evidence | BJ’s four floats stayed held because the scoop descriptions and nutrition imply different quantities. Appetizers, sides, five pastas including garlic knots, and seven full-size Pizookies were reviewed separately. |
-| Unproven sauce portion | Dave's ordinary cheese sauce had no menu weight or calorie label to establish the PDF portion. Review removed that binding before publication; four clear standard sides remained. |
-| Nutrition servings versus guests | Nothing Bundt Cakes publishes nutrition servings per cake separately from approximate guest counts. Whole products use the flavor-specific nutrition count; generic cakes without a size remain held. |
+| Same name, different serving | Require the exact item, size and complete order; Wingstop per-wing facts cannot represent an unsized wing order |
+| Missing accompaniments | Check included sides and sauces; hold unresolved IHOP omelette sides and Burger King onion-ring sauce |
+| Calculator extras | Capture selected controls and visible recipe rows; Jersey Mike's Markdown also lists unselected extras |
+| Conflicting source values | Hold disagreements instead of choosing the convenient number; examples include Habit, Charleys, CAVA and Buffalo Wild Wings |
+| Wrong source scope | Respect country, region and restaurant eligibility; Peet's and Del Taco remain inactive for separate scope/release reasons |
+| Different portion conventions | Use nutrition servings, not guest counts, for whole Nothing Bundt Cakes products |
+| Duplicate brand identity | Reuse verified source facts through separate brand-scoped bindings; test each identity without merging unrelated restaurants |
+| Existing catalog says “official” | Require a valid review and serving binding; Charleys' 39 older unreviewed rows were preserved and not implicitly promoted |
 
-Burger King's 225 visible panels passed a full automated comparison with captured per-serving observations; independent review sampled raw macros and reviewed every proposed alias.
-IHOP's automated checks cover all 417 source rows, while independent raw-source and alias review was sampled.
-Its three standalone product pages support a stated category inference for 13 further variants, not direct checks of every variant or location.
-Wingstop's 11 approved facts and aliases were independently checked against PDF text and a rendered page.
-All three retain unresolved cases as estimates.
-Shake Shack's 35 facts and 44 aliases were independently reviewed in full.
-CAVA and Habit review covered all 21 approved facts and 32 aliases; local tests also checked all 37 stored restaurant names with and without a prelinked brand.
-Their production plans selected exactly the expected IDs and preserved Habit's 100 existing catalog rows.
-Wendy's, Fresh Brothers, Buffalo Wild Wings, Dunkin, Jersey Mike's and Popeyes received independent review of every proposed fact and alias.
-Their holds include changed recipes, unknown container quantities, mixed chicken orders, dip choices and unsized drinks.
-Published standard servings and singular product assumptions remain distinct from measured portions.
-CPK’s 50 facts and 66 aliases and BJ’s 35 facts and 36 aliases passed independent review and complete historical menu replays.
-CPK’s 380 updates preserved 1,660 IDs; BJ’s 243 updates preserved 1,444 IDs.
-Both batches passed authenticated complete-menu checks and empty repeat plans.
-Nothing Bundt Cakes passed independent review of 26 source rows, 23 whole-order facts and 41 aliases.
-Its 49 updates preserved all 104 menu IDs; 43 unclear configurations and 12 non-food candles stayed unchanged.
-The fixed 12-Bundtini assortment includes three each of four named flavors; decorative toppers are treated as non-food accessories based on the product descriptions.
-Dave's four facts and eight exact aliases passed source review and both writer paths.
-Its 28 updates include four nutrition corrections and 24 confirmations of existing values; all 128 menu IDs and 100 unselected rows were preserved.
-The six historical aliases and two current-only Featured items aliases are verified together; sauce conflicts, unknown heat levels and ambiguous portions remain estimates.
-Peet’s regional catalog is prepared but inactive; its location-aware runtime still requires the repository’s simulator release gate.
-Del Taco remains unpublished because its guide limits nutrition coverage to company-owned restaurants, and location eligibility has not been established.
+Published default servings remain an explicit assumption where historical menus lack weights or ingredients.
+Unresolved cases retain estimates; replay consistency is not evidence that an estimate or published portion is accurate for every order.
 
 ## Remaining work
 
-1. Continue through remaining identities and source candidates, prioritizing restaurant meals and recording missing portions, recipe conflicts, wrong markets and unavailable facts.
-2. Package the proven source adapters and proposal gates into the repeatable onboarding workflow.
-   Discovery and review remain offline work, not an unattended nationwide service.
-3. Keep source accuracy review separate from coverage and importer consistency.
-   An exact alias and passing replay do not prove a restaurant serves the published portion.
+1. Continue through remaining chain identities, prioritizing meals with usable official serving evidence.
+2. Package the proven source adapters and proposal checks into repeatable offline onboarding.
+3. Release the prepared regional runtime after its required simulator gate, then activate the reviewed Peet's batch.
+4. Keep nutrition accuracy review separate from match coverage and import consistency.
 
-The [September 11 inventory](chain-national-onboarding.md) covers the broader opportunity.
-Its 688 menu-bearing groups are a review cohort, not 688 independently confirmed national chains or approved catalogs.
-Use the [catalog runbook](chain-catalog-batches.md) for execution and recovery rules.
+Del Taco remains held because its guide covers company-owned restaurants and location eligibility is unproven.
+The inventory's 688 menu-bearing groups are a review cohort, not 688 independently confirmed national chains or approved catalogs.
+
+The [receipt record](chain-production-receipts-2026-09-12.json) contains verification times, counts and approval/readback hashes.
+Full source captures, baselines and rollback journals remain in the task archive `work/chain-national`; the aggregate alone cannot perform rollback.
+See the [national inventory](chain-national-onboarding.md) and [catalog runbook](chain-catalog-batches.md) for scope and recovery rules.
