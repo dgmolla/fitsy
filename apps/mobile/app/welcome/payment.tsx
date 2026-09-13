@@ -14,7 +14,7 @@ import { usePreviewAccess } from '@/lib/usePreviewAccess';
 import { rememberPaywallDecline } from '@/lib/paywallAccess';
 import { getOnboardingData } from '@/lib/onboardingStorage';
 import { fetchGuidedPreview } from '@/lib/guidedPreview';
-import { getPaywallIntent, resetWelcomeJourney, type PaywallIntent } from '@/lib/paywallJourney';
+import { getPaywallIntent, openPurchasedDestination, resetWelcomeJourney, type PaywallIntent } from '@/lib/paywallJourney';
 import { purchaseTerms, savingPercent } from '@/lib/purchaseTerms';
 
 type PlanId = 'monthly' | 'yearly';
@@ -99,8 +99,9 @@ export default function PaymentScreen() {
     // cannot fire a second replace once `loading` flips back. The recording
     // itself is idempotent (a re-entered paywall must not double-count).
     claim();
-    await recordOnboardingComplete(discounted);
-    resetWelcomeJourney(navigation, 'notification-permission');
+    const firstCompletion = await recordOnboardingComplete(discounted);
+    if (firstCompletion) resetWelcomeJourney(navigation, 'notification-permission');
+    else await openPurchasedDestination(navigation);
   }
 
   // This screen IS the paywall - it renders Fitsy's own design and buys the

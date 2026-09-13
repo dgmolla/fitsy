@@ -1380,7 +1380,7 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 10,
   },
   searchIco: { fontFamily: FONTS.nunitoSans, fontSize: 16, color: EDITORIAL.textSoft },
-  searchInput: { fontFamily: FONTS.nunitoSans, flex: 1, fontSize: 13.5, color: EDITORIAL.text, padding: 0 },
+  searchInput: { fontFamily: FONTS.nunitoSans, flex: 1, fontSize: 13.5, lineHeight: 20, minHeight: 24, color: EDITORIAL.text, padding: 0, textAlignVertical: 'center' },
   searchClear: { fontFamily: FONTS.nunitoSans, fontSize: 18, color: EDITORIAL.textSoft, paddingHorizontal: 4 },
 
   restSection: { marginTop: 22 },

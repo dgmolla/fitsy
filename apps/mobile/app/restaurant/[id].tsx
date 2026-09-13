@@ -369,6 +369,7 @@ export default function RestaurantDetailScreen() {
                   value={query}
                   onChangeText={onChangeQuery}
                   placeholder="Search the menu…"
+                  accessibilityLabel="Search the menu"
                   placeholderTextColor={EDITORIAL.textSoft}
                   style={s.searchInput}
                   autoCorrect={false}
@@ -496,7 +497,7 @@ const s = StyleSheet.create({
 
   search: { marginHorizontal: 18, marginTop: 6, backgroundColor: EDITORIAL.creamCard, borderWidth: 1, borderColor: EDITORIAL.border, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 10 },
   searchIco: { fontFamily: FONTS.nunitoSans, fontSize: 16, color: EDITORIAL.textSoft },
-  searchInput: { fontFamily: FONTS.nunitoSans, flex: 1, fontSize: 13.5, color: EDITORIAL.text, padding: 0 },
+  searchInput: { fontFamily: FONTS.nunitoSans, flex: 1, fontSize: 13.5, lineHeight: 20, minHeight: 24, color: EDITORIAL.text, padding: 0, textAlignVertical: 'center' },
   searchClear: { fontFamily: FONTS.nunitoSans, fontSize: 18, color: EDITORIAL.textSoft, paddingHorizontal: 4 },
 
   chipRow: { paddingHorizontal: 18, paddingTop: 14, paddingBottom: 6, gap: 8 },
