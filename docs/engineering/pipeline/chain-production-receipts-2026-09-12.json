@@ -1,19 +1,19 @@
 {
   "generated": true,
-  "asOf": "2026-09-13T08:28:47.194882+00:00",
-  "scope": "29 completed source batches; earlier WaBa/Yoshinoya excluded",
+  "asOf": "2026-09-13T09:13:18.730480+00:00",
+  "scope": "30 completed source batches; earlier WaBa/Yoshinoya excluded",
   "reviewedCodeHead": "179be20e9a26eda262c428149630f72092730302",
   "mergeCommit": "848f117952b60b62bd1ee03291151e73a1184e55",
   "pr": "https://github.com/dgmolla/fitsy/pull/289",
   "totals": {
-    "facts": 1410,
-    "aliases": 1985,
-    "patchedRows": 36174,
-    "numericChanges": 13843,
-    "attributionOnly": 22331,
-    "preservedMenuIds": 110461,
-    "unchangedUnselectedRows": 74287,
-    "restaurants": 1124
+    "facts": 1435,
+    "aliases": 2014,
+    "patchedRows": 36655,
+    "numericChanges": 13986,
+    "attributionOnly": 22669,
+    "preservedMenuIds": 111651,
+    "unchangedUnselectedRows": 74996,
+    "restaurants": 1160
   },
   "batches": [
     {
@@ -754,6 +754,31 @@
         "paninikabob-meals-v2-approved.json": "f744e64c2471eb32c1e84a6cc31cebbdcc2cf3d3c3ba80bb5485f28e36739b0d",
         "paninikabob-meals-v2-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "paninikabob-meals-v2-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "baskin-fixed",
+      "chains": "Baskin-Robbins",
+      "brandSlugs": [
+        "baskin-robbins"
+      ],
+      "facts": 25,
+      "aliases": 29,
+      "patchedRows": 481,
+      "numericChanges": 143,
+      "attributionOnly": 338,
+      "preservedMenuIds": 1190,
+      "unchangedUnselectedRows": 709,
+      "restaurants": 36,
+      "httpVerifiedAt": "2026-09-13T09:13:18.730480+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "baskin-fixed-segments/000424.json.verified.json": "6e6b8525f0ca70a06e7c75cdc667eb36c89f7b532c2cf2597ca622bc0cffeb9e",
+        "baskin-fixed-complete-http.json": "8b043c09ec14fd2842c550139a213f50525e4adfb51d9d4f8cdfcd2d657914f8",
+        "baskin-fixed-approved.json": "c77761c4680bec0925e21084beea50e265fc7c9660d16a4cf96dcade71270e74",
+        "baskin-fixed-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "baskin-fixed-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
       }
     }
   ],

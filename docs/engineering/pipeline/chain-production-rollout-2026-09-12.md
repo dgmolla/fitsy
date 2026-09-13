@@ -1,28 +1,31 @@
 # Chain nutrition rollout: production results
 
-**36,174 existing menu rows now use reviewed official nutrition across 40 consumer brands.**
-The 29 completed batches cover 44 stored brand identities and exclude the earlier WaBa/Yoshinoya rollout.
+**36,655 existing menu rows now use reviewed official nutrition across 41 consumer brands.**
+The 30 completed batches cover 45 stored brand identities and exclude the earlier WaBa/Yoshinoya rollout.
 National onboarding is still in progress.
 
-## Latest result: Panini Kabob Grill
+## Latest result: Baskin-Robbins
 
-**150 nutrition corrections are live across 10 restaurants**, using 15 reviewed facts and 20 exact aliases.
-The batch covers eight individual pasta entrees with their included bread and seven single-skewer items.
-All 1,109 menu IDs were preserved; the other 959 rows remain unchanged.
+**481 rows are production verified: 143 macro corrections and 338 attribution-only confirmations.**
+The 25 reviewed facts and 29 exact aliases cover empty cones, explicitly sized drinks, one 4 oz scoop, four-bar boxes and whole Polar Pizzas.
+All 1,190 menu IDs across 36 restaurants were preserved, including 709 unchanged rows and 10 older unreviewed catalog records.
 
-| Example | Previous calories across locations | Reviewed official calories |
-|---|---:|---:|
-| Chicken Pesto Linguine, with bread | 608-766 | 1,810 |
-| Salmon Scampi, with bread | 584-806 | 1,380 |
-| One Chicken Skewer | 132-557 | 330 |
+| Serving issue | Reviewed treatment |
+|---|---|
+| OREO Cookies 'n Cream, explicit 4 oz scoop | Correct fat from 10 g to 15 g; keep the other published macros |
+| A box explicitly containing four bars | Multiply the official one-bar facts by four |
+| A whole Polar Pizza explicitly serving eight | Multiply the official one-eighth-pie facts by eight |
+| Unknown flavor, size or recipe | Retain the existing estimate |
 
-A 15-row canary covered every approved fact and passed complete-menu HTTP checks before the remaining 135 rows were applied.
-Final authenticated reads checked all 1,109 items and all 150 updates; catalog and April repeat plans both returned zero changes.
-The batch uses the released matcher and writer, so no API deployment was needed for these catalog additions.
+The 24-row canary covered every fact used by April rows; Cotton Candy's four-bar box is the one current-import-only fact.
+Final authenticated reads checked all 1,190 items and all 481 updates, with zero remaining catalog or April changes.
+Local proof covered all 29 aliases using two current captures and ten historical menu shapes.
+Whole-pack totals sum rounded published servings and remain approximate.
+Mangonada's conflicting fat fields, ambiguous whipped-cream recipes and the separate Kosher identity were excluded.
 
-Local import proof covered all 20 aliases using two current UE captures and six complete historical menu shapes.
-These are publisher standard servings, not weighed-food measurements.
-The official menu includes bread with every pasta entree, so two calculator panels that initially omitted bread were captured again with that option selected.
+The preceding Panini batch is also production verified: 150 corrections across ten restaurants, covering eight individual pastas with included bread and seven single-skewer items.
+All 1,109 IDs and the other 959 rows were preserved; repeat plans returned zero changes.
+Both batches use the released matcher and writer, so catalog additions required no API deployment.
 
 ## Completed batches
 
@@ -57,13 +60,14 @@ The official menu includes bread with every pasta entree, so two calculator pane
 | Charleys | 8 | 8 | 0 |
 | Jersey Mike's (second identity) | 31 | 7 | 24 |
 | Panini Kabob Grill | 150 | 150 | 0 |
-| **Total** | **36,174** | **13,843** | **22,331** |
+| Baskin-Robbins | 481 | 143 | 338 |
+| **Total** | **36,655** | **13,986** | **22,669** |
 
 “Values changed” means at least one of calories, protein, carbs or fat changed.
 “Attribution only” means those four values stayed the same and reviewed official attribution was applied.
 These counts measure rollout behavior, not accuracy against measured food.
 
-The batches loaded **1,410 approved facts and 1,985 exact menu aliases** into the chain catalog.
+The batches loaded **1,435 approved facts and 2,014 exact menu aliases** into the chain catalog.
 Jamba, Panera, Popeyes and Jersey Mike's each have two stored identities; their facts remain scoped to the correct identity.
 Dave's and Nothing Bundt Cakes were also linked to 23 existing restaurants without changing their menu identities.
 
@@ -88,7 +92,7 @@ Offline UE runs must use a checkout containing it.
 
 | Check | Result and limit |
 |---|---|
-| Production preservation | All **110,461 menu IDs across 1,124 restaurants** preserved; all **74,287 unselected rows** unchanged |
+| Production preservation | All **111,651 menu IDs across 1,160 restaurants** preserved; all **74,996 unselected rows** unchanged |
 | Serving | Authenticated reads checked every selected restaurant's complete menu and every changed row; search/detail checks passed per brand |
 | Repeated execution | All completed batches produced zero pending catalog and April changes |
 | Recovery | Exact local rollback passed; bounded production transactions retain before/after journals; production was not rolled back as a test |
@@ -97,7 +101,7 @@ Offline UE runs must use a checkout containing it.
 
 Current UE captures and simulated historical imports are separate evidence.
 Nine batches after Habit have no current UE capture; their proof does not establish current naming or availability.
-Dave's, Charleys, the second Jersey Mike's identity and Panini have additional current-capture replays.
+Dave's, Charleys, the second Jersey Mike's identity Panini and Baskin have additional current-capture replays.
 Activating a catalog routes imports through UE but does not guarantee UE returns a menu.
 Authenticated checks use the existing allowlisted review account, not a paid-subscription test.
 
@@ -112,7 +116,7 @@ Authenticated checks use the existing allowlisted review account, not a paid-sub
 | Wrong source scope | Respect country, region and restaurant eligibility; Peet's and Del Taco remain inactive for separate scope/release reasons |
 | Different portion conventions | Use nutrition servings, not guest counts, for whole Nothing Bundt Cakes products |
 | Duplicate brand identity | Reuse verified source facts through separate brand-scoped bindings; test each identity without merging unrelated restaurants |
-| Existing catalog says “official” | Require a valid review and serving binding; Charleys' 39 older unreviewed rows were preserved and not implicitly promoted |
+| Existing catalog says “official” | Require a valid review and serving binding; Charleys' 39 and Baskin's 10 older unreviewed rows were preserved and not implicitly promoted |
 
 Published default servings remain an explicit assumption where historical menus lack weights or ingredients.
 Unresolved cases retain estimates; replay consistency is not evidence that an estimate or published portion is accurate for every order.
