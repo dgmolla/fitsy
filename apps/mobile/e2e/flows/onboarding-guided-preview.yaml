@@ -102,12 +102,25 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
     visible:
       id: paywall-plan-yearly
     timeout: 15000
+- assertVisible: "See the full menu for.*Plus craving search.*"
 - tapOn:
     id: welcome-back
 - assertVisible:
     id: trial-see-plans
 - tapOn:
     id: trial-back
+- assertVisible:
+    id: preview-guide
+# The signed-in return to preview also abandons the previous menu choice.
+- openLink: com.fitsy.mobile://welcome/payment
+- extendedWaitUntil:
+    visible:
+      id: paywall-price-yearly
+    timeout: 15000
+- assertVisible: "Search your craving. See full menus. Save meals that fit."
+- assertNotVisible: "See the full menu for.*"
+- tapOn:
+    id: welcome-back
 - assertVisible:
     id: preview-guide
 - stopApp

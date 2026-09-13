@@ -15,9 +15,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Redirect, Stack, router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { MenuItemResult, MenuResponse } from '@fitsy/shared';
 import { BookmarkButton, FitsyLoader, LockedUnlockCard, MenuItemCard } from '@/components';
-import { fetchMenu, getSavedItems, saveItem, unsaveItem } from '@/lib/apiClient';
+import { fetchMenuOutcome, getSavedItems, saveItem, unsaveItem } from '@/lib/apiClient';
 import { getMacroTargets } from '@/lib/macroStorage';
 import { reconcileMenuBookmarks } from '@/lib/menuBookmarks';
+import { reconcileMenuLoad } from '@/lib/menuLoadState';
 import { recordSaveAndMaybePrompt } from '@/lib/ratingPrompt';
 import { markPreviewSampleUsed, routeToPaywall } from '@/lib/teaserGate';
 import { supabase } from '@/lib/supabase';
@@ -120,20 +121,18 @@ export default function RestaurantDetailScreen() {
       // to /welcome/problem the instant this screen opens. The session check
       // runs inside the same Promise.all as the menu fetch (rather than
       // ahead of it) so it doesn't add latency to every detail-screen open.
-      const [result, session, macroTargets] = await Promise.all([
-        fetchMenu(id, { selectedItemId: params.selectedItemId }), supabase.auth.getSession().then((r) => r.data.session), getMacroTargets(),
+      const [outcome, session, macroTargets] = await Promise.all([
+        fetchMenuOutcome(id, { selectedItemId: params.selectedItemId }), supabase.auth.getSession().then((r) => r.data.session), getMacroTargets(),
       ]);
       const savedResult = session ? await getSavedItems() : null;
       if (cancelled) return;
+      const result = outcome.menu;
+      setMenu(previous => reconcileMenuLoad(previous, id, outcome));
       if (result === null) {
-        setMenu(null);
         setError('Could not load menu.');
-        // Initial-page or access failures cannot leave a usable menu.
-        // Later transient failures retain a cursor and render a retry banner.
         trackRestaurantDetailFailed({ restaurant_id: id });
       }
       else {
-        setMenu(result);
         trackRestaurantDetailViewed({ restaurant_id: id, item_count: result.menuItems.length });
       }
       setTargets(macroTargets);

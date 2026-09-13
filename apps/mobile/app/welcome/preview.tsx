@@ -15,6 +15,7 @@ import { hasSeenPreviewTour, markPreviewTourSeen, routeToPaywall } from '@/lib/t
 import { usePreviewAccess } from '@/lib/usePreviewAccess';
 import { usePurchases } from '@/lib/usePurchases';
 import { trackOnboardingScreenView } from '@/lib/analytics';
+import { clearPaywallIntent } from '@/lib/paywallJourney';
 
 const STEPS = [
   ['Your meal targets', 'These numbers guide the picks below. You can edit them anytime.'],
@@ -60,7 +61,13 @@ export default function GuidedPreviewScreen() {
     } catch { if (sequence === request.current) setError(true); }
     finally { if (sequence === request.current) setBusy(false); }
   }, []);
-  useFocusEffect(useCallback(() => { void load(); return () => { ++request.current; }; }, [load]));
+  useFocusEffect(useCallback(() => {
+    // Returning to meal picks abandons the previous purchase action. Back
+    // between trial and plans keeps it because the preview stays unfocused.
+    void clearPaywallIntent().catch(() => undefined);
+    void load();
+    return () => { ++request.current; };
+  }, [load]));
 
   async function unlock(action: 'menu' | 'save' | 'discovery', restaurant?: RestaurantResult) {
     markPreviewTourSeen();

@@ -1,16 +1,12 @@
 /**
  * @jest-environment node
  */
-jest.mock('./authClient', () => ({
-  getStoredToken: jest.fn().mockResolvedValue('test-token'),
-}));
-
 jest.mock('@react-native-async-storage/async-storage', () => ({
   __esModule: true, default: { getItem: jest.fn().mockResolvedValue(null) },
 }));
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { fetchMenu, fetchRestaurants, fetchRestaurantsPage, fetchSubscriptionStatus, syncSubscription } from './apiClient';
+import { fetchMenu, fetchMenuOutcome, fetchRestaurants, fetchRestaurantsPage, fetchSubscriptionStatus, syncSubscription } from './apiClient';
 import type { MenuApiResponseBody, MenuResponse, RestaurantsResponse } from '@fitsy/shared';
 
 const BASE_URL = 'http://localhost:3000';
@@ -292,6 +288,17 @@ describe('fetchMenu', () => {
     const result = await fetchMenu('not-exist');
 
     expect(result).toBeNull();
+  });
+
+  it('distinguishes a temporary first-page failure from an explicit rejection for Retry', async () => {
+    global.fetch = makeMockFetch({ ok: false, status: 503 });
+    expect(await fetchMenuOutcome('r1')).toEqual({ menu: null, error: 'transient' });
+    global.fetch = makeMockFetch({ ok: false, status: 403 });
+    expect(await fetchMenuOutcome('r1')).toEqual({ menu: null, error: 'unavailable' });
+    global.fetch = makeMockFetch({ ok: false, status: 401 });
+    expect(await fetchMenuOutcome('r1')).toEqual({ menu: null, error: 'unavailable' });
+    global.fetch = makeMockFetch({ ok: true, body: { error: 'Access unavailable' } });
+    expect(await fetchMenuOutcome('r1')).toEqual({ menu: null, error: 'unavailable' });
   });
 
   it('returns null when API returns error shape', async () => {
