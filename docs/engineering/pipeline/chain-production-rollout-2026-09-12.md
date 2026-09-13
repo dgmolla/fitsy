@@ -1,7 +1,7 @@
 # Chain nutrition rollout: production results
 
-**35,285 existing menu rows now use reviewed official nutrition across 37 brand identities.**
-These 22 completed batches are separate from the earlier WaBa/Yoshinoya rollout.
+**35,908 existing menu rows now use reviewed official nutrition across 39 brand identities.**
+These 24 completed batches are separate from the earlier WaBa/Yoshinoya rollout.
 National onboarding is still in progress.
 
 ## What changed
@@ -30,15 +30,17 @@ National onboarding is still in progress.
 | Dunkin | 230 | 230 | 0 |
 | Jersey Mike's | 60 | 60 | 0 |
 | Popeyes | 108 | 108 | 0 |
-| **Total** | **35,285** | **13,192** | **22,093** |
+| California Pizza Kitchen | 380 | 190 | 190 |
+| BJ's Restaurant & Brewhouse | 243 | 243 | 0 |
+| **Total** | **35,908** | **13,625** | **22,283** |
 
 “Nutrition values changed” means at least one of calories, protein, carbs or fat changed.
 “Attribution only” means those four values stayed the same and reviewed official attribution was applied.
 These counts measure rollout behavior, not accuracy against measured food.
 
-The batches loaded **1,275 approved facts and 1,805 exact menu aliases** into the chain catalog.
+The batches loaded **1,360 approved facts and 1,907 exact menu aliases** into the chain catalog.
 Existing menu items and their winning macro estimates then received the same facts through the shared matcher.
-Jamba, Panera and Popeyes each have two stored brand identities, so 37 identities represent 34 distinct consumer brands.
+Jamba, Panera and Popeyes each have two stored brand identities, so 39 identities represent 36 distinct consumer brands.
 Two additional identities, Dave's Hot Chicken and Nothing Bundt Cakes, were linked to 23 existing restaurants; their 232 menu items and estimates stayed unchanged, with no official nutrition activated yet.
 
 ## Both paths use the same catalog
@@ -63,14 +65,14 @@ Offline UE runs must use a checkout containing that release.
 
 | Check | Result and limit |
 |---|---|
-| Production preservation | All **104,702 menu IDs across 1,053 restaurants** preserved; all **69,417 unselected rows** unchanged. |
+| Production preservation | All **107,806 menu IDs across 1,072 restaurants** preserved; all **71,898 unselected rows** unchanged. |
 | Serving API | Complete authenticated menu reads checked every selected restaurant and changed row; search/detail checks passed per changed brand. |
 | Repeat execution | Every completed batch produced zero pending catalog and April changes. |
 | Recovery | Local exact rollback passed; production writes have bounded transaction journals and before/after snapshots. Production was not rolled back as a test. |
 | Future imports | Local tests used the real parser, resolver, brand handoff, `persistHex` and serving layer. Current UE captures and simulated historical menus are separate evidence. No production hex was added. |
 | Source quality | Automated transcription checks plus independent source/binding review. Review depth varies; this is not measured restaurant nutrition or an exhaustive human audit. |
 
-Several batches, including all six additions after Habit, have no current UE capture.
+Several batches, including all eight additions after Habit, have no current UE capture.
 Their import proof uses complete historical menus, so current availability and naming coverage remain unverified.
 Activating an approved catalog routes new imports through UE; it does not guarantee UE will return a menu.
 
@@ -93,6 +95,8 @@ The aggregate record alone cannot perform a rollback.
 | Two current sources disagree | Buffalo Wild Wings nachos and carrots/celery disagreed with its current dine-in menu. Both bindings were removed; five other facts lacked a second label, which was recorded as absence rather than agreement. |
 | Recipe and serving ambiguity | Dunkin ingredient blocks distinguish Swiss cheese from other sandwiches and standard from Kosher recipes. Jersey Mike's generic cookie and unspecified sub sizes stayed held. Fresh Brothers pizzas stayed held because whole-order slice counts were unavailable. |
 | Duplicate chain identities | Popeyes had two additional locations under a second brand. Their eight eligible rows used the same reviewed facts, with separate brand-scoped aliases and both importer paths tested. |
+| Default configuration and recipe scope | CPK whole pizzas use the explicit six-slice rule; seven-inch pizzas remain whole single pizzas. Three conflicting recipes affecting 15 rows were held. |
+| Conflicting portion evidence | BJ’s four floats stayed held because the scoop descriptions and nutrition imply different quantities. Appetizers, sides, five pastas including garlic knots, and seven full-size Pizookies were reviewed separately. |
 
 Burger King's 225 visible panels passed a full automated comparison with captured per-serving observations; independent review sampled raw macros and reviewed every proposed alias.
 IHOP's automated checks cover all 417 source rows, while independent raw-source and alias review was sampled.
@@ -105,6 +109,9 @@ Their production plans selected exactly the expected IDs and preserved Habit's 1
 Wendy's, Fresh Brothers, Buffalo Wild Wings, Dunkin, Jersey Mike's and Popeyes received independent review of every proposed fact and alias.
 Their holds include changed recipes, unknown container quantities, mixed chicken orders, dip choices and unsized drinks.
 Published standard servings and singular product assumptions remain distinct from measured portions.
+CPK’s 50 facts and 66 aliases and BJ’s 35 facts and 36 aliases passed independent review and complete historical menu replays.
+CPK’s 380 updates preserved 1,660 IDs; BJ’s 243 updates preserved 1,444 IDs.
+Both batches passed authenticated complete-menu checks and empty repeat plans.
 Del Taco remains unpublished because its guide limits nutrition coverage to company-owned restaurants, and location eligibility has not been established.
 
 ## Remaining work
