@@ -32,7 +32,8 @@ jobs:
           POSTGRES_URL_NON_POOLING: ${{ secrets.DEV_DATABASE_URL }}
         run: |
           sudo apt-get install -y -q postgresql-client >/dev/null 2>&1 || true
-          bash scripts/verify/dev-drift.sh; code=$?
+          code=0
+          bash scripts/verify/dev-drift.sh || code=$?
           [ "$code" -eq 0 ] || [ "$code" -eq 2 ] || exit 1
       - name: File incident on failure
         if: failure()

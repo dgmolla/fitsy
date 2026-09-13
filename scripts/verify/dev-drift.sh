@@ -7,6 +7,8 @@
 # Env: POSTGRES_URL_NON_POOLING (dev). Skips (exit 2) when unset so the check
 # is harmless in contexts without dev credentials.
 set -euo pipefail
+# PostgreSQL's collation need not match the runner's. Compare both sets in C order.
+export LC_ALL=C
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 NAME="dev-drift"
 
@@ -31,9 +33,13 @@ fi
 Q() { psql "$URL" -Atqc "$1"; }
 
 # 1. Migrations applied in dev vs migrations on disk.
-applied="$(Q "select migration_name from _prisma_migrations where finished_at is not null order by 1" || true)"
-expected="$(ls "$REPO_ROOT/prisma/migrations" | grep -v migration_lock.toml | sort)"
-missing="$(comm -23 <(echo "$expected") <(echo "$applied") | tr '\n' ' ')"
+if ! applied="$(Q "select migration_name from _prisma_migrations where finished_at is not null")"; then
+  emit fail "could not read dev migration history" "check the dev database connection and _prisma_migrations table"
+  exit 1
+fi
+applied="$(printf '%s\n' "$applied" | sort -u)"
+expected="$(ls "$REPO_ROOT/prisma/migrations" | grep -v migration_lock.toml | sort -u)"
+missing="$(comm -23 <(printf '%s\n' "$expected") <(printf '%s\n' "$applied") | tr '\n' ' ')"
 if [ -n "$missing" ]; then
   emit fail "dev is missing migrations: ${missing}" "POSTGRES_URL_NON_POOLING=<dev> npx prisma migrate deploy --schema prisma/schema.prisma"
   exit 1
@@ -53,5 +59,6 @@ if [ "$u" -lt 3 ]; then
   exit 1
 fi
 
-emit pass "dev in sync: ${#expected} migrations, restaurants=$r items=$m estimates=$e seedUsers=$u" ""
+migration_count="$(printf '%s\n' "$expected" | awk 'NF {n++} END {print n+0}')"
+emit pass "dev in sync: $migration_count migrations, restaurants=$r items=$m estimates=$e seedUsers=$u" ""
 exit 0

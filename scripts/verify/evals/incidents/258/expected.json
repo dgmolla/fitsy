@@ -1,0 +1,1 @@
+{"lens":"correctness","must_find":"The drift check feeds PostgreSQL-collated migration names directly to comm, whose local collation can differ, and the maintenance shell exits on a skipped check before handling exit 2. Both produce a false failed job."}

@@ -115,7 +115,9 @@ function runCheck(c) {
         status: code === 0 ? "pass" : code === 2 ? "skipped" : "fail",
         duration_ms: Date.now() - t0,
         blocking: c.blocking !== "shadow",
-        stderr: code === 1 ? stderr.slice(-4000) : undefined,
+        // Keep the original failing workspace, even when later suites print a long passing log.
+        // execFile's maxBuffer above bounds output; CI applies its normal log secret masking.
+        stderr: code !== 0 && code !== 2 ? stderr : undefined,
       });
     });
   });
