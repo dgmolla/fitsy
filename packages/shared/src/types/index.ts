@@ -128,6 +128,7 @@ export interface BestMatchSummary {
   carbsG: number;
   fatG: number;
   confidence: ConfidenceLevel;
+  nutritionBasis?: "published" | "estimated";
   /**
    * Macro-fit score (lower = better fit). `null` when the caller set no macro
    * targets - there is nothing to score against. (Historically the server put
