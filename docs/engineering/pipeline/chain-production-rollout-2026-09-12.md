@@ -1,43 +1,50 @@
 # Chain nutrition rollout: production results
 
-**37,787 existing menu rows now use reviewed official nutrition across 44 consumer brands.**
-The 35 completed batches cover 50 stored brand identities and exclude the earlier WaBa/Yoshinoya rollout.
+**38,076 existing menu rows now use reviewed official nutrition across 45 consumer brands.**
+The 36 completed batches cover 51 stored brand identities and exclude the earlier WaBa/Yoshinoya rollout.
 National onboarding is still in progress.
 
-## Latest result: Kreation
+## Latest result: Pressed
 
-**82 rows across 19 restaurants are production verified, all with numeric corrections.**
-Five reviewed bottle labels support 15 catalog facts and 23 exact aliases under Kreation's three existing brand identities.
-All 3,777 menu IDs were preserved; the other 3,695 rows stayed unchanged.
+**289 rows across 11 restaurants are production verified, all with numeric corrections.**
+The catalog contains 33 new facts and 57 exact aliases; all 1,267 menu IDs were preserved and 978 unselected rows stayed unchanged.
 
-| Drink | Previous calorie range | Published whole bottle |
+| Example row | Previous calories | Published single bottle |
 |---|---:|---:|
-| Balance | 13-288 | 520 |
-| DStrest | 51-336 | 180 |
-| Green 4 | 53-221 | 120 |
-| 50 Shades of Green | 47-361 | 120 |
-| Electro-Ade | 4-215 | 100 |
+| Unwind Tonic | 997 | 90 |
+| Carrot Juice | 436 | 120 |
+| Blue Pineapple Probiotic Lemonade | 382 | 90 |
 
-Each source label gives two 8 fl oz servings; Fitsy now serves the nutrition for the whole 16 fl oz bottle.
-Balance, DStrest and Green 4 explicitly state 16 fl oz in UE.
-50 Shades and Electro-Ade use the single published bottle default, an assumption recorded in their source bindings.
-The attached Balance label and UE include dates omitted by website prose; 50 Shades UE omits label salt.
-These disclosed limitations do not establish exact ingredient weights or sodium values.
+These examples show correction magnitude, not accuracy against measured food.
+The median absolute calorie change across the 289 rows was 36.
+Root and independent review read all 37 original labels and 148 macro fields.
+The proposed facts use one complete 450 mL bottle or 59 mL shot, without scaling.
+Unsized UE items use the single packaged bottle assumption; April Carrot's missing description is a disclosed weaker binding.
 
-Independent review visually read all five original labels, all 20 macro fields, portions and ingredient panels.
-All 23 aliases passed local April/import tests, including one current-only Electro-Ade alias.
-The six current UE captures matched 27 of 1,255 items; the other 1,228 remained estimated.
-Historical simulations covered all 19 complete menus, with 82 official matches and 3,695 estimates.
-A joint check against all 749 stored brands verified the three Kreation identities, with 130 serving/recipe/section changes correctly abstaining.
+| Evidence | Result |
+|---|---|
+| Current captured UE imports | 64 official / 162 estimated across 226 items |
+| Historical menu simulations | 289 official / 978 estimated across all 11 menus |
+| Exact alias coverage | All 57: 54 historical and 3 current-only |
+| Identity boundaries | 749 brands, all 11 actual names, 397 negative mutations and 321 held contexts |
+| Production | 32-fact canary, full authenticated menu/search checks, preservation and zero-change reruns |
 
-The first identity's 10-row canary exercised every fact before its remaining 53 updates.
-The two smaller identities applied all five facts in single nine-row and ten-row transactions.
-Final authenticated reads checked every item and updated row across all three identities; repeat catalog and April plans returned zero changes.
-Protein Power, Green 2, Green 3, Berryatric, Greentastic and Healixir remain held for unresolved source, recipe or serving evidence.
+Mango Sunshine is an evidenced rename of Tropical Wellness Smoothie: official and UE text explicitly say the recipe is unchanged.
+Old matcha Avocado descriptions and the old Hydration formula remain held.
+Chocolate Banana's one April 20 g/coconut-cream context matches, while eight April rows and both current UE captures still say 21 g and remain estimated.
+Current Vanilla matches the 30 g label; April's 20 g version conflicts.
+Stale official SEO metadata was distinguished from visible product descriptions and attached labels.
 
-The preceding Cold Stone and NORMS batches are also production verified: 917 and 133 rows respectively.
-Their unresolved serving and source conflicts remain held.
-All three chains use the released matcher and writer, so catalog additions required no API deployment.
+Three label-verified products remain held by the released calorie validator: Dark Chocolate, Simple Cleanse and Vanilla.
+Their allulose/fiber labels do not fit its naive 4/4/9 check; the rejection and resulting UE estimator fallback were reproduced locally.
+No publisher value was changed to pass the check, and no validator was bypassed.
+
+The remaining 978 April rows include 431 packs/programs, 191 third-party packaged products, 154 prepared products, 150 single products needing sources and 52 specific recipe/protein/validator holds.
+This is title-based follow-up triage, not proof that all those products have usable official facts.
+34 additional official pack pages were retained for separate quantity and serving review.
+
+Kreation's preceding 82 corrections across 19 restaurants remain production verified.
+Both chains use the released matcher and writer, so these catalog additions required no API deployment.
 
 ## Completed batches
 
@@ -78,13 +85,14 @@ All three chains use the released matcher and writer, so catalog additions requi
 | Kreation Organic Juicery | 63 | 63 | 0 |
 | Kreation Organic | 9 | 9 | 0 |
 | Kreation Kafe & Juicery | 10 | 10 | 0 |
-| **Total** | **37,787** | **14,233** | **23,554** |
+| Pressed | 289 | 289 | 0 |
+| **Total** | **38,076** | **14,522** | **23,554** |
 
 “Values changed” means at least one of calories, protein, carbs or fat changed.
 “Attribution only” means those four values stayed the same and reviewed official attribution was applied.
 These counts measure rollout behavior, not accuracy against measured food.
 
-The batches loaded **1,530 approved facts and 2,119 exact menu aliases** into the chain catalog.
+The batches loaded **1,563 approved facts and 2,176 exact menu aliases** into the chain catalog.
 Jamba, Panera, Popeyes and Jersey Mike's each have two stored identities; Kreation has three.
 Their facts remain scoped to the correct identity.
 Dave's and Nothing Bundt Cakes were also linked to 23 existing restaurants without changing their menu identities.
@@ -110,7 +118,7 @@ Offline UE runs must use a checkout containing it.
 
 | Check | Result and limit |
 |---|---|
-| Production preservation | All **118,848 menu IDs across 1,204 restaurants** preserved; all **81,061 unselected rows** unchanged |
+| Production preservation | All **120,115 menu IDs across 1,215 restaurants** preserved; all **82,039 unselected rows** unchanged |
 | Serving | Authenticated reads checked every selected restaurant's complete menu and every changed row; search/detail checks passed per brand |
 | Repeated execution | All completed batches produced zero pending catalog and April changes |
 | Recovery | Exact local rollback passed; bounded production transactions retain before/after journals; production was not rolled back as a test |
@@ -119,7 +127,7 @@ Offline UE runs must use a checkout containing it.
 
 Current UE captures and simulated historical imports are separate evidence.
 Nine batches after Habit have no current UE capture; their proof does not establish current naming or availability.
-Dave's, Charleys, the second Jersey Mike's identity, Panini, Baskin, Cold Stone, NORMS and Kreation have additional current-capture replays.
+Dave's, Charleys, the second Jersey Mike's identity, Panini, Baskin, Cold Stone, NORMS, Kreation and Pressed have additional current-capture replays.
 Activating a catalog routes imports through UE but does not guarantee UE returns a menu.
 Authenticated checks use the existing allowlisted review account, not a paid-subscription test.
 
@@ -130,6 +138,8 @@ Authenticated checks use the existing allowlisted review account, not a paid-sub
 | Same name, different serving | Require the exact item, size and complete order; Wingstop per-wing facts cannot represent an unsized wing order |
 | Missing accompaniments | Check included sides and sauces; hold unresolved IHOP omelette sides and Burger King/NORMS onion-ring sauces |
 | Calculator controls | Check actions, displayed selections and totals together; Panini has stale checked classes, and Jersey Mike's Markdown lists unselected extras |
+| Stale page metadata | Compare visible descriptions and attached labels; Pressed SEO retained old formulas while the product panel had changed |
+| Energy consistency | Keep a reviewed path for allulose/fiber labels; do not alter source macros to satisfy a naive 4/4/9 equation |
 | Conflicting source values | Hold disagreements instead of choosing the convenient number; examples include Habit, Charleys, CAVA, Buffalo Wild Wings and Cold Stone |
 | Wrong source scope | Respect country, region and restaurant eligibility; Peet's and Del Taco remain inactive for separate scope/release reasons |
 | Different portion conventions | Use nutrition servings for whole cakes and bottles; Kreation labels require two servings per bottle |
@@ -152,10 +162,11 @@ This is a reproduced gap, not a shipped fix; the captured-menu consistency proof
 ## Remaining work
 
 1. Fix distinct-product name collisions through the parser, writer and database identity contract, with a staged migration and preserved saved items.
-2. Continue through remaining chain identities, prioritizing meals with usable official serving evidence.
-3. Package the proven source adapters and proposal checks into repeatable offline onboarding.
-4. Release the prepared regional runtime after its required simulator gate, then activate the reviewed Peet's batch.
-5. Keep nutrition accuracy review separate from match coverage and import consistency.
+2. Add narrowly reviewed support for legitimate allulose/fiber labels, preserving strict validation for unreviewed facts.
+3. Continue through remaining chain identities, prioritizing meals with usable official serving evidence.
+4. Package the proven source adapters and proposal checks into repeatable offline onboarding.
+5. Release the prepared regional runtime after its required simulator gate, then activate the reviewed Peet's batch.
+6. Keep nutrition accuracy review separate from match coverage and import consistency.
 
 Del Taco remains held because its guide covers company-owned restaurants and location eligibility is unproven.
 The inventory's 688 menu-bearing groups are a review cohort, not 688 independently confirmed national chains or approved catalogs.

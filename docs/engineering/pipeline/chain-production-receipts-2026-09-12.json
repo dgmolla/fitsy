@@ -1,19 +1,19 @@
 {
   "generated": true,
-  "asOf": "2026-09-13T11:02:50.290772+00:00",
-  "scope": "35 completed source batches; earlier WaBa/Yoshinoya excluded",
+  "asOf": "2026-09-13T11:50:50.057621+00:00",
+  "scope": "36 completed source batches; earlier WaBa/Yoshinoya excluded",
   "reviewedCodeHead": "179be20e9a26eda262c428149630f72092730302",
   "mergeCommit": "848f117952b60b62bd1ee03291151e73a1184e55",
   "pr": "https://github.com/dgmolla/fitsy/pull/289",
   "totals": {
-    "facts": 1530,
-    "aliases": 2119,
-    "patchedRows": 37787,
-    "numericChanges": 14233,
+    "facts": 1563,
+    "aliases": 2176,
+    "patchedRows": 38076,
+    "numericChanges": 14522,
     "attributionOnly": 23554,
-    "preservedMenuIds": 118848,
-    "unchangedUnselectedRows": 81061,
-    "restaurants": 1204
+    "preservedMenuIds": 120115,
+    "unchangedUnselectedRows": 82039,
+    "restaurants": 1215
   },
   "batches": [
     {
@@ -938,6 +938,32 @@
         "kreation-kafe-juicery-bottles-approved.json": "4cbcdc599775f8032e3edb44fbcee5179987c99f26c7b13114704cbb86a73ab4",
         "kreation-kafe-juicery-bottles-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "kreation-kafe-juicery-bottles-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "pressed-bottles-v2",
+      "chains": "Pressed",
+      "brandSlugs": [
+        "pressed"
+      ],
+      "facts": 33,
+      "aliases": 57,
+      "patchedRows": 289,
+      "numericChanges": 289,
+      "attributionOnly": 0,
+      "preservedMenuIds": 1267,
+      "unchangedUnselectedRows": 978,
+      "restaurants": 11,
+      "httpVerifiedAt": "2026-09-13T11:50:50.057621+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "pressed-bottles-v2-segments/000232.json.verified.json": "096022372cee6571a38a7a062c77b078269a3d7e82424208dc0f50d71db3dfa0",
+        "pressed-bottles-v2-complete-http.json": "62834044e3caf36c6b15935eb6971acd71cbdd81ee47df20abc984aa605e8045",
+        "pressed-bottles-v2-approved.json": "4864d2737b662a8b9915dd0571add4e341ab39cc995320ea8ed54062d3c508d5",
+        "pressed-bottles-v2-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "pressed-bottles-v2-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
       },
       "originalCatalogRowsPreserved": 0
     }
