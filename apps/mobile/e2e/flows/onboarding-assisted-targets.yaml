@@ -89,13 +89,17 @@ tags: [onboarding, discovery, changed-journey]
     visible:
       id: coachmark-next
     timeout: 30000
-- assertVisible: "Search anything"
+- assertVisible: "Follow your craving"
 - tapOn:
     id: coachmark-next
 - tapOn:
     id: coachmark-next
 - tapOn:
     id: coachmark-next
+- tapOn:
+    id: coachmark-next
+- assertVisible: "5 OF 5"
+- tapOn: "Find my meal"
 - assertVisible: "700"
 - assertVisible:
     id: discovery-hero

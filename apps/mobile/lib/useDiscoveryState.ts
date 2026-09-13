@@ -5,11 +5,12 @@ import type { RestaurantResult } from '@fitsy/shared';
 import type { CoachMarkStep } from '@/components/CoachMarks';
 import type { MacroValues } from './macroPresets';
 import type { PresetLocation } from './locations';
+import { usePreviewTour } from './usePreviewTour';
 import { useDiscoveryResults } from './useDiscoveryResults';
 import { useDiscoveryLocation } from './useDiscoveryLocation';
 import { useEntitlementMismatch } from './useEntitlementMismatch';
 import { usePurchases } from './usePurchases';
-import { hasSeenPreviewTour, markPreviewTourSeen, routeToPaywall } from './teaserGate';
+import { routeToPaywall } from './teaserGate';
 import { getMacroTargets, saveMacroTargets } from './macroStorage';
 import { getPreviewSetup } from './previewSetup';
 import { saveOnboardingField } from './onboardingStorage';
@@ -33,14 +34,10 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
   const tourEditRef = useRef<View | null>(null);
   const tourSearchRef = useRef<View | null>(null);
   const tourHeroRef = useRef<View | null>(null);
-  const [tourVisible, setTourVisible] = useState(false);
-  const tourDoneRef = useRef(false);
-  const tourStartingRef = useRef(false);
-  const screenFocusedRef = useRef(false);
-  const overlayOpenRef = useRef(false);
+  const tourLocationRef = useRef<View | null>(null);
+  const tourMoreRef = useRef<View | null>(null);
   const [filterVisible, setFilterVisible] = useState(false);
   const [locationPickerVisible, setLocationPickerVisible] = useState(false);
-  overlayOpenRef.current = filterVisible || locationPickerVisible;
   const [query, setQuery] = useState(initialQuery ?? '');
   const location = useDiscoveryLocation(isOnboardingPreview);
   function handleOpenLocationPicker() {
@@ -62,14 +59,7 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
   const [targetsLoaded, setTargetsLoaded] = useState(false);
   const discovery = useDiscoveryResults({ inputs, query, location, canSearch, targetsLoaded, previewReady, isOnboardingPreview });
   const { results, nextCursor, loading, loadingMore, refreshing, error, locked, fetchSeq, outOfArea, nearbyDishCount, doFetch, handleRefresh, handleEndReached } = discovery;
-  const lockedRef = useRef<boolean | null>(null);
-  lockedRef.current = locked;
-  useFocusEffect(
-    useCallback(() => {
-      screenFocusedRef.current = true;
-      return () => { screenFocusedRef.current = false; };
-    }, []),
-  );
+  const tour = usePreviewTour(isOnboardingPreview && locked === true && !loading && !error && results.length > 0 && !filterVisible && !locationPickerVisible);
   useFocusEffect(
     useCallback(() => {
       getMacroTargets()
@@ -106,7 +96,6 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
     return () => { live = false; };
   }, [isOnboardingPreview]));
   const unlockPreview = useCallback(async (restaurant?: RestaurantResult) => {
-    markPreviewTourSeen();
     try {
       await saveOnboardingField('previewArea', `${location.lat}:${location.lng}`);
       await saveOnboardingField('previewCraving', query.trim());
@@ -176,57 +165,38 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
         ? location.name ?? 'Manual'
         : 'Silver Lake, LA';
   const [heroResult, ...listResults] = results;
-  useEffect(() => {
-    if (!isOnboardingPreview || locked !== true || loading || results.length === 0) return;
-    if (tourDoneRef.current || tourStartingRef.current) return;
-    tourStartingRef.current = true;
-    void hasSeenPreviewTour().then((seen) => {
-      if (seen) {
-        tourDoneRef.current = true;
-        return;
-      }
-      setTimeout(() => {
-        tourStartingRef.current = false;
-        const ok = lockedRef.current === true && screenFocusedRef.current && !overlayOpenRef.current;
-        if (!ok) return;
-        tourDoneRef.current = true;
-        setTourVisible(true);
-      }, 600);
-    });
-  }, [isOnboardingPreview, locked, loading, results.length]);
-  useEffect(() => {
-    if (locked !== true) setTourVisible(false);
-  }, [locked]);
-  const finishTour = useCallback(() => {
-    markPreviewTourSeen();
-    setTourVisible(false);
-  }, []);
   const tourSteps: CoachMarkStep[] = useMemo(() => { const steps: CoachMarkStep[] = [
     {
       key: 'macros',
       title: 'Your meal targets',
-      body: 'Tap Edit to change calories, protein, carbs and fat for one meal. Your picks update to match.',
+      body: 'Your targets are for one meal. Tap Edit any time to change the numbers and explore different picks.',
       target: tourEditRef,
     },
     {
       key: 'search',
-      title: 'Search anything',
-      body: 'Type a dish or a restaurant name to narrow down what is nearby.',
+      title: 'Follow your craving',
+      body: 'Pizza, chicken, or your favorite restaurant. Search here as often as you like, with your meal targets alongside.',
       target: tourSearchRef,
     },
     {
       key: 'restaurant',
-      title: 'Real meals. Clear numbers.',
-      body: 'Explore three picks and their nutrition sources. Tap a restaurant to see plans for its full menu.',
+      title: 'Real meals. Know the source.',
+      body: 'Compare real dish names and macros. Look for Published or Estimated nutrition so you know where the numbers come from.',
       target: tourHeroRef,
       placement: 'above',
     },
-  ]; const first = onboardingPitch(tried).firstTip; return [...steps.filter(step => step.key === first), ...steps.filter(step => step.key !== first)]; }, [tried]);
+  ]; const first = onboardingPitch(tried).firstTip;
+    return [...steps.filter(step => step.key === first), ...steps.filter(step => step.key !== first),
+      { key: 'location', title: 'Wherever your day takes you', body: 'Eating near work or meeting friends? Change your area here to find meals where you want to eat.', target: tourLocationRef },
+      { key: 'more', title: 'More choices. Full menus.', body: nearbyDishCount != null
+        ? `${nearbyDishCount.toLocaleString()} dishes with nutrition within 3 miles of ${locationLabel}. Explore more results and full menus with Pro. Try your first craving now.`
+        : 'Explore more results and full menus with Pro. Try your first craving now.', target: tourMoreRef, placement: 'above' as const },
+    ]; }, [tried, nearbyDishCount, locationLabel]);
 
   return { navigation, isOnboardingPreview, tried, inputs, query, setQuery, canSearch, hasQuery, location,
     locationLabel, results, heroResult, listResults, nextCursor, loading, loadingMore, refreshing, error, locked, outOfArea, nearbyDishCount,
-    filterVisible, setFilterVisible, locationPickerVisible, setLocationPickerVisible, tourVisible, setTourVisible,
-    tourEditRef, tourSearchRef, tourHeroRef, tourSteps, finishTour, handleClearQuery, handleApplyFilters,
+    filterVisible, setFilterVisible, locationPickerVisible, setLocationPickerVisible, tourVisible: tour.visible, startTour: tour.start,
+    tourEditRef, tourSearchRef, tourHeroRef, tourLocationRef, tourMoreRef, tourSteps, finishTour: tour.finish, handleClearQuery, handleApplyFilters,
     handleJoinWaitlist, handleOpenLocationPicker, handlePickLocation, handleUseCurrentLocation, unlockPreview,
     unlocking, resyncNow, onLockedTap, unlockTitle, unlockSubtitle, unlockLabel, handleRefresh, handleEndReached };
 }

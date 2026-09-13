@@ -5,6 +5,7 @@ import { View } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
 import { CoachMarks, type CoachMarkStep } from './CoachMarks';
 
+jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 59, bottom: 34, left: 0, right: 0 }) }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 
 function fakeTarget(rect: [number, number, number, number] | null) {
@@ -43,8 +44,31 @@ describe('CoachMarks', () => {
     expect(getByText('Step C')).toBeTruthy();
     expect(onStepShown).toHaveBeenCalledTimes(2);
 
+    fireEvent.press(getByLabelText('Previous tip'));
+    act(() => { jest.advanceTimersByTime(100); });
+    expect(getByText('Step A')).toBeTruthy();
+    fireEvent.press(getByLabelText('Next tip'));
+    act(() => { jest.advanceTimersByTime(100); });
+    act(() => { jest.advanceTimersByTime(100); });
     fireEvent.press(getByLabelText('Got it'));
     expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits for scrolling before measuring, and replay starts at the first tip', async () => {
+    let finishScroll: () => void = () => {};
+    const onBeforeStep = jest.fn(() => new Promise<void>(resolve => { finishScroll = resolve; }));
+    const props = { steps, onDone: jest.fn(), onBeforeStep };
+    const screen = render(<CoachMarks visible {...props} />);
+    act(() => { jest.advanceTimersByTime(100); });
+    expect(screen.queryByText('Step A')).toBeNull();
+    await act(async () => { finishScroll(); });
+    expect(screen.getByText('Step A')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Next tip'));
+    screen.rerender(<CoachMarks visible={false} {...props} />);
+    screen.rerender(<CoachMarks visible {...props} />);
+    act(() => { jest.advanceTimersByTime(100); });
+    await act(async () => { finishScroll(); });
+    expect(screen.getByText('1 of 3')).toBeTruthy();
   });
 
   it('Skip ends the tour early', () => {

@@ -6,6 +6,7 @@ import { fetchCustomerInfo, hasLapsedEntitlement } from './purchases';
 
 const PREVIEW_SAMPLE_USED_KEY = '@fitsy/previewSampleUsed';
 const PREVIEW_TOUR_SEEN_KEY = '@fitsy/previewTourSeen';
+const PREVIEW_TOUR_VERSION = '2';
 
 // In-memory mirror of the persisted flag: reads after the first one are
 // free (no bridge round-trip on every locked-row tap), and mark/reset flip
@@ -36,7 +37,7 @@ export async function hasUsedPreviewSample(): Promise<boolean> {
   return sampleUsedCache;
 }
 
-/** Fresh onboarding pass = fresh tease: the free look and the three-step
+/** Fresh onboarding pass = fresh tease: the free look and the guided
  * search tour both come back. Sync in memory; the storage writes are
  * fire-and-forget (a failure just means the look stays spent on disk). */
 export function resetPreviewSample(): void {
@@ -56,7 +57,7 @@ let tourSeenCache: boolean | null = null;
 export async function hasSeenPreviewTour(): Promise<boolean> {
   if (tourSeenCache !== null) return tourSeenCache;
   try {
-    tourSeenCache = (await AsyncStorage.getItem(PREVIEW_TOUR_SEEN_KEY)) === '1';
+    tourSeenCache = (await AsyncStorage.getItem(PREVIEW_TOUR_SEEN_KEY)) === PREVIEW_TOUR_VERSION;
   } catch {
     tourSeenCache = true;
   }
@@ -65,7 +66,7 @@ export async function hasSeenPreviewTour(): Promise<boolean> {
 
 export function markPreviewTourSeen(): void {
   tourSeenCache = true;
-  AsyncStorage.setItem(PREVIEW_TOUR_SEEN_KEY, '1').catch(() => {});
+  AsyncStorage.setItem(PREVIEW_TOUR_SEEN_KEY, PREVIEW_TOUR_VERSION).catch(() => {});
 }
 
 /** Sync in memory; storage write is fire-and-forget (a failure just means

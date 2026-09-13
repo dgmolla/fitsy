@@ -1,10 +1,10 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useRef } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, SafeAreaView, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { FitsyLoader } from './FitsyLoader';
 import { LockedUnlockCard } from './LockedUnlockCard';
-import { CoachMarks } from './CoachMarks';
+import { CoachMarks, type CoachMarkStep } from './CoachMarks';
 import { FilterPopup } from './FilterPopup';
 import { LocationPickerSheet } from './LocationPickerSheet';
 import { shouldShowInitialLoader } from '@/lib/searchLoading';
@@ -20,15 +20,32 @@ const FREE_RESULT_COUNT = 3;
 export function DiscoveryScreen({ onboardingPreview = false }: { onboardingPreview?: boolean }) {
   const { navigation, isOnboardingPreview, tried, inputs, query, setQuery, canSearch, hasQuery, location,
     locationLabel, results, heroResult, listResults, nextCursor, loading, loadingMore, refreshing, error, locked, outOfArea, nearbyDishCount,
-    filterVisible, setFilterVisible, locationPickerVisible, setLocationPickerVisible, tourVisible, setTourVisible,
-    tourEditRef, tourSearchRef, tourHeroRef, tourSteps, finishTour, handleClearQuery, handleApplyFilters,
+    filterVisible, setFilterVisible, locationPickerVisible, setLocationPickerVisible, tourVisible, startTour,
+    tourEditRef, tourSearchRef, tourHeroRef, tourLocationRef, tourMoreRef, tourSteps, finishTour, handleClearQuery, handleApplyFilters,
     handleJoinWaitlist, handleOpenLocationPicker, handlePickLocation, handleUseCurrentLocation, unlockPreview,
     unlocking, resyncNow, onLockedTap, unlockTitle, unlockSubtitle, unlockLabel, handleRefresh, handleEndReached } = useDiscoveryState({ onboardingPreview });
+  const listRef = useRef<FlatList<(typeof results)[number]>>(null);
+  const scrollOffset = useRef(0);
+  const viewportRef = useRef<View>(null);
+  const prepareTourStep = useCallback((step: CoachMarkStep) => new Promise<void>(resolve => {
+    // The location chip is fixed above the list; all other anchors scroll with it.
+    if (step.key === 'location') { resolve(); return; }
+    const timer = setTimeout(resolve, 250);
+    step.target.current?.measureInWindow((_x, y, _w, h) => {
+      viewportRef.current?.measureInWindow((_vx, vy, _vw, vh) => {
+        const top = Math.max(vy + 12, Math.min(y, vy + vh - h - 24));
+        listRef.current?.scrollToOffset({ offset: Math.max(0, scrollOffset.current + y - top), animated: false });
+        clearTimeout(timer);
+        setTimeout(resolve, 100);
+      });
+    });
+  }), []);
+  const closeTour = () => { finishTour(); listRef.current?.scrollToOffset({ offset: 0, animated: false }); };
   const header = (
     <>
       {isOnboardingPreview && <View style={s.previewIntro} testID="preview-guide">
         <Text style={s.previewHint}>{onboardingPitch(tried).preview}</Text>
-        <Pressable onPress={() => setTourVisible(true)} accessibilityRole="button" testID="preview-show-tour"><Text style={s.previewLink}>Show me around</Text></Pressable>
+        <Pressable onPress={startTour} style={s.previewTourButton} accessibilityRole="button" testID="preview-show-tour"><Ionicons name="sparkles-outline" size={16} color={EDITORIAL.green} /><Text style={s.previewLink}>Show me how Fitsy works</Text><Text style={s.previewHint}>5 quick tips</Text></Pressable>
       </View>}
       <MacroStrip macros={inputs} onEdit={() => setFilterVisible(true)} editRef={tourEditRef} />
       <SearchBar value={query} onChangeText={setQuery} onClear={handleClearQuery} containerRef={tourSearchRef} />
@@ -90,8 +107,8 @@ export function DiscoveryScreen({ onboardingPreview = false }: { onboardingPrevi
   const hiddenCount = results.length - FREE_RESULT_COUNT;
   const renderFooter = useCallback(() => {
     if (isOnboardingPreview && !loading && !error && !outOfArea) {
-      return <LockedUnlockCard title="More choices. Full menus." subtitle={nearbyDishCount != null ? `${nearbyDishCount.toLocaleString()} dishes with nutrition within 3 miles. Explore more with Pro.` : 'Keep exploring nearby meals with Pro.'}
-        ctaLabel="Explore meals that fit" accessibilityLabel="Explore more meals and full menus with Pro" onPress={() => { void unlockPreview(); }} style={s.lockedCard} />;
+      return <View ref={tourMoreRef} collapsable={false}><LockedUnlockCard title="More choices. Full menus." subtitle={nearbyDishCount != null ? `${nearbyDishCount.toLocaleString()} dishes with nutrition within 3 miles. Explore more with Pro.` : 'Keep exploring nearby meals with Pro.'}
+        ctaLabel="Explore meals that fit" accessibilityLabel="Explore more meals and full menus with Pro" onPress={() => { void unlockPreview(); }} style={s.lockedCard} /></View>;
     }
     if (locked && results.length > 0) {
       if (unlocking) {
@@ -122,7 +139,7 @@ export function DiscoveryScreen({ onboardingPreview = false }: { onboardingPrevi
         <ActivityIndicator size="small" color={EDITORIAL.greenAccent} />
       </View>
     );
-  }, [loadingMore, locked, results.length, hiddenCount, nextCursor, unlocking, resyncNow, unlockTitle, unlockSubtitle, unlockLabel, isOnboardingPreview, nearbyDishCount, unlockPreview, loading, error, outOfArea]);
+  }, [loadingMore, locked, results.length, hiddenCount, nextCursor, unlocking, resyncNow, unlockTitle, unlockSubtitle, unlockLabel, isOnboardingPreview, nearbyDishCount, unlockPreview, loading, error, outOfArea, tourMoreRef]);
   const initialLoading = shouldShowInitialLoader({
     loading,
     resultCount: results.length,
@@ -131,7 +148,7 @@ export function DiscoveryScreen({ onboardingPreview = false }: { onboardingPrevi
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: EDITORIAL.cream }}>
       {isOnboardingPreview && navigation.canGoBack() && <Pressable style={s.previewBack} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Go back" testID="preview-back"><Ionicons name="chevron-back" size={22} color={EDITORIAL.green} /><Text style={s.previewLink}>Your meal targets</Text></Pressable>}
-      <Masthead locationLabel={locationLabel} onLocationPress={handleOpenLocationPicker} />
+      <Masthead locationRef={tourLocationRef} locationLabel={locationLabel} onLocationPress={handleOpenLocationPicker} />
       {initialLoading && (
         <View style={s.loaderWrap}>
           <FitsyLoader size="md" />
@@ -144,7 +161,10 @@ export function DiscoveryScreen({ onboardingPreview = false }: { onboardingPrevi
         </View>
       )}
       {!initialLoading && (
-        <FlatList
+        <View ref={viewportRef} collapsable={false} style={{ flex: 1 }}><FlatList
+          ref={listRef}
+          onScroll={event => { scrollOffset.current = event.nativeEvent.contentOffset.y; }}
+          scrollEventThrottle={16}
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingBottom: 110 }}
           showsVerticalScrollIndicator={false}
@@ -165,12 +185,14 @@ export function DiscoveryScreen({ onboardingPreview = false }: { onboardingPrevi
               colors={[EDITORIAL.greenAccent]}
             />
           }
-        />
+        /></View>
       )}
       <CoachMarks
         visible={tourVisible && locked === true}
         steps={tourSteps}
-        onDone={finishTour}
+        onDone={closeTour}
+        onBeforeStep={prepareTourStep}
+        doneLabel="Find my meal"
         onStepShown={(step) => trackOnboardingScreenView(`preview_tour_${step.key}`)}
       />
       <FilterPopup
