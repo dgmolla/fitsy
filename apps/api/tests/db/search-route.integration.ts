@@ -182,6 +182,7 @@ test('search and detail expose the same LOW confidence when provenance is missin
   const detail = await body(await getMenu(id, targetQuery));
   assert.equal(best.confidence, 'LOW');
   assert.equal('source' in best, false);
+  assert.equal('nutritionBasis' in best, false);
   assert.equal(detail.menuItems[0]!.id, best.menuItemId);
   assert.equal(detail.menuItems[0]!.macros!.confidence, 'LOW');
   assert.equal(detail.menuItems[0]!.macros!.calories, best.calories);
@@ -202,10 +203,14 @@ test('guided preview reveals three real ranked meal summaries with provenance an
   assert.equal(result.data.length, 3);
   assert.equal(result.meta.nearbyDishCount, 1004, 'four restaurants, 251 dishes each, regardless of the craving');
   assert.equal(result.meta.radiusMiles, 3);
+  const estimated = guidedPreviewResponseSchema.parse(await (await preview(guidedRequest('q=dish'))).json());
+  assert.ok(estimated.data.length);
+  assert.ok(estimated.data.every(restaurant => restaurant.bestMatch!.nutritionBasis === 'estimated'));
   for (const restaurant of result.data) {
     assert.equal(restaurant.bestMatch!.name, 'Zucchini chicken');
     assert.equal(restaurant.bestMatch!.calories, 600);
-    assert.equal(restaurant.bestMatch!.source, 'merchant');
+    assert.equal(restaurant.bestMatch!.nutritionBasis, 'published');
+    assert.equal('source' in restaurant.bestMatch!, false);
   }
 });
 
@@ -225,7 +230,7 @@ test('no craving matches preserve coverage count; genuinely uncovered areas retu
   assert.deepEqual(uncovered, { data: [], meta: { nearbyDishCount: 0, radiusMiles: 3 } });
 });
 
-test('local count excludes dishes without complete nutrition and does not multiply estimate sources', async () => {
+test('local count excludes dishes without complete nutrition', async () => {
   const id = restaurantIds[1]!;
   const incomplete = await prisma.menuItem.create({ data: {
     restaurantId: id, name: 'Missing protein', calories: 500, carbsG: 40, fatG: 20,

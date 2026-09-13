@@ -22,7 +22,7 @@ export const bestMatchSummarySchema = z.object({
   fatG: z.number(),
   confidence: z.enum(["HIGH", "MEDIUM", "LOW"]),
   matchScore: z.number().nullable(),
-  source: z.string().optional(),
+  nutritionBasis: z.enum(["published", "estimated"]).optional(),
 });
 
 export const restaurantResultSchema = z.object({

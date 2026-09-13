@@ -69,13 +69,13 @@ export async function GET(
       // still redacts bestMatch; this sample has no cursor or full-menu data.
       // The per-instance IP brake limits bursts, not determined scraping across
       // serverless instances. The app's one-craving tour is a UX limit only.
-      const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+      const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";
       const quota = guidedLimiter.check(ip);
       if (!quota.ok) return NextResponse.json({ error: "Too many preview searches. Please try again shortly." }, {
         status: 429, headers: { "Retry-After": String(Math.ceil(quota.retryAfterMs / 1000)) },
       });
       const [{ data }, nearbyDishCount] = await Promise.all([
-        findNearbyRestaurants({ lat, lng, radiusMiles: 3, targets, query, limit: 3 }),
+        findNearbyRestaurants({ lat, lng, radiusMiles: 3, targets, query, limit: 3, includeNutritionBasis: true }),
         countNearbyDishes(lat, lng, 3),
       ]);
       return NextResponse.json({ data, meta: { nearbyDishCount, radiusMiles: 3 } });

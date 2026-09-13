@@ -46,6 +46,8 @@ export interface NearbyRestaurantsParams {
   lng: number;
   radiusMiles: number;
   targets: MacroTargets;
+  /** Public provenance label for the guided sample only; legacy responses stay unchanged. */
+  includeNutritionBasis?: boolean;
   cuisineType?: string | undefined;
   chainOnly?: boolean | undefined;
   dietary?: string | undefined;
@@ -435,7 +437,7 @@ export async function findNearbyRestaurants(
       carbsG: r.carbsG,
       fatG: r.fatG,
       confidence: r.confidence ?? "LOW",
-      ...(r.source ? { source: r.source } : {}),
+      ...(params.includeNutritionBasis ? { nutritionBasis: r.source === "merchant" || r.source === "official" ? "published" as const : "estimated" as const } : {}),
       matchScore: targetsActive
         ? Math.round(Math.sqrt(r.scoreSum) * 10000) / 10000
         : null,
