@@ -199,6 +199,7 @@ test('guided preview reveals three real ranked meal summaries with provenance an
   assert.equal(response.status, 200);
   const raw = await response.json();
   assert.ok(!('nextCursor' in raw.meta));
+  for (const restaurant of raw.data) assert.equal('source' in restaurant.bestMatch, false);
   const result = guidedPreviewResponseSchema.parse(raw);
   assert.equal(result.data.length, 3);
   assert.equal(result.meta.nearbyDishCount, 1004, 'four restaurants, 251 dishes each, regardless of the craving');
@@ -210,7 +211,6 @@ test('guided preview reveals three real ranked meal summaries with provenance an
     assert.equal(restaurant.bestMatch!.name, 'Zucchini chicken');
     assert.equal(restaurant.bestMatch!.calories, 600);
     assert.equal(restaurant.bestMatch!.nutritionBasis, 'published');
-    assert.equal('source' in restaurant.bestMatch!, false);
   }
 });
 
