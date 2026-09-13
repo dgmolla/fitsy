@@ -5,21 +5,24 @@
 set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$REPO_ROOT"
 CHANGED=""
-if [ -n "${PR_NUMBER:-}" ] && command -v gh >/dev/null; then
-  CHANGED="$(gh pr diff "$PR_NUMBER" --name-only 2>/dev/null || true)"
+COMPARE_HEAD=HEAD
+if [ -n "${PR_NUMBER:-}" ]; then
+  # One snapshot keeps the file list and comparison revision consistent.
+  PR_CONTEXT="$(gh pr view "$PR_NUMBER" --json headRefOid,files --jq '.headRefOid, (.files[].path)' 2>/dev/null)" || PR_CONTEXT=""
+  COMPARE_HEAD="$(printf '%s\n' "$PR_CONTEXT" | head -n 1)"
+  if ! [[ "$COMPARE_HEAD" =~ ^[a-f0-9]{40}$ ]]; then
+    printf '{"name":"domain-check","status":"fail","summary":"Unable to resolve PR files and head","fix":"retry with GitHub access to the exact PR revision"}\n'
+    exit 1
+  fi
+  CHANGED="$(printf '%s\n' "$PR_CONTEXT" | sed '1d')"
+else
+  CHANGED="$(git diff --name-only origin/main...HEAD 2>/dev/null || true)"
 fi
-[ -z "$CHANGED" ] && CHANGED="$(git diff --name-only origin/main...HEAD 2>/dev/null || true)"
 if [ -z "$CHANGED" ]; then
   printf '{"name":"domain-check","status":"skipped","summary":"no diff vs origin/main","fix":""}\n'
   exit 2
 fi
 # Classify removal-only exception maintenance with the same changed product files.
-# Resolve the actual PR head so a different local checkout cannot hide additions.
-COMPARE_HEAD=HEAD
-if [ -n "${PR_NUMBER:-}" ]; then
-  COMPARE_HEAD="$(gh pr view "$PR_NUMBER" --json headRefOid --jq .headRefOid 2>/dev/null || echo unavailable)"
-  [[ "$COMPARE_HEAD" =~ ^[a-f0-9]{40}$ ]] || COMPARE_HEAD=unavailable
-fi
 CHANGED="$(printf '%s\n' "$CHANGED" | node scripts/verify/domain-allowlist-paths.mjs "$COMPARE_HEAD")"
 # Main's routing table, so PR branches never need a rebase to pick up routing
 # fixes — EXCEPT when the PR itself changes the table: that change is under

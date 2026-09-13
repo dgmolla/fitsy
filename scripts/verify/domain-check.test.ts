@@ -49,7 +49,7 @@ test('unreadable comparison history fails closed', () => {
   expect(result.status).toBe(0); expect(result.stdout).toBe(paths);
 });
 
-test.each(['addition', 'unavailable'])('PR mode uses the remote head and fails closed for %s', scenario => {
+test.each(['addition', 'cleanup', 'unavailable'])('PR mode uses the remote head and fails closed for %s', scenario => {
   write(mobile, 'remote screen');
   write(allowlist, readFileSync(join(directory, allowlist), 'utf8') + `long-file apps/mobile/app/new.tsx\n`);
   commit(); const remoteHead = git('rev-parse', 'HEAD');
@@ -57,10 +57,12 @@ test.each(['addition', 'unavailable'])('PR mode uses the remote head and fails c
   write(mobile, 'local screen'); write(allowlist, ''); commit();
   expect(check().status).toBe(0);
   const bin = join(directory, 'bin'); mkdirSync(bin);
-  const program = `#!/usr/bin/env node\nif (process.argv.includes('--name-only')) process.stdout.write(${JSON.stringify(mobile + '\n' + allowlist + '\n')}); else process.stdout.write(process.env.FIXTURE_PR_HEAD || '');\n`;
+  const program = `#!/usr/bin/env node\nprocess.stdout.write((process.env.FIXTURE_PR_HEAD || '') + '\\n' + ${JSON.stringify(mobile + '\n' + allowlist + '\n')});\n`;
   writeFileSync(join(bin, 'gh'), program, { mode: 0o755 });
-  const result = check({ PR_NUMBER: '1', FIXTURE_PR_HEAD: scenario === 'addition' ? remoteHead : '', PATH: bin + ':' + fixtureEnv.PATH });
-  expect(result.status).toBe(1); expect(JSON.parse(result.stdout).summary).toContain('cto frontend');
+  const head = scenario === 'addition' ? remoteHead : scenario === 'cleanup' ? git('rev-parse', 'HEAD') : '';
+  const result = check({ PR_NUMBER: '1', FIXTURE_PR_HEAD: head, PATH: bin + ':' + fixtureEnv.PATH });
+  expect(result.status).toBe(scenario === 'cleanup' ? 0 : 1);
+  expect(JSON.parse(result.stdout).summary).toBe(scenario === 'cleanup' ? 'single domain: frontend' : scenario === 'addition' ? 'PR touches 2 domains: cto frontend' : 'Unable to resolve PR files and head');
 });
 test('unrecognized exception categories keep infrastructure ownership', () => {
   write(allowlist, `future-rule ${mobile}\n`); commit(); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
