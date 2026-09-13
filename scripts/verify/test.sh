@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
-# api unit tests with coverage gate + scripts and mobile tests. CI provides the Postgres service container env; locally all tests
-# mock external services so no DB is required.
+# API coverage plus scripts and mobile tests. Database-backed API suites share
+# one schema, so run those suites in one worker to avoid unrelated SERIALIZABLE
+# transactions exhausting each other's retry budget. In-test concurrency remains.
 set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$REPO_ROOT"
 FAIL=""
-npm run test:coverage --workspace=apps/api >&2 || FAIL="apps/api"
+API_ARGS=()
+if [ -n "${POSTGRES_PRISMA_URL:-}" ]; then API_ARGS=(-- --runInBand); fi
+npm run test:coverage --workspace=apps/api "${API_ARGS[@]}" >&2 || FAIL="apps/api"
 npm test --workspace=@fitsy/scripts >&2 || FAIL="${FAIL:+$FAIL, }scripts"
 npm test --workspace=@fitsy/mobile >&2 || FAIL="${FAIL:+$FAIL, }mobile"
 if [ -n "$FAIL" ]; then
