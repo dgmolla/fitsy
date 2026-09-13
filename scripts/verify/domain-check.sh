@@ -18,6 +18,7 @@ fi
 COMPARE_HEAD=HEAD
 if [ -n "${PR_NUMBER:-}" ]; then
   COMPARE_HEAD="$(gh pr view "$PR_NUMBER" --json headRefOid --jq .headRefOid 2>/dev/null || echo unavailable)"
+  [[ "$COMPARE_HEAD" =~ ^[a-f0-9]{40}$ ]] || COMPARE_HEAD=unavailable
 fi
 CHANGED="$(printf '%s\n' "$CHANGED" | node scripts/verify/domain-allowlist-paths.mjs "$COMPARE_HEAD")"
 # Main's routing table, so PR branches never need a rebase to pick up routing
