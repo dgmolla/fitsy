@@ -8,7 +8,8 @@ National onboarding is still in progress.
 
 **481 rows are production verified: 143 macro corrections and 338 attribution-only confirmations.**
 The 25 reviewed facts and 29 exact aliases cover empty cones, explicitly sized drinks, one 4 oz scoop, four-bar boxes and whole Polar Pizzas.
-All 1,190 menu IDs across 36 restaurants were preserved, including 709 unchanged rows and 10 older unreviewed catalog records.
+All 1,190 menu IDs across 36 restaurants were preserved; the 709 unselected menu rows stayed unchanged.
+Separately, all ten older unreviewed records in the chain catalog were preserved.
 
 | Serving issue | Reviewed treatment |
 |---|---|
@@ -116,7 +117,7 @@ Authenticated checks use the existing allowlisted review account, not a paid-sub
 | Wrong source scope | Respect country, region and restaurant eligibility; Peet's and Del Taco remain inactive for separate scope/release reasons |
 | Different portion conventions | Use nutrition servings, not guest counts, for whole Nothing Bundt Cakes products |
 | Duplicate brand identity | Reuse verified source facts through separate brand-scoped bindings; test each identity without merging unrelated restaurants |
-| Existing catalog says “official” | Require a valid review and serving binding; Charleys' 39 and Baskin's 10 older unreviewed rows were preserved and not implicitly promoted |
+| Existing catalog says “official” | Require a valid review and serving binding; Charleys' 39 and Baskin's 10 older unreviewed chain catalog records were preserved and not implicitly promoted |
 
 Published default servings remain an explicit assumption where historical menus lack weights or ingredients.
 Unresolved cases retain estimates; replay consistency is not evidence that an estimate or published portion is accurate for every order.
