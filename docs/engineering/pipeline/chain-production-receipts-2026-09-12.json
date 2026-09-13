@@ -1,19 +1,19 @@
 {
   "generated": true,
-  "asOf": "2026-09-13T07:39:16.553941+00:00",
-  "scope": "28 completed source batches; earlier WaBa/Yoshinoya excluded",
+  "asOf": "2026-09-13T12:31:30.486189+00:00",
+  "scope": "37 completed source batches; earlier WaBa/Yoshinoya excluded",
   "reviewedCodeHead": "179be20e9a26eda262c428149630f72092730302",
   "mergeCommit": "848f117952b60b62bd1ee03291151e73a1184e55",
   "pr": "https://github.com/dgmolla/fitsy/pull/289",
   "totals": {
-    "facts": 1395,
-    "aliases": 1965,
-    "patchedRows": 36024,
-    "numericChanges": 13693,
-    "attributionOnly": 22331,
-    "preservedMenuIds": 109352,
-    "unchangedUnselectedRows": 73328,
-    "restaurants": 1114
+    "facts": 1628,
+    "aliases": 2279,
+    "patchedRows": 38300,
+    "numericChanges": 14619,
+    "attributionOnly": 23681,
+    "preservedMenuIds": 120904,
+    "unchangedUnselectedRows": 82604,
+    "restaurants": 1222
   },
   "batches": [
     {
@@ -41,7 +41,8 @@
         "first-batch-approved.json": "b424c9dc48a39322fb46722d1879bc1ff0b89d21382fdfe54bfeac6864533904",
         "first-batch-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "first-batch-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
-      }
+      },
+      "originalCatalogRowsPreserved": 0
     },
     {
       "batch": "second-batch",
@@ -69,7 +70,8 @@
         "second-batch-approved.json": "e6addb9f9d26b1b205d17033bcdc0d0177aa6518ec4a28d5443a7535da476bfa",
         "second-batch-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "second-batch-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
-      }
+      },
+      "originalCatalogRowsPreserved": 103
     },
     {
       "batch": "tacobell",
@@ -94,7 +96,8 @@
         "tacobell-approved.json": "b9946eac7074d528f1783b7ba802fefe923731b51eb7c1ab7d8db3a372e1d4ae",
         "tacobell-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "tacobell-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
-      }
+      },
+      "originalCatalogRowsPreserved": 0
     },
     {
       "batch": "starbucks",
@@ -119,7 +122,8 @@
         "starbucks-approved.json": "949026c1b5892b9cfcdf7fdb1efba500b78f5cad6df20b40ae95828d3b12f7dd",
         "starbucks-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "starbucks-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
-      }
+      },
+      "originalCatalogRowsPreserved": 0
     },
     {
       "batch": "next-source",
@@ -145,7 +149,8 @@
         "next-source-approved.json": "5f414265bb6accc05f41be3d01c18c4b85dce6111323c85ce00695bec5ffca97",
         "next-source-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "next-source-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
-      }
+      },
+      "originalCatalogRowsPreserved": 300
     },
     {
       "batch": "standard-chain",
@@ -173,7 +178,8 @@
         "standard-chain-approved.json": "376b0b25e65883c3c20e6dd389b77dc37bb2fdc0f6ef8b0cb6729a426dfbd418",
         "standard-chain-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "standard-chain-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
-      }
+      },
+      "originalCatalogRowsPreserved": 0
     },
     {
       "batch": "dominos",
@@ -198,7 +204,8 @@
         "dominos-approved.json": "6f0ba9d4c2fa21259031cf39cf9a0f5c65e99d51a620ef5cd3dd7db8bf1576d6",
         "dominos-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "dominos-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
-      }
+      },
+      "originalCatalogRowsPreserved": 99
     },
     {
       "batch": "cafe",
@@ -227,7 +234,8 @@
         "cafe-approved.json": "e90766ebb8b99dba23bedb83a98e71948a8813d8ac4c4078185a1cb7353ba64b",
         "cafe-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "cafe-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
-      }
+      },
+      "originalCatalogRowsPreserved": 124
     },
     {
       "batch": "pizza-chain",
@@ -253,7 +261,8 @@
         "pizza-chain-approved.json": "9873cc1ab630f81d17537dd2e5b4d0034e48f2d40cbcae5a4d038ccb3caf2a87",
         "pizza-chain-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "pizza-chain-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
-      }
+      },
+      "originalCatalogRowsPreserved": 0
     },
     {
       "batch": "jimmyjohns",
@@ -278,7 +287,8 @@
         "jimmyjohns-approved.json": "068a7dfd891a306b29322a3f77fd8ce2ec9c9e6475965fbc3ccc4a88e2c417bc",
         "jimmyjohns-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "jimmyjohns-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
-      }
+      },
+      "originalCatalogRowsPreserved": 23
     },
     {
       "batch": "wingstop",
@@ -303,7 +313,8 @@
         "wingstop-approved.json": "75ad4b10798b7b5227cd6e13556441e236797f7493d40ea358ec7273a727c73e",
         "wingstop-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "wingstop-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
-      }
+      },
+      "originalCatalogRowsPreserved": 0
     },
     {
       "batch": "burgerking",
@@ -328,7 +339,8 @@
         "burgerking-approved.json": "740c3eeb7919575840d35e5499a537bf71c14712f6b377c3f2a4b9d386d670cf",
         "burgerking-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "burgerking-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
-      }
+      },
+      "originalCatalogRowsPreserved": 0
     },
     {
       "batch": "ihop",
@@ -353,7 +365,8 @@
         "ihop-approved.json": "c915e2a8999f9361d8469c35c3df1a3f8a10120fd1ba1291179b011b6a9f73ca",
         "ihop-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "ihop-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
-      }
+      },
+      "originalCatalogRowsPreserved": 0
     },
     {
       "batch": "shakeshack",
@@ -378,7 +391,8 @@
         "shakeshack-approved.json": "08cf31d2190565dd79b5f37388065bbf0c4ccf525511f9f552c9dfb309fcba71",
         "shakeshack-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "shakeshack-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
-      }
+      },
+      "originalCatalogRowsPreserved": 130
     },
     {
       "batch": "cava",
@@ -403,7 +417,8 @@
         "cava-approved.json": "343061c318ca62457a0ab24f77fce3a965cc7c667aab645862d679b2d384abbc",
         "cava-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "cava-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
-      }
+      },
+      "originalCatalogRowsPreserved": 0
     },
     {
       "batch": "habit",
@@ -428,7 +443,8 @@
         "habit-approved.json": "c13d06744e26cddfe5f7d57c5f8484355cbcf7abf389b1aa56d28c314df53369",
         "habit-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "habit-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
-      }
+      },
+      "originalCatalogRowsPreserved": 100
     },
     {
       "batch": "wendys",
@@ -453,7 +469,8 @@
         "wendys-approved.json": "9632eb3c5aa3b7e575410be234c43ee7623c11377f44532e38ce67a217ac5dda",
         "wendys-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "wendys-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
-      }
+      },
+      "originalCatalogRowsPreserved": 0
     },
     {
       "batch": "freshbrothers",
@@ -478,7 +495,8 @@
         "freshbrothers-approved.json": "1a22c4b643c9ae75eed3ac792b8ec306563112d87878019ffa2d81250d1f3af2",
         "freshbrothers-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "freshbrothers-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
-      }
+      },
+      "originalCatalogRowsPreserved": 149
     },
     {
       "batch": "bww",
@@ -503,7 +521,8 @@
         "bww-approved.json": "aebee161a1cdcb656a2dfc76b28b90ed4dc3b43ba42aaea32668ee3ec33f44b3",
         "bww-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "bww-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
-      }
+      },
+      "originalCatalogRowsPreserved": 0
     },
     {
       "batch": "dunkin",
@@ -528,7 +547,8 @@
         "dunkin-approved.json": "cf9095ef0a53f83540e9dab70309ede03ee675af1919072c6a7187e91c2c50ec",
         "dunkin-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "dunkin-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
-      }
+      },
+      "originalCatalogRowsPreserved": 278
     },
     {
       "batch": "jerseymikes",
@@ -553,7 +573,8 @@
         "jerseymikes-approved.json": "31e694b98830e9e7b5a6eaaa341f7f7c1d5ddf649b8980495c30c2632d9cb3ad",
         "jerseymikes-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "jerseymikes-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
-      }
+      },
+      "originalCatalogRowsPreserved": 0
     },
     {
       "batch": "popeyes",
@@ -579,7 +600,8 @@
         "popeyes-approved.json": "ac6e837029a2459ee979241a0aa0e8c779429c6fdb882e1562d3b313b603cf3c",
         "popeyes-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "popeyes-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
-      }
+      },
+      "originalCatalogRowsPreserved": 0
     },
     {
       "batch": "cpk",
@@ -604,7 +626,8 @@
         "cpk-approved.json": "2921d1a3c9098e73ab889b772adfd6369c91bd2182aa120841e9bf7395dfdf3c",
         "cpk-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "cpk-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
-      }
+      },
+      "originalCatalogRowsPreserved": 0
     },
     {
       "batch": "bjs",
@@ -629,7 +652,8 @@
         "bjs-approved.json": "dc7be6c423698e8dc3a718b5208cf9843d13bf310c9f4e7f3c6a276847cf2fa0",
         "bjs-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "bjs-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
-      }
+      },
+      "originalCatalogRowsPreserved": 0
     },
     {
       "batch": "nothing-bundt",
@@ -654,7 +678,8 @@
         "nothing-bundt-approved.json": "f43f236e30e0f6c5bf9ba933c9e5d78d070cd3ed267bd9e06ae7b9d52d932d33",
         "nothing-bundt-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "nothing-bundt-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
-      }
+      },
+      "originalCatalogRowsPreserved": 0
     },
     {
       "batch": "daves-sides",
@@ -679,7 +704,8 @@
         "daves-sides-approved.json": "04461959affae73135c2f8d6d08a25666a512f6f0580dac3c0331cda68baa042",
         "daves-sides-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "daves-sides-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
-      }
+      },
+      "originalCatalogRowsPreserved": 0
     },
     {
       "batch": "charleys-fixed",
@@ -704,7 +730,8 @@
         "charleys-fixed-approved.json": "4568a3ef3d6d4f191f9ea1ceb156d93d42c3432026fdf1779db7a501c3e86aeb",
         "charleys-fixed-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "charleys-fixed-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
-      }
+      },
+      "originalCatalogRowsPreserved": 39
     },
     {
       "batch": "jerseymikes-expanded",
@@ -729,7 +756,242 @@
         "jerseymikes-expanded-approved.json": "6d44249c5041e1e905340ca4b6e9b77c01bcde3d3132ea5e3f97cfe3d6a0e0b3",
         "jerseymikes-expanded-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "jerseymikes-expanded-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
-      }
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "paninikabob-meals-v2",
+      "chains": "Panini Kabob Grill",
+      "brandSlugs": [
+        "panini-kabob-grill"
+      ],
+      "facts": 15,
+      "aliases": 20,
+      "patchedRows": 150,
+      "numericChanges": 150,
+      "attributionOnly": 0,
+      "preservedMenuIds": 1109,
+      "unchangedUnselectedRows": 959,
+      "restaurants": 10,
+      "httpVerifiedAt": "2026-09-13T08:28:47.194882+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "paninikabob-meals-v2-segments/000115.json.verified.json": "cb362c4d20c6d5656f10ed62b1fe9435c6ba8698441da6d691bbb32ada3375ed",
+        "paninikabob-meals-v2-complete-http.json": "0ac5f0971721b2b3563c6569c801f5c8a3c7942ebdc47d9b540c272f07696766",
+        "paninikabob-meals-v2-approved.json": "f744e64c2471eb32c1e84a6cc31cebbdcc2cf3d3c3ba80bb5485f28e36739b0d",
+        "paninikabob-meals-v2-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "paninikabob-meals-v2-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "baskin-fixed",
+      "chains": "Baskin-Robbins",
+      "brandSlugs": [
+        "baskin-robbins"
+      ],
+      "facts": 25,
+      "aliases": 29,
+      "patchedRows": 481,
+      "numericChanges": 143,
+      "attributionOnly": 338,
+      "preservedMenuIds": 1190,
+      "unchangedUnselectedRows": 709,
+      "restaurants": 36,
+      "httpVerifiedAt": "2026-09-13T09:13:18.730480+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "baskin-fixed-segments/000424.json.verified.json": "6e6b8525f0ca70a06e7c75cdc667eb36c89f7b532c2cf2597ca622bc0cffeb9e",
+        "baskin-fixed-complete-http.json": "8b043c09ec14fd2842c550139a213f50525e4adfb51d9d4f8cdfcd2d657914f8",
+        "baskin-fixed-approved.json": "c77761c4680bec0925e21084beea50e265fc7c9660d16a4cf96dcade71270e74",
+        "baskin-fixed-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "baskin-fixed-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 10
+    },
+    {
+      "batch": "coldstone-fixed-v2",
+      "chains": "Cold Stone Creamery",
+      "brandSlugs": [
+        "cold-stone-creamery"
+      ],
+      "facts": 61,
+      "aliases": 63,
+      "patchedRows": 917,
+      "numericChanges": 32,
+      "attributionOnly": 885,
+      "preservedMenuIds": 2389,
+      "unchangedUnselectedRows": 1472,
+      "restaurants": 18,
+      "httpVerifiedAt": "2026-09-13T09:54:20.617640+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "coldstone-fixed-v2-segments/000861.json.verified.json": "50ed6f772090a3e63777f5c66484098c11ff9f7f0991d860e42c91f79c1cbb36",
+        "coldstone-fixed-v2-complete-http.json": "a62e62ecccbff65bb4b0cd799670bf2782d7b56d0efd139da5f18c7286905812",
+        "coldstone-fixed-v2-approved.json": "15e348acc7cb6ac87c2868cbd365ad1f908ec1706f8eaf56d5ce0a42c284640f",
+        "coldstone-fixed-v2-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "coldstone-fixed-v2-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "norms-fixed",
+      "chains": "NORMS",
+      "brandSlugs": [
+        "norms"
+      ],
+      "facts": 19,
+      "aliases": 19,
+      "patchedRows": 133,
+      "numericChanges": 133,
+      "attributionOnly": 0,
+      "preservedMenuIds": 1031,
+      "unchangedUnselectedRows": 898,
+      "restaurants": 7,
+      "httpVerifiedAt": "2026-09-13T10:25:21.597558+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "norms-fixed-segments/000119.json.verified.json": "9b797e9fc546f77d6de9e34e5d797a6d34b9d98e9ea0efb53e078060da4116b5",
+        "norms-fixed-complete-http.json": "76dda2511801f3fd765722b6e8e37dd2493352ab5d958af62d1aa23689f002ab",
+        "norms-fixed-approved.json": "ef797b5223e5ee12ff83e28f980d66adbfb92603bec3ae32a58d1d27508adf8d",
+        "norms-fixed-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "norms-fixed-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "kreation-organic-juicery-bottles",
+      "chains": "Kreation Organic Juicery",
+      "brandSlugs": [
+        "kreation-organic-juicery"
+      ],
+      "facts": 5,
+      "aliases": 9,
+      "patchedRows": 63,
+      "numericChanges": 63,
+      "attributionOnly": 0,
+      "preservedMenuIds": 2981,
+      "unchangedUnselectedRows": 2918,
+      "restaurants": 15,
+      "httpVerifiedAt": "2026-09-13T10:59:59.816668+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "kreation-organic-juicery-bottles-segments/000010.json.verified.json": "4eb18b36e3d51d780737a5eda3bedce4eda135669537bc6928d982a5e1cb38c9",
+        "kreation-organic-juicery-bottles-complete-http.json": "ecbafd20eb11b494b0702d247628b40eafdedfe391b7d6b41e966c0774b7f349",
+        "kreation-organic-juicery-bottles-approved.json": "169089d7ee2bdf554c9f0dcc3ab0e46d3826a29e94a1dfb01a54dacb225f8223",
+        "kreation-organic-juicery-bottles-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "kreation-organic-juicery-bottles-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "kreation-organic-bottles",
+      "chains": "Kreation Organic",
+      "brandSlugs": [
+        "kreation-organic"
+      ],
+      "facts": 5,
+      "aliases": 9,
+      "patchedRows": 9,
+      "numericChanges": 9,
+      "attributionOnly": 0,
+      "preservedMenuIds": 306,
+      "unchangedUnselectedRows": 297,
+      "restaurants": 2,
+      "httpVerifiedAt": "2026-09-13T11:01:30.756475+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "kreation-organic-bottles-segments/000000.json.verified.json": "606c27a8e359290f6be67be653ad36334a4c07132e6a7a653d3df5ee9ff31fde",
+        "kreation-organic-bottles-complete-http.json": "7f0e733dfa185d657bf0949093b81b15247a93b8ac945da0a0ea4b789ce4e774",
+        "kreation-organic-bottles-approved.json": "b65acf56c8cfc38aad8d0bf169547be20a03a34efdf7ae1ff68c89760a61dc56",
+        "kreation-organic-bottles-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "kreation-organic-bottles-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "kreation-kafe-juicery-bottles",
+      "chains": "Kreation Kafe & Juicery",
+      "brandSlugs": [
+        "kreation-kafe-juicery"
+      ],
+      "facts": 5,
+      "aliases": 5,
+      "patchedRows": 10,
+      "numericChanges": 10,
+      "attributionOnly": 0,
+      "preservedMenuIds": 490,
+      "unchangedUnselectedRows": 480,
+      "restaurants": 2,
+      "httpVerifiedAt": "2026-09-13T11:02:50.290772+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "kreation-kafe-juicery-bottles-segments/000000.json.verified.json": "ff46011d860f59979aa7a4c0f61d6f9066946780f0394fb3a4aff4bd49b7b03d",
+        "kreation-kafe-juicery-bottles-complete-http.json": "87ae55de5138864229c262c01911b4e4b74642dd9d3fde3d68c80107382184bd",
+        "kreation-kafe-juicery-bottles-approved.json": "4cbcdc599775f8032e3edb44fbcee5179987c99f26c7b13114704cbb86a73ab4",
+        "kreation-kafe-juicery-bottles-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "kreation-kafe-juicery-bottles-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "pressed-bottles-v2",
+      "chains": "Pressed",
+      "brandSlugs": [
+        "pressed"
+      ],
+      "facts": 33,
+      "aliases": 57,
+      "patchedRows": 289,
+      "numericChanges": 289,
+      "attributionOnly": 0,
+      "preservedMenuIds": 1267,
+      "unchangedUnselectedRows": 978,
+      "restaurants": 11,
+      "httpVerifiedAt": "2026-09-13T11:50:50.057621+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "pressed-bottles-v2-segments/000232.json.verified.json": "096022372cee6571a38a7a062c77b078269a3d7e82424208dc0f50d71db3dfa0",
+        "pressed-bottles-v2-complete-http.json": "62834044e3caf36c6b15935eb6971acd71cbdd81ee47df20abc984aa605e8045",
+        "pressed-bottles-v2-approved.json": "4864d2737b662a8b9915dd0571add4e341ab39cc995320ea8ed54062d3c508d5",
+        "pressed-bottles-v2-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "pressed-bottles-v2-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "paris-fixed",
+      "chains": "Paris Baguette",
+      "brandSlugs": [
+        "paris-baguette"
+      ],
+      "facts": 65,
+      "aliases": 103,
+      "patchedRows": 224,
+      "numericChanges": 97,
+      "attributionOnly": 127,
+      "preservedMenuIds": 789,
+      "unchangedUnselectedRows": 565,
+      "restaurants": 7,
+      "httpVerifiedAt": "2026-09-13T12:31:30.486189+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "paris-fixed-segments/000154.json.verified.json": "efe8119fb73c12f1204e19f4175a6cd5ced21a65e77cf6ce8f6130ffc8dbeffc",
+        "paris-fixed-complete-http.json": "83fa0ee84f25d721253e2f2a94acdd64078102ca4e336433f2577f13e871734c",
+        "paris-fixed-approved.json": "de40ae1fae97e137c4cce60a4e3ccade997b050df2cf372e1168301e0a9a3767",
+        "paris-fixed-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "paris-fixed-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 249
     }
   ],
   "receiptArchive": "Local task work/chain-national; full journals and baselines are intentionally excluded from this aggregate repository record",
