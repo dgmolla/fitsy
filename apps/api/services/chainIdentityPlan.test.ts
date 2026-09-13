@@ -49,6 +49,25 @@ test("indexed brand resolver retains unique exact aliases and rejects ambiguous 
   expect(buildBrandIdentityMatcher([{ ...brand, detectionConf: "low" }])({ name: "Fixture Cafe" })).toBeUndefined();
 });
 
+test("classification corrections require explicit brand and store review and keep identity guards", () => {
+  const b = batch(), grocery = { ...brand, menuKind: "grocery/convenience" }, store = { ...restaurant, menuKind: "grocery/convenience" };
+  b.brands[0]!.expected!.menuKind = grocery.menuKind;
+  b.links[0]!.expected = store;
+  expect(() => planChainIdentity([grocery], [store], b)).toThrow("Unqualified brand identity");
+  b.brands[0]!.classifyAsRestaurant = true;
+  expect(() => planChainIdentity([grocery], [store], b)).toThrow("Restaurant does not have the reviewed unique identity");
+  b.links[0]!.classifyAsRestaurant = true;
+  const plan = planChainIdentity([grocery], [store], b);
+  expect(plan.brands[0]!.desired.menuKind).toBe("restaurant");
+  expect(plan.links[0]!.desired.menuKind).toBe("restaurant");
+  expect(() => planChainIdentity([grocery], [store, { ...store, id: "omitted" }], b)).toThrow("Unreviewed restaurant");
+  expect(() => planChainIdentity([grocery], [{ ...store, brandId: "other" }], b)).toThrow("unique identity");
+  expect(() => planChainIdentity([grocery], [{ ...store, name: "Unrelated Market" }], b)).toThrow("unique identity");
+  expect(() => planChainIdentity([grocery], [{ ...store, menuKind: "pharmacy" }], b)).toThrow("baseline");
+  const low = structuredClone(b); low.brands[0]!.expected!.detectionConf = "low";
+  expect(() => planChainIdentity([{ ...grocery, detectionConf: "low" }], [store], low)).toThrow("Unqualified brand identity");
+});
+
 test("malformed CLI database configuration does not echo its secret", () => {
   const marker = "synthetic-secret-must-not-appear", root = resolve(__dirname, "../../..");
   try {

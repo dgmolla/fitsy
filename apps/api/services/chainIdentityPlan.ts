@@ -11,9 +11,10 @@ const restaurant = z.object({ id: text, name: text, storeUuid: z.string().nullab
   chainFlag: z.boolean(), menuKind: text }).strict();
 export const chainIdentityBatchSchema = z.object({ version: z.literal(1), reviewedBy: text,
   brands: z.array(z.object({ id: text, slug: text, displayName: text, addAliases: z.array(text), expected: identity.nullable(),
+    classifyAsRestaurant: z.literal(true).optional(),
     evidence: z.object({ url: z.string().url().startsWith("https://"), sha256: z.string().regex(/^[a-f0-9]{64}$/), locator: text }).strict(),
   }).strict()).min(1),
-  links: z.array(z.object({ brandId: text, expected: restaurant }).strict()),
+  links: z.array(z.object({ brandId: text, expected: restaurant, classifyAsRestaurant: z.literal(true).optional() }).strict()),
 }).strict();
 export type ChainIdentityBatch = z.infer<typeof chainIdentityBatchSchema>;
 export type RestaurantIdentity = z.infer<typeof restaurant>;
@@ -40,7 +41,8 @@ export function planChainIdentity(brands: Brand[], restaurants: RestaurantIdenti
       || definition.expected.displayName !== definition.displayName)) throw new Error("Existing brand identity cannot be renamed");
     const desired = { id: definition.id, slug: definition.slug, displayName: definition.displayName,
       aliases: [...new Set([...(definition.expected?.aliases ?? []), ...definition.addAliases])],
-      detectionConf: definition.expected ? definition.expected.detectionConf : "high", menuKind: definition.expected?.menuKind ?? "restaurant" };
+      detectionConf: definition.expected ? definition.expected.detectionConf : "high",
+      menuKind: definition.classifyAsRestaurant ? "restaurant" : definition.expected?.menuKind ?? "restaurant" };
     if (desired.menuKind !== "restaurant" || !["high", "llm-confirmed"].includes(desired.detectionConf ?? "")) throw new Error("Unqualified brand identity");
     const current = before ? brandIdentity(before) : null;
     if (stateHash(current) !== stateHash(desired)) {
@@ -71,9 +73,10 @@ export function planChainIdentity(brands: Brand[], restaurants: RestaurantIdenti
   for (const link of batch.links) {
     if (!batch.brands.some(b => b.id === link.brandId)) throw new Error("Link refers to a brand outside the reviewed batch");
     const before = restaurants.find(r => r.id === link.expected.id);
-    if (!before || before.menuKind !== "restaurant" || (before.brandId && before.brandId !== link.brandId)
+    if (!before || (before.menuKind !== "restaurant" && !link.classifyAsRestaurant) || (before.brandId && before.brandId !== link.brandId)
       || afterIdentity(before) !== link.brandId) throw new Error("Restaurant does not have the reviewed unique identity");
-    const desired = { ...link.expected, brandId: link.brandId, chainFlag: true };
+    const desired = { ...link.expected, brandId: link.brandId, chainFlag: true,
+      menuKind: link.classifyAsRestaurant ? "restaurant" : link.expected.menuKind };
     if (stateHash(before) === stateHash(desired)) continue;
     if (stateHash(before) !== stateHash(link.expected)) throw new Error("Restaurant differs from reviewed baseline");
     links.push({ before, desired });
@@ -95,11 +98,11 @@ export async function applyChainIdentity(prisma: PrismaClient, plan: ChainIdenti
     if (planChainIdentity(current.brands, current.restaurants, plan.batch).hash !== hash) throw new Error("Identity plan changed; replan");
     const brands: Brand[] = [], restaurants: RestaurantIdentity[] = [];
     for (const change of plan.brands) brands.push(change.before
-      ? await tx.brand.update({ where: { id: change.before.id }, data: { aliases: change.desired.aliases } })
+      ? await tx.brand.update({ where: { id: change.before.id }, data: { aliases: change.desired.aliases, menuKind: change.desired.menuKind } })
       : await tx.brand.create({ data: { ...change.desired, officialUrl: change.officialUrl,
         locationCount: plan.batch.links.filter(l => l.brandId === change.desired.id).length } }));
     for (const link of plan.links) restaurants.push(await tx.restaurant.update({ where: { id: link.before.id },
-      data: { brandId: link.desired.brandId, chainFlag: true }, select: restaurantIdentitySelect }));
+      data: { brandId: link.desired.brandId, chainFlag: true, menuKind: link.desired.menuKind }, select: restaurantIdentitySelect }));
     return { plan, brands, restaurants };
   }, 120_000);
 }
@@ -113,6 +116,10 @@ export async function rollbackChainIdentity(prisma: PrismaClient, journal: Chain
       const after = brands[i]!;
       if (stateHash(brandIdentity(after)) !== stateHash(change.desired)
         || stateHash(await tx.brand.findUnique({ where: { id: after.id } })) !== stateHash(after)) throw new Error("Brand changed after identity apply");
+      if (change.before && change.before.menuKind !== change.desired.menuKind
+        && (await tx.chainItem.findMany({ where: { brandId: after.id }, select: { review: true } })).some(row => row.review !== null)) {
+        throw new Error("Reviewed catalog still references the corrected classification; roll back catalog first");
+      }
     }
     for (const [i, link] of plan.links.entries()) {
       const after = restaurants[i]!;
@@ -120,9 +127,9 @@ export async function rollbackChainIdentity(prisma: PrismaClient, journal: Chain
         where: { id: after.id }, select: restaurantIdentitySelect })) !== stateHash(after)) throw new Error("Restaurant changed after identity apply");
     }
     for (const link of plan.links) await tx.restaurant.update({ where: { id: link.before.id },
-      data: { brandId: link.before.brandId, chainFlag: link.before.chainFlag } });
+      data: { brandId: link.before.brandId, chainFlag: link.before.chainFlag, menuKind: link.before.menuKind } });
     for (const change of plan.brands) {
-      if (change.before) await tx.brand.update({ where: { id: change.before.id }, data: { aliases: change.before.aliases } });
+      if (change.before) await tx.brand.update({ where: { id: change.before.id }, data: { aliases: change.before.aliases, menuKind: change.before.menuKind } });
       else {
         const id = change.desired.id;
         if (await tx.chainItem.count({ where: { brandId: id } }) || await tx.restaurant.count({ where: { brandId: id } })) throw new Error("New brand still has catalog or restaurant references; roll those back first");
