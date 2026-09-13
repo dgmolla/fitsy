@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { PrismaClient } from '@prisma/client';
 import { approvedChainRow, chainReviewHash } from '../../services/chainCatalog';
-import { applyAprilChainMatch, loadChainServing, resolveChainMacros } from '../../services/chainServing';
+import { applyAprilChainMatch, loadChainServing, chainMenuResolver } from '../../services/chainServing';
 import { applyAprilChainBatch, restoreAprilChainBatch } from '../../services/chainAprilBatch';
 import { stateHash } from '../../services/chainPilotPlan';
 import { getMenuPage } from '../../lib/restaurantMenuService';
@@ -27,18 +27,18 @@ suite('regional official nutrition through the real writer and served menu', () 
         locator: 'California food guide, croissant row', aliases: [item], usStates: ['CA', 'IL'] };
       const approved = approvedChainRow(await p.chainItem.update({ where: { id: row.id }, data: { review: { ...review, dataHash: chainReviewHash(row, review) } } }))!;
       const runtime = await loadChainServing(p);
-      const observed: { location: string; calories: number | null; confidence: string | undefined }[] = [];
       for (const [location, lat, lng] of [['California', 34.0522, -118.2437], ['Ohio', 41.4993, -81.6944]] as const) {
         const restaurant = await p.restaurant.create({ data: { storeUuid: scope + location, name: brand.displayName,
           ...(location === 'Ohio' ? { brandId: brand.id } : {}), address: location, lat, lng, source: 'ue_feed', cuisineTags: [] } });
-        const macros = await resolveChainMacros([item], runtime.brandId(restaurant), runtime.match,
-          async items => items.map(() => ({ calories: 400, proteinG: 8, carbsG: 44, fatG: 21, confidence: 'MEDIUM' as const, source: 'haiku', dietaryTags: [] })), restaurant);
+        const { resolveMacros } = chainMenuResolver({ ...restaurant, storeUuid: restaurant.storeUuid! }, runtime);
+        const macros = await resolveMacros([item],
+          async items => items.map(() => ({ calories: 400, proteinG: 8, carbsG: 44, fatG: 21, confidence: 'MEDIUM' as const, source: 'haiku', dietaryTags: [] })));
         await persistHex(scope, location, [{ restaurantId: restaurant.id, brandId: brand.id,
           menuHash: scope + location, items: [{ item, macro: macros[0]! }] }], p);
         expect(await p.restaurant.findUniqueOrThrow({ where: { id: restaurant.id } })).toMatchObject({ brandId: brand.id, chainFlag: true });
         const page = await getMenuPage(p, restaurant.id, { limit: 10 });
         const served = page!.menuItems[0]!.macros;
-        observed.push({ location, calories: served?.calories ?? null, confidence: served?.confidence });
+        expect(served).toMatchObject({ calories: location === 'California' ? 300 : 400, confidence: location === 'California' ? 'HIGH' : 'MEDIUM' });
         if (location === 'California') {
           const include = { macroEstimates: { orderBy: { id: 'asc' as const } } };
           const snapshot = () => p.menuItem.findUniqueOrThrow({ where: { restaurantId_name: { restaurantId: restaurant.id, name: item.name } }, include });
@@ -82,8 +82,6 @@ suite('regional official nutrition through the real writer and served menu', () 
           await p.chainItem.update({ where: { id: row.id }, data: { calories: 300 } });
         }
       }
-      expect(observed).toEqual([{ location: 'California', calories: 300, confidence: 'HIGH' },
-        { location: 'Ohio', calories: 400, confidence: 'MEDIUM' }]);
       const directory = mkdtempSync(join(tmpdir(), 'fitsy-chain-region-')), repo = resolve(__dirname, '../../../..');
       try {
         const batchPath = join(directory, 'batch.json'), planPath = join(directory, 'plan.json');

@@ -7,7 +7,7 @@ import { PrismaClient, type Brand } from "@prisma/client";
 import { planChainIdentity, readChainIdentities, applyChainIdentity, rollbackChainIdentity,
   restaurantIdentitySelect, type ChainIdentityBatch } from "../../services/chainIdentityPlan";
 import { applyCatalogPlan, planChainPilot, rollbackCatalogPlan } from "../../services/chainPilotPlan";
-import { loadChainServing, applyAprilChainMatch, aprilMenuIdentity, chainMenuResolver, resolveChainMacros } from "../../services/chainServing";
+import { loadChainServing, applyAprilChainMatch, aprilMenuIdentity, chainMenuResolver } from "../../services/chainServing";
 import { rollbackAprilBatch } from "../../services/chainPilotRollback";
 import { getMenuPage } from "../../lib/restaurantMenuService";
 import { persistHex } from "../../../../scripts/hex-persist";
@@ -70,8 +70,10 @@ suite("reviewed chain identities through existing menu and new-hex serving", () 
     expect(after.id).toBe(original.id); expect(after).toMatchObject({ ...facts, price: original.price, photoUrl: original.photoUrl, dietaryTags: original.dietaryTags });
     expect((await getMenuPage(p, r.id, { targets: facts, limit: 1 }))!.menuItems[0]!.macros).toMatchObject({ ...facts, confidence: "HIGH" });
     // A genuinely new location begins without a Fitsy brand ID and uses the same main-pipeline adapters.
-    const fresh = await createRestaurant(`${displayName} (New Hex)`), request = { ...fresh, storeUuid: fresh.storeUuid! };
-    const { resolver, brandId } = chainMenuResolver(request, runtime);
+    const fresh = await createRestaurant(`${displayName} (New Hex)`);
+    const location = await p.restaurant.findUniqueOrThrow({ where: { id: fresh.id } });
+    const request = { ...location, storeUuid: location.storeUuid! };
+    const { resolver, brandId, resolveMacros } = chainMenuResolver(request, runtime);
     expect(brandId).toBe(id);
     const ue = { status: "success", data: { title: fresh.name, catalogSectionsMap: { menu: [{ payload: { standardItemsPayload: {
       title: { text: "Bowls" }, catalogItems: [{ title: item.name, itemDescription: item.description },
@@ -79,7 +81,7 @@ suite("reviewed chain identities through existing menu and new-hex serving", () 
     const fetch = jest.spyOn(global, "fetch").mockImplementation(async () => new Response(JSON.stringify(ue)));
     let resolved;
     try { resolved = await resolver.resolve(request.name, "Fixture"); expect(fetch).toHaveBeenCalledTimes(1); } finally { fetch.mockRestore(); }
-    const estimated: string[] = [], macros = await resolveChainMacros(resolved.items, brandId, runtime.match, async unmatched => {
+    const estimated: string[] = [], macros = await resolveMacros(resolved.items, async unmatched => {
       estimated.push(...unmatched.map(i => i.name)); return unmatched.map(() => ({ calories: 400, proteinG: 20, carbsG: 50, fatG: 13, source: "haiku", confidence: "MEDIUM", dietaryTags: [] }));
     });
     expect(estimated).toEqual(["New seasonal bowl", "Second seasonal bowl"]);

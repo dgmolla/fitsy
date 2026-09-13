@@ -47,11 +47,12 @@ export async function loadChainServing(prisma: Pick<PrismaClient, "brand" | "cha
 }
 export type ChainServing = Awaited<ReturnType<typeof loadChainServing>>;
 /** Reviewed brands require location menu evidence. Empty UE menus have no national-catalog fallback; unmatched UE items use estimation, not unverified FatSecret servings. */
-export function chainMenuResolver(restaurant: { name: string; brandId?: string | null; storeUuid: string }, runtime: ChainServing, gate?: UeConcurrencyGate) {
+export function chainMenuResolver(restaurant: { name: string; brandId?: string | null; storeUuid: string } & ChainLocation, runtime: ChainServing, gate?: UeConcurrencyGate) {
   const brandId = runtime.brandId(restaurant);
   return { brandId, resolver: new MenuSourceResolver([
     ...(brandId ? [] : [new FatSecretSource()]), new UeApiDirectSource(restaurant.storeUuid, {}, gate),
-  ]) };
+  ]), resolveMacros: (items: StructuredMenuItem[], estimate: Parameters<typeof resolveChainMacros>[3]) =>
+    resolveChainMacros(items, brandId, runtime.match, estimate, restaurant) };
 }
 /** Only unmatched UE items reach estimation; a resolver never invents menu membership. */
 export async function resolveChainMacros(items: StructuredMenuItem[], brandId: string | undefined,
