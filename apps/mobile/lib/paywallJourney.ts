@@ -27,8 +27,6 @@ type Navigation = Pick<NavigationProp<ParamListBase>, 'reset' | 'getParent'> & {
   getState: () => ReturnType<NavigationProp<ParamListBase>['getState']> | undefined;
 };
 function appStackOf(navigation: Navigation): Navigation {
-  // Expo has an outer navigator whose only app route is __root.
-  // Reset the stack that actually owns Fitsy's routes, not that wrapper.
   let current: Navigation | undefined = navigation;
   while (current) {
     const names = current.getState()?.routeNames;
@@ -38,19 +36,41 @@ function appStackOf(navigation: Navigation): Navigation {
   throw new Error('Fitsy application navigator is unavailable');
 }
 
+type JourneyState = { index: number; routes: { name: string; params?: Record<string, unknown>; state?: JourneyState }[] };
+function nestedRoute(name: string, state: JourneyState) {
+  // Keep React Navigation's nested destination params consistent with state.
+  // An old screen=payment param otherwise recreates the paywall after reset.
+  return { name, params: { state }, state };
+}
+function resetJourney(navigation: Navigation, state: JourneyState): void {
+  let current = appStackOf(navigation);
+  let parent = current.getParent();
+  while (parent) {
+    const parentState = parent.getState();
+    const route = parentState?.routes.find(candidate => candidate.state?.key === current.getState()?.key)
+      ?? (parentState && parentState.routes[parentState.index]);
+    if (!route) throw new Error('Fitsy parent navigator is unavailable');
+    state = { index: 0, routes: [nestedRoute(route.name, state)] };
+    current = parent;
+    parent = current.getParent();
+  }
+  // Reset from the top, replacing parent deep-link params as well as history.
+  current.reset(state);
+}
+
 /** These are completion actions, never Back actions. Reset the entire stack. */
 export function resetWelcomeJourney(navigation: Navigation, screen: 'payment' | 'notification-permission'): void {
-  appStackOf(navigation).reset({ index: 0, routes: [{ name: 'welcome', state: { index: 0, routes: [{ name: screen }] } }] });
+  resetJourney(navigation, { index: 0, routes: [nestedRoute('welcome', { index: 0, routes: [{ name: screen }] })] });
 }
 export async function openPurchasedDestination(navigation: Navigation): Promise<void> {
   const intent = await getPaywallIntent();
-  const routes = [{ name: '(tabs)', state: { index: 0, routes: [{ name: 'search' }] } },
+  const routes = [nestedRoute('(tabs)', { index: 0, routes: [{ name: 'search' }] }),
     ...(intent?.restaurantId ? [{ name: 'restaurant/[id]', params: {
       id: intent.restaurantId,
       ...(intent.menuItemId ? { selectedItemId: intent.menuItemId } : {}),
       ...(intent.action === 'save' ? { saveSelected: '1' } : {}),
     } }] : []),
   ];
-  appStackOf(navigation).reset({ index: routes.length - 1, routes });
+  resetJourney(navigation, { index: routes.length - 1, routes });
   await clearPaywallIntent();
 }

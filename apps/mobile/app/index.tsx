@@ -9,55 +9,33 @@ import { ONBOARDING_COMPLETE_KEY } from '@/lib/onboardingCompletion';
 import { getStoredToken } from '@/lib/authClient';
 import { getMacroTargets } from '@/lib/macroStorage';
 import { usePurchases } from '@/lib/usePurchases';
+import { onboardingEntry, type EntryDestination } from '@/lib/onboardingEntry';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 
-type Destination = Awaited<ReturnType<typeof getOnboardingResume>> | '/welcome/payment' | '/(tabs)/search' | '/welcome/problem' | '/macro-setup' | '/welcome/resubscribe';
-
 export default function Index() {
-  const [destination, setDestination] = useState<Destination | null>(null);
+  const [destination, setDestination] = useState<EntryDestination>(null);
   const { ready: purchasesReady, entitled, isLapsed, offering } = usePurchases();
 
   useEffect(() => {
+    let current = true;
     async function resolve() {
       try {
-        const [token, resume, declined, completed] = await Promise.all([
-          getStoredToken(), getOnboardingResume(), readPaywallDecline(), AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY),
+        const [token, resume, declined, completed, targets] = await Promise.all([
+          getStoredToken(), getOnboardingResume(), readPaywallDecline(),
+          AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY), getMacroTargets(),
         ]);
-        if (!isLapsed && completed !== 'true' && resume && !declined && entitled !== true) {
-          setDestination(token && resume === '/welcome/signin' ? '/welcome/trial' : resume);
-          return;
-        }
-        if (declined && !token) {
-          // Boot resolves the current offering before settling its verdict.
-          // Do not route a preview cohort using the temporary hard default.
-          if (!purchasesReady) return;
-          setDestination(paywallVariants(offering?.metadata).access === 'preview' ? '/welcome/preview' : '/welcome/payment');
-          return;
-        }
-        if (!token) {
-          setDestination('/welcome/problem');
-          return;
-        }
-        const targets = await getMacroTargets();
-        if (!targets) {
-          setDestination('/macro-setup');
-          return;
-        }
-        // Wait for the provider's verdict to settle (`ready` is exactly
-        // `entitled !== null`: the server answered, or the cache / device
-        // stood in once BOOT_VERDICT_CAP_MS passed) so a lapsed subscriber
-        // gets the win-back screen instead of a flash of the search tab, and
-        // the tab layout's gate has a settled verdict the moment it mounts.
-        if (!purchasesReady) return;
-        // The server verdict wins: an active row goes straight to search even
-        // if the device's RevenueCat record reads as lapsed. Only an
-        // unentitled lapsed subscriber gets the win-back screen.
-        setDestination(entitled === true || !isLapsed ? '/(tabs)/search' : '/welcome/resubscribe');
+        if (!current) return;
+        setDestination(onboardingEntry({
+          signedIn: !!token, resume, declined, completed: completed === 'true',
+          hasTargets: !!targets, purchasesReady, entitled, isLapsed,
+          access: paywallVariants(offering?.metadata).access,
+        }));
       } catch {
-        setDestination('/welcome/problem');
+        if (current) setDestination('/welcome/problem');
       }
     }
-    resolve();
+    void resolve();
+    return () => { current = false; };
   }, [purchasesReady, entitled, isLapsed, offering]);
 
   if (!destination) {
