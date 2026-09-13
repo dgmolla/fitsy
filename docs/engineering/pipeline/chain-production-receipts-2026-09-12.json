@@ -1,19 +1,19 @@
 {
   "generated": true,
-  "asOf": "2026-09-13T12:31:30.486189+00:00",
-  "scope": "37 completed source batches; earlier WaBa/Yoshinoya excluded",
+  "asOf": "2026-09-13T13:31:36.620513+00:00",
+  "scope": "39 completed source batches; earlier WaBa/Yoshinoya excluded",
   "reviewedCodeHead": "179be20e9a26eda262c428149630f72092730302",
   "mergeCommit": "848f117952b60b62bd1ee03291151e73a1184e55",
   "pr": "https://github.com/dgmolla/fitsy/pull/289",
   "totals": {
-    "facts": 1628,
-    "aliases": 2279,
-    "patchedRows": 38300,
-    "numericChanges": 14619,
-    "attributionOnly": 23681,
-    "preservedMenuIds": 120904,
-    "unchangedUnselectedRows": 82604,
-    "restaurants": 1222
+    "facts": 1668,
+    "aliases": 2345,
+    "patchedRows": 38511,
+    "numericChanges": 14794,
+    "attributionOnly": 23717,
+    "preservedMenuIds": 123239,
+    "unchangedUnselectedRows": 84728,
+    "restaurants": 1235
   },
   "batches": [
     {
@@ -992,6 +992,58 @@
         "paris-fixed-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
       },
       "originalCatalogRowsPreserved": 249
+    },
+    {
+      "batch": "benihana-standard",
+      "chains": "Benihana",
+      "brandSlugs": [
+        "benihana"
+      ],
+      "facts": 20,
+      "aliases": 32,
+      "patchedRows": 56,
+      "numericChanges": 20,
+      "attributionOnly": 36,
+      "preservedMenuIds": 697,
+      "unchangedUnselectedRows": 641,
+      "restaurants": 4,
+      "httpVerifiedAt": "2026-09-13T12:59:22.769580+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "benihana-standard-segments/000020.json.verified.json": "b0648b1e0f96d95dce096d2ef8f5d0afdf9cf5f8c424d158bdfe39ac6cc92679",
+        "benihana-standard-http.json": "3aff1e1bf48453c87de95c24049ba40086e37970ddffbe0669713fe42c2a8a5a",
+        "benihana-standard-approved.json": "49909b4bff15ed5e1dff80f86fdcc0b80a030bac89f0bd7cf792bfd4c99bcfbb",
+        "benihana-standard-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "benihana-standard-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "peets",
+      "chains": "Peet's Coffee",
+      "brandSlugs": [
+        "peet-s-coffee"
+      ],
+      "facts": 20,
+      "aliases": 34,
+      "patchedRows": 155,
+      "numericChanges": 155,
+      "attributionOnly": 0,
+      "preservedMenuIds": 1638,
+      "unchangedUnselectedRows": 1483,
+      "restaurants": 9,
+      "httpVerifiedAt": "2026-09-13T13:31:36.620513+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "peets-segments/000120.json.verified.json": "edc64b89d1bacc61904f1774b1ceacb57e4ce520d732644a0eae4b3240d4ef02",
+        "peets-complete-http.json": "0b66add75dc2b9f987d397e5cd355f3a7b68a832a26aeba6d0f5b3537811955f",
+        "peets-approved.json": "6c87747c163f68bfc0920d71bfe4edfbac693dcc49b3e6b26680c0c81054a055",
+        "peets-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "peets-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
     }
   ],
   "receiptArchive": "Local task work/chain-national; full journals and baselines are intentionally excluded from this aggregate repository record",
@@ -1000,5 +1052,15 @@
     "Source review coverage varies by batch; retained independent reviews distinguish exhaustive source transcription checks from samples",
     "Current captured UE menus and simulated historical imports are different evidence",
     "No actual production new hex created"
-  ]
+  ],
+  "regionalRuntime": {
+    "reviewedCodeHead": "e805ee2c63ec4e0f19563c6b8ff9fc4a8a3c121d",
+    "mergeCommit": "e63f0fc48c9ede443fc60180be43c7c6628b007e",
+    "pr": "https://github.com/dgmolla/fitsy/pull/302",
+    "productionDeployment": "dpl_CJJ2SPtWipxrTcTb4Hdv2mmfxjKT",
+    "releaseEvidenceSha256": "d4698242f6e9b494a96084ec5733f9559510ab18a6bf49169042dc7c8d7ab50e",
+    "appliesToBatches": [
+      "peets"
+    ]
+  }
 }

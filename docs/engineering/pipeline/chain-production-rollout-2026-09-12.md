@@ -1,50 +1,40 @@
 # Chain nutrition rollout: production results
 
-**38,300 existing menu rows now use reviewed official nutrition across 46 consumer brands.**
-The 37 completed batches cover 52 stored brand identities and exclude the earlier WaBa/Yoshinoya rollout.
+**38,511 existing menu rows now use reviewed official nutrition across 48 consumer brands.**
+The 39 completed batches cover 54 stored brand identities and exclude the earlier WaBa/Yoshinoya rollout.
 National onboarding is still in progress.
 
-## Latest result: Paris Baguette
+## Latest results
 
-**224 rows across seven restaurants are production verified: 97 numeric corrections and 127 attribution-only updates.**
-65 reviewed facts and 103 exact aliases were added to the chain catalog.
-All 789 menu IDs, 565 unselected rows and 249 older unreviewed catalog records were preserved.
+| Batch | Production rows | Values changed | Facts / aliases | Preserved IDs | Unselected rows unchanged |
+|---|---:|---:|---:|---:|---:|
+| Peet's Coffee | 155 | 155 | 20 / 34 | 1,638 | 1,483 |
+| Benihana | 56 | 20 | 20 / 32 | 697 | 641 |
 
-| Example row | Previous calories | Published standard item |
+Peet's is verified across nine restaurants; Benihana across four.
+Both passed a canary covering every approved fact, complete authenticated menu reads, search/detail consistency and zero-change reruns.
+
+| Example row | Previous calories | Reviewed calories |
 |---|---:|---:|
-| Macadamia Nut Cookie | 167 | 580 |
-| Triple Chocolate Chip Cookie | 156 | 530 |
-| Blueberry Yogurt Cake Slice | 109 | 460 |
+| Peet's Cardamom Morning Bun | 485 | 290 |
+| Peet's Cheesy Sausage Slider | 325 | 260 |
+| Benihana Onion Soup | 203 | 30 |
 
-These examples show correction magnitude, not accuracy against measured food.
-Root and independent review checked all 65 four-macro tuples on the original US nutrition chart.
-The 715 selected nutrient cells were also checked with a separate PDF extraction method, and official product pages corroborated calories and recipes.
+Peet's uses 13 baked and seven warm-food facts scoped to CA, IL, DC, MD and VA.
+The shared regional matcher and both writers shipped through [PR 302](https://github.com/dgmolla/fitsy/pull/302).
+Local actual-menu replays found 38 official matches among 455 current UE items and 155 among 1,638 historical items.
+All 20 facts remain estimated in WA, CO and unknown-location controls; both April writers reject those ineligible plans.
+This is local new-import proof, not a newly added production hex.
 
-| Evidence | Result |
-|---|---|
-| Current captured UE imports | 68 official / 251 estimated across 319 items |
-| Historical simulations | 79 matched / 200 unchanged contexts, weighted to 224 April rows |
-| Exact alias coverage | All 103: 79 historical and 24 current-only |
-| Identity boundaries | 749 brands, all seven restaurant names, 689 negative mutations and 451 held contexts |
-| Production | 54-fact canary, complete authenticated menu/search checks, preservation and zero-change reruns |
+Thirteen Peet's facts have one numeric publication, the official regional PDF; seven warm-food facts also agree with the publisher's product pages.
+Three published weight differences remain disclosed; the approved whole-item macros agree and are not gram-scaled.
+Bacon Sausage Cheddar Crispy, Cinnamon Swirl Crumb Cake and Everything Plant-Based Sandwich remain held for source disagreements.
 
-Seven restaurants share two distinct historical menu shapes; both were replayed and every restaurant name was checked separately.
-All 68 matched current UE items publish a single calorie value agreeing with the reference.
-Some expose a generic customization flag; the facts describe only the named unmodified item.
-Blank April descriptions explicitly assume the same standard product.
-
-22 product calorie panels disagree with the linked PDF, and those conflicts were held.
-Whole cakes, loaves, multipacks, fractional Choux Cream Bread, drinks and Tiramisu Cake Slice's sugar/carbohydrate contradiction were also excluded.
-The separately named Tiramisu Tart has its own corroborated source row.
-PDF warning footnotes were removed using their glyph position; menu quantities were retained.
-Labeled packs were kept separate from individual items.
-
-The remaining 565 April rows include 317 drinks, 82 products needing a whole-order serving review, 68 without a reviewed current source binding, 61 official calorie conflicts, 30 source rows needing product corroboration and seven Tiramisu contradictions.
-These categories prioritize follow-up; they do not establish eligibility.
-
-Pressed's preceding 289 numeric corrections and Kreation's 82 remain production verified.
-Pressed's allulose/fiber validator limitation remains reproduced and unfixed; no publisher macros were altered to pass the check.
-All these catalog updates use the released matcher and writer without a new API deployment.
+Benihana's 20 standard items passed root and independent visual source checks, plus a separate check of 236 nonempty source cells.
+Its current UE replay produced 40 official matches among 385 items.
+Full course meals, samplers, bundles and conflicting values remain held.
+Some roll bindings assume the standard named item with corroborating UE calories because the official menu has blank recipe fields.
+Published references are not measured portions or ingredient-by-ingredient proof.
 
 ## Completed batches
 
@@ -87,13 +77,15 @@ All these catalog updates use the released matcher and writer without a new API 
 | Kreation Kafe & Juicery | 10 | 10 | 0 |
 | Pressed | 289 | 289 | 0 |
 | Paris Baguette | 224 | 97 | 127 |
-| **Total** | **38,300** | **14,619** | **23,681** |
+| Benihana | 56 | 20 | 36 |
+| Peet's Coffee | 155 | 155 | 0 |
+| **Total** | **38,511** | **14,794** | **23,717** |
 
 “Values changed” means at least one of calories, protein, carbs or fat changed.
 “Attribution only” means those four values stayed the same and reviewed official attribution was applied.
 These counts measure rollout behavior, not accuracy against measured food.
 
-The batches loaded **1,628 approved facts and 2,279 exact menu aliases** into the chain catalog.
+The batches loaded **1,668 approved facts and 2,345 exact menu aliases** into the chain catalog.
 Jamba, Panera, Popeyes and Jersey Mike's each have two stored identities; Kreation has three.
 Their facts remain scoped to the correct identity.
 Dave's and Nothing Bundt Cakes were also linked to 23 existing restaurants without changing their menu identities.
@@ -113,13 +105,16 @@ flowchart LR
 The shared matcher, identity handoff and guarded bulk writer are merged through [PR 289](https://github.com/dgmolla/fitsy/pull/289).
 The reviewed writer is `179be20e9a26eda262c428149630f72092730302`, merged as `848f117952b60b62bd1ee03291151e73a1184e55`.
 Main Verify, Deploy and authenticated production checks passed for that runtime release.
-Offline UE runs must use a checkout containing it.
+Regional approval support is reviewed at `e805ee2c63ec4e0f19563c6b8ff9fc4a8a3c121d`, merged as `e63f0fc48c9ede443fc60180be43c7c6628b007e` in [PR 302](https://github.com/dgmolla/fitsy/pull/302).
+Its exact-merge main Verify, Deploy, production deployment and authenticated serving checks passed.
+Offline UE and backfill runs must now use a checkout containing the regional release.
+Stop older writers and the chain-unaware rerun command for reviewed menus; narrowing an approval requires a separate data migration first.
 
 ## What was proved
 
 | Check | Result and limit |
 |---|---|
-| Production preservation | All **120,904 menu IDs across 1,222 restaurants** preserved; all **82,604 unselected rows** unchanged |
+| Production preservation | All **123,239 menu IDs across 1,235 restaurants** preserved; all **84,728 unselected rows** unchanged |
 | Serving | Authenticated reads checked every selected restaurant's complete menu and every changed row; search/detail checks passed per brand |
 | Repeated execution | All completed batches produced zero pending catalog and April changes |
 | Recovery | Exact local rollback passed; bounded production transactions retain before/after journals; production was not rolled back as a test |
@@ -128,7 +123,7 @@ Offline UE runs must use a checkout containing it.
 
 Current UE captures and simulated historical imports are separate evidence.
 Nine batches after Habit have no current UE capture; their proof does not establish current naming or availability.
-Dave's, Charleys, the second Jersey Mike's identity, Panini, Baskin, Cold Stone, NORMS, Kreation, Pressed and Paris Baguette have additional current-capture replays.
+Dave's, Charleys, the second Jersey Mike's identity, Panini, Baskin, Cold Stone, NORMS, Kreation, Pressed, Paris Baguette, Benihana and Peet's have additional current-capture replays.
 Activating a catalog routes imports through UE but does not guarantee UE returns a menu.
 Authenticated checks use the existing allowlisted review account, not a paid-subscription test.
 
@@ -142,7 +137,7 @@ Authenticated checks use the existing allowlisted review account, not a paid-sub
 | Stale page metadata | Compare visible descriptions and attached labels; Pressed SEO retained old formulas while the product panel had changed |
 | Energy consistency | Keep a reviewed path for allulose/fiber labels; do not alter source macros to satisfy a naive 4/4/9 equation |
 | Conflicting source values | Hold disagreements instead of choosing the convenient number; examples include Habit, Charleys, CAVA, Buffalo Wild Wings, Cold Stone and Paris Baguette |
-| Wrong source scope | Respect country, region and restaurant eligibility; Peet's and Del Taco remain inactive for separate scope/release reasons |
+| Wrong source scope | Respect country, region and restaurant eligibility; Peet's is state-scoped; Del Taco remains held for unproven company-owned location eligibility |
 | Different portion conventions | Use nutrition servings for whole cakes and bottles; Kreation labels require two servings per bottle |
 | Duplicate brand identity | Reuse verified source facts through separate brand-scoped bindings; test each identity without merging unrelated restaurants |
 | Existing catalog says “official” | Require a valid review and serving binding; Charleys' 39, Baskin's 10 and Paris Baguette's 249 older unreviewed chain catalog records were preserved and not implicitly promoted |
@@ -169,8 +164,7 @@ This is a reproduced gap, not a shipped fix; the captured-menu consistency proof
 2. Add narrowly reviewed support for legitimate allulose/fiber labels, preserving strict validation for unreviewed facts.
 3. Continue through remaining chain identities, prioritizing meals with usable official serving evidence.
 4. Package the proven source adapters and proposal checks into repeatable offline onboarding.
-5. Release the prepared regional runtime after its required simulator gate, then activate the reviewed Peet's batch.
-6. Keep nutrition accuracy review separate from match coverage and import consistency.
+5. Keep nutrition accuracy review separate from match coverage and import consistency.
 
 Del Taco remains held because its guide covers company-owned restaurants and location eligibility is unproven.
 The inventory's 688 menu-bearing groups are a review cohort, not 688 independently confirmed national chains or approved catalogs.
