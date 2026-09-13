@@ -27,8 +27,8 @@ test('disjoint regional aliases coexist; unknown location cannot select a region
 test('overlapping regional and national claims remain ambiguous, even with identical macros', () => {
   for (const row of [fixture('overlap', ['CA', 'OR']), fixture('national')]) {
     const rows = [fixture('west', ['CA']), row];
-    expect(() => assertUnambiguousChainAliases(rows)).toThrow('Ambiguous reviewed alias');
+    expect(() => assertUnambiguousChainAliases(rows)).toThrow(`Ambiguous reviewed alias: Butter Croissant; brand bakery; west overlaps ${row.canonicalKey}`);
     expect(buildChainMatcher(rows)('bakery', item, ca)).toEqual({ status: 'ambiguous' });
   }
-  expect(buildChainMatcher([fixture('national')])('bakery', item)).toMatchObject({ status: 'matched' });
+  expect(buildChainMatcher([fixture('national')])('bakery', item)).toMatchObject({ status: 'matched', row: { id: 'national' } });
 });

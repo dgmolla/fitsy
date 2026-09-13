@@ -73,11 +73,14 @@ function indexApprovedRows(rows: ChainCatalogRow[]) {
 }
 /** Catalog validation compares scopes directly, without inventing representative store coordinates. */
 export function assertUnambiguousChainAliases(rows: ChainCatalogRow[]): void {
-  for (const candidates of indexApprovedRows(rows).values()) {
+  for (const [key, candidates] of indexApprovedRows(rows)) {
     const entries = [...candidates.values()];
     for (let i = 0; i < entries.length; i++) for (const other of entries.slice(i + 1)) {
       const a = entries[i]!.review.usStates, b = other.review.usStates;
-      if (!a || !b || a.some(code => b.includes(code))) throw new Error('Ambiguous reviewed alias: overlapping geographic scopes');
+      if (!a || !b || a.some(code => b.includes(code))) {
+        const first = entries[i]!, name = first.review.aliases.find(alias => first.brandId + ':' + chainMenuFingerprint(alias) === key)!.name;
+        throw new Error(`Ambiguous reviewed alias: ${name}; brand ${first.brandId}; ${first.canonicalKey} overlaps ${other.canonicalKey}`);
+      }
     }
   }
 }

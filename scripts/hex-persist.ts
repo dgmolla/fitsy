@@ -89,6 +89,10 @@ export async function persistHex(
     // validation + checkpoint insert without false-positive timeouts.
     // maxWait raised from the 2s default so we don't fail acquiring a tx slot
     // under sustained pipeline pressure.
+    // Serializable also protects the catalog/brand reads from newly inserted
+    // conflicting claims, which row locks on existing approvals cannot cover.
+    // Known serialization aborts retry the entire hex at most twice; uncertain
+    // commits and other failures stop. Avoid concurrent ingestion/backfill jobs.
     300_000, 30_000,
   );
 

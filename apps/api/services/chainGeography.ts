@@ -2,14 +2,18 @@ import { z } from 'zod';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
+import { chainUsStateCodes } from './chainUsStateCodes.generated';
 
 // Compressed reference avoids feeding a multi-megabyte numeric AST to TypeScript and code-review tools.
-const boundaries = JSON.parse(gunzipSync(readFileSync(join(__dirname, 'chainUsStates.generated.json.gz'))).toString('utf8')) as {
+type Boundaries = {
   states: { code: string; polygons: { bounds: number[]; rings: number[][][] }[] }[];
 };
+let boundaries: Boundaries | undefined;
+// Offline pipeline asset, resolved relative to this module regardless of the invoking CLI's cwd.
+const loadBoundaries = (): Boundaries => boundaries ??= JSON.parse(gunzipSync(readFileSync(join(__dirname, 'chainUsStates.generated.json.gz'))).toString('utf8')) as Boundaries;
 
 export interface ChainLocation { lat: number; lng: number }
-export const usStatesSchema = z.array(z.string().regex(/^[A-Z]{2}$/).refine(code => boundaries.states.some(s => s.code === code)))
+export const usStatesSchema = z.array(z.string().regex(/^[A-Z]{2}$/).refine(code => chainUsStateCodes.includes(code)))
   .min(1).max(56).refine(codes => new Set(codes).size === codes.length, 'Duplicate state');
 const cache = new Map<string, string | undefined>();
 // Cartographic boundaries are generalized. Abstain within 250 m of any edge.
@@ -34,7 +38,7 @@ export function chainUsState(location?: ChainLocation): string | undefined {
   if (cache.has(key)) return cache.get(key);
   const found = new Set<string>();
   let uncertain = false;
-  for (const state of boundaries.states) for (const polygon of state.polygons) {
+  for (const state of loadBoundaries().states) for (const polygon of state.polygons) {
     const [west, south, east, north] = polygon.bounds;
     const x = location.lng + 360 * Math.round(((west! + east!) / 2 - location.lng) / 360), y = location.lat;
     const longitudeMargin = margin / Math.max(.01, Math.cos(y * Math.PI / 180));

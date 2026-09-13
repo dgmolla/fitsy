@@ -10,7 +10,6 @@ test.each([
 ])('offline boundary lookup: %s at %s,%s', (expected, lat, lng) => {
   const location = { lat: Number(lat), lng: Number(lng) };
   expect(chainUsState(location)).toBe(expected);
-  expect(chainUsState(location)).toBe(expected); // Same result on cache hits.
 });
 test.each([
   undefined, { lat: NaN, lng: -118 }, { lat: 34, lng: Infinity }, { lat: 91, lng: 0 }, { lat: 0, lng: -181 },

@@ -1,4 +1,8 @@
 import { randomUUID } from 'node:crypto';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { PrismaClient } from '@prisma/client';
 import { approvedChainRow, chainReviewHash } from '../../services/chainCatalog';
 import { applyAprilChainMatch, loadChainServing, resolveChainMacros } from '../../services/chainServing';
@@ -40,6 +44,13 @@ suite('regional official nutrition through the real writer and served menu', () 
           const snapshot = () => p.menuItem.findUniqueOrThrow({ where: { restaurantId_name: { restaurantId: restaurant.id, name: item.name } }, include });
           const original = await snapshot(), pairs = [{ item, macro: macros[0]! }];
           await expect(persistItems(restaurant.id, [{ item, macro: { ...macros[0]!, calories: 301 } }], p)).rejects.toThrow('facts changed');
+          await expect(persistItems(restaurant.id, [{ item, macro: { ...macros[0]!, reasoning: '{"kind":"reviewed-chain-v1"}' } }], p)).rejects.toThrow('proof is incomplete');
+          await p.restaurant.update({ where: { id: restaurant.id }, data: { name: 'Unrelated bakery' } });
+          await expect(persistItems(restaurant.id, pairs, p)).rejects.toThrow('brand changed');
+          await expect(persistHex(scope, 'renamed', [{ restaurantId: restaurant.id, brandId: brand.id, menuHash: 'renamed', items: pairs }], p)).rejects.toThrow('brand changed');
+          expect(await p.pipelineCompletedHex.count({ where: { runId: scope, hexId: 'renamed' } })).toBe(0);
+          await p.restaurant.update({ where: { id: restaurant.id }, data: { name: restaurant.name } });
+          await expect(persistHex(scope, 'wrong-brand', [{ restaurantId: restaurant.id, brandId: randomUUID(), menuHash: 'wrong', items: pairs }], p)).rejects.toThrow('brand changed');
           expect(stateHash(await snapshot())).toBe(stateHash(original));
           // Stale resolved nutrition cannot cross a state boundary at either writer.
           await p.restaurant.update({ where: { id: restaurant.id }, data: { lat: 41.4993, lng: -81.6944 } });
@@ -73,11 +84,58 @@ suite('regional official nutrition through the real writer and served menu', () 
       }
       expect(observed).toEqual([{ location: 'California', calories: 300, confidence: 'HIGH' },
         { location: 'Ohio', calories: 400, confidence: 'MEDIUM' }]);
+      const directory = mkdtempSync(join(tmpdir(), 'fitsy-chain-region-')), repo = resolve(__dirname, '../../../..');
+      try {
+        const batchPath = join(directory, 'batch.json'), planPath = join(directory, 'plan.json');
+        writeFileSync(batchPath, JSON.stringify({ version: 1, reviewedBy: review.reviewedBy, quarantine: [], changes: [{ slug: brand.slug,
+          canonicalKey: row.canonicalKey, expected: null, facts: { calories: 300, proteinG: 6, carbsG: 33, fatG: 16, servingSize: 'One croissant' },
+          source: { url: row.officialUrl, sha256: review.sourceHash }, locator: review.locator, aliases: [item], usStates: ['CA'] }] }));
+        const run = (...args: string[]) => execFileSync(process.execPath, [join(repo, 'node_modules/tsx/dist/cli.mjs'),
+          '--tsconfig', join(repo, 'apps/api/tsconfig.json'), join(repo, 'scripts/preload-chain-pilot.ts'), ...args, '--batch=' + batchPath],
+        { cwd: repo, encoding: 'utf8' }).trim().split('\n').map(line => JSON.parse(line)).at(-1);
+        const california = await p.restaurant.findUniqueOrThrow({ where: { storeUuid: scope + 'California' } });
+        const current = () => p.menuItem.findMany({ where: { restaurantId: california.id }, include: { macroEstimates: { orderBy: { id: 'asc' as const } } } });
+        const beforeCli = await current(), planned = run('april-plan', planPath);
+        expect(planned.matched).toBe(1);
+        const plan = JSON.parse(readFileSync(planPath, 'utf8'));
+        expect(plan.rows.map((r: { before: { restaurantId: string } }) => r.before.restaurantId)).toEqual([california.id]);
+        run('april-apply', planPath, planned.hash, '--limit=1', '--chunk-size=100');
+        expect((await current())[0]!.calories).toBe(300);
+        run('april-rollback', planPath + '.journal');
+        expect(stateHash(await current())).toBe(stateHash(beforeCli));
+      } finally { rmSync(directory, { recursive: true, force: true }); }
+      // Real overlapping April lock and an all-estimated hex must not form a deadlock.
+      const ohio = await p.restaurant.findUniqueOrThrow({ where: { storeUuid: scope + 'Ohio' } });
+      const saved = await p.menuItem.findFirstOrThrow({ where: { restaurantId: ohio.id } });
+      const url = new URL(process.env['POSTGRES_PRISMA_URL']!);
+      url.searchParams.set('application_name', scope); url.searchParams.set('connection_limit', '1');
+      const writer = new PrismaClient({ datasources: { db: { url: url.toString() } } });
+      let pending: Promise<number> | undefined;
+      try {
+        await p.$transaction(async tx => {
+          await tx.$queryRaw`SELECT id FROM "Restaurant" WHERE id = ${ohio.id} FOR SHARE`;
+          pending = persistHex(scope, 'concurrent-estimated', [{ restaurantId: ohio.id, brandId: brand.id,
+            menuHash: 'concurrent-estimated', items: [{ item, macro: { calories: 400, proteinG: 8, carbsG: 44, fatG: 21,
+              confidence: 'MEDIUM', source: 'haiku', dietaryTags: [] } }] }], writer);
+          void pending.catch(() => {});
+          let waiting = false;
+          for (let tries = 0; tries < 100; tries++) {
+            const active = await p.$queryRaw<{ wait_event_type: string | null }[]>`SELECT wait_event_type FROM pg_stat_activity WHERE application_name = ${scope}`;
+            if (active.some(a => a.wait_event_type === 'Lock')) { waiting = true; break; }
+            await new Promise(resolve => setTimeout(resolve, 20));
+          }
+          expect(waiting).toBe(true);
+          // Old order holds MenuItem while waiting for Restaurant and deadlocks here.
+          await tx.$queryRaw`SELECT id FROM "MenuItem" WHERE id = ${saved.id} FOR UPDATE`;
+        }, { timeout: 10_000 });
+        await expect(pending).resolves.toBe(1);
+        expect(await p.pipelineCompletedHex.count({ where: { runId: scope, hexId: 'concurrent-estimated' } })).toBe(1);
+      } finally { await pending?.catch(() => {}); await writer.$disconnect(); }
     } finally {
       await p.restaurant.deleteMany({ where: { storeUuid: { startsWith: scope } } });
       await p.chainItem.deleteMany({ where: { brandId: brand.id } });
       await p.brand.delete({ where: { id: brand.id } });
       await p.pipelineCompletedHex.deleteMany({ where: { runId: scope } });
     }
-  });
+  }, 30_000);
 });

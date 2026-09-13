@@ -45,7 +45,10 @@ flowchart LR
 
 The April planner, both April writers and the UE-first resolver use the same matcher.
 Both menu persistence paths recheck reviewed-chain metadata and facts against the current catalog and locked restaurant location.
-Transactions use serializable isolation; only known serialization aborts receive bounded retries.
+All target restaurants, including those with only estimates, are locked before their menu rows.
+Transactions use serializable isolation to cover concurrent new catalog/brand claims that locks on existing rows cannot cover.
+Only known serialization aborts receive bounded retries; a large hex can repeat its entire transaction up to twice.
+Avoid concurrent ingestion and backfill jobs targeting the same data.
 An uncertain commit is never retried automatically.
 Rollback restores recorded rows without requiring the restaurant to remain inside the source's region.
 
@@ -53,9 +56,10 @@ Rollback restores recorded rows without requiring the restaurant to remain insid
 
 The lookup uses the [2025 Census cartographic state boundaries](https://www.census.gov/geographies/mapping-files/2025/geo/carto-boundary-file.html) at 1:500,000 scale.
 The source archive URL and SHA-256 are embedded in the generated reference.
-Regenerate it with `python3 scripts/gen/chain-us-states.py /path/to/cb_2025_us_state_500k.zip`.
+Regenerate it with `python3 scripts/preload-chain-boundaries.py /path/to/cb_2025_us_state_500k.zip`.
 The generator verifies the pinned archive and preserves every polygon, hole and coordinate, with antimeridian unwrapping and no simplification.
 
+The compressed reference loads only when a location needs checking.
 Bounding boxes avoid unnecessary polygon scans, and a bounded coordinate cache shares results across menu items.
 Matching adds no network, geocoding or model calls.
 Coordinates within 250 metres of an edge are treated as uncertain.
