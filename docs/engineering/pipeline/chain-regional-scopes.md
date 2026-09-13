@@ -26,7 +26,9 @@ The array is nonempty, unique, uppercase and limited to recognized Census state/
 Every state is bound into the review hash; changing or removing the scope requires a new approval.
 Reordering the same states does not invalidate approval.
 Complete the code rollout and stop older ingestion/backfill processes before applying the first regional catalog batch.
-Older readers reject scoped approvals and can replace previously official nutrition with estimation during a menu update.
+Older readers and the chain-unaware `rerun.ts` command can replace reviewed nutrition with estimates; keep them stopped for these menus.
+Narrowing an existing approval requires a separate data migration to replace previously written out-of-region official estimates before publishing the narrower scope.
+Regional facts use `changes`; manufacturer-product bindings remain national-only.
 
 The source review must establish statewide applicability.
 State coverage does not establish city-only coverage, franchise ownership, restaurant availability, portions or menu membership.

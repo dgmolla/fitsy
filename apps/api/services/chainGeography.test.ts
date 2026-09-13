@@ -14,9 +14,10 @@ test.each([
 });
 test.each([
   undefined, { lat: NaN, lng: -118 }, { lat: 34, lng: Infinity }, { lat: 91, lng: 0 }, { lat: 0, lng: -181 },
+  { lat: 52.8956, lng: -187.0999 }, // Invalid longitude must not unwrap to the valid Attu point.
   { lat: 0, lng: 0 }, { lat: 43.6532, lng: -79.3832 }, { lat: 32.5149, lng: -117.0382 },
   { lat: 36.999084, lng: -109.045223 }, { lat: 41.994944, lng: -119.999234 }, { lat: 0, lng: 179 },
-  // About154m inside CA and105m inside NV from the pinned Census edge north of Tahoe.
+  // About 154 m inside CA and 105 m inside NV from the pinned Census edge north of Tahoe.
   { lat: 39.2, lng: -120.007 }, { lat: 39.2, lng: -120.004 },
 ])('unknown, foreign, ocean and border coordinates abstain: %p', location => {
   expect(chainUsState(location)).toBeUndefined();
