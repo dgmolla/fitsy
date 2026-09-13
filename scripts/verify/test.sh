@@ -5,9 +5,11 @@
 set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$REPO_ROOT"
 FAIL=""
-API_ARGS=()
-if [ -n "${POSTGRES_PRISMA_URL:-}" ]; then API_ARGS=(-- --runInBand); fi
-npm run test:coverage --workspace=apps/api "${API_ARGS[@]}" >&2 || FAIL="apps/api"
+if [ -n "${POSTGRES_PRISMA_URL:-}" ]; then
+  npm run test:coverage --workspace=apps/api -- --runInBand >&2 || FAIL="apps/api"
+else
+  npm run test:coverage --workspace=apps/api >&2 || FAIL="apps/api"
+fi
 npm test --workspace=@fitsy/scripts >&2 || FAIL="${FAIL:+$FAIL, }scripts"
 npm test --workspace=@fitsy/mobile >&2 || FAIL="${FAIL:+$FAIL, }mobile"
 if [ -n "$FAIL" ]; then
