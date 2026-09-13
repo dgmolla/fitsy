@@ -19,7 +19,8 @@ flowchart TD
   J --> L[Goal, height, weight, age, sex, activity]
   I --> M[Editable per-meal targets]
   L --> M
-  K --> M
+  K -->|Edit| M
+  K -->|Use saved targets| N
   M --> N[Real search preview and guided tour]
   N --> O[Account and approved paywall]
   O --> P[Optional reminders and selected meal]
