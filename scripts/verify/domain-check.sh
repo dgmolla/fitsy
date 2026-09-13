@@ -13,6 +13,13 @@ if [ -z "$CHANGED" ]; then
   printf '{"name":"domain-check","status":"skipped","summary":"no diff vs origin/main","fix":""}\n'
   exit 2
 fi
+# Classify removal-only exception maintenance with the same changed product files.
+# Resolve the actual PR head so a different local checkout cannot hide additions.
+COMPARE_HEAD=HEAD
+if [ -n "${PR_NUMBER:-}" ]; then
+  COMPARE_HEAD="$(gh pr view "$PR_NUMBER" --json headRefOid --jq .headRefOid 2>/dev/null || echo unavailable)"
+fi
+CHANGED="$(printf '%s\n' "$CHANGED" | node scripts/verify/domain-allowlist-paths.mjs "$COMPARE_HEAD")"
 # Main's routing table, so PR branches never need a rebase to pick up routing
 # fixes — EXCEPT when the PR itself changes the table: that change is under
 # review in this very PR (structural test 10 keeps it synced with reviewer.md).
