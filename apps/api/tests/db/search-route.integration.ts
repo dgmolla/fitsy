@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { generateKeyPair, exportJWK, SignJWT } from 'jose';
+import { Prisma } from '@prisma/client';
 import { NextRequest } from 'next/server';
 import { restaurantsResponseSchema, menuResponseSchema, guidedPreviewResponseSchema } from '@fitsy/shared';
 import { GET } from '../../app/api/restaurants/route';
@@ -229,10 +230,11 @@ test('search and detail expose the same LOW confidence when provenance is missin
   const best = results.find(r => r.id === id)!.bestMatch!;
   const detail = await body(await getMenu(id, targetQuery));
   assert.equal(best.confidence, 'LOW');
+  assert.equal('source' in best, false);
   assert.equal(detail.menuItems[0]!.id, best.menuItemId);
   assert.equal(detail.menuItems[0]!.macros!.confidence, 'LOW');
   assert.equal(detail.menuItems[0]!.macros!.calories, best.calories);
-  } finally { await prisma.macroEstimate.createMany({ data: estimates }); }
+  } finally { await prisma.macroEstimate.createMany({ data: estimates.map(row => ({ ...row, ingredientBreakdown: row.ingredientBreakdown === null ? Prisma.DbNull : row.ingredientBreakdown })) }); }
 });
 
 
