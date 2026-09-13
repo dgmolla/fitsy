@@ -45,7 +45,9 @@ export function DiscoveryScreen({ onboardingPreview = false }: { onboardingPrevi
     <>
       {isOnboardingPreview && <View style={s.previewIntro} testID="preview-guide">
         <Text style={s.previewHint}>{onboardingPitch(tried).preview}</Text>
-        <Pressable onPress={startTour} style={s.previewTourButton} accessibilityRole="button" testID="preview-show-tour"><Ionicons name="sparkles-outline" size={16} color={EDITORIAL.green} /><Text style={s.previewLink}>Show me how Fitsy works</Text><Text style={s.previewHint}>5 quick tips</Text></Pressable>
+        {!loading && !error && results.length > 0 && <Pressable onPress={startTour} style={s.previewTourButton} accessibilityRole="button" accessibilityLabel="Show me how Fitsy works" accessibilityHint="Replay the five preview tips" testID="preview-show-tour">
+          <Ionicons name="help-circle-outline" size={20} color={EDITORIAL.green} />
+        </Pressable>}
       </View>}
       <MacroStrip macros={inputs} onEdit={() => setFilterVisible(true)} editRef={tourEditRef} />
       <SearchBar value={query} onChangeText={setQuery} onClear={handleClearQuery} containerRef={tourSearchRef} />

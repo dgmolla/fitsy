@@ -1,0 +1,80 @@
+# Simulator GPS only; coverage and recovery use the real dev API.
+# Signup completion and waitlist database writes are checked in the native walkthrough.
+appId: com.fitsy.mobile
+tags: [onboarding, auth, changed-journey]
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- extendedWaitUntil:
+    visible: "Find meals that fit"
+    timeout: 30000
+- waitForAnimationToEnd
+- tapOn:
+    point: "92%,93%"
+- setLocation:
+    latitude: 40.7128
+    longitude: -74.0060
+- openLink: com.fitsy.mobile://welcome/location-permission
+- extendedWaitUntil:
+    visible:
+      id: location-use-current
+    timeout: 15000
+- waitForAnimationToEnd
+- tapOn:
+    id: location-use-current
+- extendedWaitUntil:
+    visible:
+      id: waitlist-join
+    timeout: 30000
+- assertVisible: "More menus are.*"
+- assertNotVisible:
+    id: trial-see-plans
+- tapOn:
+    id: waitlist-join
+- assertVisible: "Create an account"
+# Interrupting waitlist signup must keep its destination across a cold launch.
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: waitlist-join
+    timeout: 30000
+- assertVisible: "More menus are.*"
+- assertNotVisible: "Create an account"
+- tapOn:
+    id: waitlist-join
+- assertVisible: "Create an account"
+- tapOn:
+    id: welcome-back
+- assertVisible:
+    id: waitlist-change-area
+- tapOn:
+    id: waitlist-change-area
+- extendedWaitUntil:
+    visible:
+      id: location-choose-area
+    timeout: 15000
+- assertVisible: "Selected: Your location"
+- tapOn:
+    id: location-choose-area
+- tapOn: "Search near DTLA"
+- extendedWaitUntil:
+    visible:
+      id: welcome-continue
+      enabled: true
+    timeout: 30000
+- assertVisible: ".*dishes with nutrition within 3 miles.*"
+- assertVisible: "About the nutrition"
+- assertNotVisible:
+    id: waitlist-join
+# The selected manual area survives another restart, independent of GPS.
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: welcome-continue
+      enabled: true
+    timeout: 30000
+- assertVisible: ".*dishes with nutrition within 3 miles.*"
+- assertVisible: "About the nutrition"

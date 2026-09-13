@@ -36,7 +36,6 @@ async function captureIdentity(userId: string, email?: string | null): Promise<v
 }
 
 export default function SignInScreen() {
-  useOnboardingStep('signin');
   const [appleLoading, setAppleLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [devLoading, setDevLoading] = useState(false);
@@ -44,6 +43,9 @@ export default function SignInScreen() {
   // Continue from the preview to live plan terms. Permissions follow purchase.
   // Skip onboarding review; existing in-app prompts use lib/ratingPrompt.ts.
   const { outOfArea, returnTo } = useLocalSearchParams<{ outOfArea?: string; returnTo?: string }>();
+  // A cold launch cannot recover this screen's query parameters. Keep the
+  // waitlist checkpoint so interrupted signup never resumes toward a paywall.
+  useOnboardingStep(outOfArea === '1' ? 'out-of-area' : 'signin');
 
   const navigateAfterAuth = useCallback(async (isNewUser: boolean) => {
     if (outOfArea === '1') {

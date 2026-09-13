@@ -4,9 +4,9 @@ const HERO_H = 320;
 const DISH_CARD_H = 138;
 
 export const s = StyleSheet.create({
-  previewTourButton: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', minHeight: 44, paddingHorizontal: 12, borderRadius: 12, backgroundColor: EDITORIAL.creamCard },
-  previewIntro: { paddingHorizontal: 22, paddingTop: 4, paddingBottom: 8, gap: 7 },
-  previewHint: { fontFamily: FONTS.nunitoSans, fontSize: 13, lineHeight: 19, color: EDITORIAL.textMid },
+  previewTourButton: { alignItems: 'center', justifyContent: 'center', width: 44, minHeight: 44, flexShrink: 0 },
+  previewIntro: { flexDirection: 'row', alignItems: 'center', paddingLeft: 22, paddingRight: 12, paddingTop: 4, paddingBottom: 8, gap: 4 },
+  previewHint: { flex: 1, fontFamily: FONTS.nunitoSans, fontSize: 13, lineHeight: 19, color: EDITORIAL.textMid },
   previewLink: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 13, lineHeight: 20, color: EDITORIAL.green },
   previewBack: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, paddingHorizontal: 18 },
   masthead: {
