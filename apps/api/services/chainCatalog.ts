@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { StructuredMenuItem } from "./menuSources/types";
+import { chainUsState, usStatesSchema, type ChainLocation } from './chainGeography';
 
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
 const text = z.string().trim().min(1);
@@ -12,7 +13,7 @@ const defaultServing = z.object({
 const alias = z.object({ name: text, section: z.string().optional(), description: z.string().optional(),
   defaultServing: defaultServing.optional() }).strict();
 export const chainReviewSchema = z.object({ version: z.literal(1), sourceHash: hash, locator: z.string().trim().min(1),
-  reviewedBy: z.string().trim().min(1), dataHash: hash, aliases: z.array(alias) }).strict();
+  reviewedBy: z.string().trim().min(1), dataHash: hash, aliases: z.array(alias), usStates: usStatesSchema.optional() }).strict();
 export type ChainReview = z.infer<typeof chainReviewSchema>;
 export interface ChainCatalogRow {
   id: string; brandId: string; canonicalKey: string; servingSize: string | null;
@@ -32,7 +33,9 @@ export function chainReviewHash(row: ChainCatalogRow, review: Omit<ChainReview, 
     row.source, row.confidence, row.officialUrl, review.version, review.sourceHash, review.locator.trim(), review.reviewedBy.trim(),
     // Keep existing version-1 hashes stable; new option approvals bind every evidence field.
     review.aliases.map(a => a.defaultServing ? digest([chainMenuFingerprint(a), a.defaultServing.calorieRange,
-      a.defaultServing.sourceUrl, a.defaultServing.sourceHash, a.defaultServing.locator.trim(), a.defaultServing.selections.map(s => s.trim())]) : chainMenuFingerprint(a)).sort()]);
+      a.defaultServing.sourceUrl, a.defaultServing.sourceHash, a.defaultServing.locator.trim(), a.defaultServing.selections.map(s => s.trim())]) : chainMenuFingerprint(a)).sort(),
+    // Absent scope adds no bytes to existing approval hashes.
+    ...(review.usStates ? [['usStates', [...review.usStates].sort()]] : [])]);
 }
 export function approvedChainRow(row: ChainCatalogRow): ApprovedChainRow | null {
   const parsed = chainReviewSchema.safeParse(row.review);
@@ -55,8 +58,7 @@ export function approvedChainRow(row: ChainCatalogRow): ApprovedChainRow | null 
   return { ...row, calories, proteinG: row.proteinG!, carbsG: row.carbsG!, fatG: row.fatG!, review: parsed.data };
 }
 export type ChainMatch = { status: "matched"; row: ApprovedChainRow } | { status: "unmatched" | "ambiguous" };
-/** Build once per run. Matching makes no DB, model or network calls. */
-export function buildChainMatcher(rows: ChainCatalogRow[]): (brandId: string | undefined, item: StructuredMenuItem) => ChainMatch {
+function indexApprovedRows(rows: ChainCatalogRow[]) {
   const index = new Map<string, Map<string, ApprovedChainRow>>();
   for (const input of rows) {
     const row = approvedChainRow(input);
@@ -67,11 +69,31 @@ export function buildChainMatcher(rows: ChainCatalogRow[]): (brandId: string | u
       candidates.set(row.id, row); index.set(key, candidates);
     }
   }
-  return (brandId, item) => {
-    const candidates = index.get(brandId + ":" + chainMenuFingerprint(item));
-    if (!candidates?.size) return { status: "unmatched" };
-    if (candidates.size !== 1) return { status: "ambiguous" };
-    const row = candidates.values().next().value!;
+  return index;
+}
+/** Catalog validation compares scopes directly, without inventing representative store coordinates. */
+export function assertUnambiguousChainAliases(rows: ChainCatalogRow[]): void {
+  for (const [key, candidates] of indexApprovedRows(rows)) {
+    const entries = [...candidates.values()];
+    for (let i = 0; i < entries.length; i++) for (const other of entries.slice(i + 1)) {
+      const a = entries[i]!.review.usStates, b = other.review.usStates;
+      if (!a || !b || a.some(code => b.includes(code))) {
+        const first = entries[i]!, name = first.review.aliases.find(alias => first.brandId + ':' + chainMenuFingerprint(alias) === key)!.name;
+        throw new Error(`Ambiguous reviewed alias: ${name}; brand ${first.brandId}; ${first.canonicalKey} overlaps ${other.canonicalKey}`);
+      }
+    }
+  }
+}
+/** Build once per run. Matching makes no DB, model or network calls. */
+export function buildChainMatcher(rows: ChainCatalogRow[]): (brandId: string | undefined, item: StructuredMenuItem, location?: ChainLocation) => ChainMatch {
+  const index = indexApprovedRows(rows);
+  return (brandId, item, location) => {
+    const indexed = index.get(brandId + ":" + chainMenuFingerprint(item));
+    if (!indexed?.size) return { status: "unmatched" };
+    const candidates = [...indexed.values()].filter(row => !row.review.usStates || row.review.usStates.includes(chainUsState(location) ?? ''));
+    if (!candidates.length) return { status: "unmatched" };
+    if (candidates.length !== 1) return { status: "ambiguous" };
+    const row = candidates[0]!;
     // Source calorie labels corroborate a serving; estimated DB columns must
     // not be passed as source labels by the April adapter.
     if (item.calorieRange) {

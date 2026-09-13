@@ -22,7 +22,9 @@ export async function applyAprilChainBatch(prisma: PrismaClient, entries: AprilB
     const catalogById = new Map(catalog.map(r => [r.id, r]));
     const brands = await tx.brand.findMany({ where: { detectionConf: { in: ["high", "llm-confirmed"] }, menuKind: "restaurant" } });
     const identity = buildBrandIdentityMatcher(brands), match = buildChainMatcher(catalog);
-    const restaurants = await tx.restaurant.findMany({ where: { id: { in: [...new Set(entries.map(e => e.before.restaurantId))] } }, select: { id: true, name: true, brandId: true } });
+    const restaurantIds = [...new Set(entries.map(e => e.before.restaurantId))].sort();
+    await tx.$queryRaw`SELECT id FROM "Restaurant" WHERE id IN (${Prisma.join(restaurantIds)}) ORDER BY id FOR SHARE`;
+    const restaurants = await tx.restaurant.findMany({ where: { id: { in: restaurantIds } }, select: { id: true, name: true, brandId: true, lat: true, lng: true } });
     const restaurantsById = new Map(restaurants.map(r => [r.id, r]));
     await tx.$queryRaw`SELECT id FROM "MenuItem" WHERE id IN (${Prisma.join(ids)}) ORDER BY id FOR UPDATE`;
     const current = await tx.menuItem.findMany({ where: { id: { in: ids } }, include });
@@ -35,7 +37,7 @@ export async function applyAprilChainBatch(prisma: PrismaClient, entries: AprilB
       if (!actual || actual.restaurantId !== before.restaurantId || actual.updatedAt.getTime() !== new Date(before.updatedAt).getTime()
         || chainMenuFingerprint(aprilMenuIdentity(actual)) !== chainMenuFingerprint(aprilMenuIdentity(before))) throw new AprilPlanChangedError("April item changed; rebuild the plan");
       if (stateHash(actual.macroEstimates) !== stateHash(before.macroEstimates)) throw new AprilPlanChangedError("April estimates changed; rebuild the plan");
-      const item = aprilMenuIdentity(actual), result = match(approved.brandId, item);
+      const item = aprilMenuIdentity(actual), result = match(approved.brandId, item, restaurant);
       if (result.status !== "matched" || result.row.id !== approved.id || result.row.review.dataHash !== approved.review.dataHash) throw new AprilPlanChangedError("April item has no current reviewed binding");
       const macro = officialMacro(result.row, item), existing = actual.macroEstimates.find(e => e.source === "official");
       if (existing?.reasoning === macro.reasoning && existing.confidence === "HIGH" && !existing.hadPhoto && existing.ingredientBreakdown === null && nutritionKeys.every(k => existing[k] === macro[k])) continue;
