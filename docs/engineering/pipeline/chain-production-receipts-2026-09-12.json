@@ -1,19 +1,19 @@
 {
   "generated": true,
-  "asOf": "2026-09-13T10:25:21.597558+00:00",
-  "scope": "32 completed source batches; earlier WaBa/Yoshinoya excluded",
+  "asOf": "2026-09-13T11:02:50.290772+00:00",
+  "scope": "35 completed source batches; earlier WaBa/Yoshinoya excluded",
   "reviewedCodeHead": "179be20e9a26eda262c428149630f72092730302",
   "mergeCommit": "848f117952b60b62bd1ee03291151e73a1184e55",
   "pr": "https://github.com/dgmolla/fitsy/pull/289",
   "totals": {
-    "facts": 1515,
-    "aliases": 2096,
-    "patchedRows": 37705,
-    "numericChanges": 14151,
+    "facts": 1530,
+    "aliases": 2119,
+    "patchedRows": 37787,
+    "numericChanges": 14233,
     "attributionOnly": 23554,
-    "preservedMenuIds": 115071,
-    "unchangedUnselectedRows": 77366,
-    "restaurants": 1185
+    "preservedMenuIds": 118848,
+    "unchangedUnselectedRows": 81061,
+    "restaurants": 1204
   },
   "batches": [
     {
@@ -860,6 +860,84 @@
         "norms-fixed-approved.json": "ef797b5223e5ee12ff83e28f980d66adbfb92603bec3ae32a58d1d27508adf8d",
         "norms-fixed-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "norms-fixed-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "kreation-organic-juicery-bottles",
+      "chains": "Kreation Organic Juicery",
+      "brandSlugs": [
+        "kreation-organic-juicery"
+      ],
+      "facts": 5,
+      "aliases": 9,
+      "patchedRows": 63,
+      "numericChanges": 63,
+      "attributionOnly": 0,
+      "preservedMenuIds": 2981,
+      "unchangedUnselectedRows": 2918,
+      "restaurants": 15,
+      "httpVerifiedAt": "2026-09-13T10:59:59.816668+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "kreation-organic-juicery-bottles-segments/000010.json.verified.json": "4eb18b36e3d51d780737a5eda3bedce4eda135669537bc6928d982a5e1cb38c9",
+        "kreation-organic-juicery-bottles-complete-http.json": "ecbafd20eb11b494b0702d247628b40eafdedfe391b7d6b41e966c0774b7f349",
+        "kreation-organic-juicery-bottles-approved.json": "169089d7ee2bdf554c9f0dcc3ab0e46d3826a29e94a1dfb01a54dacb225f8223",
+        "kreation-organic-juicery-bottles-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "kreation-organic-juicery-bottles-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "kreation-organic-bottles",
+      "chains": "Kreation Organic",
+      "brandSlugs": [
+        "kreation-organic"
+      ],
+      "facts": 5,
+      "aliases": 9,
+      "patchedRows": 9,
+      "numericChanges": 9,
+      "attributionOnly": 0,
+      "preservedMenuIds": 306,
+      "unchangedUnselectedRows": 297,
+      "restaurants": 2,
+      "httpVerifiedAt": "2026-09-13T11:01:30.756475+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "kreation-organic-bottles-segments/000000.json.verified.json": "606c27a8e359290f6be67be653ad36334a4c07132e6a7a653d3df5ee9ff31fde",
+        "kreation-organic-bottles-complete-http.json": "7f0e733dfa185d657bf0949093b81b15247a93b8ac945da0a0ea4b789ce4e774",
+        "kreation-organic-bottles-approved.json": "b65acf56c8cfc38aad8d0bf169547be20a03a34efdf7ae1ff68c89760a61dc56",
+        "kreation-organic-bottles-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "kreation-organic-bottles-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "kreation-kafe-juicery-bottles",
+      "chains": "Kreation Kafe & Juicery",
+      "brandSlugs": [
+        "kreation-kafe-juicery"
+      ],
+      "facts": 5,
+      "aliases": 5,
+      "patchedRows": 10,
+      "numericChanges": 10,
+      "attributionOnly": 0,
+      "preservedMenuIds": 490,
+      "unchangedUnselectedRows": 480,
+      "restaurants": 2,
+      "httpVerifiedAt": "2026-09-13T11:02:50.290772+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "kreation-kafe-juicery-bottles-segments/000000.json.verified.json": "ff46011d860f59979aa7a4c0f61d6f9066946780f0394fb3a4aff4bd49b7b03d",
+        "kreation-kafe-juicery-bottles-complete-http.json": "87ae55de5138864229c262c01911b4e4b74642dd9d3fde3d68c80107382184bd",
+        "kreation-kafe-juicery-bottles-approved.json": "4cbcdc599775f8032e3edb44fbcee5179987c99f26c7b13114704cbb86a73ab4",
+        "kreation-kafe-juicery-bottles-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "kreation-kafe-juicery-bottles-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
       },
       "originalCatalogRowsPreserved": 0
     }

@@ -1,37 +1,43 @@
 # Chain nutrition rollout: production results
 
-**37,705 existing menu rows now use reviewed official nutrition across 43 consumer brands.**
-The 32 completed batches cover 47 stored brand identities and exclude the earlier WaBa/Yoshinoya rollout.
+**37,787 existing menu rows now use reviewed official nutrition across 44 consumer brands.**
+The 35 completed batches cover 50 stored brand identities and exclude the earlier WaBa/Yoshinoya rollout.
 National onboarding is still in progress.
 
-## Latest result: NORMS
+## Latest result: Kreation
 
-**133 rows are production verified, all with numeric corrections.**
-The 19 reviewed facts and 19 exact aliases cover standalone breakfast sides, fries, potatoes, rice and selected macaroni-and-cheese sides.
-All 1,031 menu IDs across seven restaurants were preserved; the other 898 rows stayed unchanged.
+**82 rows across 19 restaurants are production verified, all with numeric corrections.**
+Five reviewed bottle labels support 15 catalog facts and 23 exact aliases under Kreation's three existing brand identities.
+All 3,777 menu IDs were preserved; the other 3,695 rows stayed unchanged.
 
-| Item | Before | Reviewed published serving |
+| Drink | Previous calorie range | Published whole bottle |
 |---|---:|---:|
-| Four bacon strips | 291 calories | 160 calories |
-| Side of fries | 373 calories | 170 calories |
-| Basket of fries | 589 calories | 341 calories |
-| Three turkey sausage patties | 103 calories | 210 calories |
+| Balance | 13-288 | 520 |
+| DStrest | 51-336 | 180 |
+| Green 4 | 53-221 | 120 |
+| 50 Shades of Green | 47-361 | 120 |
+| Electro-Ade | 4-215 | 100 |
 
-The 19-row canary exercised every fact before the remaining 114 rows were applied.
-Final authenticated reads checked all 1,031 items and all 133 updates; repeat catalog and April plans returned zero changes.
-All 19 aliases passed local April and import checks, including seven complete historical menu shapes.
-Two current UE captures matched 36 of 279 items; the other 243 remained estimated.
+Each source label gives two 8 fl oz servings; Fitsy now serves the nutrition for the whole 16 fl oz bottle.
+Balance, DStrest and Green 4 explicitly state 16 fl oz in UE.
+50 Shades and Electro-Ade use the single published bottle default, an assumption recorded in their source bindings.
+The attached Balance label and UE include dates omitted by website prose; 50 Shades UE omits label salt.
+These disclosed limitations do not establish exact ingredient weights or sodium values.
 
-Source review checked the publisher's static nutrition table, current menu portion labels and the calculator's default ingredients.
-Separate HTML parsers agreed on all 285 selected nutrient cells; independent review checked all 19 macro rows against the original capture.
-Published static integers were retained, with calculator fractions corroborating within half a gram.
-Calculator observations were manually transferred from actual browser tool output, not raw browser exports.
-Eggs and black beans with conflicting calorie values, onion rings missing included ranch, and a questionable 1,523-calorie mac-and-cheese portion remain held.
+Independent review visually read all five original labels, all 20 macro fields, portions and ingredient panels.
+All 23 aliases passed local April/import tests, including one current-only Electro-Ade alias.
+The six current UE captures matched 27 of 1,255 items; the other 1,228 remained estimated.
+Historical simulations covered all 19 complete menus, with 82 official matches and 3,695 estimates.
+A joint check against all 749 stored brands verified the three Kreation identities, with 130 serving/recipe/section changes correctly abstaining.
 
-The preceding Cold Stone batch is also production verified: 917 rows, with 32 numeric changes and 885 attribution confirmations.
-All 2,389 IDs and the other 1,472 rows were preserved; all 61 facts and 63 historical aliases passed source and wiring review.
-Cold Stone's two current UE captures abstained on all 158 items because selected size was missing; guide/menu conflicts remain held.
-Both batches use the released matcher and writer, so catalog additions required no API deployment.
+The first identity's 10-row canary exercised every fact before its remaining 53 updates.
+The two smaller identities applied all five facts in single nine-row and ten-row transactions.
+Final authenticated reads checked every item and updated row across all three identities; repeat catalog and April plans returned zero changes.
+Protein Power, Green 2, Green 3, Berryatric, Greentastic and Healixir remain held for unresolved source, recipe or serving evidence.
+
+The preceding Cold Stone and NORMS batches are also production verified: 917 and 133 rows respectively.
+Their unresolved serving and source conflicts remain held.
+All three chains use the released matcher and writer, so catalog additions required no API deployment.
 
 ## Completed batches
 
@@ -69,14 +75,18 @@ Both batches use the released matcher and writer, so catalog additions required 
 | Baskin-Robbins | 481 | 143 | 338 |
 | Cold Stone Creamery | 917 | 32 | 885 |
 | NORMS | 133 | 133 | 0 |
-| **Total** | **37,705** | **14,151** | **23,554** |
+| Kreation Organic Juicery | 63 | 63 | 0 |
+| Kreation Organic | 9 | 9 | 0 |
+| Kreation Kafe & Juicery | 10 | 10 | 0 |
+| **Total** | **37,787** | **14,233** | **23,554** |
 
 “Values changed” means at least one of calories, protein, carbs or fat changed.
 “Attribution only” means those four values stayed the same and reviewed official attribution was applied.
 These counts measure rollout behavior, not accuracy against measured food.
 
-The batches loaded **1,515 approved facts and 2,096 exact menu aliases** into the chain catalog.
-Jamba, Panera, Popeyes and Jersey Mike's each have two stored identities; their facts remain scoped to the correct identity.
+The batches loaded **1,530 approved facts and 2,119 exact menu aliases** into the chain catalog.
+Jamba, Panera, Popeyes and Jersey Mike's each have two stored identities; Kreation has three.
+Their facts remain scoped to the correct identity.
 Dave's and Nothing Bundt Cakes were also linked to 23 existing restaurants without changing their menu identities.
 
 ## Both paths use the same catalog
@@ -100,7 +110,7 @@ Offline UE runs must use a checkout containing it.
 
 | Check | Result and limit |
 |---|---|
-| Production preservation | All **115,071 menu IDs across 1,185 restaurants** preserved; all **77,366 unselected rows** unchanged |
+| Production preservation | All **118,848 menu IDs across 1,204 restaurants** preserved; all **81,061 unselected rows** unchanged |
 | Serving | Authenticated reads checked every selected restaurant's complete menu and every changed row; search/detail checks passed per brand |
 | Repeated execution | All completed batches produced zero pending catalog and April changes |
 | Recovery | Exact local rollback passed; bounded production transactions retain before/after journals; production was not rolled back as a test |
@@ -109,7 +119,7 @@ Offline UE runs must use a checkout containing it.
 
 Current UE captures and simulated historical imports are separate evidence.
 Nine batches after Habit have no current UE capture; their proof does not establish current naming or availability.
-Dave's, Charleys, the second Jersey Mike's identity, Panini, Baskin, Cold Stone and NORMS have additional current-capture replays.
+Dave's, Charleys, the second Jersey Mike's identity, Panini, Baskin, Cold Stone, NORMS and Kreation have additional current-capture replays.
 Activating a catalog routes imports through UE but does not guarantee UE returns a menu.
 Authenticated checks use the existing allowlisted review account, not a paid-subscription test.
 
@@ -122,7 +132,7 @@ Authenticated checks use the existing allowlisted review account, not a paid-sub
 | Calculator controls | Check actions, displayed selections and totals together; Panini has stale checked classes, and Jersey Mike's Markdown lists unselected extras |
 | Conflicting source values | Hold disagreements instead of choosing the convenient number; examples include Habit, Charleys, CAVA, Buffalo Wild Wings and Cold Stone |
 | Wrong source scope | Respect country, region and restaurant eligibility; Peet's and Del Taco remain inactive for separate scope/release reasons |
-| Different portion conventions | Use nutrition servings, not guest counts, for whole Nothing Bundt Cakes products |
+| Different portion conventions | Use nutrition servings for whole cakes and bottles; Kreation labels require two servings per bottle |
 | Duplicate brand identity | Reuse verified source facts through separate brand-scoped bindings; test each identity without merging unrelated restaurants |
 | Existing catalog says “official” | Require a valid review and serving binding; Charleys' 39 and Baskin's 10 older unreviewed chain catalog records were preserved and not implicitly promoted |
 
