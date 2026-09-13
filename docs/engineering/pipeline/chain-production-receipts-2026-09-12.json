@@ -1,19 +1,19 @@
 {
   "generated": true,
-  "asOf": "2026-09-13T13:31:36.620513+00:00",
-  "scope": "39 completed source batches; earlier WaBa/Yoshinoya excluded",
+  "asOf": "2026-09-13T21:19:31.950567+00:00",
+  "scope": "42 completed source batches; earlier WaBa/Yoshinoya excluded",
   "reviewedCodeHead": "179be20e9a26eda262c428149630f72092730302",
   "mergeCommit": "848f117952b60b62bd1ee03291151e73a1184e55",
   "pr": "https://github.com/dgmolla/fitsy/pull/289",
   "totals": {
-    "facts": 1668,
-    "aliases": 2345,
-    "patchedRows": 38511,
-    "numericChanges": 14794,
-    "attributionOnly": 23717,
-    "preservedMenuIds": 123239,
-    "unchangedUnselectedRows": 84728,
-    "restaurants": 1235
+    "facts": 1767,
+    "aliases": 2488,
+    "patchedRows": 39847,
+    "numericChanges": 16001,
+    "attributionOnly": 23846,
+    "preservedMenuIds": 130327,
+    "unchangedUnselectedRows": 90480,
+    "restaurants": 1303
   },
   "batches": [
     {
@@ -1044,6 +1044,84 @@
         "peets-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
       },
       "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "jinya-revised",
+      "chains": "JINYA Ramen Bar",
+      "brandSlugs": [
+        "jinya-ramen-bar"
+      ],
+      "facts": 57,
+      "aliases": 73,
+      "patchedRows": 226,
+      "numericChanges": 226,
+      "attributionOnly": 0,
+      "preservedMenuIds": 448,
+      "unchangedUnselectedRows": 222,
+      "restaurants": 5,
+      "httpVerifiedAt": "2026-09-13T20:11:30.862380+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "originalCatalogRowsPreserved": 135,
+      "receiptHashes": {
+        "jinya-revised-segments/000149.json.verified.json": "729e8568f668fc80c883396669e4ad0136be2b81acfc964df56f51890ba62ad8",
+        "jinya-revised-complete-http.json": "0b74143c9be7b036e66cf64c1e65898196dd77810db75e1aaa3bd42699481312",
+        "jinya-revised-approved.json": "bb52b25547b86b94f986c10e1e416b1f5a9692dbc506cdd8543d0c70110e37b9",
+        "jinya-revised-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "jinya-revised-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "noahs-2026-standard",
+      "chains": "Noah's Bagels",
+      "brandSlugs": [
+        "noah-s-bagels"
+      ],
+      "facts": 7,
+      "aliases": 8,
+      "patchedRows": 48,
+      "numericChanges": 48,
+      "attributionOnly": 0,
+      "preservedMenuIds": 461,
+      "unchangedUnselectedRows": 413,
+      "restaurants": 7,
+      "httpVerifiedAt": "2026-09-13T20:20:09.638369+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "originalCatalogRowsPreserved": 118,
+      "receiptHashes": {
+        "noahs-2026-standard-segments/000010.json.verified.json": "d6ca5670185957bb07ac94a6b25fdc04f387431853932836dcec420b07db5abe",
+        "noahs-2026-standard-complete-http.json": "59d8c5e5dab41afd6a834d183ddf3e7bbd2a6f319ec7745aad673a44d1baa3fa",
+        "noahs-2026-standard-approved.json": "f36f60cfd708bdcc2940d87734e48b5a6acc4e451fc5e3f8a92a192e804c9fc8",
+        "noahs-2026-standard-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "noahs-2026-standard-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "jack-2026-standard",
+      "chains": "Jack in the Box",
+      "brandSlugs": [
+        "jack-in-the-box"
+      ],
+      "facts": 35,
+      "aliases": 62,
+      "patchedRows": 1062,
+      "numericChanges": 933,
+      "attributionOnly": 129,
+      "preservedMenuIds": 6179,
+      "unchangedUnselectedRows": 5117,
+      "restaurants": 56,
+      "httpVerifiedAt": "2026-09-13T21:19:31.950567+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "originalCatalogRowsPreserved": 24,
+      "receiptHashes": {
+        "jack-2026-standard-segments/001034.json.verified.json": "3266a5e70c6edc2ce6cee4f1b95a289468b028f697dd54de90d6f262d8bf77a0",
+        "jack-2026-standard-complete-http.json": "e81ebc6acc98baef9ad1dc9e9fa377151b6333b30ba30a58a8d3bea2001a63e7",
+        "jack-2026-standard-approved.json": "551cd670a6d83a4852811ef120273875cdcfa4a274d81bb8caf5f2b2af86be46",
+        "jack-2026-standard-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "jack-2026-standard-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
     }
   ],
   "receiptArchive": "Local task work/chain-national; full journals and baselines are intentionally excluded from this aggregate repository record",
@@ -1060,7 +1138,11 @@
     "productionDeployment": "dpl_CJJ2SPtWipxrTcTb4Hdv2mmfxjKT",
     "releaseEvidenceSha256": "d4698242f6e9b494a96084ec5733f9559510ab18a6bf49169042dc7c8d7ab50e",
     "appliesToBatches": [
-      "peets"
-    ]
+      "peets",
+      "jinya-revised",
+      "noahs-2026-standard",
+      "jack-2026-standard"
+    ],
+    "productionDeploymentNote": "Historical runtime release deployment, not a claim that this deployment ID remains the latest production deployment."
   }
 }
