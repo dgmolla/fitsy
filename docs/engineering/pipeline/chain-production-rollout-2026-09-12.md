@@ -1,7 +1,7 @@
 # Chain nutrition rollout: production results
 
-**35,957 existing menu rows now use reviewed official nutrition across 40 brand identities.**
-These 25 completed batches are separate from the earlier WaBa/Yoshinoya rollout.
+**35,985 existing menu rows now use reviewed official nutrition across 41 brand identities.**
+These 26 completed batches are separate from the earlier WaBa/Yoshinoya rollout.
 National onboarding is still in progress.
 
 ## What changed
@@ -33,17 +33,18 @@ National onboarding is still in progress.
 | California Pizza Kitchen | 380 | 190 | 190 |
 | BJ's Restaurant & Brewhouse | 243 | 243 | 0 |
 | Nothing Bundt Cakes | 49 | 49 | 0 |
-| **Total** | **35,957** | **13,674** | **22,283** |
+| Dave's Hot Chicken | 28 | 4 | 24 |
+| **Total** | **35,985** | **13,678** | **22,307** |
 
 “Nutrition values changed” means at least one of calories, protein, carbs or fat changed.
 “Attribution only” means those four values stayed the same and reviewed official attribution was applied.
 These counts measure rollout behavior, not accuracy against measured food.
 
-The batches loaded **1,383 approved facts and 1,948 exact menu aliases** into the chain catalog.
+The batches loaded **1,387 approved facts and 1,956 exact menu aliases** into the chain catalog.
 Existing menu items and their winning macro estimates then received the same facts through the shared matcher.
-Jamba, Panera and Popeyes each have two stored brand identities, so 40 identities represent 37 distinct consumer brands.
+Jamba, Panera and Popeyes each have two stored brand identities, so 41 identities represent 38 distinct consumer brands.
 Dave's Hot Chicken and Nothing Bundt Cakes were also linked to 23 existing restaurants while preserving all 232 menu items and estimates.
-Nothing Bundt Cakes now has 49 official nutrition updates across 10 locations; Dave's 128 items remain estimated.
+Nothing Bundt Cakes now has 49 official nutrition updates across 10 locations; Dave's has 28 across 13 locations, with 100 rows still estimated.
 
 ## Both paths use the same catalog
 
@@ -67,15 +68,16 @@ Offline UE runs must use a checkout containing that release.
 
 | Check | Result and limit |
 |---|---|
-| Production preservation | All **107,910 menu IDs across 1,082 restaurants** preserved; all **71,953 unselected rows** unchanged. |
+| Production preservation | All **108,038 menu IDs across 1,095 restaurants** preserved; all **72,053 unselected rows** unchanged. |
 | Serving API | Complete authenticated menu reads checked every selected restaurant and changed row; search/detail checks passed per changed brand. |
 | Repeat execution | Every completed batch produced zero pending catalog and April changes. |
 | Recovery | Local exact rollback passed; production writes have bounded transaction journals and before/after snapshots. Production was not rolled back as a test. |
 | Future imports | Local tests used the real parser, resolver, brand handoff, `persistHex` and serving layer. Current UE captures and simulated historical menus are separate evidence. No production hex was added. |
 | Source quality | Automated transcription checks plus independent source/binding review. Review depth varies; this is not measured restaurant nutrition or an exhaustive human audit. |
 
-Several batches, including all nine additions after Habit, have no current UE capture.
-Their import proof uses complete historical menus, so current availability and naming coverage remain unverified.
+Nine batches after Habit have no current UE capture.
+Those batches use complete historical menus for import proof, so current availability and naming coverage remain unverified.
+Dave's additionally passed replay of two current UE menus with 185 items: eight official matches and 177 retained estimates.
 Activating an approved catalog routes new imports through UE; it does not guarantee UE will return a menu.
 
 The [receipt record](chain-production-receipts-2026-09-12.json) contains counts, verification times and hashes of approvals and readbacks.
@@ -99,6 +101,7 @@ The aggregate record alone cannot perform a rollback.
 | Duplicate chain identities | Popeyes had two additional locations under a second brand. Their eight eligible rows used the same reviewed facts, with separate brand-scoped aliases and both importer paths tested. |
 | Default configuration and recipe scope | CPK whole pizzas use the explicit six-slice rule; seven-inch pizzas remain whole single pizzas. Three conflicting recipes affecting 15 rows were held. |
 | Conflicting portion evidence | BJ’s four floats stayed held because the scoop descriptions and nutrition imply different quantities. Appetizers, sides, five pastas including garlic knots, and seven full-size Pizookies were reviewed separately. |
+| Unproven sauce portion | Dave's ordinary cheese sauce had no menu weight or calorie label to establish the PDF portion. Review removed that binding before publication; four clear standard sides remained. |
 | Nutrition servings versus guests | Nothing Bundt Cakes publishes nutrition servings per cake separately from approximate guest counts. Whole products use the flavor-specific nutrition count; generic cakes without a size remain held. |
 
 Burger King's 225 visible panels passed a full automated comparison with captured per-serving observations; independent review sampled raw macros and reviewed every proposed alias.
@@ -118,6 +121,9 @@ Both batches passed authenticated complete-menu checks and empty repeat plans.
 Nothing Bundt Cakes passed independent review of 26 source rows, 23 whole-order facts and 41 aliases.
 Its 49 updates preserved all 104 menu IDs; 43 unclear configurations and 12 non-food candles stayed unchanged.
 The fixed 12-Bundtini assortment includes three each of four named flavors; decorative toppers are treated as non-food accessories based on the product descriptions.
+Dave's four facts and eight exact aliases passed source review and both writer paths.
+Its 28 updates include four nutrition corrections and 24 confirmations of existing values; all 128 menu IDs and 100 unselected rows were preserved.
+The six historical aliases and two current-only Featured items aliases are verified together; sauce conflicts, unknown heat levels and ambiguous portions remain estimates.
 Peet’s regional catalog is prepared but inactive; its location-aware runtime still requires the repository’s simulator release gate.
 Del Taco remains unpublished because its guide limits nutrition coverage to company-owned restaurants, and location eligibility has not been established.
 

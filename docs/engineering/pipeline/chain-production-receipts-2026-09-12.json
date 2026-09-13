@@ -1,19 +1,19 @@
 {
   "generated": true,
-  "asOf": "2026-09-13T06:13:40.370852+00:00",
-  "scope": "25 completed source batches; earlier WaBa/Yoshinoya excluded",
+  "asOf": "2026-09-13T06:49:35.269070+00:00",
+  "scope": "26 completed source batches; earlier WaBa/Yoshinoya excluded",
   "reviewedCodeHead": "179be20e9a26eda262c428149630f72092730302",
   "mergeCommit": "848f117952b60b62bd1ee03291151e73a1184e55",
   "pr": "https://github.com/dgmolla/fitsy/pull/289",
   "totals": {
-    "facts": 1383,
-    "aliases": 1948,
-    "patchedRows": 35957,
-    "numericChanges": 13674,
-    "attributionOnly": 22283,
-    "preservedMenuIds": 107910,
-    "unchangedUnselectedRows": 71953,
-    "restaurants": 1082
+    "facts": 1387,
+    "aliases": 1956,
+    "patchedRows": 35985,
+    "numericChanges": 13678,
+    "attributionOnly": 22307,
+    "preservedMenuIds": 108038,
+    "unchangedUnselectedRows": 72053,
+    "restaurants": 1095
   },
   "batches": [
     {
@@ -654,6 +654,31 @@
         "nothing-bundt-approved.json": "f43f236e30e0f6c5bf9ba933c9e5d78d070cd3ed267bd9e06ae7b9d52d932d33",
         "nothing-bundt-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "nothing-bundt-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "daves-sides",
+      "chains": "Dave's Hot Chicken",
+      "brandSlugs": [
+        "dave-s-hot-chicken"
+      ],
+      "facts": 4,
+      "aliases": 8,
+      "patchedRows": 28,
+      "numericChanges": 4,
+      "attributionOnly": 24,
+      "preservedMenuIds": 128,
+      "unchangedUnselectedRows": 100,
+      "restaurants": 13,
+      "httpVerifiedAt": "2026-09-13T06:49:35.269070+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "daves-sides-segments/000010.json.verified.json": "978ff0e91d372ec4fa655e2e56195afe0534254da4125738b648d62f69b276b4",
+        "daves-sides-complete-http.json": "537c146bb195ae326c707d74f8c33bee80a3625fb9195228b42590e831e513b7",
+        "daves-sides-approved.json": "04461959affae73135c2f8d6d08a25666a512f6f0580dac3c0331cda68baa042",
+        "daves-sides-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "daves-sides-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
       }
     }
   ],
