@@ -72,7 +72,7 @@ export default function OutOfAreaScreen() {
             disabled={joining || joined}
             haptic
             accessibilityRole="button"
-            accessibilityLabel="Notify me when Fitsy launches nearby"
+            accessibilityLabel={joined ? "You're on the list" : joining ? 'Adding you to the waitlist' : 'Notify me when Fitsy launches nearby'}
             testID="waitlist-join"
           >
             <Ionicons
