@@ -2,13 +2,18 @@
  * Phase 0 — populate the Brand table + Restaurant.brandId / .menuKind.
  * Re-runs v3 detection, folds in LLM tiebreaker verdicts (scripts/phase0-tiebreak.json),
  * then WRITES. Touches ONLY: INSERT Brand, UPDATE Restaurant.{brandId,menuKind}.
- * Asserts MenuItem / MacroEstimate counts are unchanged. Idempotent (upsert by slug).
+ * Asserts MenuItem / MacroEstimate counts are unchanged. Initial population only.
  *
  *   --apply   actually write (default is dry-run)
+ * Existing brands require preload-chain-identity.ts for reviewed corrections.
  */
 import { PrismaClient } from "@prisma/client";
 import { readFileSync, existsSync } from "node:fs";
-const p = new PrismaClient();
+const raw = process.env["POSTGRES_URL_NON_POOLING"];
+if (!raw) throw new Error("POSTGRES_URL_NON_POOLING required; choose the target explicitly");
+let url: URL;
+try { url = new URL(raw.trim()); } catch { throw new Error("Invalid database URL"); }
+const p = new PrismaClient({ datasources: { db: { url: url.toString() } } });
 const APPLY = process.argv.includes("--apply");
 
 const MIN_ITEMS = 5, PAIR_CAP = 30, DIST_BEST = 0.5, DIST_REVIEW = 0.3, GEN_BEST = 0.6, GEN_REVIEW = 0.45, ISOLATED = 0.2, DISTINCT_TOKEN_MAXFREQ = 2;
@@ -53,6 +58,12 @@ const containment = (a: Set<string>, b: Set<string>): number => {
 };
 
 async function main() {
+  if (APPLY) {
+    if (await p.brand.count()) {
+      await p.$disconnect();
+      throw new Error("Brand identities already exist; use preload-chain-identity.ts with an explicit reviewed batch instead of legacy population");
+    }
+  }
   console.log(APPLY ? "=== APPLY MODE (writing) ===" : "=== DRY RUN (use --apply to write) ===");
   const before = { menuItems: await p.menuItem.count(), macros: await p.macroEstimate.count(), rests: await p.restaurant.count() };
   console.log(`snapshot: ${before.rests} restaurants, ${before.menuItems} items, ${before.macros} macros`);
