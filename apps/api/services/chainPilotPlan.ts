@@ -17,6 +17,11 @@ type Desired = Pick<ChainItem, "brandId" | typeof fields[number] | "review">;
 export interface CatalogChange { before: ChainItem | null; desired: Desired }
 export interface CatalogPlan { changes: CatalogChange[]; hash: string }
 const reviewJson = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+const compareReview = (value: unknown): unknown => {
+  if (!value || typeof value !== 'object' || !('usStates' in value) || !Array.isArray(value.usStates)
+    || !value.usStates.every(code => typeof code === 'string')) return value;
+  return { ...value, usStates: [...value.usStates].sort() };
+};
 
 /** The audited old values are a guard against overwriting concurrent or unaudited catalog edits. */
 export function planChainPilot(brands: Brand[], catalog: ChainItem[], input: ChainCatalogBatch = chainPilot): CatalogPlan {
@@ -29,7 +34,8 @@ export function planChainPilot(brands: Brand[], catalog: ChainItem[], input: Cha
   };
   const find = (id: string, key: string) => catalog.find(r => r.brandId === id && r.canonicalKey === key) ?? null;
   const append = (before: ChainItem | null, desired: Desired, expected: ChainCatalogBatch["changes"][number]["expected"]) => {
-    if (before && stateHash({ ...facts(before), brandId: before.brandId, review: before.review }) === stateHash(desired)) return;
+    if (before && stateHash({ ...facts(before), brandId: before.brandId, review: compareReview(before.review) })
+      === stateHash({ ...desired, review: compareReview(desired.review) })) return;
     if (stateHash(before ? { ...facts(before), review: before.review } : null) !== stateHash(expected ? { ...expected, review: expected.review ?? null } : null)) throw new Error(`Catalog differs from audited baseline: ${desired.canonicalKey}`);
     changes.push({ before, desired });
   };

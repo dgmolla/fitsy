@@ -24,7 +24,7 @@ suite('regional official nutrition through the real writer and served menu', () 
         servingSize: 'One croissant', calories: 300, proteinG: 6, carbsG: 33, fatG: 16,
         source: 'official', confidence: 'HIGH', officialUrl: 'https://example.com/california-nutrition.pdf' } });
       const review = { version: 1 as const, sourceHash: 'a'.repeat(64), reviewedBy: 'Regional regression fixture',
-        locator: 'California food guide, croissant row', aliases: [item], usStates: ['CA'] };
+        locator: 'California food guide, croissant row', aliases: [item], usStates: ['CA', 'IL'] };
       const approved = approvedChainRow(await p.chainItem.update({ where: { id: row.id }, data: { review: { ...review, dataHash: chainReviewHash(row, review) } } }))!;
       const runtime = await loadChainServing(p);
       const observed: { location: string; calories: number | null; confidence: string | undefined }[] = [];
@@ -89,10 +89,10 @@ suite('regional official nutrition through the real writer and served menu', () 
         const batchPath = join(directory, 'batch.json'), planPath = join(directory, 'plan.json');
         writeFileSync(batchPath, JSON.stringify({ version: 1, reviewedBy: review.reviewedBy, quarantine: [], changes: [{ slug: brand.slug,
           canonicalKey: row.canonicalKey, expected: null, facts: { calories: 300, proteinG: 6, carbsG: 33, fatG: 16, servingSize: 'One croissant' },
-          source: { url: row.officialUrl, sha256: review.sourceHash }, locator: review.locator, aliases: [item], usStates: ['CA'] }] }));
+          source: { url: row.officialUrl, sha256: review.sourceHash }, locator: review.locator, aliases: [item], usStates: ['IL', 'CA'] }] }));
         const run = (...args: string[]) => execFileSync(process.execPath, [join(repo, 'node_modules/tsx/dist/cli.mjs'),
           '--tsconfig', join(repo, 'apps/api/tsconfig.json'), join(repo, 'scripts/preload-chain-pilot.ts'), ...args, '--batch=' + batchPath],
-        { cwd: repo, encoding: 'utf8' }).trim().split('\n').map(line => JSON.parse(line)).at(-1);
+        { cwd: repo, encoding: 'utf8', timeout: 30_000 }).trim().split('\n').map(line => JSON.parse(line)).at(-1);
         const california = await p.restaurant.findUniqueOrThrow({ where: { storeUuid: scope + 'California' } });
         const current = () => p.menuItem.findMany({ where: { restaurantId: california.id }, include: { macroEstimates: { orderBy: { id: 'asc' as const } } } });
         const beforeCli = await current(), planned = run('april-plan', planPath);
@@ -112,19 +112,36 @@ suite('regional official nutrition through the real writer and served menu', () 
       const writer = new PrismaClient({ datasources: { db: { url: url.toString() } } });
       let pending: Promise<number> | undefined;
       try {
+        const waitForRestaurantLock = async () => {
+          for (let tries = 0; tries < 100; tries++) {
+            const active = await p.$queryRaw<{ wait_event_type: string | null; query: string }[]>`SELECT wait_event_type, query FROM pg_stat_activity WHERE application_name = ${scope}`;
+            const blocked = active.find(a => a.wait_event_type === 'Lock');
+            if (blocked) { expect(blocked.query).toContain('"Restaurant"'); return; }
+            await new Promise(resolve => setTimeout(resolve, 20));
+          }
+          throw new Error('Writer did not wait on the restaurant lock');
+        };
+        const california = await p.restaurant.findUniqueOrThrow({ where: { storeUuid: scope + 'California' } });
+        for (const mode of ['single', 'batch']) {
+          const before = await p.menuItem.findFirstOrThrow({ where: { restaurantId: california.id }, include: { macroEstimates: { orderBy: { id: 'asc' } } } });
+          let applying: Promise<unknown> | undefined;
+          try {
+            await p.$transaction(async tx => {
+              await tx.$queryRaw`SELECT id FROM "Restaurant" WHERE id = ${california.id} FOR UPDATE`;
+              applying = mode === 'single' ? applyAprilChainMatch(writer, before, approved) : applyAprilChainBatch(writer, [{ before, approved }]);
+              void applying.catch(() => {});
+              await waitForRestaurantLock();
+            }, { timeout: 10_000 });
+            await applying;
+          } finally { await applying?.catch(() => {}); }
+        }
         await p.$transaction(async tx => {
           await tx.$queryRaw`SELECT id FROM "Restaurant" WHERE id = ${ohio.id} FOR SHARE`;
           pending = persistHex(scope, 'concurrent-estimated', [{ restaurantId: ohio.id, brandId: brand.id,
             menuHash: 'concurrent-estimated', items: [{ item, macro: { calories: 400, proteinG: 8, carbsG: 44, fatG: 21,
               confidence: 'MEDIUM', source: 'haiku', dietaryTags: [] } }] }], writer);
           void pending.catch(() => {});
-          let waiting = false;
-          for (let tries = 0; tries < 100; tries++) {
-            const active = await p.$queryRaw<{ wait_event_type: string | null }[]>`SELECT wait_event_type FROM pg_stat_activity WHERE application_name = ${scope}`;
-            if (active.some(a => a.wait_event_type === 'Lock')) { waiting = true; break; }
-            await new Promise(resolve => setTimeout(resolve, 20));
-          }
-          expect(waiting).toBe(true);
+          await waitForRestaurantLock();
           // Old order holds MenuItem while waiting for Restaurant and deadlocks here.
           await tx.$queryRaw`SELECT id FROM "MenuItem" WHERE id = ${saved.id} FOR UPDATE`;
         }, { timeout: 10_000 });
@@ -137,5 +154,5 @@ suite('regional official nutrition through the real writer and served menu', () 
       await p.brand.delete({ where: { id: brand.id } });
       await p.pipelineCompletedHex.deleteMany({ where: { runId: scope } });
     }
-  }, 30_000);
+  }, 125_000);
 });

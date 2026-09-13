@@ -13,7 +13,7 @@ let boundaries: Boundaries | undefined;
 const loadBoundaries = (): Boundaries => boundaries ??= JSON.parse(gunzipSync(readFileSync(join(__dirname, 'chainUsStates.generated.json.gz'))).toString('utf8')) as Boundaries;
 
 export interface ChainLocation { lat: number; lng: number }
-export const usStatesSchema = z.array(z.string().regex(/^[A-Z]{2}$/).refine(code => chainUsStateCodes.includes(code)))
+export const usStatesSchema = z.array(z.string().regex(/^[A-Z]{2}$/).refine(code => chainUsStateCodes.includes(code), 'Unrecognized state code'))
   .min(1).max(56).refine(codes => new Set(codes).size === codes.length, 'Duplicate state');
 const cache = new Map<string, string | undefined>();
 // Cartographic boundaries are generalized. Abstain within 250 m of any edge.

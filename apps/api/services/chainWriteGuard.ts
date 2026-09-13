@@ -20,9 +20,9 @@ export async function validateReviewedChainWrites(tx: Prisma.TransactionClient, 
   const restaurantIds = [...new Set(inputs.map(r => r.restaurantId))].sort();
   if (!restaurantIds.length) return;
   const catalogIds = [...new Set(reviewed.map(r => r.chainItemId))].sort();
+  if (catalogIds.length) await tx.$queryRaw`SELECT id FROM "ChainItem" WHERE id IN (${Prisma.join(catalogIds)}) ORDER BY id FOR SHARE`;
   // Lock ALL target restaurants, including estimated-only ones, before any MenuItem write.
   // Otherwise a later brand/hash update can deadlock with April's Restaurant->MenuItem order.
-  if (catalogIds.length) await tx.$queryRaw`SELECT id FROM "ChainItem" WHERE id IN (${Prisma.join(catalogIds)}) ORDER BY id FOR SHARE`;
   await tx.$queryRaw`SELECT id FROM "Restaurant" WHERE id IN (${Prisma.join(restaurantIds)}) ORDER BY id FOR UPDATE`;
   if (!reviewed.length) return;
   const restaurants = await tx.restaurant.findMany({ where: { id: { in: restaurantIds } } });
