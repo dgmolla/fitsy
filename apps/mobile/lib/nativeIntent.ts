@@ -1,3 +1,4 @@
+import 'react-native-url-polyfill/auto';
 /** Older onboarding links used the subscription-gated tab route for the preview. */
 export function redirectSystemPath({ path }: { path: string; initial: boolean }): string {
   try {
