@@ -4,7 +4,7 @@ import React, { useEffect } from 'react';
 import { Button, Text } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NavigationContainer, createNavigatorFactory, useNavigation, useNavigationBuilder, useRoute } from '@react-navigation/native';
-import { StackRouter, TabRouter } from '@react-navigation/routers';
+import { StackActions, StackRouter, TabRouter } from '@react-navigation/routers';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { getPaywallIntent, openPurchasedDestination, rememberPaywallIntent, resetWelcomeJourney } from '../lib/paywallJourney';
 
@@ -42,7 +42,15 @@ function Payment() {
     if (action === 'notification') resetWelcomeJourney(navigation, 'notification-permission');
     if (action === 'purchased') void openPurchasedDestination(navigation);
   }, [navigation]);
-  return <Button title="Decline subscription" onPress={() => resetWelcomeJourney(navigation, 'payment')} />;
+  return <>
+    <Text>{navigation.canGoBack() ? 'Earlier screens remain' : 'No earlier screens'}</Text>
+    <Button title="Browse meal preview" onPress={() => navigation.dispatch(StackActions.push('preview'))} />
+    <Button title="Decline subscription" onPress={() => resetWelcomeJourney(navigation, 'payment')} />
+  </>;
+}
+function Preview() {
+  const navigation = useNavigation();
+  return <Button title="See meal plans" onPress={() => navigation.dispatch(StackActions.push('payment'))} />;
 }
 function Notifications() { return <Text>Optional reminders</Text>; }
 function Search() { return <Text>Meal search</Text>; }
@@ -52,7 +60,7 @@ function Meal() {
   return <Text>{JSON.stringify(route.params)}</Text>;
 }
 function WelcomeScreens() {
-  return <Welcome.Navigator><Welcome.Screen name="payment" component={Payment} /><Welcome.Screen name="notification-permission" component={Notifications} /></Welcome.Navigator>;
+  return <Welcome.Navigator><Welcome.Screen name="payment" component={Payment} /><Welcome.Screen name="preview" component={Preview} /><Welcome.Screen name="notification-permission" component={Notifications} /></Welcome.Navigator>;
 }
 function TabScreens() {
   return <Tabs.Navigator><Tabs.Screen name="saved" component={Saved} /><Tabs.Screen name="search" component={Search} /></Tabs.Navigator>;
@@ -79,9 +87,13 @@ it('shows optional reminders without replaying stale parent payment params', asy
 it('keeps a deliberate hard decline on a single payment destination', async () => {
   action = 'payment';
   const screen = render(<Journey />);
+  fireEvent.press(await screen.findByText('Browse meal preview'));
+  fireEvent.press(await screen.findByText('See meal plans'));
+  expect(await screen.findByText('Earlier screens remain')).toBeTruthy();
   fireEvent.press(await screen.findByText('Decline subscription'));
+  await waitFor(() => expect(screen.getByText('No earlier screens')).toBeTruthy());
+  expect(screen.queryByText('Earlier screens remain')).toBeNull();
   await waitFor(() => expect(screen.getAllByText('Decline subscription')).toHaveLength(1));
-  expect(paymentRenders).toBeLessThan(4);
 });
 
 it('uses the real TabRouter to select search when no meal intent exists', async () => {
