@@ -1,26 +1,22 @@
 {
-  "at": "2026-09-13T14:31:10.943Z",
+  "at": "2026-09-13T20:20:44.448Z",
   "readOnly": true,
   "runtime": "e805ee2c63ec4e0f19563c6b8ff9fc4a8a3c121d",
   "includesEarlierWabaYoshinoya": true,
-  "approvedFacts": 1859,
-  "activeBrandIdentities": 56,
+  "approvedFacts": 1923,
+  "activeBrandIdentities": 58,
   "totals": {
-    "restaurants": 1297,
-    "items": 124576,
-    "matched": 39169,
-    "unmatched": 85407,
+    "restaurants": 1309,
+    "items": 125485,
+    "matched": 39443,
+    "unmatched": 86042,
     "ambiguous": 0,
-    "consistent": 39169,
+    "consistent": 39443,
     "differences": 0
   },
   "identityHolds": [],
   "differences": [],
   "limits": "Tests consistency with currently reviewed catalog facts and exact April bindings. Does not establish measured nutrition accuracy, expand source coverage, or exercise authenticated HTTP. Merchant overrides require separate review if encountered.",
-  "fullAuditSha256": "14e956df63f149c2172b346e6ebd35bba18be382435c707ffb658142418e0e27",
-  "freshInventory": {
-    "at": "2026-09-13T14:27:40.360Z",
-    "qualifiedUnlinkedExactCandidates": 0,
-    "fullInventorySha256": "f00ac78ff64bd3c7826b2b637581153349ddce951f3312d9e72f0c25cf7298d7"
-  }
+  "fullAuditSha256": "1fe537697c6851c211d2c8f769e675bf01b43791fd6f03b4540c0a5399aeefd6",
+  "generated": true
 }
