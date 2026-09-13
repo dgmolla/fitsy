@@ -14,7 +14,7 @@ import type { CustomerInfo } from 'react-native-purchases';
 import { supabase } from './supabase';
 import type { EntitlementVerdict } from './useEntitlementVerdict';
 import { fetchCustomerInfo, identifyPurchasesUser, logoutPurchasesUser } from './purchases';
-import { clearPaywallIntent } from './paywallJourney';
+import { clearPaywallIntent } from './paywallIntent';
 
 export interface AuthLifecycle {
   /** Boot has started: SIGNED_IN events are noted, not acted on, until finishBoot. */

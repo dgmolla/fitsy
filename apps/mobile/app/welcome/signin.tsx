@@ -11,7 +11,7 @@ import { appleSignIn, completeGoogleSignIn, devLogin } from '@/lib/authClient';
 import { pullProfileFromServer } from '@/lib/profileSync';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
-import { claimPaywallIntent, clearPaywallIntent, getPaywallIntent } from '@/lib/paywallJourney';
+import { claimPaywallIntent, clearPaywallIntent, getPaywallIntent } from '@/lib/paywallIntent';
 import { getMacroTargets } from '@/lib/macroStorage';
 import { getOnboardingData } from '@/lib/onboardingStorage';
 import { identifyUser, trackAuthFailure, trackAuthSuccess, trackOnboardingScreenView } from '@/lib/analytics';

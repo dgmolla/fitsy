@@ -14,7 +14,8 @@ import { usePreviewAccess } from '@/lib/usePreviewAccess';
 import { rememberPaywallDecline } from '@/lib/paywallAccess';
 import { getOnboardingData } from '@/lib/onboardingStorage';
 import { fetchGuidedPreview } from '@/lib/guidedPreview';
-import { getPaywallIntent, openPurchasedDestination, resetWelcomeJourney, type PaywallIntent } from '@/lib/paywallJourney';
+import { openPurchasedDestination, resetWelcomeJourney } from '@/lib/paywallJourney';
+import { getPaywallIntent, type PaywallIntent } from '@/lib/paywallIntent';
 import { purchaseTerms, savingPercent } from '@/lib/purchaseTerms';
 
 type PlanId = 'monthly' | 'yearly';
@@ -87,8 +88,7 @@ export default function PaymentScreen() {
     try {
       await rememberPaywallDecline();
       setModal('none');
-      if (variants.access === 'preview') router.replace('/welcome/preview');
-      else resetWelcomeJourney(navigation, 'payment');
+      resetWelcomeJourney(navigation, variants.access === 'preview' ? 'preview' : 'payment');
     } catch { Alert.alert('Could not save your choice', 'Please try again.'); }
   }
 

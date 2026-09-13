@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { supabase } from './supabase';
-import { rememberPaywallIntent, type PaywallIntent } from './paywallJourney';
+import { rememberPaywallIntent, type PaywallIntent } from './paywallIntent';
 import { fetchCustomerInfo, hasLapsedEntitlement } from './purchases';
 
 const PREVIEW_SAMPLE_USED_KEY = '@fitsy/previewSampleUsed';

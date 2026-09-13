@@ -5,8 +5,9 @@ import { Button, Text } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NavigationContainer, createNavigatorFactory, useNavigation, useNavigationBuilder, useRoute } from '@react-navigation/native';
 import { StackActions, StackRouter, TabRouter } from '@react-navigation/routers';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
-import { getPaywallIntent, openPurchasedDestination, rememberPaywallIntent, resetWelcomeJourney } from '../lib/paywallJourney';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { openPurchasedDestination, resetWelcomeJourney } from '../lib/paywallJourney';
+import { getPaywallIntent, rememberPaywallIntent } from '../lib/paywallIntent';
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 jest.mock('@supabase/supabase-js', () => {
@@ -22,17 +23,20 @@ jest.mock('@supabase/supabase-js', () => {
 type NavigatorProps = { children: React.ReactNode; initialRouteName?: string };
 function StackNavigator(props: NavigatorProps) {
   const { state, descriptors, NavigationContent } = useNavigationBuilder(StackRouter, props);
-  return <NavigationContent>{descriptors[state.routes[state.index]!.key]!.render()}</NavigationContent>;
+  const key = state.routes[state.index]!.key;
+  return <NavigationContent><React.Fragment key={key}>{descriptors[key]!.render()}</React.Fragment></NavigationContent>;
 }
 function TabNavigator(props: NavigatorProps) {
   const { state, descriptors, NavigationContent } = useNavigationBuilder(TabRouter, props);
-  return <NavigationContent>{descriptors[state.routes[state.index]!.key]!.render()}</NavigationContent>;
+  const key = state.routes[state.index]!.key;
+  return <NavigationContent><React.Fragment key={key}>{descriptors[key]!.render()}</React.Fragment></NavigationContent>;
 }
 const Root = createNavigatorFactory(StackNavigator)();
 const App = createNavigatorFactory(StackNavigator)();
 const Welcome = createNavigatorFactory(StackNavigator)();
 const Tabs = createNavigatorFactory(TabNavigator)();
 let action: 'payment' | 'notification' | 'purchased';
+let declineDestination: 'payment' | 'preview';
 let paymentRenders = 0;
 function Payment() {
   const navigation = useNavigation();
@@ -45,12 +49,15 @@ function Payment() {
   return <>
     <Text>{navigation.canGoBack() ? 'Earlier screens remain' : 'No earlier screens'}</Text>
     <Button title="Browse meal preview" onPress={() => navigation.dispatch(StackActions.push('preview'))} />
-    <Button title="Decline subscription" onPress={() => resetWelcomeJourney(navigation, 'payment')} />
+    <Button title="Decline subscription" onPress={() => resetWelcomeJourney(navigation, declineDestination)} />
   </>;
 }
 function Preview() {
   const navigation = useNavigation();
-  return <Button title="See meal plans" onPress={() => navigation.dispatch(StackActions.push('payment'))} />;
+  return <>
+    <Text>{navigation.canGoBack() ? 'Earlier screens remain' : 'No earlier screens'}</Text>
+    <Button title="See meal plans" onPress={() => navigation.dispatch(StackActions.push('payment'))} />
+  </>;
 }
 function Notifications() { return <Text>Optional reminders</Text>; }
 function Search() { return <Text>Meal search</Text>; }
@@ -71,10 +78,11 @@ function AppScreens() {
 function Journey() {
   // Expo wraps the app and carries deep-link destination params on its parent.
   // Resetting only the inner state must not replay this old payment destination.
-  return <NavigationContainer><Root.Navigator><Root.Screen name="__root" component={AppScreens}
-    initialParams={{ screen: 'welcome', params: { screen: 'payment' } }} /></Root.Navigator></NavigationContainer>;
+  return <NavigationContainer initialState={{ index: 0, routes: [
+    { name: '__root', params: { screen: 'welcome', params: { screen: 'payment' } } },
+  ] }}><Root.Navigator><Root.Screen name="__root" component={AppScreens} /></Root.Navigator></NavigationContainer>;
 }
-beforeEach(async () => { await AsyncStorage.clear(); paymentRenders = 0; });
+beforeEach(async () => { await AsyncStorage.clear(); paymentRenders = 0; declineDestination = 'payment'; });
 
 it('shows optional reminders without replaying stale parent payment params', async () => {
   action = 'notification';
@@ -84,16 +92,18 @@ it('shows optional reminders without replaying stale parent payment params', asy
   expect(paymentRenders).toBeLessThan(4);
 });
 
-it('keeps a deliberate hard decline on a single payment destination', async () => {
+it.each(['payment', 'preview'] as const)('ends a deliberate decline on a single %s destination', async (destination) => {
   action = 'payment';
+  declineDestination = destination;
   const screen = render(<Journey />);
-  fireEvent.press(await screen.findByText('Browse meal preview'));
-  fireEvent.press(await screen.findByText('See meal plans'));
+  await act(async () => { fireEvent.press(screen.getByText('Browse meal preview')); });
+  await act(async () => { fireEvent.press(screen.getByText('See meal plans')); });
   expect(await screen.findByText('Earlier screens remain')).toBeTruthy();
-  fireEvent.press(await screen.findByText('Decline subscription'));
+  await act(async () => { fireEvent.press(screen.getByText('Decline subscription')); });
+  await waitFor(() => expect(screen.getAllByText(destination === 'payment' ? 'Decline subscription' : 'See meal plans')).toHaveLength(1));
   await waitFor(() => expect(screen.getByText('No earlier screens')).toBeTruthy());
   expect(screen.queryByText('Earlier screens remain')).toBeNull();
-  await waitFor(() => expect(screen.getAllByText('Decline subscription')).toHaveLength(1));
+  expect(screen.queryByText(destination === 'payment' ? 'See meal plans' : 'Decline subscription')).toBeNull();
 });
 
 it('uses the real TabRouter to select search when no meal intent exists', async () => {

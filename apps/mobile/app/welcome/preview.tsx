@@ -15,7 +15,7 @@ import { hasSeenPreviewTour, markPreviewTourSeen, routeToPaywall } from '@/lib/t
 import { usePreviewAccess } from '@/lib/usePreviewAccess';
 import { usePurchases } from '@/lib/usePurchases';
 import { trackOnboardingScreenView } from '@/lib/analytics';
-import { clearPaywallIntent } from '@/lib/paywallJourney';
+import { clearPaywallIntent } from '@/lib/paywallIntent';
 
 const STEPS = [
   ['Your meal targets', 'These numbers guide the picks below. You can edit them anytime.'],

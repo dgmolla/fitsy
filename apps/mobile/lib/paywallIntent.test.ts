@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { claimPaywallIntent, clearPaywallIntent, getPaywallIntent, rememberPaywallIntent } from './paywallJourney';
+import { claimPaywallIntent, clearPaywallIntent, getPaywallIntent, rememberPaywallIntent } from './paywallIntent';
 
 let mockUserId: string | null = null;
 jest.mock('@supabase/supabase-js', () => {

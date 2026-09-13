@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
-import { openPurchasedDestination } from '@/lib/paywallJourney';
-import { router, useNavigation } from 'expo-router';
+import { openPurchasedDestination, resetWelcomeJourney } from '@/lib/paywallJourney';
+import { useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { RestaurantCard, SkeletonCard } from '@/components/PreviewRestaurantCard';
@@ -105,7 +105,7 @@ export default function ResubscribeScreen() {
       canContinue={!loading && !restoring && !!terms}
       continueLabel={loading ? 'Resubscribing…' : 'Find meals that fit again'}
       onSkip={variants.access === 'preview' ? () => {
-        void rememberPaywallDecline().then(() => router.replace('/welcome/preview'))
+        void rememberPaywallDecline().then(() => resetWelcomeJourney(navigation, 'preview'))
           .catch(() => Alert.alert('Could not save your choice', 'Please try again.'));
       } : undefined}
       showBack
