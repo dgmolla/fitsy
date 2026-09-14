@@ -1,19 +1,19 @@
 {
   "generated": true,
-  "asOf": "2026-09-14T00:40:45.653441+00:00",
-  "scope": "44 completed source batches; earlier WaBa/Yoshinoya excluded",
+  "asOf": "2026-09-14T01:30:06.365854+00:00",
+  "scope": "45 completed source batches; earlier WaBa/Yoshinoya excluded",
   "reviewedCodeHead": "179be20e9a26eda262c428149630f72092730302",
   "mergeCommit": "848f117952b60b62bd1ee03291151e73a1184e55",
   "pr": "https://github.com/dgmolla/fitsy/pull/289",
   "totals": {
-    "facts": 1829,
-    "aliases": 2567,
-    "patchedRows": 42058,
-    "numericChanges": 16159,
-    "attributionOnly": 25899,
-    "preservedMenuIds": 138528,
-    "unchangedUnselectedRows": 96470,
-    "restaurants": 1407
+    "facts": 1863,
+    "aliases": 2615,
+    "patchedRows": 42293,
+    "numericChanges": 16393,
+    "attributionOnly": 25900,
+    "preservedMenuIds": 139245,
+    "unchangedUnselectedRows": 96952,
+    "restaurants": 1414
   },
   "batches": [
     {
@@ -1174,6 +1174,32 @@
         "chipotle-2024-fixed-v2-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "chipotle-2024-fixed-v2-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
       }
+    },
+    {
+      "batch": "tocaya-2024-standard-v2",
+      "chains": "Tocaya",
+      "brandSlugs": [
+        "tocaya-modern-mexican"
+      ],
+      "facts": 34,
+      "aliases": 48,
+      "patchedRows": 235,
+      "numericChanges": 234,
+      "attributionOnly": 1,
+      "preservedMenuIds": 717,
+      "unchangedUnselectedRows": 482,
+      "restaurants": 7,
+      "httpVerifiedAt": "2026-09-14T01:30:06.365854+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "originalCatalogRowsPreserved": 39,
+      "receiptHashes": {
+        "tocaya-2024-standard-v2-segments/000234.json.verified.json": "539c1e0b95a486e433cd14017110ce3e594f2c4b0b227c54728be9a49c767e9f",
+        "tocaya-2024-standard-v2-complete-http.json": "e093ef1e1513abde4643ff096ac0f0c0b32dd4d595dea07e0ad88fc1a1c46eb0",
+        "tocaya-2024-standard-v2-approved.json": "8c09f510d01bd3a3bffa7b11e9a62fc8022bd6ac41f3e12cf27bb5bc6781e56a",
+        "tocaya-2024-standard-v2-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "tocaya-2024-standard-v2-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
     }
   ],
   "receiptArchive": "Local task work/chain-national; full journals and baselines are intentionally excluded from this aggregate repository record",
@@ -1214,6 +1240,22 @@
       "classification-production-identity-plan.json.applied.json": "8481b0214caa25e53c9a57f38ede407a3b71b4ec1aec4baaba10cea015a87e3e",
       "chipotle-2024-fixed-v2-post-identity-baseline.json": "d18ba8cafe14f8366499e2e0c4fb8f28cc271452f92aaf24f450a353a9088a00",
       "chipotle-2024-fixed-v2-approval-evidence.json": "df45c26a428c9801fda949a4843760dff7fd0467aa54d911985557f5be95af99"
+    }
+  },
+  "ingestionFilterRuntime": {
+    "reviewedCodeHead": "89e2df08d202ed98e93d23c34614866a38d4a114",
+    "runtimeDigest": "e1ed7774b6869ee8b0c65bef22ea4832795d0e52e4a4afd9437c1d2726c96626",
+    "pullRequest": 316,
+    "mainVerify": 34795591423,
+    "deploy": 34795591441,
+    "appliesToBatches": [
+      "tocaya-2024-standard-v2"
+    ],
+    "receiptHashes": {
+      "utensil-filter-release-receipt.json": "9dcd8140aeb58ea1b7779825c0f32b9fd50cddf3460fa780f24e74fc712fe116",
+      "tocaya-2024-standard-v2-approval-evidence.json": "714b9b0fa75e87dca83f739f9cd494d927d708966225555b78320366b259325c",
+      "tocaya-2024-standard-v2-root-review-disposition.json": "a37e09f55aaa40932154f251d9fea2b5f2a99489e2ba15a0d6e0cecff44d4f2b",
+      "tocaya-source-render-verification.json": "5d69b155903f70aa4ac2305f29a4b7b15314397743a32806f52cc3d439c7bd59"
     }
   }
 }
