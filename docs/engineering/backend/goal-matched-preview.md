@@ -58,7 +58,8 @@ It affects count exclusion only and cannot pin a dish, change the three picks or
 `additionalDishCount` is `matchingDishCount - 1` only when the selected item is one of the three visible qualifying picks in the current location, query and target context.
 `selectedItemMatches` is a visible-pick check, not an oracle for arbitrary hidden item IDs.
 Otherwise the count is unchanged and `selectedItemMatches` is false.
-Clients must not subtract one themselves or reuse the coverage count as a target-match claim.
+Clients must not unconditionally subtract one or reuse the coverage count as a target-match claim.
+A short-lived cached response may derive the additional count only when the same location, query and target context is retained and the selected ID is verified in that response’s visible qualifying picks.
 A zero matching count with positive coverage is a search/target empty state, not an unsupported area.
 
 ## Intentional public exposure
