@@ -1,19 +1,19 @@
 {
   "generated": true,
-  "asOf": "2026-09-13T21:19:31.950567+00:00",
-  "scope": "42 completed source batches; earlier WaBa/Yoshinoya excluded",
+  "asOf": "2026-09-14T00:40:45.653441+00:00",
+  "scope": "44 completed source batches; earlier WaBa/Yoshinoya excluded",
   "reviewedCodeHead": "179be20e9a26eda262c428149630f72092730302",
   "mergeCommit": "848f117952b60b62bd1ee03291151e73a1184e55",
   "pr": "https://github.com/dgmolla/fitsy/pull/289",
   "totals": {
-    "facts": 1767,
-    "aliases": 2488,
-    "patchedRows": 39847,
-    "numericChanges": 16001,
-    "attributionOnly": 23846,
-    "preservedMenuIds": 130327,
-    "unchangedUnselectedRows": 90480,
-    "restaurants": 1303
+    "facts": 1829,
+    "aliases": 2567,
+    "patchedRows": 42058,
+    "numericChanges": 16159,
+    "attributionOnly": 25899,
+    "preservedMenuIds": 138528,
+    "unchangedUnselectedRows": 96470,
+    "restaurants": 1407
   },
   "batches": [
     {
@@ -1122,6 +1122,58 @@
         "jack-2026-standard-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
         "jack-2026-standard-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
       }
+    },
+    {
+      "batch": "ono-2021-fixed",
+      "chains": "Ono Hawaiian BBQ",
+      "brandSlugs": [
+        "ono-hawaiian-bbq"
+      ],
+      "facts": 11,
+      "aliases": 14,
+      "patchedRows": 71,
+      "numericChanges": 58,
+      "attributionOnly": 13,
+      "preservedMenuIds": 448,
+      "unchangedUnselectedRows": 377,
+      "restaurants": 17,
+      "httpVerifiedAt": "2026-09-13T22:59:53.643814+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "originalCatalogRowsPreserved": 5,
+      "receiptHashes": {
+        "ono-2021-fixed-segments/000011.json.verified.json": "f766c66ccfb8f0f93d749e99b73057d671a6ec29f2fed6ee2c46d5dc441b1143",
+        "ono-2021-fixed-complete-http.json": "2040fc88b0adb4e5c95d8f78aa62049e823f1bf02aa06e05c00711dda6c3b0c9",
+        "ono-2021-fixed-approved.json": "4b74533248a351d88defbf85f0ff1cb7bb7819b72c84d1c03e6321b98a700582",
+        "ono-2021-fixed-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "ono-2021-fixed-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "chipotle-2024-fixed-v2",
+      "chains": "Chipotle",
+      "brandSlugs": [
+        "chipotle-mexican-grill"
+      ],
+      "facts": 51,
+      "aliases": 65,
+      "patchedRows": 2140,
+      "numericChanges": 100,
+      "attributionOnly": 2040,
+      "preservedMenuIds": 7753,
+      "unchangedUnselectedRows": 5613,
+      "restaurants": 87,
+      "httpVerifiedAt": "2026-09-14T00:40:45.653441+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "originalCatalogRowsPreserved": 0,
+      "receiptHashes": {
+        "chipotle-2024-fixed-v2-segments/002051.json.verified.json": "a6fbb210d8d9f23e33f42ec1b124d9c61d2e18da45d148669945115b51123072",
+        "chipotle-2024-fixed-v2-complete-http.json": "2bd54e4dc9af66e542bfdfb1b36318440a8a9c2c67a780b2dcb8040494a06a9b",
+        "chipotle-2024-fixed-v2-approved.json": "87a70100576cbb3ae256915cbd79d837e23072faaf062cf453b5368560c3275d",
+        "chipotle-2024-fixed-v2-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "chipotle-2024-fixed-v2-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
     }
   ],
   "receiptArchive": "Local task work/chain-national; full journals and baselines are intentionally excluded from this aggregate repository record",
@@ -1141,8 +1193,27 @@
       "peets",
       "jinya-revised",
       "noahs-2026-standard",
-      "jack-2026-standard"
+      "jack-2026-standard",
+      "ono-2021-fixed"
     ],
     "productionDeploymentNote": "Historical runtime release deployment, not a claim that this deployment ID remains the latest production deployment."
+  },
+  "classificationRuntime": {
+    "reviewedCodeHead": "e8aeb655eb5b437239466b3c071b9b97830f9fb7",
+    "runtimeDigest": "076409d20ae9a0e244548845db1f26bc91a465e1131c239fd67160f20d46bd77",
+    "pullRequest": 314,
+    "mainVerify": 34792552138,
+    "deploy": 34792552165,
+    "productionDeployment": 6428215802,
+    "appliesToBatches": [
+      "chipotle-2024-fixed-v2"
+    ],
+    "receiptHashes": {
+      "classification-release-receipt.json": "7a7f1eb4874357acedb79771ecbc504b3c0457eced8cfd7fd049205b654b9df7",
+      "classification-identity-source-approval.json": "072c2e2e07f1dbee45feb7d0a1e7944e06891a8d0fd1ccfb4f5f33c0fcf7172d",
+      "classification-production-identity-plan.json.applied.json": "8481b0214caa25e53c9a57f38ede407a3b71b4ec1aec4baaba10cea015a87e3e",
+      "chipotle-2024-fixed-v2-post-identity-baseline.json": "d18ba8cafe14f8366499e2e0c4fb8f28cc271452f92aaf24f450a353a9088a00",
+      "chipotle-2024-fixed-v2-approval-evidence.json": "df45c26a428c9801fda949a4843760dff7fd0467aa54d911985557f5be95af99"
+    }
   }
 }
