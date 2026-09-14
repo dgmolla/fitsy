@@ -19,7 +19,7 @@ import { chainTransaction } from '../apps/api/services/chainTransaction';
 // ─── Item validation (S-111, S-112) ─────────────────────────────────────────
 
 export const NON_FOOD_PATTERNS = /\b(t-?shirt|tee|hoodie|sweatshirt|hat|cap|beanie|mug|tumbler|bag|tote|merch|sticker|poster|gift\s*card|apron)\b/i;
-export const UTENSIL_PATTERNS = /\b(chopstick|fork|spoon|knife|napkin|straw|container|lid|cup\s*sleeve|utensil)\b/i;
+export const UTENSIL_PATTERNS = /\b(chopsticks?|forks?|spoons?|knife|knives|napkins?|straws?|containers?|lids?|cup\s*sleeves?|utensils?)\b/i;
 export const CONDIMENT_PATTERNS = /\b(packet|sauce\s*cup|dressing\s*packet|ketchup|mustard|mayo|soy\s*sauce|hot\s*sauce|salt|pepper|sugar|cream|sweetener|butter\s*pat|jam|jelly|syrup|relish|vinegar|dipping\s*sauce)\b/i;
 const BEVERAGE_PATTERNS = /\b(water|soda|juice|tea|coffee|lemonade|drink|beverage|sparkling|kombucha|milk|shake|smoothie)\b/i;
 
