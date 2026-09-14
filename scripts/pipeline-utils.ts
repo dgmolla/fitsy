@@ -19,8 +19,12 @@ import { chainTransaction } from '../apps/api/services/chainTransaction';
 // ─── Item validation (S-111, S-112) ─────────────────────────────────────────
 
 export const NON_FOOD_PATTERNS = /\b(t-?shirt|tee|hoodie|sweatshirt|hat|cap|beanie|mug|tumbler|bag|tote|merch|sticker|poster|gift\s*card|apron)\b/i;
-export const UTENSIL_PATTERNS = /\b(chopsticks?|forks?|spoons?|knife|knives|napkins?|straws?|containers?|lids?|cup\s*sleeves?|utensils?)\b/i;
+export const UTENSIL_PATTERNS = /\b(chopsticks?|forks?|spoons?|knife|knives|napkins?|straws?|containers?|lids?|cup\s*sleeves?|utensils?|stir\s*sticks?|stirrers?)\b/i;
+const NON_FOOD_SECTION_CATEGORY = "(?:utensils?|cutlery|paper\\s+(?:goods|supplies)|merchandise|drinkware|apparel)";
+// Require the entire section to describe non-food goods; mixed food sections stay eligible.
+const NON_FOOD_SECTION_PATTERN = new RegExp(`^\\s*${NON_FOOD_SECTION_CATEGORY}(?:\\s*(?:and|[&/+,|])\\s*${NON_FOOD_SECTION_CATEGORY})*\\s*$`, "i");
 export const CONDIMENT_PATTERNS = /\b(packet|sauce\s*cup|dressing\s*packet|ketchup|mustard|mayo|soy\s*sauce|hot\s*sauce|salt|pepper|sugar|cream|sweetener|butter\s*pat|jam|jelly|syrup|relish|vinegar|dipping\s*sauce)\b/i;
+const CONDIMENT_SECTION_EXCEPTIONS = /\b(sauce|butter|mayonnaise)\b/i;
 const BEVERAGE_PATTERNS = /\b(water|soda|juice|tea|coffee|lemonade|drink|beverage|sparkling|kombucha|milk|shake|smoothie)\b/i;
 
 export interface RejectedItem {
@@ -77,6 +81,12 @@ export function validateItems(
     }
     if (UTENSIL_PATTERNS.test(name)) {
       rejected.push({ name, reason: "non-food: utensil" });
+      continue;
+    }
+    // Some menus place edible condiments under Utensils; preserve their calorie-based rule below.
+    if (NON_FOOD_SECTION_PATTERN.test(item.section ?? "")
+      && !CONDIMENT_PATTERNS.test(name) && !CONDIMENT_SECTION_EXCEPTIONS.test(name)) {
+      rejected.push({ name, reason: "non-food: supply or merchandise section" });
       continue;
     }
 
