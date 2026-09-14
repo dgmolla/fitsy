@@ -11,6 +11,7 @@
  * tsc fail if a field is added to the interfaces but not the schemas.
  */
 import { z } from "zod";
+import { goalMatchSchema } from './goalMatch';
 import type { BestMatchSummary, RestaurantResult, RestaurantsMeta, RestaurantsResponse } from "../types/index";
 
 export const bestMatchSummarySchema = z.object({
@@ -72,6 +73,7 @@ export const guidedPreviewResponseSchema = z.object({
   meta: z.object({
     nearbyDishCount: z.number().int().nonnegative(),
     radiusMiles: z.literal(3),
+    goalMatch: goalMatchSchema.nullable().optional(),
   }),
 });
 export type GuidedPreviewResponse = z.infer<typeof guidedPreviewResponseSchema>;

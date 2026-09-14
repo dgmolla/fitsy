@@ -1,6 +1,8 @@
 import { Prisma, PrismaClient } from "@prisma/client";
-import { hasTargets, type MacroTargets } from "./macroScoring";
-import { macroScoreSumSql } from "./macroScoreSql";
+import { hasTargets } from "./macroScoring";
+import { macroScoreSumSql, macroQualificationSql } from "./macroScoreSql";
+import { nearbyBoundarySql, nearbyDistanceSql, restaurantQuerySql } from "./restaurantQuerySql";
+import { restaurantCursorContext, type RestaurantSearchContext } from './restaurantCursorContext';
 import { macroWinnerSqlOrder } from "@fitsy/shared";
 import { type RestaurantResult, type MenuResponse } from "@fitsy/shared";
 
@@ -34,33 +36,16 @@ if (process.env["NODE_ENV"] !== "production") {
  * macro match and a wildly-off item (which sits at scoreSum ~2+).
  */
 const RAW_DISTANCE_WEIGHT = process.env["SEARCH_DISTANCE_WEIGHT"];
-const DISTANCE_WEIGHT: number =
+export const DISTANCE_WEIGHT: number =
   RAW_DISTANCE_WEIGHT !== undefined && !Number.isNaN(Number(RAW_DISTANCE_WEIGHT))
     ? Number(RAW_DISTANCE_WEIGHT)
     : 0.05;
 
 // ─── Query params ─────────────────────────────────────────────────────────────
 
-export interface NearbyRestaurantsParams {
-  lat: number;
-  lng: number;
-  radiusMiles: number;
-  targets: MacroTargets;
+export interface NearbyRestaurantsParams extends RestaurantSearchContext {
   /** Public provenance label for the guided sample only; legacy responses stay unchanged. */
   includeNutritionBasis?: boolean;
-  cuisineType?: string | undefined;
-  chainOnly?: boolean | undefined;
-  dietary?: string | undefined;
-  maxPriceLevel?: string | undefined;
-  minRating?: number | undefined;
-  /**
-   * Free-text query. Matched (case-insensitive substring) against the
-   * restaurant name, its cuisineTags, and its menu item names/descriptions.
-   * Acts as a filter only — results are still ranked by the macro+distance
-   * composite. All matching is correlated to the geographically-bounded
-   * candidate set, so cost scales with restaurants-in-radius, not table size.
-   */
-  query?: string | undefined;
   limit: number;
   /**
    * Decoded cursor — { id, orderKey } from the last item on the previous
@@ -82,6 +67,7 @@ export interface PaginationCursor {
   orderKeyText?: string;
   /** Kept for backward compat with cursors encoded before composite ranking. */
   distanceMiles?: number;
+  context?: string;
 }
 
 export function encodeCursor(cursor: PaginationCursor): string {
@@ -97,7 +83,7 @@ export function decodeCursor(raw: string): PaginationCursor | null {
       parsed !== null &&
       typeof (parsed as { id?: unknown }).id === "string"
     ) {
-      const obj = parsed as { id: string; orderKey?: unknown; orderKeyText?: unknown; distanceMiles?: unknown };
+      const obj = parsed as { id: string; orderKey?: unknown; orderKeyText?: unknown; distanceMiles?: unknown; context?: unknown };
       // Prefer `orderKey`; fall back to legacy `distanceMiles`.
       const rawKey =
         typeof obj.orderKey === "number" && isFinite(obj.orderKey)
@@ -107,6 +93,10 @@ export function decodeCursor(raw: string): PaginationCursor | null {
             : null;
       if (rawKey === null) return null;
       const out: PaginationCursor = { id: obj.id, orderKey: rawKey };
+      if (obj.context !== undefined) {
+        if (typeof obj.context !== 'string' || !/^[a-f0-9]{64}$/.test(obj.context)) return null;
+        out.context = obj.context;
+      }
       if (obj.orderKeyText !== undefined) {
         if (typeof obj.orderKeyText !== "string" || !/^-?\d+(\.\d+)?(e[+-]?\d+)?$/i.test(obj.orderKeyText)
           || !Number.isFinite(Number(obj.orderKeyText))
@@ -137,44 +127,9 @@ function allowedPriceLevels(maxPriceLevel: string): string[] {
     : (PRICE_LEVEL_ORDER as unknown as string[]);
 }
 
-// ─── Text search config ───────────────────────────────────────────────────────
-
-/**
- * Postgres full-text-search dictionary for free-text matching.
- *
- * We match with `to_tsvector(config, target) @@ plainto_tsquery(config, query)`.
- * FTS tokenizes both sides into lexemes and requires *all* query lexemes to be
- * present (AND semantics), which is precise for multi-word queries and immune
- * to substring-in-word noise — validated against prod data:
- *   "chick fil a" → Chick-fil-A ✓ (tokenizes the hyphenated name)
- *                   but NOT "Lil' Chick Bowl" / "Chick'n Wrap" ✓
- *   "ramen" → "Birria Ramen" ✓ but NOT "Sacramento" / "Rama Thai" ✓
- * The `english` dictionary also stems, so "tacos"→taco, "burritos"→burrito.
- * (FTS does not do typo correction; that's a future trigram-assist job.)
- * Override via SEARCH_TS_CONFIG.
- */
-const TEXT_SEARCH_CONFIG = process.env["SEARCH_TS_CONFIG"] ?? "english";
-
-// ─── Distance helpers ─────────────────────────────────────────────────────────
-
-function computeBoundingBox(
-  lat: number,
-  lng: number,
-  radiusMiles: number,
-): { latMin: number; latMax: number; lngMin: number; lngMax: number } {
-  const latDelta = radiusMiles / 69;
-  const lngDelta = radiusMiles / (69 * Math.cos((lat * Math.PI) / 180));
-  return {
-    latMin: lat - latDelta,
-    latMax: lat + latDelta,
-    lngMin: lng - lngDelta,
-    lngMax: lng + lngDelta,
-  };
-}
-
 // ─── Raw row shape returned by the DISTINCT ON query ──────────────────────────
 
-interface ScoredRow {
+export interface ScoredRow {
   restaurantId: string;
   name: string;
   address: string;
@@ -223,13 +178,9 @@ export async function findNearbyRestaurants(
 
   const startMs = Date.now();
 
-  const { latMin, latMax, lngMin, lngMax } = computeBoundingBox(
-    lat,
-    lng,
-    radiusMiles,
-  );
-
   const targetsActive = hasTargets(targets);
+  const cursorContext = restaurantCursorContext(params);
+  const goalFilter = params.goalMatched && targetsActive ? Prisma.sql`AND ${macroQualificationSql(targets)}` : Prisma.empty;
 
   // Dynamic filter fragments — composed via Prisma.sql for safe parameter binding.
   const filterFrags: Prisma.Sql[] = [];
@@ -252,57 +203,19 @@ export async function findNearbyRestaurants(
   if (minRating !== undefined) {
     filterFrags.push(Prisma.sql`AND r.rating >= ${minRating}`);
   }
-  // Free-text filter. References only `r` (plus correlated subqueries on
-  // r.id), so the planner can prune Restaurant rows before the macro LATERAL
-  // runs. Matching is bounded to the geographic candidate set, so cost tracks
-  // restaurants-in-radius rather than total table size.
-  //
-  // Full-text matches restaurant name, cuisineTags, and menu item *names* —
-  // NOT descriptions (long prose, low precision). FTS tokenization handles
-  // spacing/punctuation ("chick fil a" → "Chick-fil-A") and its AND-of-lexemes
-  // semantics keep multi-word queries precise (no "Lil' Chick Bowl" noise).
-  const queryText = query !== undefined && query !== "" ? query : null;
-
-  // to_tsvector(config, target) @@ plainto_tsquery(config, query). plainto_tsquery
-  // safely parses arbitrary user text into a lexeme AND-query (no escaping/
-  // injection concerns). Reused for name / cuisine / dish.
-  const fts = (target: Prisma.Sql): Prisma.Sql =>
-    Prisma.sql`to_tsvector(${TEXT_SEARCH_CONFIG}::regconfig, ${target}) @@ plainto_tsquery(${TEXT_SEARCH_CONFIG}::regconfig, ${queryText})`;
-
-  // True (per row) when the restaurant *itself* is on-topic for the query
-  // (name or cuisine matches) — in which case every one of its dishes is
-  // relevant. Reused by the outer gate and the macro LATERAL's item filter so
-  // both agree on what "relevant" means.
-  const restaurantMatchesQuery = Prisma.sql`(
-    ${fts(Prisma.sql`r.name`)}
-    OR ${fts(Prisma.sql`array_to_string(r."cuisineTags", ' ')`)}
-  )`;
-
-  if (queryText !== null) {
-    filterFrags.push(Prisma.sql`AND (
-      ${restaurantMatchesQuery}
-      OR EXISTS (
-        SELECT 1 FROM "MenuItem" mi
-        WHERE mi."restaurantId" = r.id
-          AND ${fts(Prisma.sql`mi.name`)}
-      )
-    )`);
-  }
-
-  // When a text query is active, the dish we display and macro-score for each
-  // restaurant must come from the query-relevant set — otherwise a "ramen"
-  // search can surface a restaurant for its Birria Ramen but show (and rank by)
-  // an unrelated best-macro kabob. If the restaurant itself matches (name /
-  // cuisine) every dish is relevant; otherwise only dishes whose name matches.
-  // So `best` becomes "the query-matching dish that best fits the user's
-  // macros," and the restaurant's rank reflects that dish.
-  const menuQueryFilter: Prisma.Sql =
-    queryText !== null
-      ? Prisma.sql`AND (
-          ${restaurantMatchesQuery}
-          OR ${fts(Prisma.sql`m.name`)}
-        )`
-      : Prisma.empty;
+  const textQuery = restaurantQuerySql(query);
+  // Query intent is decided once over the area, before macro targets or filters.
+  const queryContext = textQuery.active ? Prisma.sql`SELECT EXISTS (
+    SELECT 1 FROM "MenuItem" mi JOIN "Restaurant" qr ON qr.id = mi."restaurantId"
+    WHERE ${nearbyBoundarySql(lat, lng, radiusMiles, 'qr')}
+      AND mi.calories IS NOT NULL AND mi."proteinG" IS NOT NULL
+      AND mi."carbsG" IS NOT NULL AND mi."fatG" IS NOT NULL
+      AND ${textQuery.dish('mi')}
+  ) AS "hasDishMatches"` : Prisma.sql`SELECT false AS "hasDishMatches"`;
+  const menuQueryFilter = textQuery.active ? Prisma.sql`AND ${textQuery.matches(
+    Prisma.sql`(SELECT "hasDishMatches" FROM query_context)`, textQuery.dish(),
+    Prisma.sql`(${textQuery.restaurant()} OR ${textQuery.cuisine()})`, textQuery.exactRestaurant(),
+  )}` : Prisma.empty;
   // Shared distance expression — reused in SELECT, ORDER BY, and the cursor
   // WHERE filter so all three agree exactly.
   const distanceExpr = nearbyDistanceSql(lat, lng);
@@ -341,7 +254,7 @@ export async function findNearbyRestaurants(
   // estimate per result so multiple sources cannot duplicate restaurants
   // or consume page slots. Confidence follows the same source as detail.
   const rows = await prisma.$queryRaw<ScoredRow[]>`
-    WITH ranked AS MATERIALIZED (
+    WITH query_context AS MATERIALIZED (${queryContext}), ranked AS MATERIALIZED (
     SELECT
       r.id            AS "restaurantId",
       r.name          AS name,
@@ -378,13 +291,12 @@ export async function findNearbyRestaurants(
         AND m.calories IS NOT NULL AND m."proteinG" IS NOT NULL
         AND m."carbsG" IS NOT NULL AND m."fatG" IS NOT NULL
         ${menuQueryFilter}
+        ${goalFilter}
       ORDER BY "scoreSum" ASC, m.id ASC
       LIMIT 1
     ) AS best
-    WHERE r.lat BETWEEN ${latMin} AND ${latMax}
-      AND r.lng BETWEEN ${lngMin} AND ${lngMax}
+    WHERE ${nearbyBoundarySql(lat, lng, radiusMiles)}
       ${filters}
-      AND ${distanceExpr} <= ${radiusMiles}::double precision
     ORDER BY "orderKey" ASC, r.id ASC
     LIMIT ${limit}
     )
@@ -413,10 +325,29 @@ export async function findNearbyRestaurants(
           orderKey: lastRow.orderKey,
           ...(lastRow.orderKeyText ? { orderKeyText: lastRow.orderKeyText } : {}),
           distanceMiles: lastRow.distanceMiles,
+          ...(cursorContext ? { context: cursorContext } : {}),
         })
       : null;
 
-  const data: RestaurantResult[] = paginated.map((r) => ({
+  const data = paginated.map(r => restaurantResultFromRow(r, targetsActive, !!params.includeNutritionBasis));
+
+  const totalMs = Date.now() - startMs;
+
+  console.log(
+    JSON.stringify({
+      event: "search_query",
+      restaurants: total,
+      hasTargets: targetsActive,
+      totalMs,
+      paginated: cursor !== undefined,
+    }),
+  );
+
+  return { data, total, nextCursor };
+}
+
+export function restaurantResultFromRow(r: ScoredRow, targetsActive: boolean, includeNutritionBasis: boolean): RestaurantResult {
+  return {
     id: r.restaurantId,
     name: r.name,
     address: r.address,
@@ -437,26 +368,12 @@ export async function findNearbyRestaurants(
       carbsG: r.carbsG,
       fatG: r.fatG,
       confidence: r.confidence ?? "LOW",
-      ...(params.includeNutritionBasis ? { nutritionBasis: r.source === "merchant" || r.source === "official" ? "published" as const : "estimated" as const } : {}),
+      ...(includeNutritionBasis ? { nutritionBasis: r.source === "merchant" || r.source === "official" ? "published" as const : "estimated" as const } : {}),
       matchScore: targetsActive
         ? Math.round(Math.sqrt(r.scoreSum) * 10000) / 10000
         : null,
     },
-  }));
-
-  const totalMs = Date.now() - startMs;
-
-  console.log(
-    JSON.stringify({
-      event: "search_query",
-      restaurants: total,
-      hasTargets: targetsActive,
-      totalMs,
-      paginated: cursor !== undefined,
-    }),
-  );
-
-  return { data, total, nextCursor };
+  };
 }
 
 // ─── Service: GET /api/restaurants/[id]/menu ──────────────────────────────────
@@ -466,24 +383,4 @@ export async function getRestaurantMenu(
   options: MenuPageOptions = {},
 ): Promise<MenuResponse | null> {
   return getMenuPage(prisma, restaurantId, options);
-}
-
-/** Same geographic boundary as search; count dishes with usable nutrition once. */
-export async function countNearbyDishes(lat: number, lng: number, radiusMiles: number): Promise<number> {
-  const { latMin, latMax, lngMin, lngMax } = computeBoundingBox(lat, lng, radiusMiles);
-  const rows = await prisma.$queryRaw<{ count: number }[]>`
-    SELECT count(*)::integer AS count FROM "MenuItem" m
-    JOIN "Restaurant" r ON r.id = m."restaurantId"
-    WHERE r.lat BETWEEN ${latMin} AND ${latMax}
-      AND r.lng BETWEEN ${lngMin} AND ${lngMax}
-      AND ${nearbyDistanceSql(lat, lng)} <= ${radiusMiles}::double precision
-      AND m.calories IS NOT NULL AND m."proteinG" IS NOT NULL
-      AND m."carbsG" IS NOT NULL AND m."fatG" IS NOT NULL
-  `;
-  return rows[0]!.count;
-}
-
-function nearbyDistanceSql(lat: number, lng: number): Prisma.Sql {
-  return Prisma.sql`(sqrt(power(r.lat - ${lat}::double precision, 2)
-    + power((r.lng - ${lng}::double precision) * cos(${lat}::double precision * pi() / 180), 2)) * 69)`;
 }

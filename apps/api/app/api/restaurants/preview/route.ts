@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { countNearbyDishes, findNearbyRestaurants } from "@/lib/restaurantService";
+import { findNearbyRestaurants } from "@/lib/restaurantService";
+import { findGuidedPreview } from '@/lib/guidedPreviewService';
 import { createRateLimiter } from "@/lib/rateLimit";
 import { parseMacroTargetParams } from "@/lib/macroTargetParams";
 import type { GuidedPreviewResponse, RestaurantResult } from "@fitsy/shared";
@@ -27,7 +28,7 @@ interface PreviewResponse {
  *
  * Returns only name + cuisine info. bestMatch / meal details are intentionally
  * omitted for legacy clients. guided=1 explicitly exposes three meal summaries
- * for the onboarding tour, with an unfiltered local dish count.
+ * for the onboarding tour, with separate coverage and goal-qualified counts.
  * Full menus and continued discovery remain subscription features.
  */
 export async function GET(
@@ -58,7 +59,9 @@ export async function GET(
 
   const guided = searchParams.get("guided") === "1";
   const query = searchParams.get("q")?.trim();
-  if (guided && ((query?.length ?? 0) > 100 || ["cursor", "limit", "pageSize", "selectedItemId", "radiusMiles"].some(key => searchParams.has(key)))) {
+  const selectedItemId = searchParams.get('selectedItemId') ?? undefined;
+  if (guided && ((query?.length ?? 0) > 100 || ["cursor", "limit", "pageSize", "radiusMiles"].some(key => searchParams.has(key))
+    || (selectedItemId !== undefined && (!selectedItemId.trim() || selectedItemId.length > 128 || searchParams.getAll('selectedItemId').length > 1)))) {
     return NextResponse.json({ error: "Guided preview supports a craving and a fixed three-pick sample" }, { status: 400 });
   }
 
@@ -67,6 +70,9 @@ export async function GET(
       // The launch preview deliberately makes these three meal summaries public,
       // including names and macros, before account creation. Standard search
       // still redacts bestMatch; this sample has no cursor or full-menu data.
+      // The exact area-wide qualifying count is also deliberately public for
+      // the paywall value claim. Repeated target queries can reveal aggregate
+      // nutrition distribution; arbitrary hidden-item membership stays private.
       // The per-instance IP brake limits bursts, not determined scraping across
       // serverless instances. The app's one-craving tour is a UX limit only.
       const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";
@@ -74,11 +80,7 @@ export async function GET(
       if (!quota.ok) return NextResponse.json({ error: "Too many preview searches. Please try again shortly." }, {
         status: 429, headers: { "Retry-After": String(Math.ceil(quota.retryAfterMs / 1000)) },
       });
-      const [{ data }, nearbyDishCount] = await Promise.all([
-        findNearbyRestaurants({ lat, lng, radiusMiles: 3, targets, query, limit: 3, includeNutritionBasis: true }),
-        countNearbyDishes(lat, lng, 3),
-      ]);
-      return NextResponse.json({ data, meta: { nearbyDishCount, radiusMiles: 3 } });
+      return NextResponse.json(await findGuidedPreview({ lat, lng, targets, query, selectedItemId }));
     }
     // Prefer indie restaurants for the teaser — chains are less compelling as
     // a hook. Fall back to all restaurants only if the DB is too sparse locally.

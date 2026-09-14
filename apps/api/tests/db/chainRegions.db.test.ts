@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { approvedChainRow, chainReviewHash } from '../../services/chainCatalog';
 import { applyAprilChainMatch, loadChainServing, chainMenuResolver } from '../../services/chainServing';
 import { applyAprilChainBatch, restoreAprilChainBatch } from '../../services/chainAprilBatch';
@@ -13,9 +13,47 @@ import { persistHex } from '../../../../scripts/hex-persist';
 import { persistItems } from '../../../../scripts/pipeline-utils';
 
 const suite = process.env['POSTGRES_PRISMA_URL'] ? describe : describe.skip;
+async function waitForRestaurantLock(observer: Prisma.TransactionClient, writerPid: number, holderPid: number) {
+  for (let tries = 0; tries < 100; tries++) {
+    // Activity query text is cached separately from live wait events. The holder
+    // has locked only Restaurant, so its actual blocking PID proves the awaited row lock.
+    const [{ blockers }] = await observer.$queryRaw<[{ blockers: number[] }]>`SELECT pg_blocking_pids(${writerPid}::integer) AS blockers`;
+    if (blockers.length) { expect(blockers).toEqual([holderPid]); return; }
+    await new Promise(resolve => setTimeout(resolve, 20));
+  }
+  throw new Error(`Writer did not wait on the restaurant lock held by ${holderPid}`);
+}
 suite('regional official nutrition through the real writer and served menu', () => {
   const p = new PrismaClient(), scope = randomUUID();
   afterAll(async () => { await p.$disconnect(); });
+  test('observes the actual Restaurant blocker when activity text is cached before the wait', async () => {
+    const restaurant = await p.restaurant.create({ data: { name: scope, storeUuid: `${scope}-observer`, address: 'Lock observer fixture', lat: 34, lng: -118, source: 'test', cuisineTags: [] } });
+    const url = new URL(process.env['POSTGRES_PRISMA_URL']!);
+    url.searchParams.set('connection_limit', '1');
+    const writer = new PrismaClient({ datasources: { db: { url: url.toString() } } });
+    let pending: Promise<unknown> | undefined;
+    try {
+      const [{ pid: writerPid }] = await writer.$queryRaw<[{ pid: number }]>`SELECT pg_backend_pid() AS pid`;
+      await writer.$queryRaw`SELECT id FROM "ChainItem" LIMIT 1`;
+      await p.$transaction(async tx => {
+        await tx.$queryRaw`SELECT id FROM "Restaurant" WHERE id = ${restaurant.id} FOR UPDATE`;
+        const [{ pid: holderPid }] = await tx.$queryRaw<[{ pid: number }]>`SELECT pg_backend_pid() AS pid`;
+        // Pin the pre-wait query text to reproduce pg_stat_activity's mixed snapshot deterministically.
+        const [before] = await tx.$queryRaw<{ query: string }[]>`SELECT query FROM pg_stat_activity WHERE pid = ${writerPid}`;
+        expect(before?.query).toContain('"ChainItem"');
+        pending = writer.$queryRaw`SELECT id FROM "Restaurant" WHERE id = ${restaurant.id} FOR UPDATE`.then(rows => rows);
+        void pending.catch(() => {});
+        await waitForRestaurantLock(tx, writerPid, holderPid);
+        const [during] = await tx.$queryRaw<{ query: string; wait_event_type: string }[]>`SELECT query, wait_event_type FROM pg_stat_activity WHERE pid = ${writerPid}`;
+        expect(during).toEqual({ query: before?.query, wait_event_type: 'Lock' });
+      }, { timeout: 10_000 });
+      await expect(pending).resolves.toEqual([{ id: restaurant.id }]);
+    } finally {
+      await pending?.catch(() => {});
+      await writer.$disconnect();
+      await p.restaurant.delete({ where: { id: restaurant.id } });
+    }
+  });
   test('a California-only fact reaches California menus while Ohio keeps its estimate', async () => {
     const brand = await p.brand.create({ data: { slug: scope, displayName: scope, detectionConf: 'high' } });
     try {
@@ -110,15 +148,7 @@ suite('regional official nutrition through the real writer and served menu', () 
       const writer = new PrismaClient({ datasources: { db: { url: url.toString() } } });
       let pending: Promise<number> | undefined;
       try {
-        const waitForRestaurantLock = async () => {
-          for (let tries = 0; tries < 100; tries++) {
-            const active = await p.$queryRaw<{ wait_event_type: string | null; query: string }[]>`SELECT wait_event_type, query FROM pg_stat_activity WHERE application_name = ${scope}`;
-            const blocked = active.find(a => a.wait_event_type === 'Lock');
-            if (blocked) { expect(blocked.query).toContain('"Restaurant"'); return; }
-            await new Promise(resolve => setTimeout(resolve, 20));
-          }
-          throw new Error('Writer did not wait on the restaurant lock');
-        };
+        const [{ pid: writerPid }] = await writer.$queryRaw<[{ pid: number }]>`SELECT pg_backend_pid() AS pid`;
         const california = await p.restaurant.findUniqueOrThrow({ where: { storeUuid: scope + 'California' } });
         for (const mode of ['single', 'batch']) {
           const before = await p.menuItem.findFirstOrThrow({ where: { restaurantId: california.id }, include: { macroEstimates: { orderBy: { id: 'asc' } } } });
@@ -126,22 +156,25 @@ suite('regional official nutrition through the real writer and served menu', () 
           try {
             await p.$transaction(async tx => {
               await tx.$queryRaw`SELECT id FROM "Restaurant" WHERE id = ${california.id} FOR UPDATE`;
+              const [{ pid: holderPid }] = await tx.$queryRaw<[{ pid: number }]>`SELECT pg_backend_pid() AS pid`;
               applying = mode === 'single' ? applyAprilChainMatch(writer, before, approved) : applyAprilChainBatch(writer, [{ before, approved }]);
               void applying.catch(() => {});
-              await waitForRestaurantLock();
+              await waitForRestaurantLock(p, writerPid, holderPid);
+              expect(await tx.$queryRaw`SELECT id FROM "MenuItem" WHERE id = ${before.id} FOR UPDATE NOWAIT`).toEqual([{ id: before.id }]);
             }, { timeout: 10_000 });
             await applying;
           } finally { await applying?.catch(() => {}); }
         }
         await p.$transaction(async tx => {
           await tx.$queryRaw`SELECT id FROM "Restaurant" WHERE id = ${ohio.id} FOR SHARE`;
+          const [{ pid: holderPid }] = await tx.$queryRaw<[{ pid: number }]>`SELECT pg_backend_pid() AS pid`;
           pending = persistHex(scope, 'concurrent-estimated', [{ restaurantId: ohio.id, brandId: brand.id,
             menuHash: 'concurrent-estimated', items: [{ item, macro: { calories: 400, proteinG: 8, carbsG: 44, fatG: 21,
               confidence: 'MEDIUM', source: 'haiku', dietaryTags: [] } }] }], writer);
           void pending.catch(() => {});
-          await waitForRestaurantLock();
-          // Old order holds MenuItem while waiting for Restaurant and deadlocks here.
-          await tx.$queryRaw`SELECT id FROM "MenuItem" WHERE id = ${saved.id} FOR UPDATE`;
+          await waitForRestaurantLock(p, writerPid, holderPid);
+          // Old order holds MenuItem before Restaurant; NOWAIT fails immediately instead of deadlocking.
+          expect(await tx.$queryRaw`SELECT id FROM "MenuItem" WHERE id = ${saved.id} FOR UPDATE NOWAIT`).toEqual([{ id: saved.id }]);
         }, { timeout: 10_000 });
         await expect(pending).resolves.toBe(1);
         expect(await p.pipelineCompletedHex.count({ where: { runId: scope, hexId: 'concurrent-estimated' } })).toBe(1);

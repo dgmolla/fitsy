@@ -6,3 +6,4 @@ export * from "./utils/notifySlack";
 export * from "./env";
 export * from "./utils/macroScoring";
 export * from "./contracts/menu";
+export * from "./contracts/goalMatch";

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse, after } from "next/server";
-import { findNearbyRestaurants, decodeCursor, type PaginationCursor } from "@/lib/restaurantService";
+import { findNearbyRestaurants, decodeCursor, type PaginationCursor, type NearbyRestaurantsParams } from "@/lib/restaurantService";
+import { restaurantCursorContext } from '@/lib/restaurantCursorContext';
 import { optionalSubscription } from "@/lib/subscription";
 import { getApiEmitter } from "@/lib/apiEmitter";
 import type { RestaurantsApiResponse } from "@fitsy/shared";
@@ -135,24 +136,35 @@ export async function GET(
     decodedCursor = decoded;
   }
 
+  const goalMatchedRaw = searchParams.get("goalMatched");
+  if ((goalMatchedRaw !== null && !["0", "1"].includes(goalMatchedRaw)) || searchParams.getAll("goalMatched").length > 1) {
+    return NextResponse.json({ error: "Invalid goalMatched flag" } as never, { status: 400 });
+  }
+  const options: NearbyRestaurantsParams = {
+    lat,
+    lng,
+    radiusMiles,
+    targets,
+    // Filtering locked rows by nutrition would reveal match membership despite redacting bestMatch.
+    goalMatched: entitled && goalMatchedRaw === "1",
+    ...(cuisineTypeRaw !== null ? { cuisineType: cuisineTypeRaw } : {}),
+    ...(chainOnlyRaw !== null ? { chainOnly: chainOnlyRaw === "true" } : {}),
+    ...(dietaryRaw !== null ? { dietary: dietaryRaw } : {}),
+    ...(maxPriceLevelRaw !== null ? { maxPriceLevel: maxPriceLevelRaw } : {}),
+    ...(minRating !== undefined ? { minRating } : {}),
+    ...(query !== "" ? { query } : {}),
+    limit,
+    ...(decodedCursor !== undefined ? { cursor: decodedCursor } : {}),
+  };
+  if (decodedCursor && decodedCursor.context !== restaurantCursorContext(options)) {
+    return NextResponse.json({ error: "Cursor belongs to another search context" } as never, { status: 400 });
+  }
+
   // ─── Query ──────────────────────────────────────────────────────────────────
 
   try {
     const tBeforeQuery = Date.now();
-    const { data, total, nextCursor } = await findNearbyRestaurants({
-      lat,
-      lng,
-      radiusMiles,
-      targets,
-      ...(cuisineTypeRaw !== null ? { cuisineType: cuisineTypeRaw } : {}),
-      ...(chainOnlyRaw !== null ? { chainOnly: chainOnlyRaw === "true" } : {}),
-      ...(dietaryRaw !== null ? { dietary: dietaryRaw } : {}),
-      ...(maxPriceLevelRaw !== null ? { maxPriceLevel: maxPriceLevelRaw } : {}),
-      ...(minRating !== undefined ? { minRating } : {}),
-      ...(query !== "" ? { query } : {}),
-      limit,
-      ...(decodedCursor !== undefined ? { cursor: decodedCursor } : {}),
-    });
+    const { data, total, nextCursor } = await findNearbyRestaurants(options);
     const tDone = Date.now();
     const emitter = getApiEmitter();
     emitter.emitSearchRoute({

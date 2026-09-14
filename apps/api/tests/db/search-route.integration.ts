@@ -204,7 +204,9 @@ test('guided preview reveals three real ranked meal summaries with provenance an
   assert.equal(result.data.length, 3);
   assert.equal(result.meta.nearbyDishCount, 1004, 'four restaurants, 251 dishes each, regardless of the craving');
   assert.equal(result.meta.radiusMiles, 3);
-  const estimated = guidedPreviewResponseSchema.parse(await (await preview(guidedRequest('q=dish'))).json());
+  const estimated = guidedPreviewResponseSchema.parse(await (await preview(new NextRequest(
+    'http://localhost/api/restaurants/preview?lat=12&lng=12&guided=1&q=dish&calories=900&protein=10&carbs=100&fat=50',
+  ))).json());
   assert.ok(estimated.data.length);
   assert.ok(estimated.data.every(restaurant => restaurant.bestMatch!.nutritionBasis === 'estimated'));
   for (const restaurant of result.data) {
@@ -215,7 +217,8 @@ test('guided preview reveals three real ranked meal summaries with provenance an
 });
 
 test('guided sample cannot expand its page or geographic scope and validates its craving', async () => {
-  for (const query of ['cursor=x', 'limit=50', 'pageSize=50', 'selectedItemId=x', 'radiusMiles=50', 'q=' + 'x'.repeat(101)]) {
+  assert.equal((await preview(guidedRequest('selectedItemId=' + 'x'.repeat(128)))).status, 200);
+  for (const query of ['cursor=x', 'limit=50', 'pageSize=50', 'selectedItemId=', 'selectedItemId=x&selectedItemId=y', 'selectedItemId=' + 'x'.repeat(129), 'radiusMiles=50', 'q=' + 'x'.repeat(101)]) {
     assert.equal((await preview(guidedRequest(query))).status, 400, query);
   }
 });
@@ -227,7 +230,7 @@ test('no craving matches preserve coverage count; genuinely uncovered areas retu
   const uncovered = guidedPreviewResponseSchema.parse(await (await preview(new NextRequest(
     'http://localhost/api/restaurants/preview?lat=-40&lng=60&guided=1',
   ))).json());
-  assert.deepEqual(uncovered, { data: [], meta: { nearbyDishCount: 0, radiusMiles: 3 } });
+  assert.deepEqual(uncovered, { data: [], meta: { nearbyDishCount: 0, radiusMiles: 3, goalMatch: null } });
 });
 
 test('local count excludes dishes without complete nutrition', async () => {
