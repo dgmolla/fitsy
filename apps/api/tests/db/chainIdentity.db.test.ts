@@ -39,12 +39,16 @@ suite("reviewed chain identities through existing menu and new-hex serving", () 
     await p.pipelineCompletedHex.deleteMany({ where: { runId: scope } });
     await p.$disconnect();
   });
-  test.each([false, true])("sparse menu or explicit store alias can be onboarded without replacing menu IDs (existing brand=%s)", async existing => serialized(async () => {
-    const id = randomUUID(), slug = `${scope}-${existing}`, displayName = `${scope} ${existing ? "Existing" : "New"} Cafe`;
+  test.each(["new", "alias", "misclassified"])("reviewed chain onboarding preserves menu IDs (%s)", async scenario => serialized(async () => {
+    const existing = scenario !== "new", misclassified = scenario === "misclassified";
+    const id = randomUUID(), slug = `${scope}-${scenario}`, displayName = `${scope} ${scenario} Cafe`;
     brands.push(id);
-    const oldBrand = existing ? await p.brand.create({ data: { id, slug, displayName, detectionConf: "high" } }) : null;
+    const oldBrand = existing ? await p.brand.create({ data: { id, slug, displayName, detectionConf: "high",
+      menuKind: misclassified ? "grocery/convenience" : "restaurant" } }) : null;
     const name = existing ? `${displayName} #42` : displayName;
-    const r = await createRestaurant(name, oldBrand?.id), original = await p.menuItem.create({ data: {
+    let r = await createRestaurant(name, oldBrand?.id);
+    if (misclassified) r = await p.restaurant.update({ where: { id: r.id }, data: { menuKind: "grocery/convenience" }, select: restaurantIdentitySelect });
+    const original = await p.menuItem.create({ data: {
       restaurantId: r.id, name: "Chicken Bowl", section: "Bowls", description: "One fixed bowl", price: 12,
       calories: 400, proteinG: 20, carbsG: 50, fatG: 13, photoUrl: "https://example.com/photo", dietaryTags: ["fixture"] } });
     await p.macroEstimate.create({ data: { menuItemId: original.id, calories: 400, proteinG: 20, carbsG: 50, fatG: 13, source: "haiku", confidence: "MEDIUM" } });
@@ -54,8 +58,15 @@ suite("reviewed chain identities through existing menu and new-hex serving", () 
     expect((await getMenuPage(p, r.id, { targets: facts, limit: 1 }))!.menuItems[0]!.macros?.calories).toBe(400);
     const batch: ChainIdentityBatch = { version: 1, reviewedBy: "Synthetic integration test", brands: [{ id, slug, displayName,
       expected: oldBrand ? identity(oldBrand) : null, addAliases: existing ? [name] : [], evidence }], links: [{ brandId: id, expected: r }] };
+    if (misclassified) {
+      await expect(plan(batch)).rejects.toThrow("Unqualified brand identity");
+      batch.brands[0]!.classifyAsRestaurant = true;
+      batch.links[0]!.classifyAsRestaurant = true;
+    }
     const planned = await plan(batch), journal = await applyChainIdentity(p, planned);
     expect(journal.brands).toHaveLength(1); expect(journal.restaurants).toHaveLength(1);
+    expect(journal.brands[0]!.menuKind).toBe("restaurant");
+    expect(journal.restaurants[0]!.menuKind).toBe("restaurant");
     expect(await p.menuItem.findUniqueOrThrow({ where: { id: original.id }, include: { macroEstimates: { orderBy: { id: "asc" } } } })).toEqual(before);
     expect((await plan(batch)).brands).toEqual([]); expect((await plan(batch)).links).toEqual([]);
     // Identity alone cannot activate a chain or install unreviewed nutrition.
@@ -64,6 +75,11 @@ suite("reviewed chain identities through existing menu and new-hex serving", () 
       facts: { ...facts, servingSize: "one synthetic bowl" }, source: { url: evidence.url, sha256: evidence.sha256 }, locator: evidence.locator, aliases: [item] }], quarantine: [] };
     const brand = await p.brand.findUniqueOrThrow({ where: { id } }), catalogPlan = planChainPilot([brand], [], catalogBatch);
     const catalogAfter = await applyCatalogPlan(p, catalogPlan, catalogBatch), runtime = await loadChainServing(p);
+    if (misclassified) {
+      await expect(rollbackChainIdentity(p, journal)).rejects.toThrow("roll back catalog first");
+      expect((await p.brand.findUniqueOrThrow({ where: { id } })).menuKind).toBe("restaurant");
+      expect((await p.restaurant.findUniqueOrThrow({ where: { id: r.id } })).menuKind).toBe("restaurant");
+    }
     const match = runtime.match(runtime.brandId({ name, brandId: id }), item);
     expect(match.status).toBe("matched"); if (match.status !== "matched") throw new Error("Missing reviewed match");
     const after = await applyAprilChainMatch(p, before, match.row);
@@ -98,7 +114,22 @@ suite("reviewed chain identities through existing menu and new-hex serving", () 
     await rollbackChainIdentity(p, JSON.parse(JSON.stringify(journal)));
     expect(await p.restaurant.findUniqueOrThrow({ where: { id: r.id }, select: restaurantIdentitySelect })).toEqual(r);
     expect(await p.menuItem.findUniqueOrThrow({ where: { id: original.id }, include: { macroEstimates: { orderBy: { id: "asc" } } } })).toEqual(before);
-    expect((await p.brand.findUnique({ where: { id } }))?.aliases ?? null).toEqual(oldBrand?.aliases ?? null);
+    expect(oldBrand ? identity(await p.brand.findUniqueOrThrow({ where: { id } })) : await p.brand.findUnique({ where: { id } })).toEqual(oldBrand ? identity(oldBrand) : null);
+  }), 125_000);
+  test("rolling back an unused alias preserves an existing reviewed catalog", async () => serialized(async () => {
+    const brand = await p.brand.create({ data: { slug: `${scope}-unused-alias`, displayName: `${scope} Standalone Catalog Cafe`, detectionConf: "high" } });
+    brands.push(brand.id);
+    const catalog = { version: 1 as const, reviewedBy: "Synthetic independent catalog", changes: [{ slug: brand.slug, canonicalKey: "bowl", expected: null,
+      facts: { ...facts, servingSize: "one synthetic bowl" }, source: { url: evidence.url, sha256: evidence.sha256 }, locator: evidence.locator,
+      aliases: [{ name: "Fixed Bowl" }] }], quarantine: [] };
+    await applyCatalogPlan(p, planChainPilot([brand], [], catalog), catalog);
+    const beforeCatalog = await p.chainItem.findMany({ where: { brandId: brand.id } });
+    const batch: ChainIdentityBatch = { version: 1, reviewedBy: "Synthetic unused alias", brands: [{ id: brand.id, slug: brand.slug,
+      displayName: brand.displayName, expected: identity(brand), addAliases: [`${scope} Unused Alias`], evidence }], links: [] };
+    const journal = await applyChainIdentity(p, await plan(batch));
+    await rollbackChainIdentity(p, journal);
+    expect(identity(await p.brand.findUniqueOrThrow({ where: { id: brand.id } }))).toEqual(identity(brand));
+    expect(await p.chainItem.findMany({ where: { brandId: brand.id } })).toEqual(beforeCatalog);
   }), 125_000);
   test("collision, unreviewed locations, and concurrent edits fail before any identity mutation", async () => serialized(async () => {
     const id = randomUUID(), slug = `${scope}-guarded`, displayName = `${scope} Guarded Cafe`; brands.push(id);
