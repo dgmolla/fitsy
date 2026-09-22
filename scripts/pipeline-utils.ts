@@ -19,13 +19,19 @@ import { chainTransaction } from '../apps/api/services/chainTransaction';
 // ─── Item validation (S-111, S-112) ─────────────────────────────────────────
 
 export const NON_FOOD_PATTERNS = /\b(t-?shirt|tee|hoodie|sweatshirt|hat|cap|beanie|mug|tumbler|bag|tote|merch|sticker|poster|gift\s*card|apron)\b/i;
+// A counted cookie order uses "tote" as its package; merchandise sections still reject it.
+const COUNTED_COOKIE_TOTE_PATTERN = /^\s*[1-9]\d*\s+cookies?\s+tote\s*$/i;
 export const UTENSIL_PATTERNS = /\b(chopsticks?|forks?|spoons?|knife|knives|napkins?|straws?|containers?|lids?|cup\s*sleeves?|utensils?|stir\s*sticks?|stirrers?)\b/i;
+// Match standalone contributions, not meals whose names or descriptions mention charity.
+const DONATION_PATTERN = /^\s*(?:round[\s-]+up\s+)?(?:toy\s+)?donation(?:\s+\$\s*\d+(?:\.\d{1,2})?)?\s*$/i;
 const NON_FOOD_SECTION_CATEGORY = "(?:utensils?|cutlery|paper\\s+(?:goods|supplies)|merchandise|drinkware|apparel)";
 // Require the entire section to describe non-food goods; mixed food sections stay eligible.
 const NON_FOOD_SECTION_PATTERN = new RegExp(`^\\s*${NON_FOOD_SECTION_CATEGORY}(?:\\s*(?:and|[&/+,|])\\s*${NON_FOOD_SECTION_CATEGORY})*\\s*$`, "i");
 export const CONDIMENT_PATTERNS = /\b(packet|sauce\s*cup|dressing\s*packet|ketchup|mustard|mayo|soy\s*sauce|hot\s*sauce|salt|pepper|sugar|cream|sweetener|butter\s*pat|jam|jelly|syrup|relish|vinegar|dipping\s*sauce)\b/i;
 const CONDIMENT_SECTION_EXCEPTIONS = /\b(sauce|butter|mayonnaise)\b/i;
 const BEVERAGE_PATTERNS = /\b(water|soda|juice|tea|coffee|lemonade|drink|beverage|sparkling|kombucha|milk|shake|smoothie)\b/i;
+// Brand-only drink titles need a complete match so branded food or merchandise is not exempted.
+const PEPSI_BEVERAGE_PATTERN = /^\s*(?:\d+(?:\.\d+)?\s*(?:fl\.?\s*)?oz\.?\s*)?(?:diet\s+pepsi|pepsi(?:\s+zero(?:\s+sugar)?)?)[®™]?(?:\s+(?:can|bottle))?\s*$/i;
 
 export interface RejectedItem {
   name: string;
@@ -73,9 +79,14 @@ export function validateItems(
     if (!item || !macro) continue;
 
     const name = item.name;
+    const isPepsiBeverage = PEPSI_BEVERAGE_PATTERN.test(name);
 
     // S-111: Non-food items
-    if (NON_FOOD_PATTERNS.test(name)) {
+    if (DONATION_PATTERN.test(name)) {
+      rejected.push({ name, reason: "non-food: donation" });
+      continue;
+    }
+    if (NON_FOOD_PATTERNS.test(name) && !COUNTED_COOKIE_TOTE_PATTERN.test(name)) {
       rejected.push({ name, reason: "non-food: merchandise" });
       continue;
     }
@@ -91,13 +102,13 @@ export function validateItems(
     }
 
     // S-111: Zero-cal non-beverage items
-    if (macro.calories === 0 && !BEVERAGE_PATTERNS.test(name)) {
+    if (macro.calories === 0 && !BEVERAGE_PATTERNS.test(name) && !isPepsiBeverage) {
       rejected.push({ name, reason: "non-food: zero calories" });
       continue;
     }
 
     // S-112: Condiments (cal < 30 AND condiment pattern)
-    if (macro.calories < 30 && CONDIMENT_PATTERNS.test(name)) {
+    if (macro.calories < 30 && CONDIMENT_PATTERNS.test(name) && !isPepsiBeverage) {
       rejected.push({ name, reason: "condiment" });
       continue;
     }
