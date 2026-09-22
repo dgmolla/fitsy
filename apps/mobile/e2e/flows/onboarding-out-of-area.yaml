@@ -6,10 +6,16 @@ tags: [onboarding, auth, changed-journey]
 - launchApp:
     clearState: true
     clearKeychain: true
-- extendedWaitUntil:
-    visible:
-      id: welcome-start
-    timeout: 30000
+# Retry only the startup read if XCTest catches an invalid transient AX frame.
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - extendedWaitUntil:
+          visible:
+            id: welcome-start
+          timeout: 30000
 - waitForAnimationToEnd
 - tapOn:
     point: "92%,93%"
@@ -48,6 +54,10 @@ tags: [onboarding, auth, changed-journey]
           visible:
             id: waitlist-join
           timeout: 30000
+# A cold Debug launch recreates the native LogBox window above the footer.
+# Dismiss its close control in the blank right margin before product taps.
+- tapOn:
+    point: "92%,93%"
 - assertVisible: "More menus are.*"
 - assertNotVisible: "Continue with Apple"
 - tapOn:
@@ -65,8 +75,12 @@ tags: [onboarding, auth, changed-journey]
       id: location-choose-area
     timeout: 15000
 - assertVisible: "Continue with Your location"
+# Wait for the returning screen to finish its navigation animation before tapping.
+- waitForAnimationToEnd
 - tapOn:
     id: location-choose-area
+- assertVisible: "Choose a neighborhood"
+- waitForAnimationToEnd
 - tapOn: "Search near DTLA"
 - extendedWaitUntil:
     visible:
