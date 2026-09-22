@@ -5,10 +5,16 @@ tags: [onboarding, discovery, changed-journey]
 - launchApp:
     clearState: true
     clearKeychain: true
-- extendedWaitUntil:
-    visible:
-      id: welcome-start
-    timeout: 30000
+# Retry only the startup read if XCTest catches an invalid transient AX frame.
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - extendedWaitUntil:
+          visible:
+            id: welcome-start
+          timeout: 30000
 - waitForAnimationToEnd
 - tapOn:
     point: "92%,93%"
