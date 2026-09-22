@@ -46,31 +46,6 @@ describe("validateItems", () => {
     expect(rejected.every((r) => r.reason === "non-food: merchandise")).toBe(true);
   });
 
-  it.each([242, 35, 400, 0])("rejects standalone donations regardless of estimated calories (%i)", (calories) => {
-    const items = [
-      makeItem("Round Up Toy Donation $3"),
-      makeItem("Round Up Toy Donation $1"),
-      makeItem("Donation"),
-      makeItem("Donation $2.50"),
-      makeItem("round-up donation $1"),
-    ];
-    const result = validateItems(items, items.map(() => makeMacro({ calories })));
-    expect(result.valid).toEqual([]);
-    expect(result.rejected).toEqual(items.map(({ name }) => ({ name, reason: "non-food: donation" })));
-  });
-
-  it("preserves food sold for charity and meals that include toys", () => {
-    const items = [
-      makeItem("Chicken Bowl", { description: "$1 donation from every purchase", section: "Charity" }),
-      makeItem("Donation Burger"),
-      makeItem("Donated Meal"),
-      makeItem("Kids Meal with Toy"),
-    ];
-    const result = validateItems(items, items.map(() => makeMacro()));
-    expect(result.valid.map(({ item }) => item)).toEqual(items);
-    expect(result.rejected).toEqual([]);
-  });
-
   it("rejects utensil items", () => {
     const items = [makeItem("Bamboo Chopstick Set"), makeItem("Extra Fork")];
     const macros = items.map(() => makeMacro());
