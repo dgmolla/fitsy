@@ -58,3 +58,36 @@ test('scope requires bounded unique stores with source evidence and survives bat
   locator: 'Test', aliases: [item], storeScope: scope('la') }], quarantine: [] });
  expect(batch.changes[0]!.storeScope).toEqual(scope('la'));
 });
+
+test('overlap needs the sum of both radii, including unequal tolerances', () => {
+ const separated = { lat: la.lat + 150 / 111_195, lng: la.lng };
+ const first = fixture('la', scope('la')), otherScope = scope('other', separated);
+ expect(() => assertUnambiguousChainAliases([first, fixture('other', otherScope)])).toThrow('Ambiguous reviewed alias');
+ otherScope.stores[0]!.radiusMeters = 20;
+ expect(() => assertUnambiguousChainAliases([first, fixture('other', otherScope)])).not.toThrow();
+});
+test('state restriction still rejects a location inside an approved store circle', () => {
+ const row = fixture('la', scope('la')), original = approvedChainRow(row)!.review;
+ const review = { ...original, usStates: ['NV'] };
+ const constrained = { ...row, review: { ...review, dataHash: chainReviewHash(row, review) } };
+ expect(approvedChainRow(constrained)).not.toBeNull();
+ expect(buildChainMatcher([constrained])('bakery', item, la)).toEqual({ status: 'unmatched' });
+});
+test('latitude pruning finds middle, first and last stores and preserves overlap at the window edge', () => {
+ const multi = { ...scope('middle'), stores: [...scope('last', { lat: 38, lng: -118 }).stores,
+  ...scope('first', { lat: 30, lng: -118 }).stores, ...scope('middle', { lat: 34, lng: -118 }).stores] };
+ const match = buildStoreScopeMatcher(multi);
+ for (const lat of [30, 34, 38]) expect(match({ lat, lng: -118 })).toBe(true);
+ expect(match({ lat: 35, lng: -118 })).toBe(false);
+ for (const lat of [30, 34, 38]) {
+  expect(() => assertUnambiguousChainAliases([fixture('multi', multi), fixture('near', scope('near', { lat: lat + 150 / 111_195, lng: -118 }))])).toThrow();
+ }
+});
+test('invalid coordinates, nonpositive radii and insecure evidence are rejected', () => {
+ for (const store of [{ ...scope('la').stores[0], radiusMeters: 0 }, { ...scope('la').stores[0], radiusMeters: -1 },
+  { ...scope('la').stores[0], lat: 91 }, { ...scope('la').stores[0], lng: 181 },
+  { ...scope('la').stores[0], association: { ...evidence, url: 'http://example.com' } }]) {
+  expect(chainStoreScopeSchema.safeParse({ ...scope('la'), stores: [store] }).success).toBe(false);
+ }
+ expect(chainStoreScopeSchema.safeParse({ ...scope('la'), directory: { ...evidence, url: 'http://example.com' } }).success).toBe(false);
+});

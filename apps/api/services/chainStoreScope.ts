@@ -27,7 +27,22 @@ export function chainStoreDistance(a: ChainLocation, b: ChainLocation): number {
   return 6_371_000 * 2 * Math.asin(Math.sqrt(Math.max(0, Math.min(1, h))));
 }
 export function storeScopesOverlap(a: ChainStoreScope, b: ChainStoreScope): boolean {
-  return a.stores.some(first => b.stores.some(second => chainStoreDistance(first, second) <= first.radiusMeters + second.radiusMeters));
+  const stores = [...b.stores].sort((first, second) => first.lat - second.lat);
+  const maximumRadius = Math.max(...stores.map(store => store.radiusMeters));
+  for (const first of a.stores) {
+    const margin = (first.radiusMeters + maximumRadius) / 110_000;
+    let low = 0, high = stores.length;
+    while (low < high) {
+      const middle = (low + high) >>> 1;
+      if (stores[middle]!.lat < first.lat - margin) low = middle + 1;
+      else high = middle;
+    }
+    for (let i = low; i < stores.length && stores[i]!.lat <= first.lat + margin; i++) {
+      const second = stores[i]!;
+      if (chainStoreDistance(first, second) <= first.radiusMeters + second.radiusMeters) return true;
+    }
+  }
+  return false;
 }
 /** Shared by all facts with this scope; bounded cache avoids rescanning stores for every menu item. */
 export function buildStoreScopeMatcher(scope: ChainStoreScope): (location?: ChainLocation) => boolean {
