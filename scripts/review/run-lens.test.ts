@@ -12,8 +12,8 @@ const verdict = JSON.stringify({ lens: "correctness", verdict: "pass", findings:
 function git(...args: string[]) {
   return execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 }
-function run(model = "fixture-model", provider = "claude") {
-  return spawnSync("bash", ["scripts/review/run-lens.sh", "--local", "correctness"], {
+function run(model = "fixture-model", provider = "claude", lens = "correctness") {
+  return spawnSync("bash", ["scripts/review/run-lens.sh", "--local", lens], {
     cwd: root, encoding: "utf8", env: { ...env, FITSY_REVIEW_MODEL: model, FITSY_REVIEW_PROVIDER: provider }, timeout: 15000,
   });
 }
@@ -80,4 +80,13 @@ test("provider identity separates cache entries", () => {
   expect(codex.status).toBe(0);
   expect(JSON.parse(codex.stdout)).toMatchObject({ reviewer: { provider: "codex" } });
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(2);
+});
+
+test("advisory docs findings remain visible without blocking the caller", () => {
+  writeFileSync(join(root, ".claude/lenses/docs-sanity.md"), "Review documentation.\n");
+  const advisory = { lens: "docs-sanity", verdict: "fail", findings: [{ severity: "CONFIRMED", file: "docs/setup.md", line: 3, summary: "Missing command", scenario: "Setup command fails", fix: "Use the existing command" }] };
+  writeFileSync(join(root, "verdict"), JSON.stringify(advisory));
+  const result = run("fixture-model", "claude", "docs-sanity");
+  expect(result.status).toBe(0);
+  expect(JSON.parse(result.stdout)).toMatchObject(advisory);
 });

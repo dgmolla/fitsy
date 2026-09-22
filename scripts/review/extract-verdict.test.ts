@@ -4,8 +4,8 @@ import { join } from "node:path";
 const extractor = join(__dirname, "extract-verdict.py");
 const pass = { lens: "correctness", verdict: "pass", findings: [] };
 const finding = { severity: "CONFIRMED", file: "app.ts", line: 3, summary: "Wrong output", scenario: "Empty input crashes", fix: "Handle empty input" };
-function extract(input: unknown) {
-  return JSON.parse(execFileSync("python3", [extractor, "correctness"], {
+function extract(input: unknown, lens = "correctness") {
+  return JSON.parse(execFileSync("python3", [extractor, lens], {
     input: typeof input === "string" ? input : JSON.stringify(input), encoding: "utf8",
   }));
 }
@@ -37,4 +37,9 @@ test("rejects ambiguous verdict blocks and partial output", () => {
   const block = "```json\n" + JSON.stringify(pass) + "\n```";
   runnerFailure(block + "\n" + block);
   runnerFailure('{"lens":"correctness","verdict":"pass"');
+});
+
+test("preserves confirmed advisory docs findings using the same verdict contract", () => {
+  const advisory = { lens: "docs-sanity", verdict: "fail", findings: [finding] };
+  expect(extract(advisory, "docs-sanity")).toEqual(advisory);
 });

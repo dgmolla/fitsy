@@ -94,7 +94,9 @@ print('untrusted partial output must not be emitted')
         self.assertIn('model_reasoning_effort="high"', args)
         self.assertIn('project_doc_max_bytes=0', args)
         self.assertIn('skills.bundled.enabled=false', args)
-        for feature in runner.CODEX_DISABLED_FEATURES:
+        for feature in ("hooks", "plugins", "apps", "multi_agent", "multi_agent_v2",
+                        "skill_search", "skill_mcp_dependency_install", "remote_plugin",
+                        "external_agent_memory_import", "shell_snapshot"):
             self.assertIn(["--disable", feature], [args[i:i+2] for i in range(len(args)-1)])
         for name in ["BASH_ENV", "NODE_OPTIONS", "CODEX_THREAD_ID"]:
             self.assertNotIn(name, capture["env"])
