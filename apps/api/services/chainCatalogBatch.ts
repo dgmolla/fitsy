@@ -12,7 +12,7 @@ const identity = { slug: text, canonicalKey: text };
 export const chainCatalogBatchSchema = z.object({ version: z.literal(1), reviewedBy: text,
   changes: z.array(z.object({ ...identity, expected: baseline.nullable(), facts,
     source: z.object({ url: z.string().url().startsWith("https://"), sha256: z.string().regex(/^[a-f0-9]{64}$/) }).strict(),
-    locator: text, aliases: chainReviewSchema.shape.aliases, usStates: chainReviewSchema.shape.usStates }).strict()),
+    locator: text, aliases: chainReviewSchema.shape.aliases, usStates: chainReviewSchema.shape.usStates, storeScope: chainReviewSchema.shape.storeScope }).strict()),
   quarantine: z.array(z.object({ ...identity, expected: baseline }).strict()),
 }).strict().superRefine((batch, ctx) => {
   const seen = new Set<string>();
