@@ -20,6 +20,8 @@ import { chainTransaction } from '../apps/api/services/chainTransaction';
 
 export const NON_FOOD_PATTERNS = /\b(t-?shirt|tee|hoodie|sweatshirt|hat|cap|beanie|mug|tumbler|bag|tote|merch|sticker|poster|gift\s*card|apron)\b/i;
 export const UTENSIL_PATTERNS = /\b(chopsticks?|forks?|spoons?|knife|knives|napkins?|straws?|containers?|lids?|cup\s*sleeves?|utensils?|stir\s*sticks?|stirrers?)\b/i;
+// Match standalone contributions, not meals whose names or descriptions mention charity.
+const DONATION_PATTERN = /^\s*(?:round[\s-]+up\s+)?(?:toy\s+)?donation(?:\s+\$\s*\d+(?:\.\d{1,2})?)?\s*$/i;
 const NON_FOOD_SECTION_CATEGORY = "(?:utensils?|cutlery|paper\\s+(?:goods|supplies)|merchandise|drinkware|apparel)";
 // Require the entire section to describe non-food goods; mixed food sections stay eligible.
 const NON_FOOD_SECTION_PATTERN = new RegExp(`^\\s*${NON_FOOD_SECTION_CATEGORY}(?:\\s*(?:and|[&/+,|])\\s*${NON_FOOD_SECTION_CATEGORY})*\\s*$`, "i");
@@ -75,6 +77,10 @@ export function validateItems(
     const name = item.name;
 
     // S-111: Non-food items
+    if (DONATION_PATTERN.test(name)) {
+      rejected.push({ name, reason: "non-food: donation" });
+      continue;
+    }
     if (NON_FOOD_PATTERNS.test(name)) {
       rejected.push({ name, reason: "non-food: merchandise" });
       continue;
