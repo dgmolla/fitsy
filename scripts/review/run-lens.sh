@@ -17,6 +17,7 @@ LENS_FILE=".claude/lenses/$LENS.md"
 [ -f "$LENS_FILE" ] || { echo "unknown lens: $LENS (no $LENS_FILE)" >&2; exit 1; }
 CACHE_DIR="${FITSY_REVIEW_CACHE:-$HOME/.cache/fitsy-review}"
 mkdir -p "$CACHE_DIR"
+umask 077
 
 # ── Gather the diff and context ─────────────────────────────────────────────
 if [ "$TARGET" = "--local" ]; then
@@ -31,28 +32,39 @@ else
 fi
 [ -n "$DIFF" ] || { echo "empty diff" >&2; exit 1; }
 
-# ── Tier -> model ───────────────────────────────────────────────────────────
+# ── Tier and review provider ───────────────────────────────────────────────────────────
 # both sides of the diff: a PR that only deletes or renames a high-tier file
 # must still classify high (lens finding, 2026-09-07)
 CHANGED="$(echo "$DIFF" | grep -E '^(\+\+\+ b/|--- a/|rename (from|to) )' | sed -E 's#^\+\+\+ b/##; s#^--- a/##; s#^rename (from|to) ##' | grep -v '^/dev/null$' | sort -u)"
 TIER="$(echo "$CHANGED" | node scripts/review/tier.mjs)"
-case "$LENS" in
-  docs-sanity) MODEL="haiku"; BLOCKING=0 ;;  # comment-only lens, never blocks
-  *) if [ "$TIER" = "high" ]; then MODEL="opus"; else MODEL="sonnet"; fi; BLOCKING=1 ;;
-esac
+PROVIDER="${FITSY_REVIEW_PROVIDER:-claude}"
+if [ "$LENS" = "docs-sanity" ]; then BLOCKING=0; else BLOCKING=1; fi
+# Preserve the installed Claude defaults; other adapters require an explicit model.
+# Provider/model selection does not alter lens routing or the evidence bar.
+MODEL="${FITSY_REVIEW_MODEL:-}"
+if [ -z "$MODEL" ] && [ "$PROVIDER" = "claude" ]; then
+  case "$LENS" in
+    docs-sanity) MODEL="haiku" ;;
+    *) if [ "$TIER" = "high" ]; then MODEL="opus"; else MODEL="sonnet"; fi ;;
+  esac
+fi
+[ -n "$MODEL" ] || { echo "Set FITSY_REVIEW_MODEL for provider $PROVIDER" >&2; exit 1; }
+IDENTITY="$(python3 scripts/review/execute-review.py --identity "$PROVIDER" "$MODEL")"
 
 # ── Cache ───────────────────────────────────────────────────────────────────
 # Key on content only (diff + lens + rules + model): title/body differ between
 # --local and PR mode for the same diff, and keying them would defeat the
 # pre-PR -> PR cache reuse. Tradeoff: a title edited after review does not
 # re-trigger; the diff is the reviewed object.
-KEY="$(printf '%s' "$DIFF" | cat - "$LENS_FILE" REVIEW.md "$REPO_ROOT/scripts/review/run-lens.sh" <(echo "$MODEL") | shasum -a 256 | cut -d' ' -f1)"
+KEY="$(printf '%s' "$DIFF" | cat - "$LENS_FILE" REVIEW.md "$REPO_ROOT/scripts/review/run-lens.sh" "$REPO_ROOT/scripts/review/execute-review.py" "$REPO_ROOT/scripts/review/extract-verdict.py" <(printf '%s' "$IDENTITY") | shasum -a 256 | cut -d' ' -f1)"
 CACHE_FILE="$CACHE_DIR/$KEY.json"
 if [ -f "$CACHE_FILE" ]; then
   echo "[run-lens] cache hit ($KEY)" >&2
-  RESULT_JSON="$(cat "$CACHE_FILE")"
+  RESULT_JSON="$(python3 scripts/review/extract-verdict.py "$LENS" < "$CACHE_FILE")"
 else
   PROMPT_FILE="$(mktemp)"
+  RAW_FILE="$(mktemp)"
+  trap 'rm -f "$PROMPT_FILE" "$RAW_FILE"' EXIT
   {
     echo "You are a code review lens. Follow these rules exactly."
     echo; echo "===== REVIEW.md ====="; cat REVIEW.md
@@ -65,22 +77,28 @@ else
     echo "Review the diff through this lens only. You may read repo files for context."
     echo "End with the fenced JSON block required by REVIEW.md's output contract."
   } > "$PROMPT_FILE"
-  echo "[run-lens] $LENS on ${TARGET} (tier=$TIER model=$MODEL)" >&2
-  # stdin must be explicit: claude -p inherits the caller's stdin and can hang
-  # or read loop data (poller); prompt goes via stdin, not argv (size limits)
-  # Tool availability, not auto-approval alone, keeps reviews read-only.
-  RAW="$(claude -p --restricted --model "$MODEL" --output-format json \
-    --tools "Read,Glob,Grep" --allowedTools "Read" "Glob" "Grep" \
-    --strict-mcp-config --mcp-config '{"mcpServers":{}}' \
-    --disable-slash-commands --settings '{"disableAllHooks":true}' \
-    < "$PROMPT_FILE" 2>>"$CACHE_DIR/errors.log" || true)"
-  printf '%s' "$RAW" > "$CACHE_DIR/last-raw.json"
-  rm -f "$PROMPT_FILE"
-  RESULT_JSON="$(printf '%s' "$RAW" | python3 scripts/review/extract-verdict.py "$LENS")"
+  echo "[run-lens] $LENS on ${TARGET} (tier=$TIER provider=$PROVIDER model=$MODEL)" >&2
+  # Never salvage a pass from partial output produced by a failed execution.
+  if python3 scripts/review/execute-review.py "$PROVIDER" "$MODEL" \
+    < "$PROMPT_FILE" > "$RAW_FILE" 2>>"$CACHE_DIR/errors.log"; then
+    RESULT_JSON="$(python3 scripts/review/extract-verdict.py "$LENS" < "$RAW_FILE")"
+  else
+    RESULT_JSON="$(printf '' | python3 scripts/review/extract-verdict.py "$LENS")"
+  fi
+  cp "$RAW_FILE" "$CACHE_DIR/$KEY.raw"
+  rm -f "$PROMPT_FILE" "$RAW_FILE"
+  trap - EXIT
+  RESULT_JSON="$(printf '%s' "$RESULT_JSON" | python3 -c '
+import json,sys
+result=json.load(sys.stdin)
+result["reviewer"]=json.loads(sys.argv[1])
+print(json.dumps(result))' "$IDENTITY")"
   # never cache a runner-error verdict: it would replay a transient failure
   # against every retry of the same diff (hit exactly this, 2026-09-07)
   if ! printf '%s' "$RESULT_JSON" | grep -q '"file": "(runner)"'; then
-    printf '%s' "$RESULT_JSON" > "$CACHE_FILE"
+    CACHE_TMP="$(mktemp "$CACHE_DIR/.verdict.XXXXXX")"
+    printf '%s' "$RESULT_JSON" > "$CACHE_TMP"
+    mv "$CACHE_TMP" "$CACHE_FILE"
   fi
 fi
 
@@ -92,7 +110,7 @@ echo "$RESULT_JSON"
 if [ "$TARGET" != "--local" ]; then
   if [ "$BLOCKING" = "0" ]; then STATE=success; else STATE=$([ "$BLOCKING" = "0" ] || [ "$VERDICT" = "pass" ] && echo success || echo failure); fi
   gh api "repos/{owner}/{repo}/statuses/$HEAD_SHA" -f state="$STATE" \
-    -f context="lens/$LENS" -f description="$N_FINDINGS finding(s), tier $TIER, $MODEL" >/dev/null
+    -f context="lens/$LENS" -f description="$N_FINDINGS finding(s), tier $TIER, $PROVIDER/$MODEL" >/dev/null
   if [ "$N_FINDINGS" -gt 0 ]; then
     COMMENT="$(echo "$RESULT_JSON" | python3 scripts/review/format-comment.py)"
     gh pr comment "$TARGET" --body "$COMMENT" >/dev/null
