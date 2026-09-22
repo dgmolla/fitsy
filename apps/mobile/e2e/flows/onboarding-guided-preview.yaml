@@ -53,7 +53,7 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
     id: target-mode-known
 - assertVisible:
     id: target-mode-known
-    checked: true
+    text: "radio button, checked"
 - tapOn:
     id: welcome-continue
 - assertVisible: "What works.*for one meal.*"

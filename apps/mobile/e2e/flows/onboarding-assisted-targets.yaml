@@ -54,7 +54,7 @@ tags: [onboarding, discovery, changed-journey]
     id: target-mode-estimate
 - assertVisible:
     id: target-mode-estimate
-    checked: true
+    text: "radio button, checked"
 - tapOn:
     id: welcome-continue
 - assertVisible: "What's your goal.*"
