@@ -1,44 +1,35 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Animated as RNAnimated, SafeAreaView, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import React, { useEffect, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from 'expo-router';
-import { openPurchasedDestination } from '@/lib/paywallJourney';
 import { Ionicons } from '@expo/vector-icons';
-import { EDITORIAL, FONTS } from '@/lib/brand';
-import { AnimatedPress } from '@/components/AnimatedPress';
+import { WelcomeScreen } from '@/components/WelcomeScreen';
+import { WelcomeActions } from '@/components/WelcomeActions';
+import { openPurchasedDestination } from '@/lib/paywallJourney';
+import { EDITORIAL, TEXT } from '@/lib/brand';
 import { api } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
+import { usePurchases } from '@/lib/usePurchases';
 import { saveReminderPreferences } from '@/lib/notificationSchedule';
 import { getExpoPushTokenAsync, requestPermissionsAsync } from '@/lib/useNotifications';
 import {
-  trackReminderAction,
-  trackNotificationPermissionDenied,
-  trackNotificationPermissionGranted,
-  trackNotificationPrimingAllowTapped,
-  trackNotificationPrimingShown,
-  trackNotificationPrimingSkipTapped,
+  trackReminderAction, trackNotificationPermissionDenied, trackNotificationPermissionGranted,
+  trackNotificationPrimingAllowTapped, trackNotificationPrimingShown, trackNotificationPrimingSkipTapped,
 } from '@/lib/analytics';
 
-/** Ask only after the user chooses Allow. Local reminders work without an
- * APNs token; token registration remains available for future push campaigns. */
+/** Permission follows purchase and explicitly enables the two basic reminders.
+ * A trial reminder is only scheduled from verified renewal data by ReminderProvider. */
 export default function NotificationPermissionScreen() {
   const navigation = useNavigation();
+  const { customerInfo } = usePurchases();
+  const trial = customerInfo?.entitlements.all.pro;
+  const hasTrial = trial?.isActive && trial.periodType === 'TRIAL' && trial.willRenew;
   const [busy, setBusy] = useState(false);
-  const pulse = useRef(new RNAnimated.Value(0.45)).current;
+  useEffect(() => { trackNotificationPrimingShown(); }, []);
 
-  useEffect(() => {
-    trackNotificationPrimingShown();
-  }, []);
-
-  useEffect(() => {
-    RNAnimated.loop(
-      RNAnimated.sequence([
-        RNAnimated.timing(pulse, { toValue: 1, duration: 900, useNativeDriver: true }),
-        RNAnimated.timing(pulse, { toValue: 0.45, duration: 900, useNativeDriver: true }),
-      ]),
-    ).start();
-  }, [pulse]);
-
+  async function registerPushToken() {
+    try { const token = await getExpoPushTokenAsync(); if (token) await api.post('/api/user/push-token', { token }); }
+    catch { /* Local reminders do not require an APNs token. */ }
+  }
   async function handleAllow() {
     if (busy) return;
     setBusy(true);
@@ -52,135 +43,41 @@ export default function NotificationPermissionScreen() {
           await saveReminderPreferences(session.user.id, { meals: true, trial: true });
           trackReminderAction({ action: 'preferences_changed', meals: true, trial: true });
         }
-        // Fire-and-forget the token POST. Token fetch returns null in Expo Go
-        // and on push-incapable simulators — we don't want to block the
-        // redirect on either, so swallow errors and let the next session
-        // re-attempt. The S-226a endpoint is idempotent.
-        try {
-          const token = await getExpoPushTokenAsync();
-          if (token) {
-            await api.post('/api/user/push-token', { token });
-          }
-        } catch {
-          // Non-actionable here; PostHog already captured `granted`.
-        }
-      } else {
-        trackNotificationPermissionDenied();
-      }
-    } catch {
-      // OS prompt failures are rare and non-actionable — proceed to paywall.
-    } finally {
-      void openPurchasedDestination(navigation);
-    }
+        void registerPushToken();
+      } else trackNotificationPermissionDenied();
+    } catch { /* An unavailable permission prompt never blocks the purchased meal. */ }
+    finally { void openPurchasedDestination(navigation); }
   }
-
   function handleSkip() {
     if (busy) return;
     trackNotificationPrimingSkipTapped();
     void openPurchasedDestination(navigation);
   }
-
-  return (
-    <SafeAreaView style={s.safe}>
-      <View style={s.content}>
-        <View style={s.center}>
-          <Animated.View entering={FadeIn.duration(500)}>
-            <RNAnimated.View style={[s.bell, { opacity: pulse }]}>
-              <Ionicons name="notifications" size={36} color={EDITORIAL.greenAccent} />
-            </RNAnimated.View>
-          </Animated.View>
-
-          <Animated.Text entering={FadeInDown.duration(500).delay(120)} style={s.title}>
-            Your next meal,{'\n'}made easier.
-          </Animated.Text>
-
-          <Animated.Text entering={FadeInDown.duration(500).delay(240)} style={s.subtitle}>
-            Turn on two weekly meal-planning nudges and a reminder before an
-            eligible trial renews. No more than one a day, with quiet hours
-            from 8pm to 9am. Change these in Profile anytime.
-          </Animated.Text>
-        </View>
-
-        <Animated.View entering={FadeIn.duration(400).delay(360)} style={s.ctas}>
-          <AnimatedPress
-            style={[s.allow, busy ? s.dim : undefined]}
-            onPress={handleAllow}
-            disabled={busy}
-            haptic
-            accessibilityRole="button"
-            accessibilityLabel="Allow notifications"
-            testID="notification-allow"
-          >
-            <Text style={s.allowTxt}>{busy ? 'Asking…' : 'Allow notifications'}</Text>
-            <Ionicons name="arrow-forward" size={15} color={EDITORIAL.cream} />
-          </AnimatedPress>
-
-          <AnimatedPress
-            style={s.skip}
-            onPress={handleSkip}
-            disabled={busy}
-            accessibilityRole="button"
-            accessibilityLabel="Maybe later"
-            testID="notification-skip"
-          >
-            <Text style={s.skipTxt}>Maybe later</Text>
-          </AnimatedPress>
-        </Animated.View>
-      </View>
-    </SafeAreaView>
-  );
+  return <WelcomeScreen progress={1} title={"Make room for\nyour next meal."} subtitle="A little help to keep your goals in view."
+    canContinue={!busy} onContinue={handleAllow} showBack={false}
+    beforeTitle={<View style={s.success}><View style={s.tick}><Ionicons name="checkmark" size={22} color={EDITORIAL.greenAccent} /></View><Text style={s.successText}>You're in</Text></View>}
+    footerContent={<WelcomeActions label={busy ? 'Asking…' : 'Remind me'} onPress={handleAllow} disabled={busy} testID="notification-allow"
+      secondaryLabel="Not now" onSecondary={handleSkip} secondaryTestID="notification-skip" />}>
+    <View style={s.card} testID={hasTrial ? 'notification-trial-benefit' : 'notification-meal-benefit'}>
+      <View style={s.cardTop}><Ionicons name="notifications-outline" size={32} color={EDITORIAL.greenAccent} /><Text style={s.optional}>Optional</Text></View>
+      <Text style={s.cardTitle}>{hasTrial ? 'Before your trial ends' : 'Meal inspiration'}</Text>
+      <Text style={s.cardBody}>{hasTrial ? 'A heads-up before your subscription renews.' : 'Occasional ideas for your next meal.'}</Text>
+    </View>
+    {hasTrial && <View style={s.row}><Text style={s.rowTitle}>Meal inspiration</Text><Text style={s.rowBody}>Occasional ideas for your next meal.</Text></View>}
+    <Text style={s.quiet}>Notifications are optional.</Text>
+  </WelcomeScreen>;
 }
-
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: EDITORIAL.cream },
-  content: { flex: 1, paddingHorizontal: 36, paddingBottom: 40, paddingTop: 24 },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  bell: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    backgroundColor: EDITORIAL.creamCard,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 32,
-  },
-  title: {
-    fontFamily: FONTS.frauncesDisplay,
-    fontSize: 32,
-    color: EDITORIAL.text,
-    letterSpacing: -1,
-    lineHeight: 40,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  subtitle: {
-    fontFamily: FONTS.nunitoSans,
-    fontSize: 15,
-    lineHeight: 22,
-    color: EDITORIAL.textSoft,
-    textAlign: 'center',
-    paddingHorizontal: 8,
-  },
-  ctas: { gap: 12 },
-  allow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: EDITORIAL.green,
-    borderRadius: 32,
-    paddingVertical: 18,
-  },
-  allowTxt: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 16, fontWeight: '600', color: EDITORIAL.cream },
-  dim: { opacity: 0.4 },
-  skip: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-  },
-  skipTxt: { fontFamily: FONTS.nunitoSans, fontSize: 15, fontWeight: '500', color: EDITORIAL.textSoft },
+  success: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 24 },
+  tick: { width: 28, height: 28, borderRadius: 14, backgroundColor: EDITORIAL.greenAccentTint, alignItems: 'center', justifyContent: 'center' },
+  successText: { ...TEXT.body, color: EDITORIAL.greenAccent },
+  card: { padding: 22, borderRadius: 24, backgroundColor: EDITORIAL.greenAccentTint, marginTop: 4, gap: 16 },
+  cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
+  optional: { ...TEXT.bodySmall, color: EDITORIAL.green, borderWidth: 1, borderColor: EDITORIAL.greenAccentTint, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14 },
+  cardTitle: { ...TEXT.title, fontSize: 25, lineHeight: 30 },
+  cardBody: { ...TEXT.body, lineHeight: 22 },
+  row: { gap: 6, marginTop: 28, borderBottomWidth: 1, borderColor: EDITORIAL.border, paddingBottom: 20 },
+  rowTitle: { ...TEXT.body, color: EDITORIAL.green },
+  rowBody: { ...TEXT.bodySmall },
+  quiet: { ...TEXT.bodySmall, textAlign: 'center', marginTop: 24 },
 });

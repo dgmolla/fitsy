@@ -33,7 +33,7 @@ tags: [billing, discovery, onboarding, changed-journey]
 - tapOn:
     id: restaurant-back
 - assertVisible: "Find meals that fit"
-- assertNotVisible: "Create an account"
+- assertNotVisible: "Continue with Apple"
 - openLink: ${'com.fitsy.mobile://restaurant/' + output.seed.id}
 - scrollUntilVisible:
     element:
@@ -42,12 +42,14 @@ tags: [billing, discovery, onboarding, changed-journey]
 - assertVisible: "Find meals that fit.*"
 - tapOn:
     id: locked-value-cta
-- assertVisible: "Create an account"
+- assertVisible: "Continue with Apple"
+- assertVisible: "Continue with Google"
 - openLink: com.fitsy.mobile://welcome/leave-review
 - assertVisible:
-    id: trial-see-plans
+    id: paywall-plan-yearly
 - assertNotVisible: "Leave a review"
 - assertNotVisible: "Allow notifications"
+- assertNotVisible: "Remind me"
 - openLink: com.fitsy.mobile://welcome/payment
 - extendedWaitUntil:
     visible:

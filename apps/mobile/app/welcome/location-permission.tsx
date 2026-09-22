@@ -1,10 +1,12 @@
 import { useOnboardingStep } from '@/lib/onboardingResume';
-import React, { useEffect, useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Alert, StyleSheet, Text } from 'react-native';
 import * as Location from 'expo-location';
 import * as SecureStore from 'expo-secure-store';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
+import { WelcomeActions } from '@/components/WelcomeActions';
+import { OnboardingLocationMap } from '@/components/OnboardingLocationMap';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { LocationPickerSheet } from '@/components/LocationPickerSheet';
 import { EDITORIAL, TEXT } from '@/lib/brand';
@@ -12,6 +14,7 @@ import { setCachedCoords } from '@/lib/locationCache';
 import { MANUAL_LOCATION_KEY } from '@/lib/useLocation';
 import { getOnboardingData, saveOnboardingField, type OnboardingArea } from '@/lib/onboardingStorage';
 import { fetchGuidedPreview } from '@/lib/guidedPreview';
+import { useRouteContinuation } from '@/lib/useRouteContinuation';
 import { trackLocationPrimingShown, trackLocationPermissionGranted, trackLocationPermissionDenied } from '@/lib/analytics';
 
 export default function LocationPermissionScreen() {
@@ -19,12 +22,19 @@ export default function LocationPermissionScreen() {
   const [busy, setBusy] = useState(false);
   const [picker, setPicker] = useState(false);
   const [area, setArea] = useState<OnboardingArea>();
+  const { begin } = useRouteContinuation();
   useEffect(() => {
     trackLocationPrimingShown();
-    void getOnboardingData().then(data => setArea(data.area));
   }, []);
+  useFocusEffect(useCallback(() => {
+    let current = true;
+    setBusy(false);
+    void getOnboardingData().then(data => { if (current) setArea(data.area); });
+    return () => { current = false; };
+  }, []));
 
-  async function choose(next: OnboardingArea) {
+  async function choose(next: OnboardingArea, isCurrent = begin()) {
+    if (!isCurrent()) return;
     setPicker(false);
     setBusy(true);
     setArea(next);
@@ -36,17 +46,19 @@ export default function LocationPermissionScreen() {
       if (next.source === 'manual') await SecureStore.setItemAsync(MANUAL_LOCATION_KEY, JSON.stringify(next));
       else if (next.source === 'gps') await SecureStore.deleteItemAsync(MANUAL_LOCATION_KEY);
       const result = await fetchGuidedPreview(next, '', null);
-      router.push(result.meta.nearbyDishCount > 0 ? '/welcome/value-abundance' : '/welcome/out-of-area');
-    } catch { Alert.alert('Could not check this area', 'Please try again. Your selected area is saved.'); }
-    finally { setBusy(false); }
+      if (isCurrent()) router.push(result.meta.nearbyDishCount > 0 ? '/welcome/tried' : '/welcome/out-of-area');
+    } catch { if (isCurrent()) Alert.alert('Could not check this area', 'Please try again. Your selected area is saved.'); }
+    finally { if (isCurrent()) setBusy(false); }
   }
 
   async function useCurrent() {
     if (busy) return;
+    const isCurrent = begin();
     setPicker(false);
     setBusy(true);
     try {
       const permission = await Location.requestForegroundPermissionsAsync();
+      if (!isCurrent()) return;
       if (permission.status !== 'granted') {
         trackLocationPermissionDenied({ had_last_known: false });
         Alert.alert('Choose an area instead', 'You can search a neighborhood without sharing your device location.');
@@ -58,31 +70,28 @@ export default function LocationPermissionScreen() {
         Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
         new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Location timed out')), 8000)),
       ]);
-      await choose({ lat: fix.coords.latitude, lng: fix.coords.longitude, name: 'Your location', source: 'gps' });
-    } catch { Alert.alert('Location unavailable', 'Choose an area, or try your location again.'); }
-    finally { setBusy(false); }
+      await choose({ lat: fix.coords.latitude, lng: fix.coords.longitude, name: 'Your location', source: 'gps' }, isCurrent);
+    } catch { if (isCurrent()) Alert.alert('Location unavailable', 'Choose an area, or try your location again.'); }
+    finally { if (isCurrent()) setBusy(false); }
   }
 
   return (
-    <WelcomeScreen progress={0.4} title={"Where would you\nlike to eat?"} subtitle="Find a few options in an area you choose." hideFooter canContinue onContinue={() => {}}>
-      <View style={s.actions}>
-        <Text style={s.area}>{area ? `Selected: ${area.name}` : 'Start with a Los Angeles neighborhood or your current location.'}</Text>
-        <AnimatedPress style={s.primary} disabled={busy} onPress={() => setPicker(true)} accessibilityRole="button" testID="location-choose-area"><Text style={s.primaryText}>Choose an area</Text></AnimatedPress>
-        <AnimatedPress style={s.secondary} disabled={busy} onPress={useCurrent} accessibilityRole="button" testID="location-use-current"><Text style={s.secondaryText}>Use my location</Text></AnimatedPress>
-        {area && <AnimatedPress style={s.secondary} disabled={busy} onPress={() => choose(area)} accessibilityRole="button" testID="location-continue-area"><Text style={s.secondaryText}>Continue with {area.name}</Text></AnimatedPress>}
-        {busy && <Text style={s.area} accessibilityLiveRegion="polite">Checking nearby dishes…</Text>}
-        <Text style={s.privacy}>We remember your selected area on this device and send coordinates to Fitsy to find nearby meals. Device location is optional.</Text>
-      </View>
+    <WelcomeScreen progress={0.14} title={"Where would you\nlike to eat?"} subtitle="Find restaurants around you." hideFooter canContinue onContinue={() => {}}
+      footerContent={<WelcomeActions label={busy ? 'Checking nearby dishes…' : 'Use my location'} onPress={useCurrent} disabled={busy}
+        testID="location-use-current" secondaryLabel="Choose an area instead" onSecondary={() => setPicker(true)} secondaryTestID="location-choose-area" />}>
+      <OnboardingLocationMap />
+      <Text style={s.intro}>Use your location to discover nearby menus. You can change your area anytime.</Text>
+      {area && <AnimatedPress style={s.saved} disabled={busy} onPress={() => choose(area)} accessibilityRole="button" testID="location-continue-area"><Text style={s.savedText}>Continue with {area.name}</Text></AnimatedPress>}
+      {busy && <Text style={s.area} accessibilityLiveRegion="polite">Checking nearby dishes…</Text>}
+      <Text style={s.privacy}>Your selected area stays on this device. We use its coordinates to find nearby meals. Device location is optional.</Text>
       <LocationPickerSheet visible={picker} activeName={area?.name} onClose={() => setPicker(false)} onUseCurrent={useCurrent} onPick={loc => choose({ ...loc, source: 'manual' })} />
     </WelcomeScreen>
   );
 }
 const s = StyleSheet.create({
-  actions: { gap: 12, marginTop: 24 },
-  area: { ...TEXT.bodySmall, marginBottom: 12 },
-  primary: { backgroundColor: EDITORIAL.green, padding: 18, borderRadius: 30, alignItems: 'center' },
-  primaryText: { ...TEXT.cta },
-  secondary: { padding: 16, borderRadius: 30, borderWidth: 1, borderColor: EDITORIAL.border, alignItems: 'center' },
-  secondaryText: { ...TEXT.body, color: EDITORIAL.green, textAlign: 'center' },
-  privacy: { ...TEXT.bodySmall, fontSize: 12, lineHeight: 18, marginTop: 20 },
+  intro: { ...TEXT.body, textAlign: 'center', marginTop: 24 },
+  area: { ...TEXT.bodySmall, textAlign: 'center', marginTop: 16 },
+  saved: { minHeight: 48, justifyContent: 'center', padding: 12, borderRadius: 24, borderWidth: 1, borderColor: EDITORIAL.border, marginTop: 20 },
+  savedText: { ...TEXT.body, color: EDITORIAL.green, textAlign: 'center' },
+  privacy: { ...TEXT.bodySmall, fontSize: 12, lineHeight: 18, marginTop: 22, textAlign: 'center' },
 });

@@ -26,9 +26,9 @@ export default function TriedScreen() {
 
   return (
     <WelcomeScreen
-      progress={0.2}
+      progress={0.22}
       title={"What have you tried\nfor healthy eating?"}
-      subtitle="Choose one."
+      subtitle="We’ll start with what matters to you."
       onContinue={async () => {
         if (!selected || busy) return;
         setBusy(true);

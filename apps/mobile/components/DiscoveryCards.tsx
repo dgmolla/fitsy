@@ -8,6 +8,7 @@ import { BlurFallback } from '@/lib/BlurFallback';
 import { hasUsedPreviewSample, routeToPaywall } from '@/lib/teaserGate';
 import { trackRestaurantTapped } from '@/lib/analytics';
 import { RestaurantPhoto } from './RestaurantPhoto';
+import { PreviewDishName } from './PreviewDishName';
 import { s, hero, dc } from './DiscoveryScreen.styles';
 
 const DIETARY_BADGE_LABELS: Record<string, string> = {
@@ -114,7 +115,7 @@ export function HeroCard({ result, locked, unlocking, containerRef, onOpen }: { 
       accessibilityLabel={`${result.name}${result.bestMatch ? `, best match: ${result.bestMatch.name}` : ''}`}
       accessibilityRole="button"
     >
-      <RestaurantPhoto identifyRestaurant uri={result.photoUrl} name={result.name} style={hero.image} />
+      <RestaurantPhoto uri={result.photoUrl} name={result.name} style={hero.image} />
       <LinearGradient
         colors={['transparent', EDITORIAL.heroGrad]}
         style={hero.gradient}
@@ -141,7 +142,6 @@ export function HeroCard({ result, locked, unlocking, containerRef, onOpen }: { 
             <Text style={hero.calText}>{bm.calories} kcal</Text>
           </View>
         )}
-        {!locked && bm && <Text style={hero.macroText}>{bm.nutritionBasis === 'published' ? 'Published nutrition' : bm.nutritionBasis === 'estimated' ? 'Estimated nutrition' : 'Nutrition information'}</Text>}
         {onOpen && <Text style={hero.macroText}>See full menu with Pro →</Text>}
       </View>
     </TouchableOpacity>
@@ -151,7 +151,7 @@ export function HeroCard({ result, locked, unlocking, containerRef, onOpen }: { 
 
 // ─── Dish carousel card ───────────────────────────────────────────────────────
 
-function DishCard({ result, locked, onPress }: { result: RestaurantResult; locked: boolean; onPress?: () => void }) {
+function DishCard({ result, locked, hideDishName = false, onPress }: { result: RestaurantResult; locked: boolean; hideDishName?: boolean; onPress?: () => void }) {
   const bm = result.bestMatch;
   return (
     <TouchableOpacity
@@ -168,16 +168,15 @@ function DishCard({ result, locked, onPress }: { result: RestaurantResult; locke
           });
         }
       }}
-      accessibilityLabel={result.bestMatch ? `${result.bestMatch.name} at ${result.name}` : result.name}
+      accessibilityLabel={hideDishName ? previewRowLabel(result) : result.bestMatch ? `${result.bestMatch.name} at ${result.name}` : result.name}
       accessibilityRole="button"
     >
-      <RestaurantPhoto identifyRestaurant uri={result.photoUrl} name={result.name} style={dc.image} />
+      <RestaurantPhoto uri={result.photoUrl} name={result.name} style={dc.image} />
       <LinearGradient colors={['transparent', EDITORIAL.cardGrad]} style={dc.gradient} />
       <View style={dc.info}>
         {locked && <LockedDishTeaser variant="card" />}
-        {!locked && bm && <Text style={dc.dishName} numberOfLines={2}>{bm.name}</Text>}
+        {!locked && bm && (hideDishName ? <PreviewDishName restaurantId={result.id} /> : <Text style={dc.dishName} numberOfLines={2}>{bm.name}</Text>)}
         {!locked && bm && <Text style={dc.cal}>{bm.calories} kcal · P {bm.proteinG}g · C {bm.carbsG}g · F {bm.fatG}g</Text>}
-        {!locked && bm && <Text style={dc.cal}>{bm.nutritionBasis === 'published' ? 'Published nutrition' : bm.nutritionBasis === 'estimated' ? 'Estimated nutrition' : 'Nutrition information'}</Text>}
       </View>
     </TouchableOpacity>
   );
@@ -185,7 +184,7 @@ function DishCard({ result, locked, onPress }: { result: RestaurantResult; locke
 
 // ─── Numbered restaurant section (#02+) ──────────────────────────────────────
 
-export function RestaurantSection({ result, index, locked, unlocking, onOpen }: { result: RestaurantResult; index: number; locked: boolean; unlocking?: () => void; onOpen?: () => void }) {
+export function RestaurantSection({ result, index, locked, hideDishName = false, unlocking, onOpen }: { result: RestaurantResult; index: number; locked: boolean; hideDishName?: boolean; unlocking?: () => void; onOpen?: () => void }) {
   const indexStr = String(index + 2).padStart(2, '0');
   const position = index + 1;
 
@@ -225,7 +224,7 @@ export function RestaurantSection({ result, index, locked, unlocking, onOpen }: 
       testID={`preview-pick-${index + 2}`}
       activeOpacity={0.85}
       onPress={handleSectionPress}
-      accessibilityLabel={`${result.name}, ${onOpen ? 'see full menu with Pro' : 'view full menu'}`}
+      accessibilityLabel={hideDishName ? previewRowLabel(result) : `${result.name}, ${onOpen ? 'see full menu with Pro' : 'view full menu'}`}
       accessibilityRole="button"
     >
       <View style={s.sectionHeader}>
@@ -239,11 +238,16 @@ export function RestaurantSection({ result, index, locked, unlocking, onOpen }: 
           </Text>
         </View>
       </View>
-      <DishCard result={result} locked={locked} onPress={handleDishCardPress} />
+      <DishCard result={result} locked={locked} hideDishName={hideDishName} onPress={handleDishCardPress} />
       {!locked && result.bestMatch && (
-        <Text style={s.viewMenu}>{onOpen ? 'See full menu with Pro →' : 'View full menu →'}</Text>
+        <Text style={s.viewMenu}>{hideDishName ? 'Unlock meal name and full menu →' : onOpen ? 'See full menu with Pro →' : 'View full menu →'}</Text>
       )}
     </TouchableOpacity>
   );
 }
 
+
+function previewRowLabel(result: RestaurantResult): string {
+  const m = result.bestMatch;
+  return `${result.name}${m ? `, ${m.calories} kcal, protein ${m.proteinG}g, carbs ${m.carbsG}g, fat ${m.fatG}g` : ''}. Unlock meal name and full menu with Pro.`;
+}

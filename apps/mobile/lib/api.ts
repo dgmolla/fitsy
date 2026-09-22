@@ -26,7 +26,7 @@ async function handleUnauthorized(): Promise<never> {
   throw new ApiRequestError(401, 'Session expired');
 }
 
-async function get<T>(path: string, authenticated = false): Promise<T> {
+async function get<T>(path: string, authenticated = false, options: { signal?: AbortSignal } = {}): Promise<T> {
   const headers: Record<string, string> = {};
 
   if (authenticated) {
@@ -37,7 +37,7 @@ async function get<T>(path: string, authenticated = false): Promise<T> {
   }
 
   const init: RequestInit =
-    Object.keys(headers).length > 0 ? { headers } : {};
+    { headers, signal: options.signal };
 
   const res = await fetch(`${BASE_URL}${path}`, init);
 

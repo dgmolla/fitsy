@@ -3,7 +3,9 @@ import type { RestaurantResult } from '@fitsy/shared';
 import type { MacroValues } from './macroPresets';
 import type { UseLocationResult, LocationState } from './useLocation';
 import { fetchRestaurantsPage } from './apiClient';
+import { buildDiscoveryParams, discoveryTargetFlags } from './discoverySearchParams';
 import { fetchGuidedPreview } from './guidedPreview';
+import type { GuidedPreviewResponse } from '../../../packages/shared/src/contracts/restaurants';
 import { saveOnboardingField } from './onboardingStorage';
 import { recordSearchAndMaybePrompt } from './ratingPrompt';
 import { trackSearchPerformed, trackSearchFailed, trackPreviewFetchFailed, trackSearchPageLoaded, trackSearchPaginationEndReached, trackSearchEmptyResults } from './analytics';
@@ -23,34 +25,21 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
   const [fetchSeq, setFetchSeq] = useState(0);
   const [outOfArea, setOutOfArea] = useState(false);
   const [nearbyDishCount, setNearbyDishCount] = useState<number>();
+  const [goalMatch, setGoalMatch] = useState<GuidedPreviewResponse['meta']['goalMatch']>();
+  // Invalidate on the rendered context, before the debounce starts another request.
+  // Otherwise an older response can repaint results for text the user already replaced.
+  const contextKey = JSON.stringify([inputs.protein, inputs.carbs, inputs.fat, inputs.calories, location.lat, location.lng, query.trim(), isOnboardingPreview]);
+  const currentContext = useRef(contextKey);
+  currentContext.current = contextKey;
+  const [completedContext, setCompletedContext] = useState<string>();
+  const requestController = useRef<AbortController | null>(null);
+  const pageController = useRef<AbortController | null>(null);
   const fetchGeneration = useRef(0);
   const pagesLoadedRef = useRef(0);
   const isLoadingMoreRef = useRef(false);
   const endReachedFiredRef = useRef(false);
-  const skipLocationFetchRef = useRef(false);
   const initialFetch = useRef(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const buildParams = useCallback(
-    (
-      current: MacroValues,
-      lat: number,
-      lng: number,
-      q: string,
-    ): Parameters<typeof fetchRestaurantsPage>[0] => {
-      const params: Parameters<typeof fetchRestaurantsPage>[0] = { lat, lng };
-      const protein = parseFloat(current.protein);
-      const carbs = parseFloat(current.carbs);
-      const fat = parseFloat(current.fat);
-      const calories = parseFloat(current.calories);
-      if (!isNaN(protein)) params.protein = protein;
-      if (!isNaN(carbs)) params.carbs = carbs;
-      if (!isNaN(fat)) params.fat = fat;
-      if (!isNaN(calories)) params.calories = calories;
-      if (q.trim() !== '') params.query = q.trim();
-      return params;
-    },
-    [],
-  );
   const doFetch = useCallback(
     async (
       current: MacroValues,
@@ -61,27 +50,34 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
       isRefresh = false,
     ) => {
       const generation = ++fetchGeneration.current;
+      const requestContext = currentContext.current;
+      requestController.current?.abort();
+      pageController.current?.abort();
+      const controller = new AbortController();
+      requestController.current = controller;
+      const isCurrent = () => generation === fetchGeneration.current && requestContext === currentContext.current && !controller.signal.aborted;
       if (isRefresh) setRefreshing(true);
       else setLoading(true);
       setError(null);
+      setGoalMatch(undefined);
+      setNearbyDishCount(undefined);
       setOutOfArea(false);
       pagesLoadedRef.current = 0;
       isLoadingMoreRef.current = false;
+      setLoadingMore(false);
       endReachedFiredRef.current = false;
       setNextCursor(null);
-      const params = buildParams(current, lat, lng, q);
-      const protein = parseFloat(current.protein);
-      const carbs = parseFloat(current.carbs);
-      const fat = parseFloat(current.fat);
-      const calories = parseFloat(current.calories);
+      const params = buildDiscoveryParams(current, lat, lng, q);
+      const targetFlags = discoveryTargetFlags(current);
       try {
-        const previewResponse = isOnboardingPreview ? await fetchGuidedPreview({ lat, lng }, q, current) : null;
+        const previewResponse = isOnboardingPreview ? await fetchGuidedPreview({ lat, lng }, q, current, { signal: controller.signal, refresh: isRefresh }) : null;
         const { data, nextCursor: cursor, locked: isLocked, networkError } = previewResponse
           ? { data: previewResponse.data, nextCursor: null, locked: true, networkError: false }
-          : await fetchRestaurantsPage(params);
-        if (generation !== fetchGeneration.current) return;
+          : await fetchRestaurantsPage(params, { signal: controller.signal });
+        if (!isCurrent()) return;
         if (previewResponse) {
           setNearbyDishCount(previewResponse.meta.nearbyDishCount);
+          setGoalMatch(previewResponse.meta.goalMatch);
           void saveOnboardingField('previewArea', `${lat}:${lng}`).then(() => saveOnboardingField('previewCraving', q.trim())).catch(() => undefined);
         }
         if (networkError) {
@@ -89,10 +85,7 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
           setNextCursor(null);
           setError('Network problem - check your connection and try again.');
           trackSearchPerformed({
-            has_protein_target: !isNaN(protein),
-            has_carbs_target: !isNaN(carbs),
-            has_fat_target: !isNaN(fat),
-            has_calories_target: !isNaN(calories),
+            ...targetFlags,
             cuisine_filter: 'all',
             query_length: q.trim().length,
             result_count: 0,
@@ -127,10 +120,7 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
           });
         }
         trackSearchPerformed({
-          has_protein_target: !isNaN(protein),
-          has_carbs_target: !isNaN(carbs),
-          has_fat_target: !isNaN(fat),
-          has_calories_target: !isNaN(calories),
+          ...targetFlags,
           cuisine_filter: 'all',
           query_length: q.trim().length,
           result_count: data.length,
@@ -140,24 +130,18 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
         if (data.length === 0) {
           trackSearchEmptyResults({
             cuisine_filter: 'all',
-            has_protein_target: !isNaN(protein),
-            has_carbs_target: !isNaN(carbs),
-            has_fat_target: !isNaN(fat),
-            has_calories_target: !isNaN(calories),
+            ...targetFlags,
           });
         } else if (!isLocked) {
           void recordSearchAndMaybePrompt();
         }
       } catch (err) {
-        if (generation !== fetchGeneration.current) return;
+        if (!isCurrent()) return;
         setResults([]);
         setNextCursor(null);
         setError('Network problem - check your connection and try again.');
         trackSearchPerformed({
-          has_protein_target: !isNaN(protein),
-          has_carbs_target: !isNaN(carbs),
-          has_fat_target: !isNaN(fat),
-          has_calories_target: !isNaN(calories),
+          ...targetFlags,
           cuisine_filter: 'all',
           query_length: q.trim().length,
           result_count: 0,
@@ -170,15 +154,17 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
         });
         if (isOnboardingPreview) trackPreviewFetchFailed(err);
       } finally {
-        if (generation !== fetchGeneration.current) return;
-        if (isRefresh) setRefreshing(false);
-        else setLoading(false);
+        if (!isCurrent()) return;
+        setCompletedContext(requestContext);
+        setRefreshing(false);
+        setLoading(false);
       }
     },
-    [buildParams, isOnboardingPreview],
+    [isOnboardingPreview],
   );
   const handleRefresh = useCallback(async () => {
     if (!canSearch) return;
+    const refreshContext = currentContext.current;
     setRefreshing(true);
     let lat = location.lat;
     let lng = location.lng;
@@ -187,7 +173,8 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
       const fresh = await location.refreshLocation();
       if (fresh) {
         if (fresh.lat !== location.lat || fresh.lng !== location.lng) {
-          skipLocationFetchRef.current = true;
+          setRefreshing(false);
+          return;
         }
         lat = fresh.lat;
         lng = fresh.lng;
@@ -196,6 +183,7 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
     } catch {
       // Keep the selected coordinates if GPS refresh fails.
     }
+    if (refreshContext !== currentContext.current) { setRefreshing(false); return; }
     await doFetch(inputs, lat, lng, query, source, true);
   }, [
     doFetch,
@@ -205,20 +193,30 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
     query,
   ]);
   const handleEndReached = useCallback(async () => {
-    if (!canSearch) return;
+    if (!canSearch || loading || completedContext !== currentContext.current) return;
     if (locked) return;
     if (nextCursor === null) return;
     if (isLoadingMoreRef.current) return;
     isLoadingMoreRef.current = true;
     setLoadingMore(true);
     const generation = fetchGeneration.current;
+    const controller = new AbortController();
+    pageController.current = controller;
+    const pageContext = currentContext.current;
     const cursorBeingFetched = nextCursor;
     const pageIndex = pagesLoadedRef.current;
-    const params = buildParams(inputs, location.lat, location.lng, query);
+    const params = buildDiscoveryParams(inputs, location.lat, location.lng, query);
     params.cursor = cursorBeingFetched;
     try {
-      const { data, nextCursor: cursor, locked: isLocked } = await fetchRestaurantsPage(params);
-      if (generation !== fetchGeneration.current) return;
+      const { data, nextCursor: cursor, locked: isLocked, networkError, restartRequired } = await fetchRestaurantsPage(params, { signal: controller.signal });
+      if (generation !== fetchGeneration.current || pageContext !== currentContext.current) return;
+      if (restartRequired) {
+        // A changed entitlement can invalidate this cursor without changing
+        // the typed query. Replace the list; never append another context.
+        await doFetch(inputs, location.lat, location.lng, query, location.source);
+        return;
+      }
+      if (networkError) throw new Error('Next page unavailable');
       setResults((prev) => {
         const seen = new Set(prev.map((r) => r.id));
         const merged = [...prev];
@@ -252,24 +250,30 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
     } catch {
       // Existing rows remain usable; the next scroll retries pagination.
     } finally {
+      if (generation !== fetchGeneration.current) return;
       isLoadingMoreRef.current = false;
       setLoadingMore(false);
     }
   }, [
-    buildParams,
     query,
     canSearch,
     inputs,
     location.lat,
     location.lng,
+    location.source,
     nextCursor,
     locked,
+    loading,
+    completedContext,
+    doFetch,
   ]);
   useEffect(() => {
-    if (skipLocationFetchRef.current) {
-      skipLocationFetchRef.current = false;
-      return;
-    }
+    requestController.current?.abort();
+    pageController.current?.abort();
+    fetchGeneration.current++;
+    isLoadingMoreRef.current = false;
+    setLoadingMore(false);
+    setRefreshing(false);
     if (!targetsLoaded || location.loading || !previewReady) return;
     if (!canSearch) { setResults([]); setNextCursor(null); setLoading(false); return; }
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -282,7 +286,11 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
     debounceRef.current = setTimeout(() => {
       doFetch(inputs, location.lat, location.lng, query, locSource);
     }, DEBOUNCE_MS);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); requestController.current?.abort(); };
   }, [inputs, location.lat, location.lng, location.loading, location.source, query, canSearch, doFetch, targetsLoaded, previewReady]);
-  return { results, nextCursor, loading, loadingMore, refreshing, error, locked, fetchSeq, outOfArea, nearbyDishCount, doFetch, handleRefresh, handleEndReached };
+  useEffect(() => () => { requestController.current?.abort(); pageController.current?.abort(); fetchGeneration.current++; }, []);
+  const pending = canSearch && completedContext !== contextKey;
+  return { results, nextCursor, loading: canSearch && (loading || pending), loadingMore, refreshing,
+    error: pending ? null : error, locked, fetchSeq, outOfArea: !pending && outOfArea,
+    goalMatch: pending ? undefined : goalMatch, nearbyDishCount: pending ? undefined : nearbyDishCount, doFetch, handleRefresh, handleEndReached };
 }

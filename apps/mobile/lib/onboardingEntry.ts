@@ -20,7 +20,7 @@ export function onboardingEntry(state: EntryState): EntryDestination {
   // Wait for that account's verdict before resuming an old payment screen.
   if (state.signedIn && !state.purchasesReady) return null;
   if (!state.isLapsed && !state.completed && state.resume && !state.declined && state.entitled !== true) {
-    return state.signedIn && state.resume === '/welcome/signin' ? '/welcome/trial' : state.resume;
+    return state.signedIn && state.resume === '/welcome/signin' ? '/welcome/payment' : state.resume;
   }
   if (!state.signedIn) {
     if (!state.declined) return '/welcome/problem';

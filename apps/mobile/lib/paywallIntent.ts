@@ -3,10 +3,16 @@ import { z } from 'zod';
 import { supabase } from './supabase';
 
 const KEY = '@fitsy/paywallIntent';
+const PURCHASED_KEY = '@fitsy/purchasedContinuation';
 const schema = z.object({
   restaurantId: z.string().min(1).optional(),
   menuItemId: z.string().min(1).optional(),
   mealName: z.string().optional(),
+  restaurantName: z.string().max(300).optional(),
+  photoUrl: z.string().url().optional(),
+  nearbyRestaurants: z.array(z.object({ id: z.string(), name: z.string().max(300), photoUrl: z.string().url().optional() })).max(3).optional(),
+  area: z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) }).optional(),
+  targets: z.object({ calories: z.string(), protein: z.string(), carbs: z.string(), fat: z.string() }).optional(),
   action: z.enum(['menu', 'save', 'discovery']),
   nearbyDishCount: z.number().int().nonnegative().optional(),
   areaName: z.string().optional(),
@@ -21,9 +27,9 @@ function writeIntent(work: () => Promise<void>): Promise<void> {
   pendingWrite = next.catch(() => undefined);
   return next;
 }
-async function readIntentRecord() {
+async function readIntentRecord(key = KEY) {
   try {
-    const raw = await AsyncStorage.getItem(KEY);
+    const raw = await AsyncStorage.getItem(key);
     if (!raw) return null;
     const record = recordSchema.parse(JSON.parse(raw));
     const age = Date.now() - record.createdAt;
@@ -33,7 +39,10 @@ async function readIntentRecord() {
 export async function rememberPaywallIntent(intent: PaywallIntent): Promise<void> {
   const { data } = await supabase.auth.getSession();
   const record = { intent: schema.parse(intent), userId: data.session?.user.id ?? null, createdAt: Date.now() };
-  await writeIntent(() => AsyncStorage.setItem(KEY, JSON.stringify(record)));
+  await writeIntent(async () => {
+    await AsyncStorage.removeItem(PURCHASED_KEY);
+    await AsyncStorage.setItem(KEY, JSON.stringify(record));
+  });
 }
 export async function getPaywallIntent(): Promise<PaywallIntent | null> {
   try {
@@ -48,9 +57,29 @@ export async function claimPaywallIntent(userId: string): Promise<void> {
     const record = await readIntentRecord();
     if (!record || (record.userId !== null && record.userId !== userId)) {
       await AsyncStorage.removeItem(KEY);
+      await AsyncStorage.removeItem(PURCHASED_KEY);
       return;
     }
     await AsyncStorage.setItem(KEY, JSON.stringify({ ...record, userId }));
   });
 }
-export async function clearPaywallIntent(): Promise<void> { await writeIntent(() => AsyncStorage.removeItem(KEY)); }
+/** Snapshot only an owned selection after entitlement has completed onboarding. */
+export async function markPurchasedContinuation(): Promise<void> {
+  await writeIntent(async () => {
+    const [record, { data }] = await Promise.all([readIntentRecord(), supabase.auth.getSession()]);
+    if (record?.userId && record.userId === data.session?.user.id) {
+      await AsyncStorage.setItem(PURCHASED_KEY, JSON.stringify(record));
+    } else await AsyncStorage.removeItem(PURCHASED_KEY);
+  });
+}
+
+/** Call only after the signed-in account's entitlement has settled true. */
+export async function getPurchasedContinuation(): Promise<PaywallIntent | null> {
+  await pendingWrite;
+  const [record, { data }] = await Promise.all([readIntentRecord(PURCHASED_KEY), supabase.auth.getSession()]);
+  return record?.userId && record.userId === data.session?.user.id ? record.intent : null;
+}
+
+export async function clearPaywallIntent(): Promise<void> {
+  await writeIntent(async () => { await AsyncStorage.removeItem(KEY); await AsyncStorage.removeItem(PURCHASED_KEY); });
+}

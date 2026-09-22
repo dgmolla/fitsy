@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { supabase } from './supabase';
 import { rememberPaywallIntent, type PaywallIntent } from './paywallIntent';
 import { fetchCustomerInfo, hasLapsedEntitlement } from './purchases';
+import { readPaywallDecline } from './paywallAccess';
 
 const PREVIEW_SAMPLE_USED_KEY = '@fitsy/previewSampleUsed';
 const PREVIEW_TOUR_SEEN_KEY = '@fitsy/previewTourSeen';
@@ -84,9 +85,9 @@ let navigating = false;
 
 /**
  * Sends a locked-out browser to the right paywall entry point:
- * - no session: account creation (sign-in), which then flows through the
- *   normal post-signup onboarding tail into payment - payment itself
- *   assumes an authenticated user, so it can't be the direct target;
+ * - no session: account creation on the first preview selection; after an
+ *   explicit decline, payment remains the entry. Its purchase action asks
+ *   for sign-in when needed, without a deep link restarting onboarding;
  * - signed in with a *lapsed* entitlement: the win-back screen
  *   (welcome/resubscribe), never the first-time paywall - that one promises
  *   a free trial Apple won't grant a second time to the same Apple ID;
@@ -100,13 +101,10 @@ export async function routeToPaywall(options: { replace?: boolean; intent?: Payw
   if (navigating) return;
   navigating = true;
   const replace = options.replace ?? false;
-  // Default to sign-in on a failed session check - most locked-teaser
-  // visitors are anonymous (onboarding), not a signed-in lapsed subscriber,
-  // so this is the more common correct outcome, not a guaranteed-safe one:
-  // an authenticated user hitting this branch would have to re-authenticate
-  // rather than landing straight on payment.
+  // Persisted decline survives anonymous sessions and legacy preview links.
   let target: '/welcome/payment' | '/welcome/resubscribe' | '/welcome/signin' = '/welcome/signin';
   try {
+    if (await readPaywallDecline()) target = '/welcome/payment';
     if (options.intent) await rememberPaywallIntent(options.intent);
     try {
       const { data } = await supabase.auth.getSession();
@@ -116,7 +114,7 @@ export async function routeToPaywall(options: { replace?: boolean; intent?: Payw
         target = hasLapsedEntitlement(await fetchCustomerInfo()) ? '/welcome/resubscribe' : '/welcome/payment';
       }
     } catch {
-      // Fall through with the sign-in default set above.
+      // Keep the persisted entry choice if the session lookup fails.
     }
     if (replace) router.replace(target);
     else router.push(target);

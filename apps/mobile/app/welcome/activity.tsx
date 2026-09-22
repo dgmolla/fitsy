@@ -27,7 +27,7 @@ export default function ActivityScreen() {
 
   return (
     <WelcomeScreen
-      progress={0.88}
+      progress={0.51}
       title="How active are you?"
       subtitle="How many days per week are you active?"
       onContinue={async () => {

@@ -15,8 +15,10 @@ appId: com.fitsy.mobile
       - extendedWaitUntil:
           visible: ".*Log in.*"
           timeout: 15000
-- tapOn: ".*Log in.*"
+- tapOn:
+    id: welcome-login
 - extendedWaitUntil:
     visible: "Welcome back"
     timeout: 10000
 - assertVisible: "Continue with Apple"
+- assertVisible: "Continue with Google"

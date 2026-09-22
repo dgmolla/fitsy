@@ -1,5 +1,5 @@
 import { StackRouter, type NavigationProp, type ParamListBase } from '@react-navigation/native';
-import { clearPaywallIntent, getPaywallIntent } from './paywallIntent';
+import { clearPaywallIntent, getPaywallIntent, getPurchasedContinuation } from './paywallIntent';
 
 type Navigation = Pick<NavigationProp<ParamListBase>, 'reset' | 'getParent'> & {
   getState: () => ReturnType<NavigationProp<ParamListBase>['getState']> | undefined;
@@ -47,8 +47,9 @@ function resetJourney(navigation: Navigation, state: JourneyState): void {
 export function resetWelcomeJourney(navigation: Navigation, screen: 'payment' | 'preview' | 'notification-permission'): void {
   resetJourney(navigation, { index: 0, routes: [nestedRoute('welcome', { index: 0, routes: [{ name: screen }] })] });
 }
-export async function openPurchasedDestination(navigation: Navigation): Promise<void> {
-  const intent = await getPaywallIntent();
+export async function openPurchasedDestination(navigation: Navigation, options?: { resumeOnly: true; isCurrent: () => boolean }): Promise<boolean> {
+  const intent = options?.resumeOnly ? await getPurchasedContinuation() : await getPaywallIntent();
+  if (options && (!intent || !options.isCurrent())) return false;
   const routes = [nestedRoute('(tabs)', { index: 0, routes: [{ name: 'search', ...(intent?.query ? { params: { query: intent.query } } : {}) }] }),
     ...(intent?.restaurantId ? [{ name: 'restaurant/[id]', params: {
       id: intent.restaurantId,
@@ -58,4 +59,5 @@ export async function openPurchasedDestination(navigation: Navigation): Promise<
   ];
   resetJourney(navigation, { index: routes.length - 1, routes });
   await clearPaywallIntent();
+  return true;
 }

@@ -13,6 +13,8 @@ appId: com.fitsy.mobile
       - waitForAnimationToEnd:
           timeout: 10000
       - extendedWaitUntil:
-          visible: "Find meals that fit"
+          visible:
+            id: welcome-start
           timeout: 15000
 - assertVisible: ".*Log in.*"
+- assertVisible: "Good food. Your goals in mind."
