@@ -34,7 +34,8 @@ export interface FetchRestaurantsParams {
  */
 export async function fetchRestaurantsPage(
   params: FetchRestaurantsParams,
-): Promise<{ data: RestaurantResult[]; nextCursor: string | null; locked: boolean; networkError: boolean }> {
+  options: { signal?: AbortSignal } = {},
+): Promise<{ data: RestaurantResult[]; nextCursor: string | null; locked: boolean; networkError: boolean; restartRequired?: boolean }> {
   const { lat, lng } = params;
 
   const qs = new URLSearchParams();
@@ -51,6 +52,7 @@ export async function fetchRestaurantsPage(
   if (params.minRating !== undefined) qs.set('minRating', String(params.minRating));
   if (params.query !== undefined && params.query.trim() !== '') qs.set('q', params.query.trim());
   if (params.cursor !== undefined) qs.set('cursor', params.cursor);
+  if ([params.calories, params.protein, params.carbs, params.fat].some(n => n != null && Number.isFinite(n) && n > 0)) qs.set('goalMatched', '1');
 
   const reqId = Math.random().toString(36).slice(2, 8);
   const t0 = Date.now();
@@ -60,6 +62,7 @@ export async function fetchRestaurantsPage(
     const response = await api.get<RestaurantsApiResponse>(
       `/api/restaurants?${qs.toString()}`,
       true,
+      options,
     );
     const t1 = Date.now();
 
@@ -73,6 +76,10 @@ export async function fetchRestaurantsPage(
     console.log(JSON.stringify({ event: 'fitsy_search_client_done', reqId, ok: true, client_total_ms: t1 - t0, results: response.data.length }));
     return { data: response.data, nextCursor: response.meta.nextCursor ?? null, locked: response.meta.locked ?? false, networkError: false };
   } catch (err) {
+    if (options.signal?.aborted) throw err;
+    if (params.cursor && err instanceof ApiRequestError && err.status === 400 && err.message === 'Cursor belongs to another search context') {
+      return { data: [], nextCursor: null, locked: false, networkError: false, restartRequired: true };
+    }
     const t1 = Date.now();
     // eslint-disable-next-line no-console
     console.log(JSON.stringify({ event: 'fitsy_search_client_done', reqId, ok: false, client_total_ms: t1 - t0, err: String(err) }));

@@ -1,13 +1,12 @@
-# Permission and preference checks use the unentitled shared dev account.
-# The MCP walkthrough buys only on a separate run-owned Test Store account,
-# then verifies logout cleanup and explicitly synthetic native date delivery.
-# No shared account purchase or invented store trial expiry is used here.
+# Native permission outcomes use the unentitled shared dev account, without purchases.
+# The MCP walkthrough purchases only on an owned Test Store account and verifies
+# actual native scheduling, delivery and account cleanup separately.
 appId: com.fitsy.mobile
 tags: [billing, onboarding, discovery, notifications, changed-journey]
 ---
 - launchApp:
     clearState: true
-    clearKeychain: true # Disposable simulator: isolate auth between flows.
+    clearKeychain: true
     permissions:
       notifications: unset
 # Retry only the first accessibility read through the Debug launch transition.
@@ -17,80 +16,126 @@ tags: [billing, onboarding, discovery, notifications, changed-journey]
       - waitForAnimationToEnd:
           timeout: 10000
       - extendedWaitUntil:
-          visible: "Find meals that fit"
+          visible:
+            id: welcome-start
           timeout: 15000
 - waitForAnimationToEnd:
     timeout: 3000
 - tapOn:
     point: "92%,93%"
 - openLink: com.fitsy.mobile://notification-settings
-- assertVisible: "Reminders that fit."
-# iOS reports enabled=true for this disabled RN Switch; verify behavior.
-- assertVisible: "Sign in to choose reminders for your account."
-- tapOn:
-    id: reminder-meals-toggle
 - assertVisible:
-    id: reminder-meals-toggle
-    checked: false
-- assertNotVisible: "Allow"
+    id: reminder-permission
 - assertVisible:
     id: reminders-empty
+- assertNotVisible:
+    id: reminder-meals-toggle
+- assertNotVisible:
+    id: reminder-trial-toggle
+- assertNotVisible: "Allow"
 - openLink: com.fitsy.mobile://welcome/signin
 - tapOn: "Dev login"
 - extendedWaitUntil:
     visible:
-      id: trial-see-plans
+      id: paywall-plan-yearly
     timeout: 30000
-# The normal journey requests reminders after purchase. This explicit link
-# covers the permission/settings recovery path without buying on a shared user.
+# The ordinary journey requests notifications after purchase. Explicit links
+# exercise skip and denied recovery without purchasing on the shared dev user.
 - openLink: com.fitsy.mobile://welcome/notification-permission
-- assertVisible:
-    id: notification-allow
+- assertVisible: "Remind me"
+- assertNotVisible: "Choose reminders"
 - tapOn:
-    id: notification-allow
-- tapOn: "Allow"
+    id: notification-skip
 - openLink: com.fitsy.mobile://notification-settings
-- assertVisible: "Device notifications allowed"
+- extendedWaitUntil:
+    visible:
+      id: reminder-permission
+    timeout: 15000
+- assertVisible: "Device notifications are off"
 - assertVisible:
     id: reminders-empty
-- assertVisible:
+- assertNotVisible:
     id: reminder-meals-toggle
-    checked: true
+- openLink: com.fitsy.mobile://welcome/notification-permission
 - tapOn:
-    id: reminder-meals-toggle
-- assertVisible:
-    id: reminder-meals-toggle
-    checked: false
-- tapOn:
-    id: reminder-meals-toggle
-- assertVisible:
-    id: reminder-meals-toggle
-    checked: true
-- stopApp
-- launchApp
+    id: notification-allow
+- extendedWaitUntil:
+    visible: "Don.t Allow"
+    timeout: 15000
+- assertVisible: "Allow"
+- tapOn: "Don.t Allow"
 - openLink: com.fitsy.mobile://notification-settings
-# XCTest can invalidate the first accessibility tree after cold relaunch.
-# Retry only the settled read; preference changes remain single-pass actions.
+- extendedWaitUntil:
+    visible:
+      id: reminder-permission
+    timeout: 15000
+- assertVisible: "Device notifications are off"
+- assertVisible:
+    id: reminders-empty
+- assertNotVisible:
+    id: reminder-trial-toggle
+# Reset the disposable app's permission to exercise the independent grant path.
+- launchApp:
+    clearState: true
+    clearKeychain: true
+    permissions:
+      notifications: unset
 - retry:
     maxRetries: 2
     commands:
       - waitForAnimationToEnd:
           timeout: 10000
-      - assertVisible:
-          id: reminder-meals-toggle
-          checked: true
+      - extendedWaitUntil:
+          visible:
+            id: welcome-start
+          timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn:
+    point: "92%,93%"
+- openLink: com.fitsy.mobile://welcome/signin
+- tapOn: "Dev login"
+- extendedWaitUntil:
+    visible:
+      id: paywall-plan-yearly
+    timeout: 30000
+- openLink: com.fitsy.mobile://welcome/notification-permission
+- assertVisible: "Remind me"
+- assertNotVisible:
+    id: reminder-meals-toggle
+- assertNotVisible:
+    id: reminder-trial-toggle
+- tapOn:
+    id: notification-allow
+- extendedWaitUntil:
+    visible: "Allow"
+    timeout: 15000
+- tapOn: "Allow"
+- openLink: com.fitsy.mobile://notification-settings
+- extendedWaitUntil:
+    visible:
+      id: reminder-permission
+    timeout: 15000
+- assertVisible: "Device notifications allowed"
+# Granting permission alone cannot invent a schedule for an inactive subscriber.
 - assertVisible:
     id: reminders-empty
-- assertVisible: "Reminders start with your active Fitsy subscription."
-- tapOn:
+- assertNotVisible:
     id: reminder-meals-toggle
-- tapOn:
+- assertNotVisible:
     id: reminder-trial-toggle
-- assertVisible:
-    id: reminder-meals-toggle
-    checked: false
-- assertVisible:
-    id: reminder-trial-toggle
-    checked: false
+- stopApp
+- launchApp
+- openLink: com.fitsy.mobile://notification-settings
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - assertVisible: "Device notifications allowed"
 - assertVisible:
     id: reminders-empty
+- assertNotVisible:
+    id: reminder-meals-toggle
+- assertNotVisible:
+    id: reminder-trial-toggle

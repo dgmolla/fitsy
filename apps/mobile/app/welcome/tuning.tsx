@@ -51,14 +51,14 @@ export default function PlanReadyScreen() {
     try {
       await saveMacroTargets(targets);
       await saveOnboardingField('targetBasis', basisOf(data));
-      router.push('/welcome/preview');
+      router.push('/welcome/how-it-works');
     } catch { Alert.alert('Could not save targets', 'Please try again.'); }
     finally { setBusy(false); }
   }
 
   return (
-    <WelcomeScreen progress={0.9} title="Your meal targets." subtitle={data.targetMode === 'known' ? 'Enter per-meal targets. You can change these anytime.' : 'Estimated from your answers, with room for snacks. Tap any number to make it yours.'}
-      onContinue={proceed} canContinue={ready && valid && !busy} continueLabel="Find my meal picks">
+    <WelcomeScreen progress={0.53} title={"What works\nfor one meal?"} subtitle={data.targetMode === 'known' ? 'Your numbers guide the search. You can edit them anytime.' : 'Estimated from your answers, with room for snacks. Tap any number to make it yours.'}
+      onContinue={proceed} canContinue={ready && valid && !busy} continueLabel="Use these meal targets">
       <View style={s.grid}>
         {FIELDS.map(([key, label, unit]) => (
           <View key={key} style={s.cell}>

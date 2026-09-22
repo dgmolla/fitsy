@@ -1,147 +1,36 @@
-import { useOnboardingStep } from '@/lib/onboardingResume';
 import React, { useEffect } from 'react';
-import { Image, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import { StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { EDITORIAL, FONTS } from '@/lib/brand';
-import { AnimatedPress } from '@/components/AnimatedPress';
+import { WelcomeScreen } from '@/components/WelcomeScreen';
+import { EDITORIAL, TEXT } from '@/lib/brand';
+import { useOnboardingStep } from '@/lib/onboardingResume';
 import { trackOnboardingScreenView } from '@/lib/analytics';
 
 export default function HowItWorksScreen() {
   useOnboardingStep('how-it-works');
-  useEffect(() => {
-    trackOnboardingScreenView('how_it_works');
-  }, []);
-
-  return (
-    <SafeAreaView style={s.safe}>
-      <View style={s.content}>
-        <View style={s.topBar}>
-          <Pressable onPress={() => router.back()} hitSlop={16} style={s.back} accessibilityRole="button" accessibilityLabel="Go back" testID="welcome-back">
-            <Ionicons name="chevron-back" size={22} color={EDITORIAL.textMid} />
-          </Pressable>
-          <View style={s.progressTrack}>
-            <View style={[s.progressFill, { width: '60%' }]} />
-          </View>
-        </View>
-
-        <Animated.Text entering={FadeInDown.duration(500)} style={s.title}>
-          Know your numbers.{'\n'}Know their source.
-        </Animated.Text>
-
-        <View style={s.panels}>
-          {/* Verified - dark green panel with food image */}
-          <Animated.View entering={FadeInDown.duration(400).delay(150)} style={s.panelDark}>
-            <View style={s.panelDarkContent}>
-              <Text style={s.badgeLight}>PUBLISHED</Text>
-              <Text style={s.titleLight}>Published{'\n'}nutrition</Text>
-              <Text style={s.descLight}>From restaurant nutrition information. Portions can vary.</Text>
-            </View>
-            <Image
-              source={{ uri: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=300&q=70' }}
-              style={s.panelImg}
-              resizeMode="cover"
-            />
-          </Animated.View>
-
-          {/* AI Estimated - cream panel with food image */}
-          <Animated.View entering={FadeInDown.duration(400).delay(280)} style={s.panelLight}>
-            <View style={s.panelLightContent}>
-              <Text style={s.badgeDark}>AI ESTIMATED</Text>
-              <Text style={s.titleDark}>Estimated{'\n'}nutrition</Text>
-              <Text style={s.descDark}>Estimated from menu information. Look for the label on each meal.</Text>
-            </View>
-            <Image
-              source={{ uri: 'https://images.unsplash.com/photo-1559314809-0d155014e29e?w=300&q=70' }}
-              style={s.panelImg}
-              resizeMode="cover"
-            />
-          </Animated.View>
-        </View>
-
-        <View style={{ flex: 1 }} />
-
-        <Animated.View entering={FadeIn.duration(400).delay(500)}>
-          <AnimatedPress
-            style={s.cta}
-            testID="welcome-continue"
-            onPress={() => router.push('/welcome/target-setup')}
-            haptic
-            accessibilityRole="button"
-          >
-            <Text style={s.ctaTxt}>Set my meal targets</Text>
-            <Ionicons name="arrow-forward" size={15} color={EDITORIAL.cream} />
-          </AnimatedPress>
-        </Animated.View>
+  useEffect(() => { trackOnboardingScreenView('how_it_works'); }, []);
+  return <WelcomeScreen progress={0.61} title={"A little context.\nA better choice."}
+    subtitle="Every nutrition label tells you where the numbers come from."
+    canContinue onContinue={() => router.push('/welcome/preview')} continueLabel="Explore restaurants">
+    <View style={s.panels}>
+      <View style={s.panel} testID="nutrition-source-published">
+        <Text style={s.badge}>Published</Text><Text style={s.title}>From the restaurant.</Text>
+        <Text style={s.body}>Nutrition supplied by the restaurant for the listed meal.</Text>
       </View>
-    </SafeAreaView>
-  );
+      <View style={s.panel} testID="nutrition-source-estimated">
+        <Text style={[s.badge, s.estimated]}>Estimated</Text><Text style={s.title}>A useful approximation.</Text>
+        <Text style={s.body}>An estimate when published nutrition isn't available.</Text>
+      </View>
+    </View>
+    <Text style={s.note}>Portions and preparation can vary. The label stays beside the dish.</Text>
+  </WelcomeScreen>;
 }
-
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: EDITORIAL.cream },
-  content: { flex: 1, paddingHorizontal: 36, paddingBottom: 40 },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 52,
-  },
-  back: { width: 44, height: 44, justifyContent: 'center' },
-  progressTrack: {
-    flex: 1,
-    height: 4,
-    backgroundColor: EDITORIAL.border,
-    borderRadius: 2,
-    marginLeft: 12,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: EDITORIAL.greenAccent,
-    borderRadius: 2,
-  },
-  title: {
-    fontFamily: FONTS.frauncesDisplay,
-    fontSize: 30,
-    color: EDITORIAL.text,
-    letterSpacing: -1.2,
-    lineHeight: 42,
-    marginBottom: 32,
-  },
   panels: { gap: 14 },
-
-  /* Dark panel */
-  panelDark: {
-    backgroundColor: EDITORIAL.green,
-    borderRadius: 22,
-    flexDirection: 'row',
-    overflow: 'hidden',
-    minHeight: 160,
-  },
-  panelDarkContent: { flex: 1, padding: 24, gap: 6, justifyContent: 'center' },
-  badgeLight: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 10, fontWeight: '800', color: 'rgba(253,251,247,0.5)', letterSpacing: 2 },
-  titleLight: { fontFamily: FONTS.frauncesDisplay, fontSize: 24, color: EDITORIAL.cream, letterSpacing: -0.3, lineHeight: 28 },
-  descLight: { fontFamily: FONTS.nunitoSans, fontSize: 14, lineHeight: 20, color: 'rgba(253,251,247,0.6)', marginTop: 4 },
-
-  /* Light panel */
-  panelLight: {
-    backgroundColor: EDITORIAL.creamCard,
-    borderRadius: 22,
-    flexDirection: 'row',
-    overflow: 'hidden',
-    minHeight: 160,
-  },
-  panelLightContent: { flex: 1, padding: 24, gap: 6, justifyContent: 'center' },
-  badgeDark: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 10, fontWeight: '800', color: EDITORIAL.greenAccent, letterSpacing: 2 },
-  titleDark: { fontFamily: FONTS.frauncesDisplay, fontSize: 24, color: EDITORIAL.text, letterSpacing: -0.3, lineHeight: 28 },
-  descDark: { fontFamily: FONTS.nunitoSans, fontSize: 14, lineHeight: 20, color: EDITORIAL.textSoft, marginTop: 4 },
-
-  panelImg: { width: 110, height: '100%' },
-
-  cta: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: EDITORIAL.green, borderRadius: 32, paddingVertical: 18,
-  },
-  ctaTxt: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 16, fontWeight: '600', color: EDITORIAL.cream },
+  panel: { padding: 20, borderRadius: 24, backgroundColor: EDITORIAL.creamCard, gap: 16 },
+  badge: { ...TEXT.bodySmall, alignSelf: 'flex-start', borderRadius: 14, overflow: 'hidden', backgroundColor: EDITORIAL.greenAccentTint, color: EDITORIAL.green, paddingHorizontal: 10, paddingVertical: 5 },
+  estimated: { backgroundColor: EDITORIAL.creamDeep, color: EDITORIAL.textMid },
+  title: { ...TEXT.title, fontSize: 23, lineHeight: 28 },
+  body: { ...TEXT.body, lineHeight: 24 },
+  note: { ...TEXT.bodySmall, textAlign: 'center', marginTop: 20, lineHeight: 20 },
 });

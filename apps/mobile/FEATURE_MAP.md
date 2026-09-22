@@ -12,22 +12,23 @@ signed in without targets -> `/macro-setup`.
 | Route | Reached by | Anchor (visible text) | Notes |
 |---|---|---|---|
 | `/welcome/problem` | fresh install | "Find meals that fit"; login link reads "Have an account? Log in" | animated dish columns; first onboarding screen |
-| `/welcome/promise` | welcome CTA | `welcome-continue` | Original visual value introduction; illustrative meals labeled as examples |
-| `/welcome/tried` | promise CTA | `tried-meal_prep`, `tried-calorie_apps` | Four prior approaches; answer persists and personalizes the response and tour |
-| `/welcome/response` | prior approach | `welcome-continue` | One relevant payoff, then find local options |
-| `/welcome/location-permission` | personalized response | `location-choose-area` | Where would you like to eat? Explicit GPS or manual neighborhood |
-| `/welcome/value-abundance` | covered area | `welcome-continue` | Real local restaurant photos, names and unfiltered coverage count |
-| `/welcome/how-it-works` | local coverage | `welcome-continue` | Published versus estimated nutrition, with portion uncertainty |
-| `/welcome/target-setup` | nutrition explanation | `target-mode-known`, `target-mode-estimate`, `target-use-saved` | Enter meal targets, estimate, or explicitly confirm/edit/recalculate saved targets |
+| `/welcome/promise` | welcome CTA | `welcome-continue` | Favorite-bite hero with labeled meal inspiration, then location |
+| `/welcome/tried` | covered area | `tried-meal_prep`, `tried-calorie_apps` | Four prior approaches personalize the response, fitness payoff and tour |
+| `/welcome/response` | prior approach | `welcome-continue` | Relevant response, then a personalized fitness-goal payoff |
+| `/welcome/location-permission` | favorite-bite hero | `location-use-current`, `location-choose-area` | GPS primary; manual area fallback; actual coverage determines continuation |
+| `/welcome/value-abundance` | legacy links only | redirects to value-payoff | Retired benefits screen |
+| `/welcome/value-payoff` | personalized response | `fitness-payoff-diagram`, `welcome-continue` | Connects meal targets and eating out to fitness goals; meal-prep path shows home and restaurant choices |
+| `/welcome/how-it-works` | confirmed meal targets | `nutrition-source-published`, `nutrition-source-estimated` | Source transparency and portion uncertainty before discovery |
+| `/welcome/target-setup` | fitness payoff | `target-mode-known`, `target-mode-estimate`, `target-use-saved` | Choose then confirm own or assisted targets; saved-target shortcut still visits nutrition trust |
 | `/welcome/macros-intro` | optional target help | `welcome-continue` | Returns to target choice |
 | `/welcome/goal`, `/welcome/height`, `/welcome/weight`, `/welcome/age`, `/welcome/sex`, `/welcome/activity` | estimate choice only | `welcome-continue` | Original profile questions; known targets bypass all six |
 | `/welcome/tuning` | known-target choice or profile questions | `meal-target-calories` | Editable per-meal targets; goal and edits persist |
-| `/welcome/preview` | confirm meal targets | `preview-pick-1`, `preview-guide` | Shared real search screen, restaurant images, three named picks, repeatable craving search, full guided tour; menus and extra results open plans |
-| `/welcome/trial` | sign in from a preview action | `trial-see-plans` | Live trial terms; Back returns through real history |
-| `/welcome/payment` | trial CTA or locked action | `paywall-plan-yearly` | Root launch has no fabricated Back; explicit decline resets the stack |
-| `/welcome/notification-permission` | confirmed purchase or restore | `notification-allow` | Optional reminders, then return to the selected meal |
+| `/welcome/preview` | nutrition trust | `preview-pick-1`, `preview-guide` | Real search, restaurant photos, three visible picks and guided tour; locked menus and extra results open plans |
+| `/welcome/trial` | legacy links only | redirects to payment | Retired primer; resume goes straight to live plans |
+| `/welcome/payment` | sign-in from preview or locked action | `paywall-plan-yearly` | Live plans; root launch has no fabricated Back; explicit decline resets the stack |
+| `/welcome/notification-permission` | confirmed purchase or restore | `notification-allow`, `notification-skip` | Remind me directly asks OS permission; no choices; then selected meal |
 | `/auth/login` | "Have an account? Log in" link on the problem screen (router.push, no intermediate screen) | "Welcome back", "Continue with Apple" | Apple/Google/email in one screen |
-| `/welcome/signin` | within the onboarding story flow | "Continue with Apple" | onboarding-time account creation |
+| `/welcome/signin` | locked preview action | `signup-selected-restaurant`, `signup-apple`, `signup-google` | Selected restaurant/search/targets remain visible; authenticated continuation opens live plans directly |
 | `/auth/reviewer` | App Store review deep link | - | demo access |
 | `/macro-setup` | signed in, no targets | - | standalone target editor |
 | `/(tabs)/search` | cold start when entitled; tab bar | "Search restaurants or dishes" | same discovery component as preview; tabs require entitlement; hard paywall after decline by default |
@@ -37,7 +38,7 @@ signed in without targets -> `/macro-setup`.
 | `/welcome/leave-review` | legacy links only | redirects to permission/out-of-area | no rating prompt in onboarding |
 | `/welcome/resubscribe` | cold start when lapsed | - | win-back screen |
 | out-of-area state | search preview returns 0 nearby | "Keep me posted" (inline on the search screen, not a separate route) | LA-only launch teaser; `/welcome/out-of-area` also exists in the onboarding flow |
-| `/notification-settings` | Profile → Reminders | "Reminders that fit." | opt-in meal/trial reminders, actual upcoming schedule, device/subscription settings |
+| `/notification-settings` | Profile -> Notifications; trial reminder | `reminder-permission`, `reminders-device-settings` | Device notification settings and actual upcoming schedule; no per-reminder configuration |
 | `/feedback-board` | profile | - | feedback list |
 
 Known flake: first cold start after install animates for ~2s before "continue"

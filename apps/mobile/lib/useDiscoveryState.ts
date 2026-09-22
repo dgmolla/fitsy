@@ -6,6 +6,7 @@ import type { CoachMarkStep } from '@/components/CoachMarks';
 import type { MacroValues } from './macroPresets';
 import type { PresetLocation } from './locations';
 import { usePreviewTour } from './usePreviewTour';
+import { usePreviewSearchDemo } from './usePreviewSearchDemo';
 import { useDiscoveryResults } from './useDiscoveryResults';
 import { useDiscoveryLocation } from './useDiscoveryLocation';
 import { useEntitlementMismatch } from './useEntitlementMismatch';
@@ -58,9 +59,11 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
   const canSearch = (hasInputs || hasQuery || isOnboardingPreview) && previewReady;
   const [targetsLoaded, setTargetsLoaded] = useState(false);
   const discovery = useDiscoveryResults({ inputs, query, location, canSearch, targetsLoaded, previewReady, isOnboardingPreview });
-  const { results, nextCursor, loading, loadingMore, refreshing, error, locked, fetchSeq, outOfArea, nearbyDishCount, doFetch, handleRefresh, handleEndReached } = discovery;
-  const tour = usePreviewTour(isOnboardingPreview && locked === true && !loading && !error && results.length > 0 && !filterVisible && !locationPickerVisible);
-  const { finish: finishTour } = tour;
+  const { results, nextCursor, loading, loadingMore, refreshing, error, locked, fetchSeq, outOfArea, nearbyDishCount, goalMatch, doFetch, handleRefresh, handleEndReached } = discovery;
+  const tourEnabled = isOnboardingPreview && locked === true && !filterVisible && !locationPickerVisible;
+  const tour = usePreviewTour(tourEnabled && !loading && !error && results.length > 0, tourEnabled);
+  const demo = usePreviewSearchDemo(tour.visible, setQuery);
+  const finishTour = useCallback(() => { demo.cancel(); tour.finish(); }, [demo.cancel, tour.finish]);
   useFocusEffect(
     useCallback(() => {
       getMacroTargets()
@@ -97,6 +100,7 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
     return () => { live = false; };
   }, [isOnboardingPreview]));
   const unlockPreview = useCallback(async (restaurant?: RestaurantResult) => {
+    if (loading || error) return;
     finishTour();
     try {
       await saveOnboardingField('previewArea', `${location.lat}:${location.lng}`);
@@ -104,10 +108,13 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
       await routeToPaywall({ intent: {
         action: restaurant ? 'menu' : 'discovery', restaurantId: restaurant?.id,
         menuItemId: restaurant?.bestMatch?.menuItemId, mealName: restaurant?.bestMatch?.name,
-        areaName: location.name, nearbyDishCount, query: query.trim(),
+        restaurantName: restaurant?.name, photoUrl: restaurant?.photoUrl,
+        nearbyRestaurants: results.filter(r => r.id !== restaurant?.id).slice(0, 2).map(r => ({ id: r.id, name: r.name, photoUrl: r.photoUrl })),
+        area: { lat: location.lat, lng: location.lng }, targets: inputs,
+        areaName: location.name, query: query.trim(),
       } });
     } catch { Alert.alert('Could not open plans', 'Please try again. Your picks are still here.'); }
-  }, [location.lat, location.lng, location.name, nearbyDishCount, query, finishTour]);
+  }, [location.lat, location.lng, location.name, query, finishTour, inputs, results, loading, error]);
   const mismatchArgsRef = useRef({ inputs, location, query, doFetch });
   mismatchArgsRef.current = { inputs, location, query, doFetch };
   const mismatchRefetch = useCallback(() => {
@@ -155,7 +162,7 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
       has_calories: newValues.calories !== '',
     });
   }
-  const handleClearQuery = useCallback(() => setQuery(''), []);
+  const handleClearQuery = useCallback(() => demo.editQuery(''), [demo.editQuery]);
   const handleJoinWaitlist = useCallback(() => {
     router.push(isOnboardingPreview ? '/welcome/out-of-area' : '/welcome/signin?outOfArea=1');
   }, [isOnboardingPreview]);
@@ -177,28 +184,32 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
     {
       key: 'search',
       title: 'Follow your craving',
-      body: 'Pizza, chicken, or your favorite restaurant. Search here as often as you like, with your meal targets alongside.',
+      body: 'Let’s try pizza. Fitsy checks nearby menus against your meal targets. Then try any craving or restaurant of your own.',
       target: tourSearchRef,
+      nextDisabled: demo.typing || loading,
     },
     {
       key: 'restaurant',
       title: 'Real meals. Know the source.',
-      body: 'Compare real dish names and macros. Look for Published or Estimated nutrition so you know where the numbers come from.',
+      body: 'Compare meal macros at real restaurants. Open a full menu with Pro to explore dishes and check their nutrition sources.',
       target: tourHeroRef,
       placement: 'above',
     },
-  ]; const first = onboardingPitch(tried).firstTip;
+  ];
+    // Demonstrate the craving before anchoring to its newly fetched restaurant.
+    const preferred = onboardingPitch(tried).firstTip;
+    const first = preferred === 'restaurant' ? 'search' : preferred;
     return [...steps.filter(step => step.key === first), ...steps.filter(step => step.key !== first),
       { key: 'location', title: 'Wherever your day takes you', body: 'Eating near work or meeting friends? Change your area here to find meals where you want to eat.', target: tourLocationRef },
-      { key: 'more', title: 'More choices. Full menus.', body: nearbyDishCount != null
-        ? `${nearbyDishCount.toLocaleString()} dishes with nutrition within 3 miles of ${locationLabel}. Explore more results and full menus with Pro. Try your first craving now.`
+      { key: 'more', title: 'More choices. Full menus.', body: goalMatch && goalMatch.matchingDishCount > 3
+        ? `${(goalMatch.matchingDishCount - results.length).toLocaleString()} more meals close to your targets in ${locationLabel}. Explore full menus with Pro. Try your first craving now.`
         : 'Explore more results and full menus with Pro. Try your first craving now.', target: tourMoreRef, placement: 'above' as const },
-    ]; }, [tried, nearbyDishCount, locationLabel]);
+    ]; }, [tried, goalMatch, results.length, locationLabel, demo.typing, loading]);
 
-  return { navigation, isOnboardingPreview, tried, inputs, query, setQuery, canSearch, hasQuery, location,
-    locationLabel, results, heroResult, listResults, nextCursor, loading, loadingMore, refreshing, error, locked, outOfArea, nearbyDishCount,
+  return { navigation, isOnboardingPreview, tried, inputs, query, setQuery: demo.editQuery, canSearch, hasQuery, location,
+    locationLabel, results, heroResult, listResults, nextCursor, loading, loadingMore, refreshing, error, locked, outOfArea, nearbyDishCount, goalMatch,
     filterVisible, setFilterVisible, locationPickerVisible, setLocationPickerVisible, tourVisible: tour.visible, startTour: tour.start,
-    tourEditRef, tourSearchRef, tourHeroRef, tourLocationRef, tourMoreRef, tourSteps, finishTour, handleClearQuery, handleApplyFilters,
+    tourEditRef, tourSearchRef, tourHeroRef, tourLocationRef, tourMoreRef, tourSteps, finishTour, tourStepShown: demo.showStep, cancelTourTyping: demo.cancel, handleClearQuery, handleApplyFilters,
     handleJoinWaitlist, handleOpenLocationPicker, handlePickLocation, handleUseCurrentLocation, unlockPreview,
     unlocking, resyncNow, onLockedTap, unlockTitle, unlockSubtitle, unlockLabel, handleRefresh, handleEndReached };
 }

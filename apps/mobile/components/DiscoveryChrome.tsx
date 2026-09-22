@@ -16,7 +16,9 @@ export function Masthead({
   locationLabel,
   onLocationPress,
   locationRef,
+  preview = false,
 }: {
+  preview?: boolean;
   locationLabel: string;
   onLocationPress: () => void;
   locationRef?: React.RefObject<View | null>;
@@ -24,10 +26,10 @@ export function Masthead({
   return (
     <View style={s.masthead}>
       <View style={s.mastheadTop}>
-        <View style={s.logoRow}>
+        {preview ? <Text style={s.previewHeading}>Your first picks</Text> : <View style={s.logoRow}>
           <View style={s.logoDot} />
           <Text style={s.logo}>fitsy</Text>
-        </View>
+        </View>}
         <View ref={locationRef} collapsable={false}><TouchableOpacity
           style={s.locationChip}
           onPress={onLocationPress}
@@ -42,7 +44,7 @@ export function Masthead({
           <Ionicons name="chevron-down" size={10} color={EDITORIAL.textSoft} />
         </TouchableOpacity></View>
       </View>
-      <Text style={s.issueLabel}>{getSelectionLabel()}</Text>
+      {!preview && <Text style={s.issueLabel}>{getSelectionLabel()}</Text>}
     </View>
   );
 }

@@ -1,8 +1,11 @@
 import React from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPress } from './AnimatedPress';
+import { WelcomeNav } from './WelcomeNav';
+import { PaywallChoiceHero } from './PaywallChoiceHero';
+import type { PaywallDiscovery } from '@/lib/usePaywallDiscovery';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { openLegalLink } from '@/lib/legalLinks';
 import type { purchaseTerms } from '@/lib/purchaseTerms';
@@ -13,13 +16,11 @@ interface Props {
   plan: PlanId;
   annual: Terms;
   monthly: Terms;
-  showImage: boolean;
+  discovery: PaywallDiscovery;
   loading: boolean;
   restoring: boolean;
   onSelect: (plan: PlanId) => void;
   onBack?: () => void;
-  context?: string;
-  localProof?: string;
   onRestore: () => void;
   onRetry: () => void;
   onPurchase: () => void;
@@ -28,36 +29,24 @@ interface Props {
 
 /** The store supplies all offer copy; this component owns only presentation. */
 export function PaywallView(props: Props) {
-  const { height, fontScale } = useWindowDimensions();
+  const { fontScale } = useWindowDimensions();
   const largeText = fontScale > 1.35;
   const { plan, annual, monthly, loading, restoring } = props;
   const selected = plan === 'yearly' ? annual : monthly;
   const busy = loading || restoring;
-  const label = loading ? 'Setting up…' : selected?.trial ? 'Try meals that fit for free' : 'Unlock meals that fit';
+  const label = loading ? 'Setting up…' : selected?.trial ? 'Try more meals that fit' : 'Find more meals that fit';
 
   return (
     <SafeAreaView key={fontScale} style={s.safe}>
-      <View style={s.nav}>
-        {props.onBack ? <Pressable disabled={busy} onPress={props.onBack} style={s.navAction} accessibilityRole="button" accessibilityLabel="Go back" testID="welcome-back">
-          <Ionicons name="chevron-back" size={23} color={EDITORIAL.textMid} />
-        </Pressable> : <View style={s.navAction} />}
-        {!largeText && <Text style={s.wordmark} accessibilityLabel="Fitsy Pro">fitsy pro</Text>}
+      <WelcomeNav progress={1} onBack={!busy ? props.onBack : undefined} trailing={
         <Pressable onPress={props.onRestore} disabled={busy} style={s.navAction} accessibilityRole="button" testID="paywall-restore">
           <Text style={[s.restore, busy && s.disabled]}>{restoring ? 'Restoring…' : 'Restore'}</Text>
         </Pressable>
-      </View>
+      } />
 
       <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false} bounces={false}>
         <View>
-          {props.showImage && (
-            <View style={[s.photo, { height: Math.max(130, Math.min(187, height * 0.2)) }]}>
-              <Image source={require('@/assets/dishes/19.jpg')} style={s.image} accessibilityLabel="Meal inspiration" testID="paywall-meal-image" />
-              <Text style={s.imageLabel}>Meal inspiration</Text>
-            </View>
-          )}
-          <Text style={s.hero}>Eat out.{'\n'}Stay on track.</Text>
-          <Text style={s.subtitle}>{props.context ?? 'Search your craving. See full menus. Save meals that fit.'}</Text>
-          {!!props.localProof && <Text style={s.proof} testID="paywall-local-proof">{props.localProof}</Text>}
+          <PaywallChoiceHero discovery={props.discovery} />
 
           <View style={s.plans}>
             {([{ id: 'yearly', name: 'Annual', terms: annual }, { id: 'monthly', name: 'Monthly', terms: monthly }] as const).map(option => {
@@ -107,17 +96,9 @@ export function PaywallView(props: Props) {
 
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: EDITORIAL.cream },
-  nav: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24 },
   navAction: { minWidth: 64, minHeight: 44, justifyContent: 'center' },
-  wordmark: { fontFamily: FONTS.frauncesDisplay, fontSize: 20, color: EDITORIAL.green },
   restore: { fontFamily: FONTS.nunitoSans, fontSize: 12, color: EDITORIAL.textMid, textDecorationLine: 'underline', textAlign: 'right' },
-  content: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 8, paddingBottom: 2 },
-  photo: { width: '100%', borderRadius: 22, overflow: 'hidden', marginBottom: 16 },
-  image: { width: '100%', height: '100%', resizeMode: 'cover' },
-  imageLabel: { position: 'absolute', left: 10, bottom: 10, backgroundColor: EDITORIAL.cream, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 12, fontFamily: FONTS.nunitoSansSemiBold, fontSize: 9, color: EDITORIAL.green },
-  hero: { fontFamily: FONTS.frauncesDisplay, fontSize: 34, lineHeight: 37, letterSpacing: -0.8, color: EDITORIAL.green },
-  subtitle: { fontFamily: FONTS.nunitoSans, fontSize: 14, lineHeight: 20, color: EDITORIAL.textMid, marginTop: 8, marginBottom: 16 },
-  proof: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 12, lineHeight: 18, color: EDITORIAL.greenMid, marginBottom: 12 },
+  content: { flexGrow: 1, paddingHorizontal: 36, paddingTop: 14, paddingBottom: 2 },
   plans: { gap: 8 },
   plan: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, minHeight: 62, borderRadius: 15, borderWidth: 1, borderColor: EDITORIAL.border },
   planSelected: { backgroundColor: EDITORIAL.greenAccentTint, borderColor: EDITORIAL.greenMid },

@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { claimPaywallIntent, clearPaywallIntent, getPaywallIntent, rememberPaywallIntent } from './paywallIntent';
+import { claimPaywallIntent, clearPaywallIntent, getPaywallIntent, getPurchasedContinuation, markPurchasedContinuation, rememberPaywallIntent } from './paywallIntent';
 
 let mockUserId: string | null = null;
 jest.mock('@supabase/supabase-js', () => {
@@ -55,4 +55,37 @@ test('old pending selections expire instead of replaying on a later visit', asyn
 test('legacy selections without account and age metadata are not replayed', async () => {
   await AsyncStorage.setItem('@fitsy/paywallIntent', JSON.stringify(choice));
   expect(await getPaywallIntent()).toBeNull();
+});
+
+test('only an owned purchased continuation survives restart, never anonymous or another account', async () => {
+  await rememberPaywallIntent(choice);
+  await markPurchasedContinuation();
+  expect(await getPurchasedContinuation()).toBeNull();
+  mockUserId = 'account-a';
+  await claimPaywallIntent('account-a');
+  await markPurchasedContinuation();
+  expect(await getPurchasedContinuation()).toEqual(choice);
+  mockUserId = 'account-b';
+  expect(await getPurchasedContinuation()).toBeNull();
+  mockUserId = null;
+  expect(await getPurchasedContinuation()).toBeNull();
+});
+
+test('a new preview selection or abandonment cannot reuse the purchased marker', async () => {
+  mockUserId = 'account-a';
+  await rememberPaywallIntent(choice);
+  await markPurchasedContinuation();
+  await rememberPaywallIntent({ action: 'discovery', query: 'salad' });
+  expect(await getPurchasedContinuation()).toBeNull();
+  await markPurchasedContinuation();
+  await clearPaywallIntent();
+  expect(await getPurchasedContinuation()).toBeNull();
+});
+
+test('purchased continuations expire with their original selection', async () => {
+  mockUserId = 'account-a';
+  await rememberPaywallIntent(choice);
+  await markPurchasedContinuation();
+  jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 24 * 60 * 60 * 1000);
+  expect(await getPurchasedContinuation()).toBeNull();
 });

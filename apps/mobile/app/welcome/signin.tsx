@@ -1,21 +1,21 @@
 import { useOnboardingStep } from '@/lib/onboardingResume';
-import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
-import { router, useLocalSearchParams } from 'expo-router';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, StyleSheet, Text } from 'react-native';
+import { router, useLocalSearchParams, useFocusEffect, useNavigation } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 
-import { Ionicons } from '@expo/vector-icons';
 import { appleSignIn, completeGoogleSignIn, devLogin } from '@/lib/authClient';
 import { pullProfileFromServer } from '@/lib/profileSync';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
-import { AnimatedPress } from '@/components/AnimatedPress';
-import { claimPaywallIntent, clearPaywallIntent, getPaywallIntent } from '@/lib/paywallIntent';
-import { getMacroTargets } from '@/lib/macroStorage';
+import { OnboardingAccountSummary } from '@/components/OnboardingAccountSummary';
+import { WelcomeAuthActions } from '@/components/WelcomeAuthActions';
+import { claimPaywallIntent, clearPaywallIntent, getPaywallIntent, type PaywallIntent } from '@/lib/paywallIntent';
+import { getMacroTargets, type StoredMacroTargets } from '@/lib/macroStorage';
 import { getOnboardingData } from '@/lib/onboardingStorage';
 import { identifyUser, trackAuthFailure, trackAuthSuccess, trackOnboardingScreenView } from '@/lib/analytics';
 import { EDITORIAL, FONTS } from '@/lib/brand';
+import { useRouteContinuation } from '@/lib/useRouteContinuation';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -36,9 +36,19 @@ async function captureIdentity(userId: string, email?: string | null): Promise<v
 }
 
 export default function SignInScreen() {
+  const navigation = useNavigation();
+  const { begin, cancel } = useRouteContinuation();
+  const googleContinuation = useRef<() => boolean>(() => false);
   const [appleLoading, setAppleLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [devLoading, setDevLoading] = useState(false);
+  const [selection, setSelection] = useState<{ intent: PaywallIntent | null; targets: StoredMacroTargets | null }>({ intent: null, targets: null });
+  useFocusEffect(useCallback(() => {
+    let live = true;
+    setAppleLoading(false); setGoogleLoading(false); setDevLoading(false);
+    void Promise.all([getPaywallIntent(), getMacroTargets()]).then(([intent, targets]) => { if (live) setSelection({ intent, targets }); });
+    return () => { live = false; };
+  }, []));
 
   // Continue from the preview to live plan terms. Permissions follow purchase.
   // Skip onboarding review; existing in-app prompts use lib/ratingPrompt.ts.
@@ -47,7 +57,8 @@ export default function SignInScreen() {
   // waitlist checkpoint so interrupted signup never resumes toward a paywall.
   useOnboardingStep(outOfArea === '1' ? 'out-of-area' : 'signin');
 
-  const navigateAfterAuth = useCallback(async (isNewUser: boolean) => {
+  const navigateAfterAuth = useCallback(async (isNewUser: boolean, isCurrent: () => boolean) => {
+    if (!isCurrent()) return;
     if (outOfArea === '1') {
       router.dismissTo('/welcome/out-of-area');
       return;
@@ -56,8 +67,21 @@ export default function SignInScreen() {
       router.dismissTo(`/welcome/${returnTo}`);
       return;
     }
-    router.replace(isNewUser || await getPaywallIntent() ? '/welcome/trial' : '/(tabs)/search');
+    const destination = isNewUser || await getPaywallIntent() ? '/welcome/payment' : '/(tabs)/search';
+    if (isCurrent()) router.replace(destination);
   }, [outOfArea, returnTo]);
+
+  const finishAuth = useCallback(async (r: Awaited<ReturnType<typeof appleSignIn>>, provider: 'apple' | 'google' | 'dev', isCurrent: () => boolean) => {
+    trackAuthSuccess({ provider, is_new_user: provider === 'dev' ? false : r.isNewUser });
+    // The SDK retains the completed session even if this route was left.
+    // A stale continuation must not claim a newer preview's selected meal.
+    if (!isCurrent()) return;
+    await claimPaywallIntent(r.user.id);
+    await captureIdentity(r.user.id, r.user.email);
+    if (!isCurrent()) return;
+    if (!r.isNewUser && outOfArea !== '1' && !(await getPaywallIntent()) && isCurrent()) await pullProfileFromServer();
+    await navigateAfterAuth(r.isNewUser, isCurrent);
+  }, [navigateAfterAuth, outOfArea]);
 
   const [, response, promptGoogleAsync] = Google.useIdTokenAuthRequest({
     iosClientId: GOOGLE_IOS_CLIENT_ID ?? 'not-configured',
@@ -72,145 +96,90 @@ export default function SignInScreen() {
     if (response?.type === 'success') {
       const idToken = response.params['id_token'];
       if (idToken) {
-        setGoogleLoading(true);
+        const isCurrent = googleContinuation.current;
+        if (isCurrent()) setGoogleLoading(true);
         completeGoogleSignIn(idToken)
-          .then(async (r) => {
-            await claimPaywallIntent(r.user.id);
-            trackAuthSuccess({ provider: 'google', is_new_user: r.isNewUser });
-            await captureIdentity(r.user.id, r.user.email);
-            if (!r.isNewUser && outOfArea !== '1' && !(await getPaywallIntent())) await pullProfileFromServer();
-            setGoogleLoading(false);
-            // Preserve the selected meal through sign-in; returning subscribers
-            // without a preview intent continue to their existing account.
-            await navigateAfterAuth(r.isNewUser);
-          })
+          .then(r => finishAuth(r, 'google', isCurrent))
           .catch((err: Error) => {
             trackAuthFailure({ provider: 'google', error_message: err.message });
-            setGoogleLoading(false);
-            Alert.alert('Sign In Failed', err.message);
-          });
+            if (isCurrent()) Alert.alert('Sign In Failed', err.message);
+          })
+          .finally(() => { if (isCurrent()) setGoogleLoading(false); });
       }
     } else if (response?.type === 'error') {
       trackAuthFailure({ provider: 'google', error_message: response.error?.message });
-      Alert.alert('Google Sign In Error', response.error?.message ?? 'Unknown error');
+      if (googleContinuation.current()) Alert.alert('Google Sign In Error', response.error?.message ?? 'Unknown error');
     }
-  }, [response, navigateAfterAuth, outOfArea]);
+  }, [response, finishAuth]);
 
   async function handleApple() {
+    const isCurrent = begin();
     setAppleLoading(true);
     try {
       const r = await appleSignIn();
-      await claimPaywallIntent(r.user.id);
-      trackAuthSuccess({ provider: 'apple', is_new_user: r.isNewUser });
-      await captureIdentity(r.user.id, r.user.email);
-      if (!r.isNewUser && outOfArea !== '1' && !(await getPaywallIntent())) await pullProfileFromServer();
-      await navigateAfterAuth(r.isNewUser);
+      await finishAuth(r, 'apple', isCurrent);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Apple Sign In failed';
       if (!msg.includes('canceled')) {
         trackAuthFailure({ provider: 'apple', error_message: msg });
-        Alert.alert('Sign In Failed', msg);
+        if (isCurrent()) Alert.alert('Sign In Failed', msg);
       }
-    } finally { setAppleLoading(false); }
+    } finally { if (isCurrent()) setAppleLoading(false); }
   }
 
   async function handleGoogle() {
     if (!GOOGLE_IOS_CLIENT_ID) { Alert.alert('Not Configured', 'Google Sign In is not configured yet.'); return; }
-    await promptGoogleAsync();
+    const isCurrent = begin();
+    googleContinuation.current = isCurrent;
+    setGoogleLoading(true);
+    try {
+      const result = await promptGoogleAsync();
+      if (result.type !== 'success' && isCurrent()) setGoogleLoading(false);
+    } catch (err) {
+      if (isCurrent()) { setGoogleLoading(false); Alert.alert('Google Sign In Error', err instanceof Error ? err.message : 'Please try again.'); }
+    }
   }
 
   // Dev-only: skip Apple/Google (which need real OAuth config / a signed build)
   // and authenticate with a throwaway account so onboarding can be exercised on
   // the simulator. Continues the normal post-signin onboarding chain.
   async function handleDevLogin() {
+    const isCurrent = begin();
     setDevLoading(true);
     try {
       const r = await devLogin();
-      await claimPaywallIntent(r.user.id);
-      trackAuthSuccess({ provider: 'dev', is_new_user: false });
-      await captureIdentity(r.user.id, r.user.email);
       // Continue where a new user would land, so the full flow is testable on the sim.
-      await navigateAfterAuth(true);
+      await finishAuth({ ...r, isNewUser: true }, 'dev', isCurrent);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Dev login failed';
       trackAuthFailure({ provider: 'dev', error_message: msg });
-      Alert.alert('Dev Login Failed', msg);
+      if (isCurrent()) Alert.alert('Dev Login Failed', msg);
     } finally {
-      setDevLoading(false);
+      if (isCurrent()) setDevLoading(false);
     }
   }
 
   const busy = appleLoading || googleLoading || devLoading;
 
-  return (
-    <WelcomeScreen
-      title="Create an account"
-      subtitle="Keep your meal picks and targets with one sign-in."
-      onContinue={() => {}}
-      canContinue={false}
-      hideFooter
-      onBack={() => { void clearPaywallIntent().then(() => router.back(), () => router.back()); }}
-    >
-      <View style={s.wrap}>
-        <Animated.View entering={FadeInDown.duration(400).delay(100)} style={s.btns}>
-          <AnimatedPress
-            style={[s.apple, busy ? s.dim : undefined]}
-            onPress={handleApple}
-            disabled={busy}
-            haptic
-            accessibilityRole="button"
-            accessibilityLabel="Continue with Apple"
-          >
-            <Ionicons name="logo-apple" size={20} color={EDITORIAL.cream} />
-            <Text style={s.appleTxt}>{appleLoading ? 'Signing in...' : 'Continue with Apple'}</Text>
-          </AnimatedPress>
-
-          <AnimatedPress
-            style={[s.google, busy ? s.dim : undefined]}
-            onPress={handleGoogle}
-            disabled={busy}
-            haptic
-            accessibilityRole="button"
-            accessibilityLabel="Continue with Google"
-          >
-            <Ionicons name="logo-google" size={20} color={EDITORIAL.text} />
-            <Text style={s.googleTxt}>{googleLoading ? 'Signing in...' : 'Continue with Google'}</Text>
-          </AnimatedPress>
-
-          {__DEV__ && (
-            <AnimatedPress
-              style={[s.google, busy ? s.dim : undefined]}
-              onPress={handleDevLogin}
-              disabled={busy}
-              haptic
-              accessibilityRole="button"
-              accessibilityLabel="Dev login"
-            >
-              <Ionicons name="code-slash" size={20} color={EDITORIAL.textSoft} />
-              <Text style={s.googleTxt}>{devLoading ? 'Signing in...' : 'Dev Login (skip auth)'}</Text>
-            </AnimatedPress>
-          )}
-        </Animated.View>
-
-        <Text style={s.legal}>By continuing you agree to our Terms of Service and Privacy Policy.</Text>
-      </View>
-    </WelcomeScreen>
-  );
+  const hasIntent = outOfArea !== '1' && !!selection.intent;
+  return <WelcomeScreen progress={0.82}
+    title={hasIntent ? "Keep this\nrestaurant in reach." : 'Create an account'}
+    subtitle={hasIntent ? 'Keep your pick, then choose a plan to open its full menu.' : outOfArea === '1' ? 'Sign in for updates when more menus arrive in your area.' : 'Keep your meal picks and targets with one sign-in.'}
+    onContinue={() => {}} canContinue={false} hideFooter
+    onBack={navigation.canGoBack() ? () => {
+      cancel();
+      const goBack = () => { if (navigation.isFocused() && navigation.canGoBack()) router.back(); };
+      void clearPaywallIntent().then(goBack, goBack);
+    } : undefined}
+    footerContent={<>
+      <WelcomeAuthActions busy={busy} appleLoading={appleLoading} googleLoading={googleLoading} devLoading={devLoading}
+        onApple={handleApple} onGoogle={handleGoogle} onDev={handleDevLogin} />
+      <Text style={s.legal}>By continuing you agree to our Terms of Service and Privacy Policy.</Text>
+    </>}>
+    {hasIntent && selection.intent && <OnboardingAccountSummary intent={selection.intent} targets={selection.targets} />}
+  </WelcomeScreen>;
 }
 
 const s = StyleSheet.create({
-  wrap: { flex: 1, justifyContent: 'center' },
-  btns: { gap: 12, marginBottom: 24 },
-  apple: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-    backgroundColor: EDITORIAL.text, borderRadius: 32, paddingVertical: 18,
-  },
-  appleTxt: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 16, fontWeight: '600', color: EDITORIAL.cream },
-  google: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-    backgroundColor: EDITORIAL.creamCard, borderRadius: 32, paddingVertical: 18,
-  },
-  googleTxt: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 16, fontWeight: '600', color: EDITORIAL.text },
-  dim: { opacity: 0.4 },
   legal: { fontFamily: FONTS.nunitoSans, fontSize: 12, textAlign: 'center', lineHeight: 18, color: EDITORIAL.textSoft },
 });

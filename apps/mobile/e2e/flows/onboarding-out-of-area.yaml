@@ -7,7 +7,8 @@ tags: [onboarding, auth, changed-journey]
     clearState: true
     clearKeychain: true
 - extendedWaitUntil:
-    visible: "Find meals that fit"
+    visible:
+      id: welcome-start
     timeout: 30000
 - waitForAnimationToEnd
 - tapOn:
@@ -29,10 +30,11 @@ tags: [onboarding, auth, changed-journey]
     timeout: 30000
 - assertVisible: "More menus are.*"
 - assertNotVisible:
-    id: trial-see-plans
+    id: paywall-plan-yearly
 - tapOn:
     id: waitlist-join
-- assertVisible: "Create an account"
+- assertVisible: "Continue with Apple"
+- assertVisible: "Continue with Google"
 # Interrupting waitlist signup must keep its destination across a cold launch.
 - stopApp
 - launchApp
@@ -47,10 +49,11 @@ tags: [onboarding, auth, changed-journey]
             id: waitlist-join
           timeout: 30000
 - assertVisible: "More menus are.*"
-- assertNotVisible: "Create an account"
+- assertNotVisible: "Continue with Apple"
 - tapOn:
     id: waitlist-join
-- assertVisible: "Create an account"
+- assertVisible: "Continue with Apple"
+- assertVisible: "Continue with Google"
 - tapOn:
     id: welcome-back
 - assertVisible:
@@ -61,19 +64,19 @@ tags: [onboarding, auth, changed-journey]
     visible:
       id: location-choose-area
     timeout: 15000
-- assertVisible: "Selected: Your location"
+- assertVisible: "Continue with Your location"
 - tapOn:
     id: location-choose-area
 - tapOn: "Search near DTLA"
 - extendedWaitUntil:
     visible:
-      id: welcome-continue
-      enabled: true
+      id: tried-meal_prep
     timeout: 30000
-- assertVisible: ".*dishes with nutrition within 3 miles.*"
-- assertVisible: "About the nutrition"
+- assertVisible: "What have you tried.*for healthy eating.*"
 - assertNotVisible:
     id: waitlist-join
+- assertNotVisible:
+    id: paywall-plan-yearly
 # The selected manual area survives another restart, independent of GPS.
 - stopApp
 - launchApp
@@ -84,8 +87,22 @@ tags: [onboarding, auth, changed-journey]
           timeout: 10000
       - extendedWaitUntil:
           visible:
-            id: welcome-continue
-            enabled: true
+            id: tried-meal_prep
           timeout: 30000
-- assertVisible: ".*dishes with nutrition within 3 miles.*"
-- assertVisible: "About the nutrition"
+- assertNotVisible:
+    id: waitlist-join
+- openLink: com.fitsy.mobile://welcome/location-permission
+- extendedWaitUntil:
+    visible:
+      id: location-continue-area
+    timeout: 15000
+- assertVisible: "Continue with DTLA"
+- assertNotVisible: "Continue with Your location"
+- tapOn:
+    id: location-continue-area
+- extendedWaitUntil:
+    visible:
+      id: tried-meal_prep
+    timeout: 30000
+- assertNotVisible:
+    id: waitlist-join

@@ -11,6 +11,7 @@ export interface CoachMarkStep {
   target: React.RefObject<View | null>;
   /** Which side of the target the bubble sits on. Default: below. */
   placement?: 'below' | 'above';
+  nextDisabled?: boolean;
 }
 
 interface Rect { x: number; y: number; width: number; height: number }
@@ -22,6 +23,7 @@ interface CoachMarksProps {
   doneLabel?: string;
   onBeforeStep?: (step: CoachMarkStep) => Promise<void>;
   onStepShown?: (step: CoachMarkStep, index: number) => void;
+  onStepLeaving?: () => void;
 }
 
 const CUTOUT_PAD = 6;
@@ -38,7 +40,7 @@ const SCRIM = 'rgba(15,31,21,0.55)';
  * Next / Got it. Targets are measured in window coordinates when their step
  * shows; a target that isn't mounted is skipped so the tour never blocks.
  */
-export function CoachMarks({ visible, steps, onDone, onStepShown, onBeforeStep, doneLabel = 'Got it' }: CoachMarksProps) {
+export function CoachMarks({ visible, steps, onDone, onStepShown, onStepLeaving, onBeforeStep, doneLabel = 'Got it' }: CoachMarksProps) {
   const { width: winW, height: winH } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [bubbleHeight, setBubbleHeight] = useState(BUBBLE_EST_H);
@@ -97,6 +99,8 @@ export function CoachMarks({ visible, steps, onDone, onStepShown, onBeforeStep, 
 
   const isLast = index === steps.length - 1;
   const next = () => {
+    if (step.nextDisabled) return;
+    onStepLeaving?.();
     if (isLast) onDone();
     else setIndex((i) => i + 1);
   };
@@ -154,15 +158,17 @@ export function CoachMarks({ visible, steps, onDone, onStepShown, onBeforeStep, 
               <Text style={s.title}>{step.title}</Text>
               <Text style={s.body}>{step.body}</Text>
               <View style={s.actions}>
-                {previous !== undefined && <Pressable testID="coachmark-back" style={s.textButton} onPress={() => setIndex(previous)} accessibilityRole="button" accessibilityLabel="Previous tip"><Text style={s.skip}>Back</Text></Pressable>}
+                {previous !== undefined && <Pressable testID="coachmark-back" style={s.textButton} onPress={() => { onStepLeaving?.(); setIndex(previous); }} accessibilityRole="button" accessibilityLabel="Previous tip"><Text style={s.skip}>Back</Text></Pressable>}
                 <Pressable
                   style={({ pressed }) => [s.nextBtn, pressed && s.nextBtnPressed]}
                   onPress={next}
+                  disabled={step.nextDisabled}
+                  accessibilityState={{ disabled: Boolean(step.nextDisabled) }}
                   accessibilityRole="button"
                   testID="coachmark-next"
                   accessibilityLabel={isLast ? doneLabel : 'Next tip'}
                 >
-                  <Text style={s.nextTxt}>{isLast ? doneLabel : 'Next'}</Text>
+                  <Text style={s.nextTxt}>{step.nextDisabled ? 'Finding meals…' : isLast ? doneLabel : 'Next'}</Text>
                 </Pressable>
               </View>
             </ScrollView>

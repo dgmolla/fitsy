@@ -6,7 +6,8 @@ tags: [onboarding, discovery, changed-journey]
     clearState: true
     clearKeychain: true
 - extendedWaitUntil:
-    visible: "Find meals that fit"
+    visible:
+      id: welcome-start
     timeout: 30000
 - waitForAnimationToEnd
 - tapOn:
@@ -15,6 +16,13 @@ tags: [onboarding, discovery, changed-journey]
     id: welcome-start
 - tapOn:
     id: welcome-continue
+- tapOn:
+    id: location-choose-area
+- tapOn: "Search near DTLA"
+- extendedWaitUntil:
+    visible:
+      id: tried-meal_prep
+    timeout: 30000
 - tapOn:
     id: tried-meal_prep
 - tapOn:
@@ -30,19 +38,9 @@ tags: [onboarding, discovery, changed-journey]
 - assertVisible: "For the meals.*"
 - tapOn:
     id: welcome-continue
-- assertVisible: "Where would you.*"
-- tapOn:
-    id: location-choose-area
-- tapOn: "Search near DTLA"
-- extendedWaitUntil:
-    visible:
-      id: welcome-continue
-      enabled: true
-    timeout: 30000
-- assertVisible: "About the nutrition"
-- tapOn:
-    id: welcome-continue
-- assertVisible: "Know your numbers.*"
+- assertVisible:
+    id: fitness-payoff-diagram
+- assertVisible: "Your fitness plan.*can come with you.*"
 - tapOn:
     id: welcome-continue
 - tapOn:
@@ -54,6 +52,11 @@ tags: [onboarding, discovery, changed-journey]
     id: target-mode-estimate
 - tapOn:
     id: target-mode-estimate
+- assertVisible:
+    id: target-mode-estimate
+    checked: true
+- tapOn:
+    id: welcome-continue
 - assertVisible: "What's your goal.*"
 - tapOn:
     id: goal-maintain
@@ -88,6 +91,10 @@ tags: [onboarding, discovery, changed-journey]
     id: meal-target-calories
 - eraseText: 7
 - inputText: "700"
+- assertVisible: "700"
+- tapOn:
+    id: welcome-continue
+- assertVisible: "A little context.*A better choice.*"
 - tapOn:
     id: welcome-continue
 - extendedWaitUntil:
@@ -95,21 +102,50 @@ tags: [onboarding, discovery, changed-journey]
       id: coachmark-next
     timeout: 30000
 - assertVisible: "Follow your craving"
+# Keep the calculated protein/carbs/fat targets. Pizza genuinely has no match
+# for this profile, so the tour must finish without a phantom restaurant anchor.
+- extendedWaitUntil:
+    visible:
+      id: coachmark-next
+      enabled: true
+    timeout: 30000
 - tapOn:
     id: coachmark-next
+- assertVisible: "Your meal targets"
 - tapOn:
     id: coachmark-next
-- tapOn:
-    id: coachmark-next
+- extendedWaitUntil:
+    visible: "Wherever your day takes you"
+    timeout: 15000
+- assertNotVisible: "Real meals. Know the source."
 - tapOn:
     id: coachmark-next
 - assertVisible: "5 OF 5"
 - tapOn: "Find my meal"
+- copyTextFrom:
+    id: discovery-search
+- assertTrue: ${maestro.copiedText === 'pizza'}
 - assertVisible: "700"
-- assertVisible:
+- assertVisible: "No matches nearby"
+- assertNotVisible:
     id: discovery-hero
+- assertNotVisible:
+    id: discovery-loading
+- assertNotVisible:
+    id: discovery-join-waitlist
+# Clearing the demo restores real qualifying meals, without changing targets.
+- tapOn:
+    id: discovery-clear-search
+- extendedWaitUntil:
+    visible:
+      id: discovery-hero
+    timeout: 30000
+- assertVisible: "700"
 - tapOn:
     id: preview-back
+- assertVisible: "A little context.*A better choice.*"
+- tapOn:
+    id: welcome-back
 - assertVisible: "700"
 - assertVisible:
     id: meal-goal-build_muscle
@@ -121,6 +157,9 @@ tags: [onboarding, discovery, changed-journey]
 - tapOn:
     id: welcome-continue
 - assertVisible: "700"
+- tapOn:
+    id: welcome-continue
+- assertVisible: "A little context.*A better choice.*"
 - tapOn:
     id: welcome-continue
 - extendedWaitUntil:

@@ -12,10 +12,8 @@ import { ensureSessionForPurchase } from '@/lib/purchaseSession';
 import { trackOnboardingScreenView, trackPaywallExperimentExposure } from '@/lib/analytics';
 import { usePreviewAccess } from '@/lib/usePreviewAccess';
 import { rememberPaywallDecline } from '@/lib/paywallAccess';
-import { getOnboardingData } from '@/lib/onboardingStorage';
-import { fetchGuidedPreview } from '@/lib/guidedPreview';
+import { usePaywallDiscovery } from '@/lib/usePaywallDiscovery';
 import { openPurchasedDestination, resetWelcomeJourney } from '@/lib/paywallJourney';
-import { getPaywallIntent, type PaywallIntent } from '@/lib/paywallIntent';
 import { purchaseTerms, savingPercent } from '@/lib/purchaseTerms';
 
 type PlanId = 'monthly' | 'yearly';
@@ -24,7 +22,7 @@ export default function PaymentScreen() {
   useOnboardingStep('payment');
   const navigation = useNavigation();
   const focused = useIsFocused();
-  const [intent, setIntent] = useState<PaywallIntent | null>(null);
+  const discovery = usePaywallDiscovery(focused);
   const [plan, setPlan] = useState<PlanId>('yearly');
   const variants = usePreviewAccess();
   const exposure = useRef('');
@@ -56,18 +54,7 @@ export default function PaymentScreen() {
 
   useEffect(() => {
     trackOnboardingScreenView('payment');
-    let live = true;
-    void Promise.all([getPaywallIntent(), getOnboardingData()]).then(async ([saved, data]) => {
-      if (!live || !saved) return;
-      setIntent({ ...saved, nearbyDishCount: undefined });
-      if (data.area && data.area.name === saved.areaName) {
-        try {
-          const preview = await fetchGuidedPreview(data.area);
-          if (live) setIntent({ ...saved, nearbyDishCount: preview.meta.nearbyDishCount });
-        } catch { /* Count is optional; never substitute a fabricated total. */ }
-      }
-    });
-    return () => { live = false; };
+
   }, []);
 
   // The boot-time offering fetch can fail (offline at launch, StoreKit hiccup).
@@ -78,11 +65,11 @@ export default function PaymentScreen() {
 
   useEffect(() => {
     if (!offering) return;
-    const key = `${offering.identifier}:${variants.access}:${variants.image}`;
+    const key = `${offering.identifier}:${variants.access}:choice_c`;
     if (exposure.current === key) return;
     exposure.current = key;
-    trackPaywallExperimentExposure({ offering_id: offering.identifier, access_variant: variants.access, image_variant: variants.image });
-  }, [offering, variants.access, variants.image]);
+    trackPaywallExperimentExposure({ offering_id: offering.identifier, access_variant: variants.access, image_variant: 'meal', layout_variant: 'choice_c' });
+  }, [offering, variants.access]);
 
   async function declineSubscription() {
     try {
@@ -165,13 +152,11 @@ export default function PaymentScreen() {
         plan={plan}
         annual={annualTerms}
         monthly={monthlyTerms}
-        showImage={variants.image === 'meal'}
+        discovery={discovery}
         loading={loading}
         restoring={restoring}
         onSelect={setPlan}
         onBack={navigation.canGoBack() ? () => router.back() : undefined}
-        context={intent?.mealName ? `${intent.action === 'save' ? 'Save' : 'See the full menu for'} ${intent.mealName}. Plus craving search and meals that fit.` : undefined}
-        localProof={intent?.nearbyDishCount ? `${intent.nearbyDishCount.toLocaleString()} dishes with nutrition within 3 miles of ${intent.areaName ?? 'your selected area'}.` : undefined}
         onRestore={() => { void handleRestore(); }}
         onRetry={() => { void refreshOffering(); }}
         onPurchase={() => { void handleStart(false); }}

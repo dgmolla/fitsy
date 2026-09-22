@@ -1,7 +1,8 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated as RNAnimated, Dimensions, Image, Pressable, SafeAreaView, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
+import { Animated as RNAnimated, Dimensions, Image, Pressable, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { router } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { DISHES } from '@/lib/dishImages';
@@ -87,7 +88,7 @@ export default function ProblemScreen() {
             Eat what you crave.{'\n'}Find what fits.
           </Animated.Text>
 
-          <Text style={s.subtitle}>Nearby dishes. Clear macros. More confidence eating out.</Text>
+          <Text style={s.subtitle}>Good food. Your goals in mind.</Text>
 
           <Animated.View entering={FadeIn.duration(500).delay(400)} style={s.footerInner}>
             <AnimatedPress

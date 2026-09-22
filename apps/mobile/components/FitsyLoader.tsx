@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { AccessibilityInfo, Animated, StyleSheet, View } from 'react-native';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 
 export type FitsyLoaderSize = 'sm' | 'md' | 'lg';
@@ -21,10 +21,11 @@ const STAGGER_MS = 90;
 const BOUNCE_MS = 200;
 const LOOP_MS = (LETTERS.length - 1) * STAGGER_MS + BOUNCE_MS + 400;
 
-function LetterBounce({ letter, index, fontSize }: { letter: string; index: number; fontSize: number }) {
+function LetterBounce({ letter, index, fontSize, reduceMotion }: { letter: string; index: number; fontSize: number; reduceMotion: boolean }) {
   const translateY = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    if (reduceMotion) { translateY.setValue(0); return; }
     const delay = index * STAGGER_MS;
     const tailDelay = LOOP_MS - delay - BOUNCE_MS;
 
@@ -38,10 +39,10 @@ function LetterBounce({ letter, index, fontSize }: { letter: string; index: numb
     );
     animation.start();
     return () => animation.stop();
-  }, [index, translateY]);
+  }, [index, translateY, reduceMotion]);
 
   return (
-    <Animated.Text style={[styles.letter, { fontSize, transform: [{ translateY }] }]}>
+    <Animated.Text accessible={false} style={[styles.letter, { fontSize, transform: [{ translateY }] }]}>
       {letter}
     </Animated.Text>
   );
@@ -49,11 +50,18 @@ function LetterBounce({ letter, index, fontSize }: { letter: string; index: numb
 
 export function FitsyLoader({ size = 'md' }: FitsyLoaderProps) {
   const fontSize = FONT_SIZES[size];
+  const [reduceMotion, setReduceMotion] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then(value => { if (live) setReduceMotion(value); });
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => { live = false; subscription.remove(); };
+  }, []);
 
   return (
-    <View style={styles.container} accessibilityLabel="Loading" accessibilityRole="progressbar">
+    <View style={styles.container} accessible accessibilityLabel="Loading" accessibilityRole="progressbar">
       {LETTERS.map((letter, index) => (
-        <LetterBounce key={letter} letter={letter} index={index} fontSize={fontSize} />
+        <LetterBounce key={letter} letter={letter} index={index} fontSize={fontSize} reduceMotion={reduceMotion} />
       ))}
     </View>
   );

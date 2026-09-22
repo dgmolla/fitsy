@@ -19,7 +19,7 @@ it('searches with the current edited meal values instead of stale persisted targ
   await saveMacroTargets({ calories: '900', protein: '20', carbs: '90', fat: '40' });
   await fetchGuidedPreview(area, 'chicken', { calories: '600', protein: '40', carbs: '60', fat: '0' });
   const url = new URL((global.fetch as jest.Mock).mock.calls[0][0]);
-  expect(Object.fromEntries(url.searchParams)).toEqual({ guided: '1', lat: '34.0522', lng: '-118.2437', q: 'chicken', calories: '600', protein: '40', carbs: '60', fat: '0' });
+  expect(Object.fromEntries(url.searchParams)).toEqual({ guided: '1', lat: '34.0522', lng: '-118.2437', q: 'chicken', calories: '600', protein: '40', carbs: '60' });
 });
 
 it('shows area coverage without personal target claims before target setup', async () => {
@@ -34,4 +34,47 @@ it('shows area coverage without personal target claims before target setup', asy
 it('does not turn a temporary network failure into an empty coverage result', async () => {
   (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('offline'));
   await expect(fetchGuidedPreview(area)).rejects.toThrow('offline');
+});
+
+it('reuses a fresh exact-context preview for its selected dish without another backend count', async () => {
+  const { restaurantResultSchema } = await import('../../../packages/shared/src/contracts/restaurants');
+  const fixture = restaurantResultSchema.parse({ id: 'chosen', name: 'Test Restaurant', cuisineTags: [], address: 'Test', distanceMiles: 1, lat: area.lat, lng: area.lng, chainFlag: false,
+    bestMatch: { menuItemId: 'chosen-dish', name: 'Test meal', calories: 600, proteinG: 40, carbsG: 60, fatG: 20, confidence: 'HIGH', matchScore: 0 } });
+  (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ data: [fixture], meta: { radiusMiles: 3, nearbyDishCount: 200,
+    goalMatch: { policy: 'within-20-percent-v1', activeTargets: { calories: 600 }, matchingDishCount: 17, additionalDishCount: 17, selectedItemMatches: false } } }) });
+  const targets = { calories: '600', protein: '', carbs: '', fat: '' };
+  const first = await fetchGuidedPreview(area, 'cache-test', targets);
+  const selected = await fetchGuidedPreview(area, 'cache-test', targets, { selectedItemId: 'chosen-dish' });
+  expect(global.fetch).toHaveBeenCalledTimes(1);
+  expect(selected.meta.goalMatch?.additionalDishCount).toBe(16);
+  expect(first.meta.goalMatch?.additionalDishCount).toBe(17);
+  await fetchGuidedPreview(area, 'changed craving', targets);
+  await fetchGuidedPreview({ ...area, lat: area.lat + 0.01 }, 'cache-test', targets);
+  await fetchGuidedPreview(area, 'cache-test', { ...targets, calories: '650' });
+  expect(global.fetch).toHaveBeenCalledTimes(4);
+});
+
+it('revalidates expired preview proof and unknown selected dishes', async () => {
+  const targets = { calories: '500', protein: '', carbs: '', fat: '' };
+  await fetchGuidedPreview(area, 'expiry-test', targets);
+  await fetchGuidedPreview(area, 'expiry-test', targets, { selectedItemId: 'not-in-top-three' });
+  const url = new URL((global.fetch as jest.Mock).mock.calls[1][0]);
+  expect(url.searchParams.get('selectedItemId')).toBe('not-in-top-three');
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 30_001);
+  try { await fetchGuidedPreview(area, 'expiry-test', targets); }
+  finally { clock.mockRestore(); }
+  expect(global.fetch).toHaveBeenCalledTimes(3);
+});
+
+it('passes cancellation to the transport and never caches a cancelled response', async () => {
+  const controller = new AbortController();
+  const targets = { calories: '650', protein: '', carbs: '', fat: '' };
+  (global.fetch as jest.Mock).mockImplementationOnce(async () => {
+    controller.abort();
+    return { ok: true, status: 200, json: async () => response };
+  });
+  await expect(fetchGuidedPreview(area, 'cancel-test', targets, { signal: controller.signal })).rejects.toThrow('cancelled');
+  expect((global.fetch as jest.Mock).mock.calls[0][1].signal).toBe(controller.signal);
+  await fetchGuidedPreview(area, 'cancel-test', targets);
+  expect(global.fetch).toHaveBeenCalledTimes(2);
 });

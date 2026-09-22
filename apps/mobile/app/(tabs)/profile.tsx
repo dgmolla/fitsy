@@ -263,7 +263,7 @@ export default function ProfileScreen() {
         </View>
 
         {/* Goal banner */}
-        <Pressable style={s.goalBanner} onPress={() => openEditField('goal')}>
+        <Pressable testID="profile-edit-goal" style={s.goalBanner} onPress={() => openEditField('goal')}>
           <View style={s.goalIconCircle}>
             <Ionicons name={goalIcon as ComponentProps<typeof Ionicons>['name']} size={18} color={EDITORIAL.greenAccent} />
           </View>
@@ -276,22 +276,22 @@ export default function ProfileScreen() {
 
         {/* Body stats row */}
         <View style={s.statsCard}>
-          <Pressable style={s.statBlock} onPress={() => openEditField('age')}>
+          <Pressable testID="profile-edit-age" style={s.statBlock} onPress={() => openEditField('age')}>
             <Text style={s.statValue}>{age ?? '—'}</Text>
             <Text style={s.statLabel}>Age</Text>
           </Pressable>
           <View style={s.statDivider} />
-          <Pressable style={s.statBlock} onPress={() => openEditField('height')}>
+          <Pressable testID="profile-edit-height" style={s.statBlock} onPress={() => openEditField('height')}>
             <Text style={s.statValue}>{profile.heightCm ? `${Math.floor(profile.heightCm / 2.54 / 12)}'${Math.round(profile.heightCm / 2.54 % 12)}"` : '—'}</Text>
             <Text style={s.statLabel}>Height</Text>
           </Pressable>
           <View style={s.statDivider} />
-          <Pressable style={s.statBlock} onPress={() => openEditField('weight')}>
+          <Pressable testID="profile-edit-weight" style={s.statBlock} onPress={() => openEditField('weight')}>
             <Text style={s.statValue}>{profile.weightKg ? `${Math.round(profile.weightKg * 2.20462)}lbs` : '—'}</Text>
             <Text style={s.statLabel}>Weight</Text>
           </Pressable>
           <View style={s.statDivider} />
-          <Pressable style={s.statBlock} onPress={() => openEditField('activity')}>
+          <Pressable testID="profile-edit-activity" style={s.statBlock} onPress={() => openEditField('activity')}>
             <Text style={s.statValueWord}>
               {ACTIVITY_OPTIONS.find((o) => o.id === profile.activity)?.label ?? '—'}
             </Text>
@@ -301,7 +301,7 @@ export default function ProfileScreen() {
 
         {/* Per-meal targets */}
         {macroTargets && (
-          <Pressable onPress={() => setFilterVisible(true)} style={s.macroCard}>
+          <Pressable testID="profile-edit-meal-targets" onPress={() => setFilterVisible(true)} style={s.macroCard}>
             <View style={s.macroHeader}>
               <Text style={s.macroTitle}>Per-Meal Targets</Text>
               <View style={s.editChip}>
@@ -320,7 +320,7 @@ export default function ProfileScreen() {
         )}
 
         {/* Feedback */}
-        <Pressable style={s.feedbackBanner} onPress={() => router.push('/feedback-board')}>
+        <Pressable testID="profile-feedback" style={s.feedbackBanner} onPress={() => router.push('/feedback-board')}>
           <View style={s.goalIconCircle}>
             <Ionicons name="chatbubble-ellipses-outline" size={18} color={EDITORIAL.greenAccent} />
           </View>
@@ -333,31 +333,31 @@ export default function ProfileScreen() {
 
         {/* Reminders */}
         <Pressable style={s.feedbackBanner} onPress={() => router.push('/notification-settings')} accessibilityRole="button" testID="profile-reminders">
-          <Text style={s.feedbackValue}>Reminders</Text>
+          <Text style={s.feedbackValue}>Notifications</Text>
           <Ionicons name="chevron-forward" size={14} color={EDITORIAL.creamDeep} />
         </Pressable>
         {/* Logout */}
-        <Pressable style={s.logoutBtn} onPress={handleLogout}>
+        <Pressable testID="profile-logout" style={s.logoutBtn} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={16} color="#B85450" />
           <Text style={s.logoutText}>Log out</Text>
         </Pressable>
 
         {/* Delete account — subtle, destructive */}
-        <Pressable style={s.deleteBtn} onPress={confirmDelete}>
+        <Pressable testID="profile-delete-account" style={s.deleteBtn} onPress={confirmDelete}>
           <Text style={s.deleteText}>Delete account</Text>
         </Pressable>
 
         {/* Legal / support — quiet footer */}
         <View style={s.legalRow}>
-          <Pressable hitSlop={8} onPress={() => openLegalLink('privacy')}>
+          <Pressable testID="profile-privacy" hitSlop={8} onPress={() => openLegalLink('privacy')}>
             <Text style={s.legalLink}>Privacy</Text>
           </Pressable>
           <Text style={s.legalDot}>·</Text>
-          <Pressable hitSlop={8} onPress={() => openLegalLink('terms')}>
+          <Pressable testID="profile-terms" hitSlop={8} onPress={() => openLegalLink('terms')}>
             <Text style={s.legalLink}>Terms</Text>
           </Pressable>
           <Text style={s.legalDot}>·</Text>
-          <Pressable hitSlop={8} onPress={() => openLegalLink('support')}>
+          <Pressable testID="profile-support" hitSlop={8} onPress={() => openLegalLink('support')}>
             <Text style={s.legalLink}>Support</Text>
           </Pressable>
         </View>

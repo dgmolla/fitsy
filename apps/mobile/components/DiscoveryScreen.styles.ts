@@ -4,8 +4,9 @@ const HERO_H = 320;
 const DISH_CARD_H = 138;
 
 export const s = StyleSheet.create({
+  previewHeading: { flex: 1, fontFamily: FONTS.frauncesDisplay, fontSize: 24, lineHeight: 30, color: EDITORIAL.green, letterSpacing: -0.5 },
   previewTourButton: { alignItems: 'center', justifyContent: 'center', width: 44, minHeight: 44, flexShrink: 0 },
-  previewIntro: { flexDirection: 'row', alignItems: 'center', paddingLeft: 22, paddingRight: 12, paddingTop: 4, paddingBottom: 8, gap: 4 },
+  previewIntro: { flexDirection: 'row', alignItems: 'center', paddingLeft: 20, paddingRight: 12, paddingTop: 4, paddingBottom: 8, gap: 4 },
   previewHint: { flex: 1, fontFamily: FONTS.nunitoSans, fontSize: 13, lineHeight: 19, color: EDITORIAL.textMid },
   previewLink: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 13, lineHeight: 20, color: EDITORIAL.green },
   previewBack: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, paddingHorizontal: 18 },
@@ -28,7 +29,7 @@ export const s = StyleSheet.create({
   locationChip: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     backgroundColor: EDITORIAL.creamCard, borderRadius: 12,
-    paddingHorizontal: 10, paddingVertical: 5,
+    paddingHorizontal: 10, paddingVertical: 5, minHeight: 44, justifyContent: 'center',
     borderWidth: 1, borderColor: EDITORIAL.border,
   },
   locationText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 11, fontWeight: '600', color: EDITORIAL.textSoft },
@@ -78,7 +79,7 @@ export const s = StyleSheet.create({
   macroDivider: { width: 1, height: 20, backgroundColor: EDITORIAL.creamDeep },
   editBtn: {
     backgroundColor: EDITORIAL.green, borderRadius: 8,
-    paddingHorizontal: 10, paddingVertical: 5, marginLeft: 8,
+    paddingHorizontal: 10, paddingVertical: 5, marginLeft: 8, minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center',
   },
   editBtnText: {
     fontFamily: FONTS.nunitoSansSemiBold,
@@ -91,7 +92,7 @@ export const s = StyleSheet.create({
   // Search row - matches the restaurant detail screen's menu search input
   // (app/restaurant/[id].tsx): ⌕ glyph + × clear, creamCard pill, radius 14.
   search: {
-    marginHorizontal: 18, marginBottom: 8,
+    marginHorizontal: 16, marginBottom: 12,
     backgroundColor: EDITORIAL.creamCard,
     borderWidth: 1, borderColor: EDITORIAL.border, borderRadius: 14,
     paddingHorizontal: 14, paddingVertical: 10,
@@ -129,9 +130,9 @@ export const s = StyleSheet.create({
   },
   lockedBannerText: { flex: 1, fontFamily: FONTS.nunitoSans, fontSize: 12.5, color: EDITORIAL.text, lineHeight: 17 },
 
-  inlineEmpty: { alignItems: 'center', paddingTop: 50, paddingBottom: 30, gap: 8 },
-  inlineEmptyText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 15, fontWeight: '600', color: EDITORIAL.textSoft },
-  inlineEmptyHint: { fontFamily: FONTS.nunitoSans, fontSize: 14, color: EDITORIAL.textSoft, textAlign: 'center', lineHeight: 20 },
+  inlineEmpty: { alignItems: 'center', alignSelf: 'stretch', paddingHorizontal: 24, paddingTop: 50, paddingBottom: 30, gap: 8 },
+  inlineEmptyText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 15, fontWeight: '600', color: EDITORIAL.textSoft, textAlign: 'center', maxWidth: '100%' },
+  inlineEmptyHint: { alignSelf: 'stretch', fontFamily: FONTS.nunitoSans, fontSize: 14, color: EDITORIAL.textSoft, textAlign: 'center', lineHeight: 20 },
   waitlistBtn: {
     marginTop: 12,
     backgroundColor: EDITORIAL.green,
@@ -194,7 +195,7 @@ export const hero = StyleSheet.create({
     fontSize: 17, color: 'rgba(253,251,247,0.92)', letterSpacing: -0.2,
     fontStyle: 'italic',
   },
-  macroRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 },
+  macroRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 5, marginTop: 4 },
   macroText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 11, fontWeight: '600', color: 'rgba(253,251,247,0.6)' },
   dot: { fontFamily: FONTS.nunitoSans, fontSize: 11, color: 'rgba(253,251,247,0.3)' },
   calText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 11, fontWeight: '700', color: 'rgba(253,251,247,0.88)' },

@@ -4,6 +4,11 @@
 const store: Record<string, string> = {};
 const mockPush = jest.fn();
 const mockTrack = jest.fn();
+jest.mock('@supabase/supabase-js', () => {
+  process.env.EXPO_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'unit-test-anon-key';
+  return jest.requireActual('../__mocks__/supabase-js');
+});
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
   __esModule: true,

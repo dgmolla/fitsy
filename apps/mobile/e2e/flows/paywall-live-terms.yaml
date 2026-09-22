@@ -13,29 +13,34 @@ tags: [billing, onboarding, changed-journey]
     commands:
       - waitForAnimationToEnd:
           timeout: 10000
-      - assertVisible: "Find meals that fit"
+      - assertVisible:
+          id: welcome-start
 # Fresh welcome has no controls in this corner. Dismiss the Debug warning
 # window here; native LogBox is absent from the app accessibility hierarchy.
 - waitForAnimationToEnd:
     timeout: 3000
 - tapOn:
     point: "92%,93%"
-- openLink: com.fitsy.mobile://welcome/trial
+# Choose a real area so the preview has valid restaurant data and no implicit GPS fallback.
+- openLink: com.fitsy.mobile://welcome/location-permission
+- tapOn:
+    id: location-choose-area
+- tapOn: "Search near DTLA"
 - extendedWaitUntil:
     visible:
-      id: trial-title
-    timeout: 15000
+      id: tried-meal_prep
+    timeout: 30000
+# Build a real preview predecessor, then exercise the legacy trial redirect.
+- openLink: com.fitsy.mobile://welcome/preview
+- extendedWaitUntil:
+    visible:
+      id: coachmark-skip
+    timeout: 30000
+- tapOn:
+    id: coachmark-skip
 - assertVisible:
-    id: trial-title
-# A late startup warning can arrive after the welcome cleanup; outside the CTA.
-- tapOn:
-    point: "93%,93%"
-- scrollUntilVisible:
-    element:
-      id: trial-see-plans
-    direction: DOWN
-- tapOn:
-    id: trial-see-plans
+    id: preview-guide
+- openLink: com.fitsy.mobile://welcome/trial
 - extendedWaitUntil:
     visible:
       id: paywall-price-yearly
@@ -43,14 +48,19 @@ tags: [billing, onboarding, changed-journey]
 - extendedWaitUntil:
     notVisible: "Loading…"
     timeout: 30000
+- assertNotVisible:
+    id: trial-see-plans
 - tapOn:
     id: welcome-back
 - assertVisible:
-    id: trial-title
-- assertVisible:
-    id: trial-see-plans
-- tapOn:
-    id: trial-see-plans
+    id: preview-guide
+- assertNotVisible:
+    id: paywall-plan-yearly
+- openLink: com.fitsy.mobile://welcome/payment
+- extendedWaitUntil:
+    visible:
+      id: paywall-price-yearly
+    timeout: 15000
 - copyTextFrom:
     id: paywall-price-yearly
 - evalScript: ${output.annualPrice = maestro.copiedText}
@@ -103,20 +113,26 @@ tags: [billing, onboarding, changed-journey]
     id: paywall-terms
 - tapOn:
     id: paywall-restore
-- assertVisible: "Create an account"
+- assertVisible: "Continue with Apple"
+- assertVisible: "Continue with Google"
 - tapOn: "Dev login"
 - extendedWaitUntil:
     visible:
       id: paywall-plan-yearly
     timeout: 30000
 - assertNotVisible: "Leave a review"
-# Re-authentication returns to the existing paywall, with its real trial page behind it.
+# Re-authentication returns to the same paywall, with preview still behind it.
 - tapOn:
     id: welcome-back
 - assertVisible:
-    id: trial-title
-- tapOn:
+    id: preview-guide
+- assertNotVisible:
     id: trial-see-plans
+- openLink: com.fitsy.mobile://welcome/payment
+- extendedWaitUntil:
+    visible:
+      id: paywall-plan-yearly
+    timeout: 15000
 - tapOn:
     id: welcome-skip
 - tapOn:

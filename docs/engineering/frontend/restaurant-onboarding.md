@@ -25,6 +25,11 @@ flowchart LR
 
 Onboarding and the main app use the same `DiscoveryScreen`, search state, branded loading component and request cancellation.
 The search field remains mounted while its results update.
+Starting or replaying the guided tour clears the field; the search tip types pizza into the same real search state.
+The search tip waits for typing and the backend response before Next, while Back and Skip remain available.
+Leaving the tip, leaving the screen, or editing the query cancels pending letters; Reduced Motion shows the complete craving without animation.
+Restaurant tips follow the search demonstration so they point to the current results.
+Discovery cards omit the restaurant-photo and nutrition-source badges; full menus retain nutrition provenance.
 A context change invalidates old results, count, pagination and pending requests before the debounce begins.
 The backend's versioned close-to-target policy applies to the preview and the main app's opt-in search requests.
 Dish-name matches take priority for cravings; explicit restaurant searches retain restaurant discovery.

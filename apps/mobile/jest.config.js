@@ -73,6 +73,8 @@ const config = {
       testMatch: ['<rootDir>/components/**/*.test.tsx'],
       moduleNameMapper: {
         '^@/(.*)$': '<rootDir>/$1',
+        // Expo Router's hoisted test helper resolves the mobile workspace peer here.
+        '^@testing-library/react-native$': require.resolve('@testing-library/react-native'),
         '^@fitsy/shared$': '<rootDir>/../../packages/shared/src/index.ts',
         '^@fitsy/shared/(.*)$': '<rootDir>/../../packages/shared/src/$1',
       },
