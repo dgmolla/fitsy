@@ -1,6 +1,6 @@
 # Business Model & Pricing
 
-> **Status:** Living document · **Last verified:** 2026-06-12
+> **Status:** Living document · **Pricing and trial configuration last verified:** 2026-09-22; other operational sections retain their stated dates
 
 ---
 
@@ -17,12 +17,12 @@ deprecated.
 
 - **Entitlement:** `pro` (single entitlement; all features require it)
 - **Plans:** Annual and Monthly (see Pricing Decision Record below for exact prices)
-- **Trial:** 3-day free trial on both plans — configured in App Store Connect,
-  surfaced by RevenueCat; no charge until trial ends
+- **Trial:** Seven-day introductory free trial configured for eligible monthly and annual subscribers in existing offer territories.
+  The selected live StoreKit product and RevenueCat eligibility determine the actual offer; the discounted annual product has no introductory trial.
 - **SDK:** `react-native-purchases` (RevenueCat React Native SDK)
-- **Paywall:** `apps/mobile/app/welcome/payment.tsx` — Fitsy's own designed
-  paywall; reads live prices from the current RevenueCat offering at runtime;
-  falls back to hardcoded strings while offerings load
+- **Paywall:** `apps/mobile/app/welcome/payment.tsx` reads localized prices, billing periods, introductory duration, and eligibility from live store data through RevenueCat.
+  Missing product terms remain unavailable; unknown eligibility never promises a free trial.
+  Display copy does not substitute fixed prices or a fixed trial length.
 
 ### Why no freemium
 
@@ -46,7 +46,7 @@ sequenceDiagram
     U->>App: Opens app / hits paywall
     App->>RC: getOfferings()
     RC-->>App: Current offering (annual + monthly packages, live prices)
-    U->>App: Selects plan, taps "Start Free Trial"
+    U->>App: Selects plan, confirms live eligible trial or paid terms
     App->>RC: purchasePackage(pkg)
     RC->>ASC: IAP purchase sheet
     ASC-->>RC: Purchase receipt
@@ -106,25 +106,26 @@ model Subscription {
 | Monthly → Annual | Apple handles proration; RevenueCat reflects new plan; webhook updates DB |
 | Annual → Monthly | Takes effect at next renewal; user stays `ACTIVE` until then |
 | Cancel | Access until period end, then `EXPIRED` |
-| Reactivate after cancel | New subscription; 3-day trial does NOT restart |
+| Reactivate after cancel | Store eligibility controls any introductory offer; restarting a subscription does not promise another trial |
 | Payment failure | Apple retries (Smart Retries); RevenueCat sets `GRACE_PERIOD`, then `PAST_DUE`; after ~16 days `EXPIRED` |
 | Restore purchases | `restore()` via RC SDK; re-checks entitlements; completes onboarding if `pro` active |
 
 ---
 
-## Production blockers (as of 2026-06-16)
+## Historical production checklist (2026-06-16)
 
-RevenueCat is wired and ASC products are created. Remaining items:
+This checklist records the June launch setup and is not the current release-status source.
+The current pricing and trial configuration below supersedes its original offer terms.
 
 | Blocker | Owner | Status |
 |---------|-------|--------|
 | Apple Developer account + ASC app record | `#human` | ✅ done (Apple ID 6763851364) |
-| ASC subscription products (`fitsy_monthly`, `fitsy_annual`) | `#human` | ✅ created 2026-06-16 ($7.99 / $39.99, 3-day trial) |
+| ASC subscription products (`fitsy_monthly`, `fitsy_annual`) | `#human` | ✅ created 2026-06-16; current product IDs and offers below |
 | Bundle ID | `#frontend` | ✅ resolved — code + ASC agree on `com.fitsy.mobile` |
 | `optionalSubscription()` server gate | `#backend` | ✅ done - guards `/api/restaurants` + menu (locked responses); client gates on `GET /api/subscriptions/status` |
 | RevenueCat webhook in production | `#backend` | Endpoint `POST /api/revenuecat/webhook` is live — **confirm URL + `REVENUECAT_WEBHOOK_AUTH` are set in the RC dashboard + Vercel** |
 | `EXPO_PUBLIC_REVENUECAT_IOS_KEY` in the production EAS build | `#frontend` | Verify it's set (test key only works in dev) |
-| Exit-intent discount product | `#human` | Create `fitsy_annual_discount` ($29.99/yr, 3-day trial) in the same subscription group + RevenueCat package `annual_discount`; paywall already wired |
+| Exit-intent discount product | `#human` | Product now exists as `com.fitsy.mobile.yearly_discount`; no introductory trial (verified 2026-09-22) |
 | Paywall design sign-off | `#design` | `payment.tsx` functional; optional polish |
 
 See `docs/product/pre-launch-action-items.md` for the full critical path.
@@ -133,48 +134,39 @@ See `docs/product/pre-launch-action-items.md` for the full critical path.
 
 ## Pricing Decision Record
 
-> **Status: CONFIRMED 2026-06-16 — $7.99/month · $39.99/year · 3-day free trial.**
+> **Trial configuration verified 2026-09-22:** Seven-day monthly/yearly introductory offers for eligible subscribers; discounted annual has no introductory offer.
 
-The true source of truth for prices is the **RevenueCat offering**, which maps
-to the **App Store Connect subscription products**, created 2026-06-16:
-`com.fitsy.mobile.monthly` $7.99 and `com.fitsy.mobile.yearly` $39.99, each with
-a 3-day introductory free trial, plus `com.fitsy.mobile.yearly_discount` $29.99
-(the exit-intent offer; no trial, billed immediately).
-The app reads prices live from the RevenueCat offering; `payment.tsx` fallback strings mirror them for display only.
-The website reads prices and trial length from the App Store Connect API at render time (`apps/api/lib/pricing.ts`, cached daily).
-It falls back to the values on this page when ASC is unreachable.
+App Store Connect configures subscription products, prices, and introductory offers.
+The mobile paywall uses the selected live StoreKit product through RevenueCat and the customer's current introductory-offer eligibility.
+This document records configuration, not a guarantee that every customer receives an offer or that every territory has product availability.
 
-### All observed price points and their sources
+| Plan | US retail price | App Store product | Introductory configuration |
+|------|-----------------|-------------------|---------------------------|
+| Monthly | $7.99/month | `com.fitsy.mobile.monthly` | Seven days free for eligible subscribers |
+| Annual | $39.99/year | `com.fitsy.mobile.yearly` | Seven days free for eligible subscribers |
+| Discounted annual | $29.99/year | `com.fitsy.mobile.yearly_discount` | No introductory offer; billed on confirmation |
 
-| Price | Source | Notes |
-|-------|--------|-------|
-| $30/yr · $5/mo | `docs/product/app-store-listing.md` (listing copy) | Round numbers; never wired to ASC |
-| $4.99/mo | `docs/product/archive/launch-plan.md` (RevenueCat section, product IDs) | Listed as the planned monthly price in the launch plan |
-| $29.99/yr · $8.99/mo | `apps/mobile/app/welcome/payment.tsx` fallback strings | Designer/dev fallback copy while offerings load; closest to a "designed" price |
-| $14.99/yr promo | `apps/mobile/app/welcome/payment.tsx` discount modal | "50% off" exit-intent offer; implies base annual = $29.99/yr |
+A read-only App Store Connect check on 2026-09-22 found 175 `ONE_WEEK`, `FREE_TRIAL`, one-period offers for each regular product and no introductory offers for the discounted annual product.
+The seven-day rollout preserved existing offer territories and product availability; it did not expand availability to every offer territory.
+Store configuration verification does not establish a particular customer's eligibility or prove an Apple sandbox purchase.
 
-### Why there is a conflict
+### Display authority and unavailable terms
 
-These numbers were written in different documents at different times by
-different roles without a shared canonical decision. No ASC product has ever
-been created. The RevenueCat offering has not been configured. Until products
-exist in ASC, no number is "real."
+`apps/mobile/lib/purchaseTerms.ts` derives localized charges, renewal periods, and eligible introductory duration from the selected product.
+Missing price or billing-period data produces no purchase terms; unknown eligibility does not assert a free trial.
+Cancellation and renewal disclosures follow those live terms.
+Discount percentages are calculated only between comparable live products.
+The June three-day copy and fixed-price mobile fallbacks are superseded.
 
-### Decision (confirmed 2026-06-16)
+The website reads US prices and introductory duration from App Store Connect in `apps/api/lib/pricing.ts`, caching successful reads for 24 hours.
+Its existing failure path still uses a legacy static fallback, including a three-day trial; this is separate from the mobile paywall and remains an unresolved inconsistency.
+Do not treat that fallback as the current offer configuration or claim that all website terms are already free of hardcoded values.
 
-| Plan | Price | ASC product |
-|------|-------|-------------|
-| Monthly | **$7.99/mo** | `fitsy_monthly` |
-| Annual | **$39.99/yr** | `fitsy_annual` |
-| Free trial | **3 days** (both plans) | introductory offer in ASC |
+### Historical decisions
 
-### Alignment status
-
-- [x] ASC subscription products created (`fitsy_monthly` $7.99, `fitsy_annual` $39.99, 3-day trial) — 2026-06-16
-- [x] `payment.tsx` fallback strings updated to `$7.99/mo` · `$39.99/yr`
-- [x] `app-store-listing.md` trial copy set to 3 days; price now references this record
-- [x] Paywall title "Try Fitsy free for 3 days" matches the trial length
-- [x] **Exit-intent discount — decided 2026-06-18: 25% off annual → $29.99/yr.** Paywall copy + purchase wiring updated. To charge it, create a **separate annual product `fitsy_annual_discount`** ($29.99/yr, same 3-day trial) in the **same subscription group**, and expose it in the RevenueCat offering as package **`annual_discount`**. The "Claim 25% Off" CTA buys that package; until it exists the CTA shows "offer isn't available" rather than charging full price. (Alternative to a second product: an Apple **promotional offer** on `fitsy_annual` — avoids the extra product but needs a subscription key uploaded to RevenueCat for offer signing.)
+The original products were created on 2026-06-16 with a three-day introductory offer.
+The discounted annual product was chosen on 2026-06-18.
+The September seven-day configuration and live mobile disclosures supersede earlier launch-plan prices, fixed paywall strings, and three-day trial claims.
 
 ---
 
