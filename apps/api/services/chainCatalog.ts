@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { StructuredMenuItem } from "./menuSources/types";
+import { chainStoreScopeSchema, canonicalStoreScope, buildStoreScopeMatcher, storeScopesOverlap } from './chainStoreScope';
 import { chainUsState, usStatesSchema, type ChainLocation } from './chainGeography';
 
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
@@ -13,7 +14,7 @@ const defaultServing = z.object({
 const alias = z.object({ name: text, section: z.string().optional(), description: z.string().optional(),
   defaultServing: defaultServing.optional() }).strict();
 export const chainReviewSchema = z.object({ version: z.literal(1), sourceHash: hash, locator: z.string().trim().min(1),
-  reviewedBy: z.string().trim().min(1), dataHash: hash, aliases: z.array(alias), usStates: usStatesSchema.optional() }).strict();
+  reviewedBy: z.string().trim().min(1), dataHash: hash, aliases: z.array(alias), usStates: usStatesSchema.optional(), storeScope: chainStoreScopeSchema.optional() }).strict();
 export type ChainReview = z.infer<typeof chainReviewSchema>;
 export interface ChainCatalogRow {
   id: string; brandId: string; canonicalKey: string; servingSize: string | null;
@@ -35,7 +36,8 @@ export function chainReviewHash(row: ChainCatalogRow, review: Omit<ChainReview, 
     review.aliases.map(a => a.defaultServing ? digest([chainMenuFingerprint(a), a.defaultServing.calorieRange,
       a.defaultServing.sourceUrl, a.defaultServing.sourceHash, a.defaultServing.locator.trim(), a.defaultServing.selections.map(s => s.trim())]) : chainMenuFingerprint(a)).sort(),
     // Absent scope adds no bytes to existing approval hashes.
-    ...(review.usStates ? [['usStates', [...review.usStates].sort()]] : [])]);
+    ...(review.usStates ? [['usStates', [...review.usStates].sort()]] : []),
+    ...(review.storeScope ? [['storeScope', canonicalStoreScope(review.storeScope)]] : [])]);
 }
 export function approvedChainRow(row: ChainCatalogRow): ApprovedChainRow | null {
   const parsed = chainReviewSchema.safeParse(row.review);
@@ -77,7 +79,8 @@ export function assertUnambiguousChainAliases(rows: ChainCatalogRow[]): void {
     const entries = [...candidates.values()];
     for (let i = 0; i < entries.length; i++) for (const other of entries.slice(i + 1)) {
       const a = entries[i]!.review.usStates, b = other.review.usStates;
-      if (!a || !b || a.some(code => b.includes(code))) {
+      const x = entries[i]!.review.storeScope, y = other.review.storeScope;
+      if ((!a || !b || a.some(code => b.includes(code))) && (!x || !y || storeScopesOverlap(x, y))) {
         const first = entries[i]!, name = first.review.aliases.find(alias => first.brandId + ':' + chainMenuFingerprint(alias) === key)!.name;
         throw new Error(`Ambiguous reviewed alias: ${name}; brand ${first.brandId}; ${first.canonicalKey} overlaps ${other.canonicalKey}`);
       }
@@ -87,10 +90,19 @@ export function assertUnambiguousChainAliases(rows: ChainCatalogRow[]): void {
 /** Build once per run. Matching makes no DB, model or network calls. */
 export function buildChainMatcher(rows: ChainCatalogRow[]): (brandId: string | undefined, item: StructuredMenuItem, location?: ChainLocation) => ChainMatch {
   const index = indexApprovedRows(rows);
+  const scopes = new Map<string, ReturnType<typeof buildStoreScopeMatcher>>();
+  const eligible = new Map<string, ReturnType<typeof buildStoreScopeMatcher>>();
+  for (const candidates of index.values()) for (const row of candidates.values()) {
+    if (!row.review.storeScope || eligible.has(row.id)) continue;
+    const key = digest(canonicalStoreScope(row.review.storeScope));
+    if (!scopes.has(key)) scopes.set(key, buildStoreScopeMatcher(row.review.storeScope));
+    eligible.set(row.id, scopes.get(key)!);
+  }
   return (brandId, item, location) => {
     const indexed = index.get(brandId + ":" + chainMenuFingerprint(item));
     if (!indexed?.size) return { status: "unmatched" };
-    const candidates = [...indexed.values()].filter(row => !row.review.usStates || row.review.usStates.includes(chainUsState(location) ?? ''));
+    const candidates = [...indexed.values()].filter(row => (!row.review.usStates || row.review.usStates.includes(chainUsState(location) ?? ''))
+      && (!row.review.storeScope || eligible.get(row.id)!(location)));
     if (!candidates.length) return { status: "unmatched" };
     if (candidates.length !== 1) return { status: "ambiguous" };
     const row = candidates[0]!;

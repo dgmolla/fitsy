@@ -1,3 +1,4 @@
+import { canonicalStoreScope, chainStoreScopeSchema } from './chainStoreScope';
 import { chainTransaction } from "./chainTransaction";
 import { createHash } from "node:crypto";
 import { Prisma, type PrismaClient, type Brand, type ChainItem } from "@prisma/client";
@@ -18,9 +19,12 @@ export interface CatalogChange { before: ChainItem | null; desired: Desired }
 export interface CatalogPlan { changes: CatalogChange[]; hash: string }
 const reviewJson = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 const compareReview = (value: unknown): unknown => {
-  if (!value || typeof value !== 'object' || !('usStates' in value) || !Array.isArray(value.usStates)
-    || !value.usStates.every(code => typeof code === 'string')) return value;
-  return { ...value, usStates: [...value.usStates].sort() };
+  if (!value || typeof value !== 'object') return value;
+  const scope = 'storeScope' in value ? chainStoreScopeSchema.safeParse(value.storeScope) : undefined;
+  return { ...value,
+    ...('usStates' in value && Array.isArray(value.usStates) && value.usStates.every(code => typeof code === 'string')
+      ? { usStates: [...value.usStates].sort() } : {}),
+    ...(scope?.success ? { storeScope: canonicalStoreScope(scope.data) } : {}) };
 };
 
 /** The audited old values are a guard against overwriting concurrent or unaudited catalog edits. */
@@ -44,7 +48,8 @@ export function planChainPilot(brands: Brand[], catalog: ChainItem[], input: Cha
     const row: ChainCatalogRow = { id: before?.id ?? `${id}:${definition.canonicalKey}`, brandId: id, canonicalKey: definition.canonicalKey,
       ...definition.facts, source: "official", confidence: "HIGH", officialUrl: definition.source.url, review: null };
     const evidence = { version: 1 as const, sourceHash: definition.source.sha256, locator: definition.locator, reviewedBy: pilot.reviewedBy, aliases: definition.aliases,
-      ...(definition.usStates ? { usStates: definition.usStates } : {}) };
+      ...(definition.usStates ? { usStates: definition.usStates } : {}),
+      ...(definition.storeScope ? { storeScope: definition.storeScope } : {}) };
     const review = { ...evidence, dataHash: chainReviewHash(row, evidence) };
     if (!approvedChainRow({ ...row, review })) throw new Error(`Invalid reviewed facts: ${definition.canonicalKey}`);
     append(before, { brandId: id, canonicalKey: row.canonicalKey, ...definition.facts, source: "official", confidence: "HIGH",
