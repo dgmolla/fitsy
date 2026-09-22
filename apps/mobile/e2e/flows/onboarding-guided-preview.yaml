@@ -29,7 +29,10 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
       id: tried-calorie_apps
     timeout: 30000
 - assertVisible: "What have you tried.*for healthy eating.*"
-- assertVisible: "Meal prepping at home"
+# The native option groups its emoji and label into one accessible button.
+- assertVisible:
+    id: tried-meal_prep
+    text: ".*Meal prepping at home.*"
 - tapOn:
     id: tried-calorie_apps
 - tapOn:
@@ -73,6 +76,14 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
 - copyTextFrom:
     id: meal-target-protein
 - assertTrue: ${maestro.copiedText === '0'}
+# The numeric keyboard leaves the second target row below the visible body.
+# Scroll the body above the keyboard before tapping carbs or fat.
+- swipe:
+    start: "50%,46%"
+    end: "50%,25%"
+- waitForAnimationToEnd
+- assertVisible:
+    id: meal-target-carbs
 - tapOn:
     id: meal-target-carbs
 - waitForAnimationToEnd

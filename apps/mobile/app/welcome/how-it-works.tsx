@@ -22,7 +22,7 @@ export default function HowItWorksScreen() {
         <Text style={s.body}>An estimate when published nutrition isn't available.</Text>
       </View>
     </View>
-    <Text style={s.note}>Portions and preparation can vary. The label stays beside the dish.</Text>
+    <Text style={s.note}>Full menus show each dish’s nutrition source. Portions and preparation can vary.</Text>
   </WelcomeScreen>;
 }
 const s = StyleSheet.create({

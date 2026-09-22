@@ -25,7 +25,7 @@ const PITCHES = {
     payoff: "Put your fitness plan into your next order.",
     payoffTitle: "Hit your meal targets.\nEnjoy eating out.",
     payoffBody: "Find meals around your calories and protein, instead of logging a surprise later.",
-    stages: ["Calories + protein", "Choose before you order", "Stay on track"],
+    stages: ["Your tracked targets", "Choose before you order", "Stay on track"],
     diagram: "bridge",
     preview: 'Compare the numbers below. Edit your meal targets to see different picks.',
     firstTip: 'macros',
@@ -38,7 +38,7 @@ const PITCHES = {
     payoffBody: "See calories and protein before you order, so eating out can support your goals.",
     stages: ["Your meal targets", "Meals compared for you", "Your fitness goal"],
     diagram: "bridge",
-    preview: 'Compare meals side by side. Each pick labels its nutrition source.',
+    preview: 'Compare meals side by side. Your targets guide every pick.',
     firstTip: 'restaurant',
   },
   nothing: {
