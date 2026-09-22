@@ -19,6 +19,8 @@ import { chainTransaction } from '../apps/api/services/chainTransaction';
 // ─── Item validation (S-111, S-112) ─────────────────────────────────────────
 
 export const NON_FOOD_PATTERNS = /\b(t-?shirt|tee|hoodie|sweatshirt|hat|cap|beanie|mug|tumbler|bag|tote|merch|sticker|poster|gift\s*card|apron)\b/i;
+// A counted cookie order uses "tote" as its package; merchandise sections still reject it.
+const COUNTED_COOKIE_TOTE_PATTERN = /^\s*[1-9]\d*\s+cookies?\s+tote\s*$/i;
 export const UTENSIL_PATTERNS = /\b(chopsticks?|forks?|spoons?|knife|knives|napkins?|straws?|containers?|lids?|cup\s*sleeves?|utensils?|stir\s*sticks?|stirrers?)\b/i;
 // Match standalone contributions, not meals whose names or descriptions mention charity.
 const DONATION_PATTERN = /^\s*(?:round[\s-]+up\s+)?(?:toy\s+)?donation(?:\s+\$\s*\d+(?:\.\d{1,2})?)?\s*$/i;
@@ -84,7 +86,7 @@ export function validateItems(
       rejected.push({ name, reason: "non-food: donation" });
       continue;
     }
-    if (NON_FOOD_PATTERNS.test(name)) {
+    if (NON_FOOD_PATTERNS.test(name) && !COUNTED_COOKIE_TOTE_PATTERN.test(name)) {
       rejected.push({ name, reason: "non-food: merchandise" });
       continue;
     }
