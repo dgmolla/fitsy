@@ -45,7 +45,7 @@ describe("food filter regressions from chain ingestion", () => {
     const items = [makeItem("Pepsi Logo Sign"), makeItem("Pepsi Cake"), makeItem("Mystery Item", { description: "Enjoy with Pepsi" })];
     const result = validateItems(items, items.map(() => makeMacro({ calories: 0 })));
     expect(result.valid).toEqual([]);
-    expect(result.rejected).toHaveLength(items.length);
+    expect(result.rejected).toEqual(items.map(({ name }) => ({ name, reason: "non-food: zero calories" })));
   });
 
 });
