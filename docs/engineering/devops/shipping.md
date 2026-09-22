@@ -92,7 +92,21 @@ bash scripts/review/run-lens.sh --local correctness
 ```
 
 Address confirmed findings, commit the fixes, and rerun affected checks/lenses.
-The runner caches by the diff, lens instructions, REVIEW.md, and model.
+Review requirements are independent of the implementing agent, model vendor and subscription.
+The runner supports `claude` and `codex` adapters; choose an authenticated provider explicitly with `FITSY_REVIEW_PROVIDER`.
+Set `FITSY_REVIEW_MODEL` to the intended model; Codex requires it, while existing Claude installations retain their tier-based defaults.
+Use a model appropriate to the change's risk and keep the required lenses unchanged.
+For example, `FITSY_REVIEW_PROVIDER=codex FITSY_REVIEW_MODEL=<configured-model> bash scripts/review/run-lens.sh --local correctness` runs the same lens through the Codex adapter.
+Provider-specific credentials remain in the provider's normal local credential store and must never enter the repository or evidence.
+The adapters run an independent review process with read-only tools, disabled integrations and bounded execution time.
+`FITSY_REVIEW_TIMEOUT_SECONDS` configures the execution timeout.
+For Codex, `FITSY_REVIEW_REASONING_EFFORT` defaults to `high` and supports `low`, `medium`, `high` and `xhigh`; unsupported model/effort combinations fail rather than silently changing settings.
+The installed CLI and administrator-managed policy remain trusted infrastructure; the adapter constrains model tools and preserves the normal credential store.
+Authentication, process, timeout and invalid-output failures cannot produce passing or reusable verdicts.
+A supported alternative may resolve a provider outage, but never switch providers to evade a confirmed code finding.
+The runner records provider, model and execution identity with the verdict, and includes that identity and adapter/parser contents in its cache key.
+An existing status from another provider still satisfies the same lens; a cache entry is reused only for its matching execution identity.
+The implementing agent must not author its own independent review verdict.
 A matching post-PR pass should reuse the local verdict rather than duplicate the expensive review.
 A changed diff or changed review inputs invalidates that reuse.
 A rebase may alter the actual diff and requires checking again.
@@ -102,7 +116,7 @@ For a spec-conformance judgment that depends on the PR's linked spec or acceptan
 Do not use the content-only cache as proof that changed requirements were reviewed.
 The same applies when a reviewer relied on context outside the cached diff and that context changed.
 
-Do not run a separate generic `/code-review ... high` after these project lenses solely because a global skill says to.
+Do not run another generic review after these project lenses solely because a global skill says to.
 Use additional review only for a concrete uncovered risk or an explicit user request.
 
 ## PR, integration, and deployment
