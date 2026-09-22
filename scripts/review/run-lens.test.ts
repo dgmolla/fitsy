@@ -5,12 +5,18 @@ import { join, resolve } from "node:path";
 
 const source = resolve(__dirname, "../..");
 let root: string;
+let guard: string;
+let guardHead: string;
+let inheritedGit: NodeJS.ProcessEnv;
+function isolatedEnv() {
+  return Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")));
+}
 let calls: string;
 let cache: string;
 let env: NodeJS.ProcessEnv;
 const verdict = JSON.stringify({ lens: "correctness", verdict: "pass", findings: [] });
 function git(...args: string[]) {
-  return execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  return execFileSync("git", args, { cwd: root, env: isolatedEnv(), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 }
 function run(model = "fixture-model", provider = "claude", lens = "correctness") {
   return spawnSync("bash", ["scripts/review/run-lens.sh", "--local", lens], {
@@ -18,6 +24,15 @@ function run(model = "fixture-model", provider = "claude", lens = "correctness")
   });
 }
 beforeEach(() => {
+  // A real hook environment points Git at its caller even when cwd changes.
+  // Use a disposable caller repository so this regression cannot damage ours.
+  inheritedGit = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.startsWith("GIT_")));
+  guard = mkdtempSync(join(tmpdir(), "fitsy-review-caller-"));
+  const options = { cwd: guard, env: isolatedEnv(), encoding: "utf8" as const, stdio: ["ignore", "pipe", "pipe"] as ["ignore", "pipe", "pipe"] };
+  execFileSync("git", ["init", "-q"], options);
+  execFileSync("git", ["-c", "user.name=Caller", "-c", "user.email=caller@example.test", "commit", "--allow-empty", "-qm", "caller"], options);
+  guardHead = execFileSync("git", ["rev-parse", "HEAD"], options).trim();
+  Object.assign(process.env, { GIT_DIR: join(guard, ".git"), GIT_WORK_TREE: guard, GIT_INDEX_FILE: join(guard, ".git/index"), GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "fixture.owner", GIT_CONFIG_VALUE_0: "caller" });
   root = mkdtempSync(join(tmpdir(), "fitsy-review-runner-"));
   calls = join(root, "calls"); cache = join(root, "cache");
   mkdirSync(join(root, "scripts/review"), { recursive: true });
@@ -46,13 +61,25 @@ sys.exit(int(pathlib.Path(${JSON.stringify(join(root, 'exit'))}).read_text()))
 `;
   writeFileSync(join(root, "verdict"), verdict); writeFileSync(join(root, "exit"), "0");
   for (const name of ["claude", "codex"]) writeFileSync(join(root, "bin", name), cli, { mode: 0o755 });
-  env = { ...process.env, PATH: join(root, "bin") + ":" + process.env.PATH, FITSY_REVIEW_CACHE: cache,
+  env = { ...isolatedEnv(), PATH: join(root, "bin") + ":" + process.env.PATH, FITSY_REVIEW_CACHE: cache,
     REVIEW_TEST_CALLS: calls, REVIEW_TEST_VERDICT: verdict };
   git("init", "-q"); git("config", "user.name", "Review fixture"); git("config", "user.email", "fixture@example.test");
   git("add", "."); git("commit", "-qm", "base"); git("update-ref", "refs/remotes/origin/main", "HEAD");
   writeFileSync(join(root, "app.ts"), "export const value = 2;\n"); git("add", "app.ts"); git("commit", "-qm", "change");
 });
-afterEach(() => rmSync(root, { recursive: true, force: true }));
+afterEach(() => {
+  for (const key of Object.keys(process.env)) if (key.startsWith("GIT_")) delete process.env[key];
+  Object.assign(process.env, inheritedGit);
+  try {
+    const options = { cwd: guard, env: isolatedEnv(), encoding: "utf8" as const };
+    expect(execFileSync("git", ["rev-parse", "HEAD"], options).trim()).toBe(guardHead);
+    expect(execFileSync("git", ["for-each-ref", "--format=%(refname)"], options).trim().split("\n")).toHaveLength(1);
+    expect(execFileSync("git", ["config", "--local", "--list"], options)).not.toContain("fixture@example.test");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(guard, { recursive: true, force: true });
+  }
+});
 
 test("local caller runs independent CLI, records identity, and reuses only matching cache", () => {
   const first = run();
