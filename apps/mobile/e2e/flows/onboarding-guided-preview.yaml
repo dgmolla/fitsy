@@ -253,6 +253,13 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
 - tapOn:
     id: welcome-back
 - assertVisible:
+    id: preview-back
+# Back preserves the user's list position; scroll to inspect the retained query.
+- scrollUntilVisible:
+    element:
+      id: preview-guide
+    direction: UP
+- assertVisible:
     id: preview-guide
 - assertVisible: "pizza"
 # A standalone paywall keeps the current search but must not exclude an abandoned pick.
@@ -272,6 +279,13 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
 - assertTrue: ${maestro.copiedText.replace(/,/g, '') === output.context.meta.goalMatch.matchingDishCount + ' more meals close to your targets'}
 - tapOn:
     id: welcome-back
+- assertVisible:
+    id: preview-back
+# Back preserves the user's list position; scroll to inspect the retained query.
+- scrollUntilVisible:
+    element:
+      id: preview-guide
+    direction: UP
 - assertVisible:
     id: preview-guide
 - assertVisible: "pizza"
@@ -306,6 +320,13 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
 - assertNotVisible: "Leave a review"
 - tapOn:
     id: welcome-back
+- assertVisible:
+    id: preview-back
+# Back preserves the user's list position; scroll to inspect the retained query.
+- scrollUntilVisible:
+    element:
+      id: preview-guide
+    direction: UP
 - assertVisible:
     id: preview-guide
 - assertVisible: "pizza"
