@@ -22,7 +22,7 @@ const row = (id: string) => ({ id, name: `${id} restaurant`, address: 'Test', la
   bestMatch: { menuItemId: id + '-dish', name: id + ' meal', calories: 600, proteinG: 40, carbsG: 60, fatG: 20, confidence: 'HIGH', matchScore: 0 } });
 function respond(index: number, id: string, extraMeta: { locked?: boolean; nextCursor?: string | null } = {}) {
   requests[index].resolve({ ok: true, status: 200, json: async () => ({ data: [row(id)], meta: { radiusMiles: 3, nearbyDishCount: 90, limit: 20, total: 1, locked: true, nextCursor: null,
-    goalMatch: { policy: 'within-20-percent-v1', activeTargets: { calories: 600 }, matchingDishCount: 12, additionalDishCount: 12, selectedItemMatches: false }, ...extraMeta } }) } as Response);
+    ...extraMeta } }) } as Response);
 }
 beforeEach(() => {
   jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] });
@@ -30,6 +30,17 @@ beforeEach(() => {
   global.fetch = jest.fn((url, init) => new Promise(resolve => requests.push({ url: String(url), signal: init?.signal ?? undefined, resolve }))) as typeof fetch;
 });
 afterEach(() => { global.fetch = originalFetch; jest.useRealTimers(); });
+
+it.each([true, false])('keeps all targets for ranking without requiring exact qualification (preview=%s)', async preview => {
+  const targets = { calories: '500', protein: '40', carbs: '40', fat: '20' };
+  const { result } = renderHook(() => useDiscoveryResults({ inputs: targets, query: `pizza-${preview}`, location, canSearch: true, targetsLoaded: true, previewReady: true, isOnboardingPreview: preview }));
+  await act(async () => {});
+  const params = new URL(requests[0].url).searchParams;
+  expect(Object.fromEntries(params)).toMatchObject({ ...targets, q: `pizza-${preview}` });
+  expect(params.has('goalMatched')).toBe(false);
+  await act(async () => respond(0, 'ranked-pizza'));
+  expect(result.current.results.map(r => r.id)).toEqual(['ranked-pizza']);
+});
 
 it.each([true, false])('ignores an old response immediately after typing, before the debounce (preview=%s)', async (preview) => {
   const { result, rerender } = renderHook(({ query }) => useDiscoveryResults({ inputs, query, location, canSearch: true, targetsLoaded: true, previewReady: true, isOnboardingPreview: preview }), { initialProps: { query: `old-${preview}` } });
@@ -53,9 +64,7 @@ it('invalidates count and cancels the transport when meal targets change or the 
   const { result, rerender, unmount } = renderHook(({ calories }) => { const targets = useMemo(() => ({ ...inputs, calories }), [calories]); return useDiscoveryResults({ inputs: targets, query: 'targets-test', location, canSearch: true, targetsLoaded: true, previewReady: true, isOnboardingPreview: true }); }, { initialProps: { calories: '600' } });
   await act(async () => {});
   await act(async () => respond(0, 'first'));
-  expect(result.current.goalMatch?.matchingDishCount).toBe(12);
   rerender({ calories: '700' });
-  expect(result.current.goalMatch).toBeUndefined();
   expect(result.current.loading).toBe(true);
   await act(async () => jest.advanceTimersByTime(600));
   expect(Object.fromEntries(new URL(requests[1].url).searchParams)).toMatchObject({ calories: '700' });

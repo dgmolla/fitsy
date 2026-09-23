@@ -38,8 +38,12 @@ New clients request profile goal schema 2; legacy clients receive a supported ma
 ## Search and trial behavior
 
 Search keeps the typed query and meal targets through loading, empty results and retries.
+Targets rank relevant dishes by closeness, using the same ranking in preview and main discovery.
+The preview is limited to three restaurant picks without hard macro cutoffs.
+Preview and paywall use general copy, "Dozens more meals to explore," without calculating or displaying target-fit counts.
+The paywall uses saved selection context and never issues a search to support marketing copy.
 A bounded transport timeout leaves a retry action instead of an indefinite loader.
-An empty result explains the combined craving and target constraints, with edit and clear actions.
+An empty result explains unavailable dish or area coverage and preserves saved targets through recovery.
 The tour preserves all five numbered tips when a restaurant anchor is unavailable.
 
 Trial eligibility, duration, prices and disclosures come from the store.

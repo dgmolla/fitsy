@@ -5,7 +5,6 @@ import type { UseLocationResult, LocationState } from './useLocation';
 import { fetchRestaurantsPage } from './apiClient';
 import { buildDiscoveryParams, discoveryTargetFlags } from './discoverySearchParams';
 import { fetchGuidedPreview } from './guidedPreview';
-import type { GuidedPreviewResponse } from '../../../packages/shared/src/contracts/restaurants';
 import { saveOnboardingField } from './onboardingStorage';
 import { recordFirstDiscoveryPage } from './discoverySearchTelemetry';
 import { trackSearchPerformed, trackSearchFailed, trackPreviewFetchFailed, trackSearchPageLoaded, trackSearchPaginationEndReached } from './analytics';
@@ -25,7 +24,6 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
   const [fetchSeq, setFetchSeq] = useState(0);
   const [outOfArea, setOutOfArea] = useState(false);
   const [nearbyDishCount, setNearbyDishCount] = useState<number>();
-  const [goalMatch, setGoalMatch] = useState<GuidedPreviewResponse['meta']['goalMatch']>();
   // Invalidate on the rendered context, before the debounce starts another request.
   // Otherwise an older response can repaint results for text the user already replaced.
   const contextKey = JSON.stringify([inputs.protein, inputs.carbs, inputs.fat, inputs.calories, location.lat, location.lng, query.trim(), isOnboardingPreview]);
@@ -59,7 +57,6 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
       if (isRefresh) setRefreshing(true);
       else setLoading(true);
       setError(null);
-      setGoalMatch(undefined);
       setNearbyDishCount(undefined);
       setOutOfArea(false);
       pagesLoadedRef.current = 0;
@@ -87,7 +84,6 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
         if (!isCurrent()) return;
         if (previewResponse) {
           setNearbyDishCount(previewResponse.meta.nearbyDishCount);
-          setGoalMatch(previewResponse.meta.goalMatch);
           void saveOnboardingField('previewArea', `${lat}:${lng}`).then(() => saveOnboardingField('previewCraving', q.trim())).catch(() => undefined);
         }
         if (networkError) {
@@ -277,5 +273,5 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
   const pending = canSearch && completedContext !== contextKey;
   return { results, nextCursor, loading: canSearch && (loading || pending), loadingMore, refreshing,
     error: pending ? null : error, locked, fetchSeq, outOfArea: !pending && outOfArea,
-    goalMatch: pending ? undefined : goalMatch, nearbyDishCount: pending ? undefined : nearbyDishCount, doFetch, handleRefresh, handleEndReached };
+    nearbyDishCount: pending ? undefined : nearbyDishCount, doFetch, handleRefresh, handleEndReached };
 }

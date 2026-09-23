@@ -59,7 +59,7 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
   const canSearch = (hasInputs || hasQuery || isOnboardingPreview) && previewReady;
   const [targetsLoaded, setTargetsLoaded] = useState(false);
   const discovery = useDiscoveryResults({ inputs, query, location, canSearch, targetsLoaded, previewReady, isOnboardingPreview });
-  const { results, nextCursor, loading, loadingMore, refreshing, error, locked, fetchSeq, outOfArea, nearbyDishCount, goalMatch, doFetch, handleRefresh, handleEndReached } = discovery;
+  const { results, nextCursor, loading, loadingMore, refreshing, error, locked, fetchSeq, outOfArea, nearbyDishCount, doFetch, handleRefresh, handleEndReached } = discovery;
   const tourEnabled = isOnboardingPreview && locked === true && !filterVisible && !locationPickerVisible;
   const tour = usePreviewTour(tourEnabled && !loading && !error && results.length > 0, tourEnabled);
   const demo = usePreviewSearchDemo(tour.visible, setQuery);
@@ -193,7 +193,7 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
     {
       key: 'restaurant',
       title: error ? 'Your search can try again' : results.length === 0 ? 'Make room for your craving' : 'Real meals. Know the source.',
-      body: error ? 'The search could not finish. Close the tour and tap Try again. Your craving and targets are still here.' : results.length === 0 ? 'No meals matched this craving and all your current targets. Try another craving, or tap Edit to adjust your targets. We won’t label an unsuitable meal as a match.' : 'Compare meal macros at real restaurants. Open a full menu with Pro to explore dishes and check their nutrition sources.',
+      body: error ? 'The search could not finish. Close the tour and tap Try again. Your craving and targets are still here.' : results.length === 0 ? 'We have no meals for this craving here yet. Try another dish or area. Your meal targets stay saved.' : 'Your targets rank these meals by closeness. Compare the macros, then open a full menu with Pro to check dishes and nutrition sources.',
       target: error ? tourSearchRef : results.length === 0 ? tourEditRef : tourHeroRef,
       placement: 'above',
     },
@@ -203,13 +203,11 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
     const first = preferred === 'restaurant' ? 'search' : preferred;
     return [...steps.filter(step => step.key === first), ...steps.filter(step => step.key !== first),
       { key: 'location', title: 'Wherever your day takes you', body: 'Eating near work or meeting friends? Change your area here to find meals where you want to eat.', target: tourLocationRef },
-      { key: 'more', title: 'More choices. Full menus.', body: goalMatch && goalMatch.matchingDishCount > 3
-        ? `${(goalMatch.matchingDishCount - results.length).toLocaleString()} more meals close to your targets in ${locationLabel}. Explore full menus with Pro. Try your first craving now.`
-        : 'Explore more results and full menus with Pro. Try your first craving now.', target: tourMoreRef, placement: 'above' as const },
-    ]; }, [tried, goalMatch, results.length, locationLabel, demo.typing, loading, error]);
+      { key: 'more', title: 'More choices. Full menus.', body: 'Dozens more meals to explore. Unlock full menus with Pro. Try your first craving now.', target: tourMoreRef, placement: 'above' as const },
+    ]; }, [tried, results, demo.typing, loading, error]);
 
   return { navigation, isOnboardingPreview, tried, inputs, query, setQuery: demo.editQuery, canSearch, hasQuery, location,
-    locationLabel, results, heroResult, listResults, nextCursor, loading, loadingMore, refreshing, error, locked, outOfArea, nearbyDishCount, goalMatch,
+    locationLabel, results, heroResult, listResults, nextCursor, loading, loadingMore, refreshing, error, locked, outOfArea, nearbyDishCount,
     filterVisible, setFilterVisible, locationPickerVisible, setLocationPickerVisible, tourVisible: tour.visible, startTour: tour.start,
     tourEditRef, tourSearchRef, tourHeroRef, tourLocationRef, tourMoreRef, tourSteps, finishTour, tourStepShown: demo.showStep, cancelTourTyping: demo.cancel, handleClearQuery, handleApplyFilters,
     handleJoinWaitlist, handleOpenLocationPicker, handlePickLocation, handleUseCurrentLocation, unlockPreview,

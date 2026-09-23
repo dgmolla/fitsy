@@ -1,4 +1,4 @@
-# Real dev coverage: prove an empty craving keeps all five tour tips.
+# Real dev coverage: full targets rank pizza and preserve all five tour tips.
 appId: com.fitsy.mobile
 tags: [discovery, onboarding, changed-journey]
 ---
@@ -104,16 +104,16 @@ tags: [discovery, onboarding, changed-journey]
 - copyTextFrom:
     id: meal-target-fat
 - assertTrue: ${maestro.copiedText === '14'}
-# Fail visibly if dev coverage no longer satisfies this regression's premise.
+# Compare native results with the live ranked query while all four targets remain set.
 - evalScript: ${output.noMatchUrl = 'https://dev.fitsy.org/api/restaurants/preview?guided=1&lat=34.0407&lng=-118.2468&calories=500&protein=50&carbs=44&fat=14'}
 - evalScript: ${output.baseResponse = http.get(output.noMatchUrl)}
 - assertTrue: ${output.baseResponse.status === 200}
 - evalScript: ${output.base = json(output.baseResponse.body)}
-- assertTrue: ${output.base.data.length > 0 && output.base.meta.goalMatch.matchingDishCount > 0}
+- assertTrue: ${output.base.data.length > 0}
 - evalScript: ${output.pizzaResponse = http.get(output.noMatchUrl + '&q=pizza')}
 - assertTrue: ${output.pizzaResponse.status === 200}
 - evalScript: ${output.pizza = json(output.pizzaResponse.body)}
-- assertTrue: ${output.pizza.data.length === 0 && output.pizza.meta.goalMatch.matchingDishCount === 0}
+- assertTrue: ${output.pizza.data.length > 0}
 - tapOn:
     id: welcome-continue
 - assertVisible: "A little context.*A better choice.*"
@@ -153,8 +153,7 @@ tags: [discovery, onboarding, changed-journey]
 - tapOn:
     id: coachmark-next
 - assertVisible: "3 OF 5"
-- assertVisible: "Make room for your craving"
-- assertNotVisible: "Real meals. Know the source."
+- assertVisible: "Real meals. Know the source."
 - tapOn:
     id: coachmark-next
 - assertVisible: "4 OF 5"
@@ -170,17 +169,31 @@ tags: [discovery, onboarding, changed-journey]
 - assertVisible: "50g"
 - assertVisible: "44g"
 - assertVisible: "14g"
-- assertVisible: "No matches for this search"
 - assertVisible:
-    id: discovery-empty-edit
+    id: discovery-hero
+- copyTextFrom:
+    id: discovery-hero
+- assertTrue: ${maestro.copiedText.includes(output.pizza.data[0].name) && maestro.copiedText.includes(output.pizza.data[0].bestMatch.name)}
+- assertNotVisible:
+    id: discovery-loading
+# A genuinely absent craving still has an honest empty state and clear recovery.
+- tapOn:
+    id: discovery-clear-search
+- tapOn:
+    id: discovery-search
+- inputText: "unfindablecravingxyz"
+- pressKey: Enter
+- extendedWaitUntil:
+    visible: "No matches for this search"
+    timeout: 30000
 - assertVisible:
     id: discovery-empty-clear
 - assertNotVisible:
     id: discovery-hero
-- assertNotVisible:
-    id: discovery-loading
-- assertNotVisible:
-    id: discovery-join-waitlist
+- assertVisible: "500"
+- assertVisible: "50g"
+- assertVisible: "44g"
+- assertVisible: "14g"
 - tapOn:
     id: discovery-empty-clear
 - extendedWaitUntil:

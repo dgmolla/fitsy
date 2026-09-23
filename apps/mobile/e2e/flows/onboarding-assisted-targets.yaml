@@ -199,7 +199,7 @@ tags: [onboarding, discovery, changed-journey]
     id: discovery-loading
 - assertNotVisible:
     id: discovery-join-waitlist
-# Clearing the demo restores real qualifying meals, without changing targets.
+# Clearing the demo restores real ranked meals, without changing targets.
 - tapOn:
     id: discovery-clear-search
 - extendedWaitUntil:

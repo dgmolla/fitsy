@@ -15,7 +15,7 @@ const product = { priceString: '$59.99', subscriptionPeriod: 'P1Y',
   introPrice: { price: 0, priceString: '$0.00', period: 'P1W', periodUnit: 'WEEK', periodNumberOfUnits: 1, cycles: 1 } };
 const annual = purchaseTerms(product, true);
 const monthly = purchaseTerms({ ...product, priceString: '$9.99', subscriptionPeriod: 'P1M', introPrice: null }, false);
-function props() { return { annual, monthly, plan: 'yearly' as const, discovery: { nearby: [] }, loading: false, restoring: false,
+function props() { return { annual, monthly, plan: 'yearly' as const, discovery: {}, loading: false, restoring: false,
   onSelect: jest.fn(), onRestore: jest.fn(), onRetry: jest.fn(), onPurchase: jest.fn(), onDecline: jest.fn() }; }
 
 test('timeline derives trial end and reminder day from the selected store offer', () => {

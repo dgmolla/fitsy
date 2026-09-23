@@ -36,30 +36,25 @@ it('does not turn a temporary network failure into an empty coverage result', as
   await expect(fetchGuidedPreview(area)).rejects.toThrow('offline');
 });
 
-it('reuses a fresh exact-context preview for its selected dish without another backend count', async () => {
-  const { restaurantResultSchema } = await import('../../../packages/shared/src/contracts/restaurants');
-  const fixture = restaurantResultSchema.parse({ id: 'chosen', name: 'Test Restaurant', cuisineTags: [], address: 'Test', distanceMiles: 1, lat: area.lat, lng: area.lng, chainFlag: false,
-    bestMatch: { menuItemId: 'chosen-dish', name: 'Test meal', calories: 600, proteinG: 40, carbsG: 60, fatG: 20, confidence: 'HIGH', matchScore: 0 } });
-  (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ data: [fixture], meta: { radiusMiles: 3, nearbyDishCount: 200,
-    goalMatch: { policy: 'within-20-percent-v1', activeTargets: { calories: 600 }, matchingDishCount: 17, additionalDishCount: 17, selectedItemMatches: false } } }) });
-  const targets = { calories: '600', protein: '', carbs: '', fat: '' };
+it('caches only the exact targets, craving and area without selection-count requests', async () => {
+  const targets = { calories: '600', protein: '40', carbs: '60', fat: '20' };
   const first = await fetchGuidedPreview(area, 'cache-test', targets);
-  const selected = await fetchGuidedPreview(area, 'cache-test', targets, { selectedItemId: 'chosen-dish' });
+  expect(await fetchGuidedPreview(area, 'cache-test', targets)).toEqual(first);
   expect(global.fetch).toHaveBeenCalledTimes(1);
-  expect(selected.meta.goalMatch?.additionalDishCount).toBe(16);
-  expect(first.meta.goalMatch?.additionalDishCount).toBe(17);
   await fetchGuidedPreview(area, 'changed craving', targets);
   await fetchGuidedPreview({ ...area, lat: area.lat + 0.01 }, 'cache-test', targets);
   await fetchGuidedPreview(area, 'cache-test', { ...targets, calories: '650' });
   expect(global.fetch).toHaveBeenCalledTimes(4);
+  for (const [url] of (global.fetch as jest.Mock).mock.calls) {
+    expect(new URL(url).searchParams.has('selectedItemId')).toBe(false);
+    expect(new URL(url).searchParams.has('goalMatched')).toBe(false);
+  }
 });
 
-it('revalidates expired preview proof and unknown selected dishes', async () => {
+it('revalidates expired preview results and explicit refreshes', async () => {
   const targets = { calories: '500', protein: '', carbs: '', fat: '' };
   await fetchGuidedPreview(area, 'expiry-test', targets);
-  await fetchGuidedPreview(area, 'expiry-test', targets, { selectedItemId: 'not-in-top-three' });
-  const url = new URL((global.fetch as jest.Mock).mock.calls[1][0]);
-  expect(url.searchParams.get('selectedItemId')).toBe('not-in-top-three');
+  await fetchGuidedPreview(area, 'expiry-test', targets, { refresh: true });
   const clock = jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 30_001);
   try { await fetchGuidedPreview(area, 'expiry-test', targets); }
   finally { clock.mockRestore(); }

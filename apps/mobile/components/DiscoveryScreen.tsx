@@ -20,7 +20,7 @@ import { HeroCard, RestaurantSection } from './DiscoveryCards';
 const FREE_RESULT_COUNT = 3;
 export function DiscoveryScreen({ onboardingPreview = false }: { onboardingPreview?: boolean }) {
   const { navigation, isOnboardingPreview, tried, inputs, query, setQuery, canSearch, hasQuery, location,
-    locationLabel, results, heroResult, listResults, nextCursor, loading, loadingMore, refreshing, error, locked, outOfArea, goalMatch,
+    locationLabel, results, heroResult, listResults, nextCursor, loading, loadingMore, refreshing, error, locked, outOfArea,
     filterVisible, setFilterVisible, locationPickerVisible, setLocationPickerVisible, tourVisible, startTour,
     tourEditRef, tourSearchRef, tourHeroRef, tourLocationRef, tourMoreRef, tourSteps, finishTour, tourStepShown, cancelTourTyping, handleClearQuery, handleApplyFilters,
     handleJoinWaitlist, handleOpenLocationPicker, handlePickLocation, handleUseCurrentLocation, unlockPreview,
@@ -81,9 +81,9 @@ export function DiscoveryScreen({ onboardingPreview = false }: { onboardingPrevi
       {canSearch && !outOfArea && !loading && !error && results.length === 0 && (
         <View style={s.inlineEmpty}>
           <Ionicons name="search-outline" size={32} color={EDITORIAL.creamDeep} />
-          <Text style={s.inlineEmptyText}>{hasQuery ? 'No matches for this search' : 'No meals close to these targets'}</Text>
+          <Text style={s.inlineEmptyText}>{hasQuery ? 'No matches for this search' : 'No meals with nutrition nearby'}</Text>
           <Text style={s.inlineEmptyHint}>
-            {hasQuery ? 'We checked your craving and every active meal target. Try another search or adjust your targets.' : 'Try adjusting one or more meal targets to see more options.'}
+            {hasQuery ? 'Try another dish or restaurant, or search in a different area. Your meal targets stay saved.' : 'Try another area to find meals with nutrition information.'}
           </Text>
           <Pressable testID="discovery-empty-edit" accessibilityRole="button" style={s.waitlistBtn} onPress={() => setFilterVisible(true)}><Text style={s.waitlistBtnText}>Adjust meal targets</Text></Pressable>
           {hasQuery && <Pressable testID="discovery-empty-clear" accessibilityRole="button" style={s.waitlistBtn} onPress={handleClearQuery}><Text style={s.waitlistBtnText}>Clear search</Text></Pressable>}
@@ -114,7 +114,7 @@ export function DiscoveryScreen({ onboardingPreview = false }: { onboardingPrevi
   const renderFooter = useCallback(() => {
     if (loading) return null;
     if (isOnboardingPreview && !loading && !error && !outOfArea) {
-      return <View ref={tourMoreRef} collapsable={false}><LockedUnlockCard title="More choices. Full menus." subtitle={goalMatch && goalMatch.matchingDishCount > results.length ? `${(goalMatch.matchingDishCount - results.length).toLocaleString()} more meals close to your targets. Explore full menus with Pro.` : 'Explore full menus and find more ways to eat toward your goals.'}
+      return <View ref={tourMoreRef} collapsable={false}><LockedUnlockCard title="More choices. Full menus." subtitle="Dozens more meals to explore. Unlock full menus with Pro."
         ctaLabel="Explore meals that fit" accessibilityLabel="Explore more meals and full menus with Pro" onPress={() => { void unlockPreview(); }} style={s.lockedCard} /></View>;
     }
     if (locked && results.length > 0) {
@@ -146,7 +146,7 @@ export function DiscoveryScreen({ onboardingPreview = false }: { onboardingPrevi
         <ActivityIndicator size="small" color={EDITORIAL.greenAccent} />
       </View>
     );
-  }, [loadingMore, locked, results.length, hiddenCount, nextCursor, unlocking, resyncNow, unlockTitle, unlockSubtitle, unlockLabel, isOnboardingPreview, goalMatch, unlockPreview, loading, error, outOfArea, tourMoreRef]);
+  }, [loadingMore, locked, results.length, hiddenCount, nextCursor, unlocking, resyncNow, unlockTitle, unlockSubtitle, unlockLabel, isOnboardingPreview, unlockPreview, loading, error, outOfArea, tourMoreRef]);
   return (
     <SafeAreaView
       edges={isOnboardingPreview ? ['top', 'right', 'bottom', 'left'] : ['top', 'right', 'left']}
