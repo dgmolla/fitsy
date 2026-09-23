@@ -142,4 +142,5 @@ console.error(
     `, ${results.filter((r) => r.status === "skipped").length + skipped.length} skipped [layers ${layerArg}, scope ${scope}, runs ${runsCtx}]`,
 );
 for (const r of blockingFailed) console.error(`FAIL ${r.name}: ${r.summary ?? ""}${r.fix ? `\n  fix: ${r.fix}` : ""}`);
-process.exit(blockingFailed.length ? 1 : 0);
+// Allow piped diagnostics to drain before Node exits, including failing CI logs.
+process.exitCode = blockingFailed.length ? 1 : 0;
