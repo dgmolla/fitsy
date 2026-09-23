@@ -9,6 +9,7 @@ jest.mock('@supabase/supabase-js', () => {
   process.env.EXPO_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
   process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'unit-test-anon-key';
   return { createClient: () => ({ auth: { getSession: async () => ({ data: { session: null } }), startAutoRefresh() {}, stopAutoRefresh() {} } }) };
+});
 const originalFetch = global.fetch;
 const selection = (id: string) => ({ action: 'menu' as const, restaurantId: id, restaurantName: `Restaurant ${id}` });
 beforeEach(async () => { await AsyncStorage.clear(); global.fetch = jest.fn(); });
