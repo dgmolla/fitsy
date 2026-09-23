@@ -163,15 +163,16 @@ tags: [billing, onboarding, discovery, notifications, changed-journey]
 - stopApp
 - launchApp
 - openLink: com.fitsy.mobile://notification-settings
-# A fresh simulator can require system confirmation for an app link.
-- tapOn:
-    text: "^Open$"
-    optional: true
+# Relaunch can briefly invalidate the native accessibility hierarchy.
+# Retry the first hierarchy read as well as the required persisted-state assertion.
 - retry:
     maxRetries: 2
     commands:
       - waitForAnimationToEnd:
           timeout: 10000
+      - tapOn:
+          text: "^Open$"
+          optional: true
       - assertVisible: "Device notifications allowed"
 - assertVisible:
     id: reminders-empty

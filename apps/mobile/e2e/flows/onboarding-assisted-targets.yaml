@@ -136,6 +136,8 @@ tags: [onboarding, discovery, changed-journey]
 - evalScript: ${output.assistedPizzaResponse = http.get(output.assistedUrl + '&q=pizza')}
 - assertTrue: ${output.assistedPizzaResponse.status === 200}
 - evalScript: ${output.assistedPizza = json(output.assistedPizzaResponse.body)}
+# Targets rank matching meals; they must not filter out a common craving.
+- assertTrue: ${output.assistedPizza.data.length > 0}
 - tapOn:
     id: meal-target-calories
 - eraseText: 7
@@ -151,7 +153,7 @@ tags: [onboarding, discovery, changed-journey]
       id: coachmark-next
     timeout: 30000
 - assertVisible: "Follow your craving"
-# Keep the calculated targets and every tour step, whether pizza matches or not.
+# Keep the calculated targets and every tour step with a real ranked pizza result.
 - assertVisible: "1 OF 5"
 - extendedWaitUntil:
     visible:
@@ -165,16 +167,7 @@ tags: [onboarding, discovery, changed-journey]
 - tapOn:
     id: coachmark-next
 - assertVisible: "3 OF 5"
-- runFlow:
-    when:
-      true: ${output.assistedPizza.data.length === 0}
-    commands:
-      - assertVisible: "Make room for your craving"
-- runFlow:
-    when:
-      true: ${output.assistedPizza.data.length > 0}
-    commands:
-      - assertVisible: "Real meals. Know the source."
+- assertVisible: "Real meals. Know the source."
 - tapOn:
     id: coachmark-next
 - extendedWaitUntil:
@@ -189,24 +182,9 @@ tags: [onboarding, discovery, changed-journey]
     id: discovery-search
 - assertTrue: ${maestro.copiedText === 'pizza'}
 - assertVisible: "700"
-- runFlow:
-    when:
-      true: ${output.assistedPizza.data.length === 0}
-    commands:
-      - assertVisible: "No matches for this search"
-      - assertVisible:
-          id: discovery-empty-edit
-      - assertVisible:
-          id: discovery-empty-clear
-      - assertNotVisible:
-          id: discovery-hero
-- runFlow:
-    when:
-      true: ${output.assistedPizza.data.length > 0}
-    commands:
-      - copyTextFrom:
-          id: discovery-hero
-      - assertTrue: ${maestro.copiedText.includes(output.assistedPizza.data[0].name) && maestro.copiedText.includes(output.assistedPizza.data[0].bestMatch.name)}
+- copyTextFrom:
+    id: discovery-hero
+- assertTrue: ${maestro.copiedText.includes(output.assistedPizza.data[0].name) && maestro.copiedText.includes(output.assistedPizza.data[0].bestMatch.name)}
 - assertNotVisible:
     id: discovery-loading
 - assertNotVisible:
