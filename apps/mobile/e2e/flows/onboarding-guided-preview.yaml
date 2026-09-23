@@ -1,6 +1,6 @@
 # Real dev coverage and live offering terms. No purchase on the shared dev account.
 appId: com.fitsy.mobile
-tags: [billing, discovery, onboarding, auth, changed-journey]
+tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
 ---
 - launchApp:
     clearState: true
@@ -371,8 +371,21 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
 - tapOn:
     id: welcome-continue
 - assertVisible: "A heads-up before your trial ends."
+# Exercise the permission action. Deny a fresh native prompt; an existing denial
+# may return directly. Both paths must still reach the plans without a purchase.
 - tapOn:
-    id: trial-reminder-skip
+    id: trial-reminder-allow
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Don’t Allow"
+    commands:
+      - tapOn: "Don’t Allow"
+- runFlow:
+    when:
+      visible: "Don't Allow"
+    commands:
+      - tapOn: "Don't Allow"
 - extendedWaitUntil:
     visible: ${'Discover more meals like your pick at ' + output.context.data[2].name + '.'}
     timeout: 30000
@@ -490,8 +503,12 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
 - inputText: "fitsy-e2e-no-dish-9f71c2"
 - pressKey: Enter
 - extendedWaitUntil:
-    visible: "No matches nearby"
+    visible: "No matches for this search"
     timeout: 30000
+- assertVisible:
+    id: discovery-empty-edit
+- assertVisible:
+    id: discovery-empty-clear
 - assertNotVisible:
     id: discovery-loading
 - assertNotVisible:

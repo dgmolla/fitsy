@@ -100,6 +100,30 @@ tags: [onboarding, discovery, changed-journey]
 - assertVisible: "Estimated from your answers.*"
 - tapOn:
     id: meal-goal-build_muscle
+- waitForAnimationToEnd
+# Read the calculated targets rather than hardcoding the previous formula.
+- copyTextFrom:
+    id: meal-target-calories
+- assertTrue: ${Number(maestro.copiedText) > 0}
+- copyTextFrom:
+    id: meal-target-protein
+- evalScript: ${output.assistedProtein = Number(maestro.copiedText)}
+- copyTextFrom:
+    id: meal-target-carbs
+- evalScript: ${output.assistedCarbs = Number(maestro.copiedText)}
+- copyTextFrom:
+    id: meal-target-fat
+- evalScript: ${output.assistedFat = Number(maestro.copiedText)}
+- assertTrue: ${output.assistedProtein > 0 && output.assistedCarbs > 0 && output.assistedFat > 0}
+# Ask the real backend about these exact targets before asserting the UI outcome.
+- evalScript: ${output.assistedUrl = 'https://dev.fitsy.org/api/restaurants/preview?guided=1&lat=34.0407&lng=-118.2468&calories=700&protein=' + output.assistedProtein + '&carbs=' + output.assistedCarbs + '&fat=' + output.assistedFat}
+- evalScript: ${output.assistedBaseResponse = http.get(output.assistedUrl)}
+- assertTrue: ${output.assistedBaseResponse.status === 200}
+- evalScript: ${output.assistedBase = json(output.assistedBaseResponse.body)}
+- assertTrue: ${output.assistedBase.data.length > 0}
+- evalScript: ${output.assistedPizzaResponse = http.get(output.assistedUrl + '&q=pizza')}
+- assertTrue: ${output.assistedPizzaResponse.status === 200}
+- evalScript: ${output.assistedPizza = json(output.assistedPizzaResponse.body)}
 - tapOn:
     id: meal-target-calories
 - eraseText: 7
@@ -115,8 +139,8 @@ tags: [onboarding, discovery, changed-journey]
       id: coachmark-next
     timeout: 30000
 - assertVisible: "Follow your craving"
-# Keep the calculated protein/carbs/fat targets. Pizza genuinely has no match
-# for this profile, so the tour must finish without a phantom restaurant anchor.
+# Keep the calculated targets and every tour step, whether pizza matches or not.
+- assertVisible: "1 OF 5"
 - extendedWaitUntil:
     visible:
       id: coachmark-next
@@ -125,12 +149,26 @@ tags: [onboarding, discovery, changed-journey]
 - tapOn:
     id: coachmark-next
 - assertVisible: "Your meal targets"
+- assertVisible: "2 OF 5"
+- tapOn:
+    id: coachmark-next
+- assertVisible: "3 OF 5"
+- runFlow:
+    when:
+      true: ${output.assistedPizza.data.length === 0}
+    commands:
+      - assertVisible: "Make room for your craving"
+- runFlow:
+    when:
+      true: ${output.assistedPizza.data.length > 0}
+    commands:
+      - assertVisible: "Real meals. Know the source."
 - tapOn:
     id: coachmark-next
 - extendedWaitUntil:
     visible: "Wherever your day takes you"
     timeout: 15000
-- assertNotVisible: "Real meals. Know the source."
+- assertVisible: "4 OF 5"
 - tapOn:
     id: coachmark-next
 - assertVisible: "5 OF 5"
@@ -139,9 +177,24 @@ tags: [onboarding, discovery, changed-journey]
     id: discovery-search
 - assertTrue: ${maestro.copiedText === 'pizza'}
 - assertVisible: "700"
-- assertVisible: "No matches nearby"
-- assertNotVisible:
-    id: discovery-hero
+- runFlow:
+    when:
+      true: ${output.assistedPizza.data.length === 0}
+    commands:
+      - assertVisible: "No matches for this search"
+      - assertVisible:
+          id: discovery-empty-edit
+      - assertVisible:
+          id: discovery-empty-clear
+      - assertNotVisible:
+          id: discovery-hero
+- runFlow:
+    when:
+      true: ${output.assistedPizza.data.length > 0}
+    commands:
+      - copyTextFrom:
+          id: discovery-hero
+      - assertTrue: ${maestro.copiedText.includes(output.assistedPizza.data[0].name) && maestro.copiedText.includes(output.assistedPizza.data[0].bestMatch.name)}
 - assertNotVisible:
     id: discovery-loading
 - assertNotVisible:
@@ -154,6 +207,9 @@ tags: [onboarding, discovery, changed-journey]
       id: discovery-hero
     timeout: 30000
 - assertVisible: "700"
+- copyTextFrom:
+    id: discovery-hero
+- assertTrue: ${maestro.copiedText.includes(output.assistedBase.data[0].name) && maestro.copiedText.includes(output.assistedBase.data[0].bestMatch.name)}
 - tapOn:
     id: preview-back
 - assertVisible: "A little context.*A better choice.*"
