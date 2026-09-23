@@ -1,8 +1,8 @@
 import { Prisma } from '@prisma/client';
-import { activeTarget, MACRO_DIMENSIONS, GOAL_MATCH_POLICY, macroWinnerSqlOrder,
+import { activeTarget, MACRO_DIMENSIONS, macroWinnerSqlOrder,
   type GuidedPreviewResponse, type MacroTargets } from '@fitsy/shared';
 import { prisma, DISTANCE_WEIGHT, restaurantResultFromRow, type ScoredRow } from './restaurantService';
-import { macroScoreSumSql, macroQualificationSql } from './macroScoreSql';
+import { macroScoreSumSql } from './macroScoreSql';
 import { nearbyBoundarySql, nearbyDistanceSql, restaurantQuerySql } from './restaurantQuerySql';
 
 export interface GuidedPreviewParams {
@@ -15,15 +15,12 @@ export interface GuidedPreviewParams {
 
 interface PreviewRow extends ScoredRow {
   nearbyDishCount: number;
-  matchingDishCount: number;
-  selectedItemMatches: boolean;
 }
 
-/** One statement and one snapshot for coverage, qualification, selection membership and the three picks. */
-export function guidedPreviewSql({ lat, lng, targets, query, selectedItemId }: GuidedPreviewParams): Prisma.Sql {
+/** Rank relevant meals by the same targets as main search, without hard macro cutoffs. */
+export function guidedPreviewSql({ lat, lng, targets, query }: GuidedPreviewParams): Prisma.Sql {
   const text = restaurantQuerySql(query);
   const dimensions = MACRO_DIMENSIONS.filter(key => activeTarget(targets[key]));
-  const targetFilter = macroQualificationSql(targets);
   const queryFilter = text.matches(Prisma.sql`(SELECT "hasDishMatches" FROM query_context)`, Prisma.sql`m."dishMatches"`,
     Prisma.sql`m."restaurantMatches"`, Prisma.sql`m."exactRestaurant"`);
   const orderKey = dimensions.length ? Prisma.sql`m."scoreSum" + ${DISTANCE_WEIGHT}::double precision * m."distanceMiles"`
@@ -43,18 +40,16 @@ export function guidedPreviewSql({ lat, lng, targets, query, selectedItemId }: G
         AND m."carbsG" IS NOT NULL AND m."fatG" IS NOT NULL
     ), query_context AS MATERIALIZED (
       SELECT coalesce(bool_or("dishMatches"), false) AS "hasDishMatches" FROM area_menu
-    ), qualified AS MATERIALIZED (
+    ), relevant AS MATERIALIZED (
       SELECT m.*, ${orderKey} AS "orderKey"
       FROM area_menu m
-      WHERE ${queryFilter} AND ${targetFilter}
+      WHERE ${queryFilter}
     ), winners AS (
-      SELECT DISTINCT ON ("restaurantId") * FROM qualified ORDER BY "restaurantId", "scoreSum", "menuItemId"
+      SELECT DISTINCT ON ("restaurantId") * FROM relevant ORDER BY "restaurantId", "scoreSum", "menuItemId"
     ), picks AS MATERIALIZED (
       SELECT * FROM winners ORDER BY "orderKey", "restaurantId" LIMIT 3
     ), counts AS (
-      SELECT (SELECT count(*)::integer FROM area_menu) AS "nearbyDishCount",
-        (SELECT count(*)::integer FROM qualified) AS "matchingDishCount",
-        EXISTS (SELECT 1 FROM picks WHERE "menuItemId" = ${selectedItemId ?? null}::text) AS "selectedItemMatches"
+      SELECT (SELECT count(*)::integer FROM area_menu) AS "nearbyDishCount"
     )
     SELECT counts.*, p.*, r.name, r.address, r.lat, r.lng, r."cuisineTags", r."chainFlag", r."photoUrl",
       r.rating, r."priceLevel", r."dietaryOptions", e.confidence, e.source
@@ -70,20 +65,14 @@ export function guidedPreviewSql({ lat, lng, targets, query, selectedItemId }: G
 export async function findGuidedPreview(params: GuidedPreviewParams): Promise<GuidedPreviewResponse> {
   const rows = await prisma.$queryRaw<PreviewRow[]>(guidedPreviewSql(params));
   const counts = rows[0]!;
-  const activeTargets = Object.fromEntries(MACRO_DIMENSIONS.filter(key => activeTarget(params.targets[key]))
-    .map(key => [key, params.targets[key]!])) as MacroTargets;
-  const targetsActive = Object.keys(activeTargets).length > 0;
+  const targetsActive = MACRO_DIMENSIONS.some(key => activeTarget(params.targets[key]));
   return {
     data: rows.filter(row => row.restaurantId != null).map(row => restaurantResultFromRow(row, targetsActive, true)),
     meta: {
       nearbyDishCount: counts.nearbyDishCount,
       radiusMiles: 3,
-      goalMatch: targetsActive ? {
-        policy: GOAL_MATCH_POLICY, activeTargets,
-        matchingDishCount: counts.matchingDishCount,
-        additionalDishCount: counts.matchingDishCount - Number(counts.selectedItemMatches),
-        selectedItemMatches: counts.selectedItemMatches,
-      } : null,
+      // Explicit null disables numerical proof in older clients as well.
+      goalMatch: null,
     },
   };
 }

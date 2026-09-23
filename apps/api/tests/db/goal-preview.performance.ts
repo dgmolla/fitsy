@@ -18,7 +18,7 @@ async function main() {
   const prefix = `goal-bench-${randomUUID()}`;
   const restaurantCount = Number(process.env['GOAL_BENCH_RESTAURANTS'] ?? 400);
   assert.ok([400, 2_000].includes(restaurantCount));
-  const dishCount = restaurantCount * 80, matchingCount = restaurantCount * 4;
+  const dishCount = restaurantCount * 80;
   const ids = Array.from({ length: restaurantCount }, (_, i) => `${prefix}-${String(i).padStart(3, '0')}`);
   const params = { lat: 47, lng: 47, targets: { calories: 600, proteinG: 40, carbsG: 60, fatG: 20 }, query: 'ramen' };
   try {
@@ -57,8 +57,6 @@ async function main() {
       assert.equal(dataQueries().length, 1, 'Exactly one application data query per preview handler call');
       assert.equal(result.data.length, 3);
       assert.equal(result.meta.nearbyDishCount, dishCount);
-      assert.equal(result.meta.goalMatch.matchingDishCount, matchingCount);
-      assert.equal(result.meta.goalMatch.additionalDishCount, selectedItemId ? matchingCount - 1 : matchingCount);
       selectedItemId = result.data[0].bestMatch.menuItemId;
       queries.length = 0;
       const searchStart = performance.now();
@@ -72,7 +70,7 @@ async function main() {
     const plan = await prisma.$queryRaw(Prisma.sql`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${guidedPreviewSql({ ...params, selectedItemId })}`);
     const warm = samples.slice(2).sort((a, b) => a - b);
     const receipt = { fixture: 'synthetic local density, not production latency', restaurants: ids.length, dishes: dishCount,
-      responseRows: 3, matchingDishCount: matchingCount, applicationDataQueries: 1, connectionHealthChecks, cache: 'none',
+      responseRows: 3, applicationDataQueries: 1, connectionHealthChecks, cache: 'none',
       firstRequestMs: samples[0], warmMedianMs: warm[Math.floor(warm.length / 2)], warmP95Ms: warm[Math.ceil(warm.length * .95) - 1], samplesMs: samples,
       standardSearchMeasurement: 'query service with goalMatched true, radius 50; auth excluded', standardSearchSamplesMs: standardSamples,
       postgresPlan: plan };
