@@ -19,7 +19,7 @@ interface PreviewRow extends ScoredRow {
   selectedItemMatches: boolean;
 }
 
-/** One statement and one snapshot for coverage, qualification, selection membership and the three picks. */
+/** Rank relevant meals by the same targets as main search; qualification is only count metadata. */
 export function guidedPreviewSql({ lat, lng, targets, query, selectedItemId }: GuidedPreviewParams): Prisma.Sql {
   const text = restaurantQuerySql(query);
   const dimensions = MACRO_DIMENSIONS.filter(key => activeTarget(targets[key]));
@@ -43,18 +43,18 @@ export function guidedPreviewSql({ lat, lng, targets, query, selectedItemId }: G
         AND m."carbsG" IS NOT NULL AND m."fatG" IS NOT NULL
     ), query_context AS MATERIALIZED (
       SELECT coalesce(bool_or("dishMatches"), false) AS "hasDishMatches" FROM area_menu
-    ), qualified AS MATERIALIZED (
-      SELECT m.*, ${orderKey} AS "orderKey"
+    ), relevant AS MATERIALIZED (
+      SELECT m.*, ${orderKey} AS "orderKey", ${targetFilter} AS "goalQualified"
       FROM area_menu m
-      WHERE ${queryFilter} AND ${targetFilter}
+      WHERE ${queryFilter}
     ), winners AS (
-      SELECT DISTINCT ON ("restaurantId") * FROM qualified ORDER BY "restaurantId", "scoreSum", "menuItemId"
+      SELECT DISTINCT ON ("restaurantId") * FROM relevant ORDER BY "restaurantId", "scoreSum", "menuItemId"
     ), picks AS MATERIALIZED (
       SELECT * FROM winners ORDER BY "orderKey", "restaurantId" LIMIT 3
     ), counts AS (
       SELECT (SELECT count(*)::integer FROM area_menu) AS "nearbyDishCount",
-        (SELECT count(*)::integer FROM qualified) AS "matchingDishCount",
-        EXISTS (SELECT 1 FROM picks WHERE "menuItemId" = ${selectedItemId ?? null}::text) AS "selectedItemMatches"
+        (SELECT count(*)::integer FROM relevant WHERE "goalQualified") AS "matchingDishCount",
+        EXISTS (SELECT 1 FROM picks WHERE "menuItemId" = ${selectedItemId ?? null}::text AND "goalQualified") AS "selectedItemMatches"
     )
     SELECT counts.*, p.*, r.name, r.address, r.lat, r.lng, r."cuisineTags", r."chainFlag", r."photoUrl",
       r.rating, r."priceLevel", r."dietaryOptions", e.confidence, e.source

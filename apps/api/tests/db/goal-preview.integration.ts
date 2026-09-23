@@ -47,7 +47,7 @@ test('real guided and authenticated search preserve craving, target, selection a
     cuisineTags: i === 3 ? ['mexican'] : [], menuItems: { create: items[i]! },
   } })));
   try {
-    await t.test('top three and count use qualifying ramen, with deterministic item and restaurant ties', async () => {
+    await t.test('top three rank relevant ramen, with deterministic item and restaurant ties and separate counts', async () => {
       const result = await guided(`${targets}&q=ramen`);
       assert.deepEqual(result.data.map(row => row.bestMatch!.menuItemId),
         [`${prefix}-ramen-b`, `${prefix}-ramen-c`, `${prefix}-ramen-a`]);
@@ -62,13 +62,15 @@ test('real guided and authenticated search preserve craving, target, selection a
     });
     await t.test('changing target and craving changes both ranked picks and qualifying count', async () => {
       const protein = await guided('calories=600&protein=70&carbs=60&fat=20&q=ramen');
-      assert.deepEqual(protein.data.map(row => row.bestMatch!.menuItemId), [`${prefix}-protein-ramen`]);
+      assert.equal(protein.data[0]!.bestMatch!.menuItemId, `${prefix}-protein-ramen`);
+      assert.equal(protein.data.length, 3);
       assert.equal(protein.meta.goalMatch!.matchingDishCount, 1);
       const pizza = await guided(`${targets}&q=pizza`);
       assert.deepEqual(pizza.data.map(row => row.bestMatch!.menuItemId), [`${prefix}-pizza-a`, `${prefix}-pizza-b`]);
       assert.equal(pizza.meta.goalMatch!.matchingDishCount, 2);
       const light = await guided('calories=400&protein=40&carbs=60&fat=20&q=ramen');
-      assert.deepEqual(light.data.map(row => row.bestMatch!.menuItemId), [`${prefix}-light-ramen`]);
+      assert.equal(light.data[0]!.bestMatch!.menuItemId, `${prefix}-light-ramen`);
+      assert.equal(light.data.length, 3);
     });
     await t.test('standard search shares dish-first relevance and keeps subscription redaction', async () => {
       for (const craving of ['ramen', 'pizza']) {
@@ -92,9 +94,12 @@ test('real guided and authenticated search preserve craving, target, selection a
       assert.deepEqual(exact.data.map(row => row.id), [ids[0]]);
       assert.equal(exact.meta.goalMatch!.matchingDishCount, 4);
     });
-    await t.test('zero target matches never fall back to unrelated dishes and differ from no coverage', async () => {
+    await t.test('zero close fits still rank relevant dishes while absent cravings and coverage stay empty', async () => {
       const noFit = await guided('calories=50&protein=40&carbs=60&fat=20&q=ramen');
-      assert.deepEqual(noFit.data, []);
+      assert.equal(noFit.data.length, 3);
+      assert.ok(noFit.data.every(row => row.bestMatch!.name.toLowerCase().includes('ramen')));
+      assert.equal(noFit.data[0]!.bestMatch!.menuItemId, `${prefix}-light-ramen`);
+      assert.deepEqual(noFit.data.map(row => row.id), (await standard('calories=50&protein=40&carbs=60&fat=20&q=ramen&limit=3')).data.map(row => row.id));
       assert.equal(noFit.meta.nearbyDishCount, 11);
       assert.equal(noFit.meta.goalMatch!.matchingDishCount, 0);
       const noCraving = await guided(`${targets}&q=unfindablecravingxyz`);
@@ -155,7 +160,7 @@ test('inclusive goal bounds apply to every active dimension and preserve only co
   } finally { await prisma.restaurant.delete({ where: { id } }); }
 });
 
-test('opt-in main search matches preview picks and binds pagination to its goal context', async () => {
+test('preview ranks like main search while close-fit counts and opt-in pagination remain independent', async () => {
   const prefix = randomUUID();
   const ids = ['a', 'b', 'c', 'off'].map(suffix => `${prefix}-${suffix}`);
   await prisma.$transaction(ids.map((id, i) => prisma.restaurant.create({ data: {
@@ -169,8 +174,14 @@ test('opt-in main search matches preview picks and binds pagination to its goal 
     const preview = await guided(query);
     const matched = await standard(`${query}&goalMatched=1&limit=3`);
     assert.equal(preview.meta.goalMatch!.matchingDishCount, 3);
-    assert.deepEqual(matched.data.map(row => row.bestMatch!.menuItemId), preview.data.map(row => row.bestMatch!.menuItemId));
-    assert.equal((await standard(`${query}&limit=3`)).data[0]!.id, ids[3], 'Legacy ranking remains available');
+    const ranked = await standard(`${query}&limit=3`);
+    assert.deepEqual(ranked.data.map(row => row.bestMatch!.menuItemId), preview.data.map(row => row.bestMatch!.menuItemId));
+    assert.equal(preview.data[0]!.id, ids[3], 'A closer overall meal must not disappear for missing one cutoff');
+    assert.equal(matched.data.length, 3);
+    assert.ok(matched.data.every(row => row.id !== ids[3]), 'Explicit close-fit filtering remains available to callers');
+    const selected = await guided(`${query}&selectedItemId=${ids[3]}-meal`);
+    assert.equal(selected.meta.goalMatch!.selectedItemMatches, false);
+    assert.equal(selected.meta.goalMatch!.additionalDishCount, 3, 'A ranked alternative must not be subtracted from close-fit counts');
     const anonymous = async (flag: string) => restaurantsResponseSchema.parse(await (await search(
       new NextRequest(`http://localhost/api/restaurants?${at}&${query}&limit=3${flag}`))).json());
     const lockedLegacy = await anonymous('');

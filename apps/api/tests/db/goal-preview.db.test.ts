@@ -42,7 +42,7 @@ testIfDb('guided service preserves complete-nutrition coverage, goal qualificati
     expect(noTargets.data).toHaveLength(1);
     expect(noTargets.meta.goalMatch).toBeNull();
     const noMatch = guidedPreviewResponseSchema.parse(await findGuidedPreview({ ...params, targets: { calories: 50 } }));
-    expect(noMatch.data).toEqual([]);
+    expect(noMatch.data.map(row => row.bestMatch!.menuItemId)).toEqual([`${id}-fit`]);
     expect(noMatch.meta.nearbyDishCount).toBe(2);
     expect(noMatch.meta.goalMatch).toMatchObject({ matchingDishCount: 0, selectedItemMatches: false });
   } finally { await prisma.restaurant.delete({ where: { id } }); await prisma.$disconnect(); }
