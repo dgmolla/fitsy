@@ -1,6 +1,6 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { hasTargets } from "./macroScoring";
-import { macroScoreSumSql, macroQualificationSql } from "./macroScoreSql";
+import { macroScoreSumSql } from "./macroScoreSql";
 import { nearbyBoundarySql, nearbyDistanceSql, restaurantQuerySql } from "./restaurantQuerySql";
 import { restaurantCursorContext, type RestaurantSearchContext } from './restaurantCursorContext';
 import { macroWinnerSqlOrder } from "@fitsy/shared";
@@ -180,7 +180,6 @@ export async function findNearbyRestaurants(
 
   const targetsActive = hasTargets(targets);
   const cursorContext = restaurantCursorContext(params);
-  const goalFilter = params.goalMatched && targetsActive ? Prisma.sql`AND ${macroQualificationSql(targets)}` : Prisma.empty;
 
   // Dynamic filter fragments — composed via Prisma.sql for safe parameter binding.
   const filterFrags: Prisma.Sql[] = [];
@@ -291,7 +290,6 @@ export async function findNearbyRestaurants(
         AND m.calories IS NOT NULL AND m."proteinG" IS NOT NULL
         AND m."carbsG" IS NOT NULL AND m."fatG" IS NOT NULL
         ${menuQueryFilter}
-        ${goalFilter}
       ORDER BY "scoreSum" ASC, m.id ASC
       LIMIT 1
     ) AS best

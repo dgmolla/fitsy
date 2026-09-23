@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { guidedPreviewResponseSchema } from '@fitsy/shared';
 
 const testIfDb = process.env['POSTGRES_PRISMA_URL'] ? test : test.skip;
-testIfDb('goal-matched preview through real API handlers, JWT and Postgres', () => {
+testIfDb('target-ranked preview through real API handlers, JWT and Postgres', () => {
   let output: string;
   try { output = execFileSync(process.execPath, [require.resolve('tsx/cli'),
     '--tsconfig', resolve(__dirname, '../../tsconfig.json'), '--test', '--test-reporter=tap',
@@ -19,7 +19,7 @@ testIfDb('goal-matched preview through real API handlers, JWT and Postgres', () 
   expect(output).toMatch(/^# skipped 0$/m);
 }, 35_000);
 
-testIfDb('guided service preserves complete-nutrition coverage, goal qualification and no-target contracts', async () => {
+testIfDb('guided service preserves complete-nutrition coverage, target ranking and no-target contracts', async () => {
   // Lazy load keeps database-less runs isolated while measuring the actual service under Jest coverage.
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { findGuidedPreview } = require('../../lib/guidedPreviewService') as typeof import('../../lib/guidedPreviewService');
@@ -37,13 +37,13 @@ testIfDb('guided service preserves complete-nutrition coverage, goal qualificati
     const result = guidedPreviewResponseSchema.parse(await findGuidedPreview({ ...params, selectedItemId: `${id}-fit` }));
     expect(result.data.map(row => row.bestMatch!.menuItemId)).toEqual([`${id}-fit`]);
     expect(result.meta.nearbyDishCount).toBe(2);
-    expect(result.meta.goalMatch).toMatchObject({ matchingDishCount: 1, additionalDishCount: 0, selectedItemMatches: true });
+    expect(result.meta.goalMatch).toBeNull();
     const noTargets = guidedPreviewResponseSchema.parse(await findGuidedPreview({ ...params, targets: {} }));
     expect(noTargets.data).toHaveLength(1);
     expect(noTargets.meta.goalMatch).toBeNull();
     const noMatch = guidedPreviewResponseSchema.parse(await findGuidedPreview({ ...params, targets: { calories: 50 } }));
-    expect(noMatch.data).toEqual([]);
+    expect(noMatch.data.map(row => row.bestMatch!.menuItemId)).toEqual([`${id}-fit`]);
     expect(noMatch.meta.nearbyDishCount).toBe(2);
-    expect(noMatch.meta.goalMatch).toMatchObject({ matchingDishCount: 0, selectedItemMatches: false });
+    expect(noMatch.meta.goalMatch).toBeNull();
   } finally { await prisma.restaurant.delete({ where: { id } }); await prisma.$disconnect(); }
 });
