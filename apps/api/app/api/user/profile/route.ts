@@ -7,7 +7,7 @@ import type {
   ProfileUpdateRequest,
   ProfileResponse,
   ActivityLevel,
-  UserGoal,
+  UserGoalV2,
   Sex,
 } from "@fitsy/shared";
 
@@ -41,9 +41,9 @@ const USER_SELECT = {
 // Older installed apps only understand the original goal values and otherwise
 // calculate NaN targets after profile edits. Opt-in clients preserve performance;
 // legacy clients see its maintenance-energy equivalent without changing storage.
-function responseGoal(goal: string | null, request: NextRequest): UserGoal | null {
+function responseGoal(goal: string | null, request: NextRequest): UserGoalV2 | null {
   if (goal === "performance" && request.nextUrl.searchParams.get("goalSchema") !== "2") return "maintain";
-  return goal as UserGoal | null;
+  return goal as UserGoalV2 | null;
 }
 
 // ─── GET /api/user/profile ──────────────────────────────────────────────────
@@ -72,7 +72,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    const response: ProfileResponse = {
+    const response: ProfileResponse<UserGoalV2> = {
       user: {
         id: user.id,
         email: user.email,

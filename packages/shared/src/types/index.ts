@@ -285,7 +285,8 @@ export type ActivityLevel =
   | "active"
   | "very_active";
 
-export type UserGoal = "lose_fat" | "maintain" | "build_muscle" | "performance";
+export type UserGoal = "lose_fat" | "maintain" | "build_muscle";
+export type UserGoalV2 = UserGoal | "performance";
 
 // Biological sex — used only for the Mifflin-St Jeor BMR term.
 export type Sex = "female" | "male";
@@ -328,7 +329,7 @@ export interface ProfileUpdateRequest {
   };
 }
 
-export interface ProfileResponse {
+export interface ProfileResponse<Goal extends UserGoalV2 = UserGoal> {
   user: {
     id: string;
     email: string;
@@ -339,7 +340,7 @@ export interface ProfileResponse {
     weightKg: number | null;
     sex: Sex | null;
     activityLevel: ActivityLevel | null;
-    goal: UserGoal | null;
+    goal: Goal | null;
     onboardingStep: number;
   };
   macroTarget: {
