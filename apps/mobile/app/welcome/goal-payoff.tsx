@@ -14,14 +14,20 @@ export default function GoalPayoffScreen() {
     let live = true;
     void getOnboardingData().then(saved => {
       if (!live) return;
+      if (!saved.goal) {
+        setData(undefined);
+        router.replace('/welcome/goal');
+        return;
+      }
       setData(saved);
-      trackOnboardingScreenView(`goal_payoff_${saved.goal ?? 'maintain'}`);
+      trackOnboardingScreenView(`goal_payoff_${saved.goal}`);
     });
     return () => { live = false; };
   }, []));
+  if (!data?.goal) return null;
   const story = onboardingGoalStory(data?.goal);
   return <WelcomeScreen progress={0.4} title={story.title} subtitle={story.body}
-    canContinue={!!data} onContinue={() => router.push('/welcome/target-setup')} continueLabel="Set my meal targets">
-    {data && <OnboardingGoalGraph goal={data.goal} />}
+    canContinue onContinue={() => router.push('/welcome/target-setup')} continueLabel="Set my meal targets">
+    <OnboardingGoalGraph goal={data.goal} />
   </WelcomeScreen>;
 }

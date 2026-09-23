@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { getMacroTargets } from './macroStorage';
+import { getOnboardingData } from './onboardingStorage';
 import { getPreviewSetup } from './previewSetup';
 
 const KEY = '@fitsy/onboardingStep';
@@ -15,6 +16,9 @@ export async function getOnboardingResume(): Promise<`/welcome/${Step}` | null> 
   // Earlier versions asked about prior approaches before collecting location.
   if ((step === 'tried' || step === 'response') && !(await getPreviewSetup()).data.area) return '/welcome/location-permission';
   if (step === 'promise') return '/welcome/location-permission';
+  // Earlier onboarding asked about prior approaches before the goal choice.
+  // A resumed payoff must collect that choice before showing a goal-specific graph.
+  if ((step === 'value-abundance' || step === 'value-payoff' || step === 'goal-payoff') && !(await getOnboardingData()).goal) return '/welcome/goal';
   if (step === 'value-abundance') return '/welcome/value-payoff';
   // The old flow showed nutrition trust before targets; the new flow follows them.
   if (step === 'how-it-works' && !(await getMacroTargets())) return '/welcome/target-setup';
