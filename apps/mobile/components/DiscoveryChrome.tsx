@@ -31,7 +31,7 @@ export function Masthead({
           <Text style={s.logo}>fitsy</Text>
         </View>}
         <View ref={locationRef} collapsable={false} style={s.locationAnchor}><TouchableOpacity
-          style={s.locationChip}
+          style={s.locationButton}
           onPress={onLocationPress}
           activeOpacity={0.7}
           accessibilityRole="button"
@@ -39,9 +39,11 @@ export function Masthead({
           accessibilityHint="Double-tap to change location"
           testID="discovery-location"
         >
-          <Ionicons name="location" size={11} color={EDITORIAL.greenAccent} />
-          <Text style={s.locationText} numberOfLines={1}>{locationLabel}</Text>
-          <Ionicons name="chevron-down" size={10} color={EDITORIAL.textSoft} />
+          <View style={s.locationChip} testID="discovery-location-pill">
+            <Ionicons name="location" size={11} color={EDITORIAL.greenAccent} />
+            <Text style={s.locationText} numberOfLines={1}>{locationLabel}</Text>
+            <Ionicons name="chevron-down" size={10} color={EDITORIAL.textSoft} />
+          </View>
         </TouchableOpacity></View>
       </View>
       {!preview && <Text style={s.issueLabel}>{getSelectionLabel()}</Text>}
@@ -58,7 +60,7 @@ export function MacroStrip({ macros, onEdit, editRef }: { macros: MacroValues; o
   const cal = macros.calories || '-';
 
   return (
-    <View style={s.macroStrip}>
+    <View style={s.macroStrip} testID="discovery-macro-strip">
       <View style={s.macroItem}>
         <Text style={s.macroVal}>{p}g</Text>
         <Text style={s.macroLbl}>protein</Text>
@@ -80,14 +82,14 @@ export function MacroStrip({ macros, onEdit, editRef }: { macros: MacroValues; o
       </View>
       <View ref={editRef} collapsable={false}>
         <TouchableOpacity
-          style={s.editBtn}
+          style={s.editButton}
           onPress={onEdit}
           activeOpacity={0.7}
           accessibilityLabel="Edit macro targets"
           testID="preview-edit-targets"
           accessibilityRole="button"
         >
-          <Text style={s.editBtnText}>Edit</Text>
+          <View style={s.editBtn} testID="discovery-edit-pill"><Text style={s.editBtnText}>Edit</Text></View>
         </TouchableOpacity>
       </View>
     </View>

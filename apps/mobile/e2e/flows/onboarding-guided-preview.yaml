@@ -154,6 +154,28 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
 - assertTrue: ${maestro.copiedText === 'pizza'}
 - assertNotVisible:
     id: discovery-loading
+# Native bounds guard the approved compact chrome, not just its presence.
+# Visual pills stay compact while their enclosing touch targets remain 44pt.
+- assertVisible:
+    id: discovery-location-pill
+    height: 28
+    tolerance: 1
+- assertVisible:
+    id: discovery-edit-pill
+    height: 28
+    tolerance: 1
+- assertVisible:
+    id: discovery-macro-strip
+    height: 46
+    tolerance: 1
+- assertVisible:
+    id: discovery-location
+    height: 44
+    tolerance: 1
+- assertVisible:
+    id: preview-edit-targets
+    height: 44
+    tolerance: 1
 # Replay starts with an empty field. Skipping the first tip must leave it empty.
 - tapOn:
     id: preview-show-tour
