@@ -5,7 +5,7 @@ import { PATCH, GET } from '../../app/api/user/profile/route';
 import { token, userId } from './authenticated-route.fixture';
 import { prisma } from '../../lib/restaurantService';
 
-const request = (body?: unknown) => new NextRequest('http://localhost/api/user/profile', {
+const request = (body?: unknown, schema?: string) => new NextRequest(`http://localhost/api/user/profile${schema ? '?goalSchema=' + schema : ''}`, {
   method: body ? 'PATCH' : 'GET',
   headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
   ...(body ? { body: JSON.stringify(body) } : {}),
@@ -26,9 +26,25 @@ test('performance profile persists, calculates balanced macros and preserves exp
 
   const macroTarget = { calories: 2100, proteinG: 120, carbsG: 250, fatG: 69 };
   assert.equal((await PATCH(request({ goal: 'performance', macroTarget }))).status, 200);
-  const refreshed = await GET(request());
+  const legacy = await GET(request());
+  assert.equal(legacy.status, 200);
+  const legacyProfile = await legacy.json();
+  assert.equal(legacyProfile.user.goal, 'maintain', 'old clients receive a supported goal');
+  assert.deepEqual(legacyProfile.macroTarget, macroTarget);
+  const unknownSchema = await GET(request(undefined, '999'));
+  assert.equal((await unknownSchema.json()).user.goal, 'maintain');
+  const refreshed = await GET(request(undefined, '2'));
   assert.equal(refreshed.status, 200);
   const profile = await refreshed.json();
   assert.equal(profile.user.goal, 'performance');
   assert.deepEqual(profile.macroTarget, macroTarget);
+  const persisted = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+  assert.equal(persisted.goal, 'performance', 'compatibility serialization must not overwrite the stored goal');
+  for (const goal of ['lose_fat', 'build_muscle', 'maintain']) {
+    assert.equal((await PATCH(request({ goal, macroTarget }))).status, 200);
+    for (const schema of [undefined, '2']) {
+      const unchanged = await GET(request(undefined, schema));
+      assert.equal((await unchanged.json()).user.goal, goal);
+    }
+  }
 });
