@@ -114,8 +114,16 @@ export function DiscoveryScreen({ onboardingPreview = false }: { onboardingPrevi
   const renderFooter = useCallback(() => {
     if (loading) return null;
     if (isOnboardingPreview && !loading && !error && !outOfArea) {
-      return <View ref={tourMoreRef} collapsable={false}><LockedUnlockCard title="More choices. Full menus." subtitle="Dozens more meals to explore. Unlock full menus with Pro."
-        ctaLabel="Explore meals that fit" accessibilityLabel="Explore more meals and full menus with Pro" onPress={() => { void unlockPreview(); }} style={s.lockedCard} /></View>;
+      const empty = results.length === 0;
+      const title = empty ? 'Keep exploring.' : 'Explore full menus.';
+      const subtitle = empty ? 'Try another dish or area. Unlock full menus with Pro.' : 'Explore full menus with Pro.';
+      const ctaLabel = empty ? 'Explore Pro plans' : 'Explore full menus';
+      return <View ref={tourMoreRef} collapsable={false}><LockedUnlockCard
+        title={title}
+        subtitle={subtitle}
+        ctaLabel={ctaLabel}
+        accessibilityLabel={`${title} ${subtitle} ${ctaLabel}`}
+        onPress={() => { void unlockPreview(); }} style={s.lockedCard} /></View>;
     }
     if (locked && results.length > 0) {
       if (unlocking) {

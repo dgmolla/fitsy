@@ -40,7 +40,8 @@ New clients request profile goal schema 2; legacy clients receive a supported ma
 Search keeps the typed query and meal targets through loading, empty results and retries.
 Targets rank relevant dishes by closeness, using the same ranking in preview and main discovery.
 The preview is limited to three restaurant picks without hard macro cutoffs.
-Preview and paywall use general copy, "Dozens more meals to explore," without calculating or displaying target-fit counts.
+Preview and paywall describe full-menu access without promising a meal count.
+The preview's zero-result message asks users to try another dish or area while preserving their targets.
 The paywall uses saved selection context and never issues a search to support marketing copy.
 A bounded transport timeout leaves a retry action instead of an indefinite loader.
 An empty result explains unavailable dish or area coverage and preserves saved targets through recovery.

@@ -48,7 +48,7 @@ export function PaywallView(props: Props) {
       <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false} bounces={false}>
         <View>
           <Text style={s.title}>{selected?.trial ? `Start your ${trialLength} free trial.` : 'Make room for meals that fit.'}</Text>
-          <Text style={s.context}>Dozens more meals to explore.</Text>
+          <Text style={s.context}>Explore full menus with Pro.</Text>
           {!!props.discovery.selected && <Text style={s.context}>Discover more meals like your pick at {props.discovery.selected.name}.</Text>}
           <PaywallTimeline terms={selected} />
 

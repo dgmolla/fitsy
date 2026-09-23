@@ -203,7 +203,7 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
     const first = preferred === 'restaurant' ? 'search' : preferred;
     return [...steps.filter(step => step.key === first), ...steps.filter(step => step.key !== first),
       { key: 'location', title: 'Wherever your day takes you', body: 'Eating near work or meeting friends? Change your area here to find meals where you want to eat.', target: tourLocationRef },
-      { key: 'more', title: 'More choices. Full menus.', body: 'Dozens more meals to explore. Unlock full menus with Pro. Try your first craving now.', target: tourMoreRef, placement: 'above' as const },
+      { key: 'more', title: results.length === 0 ? 'Keep exploring.' : 'Explore full menus.', body: results.length === 0 ? 'Try another dish or area. Your targets stay saved. Unlock full menus with Pro when you find a meal.' : 'Explore full menus with Pro. Try your first craving now.', target: tourMoreRef, placement: 'above' as const },
     ]; }, [tried, results, demo.typing, loading, error]);
 
   return { navigation, isOnboardingPreview, tried, inputs, query, setQuery: demo.editQuery, canSearch, hasQuery, location,

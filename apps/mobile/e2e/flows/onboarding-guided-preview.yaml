@@ -526,6 +526,13 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
     id: preview-show-tour
 - assertNotVisible:
     id: discovery-join-waitlist
+- scrollUntilVisible:
+    element:
+      id: locked-value-cta
+    direction: DOWN
+- copyTextFrom:
+    id: locked-value-cta
+- assertTrue: ${maestro.copiedText.includes('Keep exploring.') && maestro.copiedText.includes('Try another dish or area. Unlock full menus with Pro.') && maestro.copiedText.includes('Explore Pro plans')}
 - tapOn:
     id: discovery-clear-search
 - extendedWaitUntil:
