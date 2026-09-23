@@ -21,10 +21,16 @@ tags: [onboarding, discovery, changed-journey]
 - tapOn:
     id: welcome-start
 - tapOn:
-    id: welcome-continue
-- tapOn:
     id: location-choose-area
 - tapOn: "Search near DTLA"
+- extendedWaitUntil:
+    visible:
+      id: goal-performance
+    timeout: 30000
+- tapOn:
+    id: goal-performance
+- tapOn:
+    id: welcome-continue
 - extendedWaitUntil:
     visible:
       id: tried-meal_prep
@@ -33,7 +39,7 @@ tags: [onboarding, discovery, changed-journey]
     id: tried-meal_prep
 - tapOn:
     id: welcome-continue
-- assertVisible: "For the meals.*"
+- assertVisible: "You’ve got home.*We’ve got meals out.*"
 - tapOn:
     id: welcome-back
 - assertVisible:
@@ -41,12 +47,17 @@ tags: [onboarding, discovery, changed-journey]
     selected: true
 - tapOn:
     id: welcome-continue
-- assertVisible: "For the meals.*"
+- assertVisible: "You’ve got home.*We’ve got meals out.*"
 - tapOn:
     id: welcome-continue
 - assertVisible:
-    id: fitness-payoff-diagram
-- assertVisible: "Your fitness plan.*can come with you.*"
+    id: payoff-meal_prep
+- assertVisible: "A night out.*Still your kind of meal.*"
+- tapOn:
+    id: welcome-continue
+- assertVisible:
+    id: goal-progress-graph
+- assertVisible: "Consistency with your training nutrition"
 - tapOn:
     id: welcome-continue
 - tapOn:
@@ -63,11 +74,7 @@ tags: [onboarding, discovery, changed-journey]
     text: "radio button, checked"
 - tapOn:
     id: welcome-continue
-- assertVisible: "What's your goal.*"
-- tapOn:
-    id: goal-maintain
-- tapOn:
-    id: welcome-continue
+- assertNotVisible: "What's your goal.*"
 - assertVisible: "How tall are you.*"
 - waitForAnimationToEnd
 - tapOn:

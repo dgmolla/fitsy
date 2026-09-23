@@ -14,7 +14,7 @@ const ONBOARDING_KEY = '@fitsy/onboarding';
  */
 export async function fetchProfile(): Promise<ProfileResponse | null> {
   try {
-    return await api.get<ProfileResponse>('/api/user/profile', true);
+    return await api.get<ProfileResponse>('/api/user/profile?goalSchema=2', true);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[profileSync] fetchProfile failed:', err);
@@ -63,7 +63,7 @@ export async function pushProfileToServer(): Promise<void> {
 
     if (Object.keys(body).length === 0) return;
 
-    await api.patch('/api/user/profile', body, true);
+    await api.patch('/api/user/profile?goalSchema=2', body, true);
   } catch (err) {
     // Data stays local; the next pushProfileToServer call retries. Surface in
     // console so we don't silently lose the entire profile sync silently

@@ -285,7 +285,7 @@ export type ActivityLevel =
   | "active"
   | "very_active";
 
-export type UserGoal = "lose_fat" | "maintain" | "build_muscle";
+export type UserGoal = "lose_fat" | "maintain" | "build_muscle" | "performance";
 
 // Biological sex — used only for the Mifflin-St Jeor BMR term.
 export type Sex = "female" | "male";

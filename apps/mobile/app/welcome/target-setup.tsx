@@ -33,7 +33,7 @@ export default function TargetSetupScreen() {
       await saveOnboardingField('targetMode', nextMode);
       if (nextMode === 'estimate') await saveOnboardingField('targetBasis', undefined);
       trackOnboardingChoiceSelected({ screen: 'target_setup', value: useSaved ? 'saved' : nextMode });
-      router.push(useSaved ? '/welcome/how-it-works' : nextMode === 'known' ? '/welcome/tuning' : '/welcome/goal');
+      router.push(useSaved ? '/welcome/how-it-works' : nextMode === 'known' ? '/welcome/tuning' : '/welcome/height');
     } catch { Alert.alert('Could not save your choice', 'Please try again.'); }
     finally { setBusy(false); }
   }

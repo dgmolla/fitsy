@@ -21,9 +21,6 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
     point: "92%,93%"
 - tapOn:
     id: welcome-start
-- assertVisible: "Discover restaurants that fit your goals"
-- tapOn:
-    id: welcome-continue
 - assertVisible:
     id: location-use-current
 - assertVisible:
@@ -31,6 +28,15 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
 - tapOn:
     id: location-choose-area
 - tapOn: "Search near DTLA"
+- extendedWaitUntil:
+    visible:
+      id: goal-lose_fat
+    timeout: 30000
+- assertVisible: "What's your goal.*"
+- tapOn:
+    id: goal-lose_fat
+- tapOn:
+    id: welcome-continue
 - extendedWaitUntil:
     visible:
       id: tried-calorie_apps
@@ -44,12 +50,21 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
     id: tried-calorie_apps
 - tapOn:
     id: welcome-continue
-- assertVisible: "Use your numbers.*before you order.*"
+- assertVisible: "That restaurant dish.*can be hard to find.*"
+- assertVisible:
+    id: story-calorie_apps
 - tapOn:
     id: welcome-continue
 - assertVisible:
-    id: fitness-payoff-diagram
-- assertVisible: "Hit your meal targets.*Enjoy eating out.*"
+    id: payoff-calorie_apps
+- assertVisible: "From a dish name.*to an informed order.*"
+- tapOn:
+    id: welcome-continue
+- assertVisible:
+    id: goal-progress-graph
+- assertVisible: "Consistency with your fat-loss plan"
+- assertVisible: "With Fitsy"
+- assertVisible: "Without Fitsy"
 - tapOn:
     id: welcome-continue
 - assertVisible:
@@ -304,21 +319,27 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
 - assertVisible:
     id: preview-guide
 - assertVisible: "pizza"
-# A standalone paywall keeps the current search but must not exclude an abandoned pick.
+# A standalone paywall shows live store terms and retains the current search.
 - openLink: com.fitsy.mobile://welcome/payment
+- assertNotVisible: "Discover more meals like your pick.*"
 - extendedWaitUntil:
     visible:
-      id: paywall-price-yearly
+      id: welcome-continue
+      enabled: true
     timeout: 15000
-- assertNotVisible:
-    id: paywall-selected-restaurant
-- extendedWaitUntil:
-    visible:
-      id: paywall-local-proof
-    timeout: 15000
+- assertVisible:
+    id: paywall-timeline
 - copyTextFrom:
-    id: paywall-local-proof
-- assertTrue: ${maestro.copiedText.replace(/,/g, '') === output.context.meta.goalMatch.matchingDishCount + ' more meals close to your targets'}
+    id: paywall-price-yearly
+- evalScript: ${output.annualPrice = maestro.copiedText}
+- assertTrue: ${output.annualPrice !== 'Loading…' && output.annualPrice.length > 0}
+- scrollUntilVisible:
+    element:
+      id: paywall-terms
+    direction: DOWN
+- copyTextFrom:
+    id: paywall-terms
+- assertTrue: ${maestro.copiedText.includes(output.annualPrice) && maestro.copiedText.includes('Renews automatically') && maestro.copiedText.includes('24 hours')}
 - tapOn:
     id: welcome-back
 - assertVisible:
@@ -339,14 +360,22 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
     direction: DOWN
 - tapOn:
     id: preview-pick-3
+- copyTextFrom:
+    id: signup-selected-restaurant
+- assertTrue: ${maestro.copiedText.includes(output.context.data[2].name) && maestro.copiedText.includes('pizza') && maestro.copiedText.includes('650 kcal')}
 - tapOn: "Dev login"
 - extendedWaitUntil:
     visible:
-      id: paywall-selected-restaurant
+      id: trial-offer-note
     timeout: 30000
-- copyTextFrom:
-    id: paywall-selected-restaurant
-- assertTrue: ${maestro.copiedText === 'Your pick · ' + output.context.data[2].name}
+- tapOn:
+    id: welcome-continue
+- assertVisible: "A heads-up before your trial ends."
+- tapOn:
+    id: trial-reminder-skip
+- extendedWaitUntil:
+    visible: ${'Discover more meals like your pick at ' + output.context.data[2].name + '.'}
+    timeout: 30000
 - evalScript: ${output.selectedResponse = http.get('https://dev.fitsy.org/api/restaurants/preview?guided=1&lat=34.0407&lng=-118.2468&q=pizza&calories=650&protein=0&carbs=0&fat=0&selectedItemId=' + output.context.data[2].bestMatch.menuItemId)}
 - assertTrue: ${output.selectedResponse.status === 200}
 - evalScript: ${output.selected = json(output.selectedResponse.body)}
@@ -354,12 +383,31 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
 - assertTrue: ${output.selected.meta.goalMatch.matchingDishCount === output.context.meta.goalMatch.matchingDishCount}
 - extendedWaitUntil:
     visible:
-      id: paywall-local-proof
+      id: welcome-continue
+      enabled: true
     timeout: 15000
+- assertVisible:
+    id: paywall-timeline
 - copyTextFrom:
-    id: paywall-local-proof
-- assertTrue: ${maestro.copiedText.replace(/,/g, '') === output.selected.meta.goalMatch.additionalDishCount + ' more meals close to your targets'}
+    id: paywall-price-yearly
+- evalScript: ${output.annualPrice = maestro.copiedText}
+- assertTrue: ${output.annualPrice !== 'Loading…' && output.annualPrice.length > 0}
+- scrollUntilVisible:
+    element:
+      id: paywall-terms
+    direction: DOWN
+- copyTextFrom:
+    id: paywall-terms
+- assertTrue: ${maestro.copiedText.includes(output.annualPrice) && maestro.copiedText.includes('Renews automatically') && maestro.copiedText.includes('24 hours')}
 - assertNotVisible: "Leave a review"
+- tapOn:
+    id: welcome-back
+- assertVisible:
+    id: trial-reminder-skip
+- tapOn:
+    id: welcome-back
+- assertVisible:
+    id: trial-offer-note
 - tapOn:
     id: welcome-back
 - assertVisible:

@@ -20,7 +20,7 @@ export default function ValuePayoffScreen() {
     return () => { live = false; };
   }, []));
   return <WelcomeScreen progress={0.36} title={pitch?.payoffTitle ?? 'Meals for your goals.'} subtitle={pitch?.payoffBody}
-    canContinue={!!pitch} onContinue={() => router.push('/welcome/target-setup')} continueLabel="Set my meal targets">
+    canContinue={!!pitch} onContinue={() => router.push('/welcome/goal-payoff')} continueLabel="Connect it to my goal">
     {pitch && <OnboardingFitnessPayoff pitch={pitch} />}
   </WelcomeScreen>;
 }

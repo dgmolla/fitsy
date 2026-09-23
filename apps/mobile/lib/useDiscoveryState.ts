@@ -63,7 +63,9 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
   const tourEnabled = isOnboardingPreview && locked === true && !filterVisible && !locationPickerVisible;
   const tour = usePreviewTour(tourEnabled && !loading && !error && results.length > 0, tourEnabled);
   const demo = usePreviewSearchDemo(tour.visible, setQuery);
-  const finishTour = useCallback(() => { demo.cancel(); tour.finish(); }, [demo.cancel, tour.finish]);
+  const { cancel: cancelDemo, editQuery } = demo;
+  const { finish: finishPreviewTour } = tour;
+  const finishTour = useCallback(() => { cancelDemo(); finishPreviewTour(); }, [cancelDemo, finishPreviewTour]);
   useFocusEffect(
     useCallback(() => {
       getMacroTargets()
@@ -162,7 +164,7 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
       has_calories: newValues.calories !== '',
     });
   }
-  const handleClearQuery = useCallback(() => demo.editQuery(''), [demo.editQuery]);
+  const handleClearQuery = useCallback(() => editQuery(''), [editQuery]);
   const handleJoinWaitlist = useCallback(() => {
     router.push(isOnboardingPreview ? '/welcome/out-of-area' : '/welcome/signin?outOfArea=1');
   }, [isOnboardingPreview]);
@@ -190,9 +192,9 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
     },
     {
       key: 'restaurant',
-      title: 'Real meals. Know the source.',
-      body: 'Compare meal macros at real restaurants. Open a full menu with Pro to explore dishes and check their nutrition sources.',
-      target: tourHeroRef,
+      title: error ? 'Your search can try again' : results.length === 0 ? 'Make room for your craving' : 'Real meals. Know the source.',
+      body: error ? 'The search could not finish. Close the tour and tap Try again. Your craving and targets are still here.' : results.length === 0 ? 'No meals matched this craving and all your current targets. Try another craving, or tap Edit to adjust your targets. We won’t label an unsuitable meal as a match.' : 'Compare meal macros at real restaurants. Open a full menu with Pro to explore dishes and check their nutrition sources.',
+      target: error ? tourSearchRef : results.length === 0 ? tourEditRef : tourHeroRef,
       placement: 'above',
     },
   ];
@@ -204,7 +206,7 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
       { key: 'more', title: 'More choices. Full menus.', body: goalMatch && goalMatch.matchingDishCount > 3
         ? `${(goalMatch.matchingDishCount - results.length).toLocaleString()} more meals close to your targets in ${locationLabel}. Explore full menus with Pro. Try your first craving now.`
         : 'Explore more results and full menus with Pro. Try your first craving now.', target: tourMoreRef, placement: 'above' as const },
-    ]; }, [tried, goalMatch, results.length, locationLabel, demo.typing, loading]);
+    ]; }, [tried, goalMatch, results.length, locationLabel, demo.typing, loading, error]);
 
   return { navigation, isOnboardingPreview, tried, inputs, query, setQuery: demo.editQuery, canSearch, hasQuery, location,
     locationLabel, results, heroResult, listResults, nextCursor, loading, loadingMore, refreshing, error, locked, outOfArea, nearbyDishCount, goalMatch,

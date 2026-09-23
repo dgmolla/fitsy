@@ -7,12 +7,13 @@ import { act, fireEvent, renderRouter, waitFor } from 'expo-router/testing-libra
 import Tried from '../app/welcome/tried';
 import Response from '../app/welcome/response';
 import Payoff from '../app/welcome/value-payoff';
+import GoalPayoff from '../app/welcome/goal-payoff';
 import Targets from '../app/welcome/target-setup';
 import Tuning from '../app/welcome/tuning';
 import Trust from '../app/welcome/how-it-works';
 import Goal from '../app/welcome/goal';
 import Height from '../app/welcome/height';
-import { getOnboardingData } from '../lib/onboardingStorage';
+import { getOnboardingData, saveOnboardingField } from '../lib/onboardingStorage';
 import { getMacroTargets } from '../lib/macroStorage';
 import { getOnboardingResume } from '../lib/onboardingResume';
 
@@ -26,29 +27,36 @@ jest.mock('posthog-react-native', () => {
 const routes = {
   'welcome/tried': Tried, 'welcome/response': Response, 'welcome/value-payoff': Payoff,
   'welcome/target-setup': Targets, 'welcome/tuning': Tuning, 'welcome/how-it-works': Trust,
-  'welcome/goal': Goal, 'welcome/height': Height,
+  'welcome/goal': Goal, 'welcome/height': Height, 'welcome/goal-payoff': GoalPayoff,
   'welcome/preview': () => <Text>Discovery preview</Text>,
 };
 beforeEach(async () => { await AsyncStorage.clear(); });
 
 it('updates the fitness payoff after going back and choosing another prior approach', async () => {
+  await saveOnboardingField('goal', 'performance');
   const screen = renderRouter(routes, { initialUrl: '/welcome/tried' });
   await act(async () => { fireEvent.press(screen.getByTestId('tried-meal_prep')); });
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/response'));
-  expect(screen.getByText('Keep your goals in reach when cooking isn’t in the plan.')).toBeTruthy();
+  expect(screen.getByTestId('story-meal_prep')).toBeTruthy();
+  expect(screen.getByText('“Dinner out tonight?”')).toBeTruthy();
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
-  expect(await screen.findByText('The same fitness goal')).toBeTruthy();
+  expect(await screen.findByTestId('payoff-meal_prep')).toBeTruthy();
+  expect(screen.getByText('The same meal targets')).toBeTruthy();
   expect(screen.getByText('A meal at home')).toBeTruthy();
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
   await act(async () => { fireEvent.press(screen.getByTestId('tried-calorie_apps')); });
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
-  expect(await screen.findByText('Choose before you order')).toBeTruthy();
+  expect(await screen.findByTestId('payoff-calorie_apps')).toBeTruthy();
+  expect(screen.getByText('Published or estimated')).toBeTruthy();
   expect(screen.queryByText('A meal at home')).toBeNull();
   expect((await getOnboardingData()).tried).toBe('calorie_apps');
   expect(await getOnboardingResume()).toBe('/welcome/value-payoff');
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  expect(await screen.findByText('Consistency with your training nutrition')).toBeTruthy();
+  expect((await getOnboardingData()).goal).toBe('performance');
 });
 
 it('keeps own meal targets through trust, Back, and the saved-target shortcut without body questions', async () => {
@@ -75,15 +83,41 @@ it('keeps own meal targets through trust, Back, and the saved-target shortcut wi
   expect(await screen.findByText('Discovery preview')).toBeTruthy();
 });
 
-it('opens the assisted questions only after explicitly confirming that choice', async () => {
+it('opens assisted questions only after confirmation and retains the earlier goal', async () => {
+  await saveOnboardingField('goal', 'build_muscle');
   const screen = renderRouter(routes, { initialUrl: '/welcome/target-setup' });
   await act(async () => {});
   await act(async () => { fireEvent.press(screen.getByTestId('target-mode-estimate')); });
   expect(screen.getPathname()).toBe('/welcome/target-setup');
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
-  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/goal'));
-  await act(async () => { fireEvent.press(screen.getByTestId('goal-build_muscle')); });
-  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/height'));
   expect(await getOnboardingData()).toEqual(expect.objectContaining({ targetMode: 'estimate', goal: 'build_muscle' }));
+});
+
+
+it.each([
+  ['lose_fat', 'Consistency with your fat-loss plan'],
+  ['build_muscle', 'Consistency with your muscle-building plan'],
+  ['performance', 'Consistency with your training nutrition'],
+] as const)('carries %s through the complete personalized story and into target setup', async (goal, graphLabel) => {
+  const screen = renderRouter(routes, { initialUrl: '/welcome/goal' });
+  await act(async () => {});
+  expect(screen.getByTestId('welcome-continue').props.accessibilityState?.disabled).toBe(true);
+  await act(async () => { fireEvent.press(screen.getByTestId(`goal-${goal}`)); });
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/tried'));
+  await act(async () => { fireEvent.press(screen.getByTestId('tried-check_online')); });
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  expect(await screen.findByTestId('story-check_online')).toBeTruthy();
+  expect(screen.getByText('One place to compare')).toBeTruthy();
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  expect(await screen.findByTestId('payoff-check_online')).toBeTruthy();
+  expect(screen.getByText('Protein target')).toBeTruthy();
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  expect(await screen.findByText(graphLabel)).toBeTruthy();
+  expect(screen.getByText(/Illustration only/)).toBeTruthy();
+  expect(await getOnboardingResume()).toBe('/welcome/goal-payoff');
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/target-setup'));
+  expect(await getOnboardingData()).toEqual(expect.objectContaining({ goal, tried: 'check_online' }));
 });

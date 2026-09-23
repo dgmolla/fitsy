@@ -4,9 +4,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPress } from './AnimatedPress';
 import { WelcomeNav } from './WelcomeNav';
-import { PaywallChoiceHero } from './PaywallChoiceHero';
+import { PaywallTimeline } from './PaywallTimeline';
 import type { PaywallDiscovery } from '@/lib/usePaywallDiscovery';
-import { EDITORIAL, FONTS } from '@/lib/brand';
+import { EDITORIAL, FONTS, TEXT } from '@/lib/brand';
 import { openLegalLink } from '@/lib/legalLinks';
 import type { purchaseTerms } from '@/lib/purchaseTerms';
 
@@ -34,7 +34,8 @@ export function PaywallView(props: Props) {
   const { plan, annual, monthly, loading, restoring } = props;
   const selected = plan === 'yearly' ? annual : monthly;
   const busy = loading || restoring;
-  const label = loading ? 'Setting up…' : selected?.trial ? 'Try more meals that fit' : 'Find more meals that fit';
+  const trialLength = selected?.trialDays ? `${selected.trialDays}-day` : selected?.trial;
+  const label = loading ? 'Setting up…' : selected?.trial ? `Start my ${trialLength} free trial` : 'Find meals that fit';
 
   return (
     <SafeAreaView key={fontScale} style={s.safe}>
@@ -46,14 +47,16 @@ export function PaywallView(props: Props) {
 
       <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false} bounces={false}>
         <View>
-          <PaywallChoiceHero discovery={props.discovery} />
+          <Text style={s.title}>{selected?.trial ? `Start your ${trialLength} free trial.` : 'Make room for meals that fit.'}</Text>
+          {!!props.discovery.selected && <Text style={s.context}>Discover more meals like your pick at {props.discovery.selected.name}.</Text>}
+          <PaywallTimeline terms={selected} />
 
           <View style={s.plans}>
-            {([{ id: 'yearly', name: 'Annual', terms: annual }, { id: 'monthly', name: 'Monthly', terms: monthly }] as const).map(option => {
+            {([{ id: 'monthly', name: 'Monthly', terms: monthly }, { id: 'yearly', name: 'Annual', terms: annual }] as const).map(option => {
               const active = option.id === plan;
               return (
                 <AnimatedPress key={option.id} style={[s.plan, largeText && s.planLarge, active && s.planSelected]} onPress={() => props.onSelect(option.id)}
-                  disabled={busy} haptic accessibilityRole="radio" accessibilityState={{ checked: active, disabled: busy }} testID={`paywall-plan-${option.id}`}>
+                  disabled={busy || !option.terms} haptic accessibilityRole="radio" accessibilityState={{ checked: active, disabled: busy || !option.terms }} testID={`paywall-plan-${option.id}`}>
                   <View style={[s.radio, active && s.radioSelected]} accessible={false}>
                     {active && <Ionicons name="checkmark" size={13} color={EDITORIAL.cream} />}
                   </View>
@@ -99,17 +102,19 @@ const s = StyleSheet.create({
   navAction: { minWidth: 64, minHeight: 44, justifyContent: 'center' },
   restore: { fontFamily: FONTS.nunitoSans, fontSize: 12, color: EDITORIAL.textMid, textDecorationLine: 'underline', textAlign: 'right' },
   content: { flexGrow: 1, paddingHorizontal: 36, paddingTop: 14, paddingBottom: 2 },
-  plans: { gap: 8 },
-  plan: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, minHeight: 62, borderRadius: 15, borderWidth: 1, borderColor: EDITORIAL.border },
+  title: { ...TEXT.title, fontSize: 29, lineHeight: 35, color: EDITORIAL.green, textAlign: 'center', marginTop: 10 },
+  context: { ...TEXT.bodySmall, textAlign: 'center', marginTop: 10 },
+  plans: { flexDirection: 'row', gap: 10 },
+  plan: { flex: 1, alignItems: 'flex-start', gap: 8, padding: 13, minHeight: 136, borderRadius: 15, borderWidth: 1, borderColor: EDITORIAL.border },
   planSelected: { backgroundColor: EDITORIAL.greenAccentTint, borderColor: EDITORIAL.greenMid },
-  planLarge: { flexWrap: 'wrap' },
-  radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 1, borderColor: EDITORIAL.textSoft, alignItems: 'center', justifyContent: 'center' },
+  planLarge: { paddingHorizontal: 10 },
+  radio: { alignSelf: 'flex-end', width: 20, height: 20, borderRadius: 10, borderWidth: 1, borderColor: EDITORIAL.textSoft, alignItems: 'center', justifyContent: 'center' },
   radioSelected: { backgroundColor: EDITORIAL.greenMid, borderColor: EDITORIAL.greenMid },
-  planInfo: { flex: 1 },
+  planInfo: { alignSelf: 'stretch' },
   planName: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 15, lineHeight: 20, color: EDITORIAL.green },
   planNote: { fontFamily: FONTS.nunitoSans, fontSize: 11, lineHeight: 15, color: EDITORIAL.textMid, marginTop: 1 },
-  priceWrap: { alignItems: 'flex-end', flexShrink: 1, maxWidth: '48%' },
-  priceWrapLarge: { width: '100%', maxWidth: '100%', alignItems: 'flex-start', paddingLeft: 30, flexShrink: 0 },
+  priceWrap: { alignItems: 'flex-start', flexShrink: 1, maxWidth: '100%' },
+  priceWrapLarge: { width: '100%' },
   price: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 19, color: EDITORIAL.green },
   pricePeriod: { fontFamily: FONTS.nunitoSans, fontSize: 11, color: EDITORIAL.textMid },
   retry: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },

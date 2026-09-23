@@ -97,3 +97,22 @@ it('restarts from a locked first page when entitlement changes invalidate the pa
   expect(result.current.locked).toBe(true);
   expect(result.current.loadingMore).toBe(false);
 });
+
+
+it.each([true, false])('ends a stalled request and can retry without accepting the late response (preview=%s)', async preview => {
+  const { result } = renderHook(() => useDiscoveryResults({ inputs, query: `timeout-${preview}`, location, canSearch: true, targetsLoaded: true, previewReady: true, isOnboardingPreview: preview }));
+  await act(async () => {});
+  await act(async () => jest.advanceTimersByTime(15_000));
+  expect(result.current.loading).toBe(false);
+  expect(result.current.error).toMatch(/took too long/);
+  expect(requests[0].signal?.aborted).toBe(true);
+  await act(async () => respond(0, 'late'));
+  expect(result.current.results).toEqual([]);
+  act(() => { void result.current.handleRefresh(); });
+  await act(async () => {});
+  expect(requests).toHaveLength(2);
+  await act(async () => respond(1, 'retry-result'));
+  expect(result.current.results.map(r => r.id)).toEqual(['retry-result']);
+  expect(result.current.error).toBeNull();
+  expect(result.current.loading).toBe(false);
+});

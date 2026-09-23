@@ -50,7 +50,8 @@ export function applySuggestionFilter(
   id: SuggestionFilter['id'],
   caloriesStr: string,
 ): MacroSplit {
-  const cal = parseFloat(caloriesStr) > 0 ? parseFloat(caloriesStr) : 2000;
+  const parsedCalories = Number(caloriesStr);
+  const cal = Number.isFinite(parsedCalories) && parsedCalories > 0 ? parsedCalories : 2000;
 
   if (id === 'protein-dense') {
     // protein_g = cal * 0.1  →  protein_kcal = cal * 0.4 (40%)

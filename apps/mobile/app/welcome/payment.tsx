@@ -86,9 +86,8 @@ export default function PaymentScreen() {
     // cannot fire a second replace once `loading` flips back. The recording
     // itself is idempotent (a re-entered paywall must not double-count).
     claim();
-    const firstCompletion = await recordOnboardingComplete(discounted);
-    if (firstCompletion) resetWelcomeJourney(navigation, 'notification-permission');
-    else await openPurchasedDestination(navigation);
+    await recordOnboardingComplete(discounted);
+    await openPurchasedDestination(navigation);
   }
 
   // This screen IS the paywall - it renders Fitsy's own design and buys the

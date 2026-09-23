@@ -10,7 +10,7 @@ import { getMacroTargets, saveMacroTargets, type StoredMacroTargets } from '@/li
 import { calculateMacros } from '@/lib/macroCalculator';
 
 const FIELDS = [['calories', 'Calories', 'kcal'], ['protein', 'Protein', 'g'], ['carbs', 'Carbs', 'g'], ['fat', 'Fat', 'g']] as const;
-const GOALS = [['lose_fat', 'Lose weight'], ['maintain', 'Maintain weight'], ['build_muscle', 'Build muscle']] as const;
+const GOALS = [['lose_fat', 'Lose weight'], ['maintain', 'Maintain weight'], ['performance', 'Improve performance'], ['build_muscle', 'Build muscle']] as const;
 const empty: StoredMacroTargets = { calories: '', protein: '', carbs: '', fat: '' };
 const asStrings = (values: ReturnType<typeof calculateMacros>): StoredMacroTargets => ({
   calories: String(values.calories), protein: String(values.protein), carbs: String(values.carbs), fat: String(values.fat),

@@ -75,6 +75,7 @@ const routes = {
   index: Index, 'welcome/_layout': WelcomeLayout,
   'welcome/signin': SignIn, 'welcome/notification-permission': Notifications,
   'welcome/location-permission': Location, 'welcome/preview': Preview,
+  'welcome/trial': () => <Text>Trial introduction</Text>,
   'welcome/payment': () => <Text>Payment plans</Text>,
   'welcome/problem': () => <Button title="Choose location" onPress={() => router.push('/welcome/location-permission')} />,
   'welcome/tried': () => <Text>Healthy eating approaches</Text>,
@@ -148,7 +149,7 @@ it.each([
   if (back) await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
   expect(screen.getPathname()).toBe(back ? '/welcome/preview' : '/welcome/signin');
   await act(async () => { exchange.resolve(success ? response({ token: 'test-token', refreshToken: 'refresh', user: { id: 'buyer' }, isNewUser: true }) : { ...response({ error: 'Offline' }), ok: false }); });
-  expect(screen.getPathname()).toBe(back ? '/welcome/preview' : '/welcome/payment');
+  expect(screen.getPathname()).toBe(back ? '/welcome/preview' : '/welcome/trial');
   expect(await getPaywallIntent()).toEqual(back ? null : selected);
   expect(await getStoredToken()).toBe(success ? 'test-token' : null);
   expect(alert).not.toHaveBeenCalled();

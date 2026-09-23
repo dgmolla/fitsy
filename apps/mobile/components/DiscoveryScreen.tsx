@@ -81,10 +81,12 @@ export function DiscoveryScreen({ onboardingPreview = false }: { onboardingPrevi
       {canSearch && !outOfArea && !loading && !error && results.length === 0 && (
         <View style={s.inlineEmpty}>
           <Ionicons name="search-outline" size={32} color={EDITORIAL.creamDeep} />
-          <Text style={s.inlineEmptyText}>No matches nearby</Text>
+          <Text style={s.inlineEmptyText}>{hasQuery ? 'No matches for this search' : 'No meals close to these targets'}</Text>
           <Text style={s.inlineEmptyHint}>
-            {hasQuery ? 'Try another craving or adjust your meal targets.' : 'Try adjusting your meal targets.'}
+            {hasQuery ? 'We checked your craving and every active meal target. Try another search or adjust your targets.' : 'Try adjusting one or more meal targets to see more options.'}
           </Text>
+          <Pressable testID="discovery-empty-edit" accessibilityRole="button" style={s.waitlistBtn} onPress={() => setFilterVisible(true)}><Text style={s.waitlistBtnText}>Adjust meal targets</Text></Pressable>
+          {hasQuery && <Pressable testID="discovery-empty-clear" accessibilityRole="button" style={s.waitlistBtn} onPress={handleClearQuery}><Text style={s.waitlistBtnText}>Clear search</Text></Pressable>}
         </View>
       )}
       {canSearch && !loading && heroResult && <HeroCard result={heroResult} locked={locked === true && !isOnboardingPreview} unlocking={onLockedTap} containerRef={tourHeroRef} onOpen={isOnboardingPreview ? () => { void unlockPreview(heroResult); } : undefined} />}

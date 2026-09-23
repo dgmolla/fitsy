@@ -18,3 +18,13 @@ appId: com.fitsy.mobile
           timeout: 15000
 - assertVisible: ".*Log in.*"
 - assertVisible: "Good food. Your goals in mind."
+# Start goes directly to location, without a second generic promise screen.
+- tapOn:
+    id: welcome-start
+- extendedWaitUntil:
+    visible:
+      id: location-use-current
+    timeout: 15000
+- assertVisible:
+    id: location-choose-area
+- assertNotVisible: "Discover restaurants that fit your goals"

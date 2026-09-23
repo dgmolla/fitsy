@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EDITORIAL, FONTS } from '@/lib/brand';
@@ -38,11 +38,12 @@ const SCRIM = 'rgba(15,31,21,0.55)';
  * Sequential coach marks: a scrim with a cutout around the current target,
  * a dark bubble (same palette as LockedUnlockCard) with a pointer, and
  * Next / Got it. Targets are measured in window coordinates when their step
- * shows; a target that isn't mounted is skipped so the tour never blocks.
+ * shows; an unavailable target gets an unanchored tip so no lesson is skipped.
  */
 export function CoachMarks({ visible, steps, onDone, onStepShown, onStepLeaving, onBeforeStep, doneLabel = 'Got it' }: CoachMarksProps) {
   const { width: winW, height: winH } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const moving = useRef(false);
   const [bubbleHeight, setBubbleHeight] = useState(BUBBLE_EST_H);
   const [visited, setVisited] = useState<number[]>([]);
   const [index, setIndex] = useState(0);
@@ -66,19 +67,17 @@ export function CoachMarks({ visible, steps, onDone, onStepShown, onStepLeaving,
     const measure = () => {
       if (cancelled) return;
       const node = step.target.current;
-      if (!node) {
-        setIndex((i) => i + 1);
-        return;
-      }
-      node.measureInWindow((x, y, width, height) => {
-        if (cancelled) return;
-        if (width === 0 && height === 0) {
-          setIndex((i) => i + 1);
-          return;
-        }
-        setRect({ x, y, width, height });
+      const show = (bounds: Rect) => {
+        moving.current = false;
+        setRect(bounds);
         setVisited(previous => previous.includes(index) ? previous : [...previous, index]);
         onStepShown?.(step, index);
+      };
+      const fallback = { x: winW / 2, y: winH / 2, width: 0, height: 0 };
+      if (!node) { show(fallback); return; }
+      node.measureInWindow((x, y, width, height) => {
+        if (cancelled) return;
+        show(width === 0 || height === 0 ? fallback : { x, y, width, height });
       });
     };
     const t = setTimeout(() => {
@@ -99,10 +98,11 @@ export function CoachMarks({ visible, steps, onDone, onStepShown, onStepLeaving,
 
   const isLast = index === steps.length - 1;
   const next = () => {
-    if (step.nextDisabled) return;
+    if (step.nextDisabled || moving.current) return;
+    moving.current = true;
     onStepLeaving?.();
     if (isLast) onDone();
-    else setIndex((i) => i + 1);
+    else setIndex(index + 1);
   };
 
   const previous = visited.filter(value => value < index).at(-1);
@@ -132,7 +132,7 @@ export function CoachMarks({ visible, steps, onDone, onStepShown, onStepLeaving,
   return (
     <Modal visible transparent animationType="fade" statusBarTranslucent onRequestClose={onDone}>
       <View style={StyleSheet.absoluteFill} accessibilityViewIsModal>
-        {cutout ? (
+        {cutout && rect && rect.width > 0 ? (
           <>
             <View accessible={false} testID="coachmark-scrim" style={[s.scrim, { top: 0, left: 0, right: 0, height: cutout.y }]} />
             <View accessible={false} testID="coachmark-scrim" style={[s.scrim, { top: cutout.y + cutout.height, left: 0, right: 0, bottom: 0 }]} />
@@ -149,7 +149,7 @@ export function CoachMarks({ visible, steps, onDone, onStepShown, onStepLeaving,
 
         {bubbleStyle && arrowStyle && (
           <>
-            <View pointerEvents="none" style={[s.arrow, arrowStyle]} />
+            {rect && rect.width > 0 && <View pointerEvents="none" style={[s.arrow, arrowStyle]} />}
             <ScrollView style={[s.bubble, bubbleStyle, { maxHeight: winH - insets.top - insets.bottom - 28 }]} contentContainerStyle={s.bubbleContent} onContentSizeChange={(_width, h) => setBubbleHeight(Math.min(h, winH - insets.top - insets.bottom - 28))} accessibilityViewIsModal>
               <View style={s.heading}>
                 <Text style={s.counter}>{index + 1} of {steps.length}</Text>
@@ -158,7 +158,7 @@ export function CoachMarks({ visible, steps, onDone, onStepShown, onStepLeaving,
               <Text style={s.title}>{step.title}</Text>
               <Text style={s.body}>{step.body}</Text>
               <View style={s.actions}>
-                {previous !== undefined && <Pressable testID="coachmark-back" style={[s.textButton, s.backButton]} onPress={() => { onStepLeaving?.(); setIndex(previous); }} accessibilityRole="button" accessibilityLabel="Previous tip"><Text style={s.skip}>Back</Text></Pressable>}
+                {previous !== undefined && <Pressable testID="coachmark-back" style={[s.textButton, s.backButton]} onPress={() => { if (moving.current) return; moving.current = true; onStepLeaving?.(); setIndex(previous); }} accessibilityRole="button" accessibilityLabel="Previous tip"><Text style={s.skip}>Back</Text></Pressable>}
                 <Pressable
                   style={({ pressed }) => [s.nextBtn, pressed && s.nextBtnPressed]}
                   onPress={next}

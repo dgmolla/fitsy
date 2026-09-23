@@ -5,7 +5,7 @@ import type { TriedApproach } from './onboardingPersonalization';
 const KEY = '@fitsy/onboarding';
 
 export type ActivityLevel = 'sedentary' | 'lightly_active' | 'active' | 'very_active';
-export type Goal = 'lose_fat' | 'maintain' | 'build_muscle';
+export type Goal = 'lose_fat' | 'maintain' | 'build_muscle' | 'performance';
 export type Sex = 'female' | 'male';
 
 export interface OnboardingArea { lat: number; lng: number; name: string; source: 'gps' | 'manual' | 'saved' }
@@ -60,6 +60,7 @@ const ACTIVITY_MULTIPLIERS: Record<ActivityLevel, number> = {
 const GOAL_ADJUSTMENTS: Record<Goal, number> = {
   lose_fat: -500,
   maintain: 0,
+  performance: 0,
   build_muscle: 250,
 };
 
@@ -72,9 +73,12 @@ function calcBMR(weightKg: number, heightCm: number, age: number, sex?: Sex): nu
 
 export function calculateSuggestedCalories(data: OnboardingData): number {
   const { birthday, heightCm = 170, weightKg = 75, sex, activity = 'lightly_active', goal = 'maintain' } = data;
-  const age = birthday ? calculateAge(birthday) : 25;
-  const bmr = calcBMR(weightKg, heightCm, age, sex);
-  const tdee = Math.round(bmr * ACTIVITY_MULTIPLIERS[activity]);
-  const adjusted = tdee + GOAL_ADJUSTMENTS[goal];
+  const parsedAge = birthday ? calculateAge(birthday) : 25;
+  const age = Number.isFinite(parsedAge) && parsedAge > 0 ? parsedAge : 25;
+  const weight = Number.isFinite(weightKg) && weightKg > 0 ? weightKg : 75;
+  const height = Number.isFinite(heightCm) && heightCm > 0 ? heightCm : 170;
+  const bmr = calcBMR(weight, height, age, sex);
+  const tdee = Math.round(bmr * (ACTIVITY_MULTIPLIERS[activity] ?? ACTIVITY_MULTIPLIERS.lightly_active));
+  const adjusted = tdee + (GOAL_ADJUSTMENTS[goal] ?? 0);
   return Math.max(1200, Math.min(3500, adjusted));
 }

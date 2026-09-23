@@ -7,8 +7,8 @@ import { pushProfileToServer } from '@/lib/profileSync';
 import { ScrollPicker, rangeValues } from '@/components/ScrollPicker';
 import { useTheme, type ThemeColors } from '@/lib/theme';
 import { applySuggestionFilter, type SuggestionFilter } from '@/lib/macroSuggestions';
-import { MEALS_PER_DAY } from '@/lib/macroCalculator';
-import { getOnboardingData, calculateSuggestedCalories } from '@/lib/onboardingStorage';
+import { calculateDailyMacros, dailyToPerMealMacros, macrosToStored } from '@/lib/macroCalculator';
+import { getOnboardingData, calculateSuggestedCalories, type Goal } from '@/lib/onboardingStorage';
 import { FONTS } from '@/lib/brand';
 
 interface MacroValues {
@@ -41,14 +41,13 @@ function computeCalories(v: MacroValues): number {
   return v.protein * 4 + v.carbs * 4 + v.fat * 9;
 }
 
-// Canonical 30/45/25 protein/carb/fat split for a given daily calorie target,
-// snapped + clamped to the picker ranges. Single source of truth so the
-// on-focus recompute and the "Recommended" pill can't drift apart.
-function recommendedSplit(cal: number): MacroValues {
+// Snap centralized daily recommendations to the editable picker ranges.
+function recommendedSplit(cal: number, goal: Goal): MacroValues {
+  const daily = calculateDailyMacros(cal, goal);
   return {
-    protein: clamp(snapToStep(Math.round((cal * 0.3) / 4), 5), 50, 300),
-    carbs: clamp(snapToStep(Math.round((cal * 0.45) / 4), 5), 50, 500),
-    fat: clamp(snapToStep(Math.round((cal * 0.25) / 9), 2), 20, 150),
+    protein: clamp(snapToStep(daily.protein, 5), 50, 300),
+    carbs: clamp(snapToStep(daily.carbs, 5), 50, 500),
+    fat: clamp(snapToStep(daily.fat, 2), 20, 150),
   };
 }
 
@@ -58,6 +57,7 @@ export default function MacroSetupScreen() {
 
   const [values, setValues] = useState<MacroValues>({ protein: 150, carbs: 200, fat: 66 });
   const [suggestedCal, setSuggestedCal] = useState(2000);
+  const [goal, setGoal] = useState<Goal>('maintain');
   const [activeFilter, setActiveFilter] = useState<DietStyleId>('recommended');
   const [loaded, setLoaded] = useState(false);
   // True once the user has hand-edited a macro (or picked Custom). Guards the
@@ -80,7 +80,8 @@ export default function MacroSetupScreen() {
         if (!active) return;
         const cal = snapToStep(calculateSuggestedCalories(data), 25);
         setSuggestedCal(cal);
-        if (!customizedRef.current) setValues(recommendedSplit(cal));
+        setGoal(data.goal ?? 'maintain');
+        if (!customizedRef.current) setValues(recommendedSplit(cal, data.goal ?? 'maintain'));
         setLoaded(true);
       });
       return () => {
@@ -98,7 +99,7 @@ export default function MacroSetupScreen() {
 
     if (filterId === 'recommended') {
       customizedRef.current = false;
-      setValues(recommendedSplit(suggestedCal));
+      setValues(recommendedSplit(suggestedCal, goal));
       setActiveFilter('recommended');
       return;
     }
@@ -121,12 +122,7 @@ export default function MacroSetupScreen() {
   async function handleSave() {
     try {
       const cal = computeCalories(values);
-      const mealTargets = {
-        protein: String(Math.round(values.protein / MEALS_PER_DAY)),
-        carbs: String(Math.round(values.carbs / MEALS_PER_DAY)),
-        fat: String(Math.round(values.fat / MEALS_PER_DAY)),
-        calories: String(Math.round(cal / MEALS_PER_DAY)),
-      };
+      const mealTargets = macrosToStored(dailyToPerMealMacros({ ...values, calories: cal }));
       await saveMacroTargets(mealTargets);
       if (!fromOnboarding) pushProfileToServer(); // sync to server (onboarding syncs at payment)
       router.push(fromOnboarding ? '/welcome/how-it-works' : '/(tabs)/search');
@@ -163,6 +159,7 @@ export default function MacroSetupScreen() {
               return (
                 <Pressable
                   key={ds.id}
+                  testID={`macro-diet-${ds.id}`}
                   style={[s.dietPill, active && s.dietPillActive]}
                   onPress={() => applyDietStyle(ds.id)}
                 >
@@ -220,10 +217,10 @@ export default function MacroSetupScreen() {
 
         {/* Actions */}
         <View style={s.actions}>
-          <Pressable style={s.saveButton} onPress={handleSave} accessibilityRole="button">
+          <Pressable testID="macro-setup-save" style={s.saveButton} onPress={handleSave} accessibilityRole="button">
             <Text style={s.saveText}>Save & Continue</Text>
           </Pressable>
-          <Pressable style={s.skipButton} onPress={handleSkip} accessibilityRole="button" hitSlop={8}>
+          <Pressable testID="macro-setup-skip" style={s.skipButton} onPress={handleSkip} accessibilityRole="button" hitSlop={8}>
             <Text style={s.skipText}>Skip for now</Text>
           </Pressable>
         </View>

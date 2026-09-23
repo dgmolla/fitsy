@@ -1,6 +1,6 @@
 import { useOnboardingStep } from '@/lib/onboardingResume';
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
@@ -13,11 +13,12 @@ import { EDITORIAL, FONTS } from '@/lib/brand';
 const GOALS: { id: Goal; label: string }[] = [
   { id: 'lose_fat', label: 'Lose weight' },
   { id: 'build_muscle', label: 'Build muscle' },
-  { id: 'maintain', label: 'Maintain weight' },
+  { id: 'performance', label: 'Improve performance' },
 ];
 
 export default function GoalScreen() {
   useOnboardingStep('goal');
+  const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<Goal | null>(null);
 
   useEffect(() => {
@@ -27,16 +28,18 @@ export default function GoalScreen() {
 
   return (
     <WelcomeScreen
-      progress={0.46}
+      progress={0.18}
       title="What's your goal?"
       onContinue={async () => {
-        if (selected) {
+        if (!selected || busy) return;
+        setBusy(true);
+        try {
           await saveOnboardingField('goal', selected);
-        }
-        router.push('/welcome/height');
+          router.push('/welcome/tried');
+        } catch { Alert.alert('Could not save your goal', 'Please try again.'); }
+        finally { setBusy(false); }
       }}
-      canContinue={selected !== null}
-      onSkip={() => router.push('/welcome/height')}
+      canContinue={selected !== null && !busy}
     >
       <View style={s.list}>
         {GOALS.map((g, i) => {

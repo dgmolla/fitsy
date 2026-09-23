@@ -6,7 +6,10 @@ jest.mock('@react-native-async-storage/async-storage', () => require('@react-nat
 beforeEach(async () => { await AsyncStorage.clear(); });
 
 it.each([
-  ['trial', '/welcome/payment'],
+  ['trial', '/welcome/trial'],
+  ['trial-reminder', '/welcome/trial-reminder'],
+  ['goal-payoff', '/welcome/goal-payoff'],
+  ['promise', '/welcome/location-permission'],
   ['value-abundance', '/welcome/value-payoff'],
   ['value-payoff', '/welcome/value-payoff'],
   ['out-of-area', '/welcome/out-of-area'],

@@ -84,9 +84,9 @@ tags: [onboarding, auth, changed-journey]
 - tapOn: "Search near DTLA"
 - extendedWaitUntil:
     visible:
-      id: tried-meal_prep
+      id: goal-performance
     timeout: 30000
-- assertVisible: "What have you tried.*for healthy eating.*"
+- assertVisible: "What's your goal.*"
 - assertNotVisible:
     id: waitlist-join
 - assertNotVisible:
@@ -101,7 +101,7 @@ tags: [onboarding, auth, changed-journey]
           timeout: 10000
       - extendedWaitUntil:
           visible:
-            id: tried-meal_prep
+            id: goal-performance
           timeout: 30000
 - assertNotVisible:
     id: waitlist-join
@@ -116,7 +116,7 @@ tags: [onboarding, auth, changed-journey]
     id: location-continue-area
 - extendedWaitUntil:
     visible:
-      id: tried-meal_prep
+      id: goal-performance
     timeout: 30000
 - assertNotVisible:
     id: waitlist-join

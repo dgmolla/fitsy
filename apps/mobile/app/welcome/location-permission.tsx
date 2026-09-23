@@ -46,7 +46,7 @@ export default function LocationPermissionScreen() {
       if (next.source === 'manual') await SecureStore.setItemAsync(MANUAL_LOCATION_KEY, JSON.stringify(next));
       else if (next.source === 'gps') await SecureStore.deleteItemAsync(MANUAL_LOCATION_KEY);
       const result = await fetchGuidedPreview(next, '', null);
-      if (isCurrent()) router.push(result.meta.nearbyDishCount > 0 ? '/welcome/tried' : '/welcome/out-of-area');
+      if (isCurrent()) router.push(result.meta.nearbyDishCount > 0 ? '/welcome/goal' : '/welcome/out-of-area');
     } catch { if (isCurrent()) Alert.alert('Could not check this area', 'Please try again. Your selected area is saved.'); }
     finally { if (isCurrent()) setBusy(false); }
   }
