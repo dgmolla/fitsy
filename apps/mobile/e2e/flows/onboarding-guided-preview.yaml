@@ -123,6 +123,15 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
     id: coachmark-next
 - assertVisible: "Follow your craving"
 # Back stays in place even as the search/loading action changes width.
+- assertVisible:
+    id: coachmark-back
+    width: 44
+    height: 44
+    tolerance: 1
+# Its hit target must stay in the counter's left column, not follow Next right.
+- assertNotVisible:
+    id: coachmark-back
+    rightOf: "2 OF 5"
 - tapOn:
     id: coachmark-back
 - assertVisible: "Your meal targets"
@@ -136,6 +145,9 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
       id: coachmark-next
       enabled: true
     timeout: 30000
+- assertNotVisible:
+    id: coachmark-back
+    rightOf: "2 OF 5"
 - tapOn:
     id: coachmark-next
 - assertVisible: "Real meals. Know the source."
