@@ -362,9 +362,13 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
     direction: DOWN
 - tapOn:
     id: preview-pick-3
-- copyTextFrom:
+# The summary is a container with separately accessible text children.
+# Assert the actual labels; copying the container does not include its children.
+- assertVisible:
     id: signup-selected-restaurant
-- assertTrue: ${maestro.copiedText.includes(output.context.data[2].name) && maestro.copiedText.includes('pizza') && maestro.copiedText.includes('650 kcal')}
+- assertVisible: ${output.context.data[2].name}
+- assertVisible: "pizza · DTLA"
+- assertVisible: "650 kcal · 0g protein · 0g carbs · 0g fat"
 - tapOn: "Dev login"
 - extendedWaitUntil:
     visible:
