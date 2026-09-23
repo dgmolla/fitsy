@@ -100,13 +100,13 @@ export function ProfileEditSheet(props: ProfileEditSheetProps) {
   const { scaleAnim, opacityAnim, blurOpacity, translateY, dismiss } = useSheetAnimation(visible);
 
   return (
-    <Modal visible={visible} transparent animationType="none">
+    <Modal visible={visible} transparent animationType="none" onRequestClose={() => dismiss(onClose)}>
       <Animated.View style={[StyleSheet.absoluteFill, { opacity: blurOpacity }]}>
         <BlurView tint="light" intensity={60} style={StyleSheet.absoluteFill as ViewStyle} />
         <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.3)' }]} />
       </Animated.View>
 
-      <Pressable style={StyleSheet.absoluteFill} onPress={() => dismiss(onClose)} />
+      <Pressable style={StyleSheet.absoluteFill} onPress={() => dismiss(onClose)} accessibilityRole="button" accessibilityLabel="Cancel edit" testID="profile-edit-cancel" />
 
       <View style={s.overlay} pointerEvents="box-none">
         <Animated.View style={[s.card, { opacity: opacityAnim, transform: [{ scale: scaleAnim }, { translateY }] }]}>
@@ -138,6 +138,8 @@ function ChoiceContent({ options, value, onApply, dismiss }: ChoiceProps & { dis
               key={opt.id}
               style={[s.choiceRow, active && s.choiceRowActive]}
               onPress={() => setSelected(opt.id)}
+              accessibilityRole="radio" accessibilityState={{ checked: active }}
+              accessibilityLabel={[opt.label, opt.description].filter(Boolean).join('. ')} testID={`profile-choice-${opt.id}`}
             >
               {opt.icon && (
                 <Ionicons name={opt.icon as ComponentProps<typeof Ionicons>['name']} size={18} color={active ? EDITORIAL.cream : EDITORIAL.textSoft} />
@@ -153,7 +155,7 @@ function ChoiceContent({ options, value, onApply, dismiss }: ChoiceProps & { dis
           );
         })}
       </View>
-      <Pressable style={s.applyBtn} onPress={() => dismiss(() => onApply(selected))}>
+      <Pressable style={s.applyBtn} accessibilityRole="button" accessibilityLabel="Apply" testID="profile-edit-apply" onPress={() => dismiss(() => onApply(selected))}>
         <Text style={s.applyText}>Apply</Text>
       </Pressable>
     </>
@@ -181,7 +183,7 @@ function NumericContent({ title, value, unit, placeholder, onApply, dismiss }: N
           onStep={(dir) => setDraft((prev) => String(clampInt((parseInt(prev, 10) || 0) + dir, 0, 99999)))}
         />
       </View>
-      <Pressable style={s.applyBtn} onPress={() => dismiss(() => onApply(draft))}>
+      <Pressable style={s.applyBtn} accessibilityRole="button" accessibilityLabel="Apply" testID="profile-edit-apply" onPress={() => dismiss(() => onApply(draft))}>
         <Text style={s.applyText}>Apply</Text>
       </Pressable>
     </>
@@ -217,10 +219,10 @@ function HeightContent({ valueCm, onApply, dismiss }: HeightProps & { dismiss: (
     <>
       {/* Unit toggle */}
       <View style={s.toggleRow}>
-        <Pressable style={[s.toggleBtn, mode === 'imperial' && s.toggleActive]} onPress={() => setMode('imperial')}>
+        <Pressable style={[s.toggleBtn, mode === 'imperial' && s.toggleActive]} onPress={() => setMode('imperial')} accessibilityRole="radio" accessibilityState={{ checked: mode === 'imperial' }} accessibilityLabel="Feet and inches" testID="profile-height-imperial">
           <Text style={[s.toggleText, mode === 'imperial' && s.toggleTextActive]}>ft / in</Text>
         </Pressable>
-        <Pressable style={[s.toggleBtn, mode === 'metric' && s.toggleActive]} onPress={() => setMode('metric')}>
+        <Pressable style={[s.toggleBtn, mode === 'metric' && s.toggleActive]} onPress={() => setMode('metric')} accessibilityRole="radio" accessibilityState={{ checked: mode === 'metric' }} accessibilityLabel="Centimeters" testID="profile-height-metric">
           <Text style={[s.toggleText, mode === 'metric' && s.toggleTextActive]}>cm</Text>
         </Pressable>
       </View>
@@ -245,7 +247,7 @@ function HeightContent({ valueCm, onApply, dismiss }: HeightProps & { dismiss: (
         </View>
       )}
 
-      <Pressable style={s.applyBtn} onPress={() => dismiss(() => onApply(getCm()))}>
+      <Pressable style={s.applyBtn} accessibilityRole="button" accessibilityLabel="Apply" testID="profile-edit-apply" onPress={() => dismiss(() => onApply(getCm()))}>
         <Text style={s.applyText}>Apply</Text>
       </Pressable>
     </>
