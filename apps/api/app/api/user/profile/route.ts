@@ -219,6 +219,13 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
 
   try {
     const updatedUser = await prisma.$transaction(async (tx) => {
+      // A legacy client echoes the maintenance alias when changing unrelated fields.
+      // Preserve performance in that case; schema-2 clients can explicitly change it.
+      let goal = update.goal;
+      if (goal === "maintain" && request.nextUrl.searchParams.get("goalSchema") !== "2") {
+        const existing = await tx.user.findUnique({ where: { id: auth.sub }, select: { goal: true } });
+        if (existing?.goal === "performance") goal = undefined;
+      }
       // ─── Update user profile ───────────────────────────────────────────────
 
       const user = await tx.user.update({
@@ -233,7 +240,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
           ...(update.activityLevel !== undefined && {
             activityLevel: update.activityLevel,
           }),
-          ...(update.goal !== undefined && { goal: update.goal }),
+          ...(goal !== undefined && { goal }),
           ...(update.onboardingStep !== undefined && {
             onboardingStep: update.onboardingStep,
           }),

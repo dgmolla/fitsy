@@ -46,6 +46,15 @@ test('performance profile persists, calculates balanced macros and preserves exp
   assert.deepEqual(profile.macroTarget, macroTarget);
   const persisted = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
   assert.equal(persisted.goal, 'performance', 'compatibility serialization must not overwrite the stored goal');
+  // The old client pushes its aliased goal alongside a weight-only edit.
+  const legacyEdit = await PATCH(request({ goal: legacyProfile.user.goal, weightKg: 76, macroTarget }));
+  assert.equal(legacyEdit.status, 200);
+  const afterLegacyEdit = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+  assert.equal(afterLegacyEdit.weightKg, 76);
+  assert.equal(afterLegacyEdit.goal, 'performance');
+  // An updated client can deliberately switch performance to maintenance.
+  assert.equal((await PATCH(request({ goal: 'maintain', macroTarget }, '2'))).status, 200);
+  assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: userId } })).goal, 'maintain');
   for (const goal of ['lose_fat', 'build_muscle', 'maintain']) {
     assert.equal((await PATCH(request({ goal, macroTarget }))).status, 200);
     for (const schema of [undefined, '2']) {
