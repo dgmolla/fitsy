@@ -52,11 +52,11 @@ describe("calculateTdee", () => {
     expect(veryActive.calories).toBeGreaterThan(sedentary.calories);
   });
 
-  it("returns macro split with correct ratios (30/40/30)", () => {
+  it("returns macro split with correct maintenance ratios (20/50/30)", () => {
     const result = calculateTdee(30, 175, 75, "active", "maintain");
-    // protein = 30% of cals / 4 kcal/g
-    const expectedProtein = Math.round((result.calories * 0.3) / 4);
-    const expectedCarbs = Math.round((result.calories * 0.4) / 4);
+    // protein = 20% of cals / 4 kcal/g
+    const expectedProtein = Math.round((result.calories * 0.2) / 4);
+    const expectedCarbs = Math.round((result.calories * 0.5) / 4);
     const expectedFat = Math.round((result.calories * 0.3) / 9);
     expect(result.proteinG).toBe(expectedProtein);
     expect(result.carbsG).toBe(expectedCarbs);
@@ -69,4 +69,13 @@ describe("calculateTdee", () => {
     expect(result.carbsG).toBeGreaterThan(0);
     expect(result.fatG).toBeGreaterThan(0);
   });
+});
+
+test("performance retains maintenance calories and prioritizes carbohydrate", () => {
+  const result = calculateTdee(30, 175, 75, "active", "performance");
+  const maintain = calculateTdee(30, 175, 75, "active", "maintain");
+  expect(result.calories).toBe(maintain.calories);
+  expect(result.proteinG).toBe(Math.round(result.calories * 0.2 / 4));
+  expect(result.carbsG).toBe(Math.round(result.calories * 0.55 / 4));
+  expect(result.fatG).toBe(Math.round(result.calories * 0.25 / 9));
 });

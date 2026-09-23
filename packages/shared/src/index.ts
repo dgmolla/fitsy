@@ -7,3 +7,4 @@ export * from "./env";
 export * from "./utils/macroScoring";
 export * from "./contracts/menu";
 export * from "./contracts/goalMatch";
+export * from "./utils/macroTargets";

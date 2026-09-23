@@ -20,7 +20,8 @@ const VALID_ACTIVITY_LEVELS: ActivityLevel[] = [
   "very_active",
 ];
 
-const VALID_GOALS: UserGoal[] = ["lose_fat", "maintain", "build_muscle"];
+const VALID_GOALS = ["lose_fat", "maintain", "build_muscle", "performance"] as const;
+type AcceptedGoal = typeof VALID_GOALS[number];
 
 const VALID_SEXES: Sex[] = ["female", "male"];
 
@@ -178,7 +179,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   }
 
   if (update.goal !== undefined) {
-    if (!VALID_GOALS.includes(update.goal as UserGoal)) {
+    if (!VALID_GOALS.includes(update.goal as AcceptedGoal)) {
       return NextResponse.json(
         { error: `goal must be one of: ${VALID_GOALS.join(", ")}` },
         { status: 400 },
@@ -265,7 +266,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
           user.heightCm,
           user.weightKg,
           user.activityLevel as ActivityLevel,
-          user.goal as UserGoal,
+          user.goal as AcceptedGoal,
           user.sex as Sex | null,
         );
 
