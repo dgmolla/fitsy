@@ -32,9 +32,9 @@ tags: [billing, onboarding, changed-journey]
 - tapOn: "Search near DTLA"
 - extendedWaitUntil:
     visible:
-      id: tried-meal_prep
+      id: goal-build_muscle
     timeout: 30000
-# Build a real preview predecessor, then exercise the legacy trial redirect.
+# Build a real preview predecessor, then exercise the three-step trial journey.
 - openLink: com.fitsy.mobile://welcome/preview
 # A fresh simulator can require system confirmation for an app link.
 - tapOn:
@@ -55,13 +55,29 @@ tags: [billing, onboarding, changed-journey]
     optional: true
 - extendedWaitUntil:
     visible:
+      id: trial-offer-note
+    timeout: 15000
+- assertVisible: "Find your next meal with Fitsy."
+- tapOn:
+    id: welcome-continue
+- assertVisible:
+    id: trial-reminder-skip
+- tapOn:
+    id: trial-reminder-skip
+- extendedWaitUntil:
+    visible:
       id: paywall-price-yearly
     timeout: 15000
-- extendedWaitUntil:
-    notVisible: "Loading…"
-    timeout: 30000
-- assertNotVisible:
-    id: trial-see-plans
+- assertVisible:
+    id: paywall-timeline
+- tapOn:
+    id: welcome-back
+- assertVisible:
+    id: trial-reminder-skip
+- tapOn:
+    id: welcome-back
+- assertVisible:
+    id: trial-offer-note
 - tapOn:
     id: welcome-back
 - assertVisible:
@@ -87,7 +103,7 @@ tags: [billing, onboarding, changed-journey]
 - tapOn:
     id: paywall-plan-monthly
 - assertVisible:
-    id: paywall-meal-image
+    id: paywall-timeline
 - copyTextFrom:
     id: paywall-price-monthly
 - evalScript: ${output.monthlyPrice = maestro.copiedText}
