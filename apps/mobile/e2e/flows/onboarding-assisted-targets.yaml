@@ -98,8 +98,20 @@ tags: [onboarding, discovery, changed-journey]
 - tapOn:
     id: welcome-continue
 - assertVisible: "Estimated from your answers.*"
+# The fourth goal starts below the scroll viewport, behind the fixed footer.
+# Scroll the form first so Maestro cannot tap the footer at its stale AX bounds.
+- swipe:
+    start: "50%,70%"
+    end: "50%,35%"
+- waitForAnimationToEnd
 - tapOn:
     id: meal-goal-build_muscle
+- assertVisible:
+    id: meal-goal-build_muscle
+    selected: true
+- swipe:
+    start: "50%,35%"
+    end: "50%,70%"
 - waitForAnimationToEnd
 # Read the calculated targets rather than hardcoding the previous formula.
 - copyTextFrom:
