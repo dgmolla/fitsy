@@ -24,13 +24,13 @@ export function Masthead({
   locationRef?: React.RefObject<View | null>;
 }) {
   return (
-    <View style={s.masthead}>
+    <View style={[s.masthead, !preview && s.mainMasthead]}>
       <View style={s.mastheadTop}>
         {preview ? <Text style={s.previewHeading}>Your first picks</Text> : <View style={s.logoRow}>
           <View style={s.logoDot} />
           <Text style={s.logo}>fitsy</Text>
         </View>}
-        <View ref={locationRef} collapsable={false}><TouchableOpacity
+        <View ref={locationRef} collapsable={false} style={s.locationAnchor}><TouchableOpacity
           style={s.locationChip}
           onPress={onLocationPress}
           activeOpacity={0.7}
@@ -40,7 +40,7 @@ export function Masthead({
           testID="discovery-location"
         >
           <Ionicons name="location" size={11} color={EDITORIAL.greenAccent} />
-          <Text style={s.locationText}>{locationLabel}</Text>
+          <Text style={s.locationText} numberOfLines={1}>{locationLabel}</Text>
           <Ionicons name="chevron-down" size={10} color={EDITORIAL.textSoft} />
         </TouchableOpacity></View>
       </View>
@@ -135,4 +135,3 @@ export function SearchBar({
     </View>
   );
 }
-

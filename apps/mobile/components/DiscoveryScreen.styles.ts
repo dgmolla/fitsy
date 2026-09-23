@@ -17,7 +17,9 @@ export const s = StyleSheet.create({
     paddingBottom: 12,
     gap: 10,
   },
-  mastheadTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  mainMasthead: { paddingHorizontal: 16 },
+  mastheadTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  locationAnchor: { flexShrink: 1, maxWidth: '55%' },
   logoRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   logoDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: EDITORIAL.green },
   logo: {
@@ -32,7 +34,7 @@ export const s = StyleSheet.create({
     paddingHorizontal: 10, paddingVertical: 5, minHeight: 44, justifyContent: 'center',
     borderWidth: 1, borderColor: EDITORIAL.border,
   },
-  locationText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 11, fontWeight: '600', color: EDITORIAL.textSoft },
+  locationText: { flexShrink: 1, fontFamily: FONTS.nunitoSansSemiBold, fontSize: 11, fontWeight: '600', color: EDITORIAL.textSoft },
   issueLabel: {
     fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 10, fontWeight: '700', color: EDITORIAL.textSoft,

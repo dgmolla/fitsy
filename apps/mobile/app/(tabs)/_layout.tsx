@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import { View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Tabs, Redirect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, EDITORIAL, FONTS } from '@/lib/brand';
@@ -14,6 +15,7 @@ export default function TabLayout() {
   // null on cold start so PostHog can distinguish "first tab opened after
   // sign-in" from a mid-session switch.
   const lastTabRef = useRef<TabId | null>(null);
+  const insets = useSafeAreaInsets();
 
   // Subscription hard-wall: the tabbed app is Pro-only. The gate is the
   // SERVER's verdict (`purchases.entitled`; null while boot / sign-in /
@@ -53,24 +55,25 @@ export default function TabLayout() {
     lastTabRef.current = next;
   }
 
-  // Teaser browsing hides the tab bar - Saved/Profile require a real
-  // subscription and shouldn't be reachable from an unentitled preview.
-  const tabBarStyle = allowTeaser
-    ? { display: 'none' as const }
-    : {
-        backgroundColor: EDITORIAL.cream,
-        borderTopWidth: 1,
-        borderTopColor: EDITORIAL.border,
-        elevation: 0,
-        paddingTop: 8,
-        height: 80,
-      };
+  // Preview redirects above. Tabs own the bottom inset for the main app;
+  // reserve a full icon row independently of the device's home indicator.
+  const bottomPadding = Math.max(insets.bottom, 8);
+  const tabBarStyle = {
+    backgroundColor: EDITORIAL.cream,
+    borderTopWidth: 1,
+    borderTopColor: EDITORIAL.border,
+    elevation: 0,
+    paddingTop: 6,
+    paddingBottom: bottomPadding,
+    height: 64 + bottomPadding,
+  };
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarStyle,
+        tabBarLabelPosition: 'below-icon',
         tabBarActiveTintColor: EDITORIAL.green,
         tabBarInactiveTintColor: EDITORIAL.textSoft,
         tabBarLabelStyle: {
@@ -94,16 +97,19 @@ export default function TabLayout() {
       <Tabs.Screen
         name="search"
         options={{
-          title: '',
+          title: 'Search',
+          tabBarAccessibilityLabel: 'Search',
+          // showLabel belongs to the whole active bar. Hide only this label.
+          tabBarLabel: () => null,
+          tabBarIconStyle: { width: 44, height: 44 },
           tabBarIcon: () => (
             <View style={{
-              width: 52,
-              height: 52,
-              borderRadius: 26,
+              width: 44,
+              height: 44,
+              borderRadius: 22,
               backgroundColor: EDITORIAL.green,
               alignItems: 'center',
               justifyContent: 'center',
-              marginBottom: 20,
               shadowColor: EDITORIAL.green,
               shadowOpacity: 0.25,
               shadowRadius: 8,

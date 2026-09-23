@@ -158,7 +158,7 @@ export function CoachMarks({ visible, steps, onDone, onStepShown, onStepLeaving,
               <Text style={s.title}>{step.title}</Text>
               <Text style={s.body}>{step.body}</Text>
               <View style={s.actions}>
-                {previous !== undefined && <Pressable testID="coachmark-back" style={s.textButton} onPress={() => { onStepLeaving?.(); setIndex(previous); }} accessibilityRole="button" accessibilityLabel="Previous tip"><Text style={s.skip}>Back</Text></Pressable>}
+                {previous !== undefined && <Pressable testID="coachmark-back" style={[s.textButton, s.backButton]} onPress={() => { onStepLeaving?.(); setIndex(previous); }} accessibilityRole="button" accessibilityLabel="Previous tip"><Text style={s.skip}>Back</Text></Pressable>}
                 <Pressable
                   style={({ pressed }) => [s.nextBtn, pressed && s.nextBtnPressed]}
                   onPress={next}
@@ -203,6 +203,8 @@ const s = StyleSheet.create({
   bubbleContent: { paddingHorizontal: 18, paddingBottom: 16, paddingTop: 6, gap: 4 },
   heading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   textButton: { minHeight: 44, minWidth: 44, justifyContent: 'center', alignItems: 'center' },
+  // Loading changes Next's width; Back must remain a stationary tap target.
+  backButton: { marginRight: 'auto' },
   counter: {
     fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 11,

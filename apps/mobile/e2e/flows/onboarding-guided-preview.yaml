@@ -5,10 +5,17 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
 - launchApp:
     clearState: true
     clearKeychain: true
-- extendedWaitUntil:
-    visible:
-      id: welcome-start
-    timeout: 30000
+# XCTest can reject the first AX snapshot after reinstall (HTTP 500).
+# Retry only the initial observation, before any product interaction.
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - extendedWaitUntil:
+          visible:
+            id: welcome-start
+          timeout: 30000
 - waitForAnimationToEnd
 - tapOn:
     point: "92%,93%"
@@ -115,6 +122,7 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
 - tapOn:
     id: coachmark-next
 - assertVisible: "Follow your craving"
+# Back stays in place even as the search/loading action changes width.
 - tapOn:
     id: coachmark-back
 - assertVisible: "Your meal targets"

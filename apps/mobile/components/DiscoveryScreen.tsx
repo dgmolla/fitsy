@@ -146,7 +146,10 @@ export function DiscoveryScreen({ onboardingPreview = false }: { onboardingPrevi
     );
   }, [loadingMore, locked, results.length, hiddenCount, nextCursor, unlocking, resyncNow, unlockTitle, unlockSubtitle, unlockLabel, isOnboardingPreview, goalMatch, unlockPreview, loading, error, outOfArea, tourMoreRef]);
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: EDITORIAL.cream }}>
+    <SafeAreaView
+      edges={isOnboardingPreview ? ['top', 'right', 'bottom', 'left'] : ['top', 'right', 'left']}
+      style={{ flex: 1, backgroundColor: EDITORIAL.cream }}
+    >
       {isOnboardingPreview && <WelcomeNav progress={0.75} backTestID="preview-back" onBack={navigation.canGoBack() ? () => router.back() : undefined} />}
       <Masthead preview={isOnboardingPreview} locationRef={tourLocationRef} locationLabel={locationLabel} onLocationPress={handleOpenLocationPicker} />
       {!loading && error !== null && (
@@ -160,7 +163,8 @@ export function DiscoveryScreen({ onboardingPreview = false }: { onboardingPrevi
           onScroll={event => { scrollOffset.current = event.nativeEvent.contentOffset.y; }}
           scrollEventThrottle={16}
           style={{ flex: 1 }}
-          contentContainerStyle={{ paddingBottom: isOnboardingPreview ? 28 : 110 }}
+          // The tab navigator occupies its own layout space below this list.
+          contentContainerStyle={{ paddingBottom: 28 }}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           automaticallyAdjustKeyboardInsets
