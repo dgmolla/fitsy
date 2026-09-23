@@ -5,10 +5,17 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
 - launchApp:
     clearState: true
     clearKeychain: true
-- extendedWaitUntil:
-    visible:
-      id: welcome-start
-    timeout: 30000
+# XCTest can reject the first AX snapshot after reinstall (HTTP 500).
+# Retry only the initial observation, before any product interaction.
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - extendedWaitUntil:
+          visible:
+            id: welcome-start
+          timeout: 30000
 - waitForAnimationToEnd
 - tapOn:
     point: "92%,93%"
@@ -115,6 +122,16 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
 - tapOn:
     id: coachmark-next
 - assertVisible: "Follow your craving"
+# Back stays in place even as the search/loading action changes width.
+- assertVisible:
+    id: coachmark-back
+    width: 44
+    height: 44
+    tolerance: 1
+# Its hit target must stay in the counter's left column, not follow Next right.
+- assertNotVisible:
+    id: coachmark-back
+    rightOf: "2 OF 5"
 - tapOn:
     id: coachmark-back
 - assertVisible: "Your meal targets"
@@ -128,6 +145,9 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
       id: coachmark-next
       enabled: true
     timeout: 30000
+- assertNotVisible:
+    id: coachmark-back
+    rightOf: "2 OF 5"
 - tapOn:
     id: coachmark-next
 - assertVisible: "Real meals. Know the source."
@@ -146,6 +166,28 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
 - assertTrue: ${maestro.copiedText === 'pizza'}
 - assertNotVisible:
     id: discovery-loading
+# Native bounds guard the approved compact chrome, not just its presence.
+# Visual pills stay compact while their enclosing touch targets remain 44pt.
+- assertVisible:
+    id: discovery-location-pill
+    height: 28
+    tolerance: 1
+- assertVisible:
+    id: discovery-edit-pill
+    height: 28
+    tolerance: 1
+- assertVisible:
+    id: discovery-macro-strip
+    height: 46
+    tolerance: 1
+- assertVisible:
+    id: discovery-location
+    height: 44
+    tolerance: 1
+- assertVisible:
+    id: preview-edit-targets
+    height: 44
+    tolerance: 1
 # Replay starts with an empty field. Skipping the first tip must leave it empty.
 - tapOn:
     id: preview-show-tour

@@ -17,7 +17,10 @@ export const s = StyleSheet.create({
     paddingBottom: 12,
     gap: 10,
   },
-  mastheadTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  mainMasthead: { paddingHorizontal: 16 },
+  mastheadTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  locationAnchor: { flexShrink: 1, maxWidth: '55%' },
+  locationButton: { minHeight: 44, justifyContent: 'center' },
   logoRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   logoDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: EDITORIAL.green },
   logo: {
@@ -29,31 +32,18 @@ export const s = StyleSheet.create({
   locationChip: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     backgroundColor: EDITORIAL.creamCard, borderRadius: 12,
-    paddingHorizontal: 10, paddingVertical: 5, minHeight: 44, justifyContent: 'center',
+    paddingHorizontal: 10, paddingVertical: 5, minHeight: 28, justifyContent: 'center',
     borderWidth: 1, borderColor: EDITORIAL.border,
   },
-  locationText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 11, fontWeight: '600', color: EDITORIAL.textSoft },
+  locationText: { flexShrink: 1, fontFamily: FONTS.nunitoSansSemiBold, fontSize: 11, fontWeight: '600', color: EDITORIAL.textSoft },
   issueLabel: {
     fontFamily: FONTS.nunitoSansSemiBold,
     fontSize: 10, fontWeight: '700', color: EDITORIAL.textSoft,
     letterSpacing: 2.5, textTransform: 'uppercase',
   },
 
-  // Macro target strip: a row of `value / label` columns separated by hairlines,
-  // capped on the right by an Edit pill. Layout principles:
-  //  - The whole row is `alignItems: 'stretch'` so dividers can fill the
-  //    available height without hard-coded numbers - the strip's intrinsic
-  //    height comes from the tallest child (the Edit pill).
-  //  - Each column is its own flex unit; `justifyContent: 'center'` keeps the
-  //    value+label pair vertically centered against the pill.
-  //  - Edit pill height is set via paddingVertical so it dictates strip height.
-  // Macro target strip - value + label per macro, hairline dividers, Edit
-  // pill on the right. Mirrors the original v3 layout: substantial values,
-  // readable labels, tall dividers that frame each column, Edit button
-  // sized as a proper pill rather than a chip.
-  // Macro strip: row aligned center so each child takes its natural height
-  // (column = val+lbl ≈ 28pt; Edit pill matches via explicit padding). Strip
-  // padding adds a uniform 6pt breathing room on all sides.
+  // Compact visual pills sit inside 44pt touch targets.
+  // The Edit target supplies the strip's height without extra vertical padding.
   macroStrip: {
     flexDirection: 'row', alignItems: 'center',
     // Lighter than the search bar (creamCard) so the two stacked rows don't
@@ -62,7 +52,7 @@ export const s = StyleSheet.create({
     backgroundColor: EDITORIAL.cream,
     borderRadius: 10, borderWidth: 1, borderColor: EDITORIAL.border,
     marginHorizontal: 16, marginBottom: 8,
-    paddingHorizontal: 12, paddingVertical: 8,
+    paddingHorizontal: 12,
   },
   macroItem: { flex: 1, alignItems: 'center', gap: 0 },
   macroVal: {
@@ -77,9 +67,10 @@ export const s = StyleSheet.create({
     letterSpacing: 0.3,
   },
   macroDivider: { width: 1, height: 20, backgroundColor: EDITORIAL.creamDeep },
+  editButton: { minHeight: 44, minWidth: 44, marginLeft: 8, justifyContent: 'center' },
   editBtn: {
     backgroundColor: EDITORIAL.green, borderRadius: 8,
-    paddingHorizontal: 10, paddingVertical: 5, marginLeft: 8, minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 10, paddingVertical: 5, minWidth: 44, minHeight: 28, alignItems: 'center', justifyContent: 'center',
   },
   editBtnText: {
     fontFamily: FONTS.nunitoSansSemiBold,
