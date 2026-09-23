@@ -127,6 +127,11 @@ tags: [billing, onboarding, changed-journey]
 - copyTextFrom:
     id: paywall-terms
 - assertTrue: ${maestro.copiedText.includes(output.annualPrice) && maestro.copiedText.includes('Renews automatically')}
+# The decline action follows the legal links and may be below the safe area.
+- scrollUntilVisible:
+    element:
+      id: welcome-skip
+    direction: DOWN
 - tapOn:
     id: welcome-skip
 - assertVisible: "Eat well for less."
@@ -134,6 +139,11 @@ tags: [billing, onboarding, changed-journey]
     id: paywall-back-to-plans
 - assertVisible:
     id: paywall-restore
+# The decline action follows the legal links and may be below the safe area.
+- scrollUntilVisible:
+    element:
+      id: welcome-skip
+    direction: DOWN
 - tapOn:
     id: welcome-skip
 - tapOn:
@@ -169,6 +179,11 @@ tags: [billing, onboarding, changed-journey]
     visible:
       id: paywall-plan-yearly
     timeout: 15000
+# The decline action follows the legal links and may be below the safe area.
+- scrollUntilVisible:
+    element:
+      id: welcome-skip
+    direction: DOWN
 - tapOn:
     id: welcome-skip
 - tapOn:
@@ -187,6 +202,11 @@ tags: [billing, onboarding, changed-journey]
 # This corner is outside the payment CTA when no toast is present.
 - tapOn:
     point: "92%,93%"
+# The decline action follows the legal links and may be below the safe area.
+- scrollUntilVisible:
+    element:
+      id: welcome-skip
+    direction: DOWN
 - tapOn:
     id: welcome-skip
 - tapOn:

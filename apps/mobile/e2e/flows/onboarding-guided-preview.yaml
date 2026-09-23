@@ -5,6 +5,8 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
 - launchApp:
     clearState: true
     clearKeychain: true
+    permissions:
+      notifications: deny
 # XCTest can reject the first AX snapshot after reinstall (HTTP 500).
 # Retry only the initial observation, before any product interaction.
 - retry:
@@ -377,21 +379,11 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
 - tapOn:
     id: welcome-continue
 - assertVisible: "A heads-up before your trial ends."
-# Exercise the permission action. Deny a fresh native prompt; an existing denial
-# may return directly. Both paths must still reach the plans without a purchase.
+# Exercise continuation from an existing native denial without a purchase.
+# reminders.yaml separately verifies fresh system grant and deny interactions.
 - tapOn:
     id: trial-reminder-allow
 - waitForAnimationToEnd
-- runFlow:
-    when:
-      visible: "Don’t Allow"
-    commands:
-      - tapOn: "Don’t Allow"
-- runFlow:
-    when:
-      visible: "Don't Allow"
-    commands:
-      - tapOn: "Don't Allow"
 - extendedWaitUntil:
     visible: ${'Discover more meals like your pick at ' + output.context.data[2].name + '.'}
     timeout: 30000
