@@ -65,10 +65,10 @@ export default function PaymentScreen() {
 
   useEffect(() => {
     if (!offering) return;
-    const key = `${offering.identifier}:${variants.access}:choice_c`;
+    const key = `${offering.identifier}:${variants.access}:trial_timeline`;
     if (exposure.current === key) return;
     exposure.current = key;
-    trackPaywallExperimentExposure({ offering_id: offering.identifier, access_variant: variants.access, image_variant: 'meal', layout_variant: 'choice_c' });
+    trackPaywallExperimentExposure({ offering_id: offering.identifier, access_variant: variants.access, image_variant: 'none', layout_variant: 'trial_timeline' });
   }, [offering, variants.access]);
 
   async function declineSubscription() {

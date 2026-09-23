@@ -871,7 +871,7 @@ export function __resetForTesting(): void {
 }
 
 /** Offering assignment is supplied by RevenueCat; this records the shown UI. */
-export function trackPaywallExperimentExposure(props: { offering_id: string; access_variant: 'hard' | 'preview'; image_variant: 'none' | 'meal'; layout_variant?: 'choice_c' }): void {
+export function trackPaywallExperimentExposure(props: { offering_id: string; access_variant: 'hard' | 'preview'; image_variant: 'none' | 'meal'; layout_variant?: 'choice_c' | 'trial_timeline' }): void {
   try { getPostHogClient().capture('paywall_experiment_exposed', props); }
   catch (error) { logCaptureError('paywall_experiment_exposed', error); }
 }
