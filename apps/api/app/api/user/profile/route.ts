@@ -20,7 +20,8 @@ const VALID_ACTIVITY_LEVELS: ActivityLevel[] = [
   "very_active",
 ];
 
-const VALID_GOALS: UserGoal[] = ["lose_fat", "maintain", "build_muscle"];
+const VALID_GOALS = ["lose_fat", "maintain", "build_muscle", "performance"] as const;
+type AcceptedGoal = typeof VALID_GOALS[number];
 
 const VALID_SEXES: Sex[] = ["female", "male"];
 
@@ -36,6 +37,14 @@ const USER_SELECT = {
   goal: true,
   onboardingStep: true,
 } as const;
+
+// Older installed apps only understand the original goal values and otherwise
+// calculate NaN targets after profile edits. Opt-in clients preserve performance;
+// legacy clients see its maintenance-energy equivalent without changing storage.
+function responseGoal(goal: string | null, request: NextRequest): UserGoal | null {
+  if (goal === "performance" && request.nextUrl.searchParams.get("goalSchema") !== "2") return "maintain";
+  return goal as UserGoal | null;
+}
 
 // ─── GET /api/user/profile ──────────────────────────────────────────────────
 
@@ -74,7 +83,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         weightKg: user.weightKg,
         sex: user.sex as Sex | null,
         activityLevel: user.activityLevel as ActivityLevel | null,
-        goal: user.goal as UserGoal | null,
+        goal: responseGoal(user.goal, request),
         onboardingStep: user.onboardingStep,
       },
       macroTarget: user.macroTarget
@@ -178,7 +187,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   }
 
   if (update.goal !== undefined) {
-    if (!VALID_GOALS.includes(update.goal as UserGoal)) {
+    if (!VALID_GOALS.includes(update.goal as AcceptedGoal)) {
       return NextResponse.json(
         { error: `goal must be one of: ${VALID_GOALS.join(", ")}` },
         { status: 400 },
@@ -210,6 +219,13 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
 
   try {
     const updatedUser = await prisma.$transaction(async (tx) => {
+      // A legacy client echoes the maintenance alias when changing unrelated fields.
+      // Preserve performance in that case; schema-2 clients can explicitly change it.
+      let goal = update.goal;
+      if (goal === "maintain" && request.nextUrl.searchParams.get("goalSchema") !== "2") {
+        const existing = await tx.user.findUnique({ where: { id: auth.sub }, select: { goal: true } });
+        if (existing?.goal === "performance") goal = undefined;
+      }
       // ─── Update user profile ───────────────────────────────────────────────
 
       const user = await tx.user.update({
@@ -224,7 +240,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
           ...(update.activityLevel !== undefined && {
             activityLevel: update.activityLevel,
           }),
-          ...(update.goal !== undefined && { goal: update.goal }),
+          ...(goal !== undefined && { goal }),
           ...(update.onboardingStep !== undefined && {
             onboardingStep: update.onboardingStep,
           }),
@@ -265,7 +281,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
           user.heightCm,
           user.weightKg,
           user.activityLevel as ActivityLevel,
-          user.goal as UserGoal,
+          user.goal as AcceptedGoal,
           user.sex as Sex | null,
         );
 
@@ -295,6 +311,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
       {
         user: {
           ...updatedUser,
+          goal: responseGoal(updatedUser.goal, request),
           birthday: updatedUser.birthday
             ? updatedUser.birthday.toISOString().split("T")[0]
             : null,

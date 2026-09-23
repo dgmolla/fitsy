@@ -192,14 +192,14 @@ describe("PATCH /api/user/profile — success", () => {
     expect(mockPrismaMacroTargetUpsert).not.toHaveBeenCalled();
   });
 
-  it("calculates TDEE and upserts MacroTarget when all fields are set", async () => {
+  it.each(["maintain", "performance"])("calculates TDEE and upserts MacroTarget for %s", async (goal) => {
     const fullUser = {
       ...MOCK_USER_BASE,
       birthday: new Date("1998-01-15"),
       heightCm: 170,
       weightKg: 70,
       activityLevel: "active",
-      goal: "maintain",
+      goal,
       onboardingStep: 5,
     };
     mockPrismaUserUpdate.mockResolvedValue(fullUser);
@@ -218,7 +218,7 @@ describe("PATCH /api/user/profile — success", () => {
           heightCm: 170,
           weightKg: 70,
           activityLevel: "active",
-          goal: "maintain",
+          goal,
           onboardingStep: 5,
         },
         "Bearer valid",
@@ -231,9 +231,20 @@ describe("PATCH /api/user/profile — success", () => {
       170,
       70,
       "active",
-      "maintain",
+      goal,
       undefined, // sex not set on this mock user
     );
     expect(mockPrismaMacroTargetUpsert).toHaveBeenCalledTimes(1);
   });
+});
+
+test("PATCH accepts performance and preserves explicit macro targets", async () => {
+  mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+  mockPrismaUserUpdate.mockResolvedValue({ ...MOCK_USER_BASE, goal: "performance" });
+  const macroTarget = { calories: 2200, proteinG: 110, carbsG: 300, fatG: 62 };
+  const res = await PATCH(makeRequest({ goal: "performance", macroTarget }, "Bearer valid"));
+  expect(res.status).toBe(200);
+  expect(mockPrismaUserUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ goal: "performance" }) }));
+  expect(mockCalculateTdee).not.toHaveBeenCalled();
+  expect(mockPrismaMacroTargetUpsert).toHaveBeenCalledWith(expect.objectContaining({ update: macroTarget }));
 });

@@ -1,4 +1,4 @@
-import type { ActivityLevel, UserGoal, Sex } from "@fitsy/shared";
+import { calculateDailyMacros, type ActivityLevel, type MacroGoal, type Sex } from "@fitsy/shared";
 
 // ─── TDEE Calculator ──────────────────────────────────────────────────────────
 
@@ -16,9 +16,10 @@ const ACTIVITY_MULTIPLIERS: Record<ActivityLevel, number> = {
   very_active: 1.725,
 };
 
-const GOAL_OFFSETS: Record<UserGoal, number> = {
+const GOAL_OFFSETS: Record<MacroGoal, number> = {
   lose_fat: -500,
   maintain: 0,
+  performance: 0,
   build_muscle: 300,
 };
 
@@ -30,14 +31,14 @@ const GOAL_OFFSETS: Record<UserGoal, number> = {
  *   estimate degrades gracefully when sex wasn't collected).
  * TDEE = BMR * activityMultiplier + goalOffset
  *
- * Macro split: protein 30% / carbs 40% / fat 30%
+ * Macro split: shared goal-specific general adult defaults.
  */
 export function calculateTdee(
   age: number,
   heightCm: number,
   weightKg: number,
   activityLevel: ActivityLevel,
-  goal: UserGoal,
+  goal: MacroGoal,
   sex?: Sex | null,
 ): TdeeResult {
   const sexTerm = sex === "male" ? 5 : sex === "female" ? -161 : -78;
@@ -45,9 +46,11 @@ export function calculateTdee(
   const tdee = bmr * ACTIVITY_MULTIPLIERS[activityLevel];
   const calories = Math.round(tdee + GOAL_OFFSETS[goal]);
 
-  const proteinG = Math.round((calories * 0.3) / 4);
-  const carbsG = Math.round((calories * 0.4) / 4);
-  const fatG = Math.round((calories * 0.3) / 9);
-
-  return { calories, proteinG, carbsG, fatG };
+  const daily = calculateDailyMacros(calories, goal);
+  return {
+    calories: daily.calories,
+    proteinG: Math.round(daily.protein),
+    carbsG: Math.round(daily.carbs),
+    fatG: Math.round(daily.fat),
+  };
 }
