@@ -4,7 +4,10 @@ import { getOnboardingData, type OnboardingData } from './onboardingStorage';
 import { getMacroTargets, saveMacroTargets, type StoredMacroTargets } from './macroStorage';
 import { MEALS_PER_DAY } from './macroCalculator';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { ProfileResponse } from '@fitsy/shared';
+import type { ProfileResponse as ProfileContract, UserGoalV2 } from '@fitsy/shared';
+
+// This client opts into goalSchema=2; legacy clients keep the default contract.
+type ProfileResponse = ProfileContract<UserGoalV2>;
 
 const ONBOARDING_KEY = '@fitsy/onboarding';
 
