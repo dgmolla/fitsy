@@ -319,6 +319,10 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
 - assertVisible: "pizza"
 # A standalone paywall shows live store terms and retains the current search.
 - openLink: com.fitsy.mobile://welcome/payment
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
 - assertNotVisible: "Discover more meals like your pick.*"
 - extendedWaitUntil:
     visible:
@@ -435,6 +439,10 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
     id: locked-value-cta
 # Replaying target setup requires explicit confirmation and preserves the search.
 - openLink: com.fitsy.mobile://welcome/target-setup
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
 - extendedWaitUntil:
     visible:
       id: target-use-saved
@@ -455,6 +463,10 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
 - assertVisible: "pizza"
 # A legacy preview link must reach the welcome preview, without a paywall loop.
 - openLink: com.fitsy.mobile://search?preview=1
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
 - extendedWaitUntil:
     visible:
       id: discovery-hero
@@ -464,6 +476,10 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
     id: paywall-price-yearly
 - stopApp
 - openLink: com.fitsy.mobile://search?preview=1
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
 - retry:
     maxRetries: 2
     commands:

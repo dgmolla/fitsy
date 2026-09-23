@@ -24,6 +24,10 @@ tags: [billing, onboarding, discovery, notifications, changed-journey]
 - tapOn:
     point: "92%,93%"
 - openLink: com.fitsy.mobile://notification-settings
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
 - assertVisible:
     id: reminder-permission
 - assertVisible:
@@ -34,6 +38,10 @@ tags: [billing, onboarding, discovery, notifications, changed-journey]
     id: reminder-trial-toggle
 - assertNotVisible: "Allow"
 - openLink: com.fitsy.mobile://welcome/signin
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
 - tapOn: "Dev login"
 - extendedWaitUntil:
     visible:
@@ -42,11 +50,19 @@ tags: [billing, onboarding, discovery, notifications, changed-journey]
 # The ordinary journey requests notifications after purchase. Explicit links
 # exercise skip and denied recovery without purchasing on the shared dev user.
 - openLink: com.fitsy.mobile://welcome/notification-permission
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
 - assertVisible: "Remind me"
 - assertNotVisible: "Choose reminders"
 - tapOn:
     id: notification-skip
 - openLink: com.fitsy.mobile://notification-settings
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
 - extendedWaitUntil:
     visible:
       id: reminder-permission
@@ -57,6 +73,10 @@ tags: [billing, onboarding, discovery, notifications, changed-journey]
 - assertNotVisible:
     id: reminder-meals-toggle
 - openLink: com.fitsy.mobile://welcome/notification-permission
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
 - tapOn:
     id: notification-allow
 - extendedWaitUntil:
@@ -65,6 +85,10 @@ tags: [billing, onboarding, discovery, notifications, changed-journey]
 - assertVisible: "Allow"
 - tapOn: "Don.t Allow"
 - openLink: com.fitsy.mobile://notification-settings
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
 - extendedWaitUntil:
     visible:
       id: reminder-permission
@@ -94,12 +118,20 @@ tags: [billing, onboarding, discovery, notifications, changed-journey]
 - tapOn:
     point: "92%,93%"
 - openLink: com.fitsy.mobile://welcome/signin
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
 - tapOn: "Dev login"
 - extendedWaitUntil:
     visible:
       id: paywall-plan-yearly
     timeout: 30000
 - openLink: com.fitsy.mobile://welcome/notification-permission
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
 - assertVisible: "Remind me"
 - assertNotVisible:
     id: reminder-meals-toggle
@@ -112,6 +144,10 @@ tags: [billing, onboarding, discovery, notifications, changed-journey]
     timeout: 15000
 - tapOn: "Allow"
 - openLink: com.fitsy.mobile://notification-settings
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
 - extendedWaitUntil:
     visible:
       id: reminder-permission
@@ -127,6 +163,10 @@ tags: [billing, onboarding, discovery, notifications, changed-journey]
 - stopApp
 - launchApp
 - openLink: com.fitsy.mobile://notification-settings
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
 - retry:
     maxRetries: 2
     commands:

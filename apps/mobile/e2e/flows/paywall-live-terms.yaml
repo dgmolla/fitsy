@@ -23,6 +23,10 @@ tags: [billing, onboarding, changed-journey]
     point: "92%,93%"
 # Choose a real area so the preview has valid restaurant data and no implicit GPS fallback.
 - openLink: com.fitsy.mobile://welcome/location-permission
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
 - tapOn:
     id: location-choose-area
 - tapOn: "Search near DTLA"
@@ -32,6 +36,10 @@ tags: [billing, onboarding, changed-journey]
     timeout: 30000
 # Build a real preview predecessor, then exercise the legacy trial redirect.
 - openLink: com.fitsy.mobile://welcome/preview
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
 - extendedWaitUntil:
     visible:
       id: coachmark-skip
@@ -41,6 +49,10 @@ tags: [billing, onboarding, changed-journey]
 - assertVisible:
     id: preview-guide
 - openLink: com.fitsy.mobile://welcome/trial
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
 - extendedWaitUntil:
     visible:
       id: paywall-price-yearly
@@ -57,6 +69,10 @@ tags: [billing, onboarding, changed-journey]
 - assertNotVisible:
     id: paywall-plan-yearly
 - openLink: com.fitsy.mobile://welcome/payment
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
 - extendedWaitUntil:
     visible:
       id: paywall-price-yearly
@@ -129,6 +145,10 @@ tags: [billing, onboarding, changed-journey]
 - assertNotVisible:
     id: trial-see-plans
 - openLink: com.fitsy.mobile://welcome/payment
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
 - extendedWaitUntil:
     visible:
       id: paywall-plan-yearly

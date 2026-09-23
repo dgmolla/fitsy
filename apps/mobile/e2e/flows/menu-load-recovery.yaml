@@ -12,6 +12,10 @@ tags: [discovery, changed-journey]
           timeout: 10000
       - assertVisible: "Find meals that fit"
 - openLink: com.fitsy.mobile://restaurant/00000000-0000-4000-8000-000000000000
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
 - extendedWaitUntil:
     visible: "Could not load menu."
     timeout: 30000

@@ -24,6 +24,10 @@ tags: [billing, discovery, onboarding, changed-journey]
 - tapOn:
     point: "92%,93%"
 - openLink: ${'com.fitsy.mobile://restaurant/' + output.seed.id}
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
 - extendedWaitUntil:
     visible: "Seed Bowl Co #01"
     timeout: 20000
@@ -35,6 +39,10 @@ tags: [billing, discovery, onboarding, changed-journey]
 - assertVisible: "Find meals that fit"
 - assertNotVisible: "Continue with Apple"
 - openLink: ${'com.fitsy.mobile://restaurant/' + output.seed.id}
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
 - scrollUntilVisible:
     element:
       id: locked-value-cta
@@ -45,12 +53,20 @@ tags: [billing, discovery, onboarding, changed-journey]
 - assertVisible: "Continue with Apple"
 - assertVisible: "Continue with Google"
 - openLink: com.fitsy.mobile://welcome/leave-review
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
 - assertVisible:
     id: paywall-plan-yearly
 - assertNotVisible: "Leave a review"
 - assertNotVisible: "Allow notifications"
 - assertNotVisible: "Remind me"
 - openLink: com.fitsy.mobile://welcome/payment
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
 - extendedWaitUntil:
     visible:
       id: paywall-price-yearly
@@ -73,6 +89,10 @@ tags: [billing, discovery, onboarding, changed-journey]
 - assertNotVisible:
     id: welcome-back
 - openLink: com.fitsy.mobile://search?preview=1
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
 # iOS can invalidate AX elements while the redirect replaces its navigator.
 # Retry only the settled observation, never the access-control action.
 - retry:
@@ -84,6 +104,10 @@ tags: [billing, discovery, onboarding, changed-journey]
           id: paywall-plan-yearly
 - assertNotVisible: "Search restaurants or dishes"
 - openLink: ${'com.fitsy.mobile://restaurant/' + output.seed.id}
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
 # iOS can invalidate AX elements while the redirect replaces its navigator.
 # Retry only the settled observation, never the access-control action.
 - retry:
@@ -97,6 +121,10 @@ tags: [billing, discovery, onboarding, changed-journey]
 - stopApp
 - launchApp
 - openLink: com.fitsy.mobile://search?preview=1
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
 # iOS can invalidate AX elements while the redirect replaces its navigator.
 # Retry only the settled observation, never the access-control action.
 - retry:

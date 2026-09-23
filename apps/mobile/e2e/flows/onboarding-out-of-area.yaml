@@ -23,6 +23,10 @@ tags: [onboarding, auth, changed-journey]
     latitude: 40.7128
     longitude: -74.0060
 - openLink: com.fitsy.mobile://welcome/location-permission
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
 - extendedWaitUntil:
     visible:
       id: location-use-current
@@ -106,6 +110,10 @@ tags: [onboarding, auth, changed-journey]
 - assertNotVisible:
     id: waitlist-join
 - openLink: com.fitsy.mobile://welcome/location-permission
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
 - extendedWaitUntil:
     visible:
       id: location-continue-area
