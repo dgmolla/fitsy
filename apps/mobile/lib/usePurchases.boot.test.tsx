@@ -32,7 +32,7 @@ describe('boot', () => {
   it('keeps plans loaded by Retry when the earlier boot catalog request fails late', async () => {
     const bootOffering = deferred<null>();
     const retryOffering = { identifier: 'retry', availablePackages: [] };
-    mockRc.fetchCurrentOffering.mockReturnValueOnce(bootOffering.promise)
+    mockRc.fetchCurrentOffering.mockReturnValueOnce(bootOffering.promise as never)
       .mockResolvedValueOnce(retryOffering as never);
     const { result } = renderProvider();
     await waitFor(() => expect(mockRc.fetchCurrentOffering).toHaveBeenCalledTimes(1));
@@ -40,6 +40,18 @@ describe('boot', () => {
     expect(result.current.offering).toEqual(retryOffering);
     await act(async () => { bootOffering.resolve(null); });
     expect(result.current.offering).toEqual(retryOffering);
+  });
+  it('accepts a late boot catalog when the newer Retry request failed', async () => {
+    const bootOffering = deferred<{ identifier: string; availablePackages: never[] }>();
+    const plans = { identifier: 'boot', availablePackages: [] };
+    mockRc.fetchCurrentOffering.mockReturnValueOnce(bootOffering.promise as never)
+      .mockResolvedValueOnce(null);
+    const { result } = renderProvider();
+    await waitFor(() => expect(mockRc.fetchCurrentOffering).toHaveBeenCalledTimes(1));
+    await act(async () => { await result.current.refreshOffering(); });
+    expect(result.current.offering).toBeNull();
+    await act(async () => { bootOffering.resolve(plans); });
+    expect(result.current.offering).toEqual(plans);
   });
   it('bounds a stalled session read and resolves a late signed-in session', async () => {
     useFakeTimersKeepingFlush();

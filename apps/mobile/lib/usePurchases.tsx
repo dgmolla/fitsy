@@ -125,6 +125,15 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   // the first render that would carry it in state).
   const customerInfoRef = useRef<CustomerInfo | null>(null);
   const offeringRequestRef = useRef(0);
+  const offeringCommittedRequestRef = useRef(0);
+  const acceptOffering = useCallback((off: PurchasesOffering | null, request: number) => {
+    // A failed retry cannot cancel an older successful catalog read.
+    // Among successful reads, the newest request owns the visible plans.
+    if (off && request > offeringCommittedRequestRef.current) {
+      offeringCommittedRequestRef.current = request;
+      setOffering(off);
+    }
+  }, []);
   const setCustomerInfo = useCallback((info: CustomerInfo | null) => {
     customerInfoRef.current = info;
     setCustomerInfoState(info);
@@ -165,7 +174,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
         if (configured) {
           const offeringRequest = ++offeringRequestRef.current;
           void fetchCurrentOffering().then(off => {
-            if (!cancelled && off && offeringRequest === offeringRequestRef.current) setOffering(off);
+            if (!cancelled) acceptOffering(off, offeringRequest);
           }).catch(() => undefined);
         }
         const rcReady = configured
@@ -221,7 +230,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
       cancelled = true;
       unsubscribe?.();
     };
-  }, [setCustomerInfo, resolveAtBoot, settleAfterBootFailure, syncEntitlement, verdict.entitledRef, auth]);
+  }, [setCustomerInfo, acceptOffering, resolveAtBoot, settleAfterBootFailure, syncEntitlement, verdict.entitledRef, auth]);
 
   const refresh = useCallback(async () => {
     setCustomerInfo(await fetchCustomerInfo());
@@ -232,9 +241,9 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     const off = await fetchCurrentOffering();
     // Keep a previously loaded offering rather than blanking prices on a
     // transient failure.
-    if (off && offeringRequest === offeringRequestRef.current) setOffering(off);
+    acceptOffering(off, offeringRequest);
     return off;
-  }, []);
+  }, [acceptOffering]);
 
   useEffect(() => {
     let current = true;
