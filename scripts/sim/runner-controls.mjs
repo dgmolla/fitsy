@@ -118,8 +118,20 @@ export function summarizeFlowTiming(commands, { anchor = null, video = null, rec
 export function saveFlowOutcomeReceipts(dir, result, summary, failureDetail = null) {
   const priorReason = result.priorReason || null;
   const cleanupError = result.cleanupError || null;
-  writeFileSync(join(dir, 'timing-summary.json'), JSON.stringify({ ...summary, priorReason, cleanupError }, null, 2) + '\n');
+  writeFileSync(join(dir, 'timing-summary.json'), JSON.stringify({ ...summary, priorReason, cleanupError,
+    capturePolicyFailure: result.capturePolicyFailure || null }, null, 2) + '\n');
   if (failureDetail) writeFileSync(join(dir, 'failure.json'), JSON.stringify({ ...failureDetail, priorReason, cleanupError }, null, 2) + '\n');
+}
+export function applyCapturePolicy(result, { verified, error = null }) {
+  if (verified) return result;
+  result.capturePolicyFailure = `No valid scoped XCTest screenshots-only launch receipt${error ? ` (${error})` : ''}. Inspect Maestro driver and capture policy before retry.`;
+  // An earlier command or watchdog failure is the primary diagnosis.
+  // The absent receipt remains explicit evidence, and a successful command cannot pass it.
+  if (result.code === 0 && !result.reason) {
+    result.reason = 'xctest-capture-unverified';
+    result.error = result.capturePolicyFailure;
+  }
+  return result;
 }
 export function saveRecordedFlowReceipts(dir, recorded, commands, { video, failureReason = null, failureDetail = null } = {}) {
   const { result, recorderStartedMs, recorderEndedMs } = recorded;

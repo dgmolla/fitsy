@@ -5,7 +5,7 @@ import { createServer } from 'node:http';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { appendRecordedFlowFailure, archiveFailureEvidence, completeMaestroRun, flowFailureReason, recordFlowOutcome, recordedFlowFailureKey, recordRunFailure, requireMetro, runOwnedMaestro, runRecordedFlow, saveRecordedFlowReceipts, startOwnedRecorder, stopOwnedRecorder, summarizeCommands, summarizeFlowTiming, nearestFailure, matchingFailureKey, needsDiagnosis } from './runner-controls.mjs';
+import { appendRecordedFlowFailure, applyCapturePolicy, archiveFailureEvidence, completeMaestroRun, flowFailureReason, recordFlowOutcome, recordedFlowFailureKey, recordRunFailure, requireMetro, runOwnedMaestro, runRecordedFlow, saveRecordedFlowReceipts, startOwnedRecorder, stopOwnedRecorder, summarizeCommands, summarizeFlowTiming, nearestFailure, matchingFailureKey, needsDiagnosis } from './runner-controls.mjs';
 
 const temp = () => mkdtempSync(join(tmpdir(), 'fitsy-runner-'));
 test('final timeline failure leaves a failed report and retains the triggering error', () => {
@@ -75,6 +75,44 @@ test('development flow executes owned Maestro and assertions without starting a 
     assert.equal(outcome.failureReason, null);
     assert.match(readFileSync(timeline, 'utf8'), /recorder-skipped/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('pre-XCTest Maestro exit retains primary failure and records missing capture proof', async () => {
+  const dir = temp(), timeline = join(dir, 'timeline.jsonl');
+  try {
+    const recorded = await runRecordedFlow({ recordVideo: false, maestroCommand: process.execPath,
+      maestroArgs: ['-e', 'process.exit(1)'], udid: 'fixture', video: join(dir, 'video.mp4'),
+      recorderLog: join(dir, 'recorder.log'), cwd: dir, env: process.env, dir, timeline,
+      flow: 'assertVisible: Ready', diagnostic: async () => {} });
+    assert.equal(recorded.result.code, 1);
+    applyCapturePolicy(recorded.result, { verified: false });
+    const reportFile = join(dir, 'report.json'), report = { result: 'running' };
+    writeFileSync(reportFile, JSON.stringify(report));
+    const outcome = recordFlowOutcome({ dir, recorded, commands: null, videoPath: null, videoReceipt: null,
+      flowName: 'welcome', report, reportFile, timeline, commandReceipt: null,
+      failureDetail: () => ({ capturePolicyFailure: recorded.result.capturePolicyFailure }) });
+    assert.equal(outcome.failureReason, 'maestro-exit');
+    assert.match(JSON.parse(readFileSync(join(dir, 'failure.json'), 'utf8')).capturePolicyFailure, /launch receipt/);
+    assert.match(JSON.parse(readFileSync(join(dir, 'timing-summary.json'), 'utf8')).capturePolicyFailure, /launch receipt/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('capture proof failure precedence preserves command and watchdog failures without allowing a pass', () => {
+  const cases = [
+    [{ code: 1, reason: null, error: 'driver exited' }, 'maestro-exit', 'driver exited'],
+    [{ code: 1, reason: 'inactivity-deadline', error: 'quiet' }, 'inactivity-deadline', 'quiet'],
+    [{ code: 0, reason: 'recorder-failure', error: 'recorder stopped' }, 'recorder-failure', 'recorder stopped'],
+    [{ code: 0, reason: null, error: null }, 'xctest-capture-unverified', null],
+  ];
+  for (const [initial, expected, originalError] of cases) {
+    const result = applyCapturePolicy({ ...initial }, { verified: false, error: 'invalid JSON' });
+    assert.equal(flowFailureReason(result, null, { state: 'skipped' }), expected);
+    assert.match(result.capturePolicyFailure, /invalid JSON/);
+    if (originalError) assert.equal(result.error, originalError);
+  }
+  const verified = applyCapturePolicy({ code: 0, reason: null }, { verified: true });
+  assert.equal(verified.capturePolicyFailure, undefined);
+  assert.equal(verified.reason, null);
 });
 
 test('healthy long command with driver progress outlives the inactivity interval', async () => {

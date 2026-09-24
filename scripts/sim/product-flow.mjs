@@ -9,7 +9,7 @@ import { createRequire } from 'node:module';
 import { root, inputHash, changedPaths, impact, digest, validate, baseline, repoEnv } from '../verify/product-flow.mjs';
 import { backendRevision } from './backend-identity.mjs';
 import { buildProfile, bundleDelegate, fixtureLabel, metroRoute } from './build-profile.mjs';
-import { admitDisk, appendRecordedFlowFailure, archiveFailureEvidence, completeMaestroRun, event, latestMaestroLog, nearestFailure, needsDiagnosis, recordFlowOutcome, recordRunFailure, requireMetro, runRecordedFlow } from './runner-controls.mjs';
+import { admitDisk, appendRecordedFlowFailure, applyCapturePolicy, archiveFailureEvidence, completeMaestroRun, event, latestMaestroLog, nearestFailure, needsDiagnosis, recordFlowOutcome, recordRunFailure, requireMetro, runRecordedFlow } from './runner-controls.mjs';
 import { matchesFinalCandidate, runSelection } from './evidence-mode.mjs';
 const yaml = createRequire(import.meta.url)('js-yaml');
 const out = resolve(root, '.evidence/product-flow');
@@ -289,11 +289,7 @@ async function execute(udid, names, mode) {
       catch (error) { captureError = error.message; }
       const captureVerified = !captureError && captureEvents.length > 0 &&
         captureEvents.every(item => item.udid === udid && item.preferredScreenCaptureFormat === 'screenshots');
-      if (!captureVerified) {
-        if (result.reason) result.priorReason = result.reason;
-        result.reason = 'xctest-capture-unverified';
-        result.error = `No valid scoped XCTest screenshots-only launch receipt${captureError ? ` (${captureError})` : ''}. Inspect Maestro driver and capture policy before retry.`;
-      }
+      applyCapturePolicy(result, { verified: captureVerified, error: captureError });
       event(timeline, { type: 'xctest-capture-check', flow: flow.name, outcome: captureVerified ? 'verified' : 'missing-or-invalid',
         expected: 'owned xcodebuild uses screenshots, never screenRecording', receipt: relative(out, captureReceipt) });
       const commands = files(dir).filter(f => /commands-.*\.json$/.test(f));
@@ -315,7 +311,7 @@ async function execute(udid, names, mode) {
           const networkTiming = log ? [...readFileSync(log, 'utf8').matchAll(/\bHTTP\s+(\d{3})\b[^\n]{0,100}?\b(\d+)\s*ms\b/g)].map(match => ({ status: Number(match[1]), durationMs: Number(match[2]) })) : [];
           return { flow: flow.name, failureReason, exitCode: result.code,
             watchdog: ['inactivity-deadline', 'wall-deadline'].find(reason => reason === (result.priorReason || result.reason)) || null,
-            runnerError: result.error || null,
+            runnerError: result.error || null, capturePolicyFailure: result.capturePolicyFailure || null,
             commandReceipt: commands.length === 1 ? relative(out, commands[0]) : null, commandParseError,
             recorder: { ...recorderResult, file: mode.recordVideo ? relative(out, video) : null },
             failedCommand: failure && { command: failure.command, expected: failure.expected, deadlineMs: failure.deadlineMs, error: failure.error },
