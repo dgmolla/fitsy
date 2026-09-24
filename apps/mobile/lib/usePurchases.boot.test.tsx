@@ -189,6 +189,26 @@ describe('boot', () => {
     jest.useRealTimers();
   });
 
+  it('keeps a Pro listener read that started after an older free boot read', async () => {
+    const identity = deferred<typeof freeInfo>();
+    const listenerRead = deferred<typeof proInfo>();
+    mockRc.identifyPurchasesUser.mockReturnValueOnce(identity.promise);
+    mockRc.fetchCustomerInfo.mockReturnValueOnce(listenerRead.promise);
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    const { result } = renderProvider();
+    await waitFor(() => expect(mockRc.identifyPurchasesUser).toHaveBeenCalledTimes(1));
+    const listener = mockRc.addCustomerInfoListener.mock.calls[0][0];
+    await act(async () => { listener(proInfo); });
+    await waitFor(() => expect(mockRc.fetchCustomerInfo).toHaveBeenCalledTimes(1));
+    await act(async () => { identity.resolve(freeInfo); });
+    await flush();
+    expect(result.current.isPro).toBe(false);
+    await act(async () => { listenerRead.resolve(proInfo); });
+    await flush();
+    expect(result.current.isPro).toBe(true);
+    expect(result.current.entitled).toBe(true);
+  });
+
   it('settles unknown trial eligibility when CustomerInfo is unavailable but plans load', async () => {
     mockRc.identifyPurchasesUser.mockResolvedValueOnce(null as never);
     mockRc.fetchCurrentOffering.mockResolvedValueOnce({ availablePackages: [{ product: { identifier: 'annual' } }] } as never);
