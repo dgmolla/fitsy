@@ -6,7 +6,7 @@ import { supabase } from './supabase';
 import { trackReminderAction } from './analytics';
 import { usePurchases } from './usePurchases';
 import { DEFAULT_REMINDER_PREFERENCES, REMINDER_PREFIX, planReminders, type ReminderPreferences } from './notificationPlan';
-import { readReminderPreferences, readScheduledReminders, replaceReminders, reminderDestination, saveReminderPreferences, subscribeReminderPreferences } from './notificationSchedule';
+import { readReminderPreferences, readScheduledReminders, reconcileReminderOwnership, replaceReminders, reminderDestination, saveReminderPreferences, subscribeReminderPreferences } from './notificationSchedule';
 
 interface ReminderContextValue { userId: string | null; preferences: ReminderPreferences; scheduled: { kind: string; date: string }[]; save: (value: ReminderPreferences) => Promise<void> }
 const ReminderContext = createContext<ReminderContextValue | null>(null);
@@ -44,9 +44,8 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!account.ready || scheduledAccountRef.current === account.id) return;
     scheduledAccountRef.current = account.id;
-    // A new account must not inherit notifications scheduled for the old one,
-    // even if its preference storage is temporarily unavailable.
-    void replaceReminders(null, []).catch(reportFailure);
+    // Keep the resolved account's jobs if its preference read fails at boot.
+    void reconcileReminderOwnership(account.id).catch(reportFailure);
   }, [account.ready, account.id]);
 
   useEffect(() => {

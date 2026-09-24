@@ -2,7 +2,7 @@ import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { planReminders, REMINDER_PREFIX } from './notificationPlan';
-import { readReminderPreferences, readScheduledReminders, saveReminderPreferences, replaceReminders, reminderDestination, REMINDER_CHANNEL } from './notificationSchedule';
+import { readReminderPreferences, readScheduledReminders, saveReminderPreferences, replaceReminders, reconcileReminderOwnership, reminderDestination, REMINDER_CHANNEL } from './notificationSchedule';
 
 jest.mock('@react-native-async-storage/async-storage', () => ({ __esModule: true, default: { getItem: jest.fn(), setItem: jest.fn() } }));
 jest.mock('expo-notifications', () => ({
@@ -94,4 +94,20 @@ test('tap destinations require the current account and a supported reminder kind
   expect(reminderDestination({ userId: 'one', kind: 'trial' }, 'two')).toBeNull();
   expect(reminderDestination({ userId: 'one', kind: 'trial' }, null)).toBeNull();
   expect(reminderDestination({ userId: 'one', url: 'https://untrusted.invalid' }, 'one')).toBeNull();
+});
+
+test('account reconciliation keeps current-account jobs and removes only other owners', async () => {
+  pending.set(`${REMINDER_PREFIX}meal.a`, { identifier: `${REMINDER_PREFIX}meal.a`, content: { data: { userId: 'one', kind: 'meal' } }, trigger: null });
+  pending.set(`${REMINDER_PREFIX}meal.b`, { identifier: `${REMINDER_PREFIX}meal.b`, content: { data: { userId: 'two', kind: 'meal' } }, trigger: null });
+  pending.set('launch-announcement', { identifier: 'launch-announcement', content: {}, trigger: null });
+  sdk.getPresentedNotificationsAsync.mockResolvedValue([
+    { request: { identifier: `${REMINDER_PREFIX}shown.a`, content: { data: { userId: 'one' } } } },
+    { request: { identifier: `${REMINDER_PREFIX}shown.b`, content: { data: { userId: 'two' } } } },
+    { request: { identifier: 'launch-announcement', content: { data: {} } } },
+  ] as Notifications.Notification[]);
+  await reconcileReminderOwnership('one');
+  expect([...pending.keys()].sort()).toEqual([`${REMINDER_PREFIX}meal.a`, 'launch-announcement'].sort());
+  expect(sdk.cancelScheduledNotificationAsync).toHaveBeenCalledWith(`${REMINDER_PREFIX}meal.b`);
+  expect(sdk.cancelScheduledNotificationAsync).not.toHaveBeenCalledWith(`${REMINDER_PREFIX}meal.a`);
+  expect(sdk.dismissNotificationAsync.mock.calls).toEqual([[`${REMINDER_PREFIX}shown.b`]]);
 });

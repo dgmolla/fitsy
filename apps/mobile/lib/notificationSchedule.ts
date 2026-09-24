@@ -68,6 +68,30 @@ export function replaceReminders(userId: string | null | undefined, reminders: P
   return work;
 }
 
+/** At an account boundary, retain jobs for the resolved account while
+ * removing reminders left by another account on this device. */
+export function reconcileReminderOwnership(userId: string | null): Promise<void> {
+  const revision = ++generation;
+  const work = queue.catch(() => undefined).then(async () => {
+    if (Platform.OS === 'web' || revision !== generation) return;
+    const pending = await Notifications.getAllScheduledNotificationsAsync();
+    for (const request of pending) {
+      if (request.identifier.startsWith(REMINDER_PREFIX) && (!userId || request.content.data?.userId !== userId)) {
+        await Notifications.cancelScheduledNotificationAsync(request.identifier);
+      }
+    }
+    const shown = await Notifications.getPresentedNotificationsAsync();
+    for (const notification of shown) {
+      const request = notification.request;
+      if (request.identifier.startsWith(REMINDER_PREFIX) && (!userId || request.content.data?.userId !== userId)) {
+        await Notifications.dismissNotificationAsync(request.identifier);
+      }
+    }
+  });
+  queue = work;
+  return work;
+}
+
 export async function readScheduledReminders(userId: string | null) {
   if (!userId || Platform.OS === 'web') return [];
   return (await Notifications.getAllScheduledNotificationsAsync()).flatMap(request => {

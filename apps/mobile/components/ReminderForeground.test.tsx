@@ -3,7 +3,7 @@ import React from 'react';
 import { AppState, Text } from 'react-native';
 import { act, render, waitFor } from '@testing-library/react-native';
 import { ReminderProvider, useReminders } from '../lib/useReminders';
-import { readReminderPreferences, replaceReminders } from '../lib/notificationSchedule';
+import { readReminderPreferences, reconcileReminderOwnership, replaceReminders } from '../lib/notificationSchedule';
 
 jest.mock('expo-router', () => ({ router: { push: jest.fn() }, usePathname: () => '/notification-settings' }));
 jest.mock('expo-notifications', () => ({
@@ -27,10 +27,19 @@ jest.mock('../lib/notificationSchedule', () => ({
   readReminderPreferences: jest.fn(),
   readScheduledReminders: jest.fn(async () => []),
   replaceReminders: jest.fn(async () => {}),
+  reconcileReminderOwnership: jest.fn(async () => {}),
   subscribeReminderPreferences: () => () => {},
   saveReminderPreferences: jest.fn(),
   reminderDestination: jest.fn(),
 }));
+
+beforeEach(() => {
+  mockAccountId = 'reminder-owner';
+  mockAuthListener = undefined;
+  jest.clearAllMocks();
+  jest.mocked(readReminderPreferences).mockReset();
+});
+afterEach(() => { jest.restoreAllMocks(); });
 
 function SettingsView() {
   const { preferences } = useReminders();
@@ -54,8 +63,8 @@ test('a foreground storage failure keeps enabled meal reminders and their planne
     if (options?.throwOnError) throw new Error('Storage temporarily unavailable');
     return { meals: false, trial: false };
   });
-  act(() => { foreground?.('active'); });
-  await waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+  await act(async () => { foreground?.('active'); });
+  await waitFor(() => expect(read.mock.calls.filter(([id]) => id === 'reminder-owner')).toHaveLength(2));
   await act(async () => { await Promise.resolve(); });
   expect(screen.getByText('Meal reminders on')).toBeTruthy();
   expect(replace.mock.calls.some(([id, jobs]) => id === 'reminder-owner' && jobs.length === 0)).toBe(false);
@@ -75,8 +84,24 @@ test('switching accounts clears prior meal reminders when the new account storag
     if (options?.throwOnError) throw new Error('Storage temporarily unavailable');
     return { meals: false, trial: false };
   });
-  act(() => { mockAuthListener?.('SIGNED_IN', { user: { id: 'next-owner' } }); });
+  await act(async () => { mockAuthListener?.('SIGNED_IN', { user: { id: 'next-owner' } }); });
   await waitFor(() => expect(read).toHaveBeenCalledWith('next-owner', { throwOnError: true }));
   expect(screen.getByText('Meal reminders off')).toBeTruthy();
-  expect(replace).toHaveBeenCalledWith(null, []);
+  expect(reconcileReminderOwnership).toHaveBeenCalledWith('next-owner');
+  expect(replace).not.toHaveBeenCalledWith(null, []);
+});
+
+test('cold launch read failure preserves the current account scheduled jobs', async () => {
+  mockAccountId = 'reminder-owner';
+  const read = jest.mocked(readReminderPreferences);
+  const replace = jest.mocked(replaceReminders);
+  read.mockImplementation(async (id, options) => {
+    if (id === 'reminder-owner' && options?.throwOnError) throw new Error('Storage temporarily unavailable');
+    return { meals: false, trial: false };
+  });
+  const screen = render(<ReminderProvider><SettingsView /></ReminderProvider>);
+  await waitFor(() => expect(read).toHaveBeenCalledWith('reminder-owner', { throwOnError: true }));
+  expect(screen.getByText('Meal reminders off')).toBeTruthy();
+  expect(reconcileReminderOwnership).toHaveBeenCalledWith('reminder-owner');
+  expect(replace).not.toHaveBeenCalledWith(null, []);
 });
