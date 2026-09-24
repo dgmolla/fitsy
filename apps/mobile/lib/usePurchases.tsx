@@ -41,6 +41,7 @@ import {
   fetchIntroEligibility,
   fetchCustomerInfo,
   hasLapsedEntitlement,
+  ensurePurchasesUser,
   identifyPurchasesUser,
   isProActive,
   presentPaywall as rcPresentPaywall,
@@ -58,6 +59,7 @@ export { BOOT_VERDICT_CAP_MS, STORE_GRACE_MS } from './useEntitlementVerdict';
 // search screen's mismatch handler finishes the job.
 export const POST_PURCHASE_SYNC_CAP_MS = 4000;
 export const INTRO_ELIGIBILITY_CAP_MS = 5000;
+export const PURCHASE_IDENTITY_CAP_MS = 5000;
 
 export interface PurchasesContextValue {
   /** `entitled !== null`: the verdict has settled on this launch. */
@@ -251,10 +253,22 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
 
   const purchase = useCallback(
     async (pkg: PurchasesPackage, source: string): Promise<boolean> => {
-      const { outcome, customerInfo: info } = await rcPurchasePackage(pkg);
+      const { data } = await supabase.auth.getSession();
+      const userId = data.session?.user.id;
+      const identified = userId
+        ? await withinMs(ensurePurchasesUser(userId), PURCHASE_IDENTITY_CAP_MS)
+        : false;
+      if (!userId || !identified) {
+        Alert.alert('Purchase not available', 'We could not confirm your account with the store. Please try again.');
+        return false;
+      }
+      const isCurrentUser = async () => (await supabase.auth.getSession()).data.session?.user.id === userId;
+      if (!(await isCurrentUser())) return false;
+      const { outcome, customerInfo: info } = await rcPurchasePackage(pkg, userId, isCurrentUser);
       trackPaywallResult({ source, outcome });
       if (outcome === 'error') Alert.alert('Purchase not completed', 'Please try again. You can also restore an existing subscription.');
       if (!info) return false;
+      if (!(await isCurrentUser())) return false;
       setCustomerInfo(info);
       return settleAfterStore(info, 'purchase');
     },

@@ -55,6 +55,7 @@ const selected = { action: 'menu' as const, restaurantId: 'varilla', restaurantN
 let restaurantMounts = 0;
 let notificationMounts = 0;
 let nativeListener: ((info: CustomerInfo) => void) | undefined;
+let nativeUserId: string | null = null;
 function Restaurant() {
   const params = useLocalSearchParams();
   useEffect(() => { restaurantMounts++; }, []);
@@ -77,10 +78,15 @@ beforeEach(async () => {
   restaurantMounts = 0;
   notificationMounts = 0;
   nativeListener = undefined;
+  nativeUserId = null;
   mockCapture.mockClear();
   (Purchases.purchasePackage as jest.Mock).mockReset().mockResolvedValue({ customerInfo: subscribed });
   jest.spyOn(Purchases, 'getCustomerInfo').mockResolvedValue(noSubscription);
-  jest.spyOn(Purchases, 'logIn').mockResolvedValue({ customerInfo: noSubscription, created: false });
+  jest.spyOn(Purchases, 'logIn').mockImplementation(async userId => {
+    nativeUserId = userId;
+    return { customerInfo: noSubscription, created: false };
+  });
+  jest.spyOn(Purchases, 'getAppUserID').mockImplementation(async () => nativeUserId ?? '$RCAnonymousID:fixture');
   jest.spyOn(Purchases, 'getOfferings').mockResolvedValue({ current: offering, all: { default: offering } });
   jest.spyOn(Purchases, 'restorePurchases').mockResolvedValue(subscribed);
   jest.spyOn(Purchases, 'addCustomerInfoUpdateListener').mockImplementation(listener => { nativeListener = listener; });
@@ -108,6 +114,55 @@ test.each(['cancelled', 'no active entitlement'])('%s stays on the real paywall 
   expect(await AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY)).toBeNull();
   expect(await getPaywallIntent()).toEqual(selected);
   expect(notificationMounts).toBe(0);
+});
+
+test('a signed-in buyer whose RevenueCat identity fails cannot enter native checkout', async () => {
+  jest.spyOn(console, 'warn').mockImplementation(() => {});
+  (Purchases.logIn as jest.Mock).mockRejectedValue(new Error('identity offline'));
+  const screen = await openPayment();
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  expect(Purchases.purchasePackage).not.toHaveBeenCalled();
+  expect(screen.getPathname()).toBe('/welcome/payment');
+  expect(await AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY)).toBeNull();
+});
+
+test('an already identified buyer reaches native checkout', async () => {
+  const screen = await openPayment();
+  await waitFor(() => expect(nativeUserId).toBe('buyer'));
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  expect(Purchases.getAppUserID).toHaveBeenCalled();
+  expect(Purchases.purchasePackage).toHaveBeenCalledWith(annual);
+});
+
+test('a checkout identity timeout never starts a late purchase and a retry can succeed', async () => {
+  const screen = await openPayment();
+  nativeUserId = null;
+  let resolveIdentity!: (value: { customerInfo: CustomerInfo; created: boolean }) => void;
+  (Purchases.logIn as jest.Mock).mockImplementationOnce(() => new Promise(resolve => { resolveIdentity = resolve; }));
+  jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick', 'queueMicrotask'] });
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  await waitFor(() => expect(resolveIdentity).toBeDefined());
+  await act(async () => { jest.advanceTimersByTime(5000); });
+  expect(Purchases.purchasePackage).not.toHaveBeenCalled();
+  await act(async () => { nativeUserId = 'buyer'; resolveIdentity({ customerInfo: noSubscription, created: false }); });
+  expect(Purchases.purchasePackage).not.toHaveBeenCalled();
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  expect(Purchases.purchasePackage).toHaveBeenCalledWith(annual);
+  jest.useRealTimers();
+});
+
+test.each(['account change', 'sign-out'])('%s during pending checkout identity prevents the old purchase', async change => {
+  const screen = await openPayment();
+  nativeUserId = null;
+  let resolveIdentity!: (value: { customerInfo: CustomerInfo; created: boolean }) => void;
+  (Purchases.logIn as jest.Mock).mockImplementationOnce(() => new Promise(resolve => { resolveIdentity = resolve; }));
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  await waitFor(() => expect(resolveIdentity).toBeDefined());
+  mockAuthSession = change === 'sign-out' ? null : { access_token: 'second-token', user: { id: 'second-buyer' } };
+  await act(async () => { mockAuthListener?.(change === 'sign-out' ? 'SIGNED_OUT' : 'SIGNED_IN', mockAuthSession); });
+  await act(async () => { nativeUserId = 'buyer'; resolveIdentity({ customerInfo: noSubscription, created: false }); });
+  expect(Purchases.purchasePackage).not.toHaveBeenCalled();
+  expect(await AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY)).toBeNull();
 });
 
 test('a late current-user Pro identity rechecks the server and opens search from the real paywall', async () => {

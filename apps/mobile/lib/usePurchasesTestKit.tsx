@@ -30,6 +30,7 @@ function mockLazy<T extends object>(get: () => T): T {
 export const mockRc = {
   configurePurchases: jest.fn(() => true),
   identifyPurchasesUser: jest.fn(async () => freeInfo),
+  ensurePurchasesUser: jest.fn(async () => true),
   fetchCustomerInfo: jest.fn(async () => freeInfo),
   fetchCurrentOffering: jest.fn(async () => null),
   // Exercise the real new seam; do not add another mock of our own code.
@@ -145,6 +146,7 @@ export function setupPurchasesMocks(): void {
     mockAuth.session = { user: { id: 'u1' } };
     mockAuth.listener = undefined;
     mockRc.identifyPurchasesUser.mockResolvedValue(freeInfo);
+    mockRc.ensurePurchasesUser.mockResolvedValue(true);
     mockRc.fetchCustomerInfo.mockResolvedValue(freeInfo);
     mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: false, status: null, expiresAt: null });
     mockApi.syncSubscription.mockResolvedValue({ active: false, synced: true });
