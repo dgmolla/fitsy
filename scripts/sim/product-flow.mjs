@@ -282,7 +282,7 @@ async function execute(udid, names) {
           nearestAX: failure?.hierarchy ? 'raw failed command metadata.error.hierarchyRoot' : null,
           networkTiming: networkTiming.length ? networkTiming : null, networkTimingAbsence: networkTiming.length ? null : 'No structured network status/duration in Maestro log' };
         save(join(dir, 'failure.json'), detail);
-        const key = matchingFailureKey(failure) || JSON.stringify([flow.name, result.reason || result.code, summary.observation]);
+        const key = matchingFailureKey(failure, flow.name) || JSON.stringify([flow.name, result.reason || result.code, summary.observation]);
         history.push({ at: new Date().toISOString(), key, flow: flow.name, evidence: relative(root, dir), head: run('git', ['rev-parse', 'HEAD']) });
         save(failuresFile, history);
         report.result = 'fail'; report.failedFlow = flow.name; save(join(out, 'report.json'), report);

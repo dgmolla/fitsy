@@ -3,6 +3,7 @@ import { appendFileSync, existsSync, readdirSync, statSync, statfsSync, openSync
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
+import { createHash } from 'node:crypto';
 
 const GiB = 1024 ** 3;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -35,6 +36,7 @@ function expected(command) {
   const value = Object.values(command || {})[0] || {};
   if (value.commands) return value.commands.map(item => expected(item)).filter(Boolean).join('; ') || null;
   const condition = value.condition || value.visible || value;
+  if (value.selector) return value.selector.idRegex || value.selector.textRegex || JSON.stringify(value.selector);
   if (condition.visible) return condition.visible.idRegex || condition.visible.textRegex || JSON.stringify(condition.visible);
   if (condition.notVisible) return `not visible: ${JSON.stringify(condition.notVisible)}`;
   return value.timeout ? commandName(command) : null;
@@ -93,10 +95,21 @@ export function summarizeFlowTiming(commands, { anchor = null, video = null, rec
 export function nearestFailure(commands) {
   const failed = commands.filter(c => c.metadata?.status === 'FAILED').sort((a, b) => (b.metadata?.timestamp || 0) - (a.metadata?.timestamp || 0))[0];
   return failed ? { command: commandName(failed.command), expected: expected(failed.command),
+    selectorIdentity: failureSelectorIdentity(failed.command),
     deadlineMs: Number(Object.values(failed.command)[0]?.timeout) || null, error: failed.metadata?.error?.message || null,
     hierarchy: failed.metadata?.error?.hierarchyRoot || null } : null;
 }
-export function matchingFailureKey(failure) { return failure && JSON.stringify([failure.command, failure.expected, failure.error]); }
+function failureSelectorIdentity(command) {
+  const value = Object.values(command || {})[0] || {};
+  const selector = value.selector ?? value.condition ?? value.point;
+  if (selector == null) return 'selector:absent';
+  const normalize = item => Array.isArray(item) ? item.map(normalize) : item && typeof item === 'object'
+    ? Object.fromEntries(Object.entries(item).filter(([key]) => key !== 'optional').sort(([a], [b]) => a.localeCompare(b)).map(([key, part]) => [key, normalize(part)])) : item;
+  return `selector:sha256:${createHash('sha256').update(JSON.stringify(normalize(selector))).digest('hex')}`;
+}
+export function matchingFailureKey(failure, flowName) {
+  return failure && JSON.stringify([flowName || 'flow:absent', failure.command, failure.selectorIdentity || 'selector:absent', failure.error]);
+}
 export function needsDiagnosis(history) {
   const last = history.slice(-2);
   return last.length === 2 && last[0].key === last[1].key && !last[1].diagnosis;

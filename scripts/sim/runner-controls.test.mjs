@@ -5,7 +5,7 @@ import { createServer } from 'node:http';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { archiveFailureEvidence, flowFailureReason, requireMetro, runOwnedMaestro, startOwnedRecorder, stopOwnedRecorder, summarizeCommands, summarizeFlowTiming, nearestFailure, needsDiagnosis } from './runner-controls.mjs';
+import { archiveFailureEvidence, flowFailureReason, requireMetro, runOwnedMaestro, startOwnedRecorder, stopOwnedRecorder, summarizeCommands, summarizeFlowTiming, nearestFailure, matchingFailureKey, needsDiagnosis } from './runner-controls.mjs';
 
 const temp = () => mkdtempSync(join(tmpdir(), 'fitsy-runner-'));
 test('missing Metro fails readiness before the selector timeout', async () => {
@@ -342,6 +342,27 @@ test('two matching failures require a diagnosis checkpoint before another run', 
   assert.equal(needsDiagnosis([{ key: 'a' }, { key: 'a' }]), true);
   assert.equal(needsDiagnosis([{ key: 'a' }, { key: 'b' }]), false);
   assert.equal(needsDiagnosis([{ key: 'a' }, { key: 'a', diagnosis: { file: 'review.json' } }]), false);
+});
+
+test('failure identity distinguishes flow and tap target while ignoring receipt timestamps', () => {
+  const failure = (idRegex, timestamp, selector = { idRegex, optional: false }) => nearestFailure([{
+    command: { tapOnElement: { selector } },
+    metadata: { status: 'FAILED', timestamp, duration: 30000, error: { message: 'Element not found' } },
+  }]);
+  const first = matchingFailureKey(failure('welcome-start', 1000), 'cold-start-welcome');
+  assert.equal(failure('welcome-start', 1000).expected, 'welcome-start');
+  const same = matchingFailureKey(failure('welcome-start', 9000, { optional: false, idRegex: 'welcome-start' }), 'cold-start-welcome');
+  const otherFlow = matchingFailureKey(failure('welcome-start', 1000), 'signin-options');
+  const otherTarget = matchingFailureKey(failure('signin-email', 1000), 'cold-start-welcome');
+  const noSelector = matchingFailureKey(failure(null, 1000, null), 'cold-start-welcome');
+  assert.equal(first, same);
+  assert.notEqual(first, otherFlow);
+  assert.notEqual(first, otherTarget);
+  assert.notEqual(first, noSelector);
+  assert.match(noSelector, /selector:absent/);
+  assert.equal(needsDiagnosis([{ key: first }, { key: same }]), true);
+  assert.equal(needsDiagnosis([{ key: first }, { key: otherFlow }]), false);
+  assert.equal(needsDiagnosis([{ key: first }, { key: otherTarget }]), false);
 });
 
 test('archived failure history retains each attempt evidence path', () => {
