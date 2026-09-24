@@ -36,6 +36,7 @@ jest.mock('@supabase/supabase-js', () => {
   process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'unit-test-anon-key';
   return { createClient: () => ({ auth: {
     getSession: async () => ({ data: { session: mockSession } }),
+    signOut: async () => { mockSession = null; return { error: null }; },
     setSession: async () => { mockSession = { access_token: 'test-token', user: { id: 'buyer' } }; return { data: { session: mockSession } }; },
     onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
     startAutoRefresh() {}, stopAutoRefresh() {},
@@ -150,6 +151,25 @@ it('does not register account A trial token after account B signs in during toke
   expect(global.fetch).not.toHaveBeenCalledWith(
     expect.stringContaining('/api/user/push-token'), expect.anything(),
   );
+});
+
+it('does not sign out account B for account A push registration returning 401 late', async () => {
+  installEligibleTrialOffer();
+  mockSession = { access_token: 'token-a', user: { id: 'buyer-a' } };
+  (ExpoNotifications.requestPermissionsAsync as jest.Mock).mockResolvedValueOnce({ status: 'granted' });
+  jest.spyOn(NotificationHelpers, 'getExpoPushTokenAsync').mockResolvedValueOnce('ExponentPushToken[buyer-a]');
+  const pushResponse = deferred<Response>();
+  global.fetch = jest.fn((url: RequestInfo | URL) => String(url).endsWith('/api/user/push-token')
+    ? pushResponse.promise : Promise.resolve(response({ active: false })));
+  const screen = renderJourney('/welcome/trial-reminder');
+  await act(async () => { fireEvent.press(await screen.findByTestId('trial-reminder-allow')); });
+  await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
+    expect.stringContaining('/api/user/push-token'), expect.objectContaining({ method: 'POST' }),
+  ));
+  mockSession = { access_token: 'token-b', user: { id: 'buyer-b' } };
+  await act(async () => { pushResponse.resolve({ ok: false, status: 401 } as Response); });
+  expect(mockSession?.user.id).toBe('buyer-b');
+  expect(screen.getPathname()).toBe('/welcome/payment');
 });
 
 function installEligibleTrialOffer() {
