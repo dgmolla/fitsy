@@ -179,8 +179,8 @@ export function archiveFailureEvidence(history, from, to) {
 export function flowFailureReason(result, commands, recorder, flowName = null) {
   if (recorder.endedBeforeStop) return 'recorder-ended-early';
   if (result.code !== 0 || result.reason) return result.reason || 'maestro-exit';
-  if (!Array.isArray(commands) || commands.length === 0) return 'missing-or-empty-command-receipt';
   if (recorder.state !== 'stopped' || recorder.code !== 0 || !recorder.bytes) return 'recorder-failure';
+  if (!Array.isArray(commands) || commands.length === 0) return 'missing-or-empty-command-receipt';
   if (flowName) {
     const applied = commands.find(c => c.command?.applyConfigurationCommand)?.command.applyConfigurationCommand.config;
     if (applied?.appId !== 'com.fitsy.mobile' || (applied.name && applied.name !== flowName)) return 'wrong-app-or-flow-receipt';

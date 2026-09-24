@@ -716,6 +716,9 @@ test('empty commands and abnormal recorder exit fail before walkthrough', () => 
   assert.equal(flowFailureReason(result, command, { state: 'stopped', code: 0, bytes: 5, endedBeforeStop: true }), 'recorder-ended-early');
   assert.equal(flowFailureReason({ code: null, reason: 'inactivity-deadline' }, [], { endedBeforeStop: true }), 'recorder-ended-early');
   assert.equal(flowFailureReason(result, [], { state: 'stopped', code: 0, bytes: 5 }), 'missing-or-empty-command-receipt');
+  assert.equal(flowFailureReason(result, [], { state: 'stopped', code: 1, bytes: 5 }), 'recorder-failure');
+  assert.equal(flowFailureReason(result, null, { state: 'stopped', code: 1, bytes: 5 }), 'recorder-failure');
+  assert.equal(flowFailureReason(result, [], { state: 'stopped', code: 0, bytes: 0 }), 'recorder-failure');
   assert.equal(flowFailureReason(result, command, { state: 'stopped', code: 1, bytes: 5 }), 'recorder-failure');
   assert.equal(flowFailureReason(result, command, { state: 'stopped', code: 0, bytes: 5 }), null);
 });
@@ -847,6 +850,7 @@ test('production failure history distinguishes recording, command, flow, and rec
       recorderA: make({ cause: 'recorder-failure', receipt: 'partial' }),
       recorderB: make({ cause: 'recorder-failure', receipt: 'partial', selector: 'next-step' }),
       recorderComplete: make({ cause: 'recorder-failure', receipt: 'complete' }),
+      recorderAbsent: make({ cause: 'recorder-failure', receipt: 'absent' }),
       unplayable: make({ cause: 'unplayable-video', receipt: 'complete' }),
       commandA: make({ cause: 'command-failure', receipt: 'failed-command' }),
       commandB: make({ cause: 'command-failure', receipt: 'failed-command', selector: 'next-step' }),
@@ -857,10 +861,12 @@ test('production failure history distinguishes recording, command, flow, and rec
       ['earlyAbsent', 'earlyPartialA', true], ['earlyPartialA', 'earlyPartialB', true],
       ['earlyPartialA', 'earlyComplete', true], ['earlyPartialA', 'earlyOtherFlow', false],
       ['recorderA', 'recorderB', true], ['recorderA', 'recorderComplete', true],
+      ['recorderAbsent', 'recorderA', true], ['recorderAbsent', 'recorderComplete', true],
       ['earlyPartialA', 'recorderA', false], ['recorderA', 'unplayable', false],
       ['unplayable', 'unplayable', true], ['recorderA', 'commandA', false],
       ['commandA', 'commandB', false], ['commandA', 'commandA', true],
       ['maestroA', 'commandA', false], ['earlyAbsent', 'missing', false],
+      ['recorderAbsent', 'missing', false],
     ];
     for (const [firstName, secondName, expectedCheckpoint] of pairs) {
       const history = [];
@@ -873,6 +879,70 @@ test('production failure history distinguishes recording, command, flow, and rec
       writeFileSync(historyFile, JSON.stringify(history));
       assert.equal(needsDiagnosis(JSON.parse(readFileSync(historyFile, 'utf8'))), expectedCheckpoint,
         `${firstName} then ${secondName}`);
+    }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('production outcomes preserve recorder precedence across command receipt and Maestro states', () => {
+  const root = temp();
+  try {
+    const config = { command: { applyConfigurationCommand: { config: { appId: 'com.fitsy.mobile', name: 'welcome' } } },
+      metadata: { status: 'COMPLETED' } };
+    const assertion = { command: { assertConditionCommand: { condition: { visible: { textRegex: 'Ready' } } } },
+      metadata: { status: 'COMPLETED' } };
+    const failed = { command: { tapOnElement: { selector: { idRegex: 'welcome-start' } } },
+      metadata: { status: 'FAILED', error: { message: 'Element not found' } } };
+    const receipts = { absent: null, empty: [], partial: [config, failed], complete: [config, assertion] };
+    const recorders = {
+      healthy: { state: 'stopped', code: 0, bytes: 928 },
+      exit: { state: 'stopped', code: 1, bytes: 928 },
+      state: { state: 'running', code: 0, bytes: 928 },
+      bytes: { state: 'stopped', code: 0, bytes: 0 },
+    };
+    const cases = new Map();
+    let sequence = 0;
+    for (const [receiptName, commands] of Object.entries(receipts)) {
+      for (const [recorderName, recorderResult] of Object.entries(recorders)) {
+        for (const maestroFailed of [false, true]) {
+          const name = `${receiptName}-${recorderName}-${maestroFailed ? 'maestro-failed' : 'maestro-passed'}`;
+          const dir = join(root, String(++sequence)); mkdirSync(dir);
+          const video = join(dir, 'flow-untrimmed.mp4');
+          writeFileSync(video, readFileSync(new URL('../verify/fixtures/valid.mp4', import.meta.url)));
+          const commandReceipt = commands === null ? null : join(dir, 'commands.json');
+          if (commandReceipt) writeFileSync(commandReceipt, JSON.stringify(commands));
+          const reportFile = join(dir, 'report.json'), timeline = join(dir, 'runner-timeline.jsonl');
+          const report = { result: 'running', flows: [] }; writeFileSync(reportFile, JSON.stringify(report));
+          const result = { code: maestroFailed ? 1 : 0, reason: null, elapsedMs: 1000 };
+          const outcome = recordFlowOutcome({ dir, recorded: { result, recorderResult,
+            recorderStartedMs: Date.now() - 1000, recorderEndedMs: Date.now() }, commands,
+            videoPath: video, videoReceipt: `${sequence}/flow-untrimmed.mp4`, flowName: 'welcome',
+            report, reportFile, timeline, commandReceipt,
+            failureDetail: failureReason => ({ flow: 'welcome', failureReason }) });
+          const expectedReason = maestroFailed ? 'maestro-exit' : recorderName !== 'healthy' ? 'recorder-failure'
+            : receiptName === 'absent' || receiptName === 'empty' ? 'missing-or-empty-command-receipt'
+              : receiptName === 'partial' ? 'missing-or-failed-required-assertions' : null;
+          assert.equal(outcome.failureReason, expectedReason, name);
+          assert.deepEqual(commandReceipt ? JSON.parse(readFileSync(commandReceipt, 'utf8')) : null, commands, name);
+          if (expectedReason) {
+            assert.equal(JSON.parse(readFileSync(join(dir, 'failure.json'), 'utf8')).failureReason, expectedReason, name);
+            const history = [];
+            appendRecordedFlowFailure(history, commands ? nearestFailure(commands) : null, 'welcome', outcome, result,
+              { evidence: dir, head: 'fixture-head' });
+            cases.set(name, history[0]);
+          }
+        }
+      }
+    }
+    const recorderAnchor = cases.get('absent-exit-maestro-passed');
+    for (const receiptName of Object.keys(receipts)) {
+      for (const recorderName of ['exit', 'state', 'bytes']) {
+        const compared = cases.get(`${receiptName}-${recorderName}-maestro-passed`);
+        assert.equal(needsDiagnosis([recorderAnchor, compared]), true, `${receiptName}-${recorderName}`);
+      }
+    }
+    for (const different of ['absent-healthy-maestro-passed', 'partial-healthy-maestro-passed',
+      'absent-exit-maestro-failed']) {
+      assert.equal(needsDiagnosis([recorderAnchor, cases.get(different)]), false, different);
     }
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
