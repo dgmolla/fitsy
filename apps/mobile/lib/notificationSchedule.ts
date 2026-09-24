@@ -41,10 +41,12 @@ export function replaceReminders(userId: string | null | undefined, reminders: P
     if (Platform.OS === 'web' || revision !== generation) return;
     const pending = await Notifications.getAllScheduledNotificationsAsync();
     for (const request of pending) {
+      if (revision !== generation) return;
       if (request.identifier.startsWith(REMINDER_PREFIX)) await Notifications.cancelScheduledNotificationAsync(request.identifier);
     }
     const shown = await Notifications.getPresentedNotificationsAsync();
     for (const notification of shown) {
+      if (revision !== generation) return;
       const request = notification.request;
       if (request.identifier.startsWith(REMINDER_PREFIX) &&
         (!userId || request.content.data?.userId !== userId || !reminders.some(r => r.kind === request.content.data?.kind))) {
@@ -76,12 +78,14 @@ export function reconcileReminderOwnership(userId: string | null): Promise<void>
     if (Platform.OS === 'web' || revision !== generation) return;
     const pending = await Notifications.getAllScheduledNotificationsAsync();
     for (const request of pending) {
+      if (revision !== generation) return;
       if (request.identifier.startsWith(REMINDER_PREFIX) && (!userId || request.content.data?.userId !== userId)) {
         await Notifications.cancelScheduledNotificationAsync(request.identifier);
       }
     }
     const shown = await Notifications.getPresentedNotificationsAsync();
     for (const notification of shown) {
+      if (revision !== generation) return;
       const request = notification.request;
       if (request.identifier.startsWith(REMINDER_PREFIX) && (!userId || request.content.data?.userId !== userId)) {
         await Notifications.dismissNotificationAsync(request.identifier);

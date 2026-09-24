@@ -111,3 +111,43 @@ test('account reconciliation keeps current-account jobs and removes only other o
   expect(sdk.cancelScheduledNotificationAsync).not.toHaveBeenCalledWith(`${REMINDER_PREFIX}meal.a`);
   expect(sdk.dismissNotificationAsync.mock.calls).toEqual([[`${REMINDER_PREFIX}shown.b`]]);
 });
+
+test('an obsolete account query cannot cancel the new account jobs', async () => {
+  const newJob = `${REMINDER_PREFIX}meal.two`;
+  pending.set(newJob, { identifier: newJob, content: { data: { userId: 'two', kind: 'meal' } }, trigger: null });
+  let started!: () => void;
+  let release!: () => void;
+  const queried = new Promise<void>(resolve => { started = resolve; });
+  sdk.getAllScheduledNotificationsAsync.mockImplementationOnce(async () => {
+    started();
+    await new Promise<void>(resolve => { release = resolve; });
+    return [...pending.values()] as Notifications.NotificationRequest[];
+  });
+  const prior = reconcileReminderOwnership('one');
+  await queried;
+  const current = reconcileReminderOwnership('two');
+  release();
+  await Promise.all([prior, current]);
+  expect(pending.has(newJob)).toBe(true);
+  expect(sdk.cancelScheduledNotificationAsync).not.toHaveBeenCalledWith(newJob);
+});
+
+test('an obsolete replacement query cannot cancel the new account jobs', async () => {
+  const newJob = `${REMINDER_PREFIX}meal.two`;
+  pending.set(newJob, { identifier: newJob, content: { data: { userId: 'two', kind: 'meal' } }, trigger: null });
+  let started!: () => void;
+  let release!: () => void;
+  const queried = new Promise<void>(resolve => { started = resolve; });
+  sdk.getAllScheduledNotificationsAsync.mockImplementationOnce(async () => {
+    started();
+    await new Promise<void>(resolve => { release = resolve; });
+    return [...pending.values()] as Notifications.NotificationRequest[];
+  });
+  const prior = replaceReminders('one', plan());
+  await queried;
+  const current = reconcileReminderOwnership('two');
+  release();
+  await Promise.all([prior, current]);
+  expect(pending.has(newJob)).toBe(true);
+  expect(sdk.cancelScheduledNotificationAsync).not.toHaveBeenCalledWith(newJob);
+});
