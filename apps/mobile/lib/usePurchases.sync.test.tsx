@@ -27,6 +27,22 @@ setupPurchasesMocks();
 type SyncResult = { active: boolean; synced: boolean };
 
 describe('syncEntitlement', () => {
+  it('does not let an older listener read replace Pro after checkout completes', async () => {
+    const { result } = renderProvider();
+    await waitFor(() => expect(result.current.entitled).toBe(false));
+    const listener = mockRc.addCustomerInfoListener.mock.calls[0][0];
+    const oldRead = deferred<typeof freeInfo>();
+    mockRc.fetchCustomerInfo.mockReturnValueOnce(oldRead.promise);
+    await act(async () => { listener(freeInfo); });
+    await waitFor(() => expect(mockRc.fetchCustomerInfo).toHaveBeenCalled());
+    mockRc.purchasePackage.mockResolvedValue({ outcome: 'purchased', customerInfo: proInfo });
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    await act(async () => { expect(await result.current.purchase({} as never, 'test')).toBe(true); });
+    expect(result.current.isPro).toBe(true);
+    await act(async () => { oldRead.resolve(freeInfo); });
+    await flush();
+    expect(result.current.isPro).toBe(true);
+  });
   it('rechecks the server gate when the current account receives Pro on another device', async () => {
     const { result } = renderProvider();
     await waitFor(() => expect(result.current.entitled).toBe(false));

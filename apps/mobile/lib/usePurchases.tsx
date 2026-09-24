@@ -223,6 +223,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     if (!configuredRef.current) return;
     try {
       return addCustomerInfoListener(() => {
+        const infoGeneration = customerInfoGenerationRef.current;
         void (async () => {
           const { data } = await supabase.auth.getSession();
           const currentUserId = data.session?.user.id;
@@ -232,8 +233,10 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
           const fresh = await fetchCustomerInfo();
           if (!fresh) return;
           const latest = await supabase.auth.getSession();
-          if (latest.data.session?.user.id === currentUserId &&
-            await currentPurchasesUserId() === currentUserId) {
+          const nativeUserId = await currentPurchasesUserId();
+          if (customerInfoGenerationRef.current === infoGeneration &&
+            latest.data.session?.user.id === currentUserId &&
+            nativeUserId === currentUserId) {
             const proChanged = isProActive(fresh) !== isProActive(customerInfoRef.current);
             setCustomerInfo(fresh);
             if (proChanged) void syncEntitlement('mismatch');
