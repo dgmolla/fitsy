@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Publish an exact-head local verdict; no simulator or credential executes in CI.
-import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync, mkdirSync, statSync, createReadStream } from 'node:fs';
+import { execFileSync, spawn } from 'node:child_process';
+import { readFileSync, writeFileSync, mkdirSync, statSync, lstatSync, createReadStream } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,14 +14,38 @@ async function fileDigest(file) {
   for await (const chunk of createReadStream(file)) hash.update(chunk);
   return hash.digest('hex');
 }
+async function archivedDigest(archive, file) {
+  return new Promise((resolveDigest, reject) => {
+    const hash = createHash('sha256');
+    const child = spawn('tar', ['-xOf', archive, file], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let error = '';
+    child.stdout.on('data', chunk => hash.update(chunk));
+    child.stderr.on('data', chunk => { error += chunk.toString().slice(0, 1024); });
+    child.on('error', reject);
+    child.on('close', code => code === 0 ? resolveDigest(hash.digest('hex')) : reject(new Error(`Cannot extract ${file} from evidence archive: ${error}`)));
+  });
+}
 const repo = 'dgmolla/fitsy', context = 'product-flow/local';
-export function createPublicationArchive(report, categories, dir, archive, execute = run) {
+export async function createPublicationArchive(report, categories, dir, archive, execute = run) {
   const artifacts = publicationArtifacts(report, categories);
   // Only verified relative artifact paths; no build, environment or debug logs.
-  for (const f of artifacts) assert(!f.startsWith('-') && !f.startsWith('/') && !f.split('/').includes('..'), 'Invalid archive path');
+  assert(lstatSync(dir).isDirectory(), 'Evidence directory must be a real directory');
+  for (const f of artifacts) {
+    const parts = f.split('/');
+    assert(!f.startsWith('-') && !f.startsWith('/') && parts.every(part => part && part !== '..' && part !== '.'), 'Invalid archive path');
+    for (let index = 0; index < parts.length; index++) {
+      const entry = lstatSync(resolve(dir, ...parts.slice(0, index + 1)));
+      assert(index === parts.length - 1 ? entry.isFile() : entry.isDirectory(),
+        `Published artifact must be a regular file with real parent directories: ${f}`);
+    }
+  }
   execute('tar', ['-czf', archive, '-C', dir, ...artifacts]);
   const archiveEntries = execute('tar', ['-tzf', archive]).split('\n');
   assert(archiveEntries.length === artifacts.length && artifacts.every(file => archiveEntries.includes(file)), 'Published archive omits verified evidence');
+  for (const file of artifacts) {
+    assert(await archivedDigest(archive, file) === await fileDigest(resolve(dir, file)),
+      `Published archive has incomplete or changed bytes: ${file}`);
+  }
 }
 export async function publishProductFlow(prNumber, {
   execute = run,
@@ -48,16 +72,19 @@ export async function publishProductFlow(prNumber, {
   execute('git', ['fetch', 'origin', 'main']);
   execute('git', ['merge-base', '--is-ancestor', 'origin/main', 'HEAD']);
   const plan = resolvePlan();
+  const evidenceRequired = plan.required || process.argv.includes('--include-baseline');
   let target = pr.url;
-  if (plan.required || process.argv.includes('--include-baseline')) {
+  if (evidenceRequired) {
     const dir = evidenceDirectory, reportFile = resolve(dir, 'report.json');
     const report = JSON.parse(readFileSync(reportFile, 'utf8'));
+    assert(report.evidenceMode === 'final-candidate' && report.flows?.every(flow => flow.video && flow.videoHash),
+      'Final candidate video proof is required; rerun with --mode=final-candidate');
     validateEvidence(report, plan, sourceHash(), dir);
     execute(process.execPath, ['--env-file=apps/mobile/.env.development.local', 'scripts/sim/product-flow.mjs', 'check']);
     const tag = `product-flow-${head}`;
     mkdirSync(publicationDirectory, { recursive: true });
     const archive = resolve(publicationDirectory, 'local-evidence.tar.gz');
-    createPublicationArchive(report, plan.categories, dir, archive, execute);
+    await createPublicationArchive(report, plan.categories, dir, archive, execute);
     const archiveSize = statSync(archive).size;
     assert(archiveSize > 0 && archiveSize < 2 * 1024 ** 3, 'Evidence archive exceeds the GitHub release asset limit of under 2 GiB');
     const archiveDigest = `sha256:${await fileDigest(archive)}`;
@@ -77,8 +104,8 @@ export async function publishProductFlow(prNumber, {
   }
   const latest = JSON.parse(gh(['pr', 'view', prNumber, '--repo', repo, '--json', 'headRefOid']));
   assert(latest.headRefOid === head, 'PR head changed during publication');
-  status('success', plan.required ? 'Local Maestro and changed-journey evidence verified' : 'Not applicable: no mobile-facing product changes', target);
-  return { status: 'pass', context, head, applicability: plan.required ? 'required' : 'not_applicable', url: target };
+  status('success', evidenceRequired ? 'Local Maestro and required video evidence verified' : 'Not applicable: no mobile-facing product changes', target);
+  return { status: 'pass', context, head, applicability: evidenceRequired ? 'required' : 'not_applicable', url: target };
   } catch (e) {
   if (head) { try { status('failure', 'Local evidence failed; inspect publisher output'); } catch { /* preserve original failure */ } }
   throw e;

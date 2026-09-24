@@ -3,7 +3,8 @@ export function publicationArtifacts(report, categories) {
   for (const flow of report.flows) {
     artifacts.add(flow.commands);
     artifacts.add(flow.screenshot);
-    artifacts.add(flow.video);
+    artifacts.add(flow.captureReceipt);
+    if (flow.video) artifacts.add(flow.video);
   }
   for (const category of categories) artifacts.add(report.exploration.find(item => item.category === category).trace);
   return [...artifacts];

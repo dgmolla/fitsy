@@ -30,26 +30,55 @@ function fixture() {
     writeFileSync(join(dir, `${name}.png`), png);
     const video = readFileSync(resolve(__dirname, 'fixtures/valid.mp4'));
     writeFileSync(join(dir, `${name}.mp4`), video);
-    return { name, source, sourceHash: sha(yaml), commands: `${name}.json`, sha256: sha(data), screenshot: `${name}.png`, screenshotHash: sha(png), video: `${name}.mp4`, videoHash: sha(video) };
+    const capture = JSON.stringify({ udid: 'test-device', preferredScreenCaptureFormat: 'screenshots' }) + '\n';
+    writeFileSync(join(dir, `${name}-capture.jsonl`), capture);
+    return { name, source, sourceHash: sha(yaml), commands: `${name}.json`, sha256: sha(data), screenshot: `${name}.png`, screenshotHash: sha(png),
+      captureReceipt: `${name}-capture.jsonl`, captureReceiptHash: sha(capture), video: `${name}.mp4`, videoHash: sha(video) };
   });
   const trace = ['mobile_click_on_screen_at_coordinates', 'mobile_list_elements_on_screen'].map(name => JSON.stringify({
     at: new Date().toISOString(), command: { name }, result: { content: [{type: 'text', text: 'Paywall visible'}] },
   })).join('\n');
   writeFileSync(join(dir, 'trace.json'), trace);
   return {
-    version: 1, startedAt: new Date(Date.now() - 10_000).toISOString(), inputHash: 'current-inputs', nativeSourceHash: 'current-inputs', result: 'pass', finishedAt: new Date().toISOString(),
+    version: 1, evidenceMode: 'final-candidate', startedAt: new Date(Date.now() - 10_000).toISOString(), inputHash: 'current-inputs', nativeSourceHash: 'current-inputs', result: 'pass', finishedAt: new Date().toISOString(),
     appHash: 'app', bundleHash: 'bundle', backendRevision: 'dev-revision', backend: 'https://dev.fitsy.org', simulator: 'test-device',
     os: 'iOS 26.4', storeMode: 'test-store', fixture: 'run-owned-user', maestroVersion: '2.3.0', flows,
     exploration: [{ category: 'billing', result: 'pass', expected: 'cancel returns to paywall', observed: 'paywall remains usable', branches: ['primary', 'recovery'], trace: 'trace.json', sha256: sha(trace) }],
   };
 }
-function validate(report: ReturnType<typeof fixture>) {
+function validate(report: ReturnType<typeof fixture>, mode = 'final-candidate') {
   writeFileSync(join(dir, 'report.json'), JSON.stringify(report));
-  return evaluate(`gate.validate(JSON.parse((await import('node:fs')).readFileSync(${JSON.stringify(join(dir, 'report.json'))}, 'utf8')), {categories:['billing']}, 'current-inputs', ${JSON.stringify(dir)}, Date.now(), ${JSON.stringify(dir)}, 'current-inputs')`);
+  return evaluate(`gate.validate(JSON.parse((await import('node:fs')).readFileSync(${JSON.stringify(join(dir, 'report.json'))}, 'utf8')), {categories:['billing']}, 'current-inputs', ${JSON.stringify(dir)}, Date.now(), ${JSON.stringify(dir)}, 'current-inputs', ${JSON.stringify(mode)})`);
 }
 
 test('accepts identified baseline and billing outcomes with matching artifacts', () => {
   const result = validate(fixture()); expect(result.status).toBe(0); expect(JSON.parse(result.stdout).status).toBe('pass');
+});
+test('development proof retains assertions but never satisfies final video publication', () => {
+  const report = fixture();
+  report.evidenceMode = 'development';
+  for (const flow of report.flows) {
+    delete (flow as { video?: string }).video;
+    delete (flow as { videoHash?: string }).videoHash;
+  }
+  expect(validate(report, 'development').status).toBe(0);
+  const publication = validate(report);
+  expect(publication.status).toBe(1);
+  expect(publication.stderr).toContain('Expected final-candidate evidence');
+});
+test('explicit requested-video proof remains separate from final candidate publication', () => {
+  const report = fixture(); report.evidenceMode = 'requested-video';
+  expect(validate(report, 'requested-video').status).toBe(0);
+  expect(validate(report).stderr).toContain('Expected final-candidate evidence');
+});
+test('capture receipt must prove screenshots-only XCTest for the selected simulator', () => {
+  const report = fixture(), flow = report.flows[0]!;
+  const changed = JSON.stringify({ udid: report.simulator, preferredScreenCaptureFormat: 'screenRecording' }) + '\n';
+  writeFileSync(join(dir, flow.captureReceipt), changed);
+  flow.captureReceiptHash = sha(changed);
+  const result = validate(report);
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain('missing screenshots-only XCTest launch proof');
 });
 test.each(['failed', 'skipped', 'empty', 'one'])("rejects %s required assertions even if the summary says pass", kind => {
   const report = fixture(), flow = report.flows[2]!;

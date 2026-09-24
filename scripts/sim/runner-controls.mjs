@@ -177,9 +177,9 @@ export function archiveFailureEvidence(history, from, to) {
     ? `${to}${entry.evidence.slice(from.length)}` : entry.evidence }));
 }
 export function flowFailureReason(result, commands, recorder, flowName = null) {
-  if (recorder.endedBeforeStop) return 'recorder-ended-early';
+  if (recorder?.endedBeforeStop) return 'recorder-ended-early';
   if (result.code !== 0 || result.reason) return result.reason || 'maestro-exit';
-  if (recorder.state !== 'stopped' || recorder.code !== 0 || !recorder.bytes) return 'recorder-failure';
+  if (recorder?.state !== 'skipped' && (recorder?.state !== 'stopped' || recorder.code !== 0 || !recorder.bytes)) return 'recorder-failure';
   if (!Array.isArray(commands) || commands.length === 0) return 'missing-or-empty-command-receipt';
   if (flowName) {
     const applied = commands.find(c => c.command?.applyConfigurationCommand)?.command.applyConfigurationCommand.config;
@@ -195,7 +195,7 @@ export function recordFlowOutcome({ dir, recorded, commands, videoPath, videoRec
   report, reportFile, timeline, commandReceipt, failureDetail }) {
   const { result, recorderResult } = recorded;
   const failureReason = flowFailureReason(result, commands, recorderResult, flowName)
-    || (isPlayableVideo(videoPath) ? null : 'unplayable-video');
+    || (recorderResult?.state === 'skipped' || isPlayableVideo(videoPath) ? null : 'unplayable-video');
   if (!failureReason) {
     saveRecordedFlowReceipts(dir, recorded, commands, { video: videoReceipt });
     return { failureReason: null };
@@ -509,7 +509,7 @@ export async function runOwnedMaestro(command, args, { cwd, env, dir, timeline, 
 
 export async function runRecordedFlow({ recorderCommand = 'xcrun', recorderArgs = null, recorderSpawnImpl,
   maestroCommand, maestroArgs, maestroSpawnImpl, udid, video, recorderLog, cwd, env, dir, timeline, flow, diagnostic,
-  quietMs, wallMs, pollMs, terminationGraceMs }) {
+  quietMs, wallMs, pollMs, terminationGraceMs, recordVideo = true }) {
   const interruption = new AbortController();
   const onInt = () => interruption.abort(new Error('SIGINT received during owned native flow'));
   const onTerm = () => interruption.abort(new Error('SIGTERM received during owned native flow'));
@@ -529,10 +529,11 @@ export async function runRecordedFlow({ recorderCommand = 'xcrun', recorderArgs 
     interruption.abort(error);
   };
   try {
-    recorder = await startOwnedRecorder(udid, video, recorderLog,
+    if (recordVideo) recorder = await startOwnedRecorder(udid, video, recorderLog,
       { command: recorderCommand, args: recorderArgs, spawnImpl: recorderSpawnImpl,
         onStart: owned => { recorderPid = owned.pid; recorderStartedMs = Date.now(); event(timeline, { type: 'recorder-start', pid: owned.pid, video }); },
         onComplete: (exit, owned) => { if (!recorderStopRequested) earlyExit(exit, 'completion-before-stop', owned); } });
+    else event(timeline, { type: 'recorder-skipped', reason: 'development evidence mode' });
     if (interruption.signal.aborted) throw interruption.signal.reason;
     result = await runOwnedMaestro(maestroCommand, maestroArgs, { cwd, env, dir, timeline, flow, diagnostic,
       signal: interruption.signal, quietMs, wallMs, pollMs, terminationGraceMs, spawnImpl: maestroSpawnImpl });
@@ -548,11 +549,12 @@ export async function runRecordedFlow({ recorderCommand = 'xcrun', recorderArgs 
   } finally {
     try {
       recorderStopRequested = true;
-      if (!recorderResult) {
+      if (!recorderResult && recordVideo) {
         try { recorderResult = await stopOwnedRecorder(recorder); }
         catch (error) { recorderResult = { state: 'stop-error', bytes: null, error: error.message, cleanupError: error.cleanupError || null }; }
       }
-      if (recorderResult.endedBeforeStop) {
+      if (!recordVideo) recorderResult = { state: 'skipped', bytes: 0 };
+      if (recorderResult?.endedBeforeStop) {
         earlyExit(recorderResult, 'keeper-stop-ack', recorder);
         if (result.reason !== 'recorder-ended-early') {
           if (result.reason) result.priorReason = result.reason;

@@ -96,8 +96,10 @@ export function isPlayableVideo(file) {
   }
 }
 
-export function validate(report, plan, hash, directory, now = Date.now(), cwd = root, nativeHash = inputHash(cwd, true)) {
+export function validate(report, plan, hash, directory, now = Date.now(), cwd = root, nativeHash = inputHash(cwd, true), mode = 'final-candidate') {
   insist(report.version === 1 && report.inputHash === hash, 'missing or stale source/test identity');
+  insist(['development', 'final-candidate', 'requested-video'].includes(mode) && report.evidenceMode === mode,
+    `Expected ${mode} evidence; development or requested-video proof cannot satisfy final publication`);
   const time = Date.parse(report.finishedAt);
   insist(Number.isFinite(time) && time <= now && now - time <= 24 * 3600_000, 'evidence expired or invalid timestamp');
   insist(report.result === 'pass', 'product flow did not pass');
@@ -129,11 +131,19 @@ export function validate(report, plan, hash, directory, now = Date.now(), cwd = 
     insist(commands.every(c => c.metadata?.status === 'COMPLETED' || Object.values(c.command || {}).some(v => v?.optional === true)), `incomplete required command: ${flow.name}`);
     const screen = artifact(flow.screenshot, directory);
     insist(digest(screen) === flow.screenshotHash && screen.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex')), `missing/changed/non-PNG screenshot: ${flow.name}`);
-    let video;
-    try { video = artifact(flow.video, directory); }
-    catch { throw new Error(`missing/changed/empty video: ${flow.name}`); }
-    insist(video.length > 0 && digest(video) === flow.videoHash, `missing/changed/empty video: ${flow.name}`);
-    insist(isPlayableVideo(artifactPath(flow.video, directory)), `unplayable video: ${flow.name}`);
+    const capture = artifact(flow.captureReceipt, directory);
+    insist(digest(capture) === flow.captureReceiptHash, `changed XCTest capture receipt: ${flow.name}`);
+    const captures = capture.toString().trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
+    insist(captures.length > 0 && captures.every(item => item.udid === report.simulator && item.preferredScreenCaptureFormat === 'screenshots'),
+      `missing screenshots-only XCTest launch proof: ${flow.name}`);
+    if (mode === 'development') insist(!flow.video && !flow.videoHash, `Development run unexpectedly claims video: ${flow.name}`);
+    else {
+      let video;
+      try { video = artifact(flow.video, directory); }
+      catch { throw new Error(`missing/changed/empty video: ${flow.name}`); }
+      insist(video.length > 0 && digest(video) === flow.videoHash, `missing/changed/empty video: ${flow.name}`);
+      insist(isPlayableVideo(artifactPath(flow.video, directory)), `unplayable video: ${flow.name}`);
+    }
     if (!baseline.includes(flow.name) && assertions.length >= 2) {
       for (const tag of config.tags || []) covered.add(tag);
     }

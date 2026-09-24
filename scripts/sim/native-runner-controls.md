@@ -3,14 +3,21 @@
 Use the build, run and finish sequence in [shipping.md](../../docs/engineering/devops/shipping.md).
 Set `FITSY_SIM_OWNER` and pass the owned simulator UDID.
 The runner checks source, app and public configuration hashes, simulator state, installed app, disk headroom and the owned Metro process before starting each Maestro flow.
-Install `ffprobe` and `ffmpeg` before a native run; the runner checks for them before Maestro and rejects a zero-duration video or one whose first video frame cannot decode, with a failure receipt after recording.
+Development and review `run` invocations default to `--mode=development`, which executes the same Maestro assertions and screenshots without starting the explicit recorder.
+Use `--mode=final-candidate` once the PR candidate is stable to produce the complete video required for publication.
+Repeating that run reuses a passing, unexpired report only when the current source, app, backend, simulator, fixture and selected flow receipts still validate.
+Use `--mode=requested-video` only for an explicit video request; that report is diagnostic and cannot pass the final candidate publication gate.
+Install `ffprobe` and `ffmpeg` before a video run; the runner checks for them before Maestro and rejects a zero-duration video or one whose first video frame cannot decode, with a failure receipt after recording.
 The validation decodes at most one frame with a 15-second limit and retains the complete original video.
 It refuses a busy Metro port and never stops another worker's server.
 The build and run phases enforce an 8 GiB free-space floor; the operational phase admission also checks the larger observed-draw requirement.
 If admission fails, clear only proven task-owned disposable data at an idle boundary and retry.
 
 Each run writes `.evidence/product-flow/runner-timeline.jsonl` with wall and monotonic runner boundaries.
-Each flow retains its original Maestro command JSON, untrimmed `flow-untrimmed.mp4`, screenshots, recorder log and a derived `timing-summary.json`.
+Each flow retains its original Maestro command JSON, screenshots, an XCTest capture policy receipt and a derived `timing-summary.json`.
+Video modes also retain the complete untrimmed `flow-untrimmed.mp4` and recorder log.
+The runner scopes a local `xcodebuild` override to its owned Maestro process, changes only that process's temporary XCTest configuration from `screenRecording` to `screenshots`, and fails when no launch receipt proves the override.
+This prevents Maestro's implicit XCTest video from silently replacing the disabled explicit recorder.
 The summary lists command condition, declared deadline, outcome and actual retry attempt only when exposed by Maestro.
 Command monotonic timestamps are estimates anchored to the runner clock; Maestro supplies wall timestamps and durations.
 An uncovered command interval is unobserved time, not measured app or recorder idle.
@@ -39,7 +46,7 @@ Inspect the recorder log and preserved partial video, repair the recording failu
 The runner waits for command and descendant exit separately from keeper exit; a normal command exit with surviving same-group descendants is a failure and is cleaned up.
 An unexpected keeper exit fails with an ownership-loss diagnostic and no further group signal.
 Children that create their own process group or session are outside this scoped cleanup guarantee.
-If a command fails, inspect `failure.json`, `failure-screen.png`, the original command JSON, Maestro log and untrimmed video.
+If a command fails, inspect `failure.json`, `failure-screen.png`, the original command JSON, Maestro log and any video produced by the selected mode.
 The failed command hierarchy remains in the raw JSON when Maestro exposes it; the failure summary records its absence otherwise.
 Network timing is reported only as redacted HTTP status and duration pairs found in the log, with an explicit absence when none exist.
 
@@ -51,5 +58,7 @@ Do not use a diagnosis file as a substitute for an actual repair or native reche
 Adopt a new runner commit only when the current simulator owner has finished its active native phase and released the claim.
 Record the exact commit and rebuild when the build recipe, mobile source or public configuration identity changes.
 Runner and test changes invalidate evidence bound to a prior PR head, so generate a fresh report and publish `product-flow/local` for the exact PR head when the shipping plan requires product evidence.
+The publisher rejects development and requested-video reports when final proof is required.
+It rejects symlinked artifacts and parent directories, then compares each archived file's extracted bytes with the validated source, including every complete flow video.
 An existing worker has not adopted these controls until its own runner timeline and source-bound receipt show the new commit.
 Repeat identity includes flow, command kind, and normalized direct or nested targets; target and error text are hashed in derived history while original command receipts remain available for diagnosis.

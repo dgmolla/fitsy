@@ -4,12 +4,13 @@ import { execFileSync, spawn } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, rmSync, existsSync, openSync, closeSync, renameSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { createHash } from 'node:crypto';
-import { resolve, relative, join } from 'node:path';
+import { resolve, relative, join, delimiter } from 'node:path';
 import { createRequire } from 'node:module';
 import { root, inputHash, changedPaths, impact, digest, validate, baseline, repoEnv } from '../verify/product-flow.mjs';
 import { backendRevision } from './backend-identity.mjs';
 import { buildProfile, bundleDelegate, fixtureLabel, metroRoute } from './build-profile.mjs';
 import { admitDisk, appendRecordedFlowFailure, archiveFailureEvidence, completeMaestroRun, event, latestMaestroLog, nearestFailure, needsDiagnosis, recordFlowOutcome, recordRunFailure, requireMetro, runRecordedFlow } from './runner-controls.mjs';
+import { matchesFinalCandidate, runSelection } from './evidence-mode.mjs';
 const yaml = createRequire(import.meta.url)('js-yaml');
 const out = resolve(root, '.evidence/product-flow');
 const buildDir = resolve(root, '.evidence/product-build');
@@ -184,7 +185,7 @@ async function build(udid, testStore) {
     console.log('Built identified simulator app. Next: run <UDID> [flow names].');
   } finally { release(); }
 }
-async function execute(udid, names) {
+async function execute(udid, names, mode) {
   const r = receipt(), identity = device(udid), server = backend();
   const fixture = fixtureLabel(process.env.FITSY_FIXTURE, process.env.FITSY_SIM_RESET_KEYCHAIN === udid);
   const hash = inputHash(), plan = impact(changedPaths(process.env.FITSY_DIFF_BASE));
@@ -197,10 +198,25 @@ async function execute(udid, names) {
     return { name, source, sourceHash: digest(bytes), tags: yaml.load(bytes.toString().split(/^---\s*$/m)[0]).tags || [] };
   });
   for (const c of plan.categories) assert(flowSources.some(f => !baseline.includes(f.name) && f.tags.includes(c)), `Add/select a deterministic scenario tagged ${c}`);
+  const existingReport = join(out, 'report.json');
+  if (mode.publishable && !process.env.FITSY_SIM_RESET_KEYCHAIN && existsSync(existingReport)) {
+    const previous = read(existingReport);
+    if (matchesFinalCandidate(previous, { udid, appHash: r.appHash, configHash: r.configHash,
+      backendDeployment: server.backendDeployment, fixture, flows: flowSources })) {
+      try {
+        validate(previous, plan, hash, out, Date.now(), root, inputHash(root, true), mode.name);
+        await checkBundle(previous);
+        console.log('Reusing valid final-candidate evidence for this source, app, backend, simulator and flow selection.');
+        return;
+      } catch (error) { console.log(`Existing final-candidate evidence cannot be reused: ${error.message}`); }
+    }
+  }
   mkdirSync(resumeDir, { recursive: true });
   const admission = admitDisk(root, 'Native run');
-  try { run('ffprobe', ['-version'], { timeout: 5000 }); run('ffmpeg', ['-version'], { timeout: 5000 }); }
-  catch { throw new Error('ffprobe and ffmpeg are required to validate recorded product-flow video before running Maestro'); }
+  if (mode.recordVideo) {
+    try { run('ffprobe', ['-version'], { timeout: 5000 }); run('ffmpeg', ['-version'], { timeout: 5000 }); }
+    catch { throw new Error('ffprobe and ffmpeg are required to validate recorded product-flow video before running Maestro'); }
+  }
   const history = existsSync(failuresFile) ? read(failuresFile) : [];
   const previous = history.slice(-2);
   if (needsDiagnosis(history)) {
@@ -225,10 +241,10 @@ async function execute(udid, names) {
     }
     mkdirSync(out, { recursive: true });
     const timeline = join(out, 'runner-timeline.jsonl');
-    event(timeline, { type: 'run-start', simulator: udid, inputHash: hash, buildHash: r.appHash, admission });
+    event(timeline, { type: 'run-start', simulator: udid, inputHash: hash, buildHash: r.appHash, admission, evidenceMode: mode.name });
     const { app, ...buildIdentity } = r;
     const report = { version: 1, ...buildIdentity, ...identity, ...server, inputHash: hash, result: 'running', startedAt: new Date().toISOString(),
-      fixture, keychainReset: false, maestroVersion: run(process.env.MAESTRO_BIN || 'maestro', ['--version']), flows: [], exploration: [] };
+      fixture, keychainReset: false, evidenceMode: mode.name, maestroVersion: run(process.env.MAESTRO_BIN || 'maestro', ['--version']), flows: [], exploration: [] };
     save(join(out, 'report.json'), report);
     if (process.env.FITSY_SIM_RESET_KEYCHAIN) {
       assert(process.env.FITSY_SIM_RESET_KEYCHAIN === udid, 'Keychain reset must explicitly name the selected disposable simulator');
@@ -258,11 +274,28 @@ async function execute(udid, names) {
           ax: 'unavailable until Maestro writes a failed command hierarchy', networkTiming: 'unavailable' });
       };
       const video = join(dir, 'flow-untrimmed.mp4');
+      const captureReceipt = join(dir, 'xctest-capture-policy.jsonl');
+      writeFileSync(captureReceipt, '');
       const recorded = await runRecordedFlow({
         maestroCommand: process.env.MAESTRO_BIN || 'maestro',
         maestroArgs: ['test', '--udid', udid, join(root, flow.source), '--format', 'junit', '--output', join(dir, 'junit.xml'), '--debug-output', dir, '--test-output-dir', dir],
-        udid, video, recorderLog: join(dir, 'recorder.log'), cwd: root, env: repoEnv(), dir, timeline, flow: flowBytes, diagnostic });
+        udid, video, recorderLog: join(dir, 'recorder.log'), cwd: root,
+        env: { ...repoEnv(), PATH: `${join(root, 'scripts/sim')}${delimiter}${process.env.PATH || ''}`,
+          FITSY_XCTEST_CAPTURE_RECEIPT: captureReceipt, FITSY_XCTEST_SIM_UDID: udid },
+        dir, timeline, flow: flowBytes, diagnostic, recordVideo: mode.recordVideo });
       const { result, recorderResult } = recorded;
+      let captureEvents = [], captureError = null;
+      try { captureEvents = readFileSync(captureReceipt, 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line)); }
+      catch (error) { captureError = error.message; }
+      const captureVerified = !captureError && captureEvents.length > 0 &&
+        captureEvents.every(item => item.udid === udid && item.preferredScreenCaptureFormat === 'screenshots');
+      if (!captureVerified) {
+        if (result.reason) result.priorReason = result.reason;
+        result.reason = 'xctest-capture-unverified';
+        result.error = `No valid scoped XCTest screenshots-only launch receipt${captureError ? ` (${captureError})` : ''}. Inspect Maestro driver and capture policy before retry.`;
+      }
+      event(timeline, { type: 'xctest-capture-check', flow: flow.name, outcome: captureVerified ? 'verified' : 'missing-or-invalid',
+        expected: 'owned xcodebuild uses screenshots, never screenRecording', receipt: relative(out, captureReceipt) });
       const commands = files(dir).filter(f => /commands-.*\.json$/.test(f));
       let parsed = null, commandParseError = null;
       if (commands.length === 1) {
@@ -270,7 +303,8 @@ async function execute(udid, names) {
         catch (error) { commandParseError = error.message; }
       }
       const failure = Array.isArray(parsed) ? nearestFailure(parsed) : null;
-      const outcome = recordFlowOutcome({ dir, recorded, commands: parsed, videoPath: video, videoReceipt: relative(out, video),
+      const outcome = recordFlowOutcome({ dir, recorded, commands: parsed, videoPath: mode.recordVideo ? video : null,
+        videoReceipt: mode.recordVideo ? relative(out, video) : null,
         flowName: flow.name, report, reportFile: join(out, 'report.json'), timeline,
         commandReceipt: commands.length === 1 ? relative(out, commands[0]) : null,
         failureDetail: failureReason => {
@@ -283,7 +317,7 @@ async function execute(udid, names) {
             watchdog: ['inactivity-deadline', 'wall-deadline'].find(reason => reason === (result.priorReason || result.reason)) || null,
             runnerError: result.error || null,
             commandReceipt: commands.length === 1 ? relative(out, commands[0]) : null, commandParseError,
-            recorder: { ...recorderResult, file: relative(out, video) },
+            recorder: { ...recorderResult, file: mode.recordVideo ? relative(out, video) : null },
             failedCommand: failure && { command: failure.command, expected: failure.expected, deadlineMs: failure.deadlineMs, error: failure.error },
             nearestScreenshot: existsSync(screenshot) ? relative(out, screenshot) : null,
             nearestAX: failure?.hierarchy ? 'raw failed command metadata.error.hierarchyRoot' : null,
@@ -298,7 +332,10 @@ async function execute(udid, names) {
       assert(commands.length === 1, `Expected exactly one command report: ${flow.name}`);
       const screenshot = join(dir, 'outcome.png');
       run('xcrun', ['simctl', 'io', udid, 'screenshot', screenshot]);
-      report.flows.push({ ...flow, commands: relative(out, commands[0]), sha256: digest(readFileSync(commands[0])), screenshot: relative(out, screenshot), screenshotHash: digest(readFileSync(screenshot)), video: relative(out, video), videoHash: digest(readFileSync(video)) });
+      report.flows.push({ ...flow, commands: relative(out, commands[0]), sha256: digest(readFileSync(commands[0])),
+        screenshot: relative(out, screenshot), screenshotHash: digest(readFileSync(screenshot)),
+        captureReceipt: relative(out, captureReceipt), captureReceiptHash: digest(readFileSync(captureReceipt)),
+        ...(mode.recordVideo ? { video: relative(out, video), videoHash: digest(readFileSync(video)) } : {}) });
       save(join(out, 'report.json'), report);
       event(timeline, { type: 'flow-end', flow: flow.name, outcome: 'pass', elapsedMs: result.elapsedMs, commandReceipt: relative(out, commands[0]) });
     }
@@ -327,7 +364,8 @@ async function finish(walkthrough) {
     o.sha256 = digest(readFileSync(join(out, o.trace)));
   }
   report.result = 'pass'; report.finishedAt = new Date().toISOString();
-  const result = validate(report, impact(changedPaths(process.env.FITSY_DIFF_BASE)), inputHash(), out);
+  const result = validate(report, impact(changedPaths(process.env.FITSY_DIFF_BASE)), inputHash(), out,
+    Date.now(), root, inputHash(root, true), report.evidenceMode);
   save(join(out, 'report.json'), report); console.log(JSON.stringify(result));
 }
 async function check() {
@@ -347,9 +385,9 @@ try {
     assert(args.length === 1 || (args.length === 2 && args[1] === '--test-store'), 'build UDID [--test-store]');
     await build(args[0], args[1] === '--test-store');
   }
-  else if (command === 'run') await execute(args[0], args.slice(1));
+  else if (command === 'run') { const selected = runSelection(args); await execute(selected.udid, selected.names, selected.mode); }
   else if (command === 'finish') await finish(args[0]);
   else if (command === 'check') await check();
   else if (command === 'stop-metro') await stopMetro();
-  else throw new Error('Usage: node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs build UDID | run UDID [flow names] | finish [walkthrough.json]');
+  else throw new Error('Usage: node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs build UDID | run UDID [flow names] [--mode=development|final-candidate|requested-video] | finish [walkthrough.json]');
 } catch (e) { console.error(e.message); process.exitCode = 1; }

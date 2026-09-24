@@ -56,6 +56,27 @@ test('missing Metro fails readiness before the selector timeout', async () => {
   assert.ok(Date.now() - start < 2000);
 });
 
+test('development flow executes owned Maestro and assertions without starting a recorder', async () => {
+  const dir = temp(), timeline = join(dir, 'timeline.jsonl'), video = join(dir, 'video.mp4');
+  try {
+    const recorded = await runRecordedFlow({ recordVideo: false,
+      maestroCommand: process.execPath, maestroArgs: ['-e', "require('fs').writeFileSync(process.argv[1], 'assertions completed')", join(dir, 'commands.txt')],
+      udid: 'fixture', video, recorderLog: join(dir, 'recorder.log'), cwd: dir, env: process.env, dir, timeline,
+      flow: 'assertVisible: Ready', diagnostic: async () => {} });
+    assert.equal(recorded.result.code, 0);
+    assert.equal(recorded.recorderResult.state, 'skipped');
+    assert.equal(existsSync(video), false);
+    const commands = [{ command: { applyConfigurationCommand: { config: { appId: 'com.fitsy.mobile', name: 'welcome' } } }, metadata: { status: 'COMPLETED' } },
+      { command: { assertConditionCommand: { condition: { visible: { textRegex: 'Ready' } } } }, metadata: { status: 'COMPLETED' } }];
+    const reportFile = join(dir, 'report.json'), report = { result: 'running' };
+    writeFileSync(reportFile, JSON.stringify(report));
+    const outcome = recordFlowOutcome({ dir, recorded, commands, videoPath: null, videoReceipt: null,
+      flowName: 'welcome', report, reportFile, timeline, commandReceipt: 'commands.json', failureDetail: () => {} });
+    assert.equal(outcome.failureReason, null);
+    assert.match(readFileSync(timeline, 'utf8'), /recorder-skipped/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('healthy long command with driver progress outlives the inactivity interval', async () => {
   const dir = temp();
   try {
