@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -67,6 +67,32 @@ test('watchdog reaps a TERM-resistant descendant after Maestro parent exits', as
   }
 });
 
+test('unexpected keeper loss fails with diagnostics and never signals an ambiguous group', async () => {
+  const dir = temp(), timeline = join(dir, 'events.jsonl');
+  const unrelated = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+  let keeperPid = null, commandPid = null, diagnostics = 0;
+  try {
+    const running = runOwnedMaestro(process.execPath, ['-e', 'setInterval(() => {}, 1000)'],
+      { cwd: dir, env: process.env, dir, timeline, flow: '', diagnostic: async () => { diagnostics++; },
+        quietMs: 60000, wallMs: 60000, pollMs: 20 });
+    const deadline = Date.now() + 3000;
+    while (!existsSync(timeline) && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 20));
+    assert.ok(existsSync(timeline));
+    const start = JSON.parse(readFileSync(timeline, 'utf8').trim().split('\n')[0]);
+    keeperPid = start.pid; commandPid = start.commandPid;
+    process.kill(keeperPid, 'SIGKILL');
+    const result = await running;
+    assert.equal(result.reason, 'keeper-ownership-lost');
+    assert.equal(diagnostics, 1);
+    assert.doesNotThrow(() => process.kill(commandPid, 0));
+    assert.doesNotThrow(() => process.kill(unrelated.pid, 0));
+  } finally {
+    if (commandPid) { try { process.kill(commandPid, 'SIGKILL'); } catch { /* fixture cleanup */ } }
+    if (keeperPid) { try { process.kill(keeperPid, 'SIGKILL'); } catch { /* fixture cleanup */ } }
+    unrelated.kill('SIGTERM'); rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('recorder stops with its flow and leaves unrelated processes alive', async () => {
   const dir = temp();
   const unrelated = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
@@ -80,6 +106,15 @@ test('recorder stops with its flow and leaves unrelated processes alive', async 
     assert.equal(result.bytes, 5);
     assert.doesNotThrow(() => process.kill(unrelated.pid, 0));
   } finally { unrelated.kill('SIGTERM'); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('recorder command startup failure is actionable and closes its keeper', async () => {
+  const dir = temp();
+  try {
+    await assert.rejects(startOwnedRecorder('test-device', join(dir, 'video.mp4'), join(dir, 'recorder.log'),
+      { command: join(dir, 'missing-recorder') }), /command did not start.*ENOENT/);
+    assert.match(readFileSync(join(dir, 'recorder.log'), 'utf8'), /^$/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('recorder reaps its stubborn descendant when leader exits on SIGINT', async () => {
@@ -116,6 +151,28 @@ test('recorder stop accepts an already exited owned group', async () => {
     assert.equal(result.bytes, 5);
     assert.throws(() => process.kill(recorder.pid, 0), { code: 'ESRCH' });
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('recorder reaps a descendant created after startup when its parent exits before stop', async () => {
+  const dir = temp(), pidFile = join(dir, 'late-descendant.pid');
+  let descendantPid = null;
+  try {
+    const stubborn = "process.on('SIGINT',()=>{});process.on('SIGTERM',()=>{});setInterval(()=>{},1000)";
+    const script = `const fs=require('fs'),cp=require('child_process');setTimeout(()=>{const child=cp.spawn(process.execPath,['-e',${JSON.stringify(stubborn)}],{stdio:'ignore'});fs.writeFileSync(process.argv[2],String(child.pid))},320);setTimeout(()=>{fs.writeFileSync(process.argv[1],'proof');process.exit(0)},600)`;
+    const recorder = await startOwnedRecorder('test-device', join(dir, 'video.mp4'), join(dir, 'recorder.log'),
+      { command: process.execPath, args: ['-e', script, join(dir, 'video.mp4'), pidFile] });
+    assert.equal(recorder.commandResult, null);
+    await recorder.completed;
+    descendantPid = Number(readFileSync(pidFile, 'utf8'));
+    assert.equal(Number(execFileSync('ps', ['-p', String(descendantPid), '-o', 'pgid='], { encoding: 'utf8' }).trim()), recorder.pid);
+    const result = await stopOwnedRecorder(recorder, { intGraceMs: 100, termGraceMs: 100 });
+    assert.equal(result.state, 'stopped');
+    assert.equal(result.bytes, 5);
+    assert.throws(() => process.kill(descendantPid, 0), { code: 'ESRCH' });
+  } finally {
+    if (descendantPid) { try { process.kill(descendantPid, 'SIGKILL'); } catch { /* fixture cleanup */ } }
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('selector failure preserves deadline, expectation and hierarchy availability', () => {

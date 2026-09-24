@@ -1,5 +1,6 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { appendFileSync, existsSync, readdirSync, statSync, statfsSync, openSync, closeSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 
@@ -143,8 +144,103 @@ function groupMembers(pgid) {
   }
   return members;
 }
-function matchingMember(before, after) {
-  return [...before].some(([pid, started]) => after.get(pid) === started);
+const keeperPath = fileURLToPath(new URL('./owned-process-keeper.mjs', import.meta.url));
+const otherMembers = owned => [...groupMembers(owned.pid).keys()].filter(pid => pid !== owned.pid);
+function assertKeeper(owned) {
+  if (owned.keeperResult || owned.child.exitCode !== null || owned.child.signalCode !== null)
+    throw new Error(`Owned ${owned.kind} keeper ${owned.pid} exited unexpectedly; ownership lost. Inspect invocation diagnostics without signaling its former group.`);
+}
+async function startOwnedGroup(kind, command, args, { cwd, env, stdio, spawnImpl = spawn }) {
+  const child = spawnImpl(process.execPath, [keeperPath, command, ...args],
+    { cwd, env, detached: true, stdio: [...stdio, 'ipc'] });
+  const owned = { kind, child, pid: child.pid, commandPid: null, commandResult: null, keeperResult: null, nextId: 0, pending: new Map() };
+  let startResolve;
+  const started = new Promise(resolve => { startResolve = resolve; });
+  let commandResolve;
+  owned.completed = new Promise(resolve => { commandResolve = resolve; });
+  owned.keeperCompleted = new Promise(resolve => {
+    child.once('exit', (code, signal) => {
+      owned.keeperResult = { code, signal };
+      for (const pending of owned.pending.values()) pending({ error: 'keeper exited before acknowledgement' });
+      owned.pending.clear();
+      if (!owned.commandResult) { owned.commandResult = { code: null, signal, error: 'keeper exited before command receipt', ownershipLost: true }; commandResolve(owned.commandResult); }
+      startResolve(); resolve(owned.keeperResult);
+    });
+  });
+  child.on('error', error => {
+    owned.spawnError = error;
+    startResolve();
+  });
+  child.on('message', message => {
+    if (message.type === 'command-start') { owned.commandPid = message.pid; startResolve(); }
+    if (message.type === 'command-exit' && !owned.commandResult) { owned.commandResult = message; commandResolve(message); startResolve(); }
+    if (message.type === 'ack') { const pending = owned.pending.get(message.id); if (pending) { owned.pending.delete(message.id); pending(message); } }
+  });
+  await waitOrTimeout(started, 3000);
+  if (!owned.commandPid || owned.spawnError || owned.keeperResult) {
+    if (owned.pid && !owned.keeperResult) {
+      try {
+        await requestKeeper(owned, 'signal', 'SIGTERM');
+        if (await waitForOtherMembers(owned, 1000)) await closeKeeper(owned);
+        else await killOwnedGroup(owned, 5000);
+      } catch { /* retain the actionable command-start error */ }
+    }
+    throw new Error(`Owned ${kind} command did not start within 3 seconds: ${owned.spawnError?.message || owned.commandResult?.error || 'keeper unavailable'}`);
+  }
+  return owned;
+}
+async function requestKeeper(owned, type, signal = null, timeoutMs = 1000) {
+  assertKeeper(owned);
+  const id = ++owned.nextId;
+  const acknowledgement = new Promise(resolve => owned.pending.set(id, resolve));
+  try { owned.child.send({ type, signal, id }); }
+  catch (error) { owned.pending.delete(id); throw new Error(`Owned ${owned.kind} keeper IPC failed: ${error.message}`); }
+  if (signal === 'SIGKILL') return;
+  const answer = await waitOrTimeout(acknowledgement, timeoutMs);
+  owned.pending.delete(id);
+  if (!answer || answer.error) throw new Error(`Owned ${owned.kind} keeper did not acknowledge ${type}${signal ? ` ${signal}` : ''}: ${answer?.error || '1 second deadline'}`);
+}
+async function waitForOtherMembers(owned, ms) {
+  const deadline = performance.now() + ms;
+  while (true) {
+    assertKeeper(owned);
+    const members = otherMembers(owned);
+    if (!members.length) return true;
+    if (performance.now() >= deadline) return false;
+    await sleep(Math.min(50, Math.max(1, deadline - performance.now())));
+  }
+}
+async function killOwnedGroup(owned, graceMs) {
+  const before = groupMembers(owned.pid);
+  await requestKeeper(owned, 'signal', 'SIGKILL');
+  if (!await waitOrTimeout(owned.keeperCompleted, graceMs))
+    throw new Error(`Owned ${owned.kind} keeper ${owned.pid} did not exit after SIGKILL`);
+  const deadline = performance.now() + graceMs;
+  while (performance.now() < deadline) {
+    const after = groupMembers(owned.pid);
+    if (![...before].some(([pid, started]) => after.get(pid) === started)) return;
+    await sleep(50);
+  }
+  throw new Error(`Owned ${owned.kind} group ${owned.pid} retained a member after SIGKILL; inspect diagnostics`);
+}
+async function closeKeeper(owned, graceMs = 5000) {
+  const deadline = performance.now() + graceMs;
+  let lastError = null;
+  while (performance.now() < deadline) {
+    assertKeeper(owned);
+    if (!otherMembers(owned).length) {
+      try { await requestKeeper(owned, 'close'); lastError = null; break; }
+      catch (error) {
+        if (!error.message.includes('group still contains')) throw error;
+        lastError = error;
+      }
+    }
+    await sleep(50);
+  }
+  if (lastError || performance.now() >= deadline)
+    throw new Error(`Owned ${owned.kind} group ${owned.pid} still has descendants after close grace: ${lastError?.message || otherMembers(owned).join(',')}`);
+  if (!await waitOrTimeout(owned.keeperCompleted, graceMs))
+    throw new Error(`Owned ${owned.kind} keeper ${owned.pid} did not exit after close`);
 }
 export function maxDeclaredWaitMs(flow) {
   const values = [...flow.matchAll(/(?:timeout|delay):\s*(\d+)/g)].map(match => Number(match[1]));
@@ -155,56 +251,37 @@ export function totalDeclaredWaitMs(flow) {
 }
 export async function startOwnedRecorder(udid, file, log, { command = 'xcrun', args = null, spawnImpl = spawn } = {}) {
   const fd = openSync(log, 'w');
-  let child;
-  try { child = spawnImpl(command, args || ['simctl', 'io', udid, 'recordVideo', '--type=mp4', file],
-    { detached: true, stdio: ['ignore', fd, fd] }); }
+  let owned;
+  try { owned = await startOwnedGroup('recorder', command, args || ['simctl', 'io', udid, 'recordVideo', '--type=mp4', file],
+    { stdio: ['ignore', fd, fd], spawnImpl }); }
   finally { closeSync(fd); }
-  await new Promise((resolve, reject) => { child.once('spawn', resolve); child.once('error', reject); });
-  const completed = new Promise(resolve => child.once('exit', (code, signal) => resolve({ code, signal })));
+  owned.file = file; owned.log = log;
   await sleep(250);
-  if (child.exitCode !== null || child.signalCode !== null) throw new Error(`Recorder exited before flow start; inspect ${log}`);
-  const initialMembers = groupMembers(child.pid);
-  if (!initialMembers.has(child.pid)) throw new Error(`Recorder ${child.pid} group identity unavailable; inspect ${log}`);
-  return { pid: child.pid, child, completed, file, log, initialMembers };
+  if (owned.commandResult || owned.keeperResult) {
+    try { await stopOwnedRecorder(owned); } catch { /* preserve startup failure */ }
+    throw new Error(`Recorder exited before flow start or lost its keeper; inspect ${log}`);
+  }
+  return owned;
 }
 export async function stopOwnedRecorder(recorder, { intGraceMs = 10000, termGraceMs = 5000, killGraceMs = 5000 } = {}) {
   if (!recorder) return { state: 'absent' };
-  const tracked = groupMembers(recorder.pid);
-  const initial = recorder.initialMembers;
-  if (tracked.size && !matchingMember(initial, tracked))
-    throw new Error(`Owned recorder group ${recorder.pid} identity changed; refusing to signal a possible reused group`);
-  const waitForGroup = async graceMs => {
-    const deadline = performance.now() + graceMs;
-    let members = groupMembers(recorder.pid);
-    while (matchingMember(tracked, members) && performance.now() < deadline) {
-      await sleep(50);
-      members = groupMembers(recorder.pid);
-    }
-    if (members.size && !matchingMember(tracked, members))
-      throw new Error(`Owned recorder group ${recorder.pid} lost its tracked identity; refusing to signal a possible reused group`);
-    return members.size === 0;
-  };
-  const signalGroup = signal => {
-    if (!tracked.size) return;
-    const members = groupMembers(recorder.pid);
-    if (!members.size) return;
-    if (!matchingMember(tracked, members))
-      throw new Error(`Owned recorder group ${recorder.pid} changed before ${signal}; refusing to signal it`);
-    try { process.kill(-recorder.pid, signal); } catch (error) { if (error.code !== 'ESRCH') throw error; }
-  };
-  signalGroup('SIGINT');
-  if (!await waitForGroup(intGraceMs)) {
-    appendFileSync(recorder.log, `Recorder group ${recorder.pid} exceeded SIGINT grace; owned members: ${[...groupMembers(recorder.pid).keys()].join(',')}\n`);
-    signalGroup('SIGTERM');
-    if (!await waitForGroup(termGraceMs)) {
-      appendFileSync(recorder.log, `Recorder group ${recorder.pid} exceeded SIGTERM grace; owned members: ${[...groupMembers(recorder.pid).keys()].join(',')}\n`);
-      signalGroup('SIGKILL');
-      if (!await waitForGroup(killGraceMs)) throw new Error(`Owned recorder group ${recorder.pid} did not exit after SIGKILL; inspect ${recorder.log}`);
+  assertKeeper(recorder);
+  if (otherMembers(recorder).length) {
+    await requestKeeper(recorder, 'signal', 'SIGINT');
+    if (!await waitForOtherMembers(recorder, intGraceMs)) {
+      appendFileSync(recorder.log, `Recorder group ${recorder.pid} exceeded SIGINT grace; owned members: ${otherMembers(recorder).join(',')}\n`);
+      await requestKeeper(recorder, 'signal', 'SIGTERM');
+      if (!await waitForOtherMembers(recorder, termGraceMs)) {
+        appendFileSync(recorder.log, `Recorder group ${recorder.pid} exceeded SIGTERM grace; owned members: ${otherMembers(recorder).join(',')}\n`);
+        await killOwnedGroup(recorder, killGraceMs);
+      }
     }
   }
+  if (!recorder.keeperResult) await closeKeeper(recorder, killGraceMs);
   const result = await waitOrTimeout(recorder.completed, killGraceMs);
-  if (!result) throw new Error(`Owned recorder ${recorder.pid} did not stop; inspect before cleanup`);
-  return { state: 'stopped', ...result, file: recorder.file, bytes: existsSync(recorder.file) ? statSync(recorder.file).size : null };
+  if (!result) throw new Error(`Owned recorder command ${recorder.commandPid} has no exit receipt; inspect ${recorder.log}`);
+  return { state: 'stopped', code: result.code, signal: result.signal, file: recorder.file,
+    bytes: existsSync(recorder.file) ? statSync(recorder.file).size : null };
 }
 export async function runOwnedMaestro(command, args, { cwd, env, dir, timeline, flow, diagnostic, signal, quietMs, wallMs,
   spawnImpl = spawn, pollMs = 1000, terminationGraceMs = 5000 }) {
@@ -213,51 +290,50 @@ export async function runOwnedMaestro(command, args, { cwd, env, dir, timeline, 
   // The 15 minute floor exceeds the observed 271 s healthy flow by over 3x.
   const ceilingMs = wallMs ?? Math.max(900000, totalDeclaredWaitMs(flow) * 3 + 600000);
   const anchor = clock(), started = performance.now();
-  const child = spawnImpl(command, args, { cwd, env, detached: true, stdio: ['ignore', 'inherit', 'inherit'] });
-  const ownedPid = child.pid;
-  let leaderIdentity = ownedPid ? groupMembers(ownedPid).get(ownedPid) || null : null;
-  event(timeline, { type: 'maestro-start', pid: ownedPid, command: 'test', deadlineMs: ceilingMs, inactivityDeadlineMs: inactivityMs, expected: 'flow completes with all required commands' });
+  const owned = await startOwnedGroup('Maestro', command, args,
+    { cwd, env, stdio: ['ignore', 'inherit', 'inherit'], spawnImpl });
+  const ownedPid = owned.pid;
+  event(timeline, { type: 'maestro-start', pid: ownedPid, commandPid: owned.commandPid, command: 'test', deadlineMs: ceilingMs,
+    inactivityDeadlineMs: inactivityMs, expected: 'flow completes with all required commands' });
   let lastActivity = performance.now(), lastLogSize = -1, reason = null;
-  const completed = new Promise((resolve, reject) => { child.once('error', reject); child.once('exit', (code, signal) => resolve({ code, signal })); });
-  let settled = false, result;
-  completed.then(value => { settled = true; result = value; }, error => { settled = true; result = { code: null, error: error.message }; });
-  while (!settled) {
+  const capture = async (failure, log) => {
+    try { await diagnostic(failure, { pid: ownedPid, commandPid: owned.commandPid, log, elapsedMs: performance.now() - started,
+      members: owned.keeperResult ? null : otherMembers(owned) }); }
+    catch (error) { event(timeline, { type: 'diagnostic-error', pid: ownedPid, error: error.message }); }
+  };
+  while (!owned.commandResult && !owned.keeperResult) {
     await sleep(pollMs);
-    if (!leaderIdentity && ownedPid) leaderIdentity = groupMembers(ownedPid).get(ownedPid) || null;
     const log = latestMaestroLog(dir);
     if (log) { try { const size = statSync(log).size; if (size !== lastLogSize) { lastLogSize = size; lastActivity = performance.now(); } } catch { /* a rotating log is not evidence of a hang */ } }
+    if (owned.commandResult || owned.keeperResult) break;
     if (!signal?.aborted && performance.now() - started <= ceilingMs && performance.now() - lastActivity <= inactivityMs) continue;
     reason = signal?.aborted ? 'operator-interrupt' : performance.now() - started > ceilingMs ? 'wall-deadline' : 'inactivity-deadline';
-    try { await diagnostic(reason, { pid: ownedPid, log, elapsedMs: performance.now() - started }); }
-    catch (error) { event(timeline, { type: 'diagnostic-error', pid: ownedPid, error: error.message }); }
-    // Only the process group created for this invocation is eligible.
-    if (ownedPid && child.pid === ownedPid && !settled) {
-      const tracked = groupMembers(ownedPid);
-      if (!leaderIdentity || tracked.get(ownedPid) !== leaderIdentity)
-        throw new Error(`Owned Maestro group ${ownedPid} identity changed before stop; inspect diagnostics without signaling it`);
-      try { process.kill(-ownedPid, 'SIGTERM'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
-      const graceDeadline = performance.now() + terminationGraceMs;
-      let remaining = groupMembers(ownedPid);
-      while (matchingMember(tracked, remaining) && performance.now() < graceDeadline) {
-        await sleep(50);
-        remaining = groupMembers(ownedPid);
-      }
-      if (remaining.size && !matchingMember(tracked, remaining))
-        throw new Error(`Owned Maestro group ${ownedPid} lost its tracked identity; refusing to signal a possible reused group`);
-      if (remaining.size) {
-        try { process.kill(-ownedPid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
-      }
-      await waitOrTimeout(completed, 5000);
-      const groupDeadline = performance.now() + 5000;
-      while (matchingMember(tracked, groupMembers(ownedPid)) && performance.now() < groupDeadline) await sleep(50);
-      if (matchingMember(tracked, groupMembers(ownedPid))) throw new Error(`Owned Maestro process group ${ownedPid} did not exit after SIGKILL; inspect diagnostics`);
-      if (!settled) {
-        throw new Error(`Owned Maestro leader ${ownedPid} did not exit after SIGKILL; inspect diagnostics`);
-      }
-    }
+    await capture(reason, log);
+    await requestKeeper(owned, 'signal', 'SIGTERM');
+    if (!await waitForOtherMembers(owned, terminationGraceMs)) {
+      event(timeline, { type: 'maestro-escalation', pid: ownedPid, outcome: 'SIGTERM-grace-expired', members: otherMembers(owned) });
+      await killOwnedGroup(owned, 5000);
+    } else await closeKeeper(owned);
     break;
   }
-  result = await completed.catch(error => ({ code: null, error: error.message }));
+  if (owned.keeperResult && !reason) {
+    reason = 'keeper-ownership-lost';
+    await capture(reason, latestMaestroLog(dir));
+  }
+  if (!reason) {
+    // The keeper's child exit event can precede OS reaping by a few ticks.
+    // A live descendant after that bounded reap interval is a flow failure.
+    if (!await waitForOtherMembers(owned, 1000)) {
+      reason = 'owned-descendant-after-command-exit';
+      await capture(reason, latestMaestroLog(dir));
+      await requestKeeper(owned, 'signal', 'SIGTERM');
+      if (!await waitForOtherMembers(owned, terminationGraceMs)) {
+        await killOwnedGroup(owned, 5000);
+      } else await closeKeeper(owned);
+    } else await closeKeeper(owned);
+  }
+  const result = await waitOrTimeout(owned.completed, 5000);
+  if (!result) throw new Error(`Owned Maestro command ${owned.commandPid} did not provide an exit receipt`);
   if (signal?.aborted && !reason) reason = 'operator-interrupt';
   event(timeline, { type: 'maestro-end', pid: ownedPid, outcome: reason || (result.code === 0 ? 'pass' : 'fail'), exitCode: result.code, signal: result.signal,
     elapsedMs: performance.now() - started, reason });

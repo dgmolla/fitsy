@@ -18,9 +18,14 @@ Overlapping command intervals must not be added together.
 The runner allows at least 15 minutes per flow and also budgets three times the sum of declared YAML waits plus 10 minutes for driver overhead.
 Its inactivity limit is at least three minutes and at least two minutes longer than the longest declared wait.
 These limits never change a product selector timeout or skip an assertion.
-Before stopping a stalled flow, it saves a simulator screenshot and watchdog receipt, then signals only the process group it spawned.
-If the Maestro parent exits first, cleanup still checks tracked members of that owned group and refuses to signal a reused group.
-The owned recorder stops when that flow ends or fails.
+Before stopping a stalled flow, it saves a simulator screenshot and watchdog receipt.
+Each Maestro and recorder invocation has a live, per-invocation keeper that owns its process group.
+The runner sends bounded signal requests to that keeper and never signals a bare group ID after its owner exits.
+Maestro receives TERM after diagnostics, then KILL if same-group children remain after the grace period.
+The owned recorder receives INT when the flow ends or fails, then TERM and KILL only if same-group children remain.
+The runner waits for command and descendant exit separately from keeper exit; a normal command exit with surviving same-group descendants is a failure and is cleaned up.
+An unexpected keeper exit fails with an ownership-loss diagnostic and no further group signal.
+Children that create their own process group or session are outside this scoped cleanup guarantee.
 If a command fails, inspect `failure.json`, `failure-screen.png`, the original command JSON, Maestro log and untrimmed video.
 The failed command hierarchy remains in the raw JSON when Maestro exposes it; the failure summary records its absence otherwise.
 Network timing is reported only as redacted HTTP status and duration pairs found in the log, with an explicit absence when none exist.
