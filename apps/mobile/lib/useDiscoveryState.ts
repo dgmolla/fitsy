@@ -63,8 +63,10 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
   const { results, nextCursor, loading, loadingMore, refreshing, error, locked, fetchSeq, outOfArea, nearbyDishCount, doFetch, handleRefresh, handleEndReached } = discovery;
   const tourEnabled = isOnboardingPreview && locked === true && !filterVisible && !locationPickerVisible;
   const tourReady = previewTourReady({ preview: isOnboardingPreview, locked, loading, error, outOfArea, fetchSeq });
-  const tour = usePreviewTour(tourEnabled && tourReady, tourEnabled);
-  const demo = usePreviewSearchDemo(tour.visible, setQuery);
+  const [emptyTour, setEmptyTour] = useState(false);
+  const captureTourMode = useCallback(() => setEmptyTour(results.length === 0), [results.length]);
+  const tour = usePreviewTour(tourEnabled && tourReady, tourEnabled, captureTourMode);
+  const demo = usePreviewSearchDemo(tour.visible, setQuery, !emptyTour);
   const { cancel: cancelDemo, editQuery } = demo;
   const { finish: finishPreviewTour } = tour;
   const finishTour = useCallback(() => { cancelDemo(); finishPreviewTour(); }, [cancelDemo, finishPreviewTour]);
@@ -188,7 +190,7 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
     {
       key: 'search',
       title: 'Follow your craving',
-      body: 'Let’s try pizza. Fitsy checks nearby menus against your meal targets. Then try any craving or restaurant of your own.',
+      body: emptyTour ? 'Your search stays here. Try another craving or restaurant when you are ready.' : 'Let’s try pizza. Fitsy checks nearby menus against your meal targets. Then try any craving or restaurant of your own.',
       target: tourSearchRef,
       nextDisabled: demo.typing || loading,
     },
@@ -202,11 +204,11 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
   ];
     // Demonstrate the craving before anchoring to its newly fetched restaurant.
     const preferred = onboardingPitch(tried).firstTip;
-    const first = preferred === 'restaurant' ? 'search' : preferred;
+    const first = emptyTour ? 'restaurant' : preferred === 'restaurant' ? 'search' : preferred;
     return [...steps.filter(step => step.key === first), ...steps.filter(step => step.key !== first),
       { key: 'location', title: 'Wherever your day takes you', body: 'Eating near work or meeting friends? Change your area here to find meals where you want to eat.', target: tourLocationRef },
       { key: 'more', title: results.length === 0 ? 'Keep exploring.' : 'Explore full menus.', body: results.length === 0 ? 'Try another dish or area. Your targets stay saved. Unlock full menus with Pro when you find a meal.' : 'Explore full menus with Pro. Try your first craving now.', target: tourMoreRef, placement: 'above' as const },
-    ]; }, [tried, results, demo.typing, loading, error]);
+    ]; }, [tried, results, demo.typing, loading, error, emptyTour]);
 
   return { navigation, isOnboardingPreview, tried, inputs, query, setQuery: demo.editQuery, canSearch, hasQuery, location,
     locationLabel, results, heroResult, listResults, nextCursor, loading, loadingMore, refreshing, error, locked, outOfArea, nearbyDishCount,
