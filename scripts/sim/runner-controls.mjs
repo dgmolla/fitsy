@@ -1,5 +1,5 @@
 import { execFileSync, spawn } from 'node:child_process';
-import { appendFileSync, existsSync, readdirSync, statSync, statfsSync, openSync, closeSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, readdirSync, statSync, statfsSync, openSync, closeSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
@@ -14,6 +14,28 @@ async function waitOrTimeout(promise, ms) {
 }
 export const clock = () => ({ wall: new Date().toISOString(), monotonicNs: process.hrtime.bigint().toString() });
 export const event = (file, value) => appendFileSync(file, JSON.stringify({ ...clock(), ...value }) + '\n');
+export function completeMaestroRun(reportFile, timeline, report) {
+  // A finishable report must never get ahead of its final execution event.
+  event(timeline, { type: 'run-end', outcome: 'awaiting-walkthrough' });
+  report.result = 'awaiting-walkthrough';
+  report.maestroFinishedAt = new Date().toISOString();
+  writeFileSync(reportFile, JSON.stringify(report, null, 2) + '\n');
+}
+export function recordRunFailure(reportFile, timeline, error) {
+  const evidenceErrors = [];
+  try {
+    if (existsSync(reportFile)) {
+      const partial = JSON.parse(readFileSync(reportFile, 'utf8'));
+      partial.result = 'fail';
+      partial.infrastructureError = error.message;
+      writeFileSync(reportFile, JSON.stringify(partial, null, 2) + '\n');
+    }
+  } catch (writeError) { evidenceErrors.push(`report: ${writeError.message}`); }
+  try {
+    if (existsSync(timeline)) event(timeline, { type: 'run-end', outcome: 'fail', error: error.message });
+  } catch (writeError) { evidenceErrors.push(`timeline: ${writeError.message}`); }
+  return evidenceErrors;
+}
 export function admitDisk(path, phase, requiredGiB = 8) {
   const disk = statfsSync(path);
   const freeBytes = Number(disk.bavail) * Number(disk.bsize);

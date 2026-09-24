@@ -9,7 +9,7 @@ import { createRequire } from 'node:module';
 import { root, inputHash, changedPaths, impact, digest, validate, baseline, repoEnv } from '../verify/product-flow.mjs';
 import { backendRevision } from './backend-identity.mjs';
 import { buildProfile, bundleDelegate, fixtureLabel, metroRoute } from './build-profile.mjs';
-import { admitDisk, archiveFailureEvidence, event, flowFailureReason, latestMaestroLog, matchingFailureKey, nearestFailure, needsDiagnosis, requireMetro, runRecordedFlow, saveRecordedFlowReceipts } from './runner-controls.mjs';
+import { admitDisk, archiveFailureEvidence, completeMaestroRun, event, flowFailureReason, latestMaestroLog, matchingFailureKey, nearestFailure, needsDiagnosis, recordRunFailure, requireMetro, runRecordedFlow, saveRecordedFlowReceipts } from './runner-controls.mjs';
 const yaml = createRequire(import.meta.url)('js-yaml');
 const out = resolve(root, '.evidence/product-flow');
 const buildDir = resolve(root, '.evidence/product-build');
@@ -304,20 +304,11 @@ async function execute(udid, names) {
     assert(hash === inputHash() && r.appHash === treeHash(app), 'Candidate changed during tests');
     assert(server.backendDeployment === backend().backendDeployment, 'Dev deployment changed during tests');
     await checkBundle(report);
-    report.result = 'awaiting-walkthrough'; report.maestroFinishedAt = new Date().toISOString();
-    save(join(out, 'report.json'), report);
-    event(timeline, { type: 'run-end', outcome: 'awaiting-walkthrough' });
+    completeMaestroRun(join(out, 'report.json'), timeline, report);
     console.log('Maestro complete. Capture affected primary/recovery flows through Mobile MCP, then finish <walkthrough.json>.');
   } catch (error) {
-    const reportFile = join(out, 'report.json');
-    if (existsSync(reportFile)) {
-      const partial = read(reportFile);
-      if (partial.result === 'running') {
-        partial.result = 'fail'; partial.infrastructureError = error.message;
-        save(reportFile, partial);
-      }
-    }
-    if (existsSync(join(out, 'runner-timeline.jsonl'))) event(join(out, 'runner-timeline.jsonl'), { type: 'run-end', outcome: 'fail', error: error.message });
+    const evidenceErrors = recordRunFailure(join(out, 'report.json'), join(out, 'runner-timeline.jsonl'), error);
+    if (evidenceErrors.length) console.error(`Failure receipt write errors: ${evidenceErrors.join('; ')}`);
     throw error;
   } finally { release(); }
 }

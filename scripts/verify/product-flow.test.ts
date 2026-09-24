@@ -28,7 +28,9 @@ function fixture() {
     ]);
     writeFileSync(join(dir, `${name}.json`), data);
     writeFileSync(join(dir, `${name}.png`), png);
-    return { name, source, sourceHash: sha(yaml), commands: `${name}.json`, sha256: sha(data), screenshot: `${name}.png`, screenshotHash: sha(png) };
+    const video = Buffer.from('recorded native video proof');
+    writeFileSync(join(dir, `${name}.mp4`), video);
+    return { name, source, sourceHash: sha(yaml), commands: `${name}.json`, sha256: sha(data), screenshot: `${name}.png`, screenshotHash: sha(png), video: `${name}.mp4`, videoHash: sha(video) };
   });
   const trace = ['mobile_click_on_screen_at_coordinates', 'mobile_list_elements_on_screen'].map(name => JSON.stringify({
     at: new Date().toISOString(), command: { name }, result: { content: [{type: 'text', text: 'Paywall visible'}] },
@@ -57,19 +59,26 @@ test.each(['failed', 'skipped', 'empty', 'one'])("rejects %s required assertions
   const result = validate(report); expect(result.status).toBe(1);
   expect(result.stderr).toContain(kind === 'one' ? 'no deterministic coverage for billing' : 'missing/skipped/failed assertions');
 });
-test.each(['source', 'commands', 'screenshot', 'trace'])('rejects changed %s artifacts', field => {
+test.each(['source', 'commands', 'screenshot', 'video', 'trace'])('rejects changed %s artifacts', field => {
   const report = fixture();
-  const file = field === 'trace' ? 'trace.json' : report.flows[2]![field as 'source' | 'commands' | 'screenshot'];
+  const file = field === 'trace' ? 'trace.json' : report.flows[2]![field as 'source' | 'commands' | 'screenshot' | 'video'];
   const original = readFileSync(join(dir, file));
   // Preserve valid content so parsing or coverage cannot mask a missing digest check.
   const changed = field === 'source' ? original + '\n# changed source\n'
     : field === 'commands' ? JSON.stringify(JSON.parse(original.toString()), null, 2)
-    : field === 'screenshot' ? Buffer.concat([original, Buffer.from([1])])
+    : field === 'screenshot' || field === 'video' ? Buffer.concat([original, Buffer.from([1])])
     : original.toString().replaceAll('Paywall visible', 'Paywall and cancel visible');
   writeFileSync(join(dir, file), changed);
   const result = validate(report); expect(result.status).toBe(1);
-  const message = { source: 'changed flow source', commands: 'changed command artifact', screenshot: 'missing/changed/non-PNG screenshot', trace: 'changed walkthrough trace' };
+  const message = { source: 'changed flow source', commands: 'changed command artifact', screenshot: 'missing/changed/non-PNG screenshot', video: 'missing/changed/empty video', trace: 'changed walkthrough trace' };
   expect(result.stderr).toContain(message[field as keyof typeof message]);
+});
+test('rejects a missing recording even when its report claims a matching digest', () => {
+  const report = fixture();
+  rmSync(join(dir, report.flows[2]!.video));
+  const result = validate(report);
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain('missing/changed/empty video');
 });
 test.each(['stale', 'future', 'expired', 'wrong-native', 'unknown-backend', 'prod', 'unconfigured', 'missing-flow', 'missing-walkthrough', 'missing-recovery'])('rejects %s proof', condition => {
   const report = fixture();

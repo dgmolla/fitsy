@@ -102,6 +102,10 @@ export function validate(report, plan, hash, directory, now = Date.now(), cwd = 
     insist(commands.every(c => c.metadata?.status === 'COMPLETED' || Object.values(c.command || {}).some(v => v?.optional === true)), `incomplete required command: ${flow.name}`);
     const screen = artifact(flow.screenshot, directory);
     insist(digest(screen) === flow.screenshotHash && screen.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex')), `missing/changed/non-PNG screenshot: ${flow.name}`);
+    let video;
+    try { video = artifact(flow.video, directory); }
+    catch { throw new Error(`missing/changed/empty video: ${flow.name}`); }
+    insist(video.length > 0 && digest(video) === flow.videoHash, `missing/changed/empty video: ${flow.name}`);
     if (!baseline.includes(flow.name) && assertions.length >= 2) {
       for (const tag of config.tags || []) covered.add(tag);
     }

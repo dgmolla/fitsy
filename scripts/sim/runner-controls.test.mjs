@@ -5,9 +5,35 @@ import { createServer } from 'node:http';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { archiveFailureEvidence, flowFailureReason, requireMetro, runOwnedMaestro, runRecordedFlow, saveRecordedFlowReceipts, startOwnedRecorder, stopOwnedRecorder, summarizeCommands, summarizeFlowTiming, nearestFailure, matchingFailureKey, needsDiagnosis } from './runner-controls.mjs';
+import { archiveFailureEvidence, completeMaestroRun, flowFailureReason, recordRunFailure, requireMetro, runOwnedMaestro, runRecordedFlow, saveRecordedFlowReceipts, startOwnedRecorder, stopOwnedRecorder, summarizeCommands, summarizeFlowTiming, nearestFailure, matchingFailureKey, needsDiagnosis } from './runner-controls.mjs';
 
 const temp = () => mkdtempSync(join(tmpdir(), 'fitsy-runner-'));
+test('final timeline failure leaves a failed report and retains the triggering error', () => {
+  const dir = temp(), reportFile = join(dir, 'report.json');
+  const report = { result: 'running', flows: [{ name: 'welcome' }] };
+  try {
+    writeFileSync(reportFile, JSON.stringify(report));
+    let original;
+    try { completeMaestroRun(reportFile, dir, report); }
+    catch (error) { original = error; }
+    assert.match(original?.message || '', /EISDIR/);
+    const evidenceErrors = recordRunFailure(reportFile, dir, original);
+    assert.match(evidenceErrors.join(' '), /timeline:.*EISDIR/);
+    assert.equal(JSON.parse(readFileSync(reportFile, 'utf8')).result, 'fail');
+    assert.match(JSON.parse(readFileSync(reportFile, 'utf8')).infrastructureError, /EISDIR/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('a failed report transition invalidates an already finishable report', () => {
+  const dir = temp(), reportFile = join(dir, 'report.json'), timeline = join(dir, 'events.jsonl');
+  try {
+    writeFileSync(reportFile, JSON.stringify({ result: 'awaiting-walkthrough' }));
+    writeFileSync(timeline, '');
+    assert.deepEqual(recordRunFailure(reportFile, timeline, Error('write failed')), []);
+    assert.equal(JSON.parse(readFileSync(reportFile, 'utf8')).result, 'fail');
+    assert.match(readFileSync(timeline, 'utf8'), /"outcome":"fail"/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
 async function assertProcessStopped(pid, deadlineMs = 1500) {
   const deadline = Date.now() + deadlineMs;
   while (Date.now() < deadline) {
