@@ -21,6 +21,7 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
   const [scheduled, setScheduled] = useState<{ id: string | null; values: { kind: string; date: string }[] }>({ id: null, values: [] });
   const [response, setResponse] = useState<Notifications.NotificationResponse | null>(null);
   const userRef = useRef(account.id); userRef.current = account.id;
+  const scheduledAccountRef = useRef<string | null | undefined>(undefined);
   const preferences = loaded?.id === account.id ? loaded.values : DEFAULT_REMINDER_PREFERENCES;
 
   useEffect(() => {
@@ -39,6 +40,14 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
     });
     return () => { live = false; data.subscription.unsubscribe(); unsubscribe(); foreground.remove(); };
   }, [refresh]);
+
+  useEffect(() => {
+    if (!account.ready || scheduledAccountRef.current === account.id) return;
+    scheduledAccountRef.current = account.id;
+    // A new account must not inherit notifications scheduled for the old one,
+    // even if its preference storage is temporarily unavailable.
+    void replaceReminders(null, []).catch(reportFailure);
+  }, [account.ready, account.id]);
 
   useEffect(() => {
     let live = true;

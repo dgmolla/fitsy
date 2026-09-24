@@ -11,9 +11,11 @@ jest.mock('expo-notifications', () => ({
   addNotificationResponseReceivedListener: () => ({ remove() {} }),
   getLastNotificationResponseAsync: async () => null,
 }));
+let mockAccountId = 'reminder-owner';
+let mockAuthListener: ((event: string, session: { user: { id: string } }) => void) | undefined;
 jest.mock('../lib/supabase', () => ({ supabase: { auth: {
-  onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
-  getSession: async () => ({ data: { session: { user: { id: 'reminder-owner' } } } }),
+  onAuthStateChange: (listener: typeof mockAuthListener) => { mockAuthListener = listener; return { data: { subscription: { unsubscribe() {} } } }; },
+  getSession: async () => ({ data: { session: { user: { id: mockAccountId } } } }),
 } } }));
 const mockRefresh = jest.fn(async () => {});
 const mockCustomerInfo = { entitlements: { all: { pro: { isActive: true } } } };
@@ -57,4 +59,24 @@ test('a foreground storage failure keeps enabled meal reminders and their planne
   await act(async () => { await Promise.resolve(); });
   expect(screen.getByText('Meal reminders on')).toBeTruthy();
   expect(replace.mock.calls.some(([id, jobs]) => id === 'reminder-owner' && jobs.length === 0)).toBe(false);
+});
+
+test('switching accounts clears prior meal reminders when the new account storage read fails', async () => {
+  mockAccountId = 'reminder-owner';
+  const read = jest.mocked(readReminderPreferences);
+  const replace = jest.mocked(replaceReminders);
+  read.mockResolvedValue({ meals: true, trial: false });
+  const screen = render(<ReminderProvider><SettingsView /></ReminderProvider>);
+  await waitFor(() => expect(screen.getByText('Meal reminders on')).toBeTruthy());
+  await waitFor(() => expect(replace.mock.calls.some(([id, jobs]) => id === 'reminder-owner' && jobs.some(job => job.kind === 'meal'))).toBe(true));
+  replace.mockClear();
+  mockAccountId = 'next-owner';
+  read.mockImplementationOnce(async (_id, options) => {
+    if (options?.throwOnError) throw new Error('Storage temporarily unavailable');
+    return { meals: false, trial: false };
+  });
+  act(() => { mockAuthListener?.('SIGNED_IN', { user: { id: 'next-owner' } }); });
+  await waitFor(() => expect(read).toHaveBeenCalledWith('next-owner', { throwOnError: true }));
+  expect(screen.getByText('Meal reminders off')).toBeTruthy();
+  expect(replace).toHaveBeenCalledWith(null, []);
 });
