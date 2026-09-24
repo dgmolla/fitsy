@@ -13,12 +13,14 @@ import Tuning from '../app/welcome/tuning';
 import Trust from '../app/welcome/how-it-works';
 import Goal from '../app/welcome/goal';
 import Height from '../app/welcome/height';
+import MacroSetup from '../app/macro-setup';
 import { getOnboardingData, saveOnboardingField } from '../lib/onboardingStorage';
 import { getMacroTargets } from '../lib/macroStorage';
 import { getOnboardingResume } from '../lib/onboardingResume';
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
+jest.mock('../lib/profileSync', () => ({ pushProfileToServer: jest.fn() }));
 jest.mock('posthog-react-native', () => {
   process.env.EXPO_PUBLIC_POSTHOG_API_KEY = 'unit-test-analytics';
   return jest.fn().mockImplementation(() => ({ capture: jest.fn() }));
@@ -29,6 +31,7 @@ const routes = {
   'welcome/target-setup': Targets, 'welcome/tuning': Tuning, 'welcome/how-it-works': Trust,
   'welcome/goal': Goal, 'welcome/height': Height, 'welcome/goal-payoff': GoalPayoff,
   'welcome/preview': () => <Text>Discovery preview</Text>,
+  'macro-setup': MacroSetup,
 };
 beforeEach(async () => { await AsyncStorage.clear(); });
 
@@ -106,6 +109,19 @@ it('sends a missing-goal target setup to goal choice, then returns before assist
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/height'));
   expect(await getOnboardingData()).toEqual(expect.objectContaining({ targetMode: 'estimate', goal: 'build_muscle' }));
+});
+
+it('requires a goal before signed-in legacy macro recommendations', async () => {
+  const screen = renderRouter(routes, { initialUrl: '/macro-setup' });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/goal'));
+  expect(screen.queryByTestId('macro-setup-save')).toBeNull();
+  expect(screen.getByTestId('welcome-continue').props.accessibilityState?.disabled).toBe(true);
+  await act(async () => { fireEvent.press(screen.getByTestId('goal-build_muscle')); });
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/macro-setup'));
+  expect(await screen.findByTestId('macro-setup-save')).toBeTruthy();
+  expect(screen.getByText(/We recommend ~/)).toBeTruthy();
+  expect((await getOnboardingData()).goal).toBe('build_muscle');
 });
 
 
