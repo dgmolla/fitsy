@@ -42,6 +42,7 @@ const routes = {
   'welcome/preview': () => <Text>Discovery preview</Text>,
   'welcome/location-permission': () => <Text>Choose your area</Text>,
   'macro-setup': MacroSetup,
+  '(tabs)/search': () => <Text>Search for meals</Text>,
 };
 beforeEach(async () => {
   jest.mocked(AsyncStorage.setItem).mockImplementation((key, value) => AsyncStorage.multiSet([[key, value]]));
@@ -161,6 +162,19 @@ it('requires a goal before signed-in legacy macro recommendations', async () => 
   expect(await screen.findByTestId('macro-setup-save')).toBeTruthy();
   expect(screen.getByText(/We recommend ~/)).toBeTruthy();
   expect((await getOnboardingData()).goal).toBe('build_muscle');
+  await act(async () => { fireEvent.press(screen.getByTestId('macro-setup-save')); });
+  await waitFor(() => expect(screen.getByText('Search for meals')).toBeTruthy());
+  expect(await getOnboardingResume()).toBeNull();
+});
+
+it('clears a signed-in goal checkpoint when macro setup is skipped', async () => {
+  await saveOnboardingField('goal', 'performance');
+  await AsyncStorage.setItem('@fitsy/onboardingStep', 'goal');
+  const screen = renderRouter(routes, { initialUrl: '/macro-setup' });
+  await screen.findByTestId('macro-setup-skip');
+  await act(async () => { fireEvent.press(screen.getByTestId('macro-setup-skip')); });
+  await waitFor(() => expect(screen.getByText('Search for meals')).toBeTruthy());
+  expect(await getOnboardingResume()).toBeNull();
 });
 
 

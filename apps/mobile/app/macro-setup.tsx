@@ -11,7 +11,7 @@ import { applySuggestionFilter, type SuggestionFilter } from '@/lib/macroSuggest
 import { calculateDailyMacros, dailyToPerMealMacros, macrosToStored } from '@/lib/macroCalculator';
 import { getOnboardingData, calculateSuggestedCalories, type Goal } from '@/lib/onboardingStorage';
 import { FONTS } from '@/lib/brand';
-import { rememberGoalReturnTo } from '@/lib/onboardingResume';
+import { clearOnboardingResume, rememberGoalReturnTo } from '@/lib/onboardingResume';
 
 interface MacroValues {
   protein: number;
@@ -136,15 +136,23 @@ export default function MacroSetupScreen() {
       const cal = computeCalories(values);
       const mealTargets = macrosToStored(dailyToPerMealMacros({ ...values, calories: cal }));
       await saveMacroTargets(mealTargets);
-      if (!fromOnboarding) pushProfileToServer(); // sync to server (onboarding syncs at payment)
+      if (!fromOnboarding) {
+        await clearOnboardingResume();
+        pushProfileToServer(); // sync to server (onboarding syncs at payment)
+      }
       router.push(fromOnboarding ? '/welcome/how-it-works' : '/(tabs)/search');
     } catch {
       Alert.alert('Save failed', 'Could not save your macro targets. Please try again.');
     }
   }
 
-  function handleSkip() {
-    router.push(fromOnboarding ? '/welcome/how-it-works' : '/(tabs)/search');
+  async function handleSkip() {
+    try {
+      if (!fromOnboarding) await clearOnboardingResume();
+      router.push(fromOnboarding ? '/welcome/how-it-works' : '/(tabs)/search');
+    } catch {
+      Alert.alert('Could not continue', 'Please try again.');
+    }
   }
 
   const s = createStyles(colors);

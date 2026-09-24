@@ -10,17 +10,20 @@ jest.mock('posthog-react-native', () => {
 import React from 'react';
 import { Text } from 'react-native';
 import { Stack } from 'expo-router';
-import { fireEvent, renderRouter, waitFor } from 'expo-router/testing-library';
+import { act, fireEvent, renderRouter, waitFor } from 'expo-router/testing-library';
 import TrialScreen from '../app/welcome/trial';
 
 jest.mock('../lib/onboardingResume', () => ({ useOnboardingStep: () => undefined }));
 const mockRefreshOffering = jest.fn();
 let mockEligibility: Record<string, boolean> = {};
 let mockEligibilityReady = true;
+const annual = { product: { identifier: 'annual', priceString: '$59.99', subscriptionPeriod: 'P1Y',
+  introPrice: { price: 0, priceString: '$0', period: 'P1W', cycles: 1 } } };
+let mockOffering: { annual: typeof annual; monthly: { product: { identifier: string; priceString: string; subscriptionPeriod: string; introPrice: null } } | null } | null = {
+  annual, monthly: { product: { identifier: 'monthly', priceString: '$9.99', subscriptionPeriod: 'P1M', introPrice: null } },
+};
 jest.mock('../lib/usePurchases', () => ({ usePurchases: () => ({
-  offering: { annual: { product: { identifier: 'annual', priceString: '$59.99', subscriptionPeriod: 'P1Y',
-    introPrice: { price: 0, priceString: '$0', period: 'P1W', cycles: 1 } } }, monthly: { product: {
-    identifier: 'monthly', priceString: '$9.99', subscriptionPeriod: 'P1M', introPrice: null } } },
+  offering: mockOffering,
   ready: true, introEligibilityReady: mockEligibilityReady, introEligibility: mockEligibility, refreshOffering: mockRefreshOffering, entitled: false,
 }) }));
 
@@ -35,6 +38,7 @@ test.each([
   ['ineligible', { annual: false, monthly: false }],
   ['unknown', {}],
 ])('%s trial introduction continues straight to plans without a trial reminder', async (_label, eligibility) => {
+  mockOffering = { annual, monthly: { product: { identifier: 'monthly', priceString: '$9.99', subscriptionPeriod: 'P1M', introPrice: null } } };
   mockEligibilityReady = true;
   mockEligibility = eligibility;
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
@@ -45,6 +49,7 @@ test.each([
 });
 
 test('eligible trial introduction keeps the optional reminder choice', async () => {
+  mockOffering = { annual, monthly: null };
   mockEligibilityReady = true;
   mockEligibility = { annual: true, monthly: false };
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
@@ -54,9 +59,21 @@ test('eligible trial introduction keeps the optional reminder choice', async () 
 });
 
 test('pending eligibility holds Continue before choosing the reminder or plans', async () => {
+  mockOffering = { annual, monthly: null };
   mockEligibilityReady = false;
   mockEligibility = {};
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
   fireEvent.press(screen.getByTestId('welcome-continue'));
   expect(screen.getPathname()).toBe('/welcome/trial');
+});
+
+test('missing offering requires an explicit retry before trial routing', async () => {
+  mockOffering = null;
+  mockEligibilityReady = false;
+  mockRefreshOffering.mockResolvedValue(null);
+  const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
+  await waitFor(() => expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toBe('Retry plans'));
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  expect(screen.getPathname()).toBe('/welcome/trial');
+  expect(mockRefreshOffering).toHaveBeenCalled();
 });

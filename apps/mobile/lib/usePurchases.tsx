@@ -57,6 +57,7 @@ export { BOOT_VERDICT_CAP_MS, STORE_GRACE_MS } from './useEntitlementVerdict';
 // lands unlocked; past the cap we navigate on the device's verdict and the
 // search screen's mismatch handler finishes the job.
 export const POST_PURCHASE_SYNC_CAP_MS = 4000;
+export const INTRO_ELIGIBILITY_CAP_MS = 5000;
 
 export interface PurchasesContextValue {
   /** `entitled !== null`: the verdict has settled on this launch. */
@@ -76,7 +77,7 @@ export interface PurchasesContextValue {
   offering: PurchasesOffering | null;
   /** Empty while checking, or when the store cannot establish eligibility. */
   introEligibility: Record<string, boolean>;
-  /** True after eligibility has been checked for the current customer and offering. */
+  /** True after eligibility settles, times out, or CustomerInfo is unavailable. */
   introEligibilityReady: boolean;
   /**
    * Ask the server for its verdict and store it. Resolves to the verdict now
@@ -112,6 +113,7 @@ const PurchasesContext = createContext<PurchasesContextValue | undefined>(undefi
 
 export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   const [customerInfo, setCustomerInfoState] = useState<CustomerInfo | null>(null);
+  const [customerInfoSettled, setCustomerInfoSettled] = useState(false);
   const [offering, setOffering] = useState<PurchasesOffering | null>(null);
   const [introResult, setIntroResult] = useState<{
     info: CustomerInfo; offering: PurchasesOffering; values: Record<string, boolean>;
@@ -122,6 +124,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   const setCustomerInfo = useCallback((info: CustomerInfo | null) => {
     customerInfoRef.current = info;
     setCustomerInfoState(info);
+    setCustomerInfoSettled(true);
   }, []);
   const verdict = useEntitlementVerdict({ customerInfoRef });
   const { entitled, inStoreGrace, syncEntitlement, resolveAtBoot, settleAfterBootFailure, markStoreConfirmed } = verdict;
@@ -159,6 +162,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
       } catch (err) {
         // The seams swallow their own errors, but no gate may hold forever.
         console.warn('[purchases] boot failed', err instanceof Error ? err.message : err);
+        if (!cancelled) setCustomerInfoSettled(true);
         await settleAfterBootFailure(userId, isCancelled);
       } finally {
         auth.finishBoot(cancelled);
@@ -186,8 +190,8 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let current = true;
     if (offering && customerInfo) {
-      void fetchIntroEligibility(offering.availablePackages.map(pkg => pkg.product.identifier)).then(values => {
-        if (current) setIntroResult({ info: customerInfo, offering, values });
+      void withinMs(fetchIntroEligibility(offering.availablePackages.map(pkg => pkg.product.identifier)), INTRO_ELIGIBILITY_CAP_MS).catch(() => null).then(values => {
+        if (current) setIntroResult({ info: customerInfo, offering, values: values ?? {} });
       });
     }
     return () => { current = false; };
@@ -197,7 +201,11 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   const introEligibility = useMemo(() =>
     introResult?.info === customerInfo && introResult?.offering === offering ? introResult.values : {},
   [introResult, customerInfo, offering]);
-  const introEligibilityReady = !!offering && !!customerInfo && introResult?.info === customerInfo && introResult?.offering === offering;
+  // CustomerInfo can fail independently of the offering. Unknown eligibility
+  // must lead to plan review without presenting a trial or hanging this route.
+  const introEligibilityReady = !!offering && (customerInfo
+    ? introResult?.info === customerInfo && introResult?.offering === offering
+    : customerInfoSettled && entitled !== null);
 
   // After RevenueCat reports Pro right out of the StoreKit flow: the user
   // just paid, so `entitled` flips true immediately (cached) and the caller

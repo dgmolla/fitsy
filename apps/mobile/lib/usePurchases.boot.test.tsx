@@ -21,13 +21,40 @@ import Purchases from 'react-native-purchases';
 jest.mock('react-native-purchases', () => jest.requireActual('../__mocks__/react-native-purchases'));
 jest.mock('expo-constants', () => jest.requireActual('../__mocks__/expo-constants'));
 import { ENTITLEMENT_CACHE_KEY } from './entitlement';
-import { BOOT_VERDICT_CAP_MS } from './usePurchases';
+import { BOOT_VERDICT_CAP_MS, INTRO_ELIGIBILITY_CAP_MS } from './usePurchases';
 
 setupPurchasesMocks();
 
 type StatusResult = { active: boolean; status: null; expiresAt: null };
 
 describe('boot', () => {
+  it('settles unknown trial eligibility when CustomerInfo is unavailable but plans load', async () => {
+    mockRc.identifyPurchasesUser.mockResolvedValueOnce(null as never);
+    mockRc.fetchCurrentOffering.mockResolvedValueOnce({ availablePackages: [{ product: { identifier: 'annual' } }] } as never);
+    const { result } = renderProvider();
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    expect(result.current.offering).not.toBeNull();
+    expect(result.current.introEligibilityReady).toBe(true);
+    expect(result.current.introEligibility).toEqual({});
+  });
+
+  it('settles unknown eligibility after a bounded StoreKit response wait', async () => {
+    useFakeTimersKeepingFlush();
+    expect(jest.requireActual<typeof import('./purchases')>('./purchases').configurePurchases()).toBe(true);
+    const pending = deferred<Record<string, { status: number; description: string }>>();
+    jest.spyOn(Purchases, 'checkTrialOrIntroductoryPriceEligibility').mockReturnValueOnce(pending.promise);
+    mockRc.fetchCurrentOffering.mockResolvedValueOnce({ availablePackages: [{ product: { identifier: 'annual' } }] } as never);
+    const { result } = renderProvider();
+    await flush();
+    await flush();
+    expect(result.current.introEligibilityReady).toBe(false);
+    act(() => { jest.advanceTimersByTime(INTRO_ELIGIBILITY_CAP_MS); });
+    await flush();
+    expect(result.current.introEligibilityReady).toBe(true);
+    expect(result.current.introEligibility).toEqual({});
+    jest.useRealTimers();
+  });
+
   it('maps live store eligibility into the provider and clears it after a failed offering refresh', async () => {
     const seam = jest.requireActual<typeof import('./purchases')>('./purchases');
     expect(seam.configurePurchases()).toBe(true);
