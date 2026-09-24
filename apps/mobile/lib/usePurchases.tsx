@@ -258,6 +258,12 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
       const identified = userId
         ? await withinMs(ensurePurchasesUser(userId), PURCHASE_IDENTITY_CAP_MS)
         : false;
+      if (identified === null) {
+        // The native identity request is still unresolved. Its queue must
+        // remain intact so a late login cannot race a new account or purchase.
+        Alert.alert('Payment service still connecting', 'Fully close and reopen Fitsy, then try again.');
+        return false;
+      }
       if (!userId || !identified) {
         Alert.alert('Purchase not available', 'We could not confirm your account with the store. Please try again.');
         return false;
