@@ -154,6 +154,12 @@ export function matchingFailureKey(failure, flowName) {
     : `error:sha256:${createHash('sha256').update(String(failure.error).replace(/\s+/gu, ' ').trim()).digest('hex')}`;
   return failure && JSON.stringify([flowName || 'flow:absent', failure.command, failure.selectorIdentity || 'selector:absent', errorIdentity]);
 }
+export function recordedFlowFailureKey(failure, flowName, outcome, result) {
+  const commandKey = matchingFailureKey(failure, flowName);
+  return commandKey
+    ? JSON.stringify([outcome.failureReason, commandKey])
+    : JSON.stringify([flowName, outcome.failureReason, result.reason || result.code, outcome.summary.observation]);
+}
 export function needsDiagnosis(history) {
   const last = history.slice(-2);
   return last.length === 2 && last[0].key === last[1].key && !last[1].diagnosis;

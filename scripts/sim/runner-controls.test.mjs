@@ -5,7 +5,7 @@ import { createServer } from 'node:http';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { archiveFailureEvidence, completeMaestroRun, flowFailureReason, recordFlowOutcome, recordRunFailure, requireMetro, runOwnedMaestro, runRecordedFlow, saveRecordedFlowReceipts, startOwnedRecorder, stopOwnedRecorder, summarizeCommands, summarizeFlowTiming, nearestFailure, matchingFailureKey, needsDiagnosis } from './runner-controls.mjs';
+import { archiveFailureEvidence, completeMaestroRun, flowFailureReason, recordFlowOutcome, recordedFlowFailureKey, recordRunFailure, requireMetro, runOwnedMaestro, runRecordedFlow, saveRecordedFlowReceipts, startOwnedRecorder, stopOwnedRecorder, summarizeCommands, summarizeFlowTiming, nearestFailure, matchingFailureKey, needsDiagnosis } from './runner-controls.mjs';
 
 const temp = () => mkdtempSync(join(tmpdir(), 'fitsy-runner-'));
 test('final timeline failure leaves a failed report and retains the triggering error', () => {
@@ -754,6 +754,16 @@ test('successful Maestro with undecodable recorder output records failure before
     assert.deepEqual(readFileSync(video), broken);
     assert.match(readFileSync(timeline, 'utf8'), /"outcome":"fail","failureReason":"unplayable-video"/);
     assert.doesNotMatch(readFileSync(timeline, 'utf8'), /awaiting-walkthrough/);
+    const unplayableKey = recordedFlowFailureKey(null, 'welcome', outcome, recorded.result);
+    const recorderFailure = { ...recorded, recorderResult: { ...recorded.recorderResult, code: 1 } };
+    const recorderOutcome = recordFlowOutcome({ dir, recorded: recorderFailure, commands, videoPath: video,
+      videoReceipt: 'welcome/flow-untrimmed.mp4', flowName: 'welcome', report, reportFile, timeline,
+      commandReceipt: 'welcome/commands.json', failureDetail: failureReason => ({ flow: 'welcome', failureReason }) });
+    const recorderKey = recordedFlowFailureKey(null, 'welcome', recorderOutcome, recorderFailure.result);
+    assert.equal(recorderOutcome.failureReason, 'recorder-failure');
+    assert.notEqual(recorderKey, unplayableKey);
+    assert.equal(needsDiagnosis([{ key: recorderKey }, { key: unplayableKey }]), false);
+    assert.equal(needsDiagnosis([{ key: unplayableKey }, { key: unplayableKey }]), true);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -761,6 +771,21 @@ test('two matching failures require a diagnosis checkpoint before another run', 
   assert.equal(needsDiagnosis([{ key: 'a' }, { key: 'a' }]), true);
   assert.equal(needsDiagnosis([{ key: 'a' }, { key: 'b' }]), false);
   assert.equal(needsDiagnosis([{ key: 'a' }, { key: 'a', diagnosis: { file: 'review.json' } }]), false);
+});
+
+test('recording failures match only the same observed cause', () => {
+  const result = { code: 0, reason: null };
+  const summary = { observation: 'complete' };
+  const recorderExit = recordedFlowFailureKey(null, 'welcome', { failureReason: 'recorder-failure', summary }, result);
+  const corruptVideo = recordedFlowFailureKey(null, 'welcome', { failureReason: 'unplayable-video', summary }, result);
+  assert.notEqual(recorderExit, corruptVideo);
+  assert.equal(needsDiagnosis([{ key: recorderExit }, { key: corruptVideo }]), false);
+  assert.equal(needsDiagnosis([{ key: corruptVideo }, { key: corruptVideo }]), true);
+  const command = nearestFailure([{ command: { tapOnElement: { selector: { idRegex: 'welcome-start' } } },
+    metadata: { status: 'FAILED', error: { message: 'Element not found' } } }]);
+  const withRecorderExit = recordedFlowFailureKey(command, 'welcome', { failureReason: 'recorder-failure', summary }, result);
+  const withCommandFailure = recordedFlowFailureKey(command, 'welcome', { failureReason: 'command-failure', summary }, result);
+  assert.notEqual(withRecorderExit, withCommandFailure);
 });
 
 test('failure identity distinguishes flow and tap target while ignoring receipt timestamps', () => {
