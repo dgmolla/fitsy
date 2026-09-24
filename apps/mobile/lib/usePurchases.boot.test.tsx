@@ -130,6 +130,23 @@ describe('boot', () => {
     expect(mockRc.identifyPurchasesUser).toHaveBeenCalledTimes(2);
   });
 
+  it('keeps the native update listener when a different account signs in before boot identity settles', async () => {
+    const oldIdentity = deferred<typeof freeInfo>();
+    mockRc.identifyPurchasesUser.mockReturnValueOnce(oldIdentity.promise).mockResolvedValueOnce(freeInfo);
+    const { result } = renderProvider();
+    await flush();
+    mockAuth.session = { user: { id: 'u2' } };
+    await act(async () => { mockAuth.listener?.('SIGNED_IN', mockAuth.session); });
+    await act(async () => { oldIdentity.resolve(freeInfo); });
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    expect(mockRc.addCustomerInfoListener).toHaveBeenCalledTimes(1);
+    const listener = mockRc.addCustomerInfoListener.mock.calls[0][0];
+    mockRc.fetchCustomerInfo.mockResolvedValueOnce(proInfo);
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    await act(async () => { listener(proInfo); });
+    await waitFor(() => expect(result.current.entitled).toBe(true));
+  });
+
   it('settles unknown trial eligibility when CustomerInfo is unavailable but plans load', async () => {
     mockRc.identifyPurchasesUser.mockResolvedValueOnce(null as never);
     mockRc.fetchCurrentOffering.mockResolvedValueOnce({ availablePackages: [{ product: { identifier: 'annual' } }] } as never);
@@ -377,13 +394,14 @@ describe('boot', () => {
     expect(a.result.current.entitled).toBe(false);
     a.unmount();
 
-    // Throws after identity, no cache: the device verdict.
+    // Listener registration fails independently: the server verdict still wins.
     delete mockStore[ENTITLEMENT_CACHE_KEY];
     mockRc.identifyPurchasesUser.mockResolvedValue(proInfo);
     mockRc.addCustomerInfoListener.mockImplementationOnce(() => { throw new Error('boom'); });
     const b = renderProvider();
     await waitFor(() => expect(b.result.current.ready).toBe(true));
-    expect(b.result.current.entitled).toBe(true);
+    expect(b.result.current.entitled).toBe(false);
+    expect(b.result.current.isPro).toBe(true);
     b.unmount();
 
     // Throws before identity, no cache: not entitled, but ready.

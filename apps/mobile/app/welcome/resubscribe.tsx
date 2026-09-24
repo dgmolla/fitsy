@@ -89,7 +89,7 @@ export default function ResubscribeScreen() {
       if (isPro) {
         claim();
         await openPurchasedDestination(navigation);
-      } else {
+      } else if (isPro === false) {
         Alert.alert('Nothing to restore', "We couldn't find an active subscription for this account.");
       }
     } finally {

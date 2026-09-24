@@ -33,7 +33,7 @@ async function restoreWithStalledSync(result: ProviderResult) {
   mockRc.restorePurchases.mockResolvedValue(proInfo);
   const pending = deferred<SyncResult>();
   mockApi.syncSubscription.mockReturnValue(pending.promise);
-  let got: boolean | undefined;
+  let got: boolean | null | undefined;
   await act(async () => {
     const p = result.current.restore();
     await new Promise((r) => setImmediate(r));
@@ -44,13 +44,26 @@ async function restoreWithStalledSync(result: ProviderResult) {
 }
 
 describe('purchase / restore', () => {
+  it('distinguishes a failed native Restore from a completed Restore with no subscription', async () => {
+    const { result } = renderProvider();
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    mockRc.restorePurchases.mockResolvedValueOnce(null).mockResolvedValueOnce({ entitlements: { active: {}, all: {} } });
+    let failed: boolean | null | undefined;
+    let empty: boolean | null | undefined;
+    await act(async () => { failed = await result.current.restore(); });
+    await act(async () => { empty = await result.current.restore(); });
+    expect(failed).toBeNull();
+    expect(empty).toBe(false);
+    expect(Alert.alert).toHaveBeenCalledWith('Restore not completed', 'Please try again.');
+    expect(mockRc.restorePurchases).toHaveBeenCalledTimes(2);
+  });
   it('holds Restore while the signed-in native identity is unresolved', async () => {
     const { result } = renderProvider();
     await waitFor(() => expect(result.current.ready).toBe(true));
     useFakeTimersKeepingFlush();
     mockRc.ensurePurchasesUser.mockImplementationOnce(() => new Promise(() => {}));
     mockRc.restorePurchases.mockResolvedValue(proInfo);
-    let restored: boolean | undefined;
+    let restored: boolean | null | undefined;
     await act(async () => {
       const pending = result.current.restore();
       await new Promise((r) => setImmediate(r));
@@ -58,7 +71,7 @@ describe('purchase / restore', () => {
       jest.advanceTimersByTime(PURCHASE_IDENTITY_CAP_MS);
       restored = await pending;
     });
-    expect(restored).toBe(false);
+    expect(restored).toBeNull();
     expect(mockRc.restorePurchases).not.toHaveBeenCalled();
     expect(Alert.alert).toHaveBeenCalledWith('Payment service still connecting', 'Fully close and reopen Fitsy, then try again.');
     expect(result.current.entitled).toBe(false);

@@ -141,7 +141,7 @@ export default function PaymentScreen() {
       const isPro = await restore();
       if (isPro) {
         await completeOnboarding();
-      } else {
+      } else if (isPro === false) {
         Alert.alert('Nothing to restore', "We couldn't find an active subscription for this account.");
       }
     } finally {

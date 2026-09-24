@@ -109,7 +109,8 @@ export interface PurchasesContextValue {
   showManageSubscriptions: () => Promise<void>;
   /** The store confirmed a purchase/restore within the last STORE_GRACE_MS. */
   storeConfirmed: boolean;
-  restore: () => Promise<boolean>; // resolves like `purchase`
+  /** True for Pro, false for a completed restore with no Pro, null if restore could not complete. */
+  restore: () => Promise<boolean | null>;
 }
 
 const PurchasesContext = createContext<PurchasesContextValue | undefined>(undefined);
@@ -124,6 +125,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   // Mirror of `customerInfo` for async callbacks (the boot sync runs before
   // the first render that would carry it in state).
   const customerInfoRef = useRef<CustomerInfo | null>(null);
+  const configuredRef = useRef(false);
   const offeringRequestRef = useRef(0);
   const offeringCommittedRequestRef = useRef(0);
   const acceptOffering = useCallback((off: PurchasesOffering | null, request: number) => {
@@ -147,7 +149,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   // verdict reads. A stalled store catalog must not hold every gate.
   useEffect(() => {
     const configured = configurePurchases();
-    let unsubscribe: (() => void) | undefined;
+    configuredRef.current = configured;
     let cancelled = false;
     let bootOpen = true;
     let bootUserId: string | undefined;
@@ -187,25 +189,6 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
             );
             if (sameUser && !isCancelled()) {
               setCustomerInfo(info);
-              unsubscribe = addCustomerInfoListener(() => {
-                void (async () => {
-                  const { data } = await supabase.auth.getSession();
-                  const currentUserId = data.session?.user.id;
-                  if (!currentUserId || await currentPurchasesUserId() !== currentUserId) return;
-                  // The event payload can belong to the previous account if
-                  // auth changed while its callback was queued. Read again
-                  // for the verified native identity instead of storing it.
-                  const fresh = await fetchCustomerInfo();
-                  if (!fresh) return;
-                  const latest = await supabase.auth.getSession();
-                  if (latest.data.session?.user.id === currentUserId &&
-                    await currentPurchasesUserId() === currentUserId) {
-                    const proChanged = isProActive(fresh) !== isProActive(customerInfoRef.current);
-                    setCustomerInfo(fresh);
-                    if (proChanged) void syncEntitlement('mismatch');
-                  }
-                })().catch(() => undefined);
-              });
               if (!bootOpen && isProActive(info) && verdict.entitledRef.current === false) {
                 void syncEntitlement('mismatch');
               }
@@ -228,9 +211,36 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       cancelled = true;
-      unsubscribe?.();
     };
   }, [setCustomerInfo, acceptOffering, resolveAtBoot, settleAfterBootFailure, syncEntitlement, verdict.entitledRef, auth]);
+
+  // Mount independently of the boot identity read. A sign-in can invalidate
+  // that read, but must not leave this provider without native updates.
+  useEffect(() => {
+    if (!configuredRef.current) return;
+    try {
+      return addCustomerInfoListener(() => {
+        void (async () => {
+          const { data } = await supabase.auth.getSession();
+          const currentUserId = data.session?.user.id;
+          if (!currentUserId || await currentPurchasesUserId() !== currentUserId) return;
+          // The event payload can belong to the previous account if auth
+          // changed while the callback was queued. Read the verified identity.
+          const fresh = await fetchCustomerInfo();
+          if (!fresh) return;
+          const latest = await supabase.auth.getSession();
+          if (latest.data.session?.user.id === currentUserId &&
+            await currentPurchasesUserId() === currentUserId) {
+            const proChanged = isProActive(fresh) !== isProActive(customerInfoRef.current);
+            setCustomerInfo(fresh);
+            if (proChanged) void syncEntitlement('mismatch');
+          }
+        })().catch(() => undefined);
+      });
+    } catch (err) {
+      console.warn('[purchases] listener unavailable', err instanceof Error ? err.message : err);
+    }
+  }, [setCustomerInfo, syncEntitlement]);
 
   const refresh = useCallback(async () => {
     setCustomerInfo(await fetchCustomerInfo());
@@ -326,7 +336,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     [setCustomerInfo, settleAfterStore],
   );
 
-  const restore = useCallback(async (): Promise<boolean> => {
+  const restore = useCallback(async (): Promise<boolean | null> => {
     const { data } = await supabase.auth.getSession();
     const userId = data.session?.user.id;
     const identified = userId
@@ -334,16 +344,20 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
       : false;
     if (identified === null) {
       Alert.alert('Payment service still connecting', 'Fully close and reopen Fitsy, then try again.');
-      return false;
+      return null;
     }
     if (!userId || !identified) {
       Alert.alert('Restore not available', 'We could not confirm your account with the store. Please try again.');
-      return false;
+      return null;
     }
     const isCurrentUser = async () => (await supabase.auth.getSession()).data.session?.user.id === userId;
-    if (!(await isCurrentUser())) return false;
+    if (!(await isCurrentUser())) return null;
     const info = await rcRestore(userId, isCurrentUser);
-    if (!(await isCurrentUser())) return false;
+    if (!(await isCurrentUser())) return null;
+    if (!info) {
+      Alert.alert('Restore not completed', 'Please try again.');
+      return null;
+    }
     setCustomerInfo(info);
     trackPurchasesRestored({ is_pro: isProActive(info) });
     return settleAfterStore(info, 'restore');
