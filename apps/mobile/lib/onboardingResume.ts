@@ -7,9 +7,12 @@ import { getPreviewSetup } from './previewSetup';
 
 const KEY = '@fitsy/onboardingStep';
 const GOAL_RETURN_KEY = '@fitsy/onboardingGoalReturnTo';
-type GoalReturnTo = '/welcome/value-payoff' | '/welcome/goal-payoff' | '/welcome/target-setup' | '/macro-setup' | '/macro-setup?fromOnboarding=1';
+export type GoalReturnTo = '/welcome/tried' | '/welcome/response' | '/welcome/value-payoff' | '/welcome/goal-payoff' | '/welcome/target-setup' | '/macro-setup' | '/macro-setup?fromOnboarding=1';
 const STEPS = ['promise', 'tried', 'response', 'value-payoff', 'goal-payoff', 'location-permission', 'value-abundance', 'how-it-works', 'target-setup', 'macros-intro', 'goal', 'height', 'weight', 'age', 'sex', 'activity', 'tuning', 'preview', 'signin', 'trial', 'trial-reminder', 'payment', 'out-of-area'] as const;
 type Step = typeof STEPS[number];
+export function hasChosenWelcomeGoal(goal: Awaited<ReturnType<typeof getOnboardingData>>['goal']): boolean {
+  return goal === 'lose_fat' || goal === 'build_muscle' || goal === 'performance';
+}
 export function useOnboardingStep(step?: Step): void {
   useFocusEffect(useCallback(() => { if (step) void AsyncStorage.setItem(KEY, step); }, [step]));
 }
@@ -18,13 +21,17 @@ export async function getOnboardingResume(): Promise<`/welcome/${Step}` | null> 
   // Earlier versions asked about prior approaches before collecting location.
   if ((step === 'tried' || step === 'response') && !(await getPreviewSetup()).data.area) return '/welcome/location-permission';
   if (step === 'promise') return '/welcome/location-permission';
+  if ((step === 'tried' || step === 'response') && !hasChosenWelcomeGoal((await getOnboardingData()).goal)) {
+    await rememberGoalReturnTo(`/welcome/${step}`);
+    return '/welcome/goal';
+  }
   // Earlier onboarding asked about prior approaches before the goal choice.
   // A resumed payoff must collect that choice before showing a goal-specific graph.
-  if ((step === 'value-abundance' || step === 'value-payoff' || step === 'goal-payoff') && !(await getOnboardingData()).goal) {
+  if ((step === 'value-abundance' || step === 'value-payoff' || step === 'goal-payoff') && !hasChosenWelcomeGoal((await getOnboardingData()).goal)) {
     await rememberGoalReturnTo(step === 'goal-payoff' ? '/welcome/goal-payoff' : '/welcome/value-payoff');
     return '/welcome/goal';
   }
-  if (step && ['how-it-works', 'target-setup', 'macros-intro', 'height', 'weight', 'age', 'sex', 'activity', 'tuning', 'preview'].includes(step) && !(await getOnboardingData()).goal) {
+  if (step && ['how-it-works', 'target-setup', 'macros-intro', 'height', 'weight', 'age', 'sex', 'activity', 'tuning', 'preview'].includes(step) && !hasChosenWelcomeGoal((await getOnboardingData()).goal)) {
     await rememberGoalReturnTo('/welcome/target-setup');
     return '/welcome/goal';
   }
@@ -40,7 +47,7 @@ export async function rememberGoalReturnTo(destination: GoalReturnTo): Promise<v
 export async function takeGoalReturnTo(): Promise<GoalReturnTo | null> {
   const saved = await AsyncStorage.getItem(GOAL_RETURN_KEY);
   await AsyncStorage.removeItem(GOAL_RETURN_KEY);
-  return saved === '/welcome/value-payoff' || saved === '/welcome/goal-payoff' || saved === '/welcome/target-setup' || saved === '/macro-setup' || saved === '/macro-setup?fromOnboarding=1' ? saved : null;
+  return saved === '/welcome/tried' || saved === '/welcome/response' || saved === '/welcome/value-payoff' || saved === '/welcome/goal-payoff' || saved === '/welcome/target-setup' || saved === '/macro-setup' || saved === '/macro-setup?fromOnboarding=1' ? saved : null;
 }
 
 export async function clearGoalReturnTo(): Promise<void> {

@@ -1,3 +1,4 @@
+import { requireWelcomeGoal } from '@/lib/requireWelcomeGoal';
 import { useOnboardingStep } from '@/lib/onboardingResume';
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -14,7 +15,7 @@ const AGE_MIN = 16;
 const AGE_MAX = 80;
 const AGE_DEFAULT = 28;
 
-export default function AgeScreen() {
+function AgeScreen() {
   useOnboardingStep('age');
   const [age, setAge] = useState(AGE_DEFAULT);
 
@@ -92,3 +93,5 @@ const s = StyleSheet.create({
     letterSpacing: 0,
   },
 });
+
+export default requireWelcomeGoal(AgeScreen, '/welcome/target-setup');

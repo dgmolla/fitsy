@@ -1,3 +1,4 @@
+import { requireWelcomeGoal } from '@/lib/requireWelcomeGoal';
 import { useOnboardingStep } from '@/lib/onboardingResume';
 import React, { useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
@@ -9,9 +10,11 @@ import { trackOnboardingScreenView, trackOnboardingChoiceSelected } from '@/lib/
 import { EDITORIAL, TEXT } from '@/lib/brand';
 import { getOnboardingData, saveOnboardingField } from '@/lib/onboardingStorage';
 import { TRIED_OPTIONS, type TriedApproach } from '@/lib/onboardingPersonalization';
+import { useRouteContinuation } from '@/lib/useRouteContinuation';
 
-export default function TriedScreen() {
+function TriedScreen() {
   useOnboardingStep('tried');
+  const { begin } = useRouteContinuation();
   const [selected, setSelected] = useState<TriedApproach | null>(null);
   const [busy, setBusy] = useState(false);
   useFocusEffect(React.useCallback(() => {
@@ -31,13 +34,15 @@ export default function TriedScreen() {
       subtitle="We’ll start with what matters to you."
       onContinue={async () => {
         if (!selected || busy) return;
+        const isCurrent = begin();
         setBusy(true);
         try {
           await saveOnboardingField('tried', selected);
+          if (!isCurrent()) return;
           trackOnboardingChoiceSelected({ screen: 'tried', value: selected });
           router.push('/welcome/response');
-        } catch { Alert.alert('Could not save your answer', 'Please try again.'); }
-        finally { setBusy(false); }
+        } catch { if (isCurrent()) Alert.alert('Could not save your answer', 'Please try again.'); }
+        finally { if (isCurrent()) setBusy(false); }
       }}
       canContinue={selected !== null && !busy}
     >
@@ -82,3 +87,5 @@ const s = StyleSheet.create({
   label: { ...TEXT.optionLabel, flex: 1 },
   labelOn: { color: EDITORIAL.cream },
 });
+
+export default requireWelcomeGoal(TriedScreen, '/welcome/tried');

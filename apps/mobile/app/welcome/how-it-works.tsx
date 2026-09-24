@@ -1,3 +1,4 @@
+import { requireWelcomeGoal } from '@/lib/requireWelcomeGoal';
 import React, { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
@@ -6,7 +7,7 @@ import { EDITORIAL, TEXT } from '@/lib/brand';
 import { useOnboardingStep } from '@/lib/onboardingResume';
 import { trackOnboardingScreenView } from '@/lib/analytics';
 
-export default function HowItWorksScreen() {
+function HowItWorksScreen() {
   useOnboardingStep('how-it-works');
   useEffect(() => { trackOnboardingScreenView('how_it_works'); }, []);
   return <WelcomeScreen progress={0.61} title={"A little context.\nA better choice."}
@@ -34,3 +35,5 @@ const s = StyleSheet.create({
   body: { ...TEXT.body, lineHeight: 24 },
   note: { ...TEXT.bodySmall, textAlign: 'center', marginTop: 20, lineHeight: 20 },
 });
+
+export default requireWelcomeGoal(HowItWorksScreen, '/welcome/target-setup');

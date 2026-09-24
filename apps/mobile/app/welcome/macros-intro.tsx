@@ -1,3 +1,4 @@
+import { requireWelcomeGoal } from '@/lib/requireWelcomeGoal';
 import { useOnboardingStep } from '@/lib/onboardingResume';
 import React, { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -13,7 +14,7 @@ const MACROS = [
   { label: 'Fat', abbr: 'F', desc: 'Supports hormones and brain function', color: '#7A4B8A' },
 ];
 
-export default function MacrosIntroScreen() {
+function MacrosIntroScreen() {
   useOnboardingStep('macros-intro');
   const navigation = useNavigation();
   useEffect(() => {
@@ -80,3 +81,5 @@ const s = StyleSheet.create({
     marginTop: 2,
   },
 });
+
+export default requireWelcomeGoal(MacrosIntroScreen, '/welcome/target-setup');

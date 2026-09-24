@@ -1,3 +1,4 @@
+import { requireWelcomeGoal } from '@/lib/requireWelcomeGoal';
 import React, { useCallback, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
@@ -7,7 +8,7 @@ import { getOnboardingData } from '@/lib/onboardingStorage';
 import { onboardingPitch } from '@/lib/onboardingPersonalization';
 import { trackOnboardingScreenView } from '@/lib/analytics';
 
-export default function ValuePayoffScreen() {
+function ValuePayoffScreen() {
   useOnboardingStep('value-payoff');
   const [pitch, setPitch] = useState<ReturnType<typeof onboardingPitch>>();
   useFocusEffect(useCallback(() => {
@@ -24,3 +25,5 @@ export default function ValuePayoffScreen() {
     {pitch && <OnboardingFitnessPayoff pitch={pitch} />}
   </WelcomeScreen>;
 }
+
+export default requireWelcomeGoal(ValuePayoffScreen, '/welcome/value-payoff');

@@ -6,6 +6,20 @@ import { clearOnboardingResume, getOnboardingResume, takeGoalReturnTo } from './
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 beforeEach(async () => { await AsyncStorage.clear(); });
 
+it.each(['tried', 'response'])('requires a goal before resuming %s with an area', async checkpoint => {
+  await saveOnboardingField('area', { lat: 34.1, lng: -118.3, name: 'Silver Lake', source: 'manual' });
+  await AsyncStorage.setItem('@fitsy/onboardingStep', checkpoint);
+  expect(await getOnboardingResume()).toBe('/welcome/goal');
+  expect(await takeGoalReturnTo()).toBe(`/welcome/${checkpoint}`);
+});
+
+it('requires a visible goal choice for an older maintenance target checkpoint', async () => {
+  await saveOnboardingField('goal', 'maintain');
+  await AsyncStorage.setItem('@fitsy/onboardingStep', 'tuning');
+  expect(await getOnboardingResume()).toBe('/welcome/goal');
+  expect(await takeGoalReturnTo()).toBe('/welcome/target-setup');
+});
+
 it.each([
   ['trial', '/welcome/trial'],
   ['trial-reminder', '/welcome/trial-reminder'],

@@ -1,3 +1,4 @@
+import { requireWelcomeGoal } from '@/lib/requireWelcomeGoal';
 import { useOnboardingStep } from '@/lib/onboardingResume';
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -16,7 +17,7 @@ const OPTIONS: { id: ActivityLevel; label: string; desc: string; days: string }[
   { id: 'very_active', label: 'Intense', desc: 'Training almost every day', days: '6–7' },
 ];
 
-export default function ActivityScreen() {
+function ActivityScreen() {
   useOnboardingStep('activity');
   const [selected, setSelected] = useState<ActivityLevel | null>(null);
 
@@ -108,3 +109,5 @@ const s = StyleSheet.create({
   desc: { fontFamily: FONTS.nunitoSans, fontSize: 14, color: EDITORIAL.textSoft, marginTop: 3, fontWeight: '500' },
   descOn: { color: 'rgba(253,251,247,0.5)' },
 });
+
+export default requireWelcomeGoal(ActivityScreen, '/welcome/target-setup');

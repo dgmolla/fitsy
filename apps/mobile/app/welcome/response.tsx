@@ -1,3 +1,4 @@
+import { requireWelcomeGoal } from '@/lib/requireWelcomeGoal';
 import React, { useCallback, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
@@ -7,7 +8,7 @@ import { getOnboardingData } from '@/lib/onboardingStorage';
 import { onboardingPitch } from '@/lib/onboardingPersonalization';
 import { trackOnboardingScreenView } from '@/lib/analytics';
 
-export default function ResponseScreen() {
+function ResponseScreen() {
   useOnboardingStep('response');
   const [pitch, setPitch] = useState<ReturnType<typeof onboardingPitch>>();
   useFocusEffect(useCallback(() => {
@@ -24,3 +25,5 @@ export default function ResponseScreen() {
     {pitch && <OnboardingApproachStory approach={pitch.approach} />}
   </WelcomeScreen>;
 }
+
+export default requireWelcomeGoal(ResponseScreen, '/welcome/response');

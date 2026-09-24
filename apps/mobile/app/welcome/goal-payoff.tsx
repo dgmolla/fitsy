@@ -1,3 +1,4 @@
+import { requireWelcomeGoal } from '@/lib/requireWelcomeGoal';
 import React, { useCallback, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
@@ -7,7 +8,7 @@ import { getOnboardingData, type OnboardingData } from '@/lib/onboardingStorage'
 import { onboardingGoalStory } from '@/lib/onboardingPersonalization';
 import { trackOnboardingScreenView } from '@/lib/analytics';
 
-export default function GoalPayoffScreen() {
+function GoalPayoffScreen() {
   useOnboardingStep('goal-payoff');
   const [data, setData] = useState<OnboardingData>();
   useFocusEffect(useCallback(() => {
@@ -32,3 +33,5 @@ export default function GoalPayoffScreen() {
     <OnboardingGoalGraph goal={data.goal} />
   </WelcomeScreen>;
 }
+
+export default requireWelcomeGoal(GoalPayoffScreen, '/welcome/goal-payoff');

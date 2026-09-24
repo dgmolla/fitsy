@@ -1,3 +1,4 @@
+import { requireWelcomeGoal } from '@/lib/requireWelcomeGoal';
 import { useOnboardingStep } from '@/lib/onboardingResume';
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -14,7 +15,7 @@ const OPTIONS: { id: Sex; label: string }[] = [
   { id: 'male', label: 'Male' },
 ];
 
-export default function SexScreen() {
+function SexScreen() {
   useOnboardingStep('sex');
   const [selected, setSelected] = useState<Sex | null>(null);
 
@@ -94,3 +95,5 @@ const s = StyleSheet.create({
   },
   dotOn: { backgroundColor: EDITORIAL.cream },
 });
+
+export default requireWelcomeGoal(SexScreen, '/welcome/target-setup');
