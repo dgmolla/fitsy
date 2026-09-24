@@ -6,10 +6,10 @@ import { createServer } from 'node:net';
 import { createHash } from 'node:crypto';
 import { resolve, relative, join } from 'node:path';
 import { createRequire } from 'node:module';
-import { root, inputHash, changedPaths, impact, digest, validate, baseline, repoEnv, isPlayableVideo } from '../verify/product-flow.mjs';
+import { root, inputHash, changedPaths, impact, digest, validate, baseline, repoEnv } from '../verify/product-flow.mjs';
 import { backendRevision } from './backend-identity.mjs';
 import { buildProfile, bundleDelegate, fixtureLabel, metroRoute } from './build-profile.mjs';
-import { admitDisk, archiveFailureEvidence, completeMaestroRun, event, flowFailureReason, latestMaestroLog, matchingFailureKey, nearestFailure, needsDiagnosis, recordRunFailure, requireMetro, runRecordedFlow, saveRecordedFlowReceipts } from './runner-controls.mjs';
+import { admitDisk, archiveFailureEvidence, completeMaestroRun, event, latestMaestroLog, matchingFailureKey, nearestFailure, needsDiagnosis, recordFlowOutcome, recordRunFailure, requireMetro, runRecordedFlow } from './runner-controls.mjs';
 const yaml = createRequire(import.meta.url)('js-yaml');
 const out = resolve(root, '.evidence/product-flow');
 const buildDir = resolve(root, '.evidence/product-build');
@@ -270,33 +270,31 @@ async function execute(udid, names) {
         catch (error) { commandParseError = error.message; }
       }
       const failure = Array.isArray(parsed) ? nearestFailure(parsed) : null;
-      const failureReason = flowFailureReason(result, parsed, recorderResult, flow.name)
-        || (isPlayableVideo(video) ? null : 'unplayable-video');
-      if (failureReason) {
-        const screenshot = join(dir, 'failure-screen.png');
-        try { run('xcrun', ['simctl', 'io', udid, 'screenshot', screenshot], { timeout: 15000 }); } catch { /* absence recorded below */ }
-        const log = latestMaestroLog(dir);
-        // Retain raw log; expose only status and duration pairs in the derived summary.
-        const networkTiming = log ? [...readFileSync(log, 'utf8').matchAll(/\bHTTP\s+(\d{3})\b[^\n]{0,100}?\b(\d+)\s*ms\b/g)].map(match => ({ status: Number(match[1]), durationMs: Number(match[2]) })) : [];
-        const detail = { flow: flow.name, failureReason, exitCode: result.code,
-          watchdog: ['inactivity-deadline', 'wall-deadline'].find(reason => reason === (result.priorReason || result.reason)) || null,
-          runnerError: result.error || null,
-          commandReceipt: commands.length === 1 ? relative(out, commands[0]) : null, commandParseError,
-          recorder: { ...recorderResult, file: relative(out, video) },
-          failedCommand: failure && { command: failure.command, expected: failure.expected, deadlineMs: failure.deadlineMs, error: failure.error },
-          nearestScreenshot: existsSync(screenshot) ? relative(out, screenshot) : null,
-          nearestAX: failure?.hierarchy ? 'raw failed command metadata.error.hierarchyRoot' : null,
-          networkTiming: networkTiming.length ? networkTiming : null, networkTimingAbsence: networkTiming.length ? null : 'No structured network status/duration in Maestro log' };
-        const summary = saveRecordedFlowReceipts(dir, recorded, parsed, { video: relative(out, video), failureReason, failureDetail: detail });
-        const key = matchingFailureKey(failure, flow.name) || JSON.stringify([flow.name, result.reason || result.code, summary.observation]);
+      const outcome = recordFlowOutcome({ dir, recorded, commands: parsed, videoPath: video, videoReceipt: relative(out, video),
+        flowName: flow.name, report, reportFile: join(out, 'report.json'), timeline,
+        commandReceipt: commands.length === 1 ? relative(out, commands[0]) : null,
+        failureDetail: failureReason => {
+          const screenshot = join(dir, 'failure-screen.png');
+          try { run('xcrun', ['simctl', 'io', udid, 'screenshot', screenshot], { timeout: 15000 }); } catch { /* absence recorded below */ }
+          const log = latestMaestroLog(dir);
+          // Retain raw log; expose only status and duration pairs in the derived summary.
+          const networkTiming = log ? [...readFileSync(log, 'utf8').matchAll(/\bHTTP\s+(\d{3})\b[^\n]{0,100}?\b(\d+)\s*ms\b/g)].map(match => ({ status: Number(match[1]), durationMs: Number(match[2]) })) : [];
+          return { flow: flow.name, failureReason, exitCode: result.code,
+            watchdog: ['inactivity-deadline', 'wall-deadline'].find(reason => reason === (result.priorReason || result.reason)) || null,
+            runnerError: result.error || null,
+            commandReceipt: commands.length === 1 ? relative(out, commands[0]) : null, commandParseError,
+            recorder: { ...recorderResult, file: relative(out, video) },
+            failedCommand: failure && { command: failure.command, expected: failure.expected, deadlineMs: failure.deadlineMs, error: failure.error },
+            nearestScreenshot: existsSync(screenshot) ? relative(out, screenshot) : null,
+            nearestAX: failure?.hierarchy ? 'raw failed command metadata.error.hierarchyRoot' : null,
+            networkTiming: networkTiming.length ? networkTiming : null, networkTimingAbsence: networkTiming.length ? null : 'No structured network status/duration in Maestro log' };
+        } });
+      if (outcome.failureReason) {
+        const key = matchingFailureKey(failure, flow.name) || JSON.stringify([flow.name, result.reason || result.code, outcome.summary.observation]);
         history.push({ at: new Date().toISOString(), key, flow: flow.name, evidence: relative(root, dir), head: run('git', ['rev-parse', 'HEAD']) });
         save(failuresFile, history);
-        report.result = 'fail'; report.failedFlow = flow.name; save(join(out, 'report.json'), report);
-        event(timeline, { type: 'flow-end', flow: flow.name, outcome: 'fail', failureReason, priorReason: result.priorReason || null,
-          elapsedMs: result.elapsedMs, commandReceipt: commands.length === 1 ? relative(out, commands[0]) : null });
         throw new Error(`Native flow ${flow.name} failed; inspect ${relative(root, join(dir, 'failure.json'))} and raw Maestro receipt before retry`);
       }
-      saveRecordedFlowReceipts(dir, recorded, parsed, { video: relative(out, video) });
       assert(commands.length === 1, `Expected exactly one command report: ${flow.name}`);
       const screenshot = join(dir, 'outcome.png');
       run('xcrun', ['simctl', 'io', udid, 'screenshot', screenshot]);

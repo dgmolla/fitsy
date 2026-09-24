@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { createHash } from 'node:crypto';
+import { isPlayableVideo } from '../verify/product-flow.mjs';
 
 const GiB = 1024 ** 3;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -175,6 +176,25 @@ export function flowFailureReason(result, commands, recorder, flowName = null) {
   if (commands.some(c => c.metadata?.status === 'FAILED' ||
     (c.metadata?.status !== 'COMPLETED' && !Object.values(c.command || {}).some(v => v?.optional === true)))) return 'command-failure';
   return null;
+}
+export function recordFlowOutcome({ dir, recorded, commands, videoPath, videoReceipt, flowName,
+  report, reportFile, timeline, commandReceipt, failureDetail }) {
+  const { result, recorderResult } = recorded;
+  const failureReason = flowFailureReason(result, commands, recorderResult, flowName)
+    || (isPlayableVideo(videoPath) ? null : 'unplayable-video');
+  if (!failureReason) {
+    saveRecordedFlowReceipts(dir, recorded, commands, { video: videoReceipt });
+    return { failureReason: null };
+  }
+  const detail = failureDetail(failureReason);
+  const summary = saveRecordedFlowReceipts(dir, recorded, commands,
+    { video: videoReceipt, failureReason, failureDetail: detail });
+  report.result = 'fail';
+  report.failedFlow = flowName;
+  writeFileSync(reportFile, JSON.stringify(report, null, 2) + '\n');
+  event(timeline, { type: 'flow-end', flow: flowName, outcome: 'fail', failureReason,
+    priorReason: result.priorReason || null, elapsedMs: result.elapsedMs, commandReceipt });
+  return { failureReason, summary };
 }
 export function latestMaestroLog(dir) {
   if (!existsSync(dir)) return null;

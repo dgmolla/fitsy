@@ -5,7 +5,7 @@ import { createServer } from 'node:http';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { archiveFailureEvidence, completeMaestroRun, flowFailureReason, recordRunFailure, requireMetro, runOwnedMaestro, runRecordedFlow, saveRecordedFlowReceipts, startOwnedRecorder, stopOwnedRecorder, summarizeCommands, summarizeFlowTiming, nearestFailure, matchingFailureKey, needsDiagnosis } from './runner-controls.mjs';
+import { archiveFailureEvidence, completeMaestroRun, flowFailureReason, recordFlowOutcome, recordRunFailure, requireMetro, runOwnedMaestro, runRecordedFlow, saveRecordedFlowReceipts, startOwnedRecorder, stopOwnedRecorder, summarizeCommands, summarizeFlowTiming, nearestFailure, matchingFailureKey, needsDiagnosis } from './runner-controls.mjs';
 
 const temp = () => mkdtempSync(join(tmpdir(), 'fitsy-runner-'));
 test('final timeline failure leaves a failed report and retains the triggering error', () => {
@@ -718,6 +718,43 @@ test('empty commands and abnormal recorder exit fail before walkthrough', () => 
   assert.equal(flowFailureReason(result, [], { state: 'stopped', code: 0, bytes: 5 }), 'missing-or-empty-command-receipt');
   assert.equal(flowFailureReason(result, command, { state: 'stopped', code: 1, bytes: 5 }), 'recorder-failure');
   assert.equal(flowFailureReason(result, command, { state: 'stopped', code: 0, bytes: 5 }), null);
+});
+
+test('successful Maestro with undecodable recorder output records failure before walkthrough', () => {
+  const dir = temp(), reportFile = join(dir, 'report.json'), timeline = join(dir, 'runner-timeline.jsonl');
+  try {
+    const video = join(dir, 'flow-untrimmed.mp4');
+    const valid = readFileSync(new URL('../verify/fixtures/valid.mp4', import.meta.url));
+    const atoms = [];
+    for (let offset = 0; offset < valid.length;) {
+      const size = valid.readUInt32BE(offset);
+      assert.ok(size >= 8 && offset + size <= valid.length);
+      if (valid.toString('ascii', offset + 4, offset + 8) !== 'mdat') atoms.push(valid.subarray(offset, offset + size));
+      offset += size;
+    }
+    const broken = Buffer.concat(atoms);
+    writeFileSync(video, broken);
+    const report = { result: 'running', flows: [] };
+    writeFileSync(reportFile, JSON.stringify(report));
+    writeFileSync(timeline, '');
+    const commands = [
+      { command: { applyConfigurationCommand: { config: { appId: 'com.fitsy.mobile', name: 'welcome' } } }, metadata: { status: 'COMPLETED' } },
+      { command: { assertConditionCommand: { condition: { visible: { textRegex: 'Ready' } } } }, metadata: { status: 'COMPLETED' } },
+    ];
+    const recorded = { result: { code: 0, reason: null, elapsedMs: 1000 }, recorderResult: { state: 'stopped', code: 0, bytes: broken.length },
+      recorderStartedMs: Date.now() - 1000, recorderEndedMs: Date.now() };
+    const outcome = recordFlowOutcome({ dir, recorded, commands, videoPath: video, videoReceipt: 'welcome/flow-untrimmed.mp4',
+      flowName: 'welcome', report, reportFile, timeline, commandReceipt: 'welcome/commands.json',
+      failureDetail: failureReason => ({ flow: 'welcome', failureReason, nearestScreenshot: null, nearestAX: null, networkTiming: null }) });
+    assert.equal(outcome.failureReason, 'unplayable-video');
+    assert.equal(JSON.parse(readFileSync(reportFile, 'utf8')).result, 'fail');
+    assert.equal(JSON.parse(readFileSync(reportFile, 'utf8')).failedFlow, 'welcome');
+    assert.equal(JSON.parse(readFileSync(join(dir, 'failure.json'), 'utf8')).failureReason, 'unplayable-video');
+    assert.equal(JSON.parse(readFileSync(join(dir, 'timing-summary.json'), 'utf8')).failureReason, 'unplayable-video');
+    assert.deepEqual(readFileSync(video), broken);
+    assert.match(readFileSync(timeline, 'utf8'), /"outcome":"fail","failureReason":"unplayable-video"/);
+    assert.doesNotMatch(readFileSync(timeline, 'utf8'), /awaiting-walkthrough/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('two matching failures require a diagnosis checkpoint before another run', () => {
