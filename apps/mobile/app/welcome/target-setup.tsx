@@ -39,14 +39,28 @@ function TargetSetupScreen() {
     });
     return () => { live = false; };
   }, []));
+  async function saveSelection(): Promise<'known' | 'estimate'> {
+    const nextMode = mode === 'saved' ? 'known' : mode;
+    await saveOnboardingField('targetMode', nextMode);
+    await saveOnboardingField('targetChoiceInProgress', mode !== 'saved');
+    return nextMode;
+  }
+  async function showMacroHelp() {
+    if (busy || !ready) return;
+    const isCurrent = begin();
+    setBusy(true);
+    try {
+      await saveSelection();
+      if (isCurrent()) router.push('/welcome/macros-intro');
+    } catch { if (isCurrent()) Alert.alert('Could not save your choice', 'Please try again.'); }
+    finally { if (isCurrent()) setBusy(false); }
+  }
   async function choose() {
     if (busy || !ready) return;
     const isCurrent = begin();
     setBusy(true);
-    const nextMode = mode === 'saved' ? 'known' : mode;
     try {
-      await saveOnboardingField('targetMode', nextMode);
-      await saveOnboardingField('targetChoiceInProgress', mode !== 'saved');
+      const nextMode = await saveSelection();
       if (nextMode === 'estimate') await saveOnboardingField('targetBasis', undefined);
       if (!isCurrent()) return;
       trackOnboardingChoiceSelected({ screen: 'target_setup', value: mode });
@@ -57,7 +71,7 @@ function TargetSetupScreen() {
   return <WelcomeScreen progress={0.45} title={"Your meal.\nYour targets."} subtitle="Choose how you'd like to get started."
     canContinue={ready && !busy} onContinue={() => choose()}
     footerContent={<WelcomeActions label="Continue" onPress={() => choose()} disabled={!ready || busy}
-      secondaryLabel="What are macros?" onSecondary={() => router.push('/welcome/macros-intro')} secondaryTestID="target-macro-help" />}>
+      secondaryLabel="What are macros?" onSecondary={() => showMacroHelp()} secondaryTestID="target-macro-help" />}>
     <View style={s.choices}>
       {saved && <AnimatedPress style={[s.choice, mode === 'saved' && s.selected]} disabled={!ready || busy} onPress={() => setMode('saved')}
         accessibilityRole="radio" accessibilityState={{ checked: mode === 'saved' }} testID="target-mode-saved">

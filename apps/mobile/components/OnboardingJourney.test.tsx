@@ -225,6 +225,25 @@ it('keeps an unfinished saved-target edit after returning from tuning', async ()
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/tuning'));
 });
 
+it.each([
+  ['saved', '/welcome/how-it-works'],
+  ['known', '/welcome/tuning'],
+  ['estimate', '/welcome/height'],
+] as const)('keeps the unconfirmed %s choice after visiting macro help', async (mode, destination) => {
+  await saveOnboardingField('goal', 'performance');
+  await saveMacroTargets({ calories: '650', protein: '42', carbs: '68', fat: '23' });
+  const screen = renderRouter(routes, { initialUrl: '/welcome/target-setup' });
+  await waitFor(() => expect(screen.getByTestId('target-mode-saved').props.accessibilityState.checked).toBe(true));
+  await act(async () => { fireEvent.press(screen.getByTestId(`target-mode-${mode}`)); });
+  await act(async () => { fireEvent.press(screen.getByTestId('target-macro-help')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/macros-intro'));
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/target-setup'));
+  await waitFor(() => expect(screen.getByTestId(`target-mode-${mode}`).props.accessibilityState.checked).toBe(true));
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  await waitFor(() => expect(screen.getPathname()).toBe(destination));
+});
+
 it('sends a missing-goal target setup to goal choice, then returns before assisted questions', async () => {
   const screen = renderRouter(routes, { initialUrl: '/welcome/target-setup' });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/goal'));
