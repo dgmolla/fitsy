@@ -167,6 +167,28 @@ describe('boot', () => {
     jest.useRealTimers();
   });
 
+  it('does not let late boot CustomerInfo replace Pro from a completed purchase', async () => {
+    useFakeTimersKeepingFlush();
+    const identity = deferred<typeof freeInfo>();
+    mockRc.identifyPurchasesUser.mockReturnValueOnce(identity.promise);
+    const { result } = renderProvider();
+    await flush();
+    act(() => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
+    await flush();
+    expect(result.current.entitled).toBe(false);
+    const sameUserRead = deferred<{ data: { session: { user: { id: string } } } }>();
+    mockAuth.getSession.mockReturnValueOnce(sameUserRead.promise);
+    await act(async () => { identity.resolve(freeInfo); });
+    mockRc.purchasePackage.mockResolvedValue({ outcome: 'purchased', customerInfo: proInfo });
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    await act(async () => { expect(await result.current.purchase({} as never, 'test')).toBe(true); });
+    expect(result.current.isPro).toBe(true);
+    await act(async () => { sameUserRead.resolve({ data: { session: mockAuth.session! } }); });
+    await flush();
+    expect(result.current.isPro).toBe(true);
+    jest.useRealTimers();
+  });
+
   it('settles unknown trial eligibility when CustomerInfo is unavailable but plans load', async () => {
     mockRc.identifyPurchasesUser.mockResolvedValueOnce(null as never);
     mockRc.fetchCurrentOffering.mockResolvedValueOnce({ availablePackages: [{ product: { identifier: 'annual' } }] } as never);

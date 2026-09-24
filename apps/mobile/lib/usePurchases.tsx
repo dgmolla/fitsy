@@ -125,6 +125,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   // Mirror of `customerInfo` for async callbacks (the boot sync runs before
   // the first render that would carry it in state).
   const customerInfoRef = useRef<CustomerInfo | null>(null);
+  const customerInfoGenerationRef = useRef(0);
   const configuredRef = useRef(false);
   const offeringRequestRef = useRef(0);
   const offeringCommittedRequestRef = useRef(0);
@@ -137,6 +138,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
   const setCustomerInfo = useCallback((info: CustomerInfo | null) => {
+    customerInfoGenerationRef.current += 1;
     customerInfoRef.current = info;
     setCustomerInfoState(info);
     setCustomerInfoSettled(true);
@@ -150,6 +152,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const configured = configurePurchases();
     configuredRef.current = configured;
+    const bootInfoGeneration = customerInfoGenerationRef.current;
     let cancelled = false;
     let bootOpen = true;
     let bootUserId: string | undefined;
@@ -187,7 +190,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
               ({ data }) => data.session?.user.id === userId,
               () => false,
             );
-            if (sameUser && !isCancelled()) {
+            if (sameUser && !isCancelled() && customerInfoGenerationRef.current === bootInfoGeneration) {
               setCustomerInfo(info);
               if (!bootOpen && isProActive(info) && verdict.entitledRef.current === false) {
                 void syncEntitlement('mismatch');
