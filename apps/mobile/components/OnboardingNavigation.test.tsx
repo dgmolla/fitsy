@@ -4,6 +4,7 @@ import React from 'react';
 import { Alert, Button, Text } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
+import * as ExpoLocation from 'expo-location';
 import { Stack, router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { act, fireEvent, renderRouter, waitFor } from 'expo-router/testing-library';
 import Index from '../app/index';
@@ -71,6 +72,7 @@ jest.mock('expo-constants', () => ({ __esModule: true, default: { expoConfig: { 
 const originalFetch = global.fetch;
 const selected = { action: 'menu' as const, restaurantId: 'varilla', restaurantName: 'Varilla', menuItemId: 'meal-1', query: 'pizza' };
 const targets = { calories: '650', protein: '42', carbs: '68', fat: '23' };
+const defaultGetItem = (AsyncStorage.getItem as jest.Mock).getMockImplementation() as typeof AsyncStorage.getItem;
 function response(body: unknown) { return { ok: true, status: 200, json: async () => body } as Response; }
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; }
 function Preview() { return <><Text>Discovery preview</Text><Button title="Open selected menu" onPress={() => router.push('/welcome/signin')} /></>; }
@@ -85,6 +87,7 @@ const routes = {
   'welcome/signin': SignIn, 'welcome/notification-permission': Notifications,
   'welcome/trial-reminder': TrialReminder,
   'welcome/location-permission': Location, 'welcome/preview': Preview,
+  'welcome/goal': () => <Text>Goal screen</Text>,
   'welcome/trial': () => <Text>Trial introduction</Text>,
   'welcome/payment': () => <Text>Payment plans</Text>,
   'welcome/problem': () => <Button title="Choose location" onPress={() => router.push('/welcome/location-permission')} />,
@@ -96,11 +99,13 @@ const routes = {
 };
 beforeEach(async () => {
   jest.useRealTimers();
+  (AsyncStorage.getItem as jest.Mock).mockImplementation(defaultGetItem);
   await AsyncStorage.clear();
   await SecureStore.deleteItemAsync('fitsy_authToken');
   mockSession = null;
   (ExpoNotifications.getPermissionsAsync as jest.Mock).mockReset().mockResolvedValue({ status: 'undetermined' });
   (ExpoNotifications.requestPermissionsAsync as jest.Mock).mockClear();
+  (ExpoLocation.requestForegroundPermissionsAsync as jest.Mock).mockClear();
   global.fetch = jest.fn().mockResolvedValue(response({ active: true, status: 'active', expiresAt: null }));
 });
 
@@ -270,6 +275,70 @@ it.each(['covered', 'empty', 'failure'])('ignores a %s area response after Back'
   await act(async () => { coverage.resolve(outcome === 'failure' ? { ...response({ error: 'Offline' }), ok: false } : response({ data: [], meta: { nearbyDishCount: outcome === 'covered' ? 1 : 0, radiusMiles: 3 } })); });
   expect(screen.getPathname()).toBe('/welcome/problem');
   expect(alert).not.toHaveBeenCalled();
+});
+
+it('waits for a saved area before enabling location choices', async () => {
+  const area = { lat: 34.05, lng: -118.25, name: 'Downtown', source: 'manual' as const };
+  const stored = deferred<string | null>();
+  jest.spyOn(AsyncStorage, 'getItem').mockImplementation(key => key === '@fitsy/onboarding' ? stored.promise : defaultGetItem(key));
+  const permission = jest.spyOn(ExpoLocation, 'requestForegroundPermissionsAsync');
+  const screen = renderJourney('/welcome/location-permission');
+  fireEvent.press(screen.getByTestId('location-use-current'));
+  expect(permission).not.toHaveBeenCalled();
+  expect(screen.getPathname()).toBe('/welcome/location-permission');
+  await act(async () => { stored.resolve(JSON.stringify({ area })); });
+  await screen.findByTestId('location-continue-area');
+  global.fetch = jest.fn().mockResolvedValue(response({ data: [], meta: { nearbyDishCount: 1, radiusMiles: 3 } }));
+  await act(async () => { fireEvent.press(screen.getByTestId('location-continue-area')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/goal'));
+  expect(permission).not.toHaveBeenCalled();
+});
+
+it('uses device permission only after confirming there is no saved area', async () => {
+  const stored = deferred<string | null>();
+  jest.spyOn(AsyncStorage, 'getItem').mockImplementation(key => key === '@fitsy/onboarding' ? stored.promise : defaultGetItem(key));
+  const permission = jest.spyOn(ExpoLocation, 'requestForegroundPermissionsAsync').mockResolvedValue({ status: ExpoLocation.PermissionStatus.DENIED } as never);
+  const screen = renderJourney('/welcome/location-permission');
+  fireEvent.press(screen.getByTestId('location-use-current'));
+  expect(permission).not.toHaveBeenCalled();
+  await act(async () => { stored.resolve(null); });
+  await act(async () => { fireEvent.press(screen.getByTestId('location-use-current')); });
+  expect(permission).toHaveBeenCalledTimes(1);
+});
+
+it('offers a retry when the saved area read fails', async () => {
+  let reads = 0;
+  jest.spyOn(AsyncStorage, 'getItem').mockImplementation(key => {
+    if (key !== '@fitsy/onboarding') return defaultGetItem(key);
+    reads += 1;
+    return reads === 1 ? Promise.reject(new Error('Storage unavailable')) : Promise.resolve(null);
+  });
+  const permission = jest.spyOn(ExpoLocation, 'requestForegroundPermissionsAsync').mockResolvedValue({ status: ExpoLocation.PermissionStatus.DENIED } as never);
+  const screen = renderJourney('/welcome/location-permission');
+  await screen.findByTestId('location-retry-area');
+  expect(screen.getByText('Your saved area could not load. Please try again.')).toBeTruthy();
+  expect(permission).not.toHaveBeenCalled();
+  await act(async () => { fireEvent.press(screen.getByTestId('location-retry-area')); });
+  await screen.findByTestId('location-use-current');
+  await act(async () => { fireEvent.press(screen.getByTestId('location-use-current')); });
+  expect(permission).toHaveBeenCalledTimes(1);
+});
+
+it('ignores a saved area read that finishes after leaving the location screen', async () => {
+  const stale = deferred<string | null>();
+  let reads = 0;
+  jest.spyOn(AsyncStorage, 'getItem').mockImplementation(key => {
+    if (key !== '@fitsy/onboarding') return defaultGetItem(key);
+    reads += 1;
+    return reads === 1 ? stale.promise : Promise.resolve(JSON.stringify({ area: { lat: 34.05, lng: -118.25, name: 'New area', source: 'manual' } }));
+  });
+  const screen = renderJourney('/welcome/problem');
+  await act(async () => { fireEvent.press(screen.getByText('Choose location')); });
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
+  await act(async () => { stale.resolve(JSON.stringify({ area: { lat: 40.71, lng: -74, name: 'Old area', source: 'manual' } })); });
+  await act(async () => { fireEvent.press(screen.getByText('Choose location')); });
+  expect(await screen.findByText('Continue with New area')).toBeTruthy();
+  expect(screen.queryByText('Continue with Old area')).toBeNull();
 });
 
 it('resumes a purchased restaurant after terminating on optional notifications', async () => {

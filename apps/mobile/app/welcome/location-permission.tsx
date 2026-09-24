@@ -21,6 +21,8 @@ export default function LocationPermissionScreen() {
   const [busy, setBusy] = useState(false);
   const [picker, setPicker] = useState(false);
   const [area, setArea] = useState<OnboardingArea>();
+  const [areaRead, setAreaRead] = useState<'loading' | 'ready' | 'failed'>('loading');
+  const [readAttempt, setReadAttempt] = useState(0);
   const { begin } = useRouteContinuation();
   useEffect(() => {
     trackLocationPrimingShown();
@@ -28,9 +30,17 @@ export default function LocationPermissionScreen() {
   useFocusEffect(useCallback(() => {
     let current = true;
     setBusy(false);
-    void getOnboardingData().then(data => { if (current) setArea(data.area); });
+    setArea(undefined);
+    setAreaRead('loading');
+    void getOnboardingData().then(data => {
+      if (!current) return;
+      setArea(data.area);
+      setAreaRead('ready');
+    }).catch(() => { if (current) setAreaRead('failed'); });
     return () => { current = false; };
-  }, []));
+    // A retry changes the focus callback identity so the failed read restarts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readAttempt]));
 
   async function choose(next: OnboardingArea, isCurrent = begin()) {
     if (!isCurrent()) return;
@@ -51,7 +61,7 @@ export default function LocationPermissionScreen() {
   }
 
   async function useCurrent() {
-    if (busy) return;
+    if (busy || areaRead !== 'ready') return;
     const isCurrent = begin();
     setPicker(false);
     setBusy(true);
@@ -75,15 +85,18 @@ export default function LocationPermissionScreen() {
   }
 
   return (
-    <WelcomeScreen progress={0.14} title={"Where would you\nlike to eat?"} subtitle="Find restaurants around you." hideFooter canContinue onContinue={() => {}}
-      footerContent={<WelcomeActions label={busy ? 'Checking nearby dishes…' : area ? `Continue with ${area.name}` : 'Use my location'}
-        onPress={area ? () => { void choose(area); } : useCurrent} disabled={busy}
-        testID={area ? 'location-continue-area' : 'location-use-current'}
-        secondaryLabel={area ? 'Choose another area' : 'Choose an area instead'} onSecondary={() => setPicker(true)} secondaryTestID="location-choose-area" />}>
+    <WelcomeScreen progress={0.14} title={"Where would you\nlike to eat?"} subtitle="Find restaurants around you." hideFooter canContinue={areaRead === 'ready' && !busy} onContinue={() => {}}
+      footerContent={<WelcomeActions label={busy ? 'Checking nearby dishes…' : areaRead === 'loading' ? 'Loading your area…' : areaRead === 'failed' ? 'Retry loading area' : area ? `Continue with ${area.name}` : 'Use my location'}
+        onPress={areaRead === 'failed' ? () => setReadAttempt(attempt => attempt + 1) : area ? () => { void choose(area); } : useCurrent}
+        disabled={busy || areaRead === 'loading'}
+        testID={areaRead === 'failed' ? 'location-retry-area' : area ? 'location-continue-area' : 'location-use-current'}
+        secondaryLabel={areaRead === 'ready' ? area ? 'Choose another area' : 'Choose an area instead' : undefined}
+        onSecondary={areaRead === 'ready' ? () => setPicker(true) : undefined} secondaryTestID="location-choose-area" />}>
       <OnboardingLocationMap />
       <Text style={s.intro}>Use your location to discover nearby menus. You can change your area anytime.</Text>
       {area && <View style={s.alternate}><Pressable style={s.alternateHit} disabled={busy} onPress={useCurrent} accessibilityRole="button" testID="location-use-current"><Text style={s.alternateText}>Use my current location instead</Text></Pressable></View>}
       {busy && <Text style={s.area} accessibilityLiveRegion="polite">Checking nearby dishes…</Text>}
+      {areaRead === 'failed' && <Text style={s.area} accessibilityLiveRegion="polite">Your saved area could not load. Please try again.</Text>}
       <Text style={s.privacy}>Your selected area stays on this device. We use its coordinates to find nearby meals. Device location is optional.</Text>
       <LocationPickerSheet visible={picker} activeName={area?.name} onClose={() => setPicker(false)} onUseCurrent={useCurrent} onPick={loc => choose({ ...loc, source: 'manual' })} />
     </WelcomeScreen>
