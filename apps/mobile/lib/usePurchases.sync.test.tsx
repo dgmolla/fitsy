@@ -335,6 +335,28 @@ describe('sign-in', () => {
 });
 
 describe('sign-out', () => {
+  it('drops old lapsed CustomerInfo before a new free account can route to resubscribe', async () => {
+    mockRc.identifyPurchasesUser.mockResolvedValueOnce({ entitlements: { active: {}, all: { pro: {} } } });
+    const { result } = renderProvider();
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    expect(result.current.isLapsed).toBe(true);
+    mockRc.logoutPurchasesUser.mockImplementationOnce(() => new Promise(() => {}));
+    mockAuth.session = null;
+    await act(async () => { mockAuth.listener?.('SIGNED_OUT', null); });
+    expect(result.current.isLapsed).toBe(false);
+    const oldListener = mockRc.addCustomerInfoListener.mock.calls[0][0];
+    await act(async () => { oldListener({ entitlements: { active: {}, all: { pro: {} } } }); });
+    await flush();
+    expect(result.current.isLapsed).toBe(false);
+    mockAuth.session = { user: { id: 'new-free' } };
+    await act(async () => { mockAuth.listener?.('SIGNED_IN', mockAuth.session); });
+    await waitFor(() => expect(result.current.entitled).toBe(false));
+    mockRc.currentPurchasesUserId.mockResolvedValueOnce('u1');
+    await act(async () => { oldListener({ entitlements: { active: {}, all: { pro: {} } } }); });
+    await flush();
+    expect(result.current.isLapsed).toBe(false);
+  });
+
   it('does not reopen the gate from an old boot verdict while native logout is queued', async () => {
     useFakeTimersKeepingFlush();
     mockRc.identifyPurchasesUser.mockImplementationOnce(() => new Promise(() => {}));

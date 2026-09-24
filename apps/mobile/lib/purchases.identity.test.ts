@@ -1,5 +1,5 @@
 import Purchases, { type CustomerInfo } from 'react-native-purchases';
-import { configurePurchases, ensurePurchasesUser, identifyPurchasesUser, logoutPurchasesUser, purchasePackage } from './purchases';
+import { configurePurchases, ensurePurchasesUser, identifyPurchasesUser, logoutPurchasesUser, purchasePackage, restorePurchases } from './purchases';
 
 const emptyInfo = { entitlements: { active: {}, all: {} } } as unknown as CustomerInfo;
 const originalDev = Object.getOwnPropertyDescriptor(globalThis, '__DEV__');
@@ -29,6 +29,37 @@ it.each([
   const result = await purchasePackage({} as never, 'buyer', async () => current);
   expect(result).toEqual({ outcome: 'error', customerInfo: null });
   expect(nativePurchase).not.toHaveBeenCalled();
+});
+
+it.each([
+  { nativeUser: 'other', current: true },
+  { nativeUser: 'buyer', current: false },
+])('blocks Restore when the final account match changes: %j', async ({ nativeUser, current }) => {
+  jest.spyOn(Purchases, 'getAppUserID').mockResolvedValue(nativeUser);
+  const nativeRestore = jest.spyOn(Purchases, 'restorePurchases').mockResolvedValue(emptyInfo);
+  expect(await restorePurchases('buyer', async () => current)).toBeNull();
+  expect(nativeRestore).not.toHaveBeenCalled();
+});
+
+it('waits for a pending login before the native Restore identity check', async () => {
+  let finishLogin!: () => void;
+  const loginPending = new Promise<void>(resolve => { finishLogin = resolve; });
+  let nativeUser = 'old';
+  jest.spyOn(Purchases, 'logIn').mockImplementation(async user => {
+    await loginPending;
+    nativeUser = user;
+    return { customerInfo: emptyInfo, created: false };
+  });
+  jest.spyOn(Purchases, 'getAppUserID').mockImplementation(async () => nativeUser);
+  const nativeRestore = jest.spyOn(Purchases, 'restorePurchases').mockResolvedValue(emptyInfo);
+  const login = identifyPurchasesUser('buyer');
+  const restore = restorePurchases('buyer', async () => true);
+  await Promise.resolve();
+  expect(nativeRestore).not.toHaveBeenCalled();
+  finishLogin();
+  await login;
+  expect(await restore).toBe(emptyInfo);
+  expect(nativeRestore).toHaveBeenCalledTimes(1);
 });
 
 it.each([false, true])('orders logout and the next login after the first login settles (failure=%s)', async failFirst => {

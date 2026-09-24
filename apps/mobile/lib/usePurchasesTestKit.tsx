@@ -32,11 +32,12 @@ export const mockRc = {
   identifyPurchasesUser: jest.fn(async () => freeInfo),
   ensurePurchasesUser: jest.fn(async () => true),
   fetchCustomerInfo: jest.fn(async () => freeInfo),
+  currentPurchasesUserId: jest.fn(async () => mockAuth.session?.user.id ?? null),
   fetchCurrentOffering: jest.fn(async () => null),
   // Exercise the real new seam; do not add another mock of our own code.
   fetchIntroEligibility: (ids: string[]) =>
     jest.requireActual<typeof import('./purchases')>('./purchases').fetchIntroEligibility(ids),
-  addCustomerInfoListener: jest.fn(() => () => undefined),
+  addCustomerInfoListener: jest.fn((_cb: (info: Info) => void) => () => undefined),
   logoutPurchasesUser: jest.fn(async () => undefined),
   purchasePackage: jest.fn(),
   restorePurchases: jest.fn(),
@@ -148,6 +149,7 @@ export function setupPurchasesMocks(): void {
     mockRc.identifyPurchasesUser.mockResolvedValue(freeInfo);
     mockRc.ensurePurchasesUser.mockResolvedValue(true);
     mockRc.fetchCustomerInfo.mockResolvedValue(freeInfo);
+    mockRc.currentPurchasesUserId.mockImplementation(async () => mockAuth.session?.user.id ?? null);
     mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: false, status: null, expiresAt: null });
     mockApi.syncSubscription.mockResolvedValue({ active: false, synced: true });
     jest.spyOn(console, 'warn').mockImplementation(() => {});

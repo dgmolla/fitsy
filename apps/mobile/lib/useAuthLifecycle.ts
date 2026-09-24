@@ -13,7 +13,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { CustomerInfo } from 'react-native-purchases';
 import { supabase } from './supabase';
 import type { EntitlementVerdict } from './useEntitlementVerdict';
-import { fetchCustomerInfo, identifyPurchasesUser, logoutPurchasesUser } from './purchases';
+import { identifyPurchasesUser, logoutPurchasesUser } from './purchases';
 import { clearPaywallIntent } from './paywallIntent';
 import { withinMs } from './async';
 import { BOOT_VERDICT_CAP_MS } from './useEntitlementVerdict';
@@ -54,6 +54,7 @@ export function useAuthLifecycle({
       // Claim this account before the detached identity read. Supabase may
       // emit the same SIGNED_IN again while the bounded read is still pending.
       bootUserIdRef.current = userId;
+      setCustomerInfo(null);
       void resolveAfterSignIn(userId, async () => {
         const info = await identifyPurchasesUser(userId);
         if (info) {
@@ -70,6 +71,7 @@ export function useAuthLifecycle({
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session) {
         if (bootPendingRef.current) {
+          if (session.user.id !== bootUserIdRef.current) setCustomerInfo(null);
           pendingSignInUserIdRef.current = session.user.id;
           return;
         }
@@ -81,15 +83,12 @@ export function useAuthLifecycle({
         bootUserIdRef.current = null;
         pendingSignInUserIdRef.current = null;
         beginSignOut();
+        setCustomerInfo(null);
         void (async () => {
           // Native logout stays serialized behind any pending login, but the
           // anonymous gate must settle even if that native work never does.
           await withinMs(logoutPurchasesUser(), BOOT_VERDICT_CAP_MS).catch(() => null);
           settleAfterSignOut();
-          const info = await fetchCustomerInfo();
-          if (bootUserIdRef.current === null && pendingSignInUserIdRef.current === null) {
-            setCustomerInfo(info);
-          }
         })();
       }
     });

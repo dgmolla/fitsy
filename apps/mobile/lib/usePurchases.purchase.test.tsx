@@ -20,8 +20,9 @@ import {
   type ProviderResult,
 } from './usePurchasesTestKit';
 import { act, waitFor } from '@testing-library/react-native';
+import { Alert } from 'react-native';
 import { ENTITLEMENT_CACHE_KEY } from './entitlement';
-import { POST_PURCHASE_SYNC_CAP_MS, STORE_GRACE_MS } from './usePurchases';
+import { POST_PURCHASE_SYNC_CAP_MS, PURCHASE_IDENTITY_CAP_MS, STORE_GRACE_MS } from './usePurchases';
 
 setupPurchasesMocks();
 
@@ -43,6 +44,27 @@ async function restoreWithStalledSync(result: ProviderResult) {
 }
 
 describe('purchase / restore', () => {
+  it('holds Restore while the signed-in native identity is unresolved', async () => {
+    const { result } = renderProvider();
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    useFakeTimersKeepingFlush();
+    mockRc.ensurePurchasesUser.mockImplementationOnce(() => new Promise(() => {}));
+    mockRc.restorePurchases.mockResolvedValue(proInfo);
+    let restored: boolean | undefined;
+    await act(async () => {
+      const pending = result.current.restore();
+      await new Promise((r) => setImmediate(r));
+      expect(mockRc.restorePurchases).not.toHaveBeenCalled();
+      jest.advanceTimersByTime(PURCHASE_IDENTITY_CAP_MS);
+      restored = await pending;
+    });
+    expect(restored).toBe(false);
+    expect(mockRc.restorePurchases).not.toHaveBeenCalled();
+    expect(Alert.alert).toHaveBeenCalledWith('Payment service still connecting', 'Fully close and reopen Fitsy, then try again.');
+    expect(result.current.entitled).toBe(false);
+    jest.useRealTimers();
+  });
+
   it('a confirmed purchase resolves true and is entitled immediately; a server "false" (REST lag) never downgrades it', async () => {
     const { result } = renderProvider();
     await waitFor(() => expect(result.current.ready).toBe(true));

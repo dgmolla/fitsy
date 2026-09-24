@@ -37,6 +37,7 @@ import { useAuthLifecycle } from './useAuthLifecycle';
 import {
   addCustomerInfoListener,
   configurePurchases,
+  currentPurchasesUserId,
   fetchCurrentOffering,
   fetchIntroEligibility,
   fetchCustomerInfo,
@@ -175,7 +176,15 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
             );
             if (sameUser && !isCancelled()) {
               setCustomerInfo(info);
-              unsubscribe = addCustomerInfoListener(setCustomerInfo);
+              unsubscribe = addCustomerInfoListener(info => {
+                void (async () => {
+                  const { data } = await supabase.auth.getSession();
+                  const currentUserId = data.session?.user.id;
+                  if (!currentUserId || await currentPurchasesUserId() !== currentUserId) return;
+                  const latest = await supabase.auth.getSession();
+                  if (latest.data.session?.user.id === currentUserId) setCustomerInfo(info);
+                })().catch(() => undefined);
+              });
               if (!bootOpen && isProActive(info) && verdict.entitledRef.current === false) {
                 void syncEntitlement('mismatch');
               }
@@ -296,7 +305,23 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   );
 
   const restore = useCallback(async (): Promise<boolean> => {
-    const info = await rcRestore();
+    const { data } = await supabase.auth.getSession();
+    const userId = data.session?.user.id;
+    const identified = userId
+      ? await withinMs(ensurePurchasesUser(userId), PURCHASE_IDENTITY_CAP_MS)
+      : false;
+    if (identified === null) {
+      Alert.alert('Payment service still connecting', 'Fully close and reopen Fitsy, then try again.');
+      return false;
+    }
+    if (!userId || !identified) {
+      Alert.alert('Restore not available', 'We could not confirm your account with the store. Please try again.');
+      return false;
+    }
+    const isCurrentUser = async () => (await supabase.auth.getSession()).data.session?.user.id === userId;
+    if (!(await isCurrentUser())) return false;
+    const info = await rcRestore(userId, isCurrentUser);
+    if (!(await isCurrentUser())) return false;
     setCustomerInfo(info);
     trackPurchasesRestored({ is_pro: isProActive(info) });
     return settleAfterStore(info, 'restore');

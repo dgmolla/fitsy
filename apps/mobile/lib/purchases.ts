@@ -198,6 +198,16 @@ export async function fetchCustomerInfo(): Promise<CustomerInfo | null> {
   }
 }
 
+/** Read the native identity without changing the serialized identity queue. */
+export async function currentPurchasesUserId(): Promise<string | null> {
+  if (!configured) return null;
+  try {
+    return await Purchases.getAppUserID();
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchOfferings(): Promise<PurchasesOfferings | null> {
   if (!configured) return null;
   try {
@@ -209,10 +219,18 @@ export async function fetchOfferings(): Promise<PurchasesOfferings | null> {
   }
 }
 
-export async function restorePurchases(): Promise<CustomerInfo | null> {
+export async function restorePurchases(
+  userId: string,
+  isCurrentUser: () => Promise<boolean>,
+): Promise<CustomerInfo | null> {
   if (!configured) return null;
   try {
-    return await Purchases.restorePurchases();
+    // The identity check and native restore must stay in the same queue so
+    // a pending login or logout cannot move the restore to another account.
+    return await changeIdentity(async () => {
+      if (await Purchases.getAppUserID() !== userId || !(await isCurrentUser())) return null;
+      return Purchases.restorePurchases();
+    });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[purchases] restorePurchases failed', err);
