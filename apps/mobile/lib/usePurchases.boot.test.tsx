@@ -147,6 +147,26 @@ describe('boot', () => {
     await waitFor(() => expect(result.current.entitled).toBe(true));
   });
 
+  it('keeps a newer Pro sync when a slow boot identity lets an older server false arrive later', async () => {
+    useFakeTimersKeepingFlush();
+    const identity = deferred<typeof freeInfo>();
+    mockRc.identifyPurchasesUser.mockReturnValueOnce(identity.promise);
+    mockRc.fetchCustomerInfo.mockResolvedValueOnce(proInfo);
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    const { result } = renderProvider();
+    await flush();
+    expect(result.current.entitled).toBeNull();
+    const listener = mockRc.addCustomerInfoListener.mock.calls[0][0];
+    await act(async () => { listener(proInfo); });
+    await waitFor(() => expect(result.current.entitled).toBe(true));
+    act(() => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
+    await flush();
+    expect(result.current.entitled).toBe(true);
+    expect(mockApi.syncSubscription).toHaveBeenCalledWith('mismatch');
+    await act(async () => { identity.resolve(freeInfo); });
+    jest.useRealTimers();
+  });
+
   it('settles unknown trial eligibility when CustomerInfo is unavailable but plans load', async () => {
     mockRc.identifyPurchasesUser.mockResolvedValueOnce(null as never);
     mockRc.fetchCurrentOffering.mockResolvedValueOnce({ availablePackages: [{ product: { identifier: 'annual' } }] } as never);

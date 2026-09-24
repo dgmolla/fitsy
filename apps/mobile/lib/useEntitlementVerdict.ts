@@ -101,6 +101,9 @@ export function useEntitlementVerdict({
   }, []);
   // When the store last confirmed Pro (markStoreConfirmed); 0 = never.
   const storeConfirmedAtRef = useRef(0);
+  // A native update or purchase may settle while boot is still reading the
+  // older account verdict. Boot must not replace that newer result.
+  const verdictGenerationRef = useRef(0);
   // Counts sign-ins, so a sign-out can tell whether one overtook it without
   // asking auth-js (see settleAfterSignOut).
   const signInEpochRef = useRef(0);
@@ -140,6 +143,7 @@ export function useEntitlementVerdict({
       if (devicePro !== active) {
         trackEntitlementMismatch({ reason, device_pro: devicePro, server_active: active });
       }
+      verdictGenerationRef.current += 1;
       if (!active && devicePro && inStoreGrace()) {
         // Inside the post-store grace window (see STORE_GRACE_MS) a server
         // "false" never downgrades: the verdict set in markStoreConfirmed
@@ -188,6 +192,7 @@ export function useEntitlementVerdict({
 
   const resolveAtBoot = useCallback(
     async (userId: string | undefined, rcReady: Promise<CustomerInfo | null>, isCancelled: () => boolean) => {
+      const generation = verdictGenerationRef.current;
       const cachedP = withinMs(readCachedEntitlement(), BOOT_VERDICT_CAP_MS);
       const answer = userId ? fetchVerdict('boot', userId) : Promise.resolve(false);
       const [info, cached, server] = await Promise.all([
@@ -195,7 +200,7 @@ export function useEntitlementVerdict({
         cachedP,
         withinMs(answer, BOOT_VERDICT_CAP_MS),
       ]);
-      if (isCancelled()) return;
+      if (isCancelled() || verdictGenerationRef.current !== generation) return;
       if (!userId) {
         // Anonymous: never left on null, and a stale cache must not count.
         setEntitled(false);
@@ -203,6 +208,7 @@ export function useEntitlementVerdict({
       }
       // Applied only now, after the RevenueCat read, so the mismatch event
       // compares against the real device state.
+      let lateEscalation: Promise<boolean | null> | null = null;
       if (server === false && isProActive(info)) {
         // The stored row says no while the device says Pro: a missed webhook
         // or an earlier lagging sync. The boot read is a cheap DB read, so
@@ -211,26 +217,38 @@ export function useEntitlementVerdict({
         // cap, fold as usual and let the late answer apply. Without this a
         // subscriber is locked out until they tap Restore: the mismatch
         // handler lives on the search screen, which never mounts.
-        const escalated = await withinMs(runSync('mismatch', userId), BOOT_VERDICT_CAP_MS);
-        if (isCancelled()) return;
-        if (escalated !== null) {
+        const escalation = fetchVerdict('mismatch', userId);
+        const escalatedAnswer = await withinMs(escalation, BOOT_VERDICT_CAP_MS);
+        if (isCancelled() || verdictGenerationRef.current !== generation) return;
+        if (escalatedAnswer !== null) {
+          const escalated = applyVerdict('mismatch', escalatedAnswer);
           setEntitled((current) => current ?? escalated);
           return;
         }
+        lateEscalation = escalation;
       }
       const effective = server === null ? null : applyVerdict('boot', server);
       // The single settled signal: server, else cache, else the device (so an
       // offline subscriber isn't bounced). `current` covers an answer that
       // landed via another path meanwhile.
       setEntitled((current) => current ?? effective ?? cached ?? isProActive(info));
+      if (lateEscalation) {
+        // A capped escalation may still resolve after the boot fallback.
+        const fallbackGeneration = verdictGenerationRef.current;
+        void lateEscalation.then((late) => {
+          if (late !== null && !isCancelled() && verdictGenerationRef.current === fallbackGeneration) {
+            applyVerdict('mismatch', late);
+          }
+        });
+      }
       if (server === null) {
         // Slow server: apply its answer when it finally lands.
         void answer.then((late) => {
-          if (late !== null && !isCancelled()) applyVerdict('boot', late);
+          if (late !== null && !isCancelled() && verdictGenerationRef.current === generation) applyVerdict('boot', late);
         });
       }
     },
-    [fetchVerdict, applyVerdict, runSync, setEntitled],
+    [fetchVerdict, applyVerdict, setEntitled],
   );
 
   const settleAfterBootFailure = useCallback(
@@ -274,6 +292,7 @@ export function useEntitlementVerdict({
 
   const markStoreConfirmed = useCallback(() => {
     storeConfirmedAtRef.current = Date.now();
+    verdictGenerationRef.current += 1;
     setEntitled(true);
     void writeCachedEntitlement(true);
   }, [setEntitled]);
