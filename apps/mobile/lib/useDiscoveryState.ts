@@ -6,6 +6,7 @@ import type { CoachMarkStep } from '@/components/CoachMarks';
 import type { MacroValues } from './macroPresets';
 import type { PresetLocation } from './locations';
 import { usePreviewTour } from './usePreviewTour';
+import { previewTourReady } from './previewTourReady';
 import { usePreviewSearchDemo } from './usePreviewSearchDemo';
 import { useDiscoveryResults } from './useDiscoveryResults';
 import { useDiscoveryLocation } from './useDiscoveryLocation';
@@ -61,7 +62,8 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
   const discovery = useDiscoveryResults({ inputs, query, location, canSearch, targetsLoaded, previewReady, isOnboardingPreview });
   const { results, nextCursor, loading, loadingMore, refreshing, error, locked, fetchSeq, outOfArea, nearbyDishCount, doFetch, handleRefresh, handleEndReached } = discovery;
   const tourEnabled = isOnboardingPreview && locked === true && !filterVisible && !locationPickerVisible;
-  const tour = usePreviewTour(tourEnabled && !loading && !error && results.length > 0, tourEnabled);
+  const tourReady = previewTourReady({ preview: isOnboardingPreview, locked, loading, error, outOfArea, fetchSeq });
+  const tour = usePreviewTour(tourEnabled && tourReady, tourEnabled);
   const demo = usePreviewSearchDemo(tour.visible, setQuery);
   const { cancel: cancelDemo, editQuery } = demo;
   const { finish: finishPreviewTour } = tour;
@@ -208,7 +210,7 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
 
   return { navigation, isOnboardingPreview, tried, inputs, query, setQuery: demo.editQuery, canSearch, hasQuery, location,
     locationLabel, results, heroResult, listResults, nextCursor, loading, loadingMore, refreshing, error, locked, outOfArea, nearbyDishCount,
-    filterVisible, setFilterVisible, locationPickerVisible, setLocationPickerVisible, tourVisible: tour.visible, startTour: tour.start,
+    filterVisible, setFilterVisible, locationPickerVisible, setLocationPickerVisible, tourReady, tourVisible: tour.visible, startTour: tour.start,
     tourEditRef, tourSearchRef, tourHeroRef, tourLocationRef, tourMoreRef, tourSteps, finishTour, tourStepShown: demo.showStep, cancelTourTyping: demo.cancel, handleClearQuery, handleApplyFilters,
     handleJoinWaitlist, handleOpenLocationPicker, handlePickLocation, handleUseCurrentLocation, unlockPreview,
     unlocking, resyncNow, onLockedTap, unlockTitle, unlockSubtitle, unlockLabel, handleRefresh, handleEndReached };

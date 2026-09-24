@@ -2,6 +2,7 @@ jest.unmock('react-native');
 import { useMemo } from 'react';
 import { act, renderHook } from '@testing-library/react-native';
 import { useDiscoveryResults } from '../lib/useDiscoveryResults';
+import { previewTourReady } from '../lib/previewTourReady';
 import type { UseLocationResult } from '../lib/useLocation';
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
@@ -40,6 +41,25 @@ it.each([true, false])('keeps all targets for ranking without requiring exact qu
   expect(params.has('goalMatched')).toBe(false);
   await act(async () => respond(0, 'ranked-pizza'));
   expect(result.current.results.map(r => r.id)).toEqual(['ranked-pizza']);
+});
+
+it('makes the five tips available after an empty result in a covered preview area', async () => {
+  const { result } = renderHook(() => useDiscoveryResults({
+    inputs, query: 'dish-that-is-absent', location, canSearch: true,
+    targetsLoaded: true, previewReady: true, isOnboardingPreview: true,
+  }));
+  await act(async () => {});
+  await act(async () => requests[0].resolve({
+    ok: true, status: 200,
+    json: async () => ({ data: [], meta: { radiusMiles: 3, nearbyDishCount: 90, limit: 20, total: 0, locked: true, nextCursor: null } }),
+  } as Response));
+  expect(result.current.results).toEqual([]);
+  expect(result.current.nearbyDishCount).toBe(90);
+  expect(previewTourReady({
+    preview: true, locked: result.current.locked, loading: result.current.loading,
+    error: result.current.error, outOfArea: result.current.outOfArea,
+    fetchSeq: result.current.fetchSeq,
+  })).toBe(true);
 });
 
 it.each([true, false])('ignores an old response immediately after typing, before the debounce (preview=%s)', async (preview) => {

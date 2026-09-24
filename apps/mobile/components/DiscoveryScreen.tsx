@@ -21,7 +21,7 @@ const FREE_RESULT_COUNT = 3;
 export function DiscoveryScreen({ onboardingPreview = false }: { onboardingPreview?: boolean }) {
   const { navigation, isOnboardingPreview, tried, inputs, query, setQuery, canSearch, hasQuery, location,
     locationLabel, results, heroResult, listResults, nextCursor, loading, loadingMore, refreshing, error, locked, outOfArea,
-    filterVisible, setFilterVisible, locationPickerVisible, setLocationPickerVisible, tourVisible, startTour,
+    filterVisible, setFilterVisible, locationPickerVisible, setLocationPickerVisible, tourReady, tourVisible, startTour,
     tourEditRef, tourSearchRef, tourHeroRef, tourLocationRef, tourMoreRef, tourSteps, finishTour, tourStepShown, cancelTourTyping, handleClearQuery, handleApplyFilters,
     handleJoinWaitlist, handleOpenLocationPicker, handlePickLocation, handleUseCurrentLocation, unlockPreview,
     unlocking, resyncNow, onLockedTap, unlockTitle, unlockSubtitle, unlockLabel, handleRefresh, handleEndReached } = useDiscoveryState({ onboardingPreview });
@@ -46,7 +46,7 @@ export function DiscoveryScreen({ onboardingPreview = false }: { onboardingPrevi
     <>
       {isOnboardingPreview && <View style={s.previewIntro} testID="preview-guide">
         <Text style={s.previewHint}>{onboardingPitch(tried).preview}</Text>
-        {!loading && !error && results.length > 0 && <Pressable onPress={startTour} style={s.previewTourButton} accessibilityRole="button" accessibilityLabel="Show me how Fitsy works" accessibilityHint="Replay the five preview tips" testID="preview-show-tour">
+        {tourReady && <Pressable onPress={startTour} style={s.previewTourButton} accessibilityRole="button" accessibilityLabel="Show me how Fitsy works" accessibilityHint="Replay the five preview tips" testID="preview-show-tour">
           <Ionicons name="help-circle-outline" size={20} color={EDITORIAL.green} />
         </Pressable>}
       </View>}
