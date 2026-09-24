@@ -30,23 +30,27 @@ export default function TrialReminderScreen() {
     const isCurrent = begin();
     setBusy(true);
     trackNotificationPrimingAllowTapped();
+    let returnToSignIn = false;
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!isCurrent()) return;
+      if (!session) {
+        returnToSignIn = true;
+        return;
+      }
       const { status } = await requestPermissionsAsync();
       if (!isCurrent()) return;
       if (status === 'granted') {
         trackNotificationPermissionGranted();
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          const prefs = await readReminderPreferences(session.user.id);
-          await saveReminderPreferences(session.user.id, { ...prefs, trial: true });
-          trackReminderAction({ action: 'preferences_changed', meals: prefs.meals, trial: true });
-        }
+        const prefs = await readReminderPreferences(session.user.id);
+        await saveReminderPreferences(session.user.id, { ...prefs, trial: true });
+        trackReminderAction({ action: 'preferences_changed', meals: prefs.meals, trial: true });
       } else trackNotificationPermissionDenied();
     } catch { /* Permission or storage failure must not block plan review. */ }
     finally {
       pending.current = false;
       setBusy(false);
-      if (isCurrent()) router.push('/welcome/payment');
+      if (isCurrent()) router.push(returnToSignIn ? '/welcome/signin?returnTo=trial-reminder' : '/welcome/payment');
     }
   }
   function skip() {

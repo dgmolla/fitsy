@@ -63,7 +63,7 @@ export default function SignInScreen() {
       router.dismissTo('/welcome/out-of-area');
       return;
     }
-    if (returnTo === 'payment' || returnTo === 'resubscribe') {
+    if (returnTo === 'payment' || returnTo === 'resubscribe' || returnTo === 'trial-reminder') {
       router.dismissTo(`/welcome/${returnTo}`);
       return;
     }

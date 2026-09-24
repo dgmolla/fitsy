@@ -59,6 +59,14 @@ it('repairs an old trust checkpoint that predates meal targets and preserves a c
   expect(await getOnboardingResume()).toBe('/welcome/how-it-works');
 });
 
+it('returns a signed-in legacy target setup to its assisted recommendation after goal choice', async () => {
+  await AsyncStorage.setItem('@fitsy/onboardingGoalReturnTo', '/macro-setup');
+  expect(await takeGoalReturnTo()).toBe('/macro-setup');
+  expect(await takeGoalReturnTo()).toBeNull();
+  await AsyncStorage.setItem('@fitsy/onboardingGoalReturnTo', '/macro-setup?fromOnboarding=1');
+  expect(await takeGoalReturnTo()).toBe('/macro-setup?fromOnboarding=1');
+});
+
 it.each(['target-setup', 'height', 'weight', 'age', 'sex', 'activity', 'tuning', 'preview'])(
   'collects a missing goal before resuming the %s target checkpoint', async checkpoint => {
     await AsyncStorage.setItem('@fitsy/onboardingStep', checkpoint);

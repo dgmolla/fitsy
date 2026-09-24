@@ -10,6 +10,7 @@ import { applySuggestionFilter, type SuggestionFilter } from '@/lib/macroSuggest
 import { calculateDailyMacros, dailyToPerMealMacros, macrosToStored } from '@/lib/macroCalculator';
 import { getOnboardingData, calculateSuggestedCalories, type Goal } from '@/lib/onboardingStorage';
 import { FONTS } from '@/lib/brand';
+import { rememberGoalReturnTo } from '@/lib/onboardingResume';
 
 interface MacroValues {
   protein: number;
@@ -57,7 +58,7 @@ export default function MacroSetupScreen() {
 
   const [values, setValues] = useState<MacroValues>({ protein: 150, carbs: 200, fat: 66 });
   const [suggestedCal, setSuggestedCal] = useState(2000);
-  const [goal, setGoal] = useState<Goal>('maintain');
+  const [goal, setGoal] = useState<Goal | null>(null);
   const [activeFilter, setActiveFilter] = useState<DietStyleId>('recommended');
   const [loaded, setLoaded] = useState(false);
   // True once the user has hand-edited a macro (or picked Custom). Guards the
@@ -76,18 +77,26 @@ export default function MacroSetupScreen() {
   useFocusEffect(
     useCallback(() => {
       let active = true;
+      setLoaded(false);
       getOnboardingData().then((data) => {
         if (!active) return;
+        if (!data.goal) {
+          setLoaded(false);
+          void rememberGoalReturnTo(fromOnboarding ? '/macro-setup?fromOnboarding=1' : '/macro-setup').then(() => {
+            if (active) router.replace('/welcome/goal');
+          });
+          return;
+        }
         const cal = snapToStep(calculateSuggestedCalories(data), 25);
         setSuggestedCal(cal);
-        setGoal(data.goal ?? 'maintain');
-        if (!customizedRef.current) setValues(recommendedSplit(cal, data.goal ?? 'maintain'));
+        setGoal(data.goal);
+        if (!customizedRef.current) setValues(recommendedSplit(cal, data.goal));
         setLoaded(true);
       });
       return () => {
         active = false;
       };
-    }, []),
+    }, [fromOnboarding]),
   );
 
   function applyDietStyle(filterId: DietStyleId) {
@@ -99,6 +108,7 @@ export default function MacroSetupScreen() {
 
     if (filterId === 'recommended') {
       customizedRef.current = false;
+      if (!goal) return;
       setValues(recommendedSplit(suggestedCal, goal));
       setActiveFilter('recommended');
       return;
@@ -120,6 +130,7 @@ export default function MacroSetupScreen() {
   }
 
   async function handleSave() {
+    if (!goal) return;
     try {
       const cal = computeCalories(values);
       const mealTargets = macrosToStored(dailyToPerMealMacros({ ...values, calories: cal }));
@@ -137,7 +148,7 @@ export default function MacroSetupScreen() {
 
   const s = createStyles(colors);
 
-  if (!loaded) return <SafeAreaView style={s.container} />;
+  if (!loaded || !goal) return <SafeAreaView style={s.container} />;
 
   const content = (
     <View style={s.contentWrap}>
