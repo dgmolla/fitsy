@@ -47,12 +47,13 @@ Both configurations use local simulator signing with Xcode's application entitle
 node scripts/verify/product-flow.mjs --plan
 export FITSY_SIM_OWNER=my-task MAESTRO_BIN="$HOME/.maestro/bin/maestro"
 node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs build <UDID>
-node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs run <UDID> <affected-flow-name>
+node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs run <UDID> <affected-flow-name> --mode=final-candidate
 # Capture affected primary and recovery paths through Mobile MCP, then:
 node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs finish .evidence/walkthrough.json
 ```
 
 Cold-start and sign-in always run. Add/select flows in `apps/mobile/e2e/flows/` tagged for every category in `--plan`, with at least two non-optional outcome assertions per changed journey. Baseline flows cannot cover a paywall change. Promote discovered regressions into deterministic scenarios.
+For development and review runs, omit the mode to skip video while retaining the required assertions and screenshots; that evidence cannot satisfy final publication.
 
 The walkthrough JSON is an array with one entry per category: `category`, `expected`, `observed`, `branches: ["primary", "recovery"]`, `result: "pass"`, and `trace` relative to `.evidence/product-flow/`. Traces are JSONL: one `{at, command: {name}, result: {content}}` object per line, recording actual Mobile MCP actions and screen observations. Identify run-owned synthetic fixtures with `FITSY_FIXTURE`; reviewers judge scenario relevance and visual quality.
 
