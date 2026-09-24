@@ -1,7 +1,7 @@
 jest.unmock('react-native');
 jest.unmock('expo-router');
 import React from 'react';
-import { Button, Text } from 'react-native';
+import { Animated, Button, Text } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import * as ExpoLocation from 'expo-location';
@@ -13,12 +13,14 @@ import TrialReminder from '../app/welcome/trial-reminder';
 import * as ExpoNotifications from 'expo-notifications';
 import Notifications from '../app/welcome/notification-permission';
 import Location from '../app/welcome/location-permission';
+import Problem from '../app/welcome/problem';
 import WelcomeLayout from '../app/welcome/_layout';
 import { PurchasesProvider } from '../lib/usePurchases';
 import { getPaywallIntent, getPurchasedContinuation, rememberPaywallIntent } from '../lib/paywallIntent';
 import { recordOnboardingComplete } from '../lib/onboardingCompletion';
 import { resetWelcomeJourney } from '../lib/paywallJourney';
 import { saveMacroTargets } from '../lib/macroStorage';
+import { hasSeenPreviewTour, hasUsedPreviewSample, markPreviewSampleUsed, markPreviewTourSeen } from '../lib/teaserGate';
 
 type Session = { access_token: string; user: { id: string } } | null;
 let mockSession: Session = null;
@@ -85,6 +87,7 @@ const routes = {
   'welcome/location-permission': Location, 'welcome/preview': Preview,
   'welcome/goal': () => <Text>Goal screen</Text>,
   'welcome/trial': () => <Text>Trial introduction</Text>,
+  'welcome/start-real': Problem,
   'welcome/payment': () => <Text>Payment plans</Text>,
   'welcome/problem': () => <Button title="Choose location" onPress={() => router.push('/welcome/location-permission')} />,
   'welcome/tried': () => <Text>Healthy eating approaches</Text>,
@@ -114,6 +117,23 @@ function renderJourney(initialUrl: string) {
   jest.setSystemTime(now);
   return screen;
 }
+
+it('resets a spent preview sample and tour when a new onboarding pass starts', async () => {
+  markPreviewSampleUsed();
+  markPreviewTourSeen();
+  expect(await hasUsedPreviewSample()).toBe(true);
+  expect(await hasSeenPreviewTour()).toBe(true);
+  jest.spyOn(Animated, 'loop').mockReturnValue({ start: jest.fn(), stop: jest.fn() } as never);
+  const screen = renderJourney('/welcome/start-real');
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-start')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/location-permission'));
+  expect(await hasUsedPreviewSample()).toBe(false);
+  expect(await hasSeenPreviewTour()).toBe(false);
+  await waitFor(async () => {
+    expect(await AsyncStorage.getItem('@fitsy/previewSampleUsed')).toBeNull();
+    expect(await AsyncStorage.getItem('@fitsy/previewTourSeen')).toBeNull();
+  });
+});
 it('waits for a saved area before enabling location choices', async () => {
   const area = { lat: 34.05, lng: -118.25, name: 'Downtown', source: 'manual' as const };
   const stored = deferred<string | null>();
