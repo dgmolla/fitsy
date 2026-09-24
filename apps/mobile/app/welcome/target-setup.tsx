@@ -23,6 +23,8 @@ function TargetSetupScreen() {
   const [busy, setBusy] = useState(false);
   useFocusEffect(useCallback(() => {
     let live = true;
+    setReady(false);
+    setBusy(false);
     void Promise.all([getMacroTargets(), getOnboardingData()]).then(async ([targets, data]) => {
       if (!live) return;
       if (!data.goal) {
@@ -31,7 +33,9 @@ function TargetSetupScreen() {
         if (live) router.replace('/welcome/goal');
         return;
       }
-      setSaved(targets); setMode(targets ? 'saved' : data.targetMode ?? 'known'); setReady(true);
+      setSaved(targets);
+      setMode(data.targetChoiceInProgress && data.targetMode ? data.targetMode : targets ? 'saved' : data.targetMode ?? 'known');
+      setReady(true);
     });
     return () => { live = false; };
   }, []));
@@ -42,6 +46,7 @@ function TargetSetupScreen() {
     const nextMode = mode === 'saved' ? 'known' : mode;
     try {
       await saveOnboardingField('targetMode', nextMode);
+      await saveOnboardingField('targetChoiceInProgress', mode !== 'saved');
       if (nextMode === 'estimate') await saveOnboardingField('targetBasis', undefined);
       if (!isCurrent()) return;
       trackOnboardingChoiceSelected({ screen: 'target_setup', value: mode });

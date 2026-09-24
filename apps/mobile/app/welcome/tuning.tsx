@@ -55,6 +55,7 @@ function PlanReadyScreen() {
     try {
       await saveMacroTargets(targets);
       await saveOnboardingField('targetBasis', basisOf(data));
+      await saveOnboardingField('targetChoiceInProgress', false);
       if (!isCurrent()) return;
       router.push('/welcome/how-it-works');
     } catch { if (isCurrent()) Alert.alert('Could not save targets', 'Please try again.'); }
