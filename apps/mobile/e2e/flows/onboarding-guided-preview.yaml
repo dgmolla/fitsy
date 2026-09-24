@@ -515,8 +515,33 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
     id: preview-pick-2
 - assertNotVisible:
     id: preview-pick-3
-- assertNotVisible:
+- assertVisible:
     id: preview-show-tour
+# The empty-result tour starts with the missing-meal tip and keeps this craving.
+- tapOn:
+    id: preview-show-tour
+- assertVisible: "1 OF 5"
+- assertVisible: "Make room for your craving"
+- copyTextFrom:
+    id: discovery-search
+- assertTrue: ${maestro.copiedText === 'fitsy-e2e-no-dish-9f71c2'}
+- tapOn:
+    id: coachmark-next
+- assertVisible: "2 OF 5"
+- tapOn:
+    id: coachmark-next
+- assertVisible: "3 OF 5"
+- tapOn:
+    id: coachmark-next
+- assertVisible: "4 OF 5"
+- tapOn:
+    id: coachmark-next
+- assertVisible: "5 OF 5"
+- tapOn:
+    id: coachmark-skip
+- copyTextFrom:
+    id: discovery-search
+- assertTrue: ${maestro.copiedText === 'fitsy-e2e-no-dish-9f71c2'}
 - assertNotVisible:
     id: discovery-join-waitlist
 - scrollUntilVisible:
