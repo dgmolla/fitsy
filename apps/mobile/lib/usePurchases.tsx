@@ -124,6 +124,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   // Mirror of `customerInfo` for async callbacks (the boot sync runs before
   // the first render that would carry it in state).
   const customerInfoRef = useRef<CustomerInfo | null>(null);
+  const offeringRequestRef = useRef(0);
   const setCustomerInfo = useCallback((info: CustomerInfo | null) => {
     customerInfoRef.current = info;
     setCustomerInfoState(info);
@@ -162,8 +163,9 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
         bootUserId = userId;
         auth.markBootUser(userId);
         if (configured) {
+          const offeringRequest = ++offeringRequestRef.current;
           void fetchCurrentOffering().then(off => {
-            if (!cancelled) setOffering(off);
+            if (!cancelled && off && offeringRequest === offeringRequestRef.current) setOffering(off);
           }).catch(() => undefined);
         }
         const rcReady = configured
@@ -188,7 +190,11 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
                   if (!fresh) return;
                   const latest = await supabase.auth.getSession();
                   if (latest.data.session?.user.id === currentUserId &&
-                    await currentPurchasesUserId() === currentUserId) setCustomerInfo(fresh);
+                    await currentPurchasesUserId() === currentUserId) {
+                    const proChanged = isProActive(fresh) !== isProActive(customerInfoRef.current);
+                    setCustomerInfo(fresh);
+                    if (proChanged) void syncEntitlement('mismatch');
+                  }
                 })().catch(() => undefined);
               });
               if (!bootOpen && isProActive(info) && verdict.entitledRef.current === false) {
@@ -222,10 +228,11 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   }, [setCustomerInfo]);
 
   const refreshOffering = useCallback(async (): Promise<PurchasesOffering | null> => {
+    const offeringRequest = ++offeringRequestRef.current;
     const off = await fetchCurrentOffering();
     // Keep a previously loaded offering rather than blanking prices on a
     // transient failure.
-    if (off) setOffering(off);
+    if (off && offeringRequest === offeringRequestRef.current) setOffering(off);
     return off;
   }, []);
 

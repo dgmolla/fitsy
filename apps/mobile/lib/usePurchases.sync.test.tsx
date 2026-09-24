@@ -27,6 +27,17 @@ setupPurchasesMocks();
 type SyncResult = { active: boolean; synced: boolean };
 
 describe('syncEntitlement', () => {
+  it('rechecks the server gate when the current account receives Pro on another device', async () => {
+    const { result } = renderProvider();
+    await waitFor(() => expect(result.current.entitled).toBe(false));
+    const listener = mockRc.addCustomerInfoListener.mock.calls[0][0];
+    mockRc.fetchCustomerInfo.mockResolvedValueOnce(proInfo);
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    await act(async () => { listener(proInfo); });
+    await waitFor(() => expect(result.current.isPro).toBe(true));
+    await waitFor(() => expect(result.current.entitled).toBe(true));
+    expect(mockApi.syncSubscription).toHaveBeenCalledWith('mismatch');
+  });
   it('leaves the verdict unchanged and returns null when the server cannot be asked', async () => {
     mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null });
     const { result } = renderProvider();
