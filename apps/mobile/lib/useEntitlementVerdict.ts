@@ -76,7 +76,7 @@ export interface EntitlementVerdict {
    * Sign-in: hold the gates (null), identify, give the server the cap, else
    * fall back to the device; the late answer still applies.
    */
-  resolveAfterSignIn: (identify: () => Promise<CustomerInfo | null>) => Promise<void>;
+  resolveAfterSignIn: (userId: string, identify: () => Promise<CustomerInfo | null>) => Promise<void>;
   /** The store just confirmed Pro: entitled now, cached, grace window open. */
   markStoreConfirmed: () => void;
   /** Sign-out, synchronous half: hold the gates (null), drop cache and grace window. */
@@ -243,18 +243,31 @@ export function useEntitlementVerdict({
   );
 
   const resolveAfterSignIn = useCallback(
-    async (identify: () => Promise<CustomerInfo | null>) => {
+    async (userId: string, identify: () => Promise<CustomerInfo | null>) => {
       // Hold the gates: the sign-in screen replaces to the tabs before the
       // server has answered, and a stale "false" would bounce a returning
       // subscriber to the paywall for the length of a round trip.
       const epoch = ++signInEpochRef.current;
       setEntitled(null);
-      const info = await withinMs(identify().catch(() => null), BOOT_VERDICT_CAP_MS);
+      const identity = identify().catch(() => null);
+      const info = await withinMs(identity, BOOT_VERDICT_CAP_MS);
       if (epoch !== signInEpochRef.current) return;
       const server = await withinMs(syncEntitlement('sign_in'), BOOT_VERDICT_CAP_MS);
       if (epoch !== signInEpochRef.current) return;
       // Same fallback rule as boot; the still-running sync applies the late answer.
       if (server === null) setEntitled((current) => current ?? isProActive(info));
+      if (info === null) {
+        // A slow identity can reveal Pro only after the first server sync has
+        // settled false. Re-read the authoritative server for that same user,
+        // as boot does; CustomerInfo alone never opens the gate.
+        void identity.then(async late => {
+          if (!isProActive(late) || epoch !== signInEpochRef.current || entitledRef.current !== false) return;
+          const { data } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+          if (epoch === signInEpochRef.current && data.session?.user.id === userId && entitledRef.current === false) {
+            void syncEntitlement('mismatch');
+          }
+        });
+      }
     },
     [syncEntitlement, setEntitled],
   );

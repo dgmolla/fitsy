@@ -16,6 +16,8 @@ jest.mock('@react-native-async-storage/async-storage', () => require('@react-nat
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
 jest.mock('expo-font', () => ({ isLoaded: () => true, loadAsync: jest.fn() }));
 const mockCapture = jest.fn();
+let mockAuthSession: { access_token: string; user: { id: string } } | null = null;
+let mockAuthListener: ((event: string, session: typeof mockAuthSession) => void) | undefined;
 jest.mock('posthog-react-native', () => {
   process.env.EXPO_PUBLIC_POSTHOG_API_KEY = 'unit-test-analytics';
   return jest.fn().mockImplementation(() => ({ capture: (...args: unknown[]) => mockCapture(...args), identify() {} }));
@@ -24,8 +26,11 @@ jest.mock('@supabase/supabase-js', () => {
   process.env.EXPO_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
   process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'unit-test-anon-key';
   return { createClient: () => ({ auth: {
-    getSession: async () => ({ data: { session: { access_token: 'test-token', user: { id: 'buyer' } } } }),
-    onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+    getSession: async () => ({ data: { session: mockAuthSession } }),
+    onAuthStateChange: (listener: typeof mockAuthListener) => {
+      mockAuthListener = listener;
+      return { data: { subscription: { unsubscribe() {} } } };
+    },
     startAutoRefresh() {}, stopAutoRefresh() {},
   } }) };
 });
@@ -60,6 +65,8 @@ const routes = {
 const originalFetch = global.fetch;
 beforeEach(async () => {
   jest.useRealTimers();
+  mockAuthSession = { access_token: 'test-token', user: { id: 'buyer' } };
+  mockAuthListener = undefined;
   await AsyncStorage.clear();
   restaurantMounts = 0;
   notificationMounts = 0;
@@ -95,6 +102,28 @@ test.each(['cancelled', 'no active entitlement'])('%s stays on the real paywall 
   expect(await AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY)).toBeNull();
   expect(await getPaywallIntent()).toEqual(selected);
   expect(notificationMounts).toBe(0);
+});
+
+test('a late current-user Pro identity rechecks the server and opens search from the real paywall', async () => {
+  const screen = await openPayment();
+  let resolveIdentity!: (value: { customerInfo: CustomerInfo; created: boolean }) => void;
+  (Purchases.logIn as jest.Mock).mockImplementationOnce(() => new Promise(resolve => { resolveIdentity = resolve; }));
+  global.fetch = jest.fn().mockImplementation((_url: string, init?: RequestInit) => {
+    const reason = init?.body ? JSON.parse(String(init.body)).reason as string : undefined;
+    return Promise.resolve({ ok: true, status: 200, json: async () => ({ active: reason === 'mismatch', synced: true }) });
+  });
+  jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick', 'queueMicrotask'] });
+  mockAuthSession = { access_token: 'returning-token', user: { id: 'returning-pro' } };
+  await act(async () => { mockAuthListener?.('SIGNED_IN', mockAuthSession); });
+  await act(async () => { jest.advanceTimersByTime(1500); });
+  await waitFor(() => expect((global.fetch as jest.Mock).mock.calls.some(([, init]) =>
+    init?.body && JSON.parse(String(init.body)).reason === 'sign_in')).toBe(true));
+  expect(screen.getPathname()).toBe('/welcome/payment');
+  await act(async () => { resolveIdentity({ customerInfo: subscribed, created: false }); });
+  await waitFor(() => expect((global.fetch as jest.Mock).mock.calls.some(([, init]) =>
+    init?.body && JSON.parse(String(init.body)).reason === 'mismatch')).toBe(true));
+  await waitFor(() => expect(screen.getPathname()).toBe('/search'));
+  jest.useRealTimers();
 });
 
 test('unknown introductory eligibility leaves the store to confirm the first charge', async () => {

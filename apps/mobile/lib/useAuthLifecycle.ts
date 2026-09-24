@@ -31,10 +31,10 @@ export function useAuthLifecycle({
   verdict,
   setCustomerInfo,
 }: {
-  verdict: Pick<EntitlementVerdict, 'entitledRef' | 'resolveAfterSignIn' | 'beginSignOut' | 'settleAfterSignOut'>;
+  verdict: Pick<EntitlementVerdict, 'resolveAfterSignIn' | 'beginSignOut' | 'settleAfterSignOut'>;
   setCustomerInfo: (info: CustomerInfo | null) => void;
 }): AuthLifecycle {
-  const { entitledRef, resolveAfterSignIn, beginSignOut, settleAfterSignOut } = verdict;
+  const { resolveAfterSignIn, beginSignOut, settleAfterSignOut } = verdict;
   // Which user boot (or the last sign-in) resolved, and whether boot is still
   // running: the recovery SIGNED_IN must not start a second identify + sync
   // (boot owns that resolution). A real sign-in during a slow boot is
@@ -46,17 +46,16 @@ export function useAuthLifecycle({
   /** Identify with RevenueCat and resolve the verdict for a signed-in user (detached). */
   const signIn = useCallback(
     (userId: string) => {
-      void resolveAfterSignIn(async () => {
+      // Claim this account before the detached identity read. Supabase may
+      // emit the same SIGNED_IN again while the bounded read is still pending.
+      bootUserIdRef.current = userId;
+      void resolveAfterSignIn(userId, async () => {
         const info = await identifyPurchasesUser(userId);
         if (info) {
           const { data } = await supabase.auth.getSession();
           if (data.session?.user.id === userId) setCustomerInfo(info);
         }
         return info;
-      }).then(async () => {
-        // A late identity for an older account cannot suppress a new sign-in.
-        const { data } = await supabase.auth.getSession();
-        if (data.session?.user.id === userId) bootUserIdRef.current = userId;
       }).catch(() => undefined);
     },
     [resolveAfterSignIn, setCustomerInfo],
@@ -69,7 +68,7 @@ export function useAuthLifecycle({
           pendingSignInUserIdRef.current = session.user.id;
           return;
         }
-        if (session.user.id === bootUserIdRef.current && entitledRef.current !== null) return;
+        if (session.user.id === bootUserIdRef.current) return;
         signIn(session.user.id);
       } else if (event === 'SIGNED_OUT') {
         void clearPaywallIntent().catch(() => undefined);
@@ -83,7 +82,7 @@ export function useAuthLifecycle({
       }
     });
     return () => sub.subscription.unsubscribe();
-  }, [setCustomerInfo, entitledRef, signIn, beginSignOut, settleAfterSignOut]);
+  }, [setCustomerInfo, signIn, beginSignOut, settleAfterSignOut]);
 
   const beginBoot = useCallback(() => {
     bootPendingRef.current = true;
@@ -94,10 +93,10 @@ export function useAuthLifecycle({
   const resumeLateBootUser = useCallback((userId: string) => {
     if (bootPendingRef.current) {
       pendingSignInUserIdRef.current = userId;
-    } else if (userId !== bootUserIdRef.current || entitledRef.current === null) {
+    } else if (userId !== bootUserIdRef.current) {
       signIn(userId);
     }
-  }, [entitledRef, signIn]);
+  }, [signIn]);
   const finishBoot = useCallback(
     (cancelled: boolean) => {
       bootPendingRef.current = false;

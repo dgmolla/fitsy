@@ -98,6 +98,122 @@ describe('sign-in', () => {
     await waitFor(() => expect(result.current.entitled).toBe(true));
   });
 
+  it('rechecks a late Pro identity once for the same signed-in account', async () => {
+    mockAuth.session = null;
+    const { result } = renderProvider();
+    await waitFor(() => expect(result.current.entitled).toBe(false));
+    useFakeTimersKeepingFlush();
+    const identity = deferred<typeof proInfo>();
+    mockRc.identifyPurchasesUser.mockReturnValueOnce(identity.promise);
+    mockApi.syncSubscription.mockResolvedValueOnce({ active: false, synced: true })
+      .mockResolvedValueOnce({ active: true, synced: true });
+    mockAuth.session = { user: { id: 'u2' } };
+    await act(async () => { mockAuth.listener?.('SIGNED_IN', mockAuth.session); });
+    await act(async () => { mockAuth.listener?.('SIGNED_IN', mockAuth.session); });
+    expect(mockRc.identifyPurchasesUser).toHaveBeenCalledTimes(1);
+    act(() => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
+    await flush();
+    expect(result.current.entitled).toBe(false);
+    await act(async () => { mockAuth.listener?.('SIGNED_IN', mockAuth.session); });
+    await act(async () => { identity.resolve(proInfo); });
+    await flush();
+    expect(mockApi.syncSubscription.mock.calls.map(([reason]) => reason)).toEqual(['sign_in', 'mismatch']);
+    expect(result.current.entitled).toBe(true);
+    jest.useRealTimers();
+  });
+
+  it('rejects a late Pro identity after account switch or sign-out', async () => {
+    mockAuth.session = null;
+    const { result } = renderProvider();
+    await waitFor(() => expect(result.current.entitled).toBe(false));
+    useFakeTimersKeepingFlush();
+    const oldIdentity = deferred<typeof proInfo>();
+    mockRc.identifyPurchasesUser.mockReturnValueOnce(oldIdentity.promise).mockResolvedValueOnce(freeInfo);
+    mockApi.syncSubscription.mockResolvedValue({ active: false, synced: true });
+    mockAuth.session = { user: { id: 'u2' } };
+    await act(async () => { mockAuth.listener?.('SIGNED_IN', mockAuth.session); });
+    act(() => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
+    await flush();
+    mockAuth.session = { user: { id: 'u3' } };
+    await act(async () => { mockAuth.listener?.('SIGNED_IN', mockAuth.session); });
+    await flush();
+    await act(async () => { oldIdentity.resolve(proInfo); });
+    await flush();
+    expect(mockApi.syncSubscription.mock.calls.map(([reason]) => reason)).toEqual(['sign_in', 'sign_in']);
+    expect(result.current.entitled).toBe(false);
+    mockAuth.session = null;
+    await act(async () => { mockAuth.listener?.('SIGNED_OUT', null); });
+    await flush();
+    expect(result.current.entitled).toBe(false);
+    jest.useRealTimers();
+  });
+
+  it('does not reconcile a late Pro identity after sign-out', async () => {
+    mockAuth.session = null;
+    const { result } = renderProvider();
+    await waitFor(() => expect(result.current.entitled).toBe(false));
+    useFakeTimersKeepingFlush();
+    const identity = deferred<typeof proInfo>();
+    mockRc.identifyPurchasesUser.mockReturnValueOnce(identity.promise);
+    mockApi.syncSubscription.mockResolvedValue({ active: false, synced: true });
+    mockAuth.session = { user: { id: 'u2' } };
+    await act(async () => { mockAuth.listener?.('SIGNED_IN', mockAuth.session); });
+    act(() => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
+    await flush();
+    mockAuth.session = null;
+    await act(async () => { mockAuth.listener?.('SIGNED_OUT', null); });
+    await flush();
+    await act(async () => { identity.resolve(proInfo); });
+    await flush();
+    expect(result.current.entitled).toBe(false);
+    expect(mockApi.syncSubscription.mock.calls.map(([reason]) => reason)).toEqual(['sign_in']);
+    jest.useRealTimers();
+  });
+
+  it('leaves a late free identity, rejected recheck, and pending recheck behind the server gate', async () => {
+    mockAuth.session = null;
+    const { result } = renderProvider();
+    await waitFor(() => expect(result.current.entitled).toBe(false));
+    useFakeTimersKeepingFlush();
+    const freeIdentity = deferred<typeof freeInfo>();
+    mockRc.identifyPurchasesUser.mockReturnValueOnce(freeIdentity.promise);
+    mockApi.syncSubscription.mockResolvedValueOnce({ active: false, synced: true });
+    mockAuth.session = { user: { id: 'u2' } };
+    await act(async () => { mockAuth.listener?.('SIGNED_IN', mockAuth.session); });
+    act(() => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
+    await flush();
+    await act(async () => { freeIdentity.resolve(freeInfo); });
+    expect(mockApi.syncSubscription).toHaveBeenCalledTimes(1);
+    expect(result.current.entitled).toBe(false);
+
+    const rejectedIdentity = deferred<typeof proInfo>();
+    mockRc.identifyPurchasesUser.mockReturnValueOnce(rejectedIdentity.promise);
+    mockApi.syncSubscription.mockResolvedValueOnce({ active: false, synced: true })
+      .mockRejectedValueOnce(new Error('offline'));
+    mockAuth.session = { user: { id: 'u3' } };
+    await act(async () => { mockAuth.listener?.('SIGNED_IN', mockAuth.session); });
+    act(() => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
+    await flush();
+    await act(async () => { rejectedIdentity.resolve(proInfo); });
+    await flush();
+    expect(result.current.entitled).toBe(false);
+    expect(mockApi.syncSubscription.mock.calls.map(([reason]) => reason)).toEqual(['sign_in', 'sign_in', 'mismatch']);
+
+    const pendingIdentity = deferred<typeof proInfo>();
+    mockRc.identifyPurchasesUser.mockReturnValueOnce(pendingIdentity.promise);
+    mockApi.syncSubscription.mockResolvedValueOnce({ active: false, synced: true })
+      .mockImplementationOnce(() => new Promise(() => {}));
+    mockAuth.session = { user: { id: 'u4' } };
+    await act(async () => { mockAuth.listener?.('SIGNED_IN', mockAuth.session); });
+    act(() => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
+    await flush();
+    await act(async () => { pendingIdentity.resolve(proInfo); });
+    await flush();
+    expect(result.current.entitled).toBe(false);
+    expect(mockApi.syncSubscription.mock.calls.map(([reason]) => reason)).toEqual(['sign_in', 'sign_in', 'mismatch', 'sign_in', 'mismatch']);
+    jest.useRealTimers();
+  });
+
   it('ignores an old account identity that completes after a newer sign-in', async () => {
     mockAuth.session = null;
     const { result } = renderProvider();
