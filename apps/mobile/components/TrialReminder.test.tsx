@@ -106,3 +106,24 @@ test('a late permission response cannot navigate after the reminder screen loses
   expect(await readReminderPreferences('trial-buyer')).toEqual({ meals: false, trial: false });
   expect(pushToken).not.toHaveBeenCalled();
 });
+
+test('a late preference read cannot opt in after leaving the reminder screen', async () => {
+  const pushToken = jest.spyOn(useNotifications, 'getExpoPushTokenAsync');
+  const write = jest.spyOn(AsyncStorage, 'setItem');
+  const originalGetItem = AsyncStorage.getItem.bind(AsyncStorage);
+  let resolve!: (value: string | null) => void;
+  const pendingRead = new Promise<string | null>(done => { resolve = done; });
+  const read = jest.spyOn(AsyncStorage, 'getItem').mockImplementation(key =>
+    key === '@fitsy/reminder-preferences/trial-buyer' ? pendingRead : originalGetItem(key));
+  const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
+  await act(async () => { fireEvent.press(screen.getByText('Continue to reminder')); });
+  await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-allow')); });
+  await waitFor(() => expect(read).toHaveBeenCalledWith('@fitsy/reminder-preferences/trial-buyer'));
+  await act(async () => { router.back(); });
+  expect(screen.getPathname()).toBe('/welcome/trial');
+  await act(async () => { resolve('{}'); });
+  read.mockRestore();
+  expect(write).not.toHaveBeenCalledWith('@fitsy/reminder-preferences/trial-buyer', expect.anything());
+  expect(await readReminderPreferences('trial-buyer')).toEqual({ meals: false, trial: false });
+  expect(pushToken).not.toHaveBeenCalled();
+});

@@ -47,6 +47,8 @@ export default function TrialReminderScreen() {
       if (status === 'granted') {
         trackNotificationPermissionGranted();
         const prefs = await readReminderPreferences(session.user.id);
+        const latestSession = await supabase.auth.getSession();
+        if (!isCurrent() || latestSession.data.session?.user.id !== session.user.id) return;
         await saveReminderPreferences(session.user.id, { ...prefs, trial: true });
         trackReminderAction({ action: 'preferences_changed', meals: prefs.meals, trial: true });
         void registerExpoPushToken(session.user.id);
