@@ -60,7 +60,10 @@ jest.mock('expo-auth-session/providers/google', () => {
   } };
 });
 jest.mock('expo-web-browser', () => ({ maybeCompleteAuthSession() {} }));
-jest.mock('expo-notifications', () => ({ requestPermissionsAsync: jest.fn().mockResolvedValue({ status: 'denied' }) }));
+jest.mock('expo-notifications', () => ({
+  getPermissionsAsync: jest.fn(),
+  requestPermissionsAsync: jest.fn().mockResolvedValue({ status: 'denied' }),
+}));
 jest.mock('react-native-purchases', () => jest.requireActual('../__mocks__/react-native-purchases'));
 jest.mock('react-native-purchases-ui', () => jest.requireActual('../__mocks__/react-native-purchases-ui'));
 jest.mock('expo-constants', () => ({ __esModule: true, default: { expoConfig: { extra: { revenueCat: { ios: 'test-store-key' } } } } }));
@@ -96,15 +99,19 @@ beforeEach(async () => {
   await AsyncStorage.clear();
   await SecureStore.deleteItemAsync('fitsy_authToken');
   mockSession = null;
+  (ExpoNotifications.getPermissionsAsync as jest.Mock).mockReset().mockResolvedValue({ status: 'undetermined' });
   (ExpoNotifications.requestPermissionsAsync as jest.Mock).mockClear();
   global.fetch = jest.fn().mockResolvedValue(response({ active: true, status: 'active', expiresAt: null }));
 });
 
 it('asks an anonymous trial reminder opt-in to sign in before permission, then returns to the choice', async () => {
   installEligibleTrialOffer();
+  (ExpoNotifications.getPermissionsAsync as jest.Mock).mockResolvedValueOnce({ status: 'granted' });
   (ExpoNotifications.requestPermissionsAsync as jest.Mock).mockResolvedValueOnce({ status: 'granted' });
   const screen = renderJourney('/welcome/trial-reminder');
   await screen.findByTestId('trial-reminder-allow');
+  expect(ExpoNotifications.getPermissionsAsync).toHaveBeenCalled();
+  expect(screen.getByText('We can notify you before your trial ends.')).toBeTruthy();
   await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-allow')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/signin'));
   expect(ExpoNotifications.requestPermissionsAsync).not.toHaveBeenCalled();

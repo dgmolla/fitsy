@@ -55,11 +55,20 @@ test('a previously denied permission does not promise or request a trial reminde
   (Notifications.getPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'denied' });
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial-reminder' });
   await waitFor(() => expect(screen.getByText('Notifications are off.')).toBeTruthy());
+  expect(Notifications.getPermissionsAsync).toHaveBeenCalled();
   expect(screen.queryByText('We can notify you before your trial ends.')).toBeNull();
   await screen.findByTestId('trial-reminder-allow');
   await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-allow')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
   expect(Notifications.requestPermissionsAsync).not.toHaveBeenCalled();
+});
+
+test('a failed permission read falls back to the optional reminder choice', async () => {
+  (Notifications.getPermissionsAsync as jest.Mock).mockRejectedValue(new Error('Permission status unavailable'));
+  const screen = renderRouter(routes, { initialUrl: '/welcome/trial-reminder' });
+  await waitFor(() => expect(screen.getByText('We can notify you before your trial ends.')).toBeTruthy());
+  expect(Notifications.getPermissionsAsync).toHaveBeenCalled();
+  expect(screen.getByTestId('trial-reminder-skip')).toBeTruthy();
 });
 
 test('a two-day trial does not offer an unschedulable reminder', async () => {
