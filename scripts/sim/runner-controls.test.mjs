@@ -5,7 +5,7 @@ import { createServer } from 'node:http';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { archiveFailureEvidence, completeMaestroRun, flowFailureReason, recordFlowOutcome, recordedFlowFailureKey, recordRunFailure, requireMetro, runOwnedMaestro, runRecordedFlow, saveRecordedFlowReceipts, startOwnedRecorder, stopOwnedRecorder, summarizeCommands, summarizeFlowTiming, nearestFailure, matchingFailureKey, needsDiagnosis } from './runner-controls.mjs';
+import { appendRecordedFlowFailure, archiveFailureEvidence, completeMaestroRun, flowFailureReason, recordFlowOutcome, recordedFlowFailureKey, recordRunFailure, requireMetro, runOwnedMaestro, runRecordedFlow, saveRecordedFlowReceipts, startOwnedRecorder, stopOwnedRecorder, summarizeCommands, summarizeFlowTiming, nearestFailure, matchingFailureKey, needsDiagnosis } from './runner-controls.mjs';
 
 const temp = () => mkdtempSync(join(tmpdir(), 'fitsy-runner-'));
 test('final timeline failure leaves a failed report and retains the triggering error', () => {
@@ -764,6 +764,20 @@ test('successful Maestro with undecodable recorder output records failure before
     assert.notEqual(recorderKey, unplayableKey);
     assert.equal(needsDiagnosis([{ key: recorderKey }, { key: unplayableKey }]), false);
     assert.equal(needsDiagnosis([{ key: unplayableKey }, { key: unplayableKey }]), true);
+    const earlyRecorder = { ...recorded, recorderResult: { ...recorded.recorderResult, endedBeforeStop: true } };
+    const partial = selector => [...commands, { command: { tapOnElement: { selector: { idRegex: selector } } },
+      metadata: { status: 'FAILED', error: { message: 'Element not found' } } }];
+    const firstPartial = partial('welcome-start'), secondPartial = partial('next-step');
+    const recordEarly = partialCommands => recordFlowOutcome({ dir, recorded: earlyRecorder, commands: partialCommands,
+      videoPath: video, videoReceipt: 'welcome/flow-untrimmed.mp4', flowName: 'welcome', report, reportFile, timeline,
+      commandReceipt: 'welcome/commands.json', failureDetail: failureReason => ({ flow: 'welcome', failureReason }) });
+    const firstEarly = recordEarly(firstPartial), secondEarly = recordEarly(secondPartial);
+    assert.equal(firstEarly.failureReason, 'recorder-ended-early');
+    assert.equal(secondEarly.failureReason, 'recorder-ended-early');
+    const firstEarlyKey = recordedFlowFailureKey(nearestFailure(firstPartial), 'welcome', firstEarly, earlyRecorder.result);
+    const secondEarlyKey = recordedFlowFailureKey(nearestFailure(secondPartial), 'welcome', secondEarly, earlyRecorder.result);
+    assert.equal(firstEarlyKey, secondEarlyKey);
+    assert.equal(needsDiagnosis([{ key: firstEarlyKey }, { key: secondEarlyKey }]), true);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -786,6 +800,81 @@ test('recording failures match only the same observed cause', () => {
   const withRecorderExit = recordedFlowFailureKey(command, 'welcome', { failureReason: 'recorder-failure', summary }, result);
   const withCommandFailure = recordedFlowFailureKey(command, 'welcome', { failureReason: 'command-failure', summary }, result);
   assert.notEqual(withRecorderExit, withCommandFailure);
+  const otherCommand = nearestFailure([{ command: { tapOnElement: { selector: { idRegex: 'next-step' } } },
+    metadata: { status: 'FAILED', error: { message: 'Element not found' } } }]);
+  const sameRecorderCause = recordedFlowFailureKey(otherCommand, 'welcome', { failureReason: 'recorder-failure', summary }, { code: 1, reason: 'maestro-exit' });
+  assert.equal(withRecorderExit, sameRecorderCause);
+  assert.equal(needsDiagnosis([{ key: withRecorderExit }, { key: sameRecorderCause }]), true);
+  const differentCommand = recordedFlowFailureKey(otherCommand, 'welcome', { failureReason: 'command-failure', summary }, result);
+  assert.notEqual(withCommandFailure, differentCommand);
+});
+
+test('production failure history distinguishes recording, command, flow, and receipt boundaries', () => {
+  const root = temp();
+  try {
+    let count = 0;
+    const make = ({ flow = 'welcome', receipt = 'complete', selector = 'welcome-start',
+      cause = 'recorder-ended-early' }) => {
+      const dir = join(root, String(++count)); mkdirSync(dir);
+      const video = join(dir, 'flow-untrimmed.mp4'); writeFileSync(video, 'not playable');
+      const reportFile = join(dir, 'report.json'), timeline = join(dir, 'runner-timeline.jsonl');
+      const report = { result: 'running', flows: [] }; writeFileSync(reportFile, JSON.stringify(report));
+      const config = { command: { applyConfigurationCommand: { config: { appId: 'com.fitsy.mobile', name: flow } } },
+        metadata: { status: 'COMPLETED' } };
+      const assertion = { command: { assertConditionCommand: { condition: { visible: { textRegex: 'Ready' } } } },
+        metadata: { status: 'COMPLETED' } };
+      const failed = { command: { tapOnElement: { selector: { idRegex: selector } } },
+        metadata: { status: 'FAILED', error: { message: 'Element not found' } } };
+      const commands = receipt === 'absent' ? null : receipt === 'partial' ? [config, failed]
+        : receipt === 'failed-command' ? [config, assertion, failed] : [config, assertion];
+      const recorderResult = { state: 'stopped', code: cause === 'recorder-failure' ? 1 : 0,
+        bytes: 12, endedBeforeStop: cause === 'recorder-ended-early' };
+      const result = { code: cause === 'maestro-exit' ? 1 : 0, reason: null, elapsedMs: 1000 };
+      const outcome = recordFlowOutcome({ dir, recorded: { result, recorderResult,
+        recorderStartedMs: Date.now() - 1000, recorderEndedMs: Date.now() }, commands,
+        videoPath: video, videoReceipt: `${count}/flow-untrimmed.mp4`, flowName: flow,
+        report, reportFile, timeline, commandReceipt: commands ? `${count}/commands.json` : null,
+        failureDetail: failureReason => ({ flow, failureReason }) });
+      assert.equal(outcome.failureReason, cause);
+      return { failure: commands ? nearestFailure(commands) : null, flow, outcome, result, dir };
+    };
+    const cases = {
+      earlyAbsent: make({ receipt: 'absent' }),
+      earlyPartialA: make({ receipt: 'partial' }),
+      earlyPartialB: make({ receipt: 'partial', selector: 'next-step' }),
+      earlyComplete: make({ receipt: 'complete' }),
+      earlyOtherFlow: make({ flow: 'signin', receipt: 'partial' }),
+      recorderA: make({ cause: 'recorder-failure', receipt: 'partial' }),
+      recorderB: make({ cause: 'recorder-failure', receipt: 'partial', selector: 'next-step' }),
+      recorderComplete: make({ cause: 'recorder-failure', receipt: 'complete' }),
+      unplayable: make({ cause: 'unplayable-video', receipt: 'complete' }),
+      commandA: make({ cause: 'command-failure', receipt: 'failed-command' }),
+      commandB: make({ cause: 'command-failure', receipt: 'failed-command', selector: 'next-step' }),
+      maestroA: make({ cause: 'maestro-exit', receipt: 'failed-command' }),
+      missing: make({ cause: 'missing-or-empty-command-receipt', receipt: 'absent' }),
+    };
+    const pairs = [
+      ['earlyAbsent', 'earlyPartialA', true], ['earlyPartialA', 'earlyPartialB', true],
+      ['earlyPartialA', 'earlyComplete', true], ['earlyPartialA', 'earlyOtherFlow', false],
+      ['recorderA', 'recorderB', true], ['recorderA', 'recorderComplete', true],
+      ['earlyPartialA', 'recorderA', false], ['recorderA', 'unplayable', false],
+      ['unplayable', 'unplayable', true], ['recorderA', 'commandA', false],
+      ['commandA', 'commandB', false], ['commandA', 'commandA', true],
+      ['maestroA', 'commandA', false], ['earlyAbsent', 'missing', false],
+    ];
+    for (const [firstName, secondName, expectedCheckpoint] of pairs) {
+      const history = [];
+      for (const name of [firstName, secondName]) {
+        const item = cases[name];
+        appendRecordedFlowFailure(history, item.failure, item.flow, item.outcome, item.result,
+          { at: new Date().toISOString(), evidence: item.dir, head: 'fixture-head' });
+      }
+      const historyFile = join(root, 'native-failures.json');
+      writeFileSync(historyFile, JSON.stringify(history));
+      assert.equal(needsDiagnosis(JSON.parse(readFileSync(historyFile, 'utf8'))), expectedCheckpoint,
+        `${firstName} then ${secondName}`);
+    }
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 test('failure identity distinguishes flow and tap target while ignoring receipt timestamps', () => {

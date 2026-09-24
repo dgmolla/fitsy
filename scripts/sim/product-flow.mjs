@@ -9,7 +9,7 @@ import { createRequire } from 'node:module';
 import { root, inputHash, changedPaths, impact, digest, validate, baseline, repoEnv } from '../verify/product-flow.mjs';
 import { backendRevision } from './backend-identity.mjs';
 import { buildProfile, bundleDelegate, fixtureLabel, metroRoute } from './build-profile.mjs';
-import { admitDisk, archiveFailureEvidence, completeMaestroRun, event, latestMaestroLog, nearestFailure, needsDiagnosis, recordFlowOutcome, recordedFlowFailureKey, recordRunFailure, requireMetro, runRecordedFlow } from './runner-controls.mjs';
+import { admitDisk, appendRecordedFlowFailure, archiveFailureEvidence, completeMaestroRun, event, latestMaestroLog, nearestFailure, needsDiagnosis, recordFlowOutcome, recordRunFailure, requireMetro, runRecordedFlow } from './runner-controls.mjs';
 const yaml = createRequire(import.meta.url)('js-yaml');
 const out = resolve(root, '.evidence/product-flow');
 const buildDir = resolve(root, '.evidence/product-build');
@@ -290,8 +290,8 @@ async function execute(udid, names) {
             networkTiming: networkTiming.length ? networkTiming : null, networkTimingAbsence: networkTiming.length ? null : 'No structured network status/duration in Maestro log' };
         } });
       if (outcome.failureReason) {
-        const key = recordedFlowFailureKey(failure, flow.name, outcome, result);
-        history.push({ at: new Date().toISOString(), key, flow: flow.name, evidence: relative(root, dir), head: run('git', ['rev-parse', 'HEAD']) });
+        appendRecordedFlowFailure(history, failure, flow.name, outcome, result,
+          { at: new Date().toISOString(), evidence: relative(root, dir), head: run('git', ['rev-parse', 'HEAD']) });
         save(failuresFile, history);
         throw new Error(`Native flow ${flow.name} failed; inspect ${relative(root, join(dir, 'failure.json'))} and raw Maestro receipt before retry`);
       }

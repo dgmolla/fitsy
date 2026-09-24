@@ -155,10 +155,18 @@ export function matchingFailureKey(failure, flowName) {
   return failure && JSON.stringify([flowName || 'flow:absent', failure.command, failure.selectorIdentity || 'selector:absent', errorIdentity]);
 }
 export function recordedFlowFailureKey(failure, flowName, outcome, result) {
+  if (['recorder-ended-early', 'recorder-failure', 'unplayable-video'].includes(outcome.failureReason))
+    return JSON.stringify([flowName, outcome.failureReason]);
   const commandKey = matchingFailureKey(failure, flowName);
   return commandKey
     ? JSON.stringify([outcome.failureReason, commandKey])
     : JSON.stringify([flowName, outcome.failureReason, result.reason || result.code, outcome.summary.observation]);
+}
+export function appendRecordedFlowFailure(history, failure, flowName, outcome, result, details) {
+  if (!outcome.failureReason) throw new Error('Cannot add a passing flow to failure history');
+  const entry = { ...details, key: recordedFlowFailureKey(failure, flowName, outcome, result), flow: flowName };
+  history.push(entry);
+  return entry;
 }
 export function needsDiagnosis(history) {
   const last = history.slice(-2);
