@@ -140,6 +140,23 @@ it('offers only goals that can continue from assisted target tuning to nutrition
   expect(screen.getByTestId('nutrition-source-published')).toBeTruthy();
 });
 
+it('shows the saved goal after assisted tuning changes it and the user returns to goal choice', async () => {
+  await saveOnboardingField('goal', 'performance');
+  await saveOnboardingField('targetMode', 'estimate');
+  const screen = renderRouter(routes, { initialUrl: '/welcome/goal' });
+  await waitFor(() => expect(screen.getByTestId('goal-performance').props.accessibilityState?.selected).toBe(true));
+  await act(async () => { router.push('/welcome/tuning'); });
+  await screen.findByTestId('meal-goal-build_muscle');
+  await act(async () => { fireEvent.press(screen.getByTestId('meal-goal-build_muscle')); });
+  await waitFor(() => expect((getOnboardingData())).resolves.toEqual(expect.objectContaining({ goal: 'build_muscle' })));
+  await act(async () => { router.back(); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/goal'));
+  await waitFor(() => expect(screen.getByTestId('goal-build_muscle').props.accessibilityState?.selected).toBe(true));
+  expect(screen.getByTestId('goal-performance').props.accessibilityState?.selected).toBe(false);
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  expect((await getOnboardingData()).goal).toBe('build_muscle');
+});
+
 it('opens assisted questions only after confirmation and retains the earlier goal', async () => {
   await saveOnboardingField('goal', 'build_muscle');
   const screen = renderRouter(routes, { initialUrl: '/welcome/target-setup' });

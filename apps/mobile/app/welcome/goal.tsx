@@ -25,13 +25,16 @@ export default function GoalScreen() {
   const [selected, setSelected] = useState<Goal | null>(null);
 
   useFocusEffect(useCallback(() => {
+    let current = true;
     setBusy(false);
-    return () => { void clearGoalReturnTo(); };
+    void getOnboardingData().then(data => {
+      if (current) setSelected(GOALS.find(goal => goal.id === data.goal)?.id ?? null);
+    });
+    return () => { current = false; void clearGoalReturnTo(); };
   }, []));
 
   useEffect(() => {
     trackOnboardingScreenView('goal');
-    void getOnboardingData().then(data => setSelected(GOALS.find(goal => goal.id === data.goal)?.id ?? null));
   }, []);
 
   return (
