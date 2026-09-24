@@ -6,7 +6,7 @@ import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { WelcomeActions } from '@/components/WelcomeActions';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { EDITORIAL, TEXT } from '@/lib/brand';
-import { useOnboardingStep } from '@/lib/onboardingResume';
+import { rememberGoalReturnTo, useOnboardingStep } from '@/lib/onboardingResume';
 import { getOnboardingData, saveOnboardingField } from '@/lib/onboardingStorage';
 import { getMacroTargets, type StoredMacroTargets } from '@/lib/macroStorage';
 import { trackOnboardingChoiceSelected } from '@/lib/analytics';
@@ -20,8 +20,15 @@ export default function TargetSetupScreen() {
   const [busy, setBusy] = useState(false);
   useFocusEffect(useCallback(() => {
     let live = true;
-    void Promise.all([getMacroTargets(), getOnboardingData()]).then(([targets, data]) => {
-      if (live) { setSaved(targets); setMode(data.targetMode ?? 'known'); setReady(true); }
+    void Promise.all([getMacroTargets(), getOnboardingData()]).then(async ([targets, data]) => {
+      if (!live) return;
+      if (!data.goal) {
+        setReady(false);
+        await rememberGoalReturnTo('/welcome/target-setup');
+        if (live) router.replace('/welcome/goal');
+        return;
+      }
+      setSaved(targets); setMode(data.targetMode ?? 'known'); setReady(true);
     });
     return () => { live = false; };
   }, []));

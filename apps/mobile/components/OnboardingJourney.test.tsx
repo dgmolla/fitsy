@@ -60,6 +60,7 @@ it('updates the fitness payoff after going back and choosing another prior appro
 });
 
 it('keeps own meal targets through trust, Back, and the saved-target shortcut without body questions', async () => {
+  await saveOnboardingField('goal', 'lose_fat');
   const screen = renderRouter(routes, { initialUrl: '/welcome/target-setup' });
   await waitFor(() => expect(screen.getByTestId('welcome-continue').props.accessibilityState?.disabled).not.toBe(true));
   await act(async () => { fireEvent.press(screen.getByTestId('target-mode-known')); });
@@ -89,6 +90,19 @@ it('opens assisted questions only after confirmation and retains the earlier goa
   await act(async () => {});
   await act(async () => { fireEvent.press(screen.getByTestId('target-mode-estimate')); });
   expect(screen.getPathname()).toBe('/welcome/target-setup');
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/height'));
+  expect(await getOnboardingData()).toEqual(expect.objectContaining({ targetMode: 'estimate', goal: 'build_muscle' }));
+});
+
+it('sends a missing-goal target setup to goal choice, then returns before assisted questions', async () => {
+  const screen = renderRouter(routes, { initialUrl: '/welcome/target-setup' });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/goal'));
+  expect(screen.getByTestId('welcome-continue').props.accessibilityState?.disabled).toBe(true);
+  await act(async () => { fireEvent.press(screen.getByTestId('goal-build_muscle')); });
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/target-setup'));
+  await act(async () => { fireEvent.press(screen.getByTestId('target-mode-estimate')); });
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/height'));
   expect(await getOnboardingData()).toEqual(expect.objectContaining({ targetMode: 'estimate', goal: 'build_muscle' }));

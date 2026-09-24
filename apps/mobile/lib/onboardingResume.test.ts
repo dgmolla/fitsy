@@ -11,7 +11,6 @@ it.each([
   ['trial-reminder', '/welcome/trial-reminder'],
   ['promise', '/welcome/location-permission'],
   ['out-of-area', '/welcome/out-of-area'],
-  ['tuning', '/welcome/tuning'],
   ['unknown-route', null],
 ])('resumes the %s checkpoint at %s', async (checkpoint, expected) => {
   await AsyncStorage.setItem('@fitsy/onboardingStep', checkpoint!);
@@ -52,7 +51,18 @@ it.each([
 
 it('repairs an old trust checkpoint that predates meal targets and preserves a completed target setup', async () => {
   await AsyncStorage.setItem('@fitsy/onboardingStep', 'how-it-works');
+  expect(await getOnboardingResume()).toBe('/welcome/goal');
+  expect(await takeGoalReturnTo()).toBe('/welcome/target-setup');
+  await saveOnboardingField('goal', 'lose_fat');
   expect(await getOnboardingResume()).toBe('/welcome/target-setup');
   await saveMacroTargets({ calories: '600', protein: '45', carbs: '60', fat: '20' });
   expect(await getOnboardingResume()).toBe('/welcome/how-it-works');
 });
+
+it.each(['target-setup', 'height', 'weight', 'age', 'sex', 'activity', 'tuning', 'preview'])(
+  'collects a missing goal before resuming the %s target checkpoint', async checkpoint => {
+    await AsyncStorage.setItem('@fitsy/onboardingStep', checkpoint);
+    expect(await getOnboardingResume()).toBe('/welcome/goal');
+    expect(await takeGoalReturnTo()).toBe('/welcome/target-setup');
+  },
+);

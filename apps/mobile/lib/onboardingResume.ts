@@ -7,7 +7,7 @@ import { getPreviewSetup } from './previewSetup';
 
 const KEY = '@fitsy/onboardingStep';
 const GOAL_RETURN_KEY = '@fitsy/onboardingGoalReturnTo';
-type GoalReturnTo = '/welcome/value-payoff' | '/welcome/goal-payoff';
+type GoalReturnTo = '/welcome/value-payoff' | '/welcome/goal-payoff' | '/welcome/target-setup';
 const STEPS = ['promise', 'tried', 'response', 'value-payoff', 'goal-payoff', 'location-permission', 'value-abundance', 'how-it-works', 'target-setup', 'macros-intro', 'goal', 'height', 'weight', 'age', 'sex', 'activity', 'tuning', 'preview', 'signin', 'trial', 'trial-reminder', 'payment', 'out-of-area'] as const;
 type Step = typeof STEPS[number];
 export function useOnboardingStep(step?: Step): void {
@@ -24,6 +24,10 @@ export async function getOnboardingResume(): Promise<`/welcome/${Step}` | null> 
     await rememberGoalReturnTo(step === 'goal-payoff' ? '/welcome/goal-payoff' : '/welcome/value-payoff');
     return '/welcome/goal';
   }
+  if (step && ['how-it-works', 'target-setup', 'macros-intro', 'height', 'weight', 'age', 'sex', 'activity', 'tuning', 'preview'].includes(step) && !(await getOnboardingData()).goal) {
+    await rememberGoalReturnTo('/welcome/target-setup');
+    return '/welcome/goal';
+  }
   if (step === 'value-abundance') return '/welcome/value-payoff';
   // The old flow showed nutrition trust before targets; the new flow follows them.
   if (step === 'how-it-works' && !(await getMacroTargets())) return '/welcome/target-setup';
@@ -36,7 +40,7 @@ export async function rememberGoalReturnTo(destination: GoalReturnTo): Promise<v
 export async function takeGoalReturnTo(): Promise<GoalReturnTo | null> {
   const saved = await AsyncStorage.getItem(GOAL_RETURN_KEY);
   await AsyncStorage.removeItem(GOAL_RETURN_KEY);
-  return saved === '/welcome/value-payoff' || saved === '/welcome/goal-payoff' ? saved : null;
+  return saved === '/welcome/value-payoff' || saved === '/welcome/goal-payoff' || saved === '/welcome/target-setup' ? saved : null;
 }
 
 export async function clearOnboardingResume(): Promise<void> {
