@@ -160,23 +160,25 @@ describe('boot', () => {
     await waitFor(() => expect(result.current.entitled).toBe(true));
   });
 
-  it('keeps a newer Pro sync when a slow boot identity lets an older server false arrive later', async () => {
+  it('keeps a newer Pro sync when the capped boot server read returns false later', async () => {
     useFakeTimersKeepingFlush();
-    const identity = deferred<typeof freeInfo>();
-    mockRc.identifyPurchasesUser.mockReturnValueOnce(identity.promise);
+    const bootServer = deferred<StatusResult>();
+    mockApi.fetchSubscriptionStatus.mockReturnValueOnce(bootServer.promise);
     mockRc.fetchCustomerInfo.mockResolvedValueOnce(proInfo);
     mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
     const { result } = renderProvider();
     await flush();
+    expect(mockApi.fetchSubscriptionStatus).toHaveBeenCalledTimes(1);
     expect(result.current.entitled).toBeNull();
+    act(() => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
+    await flush();
+    expect(result.current.entitled).toBe(false);
     const listener = mockRc.addCustomerInfoListener.mock.calls[0][0];
     await act(async () => { listener(proInfo); });
     await waitFor(() => expect(result.current.entitled).toBe(true));
-    act(() => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
-    await flush();
+    await act(async () => { bootServer.resolve({ active: false, status: null, expiresAt: null }); });
     expect(result.current.entitled).toBe(true);
     expect(mockApi.syncSubscription).toHaveBeenCalledWith('mismatch');
-    await act(async () => { identity.resolve(freeInfo); });
     jest.useRealTimers();
   });
 

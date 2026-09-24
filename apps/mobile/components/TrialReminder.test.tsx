@@ -13,6 +13,7 @@ import { Stack, router } from 'expo-router';
 import { act, fireEvent, renderRouter, waitFor } from 'expo-router/testing-library';
 import TrialReminder from '../app/welcome/trial-reminder';
 import { readReminderPreferences, saveReminderPreferences } from '../lib/notificationSchedule';
+import * as useNotifications from '../lib/useNotifications';
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
@@ -92,6 +93,7 @@ test.each(['denied', 'error', 'skip'])('%s continues to plans without saving a f
 
 
 test('a late permission response cannot navigate after the reminder screen loses focus', async () => {
+  const pushToken = jest.spyOn(useNotifications, 'getExpoPushTokenAsync');
   let resolve!: (result: { status: string }) => void;
   (Notifications.requestPermissionsAsync as jest.Mock).mockReturnValue(new Promise(done => { resolve = done; }));
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
@@ -101,4 +103,6 @@ test('a late permission response cannot navigate after the reminder screen loses
   expect(screen.getPathname()).toBe('/welcome/trial');
   await act(async () => { resolve({ status: 'granted' }); });
   expect(screen.getPathname()).toBe('/welcome/trial');
+  expect(await readReminderPreferences('trial-buyer')).toEqual({ meals: false, trial: false });
+  expect(pushToken).not.toHaveBeenCalled();
 });
