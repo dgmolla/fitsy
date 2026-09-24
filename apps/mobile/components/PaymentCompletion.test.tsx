@@ -97,6 +97,18 @@ test.each(['cancelled', 'no active entitlement'])('%s stays on the real paywall 
   expect(notificationMounts).toBe(0);
 });
 
+test('unknown introductory eligibility leaves the store to confirm the first charge', async () => {
+  const introAnnual = { ...annual, product: { ...annual.product, introPrice: { price: 0, priceString: '$0', period: 'P1W', cycles: 1 } } };
+  const introOffering = { ...offering, annual: introAnnual, availablePackages: [introAnnual] } as unknown as PurchasesOffering;
+  jest.spyOn(Purchases, 'getOfferings').mockResolvedValue({ current: introOffering, all: { default: introOffering } });
+  jest.spyOn(Purchases, 'checkTrialOrIntroductoryPriceEligibility').mockResolvedValue({ annual: { status: 0, description: 'Unknown' } });
+  const screen = await openPayment();
+  await waitFor(() => expect(Purchases.checkTrialOrIntroductoryPriceEligibility).toHaveBeenCalledWith(['annual']));
+  await act(async () => {});
+  await waitFor(() => expect(screen.getByTestId('paywall-terms').props.children).toContain('store will confirm any eligible introductory offer and the first charge'));
+  expect(screen.getByTestId('paywall-terms').props.children).not.toContain('$59.99 when you confirm');
+});
+
 test.each(['purchase', 'restore'])('%s opens the selected meal directly and a later SDK update cannot redirect twice', async action => {
   const screen = await openPayment();
   await act(async () => { fireEvent.press(screen.getByTestId(action === 'purchase' ? 'welcome-continue' : 'paywall-restore')); });
