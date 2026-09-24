@@ -43,6 +43,20 @@ test('calendar trials are not converted to invented day counts', () => {
   expect(screen.queryByText(/Day 30/)).toBeNull();
 });
 
+test('the selected short trial has a truthful reminder step, even after a longer plan offered opt-in', () => {
+  const short = purchaseTerms({ ...product, subscriptionPeriod: 'P1M', introPrice: { ...product.introPrice, period: 'P2D' } }, true);
+  const p = { ...props(), monthly: short };
+  const screen = render(<PaywallView {...p} />);
+  expect(screen.getByText('Optional reminder around day 5')).toBeTruthy();
+  screen.rerender(<PaywallView {...p} plan="monthly" />);
+  expect(screen.getByText('Reminder unavailable for this trial')).toBeTruthy();
+  expect(screen.getByText('Day 2: payment')).toBeTruthy();
+  expect(screen.queryByText('Optional reminder around day 5')).toBeNull();
+  expect(screen.getByTestId('paywall-terms').props.children).toContain('2 days free');
+  screen.rerender(<PaywallView {...p} plan="yearly" />);
+  expect(screen.getByText('Optional reminder around day 5')).toBeTruthy();
+});
+
 test('plan selection, purchase, restore and decline remain operable with live totals', () => {
   const p = props();
   const screen = render(<PaywallView {...p} />);

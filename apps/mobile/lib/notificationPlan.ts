@@ -1,4 +1,5 @@
 import type { PurchasesEntitlementInfo } from 'react-native-purchases';
+import type { purchaseTerms } from './purchaseTerms';
 
 export interface ReminderPreferences { meals: boolean; trial: boolean }
 export const DEFAULT_REMINDER_PREFERENCES: ReminderPreferences = { meals: false, trial: false };
@@ -13,6 +14,10 @@ export interface PlannedReminder {
 }
 type Subscription = Pick<PurchasesEntitlementInfo, 'isActive' | 'periodType' | 'willRenew' | 'expirationDate'>;
 export const TRIAL_REMINDER_LEAD_DAYS = 2;
+/** A trial needs time before the two-day lead and the 24-hour cancellation deadline. */
+export function canOfferTrialReminder(terms: ReturnType<typeof purchaseTerms>): boolean {
+  return !!terms?.trial && (terms.trialDays === null || terms.trialDays > TRIAL_REMINDER_LEAD_DAYS);
+}
 const HOUR = 3_600_000;
 const localDay = (d: Date) => `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 

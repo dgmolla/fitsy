@@ -29,7 +29,10 @@ jest.mock('expo-notifications', () => ({ getPermissionsAsync: jest.fn(), request
 let mockEligibility: Record<string, boolean> = { annual: true };
 const annual = { product: { identifier: 'annual', priceString: '$59.99', subscriptionPeriod: 'P1Y',
   introPrice: { price: 0, priceString: '$0', period: 'P1W', cycles: 1 } } };
-let mockOffering: { annual: typeof annual; monthly: null } | null = { annual, monthly: null };
+const shortAnnual = { product: { ...annual.product, introPrice: { ...annual.product.introPrice, period: 'P2D' } } };
+const monthly = { product: { ...annual.product, identifier: 'monthly', subscriptionPeriod: 'P1M' } };
+const shortMonthly = { product: { ...monthly.product, introPrice: { ...monthly.product.introPrice, period: 'P2D' } } };
+let mockOffering: { annual: typeof annual; monthly: typeof annual | null } | null = { annual, monthly: null };
 jest.mock('../lib/usePurchases', () => ({ usePurchases: () => ({
   offering: mockOffering,
   ready: true, introEligibilityReady: true, introEligibility: mockEligibility, refreshOffering: jest.fn(), entitled: false,
@@ -60,7 +63,7 @@ test('a previously denied permission does not promise or request a trial reminde
 });
 
 test('a two-day trial does not offer an unschedulable reminder', async () => {
-  mockOffering = { annual: { product: { ...annual.product, introPrice: { ...annual.product.introPrice, period: 'P2D' } } }, monthly: null };
+  mockOffering = { annual: shortAnnual, monthly: null };
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial-reminder' });
   await waitFor(() => expect(screen.getByText('Review your trial before it ends.')).toBeTruthy());
   expect(screen.queryByText('We can notify you before your trial ends.')).toBeNull();
@@ -68,6 +71,47 @@ test('a two-day trial does not offer an unschedulable reminder', async () => {
   await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-allow')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
   expect(Notifications.requestPermissionsAsync).not.toHaveBeenCalled();
+});
+
+test('an eligible longer trial can offer a reminder when another plan has only two days', async () => {
+  mockOffering = { annual: shortAnnual, monthly };
+  mockEligibility = { annual: true, monthly: true };
+  const screen = renderRouter(routes, { initialUrl: '/welcome/trial-reminder' });
+  await waitFor(() => expect(screen.getByText('We can notify you before your trial ends.')).toBeTruthy());
+  expect(screen.getByTestId('trial-reminder-skip')).toBeTruthy();
+  expect(Notifications.scheduleNotificationAsync).not.toHaveBeenCalled();
+});
+
+test('a longer annual trial offers a reminder even when the monthly trial is short', async () => {
+  mockOffering = { annual, monthly: shortMonthly };
+  mockEligibility = { annual: true, monthly: true };
+  const screen = renderRouter(routes, { initialUrl: '/welcome/trial-reminder' });
+  await waitFor(() => expect(screen.getByText('We can notify you before your trial ends.')).toBeTruthy());
+  expect(screen.getByTestId('trial-reminder-skip')).toBeTruthy();
+});
+
+test('an ineligible annual offer does not hide an eligible longer monthly trial', async () => {
+  mockOffering = { annual, monthly };
+  mockEligibility = { annual: false, monthly: true };
+  const screen = renderRouter(routes, { initialUrl: '/welcome/trial-reminder' });
+  await waitFor(() => expect(screen.getByText('We can notify you before your trial ends.')).toBeTruthy());
+  expect(screen.getByTestId('trial-reminder-skip')).toBeTruthy();
+});
+
+test('an ineligible long offer cannot make the sole short eligible trial look schedulable', async () => {
+  mockOffering = { annual, monthly: shortMonthly };
+  mockEligibility = { annual: false, monthly: true };
+  const screen = renderRouter(routes, { initialUrl: '/welcome/trial-reminder' });
+  await waitFor(() => expect(screen.getByText('Review your trial before it ends.')).toBeTruthy());
+  expect(screen.queryByTestId('trial-reminder-skip')).toBeNull();
+});
+
+test('two short eligible trials do not offer an unschedulable reminder', async () => {
+  mockOffering = { annual: shortAnnual, monthly: shortMonthly };
+  mockEligibility = { annual: true, monthly: true };
+  const screen = renderRouter(routes, { initialUrl: '/welcome/trial-reminder' });
+  await waitFor(() => expect(screen.getByText('Review your trial before it ends.')).toBeTruthy());
+  expect(screen.queryByTestId('trial-reminder-skip')).toBeNull();
 });
 
 test('a calendar-month trial can offer a reminder using its confirmed end date', async () => {

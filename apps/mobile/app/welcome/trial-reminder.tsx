@@ -8,6 +8,7 @@ import { TrialArtwork } from '@/components/TrialArtwork';
 import { useOnboardingStep } from '@/lib/onboardingResume';
 import { usePurchases } from '@/lib/usePurchases';
 import { purchaseTerms } from '@/lib/purchaseTerms';
+import { canOfferTrialReminder } from '@/lib/notificationPlan';
 import { useRouteContinuation } from '@/lib/useRouteContinuation';
 import { supabase } from '@/lib/supabase';
 import { readReminderPreferences, saveReminderPreferences } from '@/lib/notificationSchedule';
@@ -80,12 +81,12 @@ export default function TrialReminderScreen() {
   if (permission === null) return null;
   // Calendar-month trials have no fixed day count, but their confirmed end
   // date still allows the existing one-off scheduler to choose a safe time.
-  const canSchedule = Platform.OS !== 'web' && (trialOffer?.trialDays === null || (trialOffer?.trialDays ?? 0) > 2);
+  const canSchedule = Platform.OS !== 'web' && offers.some(canOfferTrialReminder);
   const canOptIn = canSchedule && permission !== 'denied';
   const title = !canSchedule ? 'Review your trial before it ends.' : permission === 'denied' ? 'Notifications are off.' : 'We can notify you before your trial ends.';
   const subtitle = !canSchedule ? 'This trial may be too short for a reminder before the cancellation deadline.'
     : permission === 'denied' ? 'You can turn on notifications in device settings if you want a trial reminder.'
-      : 'Choose a reminder and allow notifications before starting a trial.';
+      : 'Choose a plan with enough trial time, then allow notifications for a reminder.';
   return <WelcomeScreen progress={1} title={title} subtitle={subtitle}
     canContinue={!busy} showBack={!busy} onContinue={() => { if (canOptIn) void allow(); else skip(); }}
     footerContent={<WelcomeActions label={busy ? 'Asking…' : canOptIn ? 'Remind me' : 'Continue to plans'} onPress={canOptIn ? () => { void allow(); } : skip} disabled={busy}

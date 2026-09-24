@@ -1,8 +1,18 @@
-import { DEFAULT_REMINDER_PREFERENCES, planReminders } from './notificationPlan';
+import { canOfferTrialReminder, DEFAULT_REMINDER_PREFERENCES, planReminders } from './notificationPlan';
+import { purchaseTerms } from './purchaseTerms';
 
 const now = new Date(2026, 8, 7, 9); // Monday, local time.
 const active = { isActive: true, periodType: 'TRIAL' as const, willRenew: true, expirationDate: new Date(2026, 8, 14, 12).toISOString() };
 const input = { now, userId: 'synthetic-account', entitled: true, preferences: { meals: true, trial: true }, subscription: active };
+
+test('reminder choice follows eligible store trial length', () => {
+  const product = { priceString: '$59.99', subscriptionPeriod: 'P1Y', introPrice: { price: 0, priceString: '$0', period: 'P1W', periodUnit: 'WEEK', periodNumberOfUnits: 1, cycles: 1 } };
+  expect(canOfferTrialReminder(purchaseTerms(product, true))).toBe(true);
+  expect(canOfferTrialReminder(purchaseTerms({ ...product, introPrice: { ...product.introPrice, period: 'P2D' } }, true))).toBe(false);
+  expect(canOfferTrialReminder(purchaseTerms({ ...product, introPrice: { ...product.introPrice, period: 'P1M' } }, true))).toBe(true);
+  expect(canOfferTrialReminder(purchaseTerms(product, false))).toBe(false);
+  expect(canOfferTrialReminder(null)).toBe(false);
+});
 
 test('reminders are opt-in and never scheduled for signed-out or unentitled users', () => {
   expect(planReminders({ ...input, preferences: DEFAULT_REMINDER_PREFERENCES })).toEqual([]);
