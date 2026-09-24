@@ -161,7 +161,7 @@ it('offers a retry when the saved area read fails', async () => {
   expect(permission).toHaveBeenCalledTimes(1);
 });
 
-it('ignores a saved area read that finishes after leaving the location screen', async () => {
+it('keeps the newer saved area when an earlier read finishes after returning', async () => {
   const stale = deferred<string | null>();
   let reads = 0;
   jest.spyOn(AsyncStorage, 'getItem').mockImplementation(key => {
@@ -172,9 +172,10 @@ it('ignores a saved area read that finishes after leaving the location screen', 
   const screen = renderJourney('/welcome/problem');
   await act(async () => { fireEvent.press(screen.getByText('Choose location')); });
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
-  await act(async () => { stale.resolve(JSON.stringify({ area: { lat: 40.71, lng: -74, name: 'Old area', source: 'manual' } })); });
   await act(async () => { fireEvent.press(screen.getByText('Choose location')); });
   expect(await screen.findByText('Continue with New area')).toBeTruthy();
+  await act(async () => { stale.resolve(JSON.stringify({ area: { lat: 40.71, lng: -74, name: 'Old area', source: 'manual' } })); });
+  expect(screen.getByText('Continue with New area')).toBeTruthy();
   expect(screen.queryByText('Continue with Old area')).toBeNull();
 });
 

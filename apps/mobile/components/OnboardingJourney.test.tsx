@@ -232,8 +232,12 @@ it.each([
 ] as const)('keeps the unconfirmed %s choice after visiting macro help', async (mode, destination) => {
   await saveOnboardingField('goal', 'performance');
   await saveMacroTargets({ calories: '650', protein: '42', carbs: '68', fat: '23' });
+  if (mode === 'saved') {
+    await saveOnboardingField('targetMode', 'estimate');
+    await saveOnboardingField('targetChoiceInProgress', true);
+  }
   const screen = renderRouter(routes, { initialUrl: '/welcome/target-setup' });
-  await waitFor(() => expect(screen.getByTestId('target-mode-saved').props.accessibilityState.checked).toBe(true));
+  await waitFor(() => expect(screen.getByTestId(mode === 'saved' ? 'target-mode-estimate' : 'target-mode-saved').props.accessibilityState.checked).toBe(true));
   await act(async () => { fireEvent.press(screen.getByTestId(`target-mode-${mode}`)); });
   await act(async () => { fireEvent.press(screen.getByTestId('target-macro-help')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/macros-intro'));
