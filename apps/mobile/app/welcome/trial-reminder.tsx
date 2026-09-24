@@ -9,10 +9,10 @@ import { useOnboardingStep } from '@/lib/onboardingResume';
 import { usePurchases } from '@/lib/usePurchases';
 import { purchaseTerms } from '@/lib/purchaseTerms';
 import { useRouteContinuation } from '@/lib/useRouteContinuation';
-import { api } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import { readReminderPreferences, saveReminderPreferences } from '@/lib/notificationSchedule';
-import { getExpoPushTokenAsync, requestPermissionsAsync } from '@/lib/useNotifications';
+import { requestPermissionsAsync } from '@/lib/useNotifications';
+import { registerExpoPushToken } from '@/lib/pushTokenRegistration';
 import { EDITORIAL, TEXT } from '@/lib/brand';
 import { trackOnboardingScreenView, trackReminderAction, trackNotificationPermissionDenied, trackNotificationPermissionGranted,
   trackNotificationPrimingAllowTapped, trackNotificationPrimingShown, trackNotificationPrimingSkipTapped } from '@/lib/analytics';
@@ -28,10 +28,6 @@ export default function TrialReminderScreen() {
   const pending = useRef(false);
   useEffect(() => { if (focused && entitled === true) router.replace('/welcome/payment'); }, [focused, entitled]);
   useEffect(() => { if (trial) { trackOnboardingScreenView('trial-reminder'); trackNotificationPrimingShown(); } }, [trial]);
-  async function registerPushToken(userId: string) {
-    try { const token = await getExpoPushTokenAsync(); if (token) await api.post('/api/user/push-token', { token }, true, userId); }
-    catch { /* Local reminders do not require a push token. */ }
-  }
   async function allow() {
     if (!trial || pending.current) return;
     pending.current = true;
@@ -53,7 +49,7 @@ export default function TrialReminderScreen() {
         const prefs = await readReminderPreferences(session.user.id);
         await saveReminderPreferences(session.user.id, { ...prefs, trial: true });
         trackReminderAction({ action: 'preferences_changed', meals: prefs.meals, trial: true });
-        void registerPushToken(session.user.id);
+        void registerExpoPushToken(session.user.id);
       } else trackNotificationPermissionDenied();
     } catch { /* Permission or storage failure must not block plan review. */ }
     finally {

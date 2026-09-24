@@ -29,7 +29,9 @@ jest.mock('expo-router', () => {
       React.useEffect(() => {
         mockFocus.listeners.set(callback, mockFocus.active ? callback() ?? undefined : undefined);
         return () => {
-          mockFocus.listeners.get(callback)?.();
+          mockFocus.listeners.forEach((cleanup, listener) => {
+            if (listener === callback) cleanup?.();
+          });
           mockFocus.listeners.delete(callback);
         };
       }, [callback]);

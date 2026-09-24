@@ -1,19 +1,4 @@
-/**
- * RevenueCat React context.
- *
- * Mounts once near the root (see app/_layout.tsx). It:
- *   1. configures the SDK,
- *   2. keeps the RevenueCat app-user-id aligned with the Supabase session,
- *   3. holds the latest CustomerInfo and exposes `isPro` / `isLapsed`
- *      derived from it (hints and copy, never a gate),
- *   4. composes `useEntitlementVerdict`, which owns `entitled` (the SERVER's
- *      verdict, the thing screens gate on) and `syncEntitlement`, and
- *      `useAuthLifecycle`, which follows Supabase sign-in / sign-out, and
- *   5. exposes paywall / manage-subscription / restore actions.
- *
- * Screens consume `usePurchases()`; they never import `lib/purchases.ts`
- * (the native seam) directly.
- */
+/** Root RevenueCat context. Screens consume usePurchases; server entitlement gates access. */
 import React, {
   createContext,
   useCallback,
@@ -23,13 +8,14 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { Alert } from 'react-native';
 import type {
   CustomerInfo,
   PurchasesOffering,
   PurchasesPackage,
 } from 'react-native-purchases';
 import { supabase } from './supabase';
+import { usePurchaseActions } from './usePurchaseActions';
+import { usePurchaseIntroEligibility } from './usePurchaseIntroEligibility';
 import { withinMs } from './async';
 import type { EntitlementSyncReason } from './entitlement';
 import { BOOT_VERDICT_CAP_MS, useEntitlementVerdict } from './useEntitlementVerdict';
@@ -39,28 +25,17 @@ import {
   configurePurchases,
   currentPurchasesUserId,
   fetchCurrentOffering,
-  fetchIntroEligibility,
   fetchCustomerInfo,
   hasLapsedEntitlement,
-  ensurePurchasesUser,
   identifyPurchasesUser,
   isProActive,
-  presentPaywall as rcPresentPaywall,
-  purchasePackage as rcPurchasePackage,
-  restorePurchases as rcRestore,
   showManageSubscriptions as rcShowManageSubscriptions,
 } from './purchases';
-import { trackPaywallResult, trackPaywallShown, trackPurchasesRestored } from './analytics';
 
 export { BOOT_VERDICT_CAP_MS, STORE_GRACE_MS } from './useEntitlementVerdict';
 
-// Post-purchase/restore: the user has just paid and is waiting to get in, so
-// the server sync is capped - normally sub-second, and the first search then
-// lands unlocked; past the cap we navigate on the device's verdict and the
-// search screen's mismatch handler finishes the job.
-export const POST_PURCHASE_SYNC_CAP_MS = 4000;
-export const INTRO_ELIGIBILITY_CAP_MS = 5000;
-export const PURCHASE_IDENTITY_CAP_MS = 5000;
+export { POST_PURCHASE_SYNC_CAP_MS, PURCHASE_IDENTITY_CAP_MS } from './usePurchaseActions';
+export { INTRO_ELIGIBILITY_CAP_MS } from './usePurchaseIntroEligibility';
 
 export interface PurchasesContextValue {
   /** `entitled !== null`: the verdict has settled on this launch. */
@@ -119,9 +94,6 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   const [customerInfo, setCustomerInfoState] = useState<CustomerInfo | null>(null);
   const [customerInfoSettled, setCustomerInfoSettled] = useState(false);
   const [offering, setOffering] = useState<PurchasesOffering | null>(null);
-  const [introResult, setIntroResult] = useState<{
-    info: CustomerInfo; offering: PurchasesOffering; values: Record<string, boolean>;
-  } | null>(null);
   // Mirror of `customerInfo` for async callbacks (the boot sync runs before
   // the first render that would carry it in state).
   const customerInfoRef = useRef<CustomerInfo | null>(null);
@@ -276,113 +248,13 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     return off;
   }, [acceptOffering]);
 
-  useEffect(() => {
-    let current = true;
-    if (offering && customerInfo) {
-      void withinMs(fetchIntroEligibility(offering.availablePackages.map(pkg => pkg.product.identifier)), INTRO_ELIGIBILITY_CAP_MS).catch(() => null).then(values => {
-        if (current) setIntroResult({ info: customerInfo, offering, values: values ?? {} });
-      });
-    }
-    return () => { current = false; };
-  }, [offering, customerInfo]);
+  const { introEligibility, introEligibilityReady } = usePurchaseIntroEligibility({
+    offering, customerInfo, customerInfoSettled, entitled,
+  });
 
-  // Reject an earlier account/offering result during the render before effects run.
-  const introEligibility = useMemo(() =>
-    introResult?.info === customerInfo && introResult?.offering === offering ? introResult.values : {},
-  [introResult, customerInfo, offering]);
-  // CustomerInfo can fail independently of the offering. Unknown eligibility
-  // must lead to plan review without presenting a trial or hanging this route.
-  const introEligibilityReady = !!offering && (customerInfo
-    ? introResult?.info === customerInfo && introResult?.offering === offering
-    : customerInfoSettled && entitled !== null);
-
-  // After RevenueCat reports Pro right out of the StoreKit flow: the user
-  // just paid, so `entitled` flips true immediately (cached) and the caller
-  // gets `true` whatever the server says; otherwise a stalled or lagging
-  // sync would hold a charged user on the paywall (`if (!isPro) return`) or
-  // let the tabs layout bounce them back. The capped sync then tells the
-  // server; its answer only feeds `entitled`, the mismatch event and the
-  // cache (inside STORE_GRACE_MS it can only confirm). Past the cap we
-  // navigate anyway; the sync and the search screen's mismatch handler finish.
-  const settleAfterStore = useCallback(
-    async (info: CustomerInfo | null, reason: 'purchase' | 'restore'): Promise<boolean> => {
-      const pro = isProActive(info);
-      if (!pro) return false;
-      markStoreConfirmed();
-      await withinMs(syncEntitlement(reason), POST_PURCHASE_SYNC_CAP_MS);
-      return pro;
-    },
-    [markStoreConfirmed, syncEntitlement],
-  );
-
-  const purchase = useCallback(
-    async (pkg: PurchasesPackage, source: string): Promise<boolean> => {
-      const { data } = await supabase.auth.getSession();
-      const userId = data.session?.user.id;
-      const identified = userId
-        ? await withinMs(ensurePurchasesUser(userId), PURCHASE_IDENTITY_CAP_MS)
-        : false;
-      if (identified === null) {
-        // The native identity request is still unresolved. Its queue must
-        // remain intact so a late login cannot race a new account or purchase.
-        Alert.alert('Payment service still connecting', 'Fully close and reopen Fitsy, then try again.');
-        return false;
-      }
-      if (!userId || !identified) {
-        Alert.alert('Purchase not available', 'We could not confirm your account with the store. Please try again.');
-        return false;
-      }
-      const isCurrentUser = async () => (await supabase.auth.getSession()).data.session?.user.id === userId;
-      if (!(await isCurrentUser())) return false;
-      const { outcome, customerInfo: info } = await rcPurchasePackage(pkg, userId, isCurrentUser);
-      trackPaywallResult({ source, outcome });
-      if (outcome === 'error') Alert.alert('Purchase not completed', 'Please try again. You can also restore an existing subscription.');
-      if (!info) return false;
-      if (!(await isCurrentUser())) return false;
-      setCustomerInfo(info);
-      return settleAfterStore(info, 'purchase');
-    },
-    [setCustomerInfo, settleAfterStore],
-  );
-
-  const presentPaywall = useCallback(
-    async (source: string): Promise<boolean> => {
-      trackPaywallShown({ source });
-      const outcome = await rcPresentPaywall();
-      trackPaywallResult({ source, outcome });
-      const info = await fetchCustomerInfo();
-      setCustomerInfo(info);
-      return settleAfterStore(info, outcome === 'restored' ? 'restore' : 'purchase');
-    },
-    [setCustomerInfo, settleAfterStore],
-  );
-
-  const restore = useCallback(async (): Promise<boolean | null> => {
-    const { data } = await supabase.auth.getSession();
-    const userId = data.session?.user.id;
-    const identified = userId
-      ? await withinMs(ensurePurchasesUser(userId), PURCHASE_IDENTITY_CAP_MS)
-      : false;
-    if (identified === null) {
-      Alert.alert('Payment service still connecting', 'Fully close and reopen Fitsy, then try again.');
-      return null;
-    }
-    if (!userId || !identified) {
-      Alert.alert('Restore not available', 'We could not confirm your account with the store. Please try again.');
-      return null;
-    }
-    const isCurrentUser = async () => (await supabase.auth.getSession()).data.session?.user.id === userId;
-    if (!(await isCurrentUser())) return null;
-    const info = await rcRestore(userId, isCurrentUser);
-    if (!(await isCurrentUser())) return null;
-    if (!info) {
-      Alert.alert('Restore not completed', 'Please try again.');
-      return null;
-    }
-    setCustomerInfo(info);
-    trackPurchasesRestored({ is_pro: isProActive(info) });
-    return settleAfterStore(info, 'restore');
-  }, [setCustomerInfo, settleAfterStore]);
+  const { purchase, presentPaywall, restore } = usePurchaseActions({
+    setCustomerInfo, markStoreConfirmed, syncEntitlement,
+  });
 
   // Time-based, so read on every render and let the memo key on the result.
   const storeConfirmed = inStoreGrace();
