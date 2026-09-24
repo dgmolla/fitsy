@@ -1,5 +1,5 @@
 import { clearGoalReturnTo, takeGoalReturnTo, useOnboardingStep } from '@/lib/onboardingResume';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router, useFocusEffect, useNavigation } from 'expo-router';
@@ -23,13 +23,21 @@ export default function GoalScreen() {
   const { begin, cancel } = useRouteContinuation();
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<Goal | null>(null);
+  const [ready, setReady] = useState(false);
+  const choiceGenerationRef = useRef(0);
 
   useFocusEffect(useCallback(() => {
     let current = true;
+    const choiceGeneration = choiceGenerationRef.current;
     setBusy(false);
+    setReady(false);
+    setSelected(null);
     void getOnboardingData().then(data => {
-      if (current) setSelected(GOALS.find(goal => goal.id === data.goal)?.id ?? null);
-    });
+      if (current && choiceGenerationRef.current === choiceGeneration) {
+        setSelected(GOALS.find(goal => goal.id === data.goal)?.id ?? null);
+        setReady(true);
+      }
+    }).catch(() => { if (current && choiceGenerationRef.current === choiceGeneration) setReady(true); });
     return () => { current = false; void clearGoalReturnTo(); };
   }, []));
 
@@ -47,7 +55,7 @@ export default function GoalScreen() {
         if (navigation.isFocused()) router.back();
       } : undefined}
       onContinue={async () => {
-        if (!selected || busy) return;
+        if (!ready || !selected || busy) return;
         const isCurrent = begin();
         setBusy(true);
         try {
@@ -60,7 +68,7 @@ export default function GoalScreen() {
         } catch { if (isCurrent()) Alert.alert('Could not save your goal', 'Please try again.'); }
         finally { if (isCurrent()) setBusy(false); }
       }}
-      canContinue={selected !== null && !busy}
+      canContinue={ready && selected !== null && !busy}
     >
       <View style={s.list}>
         {GOALS.map((g, i) => {
@@ -69,8 +77,11 @@ export default function GoalScreen() {
             <Animated.View key={g.id} entering={FadeInDown.duration(400).delay(100 + i * 60)}>
               <AnimatedPress
                 style={[s.row, on ? s.rowOn : undefined]}
+                disabled={busy}
                 onPress={() => {
+                  choiceGenerationRef.current += 1;
                   setSelected(g.id);
+                  setReady(true);
                   trackOnboardingChoiceSelected({ screen: 'goal', value: g.id });
                 }}
                 testID={`goal-${g.id}`}
