@@ -128,6 +128,7 @@ export function archiveFailureEvidence(history, from, to) {
 }
 export function flowFailureReason(result, commands, recorder, flowName = null) {
   if (result.code !== 0 || result.reason) return result.reason || 'maestro-exit';
+  if (recorder.endedBeforeStop) return 'recorder-ended-early';
   if (!Array.isArray(commands) || commands.length === 0) return 'missing-or-empty-command-receipt';
   if (recorder.state !== 'stopped' || recorder.code !== 0 || !recorder.bytes) return 'recorder-failure';
   if (flowName) {
@@ -220,6 +221,7 @@ async function requestKeeper(owned, type, signal = null, timeoutMs = 1000) {
   const answer = await waitOrTimeout(acknowledgement, timeoutMs);
   owned.pending.delete(id);
   if (!answer || answer.error) throw new Error(`Owned ${owned.kind} keeper did not acknowledge ${type}${signal ? ` ${signal}` : ''}: ${answer?.error || '1 second deadline'}`);
+  return answer;
 }
 async function waitForOtherMembers(owned, ms) {
   const deadline = performance.now() + ms;
@@ -270,23 +272,37 @@ export function maxDeclaredWaitMs(flow) {
 export function totalDeclaredWaitMs(flow) {
   return [...flow.matchAll(/(?:timeout|delay):\s*(\d+)/g)].reduce((sum, match) => sum + Number(match[1]), 0);
 }
-export async function startOwnedRecorder(udid, file, log, { command = 'xcrun', args = null, spawnImpl = spawn } = {}) {
+export async function startOwnedRecorder(udid, file, log, { command = 'xcrun', args = null, spawnImpl = spawn,
+  onStart = null, onComplete = null } = {}) {
   const fd = openSync(log, 'w');
   let owned;
   try { owned = await startOwnedGroup('recorder', command, args || ['simctl', 'io', udid, 'recordVideo', '--type=mp4', file],
     { stdio: ['ignore', fd, fd], spawnImpl }); }
   finally { closeSync(fd); }
   owned.file = file; owned.log = log;
+  try { onStart?.(owned); }
+  catch (error) {
+    try { await stopOwnedRecorder(owned); }
+    catch (cleanupError) { error.cleanupError = cleanupError.message; }
+    throw error;
+  }
+  if (onComplete) owned.completed.then(exit => onComplete(exit, owned));
   await sleep(250);
   if (owned.commandResult || owned.keeperResult) {
-    try { await stopOwnedRecorder(owned); } catch { /* preserve startup failure */ }
-    throw new Error(`Recorder exited before flow start or lost its keeper; inspect ${log}`);
+    let recorderResult;
+    try { recorderResult = await stopOwnedRecorder(owned); }
+    catch (error) { recorderResult = { state: 'stop-error', bytes: null, error: error.message }; }
+    const error = new Error(`Recorder exited before flow start or lost its keeper; inspect ${log}`);
+    error.code = 'recorder-ended-early';
+    error.recorderResult = recorderResult;
+    throw error;
   }
   return owned;
 }
 export async function stopOwnedRecorder(recorder, { intGraceMs = 10000, termGraceMs = 5000, killGraceMs = 5000 } = {}) {
   if (!recorder) return { state: 'absent' };
   assertKeeper(recorder);
+  const stopAcknowledgement = await requestKeeper(recorder, 'recorder-stop');
   if (otherMembers(recorder).length) {
     await requestKeeper(recorder, 'signal', 'SIGINT');
     if (!await waitForOtherMembers(recorder, intGraceMs)) {
@@ -301,7 +317,8 @@ export async function stopOwnedRecorder(recorder, { intGraceMs = 10000, termGrac
   if (!recorder.keeperResult) await closeKeeper(recorder, killGraceMs);
   const result = await waitOrTimeout(recorder.completed, killGraceMs);
   if (!result) throw new Error(`Owned recorder command ${recorder.commandPid} has no exit receipt; inspect ${recorder.log}`);
-  return { state: 'stopped', code: result.code, signal: result.signal, file: recorder.file,
+  return { state: 'stopped', code: result.code, signal: result.signal, endedBeforeStop: stopAcknowledgement.commandExitedBeforeStop,
+    file: recorder.file,
     bytes: existsSync(recorder.file) ? statSync(recorder.file).size : null };
 }
 function interruptionReason(signal) {
@@ -374,32 +391,53 @@ export async function runRecordedFlow({ recorderCommand = 'xcrun', recorderArgs 
   const onInt = () => interruption.abort(new Error('SIGINT received during owned native flow'));
   const onTerm = () => interruption.abort(new Error('SIGTERM received during owned native flow'));
   process.on('SIGINT', onInt); process.on('SIGTERM', onTerm);
-  let recorder = null, recorderStartedMs = null, result, recorderResult, recorderStopRequested = false;
+  let recorder = null, recorderPid = null, recorderStartedMs = null, result, recorderResult;
+  let recorderStopRequested = false, recorderEarlyExitLogged = false;
+  const earlyExit = (exit, source, owned) => {
+    if (recorderEarlyExitLogged) return;
+    recorderEarlyExitLogged = true;
+    const error = new Error('Owned recorder exited before its flow ended; inspect recorder log and partial video');
+    error.code = 'recorder-ended-early';
+    try {
+      event(timeline, { type: 'recorder-early-exit', pid: owned?.pid || recorderPid, code: exit?.code ?? null,
+        signal: exit?.signal ?? null, ownershipLost: exit?.ownershipLost || false, source,
+        outcome: 'fail', expected: 'recorder remains active until flow ends and stop is accepted' });
+    } catch (timelineError) { error.timelineError = timelineError.message; }
+    interruption.abort(error);
+  };
   try {
     recorder = await startOwnedRecorder(udid, video, recorderLog,
-      { command: recorderCommand, args: recorderArgs, spawnImpl: recorderSpawnImpl });
-    recorderStartedMs = Date.now();
-    event(timeline, { type: 'recorder-start', pid: recorder.pid, video });
-    recorder.completed.then(exit => {
-      if (recorderStopRequested) return;
-      event(timeline, { type: 'recorder-early-exit', pid: recorder.pid, code: exit.code,
-        signal: exit.signal, ownershipLost: exit.ownershipLost || false,
-        outcome: 'fail', expected: 'recorder remains active until flow ends and stop is requested' });
-      const error = new Error('Owned recorder exited before its flow ended; inspect recorder log and partial video');
-      error.code = 'recorder-ended-early';
-      interruption.abort(error);
-    });
+      { command: recorderCommand, args: recorderArgs, spawnImpl: recorderSpawnImpl,
+        onStart: owned => { recorderPid = owned.pid; recorderStartedMs = Date.now(); event(timeline, { type: 'recorder-start', pid: owned.pid, video }); },
+        onComplete: (exit, owned) => { if (!recorderStopRequested) earlyExit(exit, 'completion-before-stop', owned); } });
     if (interruption.signal.aborted) throw interruption.signal.reason;
     result = await runOwnedMaestro(maestroCommand, maestroArgs, { cwd, env, dir, timeline, flow, diagnostic,
       signal: interruption.signal, quietMs, wallMs, pollMs, terminationGraceMs, spawnImpl: maestroSpawnImpl });
   } catch (error) {
-    result = { code: null, reason: interruption.signal.aborted ? interruptionReason(interruption.signal) : 'runner-error',
+    if (error.code === 'recorder-ended-early') {
+      recorderResult = error.recorderResult;
+      if (!recorderEarlyExitLogged) earlyExit(recorderResult, 'startup-before-stop', null);
+      try { await diagnostic('recorder-ended-early', { pid: recorderPid, commandPid: null, log: null, elapsedMs: null, members: null }); }
+      catch (diagnosticError) { event(timeline, { type: 'diagnostic-error', pid: recorderPid, error: diagnosticError.message }); }
+    }
+    result = { code: null, reason: interruption.signal.aborted ? interruptionReason(interruption.signal) : error.code === 'recorder-ended-early' ? 'recorder-ended-early' : 'runner-error',
       error: error.message, elapsedMs: null, anchor: clock() };
   } finally {
     recorderStopRequested = true;
-    try { recorderResult = await stopOwnedRecorder(recorder); }
-    catch (error) { recorderResult = { state: 'stop-error', bytes: null, error: error.message }; }
-    event(timeline, { type: 'recorder-end', pid: recorder?.pid || null, ...recorderResult });
+    if (!recorderResult) {
+      try { recorderResult = await stopOwnedRecorder(recorder); }
+      catch (error) { recorderResult = { state: 'stop-error', bytes: null, error: error.message }; }
+    }
+    if (recorderResult.endedBeforeStop) {
+      earlyExit(recorderResult, 'keeper-stop-ack', recorder);
+      if (!result.reason) {
+        result.reason = 'recorder-ended-early';
+        try { await diagnostic(result.reason, { pid: recorderPid, commandPid: null, log: latestMaestroLog(dir),
+          elapsedMs: result.elapsedMs, members: null }); }
+        catch (error) { event(timeline, { type: 'diagnostic-error', pid: recorderPid, error: error.message }); }
+      }
+    }
+    event(timeline, { type: 'recorder-end', pid: recorderPid, ...recorderResult });
     process.off('SIGINT', onInt); process.off('SIGTERM', onTerm);
   }
   if (interruption.signal.aborted && !result.reason) result.reason = interruptionReason(interruption.signal);

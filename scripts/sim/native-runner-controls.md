@@ -23,7 +23,9 @@ Each Maestro and recorder invocation has a live, per-invocation keeper that owns
 The runner sends bounded signal requests to that keeper and never signals a bare group ID after its owner exits.
 Maestro receives TERM after diagnostics, then KILL if same-group children remain after the grace period.
 The owned recorder receives INT when the flow ends or fails, then TERM and KILL only if same-group children remain.
-If the recorder exits before the flow requests its stop, the runner records `recorder-early-exit`, captures flow diagnostics, stops its owned Maestro group and fails with `recorder-ended-early` even when the recorder exit code is zero and the partial video has bytes.
+If the keeper observes recorder exit before accepting a stop request, the runner records `recorder-early-exit`, captures flow diagnostics, stops its owned Maestro group and fails with `recorder-ended-early` even when the recorder exit code is zero and the partial video has bytes.
+The recorder keeper acknowledges stop with whether it had already observed child exit, so a delayed exit IPC message cannot turn a partial recording into a pass.
+The handshake orders keeper observations; it cannot infer the operating system's exact exit instant if exit and stop race before either is observed.
 Inspect the recorder log and preserved partial video, repair the recording failure, then rerun the complete flow.
 The runner waits for command and descendant exit separately from keeper exit; a normal command exit with surviving same-group descendants is a failure and is cleaned up.
 An unexpected keeper exit fails with an ownership-loss diagnostic and no further group signal.

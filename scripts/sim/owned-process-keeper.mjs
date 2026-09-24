@@ -9,8 +9,13 @@ const [command, ...args] = process.argv.slice(2);
 const report = message => { if (process.connected) process.send(message); };
 let child;
 let closing = false;
+let commandExitObserved = false;
 process.on('message', message => {
-  if (message?.type === 'signal') {
+  if (message?.type === 'recorder-stop') {
+    // This keeper observes both child exit and stop intent on one event loop.
+    // IPC delivery to the runner may lag, so acknowledge the observed order here.
+    report({ type: 'ack', id: message.id, commandExitedBeforeStop: commandExitObserved });
+  } else if (message?.type === 'signal') {
     try {
       process.kill(-process.pid, message.signal);
       if (message.signal !== 'SIGKILL') report({ type: 'ack', id: message.id });
@@ -32,8 +37,9 @@ process.on('disconnect', () => {
 try {
   child = spawn(command, args, { stdio: ['ignore', 'inherit', 'inherit'], detached: false });
   child.once('spawn', () => report({ type: 'command-start', pid: child.pid }));
-  child.once('error', error => report({ type: 'command-exit', code: null, signal: null, error: error.message }));
-  child.once('exit', (code, signal) => report({ type: 'command-exit', code, signal }));
+  child.once('error', error => { commandExitObserved = true; report({ type: 'command-exit', code: null, signal: null, error: error.message }); });
+  child.once('exit', (code, signal) => { commandExitObserved = true; report({ type: 'command-exit', code, signal }); });
 } catch (error) {
+  commandExitObserved = true;
   report({ type: 'command-exit', code: null, signal: null, error: error.message });
 }
