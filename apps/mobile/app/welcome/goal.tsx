@@ -1,8 +1,8 @@
-import { takeGoalReturnTo, useOnboardingStep } from '@/lib/onboardingResume';
+import { clearGoalReturnTo, takeGoalReturnTo, useOnboardingStep } from '@/lib/onboardingResume';
 import React, { useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { router } from 'expo-router';
+import { router, useNavigation } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { getOnboardingData, saveOnboardingField, type Goal } from '@/lib/onboardingStorage';
@@ -18,6 +18,7 @@ const GOALS: { id: Goal; label: string }[] = [
 
 export default function GoalScreen() {
   useOnboardingStep('goal');
+  const navigation = useNavigation();
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<Goal | null>(null);
 
@@ -30,6 +31,10 @@ export default function GoalScreen() {
     <WelcomeScreen
       progress={0.18}
       title="What's your goal?"
+      onBack={navigation.canGoBack() ? async () => {
+        await clearGoalReturnTo();
+        router.back();
+      } : undefined}
       onContinue={async () => {
         if (!selected || busy) return;
         setBusy(true);

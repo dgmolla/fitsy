@@ -4,6 +4,7 @@ import React from 'react';
 import { Text } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, renderRouter, waitFor } from 'expo-router/testing-library';
+import { router } from 'expo-router';
 import Tried from '../app/welcome/tried';
 import Response from '../app/welcome/response';
 import Payoff from '../app/welcome/value-payoff';
@@ -31,6 +32,7 @@ const routes = {
   'welcome/target-setup': Targets, 'welcome/tuning': Tuning, 'welcome/how-it-works': Trust,
   'welcome/goal': Goal, 'welcome/height': Height, 'welcome/goal-payoff': GoalPayoff,
   'welcome/preview': () => <Text>Discovery preview</Text>,
+  'welcome/location-permission': () => <Text>Choose your area</Text>,
   'macro-setup': MacroSetup,
 };
 beforeEach(async () => { await AsyncStorage.clear(); });
@@ -177,4 +179,16 @@ it('returns a missing-goal legacy payoff to its saved destination after goal sel
   expect(screen.getPathname()).toBe('/welcome/value-payoff');
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   expect(await screen.findByText('Consistency with your fat-loss plan')).toBeTruthy();
+});
+
+it('drops a legacy payoff destination when the user backs out of its goal detour', async () => {
+  const screen = renderRouter(routes, { initialUrl: '/welcome/location-permission' });
+  await act(async () => { router.push('/welcome/goal-payoff'); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/goal'));
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/location-permission'));
+  await act(async () => { router.push('/welcome/goal'); });
+  await act(async () => { fireEvent.press(screen.getByTestId('goal-build_muscle')); });
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/tried'));
 });

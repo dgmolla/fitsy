@@ -43,6 +43,10 @@ export async function takeGoalReturnTo(): Promise<GoalReturnTo | null> {
   return saved === '/welcome/value-payoff' || saved === '/welcome/goal-payoff' || saved === '/welcome/target-setup' || saved === '/macro-setup' || saved === '/macro-setup?fromOnboarding=1' ? saved : null;
 }
 
+export async function clearGoalReturnTo(): Promise<void> {
+  await AsyncStorage.removeItem(GOAL_RETURN_KEY);
+}
+
 export async function clearOnboardingResume(): Promise<void> {
   await AsyncStorage.removeItem(KEY);
   await AsyncStorage.removeItem(GOAL_RETURN_KEY);
