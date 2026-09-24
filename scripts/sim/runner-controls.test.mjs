@@ -286,6 +286,116 @@ test('recorder stops with its flow and leaves unrelated processes alive', async 
   } finally { unrelated.kill('SIGTERM'); rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('recorder keeps its real keeper open until a delayed exit receipt arrives', async () => {
+  const dir = temp(), video = join(dir, 'video.mp4');
+  const unrelated = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+  let releaseReceipt, receiptHeld, closeSent;
+  const held = new Promise(resolve => { receiptHeld = resolve; });
+  const closed = new Promise(resolve => { closeSent = resolve; });
+  const delayedReceiptSpawn = (command, args, options) => {
+    const keeper = spawn(command, args, options);
+    const emit = keeper.emit.bind(keeper), send = keeper.send.bind(keeper);
+    keeper.emit = function (name, ...values) {
+      if (name === 'message' && values[0]?.type === 'command-exit') {
+        releaseReceipt = () => emit(name, ...values);
+        receiptHeld();
+        return true;
+      }
+      return emit(name, ...values);
+    };
+    keeper.send = (message, ...values) => {
+      if (message.type === 'close') closeSent();
+      return send(message, ...values);
+    };
+    return keeper;
+  };
+  let recorder;
+  try {
+    const script = "process.on('SIGINT',()=>{require('fs').writeFileSync(process.argv[1],'proof');process.exit(0)});setInterval(()=>{},1000)";
+    recorder = await startOwnedRecorder('test-device', video, join(dir, 'recorder.log'),
+      { command: process.execPath, args: ['-e', script, video], spawnImpl: delayedReceiptSpawn });
+    const stopping = stopOwnedRecorder(recorder, { killGraceMs: 500 });
+    await held;
+    const earlyClose = await Promise.race([closed.then(() => true), new Promise(resolve => setTimeout(() => resolve(false), 100))]);
+    assert.equal(earlyClose, false, 'keeper must retain IPC until the command receipt is delivered');
+    releaseReceipt();
+    const result = await stopping;
+    assert.equal(result.code, 0);
+    assert.equal(result.bytes, 5);
+    await assertProcessStopped(recorder.pid);
+    assert.doesNotThrow(() => process.kill(unrelated.pid, 0));
+  } finally {
+    releaseReceipt?.();
+    for (const pid of [recorder?.commandPid, recorder?.pid]) if (pid) { try { process.kill(pid, 'SIGKILL'); } catch { /* fixture cleanup */ } }
+    unrelated.kill('SIGTERM'); rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('recorder reports a missing exit receipt and reaps only its keeper', async () => {
+  const dir = temp(), unrelated = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+  let recorder;
+  try {
+    const suppressReceipt = (command, args, options) => {
+      const keeper = spawn(command, args, options), emit = keeper.emit.bind(keeper);
+      keeper.emit = function (name, ...values) {
+        if (name === 'message' && values[0]?.type === 'command-exit') return true;
+        return emit(name, ...values);
+      };
+      return keeper;
+    };
+    const script = "process.on('SIGINT',()=>process.exit(0));setInterval(()=>{},1000)";
+    recorder = await startOwnedRecorder('test-device', join(dir, 'video.mp4'), join(dir, 'recorder.log'),
+      { command: process.execPath, args: ['-e', script], spawnImpl: suppressReceipt });
+    await assert.rejects(stopOwnedRecorder(recorder, { killGraceMs: 150 }), /no exit receipt within 150 ms/);
+    await assertProcessStopped(recorder.pid);
+    await assertProcessStopped(recorder.commandPid);
+    assert.doesNotThrow(() => process.kill(unrelated.pid, 0));
+  } finally {
+    for (const pid of [recorder?.commandPid, recorder?.pid]) if (pid) { try { process.kill(pid, 'SIGKILL'); } catch { /* fixture cleanup */ } }
+    unrelated.kill('SIGTERM'); rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('Maestro watchdog keeps its real keeper open until a delayed exit receipt arrives', async () => {
+  const dir = temp(), unrelated = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+  let releaseReceipt, receiptHeld, closeSent;
+  const held = new Promise(resolve => { receiptHeld = resolve; });
+  const closed = new Promise(resolve => { closeSent = resolve; });
+  const delayedReceiptSpawn = (command, args, options) => {
+    const keeper = spawn(command, args, options), emit = keeper.emit.bind(keeper), send = keeper.send.bind(keeper);
+    keeper.emit = function (name, ...values) {
+      if (name === 'message' && values[0]?.type === 'command-exit') {
+        releaseReceipt = () => emit(name, ...values);
+        receiptHeld();
+        return true;
+      }
+      return emit(name, ...values);
+    };
+    keeper.send = (message, ...values) => {
+      if (message.type === 'close') closeSent();
+      return send(message, ...values);
+    };
+    return keeper;
+  };
+  try {
+    const script = "process.on('SIGTERM',()=>process.exit(0));setInterval(()=>{},1000)";
+    const running = runOwnedMaestro(process.execPath, ['-e', script],
+      { cwd: dir, env: process.env, dir, timeline: join(dir, 'events.jsonl'), flow: '', diagnostic: async () => {},
+        quietMs: 120, wallMs: 1500, pollMs: 20, terminationGraceMs: 500, spawnImpl: delayedReceiptSpawn });
+    await held;
+    const earlyClose = await Promise.race([closed.then(() => true), new Promise(resolve => setTimeout(() => resolve(false), 100))]);
+    assert.equal(earlyClose, false, 'watchdog must retain IPC until the command receipt is delivered');
+    releaseReceipt();
+    const result = await running;
+    assert.equal(result.reason, 'inactivity-deadline');
+    assert.equal(result.code, 0);
+    assert.doesNotThrow(() => process.kill(unrelated.pid, 0));
+  } finally {
+    releaseReceipt?.();
+    unrelated.kill('SIGTERM'); rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 for (const recorderExitCode of [0, 1]) test(`early recorder exit ${recorderExitCode} with partial video fails its still-running flow`, async () => {
   const dir = temp(), video = join(dir, 'video.mp4'), timeline = join(dir, 'timeline.jsonl');
   const sentinel = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });

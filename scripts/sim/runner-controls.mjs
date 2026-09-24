@@ -332,6 +332,12 @@ async function closeKeeper(owned, graceMs = 5000) {
   if (!await waitOrTimeout(owned.keeperCompleted, graceMs))
     throw new Error(`Owned ${owned.kind} keeper ${owned.pid} did not exit after close`);
 }
+async function requireCommandReceipt(owned, deadlineMs) {
+  const result = await waitOrTimeout(owned.completed, deadlineMs);
+  if (!result || result.ownershipLost)
+    throw new Error(`Owned ${owned.kind} command ${owned.commandPid} has no exit receipt within ${deadlineMs} ms; inspect invocation diagnostics${owned.log ? ` and ${owned.log}` : ''}`);
+  return result;
+}
 async function cleanupOwnedGroup(owned, termGraceMs = 5000, killGraceMs = 5000) {
   if (owned.keeperResult) return;
   let termError;
@@ -408,9 +414,10 @@ export async function stopOwnedRecorder(recorder, { intGraceMs = 10000, termGrac
         }
       }
     }
+    // A vanished OS member does not prove its keeper has reported the exit.
+    // Closing IPC first can turn a completed recording into a false failure.
+    const result = await requireCommandReceipt(recorder, killGraceMs);
     if (!recorder.keeperResult) await closeKeeper(recorder, killGraceMs);
-    const result = await waitOrTimeout(recorder.completed, killGraceMs);
-    if (!result) throw new Error(`Owned recorder command ${recorder.commandPid} has no exit receipt; inspect ${recorder.log}`);
     return { state: 'stopped', code: result.code, signal: result.signal, endedBeforeStop: stopAcknowledgement.commandExitedBeforeStop,
       observedAtMs: Number.isFinite(result.observedAtMs) ? result.observedAtMs : null,
       observedMonotonicNs: result.observedMonotonicNs || null,
@@ -458,7 +465,10 @@ export async function runOwnedMaestro(command, args, { cwd, env, dir, timeline, 
       if (!await waitForOtherMembers(owned, terminationGraceMs)) {
         event(timeline, { type: 'maestro-escalation', pid: ownedPid, outcome: 'SIGTERM-grace-expired', members: otherMembers(owned) });
         await killOwnedGroup(owned, 5000);
-      } else await closeKeeper(owned);
+      } else {
+        await requireCommandReceipt(owned, 5000);
+        await closeKeeper(owned);
+      }
       break;
     }
     if (owned.keeperResult && !reason) {
