@@ -127,6 +127,19 @@ it('keeps own meal targets through trust, Back, and the saved-target shortcut wi
   expect(await screen.findByText('Discovery preview')).toBeTruthy();
 });
 
+it('offers only goals that can continue from assisted target tuning to nutrition trust', async () => {
+  await saveOnboardingField('goal', 'performance');
+  await saveOnboardingField('targetMode', 'estimate');
+  const screen = renderRouter(routes, { initialUrl: '/welcome/tuning' });
+  await screen.findByTestId('meal-target-calories');
+  expect(screen.queryByTestId('meal-goal-maintain')).toBeNull();
+  for (const goal of ['lose_fat', 'performance', 'build_muscle']) expect(screen.getByTestId(`meal-goal-${goal}`)).toBeTruthy();
+  await act(async () => { fireEvent.press(screen.getByTestId('meal-goal-build_muscle')); });
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/how-it-works'));
+  expect(screen.getByTestId('nutrition-source-published')).toBeTruthy();
+});
+
 it('opens assisted questions only after confirmation and retains the earlier goal', async () => {
   await saveOnboardingField('goal', 'build_muscle');
   const screen = renderRouter(routes, { initialUrl: '/welcome/target-setup' });
