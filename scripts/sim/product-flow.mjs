@@ -9,7 +9,7 @@ import { createRequire } from 'node:module';
 import { root, inputHash, changedPaths, impact, digest, validate, baseline, repoEnv } from '../verify/product-flow.mjs';
 import { backendRevision } from './backend-identity.mjs';
 import { buildProfile, bundleDelegate, fixtureLabel, metroRoute } from './build-profile.mjs';
-import { admitDisk, clock, event, latestMaestroLog, matchingFailureKey, nearestFailure, needsDiagnosis, requireMetro, runOwnedMaestro, startOwnedRecorder, stopOwnedRecorder, summarizeCommands } from './runner-controls.mjs';
+import { admitDisk, clock, event, flowFailureReason, latestMaestroLog, matchingFailureKey, nearestFailure, needsDiagnosis, requireMetro, runOwnedMaestro, startOwnedRecorder, stopOwnedRecorder, summarizeCommands } from './runner-controls.mjs';
 const yaml = createRequire(import.meta.url)('js-yaml');
 const out = resolve(root, '.evidence/product-flow');
 const buildDir = resolve(root, '.evidence/product-build');
@@ -279,13 +279,14 @@ async function execute(udid, names) {
         note: 'Recording boundaries include driver startup and shutdown. They do not establish visual or app idle without reviewing the video.' };
       save(join(dir, 'timing-summary.json'), summary);
       const failure = Array.isArray(parsed) ? nearestFailure(parsed) : null;
-      if (result.code !== 0 || result.reason || !Array.isArray(parsed) || recorderResult.state !== 'stopped' || !recorderResult.bytes || parsed.some(c => c.metadata?.status === 'FAILED' || (c.metadata?.status !== 'COMPLETED' && !Object.values(c.command || {}).some(v => v?.optional === true)))) {
+      const failureReason = flowFailureReason(result, parsed, recorderResult);
+      if (failureReason) {
         const screenshot = join(dir, 'failure-screen.png');
         try { run('xcrun', ['simctl', 'io', udid, 'screenshot', screenshot], { timeout: 15000 }); } catch { /* absence recorded below */ }
         const log = latestMaestroLog(dir);
         // Retain raw log; expose only status and duration pairs in the derived summary.
         const networkTiming = log ? [...readFileSync(log, 'utf8').matchAll(/\bHTTP\s+(\d{3})\b[^\n]{0,100}?\b(\d+)\s*ms\b/g)].map(match => ({ status: Number(match[1]), durationMs: Number(match[2]) })) : [];
-        const detail = { flow: flow.name, exitCode: result.code, watchdog: result.reason, runnerError: result.error || null,
+        const detail = { flow: flow.name, failureReason, exitCode: result.code, watchdog: result.reason, runnerError: result.error || null,
           commandReceipt: commands.length === 1 ? relative(out, commands[0]) : null, commandParseError,
           recorder: { ...recorderResult, file: relative(out, video) },
           failedCommand: failure && { command: failure.command, expected: failure.expected, deadlineMs: failure.deadlineMs, error: failure.error },

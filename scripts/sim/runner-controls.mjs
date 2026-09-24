@@ -58,12 +58,15 @@ export function summarizeCommands(commands, { gapMs = 30000, anchor = null } = {
       error: entry.metadata?.error?.message || null };
   });
   const ordered = rows.filter(row => row.startMs !== null).sort((a, b) => a.startMs - b.startMs);
+  let coverageEndMs = ordered[0].endMs;
   const gaps = ordered.slice(1).map((row, index) => {
     const before = ordered[index];
     const adjacentStartGapMs = row.startMs - before.startMs;
-    const uncoveredMs = before.endMs === null ? null : Math.max(0, row.startMs - before.endMs);
+    const uncoveredMs = coverageEndMs === null ? null : Math.max(0, row.startMs - coverageEndMs);
+    const overlaps = coverageEndMs !== null && row.startMs < coverageEndMs;
+    coverageEndMs = coverageEndMs === null || row.endMs === null ? null : Math.max(coverageEndMs, row.endMs);
     return { afterIndex: before.index, beforeIndex: row.index, adjacentStartGapMs, precedingDurationMs: before.durationMs,
-      uncoveredMs, overlaps: before.endMs !== null && row.startMs < before.endMs, investigationCandidate: uncoveredMs !== null && uncoveredMs >= gapMs };
+      uncoveredMs, overlaps, investigationCandidate: uncoveredMs !== null && uncoveredMs >= gapMs };
   });
   return { observation: ordered.length === rows.length ? 'complete-timestamps' : 'partial-timestamps', commands: rows, gaps,
     measuredIdleMs: null, note: 'Uncovered command intervals are unobserved time, not measured app or recording idle. Overlaps are not additive.' };
@@ -78,6 +81,14 @@ export function matchingFailureKey(failure) { return failure && JSON.stringify([
 export function needsDiagnosis(history) {
   const last = history.slice(-2);
   return last.length === 2 && last[0].key === last[1].key && !last[1].diagnosis;
+}
+export function flowFailureReason(result, commands, recorder) {
+  if (result.code !== 0 || result.reason) return result.reason || 'maestro-exit';
+  if (!Array.isArray(commands) || commands.length === 0) return 'missing-or-empty-command-receipt';
+  if (recorder.state !== 'stopped' || recorder.code !== 0 || !recorder.bytes) return 'recorder-failure';
+  if (commands.some(c => c.metadata?.status === 'FAILED' ||
+    (c.metadata?.status !== 'COMPLETED' && !Object.values(c.command || {}).some(v => v?.optional === true)))) return 'command-failure';
+  return null;
 }
 export function latestMaestroLog(dir) {
   if (!existsSync(dir)) return null;

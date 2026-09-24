@@ -5,7 +5,7 @@ import { createServer } from 'node:http';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { requireMetro, runOwnedMaestro, startOwnedRecorder, stopOwnedRecorder, summarizeCommands, nearestFailure, needsDiagnosis } from './runner-controls.mjs';
+import { flowFailureReason, requireMetro, runOwnedMaestro, startOwnedRecorder, stopOwnedRecorder, summarizeCommands, nearestFailure, needsDiagnosis } from './runner-controls.mjs';
 
 const temp = () => mkdtempSync(join(tmpdir(), 'fitsy-runner-'));
 test('missing Metro fails readiness before the selector timeout', async () => {
@@ -81,6 +81,23 @@ test('long gap is unobserved, overlap is non-additive, and missing receipt is un
   assert.equal(summary.gaps[1].overlaps, true);
   assert.equal(summary.measuredIdleMs, null);
   assert.equal(summarizeCommands(null).observation, 'missing-or-empty');
+});
+
+test('a long parent command covers gaps between nested commands', () => {
+  const command = (timestamp, duration) => ({ command: { tapOnElementCommand: {} }, metadata: { status: 'COMPLETED', timestamp, duration } });
+  const summary = summarizeCommands([command(1000, 100000), command(11000, 1000), command(51000, 1000)]);
+  assert.equal(summary.gaps[1].adjacentStartGapMs, 40000);
+  assert.equal(summary.gaps[1].uncoveredMs, 0);
+  assert.equal(summary.gaps[1].overlaps, true);
+  assert.equal(summary.gaps[1].investigationCandidate, false);
+});
+
+test('empty commands and abnormal recorder exit fail before walkthrough', () => {
+  const result = { code: 0, reason: null };
+  const command = [{ command: { assertConditionCommand: { condition: { visible: { textRegex: 'Ready' } } } }, metadata: { status: 'COMPLETED' } }];
+  assert.equal(flowFailureReason(result, [], { state: 'stopped', code: 0, bytes: 5 }), 'missing-or-empty-command-receipt');
+  assert.equal(flowFailureReason(result, command, { state: 'stopped', code: 1, bytes: 5 }), 'recorder-failure');
+  assert.equal(flowFailureReason(result, command, { state: 'stopped', code: 0, bytes: 5 }), null);
 });
 
 test('two matching failures require a diagnosis checkpoint before another run', () => {
