@@ -393,6 +393,26 @@ test('failure identity follows selectors inside retry commands', () => {
   assert.equal(needsDiagnosis([{ key: first }, { key: other }]), false);
 });
 
+test('failure history key excludes target and error text retained in raw receipt', () => {
+  const dir = temp(), error = 'Element welcome-start not found';
+  const raw = [{
+    command: { tapOnElement: { selector: { idRegex: 'welcome-start' } } },
+    metadata: { status: 'FAILED', timestamp: 1000, error: { message: error } },
+  }];
+  try {
+    const rawFile = join(dir, 'commands.json'), historyFile = join(dir, 'native-failures.json');
+    writeFileSync(rawFile, JSON.stringify(raw));
+    const failure = nearestFailure(raw), key = matchingFailureKey(failure, 'cold-start-welcome');
+    writeFileSync(historyFile, JSON.stringify([{ key, flow: 'cold-start-welcome', evidence: rawFile, head: 'test' }]));
+    assert.equal(failure.error, error);
+    assert.doesNotMatch(readFileSync(historyFile, 'utf8'), /welcome-start|Element welcome-start not found/);
+    assert.match(JSON.parse(key)[3], /^error:sha256:/);
+    assert.deepEqual(JSON.parse(readFileSync(rawFile, 'utf8')), raw);
+    const same = matchingFailureKey({ ...failure, error: '  Element  welcome-start\nnot found  ' }, 'cold-start-welcome');
+    assert.equal(key, same);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('archived failure history retains each attempt evidence path', () => {
   const first = [{ key: 'a', evidence: '.evidence/product-flow/welcome' }];
   const once = archiveFailureEvidence(first, '.evidence/product-flow', '.evidence/resume/product-flow-first');

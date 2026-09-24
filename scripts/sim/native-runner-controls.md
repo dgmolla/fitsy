@@ -39,4 +39,4 @@ Adopt a new runner commit only when the current simulator owner has finished its
 Record the exact commit and rebuild when the build recipe, mobile source or public configuration identity changes.
 Runner and test changes invalidate the full source hash, so generate a fresh report and publish `product-flow/local` for the exact PR head when the shipping plan requires product evidence.
 An existing worker has not adopted these controls until its own runner timeline and source-bound receipt show the new commit.
-Repeat identity includes flow, command kind, and normalized direct or nested targets; target values are hashed in the derived history and original command receipts remain available for diagnosis.
+Repeat identity includes flow, command kind, and normalized direct or nested targets; target and error text are hashed in derived history while original command receipts remain available for diagnosis.

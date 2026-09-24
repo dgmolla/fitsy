@@ -114,7 +114,9 @@ function failureSelectorIdentity(command) {
   return targets.length ? `selector:sha256:${createHash('sha256').update(JSON.stringify(targets)).digest('hex')}` : 'selector:absent';
 }
 export function matchingFailureKey(failure, flowName) {
-  return failure && JSON.stringify([flowName || 'flow:absent', failure.command, failure.selectorIdentity || 'selector:absent', failure.error]);
+  const errorIdentity = failure?.error == null ? 'error:absent'
+    : `error:sha256:${createHash('sha256').update(String(failure.error).replace(/\s+/gu, ' ').trim()).digest('hex')}`;
+  return failure && JSON.stringify([flowName || 'flow:absent', failure.command, failure.selectorIdentity || 'selector:absent', errorIdentity]);
 }
 export function needsDiagnosis(history) {
   const last = history.slice(-2);
