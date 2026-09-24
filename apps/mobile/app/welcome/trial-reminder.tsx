@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { Platform, StyleSheet, Text } from 'react-native';
 import { Redirect, router } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
@@ -11,7 +11,7 @@ import { purchaseTerms } from '@/lib/purchaseTerms';
 import { useRouteContinuation } from '@/lib/useRouteContinuation';
 import { supabase } from '@/lib/supabase';
 import { readReminderPreferences, saveReminderPreferences } from '@/lib/notificationSchedule';
-import { requestPermissionsAsync } from '@/lib/useNotifications';
+import { getNotificationPermission, requestPermissionsAsync, type NotificationPermissionStatus } from '@/lib/useNotifications';
 import { registerExpoPushToken } from '@/lib/pushTokenRegistration';
 import { EDITORIAL, TEXT } from '@/lib/brand';
 import { trackOnboardingScreenView, trackReminderAction, trackNotificationPermissionDenied, trackNotificationPermissionGranted,
@@ -21,13 +21,21 @@ export default function TrialReminderScreen() {
   const focused = useIsFocused();
   useOnboardingStep('trial-reminder');
   const [busy, setBusy] = useState(false);
+  const [permission, setPermission] = useState<NotificationPermissionStatus | null>(null);
   const { ready, offering, introEligibility, introEligibilityReady, entitled } = usePurchases();
   const offers = [offering?.annual, offering?.monthly].map(pkg => purchaseTerms(pkg?.product, pkg ? introEligibility[pkg.product.identifier] : undefined));
-  const trial = offers.find(terms => terms?.trial)?.trial;
+  const trialOffer = offers.find(terms => terms?.trial);
+  const trial = trialOffer?.trial;
   const { begin } = useRouteContinuation();
   const pending = useRef(false);
   useEffect(() => { if (focused && entitled === true) router.replace('/welcome/payment'); }, [focused, entitled]);
   useEffect(() => { if (trial) { trackOnboardingScreenView('trial-reminder'); trackNotificationPrimingShown(); } }, [trial]);
+  useEffect(() => {
+    if (!focused) return;
+    let current = true;
+    void getNotificationPermission().then(status => { if (current) setPermission(status); });
+    return () => { current = false; };
+  }, [focused]);
   async function allow() {
     if (!trial || pending.current) return;
     pending.current = true;
@@ -69,13 +77,21 @@ export default function TrialReminderScreen() {
   if (!offering) return <Redirect href="/welcome/trial" />;
   if (!introEligibilityReady) return null;
   if (!trial) return <Redirect href="/welcome/payment" />;
-  return <WelcomeScreen progress={1} title="A heads-up before your trial ends."
-    subtitle="Allow notifications and we'll remind you before an eligible trial renews."
-    canContinue={!busy} showBack={!busy} onContinue={() => { void allow(); }}
-    footerContent={<WelcomeActions label={busy ? 'Asking…' : 'Remind me'} onPress={() => { void allow(); }} disabled={busy}
-      testID="trial-reminder-allow" secondaryLabel="Not now" onSecondary={skip} secondaryTestID="trial-reminder-skip" />}>
+  if (permission === null) return null;
+  // Calendar-month trials have no fixed day count, but their confirmed end
+  // date still allows the existing one-off scheduler to choose a safe time.
+  const canSchedule = Platform.OS !== 'web' && (trialOffer?.trialDays === null || (trialOffer?.trialDays ?? 0) > 2);
+  const canOptIn = canSchedule && permission !== 'denied';
+  const title = !canSchedule ? 'Review your trial before it ends.' : permission === 'denied' ? 'Notifications are off.' : 'We can notify you before your trial ends.';
+  const subtitle = !canSchedule ? 'This trial may be too short for a reminder before the cancellation deadline.'
+    : permission === 'denied' ? 'You can turn on notifications in device settings if you want a trial reminder.'
+      : 'Choose a reminder and allow notifications before starting a trial.';
+  return <WelcomeScreen progress={1} title={title} subtitle={subtitle}
+    canContinue={!busy} showBack={!busy} onContinue={() => { if (canOptIn) void allow(); else skip(); }}
+    footerContent={<WelcomeActions label={busy ? 'Asking…' : canOptIn ? 'Remind me' : 'Continue to plans'} onPress={canOptIn ? () => { void allow(); } : skip} disabled={busy}
+      testID="trial-reminder-allow" secondaryLabel={canOptIn ? 'Not now' : undefined} onSecondary={canOptIn ? skip : undefined} secondaryTestID="trial-reminder-skip" />}>
     <TrialArtwork reminder />
-    <Text style={s.note}>If you start a free trial, we'll use its confirmed end date to schedule a reminder about two days before renewal.</Text>
+    <Text style={s.note}>{canOptIn ? 'If permission is granted and your confirmed trial end date allows it, Fitsy schedules a local reminder about two days before renewal.' : 'You can review the exact trial and renewal terms on the next screen.'}</Text>
     <Text style={s.quiet}>Notifications are optional. You can manage them in settings.</Text>
   </WelcomeScreen>;
 }

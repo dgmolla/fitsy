@@ -45,7 +45,7 @@ tags: [billing, onboarding, discovery, notifications, changed-journey]
 - tapOn: "Dev login"
 - extendedWaitUntil:
     visible:
-      id: trial-offer-note
+      id: paywall-plan-yearly
     timeout: 30000
 # The ordinary journey requests notifications after purchase. Explicit links
 # exercise skip and denied recovery without purchasing on the shared dev user.
@@ -125,7 +125,7 @@ tags: [billing, onboarding, discovery, notifications, changed-journey]
 - tapOn: "Dev login"
 - extendedWaitUntil:
     visible:
-      id: trial-offer-note
+      id: paywall-plan-yearly
     timeout: 30000
 - openLink: com.fitsy.mobile://welcome/notification-permission
 # A fresh simulator can require system confirmation for an app link.

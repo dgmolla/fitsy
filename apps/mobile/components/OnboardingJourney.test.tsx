@@ -121,7 +121,8 @@ it('keeps own meal targets through trust, Back, and the saved-target shortcut wi
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
   expect(await screen.findByDisplayValue('650')).toBeTruthy();
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
-  await act(async () => { fireEvent.press(await screen.findByTestId('target-use-saved')); });
+  expect((await screen.findByTestId('target-mode-saved')).props.accessibilityState.checked).toBe(true);
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/how-it-works'));
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   expect(await screen.findByText('Discovery preview')).toBeTruthy();

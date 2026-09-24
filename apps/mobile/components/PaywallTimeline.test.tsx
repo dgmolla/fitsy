@@ -21,17 +21,17 @@ function props() { return { annual, monthly, plan: 'yearly' as const, discovery:
 test('timeline derives trial end and reminder day from the selected store offer', () => {
   const screen = render(<PaywallTimeline terms={annual} />);
   expect(screen.getByText('Optional reminder around day 5')).toBeTruthy();
-  expect(screen.getByText('Day 7: billing starts')).toBeTruthy();
-  expect(screen.getByText('Opt in to trial reminders and allow notifications for a heads-up before renewal.')).toBeTruthy();
+  expect(screen.getByText('Day 7: payment')).toBeTruthy();
+  expect(screen.getByText('Requires permission and a confirmed trial end date.')).toBeTruthy();
   screen.rerender(<PaywallTimeline terms={purchaseTerms({ ...product, introPrice: { ...product.introPrice, period: 'P2W' } }, true)} />);
   expect(screen.getByText('Optional reminder around day 12')).toBeTruthy();
-  expect(screen.getByText('Day 14: billing starts')).toBeTruthy();
+  expect(screen.getByText('Day 14: payment')).toBeTruthy();
 });
 
 test('ineligible and unknown offers never promise a free trial or notification', () => {
   const screen = render(<PaywallTimeline terms={purchaseTerms(product, false)} />);
   expect(screen.getByText('$59.99 charged when you confirm your purchase.')).toBeTruthy();
-  expect(screen.queryByText(/billing starts|optional reminder/)).toBeNull();
+  expect(screen.queryByText(/Reminder around|Reminder, if available/)).toBeNull();
   screen.rerender(<PaywallTimeline terms={purchaseTerms(product)} />);
   expect(screen.getByText(/store will confirm any eligible introductory offer/)).toBeTruthy();
   expect(screen.queryByText(/charged when you confirm/)).toBeNull();
@@ -39,7 +39,7 @@ test('ineligible and unknown offers never promise a free trial or notification',
 
 test('calendar trials are not converted to invented day counts', () => {
   const screen = render(<PaywallTimeline terms={purchaseTerms({ ...product, introPrice: { ...product.introPrice, period: 'P1M' } }, true)} />);
-  expect(screen.getByText('After 1 month: billing starts')).toBeTruthy();
+  expect(screen.getByText('After 1 month: payment')).toBeTruthy();
   expect(screen.queryByText(/Day 30/)).toBeNull();
 });
 

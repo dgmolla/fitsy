@@ -34,28 +34,26 @@ test('a never-settling boot offering request eventually exposes Retry plans on t
   expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toBe('Retry plans');
 });
 
-test('a stalled boot identity leaves trial eligibility unknown and permits plan review', async () => {
+test('a stalled boot identity reaches plan review without a nontrial interstitial', async () => {
   mockRc.identifyPurchasesUser.mockImplementationOnce(() => new Promise(() => {}));
   mockRc.fetchCurrentOffering.mockResolvedValue({ availablePackages: [], annual: null, monthly: null } as never);
   useFakeTimersKeepingFlush();
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
   await act(async () => { await Promise.resolve(); });
   await act(async () => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
-  expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toBe('Continue');
-  fireEvent.press(screen.getByTestId('welcome-continue'));
   expect(screen.getPathname()).toBe('/welcome/payment');
+  expect(screen.queryByTestId('welcome-continue')).toBeNull();
 });
 
-test('a rejected boot catalog exposes Retry plans, then a successful retry continues to plan review', async () => {
+test('a rejected boot catalog exposes Retry plans, then a successful retry goes directly to plan review', async () => {
   mockRc.fetchCurrentOffering.mockRejectedValueOnce(new Error('offline'))
     .mockResolvedValueOnce(null)
     .mockResolvedValueOnce({ availablePackages: [], annual: null, monthly: null } as never);
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
   await waitFor(() => expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toBe('Retry plans'));
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
-  await waitFor(() => expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toBe('Continue'));
-  fireEvent.press(screen.getByTestId('welcome-continue'));
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
+  expect(screen.queryByTestId('welcome-continue')).toBeNull();
 });
 
 test('late boot catalog completion after focus exit cannot navigate the old trial route', async () => {

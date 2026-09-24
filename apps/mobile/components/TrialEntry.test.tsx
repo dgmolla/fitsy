@@ -103,22 +103,23 @@ test.each([
   mockEligibilityReady = true;
   await act(async () => { router.push('/welcome/preview'); });
   await act(async () => { router.back(); });
-  await waitFor(() => expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toBe('Continue'));
-  fireEvent.press(screen.getByTestId('welcome-continue'));
+  if (_label === 'eligible') {
+    await waitFor(() => expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toBe('Continue'));
+    fireEvent.press(screen.getByTestId('welcome-continue'));
+  }
   await waitFor(() => expect(screen.getPathname()).toBe(destination));
 });
 
 test.each([
   ['ineligible', { annual: false, monthly: false }],
   ['unknown', {}],
-])('%s trial introduction continues straight to plans without a trial reminder', async (_label, eligibility) => {
+])('%s trial eligibility routes directly to plans without an interstitial', async (_label, eligibility) => {
   mockOffering = { annual, monthly: { product: { identifier: 'monthly', priceString: '$9.99', subscriptionPeriod: 'P1M', introPrice: null } } };
   mockEligibilityReady = true;
   mockEligibility = eligibility;
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
-  await waitFor(() => expect(screen.getByText('Find your next meal with Fitsy.')).toBeTruthy());
-  fireEvent.press(screen.getByTestId('welcome-continue'));
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
+  expect(screen.queryByText('Find your next meal with Fitsy.')).toBeNull();
   expect(screen.queryByText('Trial reminder choice')).toBeNull();
 });
 

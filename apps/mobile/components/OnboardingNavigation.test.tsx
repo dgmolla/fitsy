@@ -104,7 +104,8 @@ it('asks an anonymous trial reminder opt-in to sign in before permission, then r
   installEligibleTrialOffer();
   (ExpoNotifications.requestPermissionsAsync as jest.Mock).mockResolvedValueOnce({ status: 'granted' });
   const screen = renderJourney('/welcome/trial-reminder');
-  await act(async () => { fireEvent.press(await screen.findByTestId('trial-reminder-allow')); });
+  await screen.findByTestId('trial-reminder-allow');
+  await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-allow')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/signin'));
   expect(ExpoNotifications.requestPermissionsAsync).not.toHaveBeenCalled();
   expect(await readReminderPreferences('buyer')).toEqual({ meals: false, trial: false });
@@ -115,7 +116,8 @@ it('asks an anonymous trial reminder opt-in to sign in before permission, then r
   await act(async () => { fireEvent.press(screen.getByTestId('signup-dev')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/trial-reminder'));
   expect(ExpoNotifications.requestPermissionsAsync).not.toHaveBeenCalled();
-  await act(async () => { fireEvent.press(await screen.findByTestId('trial-reminder-allow')); });
+  await screen.findByTestId('trial-reminder-allow');
+  await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-allow')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
   expect(ExpoNotifications.requestPermissionsAsync).toHaveBeenCalledTimes(1);
   expect(await readReminderPreferences('buyer')).toEqual({ meals: false, trial: true });
@@ -127,7 +129,8 @@ it('registers a push token after a signed-in trial reminder opt-in', async () =>
   (ExpoNotifications.requestPermissionsAsync as jest.Mock).mockResolvedValueOnce({ status: 'granted' });
   jest.spyOn(NotificationHelpers, 'getExpoPushTokenAsync').mockResolvedValue('ExponentPushToken[buyer]');
   const screen = renderJourney('/welcome/trial-reminder');
-  await act(async () => { fireEvent.press(await screen.findByTestId('trial-reminder-allow')); });
+  await screen.findByTestId('trial-reminder-allow');
+  await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-allow')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
   expect(await readReminderPreferences('buyer')).toEqual({ meals: false, trial: true });
   await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
@@ -143,7 +146,8 @@ it('does not register account A trial token after account B signs in during toke
   const token = deferred<string>();
   jest.spyOn(NotificationHelpers, 'getExpoPushTokenAsync').mockReturnValueOnce(token.promise);
   const screen = renderJourney('/welcome/trial-reminder');
-  await act(async () => { fireEvent.press(await screen.findByTestId('trial-reminder-allow')); });
+  await screen.findByTestId('trial-reminder-allow');
+  await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-allow')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
   await waitFor(() => expect(NotificationHelpers.getExpoPushTokenAsync).toHaveBeenCalled());
   mockSession = { access_token: 'token-b', user: { id: 'buyer-b' } };
@@ -162,7 +166,8 @@ it('does not sign out account B for account A push registration returning 401 la
   global.fetch = jest.fn((url: RequestInfo | URL) => String(url).endsWith('/api/user/push-token')
     ? pushResponse.promise : Promise.resolve(response({ active: false })));
   const screen = renderJourney('/welcome/trial-reminder');
-  await act(async () => { fireEvent.press(await screen.findByTestId('trial-reminder-allow')); });
+  await screen.findByTestId('trial-reminder-allow');
+  await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-allow')); });
   await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
     expect.stringContaining('/api/user/push-token'), expect.objectContaining({ method: 'POST' }),
   ));

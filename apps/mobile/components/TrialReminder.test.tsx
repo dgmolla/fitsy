@@ -25,7 +25,7 @@ jest.mock('@supabase/supabase-js', () => {
 jest.mock('react-native-purchases', () => jest.requireActual('../__mocks__/react-native-purchases'));
 jest.mock('react-native-purchases-ui', () => jest.requireActual('../__mocks__/react-native-purchases-ui'));
 jest.mock('expo-constants', () => ({ __esModule: true, default: { expoConfig: { extra: { revenueCat: { ios: 'test-store-key' } } } } }));
-jest.mock('expo-notifications', () => ({ requestPermissionsAsync: jest.fn(), scheduleNotificationAsync: jest.fn() }));
+jest.mock('expo-notifications', () => ({ getPermissionsAsync: jest.fn(), requestPermissionsAsync: jest.fn(), scheduleNotificationAsync: jest.fn() }));
 let mockEligibility: Record<string, boolean> = { annual: true };
 const annual = { product: { identifier: 'annual', priceString: '$59.99', subscriptionPeriod: 'P1Y',
   introPrice: { price: 0, priceString: '$0', period: 'P1W', cycles: 1 } } };
@@ -44,7 +44,37 @@ beforeEach(async () => {
   global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ active: false }) });
   await AsyncStorage.clear();
   jest.clearAllMocks();
+  (Notifications.getPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'undetermined' });
   (Notifications.requestPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
+});
+
+test('a previously denied permission does not promise or request a trial reminder', async () => {
+  (Notifications.getPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'denied' });
+  const screen = renderRouter(routes, { initialUrl: '/welcome/trial-reminder' });
+  await waitFor(() => expect(screen.getByText('Notifications are off.')).toBeTruthy());
+  expect(screen.queryByText('We can notify you before your trial ends.')).toBeNull();
+  await screen.findByTestId('trial-reminder-allow');
+  await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-allow')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
+  expect(Notifications.requestPermissionsAsync).not.toHaveBeenCalled();
+});
+
+test('a two-day trial does not offer an unschedulable reminder', async () => {
+  mockOffering = { annual: { product: { ...annual.product, introPrice: { ...annual.product.introPrice, period: 'P2D' } } }, monthly: null };
+  const screen = renderRouter(routes, { initialUrl: '/welcome/trial-reminder' });
+  await waitFor(() => expect(screen.getByText('Review your trial before it ends.')).toBeTruthy());
+  expect(screen.queryByText('We can notify you before your trial ends.')).toBeNull();
+  await screen.findByTestId('trial-reminder-allow');
+  await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-allow')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
+  expect(Notifications.requestPermissionsAsync).not.toHaveBeenCalled();
+});
+
+test('a calendar-month trial can offer a reminder using its confirmed end date', async () => {
+  mockOffering = { annual: { product: { ...annual.product, introPrice: { ...annual.product.introPrice, period: 'P1M' } } }, monthly: null };
+  const screen = renderRouter(routes, { initialUrl: '/welcome/trial-reminder' });
+  await waitFor(() => expect(screen.getByText('We can notify you before your trial ends.')).toBeTruthy());
+  expect(screen.getByTestId('trial-reminder-skip')).toBeTruthy();
 });
 
 test('a saved reminder checkpoint returns to trial retry when plans are unavailable', async () => {
@@ -66,6 +96,7 @@ test.each([['ineligible', { annual: false }], ['unknown', {}]])('%s saved remind
 test('opt-in requests permission and saves the trial preference without enabling meal reminders or scheduling prematurely', async () => {
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial-reminder' });
   expect(Notifications.requestPermissionsAsync).not.toHaveBeenCalled();
+  await screen.findByTestId('trial-reminder-allow');
   await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-allow')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
   expect(Notifications.requestPermissionsAsync).toHaveBeenCalledTimes(1);
@@ -76,6 +107,7 @@ test('opt-in requests permission and saves the trial preference without enabling
 test('existing meal reminders stay enabled when opting in to trial reminders', async () => {
   await saveReminderPreferences('trial-buyer', { meals: true, trial: false });
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial-reminder' });
+  await screen.findByTestId('trial-reminder-allow');
   await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-allow')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
   expect(await readReminderPreferences('trial-buyer')).toEqual({ meals: true, trial: true });
@@ -85,6 +117,7 @@ test.each(['denied', 'error', 'skip'])('%s continues to plans without saving a f
   if (outcome === 'error') (Notifications.requestPermissionsAsync as jest.Mock).mockRejectedValue(new Error('Permission unavailable'));
   else (Notifications.requestPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'denied' });
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial-reminder' });
+  await screen.findByTestId(outcome === 'skip' ? 'trial-reminder-skip' : 'trial-reminder-allow');
   await act(async () => { fireEvent.press(screen.getByTestId(outcome === 'skip' ? 'trial-reminder-skip' : 'trial-reminder-allow')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
   expect(await readReminderPreferences('trial-buyer')).toEqual({ meals: false, trial: false });
@@ -98,6 +131,7 @@ test('a late permission response cannot navigate after the reminder screen loses
   (Notifications.requestPermissionsAsync as jest.Mock).mockReturnValue(new Promise(done => { resolve = done; }));
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
   await act(async () => { fireEvent.press(screen.getByText('Continue to reminder')); });
+  await screen.findByTestId('trial-reminder-allow');
   await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-allow')); });
   await act(async () => { router.back(); });
   expect(screen.getPathname()).toBe('/welcome/trial');
@@ -117,6 +151,7 @@ test('a late preference read cannot opt in after leaving the reminder screen', a
     key === '@fitsy/reminder-preferences/trial-buyer' ? pendingRead : originalGetItem(key));
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
   await act(async () => { fireEvent.press(screen.getByText('Continue to reminder')); });
+  await screen.findByTestId('trial-reminder-allow');
   await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-allow')); });
   await waitFor(() => expect(read).toHaveBeenCalledWith('@fitsy/reminder-preferences/trial-buyer'));
   await act(async () => { router.back(); });
@@ -143,6 +178,7 @@ test('a failed preference read keeps existing meal reminders and continues to pl
     return originalGetItem(key);
   });
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial-reminder' });
+  await screen.findByTestId('trial-reminder-allow');
   await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-allow')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
   expect(failed).toBe(true);

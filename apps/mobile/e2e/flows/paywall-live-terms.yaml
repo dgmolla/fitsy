@@ -55,22 +55,16 @@ tags: [billing, onboarding, changed-journey]
     optional: true
 - extendedWaitUntil:
     visible:
-      id: trial-offer-note
+      id: paywall-price-yearly
     timeout: 15000
-- assertVisible: "Find your next meal with Fitsy."
-- tapOn:
-    id: welcome-continue
+- assertNotVisible: "Find your next meal with Fitsy."
 - extendedWaitUntil:
     visible:
       id: paywall-price-yearly
     timeout: 15000
-- assertNotVisible: "A heads-up before your trial ends."
+- assertNotVisible: "We can notify you before your trial ends."
 - assertVisible:
     id: paywall-timeline
-- tapOn:
-    id: welcome-back
-- assertVisible:
-    id: trial-offer-note
 - tapOn:
     id: welcome-back
 - assertVisible:

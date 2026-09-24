@@ -7,6 +7,7 @@ import { EDITORIAL, FONTS } from '@/lib/brand';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { DISHES } from '@/lib/dishImages';
 import { trackOnboardingScreenView } from '@/lib/analytics';
+import { resetPreviewSample } from '@/lib/teaserGate';
 
 const { width: W, height: _H } = Dimensions.get('window');
 const GAP = 8;
@@ -93,7 +94,7 @@ export default function ProblemScreen() {
           <Animated.View entering={FadeIn.duration(500).delay(400)} style={s.footerInner}>
             <AnimatedPress
               style={s.cta}
-              onPress={() => router.push('/welcome/location-permission')}
+              onPress={() => { resetPreviewSample(); router.push('/welcome/location-permission'); }}
               testID="welcome-start"
               haptic
               accessibilityRole="button"
