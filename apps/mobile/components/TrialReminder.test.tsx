@@ -6,7 +6,7 @@ jest.mock('posthog-react-native', () => {
 });
 jest.unmock('expo-router');
 import React from 'react';
-import { Button, Text } from 'react-native';
+import { AppState, Button, Text } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { Stack, router } from 'expo-router';
@@ -40,13 +40,16 @@ jest.mock('../lib/usePurchases', () => ({ usePurchases: () => ({
 const routes = { _layout: () => <Stack screenOptions={{ headerShown: false }} />, 'welcome/trial': () => <Button title="Continue to reminder" onPress={() => router.push('/welcome/trial-reminder')} />,
   'welcome/trial-reminder': TrialReminder, 'welcome/payment': () => <Text>Choose a plan</Text> };
 const originalFetch = global.fetch;
-afterEach(() => { global.fetch = originalFetch; });
+let appStateListener: jest.SpyInstance;
+afterEach(() => { global.fetch = originalFetch; appStateListener.mockRestore(); });
 beforeEach(async () => {
   mockEligibility = { annual: true };
   mockOffering = { annual, monthly: null };
   global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ active: false }) });
   await AsyncStorage.clear();
   jest.clearAllMocks();
+  appStateListener = jest.spyOn(AppState, 'addEventListener').mockImplementation(() =>
+    ({ remove() {} }) as ReturnType<typeof AppState.addEventListener>);
   (Notifications.getPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'undetermined' });
   (Notifications.requestPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
 });
@@ -61,6 +64,25 @@ test('a previously denied permission does not promise or request a trial reminde
   await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-allow')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
   expect(Notifications.requestPermissionsAsync).not.toHaveBeenCalled();
+});
+
+test('refreshes the reminder choice when notifications are enabled in device settings', async () => {
+  const listeners: Array<(state: string) => void> = [];
+  appStateListener.mockImplementation((_event, listener) => {
+    listeners.push(listener as (state: string) => void);
+    return { remove() {} } as ReturnType<typeof AppState.addEventListener>;
+  });
+  (Notifications.getPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'denied' });
+  const screen = renderRouter(routes, { initialUrl: '/welcome/trial-reminder' });
+  await waitFor(() => expect(screen.getByText('Notifications are off.')).toBeTruthy());
+  (Notifications.getPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
+  await act(async () => { listeners.forEach(listener => listener('active')); });
+  await waitFor(() => expect(screen.getByText('We can notify you before your trial ends.')).toBeTruthy());
+  expect(screen.getByText('Remind me')).toBeTruthy();
+  (Notifications.getPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'denied' });
+  await act(async () => { listeners.forEach(listener => listener('active')); });
+  await waitFor(() => expect(screen.getByText('Notifications are off.')).toBeTruthy());
+  expect(screen.getByText('Continue to plans')).toBeTruthy();
 });
 
 test('a failed permission read falls back to the optional reminder choice', async () => {

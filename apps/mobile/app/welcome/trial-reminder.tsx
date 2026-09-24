@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Platform, StyleSheet, Text } from 'react-native';
+import { AppState, Platform, StyleSheet, Text } from 'react-native';
 import { Redirect, router } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
@@ -34,8 +34,14 @@ export default function TrialReminderScreen() {
   useEffect(() => {
     if (!focused) return;
     let current = true;
-    void getNotificationPermission().then(status => { if (current) setPermission(status); });
-    return () => { current = false; };
+    let request = 0;
+    const refresh = () => {
+      const latest = ++request;
+      void getNotificationPermission().then(status => { if (current && latest === request) setPermission(status); });
+    };
+    refresh();
+    const listener = AppState.addEventListener('change', state => { if (state === 'active') refresh(); });
+    return () => { current = false; listener.remove(); };
   }, [focused]);
   async function allow() {
     if (!trial || pending.current) return;
