@@ -27,6 +27,24 @@ setupPurchasesMocks();
 type SyncResult = { active: boolean; synced: boolean };
 
 describe('syncEntitlement', () => {
+  it('keeps the newer listener Pro result when an older free read finishes first', async () => {
+    const { result } = renderProvider();
+    await waitFor(() => expect(result.current.entitled).toBe(false));
+    const listener = mockRc.addCustomerInfoListener.mock.calls[0][0];
+    const oldRead = deferred<typeof freeInfo>();
+    const newRead = deferred<typeof proInfo>();
+    mockRc.fetchCustomerInfo.mockReturnValueOnce(oldRead.promise).mockReturnValueOnce(newRead.promise);
+    await act(async () => { listener(freeInfo); listener(proInfo); });
+    await waitFor(() => expect(mockRc.fetchCustomerInfo).toHaveBeenCalledTimes(2));
+    await act(async () => { oldRead.resolve(freeInfo); });
+    await flush();
+    expect(result.current.isPro).toBe(false);
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    await act(async () => { newRead.resolve(proInfo); });
+    await flush();
+    expect(result.current.isPro).toBe(true);
+    expect(result.current.entitled).toBe(true);
+  });
   it('does not let an older listener read replace Pro after checkout completes', async () => {
     const { result } = renderProvider();
     await waitFor(() => expect(result.current.entitled).toBe(false));

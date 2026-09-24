@@ -126,6 +126,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   // the first render that would carry it in state).
   const customerInfoRef = useRef<CustomerInfo | null>(null);
   const customerInfoGenerationRef = useRef(0);
+  const listenerRequestRef = useRef(0);
   const configuredRef = useRef(false);
   const offeringRequestRef = useRef(0);
   const offeringCommittedRequestRef = useRef(0);
@@ -224,6 +225,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     try {
       return addCustomerInfoListener(() => {
         const infoGeneration = customerInfoGenerationRef.current;
+        const listenerRequest = ++listenerRequestRef.current;
         void (async () => {
           const { data } = await supabase.auth.getSession();
           const currentUserId = data.session?.user.id;
@@ -235,6 +237,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
           const latest = await supabase.auth.getSession();
           const nativeUserId = await currentPurchasesUserId();
           if (customerInfoGenerationRef.current === infoGeneration &&
+            listenerRequestRef.current === listenerRequest &&
             latest.data.session?.user.id === currentUserId &&
             nativeUserId === currentUserId) {
             const proChanged = isProActive(fresh) !== isProActive(customerInfoRef.current);
