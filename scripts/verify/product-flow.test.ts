@@ -28,7 +28,7 @@ function fixture() {
     ]);
     writeFileSync(join(dir, `${name}.json`), data);
     writeFileSync(join(dir, `${name}.png`), png);
-    const video = Buffer.from('recorded native video proof');
+    const video = readFileSync(resolve(__dirname, 'fixtures/valid.mp4'));
     writeFileSync(join(dir, `${name}.mp4`), video);
     return { name, source, sourceHash: sha(yaml), commands: `${name}.json`, sha256: sha(data), screenshot: `${name}.png`, screenshotHash: sha(png), video: `${name}.mp4`, videoHash: sha(video) };
   });
@@ -79,6 +79,15 @@ test('rejects a missing recording even when its report claims a matching digest'
   const result = validate(report);
   expect(result.status).toBe(1);
   expect(result.stderr).toContain('missing/changed/empty video');
+});
+test.each(['corrupt bytes', 'truncated MP4'])('rejects %s even when its digest matches', kind => {
+  const report = fixture(), flow = report.flows[2]!;
+  const valid = readFileSync(join(dir, flow.video));
+  const invalid = kind === 'corrupt bytes' ? Buffer.from('recorded native video proof') : valid.subarray(0, 200);
+  writeFileSync(join(dir, flow.video), invalid); flow.videoHash = sha(invalid);
+  const result = validate(report);
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain('unplayable video');
 });
 test.each(['stale', 'future', 'expired', 'wrong-native', 'unknown-backend', 'prod', 'unconfigured', 'missing-flow', 'missing-walkthrough', 'missing-recovery'])('rejects %s proof', condition => {
   const report = fixture();

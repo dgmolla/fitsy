@@ -62,11 +62,27 @@ export function inputHash(cwd = root, mobileOnly = false) {
 }
 
 const insist = (condition, message) => { if (!condition) throw new Error(message); };
-export function artifact(file, directory) {
+export function artifactPath(file, directory) {
   insist(typeof file === 'string' && file.length > 0, 'missing artifact path');
   const absolute = realpathSync(resolve(directory, file));
   insist(absolute.startsWith(realpathSync(directory) + sep), 'artifact escapes evidence directory');
-  return readFileSync(absolute);
+  return absolute;
+}
+export function artifact(file, directory) {
+  return readFileSync(artifactPath(file, directory));
+}
+export function isPlayableVideo(file) {
+  let probe;
+  try {
+    probe = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_entries',
+      'stream=codec_type,codec_name,duration:format=duration', '-of', 'json', file],
+    { encoding: 'utf8', timeout: 15000, maxBuffer: 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] }));
+  } catch (error) {
+    if (error.code === 'ENOENT') throw new Error('ffprobe is required to validate product-flow video');
+    return false;
+  }
+  return probe.streams?.some(stream => stream.codec_type === 'video' && stream.codec_name &&
+    (Number(stream.duration) > 0 || Number(probe.format?.duration) > 0)) === true;
 }
 
 export function validate(report, plan, hash, directory, now = Date.now(), cwd = root, nativeHash = inputHash(cwd, true)) {
@@ -106,6 +122,7 @@ export function validate(report, plan, hash, directory, now = Date.now(), cwd = 
     try { video = artifact(flow.video, directory); }
     catch { throw new Error(`missing/changed/empty video: ${flow.name}`); }
     insist(video.length > 0 && digest(video) === flow.videoHash, `missing/changed/empty video: ${flow.name}`);
+    insist(isPlayableVideo(artifactPath(flow.video, directory)), `unplayable video: ${flow.name}`);
     if (!baseline.includes(flow.name) && assertions.length >= 2) {
       for (const tag of config.tags || []) covered.add(tag);
     }

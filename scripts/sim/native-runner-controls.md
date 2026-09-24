@@ -3,6 +3,7 @@
 Use the build, run and finish sequence in [shipping.md](../../docs/engineering/devops/shipping.md).
 Set `FITSY_SIM_OWNER` and pass the owned simulator UDID.
 The runner checks source, app and public configuration hashes, simulator state, installed app, disk headroom and the owned Metro process before starting each Maestro flow.
+Install `ffprobe` before a native run; the runner checks for it before Maestro and rejects an unplayable or zero-duration video with a failure receipt after recording.
 It refuses a busy Metro port and never stops another worker's server.
 The build and run phases enforce an 8 GiB free-space floor; the operational phase admission also checks the larger observed-draw requirement.
 If admission fails, clear only proven task-owned disposable data at an idle boundary and retry.

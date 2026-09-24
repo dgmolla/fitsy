@@ -6,7 +6,7 @@ import { createServer } from 'node:net';
 import { createHash } from 'node:crypto';
 import { resolve, relative, join } from 'node:path';
 import { createRequire } from 'node:module';
-import { root, inputHash, changedPaths, impact, digest, validate, baseline, repoEnv } from '../verify/product-flow.mjs';
+import { root, inputHash, changedPaths, impact, digest, validate, baseline, repoEnv, isPlayableVideo } from '../verify/product-flow.mjs';
 import { backendRevision } from './backend-identity.mjs';
 import { buildProfile, bundleDelegate, fixtureLabel, metroRoute } from './build-profile.mjs';
 import { admitDisk, archiveFailureEvidence, completeMaestroRun, event, flowFailureReason, latestMaestroLog, matchingFailureKey, nearestFailure, needsDiagnosis, recordRunFailure, requireMetro, runRecordedFlow, saveRecordedFlowReceipts } from './runner-controls.mjs';
@@ -199,6 +199,8 @@ async function execute(udid, names) {
   for (const c of plan.categories) assert(flowSources.some(f => !baseline.includes(f.name) && f.tags.includes(c)), `Add/select a deterministic scenario tagged ${c}`);
   mkdirSync(resumeDir, { recursive: true });
   const admission = admitDisk(root, 'Native run');
+  try { run('ffprobe', ['-version'], { timeout: 5000 }); }
+  catch { throw new Error('ffprobe is required to validate recorded product-flow video before running Maestro'); }
   const history = existsSync(failuresFile) ? read(failuresFile) : [];
   const previous = history.slice(-2);
   if (needsDiagnosis(history)) {
@@ -268,7 +270,8 @@ async function execute(udid, names) {
         catch (error) { commandParseError = error.message; }
       }
       const failure = Array.isArray(parsed) ? nearestFailure(parsed) : null;
-      const failureReason = flowFailureReason(result, parsed, recorderResult, flow.name);
+      const failureReason = flowFailureReason(result, parsed, recorderResult, flow.name)
+        || (isPlayableVideo(video) ? null : 'unplayable-video');
       if (failureReason) {
         const screenshot = join(dir, 'failure-screen.png');
         try { run('xcrun', ['simctl', 'io', udid, 'screenshot', screenshot], { timeout: 15000 }); } catch { /* absence recorded below */ }
