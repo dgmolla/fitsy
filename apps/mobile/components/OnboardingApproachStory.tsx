@@ -13,8 +13,8 @@ export function StoryNote({ children }: { children: React.ReactNode }) {
 }
 export function StoryMeal({ compact = false }: { compact?: boolean }) {
   return <View style={storyStyles.meal}>
-    <Image source={require('@/assets/dishes/19.jpg')} style={compact ? storyStyles.smallPhoto : storyStyles.photo} accessibilityLabel="Illustrative restaurant meal" />
-    <View style={storyStyles.mealCopy}><Text style={storyStyles.eyebrow}>A RESTAURANT OPTION</Text><Text style={storyStyles.title}>Chicken & grain bowl</Text><Text style={storyStyles.note}>Calories · Protein · Source</Text></View>
+    <Image source={require('@/assets/dishes/01.jpg')} style={compact ? storyStyles.smallPhoto : storyStyles.photo} accessibilityLabel="Illustrative restaurant bowl" />
+    <View style={storyStyles.mealCopy}><Text style={storyStyles.eyebrow}>A RESTAURANT OPTION</Text><Text style={storyStyles.title}>Restaurant bowl</Text><Text style={storyStyles.note}>Calories · Protein · Source</Text></View>
   </View>;
 }
 

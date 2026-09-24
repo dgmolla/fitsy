@@ -27,7 +27,7 @@ describe('personalized onboarding illustrations', () => {
       payoffImages: 1,
     },
     meal_prep: {
-      story: ['SOME DAYS GO TO PLAN', 'MON', '“Dinner out tonight?”', 'A RESTAURANT OPTION'],
+      story: ['SOME DAYS GO TO PLAN', 'MON', '“Dinner out tonight?”', 'A RESTAURANT OPTION', 'Restaurant bowl'],
       payoff: ['ONE PLAN. ROOM FOR BOTH.', 'A meal at home', 'A meal out', 'The same meal targets'],
       storyIcons: ['file-tray-full-outline', 'file-tray-full-outline', 'file-tray-full-outline', 'chatbubble-ellipses-outline'],
       payoffIcons: ['home-outline', 'restaurant-outline', 'locate-outline'],
@@ -66,6 +66,11 @@ describe('personalized onboarding illustrations', () => {
     expect(screen.getByText('Without Fitsy')).toBeTruthy();
     expect(screen.getByText(/Illustration only, not measured results/)).toBeTruthy();
     expect(screen.getByLabelText(/Illustrative consistency with your muscle-building plan/)).toBeTruthy();
+  });
+  it('shows a plated restaurant bowl in the meal-prep story', () => {
+    const screen = render(<OnboardingApproachStory approach="meal_prep" />);
+    const image = screen.getByLabelText('Illustrative restaurant bowl');
+    expect(image.props.source).toBe(require('@/assets/dishes/01.jpg'));
   });
   it('describes target ranking without promising hard meal filters', () => {
     const screen = render(<OnboardingFitnessPayoff pitch={onboardingPitch('check_online')} />);
