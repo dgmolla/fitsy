@@ -42,8 +42,8 @@ export function summarizeCommands(commands, { gapMs = 30000, anchor = null } = {
   if (!Array.isArray(commands) || !commands.length) return { observation: 'missing-or-empty', commands: [], gaps: [], measuredIdleMs: null };
   const rows = commands.map((entry, index) => {
     const value = Object.values(entry.command || {})[0] || {};
-    const startMs = Number(entry.metadata?.timestamp);
-    const durationMs = Number(entry.metadata?.duration);
+    const startMs = entry.metadata?.timestamp == null ? NaN : Number(entry.metadata.timestamp);
+    const durationMs = entry.metadata?.duration == null ? NaN : Number(entry.metadata.duration);
     const timeoutMs = Number(value.timeout);
     const nestedTimeoutMs = value.commands?.reduce((sum, item) => sum + (Number(Object.values(item)[0]?.timeout) || 0), 0) || 0;
     const deadlineMs = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : nestedTimeoutMs ? nestedTimeoutMs * (Number(value.maxRetries || 0) + 1) : null;

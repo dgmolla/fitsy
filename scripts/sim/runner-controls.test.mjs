@@ -85,6 +85,13 @@ test('long gap is unobserved, overlap is non-additive, and missing receipt is un
   assert.equal(unstamped.observation, 'no-timestamps');
   assert.deepEqual(unstamped.gaps, []);
   assert.equal(unstamped.measuredIdleMs, null);
+  const partial = summarizeCommands([command(1000, 800),
+    { command: { tapOnElementCommand: {} }, metadata: { status: 'COMPLETED', timestamp: null, duration: null } },
+    command(46000, 1000)]);
+  assert.equal(partial.observation, 'partial-timestamps');
+  assert.equal(partial.commands[1].startMs, null);
+  assert.equal(partial.commands[1].durationMs, null);
+  assert.equal(partial.gaps[0].uncoveredMs, 44200);
 });
 
 test('a long parent command covers gaps between nested commands', () => {
@@ -111,12 +118,13 @@ test('two matching failures require a diagnosis checkpoint before another run', 
 });
 
 test('archived failure history retains each attempt evidence path', () => {
-  const history = [{ key: 'a', evidence: '.evidence/product-flow/welcome' },
-    { key: 'b', evidence: '.evidence/resume/product-flow-prior/welcome' }];
-  const archived = archiveFailureEvidence(history, '.evidence/product-flow', '.evidence/resume/product-flow-current');
-  assert.equal(archived[0].evidence, '.evidence/resume/product-flow-current/welcome');
-  assert.equal(archived[1].evidence, history[1].evidence);
-  assert.equal(history[0].evidence, '.evidence/product-flow/welcome');
+  const first = [{ key: 'a', evidence: '.evidence/product-flow/welcome' }];
+  const once = archiveFailureEvidence(first, '.evidence/product-flow', '.evidence/resume/product-flow-first');
+  const second = [...once, { key: 'a', evidence: '.evidence/product-flow/welcome' }];
+  const twice = archiveFailureEvidence(second, '.evidence/product-flow', '.evidence/resume/product-flow-second');
+  assert.equal(twice[0].evidence, '.evidence/resume/product-flow-first/welcome');
+  assert.equal(twice[1].evidence, '.evidence/resume/product-flow-second/welcome');
+  assert.equal(first[0].evidence, '.evidence/product-flow/welcome');
 });
 
 test('required assertion and app identity preflight fails before walkthrough', () => {
