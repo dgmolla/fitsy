@@ -25,7 +25,7 @@ export async function getOnboardingResume(): Promise<`/welcome/${Step}` | null> 
   // saved goal checkpoint from that route needs to return to target setup.
   if (step === 'goal' && !(await AsyncStorage.getItem(GOAL_RETURN_KEY))) {
     const data = await getOnboardingData();
-    if (data.targetMode && !hasChosenWelcomeGoal(data.goal)) {
+    if (data.targetMode) {
       await rememberGoalReturnTo('/welcome/target-setup');
     }
   }

@@ -500,6 +500,9 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
     id: discovery-search
 - inputText: "fitsy-e2e-no-dish-9f71c2"
 - pressKey: Enter
+- copyTextFrom:
+    id: discovery-search
+- assertTrue: ${maestro.copiedText === 'fitsy-e2e-no-dish-9f71c2'}
 - extendedWaitUntil:
     visible: "No matches for this search"
     timeout: 30000
@@ -522,9 +525,8 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
     id: preview-show-tour
 - assertVisible: "1 OF 5"
 - assertVisible: "Make room for your craving"
-- copyTextFrom:
-    id: discovery-search
-- assertTrue: ${maestro.copiedText === 'fitsy-e2e-no-dish-9f71c2'}
+# The tour covers the search input in the accessibility tree. Verify its value
+# after closing the tour; the exact value was already checked before opening it.
 - tapOn:
     id: coachmark-next
 - assertVisible: "2 OF 5"

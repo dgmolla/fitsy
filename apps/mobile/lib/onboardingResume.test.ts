@@ -27,6 +27,14 @@ it('returns a legacy target-setup goal checkpoint to target setup after choosing
   expect(await takeGoalReturnTo()).toBe('/welcome/target-setup');
 });
 
+it('returns a legacy target-setup goal checkpoint to target setup with an already saved goal', async () => {
+  await saveOnboardingField('targetMode', 'estimate');
+  await saveOnboardingField('goal', 'build_muscle');
+  await AsyncStorage.setItem('@fitsy/onboardingStep', 'goal');
+  expect(await getOnboardingResume()).toBe('/welcome/goal');
+  expect(await takeGoalReturnTo()).toBe('/welcome/target-setup');
+});
+
 it.each([
   ['trial', '/welcome/trial'],
   ['trial-reminder', '/welcome/trial-reminder'],
