@@ -5,10 +5,9 @@ import type { UseLocationResult, LocationState } from './useLocation';
 import { fetchRestaurantsPage } from './apiClient';
 import { buildDiscoveryParams, discoveryTargetFlags } from './discoverySearchParams';
 import { fetchGuidedPreview } from './guidedPreview';
-import type { GuidedPreviewResponse } from '../../../packages/shared/src/contracts/restaurants';
 import { saveOnboardingField } from './onboardingStorage';
-import { recordSearchAndMaybePrompt } from './ratingPrompt';
-import { trackSearchPerformed, trackSearchFailed, trackPreviewFetchFailed, trackSearchPageLoaded, trackSearchPaginationEndReached, trackSearchEmptyResults } from './analytics';
+import { recordFirstDiscoveryPage } from './discoverySearchTelemetry';
+import { trackSearchPerformed, trackSearchFailed, trackPreviewFetchFailed, trackSearchPageLoaded, trackSearchPaginationEndReached } from './analytics';
 const DEBOUNCE_MS = 600;
 interface DiscoveryInputs {
   inputs: MacroValues; query: string; location: UseLocationResult;
@@ -25,7 +24,6 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
   const [fetchSeq, setFetchSeq] = useState(0);
   const [outOfArea, setOutOfArea] = useState(false);
   const [nearbyDishCount, setNearbyDishCount] = useState<number>();
-  const [goalMatch, setGoalMatch] = useState<GuidedPreviewResponse['meta']['goalMatch']>();
   // Invalidate on the rendered context, before the debounce starts another request.
   // Otherwise an older response can repaint results for text the user already replaced.
   const contextKey = JSON.stringify([inputs.protein, inputs.carbs, inputs.fat, inputs.calories, location.lat, location.lng, query.trim(), isOnboardingPreview]);
@@ -59,7 +57,6 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
       if (isRefresh) setRefreshing(true);
       else setLoading(true);
       setError(null);
-      setGoalMatch(undefined);
       setNearbyDishCount(undefined);
       setOutOfArea(false);
       pagesLoadedRef.current = 0;
@@ -69,6 +66,16 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
       setNextCursor(null);
       const params = buildDiscoveryParams(current, lat, lng, q);
       const targetFlags = discoveryTargetFlags(current);
+      // A stalled native transport must not hold the search or tour indefinitely.
+      const timeout = setTimeout(() => {
+        if (!isCurrent()) return;
+        controller.abort();
+        setResults([]);
+        setError('Search took too long. Check your connection and try again.');
+        setCompletedContext(requestContext);
+        setRefreshing(false);
+        setLoading(false);
+      }, 15_000);
       try {
         const previewResponse = isOnboardingPreview ? await fetchGuidedPreview({ lat, lng }, q, current, { signal: controller.signal, refresh: isRefresh }) : null;
         const { data, nextCursor: cursor, locked: isLocked, networkError } = previewResponse
@@ -77,7 +84,6 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
         if (!isCurrent()) return;
         if (previewResponse) {
           setNearbyDishCount(previewResponse.meta.nearbyDishCount);
-          setGoalMatch(previewResponse.meta.goalMatch);
           void saveOnboardingField('previewArea', `${lat}:${lng}`).then(() => saveOnboardingField('previewCraving', q.trim())).catch(() => undefined);
         }
         if (networkError) {
@@ -107,34 +113,8 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
         setLocked(isLocked);
         setFetchSeq((n) => n + 1);
         pagesLoadedRef.current = 1;
-        trackSearchPageLoaded({
-          page_index: 0,
-          result_count: data.length,
-          cursor: null,
-        });
-        if (cursor === null) {
-          endReachedFiredRef.current = true;
-          trackSearchPaginationEndReached({
-            total_results: data.length,
-            pages_loaded: 1,
-          });
-        }
-        trackSearchPerformed({
-          ...targetFlags,
-          cuisine_filter: 'all',
-          query_length: q.trim().length,
-          result_count: data.length,
-          location_source: locationSource,
-          success: true,
-        });
-        if (data.length === 0) {
-          trackSearchEmptyResults({
-            cuisine_filter: 'all',
-            ...targetFlags,
-          });
-        } else if (!isLocked) {
-          void recordSearchAndMaybePrompt();
-        }
+        if (cursor === null) endReachedFiredRef.current = true;
+        recordFirstDiscoveryPage(data.length, cursor, isLocked, targetFlags, q, locationSource);
       } catch (err) {
         if (!isCurrent()) return;
         setResults([]);
@@ -154,6 +134,7 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
         });
         if (isOnboardingPreview) trackPreviewFetchFailed(err);
       } finally {
+        clearTimeout(timeout);
         if (!isCurrent()) return;
         setCompletedContext(requestContext);
         setRefreshing(false);
@@ -292,5 +273,5 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
   const pending = canSearch && completedContext !== contextKey;
   return { results, nextCursor, loading: canSearch && (loading || pending), loadingMore, refreshing,
     error: pending ? null : error, locked, fetchSeq, outOfArea: !pending && outOfArea,
-    goalMatch: pending ? undefined : goalMatch, nearbyDishCount: pending ? undefined : nearbyDishCount, doFetch, handleRefresh, handleEndReached };
+    nearbyDishCount: pending ? undefined : nearbyDishCount, doFetch, handleRefresh, handleEndReached };
 }

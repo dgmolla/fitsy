@@ -1,42 +1,74 @@
-import { useOnboardingStep } from '@/lib/onboardingResume';
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { clearGoalReturnTo, takeGoalReturnTo, useOnboardingStep } from '@/lib/onboardingResume';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { router } from 'expo-router';
+import { router, useFocusEffect, useNavigation } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { getOnboardingData, saveOnboardingField, type Goal } from '@/lib/onboardingStorage';
 import { trackOnboardingChoiceSelected, trackOnboardingScreenView } from '@/lib/analytics';
 import { EDITORIAL, FONTS } from '@/lib/brand';
+import { useRouteContinuation } from '@/lib/useRouteContinuation';
 
 
 const GOALS: { id: Goal; label: string }[] = [
   { id: 'lose_fat', label: 'Lose weight' },
   { id: 'build_muscle', label: 'Build muscle' },
-  { id: 'maintain', label: 'Maintain weight' },
+  { id: 'performance', label: 'Improve performance' },
 ];
 
 export default function GoalScreen() {
   useOnboardingStep('goal');
+  const navigation = useNavigation();
+  const { begin, cancel } = useRouteContinuation();
+  const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<Goal | null>(null);
+  const [ready, setReady] = useState(false);
+  const choiceGenerationRef = useRef(0);
+
+  useFocusEffect(useCallback(() => {
+    let current = true;
+    const choiceGeneration = choiceGenerationRef.current;
+    setBusy(false);
+    setReady(false);
+    setSelected(null);
+    void getOnboardingData().then(data => {
+      if (current && choiceGenerationRef.current === choiceGeneration) {
+        setSelected(GOALS.find(goal => goal.id === data.goal)?.id ?? null);
+        setReady(true);
+      }
+    }).catch(() => { if (current && choiceGenerationRef.current === choiceGeneration) setReady(true); });
+    return () => { current = false; void clearGoalReturnTo(); };
+  }, []));
 
   useEffect(() => {
     trackOnboardingScreenView('goal');
-    void getOnboardingData().then(data => setSelected(data.goal ?? null));
   }, []);
 
   return (
     <WelcomeScreen
-      progress={0.46}
+      progress={0.18}
       title="What's your goal?"
+      onBack={navigation.canGoBack() ? async () => {
+        cancel();
+        await clearGoalReturnTo();
+        if (navigation.isFocused()) router.back();
+      } : undefined}
       onContinue={async () => {
-        if (selected) {
+        if (!ready || !selected || busy) return;
+        const isCurrent = begin();
+        setBusy(true);
+        try {
           await saveOnboardingField('goal', selected);
-        }
-        router.push('/welcome/height');
+          if (!isCurrent()) return;
+          const returnTo = await takeGoalReturnTo();
+          if (!isCurrent()) return;
+          if (returnTo) router.replace(returnTo);
+          else router.push('/welcome/tried');
+        } catch { if (isCurrent()) Alert.alert('Could not save your goal', 'Please try again.'); }
+        finally { if (isCurrent()) setBusy(false); }
       }}
-      canContinue={selected !== null}
-      onSkip={() => router.push('/welcome/height')}
+      canContinue={ready && selected !== null && !busy}
     >
       <View style={s.list}>
         {GOALS.map((g, i) => {
@@ -45,8 +77,11 @@ export default function GoalScreen() {
             <Animated.View key={g.id} entering={FadeInDown.duration(400).delay(100 + i * 60)}>
               <AnimatedPress
                 style={[s.row, on ? s.rowOn : undefined]}
+                disabled={busy}
                 onPress={() => {
+                  choiceGenerationRef.current += 1;
                   setSelected(g.id);
+                  setReady(true);
                   trackOnboardingChoiceSelected({ screen: 'goal', value: g.id });
                 }}
                 testID={`goal-${g.id}`}

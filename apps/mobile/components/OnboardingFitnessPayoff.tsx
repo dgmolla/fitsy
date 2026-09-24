@@ -1,51 +1,46 @@
 import React from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { StyleSheet, Text, View } from 'react-native';
 import { EDITORIAL, TEXT } from '@/lib/brand';
 import { onboardingPitch } from '@/lib/onboardingPersonalization';
+import { StoryIcon, StoryMeal, StoryNote, storyStyles as s } from './OnboardingApproachStory';
 
 type Pitch = ReturnType<typeof onboardingPitch>;
-const mealPhoto = require('@/assets/dishes/19.jpg');
-function Arrow() { return <Ionicons style={s.arrow} name="arrow-down" size={22} color={EDITORIAL.greenAccent} accessibilityElementsHidden />; }
-
 export function OnboardingFitnessPayoff({ pitch }: { pitch: Pitch }) {
-  const twoPaths = pitch.diagram === 'two_paths';
-  const targets = <View style={s.row}><Ionicons name="options-outline" size={28} color={EDITORIAL.greenAccent} />
-    <View style={s.copy}><Text style={s.title}>{twoPaths ? 'The same meal targets' : pitch.stages[0]}</Text><Text style={s.note}>Calories + protein</Text></View></View>;
-  return <View style={s.art} testID="fitness-payoff-diagram">
-    {twoPaths && <><View style={s.paths}>
-      <View style={s.path}><Ionicons name="home-outline" size={34} color={EDITORIAL.greenAccent} /><Text style={s.pathText}>A meal at home</Text></View>
-      <View style={s.path}><Image source={mealPhoto} style={s.pathImage} /><Text style={s.pathText}>A meal out</Text></View>
-    </View><Arrow /></>}
-    {targets}
-    {!twoPaths && <><Arrow /><View style={s.row}>
-      <Image source={mealPhoto} style={s.mealImage} />
-      <View style={s.copy}><Text style={s.eyebrow}>YOUR NEXT MEAL</Text><Text style={s.title}>{pitch.stages[1]}</Text><Text style={s.note}>See nutrition before you choose.</Text></View>
-    </View></>}
-    <Arrow />
-    <View style={[s.row, s.outcome]}><Ionicons name="locate-outline" size={30} color={EDITORIAL.greenAccent} />
-      <View style={s.copy}><Text style={s.title}>{pitch.stages[2]}</Text><Text style={s.note}>Eating out can support your plan.</Text>
-        <View style={s.goalTypes}>{([['barbell-outline', 'Strength'], ['scale-outline', 'Weight'], ['heart-outline', 'Balance']] as const).map(([name, label]) =>
-          <View style={s.goal} key={label}><Ionicons name={name} size={14} color={EDITORIAL.greenAccent} /><Text style={s.goalLabel}>{label}</Text></View>)}</View>
-      </View>
-    </View>
+  if (pitch.approach === 'check_online') return <View style={s.canvas} testID="payoff-check_online">
+    <Text style={s.eyebrow}>YOUR SHORTLIST STARTS HERE</Text>
+    <View style={s.card}><View style={s.row}><StoryIcon name="options-outline" /><Text style={s.title}>Your meal targets</Text></View><View style={s.chips}><Text style={s.chip}>Calorie range</Text><Text style={s.chip}>Protein target</Text></View></View>
+    <View style={s.center}><StoryIcon name="swap-vertical-outline" size={32} /></View>
+    <StoryMeal compact /><StoryNote>Collected nutrition. Choices ranked around your targets.</StoryNote>
+  </View>;
+  if (pitch.approach === 'calorie_apps') return <View style={s.canvas} testID="payoff-calorie_apps">
+    <Text style={s.eyebrow}>THE DISH, WITH MORE CONTEXT</Text><StoryMeal />
+    <View style={local.details}>{([['flame-outline', 'Calories', 'See the meal’s energy'], ['barbell-outline', 'Protein', 'Compare with your target'], ['reader-outline', 'Nutrition source', 'Published or estimated']] as const).map(([icon, title, body]) =>
+      <View key={title} style={s.row}><StoryIcon name={icon} size={20} /><View><Text style={s.title}>{title}</Text><StoryNote>{body}</StoryNote></View></View>)}</View>
+    <StoryNote>Estimates are labeled so you know what’s behind the numbers.</StoryNote>
+  </View>;
+  if (pitch.approach === 'meal_prep') return <View style={s.canvas} testID="payoff-meal_prep">
+    <Text style={s.eyebrow}>ONE PLAN. ROOM FOR BOTH.</Text>
+    <View style={local.paths}><View style={local.path}><StoryIcon name="home-outline" size={32} /><Text style={s.title}>A meal at home</Text><StoryNote>Your prep routine</StoryNote></View>
+      <View style={local.path}><StoryIcon name="restaurant-outline" size={32} /><Text style={s.title}>A meal out</Text><StoryNote>Your nearby options</StoryNote></View></View>
+    <View style={local.connector}><View style={local.branch} /><View style={local.stem} /></View>
+    <View style={s.card}><View style={s.row}><StoryIcon name="locate-outline" /><Text style={s.title}>The same meal targets</Text></View><StoryNote>Calories and protein, wherever you eat.</StoryNote></View>
+    <Text style={local.closing}>Your routine can have a little flexibility.</Text>
+  </View>;
+  return <View style={s.canvas} testID="payoff-nothing">
+    <Text style={s.eyebrow}>NO PERFECT ROUTINE REQUIRED</Text>
+    {([['1', 'Set a starting point', 'Get help with meal targets you can edit.'], ['2', 'Find something nearby', 'Explore restaurant dishes around you.'], ['3', 'Choose your next meal', 'See the nutrition before you order.']] as const).map(([step, title, note]) =>
+      <View style={s.card} key={step}><View style={s.row}><Text style={local.number}>{step}</Text><View style={local.step}><Text style={s.title}>{title}</Text><StoryNote>{note}</StoryNote></View></View></View>)}
+    <StoryNote>Start small. Make it your own as you go.</StoryNote>
   </View>;
 }
-const s = StyleSheet.create({
-  art: { padding: 18, borderRadius: 26, backgroundColor: EDITORIAL.greenAccentTint, gap: 8, marginTop: 4 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 20, backgroundColor: EDITORIAL.cream },
-  copy: { flex: 1, gap: 5 },
-  title: { ...TEXT.body, fontSize: 15, color: EDITORIAL.green },
-  note: { ...TEXT.bodySmall, fontSize: 12, color: EDITORIAL.textMid },
-  eyebrow: { ...TEXT.caption, fontSize: 9, color: EDITORIAL.textSoft, marginBottom: 4 },
-  arrow: { alignSelf: 'center' },
-  mealImage: { width: 68, height: 88, borderRadius: 12 },
-  paths: { flexDirection: 'row', gap: 12 },
-  path: { flex: 1, minHeight: 104, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 12, borderRadius: 18, backgroundColor: EDITORIAL.cream },
-  pathImage: { width: 48, height: 44, borderRadius: 10 },
-  pathText: { ...TEXT.bodySmall, color: EDITORIAL.green, textAlign: 'center' },
-  outcome: { backgroundColor: EDITORIAL.greenAccentTint },
-  goalTypes: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 },
-  goal: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  goalLabel: { ...TEXT.bodySmall, fontSize: 9, color: EDITORIAL.greenAccent },
+const local = StyleSheet.create({
+  details: { gap: 16, paddingHorizontal: 4 },
+  paths: { flexDirection: 'row', gap: 10 },
+  path: { flex: 1, gap: 10, padding: 14, borderRadius: 16, backgroundColor: EDITORIAL.cream },
+  connector: { alignItems: 'center', marginVertical: -10 },
+  branch: { width: '54%', height: 16, borderBottomWidth: 1, borderLeftWidth: 1, borderRightWidth: 1, borderColor: EDITORIAL.greenAccent },
+  stem: { width: 1, height: 16, backgroundColor: EDITORIAL.greenAccent },
+  closing: { ...TEXT.bodySmall, textAlign: 'center', color: EDITORIAL.greenAccent },
+  number: { ...TEXT.title, fontSize: 22, width: 34, color: EDITORIAL.greenAccent },
+  step: { flex: 1, gap: 5 },
 });

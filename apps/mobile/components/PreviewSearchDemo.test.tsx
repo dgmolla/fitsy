@@ -27,6 +27,11 @@ function useSearch(active: boolean) {
   const demo = usePreviewSearchDemo(active, setQuery);
   return { query, ...demo };
 }
+function useEmptySearchTour(active: boolean) {
+  const [query, setQuery] = useState('unfindablecravingxyz');
+  const demo = usePreviewSearchDemo(active, setQuery, false);
+  return { query, ...demo };
+}
 async function advance(milliseconds: number) {
   await act(async () => { await jest.advanceTimersByTimeAsync(milliseconds); });
 }
@@ -54,6 +59,20 @@ it('clears on start and replay, and types a full craving into the real query sta
   act(() => result.current.showStep('search'));
   await advance(840);
   expect(result.current.query).toBe('pizza');
+});
+
+it('keeps an absent-dish query through an empty-result tour until the user clears it', async () => {
+  const { result, rerender } = renderHook(({ active }) => useEmptySearchTour(active), { initialProps: { active: false } });
+  rerender({ active: true });
+  await act(async () => {});
+  expect(result.current.query).toBe('unfindablecravingxyz');
+  act(() => result.current.showStep('restaurant'));
+  act(() => result.current.showStep('search'));
+  await advance(2000);
+  expect(result.current.query).toBe('unfindablecravingxyz');
+  expect(result.current.typing).toBe(false);
+  act(() => result.current.editQuery(''));
+  expect(result.current.query).toBe('');
 });
 
 it.each(['cancel', 'another step', 'inactive'] as const)('stops typing after %s without a late query update', async action => {

@@ -52,7 +52,7 @@ export async function fetchRestaurantsPage(
   if (params.minRating !== undefined) qs.set('minRating', String(params.minRating));
   if (params.query !== undefined && params.query.trim() !== '') qs.set('q', params.query.trim());
   if (params.cursor !== undefined) qs.set('cursor', params.cursor);
-  if ([params.calories, params.protein, params.carbs, params.fat].some(n => n != null && Number.isFinite(n) && n > 0)) qs.set('goalMatched', '1');
+  // Targets rank relevant meals. Close-fit count qualification belongs to the paywall only.
 
   const reqId = Math.random().toString(36).slice(2, 8);
   const t0 = Date.now();

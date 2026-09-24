@@ -23,14 +23,15 @@ export default function PaymentScreen() {
   const navigation = useNavigation();
   const focused = useIsFocused();
   const discovery = usePaywallDiscovery(focused);
-  const [plan, setPlan] = useState<PlanId>('yearly');
+  const [chosenPlan, setChosenPlan] = useState<PlanId | null>(null);
   const variants = usePreviewAccess();
   const exposure = useRef('');
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [modal, setModal] = useState<PaywallExitModal>('none');
-  const { offering, introEligibility, refreshOffering, purchase, restore, entitled } = usePurchases();
+  const { offering, introEligibility, introEligibilityReady, refreshOffering, purchase, restore, entitled } = usePurchases();
   const purchaseBusy = useRef(false);
+  const settledDefaultPlan = useRef<PlanId | null>(null);
 
   // A verdict that turns true while this screen is up (late boot / sign-in
   // answer, a subscription bought on another device) goes through
@@ -45,6 +46,15 @@ export default function PaymentScreen() {
 
   const annualTerms = purchaseTerms(offering?.annual?.product, offering?.annual ? introEligibility[offering.annual.product.identifier] : false);
   const monthlyTerms = purchaseTerms(offering?.monthly?.product, offering?.monthly ? introEligibility[offering.monthly.product.identifier] : false);
+  // Follow the trial promised earlier in onboarding unless the user has
+  // explicitly chosen another available plan. Recompute when store terms or
+  // eligibility change while the paywall is open.
+  const defaultPlan: PlanId = monthlyTerms?.trial && !annualTerms?.trial ? 'monthly' : annualTerms ? 'yearly' : monthlyTerms ? 'monthly' : 'yearly';
+  const checkingPlans = !!offering && !introEligibilityReady;
+  if (!checkingPlans) settledDefaultPlan.current = defaultPlan;
+  const heldPlan = settledDefaultPlan.current;
+  const automaticPlan = checkingPlans && heldPlan && (heldPlan === 'yearly' ? annualTerms : monthlyTerms) ? heldPlan : defaultPlan;
+  const plan = chosenPlan && (chosenPlan === 'yearly' ? annualTerms : monthlyTerms) ? chosenPlan : automaticPlan;
   const discountedAnnual =
     offering?.availablePackages.find((p) => p.identifier === 'annual_discount') ?? null;
   const selected = plan === 'yearly' ? offering?.annual : offering?.monthly;
@@ -65,10 +75,10 @@ export default function PaymentScreen() {
 
   useEffect(() => {
     if (!offering) return;
-    const key = `${offering.identifier}:${variants.access}:choice_c`;
+    const key = `${offering.identifier}:${variants.access}:trial_timeline`;
     if (exposure.current === key) return;
     exposure.current = key;
-    trackPaywallExperimentExposure({ offering_id: offering.identifier, access_variant: variants.access, image_variant: 'meal', layout_variant: 'choice_c' });
+    trackPaywallExperimentExposure({ offering_id: offering.identifier, access_variant: variants.access, image_variant: 'none', layout_variant: 'trial_timeline' });
   }, [offering, variants.access]);
 
   async function declineSubscription() {
@@ -86,16 +96,15 @@ export default function PaymentScreen() {
     // cannot fire a second replace once `loading` flips back. The recording
     // itself is idempotent (a re-entered paywall must not double-count).
     claim();
-    const firstCompletion = await recordOnboardingComplete(discounted);
-    if (firstCompletion) resetWelcomeJourney(navigation, 'notification-permission');
-    else await openPurchasedDestination(navigation);
+    await recordOnboardingComplete(discounted);
+    await openPurchasedDestination(navigation);
   }
 
   // This screen IS the paywall - it renders Fitsy's own design and buys the
   // selected package directly through the RevenueCat SDK (no dashboard-designed
   // hosted paywall).
   async function handleStart(discounted = false) {
-    if (purchaseBusy.current || restoring) return;
+    if (purchaseBusy.current || restoring || checkingPlans) return;
     purchaseBusy.current = true;
     setLoading(true);
     try {
@@ -137,7 +146,7 @@ export default function PaymentScreen() {
       const isPro = await restore();
       if (isPro) {
         await completeOnboarding();
-      } else {
+      } else if (isPro === false) {
         Alert.alert('Nothing to restore', "We couldn't find an active subscription for this account.");
       }
     } finally {
@@ -155,7 +164,8 @@ export default function PaymentScreen() {
         discovery={discovery}
         loading={loading}
         restoring={restoring}
-        onSelect={setPlan}
+        checkingPlans={checkingPlans}
+        onSelect={setChosenPlan}
         onBack={navigation.canGoBack() ? () => router.back() : undefined}
         onRestore={() => { void handleRestore(); }}
         onRetry={() => { void refreshOffering(); }}

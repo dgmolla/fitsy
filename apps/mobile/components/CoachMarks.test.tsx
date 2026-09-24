@@ -26,32 +26,36 @@ beforeEach(() => jest.useFakeTimers());
 afterEach(() => jest.useRealTimers());
 
 describe('CoachMarks', () => {
-  it('walks the steps with Next, skips an unmounted target, and finishes with Got it', () => {
+  it('keeps every numbered step when a search leaves no restaurant anchor', () => {
     const onDone = jest.fn();
     const onStepShown = jest.fn();
-    const { getByText, queryByText, getByLabelText } = render(
-      <CoachMarks visible steps={steps} onDone={onDone} onStepShown={onStepShown} />,
-    );
+    const screen = render(<CoachMarks visible steps={steps} onDone={onDone} onStepShown={onStepShown} />);
     act(() => { jest.advanceTimersByTime(100); });
-    expect(getByText('Step A')).toBeTruthy();
-    expect(getByText('1 of 3')).toBeTruthy();
-
-    fireEvent.press(getByLabelText('Next tip'));
-    // Step B's target is not mounted: it is skipped straight to C.
+    expect(screen.getByText('1 of 3')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Next tip'));
     act(() => { jest.advanceTimersByTime(100); });
+    expect(screen.getByText('Step B')).toBeTruthy();
+    expect(screen.getByText('2 of 3')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Next tip'));
     act(() => { jest.advanceTimersByTime(100); });
-    expect(queryByText('Step B')).toBeNull();
-    expect(getByText('Step C')).toBeTruthy();
-    expect(onStepShown).toHaveBeenCalledTimes(2);
-
-    fireEvent.press(getByLabelText('Previous tip'));
+    expect(screen.getByText('Step C')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Previous tip'));
     act(() => { jest.advanceTimersByTime(100); });
-    expect(getByText('Step A')).toBeTruthy();
-    fireEvent.press(getByLabelText('Next tip'));
+    expect(screen.getByText('Step B')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Next tip'));
     act(() => { jest.advanceTimersByTime(100); });
-    act(() => { jest.advanceTimersByTime(100); });
-    fireEvent.press(getByLabelText('Got it'));
+    fireEvent.press(screen.getByLabelText('Got it'));
     expect(onDone).toHaveBeenCalledTimes(1);
+    expect(onStepShown.mock.calls.map(([step]) => step.key)).toEqual(['a', 'b', 'c', 'b', 'c']);
+  });
+
+  it('does not advance twice when Next is tapped before the next tip has laid out', () => {
+    const screen = render(<CoachMarks visible steps={steps} onDone={jest.fn()} />);
+    act(() => jest.advanceTimersByTime(100));
+    const next = screen.getByLabelText('Next tip');
+    act(() => { fireEvent.press(next); fireEvent.press(next); });
+    act(() => jest.advanceTimersByTime(100));
+    expect(screen.getByText('2 of 3')).toBeTruthy();
   });
 
   it('waits for scrolling before measuring, and replay starts at the first tip', async () => {

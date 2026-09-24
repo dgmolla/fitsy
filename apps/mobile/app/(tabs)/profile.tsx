@@ -39,6 +39,7 @@ import { usePurchases } from '@/lib/usePurchases';
 const GOAL_OPTIONS = [
   { id: 'lose_fat', label: 'Lose Weight', icon: 'flame-outline', description: 'Calorie deficit for fat loss' },
   { id: 'build_muscle', label: 'Build Muscle', icon: 'barbell-outline', description: 'Calorie surplus for growth' },
+  { id: 'performance', label: 'Improve performance', icon: 'fitness-outline', description: 'Fuel training and recovery' },
   { id: 'maintain', label: 'Maintain', icon: 'shield-checkmark-outline', description: 'Stay at current weight' },
   { id: 'eat_healthier', label: 'Eat Healthier', icon: 'leaf-outline', description: 'Better food choices' },
 ];
@@ -54,6 +55,7 @@ const GOAL_ICONS: Record<string, string> = {
   lose_fat: 'flame-outline',
   build_muscle: 'barbell-outline',
   maintain: 'shield-checkmark-outline',
+  performance: 'fitness-outline',
   explore: 'compass-outline',
   eat_healthier: 'leaf-outline',
 };

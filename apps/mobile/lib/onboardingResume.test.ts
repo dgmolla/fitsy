@@ -1,25 +1,104 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { saveMacroTargets } from './macroStorage';
-import { getOnboardingResume } from './onboardingResume';
+import { saveOnboardingField } from './onboardingStorage';
+import { clearOnboardingResume, getOnboardingResume, rememberMacroSetup, takeGoalReturnTo } from './onboardingResume';
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 beforeEach(async () => { await AsyncStorage.clear(); });
 
+it('resumes unfinished signed-in macro setup and ignores the checkpoint after targets are saved', async () => {
+  await rememberMacroSetup();
+  expect(await getOnboardingResume()).toBe('/macro-setup');
+  await saveMacroTargets({ calories: '600', protein: '45', carbs: '60', fat: '20' });
+  expect(await getOnboardingResume()).toBeNull();
+});
+
+it.each(['tried', 'response'])('requires a goal before resuming %s with an area', async checkpoint => {
+  await saveOnboardingField('area', { lat: 34.1, lng: -118.3, name: 'Silver Lake', source: 'manual' });
+  await AsyncStorage.setItem('@fitsy/onboardingStep', checkpoint);
+  expect(await getOnboardingResume()).toBe('/welcome/goal');
+  expect(await takeGoalReturnTo()).toBe(`/welcome/${checkpoint}`);
+});
+
+it('requires a visible goal choice for an older maintenance target checkpoint', async () => {
+  await saveOnboardingField('goal', 'maintain');
+  await AsyncStorage.setItem('@fitsy/onboardingStep', 'tuning');
+  expect(await getOnboardingResume()).toBe('/welcome/goal');
+  expect(await takeGoalReturnTo()).toBe('/welcome/target-setup');
+});
+
+it('returns a legacy target-setup goal checkpoint to target setup after choosing a goal', async () => {
+  await saveOnboardingField('targetMode', 'estimate');
+  await AsyncStorage.setItem('@fitsy/onboardingStep', 'goal');
+  expect(await getOnboardingResume()).toBe('/welcome/goal');
+  expect(await takeGoalReturnTo()).toBe('/welcome/target-setup');
+});
+
+it('returns a legacy target-setup goal checkpoint to target setup with an already saved goal', async () => {
+  await saveOnboardingField('targetMode', 'estimate');
+  await saveOnboardingField('goal', 'build_muscle');
+  await AsyncStorage.setItem('@fitsy/onboardingStep', 'goal');
+  expect(await getOnboardingResume()).toBe('/welcome/goal');
+  expect(await takeGoalReturnTo()).toBe('/welcome/target-setup');
+});
+
 it.each([
-  ['trial', '/welcome/payment'],
-  ['value-abundance', '/welcome/value-payoff'],
-  ['value-payoff', '/welcome/value-payoff'],
+  ['trial', '/welcome/trial'],
+  ['trial-reminder', '/welcome/trial-reminder'],
+  ['promise', '/welcome/location-permission'],
   ['out-of-area', '/welcome/out-of-area'],
-  ['tuning', '/welcome/tuning'],
   ['unknown-route', null],
 ])('resumes the %s checkpoint at %s', async (checkpoint, expected) => {
   await AsyncStorage.setItem('@fitsy/onboardingStep', checkpoint!);
   expect(await getOnboardingResume()).toBe(expected);
 });
 
+it.each(['value-abundance', 'value-payoff', 'goal-payoff'])(
+  'collects a missing goal before resuming the %s payoff checkpoint', async checkpoint => {
+    await AsyncStorage.setItem('@fitsy/onboardingStep', checkpoint);
+    await saveOnboardingField('tried', 'check_online');
+    expect(await getOnboardingResume()).toBe('/welcome/goal');
+    expect(await takeGoalReturnTo()).toBe(checkpoint === 'goal-payoff' ? '/welcome/goal-payoff' : '/welcome/value-payoff');
+  },
+);
+
+it('keeps the missing-goal payoff destination through a goal checkpoint and clears it on completion', async () => {
+  await AsyncStorage.setItem('@fitsy/onboardingStep', 'value-payoff');
+  expect(await getOnboardingResume()).toBe('/welcome/goal');
+  await AsyncStorage.setItem('@fitsy/onboardingStep', 'goal');
+  expect(await getOnboardingResume()).toBe('/welcome/goal');
+  expect(await takeGoalReturnTo()).toBe('/welcome/value-payoff');
+  expect(await takeGoalReturnTo()).toBeNull();
+  await AsyncStorage.setItem('@fitsy/onboardingStep', 'goal-payoff');
+  expect(await getOnboardingResume()).toBe('/welcome/goal');
+  await clearOnboardingResume();
+  expect(await takeGoalReturnTo()).toBeNull();
+});
+
+it.each([
+  ['value-abundance', '/welcome/value-payoff'],
+  ['value-payoff', '/welcome/value-payoff'],
+  ['goal-payoff', '/welcome/goal-payoff'],
+])('preserves the %s checkpoint after goal selection', async (checkpoint, expected) => {
+  await AsyncStorage.setItem('@fitsy/onboardingStep', checkpoint);
+  await saveOnboardingField('goal', 'lose_fat');
+  expect(await getOnboardingResume()).toBe(expected);
+});
+
 it('repairs an old trust checkpoint that predates meal targets and preserves a completed target setup', async () => {
   await AsyncStorage.setItem('@fitsy/onboardingStep', 'how-it-works');
+  expect(await getOnboardingResume()).toBe('/welcome/goal');
+  expect(await takeGoalReturnTo()).toBe('/welcome/target-setup');
+  await saveOnboardingField('goal', 'lose_fat');
   expect(await getOnboardingResume()).toBe('/welcome/target-setup');
   await saveMacroTargets({ calories: '600', protein: '45', carbs: '60', fat: '20' });
   expect(await getOnboardingResume()).toBe('/welcome/how-it-works');
 });
+
+it.each(['target-setup', 'height', 'weight', 'age', 'sex', 'activity', 'tuning', 'preview'])(
+  'collects a missing goal before resuming the %s target checkpoint', async checkpoint => {
+    await AsyncStorage.setItem('@fitsy/onboardingStep', checkpoint);
+    expect(await getOnboardingResume()).toBe('/welcome/goal');
+    expect(await takeGoalReturnTo()).toBe('/welcome/target-setup');
+  },
+);

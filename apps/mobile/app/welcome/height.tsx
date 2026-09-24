@@ -1,3 +1,4 @@
+import { requireWelcomeGoal } from '@/lib/requireWelcomeGoal';
 import { useOnboardingStep } from '@/lib/onboardingResume';
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -25,7 +26,7 @@ function fmtFtIn(totalInches: number): string {
   return `${ft}'${inch}"`;
 }
 
-export default function HeightScreen() {
+function HeightScreen() {
   useOnboardingStep('height');
   const [unit, setUnit] = useState<Unit>('ft');
   const [inches, setInches] = useState(FT_DEFAULT_IN);
@@ -144,3 +145,5 @@ const s = StyleSheet.create({
     letterSpacing: 0,
   },
 });
+
+export default requireWelcomeGoal(HeightScreen, '/welcome/target-setup');

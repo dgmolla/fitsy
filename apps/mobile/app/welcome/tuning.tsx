@@ -1,3 +1,4 @@
+import { requireWelcomeGoal } from '@/lib/requireWelcomeGoal';
 import { useOnboardingStep } from '@/lib/onboardingResume';
 import React, { useCallback, useState } from 'react';
 import { Alert, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -8,9 +9,10 @@ import { EDITORIAL, TEXT } from '@/lib/brand';
 import { getOnboardingData, saveOnboardingField, type Goal } from '@/lib/onboardingStorage';
 import { getMacroTargets, saveMacroTargets, type StoredMacroTargets } from '@/lib/macroStorage';
 import { calculateMacros } from '@/lib/macroCalculator';
+import { useRouteContinuation } from '@/lib/useRouteContinuation';
 
 const FIELDS = [['calories', 'Calories', 'kcal'], ['protein', 'Protein', 'g'], ['carbs', 'Carbs', 'g'], ['fat', 'Fat', 'g']] as const;
-const GOALS = [['lose_fat', 'Lose weight'], ['maintain', 'Maintain weight'], ['build_muscle', 'Build muscle']] as const;
+const GOALS = [['lose_fat', 'Lose weight'], ['performance', 'Improve performance'], ['build_muscle', 'Build muscle']] as const;
 const empty: StoredMacroTargets = { calories: '', protein: '', carbs: '', fat: '' };
 const asStrings = (values: ReturnType<typeof calculateMacros>): StoredMacroTargets => ({
   calories: String(values.calories), protein: String(values.protein), carbs: String(values.carbs), fat: String(values.fat),
@@ -18,8 +20,9 @@ const asStrings = (values: ReturnType<typeof calculateMacros>): StoredMacroTarge
 
 const basisOf = (d: Awaited<ReturnType<typeof getOnboardingData>>) => JSON.stringify([d.targetMode, d.goal, d.heightCm, d.weightKg, d.birthday, d.sex, d.activity]);
 
-export default function PlanReadyScreen() {
+function PlanReadyScreen() {
   useOnboardingStep('tuning');
+  const { begin } = useRouteContinuation();
   const [targets, setTargets] = useState(empty);
   const [data, setData] = useState<Awaited<ReturnType<typeof getOnboardingData>>>({});
   const [ready, setReady] = useState(false);
@@ -47,13 +50,15 @@ export default function PlanReadyScreen() {
   }
   async function proceed() {
     if (!valid || busy) return;
+    const isCurrent = begin();
     setBusy(true);
     try {
       await saveMacroTargets(targets);
       await saveOnboardingField('targetBasis', basisOf(data));
+      if (!isCurrent()) return;
       router.push('/welcome/how-it-works');
-    } catch { Alert.alert('Could not save targets', 'Please try again.'); }
-    finally { setBusy(false); }
+    } catch { if (isCurrent()) Alert.alert('Could not save targets', 'Please try again.'); }
+    finally { if (isCurrent()) setBusy(false); }
   }
 
   return (
@@ -74,9 +79,9 @@ export default function PlanReadyScreen() {
       </View>
       {data.targetMode !== 'known' && <View style={s.goals}>
         <Text style={s.note}>Your goal · Tap to change</Text>
-        {GOALS.map(([goal, label]) => <AnimatedPress key={goal} style={[s.goal, (data.goal ?? 'maintain') === goal && s.selected]}
-          disabled={busy} onPress={() => pickGoal(goal)} accessibilityRole="button" accessibilityState={{ selected: (data.goal ?? 'maintain') === goal }} testID={`meal-goal-${goal}`}>
-          <Text style={[s.goalText, (data.goal ?? 'maintain') === goal && s.selectedText]}>{label}</Text>
+        {GOALS.map(([goal, label]) => <AnimatedPress key={goal} style={[s.goal, data.goal === goal && s.selected]}
+          disabled={busy} onPress={() => pickGoal(goal)} accessibilityRole="button" accessibilityState={{ selected: data.goal === goal }} testID={`meal-goal-${goal}`}>
+          <Text style={[s.goalText, data.goal === goal && s.selectedText]}>{label}</Text>
         </AnimatedPress>)}
       </View>}
       <Text style={s.note}>Fitsy ranks dishes against these meal targets. Nutrition estimates and portion sizes can vary.</Text>
@@ -97,3 +102,5 @@ const s = StyleSheet.create({
   selectedText: { color: EDITORIAL.cream },
   note: { ...TEXT.bodySmall, fontSize: 12, lineHeight: 18, marginTop: 24 },
 });
+
+export default requireWelcomeGoal(PlanReadyScreen, '/welcome/target-setup');

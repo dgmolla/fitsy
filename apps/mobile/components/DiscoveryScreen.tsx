@@ -20,8 +20,8 @@ import { HeroCard, RestaurantSection } from './DiscoveryCards';
 const FREE_RESULT_COUNT = 3;
 export function DiscoveryScreen({ onboardingPreview = false }: { onboardingPreview?: boolean }) {
   const { navigation, isOnboardingPreview, tried, inputs, query, setQuery, canSearch, hasQuery, location,
-    locationLabel, results, heroResult, listResults, nextCursor, loading, loadingMore, refreshing, error, locked, outOfArea, goalMatch,
-    filterVisible, setFilterVisible, locationPickerVisible, setLocationPickerVisible, tourVisible, startTour,
+    locationLabel, results, heroResult, listResults, nextCursor, loading, loadingMore, refreshing, error, locked, outOfArea,
+    filterVisible, setFilterVisible, locationPickerVisible, setLocationPickerVisible, tourReady, tourVisible, startTour,
     tourEditRef, tourSearchRef, tourHeroRef, tourLocationRef, tourMoreRef, tourSteps, finishTour, tourStepShown, cancelTourTyping, handleClearQuery, handleApplyFilters,
     handleJoinWaitlist, handleOpenLocationPicker, handlePickLocation, handleUseCurrentLocation, unlockPreview,
     unlocking, resyncNow, onLockedTap, unlockTitle, unlockSubtitle, unlockLabel, handleRefresh, handleEndReached } = useDiscoveryState({ onboardingPreview });
@@ -46,7 +46,7 @@ export function DiscoveryScreen({ onboardingPreview = false }: { onboardingPrevi
     <>
       {isOnboardingPreview && <View style={s.previewIntro} testID="preview-guide">
         <Text style={s.previewHint}>{onboardingPitch(tried).preview}</Text>
-        {!loading && !error && results.length > 0 && <Pressable onPress={startTour} style={s.previewTourButton} accessibilityRole="button" accessibilityLabel="Show me how Fitsy works" accessibilityHint="Replay the five preview tips" testID="preview-show-tour">
+        {tourReady && <Pressable onPress={startTour} style={s.previewTourButton} accessibilityRole="button" accessibilityLabel="Show me how Fitsy works" accessibilityHint="Replay the five preview tips" testID="preview-show-tour">
           <Ionicons name="help-circle-outline" size={20} color={EDITORIAL.green} />
         </Pressable>}
       </View>}
@@ -81,10 +81,12 @@ export function DiscoveryScreen({ onboardingPreview = false }: { onboardingPrevi
       {canSearch && !outOfArea && !loading && !error && results.length === 0 && (
         <View style={s.inlineEmpty}>
           <Ionicons name="search-outline" size={32} color={EDITORIAL.creamDeep} />
-          <Text style={s.inlineEmptyText}>No matches nearby</Text>
+          <Text style={s.inlineEmptyText}>{hasQuery ? 'No matches for this search' : 'No meals with nutrition nearby'}</Text>
           <Text style={s.inlineEmptyHint}>
-            {hasQuery ? 'Try another craving or adjust your meal targets.' : 'Try adjusting your meal targets.'}
+            {hasQuery ? 'Try another dish or restaurant, or search in a different area. Your meal targets stay saved.' : 'Try another area to find meals with nutrition information.'}
           </Text>
+          <Pressable testID="discovery-empty-edit" accessibilityRole="button" style={s.waitlistBtn} onPress={() => setFilterVisible(true)}><Text style={s.waitlistBtnText}>Adjust meal targets</Text></Pressable>
+          {hasQuery && <Pressable testID="discovery-empty-clear" accessibilityRole="button" style={s.waitlistBtn} onPress={handleClearQuery}><Text style={s.waitlistBtnText}>Clear search</Text></Pressable>}
         </View>
       )}
       {canSearch && !loading && heroResult && <HeroCard result={heroResult} locked={locked === true && !isOnboardingPreview} unlocking={onLockedTap} containerRef={tourHeroRef} onOpen={isOnboardingPreview ? () => { void unlockPreview(heroResult); } : undefined} />}
@@ -112,8 +114,16 @@ export function DiscoveryScreen({ onboardingPreview = false }: { onboardingPrevi
   const renderFooter = useCallback(() => {
     if (loading) return null;
     if (isOnboardingPreview && !loading && !error && !outOfArea) {
-      return <View ref={tourMoreRef} collapsable={false}><LockedUnlockCard title="More choices. Full menus." subtitle={goalMatch && goalMatch.matchingDishCount > results.length ? `${(goalMatch.matchingDishCount - results.length).toLocaleString()} more meals close to your targets. Explore full menus with Pro.` : 'Explore full menus and find more ways to eat toward your goals.'}
-        ctaLabel="Explore meals that fit" accessibilityLabel="Explore more meals and full menus with Pro" onPress={() => { void unlockPreview(); }} style={s.lockedCard} /></View>;
+      const empty = results.length === 0;
+      const title = empty ? 'Keep exploring.' : 'Explore full menus.';
+      const subtitle = empty ? 'Try another dish or area. Unlock full menus with Pro.' : 'Explore full menus with Pro.';
+      const ctaLabel = empty ? 'Explore Pro plans' : 'Explore full menus';
+      return <View ref={tourMoreRef} collapsable={false}><LockedUnlockCard
+        title={title}
+        subtitle={subtitle}
+        ctaLabel={ctaLabel}
+        accessibilityLabel={`${title} ${subtitle} ${ctaLabel}`}
+        onPress={() => { void unlockPreview(); }} style={s.lockedCard} /></View>;
     }
     if (locked && results.length > 0) {
       if (unlocking) {
@@ -144,7 +154,7 @@ export function DiscoveryScreen({ onboardingPreview = false }: { onboardingPrevi
         <ActivityIndicator size="small" color={EDITORIAL.greenAccent} />
       </View>
     );
-  }, [loadingMore, locked, results.length, hiddenCount, nextCursor, unlocking, resyncNow, unlockTitle, unlockSubtitle, unlockLabel, isOnboardingPreview, goalMatch, unlockPreview, loading, error, outOfArea, tourMoreRef]);
+  }, [loadingMore, locked, results.length, hiddenCount, nextCursor, unlocking, resyncNow, unlockTitle, unlockSubtitle, unlockLabel, isOnboardingPreview, unlockPreview, loading, error, outOfArea, tourMoreRef]);
   return (
     <SafeAreaView
       edges={isOnboardingPreview ? ['top', 'right', 'bottom', 'left'] : ['top', 'right', 'left']}

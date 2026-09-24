@@ -8,7 +8,7 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 import { fetchRestaurants, fetchRestaurantsPage, fetchSubscriptionStatus, syncSubscription } from './apiClient';
 import type { RestaurantsResponse } from '@fitsy/shared';
 
-const BASE_URL = 'http://localhost:3000';
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
 
 function makeMockFetch(options: {
   ok: boolean;

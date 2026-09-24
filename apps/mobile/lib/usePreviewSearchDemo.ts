@@ -4,7 +4,7 @@ import { AccessibilityInfo } from 'react-native';
 const CRAVING = 'pizza';
 
 /** Writes into the real search field; the shared discovery debounce owns fetching. */
-export function usePreviewSearchDemo(active: boolean, changeQuery: (query: string) => void) {
+export function usePreviewSearchDemo(active: boolean, changeQuery: (query: string) => void, autoDemo = true) {
   const [typing, setTyping] = useState(false);
   const [reduceMotion, setReduceMotion] = useState<boolean | null>(null);
   const [searchStep, setSearchStep] = useState(false);
@@ -24,12 +24,12 @@ export function usePreviewSearchDemo(active: boolean, changeQuery: (query: strin
     return () => { live = false; subscription.remove(); };
   }, []);
   useEffect(() => {
-    if (active) changeQuery('');
+    if (active && autoDemo) changeQuery('');
     else cancel();
     return () => { if (timer.current) clearTimeout(timer.current); };
-  }, [active, changeQuery, cancel]);
+  }, [active, autoDemo, changeQuery, cancel]);
   useEffect(() => {
-    if (!active || !searchStep || reduceMotion === null) return;
+    if (!active || !autoDemo || !searchStep || reduceMotion === null) return;
     changeQuery('');
     if (reduceMotion) { changeQuery(CRAVING); setTyping(false); return; }
     setTyping(true);
@@ -42,13 +42,13 @@ export function usePreviewSearchDemo(active: boolean, changeQuery: (query: strin
     };
     timer.current = setTimeout(typeLetter, 280);
     return () => { if (timer.current) clearTimeout(timer.current); };
-  }, [active, searchStep, reduceMotion, changeQuery]);
+  }, [active, autoDemo, searchStep, reduceMotion, changeQuery]);
   const showStep = useCallback((key: string) => {
     if (shownStep.current === key) return;
     cancel();
     shownStep.current = key;
-    if (key === 'search') { setTyping(true); setSearchStep(true); }
-  }, [cancel]);
+    if (key === 'search' && autoDemo) { setTyping(true); setSearchStep(true); }
+  }, [cancel, autoDemo]);
   const editQuery = useCallback((query: string) => { cancel(); changeQuery(query); }, [cancel, changeQuery]);
   return { typing, showStep, cancel, editQuery };
 }

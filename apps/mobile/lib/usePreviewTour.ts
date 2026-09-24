@@ -4,11 +4,13 @@ import { useIsFocused } from '@react-navigation/native';
 import { hasSeenPreviewTour, markPreviewTourSeen } from './teaserGate';
 
 /** A delayed start belongs to the focused, ready screen, never to an old timer. */
-export function usePreviewTour(ready: boolean, enabled = ready) {
+export function usePreviewTour(ready: boolean, enabled = ready, onStart?: () => void) {
   const focused = useIsFocused();
   const [seen, setSeen] = useState<boolean | null>(null);
   const [visible, setVisible] = useState(false);
   const started = useRef(false);
+  const onStartRef = useRef(onStart);
+  onStartRef.current = onStart;
   useEffect(() => {
     let live = true;
     void hasSeenPreviewTour().then(value => { if (live) setSeen(value); });
@@ -21,6 +23,7 @@ export function usePreviewTour(ready: boolean, enabled = ready) {
     const timer = setTimeout(() => {
       Keyboard.dismiss();
       started.current = true;
+      onStartRef.current?.();
       setVisible(true);
     }, 600);
     return () => clearTimeout(timer);
@@ -29,6 +32,7 @@ export function usePreviewTour(ready: boolean, enabled = ready) {
     if (!ready || !focused) return;
     Keyboard.dismiss();
     started.current = true;
+    onStartRef.current?.();
     setVisible(true);
   }, [ready, focused]);
   const finish = useCallback(() => {

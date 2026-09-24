@@ -20,8 +20,9 @@ import {
   type ProviderResult,
 } from './usePurchasesTestKit';
 import { act, waitFor } from '@testing-library/react-native';
+import { Alert } from 'react-native';
 import { ENTITLEMENT_CACHE_KEY } from './entitlement';
-import { POST_PURCHASE_SYNC_CAP_MS, STORE_GRACE_MS } from './usePurchases';
+import { POST_PURCHASE_SYNC_CAP_MS, PURCHASE_IDENTITY_CAP_MS, STORE_GRACE_MS } from './usePurchases';
 
 setupPurchasesMocks();
 
@@ -32,7 +33,7 @@ async function restoreWithStalledSync(result: ProviderResult) {
   mockRc.restorePurchases.mockResolvedValue(proInfo);
   const pending = deferred<SyncResult>();
   mockApi.syncSubscription.mockReturnValue(pending.promise);
-  let got: boolean | undefined;
+  let got: boolean | null | undefined;
   await act(async () => {
     const p = result.current.restore();
     await new Promise((r) => setImmediate(r));
@@ -43,6 +44,40 @@ async function restoreWithStalledSync(result: ProviderResult) {
 }
 
 describe('purchase / restore', () => {
+  it('distinguishes a failed native Restore from a completed Restore with no subscription', async () => {
+    const { result } = renderProvider();
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    mockRc.restorePurchases.mockResolvedValueOnce(null).mockResolvedValueOnce({ entitlements: { active: {}, all: {} } });
+    let failed: boolean | null | undefined;
+    let empty: boolean | null | undefined;
+    await act(async () => { failed = await result.current.restore(); });
+    await act(async () => { empty = await result.current.restore(); });
+    expect(failed).toBeNull();
+    expect(empty).toBe(false);
+    expect(Alert.alert).toHaveBeenCalledWith('Restore not completed', 'Please try again.');
+    expect(mockRc.restorePurchases).toHaveBeenCalledTimes(2);
+  });
+  it('holds Restore while the signed-in native identity is unresolved', async () => {
+    const { result } = renderProvider();
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    useFakeTimersKeepingFlush();
+    mockRc.ensurePurchasesUser.mockImplementationOnce(() => new Promise(() => {}));
+    mockRc.restorePurchases.mockResolvedValue(proInfo);
+    let restored: boolean | null | undefined;
+    await act(async () => {
+      const pending = result.current.restore();
+      await new Promise((r) => setImmediate(r));
+      expect(mockRc.restorePurchases).not.toHaveBeenCalled();
+      jest.advanceTimersByTime(PURCHASE_IDENTITY_CAP_MS);
+      restored = await pending;
+    });
+    expect(restored).toBeNull();
+    expect(mockRc.restorePurchases).not.toHaveBeenCalled();
+    expect(Alert.alert).toHaveBeenCalledWith('Payment service still connecting', 'Fully close and reopen Fitsy, then try again.');
+    expect(result.current.entitled).toBe(false);
+    jest.useRealTimers();
+  });
+
   it('a confirmed purchase resolves true and is entitled immediately; a server "false" (REST lag) never downgrades it', async () => {
     const { result } = renderProvider();
     await waitFor(() => expect(result.current.ready).toBe(true));

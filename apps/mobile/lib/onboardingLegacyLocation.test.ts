@@ -17,5 +17,12 @@ it.each(['tried', 'response'])('repairs a legacy %s checkpoint before replaying 
 it('retains a response checkpoint when its chosen area already exists', async () => {
   await AsyncStorage.setItem('@fitsy/onboardingStep', 'response');
   await saveOnboardingField('area', { lat: 34.08, lng: -118.27, name: 'Silver Lake', source: 'manual' });
+  await saveOnboardingField('goal', 'performance');
   expect(await getOnboardingResume()).toBe('/welcome/response');
+});
+
+it('collects a missing goal before returning to a retained response checkpoint', async () => {
+  await AsyncStorage.setItem('@fitsy/onboardingStep', 'response');
+  await saveOnboardingField('area', { lat: 34.08, lng: -118.27, name: 'Silver Lake', source: 'manual' });
+  expect(await getOnboardingResume()).toBe('/welcome/goal');
 });

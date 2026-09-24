@@ -12,6 +12,7 @@ export interface PlannedReminder {
   body: string;
 }
 type Subscription = Pick<PurchasesEntitlementInfo, 'isActive' | 'periodType' | 'willRenew' | 'expirationDate'>;
+export const TRIAL_REMINDER_LEAD_DAYS = 2;
 const HOUR = 3_600_000;
 const localDay = (d: Date) => `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 
@@ -31,7 +32,7 @@ export function planReminders({ now, userId, entitled, preferences, subscription
   const until = Number.isFinite(expiration) ? Math.min(horizon.getTime(), expiration) : horizon.getTime();
 
   if (preferences.trial && subscription?.isActive && subscription.periodType === 'TRIAL' && subscription.willRenew && Number.isFinite(expiration)) {
-    const date = new Date(expiration - 48 * HOUR);
+    const date = new Date(expiration - TRIAL_REMINDER_LEAD_DAYS * 24 * HOUR);
     // Quiet hours 20:00–09:00. A later daytime delivery must still leave
     // at least 24 hours to cancel through Apple subscription settings.
     if (date.getHours() >= 20) { date.setDate(date.getDate() + 1); date.setHours(9, 0, 0, 0); }

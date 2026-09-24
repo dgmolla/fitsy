@@ -52,13 +52,17 @@ async function get<T>(path: string, authenticated = false, options: { signal?: A
   return res.json() as Promise<T>;
 }
 
-async function post<T>(path: string, body: unknown, authenticated = true): Promise<T> {
+async function post<T>(path: string, body: unknown, authenticated = true, expectedUserId?: string): Promise<T> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
+  let requestToken: string | undefined;
 
   if (authenticated) {
-    const token = await getAccessToken();
+    const { data } = await supabase.auth.getSession();
+    if (expectedUserId && data.session?.user.id !== expectedUserId) throw new Error('Account changed before request');
+    const token = data.session?.access_token;
+    requestToken = token;
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
@@ -71,6 +75,12 @@ async function post<T>(path: string, body: unknown, authenticated = true): Promi
   });
 
   if (res.status === 401 && authenticated) {
+    if (expectedUserId) {
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.user.id !== expectedUserId || data.session?.access_token !== requestToken) {
+        throw new ApiRequestError(401, 'Previous account request expired');
+      }
+    }
     return handleUnauthorized();
   }
 

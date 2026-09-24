@@ -107,3 +107,7 @@ describe('applySuggestionFilter', () => {
     }
   });
 });
+
+test.each(['Infinity', '-Infinity', '2500junk', '-100', '0'])('invalid suggestion calories %s use defaults', (input) => {
+  expect(applySuggestionFilter('protein-dense', input)).toEqual(applySuggestionFilter('protein-dense', '2000'));
+});

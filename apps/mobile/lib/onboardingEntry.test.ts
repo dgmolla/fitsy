@@ -20,7 +20,7 @@ it('waits for a signed-in buyer before considering a stale payment checkpoint', 
   expect(resolve({ ...interruptedPurchase, purchasesReady: true, entitled: false })).toBe('/welcome/payment');
 });
 it('continues an already signed-in onboarding user beyond the sign-in checkpoint', () => {
-  expect(resolve({ signedIn: true, purchasesReady: true, entitled: false, resume: '/welcome/signin' })).toBe('/welcome/payment');
+  expect(resolve({ signedIn: true, purchasesReady: true, entitled: false, resume: '/welcome/signin' })).toBe('/welcome/trial');
 });
 it('waits for the assigned access policy after anonymous decline', () => {
   expect(resolve({ declined: true, resume: '/welcome/preview' })).toBeNull();

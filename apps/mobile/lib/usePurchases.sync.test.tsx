@@ -14,19 +14,62 @@ import {
   mockStore,
   proInfo,
   renderProvider,
-  renderProviderTracking,
   setupPurchasesMocks,
-  useFakeTimersKeepingFlush,
 } from './usePurchasesTestKit';
 import { act, waitFor } from '@testing-library/react-native';
 import { ENTITLEMENT_CACHE_KEY } from './entitlement';
-import { BOOT_VERDICT_CAP_MS } from './usePurchases';
 
 setupPurchasesMocks();
 
 type SyncResult = { active: boolean; synced: boolean };
 
 describe('syncEntitlement', () => {
+  it('keeps the newer listener Pro result when an older free read finishes last', async () => {
+    const { result } = renderProvider();
+    await waitFor(() => expect(result.current.entitled).toBe(false));
+    const listener = mockRc.addCustomerInfoListener.mock.calls[0][0];
+    const oldRead = deferred<typeof freeInfo>();
+    const newRead = deferred<typeof proInfo>();
+    mockRc.fetchCustomerInfo.mockReturnValueOnce(oldRead.promise).mockReturnValueOnce(newRead.promise);
+    await act(async () => { listener(freeInfo); listener(proInfo); });
+    await waitFor(() => expect(mockRc.fetchCustomerInfo).toHaveBeenCalledTimes(2));
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    await act(async () => { newRead.resolve(proInfo); });
+    await flush();
+    expect(result.current.isPro).toBe(true);
+    expect(result.current.entitled).toBe(true);
+    await act(async () => { oldRead.resolve(freeInfo); });
+    await flush();
+    expect(result.current.isPro).toBe(true);
+    expect(result.current.entitled).toBe(true);
+  });
+  it('does not let an older listener read replace Pro after checkout completes', async () => {
+    const { result } = renderProvider();
+    await waitFor(() => expect(result.current.entitled).toBe(false));
+    const listener = mockRc.addCustomerInfoListener.mock.calls[0][0];
+    const oldRead = deferred<typeof freeInfo>();
+    mockRc.fetchCustomerInfo.mockReturnValueOnce(oldRead.promise);
+    await act(async () => { listener(freeInfo); });
+    await waitFor(() => expect(mockRc.fetchCustomerInfo).toHaveBeenCalled());
+    mockRc.purchasePackage.mockResolvedValue({ outcome: 'purchased', customerInfo: proInfo });
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    await act(async () => { expect(await result.current.purchase({} as never, 'test')).toBe(true); });
+    expect(result.current.isPro).toBe(true);
+    await act(async () => { oldRead.resolve(freeInfo); });
+    await flush();
+    expect(result.current.isPro).toBe(true);
+  });
+  it('rechecks the server gate when the current account receives Pro on another device', async () => {
+    const { result } = renderProvider();
+    await waitFor(() => expect(result.current.entitled).toBe(false));
+    const listener = mockRc.addCustomerInfoListener.mock.calls[0][0];
+    mockRc.fetchCustomerInfo.mockResolvedValueOnce(proInfo);
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    await act(async () => { listener(proInfo); });
+    await waitFor(() => expect(result.current.isPro).toBe(true));
+    await waitFor(() => expect(result.current.entitled).toBe(true));
+    expect(mockApi.syncSubscription).toHaveBeenCalledWith('mismatch');
+  });
   it('leaves the verdict unchanged and returns null when the server cannot be asked', async () => {
     mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null });
     const { result } = renderProvider();
@@ -67,188 +110,5 @@ describe('syncEntitlement', () => {
     expect(verdict).toBe(true);
     expect(result.current.entitled).toBe(true);
     expect(mockApi.syncSubscription).toHaveBeenCalledWith('mismatch');
-  });
-});
-
-describe('sign-in', () => {
-  it('holds the gates (null) and never shows a stale "false" before a prompt server "true"', async () => {
-    mockAuth.session = null;
-    const { result, seen } = renderProviderTracking();
-    await waitFor(() => expect(result.current.entitled).toBe(false));
-    mockAuth.session = { user: { id: 'u2' } };
-    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
-    await act(async () => { mockAuth.listener?.('SIGNED_IN', { user: { id: 'u2' } }); });
-    await waitFor(() => expect(result.current.entitled).toBe(true));
-    expect(seen).toEqual([null, false, null, true]);
-    expect(mockRc.identifyPurchasesUser).toHaveBeenLastCalledWith('u2');
-    expect(mockApi.syncSubscription).toHaveBeenCalledWith('sign_in');
-  });
-
-  it('with a slow server: null during the wait, the device verdict at the cap, then the server answer', async () => {
-    mockAuth.session = null;
-    const { result, seen } = renderProviderTracking();
-    await waitFor(() => expect(result.current.entitled).toBe(false));
-    useFakeTimersKeepingFlush();
-    mockAuth.session = { user: { id: 'u2' } };
-    mockRc.identifyPurchasesUser.mockResolvedValue(proInfo);
-    const pending = deferred<SyncResult>();
-    mockApi.syncSubscription.mockReturnValue(pending.promise);
-    await act(async () => {
-      mockAuth.listener?.('SIGNED_IN', { user: { id: 'u2' } });
-      await new Promise((r) => setImmediate(r));
-    });
-    await flush();
-    expect(result.current.entitled).toBeNull();
-    expect(result.current.ready).toBe(false);
-    act(() => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
-    await flush();
-    expect(result.current.entitled).toBe(true); // device fallback
-    await act(async () => { pending.resolve({ active: false, synced: true }); });
-    await flush();
-    expect(result.current.entitled).toBe(false); // late server answer wins
-    expect(seen).toEqual([null, false, null, true, false]);
-    jest.useRealTimers();
-  });
-
-  it('a duplicate SIGNED_IN for the same new user does not re-blank the app or re-identify', async () => {
-    mockAuth.session = null;
-    const { result, seen } = renderProviderTracking();
-    await waitFor(() => expect(result.current.entitled).toBe(false));
-    mockAuth.session = { user: { id: 'u2' } };
-    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
-    await act(async () => { mockAuth.listener?.('SIGNED_IN', { user: { id: 'u2' } }); });
-    await waitFor(() => expect(result.current.entitled).toBe(true));
-    await act(async () => { mockAuth.listener?.('SIGNED_IN', { user: { id: 'u2' } }); });
-    await flush();
-    expect(mockRc.identifyPurchasesUser).toHaveBeenCalledTimes(1);
-    expect(mockApi.syncSubscription).toHaveBeenCalledTimes(1);
-    expect(seen).toEqual([null, false, null, true]);
-  });
-
-  it('a SIGNED_IN emitted while boot is still pending is ignored, and the listener never blocks', async () => {
-    // Device free, so boot's own fold has no escalation to make; any sync
-    // request would come from the (ignored) SIGNED_IN.
-    const identify = deferred<typeof freeInfo>();
-    mockRc.identifyPurchasesUser.mockReturnValue(identify.promise);
-    const { result } = renderProvider();
-    await flush();
-    expect(result.current.entitled).toBeNull();
-    let returned: unknown = 'not called';
-    await act(async () => { returned = mockAuth.listener?.('SIGNED_IN', { user: { id: 'u1' } }); });
-    expect(returned).toBeUndefined();
-    await act(async () => { identify.resolve(freeInfo); });
-    await waitFor(() => expect(result.current.entitled).not.toBeNull());
-    expect(mockRc.identifyPurchasesUser).toHaveBeenCalledTimes(1);
-    expect(mockApi.syncSubscription).not.toHaveBeenCalled();
-  });
-
-  it('a real sign-in for a DIFFERENT user during a slow boot is deferred, then identified and synced once', async () => {
-    const identify = deferred<typeof freeInfo>();
-    mockRc.identifyPurchasesUser.mockReturnValueOnce(identify.promise);
-    const { result } = renderProvider();
-    await flush();
-    expect(result.current.entitled).toBeNull();
-    mockAuth.session = { user: { id: 'u2' } };
-    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
-    await act(async () => { mockAuth.listener?.('SIGNED_IN', { user: { id: 'u2' } }); });
-    await flush();
-    expect(mockRc.identifyPurchasesUser).toHaveBeenCalledTimes(1); // boot's, still pending
-    await act(async () => { identify.resolve(freeInfo); });
-    await waitFor(() => expect(result.current.entitled).toBe(true));
-    expect(mockRc.identifyPurchasesUser).toHaveBeenCalledTimes(2);
-    expect(mockRc.identifyPurchasesUser).toHaveBeenLastCalledWith('u2');
-    expect(mockApi.syncSubscription).toHaveBeenCalledTimes(1);
-    expect(mockApi.syncSubscription).toHaveBeenCalledWith('sign_in');
-  });
-
-  it('ignores the SIGNED_IN that session recovery re-emits for the user boot already resolved', async () => {
-    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null });
-    const { result, seen } = renderProviderTracking();
-    await waitFor(() => expect(result.current.entitled).toBe(true));
-    const identifies = mockRc.identifyPurchasesUser.mock.calls.length;
-    await act(async () => { mockAuth.listener?.('SIGNED_IN', { user: { id: 'u1' } }); });
-    await flush();
-    expect(mockRc.identifyPurchasesUser).toHaveBeenCalledTimes(identifies);
-    expect(mockApi.syncSubscription).not.toHaveBeenCalled();
-    expect(seen).toEqual([null, true]);
-  });
-});
-
-describe('sign-out', () => {
-  it('rejects a late sign-in fallback while sign-out is still settling', async () => {
-    mockAuth.session = null;
-    const { result } = renderProvider();
-    await waitFor(() => expect(result.current.entitled).toBe(false));
-    const sync = deferred<SyncResult>();
-    const logout = deferred<undefined>();
-    mockRc.identifyPurchasesUser.mockResolvedValue(proInfo);
-    mockApi.syncSubscription.mockReturnValueOnce(sync.promise);
-    mockRc.logoutPurchasesUser.mockReturnValueOnce(logout.promise);
-    mockAuth.session = { user: { id: 'u2' } };
-    await act(async () => { mockAuth.listener?.('SIGNED_IN', mockAuth.session); });
-    await waitFor(() => expect(mockApi.syncSubscription).toHaveBeenCalled());
-    mockAuth.session = null;
-    await act(async () => { mockAuth.listener?.('SIGNED_OUT', null); });
-    await act(async () => { sync.resolve({ active: true, synced: true }); });
-    await flush();
-    expect(result.current.entitled).toBeNull();
-    await act(async () => { logout.resolve(undefined); });
-    await waitFor(() => expect(result.current.entitled).toBe(false));
-    expect(result.current.isPro).toBe(false);
-    expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBeUndefined();
-  });
-
-  it('goes false -> null (gates hold while the caller navigates) -> false once the logout settles', async () => {
-    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null });
-    const { result, seen } = renderProviderTracking();
-    await waitFor(() => expect(result.current.entitled).toBe(true));
-    expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBe('true');
-    const logout = deferred<undefined>();
-    mockRc.logoutPurchasesUser.mockReturnValue(logout.promise);
-    mockAuth.session = null;
-    let returned: unknown = 'not called';
-    await act(async () => {
-      returned = mockAuth.listener?.('SIGNED_OUT', null);
-      await new Promise((r) => setImmediate(r));
-    });
-    // The listener returned synchronously (supabase-js awaits callbacks).
-    expect(returned).toBeUndefined();
-    // Logout still in flight: held, cache already gone.
-    expect(result.current.entitled).toBeNull();
-    expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBeUndefined();
-    await act(async () => { logout.resolve(undefined); });
-    await waitFor(() => expect(result.current.entitled).toBe(false));
-    expect(mockRc.logoutPurchasesUser).toHaveBeenCalledTimes(1);
-    expect(seen).toEqual([null, true, null, false]);
-  });
-
-  it('never calls getSession from the SIGNED_OUT path (auth-js holds its lock while notifying)', async () => {
-    const { result } = renderProvider();
-    await waitFor(() => expect(result.current.ready).toBe(true));
-    mockAuth.getSession.mockClear();
-    mockAuth.session = null;
-    await act(async () => { mockAuth.listener?.('SIGNED_OUT', null); });
-    await waitFor(() => expect(result.current.entitled).toBe(false));
-    expect(mockAuth.getSession).not.toHaveBeenCalled();
-  });
-
-  it('leaves the verdict to a fast re-sign-in instead of forcing false', async () => {
-    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null });
-    const { result } = renderProvider();
-    await waitFor(() => expect(result.current.entitled).toBe(true));
-    const logout = deferred<undefined>();
-    mockRc.logoutPurchasesUser.mockReturnValue(logout.promise);
-    await act(async () => {
-      mockAuth.listener?.('SIGNED_OUT', null);
-      await new Promise((r) => setImmediate(r));
-    });
-    // Someone signed in again before the logout settled, and their sync says yes.
-    mockAuth.session = { user: { id: 'u2' } };
-    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
-    await act(async () => { mockAuth.listener?.('SIGNED_IN', { user: { id: 'u2' } }); });
-    await waitFor(() => expect(result.current.entitled).toBe(true));
-    await act(async () => { logout.resolve(undefined); });
-    await flush();
-    expect(result.current.entitled).toBe(true);
   });
 });

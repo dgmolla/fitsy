@@ -23,15 +23,23 @@ tags: [billing, onboarding, changed-journey]
     point: "92%,93%"
 # Choose a real area so the preview has valid restaurant data and no implicit GPS fallback.
 - openLink: com.fitsy.mobile://welcome/location-permission
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
 - tapOn:
     id: location-choose-area
 - tapOn: "Search near DTLA"
 - extendedWaitUntil:
     visible:
-      id: tried-meal_prep
+      id: goal-build_muscle
     timeout: 30000
-# Build a real preview predecessor, then exercise the legacy trial redirect.
+# Build a real preview predecessor, then exercise the three-step trial journey.
 - openLink: com.fitsy.mobile://welcome/preview
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
 - extendedWaitUntil:
     visible:
       id: coachmark-skip
@@ -41,15 +49,28 @@ tags: [billing, onboarding, changed-journey]
 - assertVisible:
     id: preview-guide
 - openLink: com.fitsy.mobile://welcome/trial
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: trial-offer-note
+    timeout: 15000
+- assertVisible: "Find your next meal with Fitsy."
+- tapOn:
+    id: welcome-continue
 - extendedWaitUntil:
     visible:
       id: paywall-price-yearly
     timeout: 15000
-- extendedWaitUntil:
-    notVisible: "Loading…"
-    timeout: 30000
-- assertNotVisible:
-    id: trial-see-plans
+- assertNotVisible: "A heads-up before your trial ends."
+- assertVisible:
+    id: paywall-timeline
+- tapOn:
+    id: welcome-back
+- assertVisible:
+    id: trial-offer-note
 - tapOn:
     id: welcome-back
 - assertVisible:
@@ -57,6 +78,10 @@ tags: [billing, onboarding, changed-journey]
 - assertNotVisible:
     id: paywall-plan-yearly
 - openLink: com.fitsy.mobile://welcome/payment
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
 - extendedWaitUntil:
     visible:
       id: paywall-price-yearly
@@ -71,7 +96,7 @@ tags: [billing, onboarding, changed-journey]
 - tapOn:
     id: paywall-plan-monthly
 - assertVisible:
-    id: paywall-meal-image
+    id: paywall-timeline
 - copyTextFrom:
     id: paywall-price-monthly
 - evalScript: ${output.monthlyPrice = maestro.copiedText}
@@ -95,6 +120,11 @@ tags: [billing, onboarding, changed-journey]
 - copyTextFrom:
     id: paywall-terms
 - assertTrue: ${maestro.copiedText.includes(output.annualPrice) && maestro.copiedText.includes('Renews automatically')}
+# The decline action follows the legal links and may be below the safe area.
+- scrollUntilVisible:
+    element:
+      id: welcome-skip
+    direction: DOWN
 - tapOn:
     id: welcome-skip
 - assertVisible: "Eat well for less."
@@ -102,6 +132,11 @@ tags: [billing, onboarding, changed-journey]
     id: paywall-back-to-plans
 - assertVisible:
     id: paywall-restore
+# The decline action follows the legal links and may be below the safe area.
+- scrollUntilVisible:
+    element:
+      id: welcome-skip
+    direction: DOWN
 - tapOn:
     id: welcome-skip
 - tapOn:
@@ -129,10 +164,19 @@ tags: [billing, onboarding, changed-journey]
 - assertNotVisible:
     id: trial-see-plans
 - openLink: com.fitsy.mobile://welcome/payment
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
 - extendedWaitUntil:
     visible:
       id: paywall-plan-yearly
     timeout: 15000
+# The decline action follows the legal links and may be below the safe area.
+- scrollUntilVisible:
+    element:
+      id: welcome-skip
+    direction: DOWN
 - tapOn:
     id: welcome-skip
 - tapOn:
@@ -151,6 +195,11 @@ tags: [billing, onboarding, changed-journey]
 # This corner is outside the payment CTA when no toast is present.
 - tapOn:
     point: "92%,93%"
+# The decline action follows the legal links and may be below the safe area.
+- scrollUntilVisible:
+    element:
+      id: welcome-skip
+    direction: DOWN
 - tapOn:
     id: welcome-skip
 - tapOn:

@@ -8,10 +8,15 @@ import { Stack, router, useLocalSearchParams, useNavigation } from 'expo-router'
 import { act, fireEvent, renderRouter, waitFor } from 'expo-router/testing-library';
 import Index from '../app/index';
 import SignIn from '../app/welcome/signin';
+import TrialReminder from '../app/welcome/trial-reminder';
+import * as ExpoNotifications from 'expo-notifications';
+import { readReminderPreferences } from '../lib/notificationSchedule';
+import * as NotificationHelpers from '../lib/useNotifications';
 import Notifications from '../app/welcome/notification-permission';
 import Location from '../app/welcome/location-permission';
 import WelcomeLayout from '../app/welcome/_layout';
 import { PurchasesProvider } from '../lib/usePurchases';
+import * as PurchasesHooks from '../lib/usePurchases';
 import { getPaywallIntent, getPurchasedContinuation, rememberPaywallIntent } from '../lib/paywallIntent';
 import { recordOnboardingComplete } from '../lib/onboardingCompletion';
 import { resetWelcomeJourney } from '../lib/paywallJourney';
@@ -31,6 +36,7 @@ jest.mock('@supabase/supabase-js', () => {
   process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'unit-test-anon-key';
   return { createClient: () => ({ auth: {
     getSession: async () => ({ data: { session: mockSession } }),
+    signOut: async () => { mockSession = null; return { error: null }; },
     setSession: async () => { mockSession = { access_token: 'test-token', user: { id: 'buyer' } }; return { data: { session: mockSession } }; },
     onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
     startAutoRefresh() {}, stopAutoRefresh() {},
@@ -54,7 +60,7 @@ jest.mock('expo-auth-session/providers/google', () => {
   } };
 });
 jest.mock('expo-web-browser', () => ({ maybeCompleteAuthSession() {} }));
-jest.mock('expo-notifications', () => ({ requestPermissionsAsync: async () => ({ status: 'denied' }) }));
+jest.mock('expo-notifications', () => ({ requestPermissionsAsync: jest.fn().mockResolvedValue({ status: 'denied' }) }));
 jest.mock('react-native-purchases', () => jest.requireActual('../__mocks__/react-native-purchases'));
 jest.mock('react-native-purchases-ui', () => jest.requireActual('../__mocks__/react-native-purchases-ui'));
 jest.mock('expo-constants', () => ({ __esModule: true, default: { expoConfig: { extra: { revenueCat: { ios: 'test-store-key' } } } } }));
@@ -74,7 +80,9 @@ const routes = {
   _layout: () => <PurchasesProvider><Stack screenOptions={{ headerShown: false }} /></PurchasesProvider>,
   index: Index, 'welcome/_layout': WelcomeLayout,
   'welcome/signin': SignIn, 'welcome/notification-permission': Notifications,
+  'welcome/trial-reminder': TrialReminder,
   'welcome/location-permission': Location, 'welcome/preview': Preview,
+  'welcome/trial': () => <Text>Trial introduction</Text>,
   'welcome/payment': () => <Text>Payment plans</Text>,
   'welcome/problem': () => <Button title="Choose location" onPress={() => router.push('/welcome/location-permission')} />,
   'welcome/tried': () => <Text>Healthy eating approaches</Text>,
@@ -88,8 +96,90 @@ beforeEach(async () => {
   await AsyncStorage.clear();
   await SecureStore.deleteItemAsync('fitsy_authToken');
   mockSession = null;
+  (ExpoNotifications.requestPermissionsAsync as jest.Mock).mockClear();
   global.fetch = jest.fn().mockResolvedValue(response({ active: true, status: 'active', expiresAt: null }));
 });
+
+it('asks an anonymous trial reminder opt-in to sign in before permission, then returns to the choice', async () => {
+  installEligibleTrialOffer();
+  (ExpoNotifications.requestPermissionsAsync as jest.Mock).mockResolvedValueOnce({ status: 'granted' });
+  const screen = renderJourney('/welcome/trial-reminder');
+  await act(async () => { fireEvent.press(await screen.findByTestId('trial-reminder-allow')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/signin'));
+  expect(ExpoNotifications.requestPermissionsAsync).not.toHaveBeenCalled();
+  expect(await readReminderPreferences('buyer')).toEqual({ meals: false, trial: false });
+  (global.fetch as jest.Mock).mockImplementation((url: string) => Promise.resolve(url.endsWith('/api/auth/login')
+    ? response({ token: 'test-token', refreshToken: 'refresh', user: { id: 'buyer' }, isNewUser: true })
+    : response({ active: false })));
+  mockSession = { access_token: 'test-token', user: { id: 'buyer' } };
+  await act(async () => { fireEvent.press(screen.getByTestId('signup-dev')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/trial-reminder'));
+  expect(ExpoNotifications.requestPermissionsAsync).not.toHaveBeenCalled();
+  await act(async () => { fireEvent.press(await screen.findByTestId('trial-reminder-allow')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
+  expect(ExpoNotifications.requestPermissionsAsync).toHaveBeenCalledTimes(1);
+  expect(await readReminderPreferences('buyer')).toEqual({ meals: false, trial: true });
+});
+
+it('registers a push token after a signed-in trial reminder opt-in', async () => {
+  installEligibleTrialOffer();
+  mockSession = { access_token: 'test-token', user: { id: 'buyer' } };
+  (ExpoNotifications.requestPermissionsAsync as jest.Mock).mockResolvedValueOnce({ status: 'granted' });
+  jest.spyOn(NotificationHelpers, 'getExpoPushTokenAsync').mockResolvedValue('ExponentPushToken[buyer]');
+  const screen = renderJourney('/welcome/trial-reminder');
+  await act(async () => { fireEvent.press(await screen.findByTestId('trial-reminder-allow')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
+  expect(await readReminderPreferences('buyer')).toEqual({ meals: false, trial: true });
+  await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
+    expect.stringContaining('/api/user/push-token'),
+    expect.objectContaining({ method: 'POST', body: JSON.stringify({ token: 'ExponentPushToken[buyer]' }) }),
+  ));
+});
+
+it('does not register account A trial token after account B signs in during token retrieval', async () => {
+  installEligibleTrialOffer();
+  mockSession = { access_token: 'token-a', user: { id: 'buyer-a' } };
+  (ExpoNotifications.requestPermissionsAsync as jest.Mock).mockResolvedValueOnce({ status: 'granted' });
+  const token = deferred<string>();
+  jest.spyOn(NotificationHelpers, 'getExpoPushTokenAsync').mockReturnValueOnce(token.promise);
+  const screen = renderJourney('/welcome/trial-reminder');
+  await act(async () => { fireEvent.press(await screen.findByTestId('trial-reminder-allow')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
+  await waitFor(() => expect(NotificationHelpers.getExpoPushTokenAsync).toHaveBeenCalled());
+  mockSession = { access_token: 'token-b', user: { id: 'buyer-b' } };
+  await act(async () => { token.resolve('ExponentPushToken[buyer-a]'); });
+  expect(global.fetch).not.toHaveBeenCalledWith(
+    expect.stringContaining('/api/user/push-token'), expect.anything(),
+  );
+});
+
+it('does not sign out account B for account A push registration returning 401 late', async () => {
+  installEligibleTrialOffer();
+  mockSession = { access_token: 'token-a', user: { id: 'buyer-a' } };
+  (ExpoNotifications.requestPermissionsAsync as jest.Mock).mockResolvedValueOnce({ status: 'granted' });
+  jest.spyOn(NotificationHelpers, 'getExpoPushTokenAsync').mockResolvedValueOnce('ExponentPushToken[buyer-a]');
+  const pushResponse = deferred<Response>();
+  global.fetch = jest.fn((url: RequestInfo | URL) => String(url).endsWith('/api/user/push-token')
+    ? pushResponse.promise : Promise.resolve(response({ active: false })));
+  const screen = renderJourney('/welcome/trial-reminder');
+  await act(async () => { fireEvent.press(await screen.findByTestId('trial-reminder-allow')); });
+  await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
+    expect.stringContaining('/api/user/push-token'), expect.objectContaining({ method: 'POST' }),
+  ));
+  mockSession = { access_token: 'token-b', user: { id: 'buyer-b' } };
+  await act(async () => { pushResponse.resolve({ ok: false, status: 401 } as Response); });
+  expect(mockSession?.user.id).toBe('buyer-b');
+  expect(screen.getPathname()).toBe('/welcome/payment');
+});
+
+function installEligibleTrialOffer() {
+  const annual = { identifier: '$rc_annual', product: { identifier: 'annual', priceString: '$59.99', subscriptionPeriod: 'P1Y',
+    introPrice: { price: 0, priceString: '$0', period: 'P1W', cycles: 1 } } };
+  const offering = { identifier: 'default', annual, monthly: null, availablePackages: [annual], metadata: {} };
+  jest.spyOn(PurchasesHooks, 'usePurchases').mockReturnValue({ ready: true, entitled: false, offering,
+    introEligibility: { annual: true }, introEligibilityReady: true, refreshOffering: jest.fn(),
+  } as never);
+}
 afterEach(() => { global.fetch = originalFetch; jest.restoreAllMocks(); });
 
 function renderJourney(initialUrl: string) {
@@ -148,7 +238,7 @@ it.each([
   if (back) await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
   expect(screen.getPathname()).toBe(back ? '/welcome/preview' : '/welcome/signin');
   await act(async () => { exchange.resolve(success ? response({ token: 'test-token', refreshToken: 'refresh', user: { id: 'buyer' }, isNewUser: true }) : { ...response({ error: 'Offline' }), ok: false }); });
-  expect(screen.getPathname()).toBe(back ? '/welcome/preview' : '/welcome/payment');
+  expect(screen.getPathname()).toBe(back ? '/welcome/preview' : '/welcome/trial');
   expect(await getPaywallIntent()).toEqual(back ? null : selected);
   expect(await getStoredToken()).toBe(success ? 'test-token' : null);
   expect(alert).not.toHaveBeenCalled();

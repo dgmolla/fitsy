@@ -1,19 +1,4 @@
-/**
- * RevenueCat React context.
- *
- * Mounts once near the root (see app/_layout.tsx). It:
- *   1. configures the SDK,
- *   2. keeps the RevenueCat app-user-id aligned with the Supabase session,
- *   3. holds the latest CustomerInfo and exposes `isPro` / `isLapsed`
- *      derived from it (hints and copy, never a gate),
- *   4. composes `useEntitlementVerdict`, which owns `entitled` (the SERVER's
- *      verdict, the thing screens gate on) and `syncEntitlement`, and
- *      `useAuthLifecycle`, which follows Supabase sign-in / sign-out, and
- *   5. exposes paywall / manage-subscription / restore actions.
- *
- * Screens consume `usePurchases()`; they never import `lib/purchases.ts`
- * (the native seam) directly.
- */
+/** Root RevenueCat context. Screens consume usePurchases; server entitlement gates access. */
 import React, {
   createContext,
   useCallback,
@@ -23,40 +8,34 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { Alert } from 'react-native';
 import type {
   CustomerInfo,
   PurchasesOffering,
   PurchasesPackage,
 } from 'react-native-purchases';
 import { supabase } from './supabase';
+import { usePurchaseActions } from './usePurchaseActions';
+import { usePurchaseIntroEligibility } from './usePurchaseIntroEligibility';
 import { withinMs } from './async';
 import type { EntitlementSyncReason } from './entitlement';
-import { useEntitlementVerdict } from './useEntitlementVerdict';
+import { BOOT_VERDICT_CAP_MS, useEntitlementVerdict } from './useEntitlementVerdict';
 import { useAuthLifecycle } from './useAuthLifecycle';
 import {
   addCustomerInfoListener,
   configurePurchases,
+  currentPurchasesUserId,
   fetchCurrentOffering,
-  fetchIntroEligibility,
   fetchCustomerInfo,
   hasLapsedEntitlement,
   identifyPurchasesUser,
   isProActive,
-  presentPaywall as rcPresentPaywall,
-  purchasePackage as rcPurchasePackage,
-  restorePurchases as rcRestore,
   showManageSubscriptions as rcShowManageSubscriptions,
 } from './purchases';
-import { trackPaywallResult, trackPaywallShown, trackPurchasesRestored } from './analytics';
 
 export { BOOT_VERDICT_CAP_MS, STORE_GRACE_MS } from './useEntitlementVerdict';
 
-// Post-purchase/restore: the user has just paid and is waiting to get in, so
-// the server sync is capped - normally sub-second, and the first search then
-// lands unlocked; past the cap we navigate on the device's verdict and the
-// search screen's mismatch handler finishes the job.
-export const POST_PURCHASE_SYNC_CAP_MS = 4000;
+export { POST_PURCHASE_SYNC_CAP_MS, PURCHASE_IDENTITY_CAP_MS } from './usePurchaseActions';
+export { INTRO_ELIGIBILITY_CAP_MS } from './usePurchaseIntroEligibility';
 
 export interface PurchasesContextValue {
   /** `entitled !== null`: the verdict has settled on this launch. */
@@ -76,6 +55,8 @@ export interface PurchasesContextValue {
   offering: PurchasesOffering | null;
   /** Empty while checking, or when the store cannot establish eligibility. */
   introEligibility: Record<string, boolean>;
+  /** True after eligibility settles, times out, or CustomerInfo is unavailable. */
+  introEligibilityReady: boolean;
   /**
    * Ask the server for its verdict and store it. Resolves to the verdict now
    * in effect; `null` when it couldn't be asked (`entitled` unchanged);
@@ -103,148 +84,182 @@ export interface PurchasesContextValue {
   showManageSubscriptions: () => Promise<void>;
   /** The store confirmed a purchase/restore within the last STORE_GRACE_MS. */
   storeConfirmed: boolean;
-  restore: () => Promise<boolean>; // resolves like `purchase`
+  /** True for Pro, false for a completed restore with no Pro, null if restore could not complete. */
+  restore: () => Promise<boolean | null>;
 }
 
 const PurchasesContext = createContext<PurchasesContextValue | undefined>(undefined);
 
 export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   const [customerInfo, setCustomerInfoState] = useState<CustomerInfo | null>(null);
+  const [customerInfoSettled, setCustomerInfoSettled] = useState(false);
   const [offering, setOffering] = useState<PurchasesOffering | null>(null);
-  const [introResult, setIntroResult] = useState<{
-    info: CustomerInfo; offering: PurchasesOffering; values: Record<string, boolean>;
-  } | null>(null);
   // Mirror of `customerInfo` for async callbacks (the boot sync runs before
   // the first render that would carry it in state).
   const customerInfoRef = useRef<CustomerInfo | null>(null);
-  const setCustomerInfo = useCallback((info: CustomerInfo | null) => {
+  const customerInfoGenerationRef = useRef(0);
+  const customerInfoLastWriteRef = useRef<'boot' | 'listener' | 'other'>('other');
+  const customerInfoReadRequestRef = useRef(0);
+  const listenerReadSequenceRef = useRef(0);
+  const listenerCommittedSequenceRef = useRef(0);
+  const configuredRef = useRef(false);
+  const offeringRequestRef = useRef(0);
+  const offeringCommittedRequestRef = useRef(0);
+  const acceptOffering = useCallback((off: PurchasesOffering | null, request: number) => {
+    // A failed retry cannot cancel an older successful catalog read.
+    // Among successful reads, the newest request owns the visible plans.
+    if (off && request > offeringCommittedRequestRef.current) {
+      offeringCommittedRequestRef.current = request;
+      setOffering(off);
+    }
+  }, []);
+  const setCustomerInfo = useCallback((info: CustomerInfo | null, source: 'boot' | 'listener' | 'other' = 'other') => {
+    customerInfoGenerationRef.current += 1;
+    customerInfoLastWriteRef.current = source;
     customerInfoRef.current = info;
     setCustomerInfoState(info);
+    setCustomerInfoSettled(true);
   }, []);
   const verdict = useEntitlementVerdict({ customerInfoRef });
   const { entitled, inStoreGrace, syncEntitlement, resolveAtBoot, settleAfterBootFailure, markStoreConfirmed } = verdict;
   const auth = useAuthLifecycle({ verdict, setCustomerInfo });
 
-  // Boot: one session read, then the RevenueCat identify/offering and the
-  // verdict's cache read + capped server fetch all run in parallel; the
-  // verdict folds once the RevenueCat read is in (see resolveAtBoot).
+  // Boot: the offering loads independently of the bounded identity and
+  // verdict reads. A stalled store catalog must not hold every gate.
   useEffect(() => {
     const configured = configurePurchases();
-    let unsubscribe: (() => void) | undefined;
+    configuredRef.current = configured;
+    const bootInfoGeneration = customerInfoGenerationRef.current;
+    const bootInfoRequest = ++customerInfoReadRequestRef.current;
     let cancelled = false;
-    const isCancelled = () => cancelled;
+    let bootOpen = true;
+    let bootUserId: string | undefined;
+    const isCancelled = () => cancelled || !auth.isBootCurrent(bootUserId);
     auth.beginBoot();
 
     (async () => {
       let userId: string | undefined;
       try {
-        const { data } = await supabase.auth.getSession();
-        userId = data.session?.user.id;
+        const sessionRead = supabase.auth.getSession();
+        const sessionResult = await withinMs(sessionRead, BOOT_VERDICT_CAP_MS);
+        if (!sessionResult) {
+          void sessionRead.then(async ({ data }) => {
+            if (cancelled || !data.session) return;
+            const current = await supabase.auth.getSession();
+            if (!cancelled && current.data.session?.user.id === data.session.user.id) {
+              auth.resumeLateBootUser(data.session.user.id);
+            }
+          }).catch(() => undefined);
+        }
+        userId = sessionResult?.data.session?.user.id;
+        bootUserId = userId;
         auth.markBootUser(userId);
-        const rcReady = (async (): Promise<CustomerInfo | null> => {
-          if (!configured) return null;
-          const [info, off] = await Promise.all([
-            userId ? identifyPurchasesUser(userId) : fetchCustomerInfo(),
-            fetchCurrentOffering(),
-          ]);
-          if (cancelled) return info;
-          setCustomerInfo(info);
-          setOffering(off);
-          unsubscribe = addCustomerInfoListener(setCustomerInfo);
-          return info;
-        })();
+        if (configured) {
+          const offeringRequest = ++offeringRequestRef.current;
+          void fetchCurrentOffering().then(off => {
+            if (!cancelled) acceptOffering(off, offeringRequest);
+          }).catch(() => undefined);
+        }
+        const rcReady = configured
+          ? (userId ? identifyPurchasesUser(userId) : fetchCustomerInfo()).then(async info => {
+            if (isCancelled()) return info;
+            // Once boot has closed, auth may have moved to another account.
+            const sameUser = bootOpen || await supabase.auth.getSession().then(
+              ({ data }) => data.session?.user.id === userId,
+              () => false,
+            );
+            if (sameUser && !isCancelled() &&
+              customerInfoGenerationRef.current === bootInfoGeneration &&
+              customerInfoReadRequestRef.current === bootInfoRequest) {
+              setCustomerInfo(info, 'boot');
+              if (!bootOpen && isProActive(info) && verdict.entitledRef.current === false) {
+                void syncEntitlement('mismatch');
+              }
+            }
+            return info;
+          })
+          : Promise.resolve(null);
         await resolveAtBoot(userId, rcReady, isCancelled);
+        if (!cancelled) setCustomerInfoSettled(true);
       } catch (err) {
         // The seams swallow their own errors, but no gate may hold forever.
         console.warn('[purchases] boot failed', err instanceof Error ? err.message : err);
+        if (!cancelled) setCustomerInfoSettled(true);
         await settleAfterBootFailure(userId, isCancelled);
       } finally {
+        bootOpen = false;
         auth.finishBoot(cancelled);
       }
     })();
 
     return () => {
       cancelled = true;
-      unsubscribe?.();
     };
-  }, [setCustomerInfo, resolveAtBoot, settleAfterBootFailure, auth]);
+  }, [setCustomerInfo, acceptOffering, resolveAtBoot, settleAfterBootFailure, syncEntitlement, verdict.entitledRef, auth]);
+
+  // Mount independently of the boot identity read. A sign-in can invalidate
+  // that read, but must not leave this provider without native updates.
+  useEffect(() => {
+    if (!configuredRef.current) return;
+    try {
+      return addCustomerInfoListener(() => {
+        void (async () => {
+          const { data } = await supabase.auth.getSession();
+          const currentUserId = data.session?.user.id;
+          if (!currentUserId || await currentPurchasesUserId() !== currentUserId) return;
+          // A queued update from the previous native identity must not
+          // invalidate this account's still-pending boot read.
+          const readSequence = ++listenerReadSequenceRef.current;
+          for (;;) {
+            const infoGeneration = customerInfoGenerationRef.current;
+            // The event payload can belong to the previous account if auth
+            // changed while the callback was queued. Read the verified identity.
+            const fresh = await fetchCustomerInfo();
+            if (!fresh) return;
+            const latest = await supabase.auth.getSession();
+            const nativeUserId = await currentPurchasesUserId();
+            if (latest.data.session?.user.id !== currentUserId || nativeUserId !== currentUserId ||
+                readSequence <= listenerCommittedSequenceRef.current) return;
+            if (customerInfoGenerationRef.current !== infoGeneration) {
+              // Boot or another listener committed while this read was pending.
+              // Its response may predate that commit, so ask the SDK again.
+              if (customerInfoLastWriteRef.current === 'other') return;
+              continue;
+            }
+            listenerCommittedSequenceRef.current = readSequence;
+            ++customerInfoReadRequestRef.current;
+            const proChanged = isProActive(fresh) !== isProActive(customerInfoRef.current);
+            setCustomerInfo(fresh, 'listener');
+            if (proChanged) void syncEntitlement('mismatch');
+            return;
+          }
+        })().catch(() => undefined);
+      });
+    } catch (err) {
+      console.warn('[purchases] listener unavailable', err instanceof Error ? err.message : err);
+    }
+  }, [setCustomerInfo, syncEntitlement]);
 
   const refresh = useCallback(async () => {
     setCustomerInfo(await fetchCustomerInfo());
   }, [setCustomerInfo]);
 
   const refreshOffering = useCallback(async (): Promise<PurchasesOffering | null> => {
+    const offeringRequest = ++offeringRequestRef.current;
     const off = await fetchCurrentOffering();
     // Keep a previously loaded offering rather than blanking prices on a
     // transient failure.
-    if (off) setOffering(off);
+    acceptOffering(off, offeringRequest);
     return off;
-  }, []);
+  }, [acceptOffering]);
 
-  useEffect(() => {
-    let current = true;
-    if (offering && customerInfo) {
-      void fetchIntroEligibility(offering.availablePackages.map(pkg => pkg.product.identifier)).then(values => {
-        if (current) setIntroResult({ info: customerInfo, offering, values });
-      });
-    }
-    return () => { current = false; };
-  }, [offering, customerInfo]);
+  const { introEligibility, introEligibilityReady } = usePurchaseIntroEligibility({
+    offering, customerInfo, customerInfoSettled, entitled,
+  });
 
-  // Reject an earlier account/offering result during the render before effects run.
-  const introEligibility = useMemo(() =>
-    introResult?.info === customerInfo && introResult?.offering === offering ? introResult.values : {},
-  [introResult, customerInfo, offering]);
-
-  // After RevenueCat reports Pro right out of the StoreKit flow: the user
-  // just paid, so `entitled` flips true immediately (cached) and the caller
-  // gets `true` whatever the server says; otherwise a stalled or lagging
-  // sync would hold a charged user on the paywall (`if (!isPro) return`) or
-  // let the tabs layout bounce them back. The capped sync then tells the
-  // server; its answer only feeds `entitled`, the mismatch event and the
-  // cache (inside STORE_GRACE_MS it can only confirm). Past the cap we
-  // navigate anyway; the sync and the search screen's mismatch handler finish.
-  const settleAfterStore = useCallback(
-    async (info: CustomerInfo | null, reason: 'purchase' | 'restore'): Promise<boolean> => {
-      const pro = isProActive(info);
-      if (!pro) return false;
-      markStoreConfirmed();
-      await withinMs(syncEntitlement(reason), POST_PURCHASE_SYNC_CAP_MS);
-      return pro;
-    },
-    [markStoreConfirmed, syncEntitlement],
-  );
-
-  const purchase = useCallback(
-    async (pkg: PurchasesPackage, source: string): Promise<boolean> => {
-      const { outcome, customerInfo: info } = await rcPurchasePackage(pkg);
-      trackPaywallResult({ source, outcome });
-      if (outcome === 'error') Alert.alert('Purchase not completed', 'Please try again. You can also restore an existing subscription.');
-      if (!info) return false;
-      setCustomerInfo(info);
-      return settleAfterStore(info, 'purchase');
-    },
-    [setCustomerInfo, settleAfterStore],
-  );
-
-  const presentPaywall = useCallback(
-    async (source: string): Promise<boolean> => {
-      trackPaywallShown({ source });
-      const outcome = await rcPresentPaywall();
-      trackPaywallResult({ source, outcome });
-      const info = await fetchCustomerInfo();
-      setCustomerInfo(info);
-      return settleAfterStore(info, outcome === 'restored' ? 'restore' : 'purchase');
-    },
-    [setCustomerInfo, settleAfterStore],
-  );
-
-  const restore = useCallback(async (): Promise<boolean> => {
-    const info = await rcRestore();
-    setCustomerInfo(info);
-    trackPurchasesRestored({ is_pro: isProActive(info) });
-    return settleAfterStore(info, 'restore');
-  }, [setCustomerInfo, settleAfterStore]);
+  const { purchase, presentPaywall, restore } = usePurchaseActions({
+    setCustomerInfo, markStoreConfirmed, syncEntitlement,
+  });
 
   // Time-based, so read on every render and let the memo key on the result.
   const storeConfirmed = inStoreGrace();
@@ -258,6 +273,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
       customerInfo,
       offering,
       introEligibility,
+      introEligibilityReady,
       syncEntitlement,
       refresh,
       refreshOffering,
@@ -266,7 +282,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
       showManageSubscriptions: rcShowManageSubscriptions,
       restore,
     }),
-    [entitled, storeConfirmed, customerInfo, offering, introEligibility, syncEntitlement, refresh, refreshOffering, purchase, presentPaywall, restore],
+    [entitled, storeConfirmed, customerInfo, offering, introEligibility, introEligibilityReady, syncEntitlement, refresh, refreshOffering, purchase, presentPaywall, restore],
   );
 
   return <PurchasesContext.Provider value={value}>{children}</PurchasesContext.Provider>;

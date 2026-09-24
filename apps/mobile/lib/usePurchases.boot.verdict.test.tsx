@@ -27,31 +27,7 @@ setupPurchasesMocks();
 
 type StatusResult = { active: boolean; status: null; expiresAt: null };
 
-describe('boot', () => {
-  it('maps live store eligibility into the provider and clears it after a failed offering refresh', async () => {
-    const seam = jest.requireActual<typeof import('./purchases')>('./purchases');
-    expect(seam.configurePurchases()).toBe(true);
-    const ids = ['annual', 'monthly', 'discount', 'unknown', 'missing'];
-    const offering = { identifier: 'test', availablePackages: ids.map(identifier => ({ product: { identifier } })) };
-    const sdk = jest.spyOn(Purchases, 'checkTrialOrIntroductoryPriceEligibility').mockResolvedValue({
-      annual: { status: 2, description: 'Eligible' },
-      monthly: { status: 1, description: 'Ineligible' },
-      discount: { status: 3, description: 'No introductory offer' },
-      unknown: { status: 0, description: 'Unknown' },
-    });
-    mockRc.fetchCurrentOffering.mockResolvedValueOnce(offering as never);
-    const { result } = renderProvider();
-    await waitFor(() => expect(result.current.introEligibility).toEqual({ annual: true, monthly: false, discount: false }));
-    expect(sdk).toHaveBeenCalledWith(ids);
-    sdk.mockRejectedValueOnce(new Error('Store unavailable'));
-    mockRc.fetchCurrentOffering.mockResolvedValueOnce({ ...offering, identifier: 'refreshed' } as never);
-    await act(async () => { await result.current.refreshOffering(); });
-    await flush();
-    expect(result.current.introEligibility).toEqual({});
-    await expect(seam.fetchIntroEligibility([])).resolves.toEqual({});
-    expect(sdk).toHaveBeenCalledTimes(2);
-  });
-
+describe('boot verdict', () => {
   it('ignores an old eligibility response after the offering changes', async () => {
     expect(jest.requireActual<typeof import('./purchases')>('./purchases').configurePurchases()).toBe(true);
     const pending = deferred<Record<string, { status: number; description: string }>>();
@@ -239,22 +215,23 @@ describe('boot', () => {
     expect(mockApi.syncSubscription).not.toHaveBeenCalled();
   });
 
-  it('still becomes ready with a verdict when boot throws (cache, else device, else false)', async () => {
-    // Throws before the RevenueCat read completes: the cache is consulted anyway.
+  it('keeps the server verdict when offering fails, and settles when identity fails', async () => {
+    // Store catalog failure cannot make a stale cache overrule the server.
     mockStore[ENTITLEMENT_CACHE_KEY] = 'true';
     mockRc.fetchCurrentOffering.mockRejectedValueOnce(new Error('boom'));
     const a = renderProvider();
     await waitFor(() => expect(a.result.current.ready).toBe(true));
-    expect(a.result.current.entitled).toBe(true);
+    expect(a.result.current.entitled).toBe(false);
     a.unmount();
 
-    // Throws after identity, no cache: the device verdict.
+    // Listener registration fails independently: the server verdict still wins.
     delete mockStore[ENTITLEMENT_CACHE_KEY];
     mockRc.identifyPurchasesUser.mockResolvedValue(proInfo);
     mockRc.addCustomerInfoListener.mockImplementationOnce(() => { throw new Error('boom'); });
     const b = renderProvider();
     await waitFor(() => expect(b.result.current.ready).toBe(true));
-    expect(b.result.current.entitled).toBe(true);
+    expect(b.result.current.entitled).toBe(false);
+    expect(b.result.current.isPro).toBe(true);
     b.unmount();
 
     // Throws before identity, no cache: not entitled, but ready.

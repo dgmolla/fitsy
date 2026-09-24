@@ -6,7 +6,7 @@ import { supabase } from './supabase';
 import { trackReminderAction } from './analytics';
 import { usePurchases } from './usePurchases';
 import { DEFAULT_REMINDER_PREFERENCES, REMINDER_PREFIX, planReminders, type ReminderPreferences } from './notificationPlan';
-import { readReminderPreferences, readScheduledReminders, replaceReminders, reminderDestination, saveReminderPreferences, subscribeReminderPreferences } from './notificationSchedule';
+import { readReminderPreferences, readScheduledReminders, reconcileReminderOwnership, replaceReminders, reminderDestination, saveReminderPreferences, subscribeReminderPreferences } from './notificationSchedule';
 
 interface ReminderContextValue { userId: string | null; preferences: ReminderPreferences; scheduled: { kind: string; date: string }[]; save: (value: ReminderPreferences) => Promise<void> }
 const ReminderContext = createContext<ReminderContextValue | null>(null);
@@ -21,6 +21,7 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
   const [scheduled, setScheduled] = useState<{ id: string | null; values: { kind: string; date: string }[] }>({ id: null, values: [] });
   const [response, setResponse] = useState<Notifications.NotificationResponse | null>(null);
   const userRef = useRef(account.id); userRef.current = account.id;
+  const scheduledAccountRef = useRef<string | null | undefined>(undefined);
   const preferences = loaded?.id === account.id ? loaded.values : DEFAULT_REMINDER_PREFERENCES;
 
   useEffect(() => {
@@ -41,8 +42,20 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
   }, [refresh]);
 
   useEffect(() => {
+    if (!account.ready || scheduledAccountRef.current === account.id) return;
     let live = true;
-    void readReminderPreferences(account.id).then(values => { if (live) setLoaded({ id: account.id, values }); });
+    // Keep the resolved account's jobs if its preference read fails at boot.
+    void reconcileReminderOwnership(account.id)
+      .then(() => { if (live) scheduledAccountRef.current = account.id; })
+      .catch(reportFailure);
+    return () => { live = false; };
+  }, [account.ready, account.id, revision]);
+
+  useEffect(() => {
+    let live = true;
+    void readReminderPreferences(account.id, { throwOnError: true })
+      .then(values => { if (live) setLoaded({ id: account.id, values }); })
+      .catch(reportFailure);
     return () => { live = false; };
   }, [account.id, revision]);
 

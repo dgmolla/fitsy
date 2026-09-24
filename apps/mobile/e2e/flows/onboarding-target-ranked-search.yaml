@@ -1,0 +1,217 @@
+# Real dev coverage: full targets rank pizza and preserve all five tour tips.
+appId: com.fitsy.mobile
+tags: [discovery, onboarding, changed-journey]
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+# XCTest can reject the first AX snapshot after reinstall (HTTP 500).
+# Retry only the initial observation, before any product interaction.
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - extendedWaitUntil:
+          visible:
+            id: welcome-start
+          timeout: 30000
+- waitForAnimationToEnd
+- tapOn:
+    point: "92%,93%"
+- tapOn:
+    id: welcome-start
+- assertVisible:
+    id: location-use-current
+- assertVisible:
+    id: location-choose-area
+- tapOn:
+    id: location-choose-area
+- tapOn: "Search near DTLA"
+- extendedWaitUntil:
+    visible:
+      id: goal-lose_fat
+    timeout: 30000
+- assertVisible: "What's your goal.*"
+- tapOn:
+    id: goal-lose_fat
+- tapOn:
+    id: welcome-continue
+- extendedWaitUntil:
+    visible:
+      id: tried-calorie_apps
+    timeout: 30000
+- assertVisible: "What have you tried.*for healthy eating.*"
+# The native option groups its emoji and label into one accessible button.
+- assertVisible:
+    id: tried-meal_prep
+    text: ".*Meal prepping at home.*"
+- tapOn:
+    id: tried-calorie_apps
+- tapOn:
+    id: welcome-continue
+- assertVisible: "That restaurant dish.*can be hard to find.*"
+- assertVisible:
+    id: story-calorie_apps
+- tapOn:
+    id: welcome-continue
+- assertVisible:
+    id: payoff-calorie_apps
+- assertVisible: "From a dish name.*to an informed order.*"
+- tapOn:
+    id: welcome-continue
+- assertVisible:
+    id: goal-progress-graph
+- assertVisible: "Consistency with your fat-loss plan"
+- assertVisible: "With Fitsy"
+- assertVisible: "Without Fitsy"
+- tapOn:
+    id: welcome-continue
+- tapOn:
+    id: target-mode-known
+- tapOn:
+    id: welcome-continue
+- assertVisible: "What works.*for one meal.*"
+- tapOn:
+    id: meal-target-calories
+- waitForAnimationToEnd
+- inputText: "500"
+- copyTextFrom:
+    id: meal-target-calories
+- assertTrue: ${maestro.copiedText === '500'}
+- tapOn:
+    id: meal-target-protein
+- waitForAnimationToEnd
+- inputText: "50"
+- copyTextFrom:
+    id: meal-target-protein
+- assertTrue: ${maestro.copiedText === '50'}
+- swipe:
+    start: "50%,46%"
+    end: "50%,25%"
+- waitForAnimationToEnd
+- tapOn:
+    id: meal-target-carbs
+- waitForAnimationToEnd
+- inputText: "44"
+- copyTextFrom:
+    id: meal-target-carbs
+- assertTrue: ${maestro.copiedText === '44'}
+- tapOn:
+    id: meal-target-fat
+- waitForAnimationToEnd
+- inputText: "14"
+- copyTextFrom:
+    id: meal-target-fat
+- assertTrue: ${maestro.copiedText === '14'}
+# Compare native results with the live ranked query while all four targets remain set.
+- evalScript: ${output.noMatchUrl = 'https://dev.fitsy.org/api/restaurants/preview?guided=1&lat=34.0407&lng=-118.2468&calories=500&protein=50&carbs=44&fat=14'}
+- evalScript: ${output.baseResponse = http.get(output.noMatchUrl)}
+- assertTrue: ${output.baseResponse.status === 200}
+- evalScript: ${output.base = json(output.baseResponse.body)}
+- assertTrue: ${output.base.data.length > 0}
+- evalScript: ${output.pizzaResponse = http.get(output.noMatchUrl + '&q=pizza')}
+- assertTrue: ${output.pizzaResponse.status === 200}
+- evalScript: ${output.pizza = json(output.pizzaResponse.body)}
+- assertTrue: ${output.pizza.data.length > 0}
+# A matching UI and API response alone would pass if both ignored the query.
+# This real dev fixture independently anchors the ranked result to a pizza dish.
+- assertTrue: ${output.pizza.data[0].name === 'Pizza Roma' && output.pizza.data[0].bestMatch.name === 'Buffalo Chicken  Pizza'}
+- tapOn:
+    id: welcome-continue
+- assertVisible: "A little context.*A better choice.*"
+- tapOn:
+    id: welcome-continue
+- extendedWaitUntil:
+    visible:
+      id: coachmark-next
+    timeout: 30000
+- assertVisible: "1 OF 5"
+- assertVisible: "Your meal targets"
+- tapOn:
+    id: coachmark-skip
+- extendedWaitUntil:
+    visible:
+      id: discovery-hero
+    timeout: 30000
+- copyTextFrom:
+    id: discovery-hero
+- assertTrue: ${maestro.copiedText.includes(output.base.data[0].name) && maestro.copiedText.includes(output.base.data[0].bestMatch.name)}
+- assertNotVisible:
+    id: discovery-clear-search
+# Replay starts on confirmed, real dishes. The demo then types pizza itself.
+- tapOn:
+    id: preview-show-tour
+- assertVisible: "1 OF 5"
+- assertVisible: "Your meal targets"
+- tapOn:
+    id: coachmark-next
+- assertVisible: "2 OF 5"
+- assertVisible: "Follow your craving"
+- extendedWaitUntil:
+    visible:
+      id: coachmark-next
+      enabled: true
+    timeout: 30000
+- tapOn:
+    id: coachmark-next
+- assertVisible: "3 OF 5"
+- assertVisible: "Real meals. Know the source."
+- tapOn:
+    id: coachmark-next
+- assertVisible: "4 OF 5"
+- assertVisible: "Wherever your day takes you"
+- tapOn:
+    id: coachmark-next
+- assertVisible: "5 OF 5"
+- tapOn: "Find my meal"
+- copyTextFrom:
+    id: discovery-search
+- assertTrue: ${maestro.copiedText === 'pizza'}
+- assertVisible: "500"
+- assertVisible: "50g"
+- assertVisible: "44g"
+- assertVisible: "14g"
+- assertVisible:
+    id: discovery-hero
+- copyTextFrom:
+    id: discovery-hero
+- assertTrue: ${maestro.copiedText.includes(output.pizza.data[0].name) && maestro.copiedText.includes(output.pizza.data[0].bestMatch.name)}
+- assertTrue: ${maestro.copiedText.includes('Pizza Roma') && maestro.copiedText.includes('Buffalo Chicken')}
+- assertNotVisible:
+    id: discovery-loading
+# A genuinely absent craving still has an honest empty state and clear recovery.
+- tapOn:
+    id: discovery-clear-search
+- tapOn:
+    id: discovery-search
+- inputText: "unfindablecravingxyz"
+- pressKey: Enter
+- extendedWaitUntil:
+    visible: "No matches for this search"
+    timeout: 30000
+- assertVisible:
+    id: discovery-empty-clear
+- assertNotVisible:
+    id: discovery-hero
+- assertVisible: "500"
+- assertVisible: "50g"
+- assertVisible: "44g"
+- assertVisible: "14g"
+- tapOn:
+    id: discovery-empty-clear
+- extendedWaitUntil:
+    visible:
+      id: discovery-hero
+    timeout: 30000
+- copyTextFrom:
+    id: discovery-hero
+- assertTrue: ${maestro.copiedText.includes(output.base.data[0].name) && maestro.copiedText.includes(output.base.data[0].bestMatch.name)}
+- assertVisible: "500"
+- assertVisible: "50g"
+- assertVisible: "44g"
+- assertVisible: "14g"
+- assertNotVisible:
+    id: discovery-clear-search
+- assertNotVisible:
+    id: discovery-empty-clear

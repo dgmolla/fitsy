@@ -157,6 +157,21 @@ export async function identifyPurchasesUser(userId: string): Promise<CustomerInf
   }
 }
 
+/** Confirm the native account at checkout, retrying identity only when needed. */
+export async function ensurePurchasesUser(userId: string): Promise<boolean> {
+  if (!configured) return false;
+  try {
+    return await changeIdentity(async () => {
+      if (await Purchases.getAppUserID() !== userId) await Purchases.logIn(userId);
+      return await Purchases.getAppUserID() === userId;
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[purchases] checkout identity failed', err);
+    return false;
+  }
+}
+
 export async function logoutPurchasesUser(): Promise<void> {
   if (!configured) return;
   try {
@@ -183,6 +198,16 @@ export async function fetchCustomerInfo(): Promise<CustomerInfo | null> {
   }
 }
 
+/** Read the native identity without changing the serialized identity queue. */
+export async function currentPurchasesUserId(): Promise<string | null> {
+  if (!configured) return null;
+  try {
+    return await Purchases.getAppUserID();
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchOfferings(): Promise<PurchasesOfferings | null> {
   if (!configured) return null;
   try {
@@ -194,10 +219,18 @@ export async function fetchOfferings(): Promise<PurchasesOfferings | null> {
   }
 }
 
-export async function restorePurchases(): Promise<CustomerInfo | null> {
+export async function restorePurchases(
+  userId: string,
+  isCurrentUser: () => Promise<boolean>,
+): Promise<CustomerInfo | null> {
   if (!configured) return null;
   try {
-    return await Purchases.restorePurchases();
+    // The identity check and native restore must stay in the same queue so
+    // a pending login or logout cannot move the restore to another account.
+    return await changeIdentity(async () => {
+      if (await Purchases.getAppUserID() !== userId || !(await isCurrentUser())) return null;
+      return Purchases.restorePurchases();
+    });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[purchases] restorePurchases failed', err);
@@ -254,10 +287,19 @@ export function interpretPurchaseError(err: unknown): Exclude<PurchaseOutcome, '
  */
 export async function purchasePackage(
   pkg: PurchasesPackage,
+  userId: string,
+  isCurrentUser: () => Promise<boolean>,
 ): Promise<{ outcome: PurchaseOutcome; customerInfo: CustomerInfo | null }> {
   if (!configured) return { outcome: 'error', customerInfo: null };
   try {
-    const { customerInfo } = await Purchases.purchasePackage(pkg);
+    // Auth events and native logIn/logOut can race with a pressed paywall CTA.
+    // Keep this final identity read and the store call in the same queue.
+    const result = await changeIdentity(async () => {
+      if (await Purchases.getAppUserID() !== userId || !(await isCurrentUser())) return null;
+      return Purchases.purchasePackage(pkg);
+    });
+    if (!result) return { outcome: 'error', customerInfo: null };
+    const { customerInfo } = result;
     return { outcome: 'purchased', customerInfo };
   } catch (err) {
     const outcome = interpretPurchaseError(err);

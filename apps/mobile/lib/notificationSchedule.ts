@@ -8,12 +8,16 @@ const preferenceKey = (userId: string) => `@fitsy/reminder-preferences/${userId}
 const listeners = new Set<() => void>();
 export const subscribeReminderPreferences = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
 
-export async function readReminderPreferences(userId: string | null): Promise<ReminderPreferences> {
+export async function readReminderPreferences(userId: string | null, options?: { throwOnError?: boolean }): Promise<ReminderPreferences> {
   if (!userId) return { ...DEFAULT_REMINDER_PREFERENCES };
   try {
     const value = JSON.parse(await AsyncStorage.getItem(preferenceKey(userId)) ?? '{}');
     return { meals: value?.meals === true, trial: value?.trial === true };
-  } catch { return { ...DEFAULT_REMINDER_PREFERENCES }; }
+  } catch (error) {
+    // An opt-in write must not replace stored choices with fallback defaults.
+    if (options?.throwOnError) throw error;
+    return { ...DEFAULT_REMINDER_PREFERENCES };
+  }
 }
 export async function saveReminderPreferences(userId: string, preferences: ReminderPreferences): Promise<void> {
   await AsyncStorage.setItem(preferenceKey(userId), JSON.stringify(preferences));
@@ -37,10 +41,12 @@ export function replaceReminders(userId: string | null | undefined, reminders: P
     if (Platform.OS === 'web' || revision !== generation) return;
     const pending = await Notifications.getAllScheduledNotificationsAsync();
     for (const request of pending) {
+      if (revision !== generation) return;
       if (request.identifier.startsWith(REMINDER_PREFIX)) await Notifications.cancelScheduledNotificationAsync(request.identifier);
     }
     const shown = await Notifications.getPresentedNotificationsAsync();
     for (const notification of shown) {
+      if (revision !== generation) return;
       const request = notification.request;
       if (request.identifier.startsWith(REMINDER_PREFIX) &&
         (!userId || request.content.data?.userId !== userId || !reminders.some(r => r.kind === request.content.data?.kind))) {
@@ -58,6 +64,32 @@ export function replaceReminders(userId: string | null | undefined, reminders: P
         content: { title: reminder.title, body: reminder.body, sound: 'default', data: { kind: reminder.kind, userId, scheduledFor: reminder.date.toISOString() } },
         trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: reminder.date, channelId: REMINDER_CHANNEL },
       });
+    }
+  });
+  queue = work;
+  return work;
+}
+
+/** At an account boundary, retain jobs for the resolved account while
+ * removing reminders left by another account on this device. */
+export function reconcileReminderOwnership(userId: string | null): Promise<void> {
+  const revision = ++generation;
+  const work = queue.catch(() => undefined).then(async () => {
+    if (Platform.OS === 'web' || revision !== generation) return;
+    const pending = await Notifications.getAllScheduledNotificationsAsync();
+    for (const request of pending) {
+      if (revision !== generation) return;
+      if (request.identifier.startsWith(REMINDER_PREFIX) && (!userId || request.content.data?.userId !== userId)) {
+        await Notifications.cancelScheduledNotificationAsync(request.identifier);
+      }
+    }
+    const shown = await Notifications.getPresentedNotificationsAsync();
+    for (const notification of shown) {
+      if (revision !== generation) return;
+      const request = notification.request;
+      if (request.identifier.startsWith(REMINDER_PREFIX) && (!userId || request.content.data?.userId !== userId)) {
+        await Notifications.dismissNotificationAsync(request.identifier);
+      }
     }
   });
   queue = work;

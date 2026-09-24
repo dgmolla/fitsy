@@ -50,7 +50,7 @@ export default function SignInScreen() {
     return () => { live = false; };
   }, []));
 
-  // Continue from the preview to live plan terms. Permissions follow purchase.
+  // New accounts see live trial terms and optional reminders before plans.
   // Skip onboarding review; existing in-app prompts use lib/ratingPrompt.ts.
   const { outOfArea, returnTo } = useLocalSearchParams<{ outOfArea?: string; returnTo?: string }>();
   // A cold launch cannot recover this screen's query parameters. Keep the
@@ -63,11 +63,11 @@ export default function SignInScreen() {
       router.dismissTo('/welcome/out-of-area');
       return;
     }
-    if (returnTo === 'payment' || returnTo === 'resubscribe') {
+    if (returnTo === 'payment' || returnTo === 'resubscribe' || returnTo === 'trial-reminder') {
       router.dismissTo(`/welcome/${returnTo}`);
       return;
     }
-    const destination = isNewUser || await getPaywallIntent() ? '/welcome/payment' : '/(tabs)/search';
+    const destination = isNewUser || await getPaywallIntent() ? '/welcome/trial' : '/(tabs)/search';
     if (isCurrent()) router.replace(destination);
   }, [outOfArea, returnTo]);
 

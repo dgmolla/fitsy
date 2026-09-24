@@ -1,5 +1,5 @@
 jest.unmock('react-native');
-import React from 'react';
+import React, { useState } from 'react';
 import { Pressable, Text } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, render } from '@testing-library/react-native';
@@ -23,6 +23,12 @@ function Preview({ ready, enabled = ready }: { ready: boolean; enabled?: boolean
   const tour = usePreviewTour(ready, enabled);
   return <><Text>{tour.visible ? 'Story visible' : 'Browsing'}</Text><Pressable testID="replay" onPress={tour.start} /><Pressable testID="finish" onPress={tour.finish} /></>;
 }
+function CapturedModePreview({ empty }: { empty: boolean }) {
+  const [captured, setCaptured] = useState(false);
+  const tour = usePreviewTour(true, true, () => setCaptured(empty));
+  return <><Text>{tour.visible ? (captured ? 'Empty tour' : 'Populated tour') : 'Browsing'}</Text><Pressable testID="replay" onPress={tour.start} /><Pressable testID="finish" onPress={tour.finish} /></>;
+}
+
 // React Native loads its host components lazily on the first render.
 // Initialize that test harness once, outside the timed asynchronous journey.
 // The cold parallel suite otherwise spent over 10 seconds in render itself.
@@ -98,4 +104,15 @@ it('keeps an active story visible while its real search is loading, but closes w
   mockFocused = false;
   screen.rerender(<Preview ready enabled />);
   expect(screen.getByText('Browsing')).toBeTruthy();
+});
+
+it('captures empty-search mode before auto start and each replay becomes visible', async () => {
+  const screen = render(<CapturedModePreview empty />);
+  await act(async () => {});
+  await advanceTourClock(600);
+  expect(screen.getByText('Empty tour')).toBeTruthy();
+  fireEvent.press(screen.getByTestId('finish'));
+  screen.rerender(<CapturedModePreview empty={false} />);
+  fireEvent.press(screen.getByTestId('replay'));
+  expect(screen.getByText('Populated tour')).toBeTruthy();
 });

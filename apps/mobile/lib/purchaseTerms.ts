@@ -40,7 +40,8 @@ export function purchaseTerms(product: ProductTerms | null | undefined, eligible
       ? `Fitsy Pro. ${price} when you confirm, then ${price}/${periodShort}. Renews automatically. Cancel in subscription settings at least 24 hours before renewal.`
       : `Fitsy Pro. ${charge} Renews automatically at ${recurring}. Cancel in subscription settings at least 24 hours before renewal.`;
   return {
-    price, period, periodShort, recurring, trial, compactDisclosure,
+    price, period, periodShort, recurring, trial, charge, compactDisclosure,
+    trialDays: trial && /^\d+ days?$/.test(trial) ? Number.parseInt(trial, 10) : null,
     disclosure: `Fitsy Pro. ${charge} Renews automatically at ${recurring} unless canceled at least 24 hours before renewal. Manage or cancel in your device's subscription settings.`,
   };
 }

@@ -1,3 +1,4 @@
+import { requireWelcomeGoal } from '@/lib/requireWelcomeGoal';
 import React, { useCallback, useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,36 +7,47 @@ import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { WelcomeActions } from '@/components/WelcomeActions';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { EDITORIAL, TEXT } from '@/lib/brand';
-import { useOnboardingStep } from '@/lib/onboardingResume';
+import { rememberGoalReturnTo, useOnboardingStep } from '@/lib/onboardingResume';
 import { getOnboardingData, saveOnboardingField } from '@/lib/onboardingStorage';
 import { getMacroTargets, type StoredMacroTargets } from '@/lib/macroStorage';
 import { trackOnboardingChoiceSelected } from '@/lib/analytics';
+import { useRouteContinuation } from '@/lib/useRouteContinuation';
 
 type Mode = 'known' | 'estimate';
-export default function TargetSetupScreen() {
+function TargetSetupScreen() {
   useOnboardingStep('target-setup');
+  const { begin } = useRouteContinuation();
   const [saved, setSaved] = useState<StoredMacroTargets | null>(null);
   const [mode, setMode] = useState<Mode>('known');
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
   useFocusEffect(useCallback(() => {
     let live = true;
-    void Promise.all([getMacroTargets(), getOnboardingData()]).then(([targets, data]) => {
-      if (live) { setSaved(targets); setMode(data.targetMode ?? 'known'); setReady(true); }
+    void Promise.all([getMacroTargets(), getOnboardingData()]).then(async ([targets, data]) => {
+      if (!live) return;
+      if (!data.goal) {
+        setReady(false);
+        await rememberGoalReturnTo('/welcome/target-setup');
+        if (live) router.replace('/welcome/goal');
+        return;
+      }
+      setSaved(targets); setMode(data.targetMode ?? 'known'); setReady(true);
     });
     return () => { live = false; };
   }, []));
   async function choose(useSaved = false) {
     if (busy || !ready) return;
+    const isCurrent = begin();
     setBusy(true);
     const nextMode = useSaved ? 'known' : mode;
     try {
       await saveOnboardingField('targetMode', nextMode);
       if (nextMode === 'estimate') await saveOnboardingField('targetBasis', undefined);
+      if (!isCurrent()) return;
       trackOnboardingChoiceSelected({ screen: 'target_setup', value: useSaved ? 'saved' : nextMode });
-      router.push(useSaved ? '/welcome/how-it-works' : nextMode === 'known' ? '/welcome/tuning' : '/welcome/goal');
-    } catch { Alert.alert('Could not save your choice', 'Please try again.'); }
-    finally { setBusy(false); }
+      router.push(useSaved ? '/welcome/how-it-works' : nextMode === 'known' ? '/welcome/tuning' : '/welcome/height');
+    } catch { if (isCurrent()) Alert.alert('Could not save your choice', 'Please try again.'); }
+    finally { if (isCurrent()) setBusy(false); }
   }
   const label = mode === 'known' ? (saved ? 'Edit my meal targets' : 'Enter my meal targets') : 'Help me set targets';
   return <WelcomeScreen progress={0.45} title={"Your meal.\nYour targets."} subtitle="Choose how you'd like to get started."
@@ -70,3 +82,5 @@ const s = StyleSheet.create({
   use: { minHeight: 48, justifyContent: 'center', paddingVertical: 14, borderRadius: 28, backgroundColor: EDITORIAL.green, alignItems: 'center', marginTop: 4 },
   useText: { ...TEXT.cta, fontSize: 14 },
 });
+
+export default requireWelcomeGoal(TargetSetupScreen, '/welcome/target-setup');

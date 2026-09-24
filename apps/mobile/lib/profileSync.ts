@@ -4,7 +4,10 @@ import { getOnboardingData, type OnboardingData } from './onboardingStorage';
 import { getMacroTargets, saveMacroTargets, type StoredMacroTargets } from './macroStorage';
 import { MEALS_PER_DAY } from './macroCalculator';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { ProfileResponse } from '@fitsy/shared';
+import type { ProfileResponse as ProfileContract, UserGoalV2 } from '@fitsy/shared';
+
+// This client opts into goalSchema=2; legacy clients keep the default contract.
+type ProfileResponse = ProfileContract<UserGoalV2>;
 
 const ONBOARDING_KEY = '@fitsy/onboarding';
 
@@ -14,7 +17,7 @@ const ONBOARDING_KEY = '@fitsy/onboarding';
  */
 export async function fetchProfile(): Promise<ProfileResponse | null> {
   try {
-    return await api.get<ProfileResponse>('/api/user/profile', true);
+    return await api.get<ProfileResponse>('/api/user/profile?goalSchema=2', true);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[profileSync] fetchProfile failed:', err);
@@ -63,7 +66,7 @@ export async function pushProfileToServer(): Promise<void> {
 
     if (Object.keys(body).length === 0) return;
 
-    await api.patch('/api/user/profile', body, true);
+    await api.patch('/api/user/profile?goalSchema=2', body, true);
   } catch (err) {
     // Data stays local; the next pushProfileToServer call retries. Surface in
     // console so we don't silently lose the entire profile sync silently
