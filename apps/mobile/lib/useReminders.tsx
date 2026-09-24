@@ -43,10 +43,13 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!account.ready || scheduledAccountRef.current === account.id) return;
-    scheduledAccountRef.current = account.id;
+    let live = true;
     // Keep the resolved account's jobs if its preference read fails at boot.
-    void reconcileReminderOwnership(account.id).catch(reportFailure);
-  }, [account.ready, account.id]);
+    void reconcileReminderOwnership(account.id)
+      .then(() => { if (live) scheduledAccountRef.current = account.id; })
+      .catch(reportFailure);
+    return () => { live = false; };
+  }, [account.ready, account.id, revision]);
 
   useEffect(() => {
     let live = true;

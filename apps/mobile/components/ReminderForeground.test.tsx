@@ -105,3 +105,27 @@ test('cold launch read failure preserves the current account scheduled jobs', as
   expect(reconcileReminderOwnership).toHaveBeenCalledWith('reminder-owner');
   expect(replace).not.toHaveBeenCalledWith(null, []);
 });
+
+test('foreground recovery retries failed account ownership cleanup', async () => {
+  const read = jest.mocked(readReminderPreferences);
+  const reconcile = jest.mocked(reconcileReminderOwnership);
+  read.mockResolvedValue({ meals: true, trial: false });
+  let foreground: ((state: string) => void) | undefined;
+  jest.spyOn(AppState, 'addEventListener').mockImplementation((_event, listener) => {
+    foreground = listener as (state: string) => void;
+    return { remove() {} } as ReturnType<typeof AppState.addEventListener>;
+  });
+  const screen = render(<ReminderProvider><SettingsView /></ReminderProvider>);
+  await waitFor(() => expect(screen.getByText('Meal reminders on')).toBeTruthy());
+  await waitFor(() => expect(reconcile).toHaveBeenCalledWith('reminder-owner'));
+  reconcile.mockImplementationOnce(async () => { throw new Error('Notification query unavailable'); });
+  read.mockImplementation(async (id, options) => {
+    if (id === 'next-owner' && options?.throwOnError) throw new Error('Storage temporarily unavailable');
+    return { meals: true, trial: false };
+  });
+  await act(async () => { mockAuthListener?.('SIGNED_IN', { user: { id: 'next-owner' } }); });
+  await waitFor(() => expect(read).toHaveBeenCalledWith('next-owner', { throwOnError: true }));
+  expect(reconcile.mock.calls.filter(([id]) => id === 'next-owner')).toHaveLength(1);
+  await act(async () => { foreground?.('active'); });
+  await waitFor(() => expect(reconcile.mock.calls.filter(([id]) => id === 'next-owner')).toHaveLength(2));
+});
