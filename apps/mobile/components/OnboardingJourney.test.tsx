@@ -195,6 +195,7 @@ it('requires a goal before signed-in legacy macro recommendations', async () => 
   expect((await getOnboardingData()).goal).toBe('build_muscle');
   await act(async () => { fireEvent.press(screen.getByTestId('macro-setup-save')); });
   await waitFor(() => expect(screen.getByText('Search for meals')).toBeTruthy());
+  expect(await getMacroTargets()).toEqual({ protein: '44', carbs: '80', fat: '23', calories: '708' });
   expect(await getOnboardingResume()).toBeNull();
 });
 
@@ -209,6 +210,8 @@ it('requires a fresh goal choice before showing macros for a legacy maintenance 
   await waitFor(() => expect(screen.getPathname()).toBe('/macro-setup'));
   expect(await screen.findByTestId('macro-setup-save')).toBeTruthy();
   expect((await getOnboardingData()).goal).toBe('performance');
+  await act(async () => { fireEvent.press(screen.getByTestId('macro-setup-save')); });
+  expect(await getMacroTargets()).toEqual({ protein: '31', carbs: '87', fat: '18', calories: '634' });
 });
 
 it('clears a signed-in goal checkpoint when macro setup is skipped', async () => {
