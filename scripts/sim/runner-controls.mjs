@@ -163,22 +163,46 @@ export async function startOwnedRecorder(udid, file, log, { command = 'xcrun', a
   const completed = new Promise(resolve => child.once('exit', (code, signal) => resolve({ code, signal })));
   await sleep(250);
   if (child.exitCode !== null || child.signalCode !== null) throw new Error(`Recorder exited before flow start; inspect ${log}`);
-  return { pid: child.pid, child, completed, file };
+  const initialMembers = groupMembers(child.pid);
+  if (!initialMembers.has(child.pid)) throw new Error(`Recorder ${child.pid} group identity unavailable; inspect ${log}`);
+  return { pid: child.pid, child, completed, file, log, initialMembers };
 }
-export async function stopOwnedRecorder(recorder) {
+export async function stopOwnedRecorder(recorder, { intGraceMs = 10000, termGraceMs = 5000, killGraceMs = 5000 } = {}) {
   if (!recorder) return { state: 'absent' };
-  if (recorder.child.exitCode === null && recorder.child.signalCode === null) {
-    try { process.kill(-recorder.pid, 'SIGINT'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
+  const tracked = groupMembers(recorder.pid);
+  const initial = recorder.initialMembers;
+  if (tracked.size && !matchingMember(initial, tracked))
+    throw new Error(`Owned recorder group ${recorder.pid} identity changed; refusing to signal a possible reused group`);
+  const waitForGroup = async graceMs => {
+    const deadline = performance.now() + graceMs;
+    let members = groupMembers(recorder.pid);
+    while (matchingMember(tracked, members) && performance.now() < deadline) {
+      await sleep(50);
+      members = groupMembers(recorder.pid);
+    }
+    if (members.size && !matchingMember(tracked, members))
+      throw new Error(`Owned recorder group ${recorder.pid} lost its tracked identity; refusing to signal a possible reused group`);
+    return members.size === 0;
+  };
+  const signalGroup = signal => {
+    if (!tracked.size) return;
+    const members = groupMembers(recorder.pid);
+    if (!members.size) return;
+    if (!matchingMember(tracked, members))
+      throw new Error(`Owned recorder group ${recorder.pid} changed before ${signal}; refusing to signal it`);
+    try { process.kill(-recorder.pid, signal); } catch (error) { if (error.code !== 'ESRCH') throw error; }
+  };
+  signalGroup('SIGINT');
+  if (!await waitForGroup(intGraceMs)) {
+    appendFileSync(recorder.log, `Recorder group ${recorder.pid} exceeded SIGINT grace; owned members: ${[...groupMembers(recorder.pid).keys()].join(',')}\n`);
+    signalGroup('SIGTERM');
+    if (!await waitForGroup(termGraceMs)) {
+      appendFileSync(recorder.log, `Recorder group ${recorder.pid} exceeded SIGTERM grace; owned members: ${[...groupMembers(recorder.pid).keys()].join(',')}\n`);
+      signalGroup('SIGKILL');
+      if (!await waitForGroup(killGraceMs)) throw new Error(`Owned recorder group ${recorder.pid} did not exit after SIGKILL; inspect ${recorder.log}`);
+    }
   }
-  let result = await waitOrTimeout(recorder.completed, 10000);
-  if (!result) {
-    try { process.kill(-recorder.pid, 'SIGTERM'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
-    result = await waitOrTimeout(recorder.completed, 5000);
-  }
-  if (!result) {
-    try { process.kill(-recorder.pid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
-    result = await waitOrTimeout(recorder.completed, 5000);
-  }
+  const result = await waitOrTimeout(recorder.completed, killGraceMs);
   if (!result) throw new Error(`Owned recorder ${recorder.pid} did not stop; inspect before cleanup`);
   return { state: 'stopped', ...result, file: recorder.file, bytes: existsSync(recorder.file) ? statSync(recorder.file).size : null };
 }

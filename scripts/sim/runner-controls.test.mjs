@@ -82,6 +82,42 @@ test('recorder stops with its flow and leaves unrelated processes alive', async 
   } finally { unrelated.kill('SIGTERM'); rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('recorder reaps its stubborn descendant when leader exits on SIGINT', async () => {
+  const dir = temp(), pidFile = join(dir, 'recorder-descendant.pid');
+  const unrelated = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+  let descendantPid = null;
+  try {
+    const stubborn = "process.on('SIGINT',()=>{});process.on('SIGTERM',()=>{});setInterval(()=>{},1000)";
+    const script = `const fs=require('fs'),cp=require('child_process');const child=cp.spawn(process.execPath,['-e',${JSON.stringify(stubborn)}],{stdio:'ignore'});fs.writeFileSync(process.argv[2],String(child.pid));process.on('SIGINT',()=>{fs.writeFileSync(process.argv[1],'proof');process.exit(0)});setInterval(()=>{},1000)`;
+    const recorder = await startOwnedRecorder('test-device', join(dir, 'video.mp4'), join(dir, 'recorder.log'),
+      { command: process.execPath, args: ['-e', script, join(dir, 'video.mp4'), pidFile] });
+    descendantPid = Number(readFileSync(pidFile, 'utf8'));
+    const result = await stopOwnedRecorder(recorder, { intGraceMs: 100, termGraceMs: 100 });
+    assert.equal(result.state, 'stopped');
+    assert.equal(result.bytes, 5);
+    assert.throws(() => process.kill(descendantPid, 0), { code: 'ESRCH' });
+    assert.doesNotThrow(() => process.kill(unrelated.pid, 0));
+  } finally {
+    if (descendantPid) { try { process.kill(descendantPid, 'SIGKILL'); } catch { /* fixture cleanup */ } }
+    unrelated.kill('SIGTERM'); rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('recorder stop accepts an already exited owned group', async () => {
+  const dir = temp();
+  try {
+    const file = join(dir, 'video.mp4');
+    const script = "setTimeout(()=>{require('fs').writeFileSync(process.argv[1],'proof');process.exit(0)},400)";
+    const recorder = await startOwnedRecorder('test-device', file, join(dir, 'recorder.log'),
+      { command: process.execPath, args: ['-e', script, file] });
+    await recorder.completed;
+    const result = await stopOwnedRecorder(recorder, { intGraceMs: 100, termGraceMs: 100 });
+    assert.equal(result.state, 'stopped');
+    assert.equal(result.bytes, 5);
+    assert.throws(() => process.kill(recorder.pid, 0), { code: 'ESRCH' });
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('selector failure preserves deadline, expectation and hierarchy availability', () => {
   const commands = [{ command: { assertConditionCommand: { condition: { visible: { idRegex: 'welcome-start' } }, timeout: '30000' } },
     metadata: { status: 'FAILED', timestamp: 1000, duration: 30000, error: { message: 'not visible', hierarchyRoot: { children: [] } } } }];
