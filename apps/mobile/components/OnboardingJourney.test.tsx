@@ -181,14 +181,19 @@ it('returns a missing-goal legacy payoff to its saved destination after goal sel
   expect(await screen.findByText('Consistency with your fat-loss plan')).toBeTruthy();
 });
 
-it('drops a legacy payoff destination when the user backs out of its goal detour', async () => {
-  const screen = renderRouter(routes, { initialUrl: '/welcome/location-permission' });
-  await act(async () => { router.push('/welcome/goal-payoff'); });
-  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/goal'));
-  await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
-  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/location-permission'));
-  await act(async () => { router.push('/welcome/goal'); });
-  await act(async () => { fireEvent.press(screen.getByTestId('goal-build_muscle')); });
-  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
-  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/tried'));
-});
+it.each(['Back button', 'navigation gesture'] as const)(
+  'drops a legacy payoff destination when the user leaves its goal detour with %s', async exit => {
+    const screen = renderRouter(routes, { initialUrl: '/welcome/location-permission' });
+    await act(async () => { router.push('/welcome/goal-payoff'); });
+    await waitFor(() => expect(screen.getPathname()).toBe('/welcome/goal'));
+    await act(async () => {
+      if (exit === 'Back button') fireEvent.press(screen.getByTestId('welcome-back'));
+      else router.back();
+    });
+    await waitFor(() => expect(screen.getPathname()).toBe('/welcome/location-permission'));
+    await act(async () => { router.push('/welcome/goal'); });
+    await act(async () => { fireEvent.press(screen.getByTestId('goal-build_muscle')); });
+    await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+    await waitFor(() => expect(screen.getPathname()).toBe('/welcome/tried'));
+  },
+);

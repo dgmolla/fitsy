@@ -1,8 +1,8 @@
 import { clearGoalReturnTo, takeGoalReturnTo, useOnboardingStep } from '@/lib/onboardingResume';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { router, useNavigation } from 'expo-router';
+import { router, useFocusEffect, useNavigation } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { getOnboardingData, saveOnboardingField, type Goal } from '@/lib/onboardingStorage';
@@ -21,6 +21,8 @@ export default function GoalScreen() {
   const navigation = useNavigation();
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<Goal | null>(null);
+
+  useFocusEffect(useCallback(() => () => { void clearGoalReturnTo(); }, []));
 
   useEffect(() => {
     trackOnboardingScreenView('goal');
