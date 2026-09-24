@@ -209,24 +209,29 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
           if (!currentUserId || await currentPurchasesUserId() !== currentUserId) return;
           // A queued update from the previous native identity must not
           // invalidate this account's still-pending boot read.
-          const infoGeneration = customerInfoGenerationRef.current;
           const readSequence = ++listenerReadSequenceRef.current;
-          // The event payload can belong to the previous account if auth
-          // changed while the callback was queued. Read the verified identity.
-          const fresh = await fetchCustomerInfo();
-          if (!fresh) return;
-          const latest = await supabase.auth.getSession();
-          const nativeUserId = await currentPurchasesUserId();
-          if ((customerInfoGenerationRef.current === infoGeneration || customerInfoLastWriteRef.current === 'boot' ||
-              (customerInfoLastWriteRef.current === 'listener' && readSequence > listenerCommittedSequenceRef.current)) &&
-            readSequence > listenerCommittedSequenceRef.current &&
-            latest.data.session?.user.id === currentUserId &&
-            nativeUserId === currentUserId) {
+          for (;;) {
+            const infoGeneration = customerInfoGenerationRef.current;
+            // The event payload can belong to the previous account if auth
+            // changed while the callback was queued. Read the verified identity.
+            const fresh = await fetchCustomerInfo();
+            if (!fresh) return;
+            const latest = await supabase.auth.getSession();
+            const nativeUserId = await currentPurchasesUserId();
+            if (latest.data.session?.user.id !== currentUserId || nativeUserId !== currentUserId ||
+                readSequence <= listenerCommittedSequenceRef.current) return;
+            if (customerInfoGenerationRef.current !== infoGeneration) {
+              // Boot or another listener committed while this read was pending.
+              // Its response may predate that commit, so ask the SDK again.
+              if (customerInfoLastWriteRef.current === 'other') return;
+              continue;
+            }
             listenerCommittedSequenceRef.current = readSequence;
             ++customerInfoReadRequestRef.current;
             const proChanged = isProActive(fresh) !== isProActive(customerInfoRef.current);
             setCustomerInfo(fresh, 'listener');
             if (proChanged) void syncEntitlement('mismatch');
+            return;
           }
         })().catch(() => undefined);
       });

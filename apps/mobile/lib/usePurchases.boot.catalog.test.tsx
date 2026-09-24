@@ -205,7 +205,7 @@ describe('boot', () => {
     const identity = deferred<typeof freeInfo>();
     const listenerRead = deferred<typeof proInfo>();
     mockRc.identifyPurchasesUser.mockReturnValueOnce(identity.promise);
-    mockRc.fetchCustomerInfo.mockReturnValueOnce(listenerRead.promise);
+    mockRc.fetchCustomerInfo.mockReturnValueOnce(listenerRead.promise).mockResolvedValue(proInfo);
     mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
     const { result } = renderProvider();
     await waitFor(() => expect(mockRc.identifyPurchasesUser).toHaveBeenCalledTimes(1));
@@ -217,8 +217,28 @@ describe('boot', () => {
     expect(result.current.isPro).toBe(false);
     await act(async () => { listenerRead.resolve(proInfo); });
     await flush();
+    expect(mockRc.fetchCustomerInfo).toHaveBeenCalledTimes(2);
     expect(result.current.isPro).toBe(true);
     expect(result.current.entitled).toBe(true);
+  });
+
+  it('does not replace a Pro boot result with a listener read started before it', async () => {
+    const identity = deferred<typeof proInfo>();
+    const listenerRead = deferred<typeof freeInfo>();
+    mockRc.identifyPurchasesUser.mockReturnValueOnce(identity.promise);
+    mockRc.fetchCustomerInfo.mockReturnValueOnce(listenerRead.promise).mockResolvedValue(proInfo);
+    const { result } = renderProvider();
+    await waitFor(() => expect(mockRc.identifyPurchasesUser).toHaveBeenCalledTimes(1));
+    const listener = mockRc.addCustomerInfoListener.mock.calls[0][0];
+    await act(async () => { listener(freeInfo); });
+    await waitFor(() => expect(mockRc.fetchCustomerInfo).toHaveBeenCalledTimes(1));
+    await act(async () => { identity.resolve(proInfo); });
+    await flush();
+    expect(result.current.isPro).toBe(true);
+    await act(async () => { listenerRead.resolve(freeInfo); });
+    await flush();
+    expect(mockRc.fetchCustomerInfo).toHaveBeenCalledTimes(2);
+    expect(result.current.isPro).toBe(true);
   });
 
   it('accepts a successful boot identity after a same-account listener refresh fails', async () => {
