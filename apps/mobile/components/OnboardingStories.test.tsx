@@ -1,6 +1,8 @@
 jest.unmock('react-native');
 import React from 'react';
 import { act, render, within } from '@testing-library/react-native';
+import { Image } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { OnboardingApproachStory } from './OnboardingApproachStory';
 import { OnboardingFitnessPayoff } from './OnboardingFitnessPayoff';
 import { OnboardingGoalGraph } from './OnboardingGoalGraph';
@@ -11,18 +13,34 @@ describe('personalized onboarding illustrations', () => {
     check_online: {
       story: ['YOUR RESEARCH, BROUGHT TOGETHER', 'Restaurant menu', 'Nutrition page', 'One place to compare'],
       payoff: ['YOUR SHORTLIST STARTS HERE', 'Your meal targets', 'Calorie range', 'Protein target'],
+      storyIcons: ['globe-outline', 'reader-outline', 'globe-outline', 'arrow-down', 'layers-outline'],
+      payoffIcons: ['options-outline', 'swap-vertical-outline'],
+      storyImages: 0,
+      payoffImages: 1,
     },
     calorie_apps: {
       story: ['RECOGNIZE THIS SEARCH?', 'That bowl from lunch…', 'Which entry is my dish?'],
       payoff: ['THE DISH, WITH MORE CONTEXT', 'Nutrition source', 'Published or estimated'],
+      storyIcons: ['search-outline', 'help-circle-outline', 'restaurant-outline'],
+      payoffIcons: ['flame-outline', 'barbell-outline', 'reader-outline'],
+      storyImages: 0,
+      payoffImages: 1,
     },
     meal_prep: {
       story: ['SOME DAYS GO TO PLAN', 'MON', '“Dinner out tonight?”', 'A RESTAURANT OPTION'],
       payoff: ['ONE PLAN. ROOM FOR BOTH.', 'A meal at home', 'A meal out', 'The same meal targets'],
+      storyIcons: ['file-tray-full-outline', 'file-tray-full-outline', 'file-tray-full-outline', 'chatbubble-ellipses-outline'],
+      payoffIcons: ['home-outline', 'restaurant-outline', 'locate-outline'],
+      storyImages: 1,
+      payoffImages: 0,
     },
     nothing: {
       story: ['START WITH WHAT SOUNDS GOOD', '🥙', 'Something fresh', 'Something cozy'],
-      payoff: ['NO PERFECT ROUTINE REQUIRED', 'Set a starting point', 'Find something nearby', 'Choose your next meal'],
+      payoff: ['NO PERFECT ROUTINE REQUIRED', '1', 'Set a starting point', '2', 'Find something nearby', '3', 'Choose your next meal'],
+      storyIcons: ['compass-outline'],
+      payoffIcons: [],
+      storyImages: 0,
+      payoffImages: 0,
     },
   } as const;
 
@@ -33,6 +51,10 @@ describe('personalized onboarding illustrations', () => {
     const payoff = within(screen.getByTestId(`payoff-${id}`));
     for (const label of approachArtwork[id].story) expect(story.getByText(label)).toBeTruthy();
     for (const label of approachArtwork[id].payoff) expect(payoff.getByText(label)).toBeTruthy();
+    expect(screen.getByTestId(`story-${id}`).findAllByType(Ionicons).map((icon: { props: { name: string } }) => icon.props.name)).toEqual(approachArtwork[id].storyIcons);
+    expect(screen.getByTestId(`payoff-${id}`).findAllByType(Ionicons).map((icon: { props: { name: string } }) => icon.props.name)).toEqual(approachArtwork[id].payoffIcons);
+    expect(screen.getByTestId(`story-${id}`).findAllByType(Image)).toHaveLength(approachArtwork[id].storyImages);
+    expect(screen.getByTestId(`payoff-${id}`).findAllByType(Image)).toHaveLength(approachArtwork[id].payoffImages);
     for (const other of TRIED_OPTIONS.filter(option => option.id !== id)) {
       expect(screen.queryByTestId(`story-${other.id}`)).toBeNull();
       expect(screen.queryByTestId(`payoff-${other.id}`)).toBeNull();
