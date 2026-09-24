@@ -11,7 +11,7 @@ import { applySuggestionFilter, type SuggestionFilter } from '@/lib/macroSuggest
 import { calculateDailyMacros, dailyToPerMealMacros, macrosToStored } from '@/lib/macroCalculator';
 import { getOnboardingData, calculateSuggestedCalories, type Goal } from '@/lib/onboardingStorage';
 import { FONTS } from '@/lib/brand';
-import { clearOnboardingResume, rememberGoalReturnTo } from '@/lib/onboardingResume';
+import { clearOnboardingResume, hasChosenWelcomeGoal, rememberGoalReturnTo } from '@/lib/onboardingResume';
 
 interface MacroValues {
   protein: number;
@@ -81,7 +81,7 @@ export default function MacroSetupScreen() {
       setLoaded(false);
       getOnboardingData().then((data) => {
         if (!active) return;
-        if (!data.goal) {
+        if (!data.goal || !hasChosenWelcomeGoal(data.goal)) {
           setLoaded(false);
           void rememberGoalReturnTo(fromOnboarding ? '/macro-setup?fromOnboarding=1' : '/macro-setup').then(() => {
             if (active) router.replace('/welcome/goal');

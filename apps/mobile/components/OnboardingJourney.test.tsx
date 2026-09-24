@@ -197,6 +197,19 @@ it('requires a goal before signed-in legacy macro recommendations', async () => 
   expect(await getOnboardingResume()).toBeNull();
 });
 
+it('requires a fresh goal choice before showing macros for a legacy maintenance goal', async () => {
+  await saveOnboardingField('goal', 'maintain');
+  const screen = renderRouter(routes, { initialUrl: '/macro-setup' });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/goal'));
+  expect(screen.queryByTestId('macro-setup-save')).toBeNull();
+  expect(screen.getByTestId('welcome-continue').props.accessibilityState?.disabled).toBe(true);
+  await act(async () => { fireEvent.press(screen.getByTestId('goal-performance')); });
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/macro-setup'));
+  expect(await screen.findByTestId('macro-setup-save')).toBeTruthy();
+  expect((await getOnboardingData()).goal).toBe('performance');
+});
+
 it('clears a signed-in goal checkpoint when macro setup is skipped', async () => {
   await saveOnboardingField('goal', 'performance');
   await AsyncStorage.setItem('@fitsy/onboardingStep', 'goal');
