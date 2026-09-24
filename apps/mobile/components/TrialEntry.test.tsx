@@ -9,7 +9,7 @@ jest.mock('posthog-react-native', () => {
 
 import React from 'react';
 import { Text } from 'react-native';
-import { Stack } from 'expo-router';
+import { router, Stack } from 'expo-router';
 import { act, fireEvent, renderRouter, waitFor } from 'expo-router/testing-library';
 import TrialScreen from '../app/welcome/trial';
 
@@ -32,7 +32,81 @@ const routes = {
   'welcome/trial': TrialScreen,
   'welcome/trial-reminder': () => <Text>Trial reminder choice</Text>,
   'welcome/payment': () => <Text>Payment plans</Text>,
+  'welcome/preview': () => <Text>Discovery preview</Text>,
 };
+
+afterEach(() => { jest.useRealTimers(); mockRefreshOffering.mockReset(); });
+
+test('a stalled automatic offering retry becomes a usable Retry plans action', async () => {
+  mockOffering = null;
+  mockEligibilityReady = false;
+  mockEligibility = {};
+  mockRefreshOffering.mockImplementation(() => new Promise(() => {}));
+  jest.useFakeTimers();
+  const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
+  expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toBe('Checking plans…');
+  await act(async () => { jest.advanceTimersByTime(5000); });
+  expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toBe('Retry plans');
+});
+
+test('a stalled button retry times out, ignores its late result, and allows another attempt', async () => {
+  mockOffering = null;
+  mockEligibilityReady = false;
+  mockEligibility = {};
+  let resolveLate!: (value: null) => void;
+  mockRefreshOffering.mockResolvedValueOnce(null)
+    .mockImplementationOnce(() => new Promise(resolve => { resolveLate = resolve; }))
+    .mockResolvedValueOnce(null);
+  const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
+  await waitFor(() => expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toBe('Retry plans'));
+  jest.useFakeTimers();
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toBe('Checking plans…');
+  await act(async () => { jest.advanceTimersByTime(5000); });
+  expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toBe('Retry plans');
+  await act(async () => { resolveLate(null); });
+  expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toBe('Retry plans');
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  expect(mockRefreshOffering).toHaveBeenCalledTimes(3);
+  expect(screen.getPathname()).toBe('/welcome/trial');
+});
+
+test('leaving a pending offering retry cannot redirect and refocus starts a fresh check', async () => {
+  mockOffering = null;
+  mockEligibilityReady = false;
+  mockEligibility = {};
+  let resolveLate!: (value: null) => void;
+  mockRefreshOffering.mockImplementationOnce(() => new Promise(resolve => { resolveLate = resolve; }))
+    .mockResolvedValueOnce(null);
+  const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
+  expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toBe('Checking plans…');
+  await act(async () => { router.push('/welcome/preview'); });
+  await act(async () => { resolveLate(null); });
+  expect(screen.getPathname()).toBe('/welcome/preview');
+  await act(async () => { router.back(); });
+  await waitFor(() => expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toBe('Retry plans'));
+  expect(mockRefreshOffering).toHaveBeenCalledTimes(2);
+});
+
+test.each([
+  ['eligible', { annual: true }, '/welcome/trial-reminder'],
+  ['ineligible', { annual: false }, '/welcome/payment'],
+  ['unknown', {}, '/welcome/payment'],
+] as const)('pending eligibility transitions to %s route after refocus', async (_label, eligibility, destination) => {
+  mockOffering = { annual, monthly: null };
+  mockEligibilityReady = false;
+  mockEligibility = {};
+  const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
+  fireEvent.press(screen.getByTestId('welcome-continue'));
+  expect(screen.getPathname()).toBe('/welcome/trial');
+  mockEligibility = eligibility;
+  mockEligibilityReady = true;
+  await act(async () => { router.push('/welcome/preview'); });
+  await act(async () => { router.back(); });
+  await waitFor(() => expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toBe('Continue'));
+  fireEvent.press(screen.getByTestId('welcome-continue'));
+  await waitFor(() => expect(screen.getPathname()).toBe(destination));
+});
 
 test.each([
   ['ineligible', { annual: false, monthly: false }],

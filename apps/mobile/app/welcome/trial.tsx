@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { TrialArtwork } from '@/components/TrialArtwork';
@@ -9,6 +9,10 @@ import { usePurchases } from '@/lib/usePurchases';
 import { purchaseTerms } from '@/lib/purchaseTerms';
 import { EDITORIAL, TEXT } from '@/lib/brand';
 import { trackOnboardingScreenView } from '@/lib/analytics';
+import { withinMs } from '@/lib/async';
+import { useRouteContinuation } from '@/lib/useRouteContinuation';
+
+const OFFERING_RETRY_CAP_MS = 5000;
 
 export default function TrialScreen() {
   const focused = useIsFocused();
@@ -17,21 +21,27 @@ export default function TrialScreen() {
   const offers = [offering?.annual, offering?.monthly].map(pkg => purchaseTerms(pkg?.product, pkg ? introEligibility[pkg.product.identifier] : undefined));
   const trial = offers.find(terms => terms?.trial)?.trial;
   const [plansChecked, setPlansChecked] = useState(false);
+  const retryInFlight = useRef(false);
+  const { begin } = useRouteContinuation();
   const checkingPlans = !ready || (offering ? !introEligibilityReady : !plansChecked);
   useEffect(() => { if (focused && entitled === true) router.replace('/welcome/payment'); }, [focused, entitled]);
   useEffect(() => { trackOnboardingScreenView('trial'); }, []);
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     if (offering) return;
     let current = true;
-    void refreshOffering().catch(() => null).finally(() => { if (current) setPlansChecked(true); });
+    setPlansChecked(false);
+    void withinMs(refreshOffering(), OFFERING_RETRY_CAP_MS).catch(() => null).finally(() => { if (current) setPlansChecked(true); });
     return () => { current = false; };
-  }, [offering, refreshOffering]);
+  }, [offering, refreshOffering]));
   async function continueOrRetry() {
     if (checkingPlans) return;
     if (!offering) {
+      if (retryInFlight.current) return;
+      retryInFlight.current = true;
+      const isCurrent = begin();
       setPlansChecked(false);
-      try { await refreshOffering(); } catch { /* The retry button remains available. */ }
-      finally { setPlansChecked(true); }
+      try { await withinMs(refreshOffering(), OFFERING_RETRY_CAP_MS); } catch { /* The retry button remains available. */ }
+      finally { retryInFlight.current = false; if (isCurrent()) setPlansChecked(true); }
       return;
     }
     router.push(trial ? '/welcome/trial-reminder' : '/welcome/payment');
