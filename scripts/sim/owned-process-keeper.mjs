@@ -27,7 +27,7 @@ process.on('disconnect', () => {
   if (closing) return;
   // The invoking runner vanished. Bound cleanup while this group ID is still ours.
   try { process.kill(-process.pid, 'SIGTERM'); } catch { /* group may be empty */ }
-  setTimeout(() => { try { process.kill(-process.pid, 'SIGKILL'); } catch { /* already gone */ } }, 5000).unref();
+  setTimeout(() => { try { process.kill(-process.pid, 'SIGKILL'); } catch { /* already gone */ } }, 5000);
 });
 try {
   child = spawn(command, args, { stdio: ['ignore', 'inherit', 'inherit'], detached: false });

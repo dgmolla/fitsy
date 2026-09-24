@@ -93,6 +93,38 @@ test('unexpected keeper loss fails with diagnostics and never signals an ambiguo
   }
 });
 
+test('keeper stays alive after runner disconnect until a TERM-resistant descendant is killed', async () => {
+  const dir = temp(), pidFile = join(dir, 'disconnect-descendant.pid'), readyFile = join(dir, 'descendant-ready');
+  const keeperPath = new URL('./owned-process-keeper.mjs', import.meta.url).pathname;
+  const sentinel = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+  let descendantPid = null;
+  const stubborn = "process.on('SIGTERM',()=>{});require('fs').writeFileSync(process.argv[1],'ready');setInterval(()=>{},1000)";
+  const command = `const fs=require('fs'),cp=require('child_process');const child=cp.spawn(process.execPath,['-e',${JSON.stringify(stubborn)},process.argv[2]],{stdio:'ignore'});fs.writeFileSync(process.argv[1],String(child.pid));process.on('SIGTERM',()=>process.exit(0));setInterval(()=>{},1000)`;
+  const keeper = spawn(process.execPath, [keeperPath, process.execPath, '-e', command, pidFile, readyFile],
+    { detached: true, stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
+  try {
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(Error('keeper did not start command')), 3000);
+      keeper.on('message', message => { if (message.type === 'command-start') { clearTimeout(timer); resolve(); } });
+    });
+    const deadline = Date.now() + 3000;
+    while ((!existsSync(pidFile) || !existsSync(readyFile)) && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 20));
+    assert.ok(existsSync(readyFile), 'TERM-resistant child installed its handler before disconnect');
+    descendantPid = Number(readFileSync(pidFile, 'utf8'));
+    keeper.disconnect();
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(Error('keeper disconnect cleanup exceeded 7 seconds')), 7000);
+      keeper.once('exit', () => { clearTimeout(timer); resolve(); });
+    });
+    assert.throws(() => process.kill(descendantPid, 0), { code: 'ESRCH' });
+    assert.doesNotThrow(() => process.kill(sentinel.pid, 0));
+  } finally {
+    if (descendantPid) { try { process.kill(descendantPid, 'SIGKILL'); } catch { /* fixture cleanup */ } }
+    try { process.kill(keeper.pid, 'SIGKILL'); } catch { /* fixture cleanup */ }
+    sentinel.kill('SIGTERM'); rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('recorder stops with its flow and leaves unrelated processes alive', async () => {
   const dir = temp();
   const unrelated = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
