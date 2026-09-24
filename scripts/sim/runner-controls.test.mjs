@@ -90,6 +90,29 @@ test('Maestro diagnostic timeline failure reaps its owned group and preserves ca
   }
 });
 
+test('Maestro escalation timeline failure reaps a TERM-resistant command', async () => {
+  const dir = temp(), timeline = join(dir, 'events.jsonl');
+  let keeperPid = null, commandPid = null;
+  try {
+    const spawnImpl = (...args) => {
+      const child = spawn(...args);
+      keeperPid = child.pid;
+      child.on('message', message => { if (message.type === 'command-start') commandPid = message.pid; });
+      return child;
+    };
+    const stubborn = "process.on('SIGTERM',()=>{});setInterval(()=>{},1000)";
+    await assert.rejects(runOwnedMaestro(process.execPath, ['-e', stubborn],
+      { cwd: dir, env: process.env, dir, timeline, flow: '', spawnImpl,
+        diagnostic: async () => { rmSync(timeline); mkdirSync(timeline); },
+        quietMs: 100, wallMs: 3000, pollMs: 20, terminationGraceMs: 100 }), /EISDIR/);
+    await assertProcessStopped(commandPid);
+    await assertProcessStopped(keeperPid);
+  } finally {
+    for (const pid of [commandPid, keeperPid]) if (pid) { try { process.kill(pid, 'SIGKILL'); } catch { /* fixture cleanup */ } }
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('Maestro end timeline failure leaves no owned keeper after command exit', async () => {
   const dir = temp(), timeline = join(dir, 'events.jsonl');
   let keeperPid = null, commandPid = null;
@@ -426,15 +449,58 @@ test('recorder command startup failure is actionable and closes its keeper', asy
 
 test('recorder startup callback failure stops its owned group', async () => {
   const dir = temp();
-  let keeperPid = null;
+  let keeperPid = null, commandPid = null;
   try {
     await assert.rejects(startOwnedRecorder('test-device', join(dir, 'video.mp4'), join(dir, 'recorder.log'), {
       command: process.execPath, args: ['-e', 'setInterval(()=>{},1000)'],
-      onStart: owned => { keeperPid = owned.pid; throw new Error('timeline unavailable'); },
+      onStart: owned => { keeperPid = owned.pid; commandPid = owned.commandPid; throw new Error('timeline unavailable'); },
     }), /timeline unavailable/);
     assert.ok(keeperPid);
+    await assertProcessStopped(commandPid);
     await assertProcessStopped(keeperPid);
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+for (const failingWrite of [1, 2]) test(`recorder escalation log write ${failingWrite} failure reaps only its owned group`, async () => {
+  const dir = temp(), log = join(dir, 'recorder.log'), badLog = join(dir, 'unwritable-log');
+  const unrelated = spawn(process.execPath, ['-e', 'setInterval(()=>{},1000)'], { stdio: 'ignore' });
+  let recorder;
+  try {
+    mkdirSync(badLog);
+    const stubborn = "process.on('SIGINT',()=>{});process.on('SIGTERM',()=>{});setInterval(()=>{},1000)";
+    recorder = await startOwnedRecorder('test-device', join(dir, 'video.mp4'), log,
+      { command: process.execPath, args: ['-e', stubborn] });
+    let accesses = 0;
+    Object.defineProperty(recorder, 'log', { get: () => ++accesses === failingWrite ? badLog : log });
+    await assert.rejects(stopOwnedRecorder(recorder, { intGraceMs: 100, termGraceMs: 100, killGraceMs: 1000 }), /EISDIR/);
+    await assertProcessStopped(recorder.commandPid);
+    await assertProcessStopped(recorder.pid);
+    assert.doesNotThrow(() => process.kill(unrelated.pid, 0));
+  } finally {
+    for (const pid of [recorder?.commandPid, recorder?.pid]) if (pid) { try { process.kill(pid, 'SIGKILL'); } catch { /* fixture cleanup */ } }
+    unrelated.kill('SIGTERM'); rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('recorder stop acknowledgement failure reaps its owned group and retains the IPC error', async () => {
+  const dir = temp(), unrelated = spawn(process.execPath, ['-e', 'setInterval(()=>{},1000)'], { stdio: 'ignore' });
+  let recorder;
+  try {
+    recorder = await startOwnedRecorder('test-device', join(dir, 'video.mp4'), join(dir, 'recorder.log'),
+      { command: process.execPath, args: ['-e', 'setInterval(()=>{},1000)'] });
+    const send = recorder.child.send.bind(recorder.child);
+    recorder.child.send = message => {
+      if (message.type === 'recorder-stop') throw Error('simulated keeper IPC write failure');
+      return send(message);
+    };
+    await assert.rejects(stopOwnedRecorder(recorder, { termGraceMs: 100 }), /simulated keeper IPC write failure/);
+    await assertProcessStopped(recorder.commandPid);
+    await assertProcessStopped(recorder.pid);
+    assert.doesNotThrow(() => process.kill(unrelated.pid, 0));
+  } finally {
+    for (const pid of [recorder?.commandPid, recorder?.pid]) if (pid) { try { process.kill(pid, 'SIGKILL'); } catch { /* fixture cleanup */ } }
+    unrelated.kill('SIGTERM'); rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('recorder reaps its stubborn descendant when leader exits on SIGINT', async () => {

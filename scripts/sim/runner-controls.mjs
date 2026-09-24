@@ -94,8 +94,9 @@ export function summarizeFlowTiming(commands, { anchor = null, video = null, rec
 }
 export function saveFlowOutcomeReceipts(dir, result, summary, failureDetail = null) {
   const priorReason = result.priorReason || null;
-  writeFileSync(join(dir, 'timing-summary.json'), JSON.stringify({ ...summary, priorReason }, null, 2) + '\n');
-  if (failureDetail) writeFileSync(join(dir, 'failure.json'), JSON.stringify({ ...failureDetail, priorReason }, null, 2) + '\n');
+  const cleanupError = result.cleanupError || null;
+  writeFileSync(join(dir, 'timing-summary.json'), JSON.stringify({ ...summary, priorReason, cleanupError }, null, 2) + '\n');
+  if (failureDetail) writeFileSync(join(dir, 'failure.json'), JSON.stringify({ ...failureDetail, priorReason, cleanupError }, null, 2) + '\n');
 }
 export function saveRecordedFlowReceipts(dir, recorded, commands, { video, failureReason = null, failureDetail = null } = {}) {
   const { result, recorderStartedMs, recorderEndedMs } = recorded;
@@ -212,14 +213,12 @@ async function startOwnedGroup(kind, command, args, { cwd, env, stdio, spawnImpl
   });
   await waitOrTimeout(started, 3000);
   if (!owned.commandPid || owned.spawnError || owned.keeperResult) {
+    const startError = new Error(`Owned ${kind} command did not start within 3 seconds: ${owned.spawnError?.message || owned.commandResult?.error || 'keeper unavailable'}`);
     if (owned.pid && !owned.keeperResult) {
-      try {
-        await requestKeeper(owned, 'signal', 'SIGTERM');
-        if (await waitForOtherMembers(owned, 1000)) await closeKeeper(owned);
-        else await killOwnedGroup(owned, 5000);
-      } catch { /* retain the actionable command-start error */ }
+      try { await cleanupOwnedGroup(owned, 1000); }
+      catch (cleanupError) { startError.cleanupError = cleanupError.message; }
     }
-    throw new Error(`Owned ${kind} command did not start within 3 seconds: ${owned.spawnError?.message || owned.commandResult?.error || 'keeper unavailable'}`);
+    throw startError;
   }
   return owned;
 }
@@ -277,6 +276,23 @@ async function closeKeeper(owned, graceMs = 5000) {
   if (!await waitOrTimeout(owned.keeperCompleted, graceMs))
     throw new Error(`Owned ${owned.kind} keeper ${owned.pid} did not exit after close`);
 }
+async function cleanupOwnedGroup(owned, termGraceMs = 5000, killGraceMs = 5000) {
+  if (owned.keeperResult) return;
+  let termError;
+  try {
+    await requestKeeper(owned, 'signal', 'SIGTERM');
+    if (await waitForOtherMembers(owned, termGraceMs)) await closeKeeper(owned, killGraceMs);
+    else await killOwnedGroup(owned, killGraceMs);
+    return;
+  } catch (error) { termError = error; }
+  // A failed TERM acknowledgement or close must not abandon a live owned group.
+  // The keeper alone may signal it; never address its former process group here.
+  if (!owned.keeperResult) {
+    try { await killOwnedGroup(owned, killGraceMs); return; }
+    catch (killError) { throw new AggregateError([termError, killError], `Owned ${owned.kind} cleanup failed`); }
+  }
+  throw termError;
+}
 export function maxDeclaredWaitMs(flow) {
   const values = [...flow.matchAll(/(?:timeout|delay):\s*(\d+)/g)].map(match => Number(match[1]));
   return Math.max(0, ...values);
@@ -287,10 +303,19 @@ export function totalDeclaredWaitMs(flow) {
 export async function startOwnedRecorder(udid, file, log, { command = 'xcrun', args = null, spawnImpl = spawn,
   onStart = null, onComplete = null } = {}) {
   const fd = openSync(log, 'w');
-  let owned;
+  let owned, startError;
   try { owned = await startOwnedGroup('recorder', command, args || ['simctl', 'io', udid, 'recordVideo', '--type=mp4', file],
     { stdio: ['ignore', fd, fd], spawnImpl }); }
-  finally { closeSync(fd); }
+  catch (error) { startError = error; }
+  try { closeSync(fd); }
+  catch (error) { if (startError) startError.closeError = error.message; else startError = error; }
+  if (startError) {
+    if (owned && !owned.keeperResult) {
+      try { await cleanupOwnedGroup(owned); }
+      catch (cleanupError) { startError.cleanupError = cleanupError.message; }
+    }
+    throw startError;
+  }
   owned.file = file; owned.log = log;
   try { onStart?.(owned); }
   catch (error) {
@@ -303,7 +328,7 @@ export async function startOwnedRecorder(udid, file, log, { command = 'xcrun', a
   if (owned.commandResult || owned.keeperResult) {
     let recorderResult;
     try { recorderResult = await stopOwnedRecorder(owned); }
-    catch (error) { recorderResult = { state: 'stop-error', bytes: null, error: error.message }; }
+    catch (error) { recorderResult = { state: 'stop-error', bytes: null, error: error.message, cleanupError: error.cleanupError || null }; }
     const error = new Error(`Recorder exited before flow start or lost its keeper; inspect ${log}`);
     error.code = 'recorder-ended-early';
     error.recorderResult = recorderResult;
@@ -313,27 +338,35 @@ export async function startOwnedRecorder(udid, file, log, { command = 'xcrun', a
 }
 export async function stopOwnedRecorder(recorder, { intGraceMs = 10000, termGraceMs = 5000, killGraceMs = 5000 } = {}) {
   if (!recorder) return { state: 'absent' };
-  assertKeeper(recorder);
-  const stopAcknowledgement = await requestKeeper(recorder, 'recorder-stop');
-  if (otherMembers(recorder).length) {
-    await requestKeeper(recorder, 'signal', 'SIGINT');
-    if (!await waitForOtherMembers(recorder, intGraceMs)) {
-      appendFileSync(recorder.log, `Recorder group ${recorder.pid} exceeded SIGINT grace; owned members: ${otherMembers(recorder).join(',')}\n`);
-      await requestKeeper(recorder, 'signal', 'SIGTERM');
-      if (!await waitForOtherMembers(recorder, termGraceMs)) {
-        appendFileSync(recorder.log, `Recorder group ${recorder.pid} exceeded SIGTERM grace; owned members: ${otherMembers(recorder).join(',')}\n`);
-        await killOwnedGroup(recorder, killGraceMs);
+  try {
+    assertKeeper(recorder);
+    const stopAcknowledgement = await requestKeeper(recorder, 'recorder-stop');
+    if (otherMembers(recorder).length) {
+      await requestKeeper(recorder, 'signal', 'SIGINT');
+      if (!await waitForOtherMembers(recorder, intGraceMs)) {
+        appendFileSync(recorder.log, `Recorder group ${recorder.pid} exceeded SIGINT grace; owned members: ${otherMembers(recorder).join(',')}\n`);
+        await requestKeeper(recorder, 'signal', 'SIGTERM');
+        if (!await waitForOtherMembers(recorder, termGraceMs)) {
+          appendFileSync(recorder.log, `Recorder group ${recorder.pid} exceeded SIGTERM grace; owned members: ${otherMembers(recorder).join(',')}\n`);
+          await killOwnedGroup(recorder, killGraceMs);
+        }
       }
     }
+    if (!recorder.keeperResult) await closeKeeper(recorder, killGraceMs);
+    const result = await waitOrTimeout(recorder.completed, killGraceMs);
+    if (!result) throw new Error(`Owned recorder command ${recorder.commandPid} has no exit receipt; inspect ${recorder.log}`);
+    return { state: 'stopped', code: result.code, signal: result.signal, endedBeforeStop: stopAcknowledgement.commandExitedBeforeStop,
+      observedAtMs: Number.isFinite(result.observedAtMs) ? result.observedAtMs : null,
+      observedMonotonicNs: result.observedMonotonicNs || null,
+      file: recorder.file,
+      bytes: existsSync(recorder.file) ? statSync(recorder.file).size : null };
+  } catch (error) {
+    if (!recorder.keeperResult) {
+      try { await cleanupOwnedGroup(recorder, termGraceMs, killGraceMs); }
+      catch (cleanupError) { error.cleanupError = cleanupError.message; }
+    }
+    throw error;
   }
-  if (!recorder.keeperResult) await closeKeeper(recorder, killGraceMs);
-  const result = await waitOrTimeout(recorder.completed, killGraceMs);
-  if (!result) throw new Error(`Owned recorder command ${recorder.commandPid} has no exit receipt; inspect ${recorder.log}`);
-  return { state: 'stopped', code: result.code, signal: result.signal, endedBeforeStop: stopAcknowledgement.commandExitedBeforeStop,
-    observedAtMs: Number.isFinite(result.observedAtMs) ? result.observedAtMs : null,
-    observedMonotonicNs: result.observedMonotonicNs || null,
-    file: recorder.file,
-    bytes: existsSync(recorder.file) ? statSync(recorder.file).size : null };
 }
 function interruptionReason(signal) {
   return signal?.reason?.code === 'recorder-ended-early' ? 'recorder-ended-early' : 'operator-interrupt';
@@ -401,11 +434,8 @@ export async function runOwnedMaestro(command, args, { cwd, env, dir, timeline, 
     // Every callback and evidence write after acquisition can throw. Keep the
     // original failure while closing only the group whose keeper we still own.
     if (!owned.keeperResult) {
-      try {
-        await requestKeeper(owned, 'signal', 'SIGTERM');
-        if (await waitForOtherMembers(owned, terminationGraceMs)) await closeKeeper(owned);
-        else await killOwnedGroup(owned, 5000);
-      } catch (cleanupError) { error.cleanupError = cleanupError.message; }
+      try { await cleanupOwnedGroup(owned, terminationGraceMs); }
+      catch (cleanupError) { error.cleanupError = cleanupError.message; }
     }
     throw error;
   }
@@ -448,13 +478,13 @@ export async function runRecordedFlow({ recorderCommand = 'xcrun', recorderArgs 
       catch (diagnosticError) { event(timeline, { type: 'diagnostic-error', pid: recorderPid, error: diagnosticError.message }); }
     }
     result = { code: null, reason: interruption.signal.aborted ? interruptionReason(interruption.signal) : error.code === 'recorder-ended-early' ? 'recorder-ended-early' : 'runner-error',
-      error: error.message, elapsedMs: null, anchor: clock() };
+      error: error.message, cleanupError: error.cleanupError || null, elapsedMs: null, anchor: clock() };
   } finally {
     try {
       recorderStopRequested = true;
       if (!recorderResult) {
         try { recorderResult = await stopOwnedRecorder(recorder); }
-        catch (error) { recorderResult = { state: 'stop-error', bytes: null, error: error.message }; }
+        catch (error) { recorderResult = { state: 'stop-error', bytes: null, error: error.message, cleanupError: error.cleanupError || null }; }
       }
       if (recorderResult.endedBeforeStop) {
         earlyExit(recorderResult, 'keeper-stop-ack', recorder);
