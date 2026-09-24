@@ -157,6 +157,7 @@ test('a pending boot identity keeps repeated checkout attempts blocked until the
   (Purchases.logIn as jest.Mock).mockImplementationOnce(() => new Promise(resolve => { resolveIdentity = resolve; }));
   const screen = await openPayment();
   await waitFor(() => expect(resolveIdentity).toBeDefined());
+  await waitFor(() => expect(screen.getByTestId('welcome-continue').props.accessibilityState.disabled).toBe(false), { timeout: 3000 });
   jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick', 'queueMicrotask'] });
   for (let attempt = 1; attempt <= 2; attempt++) {
     await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
@@ -279,6 +280,7 @@ test('a direct payment link selects monthly when it is the only available packag
   const screen = renderRouter(routes, { initialUrl: '/welcome/payment' });
   await waitFor(() => expect(screen.getByTestId('paywall-plan-monthly').props.accessibilityState.checked).toBe(true));
   await waitFor(() => expect(screen.getByTestId('paywall-terms').props.children).toContain('store will confirm'));
+  await waitFor(() => expect(screen.getByTestId('welcome-continue').props.accessibilityState.disabled).toBe(false));
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   expect(Purchases.purchasePackage).toHaveBeenCalledWith(monthly);
 });
