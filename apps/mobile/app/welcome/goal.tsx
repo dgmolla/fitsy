@@ -8,6 +8,7 @@ import { AnimatedPress } from '@/components/AnimatedPress';
 import { getOnboardingData, saveOnboardingField, type Goal } from '@/lib/onboardingStorage';
 import { trackOnboardingChoiceSelected, trackOnboardingScreenView } from '@/lib/analytics';
 import { EDITORIAL, FONTS } from '@/lib/brand';
+import { useRouteContinuation } from '@/lib/useRouteContinuation';
 
 
 const GOALS: { id: Goal; label: string }[] = [
@@ -19,6 +20,7 @@ const GOALS: { id: Goal; label: string }[] = [
 export default function GoalScreen() {
   useOnboardingStep('goal');
   const navigation = useNavigation();
+  const { begin, cancel } = useRouteContinuation();
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<Goal | null>(null);
 
@@ -34,19 +36,23 @@ export default function GoalScreen() {
       progress={0.18}
       title="What's your goal?"
       onBack={navigation.canGoBack() ? async () => {
+        cancel();
         await clearGoalReturnTo();
-        router.back();
+        if (navigation.isFocused()) router.back();
       } : undefined}
       onContinue={async () => {
         if (!selected || busy) return;
+        const isCurrent = begin();
         setBusy(true);
         try {
           await saveOnboardingField('goal', selected);
+          if (!isCurrent()) return;
           const returnTo = await takeGoalReturnTo();
+          if (!isCurrent()) return;
           if (returnTo) router.replace(returnTo);
           else router.push('/welcome/tried');
-        } catch { Alert.alert('Could not save your goal', 'Please try again.'); }
-        finally { setBusy(false); }
+        } catch { if (isCurrent()) Alert.alert('Could not save your goal', 'Please try again.'); }
+        finally { if (isCurrent()) setBusy(false); }
       }}
       canContinue={selected !== null && !busy}
     >

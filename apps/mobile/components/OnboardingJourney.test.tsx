@@ -197,3 +197,32 @@ it.each(['Back button', 'navigation gesture'] as const)(
     await waitFor(() => expect(screen.getPathname()).toBe('/welcome/tried'));
   },
 );
+
+it('keeps the chosen screen after leaving goal choice during a pending save', async () => {
+  let releaseSave!: () => void;
+  let saveStarted!: () => void;
+  const pendingSave = new Promise<void>(resolve => { releaseSave = resolve; });
+  const started = new Promise<void>(resolve => { saveStarted = resolve; });
+  const storage = jest.spyOn(AsyncStorage, 'setItem').mockImplementation(async (key, value) => {
+    if (key === '@fitsy/onboarding' && JSON.parse(value).goal === 'build_muscle') {
+      saveStarted();
+      await pendingSave;
+    }
+    await AsyncStorage.multiSet([[key, value]]);
+  });
+  try {
+    const screen = renderRouter(routes, { initialUrl: '/welcome/location-permission' });
+    await act(async () => { router.push('/welcome/goal'); });
+    await act(async () => { fireEvent.press(screen.getByTestId('goal-build_muscle')); });
+    await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+    await started;
+    await act(async () => { router.back(); });
+    await waitFor(() => expect(screen.getPathname()).toBe('/welcome/location-permission'));
+    await act(async () => { releaseSave(); });
+    await waitFor(() => expect((getOnboardingData())).resolves.toEqual(expect.objectContaining({ goal: 'build_muscle' })));
+    expect(screen.getPathname()).toBe('/welcome/location-permission');
+  } finally {
+    releaseSave();
+    storage.mockRestore();
+  }
+});
