@@ -39,6 +39,7 @@ test('the publisher path retains every flow command, screen and complete video w
     const head = 'a'.repeat(40);
     const prUrl = 'https://github.com/dgmolla/fitsy/pull/7';
     const states = [];
+    let uploadedBytes = null, suppressUpload = false, corruptDigest = false;
     const execute = (command, args, options = {}) => {
       if (command === 'tar') return execFileSync('tar', args, { encoding: 'utf8' }).trim();
       if (command === 'git') return args[0] === 'rev-parse' ? head : '';
@@ -50,12 +51,15 @@ test('the publisher path retains every flow command, screen and complete video w
         return '';
       }
       if (args[0] === 'release' && args[1] === 'view') throw new Error('fixture release absent');
+      if (args[0] === 'release' && args[1] === 'upload') {
+        if (!suppressUpload) uploadedBytes = readFileSync(args[3]);
+        return '';
+      }
       if (args[0] === 'release') return '';
       if (args[0] === 'api' && args[1].includes('/releases/tags/')) {
-        const archive = join(publicationDirectory, 'local-evidence.tar.gz');
         return JSON.stringify({ draft: true, html_url: 'https://github.com/dgmolla/fitsy/releases/tag/fixture',
-          assets: [{ name: 'local-evidence.tar.gz', state: 'uploaded', size: readFileSync(archive).length,
-            digest: `sha256:${createHash('sha256').update(readFileSync(archive)).digest('hex')}` }] });
+          assets: uploadedBytes ? [{ name: 'local-evidence.tar.gz', state: 'uploaded', size: uploadedBytes.length,
+            digest: corruptDigest ? `sha256:${'0'.repeat(64)}` : `sha256:${createHash('sha256').update(uploadedBytes).digest('hex')}` }] : [] });
       }
       assert.fail(`Unexpected forge command: ${args.join(' ')}`);
     };
@@ -68,6 +72,20 @@ test('the publisher path retains every flow command, screen and complete video w
       } });
     assert.equal(result.status, 'pass');
     assert.deepEqual(states, ['pending', 'success']);
+    const options = { execute, evidenceDirectory, publicationDirectory,
+      resolvePlan: () => ({ required: true, categories: ['onboarding'] }), sourceHash: () => 'fixture-input',
+      validateEvidence: () => {} };
+    uploadedBytes = null;
+    suppressUpload = true;
+    await assert.rejects(publishProductFlow('7', options), /asset digest\/size readback/);
+    assert.equal(uploadedBytes, null, 'a skipped upload cannot create a remote asset');
+    assert.deepEqual(states.slice(-2), ['pending', 'failure']);
+    suppressUpload = false;
+    corruptDigest = true;
+    await assert.rejects(publishProductFlow('7', options), /asset digest\/size readback/);
+    assert.ok(uploadedBytes?.length > 0, 'digest mismatch uses bytes from an actual upload');
+    assert.deepEqual(states.slice(-2), ['pending', 'failure']);
+    corruptDigest = false;
     const archive = join(publicationDirectory, 'local-evidence.tar.gz');
     const listed = execFileSync('tar', ['-tzf', archive], { encoding: 'utf8' }).trim().split('\n');
     assert.deepEqual([...listed].sort(), [...required].sort());
