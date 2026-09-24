@@ -335,6 +335,23 @@ describe('sign-in', () => {
 });
 
 describe('sign-out', () => {
+  it('does not reopen the gate from an old boot verdict while native logout is queued', async () => {
+    useFakeTimersKeepingFlush();
+    mockRc.identifyPurchasesUser.mockImplementationOnce(() => new Promise(() => {}));
+    mockRc.logoutPurchasesUser.mockImplementationOnce(() => new Promise(() => {}));
+    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null });
+    const { result } = renderProvider();
+    await flush();
+    expect(result.current.entitled).toBeNull();
+    mockAuth.session = null;
+    await act(async () => { mockAuth.listener?.('SIGNED_OUT', null); });
+    expect(result.current.entitled).toBeNull();
+    act(() => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
+    await flush();
+    expect(result.current.entitled).toBe(false);
+    expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBeUndefined();
+  });
+
   it('rejects a late sign-in fallback while sign-out is still settling', async () => {
     mockAuth.session = null;
     const { result } = renderProvider();

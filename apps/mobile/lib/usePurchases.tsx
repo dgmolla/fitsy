@@ -139,7 +139,8 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     let unsubscribe: (() => void) | undefined;
     let cancelled = false;
     let bootOpen = true;
-    const isCancelled = () => cancelled;
+    let bootUserId: string | undefined;
+    const isCancelled = () => cancelled || !auth.isBootCurrent(bootUserId);
     auth.beginBoot();
 
     (async () => {
@@ -157,6 +158,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
           }).catch(() => undefined);
         }
         userId = sessionResult?.data.session?.user.id;
+        bootUserId = userId;
         auth.markBootUser(userId);
         if (configured) {
           void fetchCurrentOffering().then(off => {
@@ -165,13 +167,13 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
         }
         const rcReady = configured
           ? (userId ? identifyPurchasesUser(userId) : fetchCustomerInfo()).then(async info => {
-            if (cancelled) return info;
+            if (isCancelled()) return info;
             // Once boot has closed, auth may have moved to another account.
             const sameUser = bootOpen || await supabase.auth.getSession().then(
               ({ data }) => data.session?.user.id === userId,
               () => false,
             );
-            if (sameUser && !cancelled) {
+            if (sameUser && !isCancelled()) {
               setCustomerInfo(info);
               unsubscribe = addCustomerInfoListener(setCustomerInfo);
               if (!bootOpen && isProActive(info) && verdict.entitledRef.current === false) {

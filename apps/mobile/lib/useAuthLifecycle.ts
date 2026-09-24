@@ -15,6 +15,8 @@ import { supabase } from './supabase';
 import type { EntitlementVerdict } from './useEntitlementVerdict';
 import { fetchCustomerInfo, identifyPurchasesUser, logoutPurchasesUser } from './purchases';
 import { clearPaywallIntent } from './paywallIntent';
+import { withinMs } from './async';
+import { BOOT_VERDICT_CAP_MS } from './useEntitlementVerdict';
 
 export interface AuthLifecycle {
   /** Boot has started: SIGNED_IN events are noted, not acted on, until finishBoot. */
@@ -25,6 +27,8 @@ export interface AuthLifecycle {
   resumeLateBootUser: (userId: string) => void;
   /** Boot settled (or failed): run a sign-in that landed meanwhile for a different user. */
   finishBoot: (cancelled: boolean) => void;
+  /** Whether boot still owns this auth identity. */
+  isBootCurrent: (userId: string | undefined) => boolean;
 }
 
 export function useAuthLifecycle({
@@ -41,6 +45,7 @@ export function useAuthLifecycle({
   // deferred, not dropped.
   const bootUserIdRef = useRef<string | null>(null);
   const bootPendingRef = useRef(true);
+  const bootInvalidatedRef = useRef(false);
   const pendingSignInUserIdRef = useRef<string | null>(null);
 
   /** Identify with RevenueCat and resolve the verdict for a signed-in user (detached). */
@@ -72,12 +77,19 @@ export function useAuthLifecycle({
         signIn(session.user.id);
       } else if (event === 'SIGNED_OUT') {
         void clearPaywallIntent().catch(() => undefined);
+        bootInvalidatedRef.current = true;
         bootUserIdRef.current = null;
+        pendingSignInUserIdRef.current = null;
         beginSignOut();
         void (async () => {
-          await logoutPurchasesUser();
-          setCustomerInfo(await fetchCustomerInfo());
+          // Native logout stays serialized behind any pending login, but the
+          // anonymous gate must settle even if that native work never does.
+          await withinMs(logoutPurchasesUser(), BOOT_VERDICT_CAP_MS).catch(() => null);
           settleAfterSignOut();
+          const info = await fetchCustomerInfo();
+          if (bootUserIdRef.current === null && pendingSignInUserIdRef.current === null) {
+            setCustomerInfo(info);
+          }
         })();
       }
     });
@@ -86,9 +98,10 @@ export function useAuthLifecycle({
 
   const beginBoot = useCallback(() => {
     bootPendingRef.current = true;
+    bootInvalidatedRef.current = false;
   }, []);
   const markBootUser = useCallback((userId: string | undefined) => {
-    bootUserIdRef.current = userId ?? null;
+    if (!bootInvalidatedRef.current) bootUserIdRef.current = userId ?? null;
   }, []);
   const resumeLateBootUser = useCallback((userId: string) => {
     if (bootPendingRef.current) {
@@ -106,7 +119,10 @@ export function useAuthLifecycle({
     },
     [signIn],
   );
+  const isBootCurrent = useCallback((userId: string | undefined) =>
+    !bootInvalidatedRef.current && bootUserIdRef.current === (userId ?? null) &&
+    (!pendingSignInUserIdRef.current || pendingSignInUserIdRef.current === userId), []);
 
   // Stable identity: the provider's boot effect depends on this object.
-  return useMemo(() => ({ beginBoot, markBootUser, resumeLateBootUser, finishBoot }), [beginBoot, markBootUser, resumeLateBootUser, finishBoot]);
+  return useMemo(() => ({ beginBoot, markBootUser, resumeLateBootUser, finishBoot, isBootCurrent }), [beginBoot, markBootUser, resumeLateBootUser, finishBoot, isBootCurrent]);
 }
