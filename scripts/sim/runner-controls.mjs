@@ -304,6 +304,9 @@ export async function stopOwnedRecorder(recorder, { intGraceMs = 10000, termGrac
   return { state: 'stopped', code: result.code, signal: result.signal, file: recorder.file,
     bytes: existsSync(recorder.file) ? statSync(recorder.file).size : null };
 }
+function interruptionReason(signal) {
+  return signal?.reason?.code === 'recorder-ended-early' ? 'recorder-ended-early' : 'operator-interrupt';
+}
 export async function runOwnedMaestro(command, args, { cwd, env, dir, timeline, flow, diagnostic, signal, quietMs, wallMs,
   spawnImpl = spawn, pollMs = 1000, terminationGraceMs = 5000 }) {
   const inactivityMs = quietMs ?? Math.max(180000, maxDeclaredWaitMs(flow) + 120000);
@@ -328,7 +331,7 @@ export async function runOwnedMaestro(command, args, { cwd, env, dir, timeline, 
     if (log) { try { const size = statSync(log).size; if (size !== lastLogSize) { lastLogSize = size; lastActivity = performance.now(); } } catch { /* a rotating log is not evidence of a hang */ } }
     if (owned.commandResult || owned.keeperResult) break;
     if (!signal?.aborted && performance.now() - started <= ceilingMs && performance.now() - lastActivity <= inactivityMs) continue;
-    reason = signal?.aborted ? 'operator-interrupt' : performance.now() - started > ceilingMs ? 'wall-deadline' : 'inactivity-deadline';
+    reason = signal?.aborted ? interruptionReason(signal) : performance.now() - started > ceilingMs ? 'wall-deadline' : 'inactivity-deadline';
     await capture(reason, log);
     await requestKeeper(owned, 'signal', 'SIGTERM');
     if (!await waitForOtherMembers(owned, terminationGraceMs)) {
@@ -355,7 +358,10 @@ export async function runOwnedMaestro(command, args, { cwd, env, dir, timeline, 
   }
   const result = await waitOrTimeout(owned.completed, 5000);
   if (!result) throw new Error(`Owned Maestro command ${owned.commandPid} did not provide an exit receipt`);
-  if (signal?.aborted && !reason) reason = 'operator-interrupt';
+  if (signal?.aborted && !reason) {
+    reason = interruptionReason(signal);
+    await capture(reason, latestMaestroLog(dir));
+  }
   event(timeline, { type: 'maestro-end', pid: ownedPid, outcome: reason || (result.code === 0 ? 'pass' : 'fail'), exitCode: result.code, signal: result.signal,
     elapsedMs: performance.now() - started, reason });
   return { ...result, reason, elapsedMs: performance.now() - started, anchor };
@@ -368,24 +374,34 @@ export async function runRecordedFlow({ recorderCommand = 'xcrun', recorderArgs 
   const onInt = () => interruption.abort(new Error('SIGINT received during owned native flow'));
   const onTerm = () => interruption.abort(new Error('SIGTERM received during owned native flow'));
   process.on('SIGINT', onInt); process.on('SIGTERM', onTerm);
-  let recorder = null, recorderStartedMs = null, result, recorderResult;
+  let recorder = null, recorderStartedMs = null, result, recorderResult, recorderStopRequested = false;
   try {
     recorder = await startOwnedRecorder(udid, video, recorderLog,
       { command: recorderCommand, args: recorderArgs, spawnImpl: recorderSpawnImpl });
     recorderStartedMs = Date.now();
     event(timeline, { type: 'recorder-start', pid: recorder.pid, video });
+    recorder.completed.then(exit => {
+      if (recorderStopRequested) return;
+      event(timeline, { type: 'recorder-early-exit', pid: recorder.pid, code: exit.code,
+        signal: exit.signal, ownershipLost: exit.ownershipLost || false,
+        outcome: 'fail', expected: 'recorder remains active until flow ends and stop is requested' });
+      const error = new Error('Owned recorder exited before its flow ended; inspect recorder log and partial video');
+      error.code = 'recorder-ended-early';
+      interruption.abort(error);
+    });
     if (interruption.signal.aborted) throw interruption.signal.reason;
     result = await runOwnedMaestro(maestroCommand, maestroArgs, { cwd, env, dir, timeline, flow, diagnostic,
       signal: interruption.signal, quietMs, wallMs, pollMs, terminationGraceMs, spawnImpl: maestroSpawnImpl });
   } catch (error) {
-    result = { code: null, reason: interruption.signal.aborted ? 'operator-interrupt' : 'runner-error',
+    result = { code: null, reason: interruption.signal.aborted ? interruptionReason(interruption.signal) : 'runner-error',
       error: error.message, elapsedMs: null, anchor: clock() };
   } finally {
+    recorderStopRequested = true;
     try { recorderResult = await stopOwnedRecorder(recorder); }
     catch (error) { recorderResult = { state: 'stop-error', bytes: null, error: error.message }; }
     event(timeline, { type: 'recorder-end', pid: recorder?.pid || null, ...recorderResult });
     process.off('SIGINT', onInt); process.off('SIGTERM', onTerm);
   }
-  if (interruption.signal.aborted && !result.reason) result.reason = 'operator-interrupt';
+  if (interruption.signal.aborted && !result.reason) result.reason = interruptionReason(interruption.signal);
   return { result, recorderResult, recorderStartedMs, recorderEndedMs: Date.now() };
 }

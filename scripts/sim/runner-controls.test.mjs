@@ -5,7 +5,7 @@ import { createServer } from 'node:http';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { archiveFailureEvidence, flowFailureReason, requireMetro, runOwnedMaestro, startOwnedRecorder, stopOwnedRecorder, summarizeCommands, summarizeFlowTiming, nearestFailure, matchingFailureKey, needsDiagnosis } from './runner-controls.mjs';
+import { archiveFailureEvidence, flowFailureReason, requireMetro, runOwnedMaestro, runRecordedFlow, startOwnedRecorder, stopOwnedRecorder, summarizeCommands, summarizeFlowTiming, nearestFailure, matchingFailureKey, needsDiagnosis } from './runner-controls.mjs';
 
 const temp = () => mkdtempSync(join(tmpdir(), 'fitsy-runner-'));
 async function assertProcessStopped(pid, deadlineMs = 1500) {
@@ -149,6 +149,54 @@ test('recorder stops with its flow and leaves unrelated processes alive', async 
     assert.equal(result.bytes, 5);
     assert.doesNotThrow(() => process.kill(unrelated.pid, 0));
   } finally { unrelated.kill('SIGTERM'); rmSync(dir, { recursive: true, force: true }); }
+});
+
+for (const recorderExitCode of [0, 1]) test(`early recorder exit ${recorderExitCode} with partial video fails its still-running flow`, async () => {
+  const dir = temp(), video = join(dir, 'video.mp4'), timeline = join(dir, 'timeline.jsonl');
+  const sentinel = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+  try {
+    const recorderScript = `require('fs').writeFileSync(process.argv[1],'partial');setTimeout(()=>process.exit(${recorderExitCode}),450)`;
+    const maestroScript = 'setTimeout(()=>process.exit(0),2000)';
+    const diagnostics = [];
+    const { result, recorderResult } = await runRecordedFlow({
+      recorderCommand: process.execPath, recorderArgs: ['-e', recorderScript, video],
+      maestroCommand: process.execPath, maestroArgs: ['-e', maestroScript], udid: 'test-device', video,
+      recorderLog: join(dir, 'recorder.log'), cwd: dir, env: process.env, dir, timeline, flow: '',
+      diagnostic: async reason => diagnostics.push(reason), quietMs: 3000, wallMs: 3000, pollMs: 20,
+    });
+    assert.equal(result.reason, 'recorder-ended-early');
+    assert.ok(result.elapsedMs < 1800, 'early recorder exit should stop the owned flow promptly');
+    assert.equal(recorderResult.state, 'stopped');
+    assert.equal(recorderResult.code, recorderExitCode);
+    assert.equal(readFileSync(video, 'utf8'), 'partial');
+    assert.deepEqual(diagnostics, ['recorder-ended-early']);
+    const events = readFileSync(timeline, 'utf8').trim().split('\n').map(JSON.parse);
+    assert.equal(events.find(event => event.type === 'recorder-early-exit').code, recorderExitCode);
+    await assertProcessStopped(events.find(event => event.type === 'maestro-start').pid);
+    await assertProcessStopped(events.find(event => event.type === 'recorder-start').pid);
+    assert.doesNotThrow(() => process.kill(sentinel.pid, 0));
+  } finally { sentinel.kill('SIGTERM'); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('recorder completion during requested stop preserves a passing flow', async () => {
+  const dir = temp(), video = join(dir, 'video.mp4'), timeline = join(dir, 'timeline.jsonl');
+  try {
+    const recorderScript = "process.on('SIGINT',()=>{require('fs').writeFileSync(process.argv[1],'complete');process.exit(0)});setInterval(()=>{},1000)";
+    const maestroScript = 'setTimeout(()=>process.exit(0),100)';
+    const { result, recorderResult } = await runRecordedFlow({
+      recorderCommand: process.execPath, recorderArgs: ['-e', recorderScript, video],
+      maestroCommand: process.execPath, maestroArgs: ['-e', maestroScript], udid: 'test-device', video,
+      recorderLog: join(dir, 'recorder.log'), cwd: dir, env: process.env, dir, timeline, flow: '',
+      diagnostic: async () => {}, quietMs: 3000, wallMs: 3000, pollMs: 20,
+    });
+    assert.equal(result.reason, null);
+    assert.equal(result.code, 0);
+    assert.equal(recorderResult.code, 0);
+    assert.equal(recorderResult.bytes, 8);
+    const events = readFileSync(timeline, 'utf8').trim().split('\n').map(JSON.parse);
+    assert.equal(events.some(event => event.type === 'recorder-early-exit'), false);
+    assert.ok(events.findIndex(event => event.type === 'maestro-end') < events.findIndex(event => event.type === 'recorder-end'));
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('recorder command startup failure is actionable and closes its keeper', async () => {
