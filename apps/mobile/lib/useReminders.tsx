@@ -42,7 +42,9 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let live = true;
-    void readReminderPreferences(account.id).then(values => { if (live) setLoaded({ id: account.id, values }); });
+    void readReminderPreferences(account.id, { throwOnError: true })
+      .then(values => { if (live) setLoaded({ id: account.id, values }); })
+      .catch(reportFailure);
     return () => { live = false; };
   }, [account.id, revision]);
 
