@@ -23,7 +23,7 @@ export default function PaymentScreen() {
   const navigation = useNavigation();
   const focused = useIsFocused();
   const discovery = usePaywallDiscovery(focused);
-  const [plan, setPlan] = useState<PlanId>('yearly');
+  const [chosenPlan, setChosenPlan] = useState<PlanId | null>(null);
   const variants = usePreviewAccess();
   const exposure = useRef('');
   const [loading, setLoading] = useState(false);
@@ -45,6 +45,11 @@ export default function PaymentScreen() {
 
   const annualTerms = purchaseTerms(offering?.annual?.product, offering?.annual ? introEligibility[offering.annual.product.identifier] : false);
   const monthlyTerms = purchaseTerms(offering?.monthly?.product, offering?.monthly ? introEligibility[offering.monthly.product.identifier] : false);
+  // Follow the trial promised earlier in onboarding unless the user has
+  // explicitly chosen another available plan. Recompute when store terms or
+  // eligibility change while the paywall is open.
+  const defaultPlan: PlanId = monthlyTerms?.trial && !annualTerms?.trial ? 'monthly' : annualTerms ? 'yearly' : monthlyTerms ? 'monthly' : 'yearly';
+  const plan = chosenPlan && (chosenPlan === 'yearly' ? annualTerms : monthlyTerms) ? chosenPlan : defaultPlan;
   const discountedAnnual =
     offering?.availablePackages.find((p) => p.identifier === 'annual_discount') ?? null;
   const selected = plan === 'yearly' ? offering?.annual : offering?.monthly;
@@ -154,7 +159,7 @@ export default function PaymentScreen() {
         discovery={discovery}
         loading={loading}
         restoring={restoring}
-        onSelect={setPlan}
+        onSelect={setChosenPlan}
         onBack={navigation.canGoBack() ? () => router.back() : undefined}
         onRestore={() => { void handleRestore(); }}
         onRetry={() => { void refreshOffering(); }}

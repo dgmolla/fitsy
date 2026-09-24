@@ -7,6 +7,8 @@ import Purchases, { type CustomerInfo, type PurchasesOffering } from 'react-nati
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { act, fireEvent, renderRouter, waitFor } from 'expo-router/testing-library';
 import PaymentScreen from '../app/welcome/payment';
+import TrialScreen from '../app/welcome/trial';
+import TrialReminderScreen from '../app/welcome/trial-reminder';
 import WelcomeLayout from '../app/welcome/_layout';
 import { PurchasesProvider } from '../lib/usePurchases';
 import { getPaywallIntent, rememberPaywallIntent } from '../lib/paywallIntent';
@@ -45,6 +47,9 @@ const noSubscription = { entitlements: { active: {}, all: {} } } as CustomerInfo
 const pro = { identifier: 'pro', isActive: true, periodType: 'TRIAL', willRenew: true, expirationDate: '2030-01-08T12:00:00Z' };
 const subscribed = { entitlements: { active: { pro }, all: { pro } } } as unknown as CustomerInfo;
 const annual = { identifier: '$rc_annual', product: { identifier: 'annual', price: 59.99, priceString: '$59.99', currencyCode: 'USD', subscriptionPeriod: 'P1Y', introPrice: null } };
+const monthly = { identifier: '$rc_monthly', product: { identifier: 'monthly', price: 9.99, priceString: '$9.99', currencyCode: 'USD', subscriptionPeriod: 'P1M',
+  introPrice: { price: 0, priceString: '$0', period: 'P1W', cycles: 1 } } };
+const annualWithTrial = { ...annual, product: { ...annual.product, introPrice: { price: 0, priceString: '$0', period: 'P1W', cycles: 1 } } };
 const offering = { identifier: 'default', annual, monthly: null, availablePackages: [annual], metadata: {} } as unknown as PurchasesOffering;
 const selected = { action: 'menu' as const, restaurantId: 'varilla', restaurantName: 'Varilla', menuItemId: 'meal-1', query: 'pizza' };
 let restaurantMounts = 0;
@@ -58,7 +63,8 @@ function Restaurant() {
 function OldNotificationScreen() { useEffect(() => { notificationMounts++; }, []); return <Text>Old notification step</Text>; }
 const routes = {
   _layout: () => <PurchasesProvider><Stack screenOptions={{ headerShown: false }} /></PurchasesProvider>,
-  'welcome/_layout': WelcomeLayout, 'welcome/payment': PaymentScreen,
+  'welcome/_layout': WelcomeLayout, 'welcome/trial': TrialScreen, 'welcome/trial-reminder': TrialReminderScreen,
+  'welcome/payment': PaymentScreen,
   'welcome/notification-permission': OldNotificationScreen,
   '(tabs)/_layout': () => <Stack />, '(tabs)/search': () => <Text>Meal search</Text>, 'restaurant/[id]': Restaurant,
 };
@@ -136,6 +142,103 @@ test('unknown introductory eligibility leaves the store to confirm the first cha
   await act(async () => {});
   await waitFor(() => expect(screen.getByTestId('paywall-terms').props.children).toContain('store will confirm any eligible introductory offer and the first charge'));
   expect(screen.getByTestId('paywall-terms').props.children).not.toContain('$59.99 when you confirm');
+});
+
+test('monthly-only trial routes through reminder to monthly checkout and purchases monthly', async () => {
+  const both = { ...offering, annual, monthly, availablePackages: [annual, monthly] } as unknown as PurchasesOffering;
+  jest.spyOn(Purchases, 'getOfferings').mockResolvedValue({ current: both, all: { default: both } });
+  jest.spyOn(Purchases, 'checkTrialOrIntroductoryPriceEligibility').mockResolvedValue({
+    annual: { status: 1, description: 'Ineligible' }, monthly: { status: 2, description: 'Eligible' },
+  });
+  const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
+  await waitFor(() => expect(screen.getByText('We want you to try Fitsy for free.')).toBeTruthy());
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/trial-reminder'));
+  await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-skip')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
+  expect(screen.getByTestId('paywall-plan-monthly').props.accessibilityState.checked).toBe(true);
+  expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toContain('free trial');
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  expect(Purchases.purchasePackage).toHaveBeenCalledWith(monthly);
+});
+
+test('a saved reminder link enters monthly trial checkout without a preceding trial screen', async () => {
+  const both = { ...offering, annual, monthly, availablePackages: [annual, monthly] } as unknown as PurchasesOffering;
+  jest.spyOn(Purchases, 'getOfferings').mockResolvedValue({ current: both, all: { default: both } });
+  jest.spyOn(Purchases, 'checkTrialOrIntroductoryPriceEligibility').mockResolvedValue({
+    annual: { status: 1, description: 'Ineligible' }, monthly: { status: 2, description: 'Eligible' },
+  });
+  const screen = renderRouter(routes, { initialUrl: '/welcome/trial-reminder' });
+  await waitFor(() => expect(screen.getByTestId('trial-reminder-skip')).toBeTruthy());
+  await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-skip')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
+  expect(screen.getByTestId('paywall-plan-monthly').props.accessibilityState.checked).toBe(true);
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  expect(Purchases.purchasePackage).toHaveBeenCalledWith(monthly);
+});
+
+test('a direct payment link selects monthly when it is the only available package', async () => {
+  const monthlyOnly = { ...offering, annual: null, monthly, availablePackages: [monthly] } as unknown as PurchasesOffering;
+  jest.spyOn(Purchases, 'getOfferings').mockResolvedValue({ current: monthlyOnly, all: { default: monthlyOnly } });
+  jest.spyOn(Purchases, 'checkTrialOrIntroductoryPriceEligibility').mockResolvedValue({
+    monthly: { status: 0, description: 'Unknown' },
+  });
+  const screen = renderRouter(routes, { initialUrl: '/welcome/payment' });
+  await waitFor(() => expect(screen.getByTestId('paywall-plan-monthly').props.accessibilityState.checked).toBe(true));
+  await waitFor(() => expect(screen.getByTestId('paywall-terms').props.children).toContain('store will confirm'));
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  expect(Purchases.purchasePackage).toHaveBeenCalledWith(monthly);
+});
+
+test.each([
+  { eligibility: { annual: 2, monthly: 1 }, expected: 'yearly', trial: true },
+  { eligibility: { annual: 2, monthly: 2 }, expected: 'yearly', trial: true },
+  { eligibility: { annual: 1, monthly: 1 }, expected: 'yearly', trial: false },
+  { eligibility: { annual: 0, monthly: 0 }, expected: 'yearly', trial: false },
+])('direct payment entry selects $expected for eligibility $eligibility', async ({ eligibility, expected, trial }) => {
+  const both = { ...offering, annual: annualWithTrial, monthly, availablePackages: [annualWithTrial, monthly] } as unknown as PurchasesOffering;
+  jest.spyOn(Purchases, 'getOfferings').mockResolvedValue({ current: both, all: { default: both } });
+  jest.spyOn(Purchases, 'checkTrialOrIntroductoryPriceEligibility').mockResolvedValue({
+    annual: { status: eligibility.annual, description: 'Current annual eligibility' },
+    monthly: { status: eligibility.monthly, description: 'Current monthly eligibility' },
+  });
+  const screen = renderRouter(routes, { initialUrl: '/welcome/payment' });
+  await waitFor(() => expect(Purchases.checkTrialOrIntroductoryPriceEligibility).toHaveBeenCalledWith(['annual', 'monthly']));
+  await waitFor(() => expect(screen.getByTestId(`paywall-plan-${expected}`).props.accessibilityState.checked).toBe(true));
+  await waitFor(() => expect(screen.getByTestId('welcome-continue').props.accessibilityLabel.includes('free trial')).toBe(trial));
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  expect(Purchases.purchasePackage).toHaveBeenCalledWith(annualWithTrial);
+});
+
+test('an explicit paid plan choice overrides the monthly trial and remains the purchase target', async () => {
+  const both = { ...offering, annual, monthly, availablePackages: [annual, monthly] } as unknown as PurchasesOffering;
+  jest.spyOn(Purchases, 'getOfferings').mockResolvedValue({ current: both, all: { default: both } });
+  jest.spyOn(Purchases, 'checkTrialOrIntroductoryPriceEligibility').mockResolvedValue({
+    annual: { status: 1, description: 'Ineligible' }, monthly: { status: 2, description: 'Eligible' },
+  });
+  const screen = renderRouter(routes, { initialUrl: '/welcome/payment' });
+  await waitFor(() => expect(screen.getByTestId('paywall-plan-monthly').props.accessibilityState.checked).toBe(true));
+  await act(async () => { fireEvent.press(screen.getByTestId('paywall-plan-yearly')); });
+  expect(screen.getByTestId('paywall-plan-yearly').props.accessibilityState.checked).toBe(true);
+  expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).not.toContain('free trial');
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  expect(Purchases.purchasePackage).toHaveBeenCalledWith(annual);
+});
+
+test('eligibility changes on the paywall update its selection and purchase target', async () => {
+  const both = { ...offering, annual: annualWithTrial, monthly, availablePackages: [annualWithTrial, monthly] } as unknown as PurchasesOffering;
+  jest.spyOn(Purchases, 'getOfferings').mockResolvedValue({ current: both, all: { default: both } });
+  const eligibility = jest.spyOn(Purchases, 'checkTrialOrIntroductoryPriceEligibility').mockResolvedValueOnce({
+    annual: { status: 1, description: 'Ineligible' }, monthly: { status: 2, description: 'Eligible' },
+  }).mockResolvedValue({ annual: { status: 2, description: 'Eligible' }, monthly: { status: 1, description: 'Ineligible' } });
+  const screen = renderRouter(routes, { initialUrl: '/welcome/payment' });
+  await waitFor(() => expect(screen.getByTestId('paywall-plan-monthly').props.accessibilityState.checked).toBe(true));
+  await act(async () => { nativeListener?.({ ...noSubscription } as CustomerInfo); });
+  await waitFor(() => expect(eligibility).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(screen.getByTestId('paywall-plan-yearly').props.accessibilityState.checked).toBe(true));
+  expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toContain('free trial');
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  expect(Purchases.purchasePackage).toHaveBeenCalledWith(annualWithTrial);
 });
 
 test.each(['purchase', 'restore'])('%s opens the selected meal directly and a later SDK update cannot redirect twice', async action => {
