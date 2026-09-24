@@ -25,6 +25,8 @@ Maestro receives TERM after diagnostics, then KILL if same-group children remain
 The owned recorder receives INT when the flow ends or fails, then TERM and KILL only if same-group children remain.
 If the keeper observes recorder exit before accepting a stop request, the runner records `recorder-early-exit`, captures flow diagnostics, stops its owned Maestro group and fails with `recorder-ended-early` even when the recorder exit code is zero and the partial video has bytes.
 The recorder keeper acknowledges stop with whether it had already observed child exit, so a delayed exit IPC message cannot turn a partial recording into a pass.
+The keeper stamps its child exit observation before sending IPC, and the recording end field uses that stamp even when diagnostics or IPC delivery finish later.
+The stamp is the keeper's observation of process exit, not the exact last video frame; a missing exit receipt leaves the recording end and derived offsets unknown.
 If a Maestro watchdog fires before the early recorder exit is observed, `recorder-ended-early` is the final flow, failure and timing reason; the watchdog trigger is retained as `priorReason` and in its own diagnostic receipt.
 Each diagnostic has a separate numbered JSON and screenshot path, so a later recorder diagnostic does not overwrite the watchdog evidence.
 The handshake orders keeper observations; it cannot infer the operating system's exact exit instant if exit and stop race before either is observed.

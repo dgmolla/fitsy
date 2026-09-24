@@ -185,7 +185,7 @@ test('recorder completion during requested stop preserves a passing flow', async
   try {
     const recorderScript = "process.on('SIGINT',()=>{require('fs').writeFileSync(process.argv[1],'complete');process.exit(0)});setInterval(()=>{},1000)";
     const maestroScript = 'setTimeout(()=>process.exit(0),100)';
-    const { result, recorderResult } = await runRecordedFlow({
+    const { result, recorderResult, recorderStartedMs, recorderEndedMs } = await runRecordedFlow({
       recorderCommand: process.execPath, recorderArgs: ['-e', recorderScript, video],
       maestroCommand: process.execPath, maestroArgs: ['-e', maestroScript], udid: 'test-device', video,
       recorderLog: join(dir, 'recorder.log'), cwd: dir, env: process.env, dir, timeline, flow: '',
@@ -199,6 +199,10 @@ test('recorder completion during requested stop preserves a passing flow', async
     const events = readFileSync(timeline, 'utf8').trim().split('\n').map(JSON.parse);
     assert.equal(events.some(event => event.type === 'recorder-early-exit'), false);
     assert.ok(events.findIndex(event => event.type === 'maestro-end') < events.findIndex(event => event.type === 'recorder-end'));
+    assert.ok(recorderEndedMs >= recorderStartedMs);
+    assert.equal(recorderResult.observedAtMs, recorderEndedMs);
+    assert.ok(recorderEndedMs >= Date.parse(events.find(event => event.type === 'maestro-end').wall));
+    assert.ok(recorderEndedMs <= Date.parse(events.find(event => event.type === 'recorder-end').wall));
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -224,7 +228,7 @@ test('recorder exit observed by keeper before stop fails even when IPC delivery 
     const recorderScript = "const fs=require('fs');fs.writeFileSync(process.argv[1],'partial');setTimeout(()=>{fs.writeFileSync(process.argv[2],'exiting');process.exit(0)},450)";
     const maestroScript = "const fs=require('fs');const wait=()=>fs.existsSync(process.argv[1])?setTimeout(()=>process.exit(0),180):setTimeout(wait,10);wait()";
     const diagnostics = [];
-    const { result, recorderResult } = await runRecordedFlow({
+    const { result, recorderResult, recorderStartedMs, recorderEndedMs } = await runRecordedFlow({
       recorderCommand: process.execPath, recorderArgs: ['-e', recorderScript, video, marker], recorderSpawnImpl: delayedExitSpawnImpl,
       maestroCommand: process.execPath, maestroArgs: ['-e', maestroScript, marker], udid: 'test-device', video,
       recorderLog: join(dir, 'recorder.log'), cwd: dir, env: process.env, dir, timeline, flow: '',
@@ -235,6 +239,9 @@ test('recorder exit observed by keeper before stop fails even when IPC delivery 
     assert.equal(recorderResult.endedBeforeStop, true);
     assert.equal(readFileSync(video, 'utf8'), 'partial');
     assert.deepEqual(diagnostics, ['recorder-ended-early']);
+    const events = readFileSync(timeline, 'utf8').trim().split('\n').map(JSON.parse);
+    assert.ok(recorderEndedMs >= recorderStartedMs);
+    assert.ok(recorderEndedMs < Date.parse(events.find(event => event.type === 'maestro-end').wall), 'keeper exit observation precedes Maestro completion despite delayed IPC');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -243,11 +250,11 @@ test('recorder exit inside startup wait retains partial proof and captures diagn
   try {
     const recorderScript = "require('fs').writeFileSync(process.argv[1],'partial');setTimeout(()=>process.exit(0),40)";
     const diagnostics = [];
-    const { result, recorderResult } = await runRecordedFlow({
+    const { result, recorderResult, recorderStartedMs, recorderEndedMs } = await runRecordedFlow({
       recorderCommand: process.execPath, recorderArgs: ['-e', recorderScript, video],
       maestroCommand: process.execPath, maestroArgs: ['-e', 'setTimeout(()=>process.exit(0),1000)'],
       udid: 'test-device', video, recorderLog: join(dir, 'recorder.log'), cwd: dir, env: process.env,
-      dir, timeline, flow: '', diagnostic: async reason => diagnostics.push(reason), quietMs: 3000, wallMs: 3000, pollMs: 20,
+      dir, timeline, flow: '', diagnostic: async reason => { diagnostics.push(reason); await new Promise(resolve => setTimeout(resolve, 200)); }, quietMs: 3000, wallMs: 3000, pollMs: 20,
     });
     assert.equal(result.reason, 'recorder-ended-early');
     assert.equal(recorderResult.code, 0);
@@ -256,6 +263,8 @@ test('recorder exit inside startup wait retains partial proof and captures diagn
     assert.deepEqual(diagnostics, ['recorder-ended-early']);
     const events = readFileSync(timeline, 'utf8').trim().split('\n').map(JSON.parse);
     assert.equal(events.some(event => event.type === 'maestro-start'), false);
+    assert.ok(recorderEndedMs >= recorderStartedMs);
+    assert.ok(recorderEndedMs <= Date.parse(events.find(event => event.type === 'recorder-early-exit').wall) + 50, 'startup diagnostic time is outside the recording interval');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -264,7 +273,7 @@ test('recorder exit during watchdog diagnostics takes precedence and retains the
   try {
     const recorderScript = "const fs=require('fs');fs.writeFileSync(process.argv[1],'partial');const wait=()=>fs.existsSync(process.argv[2])?process.exit(0):setTimeout(wait,10);wait()";
     const diagnostics = [];
-    const { result, recorderResult } = await runRecordedFlow({
+    const { result, recorderResult, recorderStartedMs, recorderEndedMs } = await runRecordedFlow({
       recorderCommand: process.execPath, recorderArgs: ['-e', recorderScript, video, marker],
       maestroCommand: process.execPath, maestroArgs: ['-e', 'setInterval(()=>{},1000)'],
       udid: 'test-device', video, recorderLog: join(dir, 'recorder.log'), cwd: dir, env: process.env,
@@ -281,7 +290,12 @@ test('recorder exit during watchdog diagnostics takes precedence and retains the
     assert.equal(result.priorReason, 'inactivity-deadline');
     assert.deepEqual(diagnostics, ['inactivity-deadline', 'recorder-ended-early']);
     const failureReason = flowFailureReason(result, null, recorderResult, 'race-flow');
-    const summary = summarizeFlowTiming(null, { anchor: result.anchor, video });
+    const events = readFileSync(timeline, 'utf8').trim().split('\n').map(JSON.parse);
+    const observedEarlyExit = Date.parse(events.find(event => event.type === 'recorder-early-exit').wall);
+    assert.ok(recorderEndedMs >= recorderStartedMs);
+    assert.ok(recorderEndedMs <= observedEarlyExit + 50, 'watchdog diagnostic and cleanup time is outside the recording interval');
+    const command = { command: { tapOnElementCommand: {} }, metadata: { status: 'COMPLETED', timestamp: recorderStartedMs + 20, duration: 10 } };
+    const summary = summarizeFlowTiming([command], { anchor: result.anchor, video, recorderStartedMs, recorderEndedMs });
     summary.failureReason = failureReason;
     saveFlowOutcomeReceipts(dir, result, summary, { flow: 'race-flow', failureReason });
     const savedTiming = JSON.parse(readFileSync(join(dir, 'timing-summary.json'), 'utf8'));
@@ -290,7 +304,8 @@ test('recorder exit during watchdog diagnostics takes precedence and retains the
     assert.equal(savedFailure.failureReason, 'recorder-ended-early');
     assert.equal(savedTiming.priorReason, 'inactivity-deadline');
     assert.equal(savedFailure.priorReason, 'inactivity-deadline');
-    const events = readFileSync(timeline, 'utf8').trim().split('\n').map(JSON.parse);
+    assert.equal(savedTiming.recording.recorderEndedAt, new Date(recorderEndedMs).toISOString());
+    assert.equal(savedTiming.recording.afterLastCommandMs, Math.max(0, recorderEndedMs - (recorderStartedMs + 30)));
     assert.equal(events.find(event => event.type === 'maestro-end').reason, 'inactivity-deadline');
     assert.ok(events.find(event => event.type === 'recorder-early-exit'));
     assert.equal(readFileSync(video, 'utf8'), 'partial');

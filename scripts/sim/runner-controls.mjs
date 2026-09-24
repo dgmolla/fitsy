@@ -89,7 +89,7 @@ export function summarizeFlowTiming(commands, { anchor = null, video = null, rec
   summary.recording = { video, recorderStartedAt: recorderStartedMs === null ? null : new Date(recorderStartedMs).toISOString(),
     recorderEndedAt: recorderEndedMs === null ? null : new Date(recorderEndedMs).toISOString(),
     ...recordingOffsets(summary.commands, recorderStartedMs, recorderEndedMs),
-    note: 'Recording boundaries include driver startup and shutdown. They do not establish visual or app idle without reviewing the video.' };
+    note: 'Recording boundaries are runner start and keeper-observed recorder exit, not exact first and last video frames. Missing exit observation remains unknown. Offsets do not establish visual or app idle without reviewing the video.' };
   return summary;
 }
 export function saveFlowOutcomeReceipts(dir, result, summary, failureDetail = null) {
@@ -323,6 +323,8 @@ export async function stopOwnedRecorder(recorder, { intGraceMs = 10000, termGrac
   const result = await waitOrTimeout(recorder.completed, killGraceMs);
   if (!result) throw new Error(`Owned recorder command ${recorder.commandPid} has no exit receipt; inspect ${recorder.log}`);
   return { state: 'stopped', code: result.code, signal: result.signal, endedBeforeStop: stopAcknowledgement.commandExitedBeforeStop,
+    observedAtMs: Number.isFinite(result.observedAtMs) ? result.observedAtMs : null,
+    observedMonotonicNs: result.observedMonotonicNs || null,
     file: recorder.file,
     bytes: existsSync(recorder.file) ? statSync(recorder.file).size : null };
 }
@@ -447,5 +449,6 @@ export async function runRecordedFlow({ recorderCommand = 'xcrun', recorderArgs 
     process.off('SIGINT', onInt); process.off('SIGTERM', onTerm);
   }
   if (interruption.signal.aborted && !result.reason) result.reason = interruptionReason(interruption.signal);
-  return { result, recorderResult, recorderStartedMs, recorderEndedMs: Date.now() };
+  return { result, recorderResult, recorderStartedMs,
+    recorderEndedMs: Number.isFinite(recorderResult?.observedAtMs) ? recorderResult.observedAtMs : null };
 }

@@ -10,6 +10,7 @@ const report = message => { if (process.connected) process.send(message); };
 let child;
 let closing = false;
 let commandExitObserved = false;
+const exitObservation = () => ({ observedAtMs: Date.now(), observedMonotonicNs: process.hrtime.bigint().toString() });
 process.on('message', message => {
   if (message?.type === 'recorder-stop') {
     // This keeper observes both child exit and stop intent on one event loop.
@@ -37,9 +38,9 @@ process.on('disconnect', () => {
 try {
   child = spawn(command, args, { stdio: ['ignore', 'inherit', 'inherit'], detached: false });
   child.once('spawn', () => report({ type: 'command-start', pid: child.pid }));
-  child.once('error', error => { commandExitObserved = true; report({ type: 'command-exit', code: null, signal: null, error: error.message }); });
-  child.once('exit', (code, signal) => { commandExitObserved = true; report({ type: 'command-exit', code, signal }); });
+  child.once('error', error => { commandExitObserved = true; report({ type: 'command-exit', code: null, signal: null, error: error.message, ...exitObservation() }); });
+  child.once('exit', (code, signal) => { commandExitObserved = true; report({ type: 'command-exit', code, signal, ...exitObservation() }); });
 } catch (error) {
   commandExitObserved = true;
-  report({ type: 'command-exit', code: null, signal: null, error: error.message });
+  report({ type: 'command-exit', code: null, signal: null, error: error.message, ...exitObservation() });
 }
