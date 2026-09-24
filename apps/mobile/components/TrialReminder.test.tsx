@@ -26,9 +26,11 @@ jest.mock('react-native-purchases-ui', () => jest.requireActual('../__mocks__/re
 jest.mock('expo-constants', () => ({ __esModule: true, default: { expoConfig: { extra: { revenueCat: { ios: 'test-store-key' } } } } }));
 jest.mock('expo-notifications', () => ({ requestPermissionsAsync: jest.fn(), scheduleNotificationAsync: jest.fn() }));
 let mockEligibility: Record<string, boolean> = { annual: true };
+const annual = { product: { identifier: 'annual', priceString: '$59.99', subscriptionPeriod: 'P1Y',
+  introPrice: { price: 0, priceString: '$0', period: 'P1W', cycles: 1 } } };
+let mockOffering: { annual: typeof annual; monthly: null } | null = { annual, monthly: null };
 jest.mock('../lib/usePurchases', () => ({ usePurchases: () => ({
-  offering: { annual: { product: { identifier: 'annual', priceString: '$59.99', subscriptionPeriod: 'P1Y',
-    introPrice: { price: 0, priceString: '$0', period: 'P1W', cycles: 1 } } }, monthly: null },
+  offering: mockOffering,
   ready: true, introEligibilityReady: true, introEligibility: mockEligibility, refreshOffering: jest.fn(), entitled: false,
 }) }));
 const routes = { _layout: () => <Stack screenOptions={{ headerShown: false }} />, 'welcome/trial': () => <Button title="Continue to reminder" onPress={() => router.push('/welcome/trial-reminder')} />,
@@ -37,10 +39,19 @@ const originalFetch = global.fetch;
 afterEach(() => { global.fetch = originalFetch; });
 beforeEach(async () => {
   mockEligibility = { annual: true };
+  mockOffering = { annual, monthly: null };
   global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ active: false }) });
   await AsyncStorage.clear();
   jest.clearAllMocks();
   (Notifications.requestPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
+});
+
+test('a saved reminder checkpoint returns to trial retry when plans are unavailable', async () => {
+  mockOffering = null;
+  const screen = renderRouter(routes, { initialUrl: '/welcome/trial-reminder' });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/trial'));
+  expect(screen.queryByText('Choose a plan')).toBeNull();
+  expect(Notifications.requestPermissionsAsync).not.toHaveBeenCalled();
 });
 
 test.each([['ineligible', { annual: false }], ['unknown', {}]])('%s saved reminder checkpoint goes to plans without requesting permission', async (_label, eligibility) => {

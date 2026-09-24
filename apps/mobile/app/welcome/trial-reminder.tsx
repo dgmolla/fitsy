@@ -21,13 +21,12 @@ export default function TrialReminderScreen() {
   const focused = useIsFocused();
   useOnboardingStep('trial-reminder');
   const [busy, setBusy] = useState(false);
-  const { ready, offering, introEligibility, introEligibilityReady, refreshOffering, entitled } = usePurchases();
+  const { ready, offering, introEligibility, introEligibilityReady, entitled } = usePurchases();
   const offers = [offering?.annual, offering?.monthly].map(pkg => purchaseTerms(pkg?.product, pkg ? introEligibility[pkg.product.identifier] : undefined));
   const trial = offers.find(terms => terms?.trial)?.trial;
   const { begin } = useRouteContinuation();
   const pending = useRef(false);
   useEffect(() => { if (focused && entitled === true) router.replace('/welcome/payment'); }, [focused, entitled]);
-  useEffect(() => { if (!offering) void refreshOffering(); }, [offering, refreshOffering]);
   useEffect(() => { if (trial) { trackOnboardingScreenView('trial-reminder'); trackNotificationPrimingShown(); } }, [trial]);
   async function registerPushToken() {
     try { const token = await getExpoPushTokenAsync(); if (token) await api.post('/api/user/push-token', { token }); }
@@ -68,7 +67,9 @@ export default function TrialReminderScreen() {
     trackNotificationPrimingSkipTapped();
     router.push('/welcome/payment');
   }
-  if (!ready || (offering && !introEligibilityReady)) return null;
+  if (!ready) return null;
+  if (!offering) return <Redirect href="/welcome/trial" />;
+  if (!introEligibilityReady) return null;
   if (!trial) return <Redirect href="/welcome/payment" />;
   return <WelcomeScreen progress={1} title="A heads-up before your trial ends."
     subtitle="Allow notifications and we'll remind you before an eligible trial renews."
