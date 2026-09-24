@@ -24,6 +24,11 @@ describe('personalized onboarding illustrations', () => {
     expect(screen.getByText(/Illustration only, not measured results/)).toBeTruthy();
     expect(screen.getByLabelText(/Illustrative consistency with your muscle-building plan/)).toBeTruthy();
   });
+  it('describes target ranking without promising hard meal filters', () => {
+    const screen = render(<OnboardingFitnessPayoff pitch={onboardingPitch('check_online')} />);
+    expect(screen.getByText('Collected nutrition. Choices ranked around your targets.')).toBeTruthy();
+    expect(screen.queryByText(/Choices filtered/)).toBeNull();
+  });
   it('updates the graph context when the chosen goal changes', () => {
     const screen = render(<OnboardingGoalGraph goal="lose_fat" />);
     expect(screen.getByText('Consistency with your fat-loss plan')).toBeTruthy();

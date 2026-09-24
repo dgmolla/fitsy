@@ -20,11 +20,11 @@ function props() { return { annual, monthly, plan: 'yearly' as const, discovery:
 
 test('timeline derives trial end and reminder day from the selected store offer', () => {
   const screen = render(<PaywallTimeline terms={annual} />);
-  expect(screen.getByText('Around day 5')).toBeTruthy();
+  expect(screen.getByText('Optional reminder around day 5')).toBeTruthy();
   expect(screen.getByText('Day 7: billing starts')).toBeTruthy();
-  expect(screen.getByText(/With notifications on, get a heads-up/)).toBeTruthy();
+  expect(screen.getByText('Opt in to trial reminders and allow notifications for a heads-up before renewal.')).toBeTruthy();
   screen.rerender(<PaywallTimeline terms={purchaseTerms({ ...product, introPrice: { ...product.introPrice, period: 'P2W' } }, true)} />);
-  expect(screen.getByText('Around day 12')).toBeTruthy();
+  expect(screen.getByText('Optional reminder around day 12')).toBeTruthy();
   expect(screen.getByText('Day 14: billing starts')).toBeTruthy();
 });
 

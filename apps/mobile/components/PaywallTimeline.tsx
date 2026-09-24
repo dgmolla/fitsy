@@ -10,7 +10,7 @@ export function PaywallTimeline({ terms }: { terms: Terms }) {
   const reminderDay = terms?.trialDays ? terms.trialDays - TRIAL_REMINDER_LEAD_DAYS : null;
   const rows = terms?.trial ? [
     { icon: 'lock-open-outline' as const, title: 'Today', body: 'Unlock meals that fit your goals, full menus and saved favorites.' },
-    { icon: 'notifications-outline' as const, title: reminderDay && reminderDay > 0 ? `Around day ${reminderDay}` : 'Before your trial ends', body: 'With notifications on, get a heads-up before your trial ends.' },
+    { icon: 'notifications-outline' as const, title: reminderDay && reminderDay > 0 ? `Optional reminder around day ${reminderDay}` : 'Optional reminder before your trial ends', body: 'Opt in to trial reminders and allow notifications for a heads-up before renewal.' },
     { icon: 'sparkles-outline' as const, title: terms.trialDays ? `Day ${terms.trialDays}: billing starts` : `After ${terms.trial}: billing starts`, body: `${terms.recurring}, unless you cancel at least 24 hours before your trial ends.` },
   ] : [
     { icon: 'lock-open-outline' as const, title: terms ? 'Access starts today' : 'Your plan, clearly explained', body: 'Find meals that fit your goals, explore full menus and save favorites.' },

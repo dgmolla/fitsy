@@ -9,8 +9,8 @@ export function OnboardingFitnessPayoff({ pitch }: { pitch: Pitch }) {
   if (pitch.approach === 'check_online') return <View style={s.canvas} testID="payoff-check_online">
     <Text style={s.eyebrow}>YOUR SHORTLIST STARTS HERE</Text>
     <View style={s.card}><View style={s.row}><StoryIcon name="options-outline" /><Text style={s.title}>Your meal targets</Text></View><View style={s.chips}><Text style={s.chip}>Calorie range</Text><Text style={s.chip}>Protein target</Text></View></View>
-    <View style={s.center}><StoryIcon name="funnel-outline" size={32} /></View>
-    <StoryMeal compact /><StoryNote>Collected nutrition. Choices filtered around you.</StoryNote>
+    <View style={s.center}><StoryIcon name="swap-vertical-outline" size={32} /></View>
+    <StoryMeal compact /><StoryNote>Collected nutrition. Choices ranked around your targets.</StoryNote>
   </View>;
   if (pitch.approach === 'calorie_apps') return <View style={s.canvas} testID="payoff-calorie_apps">
     <Text style={s.eyebrow}>THE DISH, WITH MORE CONTEXT</Text><StoryMeal />
