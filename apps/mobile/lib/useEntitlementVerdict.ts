@@ -41,10 +41,9 @@ import { trackEntitlementMismatch, trackEntitlementSyncFailed } from './analytic
 // the webhook corrects the server row well inside the window.
 export const STORE_GRACE_MS = 60_000;
 
-// Boot and sign-in hold every gate (`entitled === null`) for up to this long
-// so the server can answer BEFORE anything gates. Past the cap the cache (at
-// boot) or the device's RevenueCat state stands in, and the still-running
-// sync applies the late answer when it arrives.
+// Each boot/sign-in prerequisite uses this cap so a stalled read cannot hold
+// every gate indefinitely. The cache (at boot) or the device's RevenueCat
+// state stands in when the server cannot answer; a late server answer applies.
 export const BOOT_VERDICT_CAP_MS = 1500;
 
 export interface EntitlementVerdict {
@@ -62,9 +61,9 @@ export interface EntitlementVerdict {
    */
   syncEntitlement: (reason: EntitlementSyncReason) => Promise<boolean | null>;
   /**
-   * Boot: cache read + capped server fetch run in parallel with the caller's
-   * RevenueCat work (`rcReady`), then one fold: server, else cache, else the
-   * device. Rejects if `rcReady` rejects (see settleAfterBootFailure).
+   * Boot: bounded cache, server, and RevenueCat identity reads run in
+   * parallel, then one fold: server, else cache, else the device.
+   * Rejects if `rcReady` rejects (see settleAfterBootFailure).
    */
   resolveAtBoot: (
     userId: string | undefined,
@@ -189,10 +188,13 @@ export function useEntitlementVerdict({
 
   const resolveAtBoot = useCallback(
     async (userId: string | undefined, rcReady: Promise<CustomerInfo | null>, isCancelled: () => boolean) => {
-      const cachedP = readCachedEntitlement();
+      const cachedP = withinMs(readCachedEntitlement(), BOOT_VERDICT_CAP_MS);
       const answer = userId ? fetchVerdict('boot', userId) : Promise.resolve(false);
-      const info = await rcReady;
-      const [cached, server] = await Promise.all([cachedP, withinMs(answer, BOOT_VERDICT_CAP_MS)]);
+      const [info, cached, server] = await Promise.all([
+        withinMs(rcReady, BOOT_VERDICT_CAP_MS),
+        cachedP,
+        withinMs(answer, BOOT_VERDICT_CAP_MS),
+      ]);
       if (isCancelled()) return;
       if (!userId) {
         // Anonymous: never left on null, and a stale cache must not count.
@@ -233,7 +235,7 @@ export function useEntitlementVerdict({
 
   const settleAfterBootFailure = useCallback(
     async (userId: string | undefined, isCancelled: () => boolean) => {
-      const cached = userId ? await readCachedEntitlement() : null;
+      const cached = userId ? await withinMs(readCachedEntitlement(), BOOT_VERDICT_CAP_MS) : null;
       if (isCancelled()) return;
       setEntitled((current) => current ?? cached ?? (userId ? isProActive(customerInfoRef.current) : false));
     },
@@ -247,7 +249,7 @@ export function useEntitlementVerdict({
       // subscriber to the paywall for the length of a round trip.
       const epoch = ++signInEpochRef.current;
       setEntitled(null);
-      const info = await identify();
+      const info = await withinMs(identify().catch(() => null), BOOT_VERDICT_CAP_MS);
       if (epoch !== signInEpochRef.current) return;
       const server = await withinMs(syncEntitlement('sign_in'), BOOT_VERDICT_CAP_MS);
       if (epoch !== signInEpochRef.current) return;

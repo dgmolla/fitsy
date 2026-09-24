@@ -5,6 +5,7 @@
  */
 import {
   deferred,
+  freeInfo,
   flush,
   mockAnalytics,
   mockApi,
@@ -28,6 +29,83 @@ setupPurchasesMocks();
 type StatusResult = { active: boolean; status: null; expiresAt: null };
 
 describe('boot', () => {
+  it('bounds a stalled session read and resolves a late signed-in session', async () => {
+    useFakeTimersKeepingFlush();
+    const sessionRead = deferred<{ data: { session: { user: { id: string } } } }>();
+    mockAuth.getSession.mockReturnValueOnce(sessionRead.promise);
+    mockAuth.session = { user: { id: 'u2' } };
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    const { result } = renderProvider();
+    await flush();
+    expect(result.current.ready).toBe(false);
+    act(() => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
+    await flush();
+    expect(result.current.entitled).toBe(false);
+    await act(async () => { sessionRead.resolve({ data: { session: mockAuth.session! } }); });
+    await flush();
+    expect(mockRc.identifyPurchasesUser).toHaveBeenCalledWith('u2');
+    await waitFor(() => expect(result.current.entitled).toBe(true));
+  });
+
+  it('bounds a stalled cache read without suppressing a known server verdict', async () => {
+    useFakeTimersKeepingFlush();
+    const storage = jest.requireMock('@react-native-async-storage/async-storage').default;
+    jest.spyOn(storage, 'getItem').mockImplementationOnce(() => new Promise(() => {}));
+    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null });
+    const { result } = renderProvider();
+    await flush();
+    act(() => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
+    await flush();
+    expect(result.current.entitled).toBe(true);
+  });
+
+  it('bounds an identity read that never settles while preserving a signed-in server verdict', async () => {
+    useFakeTimersKeepingFlush();
+    mockRc.identifyPurchasesUser.mockImplementationOnce(() => new Promise(() => {}));
+    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null });
+    const { result } = renderProvider();
+    await flush();
+    expect(result.current.ready).toBe(false);
+    act(() => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
+    await flush();
+    expect(result.current.ready).toBe(true);
+    expect(result.current.entitled).toBe(true);
+    expect(result.current.customerInfo).toBeNull();
+  });
+
+  it('accepts a late identity for the same account and rechecks a possible missed entitlement', async () => {
+    useFakeTimersKeepingFlush();
+    const identity = deferred<typeof proInfo>();
+    mockRc.identifyPurchasesUser.mockReturnValueOnce(identity.promise);
+    const { result } = renderProvider();
+    await flush();
+    act(() => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
+    await flush();
+    expect(result.current.entitled).toBe(false);
+    await act(async () => { identity.resolve(proInfo); });
+    await flush();
+    expect(result.current.isPro).toBe(true);
+    expect(mockApi.syncSubscription).toHaveBeenCalledWith('mismatch');
+  });
+
+  it('ignores an old identity result after a new account signs in during boot', async () => {
+    useFakeTimersKeepingFlush();
+    const oldIdentity = deferred<typeof proInfo>();
+    mockRc.identifyPurchasesUser.mockReturnValueOnce(oldIdentity.promise).mockResolvedValueOnce(proInfo);
+    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null });
+    const { result } = renderProvider();
+    await flush();
+    mockAuth.session = { user: { id: 'u2' } };
+    await act(async () => { mockAuth.listener?.('SIGNED_IN', mockAuth.session); });
+    act(() => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
+    await flush();
+    expect(mockRc.identifyPurchasesUser).toHaveBeenCalledWith('u2');
+    await act(async () => { oldIdentity.resolve(freeInfo); });
+    expect(result.current.ready).toBe(true);
+    expect(result.current.isPro).toBe(true);
+    expect(mockRc.identifyPurchasesUser).toHaveBeenCalledTimes(2);
+  });
+
   it('settles unknown trial eligibility when CustomerInfo is unavailable but plans load', async () => {
     mockRc.identifyPurchasesUser.mockResolvedValueOnce(null as never);
     mockRc.fetchCurrentOffering.mockResolvedValueOnce({ availablePackages: [{ product: { identifier: 'annual' } }] } as never);
@@ -266,13 +344,13 @@ describe('boot', () => {
     expect(mockApi.syncSubscription).not.toHaveBeenCalled();
   });
 
-  it('still becomes ready with a verdict when boot throws (cache, else device, else false)', async () => {
-    // Throws before the RevenueCat read completes: the cache is consulted anyway.
+  it('keeps the server verdict when offering fails, and settles when identity fails', async () => {
+    // Store catalog failure cannot make a stale cache overrule the server.
     mockStore[ENTITLEMENT_CACHE_KEY] = 'true';
     mockRc.fetchCurrentOffering.mockRejectedValueOnce(new Error('boom'));
     const a = renderProvider();
     await waitFor(() => expect(a.result.current.ready).toBe(true));
-    expect(a.result.current.entitled).toBe(true);
+    expect(a.result.current.entitled).toBe(false);
     a.unmount();
 
     // Throws after identity, no cache: the device verdict.

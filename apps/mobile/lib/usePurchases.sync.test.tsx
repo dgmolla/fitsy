@@ -71,6 +71,50 @@ describe('syncEntitlement', () => {
 });
 
 describe('sign-in', () => {
+  it('bounds a never-settling RevenueCat identify and still applies the signed-in server verdict', async () => {
+    mockAuth.session = null;
+    const { result } = renderProvider();
+    await waitFor(() => expect(result.current.entitled).toBe(false));
+    useFakeTimersKeepingFlush();
+    mockAuth.session = { user: { id: 'u2' } };
+    mockRc.identifyPurchasesUser.mockImplementationOnce(() => new Promise(() => {}));
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    await act(async () => { mockAuth.listener?.('SIGNED_IN', mockAuth.session); });
+    expect(result.current.entitled).toBeNull();
+    act(() => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
+    await flush();
+    expect(result.current.entitled).toBe(true);
+    expect(result.current.isPro).toBe(false);
+  });
+
+  it('uses the server verdict when sign-in identity rejects', async () => {
+    mockAuth.session = null;
+    const { result } = renderProvider();
+    await waitFor(() => expect(result.current.entitled).toBe(false));
+    mockAuth.session = { user: { id: 'u2' } };
+    mockRc.identifyPurchasesUser.mockRejectedValueOnce(new Error('store unavailable'));
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    await act(async () => { mockAuth.listener?.('SIGNED_IN', mockAuth.session); });
+    await waitFor(() => expect(result.current.entitled).toBe(true));
+  });
+
+  it('ignores an old account identity that completes after a newer sign-in', async () => {
+    mockAuth.session = null;
+    const { result } = renderProvider();
+    await waitFor(() => expect(result.current.entitled).toBe(false));
+    const oldIdentity = deferred<typeof freeInfo>();
+    mockRc.identifyPurchasesUser.mockReturnValueOnce(oldIdentity.promise).mockResolvedValueOnce(proInfo);
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    mockAuth.session = { user: { id: 'u2' } };
+    await act(async () => { mockAuth.listener?.('SIGNED_IN', mockAuth.session); });
+    mockAuth.session = { user: { id: 'u3' } };
+    await act(async () => { mockAuth.listener?.('SIGNED_IN', mockAuth.session); });
+    await waitFor(() => expect(result.current.isPro).toBe(true));
+    await act(async () => { oldIdentity.resolve(freeInfo); });
+    expect(result.current.isPro).toBe(true);
+    expect(result.current.entitled).toBe(true);
+  });
+
   it('holds the gates (null) and never shows a stale "false" before a prompt server "true"', async () => {
     mockAuth.session = null;
     const { result, seen } = renderProviderTracking();

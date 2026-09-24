@@ -76,6 +76,7 @@ jest.mock('./supabase', () => ({
 }));
 
 export const mockAnalytics = {
+  trackOnboardingScreenView: jest.fn(),
   trackEntitlementMismatch: jest.fn(),
   trackEntitlementSyncFailed: jest.fn(),
   trackPaywallShown: jest.fn(),

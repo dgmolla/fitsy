@@ -21,6 +21,8 @@ export interface AuthLifecycle {
   beginBoot: () => void;
   /** Boot read the session for this user (undefined = anonymous). */
   markBootUser: (userId: string | undefined) => void;
+  /** A session read that passed the boot cap eventually found a user. */
+  resumeLateBootUser: (userId: string) => void;
   /** Boot settled (or failed): run a sign-in that landed meanwhile for a different user. */
   finishBoot: (cancelled: boolean) => void;
 }
@@ -46,12 +48,16 @@ export function useAuthLifecycle({
     (userId: string) => {
       void resolveAfterSignIn(async () => {
         const info = await identifyPurchasesUser(userId);
-        if (info) setCustomerInfo(info);
+        if (info) {
+          const { data } = await supabase.auth.getSession();
+          if (data.session?.user.id === userId) setCustomerInfo(info);
+        }
         return info;
-      }).then(() => {
-        // From here a duplicate SIGNED_IN for this user is a no-op.
-        bootUserIdRef.current = userId;
-      });
+      }).then(async () => {
+        // A late identity for an older account cannot suppress a new sign-in.
+        const { data } = await supabase.auth.getSession();
+        if (data.session?.user.id === userId) bootUserIdRef.current = userId;
+      }).catch(() => undefined);
     },
     [resolveAfterSignIn, setCustomerInfo],
   );
@@ -85,6 +91,13 @@ export function useAuthLifecycle({
   const markBootUser = useCallback((userId: string | undefined) => {
     bootUserIdRef.current = userId ?? null;
   }, []);
+  const resumeLateBootUser = useCallback((userId: string) => {
+    if (bootPendingRef.current) {
+      pendingSignInUserIdRef.current = userId;
+    } else if (userId !== bootUserIdRef.current || entitledRef.current === null) {
+      signIn(userId);
+    }
+  }, [entitledRef, signIn]);
   const finishBoot = useCallback(
     (cancelled: boolean) => {
       bootPendingRef.current = false;
@@ -96,5 +109,5 @@ export function useAuthLifecycle({
   );
 
   // Stable identity: the provider's boot effect depends on this object.
-  return useMemo(() => ({ beginBoot, markBootUser, finishBoot }), [beginBoot, markBootUser, finishBoot]);
+  return useMemo(() => ({ beginBoot, markBootUser, resumeLateBootUser, finishBoot }), [beginBoot, markBootUser, resumeLateBootUser, finishBoot]);
 }

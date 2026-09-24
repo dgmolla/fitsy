@@ -32,7 +32,7 @@ import type {
 import { supabase } from './supabase';
 import { withinMs } from './async';
 import type { EntitlementSyncReason } from './entitlement';
-import { useEntitlementVerdict } from './useEntitlementVerdict';
+import { BOOT_VERDICT_CAP_MS, useEntitlementVerdict } from './useEntitlementVerdict';
 import { useAuthLifecycle } from './useAuthLifecycle';
 import {
   addCustomerInfoListener,
@@ -130,41 +130,64 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   const { entitled, inStoreGrace, syncEntitlement, resolveAtBoot, settleAfterBootFailure, markStoreConfirmed } = verdict;
   const auth = useAuthLifecycle({ verdict, setCustomerInfo });
 
-  // Boot: one session read, then the RevenueCat identify/offering and the
-  // verdict's cache read + capped server fetch all run in parallel; the
-  // verdict folds once the RevenueCat read is in (see resolveAtBoot).
+  // Boot: the offering loads independently of the bounded identity and
+  // verdict reads. A stalled store catalog must not hold every gate.
   useEffect(() => {
     const configured = configurePurchases();
     let unsubscribe: (() => void) | undefined;
     let cancelled = false;
+    let bootOpen = true;
     const isCancelled = () => cancelled;
     auth.beginBoot();
 
     (async () => {
       let userId: string | undefined;
       try {
-        const { data } = await supabase.auth.getSession();
-        userId = data.session?.user.id;
+        const sessionRead = supabase.auth.getSession();
+        const sessionResult = await withinMs(sessionRead, BOOT_VERDICT_CAP_MS);
+        if (!sessionResult) {
+          void sessionRead.then(async ({ data }) => {
+            if (cancelled || !data.session) return;
+            const current = await supabase.auth.getSession();
+            if (!cancelled && current.data.session?.user.id === data.session.user.id) {
+              auth.resumeLateBootUser(data.session.user.id);
+            }
+          }).catch(() => undefined);
+        }
+        userId = sessionResult?.data.session?.user.id;
         auth.markBootUser(userId);
-        const rcReady = (async (): Promise<CustomerInfo | null> => {
-          if (!configured) return null;
-          const [info, off] = await Promise.all([
-            userId ? identifyPurchasesUser(userId) : fetchCustomerInfo(),
-            fetchCurrentOffering(),
-          ]);
-          if (cancelled) return info;
-          setCustomerInfo(info);
-          setOffering(off);
-          unsubscribe = addCustomerInfoListener(setCustomerInfo);
-          return info;
-        })();
+        if (configured) {
+          void fetchCurrentOffering().then(off => {
+            if (!cancelled) setOffering(off);
+          }).catch(() => undefined);
+        }
+        const rcReady = configured
+          ? (userId ? identifyPurchasesUser(userId) : fetchCustomerInfo()).then(async info => {
+            if (cancelled) return info;
+            // Once boot has closed, auth may have moved to another account.
+            const sameUser = bootOpen || await supabase.auth.getSession().then(
+              ({ data }) => data.session?.user.id === userId,
+              () => false,
+            );
+            if (sameUser && !cancelled) {
+              setCustomerInfo(info);
+              unsubscribe = addCustomerInfoListener(setCustomerInfo);
+              if (!bootOpen && isProActive(info) && verdict.entitledRef.current === false) {
+                void syncEntitlement('mismatch');
+              }
+            }
+            return info;
+          })
+          : Promise.resolve(null);
         await resolveAtBoot(userId, rcReady, isCancelled);
+        if (!cancelled) setCustomerInfoSettled(true);
       } catch (err) {
         // The seams swallow their own errors, but no gate may hold forever.
         console.warn('[purchases] boot failed', err instanceof Error ? err.message : err);
         if (!cancelled) setCustomerInfoSettled(true);
         await settleAfterBootFailure(userId, isCancelled);
       } finally {
+        bootOpen = false;
         auth.finishBoot(cancelled);
       }
     })();
@@ -173,7 +196,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
       cancelled = true;
       unsubscribe?.();
     };
-  }, [setCustomerInfo, resolveAtBoot, settleAfterBootFailure, auth]);
+  }, [setCustomerInfo, resolveAtBoot, settleAfterBootFailure, syncEntitlement, verdict.entitledRef, auth]);
 
   const refresh = useCallback(async () => {
     setCustomerInfo(await fetchCustomerInfo());
