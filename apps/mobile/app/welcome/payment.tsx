@@ -29,8 +29,9 @@ export default function PaymentScreen() {
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [modal, setModal] = useState<PaywallExitModal>('none');
-  const { offering, introEligibility, refreshOffering, purchase, restore, entitled } = usePurchases();
+  const { offering, introEligibility, introEligibilityReady, refreshOffering, purchase, restore, entitled } = usePurchases();
   const purchaseBusy = useRef(false);
+  const settledDefaultPlan = useRef<PlanId | null>(null);
 
   // A verdict that turns true while this screen is up (late boot / sign-in
   // answer, a subscription bought on another device) goes through
@@ -49,7 +50,11 @@ export default function PaymentScreen() {
   // explicitly chosen another available plan. Recompute when store terms or
   // eligibility change while the paywall is open.
   const defaultPlan: PlanId = monthlyTerms?.trial && !annualTerms?.trial ? 'monthly' : annualTerms ? 'yearly' : monthlyTerms ? 'monthly' : 'yearly';
-  const plan = chosenPlan && (chosenPlan === 'yearly' ? annualTerms : monthlyTerms) ? chosenPlan : defaultPlan;
+  const checkingPlans = !!offering && !introEligibilityReady;
+  if (!checkingPlans) settledDefaultPlan.current = defaultPlan;
+  const heldPlan = settledDefaultPlan.current;
+  const automaticPlan = checkingPlans && heldPlan && (heldPlan === 'yearly' ? annualTerms : monthlyTerms) ? heldPlan : defaultPlan;
+  const plan = chosenPlan && (chosenPlan === 'yearly' ? annualTerms : monthlyTerms) ? chosenPlan : automaticPlan;
   const discountedAnnual =
     offering?.availablePackages.find((p) => p.identifier === 'annual_discount') ?? null;
   const selected = plan === 'yearly' ? offering?.annual : offering?.monthly;
@@ -99,7 +104,7 @@ export default function PaymentScreen() {
   // selected package directly through the RevenueCat SDK (no dashboard-designed
   // hosted paywall).
   async function handleStart(discounted = false) {
-    if (purchaseBusy.current || restoring) return;
+    if (purchaseBusy.current || restoring || checkingPlans) return;
     purchaseBusy.current = true;
     setLoading(true);
     try {
@@ -159,6 +164,7 @@ export default function PaymentScreen() {
         discovery={discovery}
         loading={loading}
         restoring={restoring}
+        checkingPlans={checkingPlans}
         onSelect={setChosenPlan}
         onBack={navigation.canGoBack() ? () => router.back() : undefined}
         onRestore={() => { void handleRestore(); }}

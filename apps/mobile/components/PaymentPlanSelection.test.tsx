@@ -152,6 +152,32 @@ test('eligibility changes on the paywall update its selection and purchase targe
   expect(Purchases.purchasePackage).toHaveBeenCalledWith(annualWithTrial);
 });
 
+test('a CustomerInfo refresh cannot switch a monthly trial to a paid annual purchase while eligibility is pending', async () => {
+  const both = { ...offering, annual, monthly, availablePackages: [annual, monthly] } as unknown as PurchasesOffering;
+  jest.spyOn(Purchases, 'getOfferings').mockResolvedValue({ current: both, all: { default: both } });
+  let settleEligibility: ((value: Record<string, { status: number; description: string }>) => void) | undefined;
+  const eligibility = jest.spyOn(Purchases, 'checkTrialOrIntroductoryPriceEligibility').mockResolvedValueOnce({
+    annual: { status: 1, description: 'Ineligible' }, monthly: { status: 2, description: 'Eligible' },
+  }).mockImplementationOnce(() => new Promise(resolve => { settleEligibility = resolve; }));
+  const screen = renderRouter(routes, { initialUrl: '/welcome/payment' });
+  await waitFor(() => expect(screen.getByTestId('paywall-plan-monthly').props.accessibilityState.checked).toBe(true));
+  expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toContain('free trial');
+
+  const updatedInfo = { ...noSubscription } as CustomerInfo;
+  (Purchases.getCustomerInfo as jest.Mock).mockResolvedValue(updatedInfo);
+  await act(async () => { nativeListener?.(updatedInfo); });
+  await waitFor(() => expect(eligibility).toHaveBeenCalledTimes(2));
+  expect(screen.getByTestId('paywall-plan-monthly').props.accessibilityState.checked).toBe(true);
+  expect(screen.getByTestId('welcome-continue').props.accessibilityState.disabled).toBe(true);
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  expect(Purchases.purchasePackage).not.toHaveBeenCalled();
+
+  await act(async () => { settleEligibility?.({ annual: { status: 1, description: 'Ineligible' }, monthly: { status: 2, description: 'Eligible' } }); });
+  await waitFor(() => expect(screen.getByTestId('welcome-continue').props.accessibilityState.disabled).toBe(false));
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  expect(Purchases.purchasePackage).toHaveBeenCalledWith(monthly);
+});
+
 test.each(['purchase', 'restore'])('%s opens the selected meal directly and a later SDK update cannot redirect twice', async action => {
   const screen = await openPayment();
   await act(async () => { fireEvent.press(screen.getByTestId(action === 'purchase' ? 'welcome-continue' : 'paywall-restore')); });

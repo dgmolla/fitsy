@@ -19,6 +19,7 @@ interface Props {
   discovery: PaywallDiscovery;
   loading: boolean;
   restoring: boolean;
+  checkingPlans: boolean;
   onSelect: (plan: PlanId) => void;
   onBack?: () => void;
   onRestore: () => void;
@@ -34,8 +35,9 @@ export function PaywallView(props: Props) {
   const { plan, annual, monthly, loading, restoring } = props;
   const selected = plan === 'yearly' ? annual : monthly;
   const busy = loading || restoring;
+  const planBusy = busy || props.checkingPlans;
   const trialLength = selected?.trialDays ? `${selected.trialDays}-day` : selected?.trial;
-  const label = loading ? 'Setting up…' : selected?.trial ? `Start my ${trialLength} free trial` : 'Find meals that fit';
+  const label = loading ? 'Setting up…' : props.checkingPlans ? 'Checking plans…' : selected?.trial ? `Start my ${trialLength} free trial` : 'Find meals that fit';
 
   return (
     <SafeAreaView key={fontScale} style={s.safe}>
@@ -57,7 +59,7 @@ export function PaywallView(props: Props) {
               const active = option.id === plan;
               return (
                 <AnimatedPress key={option.id} style={[s.plan, largeText && s.planLarge, active && s.planSelected]} onPress={() => props.onSelect(option.id)}
-                  disabled={busy || !option.terms} haptic accessibilityRole="radio" accessibilityState={{ checked: active, disabled: busy || !option.terms }} testID={`paywall-plan-${option.id}`}>
+                  disabled={planBusy || !option.terms} haptic accessibilityRole="radio" accessibilityState={{ checked: active, disabled: planBusy || !option.terms }} testID={`paywall-plan-${option.id}`}>
                   <View style={[s.radio, active && s.radioSelected]} accessible={false}>
                     {active && <Ionicons name="checkmark" size={13} color={EDITORIAL.cream} />}
                   </View>
@@ -83,7 +85,7 @@ export function PaywallView(props: Props) {
         <View style={s.footer}>
           {!!selected?.trial && <Text style={s.noPayment} testID="paywall-no-payment">No payment today</Text>}
           <Text style={s.disclosure} testID="paywall-terms">{selected?.compactDisclosure ?? 'Fetching current prices and subscription terms from the store…'}</Text>
-          <AnimatedPress style={[s.cta, (!selected || busy) && s.disabled]} onPress={props.onPurchase} disabled={!selected || busy} haptic
+          <AnimatedPress style={[s.cta, (!selected || planBusy) && s.disabled]} onPress={props.onPurchase} disabled={!selected || planBusy} haptic
             accessibilityRole="button" accessibilityLabel={label} testID="welcome-continue">
             <Text style={s.ctaText}>{label}</Text><Ionicons name="arrow-forward" size={17} color={EDITORIAL.cream} />
           </AnimatedPress>

@@ -377,6 +377,11 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
       id: trial-offer-note
     timeout: 30000
 - assertVisible: "Find your next meal with Fitsy."
+- extendedWaitUntil:
+    visible:
+      id: welcome-continue
+      enabled: true
+    timeout: 15000
 - tapOn:
     id: welcome-continue
 - extendedWaitUntil:
