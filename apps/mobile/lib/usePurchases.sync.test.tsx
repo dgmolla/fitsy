@@ -355,6 +355,10 @@ describe('sign-out', () => {
     await act(async () => { oldListener({ entitlements: { active: {}, all: { pro: {} } } }); });
     await flush();
     expect(result.current.isLapsed).toBe(false);
+    mockRc.fetchCustomerInfo.mockResolvedValueOnce({ entitlements: { active: {}, all: {} } });
+    await act(async () => { oldListener({ entitlements: { active: {}, all: { pro: {} } } }); });
+    await flush();
+    expect(result.current.isLapsed).toBe(false);
   });
 
   it('does not reopen the gate from an old boot verdict while native logout is queued', async () => {

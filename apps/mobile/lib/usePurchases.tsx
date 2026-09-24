@@ -176,13 +176,19 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
             );
             if (sameUser && !isCancelled()) {
               setCustomerInfo(info);
-              unsubscribe = addCustomerInfoListener(info => {
+              unsubscribe = addCustomerInfoListener(() => {
                 void (async () => {
                   const { data } = await supabase.auth.getSession();
                   const currentUserId = data.session?.user.id;
                   if (!currentUserId || await currentPurchasesUserId() !== currentUserId) return;
+                  // The event payload can belong to the previous account if
+                  // auth changed while its callback was queued. Read again
+                  // for the verified native identity instead of storing it.
+                  const fresh = await fetchCustomerInfo();
+                  if (!fresh) return;
                   const latest = await supabase.auth.getSession();
-                  if (latest.data.session?.user.id === currentUserId) setCustomerInfo(info);
+                  if (latest.data.session?.user.id === currentUserId &&
+                    await currentPurchasesUserId() === currentUserId) setCustomerInfo(fresh);
                 })().catch(() => undefined);
               });
               if (!bootOpen && isProActive(info) && verdict.entitledRef.current === false) {

@@ -332,7 +332,9 @@ test('eligibility changes on the paywall update its selection and purchase targe
   }).mockResolvedValue({ annual: { status: 2, description: 'Eligible' }, monthly: { status: 1, description: 'Ineligible' } });
   const screen = renderRouter(routes, { initialUrl: '/welcome/payment' });
   await waitFor(() => expect(screen.getByTestId('paywall-plan-monthly').props.accessibilityState.checked).toBe(true));
-  await act(async () => { nativeListener?.({ ...noSubscription } as CustomerInfo); });
+  const updatedInfo = { ...noSubscription } as CustomerInfo;
+  (Purchases.getCustomerInfo as jest.Mock).mockResolvedValue(updatedInfo);
+  await act(async () => { nativeListener?.(updatedInfo); });
   await waitFor(() => expect(eligibility).toHaveBeenCalledTimes(2));
   await waitFor(() => expect(screen.getByTestId('paywall-plan-yearly').props.accessibilityState.checked).toBe(true));
   expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toContain('free trial');
@@ -351,6 +353,7 @@ test.each(['purchase', 'restore'])('%s opens the selected meal directly and a la
   expect(restaurantMounts).toBe(1);
   if (action === 'purchase') expect(Purchases.purchasePackage).toHaveBeenCalledWith(annual);
   else { expect(Purchases.restorePurchases).toHaveBeenCalledTimes(1); expect(Purchases.purchasePackage).not.toHaveBeenCalled(); }
+  (Purchases.getCustomerInfo as jest.Mock).mockResolvedValue(subscribed);
   await act(async () => { nativeListener?.(subscribed); });
   expect(screen.getPathname()).toBe('/restaurant/varilla');
   expect(restaurantMounts).toBe(1);
