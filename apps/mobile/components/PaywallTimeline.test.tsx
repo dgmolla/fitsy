@@ -31,9 +31,10 @@ test('timeline derives trial end and reminder day from the selected store offer'
 test('ineligible and unknown offers never promise a free trial or notification', () => {
   const screen = render(<PaywallTimeline terms={purchaseTerms(product, false)} />);
   expect(screen.getByText('$59.99 charged when you confirm your purchase.')).toBeTruthy();
-  expect(screen.queryByText(/Reminder around|Reminder, if available/)).toBeNull();
+  expect(screen.queryByText(/reminder/i)).toBeNull();
   screen.rerender(<PaywallTimeline terms={purchaseTerms(product)} />);
   expect(screen.getByText(/store will confirm any eligible introductory offer/)).toBeTruthy();
+  expect(screen.queryByText(/reminder/i)).toBeNull();
   expect(screen.queryByText(/charged when you confirm/)).toBeNull();
 });
 
