@@ -91,7 +91,13 @@ test('long gap is unobserved, overlap is non-additive, and missing receipt is un
   assert.equal(partial.observation, 'partial-timestamps');
   assert.equal(partial.commands[1].startMs, null);
   assert.equal(partial.commands[1].durationMs, null);
-  assert.equal(partial.gaps[0].uncoveredMs, 44200);
+  assert.equal(partial.gaps[0].uncoveredMs, null);
+  assert.equal(partial.gaps[0].investigationCandidate, false);
+  const missingDuration = summarizeCommands([command(1000, 800),
+    { command: { tapOnElementCommand: {} }, metadata: { status: 'COMPLETED', timestamp: 2000 } },
+    command(46000, 1000)]);
+  assert.equal(missingDuration.gaps[1].uncoveredMs, null);
+  assert.equal(missingDuration.gaps[1].investigationCandidate, false);
 });
 
 test('a long parent command covers gaps between nested commands', () => {

@@ -64,8 +64,9 @@ export function summarizeCommands(commands, { gapMs = 30000, anchor = null } = {
   const gaps = ordered.slice(1).map((row, index) => {
     const before = ordered[index];
     const adjacentStartGapMs = row.startMs - before.startMs;
-    const uncoveredMs = coverageEndMs === null ? null : Math.max(0, row.startMs - coverageEndMs);
-    const overlaps = coverageEndMs !== null && row.startMs < coverageEndMs;
+    const missingBetween = before.index >= row.index || rows.some(item => item.index > before.index && item.index < row.index && item.startMs === null);
+    const uncoveredMs = coverageEndMs === null || missingBetween ? null : Math.max(0, row.startMs - coverageEndMs);
+    const overlaps = !missingBetween && coverageEndMs !== null && row.startMs < coverageEndMs;
     coverageEndMs = coverageEndMs === null || row.endMs === null ? null : Math.max(coverageEndMs, row.endMs);
     return { afterIndex: before.index, beforeIndex: row.index, adjacentStartGapMs, precedingDurationMs: before.durationMs,
       uncoveredMs, overlaps, investigationCandidate: uncoveredMs !== null && uncoveredMs >= gapMs };
