@@ -8,6 +8,17 @@ import { join } from 'node:path';
 import { archiveFailureEvidence, flowFailureReason, requireMetro, runOwnedMaestro, startOwnedRecorder, stopOwnedRecorder, summarizeCommands, summarizeFlowTiming, nearestFailure, matchingFailureKey, needsDiagnosis } from './runner-controls.mjs';
 
 const temp = () => mkdtempSync(join(tmpdir(), 'fitsy-runner-'));
+async function assertProcessStopped(pid, deadlineMs = 1500) {
+  const deadline = Date.now() + deadlineMs;
+  while (Date.now() < deadline) {
+    let state = '';
+    try { state = execFileSync('ps', ['-p', String(pid), '-o', 'stat='], { encoding: 'utf8' }).trim(); }
+    catch { return; }
+    if (state.startsWith('Z')) return;
+    await new Promise(resolve => setTimeout(resolve, 25));
+  }
+  assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' }, `process ${pid} remains live after group cleanup`);
+}
 test('missing Metro fails readiness before the selector timeout', async () => {
   const server = createServer();
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -116,7 +127,7 @@ test('keeper stays alive after runner disconnect until a TERM-resistant descenda
       const timer = setTimeout(() => reject(Error('keeper disconnect cleanup exceeded 7 seconds')), 7000);
       keeper.once('exit', () => { clearTimeout(timer); resolve(); });
     });
-    assert.throws(() => process.kill(descendantPid, 0), { code: 'ESRCH' });
+    await assertProcessStopped(descendantPid);
     assert.doesNotThrow(() => process.kill(sentinel.pid, 0));
   } finally {
     if (descendantPid) { try { process.kill(descendantPid, 'SIGKILL'); } catch { /* fixture cleanup */ } }
@@ -363,6 +374,23 @@ test('failure identity distinguishes flow and tap target while ignoring receipt 
   assert.equal(needsDiagnosis([{ key: first }, { key: same }]), true);
   assert.equal(needsDiagnosis([{ key: first }, { key: otherFlow }]), false);
   assert.equal(needsDiagnosis([{ key: first }, { key: otherTarget }]), false);
+});
+
+test('failure identity follows selectors inside retry commands', () => {
+  const failure = (target, timestamp) => nearestFailure([{
+    command: { retryCommand: { maxRetries: '2', commands: [
+      { waitForAnimationToEndCommand: { timeout: 10000 } },
+      { assertConditionCommand: { condition: { visible: { idRegex: target, optional: false } }, timeout: '30000' } },
+    ] } },
+    metadata: { status: 'FAILED', timestamp, error: { message: 'Element not found' } },
+  }]);
+  const first = matchingFailureKey(failure('welcome-start', 1000), 'onboarding-out-of-area');
+  const repeat = matchingFailureKey(failure('welcome-start', 9000), 'onboarding-out-of-area');
+  const other = matchingFailureKey(failure('waitlist-join', 1000), 'onboarding-out-of-area');
+  assert.equal(first, repeat);
+  assert.notEqual(first, other);
+  assert.equal(needsDiagnosis([{ key: first }, { key: repeat }]), true);
+  assert.equal(needsDiagnosis([{ key: first }, { key: other }]), false);
 });
 
 test('archived failure history retains each attempt evidence path', () => {

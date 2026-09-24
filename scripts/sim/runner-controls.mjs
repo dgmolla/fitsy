@@ -100,12 +100,18 @@ export function nearestFailure(commands) {
     hierarchy: failed.metadata?.error?.hierarchyRoot || null } : null;
 }
 function failureSelectorIdentity(command) {
-  const value = Object.values(command || {})[0] || {};
-  const selector = value.selector ?? value.condition ?? value.point;
-  if (selector == null) return 'selector:absent';
   const normalize = item => Array.isArray(item) ? item.map(normalize) : item && typeof item === 'object'
     ? Object.fromEntries(Object.entries(item).filter(([key]) => key !== 'optional').sort(([a], [b]) => a.localeCompare(b)).map(([key, part]) => [key, normalize(part)])) : item;
-  return `selector:sha256:${createHash('sha256').update(JSON.stringify(normalize(selector))).digest('hex')}`;
+  const targets = [];
+  const visit = current => {
+    const [name, value] = Object.entries(current || {})[0] || [];
+    if (!name) return;
+    const selector = value?.selector ?? value?.condition ?? value?.point;
+    if (selector != null) targets.push({ command: name, selector: normalize(selector) });
+    for (const child of value?.commands || []) visit(child);
+  };
+  visit(command);
+  return targets.length ? `selector:sha256:${createHash('sha256').update(JSON.stringify(targets)).digest('hex')}` : 'selector:absent';
 }
 export function matchingFailureKey(failure, flowName) {
   return failure && JSON.stringify([flowName || 'flow:absent', failure.command, failure.selectorIdentity || 'selector:absent', failure.error]);
