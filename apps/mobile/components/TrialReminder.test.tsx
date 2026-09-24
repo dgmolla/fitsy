@@ -110,10 +110,10 @@ test('a late permission response cannot navigate after the reminder screen loses
 test('a late preference read cannot opt in after leaving the reminder screen', async () => {
   const pushToken = jest.spyOn(useNotifications, 'getExpoPushTokenAsync');
   const write = jest.spyOn(AsyncStorage, 'setItem');
-  const originalGetItem = AsyncStorage.getItem.bind(AsyncStorage);
+  const originalGetItem = (AsyncStorage.getItem as jest.Mock).getMockImplementation()!;
   let resolve!: (value: string | null) => void;
   const pendingRead = new Promise<string | null>(done => { resolve = done; });
-  const read = jest.spyOn(AsyncStorage, 'getItem').mockImplementation(key =>
+  const read = (AsyncStorage.getItem as jest.Mock).mockImplementation(key =>
     key === '@fitsy/reminder-preferences/trial-buyer' ? pendingRead : originalGetItem(key));
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
   await act(async () => { fireEvent.press(screen.getByText('Continue to reminder')); });
@@ -122,8 +122,33 @@ test('a late preference read cannot opt in after leaving the reminder screen', a
   await act(async () => { router.back(); });
   expect(screen.getPathname()).toBe('/welcome/trial');
   await act(async () => { resolve('{}'); });
-  read.mockRestore();
+  read.mockImplementation(originalGetItem);
   expect(write).not.toHaveBeenCalledWith('@fitsy/reminder-preferences/trial-buyer', expect.anything());
   expect(await readReminderPreferences('trial-buyer')).toEqual({ meals: false, trial: false });
+  expect(pushToken).not.toHaveBeenCalled();
+});
+
+test('a failed preference read keeps existing meal reminders and continues to plans', async () => {
+  await saveReminderPreferences('trial-buyer', { meals: true, trial: false });
+  expect(await readReminderPreferences('trial-buyer')).toEqual({ meals: true, trial: false });
+  const write = jest.spyOn(AsyncStorage, 'setItem');
+  const pushToken = jest.spyOn(useNotifications, 'getExpoPushTokenAsync');
+  const originalGetItem = (AsyncStorage.getItem as jest.Mock).getMockImplementation()!;
+  let failed = false;
+  const read = (AsyncStorage.getItem as jest.Mock).mockImplementation(key => {
+    if (key === '@fitsy/reminder-preferences/trial-buyer' && !failed) {
+      failed = true;
+      return Promise.reject(new Error('Storage unavailable'));
+    }
+    return originalGetItem(key);
+  });
+  const screen = renderRouter(routes, { initialUrl: '/welcome/trial-reminder' });
+  await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-allow')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
+  expect(failed).toBe(true);
+  expect(write).not.toHaveBeenCalledWith('@fitsy/reminder-preferences/trial-buyer', expect.stringContaining('"meals":false'));
+  expect(await originalGetItem('@fitsy/reminder-preferences/trial-buyer')).toBe('{"meals":true,"trial":false}');
+  read.mockImplementation(originalGetItem);
+  expect(await readReminderPreferences('trial-buyer')).toEqual({ meals: true, trial: false });
   expect(pushToken).not.toHaveBeenCalled();
 });

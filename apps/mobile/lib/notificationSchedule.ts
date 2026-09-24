@@ -8,12 +8,16 @@ const preferenceKey = (userId: string) => `@fitsy/reminder-preferences/${userId}
 const listeners = new Set<() => void>();
 export const subscribeReminderPreferences = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
 
-export async function readReminderPreferences(userId: string | null): Promise<ReminderPreferences> {
+export async function readReminderPreferences(userId: string | null, options?: { throwOnError?: boolean }): Promise<ReminderPreferences> {
   if (!userId) return { ...DEFAULT_REMINDER_PREFERENCES };
   try {
     const value = JSON.parse(await AsyncStorage.getItem(preferenceKey(userId)) ?? '{}');
     return { meals: value?.meals === true, trial: value?.trial === true };
-  } catch { return { ...DEFAULT_REMINDER_PREFERENCES }; }
+  } catch (error) {
+    // An opt-in write must not replace stored choices with fallback defaults.
+    if (options?.throwOnError) throw error;
+    return { ...DEFAULT_REMINDER_PREFERENCES };
+  }
 }
 export async function saveReminderPreferences(userId: string, preferences: ReminderPreferences): Promise<void> {
   await AsyncStorage.setItem(preferenceKey(userId), JSON.stringify(preferences));

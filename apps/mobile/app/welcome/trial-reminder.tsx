@@ -46,7 +46,7 @@ export default function TrialReminderScreen() {
       if (!isCurrent()) return;
       if (status === 'granted') {
         trackNotificationPermissionGranted();
-        const prefs = await readReminderPreferences(session.user.id);
+        const prefs = await readReminderPreferences(session.user.id, { throwOnError: true });
         const latestSession = await supabase.auth.getSession();
         if (!isCurrent() || latestSession.data.session?.user.id !== session.user.id) return;
         await saveReminderPreferences(session.user.id, { ...prefs, trial: true });
