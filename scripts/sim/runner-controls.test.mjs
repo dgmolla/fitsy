@@ -5,7 +5,7 @@ import { createServer } from 'node:http';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { flowFailureReason, requireMetro, runOwnedMaestro, startOwnedRecorder, stopOwnedRecorder, summarizeCommands, nearestFailure, needsDiagnosis } from './runner-controls.mjs';
+import { archiveFailureEvidence, flowFailureReason, requireMetro, runOwnedMaestro, startOwnedRecorder, stopOwnedRecorder, summarizeCommands, nearestFailure, needsDiagnosis } from './runner-controls.mjs';
 
 const temp = () => mkdtempSync(join(tmpdir(), 'fitsy-runner-'));
 test('missing Metro fails readiness before the selector timeout', async () => {
@@ -81,6 +81,10 @@ test('long gap is unobserved, overlap is non-additive, and missing receipt is un
   assert.equal(summary.gaps[1].overlaps, true);
   assert.equal(summary.measuredIdleMs, null);
   assert.equal(summarizeCommands(null).observation, 'missing-or-empty');
+  const unstamped = summarizeCommands([{ command: { tapOnElementCommand: {} }, metadata: { status: 'COMPLETED' } }]);
+  assert.equal(unstamped.observation, 'no-timestamps');
+  assert.deepEqual(unstamped.gaps, []);
+  assert.equal(unstamped.measuredIdleMs, null);
 });
 
 test('a long parent command covers gaps between nested commands', () => {
@@ -104,4 +108,23 @@ test('two matching failures require a diagnosis checkpoint before another run', 
   assert.equal(needsDiagnosis([{ key: 'a' }, { key: 'a' }]), true);
   assert.equal(needsDiagnosis([{ key: 'a' }, { key: 'b' }]), false);
   assert.equal(needsDiagnosis([{ key: 'a' }, { key: 'a', diagnosis: { file: 'review.json' } }]), false);
+});
+
+test('archived failure history retains each attempt evidence path', () => {
+  const history = [{ key: 'a', evidence: '.evidence/product-flow/welcome' },
+    { key: 'b', evidence: '.evidence/resume/product-flow-prior/welcome' }];
+  const archived = archiveFailureEvidence(history, '.evidence/product-flow', '.evidence/resume/product-flow-current');
+  assert.equal(archived[0].evidence, '.evidence/resume/product-flow-current/welcome');
+  assert.equal(archived[1].evidence, history[1].evidence);
+  assert.equal(history[0].evidence, '.evidence/product-flow/welcome');
+});
+
+test('required assertion and app identity preflight fails before walkthrough', () => {
+  const result = { code: 0, reason: null }, recorder = { state: 'stopped', code: 0, bytes: 5 };
+  const config = { command: { applyConfigurationCommand: { config: { appId: 'com.fitsy.mobile', name: 'welcome' } } }, metadata: { status: 'COMPLETED' } };
+  const assertion = { command: { assertConditionCommand: { condition: { visible: { textRegex: 'Ready' } } } }, metadata: { status: 'COMPLETED' } };
+  assert.equal(flowFailureReason(result, [config], recorder, 'welcome'), 'missing-or-failed-required-assertions');
+  assert.equal(flowFailureReason(result, [config, { ...assertion, metadata: { status: 'SKIPPED' } }], recorder, 'welcome'), 'missing-or-failed-required-assertions');
+  assert.equal(flowFailureReason(result, [config, assertion], recorder, 'another-flow'), 'wrong-app-or-flow-receipt');
+  assert.equal(flowFailureReason(result, [config, assertion], recorder, 'welcome'), null);
 });

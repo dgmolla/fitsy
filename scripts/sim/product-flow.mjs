@@ -9,7 +9,7 @@ import { createRequire } from 'node:module';
 import { root, inputHash, changedPaths, impact, digest, validate, baseline, repoEnv } from '../verify/product-flow.mjs';
 import { backendRevision } from './backend-identity.mjs';
 import { buildProfile, bundleDelegate, fixtureLabel, metroRoute } from './build-profile.mjs';
-import { admitDisk, clock, event, flowFailureReason, latestMaestroLog, matchingFailureKey, nearestFailure, needsDiagnosis, requireMetro, runOwnedMaestro, startOwnedRecorder, stopOwnedRecorder, summarizeCommands } from './runner-controls.mjs';
+import { admitDisk, archiveFailureEvidence, clock, event, flowFailureReason, latestMaestroLog, matchingFailureKey, nearestFailure, needsDiagnosis, requireMetro, runOwnedMaestro, startOwnedRecorder, stopOwnedRecorder, summarizeCommands } from './runner-controls.mjs';
 const yaml = createRequire(import.meta.url)('js-yaml');
 const out = resolve(root, '.evidence/product-flow');
 const buildDir = resolve(root, '.evidence/product-build');
@@ -214,7 +214,13 @@ async function execute(udid, names) {
   claim();
   try {
     // Retain complete raw proof from a previous run before invalidating its report.
-    if (existsSync(out)) renameSync(out, join(resumeDir, `product-flow-${Date.now()}`));
+    if (existsSync(out)) {
+      const archive = join(resumeDir, `product-flow-${Date.now()}`);
+      renameSync(out, archive);
+      const relocated = archiveFailureEvidence(history, relative(root, out), relative(root, archive));
+      history.splice(0, history.length, ...relocated);
+      save(failuresFile, history);
+    }
     mkdirSync(out, { recursive: true });
     const timeline = join(out, 'runner-timeline.jsonl');
     event(timeline, { type: 'run-start', simulator: udid, inputHash: hash, buildHash: r.appHash, admission });
@@ -279,7 +285,7 @@ async function execute(udid, names) {
         note: 'Recording boundaries include driver startup and shutdown. They do not establish visual or app idle without reviewing the video.' };
       save(join(dir, 'timing-summary.json'), summary);
       const failure = Array.isArray(parsed) ? nearestFailure(parsed) : null;
-      const failureReason = flowFailureReason(result, parsed, recorderResult);
+      const failureReason = flowFailureReason(result, parsed, recorderResult, flow.name);
       if (failureReason) {
         const screenshot = join(dir, 'failure-screen.png');
         try { run('xcrun', ['simctl', 'io', udid, 'screenshot', screenshot], { timeout: 15000 }); } catch { /* absence recorded below */ }

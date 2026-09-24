@@ -58,6 +58,8 @@ export function summarizeCommands(commands, { gapMs = 30000, anchor = null } = {
       error: entry.metadata?.error?.message || null };
   });
   const ordered = rows.filter(row => row.startMs !== null).sort((a, b) => a.startMs - b.startMs);
+  if (!ordered.length) return { observation: 'no-timestamps', commands: rows, gaps: [], measuredIdleMs: null,
+    note: 'Command timing is unavailable. No app or recording idle was measured.' };
   let coverageEndMs = ordered[0].endMs;
   const gaps = ordered.slice(1).map((row, index) => {
     const before = ordered[index];
@@ -82,10 +84,20 @@ export function needsDiagnosis(history) {
   const last = history.slice(-2);
   return last.length === 2 && last[0].key === last[1].key && !last[1].diagnosis;
 }
-export function flowFailureReason(result, commands, recorder) {
+export function archiveFailureEvidence(history, from, to) {
+  return history.map(entry => ({ ...entry, evidence: typeof entry.evidence === 'string' && entry.evidence.startsWith(`${from}/`)
+    ? `${to}${entry.evidence.slice(from.length)}` : entry.evidence }));
+}
+export function flowFailureReason(result, commands, recorder, flowName = null) {
   if (result.code !== 0 || result.reason) return result.reason || 'maestro-exit';
   if (!Array.isArray(commands) || commands.length === 0) return 'missing-or-empty-command-receipt';
   if (recorder.state !== 'stopped' || recorder.code !== 0 || !recorder.bytes) return 'recorder-failure';
+  if (flowName) {
+    const applied = commands.find(c => c.command?.applyConfigurationCommand)?.command.applyConfigurationCommand.config;
+    if (applied?.appId !== 'com.fitsy.mobile' || (applied.name && applied.name !== flowName)) return 'wrong-app-or-flow-receipt';
+    const assertions = commands.filter(c => c.command?.assertConditionCommand && !c.command.assertConditionCommand.optional);
+    if (!assertions.length || assertions.some(c => c.metadata?.status !== 'COMPLETED')) return 'missing-or-failed-required-assertions';
+  }
   if (commands.some(c => c.metadata?.status === 'FAILED' ||
     (c.metadata?.status !== 'COMPLETED' && !Object.values(c.command || {}).some(v => v?.optional === true)))) return 'command-failure';
   return null;
