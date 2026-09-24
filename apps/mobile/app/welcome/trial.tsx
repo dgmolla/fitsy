@@ -13,15 +13,17 @@ import { trackOnboardingScreenView } from '@/lib/analytics';
 export default function TrialScreen() {
   const focused = useIsFocused();
   useOnboardingStep('trial');
-  const { offering, introEligibility, refreshOffering, entitled } = usePurchases();
+  const { ready, offering, introEligibility, introEligibilityReady, refreshOffering, entitled } = usePurchases();
   const offers = [offering?.annual, offering?.monthly].map(pkg => purchaseTerms(pkg?.product, pkg ? introEligibility[pkg.product.identifier] : undefined));
   const trial = offers.find(terms => terms?.trial)?.trial;
+  const checkingPlans = !ready || (!!offering && !introEligibilityReady);
   useEffect(() => { if (focused && entitled === true) router.replace('/welcome/payment'); }, [focused, entitled]);
   useEffect(() => { trackOnboardingScreenView('trial'); }, []);
   useEffect(() => { if (!offering) void refreshOffering(); }, [offering, refreshOffering]);
   return <WelcomeScreen progress={1} title={trial ? 'We want you to try Fitsy for free.' : 'Find your next meal with Fitsy.'}
     subtitle={trial ? 'See how good eating out can feel when it fits your goals.' : 'More meals that fit your goals, wherever the day takes you.'}
-    continueLabel="Continue" canContinue onContinue={() => router.push(trial ? '/welcome/trial-reminder' : '/welcome/payment')}>
+    continueLabel={checkingPlans ? 'Checking plans…' : 'Continue'} canContinue={!checkingPlans}
+    onContinue={() => { if (!checkingPlans) router.push(trial ? '/welcome/trial-reminder' : '/welcome/payment'); }}>
     <TrialArtwork />
     <Text style={s.note} testID="trial-offer-note">{trial ? `An eligible plan includes ${trial} free. Review your plan and renewal price before starting.` : 'Review current plans and any eligible trial on the next screens. Your subscription starts only when you confirm.'}</Text>
   </WelcomeScreen>;

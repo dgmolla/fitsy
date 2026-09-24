@@ -16,11 +16,12 @@ import TrialScreen from '../app/welcome/trial';
 jest.mock('../lib/onboardingResume', () => ({ useOnboardingStep: () => undefined }));
 const mockRefreshOffering = jest.fn();
 let mockEligibility: Record<string, boolean> = {};
+let mockEligibilityReady = true;
 jest.mock('../lib/usePurchases', () => ({ usePurchases: () => ({
   offering: { annual: { product: { identifier: 'annual', priceString: '$59.99', subscriptionPeriod: 'P1Y',
     introPrice: { price: 0, priceString: '$0', period: 'P1W', cycles: 1 } } }, monthly: { product: {
     identifier: 'monthly', priceString: '$9.99', subscriptionPeriod: 'P1M', introPrice: null } } },
-  introEligibility: mockEligibility, refreshOffering: mockRefreshOffering, entitled: false,
+  ready: true, introEligibilityReady: mockEligibilityReady, introEligibility: mockEligibility, refreshOffering: mockRefreshOffering, entitled: false,
 }) }));
 
 const routes = {
@@ -34,6 +35,7 @@ test.each([
   ['ineligible', { annual: false, monthly: false }],
   ['unknown', {}],
 ])('%s trial introduction continues straight to plans without a trial reminder', async (_label, eligibility) => {
+  mockEligibilityReady = true;
   mockEligibility = eligibility;
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
   await waitFor(() => expect(screen.getByText('Find your next meal with Fitsy.')).toBeTruthy());
@@ -43,9 +45,18 @@ test.each([
 });
 
 test('eligible trial introduction keeps the optional reminder choice', async () => {
+  mockEligibilityReady = true;
   mockEligibility = { annual: true, monthly: false };
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
   await waitFor(() => expect(screen.getByText('We want you to try Fitsy for free.')).toBeTruthy());
   fireEvent.press(screen.getByTestId('welcome-continue'));
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/trial-reminder'));
+});
+
+test('pending eligibility holds Continue before choosing the reminder or plans', async () => {
+  mockEligibilityReady = false;
+  mockEligibility = {};
+  const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
+  fireEvent.press(screen.getByTestId('welcome-continue'));
+  expect(screen.getPathname()).toBe('/welcome/trial');
 });
