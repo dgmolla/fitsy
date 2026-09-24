@@ -114,6 +114,9 @@ tags: [discovery, onboarding, changed-journey]
 - assertTrue: ${output.pizzaResponse.status === 200}
 - evalScript: ${output.pizza = json(output.pizzaResponse.body)}
 - assertTrue: ${output.pizza.data.length > 0}
+# A matching UI and API response alone would pass if both ignored the query.
+# This real dev fixture independently anchors the ranked result to a pizza dish.
+- assertTrue: ${output.pizza.data[0].name === 'Pizza Roma' && output.pizza.data[0].bestMatch.name === 'Buffalo Chicken  Pizza'}
 - tapOn:
     id: welcome-continue
 - assertVisible: "A little context.*A better choice.*"
@@ -174,6 +177,7 @@ tags: [discovery, onboarding, changed-journey]
 - copyTextFrom:
     id: discovery-hero
 - assertTrue: ${maestro.copiedText.includes(output.pizza.data[0].name) && maestro.copiedText.includes(output.pizza.data[0].bestMatch.name)}
+- assertTrue: ${maestro.copiedText.includes('Pizza Roma') && maestro.copiedText.includes('Buffalo Chicken')}
 - assertNotVisible:
     id: discovery-loading
 # A genuinely absent craving still has an honest empty state and clear recovery.
