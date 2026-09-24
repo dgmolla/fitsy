@@ -5,7 +5,7 @@ import { createServer } from 'node:http';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { archiveFailureEvidence, flowFailureReason, requireMetro, runOwnedMaestro, runRecordedFlow, saveFlowOutcomeReceipts, startOwnedRecorder, stopOwnedRecorder, summarizeCommands, summarizeFlowTiming, nearestFailure, matchingFailureKey, needsDiagnosis } from './runner-controls.mjs';
+import { archiveFailureEvidence, flowFailureReason, requireMetro, runOwnedMaestro, runRecordedFlow, saveRecordedFlowReceipts, startOwnedRecorder, stopOwnedRecorder, summarizeCommands, summarizeFlowTiming, nearestFailure, matchingFailureKey, needsDiagnosis } from './runner-controls.mjs';
 
 const temp = () => mkdtempSync(join(tmpdir(), 'fitsy-runner-'));
 async function assertProcessStopped(pid, deadlineMs = 1500) {
@@ -273,7 +273,7 @@ test('recorder exit during watchdog diagnostics takes precedence and retains the
   try {
     const recorderScript = "const fs=require('fs');fs.writeFileSync(process.argv[1],'partial');const wait=()=>fs.existsSync(process.argv[2])?process.exit(0):setTimeout(wait,10);wait()";
     const diagnostics = [];
-    const { result, recorderResult, recorderStartedMs, recorderEndedMs } = await runRecordedFlow({
+    const recorded = await runRecordedFlow({
       recorderCommand: process.execPath, recorderArgs: ['-e', recorderScript, video, marker],
       maestroCommand: process.execPath, maestroArgs: ['-e', 'setInterval(()=>{},1000)'],
       udid: 'test-device', video, recorderLog: join(dir, 'recorder.log'), cwd: dir, env: process.env,
@@ -285,6 +285,7 @@ test('recorder exit during watchdog diagnostics takes precedence and retains the
         }
       }, quietMs: 100, wallMs: 3000, pollMs: 20,
     });
+    const { result, recorderResult, recorderStartedMs, recorderEndedMs } = recorded;
     assert.equal(recorderResult.endedBeforeStop, true);
     assert.equal(result.reason, 'recorder-ended-early');
     assert.equal(result.priorReason, 'inactivity-deadline');
@@ -295,17 +296,15 @@ test('recorder exit during watchdog diagnostics takes precedence and retains the
     assert.ok(recorderEndedMs >= recorderStartedMs);
     assert.ok(recorderEndedMs <= observedEarlyExit + 50, 'watchdog diagnostic and cleanup time is outside the recording interval');
     const command = { command: { tapOnElementCommand: {} }, metadata: { status: 'COMPLETED', timestamp: recorderStartedMs + 20, duration: 10 } };
-    const summary = summarizeFlowTiming([command], { anchor: result.anchor, video, recorderStartedMs, recorderEndedMs });
-    summary.failureReason = failureReason;
-    saveFlowOutcomeReceipts(dir, result, summary, { flow: 'race-flow', failureReason });
+    saveRecordedFlowReceipts(dir, recorded, [command], { video, failureReason, failureDetail: { flow: 'race-flow', failureReason } });
     const savedTiming = JSON.parse(readFileSync(join(dir, 'timing-summary.json'), 'utf8'));
     const savedFailure = JSON.parse(readFileSync(join(dir, 'failure.json'), 'utf8'));
     assert.equal(savedTiming.failureReason, 'recorder-ended-early');
     assert.equal(savedFailure.failureReason, 'recorder-ended-early');
     assert.equal(savedTiming.priorReason, 'inactivity-deadline');
     assert.equal(savedFailure.priorReason, 'inactivity-deadline');
-    assert.equal(savedTiming.recording.recorderEndedAt, new Date(recorderEndedMs).toISOString());
-    assert.equal(savedTiming.recording.afterLastCommandMs, Math.max(0, recorderEndedMs - (recorderStartedMs + 30)));
+    assert.equal(savedTiming.recording.recorderEndedAt, new Date(recorderResult.observedAtMs).toISOString());
+    assert.equal(savedTiming.recording.afterLastCommandMs, Math.max(0, recorderResult.observedAtMs - (recorderStartedMs + 30)));
     assert.equal(events.find(event => event.type === 'maestro-end').reason, 'inactivity-deadline');
     assert.ok(events.find(event => event.type === 'recorder-early-exit'));
     assert.equal(readFileSync(video, 'utf8'), 'partial');

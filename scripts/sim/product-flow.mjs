@@ -9,7 +9,7 @@ import { createRequire } from 'node:module';
 import { root, inputHash, changedPaths, impact, digest, validate, baseline, repoEnv } from '../verify/product-flow.mjs';
 import { backendRevision } from './backend-identity.mjs';
 import { buildProfile, bundleDelegate, fixtureLabel, metroRoute } from './build-profile.mjs';
-import { admitDisk, archiveFailureEvidence, event, flowFailureReason, latestMaestroLog, matchingFailureKey, nearestFailure, needsDiagnosis, requireMetro, runRecordedFlow, saveFlowOutcomeReceipts, summarizeFlowTiming } from './runner-controls.mjs';
+import { admitDisk, archiveFailureEvidence, event, flowFailureReason, latestMaestroLog, matchingFailureKey, nearestFailure, needsDiagnosis, requireMetro, runRecordedFlow, saveRecordedFlowReceipts } from './runner-controls.mjs';
 const yaml = createRequire(import.meta.url)('js-yaml');
 const out = resolve(root, '.evidence/product-flow');
 const buildDir = resolve(root, '.evidence/product-build');
@@ -256,20 +256,19 @@ async function execute(udid, names) {
           ax: 'unavailable until Maestro writes a failed command hierarchy', networkTiming: 'unavailable' });
       };
       const video = join(dir, 'flow-untrimmed.mp4');
-      const { result, recorderResult, recorderStartedMs, recorderEndedMs } = await runRecordedFlow({
+      const recorded = await runRecordedFlow({
         maestroCommand: process.env.MAESTRO_BIN || 'maestro',
         maestroArgs: ['test', '--udid', udid, join(root, flow.source), '--format', 'junit', '--output', join(dir, 'junit.xml'), '--debug-output', dir, '--test-output-dir', dir],
         udid, video, recorderLog: join(dir, 'recorder.log'), cwd: root, env: repoEnv(), dir, timeline, flow: flowBytes, diagnostic });
+      const { result, recorderResult } = recorded;
       const commands = files(dir).filter(f => /commands-.*\.json$/.test(f));
       let parsed = null, commandParseError = null;
       if (commands.length === 1) {
         try { parsed = read(commands[0]); }
         catch (error) { commandParseError = error.message; }
       }
-      const summary = summarizeFlowTiming(parsed, { anchor: result.anchor, video: relative(out, video), recorderStartedMs, recorderEndedMs });
       const failure = Array.isArray(parsed) ? nearestFailure(parsed) : null;
       const failureReason = flowFailureReason(result, parsed, recorderResult, flow.name);
-      summary.failureReason = failureReason;
       if (failureReason) {
         const screenshot = join(dir, 'failure-screen.png');
         try { run('xcrun', ['simctl', 'io', udid, 'screenshot', screenshot], { timeout: 15000 }); } catch { /* absence recorded below */ }
@@ -285,7 +284,7 @@ async function execute(udid, names) {
           nearestScreenshot: existsSync(screenshot) ? relative(out, screenshot) : null,
           nearestAX: failure?.hierarchy ? 'raw failed command metadata.error.hierarchyRoot' : null,
           networkTiming: networkTiming.length ? networkTiming : null, networkTimingAbsence: networkTiming.length ? null : 'No structured network status/duration in Maestro log' };
-        saveFlowOutcomeReceipts(dir, result, summary, detail);
+        const summary = saveRecordedFlowReceipts(dir, recorded, parsed, { video: relative(out, video), failureReason, failureDetail: detail });
         const key = matchingFailureKey(failure, flow.name) || JSON.stringify([flow.name, result.reason || result.code, summary.observation]);
         history.push({ at: new Date().toISOString(), key, flow: flow.name, evidence: relative(root, dir), head: run('git', ['rev-parse', 'HEAD']) });
         save(failuresFile, history);
@@ -294,7 +293,7 @@ async function execute(udid, names) {
           elapsedMs: result.elapsedMs, commandReceipt: commands.length === 1 ? relative(out, commands[0]) : null });
         throw new Error(`Native flow ${flow.name} failed; inspect ${relative(root, join(dir, 'failure.json'))} and raw Maestro receipt before retry`);
       }
-      saveFlowOutcomeReceipts(dir, result, summary);
+      saveRecordedFlowReceipts(dir, recorded, parsed, { video: relative(out, video) });
       assert(commands.length === 1, `Expected exactly one command report: ${flow.name}`);
       const screenshot = join(dir, 'outcome.png');
       run('xcrun', ['simctl', 'io', udid, 'screenshot', screenshot]);

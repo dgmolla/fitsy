@@ -97,6 +97,13 @@ export function saveFlowOutcomeReceipts(dir, result, summary, failureDetail = nu
   writeFileSync(join(dir, 'timing-summary.json'), JSON.stringify({ ...summary, priorReason }, null, 2) + '\n');
   if (failureDetail) writeFileSync(join(dir, 'failure.json'), JSON.stringify({ ...failureDetail, priorReason }, null, 2) + '\n');
 }
+export function saveRecordedFlowReceipts(dir, recorded, commands, { video, failureReason = null, failureDetail = null } = {}) {
+  const { result, recorderStartedMs, recorderEndedMs } = recorded;
+  const summary = summarizeFlowTiming(commands, { anchor: result.anchor, video, recorderStartedMs, recorderEndedMs });
+  summary.failureReason = failureReason;
+  saveFlowOutcomeReceipts(dir, result, summary, failureDetail);
+  return summary;
+}
 export function nearestFailure(commands) {
   const failed = commands.filter(c => c.metadata?.status === 'FAILED').sort((a, b) => (b.metadata?.timestamp || 0) - (a.metadata?.timestamp || 0))[0];
   return failed ? { command: commandName(failed.command), expected: expected(failed.command),
