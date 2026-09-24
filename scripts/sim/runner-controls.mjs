@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { appendFileSync, existsSync, readdirSync, statSync, statfsSync, openSync, closeSync } from 'node:fs';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
@@ -135,6 +135,17 @@ export function latestMaestroLog(dir) {
   walk(dir);
   return found.sort((a, b) => b.modified - a.modified)[0]?.file || null;
 }
+function groupMembers(pgid) {
+  const members = new Map();
+  for (const line of execFileSync('ps', ['-A', '-o', 'pid=,pgid=,lstart='], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }).split('\n')) {
+    const match = line.match(/^\s*(\d+)\s+(\d+)\s+(.+?)\s*$/);
+    if (match && Number(match[2]) === pgid) members.set(Number(match[1]), match[3]);
+  }
+  return members;
+}
+function matchingMember(before, after) {
+  return [...before].some(([pid, started]) => after.get(pid) === started);
+}
 export function maxDeclaredWaitMs(flow) {
   const values = [...flow.matchAll(/(?:timeout|delay):\s*(\d+)/g)].map(match => Number(match[1]));
   return Math.max(0, ...values);
@@ -171,7 +182,8 @@ export async function stopOwnedRecorder(recorder) {
   if (!result) throw new Error(`Owned recorder ${recorder.pid} did not stop; inspect before cleanup`);
   return { state: 'stopped', ...result, file: recorder.file, bytes: existsSync(recorder.file) ? statSync(recorder.file).size : null };
 }
-export async function runOwnedMaestro(command, args, { cwd, env, dir, timeline, flow, diagnostic, signal, quietMs, wallMs, spawnImpl = spawn, pollMs = 1000 }) {
+export async function runOwnedMaestro(command, args, { cwd, env, dir, timeline, flow, diagnostic, signal, quietMs, wallMs,
+  spawnImpl = spawn, pollMs = 1000, terminationGraceMs = 5000 }) {
   const inactivityMs = quietMs ?? Math.max(180000, maxDeclaredWaitMs(flow) + 120000);
   // The wall limit includes all declared waits plus 10 minutes of driver overhead.
   // The 15 minute floor exceeds the observed 271 s healthy flow by over 3x.
@@ -179,6 +191,7 @@ export async function runOwnedMaestro(command, args, { cwd, env, dir, timeline, 
   const anchor = clock(), started = performance.now();
   const child = spawnImpl(command, args, { cwd, env, detached: true, stdio: ['ignore', 'inherit', 'inherit'] });
   const ownedPid = child.pid;
+  let leaderIdentity = ownedPid ? groupMembers(ownedPid).get(ownedPid) || null : null;
   event(timeline, { type: 'maestro-start', pid: ownedPid, command: 'test', deadlineMs: ceilingMs, inactivityDeadlineMs: inactivityMs, expected: 'flow completes with all required commands' });
   let lastActivity = performance.now(), lastLogSize = -1, reason = null;
   const completed = new Promise((resolve, reject) => { child.once('error', reject); child.once('exit', (code, signal) => resolve({ code, signal })); });
@@ -186,6 +199,7 @@ export async function runOwnedMaestro(command, args, { cwd, env, dir, timeline, 
   completed.then(value => { settled = true; result = value; }, error => { settled = true; result = { code: null, error: error.message }; });
   while (!settled) {
     await sleep(pollMs);
+    if (!leaderIdentity && ownedPid) leaderIdentity = groupMembers(ownedPid).get(ownedPid) || null;
     const log = latestMaestroLog(dir);
     if (log) { try { const size = statSync(log).size; if (size !== lastLogSize) { lastLogSize = size; lastActivity = performance.now(); } } catch { /* a rotating log is not evidence of a hang */ } }
     if (!signal?.aborted && performance.now() - started <= ceilingMs && performance.now() - lastActivity <= inactivityMs) continue;
@@ -194,11 +208,27 @@ export async function runOwnedMaestro(command, args, { cwd, env, dir, timeline, 
     catch (error) { event(timeline, { type: 'diagnostic-error', pid: ownedPid, error: error.message }); }
     // Only the process group created for this invocation is eligible.
     if (ownedPid && child.pid === ownedPid && !settled) {
+      const tracked = groupMembers(ownedPid);
+      if (!leaderIdentity || tracked.get(ownedPid) !== leaderIdentity)
+        throw new Error(`Owned Maestro group ${ownedPid} identity changed before stop; inspect diagnostics without signaling it`);
       try { process.kill(-ownedPid, 'SIGTERM'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
-      await waitOrTimeout(completed, 5000);
-      if (!settled) {
+      const graceDeadline = performance.now() + terminationGraceMs;
+      let remaining = groupMembers(ownedPid);
+      while (matchingMember(tracked, remaining) && performance.now() < graceDeadline) {
+        await sleep(50);
+        remaining = groupMembers(ownedPid);
+      }
+      if (remaining.size && !matchingMember(tracked, remaining))
+        throw new Error(`Owned Maestro group ${ownedPid} lost its tracked identity; refusing to signal a possible reused group`);
+      if (remaining.size) {
         try { process.kill(-ownedPid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
-        if (!await waitOrTimeout(completed, 5000)) throw new Error(`Owned Maestro process group ${ownedPid} did not exit after SIGKILL; inspect diagnostics`);
+      }
+      await waitOrTimeout(completed, 5000);
+      const groupDeadline = performance.now() + 5000;
+      while (matchingMember(tracked, groupMembers(ownedPid)) && performance.now() < groupDeadline) await sleep(50);
+      if (matchingMember(tracked, groupMembers(ownedPid))) throw new Error(`Owned Maestro process group ${ownedPid} did not exit after SIGKILL; inspect diagnostics`);
+      if (!settled) {
+        throw new Error(`Owned Maestro leader ${ownedPid} did not exit after SIGKILL; inspect diagnostics`);
       }
     }
     break;
@@ -212,7 +242,7 @@ export async function runOwnedMaestro(command, args, { cwd, env, dir, timeline, 
 
 export async function runRecordedFlow({ recorderCommand = 'xcrun', recorderArgs = null, recorderSpawnImpl,
   maestroCommand, maestroArgs, maestroSpawnImpl, udid, video, recorderLog, cwd, env, dir, timeline, flow, diagnostic,
-  quietMs, wallMs, pollMs }) {
+  quietMs, wallMs, pollMs, terminationGraceMs }) {
   const interruption = new AbortController();
   const onInt = () => interruption.abort(new Error('SIGINT received during owned native flow'));
   const onTerm = () => interruption.abort(new Error('SIGTERM received during owned native flow'));
@@ -225,7 +255,7 @@ export async function runRecordedFlow({ recorderCommand = 'xcrun', recorderArgs 
     event(timeline, { type: 'recorder-start', pid: recorder.pid, video });
     if (interruption.signal.aborted) throw interruption.signal.reason;
     result = await runOwnedMaestro(maestroCommand, maestroArgs, { cwd, env, dir, timeline, flow, diagnostic,
-      signal: interruption.signal, quietMs, wallMs, pollMs, spawnImpl: maestroSpawnImpl });
+      signal: interruption.signal, quietMs, wallMs, pollMs, terminationGraceMs, spawnImpl: maestroSpawnImpl });
   } catch (error) {
     result = { code: null, reason: interruption.signal.aborted ? 'operator-interrupt' : 'runner-error',
       error: error.message, elapsedMs: null, anchor: clock() };

@@ -19,6 +19,7 @@ The runner allows at least 15 minutes per flow and also budgets three times the 
 Its inactivity limit is at least three minutes and at least two minutes longer than the longest declared wait.
 These limits never change a product selector timeout or skip an assertion.
 Before stopping a stalled flow, it saves a simulator screenshot and watchdog receipt, then signals only the process group it spawned.
+If the Maestro parent exits first, cleanup still checks tracked members of that owned group and refuses to signal a reused group.
 The owned recorder stops when that flow ends or fails.
 If a command fails, inspect `failure.json`, `failure-screen.png`, the original command JSON, Maestro log and untrimmed video.
 The failed command hierarchy remains in the raw JSON when Maestro exposes it; the failure summary records its absence otherwise.

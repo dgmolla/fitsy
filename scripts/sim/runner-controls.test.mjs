@@ -47,6 +47,26 @@ test('watchdog stops its child group and leaves an unrelated process running', a
   } finally { unrelated.kill('SIGTERM'); rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('watchdog reaps a TERM-resistant descendant after Maestro parent exits', async () => {
+  const dir = temp(), pidFile = join(dir, 'descendant.pid');
+  const unrelated = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+  let descendantPid = null;
+  try {
+    const stubborn = "process.on('SIGTERM',()=>{});setInterval(()=>{},1000)";
+    const script = `const fs=require('fs'),cp=require('child_process');const child=cp.spawn(process.execPath,['-e',${JSON.stringify(stubborn)}],{stdio:'ignore'});fs.writeFileSync(process.argv[1],String(child.pid));process.on('SIGTERM',()=>process.exit(0));setInterval(()=>{},1000)`;
+    const result = await runOwnedMaestro(process.execPath, ['-e', script, pidFile],
+      { cwd: dir, env: process.env, dir, timeline: join(dir, 'events.jsonl'), flow: '', diagnostic: async () => {},
+        quietMs: 150, wallMs: 3000, pollMs: 20, terminationGraceMs: 100 });
+    descendantPid = Number(readFileSync(pidFile, 'utf8'));
+    assert.equal(result.reason, 'inactivity-deadline');
+    assert.throws(() => process.kill(descendantPid, 0), { code: 'ESRCH' });
+    assert.doesNotThrow(() => process.kill(unrelated.pid, 0));
+  } finally {
+    if (descendantPid) { try { process.kill(descendantPid, 'SIGKILL'); } catch { /* fixture cleanup */ } }
+    unrelated.kill('SIGTERM'); rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('recorder stops with its flow and leaves unrelated processes alive', async () => {
   const dir = temp();
   const unrelated = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
@@ -139,16 +159,19 @@ for (const signal of ['SIGINT', 'SIGTERM']) test(`${signal} reaps owned flow gro
   const dir = temp();
   const sentinel = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
   const fixture = join(dir, 'fixture.mjs');
+  let descendantPid = null;
   const moduleUrl = new URL('./runner-controls.mjs', import.meta.url).href;
+  const stubborn = "process.on('SIGTERM',()=>{});setInterval(()=>{},1000)";
+  const maestroScript = `const fs=require('fs'),cp=require('child_process');const child=cp.spawn(process.execPath,['-e',${JSON.stringify(stubborn)}],{stdio:'ignore'});fs.writeFileSync(process.argv[1],String(child.pid));process.on('SIGTERM',()=>process.exit(0));setInterval(()=>{},1000)`;
   writeFileSync(fixture, `import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { runRecordedFlow } from ${JSON.stringify(moduleUrl)};
 const dir = process.argv[2];
 const recorderScript = "process.on('SIGINT',()=>{require('fs').writeFileSync(process.argv[1],'video');process.exit(0)});setInterval(()=>{},1000)";
 const result = await runRecordedFlow({ recorderCommand: process.execPath, recorderArgs: ['-e', recorderScript, join(dir,'video.mp4')],
-  maestroCommand: process.execPath, maestroArgs: ['-e', 'setInterval(()=>{},1000)'], udid: 'fixture', video: join(dir,'video.mp4'),
+  maestroCommand: process.execPath, maestroArgs: ['-e', ${JSON.stringify(maestroScript)}, join(dir,'descendant.pid')], udid: 'fixture', video: join(dir,'video.mp4'),
   recorderLog: join(dir,'recorder.log'), cwd: dir, env: process.env, dir, timeline: join(dir,'events.jsonl'), flow: '',
-  diagnostic: async reason => writeFileSync(join(dir,'diagnostic.json'), JSON.stringify({reason})), quietMs: 60000, wallMs: 60000, pollMs: 20 });
+  diagnostic: async reason => writeFileSync(join(dir,'diagnostic.json'), JSON.stringify({reason})), quietMs: 60000, wallMs: 60000, pollMs: 20, terminationGraceMs: 100 });
 writeFileSync(join(dir,'result.json'), JSON.stringify({ reason: result.result.reason, recorder: result.recorderResult }));`);
   const child = spawn(process.execPath, [fixture, dir], { stdio: 'ignore' });
   try {
@@ -158,8 +181,10 @@ writeFileSync(join(dir,'result.json'), JSON.stringify({ reason: result.result.re
       await new Promise(resolve => setTimeout(resolve, 20));
     assert.ok(existsSync(timeline) && readFileSync(timeline, 'utf8').includes('maestro-start'), 'fixture reached active flow');
     child.kill(signal);
-    const exit = await Promise.race([new Promise(resolve => child.once('exit', (code, exitSignal) => resolve({ code, exitSignal }))),
-      new Promise((_, reject) => setTimeout(() => reject(Error('fixture cleanup exceeded 5 s')), 5000))]);
+    const exit = await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(Error('fixture cleanup exceeded 5 s')), 5000);
+      child.once('exit', (code, exitSignal) => { clearTimeout(timer); resolve({ code, exitSignal }); });
+    });
     assert.deepEqual(exit, { code: 0, exitSignal: null });
     const result = JSON.parse(readFileSync(join(dir, 'result.json'), 'utf8'));
     assert.equal(result.reason, 'operator-interrupt');
@@ -169,10 +194,15 @@ writeFileSync(join(dir,'result.json'), JSON.stringify({ reason: result.result.re
     const lines = readFileSync(timeline, 'utf8').trim().split('\n').map(JSON.parse);
     const maestroPid = lines.find(line => line.type === 'maestro-start').pid;
     const recorderPid = lines.find(line => line.type === 'recorder-start').pid;
-    for (const pid of [maestroPid, recorderPid]) assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
+    descendantPid = Number(readFileSync(join(dir, 'descendant.pid'), 'utf8'));
+    for (const pid of [maestroPid, descendantPid, recorderPid]) assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
     assert.doesNotThrow(() => process.kill(sentinel.pid, 0));
     assert.ok(lines.findIndex(line => line.type === 'maestro-end') < lines.findIndex(line => line.type === 'recorder-end'));
-  } finally { child.kill('SIGKILL'); sentinel.kill('SIGTERM'); rmSync(dir, { recursive: true, force: true }); }
+  } finally {
+    child.kill('SIGKILL');
+    if (descendantPid) { try { process.kill(descendantPid, 'SIGKILL'); } catch { /* fixture cleanup */ } }
+    sentinel.kill('SIGTERM'); rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('empty commands and abnormal recorder exit fail before walkthrough', () => {
