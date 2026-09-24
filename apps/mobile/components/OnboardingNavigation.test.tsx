@@ -135,6 +135,23 @@ it('registers a push token after a signed-in trial reminder opt-in', async () =>
   ));
 });
 
+it('does not register account A trial token after account B signs in during token retrieval', async () => {
+  installEligibleTrialOffer();
+  mockSession = { access_token: 'token-a', user: { id: 'buyer-a' } };
+  (ExpoNotifications.requestPermissionsAsync as jest.Mock).mockResolvedValueOnce({ status: 'granted' });
+  const token = deferred<string>();
+  jest.spyOn(NotificationHelpers, 'getExpoPushTokenAsync').mockReturnValueOnce(token.promise);
+  const screen = renderJourney('/welcome/trial-reminder');
+  await act(async () => { fireEvent.press(await screen.findByTestId('trial-reminder-allow')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
+  await waitFor(() => expect(NotificationHelpers.getExpoPushTokenAsync).toHaveBeenCalled());
+  mockSession = { access_token: 'token-b', user: { id: 'buyer-b' } };
+  await act(async () => { token.resolve('ExponentPushToken[buyer-a]'); });
+  expect(global.fetch).not.toHaveBeenCalledWith(
+    expect.stringContaining('/api/user/push-token'), expect.anything(),
+  );
+});
+
 function installEligibleTrialOffer() {
   const annual = { identifier: '$rc_annual', product: { identifier: 'annual', priceString: '$59.99', subscriptionPeriod: 'P1Y',
     introPrice: { price: 0, priceString: '$0', period: 'P1W', cycles: 1 } } };

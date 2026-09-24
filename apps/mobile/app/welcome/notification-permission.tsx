@@ -26,8 +26,8 @@ export default function NotificationPermissionScreen() {
   const [busy, setBusy] = useState(false);
   useEffect(() => { trackNotificationPrimingShown(); }, []);
 
-  async function registerPushToken() {
-    try { const token = await getExpoPushTokenAsync(); if (token) await api.post('/api/user/push-token', { token }); }
+  async function registerPushToken(userId: string) {
+    try { const token = await getExpoPushTokenAsync(); if (token) await api.post('/api/user/push-token', { token }, true, userId); }
     catch { /* Local reminders do not require an APNs token. */ }
   }
   async function handleAllow() {
@@ -42,8 +42,8 @@ export default function NotificationPermissionScreen() {
         if (session) {
           await saveReminderPreferences(session.user.id, { meals: true, trial: true });
           trackReminderAction({ action: 'preferences_changed', meals: true, trial: true });
+          void registerPushToken(session.user.id);
         }
-        void registerPushToken();
       } else trackNotificationPermissionDenied();
     } catch { /* An unavailable permission prompt never blocks the purchased meal. */ }
     finally { void openPurchasedDestination(navigation); }

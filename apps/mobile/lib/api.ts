@@ -52,13 +52,15 @@ async function get<T>(path: string, authenticated = false, options: { signal?: A
   return res.json() as Promise<T>;
 }
 
-async function post<T>(path: string, body: unknown, authenticated = true): Promise<T> {
+async function post<T>(path: string, body: unknown, authenticated = true, expectedUserId?: string): Promise<T> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
 
   if (authenticated) {
-    const token = await getAccessToken();
+    const { data } = await supabase.auth.getSession();
+    if (expectedUserId && data.session?.user.id !== expectedUserId) throw new Error('Account changed before request');
+    const token = data.session?.access_token;
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
