@@ -1,10 +1,17 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { saveMacroTargets } from './macroStorage';
 import { saveOnboardingField } from './onboardingStorage';
-import { clearOnboardingResume, getOnboardingResume, takeGoalReturnTo } from './onboardingResume';
+import { clearOnboardingResume, getOnboardingResume, rememberMacroSetup, takeGoalReturnTo } from './onboardingResume';
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 beforeEach(async () => { await AsyncStorage.clear(); });
+
+it('resumes unfinished signed-in macro setup and ignores the checkpoint after targets are saved', async () => {
+  await rememberMacroSetup();
+  expect(await getOnboardingResume()).toBe('/macro-setup');
+  await saveMacroTargets({ calories: '600', protein: '45', carbs: '60', fat: '20' });
+  expect(await getOnboardingResume()).toBeNull();
+});
 
 it.each(['tried', 'response'])('requires a goal before resuming %s with an area', async checkpoint => {
   await saveOnboardingField('area', { lat: 34.1, lng: -118.3, name: 'Silver Lake', source: 'manual' });

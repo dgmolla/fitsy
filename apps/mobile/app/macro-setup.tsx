@@ -11,7 +11,7 @@ import { applySuggestionFilter, type SuggestionFilter } from '@/lib/macroSuggest
 import { calculateDailyMacros, dailyToPerMealMacros, macrosToStored } from '@/lib/macroCalculator';
 import { getOnboardingData, calculateSuggestedCalories, type Goal } from '@/lib/onboardingStorage';
 import { FONTS } from '@/lib/brand';
-import { clearOnboardingResume, hasChosenWelcomeGoal, rememberGoalReturnTo } from '@/lib/onboardingResume';
+import { clearOnboardingResume, hasChosenWelcomeGoal, rememberGoalReturnTo, rememberMacroSetup } from '@/lib/onboardingResume';
 
 interface MacroValues {
   protein: number;
@@ -79,7 +79,7 @@ export default function MacroSetupScreen() {
     useCallback(() => {
       let active = true;
       setLoaded(false);
-      getOnboardingData().then((data) => {
+      getOnboardingData().then(async (data) => {
         if (!active) return;
         if (!data.goal || !hasChosenWelcomeGoal(data.goal)) {
           setLoaded(false);
@@ -89,6 +89,8 @@ export default function MacroSetupScreen() {
           return;
         }
         const cal = snapToStep(calculateSuggestedCalories(data), 25);
+        if (!fromOnboarding) await rememberMacroSetup();
+        if (!active) return;
         setSuggestedCal(cal);
         setGoal(data.goal);
         if (!customizedRef.current) setValues(recommendedSplit(cal, data.goal));

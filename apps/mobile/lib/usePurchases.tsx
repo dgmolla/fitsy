@@ -126,7 +126,10 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   // the first render that would carry it in state).
   const customerInfoRef = useRef<CustomerInfo | null>(null);
   const customerInfoGenerationRef = useRef(0);
+  const customerInfoLastWriteRef = useRef<'boot' | 'listener' | 'other'>('other');
   const customerInfoReadRequestRef = useRef(0);
+  const listenerReadSequenceRef = useRef(0);
+  const listenerCommittedSequenceRef = useRef(0);
   const configuredRef = useRef(false);
   const offeringRequestRef = useRef(0);
   const offeringCommittedRequestRef = useRef(0);
@@ -138,8 +141,9 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
       setOffering(off);
     }
   }, []);
-  const setCustomerInfo = useCallback((info: CustomerInfo | null) => {
+  const setCustomerInfo = useCallback((info: CustomerInfo | null, source: 'boot' | 'listener' | 'other' = 'other') => {
     customerInfoGenerationRef.current += 1;
+    customerInfoLastWriteRef.current = source;
     customerInfoRef.current = info;
     setCustomerInfoState(info);
     setCustomerInfoSettled(true);
@@ -195,7 +199,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
             if (sameUser && !isCancelled() &&
               customerInfoGenerationRef.current === bootInfoGeneration &&
               customerInfoReadRequestRef.current === bootInfoRequest) {
-              setCustomerInfo(info);
+              setCustomerInfo(info, 'boot');
               if (!bootOpen && isProActive(info) && verdict.entitledRef.current === false) {
                 void syncEntitlement('mismatch');
               }
@@ -234,19 +238,22 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
           // A queued update from the previous native identity must not
           // invalidate this account's still-pending boot read.
           const infoGeneration = customerInfoGenerationRef.current;
-          const infoRequest = ++customerInfoReadRequestRef.current;
+          const readSequence = ++listenerReadSequenceRef.current;
           // The event payload can belong to the previous account if auth
           // changed while the callback was queued. Read the verified identity.
           const fresh = await fetchCustomerInfo();
           if (!fresh) return;
           const latest = await supabase.auth.getSession();
           const nativeUserId = await currentPurchasesUserId();
-          if (customerInfoGenerationRef.current === infoGeneration &&
-            customerInfoReadRequestRef.current === infoRequest &&
+          if ((customerInfoGenerationRef.current === infoGeneration || customerInfoLastWriteRef.current === 'boot' ||
+              (customerInfoLastWriteRef.current === 'listener' && readSequence > listenerCommittedSequenceRef.current)) &&
+            readSequence > listenerCommittedSequenceRef.current &&
             latest.data.session?.user.id === currentUserId &&
             nativeUserId === currentUserId) {
+            listenerCommittedSequenceRef.current = readSequence;
+            ++customerInfoReadRequestRef.current;
             const proChanged = isProActive(fresh) !== isProActive(customerInfoRef.current);
-            setCustomerInfo(fresh);
+            setCustomerInfo(fresh, 'listener');
             if (proChanged) void syncEntitlement('mismatch');
           }
         })().catch(() => undefined);

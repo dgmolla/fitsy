@@ -190,6 +190,7 @@ it('requires a goal before signed-in legacy macro recommendations', async () => 
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/macro-setup'));
   expect(await screen.findByTestId('macro-setup-save')).toBeTruthy();
+  expect(await getOnboardingResume()).toBe('/macro-setup');
   expect(screen.getByText(/We recommend ~/)).toBeTruthy();
   expect((await getOnboardingData()).goal).toBe('build_muscle');
   await act(async () => { fireEvent.press(screen.getByTestId('macro-setup-save')); });

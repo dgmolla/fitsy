@@ -16,8 +16,9 @@ export function hasChosenWelcomeGoal(goal: Awaited<ReturnType<typeof getOnboardi
 export function useOnboardingStep(step?: Step): void {
   useFocusEffect(useCallback(() => { if (step) void AsyncStorage.setItem(KEY, step); }, [step]));
 }
-export async function getOnboardingResume(): Promise<`/welcome/${Step}` | null> {
+export async function getOnboardingResume(): Promise<`/welcome/${Step}` | '/macro-setup' | null> {
   const step = await AsyncStorage.getItem(KEY);
+  if (step === 'macro-setup') return (await getMacroTargets()) ? null : '/macro-setup';
   // Earlier versions asked about prior approaches before collecting location.
   if ((step === 'tried' || step === 'response') && !(await getPreviewSetup()).data.area) return '/welcome/location-permission';
   if (step === 'promise') return '/welcome/location-permission';
@@ -50,6 +51,10 @@ export async function getOnboardingResume(): Promise<`/welcome/${Step}` | null> 
 }
 export async function rememberGoalReturnTo(destination: GoalReturnTo): Promise<void> {
   await AsyncStorage.setItem(GOAL_RETURN_KEY, destination);
+}
+
+export async function rememberMacroSetup(): Promise<void> {
+  await AsyncStorage.setItem(KEY, 'macro-setup');
 }
 
 export async function takeGoalReturnTo(): Promise<GoalReturnTo | null> {

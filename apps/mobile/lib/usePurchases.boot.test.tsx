@@ -222,6 +222,21 @@ describe('boot', () => {
     expect(result.current.entitled).toBe(true);
   });
 
+  it('accepts a successful boot identity after a same-account listener refresh fails', async () => {
+    const identity = deferred<typeof proInfo>();
+    mockRc.identifyPurchasesUser.mockReturnValueOnce(identity.promise);
+    mockRc.fetchCustomerInfo.mockResolvedValueOnce(null as never);
+    const { result } = renderProvider();
+    await waitFor(() => expect(mockRc.identifyPurchasesUser).toHaveBeenCalledTimes(1));
+    const listener = mockRc.addCustomerInfoListener.mock.calls[0][0];
+    await act(async () => { listener(freeInfo); });
+    await waitFor(() => expect(mockRc.fetchCustomerInfo).toHaveBeenCalledTimes(1));
+    await act(async () => { identity.resolve(proInfo); });
+    await flush();
+    expect(result.current.customerInfo).toEqual(proInfo);
+    expect(result.current.isPro).toBe(true);
+  });
+
   it('settles unknown trial eligibility when CustomerInfo is unavailable but plans load', async () => {
     mockRc.identifyPurchasesUser.mockResolvedValueOnce(null as never);
     mockRc.fetchCurrentOffering.mockResolvedValueOnce({ availablePackages: [{ product: { identifier: 'annual' } }] } as never);
