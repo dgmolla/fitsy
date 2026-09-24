@@ -9,7 +9,7 @@ import { createRequire } from 'node:module';
 import { root, inputHash, changedPaths, impact, digest, validate, baseline, repoEnv } from '../verify/product-flow.mjs';
 import { backendRevision } from './backend-identity.mjs';
 import { buildProfile, bundleDelegate, fixtureLabel, metroRoute } from './build-profile.mjs';
-import { admitDisk, archiveFailureEvidence, clock, event, flowFailureReason, latestMaestroLog, matchingFailureKey, nearestFailure, needsDiagnosis, requireMetro, runOwnedMaestro, startOwnedRecorder, stopOwnedRecorder, summarizeCommands } from './runner-controls.mjs';
+import { admitDisk, archiveFailureEvidence, event, flowFailureReason, latestMaestroLog, matchingFailureKey, nearestFailure, needsDiagnosis, requireMetro, runRecordedFlow, summarizeFlowTiming } from './runner-controls.mjs';
 const yaml = createRequire(import.meta.url)('js-yaml');
 const out = resolve(root, '.evidence/product-flow');
 const buildDir = resolve(root, '.evidence/product-build');
@@ -254,35 +254,17 @@ async function execute(udid, names) {
           ax: 'unavailable until Maestro writes a failed command hierarchy', networkTiming: 'unavailable' });
       };
       const video = join(dir, 'flow-untrimmed.mp4');
-      const recorder = await startOwnedRecorder(udid, video, join(dir, 'recorder.log'));
-      const recorderStartedMs = Date.now();
-      event(timeline, { type: 'recorder-start', flow: flow.name, pid: recorder.pid, video: relative(out, video) });
-      let result, recorderResult;
-      try {
-        result = await runOwnedMaestro(process.env.MAESTRO_BIN || 'maestro', ['test', '--udid', udid, join(root, flow.source), '--format', 'junit', '--output', join(dir, 'junit.xml'), '--debug-output', dir, '--test-output-dir', dir],
-          { cwd: root, env: repoEnv(), dir, timeline, flow: flowBytes, diagnostic });
-      } catch (error) {
-        result = { code: null, reason: 'runner-error', error: error.message, elapsedMs: null, anchor: clock() };
-      } finally {
-        try { recorderResult = await stopOwnedRecorder(recorder); }
-        catch (error) { recorderResult = { state: 'stop-error', bytes: null, error: error.message }; }
-        event(timeline, { type: 'recorder-end', flow: flow.name, pid: recorder.pid, ...recorderResult });
-      }
-      const recorderEndedMs = Date.now();
+      const { result, recorderResult, recorderStartedMs, recorderEndedMs } = await runRecordedFlow({
+        maestroCommand: process.env.MAESTRO_BIN || 'maestro',
+        maestroArgs: ['test', '--udid', udid, join(root, flow.source), '--format', 'junit', '--output', join(dir, 'junit.xml'), '--debug-output', dir, '--test-output-dir', dir],
+        udid, video, recorderLog: join(dir, 'recorder.log'), cwd: root, env: repoEnv(), dir, timeline, flow: flowBytes, diagnostic });
       const commands = files(dir).filter(f => /commands-.*\.json$/.test(f));
       let parsed = null, commandParseError = null;
       if (commands.length === 1) {
         try { parsed = read(commands[0]); }
         catch (error) { commandParseError = error.message; }
       }
-      const summary = summarizeCommands(parsed, { anchor: result.anchor });
-      const stamped = summary.commands.filter(command => command.startMs !== null);
-      const firstCommandMs = stamped.length ? Math.min(...stamped.map(command => command.startMs)) : null;
-      const lastCommandEndMs = stamped.length && stamped.every(command => command.endMs !== null) ? Math.max(...stamped.map(command => command.endMs)) : null;
-      summary.recording = { video: relative(out, video), recorderStartedAt: new Date(recorderStartedMs).toISOString(), recorderEndedAt: new Date(recorderEndedMs).toISOString(),
-        beforeFirstCommandMs: firstCommandMs === null ? null : Math.max(0, firstCommandMs - recorderStartedMs),
-        afterLastCommandMs: lastCommandEndMs === null ? null : Math.max(0, recorderEndedMs - lastCommandEndMs),
-        note: 'Recording boundaries include driver startup and shutdown. They do not establish visual or app idle without reviewing the video.' };
+      const summary = summarizeFlowTiming(parsed, { anchor: result.anchor, video: relative(out, video), recorderStartedMs, recorderEndedMs });
       save(join(dir, 'timing-summary.json'), summary);
       const failure = Array.isArray(parsed) ? nearestFailure(parsed) : null;
       const failureReason = flowFailureReason(result, parsed, recorderResult, flow.name);

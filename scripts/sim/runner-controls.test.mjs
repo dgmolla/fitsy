@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { archiveFailureEvidence, flowFailureReason, requireMetro, runOwnedMaestro, startOwnedRecorder, stopOwnedRecorder, summarizeCommands, nearestFailure, needsDiagnosis } from './runner-controls.mjs';
+import { archiveFailureEvidence, flowFailureReason, requireMetro, runOwnedMaestro, startOwnedRecorder, stopOwnedRecorder, summarizeCommands, summarizeFlowTiming, nearestFailure, needsDiagnosis } from './runner-controls.mjs';
 
 const temp = () => mkdtempSync(join(tmpdir(), 'fitsy-runner-'));
 test('missing Metro fails readiness before the selector timeout', async () => {
@@ -107,6 +107,72 @@ test('a long parent command covers gaps between nested commands', () => {
   assert.equal(summary.gaps[1].uncoveredMs, 0);
   assert.equal(summary.gaps[1].overlaps, true);
   assert.equal(summary.gaps[1].investigationCandidate, false);
+});
+
+test('timing summary keeps every incomplete boundary and aggregate gap unknown', () => {
+  const command = (timestamp, duration) => ({ command: { tapOnElementCommand: {} }, metadata: { status: 'COMPLETED', timestamp, duration } });
+  const missing = { command: { retryCommand: { commands: [] } }, metadata: { status: 'COMPLETED' } };
+  const complete = [command(1000, 500), command(2000, 500), command(46000, 1000)];
+  const cases = [
+    ['complete', complete, [500, 43500], [1000, 1000], true],
+    ['missing-first', [missing, ...complete], [null, null], [null, null], false],
+    ['missing-last', [...complete, missing], [null, null], [null, null], false],
+    ['missing-middle', [complete[0], missing, ...complete.slice(1)], [null, null], [null, null], false],
+    ['untimed-parent-later-gap', [complete[0], missing, complete[1], complete[2]], [null, null], [null, null], false],
+    ['nested-overlap', [command(1000, 100000), command(11000, 1000), command(51000, 1000)], [0, 0], [1000, 0], false],
+  ];
+  for (const [name, raw, gaps, offsets, alert] of cases) {
+    const output = summarizeFlowTiming(raw, { video: 'raw.mp4', recorderStartedMs: 0, recorderEndedMs: 48000 });
+    assert.deepEqual(output.gaps.map(gap => gap.uncoveredMs), gaps, name);
+    assert.deepEqual([output.recording.beforeFirstCommandMs, output.recording.afterLastCommandMs], offsets, name);
+    assert.equal(output.gaps.some(gap => gap.investigationCandidate), alert, name);
+    assert.equal(output.measuredIdleMs, null, name);
+    assert.equal(output.recording.video, 'raw.mp4', name);
+  }
+  const noReceipt = summarizeFlowTiming(null, { video: 'raw.mp4', recorderStartedMs: 0, recorderEndedMs: 48000 });
+  assert.equal(noReceipt.observation, 'missing-or-empty');
+  assert.deepEqual([noReceipt.recording.beforeFirstCommandMs, noReceipt.recording.afterLastCommandMs], [null, null]);
+  assert.equal(summarizeFlowTiming(complete).recording.recorderStartedAt, null);
+});
+
+for (const signal of ['SIGINT', 'SIGTERM']) test(`${signal} reaps owned flow groups after diagnostics and preserves unrelated process`, async () => {
+  const dir = temp();
+  const sentinel = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+  const fixture = join(dir, 'fixture.mjs');
+  const moduleUrl = new URL('./runner-controls.mjs', import.meta.url).href;
+  writeFileSync(fixture, `import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { runRecordedFlow } from ${JSON.stringify(moduleUrl)};
+const dir = process.argv[2];
+const recorderScript = "process.on('SIGINT',()=>{require('fs').writeFileSync(process.argv[1],'video');process.exit(0)});setInterval(()=>{},1000)";
+const result = await runRecordedFlow({ recorderCommand: process.execPath, recorderArgs: ['-e', recorderScript, join(dir,'video.mp4')],
+  maestroCommand: process.execPath, maestroArgs: ['-e', 'setInterval(()=>{},1000)'], udid: 'fixture', video: join(dir,'video.mp4'),
+  recorderLog: join(dir,'recorder.log'), cwd: dir, env: process.env, dir, timeline: join(dir,'events.jsonl'), flow: '',
+  diagnostic: async reason => writeFileSync(join(dir,'diagnostic.json'), JSON.stringify({reason})), quietMs: 60000, wallMs: 60000, pollMs: 20 });
+writeFileSync(join(dir,'result.json'), JSON.stringify({ reason: result.result.reason, recorder: result.recorderResult }));`);
+  const child = spawn(process.execPath, [fixture, dir], { stdio: 'ignore' });
+  try {
+    const timeline = join(dir, 'events.jsonl');
+    const deadline = Date.now() + 5000;
+    while ((!existsSync(timeline) || !readFileSync(timeline, 'utf8').includes('maestro-start')) && Date.now() < deadline)
+      await new Promise(resolve => setTimeout(resolve, 20));
+    assert.ok(existsSync(timeline) && readFileSync(timeline, 'utf8').includes('maestro-start'), 'fixture reached active flow');
+    child.kill(signal);
+    const exit = await Promise.race([new Promise(resolve => child.once('exit', (code, exitSignal) => resolve({ code, exitSignal }))),
+      new Promise((_, reject) => setTimeout(() => reject(Error('fixture cleanup exceeded 5 s')), 5000))]);
+    assert.deepEqual(exit, { code: 0, exitSignal: null });
+    const result = JSON.parse(readFileSync(join(dir, 'result.json'), 'utf8'));
+    assert.equal(result.reason, 'operator-interrupt');
+    assert.equal(result.recorder.state, 'stopped');
+    assert.equal(result.recorder.bytes, 5);
+    assert.ok(existsSync(join(dir, 'diagnostic.json')));
+    const lines = readFileSync(timeline, 'utf8').trim().split('\n').map(JSON.parse);
+    const maestroPid = lines.find(line => line.type === 'maestro-start').pid;
+    const recorderPid = lines.find(line => line.type === 'recorder-start').pid;
+    for (const pid of [maestroPid, recorderPid]) assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
+    assert.doesNotThrow(() => process.kill(sentinel.pid, 0));
+    assert.ok(lines.findIndex(line => line.type === 'maestro-end') < lines.findIndex(line => line.type === 'recorder-end'));
+  } finally { child.kill('SIGKILL'); sentinel.kill('SIGTERM'); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('empty commands and abnormal recorder exit fail before walkthrough', () => {

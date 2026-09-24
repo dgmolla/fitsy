@@ -60,19 +60,34 @@ export function summarizeCommands(commands, { gapMs = 30000, anchor = null } = {
   const ordered = rows.filter(row => row.startMs !== null).sort((a, b) => a.startMs - b.startMs);
   if (!ordered.length) return { observation: 'no-timestamps', commands: rows, gaps: [], measuredIdleMs: null,
     note: 'Command timing is unavailable. No app or recording idle was measured.' };
+  const timingComplete = rows.every(row => row.startMs !== null && row.endMs !== null);
   let coverageEndMs = ordered[0].endMs;
   const gaps = ordered.slice(1).map((row, index) => {
     const before = ordered[index];
     const adjacentStartGapMs = row.startMs - before.startMs;
-    const missingBetween = before.index >= row.index || rows.some(item => item.index > before.index && item.index < row.index && item.startMs === null);
-    const uncoveredMs = coverageEndMs === null || missingBetween ? null : Math.max(0, row.startMs - coverageEndMs);
-    const overlaps = !missingBetween && coverageEndMs !== null && row.startMs < coverageEndMs;
+    const uncoveredMs = !timingComplete || coverageEndMs === null || before.index >= row.index ? null : Math.max(0, row.startMs - coverageEndMs);
+    const overlaps = coverageEndMs !== null && row.startMs < coverageEndMs;
     coverageEndMs = coverageEndMs === null || row.endMs === null ? null : Math.max(coverageEndMs, row.endMs);
     return { afterIndex: before.index, beforeIndex: row.index, adjacentStartGapMs, precedingDurationMs: before.durationMs,
       uncoveredMs, overlaps, investigationCandidate: uncoveredMs !== null && uncoveredMs >= gapMs };
   });
-  return { observation: ordered.length === rows.length ? 'complete-timestamps' : 'partial-timestamps', commands: rows, gaps,
+  return { observation: timingComplete ? 'complete-timestamps' : 'partial-timestamps', commands: rows, gaps,
     measuredIdleMs: null, note: 'Uncovered command intervals are unobserved time, not measured app or recording idle. Overlaps are not additive.' };
+}
+export function recordingOffsets(commands, recorderStartedMs, recorderEndedMs) {
+  if (!commands.length || !Number.isFinite(recorderStartedMs) || !Number.isFinite(recorderEndedMs) ||
+    commands.some(command => command.startMs === null || command.endMs === null))
+    return { beforeFirstCommandMs: null, afterLastCommandMs: null };
+  return { beforeFirstCommandMs: Math.max(0, Math.min(...commands.map(command => command.startMs)) - recorderStartedMs),
+    afterLastCommandMs: Math.max(0, recorderEndedMs - Math.max(...commands.map(command => command.endMs))) };
+}
+export function summarizeFlowTiming(commands, { anchor = null, video = null, recorderStartedMs = null, recorderEndedMs = null } = {}) {
+  const summary = summarizeCommands(commands, { anchor });
+  summary.recording = { video, recorderStartedAt: recorderStartedMs === null ? null : new Date(recorderStartedMs).toISOString(),
+    recorderEndedAt: recorderEndedMs === null ? null : new Date(recorderEndedMs).toISOString(),
+    ...recordingOffsets(summary.commands, recorderStartedMs, recorderEndedMs),
+    note: 'Recording boundaries include driver startup and shutdown. They do not establish visual or app idle without reviewing the video.' };
+  return summary;
 }
 export function nearestFailure(commands) {
   const failed = commands.filter(c => c.metadata?.status === 'FAILED').sort((a, b) => (b.metadata?.timestamp || 0) - (a.metadata?.timestamp || 0))[0];
@@ -156,7 +171,7 @@ export async function stopOwnedRecorder(recorder) {
   if (!result) throw new Error(`Owned recorder ${recorder.pid} did not stop; inspect before cleanup`);
   return { state: 'stopped', ...result, file: recorder.file, bytes: existsSync(recorder.file) ? statSync(recorder.file).size : null };
 }
-export async function runOwnedMaestro(command, args, { cwd, env, dir, timeline, flow, diagnostic, quietMs, wallMs, spawnImpl = spawn, pollMs = 1000 }) {
+export async function runOwnedMaestro(command, args, { cwd, env, dir, timeline, flow, diagnostic, signal, quietMs, wallMs, spawnImpl = spawn, pollMs = 1000 }) {
   const inactivityMs = quietMs ?? Math.max(180000, maxDeclaredWaitMs(flow) + 120000);
   // The wall limit includes all declared waits plus 10 minutes of driver overhead.
   // The 15 minute floor exceeds the observed 271 s healthy flow by over 3x.
@@ -173,8 +188,8 @@ export async function runOwnedMaestro(command, args, { cwd, env, dir, timeline, 
     await sleep(pollMs);
     const log = latestMaestroLog(dir);
     if (log) { try { const size = statSync(log).size; if (size !== lastLogSize) { lastLogSize = size; lastActivity = performance.now(); } } catch { /* a rotating log is not evidence of a hang */ } }
-    if (performance.now() - started <= ceilingMs && performance.now() - lastActivity <= inactivityMs) continue;
-    reason = performance.now() - started > ceilingMs ? 'wall-deadline' : 'inactivity-deadline';
+    if (!signal?.aborted && performance.now() - started <= ceilingMs && performance.now() - lastActivity <= inactivityMs) continue;
+    reason = signal?.aborted ? 'operator-interrupt' : performance.now() - started > ceilingMs ? 'wall-deadline' : 'inactivity-deadline';
     try { await diagnostic(reason, { pid: ownedPid, log, elapsedMs: performance.now() - started }); }
     catch (error) { event(timeline, { type: 'diagnostic-error', pid: ownedPid, error: error.message }); }
     // Only the process group created for this invocation is eligible.
@@ -189,7 +204,37 @@ export async function runOwnedMaestro(command, args, { cwd, env, dir, timeline, 
     break;
   }
   result = await completed.catch(error => ({ code: null, error: error.message }));
+  if (signal?.aborted && !reason) reason = 'operator-interrupt';
   event(timeline, { type: 'maestro-end', pid: ownedPid, outcome: reason || (result.code === 0 ? 'pass' : 'fail'), exitCode: result.code, signal: result.signal,
     elapsedMs: performance.now() - started, reason });
   return { ...result, reason, elapsedMs: performance.now() - started, anchor };
+}
+
+export async function runRecordedFlow({ recorderCommand = 'xcrun', recorderArgs = null, recorderSpawnImpl,
+  maestroCommand, maestroArgs, maestroSpawnImpl, udid, video, recorderLog, cwd, env, dir, timeline, flow, diagnostic,
+  quietMs, wallMs, pollMs }) {
+  const interruption = new AbortController();
+  const onInt = () => interruption.abort(new Error('SIGINT received during owned native flow'));
+  const onTerm = () => interruption.abort(new Error('SIGTERM received during owned native flow'));
+  process.on('SIGINT', onInt); process.on('SIGTERM', onTerm);
+  let recorder = null, recorderStartedMs = null, result, recorderResult;
+  try {
+    recorder = await startOwnedRecorder(udid, video, recorderLog,
+      { command: recorderCommand, args: recorderArgs, spawnImpl: recorderSpawnImpl });
+    recorderStartedMs = Date.now();
+    event(timeline, { type: 'recorder-start', pid: recorder.pid, video });
+    if (interruption.signal.aborted) throw interruption.signal.reason;
+    result = await runOwnedMaestro(maestroCommand, maestroArgs, { cwd, env, dir, timeline, flow, diagnostic,
+      signal: interruption.signal, quietMs, wallMs, pollMs, spawnImpl: maestroSpawnImpl });
+  } catch (error) {
+    result = { code: null, reason: interruption.signal.aborted ? 'operator-interrupt' : 'runner-error',
+      error: error.message, elapsedMs: null, anchor: clock() };
+  } finally {
+    try { recorderResult = await stopOwnedRecorder(recorder); }
+    catch (error) { recorderResult = { state: 'stop-error', bytes: null, error: error.message }; }
+    event(timeline, { type: 'recorder-end', pid: recorder?.pid || null, ...recorderResult });
+    process.off('SIGINT', onInt); process.off('SIGTERM', onTerm);
+  }
+  if (interruption.signal.aborted && !result.reason) result.reason = 'operator-interrupt';
+  return { result, recorderResult, recorderStartedMs, recorderEndedMs: Date.now() };
 }

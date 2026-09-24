@@ -12,7 +12,7 @@ Each flow retains its original Maestro command JSON, untrimmed `flow-untrimmed.m
 The summary lists command condition, declared deadline, outcome and actual retry attempt only when exposed by Maestro.
 Command monotonic timestamps are estimates anchored to the runner clock; Maestro supplies wall timestamps and durations.
 An uncovered command interval is unobserved time, not measured app or recorder idle.
-If a command in that interval lacks a timestamp or duration, uncovered time is unknown and no gap alert is raised.
+If any command lacks a timestamp or duration, aggregate uncovered time and recording first/last offsets are unknown, and no gap alert is raised.
 Overlapping command intervals must not be added together.
 
 The runner allows at least 15 minutes per flow and also budgets three times the sum of declared YAML waits plus 10 minutes for driver overhead.
