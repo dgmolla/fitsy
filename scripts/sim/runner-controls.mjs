@@ -127,8 +127,8 @@ export function archiveFailureEvidence(history, from, to) {
     ? `${to}${entry.evidence.slice(from.length)}` : entry.evidence }));
 }
 export function flowFailureReason(result, commands, recorder, flowName = null) {
-  if (result.code !== 0 || result.reason) return result.reason || 'maestro-exit';
   if (recorder.endedBeforeStop) return 'recorder-ended-early';
+  if (result.code !== 0 || result.reason) return result.reason || 'maestro-exit';
   if (!Array.isArray(commands) || commands.length === 0) return 'missing-or-empty-command-receipt';
   if (recorder.state !== 'stopped' || recorder.code !== 0 || !recorder.bytes) return 'recorder-failure';
   if (flowName) {
@@ -430,7 +430,8 @@ export async function runRecordedFlow({ recorderCommand = 'xcrun', recorderArgs 
     }
     if (recorderResult.endedBeforeStop) {
       earlyExit(recorderResult, 'keeper-stop-ack', recorder);
-      if (!result.reason) {
+      if (result.reason !== 'recorder-ended-early') {
+        if (result.reason) result.priorReason = result.reason;
         result.reason = 'recorder-ended-early';
         try { await diagnostic(result.reason, { pid: recorderPid, commandPid: null, log: latestMaestroLog(dir),
           elapsedMs: result.elapsedMs, members: null }); }

@@ -247,10 +247,12 @@ async function execute(udid, names) {
       const dir = join(out, flow.name); mkdirSync(dir);
       const flowBytes = readFileSync(join(root, flow.source), 'utf8');
       event(timeline, { type: 'flow-start', flow: flow.name, expected: 'all required commands complete', sourceHash: flow.sourceHash });
+      let diagnosticCount = 0;
       const diagnostic = async (reason, details) => {
-        const screenshot = join(dir, 'watchdog-screen.png');
+        const diagnosticName = `diagnostic-${++diagnosticCount}-${reason.replace(/[^a-z0-9-]/gi, '-')}`;
+        const screenshot = join(dir, `${diagnosticName}-screen.png`);
         try { run('xcrun', ['simctl', 'io', udid, 'screenshot', screenshot], { timeout: 15000 }); } catch { /* explicitly recorded below */ }
-        save(join(dir, 'watchdog.json'), { reason, ...details, screenshot: existsSync(screenshot) ? relative(out, screenshot) : null,
+        save(join(dir, `${diagnosticName}.json`), { reason, ...details, screenshot: existsSync(screenshot) ? relative(out, screenshot) : null,
           ax: 'unavailable until Maestro writes a failed command hierarchy', networkTiming: 'unavailable' });
       };
       const video = join(dir, 'flow-untrimmed.mp4');
@@ -265,16 +267,20 @@ async function execute(udid, names) {
         catch (error) { commandParseError = error.message; }
       }
       const summary = summarizeFlowTiming(parsed, { anchor: result.anchor, video: relative(out, video), recorderStartedMs, recorderEndedMs });
-      save(join(dir, 'timing-summary.json'), summary);
       const failure = Array.isArray(parsed) ? nearestFailure(parsed) : null;
       const failureReason = flowFailureReason(result, parsed, recorderResult, flow.name);
+      summary.failureReason = failureReason;
+      summary.priorReason = result.priorReason || null;
+      save(join(dir, 'timing-summary.json'), summary);
       if (failureReason) {
         const screenshot = join(dir, 'failure-screen.png');
         try { run('xcrun', ['simctl', 'io', udid, 'screenshot', screenshot], { timeout: 15000 }); } catch { /* absence recorded below */ }
         const log = latestMaestroLog(dir);
         // Retain raw log; expose only status and duration pairs in the derived summary.
         const networkTiming = log ? [...readFileSync(log, 'utf8').matchAll(/\bHTTP\s+(\d{3})\b[^\n]{0,100}?\b(\d+)\s*ms\b/g)].map(match => ({ status: Number(match[1]), durationMs: Number(match[2]) })) : [];
-        const detail = { flow: flow.name, failureReason, exitCode: result.code, watchdog: result.reason, runnerError: result.error || null,
+        const detail = { flow: flow.name, failureReason, priorReason: result.priorReason || null, exitCode: result.code,
+          watchdog: ['inactivity-deadline', 'wall-deadline'].find(reason => reason === (result.priorReason || result.reason)) || null,
+          runnerError: result.error || null,
           commandReceipt: commands.length === 1 ? relative(out, commands[0]) : null, commandParseError,
           recorder: { ...recorderResult, file: relative(out, video) },
           failedCommand: failure && { command: failure.command, expected: failure.expected, deadlineMs: failure.deadlineMs, error: failure.error },
@@ -286,7 +292,8 @@ async function execute(udid, names) {
         history.push({ at: new Date().toISOString(), key, flow: flow.name, evidence: relative(root, dir), head: run('git', ['rev-parse', 'HEAD']) });
         save(failuresFile, history);
         report.result = 'fail'; report.failedFlow = flow.name; save(join(out, 'report.json'), report);
-        event(timeline, { type: 'flow-end', flow: flow.name, outcome: 'fail', elapsedMs: result.elapsedMs, commandReceipt: commands.length === 1 ? relative(out, commands[0]) : null });
+        event(timeline, { type: 'flow-end', flow: flow.name, outcome: 'fail', failureReason, priorReason: result.priorReason || null,
+          elapsedMs: result.elapsedMs, commandReceipt: commands.length === 1 ? relative(out, commands[0]) : null });
         throw new Error(`Native flow ${flow.name} failed; inspect ${relative(root, join(dir, 'failure.json'))} and raw Maestro receipt before retry`);
       }
       assert(commands.length === 1, `Expected exactly one command report: ${flow.name}`);

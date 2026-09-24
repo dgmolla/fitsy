@@ -259,6 +259,53 @@ test('recorder exit inside startup wait retains partial proof and captures diagn
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('recorder exit during watchdog diagnostics takes precedence and retains the watchdog reason', async () => {
+  const dir = temp(), video = join(dir, 'video.mp4'), marker = join(dir, 'stop-recorder'), timeline = join(dir, 'timeline.jsonl');
+  try {
+    const recorderScript = "const fs=require('fs');fs.writeFileSync(process.argv[1],'partial');const wait=()=>fs.existsSync(process.argv[2])?process.exit(0):setTimeout(wait,10);wait()";
+    const diagnostics = [];
+    const { result, recorderResult } = await runRecordedFlow({
+      recorderCommand: process.execPath, recorderArgs: ['-e', recorderScript, video, marker],
+      maestroCommand: process.execPath, maestroArgs: ['-e', 'setInterval(()=>{},1000)'],
+      udid: 'test-device', video, recorderLog: join(dir, 'recorder.log'), cwd: dir, env: process.env,
+      dir, timeline, flow: '', diagnostic: async reason => {
+        diagnostics.push(reason);
+        if (reason === 'inactivity-deadline') {
+          writeFileSync(marker, 'exit');
+          await new Promise(resolve => setTimeout(resolve, 250));
+        }
+      }, quietMs: 100, wallMs: 3000, pollMs: 20,
+    });
+    assert.equal(recorderResult.endedBeforeStop, true);
+    assert.equal(result.reason, 'recorder-ended-early');
+    assert.equal(result.priorReason, 'inactivity-deadline');
+    assert.deepEqual(diagnostics, ['inactivity-deadline', 'recorder-ended-early']);
+    const events = readFileSync(timeline, 'utf8').trim().split('\n').map(JSON.parse);
+    assert.equal(events.find(event => event.type === 'maestro-end').reason, 'inactivity-deadline');
+    assert.ok(events.find(event => event.type === 'recorder-early-exit'));
+    assert.equal(readFileSync(video, 'utf8'), 'partial');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('watchdog reason remains primary when recorder exits after the accepted stop', async () => {
+  const dir = temp(), video = join(dir, 'video.mp4'), timeline = join(dir, 'timeline.jsonl');
+  try {
+    const recorderScript = "process.on('SIGINT',()=>{require('fs').writeFileSync(process.argv[1],'complete');process.exit(0)});setInterval(()=>{},1000)";
+    const diagnostics = [];
+    const { result, recorderResult } = await runRecordedFlow({
+      recorderCommand: process.execPath, recorderArgs: ['-e', recorderScript, video],
+      maestroCommand: process.execPath, maestroArgs: ['-e', 'setInterval(()=>{},1000)'],
+      udid: 'test-device', video, recorderLog: join(dir, 'recorder.log'), cwd: dir, env: process.env,
+      dir, timeline, flow: '', diagnostic: async reason => diagnostics.push(reason), quietMs: 100, wallMs: 3000, pollMs: 20,
+    });
+    assert.equal(result.reason, 'inactivity-deadline');
+    assert.equal(result.priorReason, undefined);
+    assert.equal(recorderResult.endedBeforeStop, false);
+    assert.deepEqual(diagnostics, ['inactivity-deadline']);
+    assert.equal(readFileSync(video, 'utf8'), 'complete');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('recorder command startup failure is actionable and closes its keeper', async () => {
   const dir = temp();
   try {
@@ -466,6 +513,7 @@ test('empty commands and abnormal recorder exit fail before walkthrough', () => 
   const result = { code: 0, reason: null };
   const command = [{ command: { assertConditionCommand: { condition: { visible: { textRegex: 'Ready' } } } }, metadata: { status: 'COMPLETED' } }];
   assert.equal(flowFailureReason(result, command, { state: 'stopped', code: 0, bytes: 5, endedBeforeStop: true }), 'recorder-ended-early');
+  assert.equal(flowFailureReason({ code: null, reason: 'inactivity-deadline' }, [], { endedBeforeStop: true }), 'recorder-ended-early');
   assert.equal(flowFailureReason(result, [], { state: 'stopped', code: 0, bytes: 5 }), 'missing-or-empty-command-receipt');
   assert.equal(flowFailureReason(result, command, { state: 'stopped', code: 1, bytes: 5 }), 'recorder-failure');
   assert.equal(flowFailureReason(result, command, { state: 'stopped', code: 0, bytes: 5 }), null);
