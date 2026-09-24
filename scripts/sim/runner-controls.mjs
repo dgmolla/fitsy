@@ -1,5 +1,5 @@
 import { execFileSync, spawn } from 'node:child_process';
-import { appendFileSync, existsSync, readdirSync, statSync, statfsSync, openSync, closeSync } from 'node:fs';
+import { appendFileSync, existsSync, readdirSync, statSync, statfsSync, openSync, closeSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
@@ -91,6 +91,11 @@ export function summarizeFlowTiming(commands, { anchor = null, video = null, rec
     ...recordingOffsets(summary.commands, recorderStartedMs, recorderEndedMs),
     note: 'Recording boundaries include driver startup and shutdown. They do not establish visual or app idle without reviewing the video.' };
   return summary;
+}
+export function saveFlowOutcomeReceipts(dir, result, summary, failureDetail = null) {
+  const priorReason = result.priorReason || null;
+  writeFileSync(join(dir, 'timing-summary.json'), JSON.stringify({ ...summary, priorReason }, null, 2) + '\n');
+  if (failureDetail) writeFileSync(join(dir, 'failure.json'), JSON.stringify({ ...failureDetail, priorReason }, null, 2) + '\n');
 }
 export function nearestFailure(commands) {
   const failed = commands.filter(c => c.metadata?.status === 'FAILED').sort((a, b) => (b.metadata?.timestamp || 0) - (a.metadata?.timestamp || 0))[0];

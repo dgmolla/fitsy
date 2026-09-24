@@ -5,7 +5,7 @@ import { createServer } from 'node:http';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { archiveFailureEvidence, flowFailureReason, requireMetro, runOwnedMaestro, runRecordedFlow, startOwnedRecorder, stopOwnedRecorder, summarizeCommands, summarizeFlowTiming, nearestFailure, matchingFailureKey, needsDiagnosis } from './runner-controls.mjs';
+import { archiveFailureEvidence, flowFailureReason, requireMetro, runOwnedMaestro, runRecordedFlow, saveFlowOutcomeReceipts, startOwnedRecorder, stopOwnedRecorder, summarizeCommands, summarizeFlowTiming, nearestFailure, matchingFailureKey, needsDiagnosis } from './runner-controls.mjs';
 
 const temp = () => mkdtempSync(join(tmpdir(), 'fitsy-runner-'));
 async function assertProcessStopped(pid, deadlineMs = 1500) {
@@ -280,6 +280,16 @@ test('recorder exit during watchdog diagnostics takes precedence and retains the
     assert.equal(result.reason, 'recorder-ended-early');
     assert.equal(result.priorReason, 'inactivity-deadline');
     assert.deepEqual(diagnostics, ['inactivity-deadline', 'recorder-ended-early']);
+    const failureReason = flowFailureReason(result, null, recorderResult, 'race-flow');
+    const summary = summarizeFlowTiming(null, { anchor: result.anchor, video });
+    summary.failureReason = failureReason;
+    saveFlowOutcomeReceipts(dir, result, summary, { flow: 'race-flow', failureReason });
+    const savedTiming = JSON.parse(readFileSync(join(dir, 'timing-summary.json'), 'utf8'));
+    const savedFailure = JSON.parse(readFileSync(join(dir, 'failure.json'), 'utf8'));
+    assert.equal(savedTiming.failureReason, 'recorder-ended-early');
+    assert.equal(savedFailure.failureReason, 'recorder-ended-early');
+    assert.equal(savedTiming.priorReason, 'inactivity-deadline');
+    assert.equal(savedFailure.priorReason, 'inactivity-deadline');
     const events = readFileSync(timeline, 'utf8').trim().split('\n').map(JSON.parse);
     assert.equal(events.find(event => event.type === 'maestro-end').reason, 'inactivity-deadline');
     assert.ok(events.find(event => event.type === 'recorder-early-exit'));
