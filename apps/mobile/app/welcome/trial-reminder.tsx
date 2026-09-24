@@ -8,9 +8,10 @@ import { TrialArtwork } from '@/components/TrialArtwork';
 import { useOnboardingStep } from '@/lib/onboardingResume';
 import { usePurchases } from '@/lib/usePurchases';
 import { useRouteContinuation } from '@/lib/useRouteContinuation';
+import { api } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import { readReminderPreferences, saveReminderPreferences } from '@/lib/notificationSchedule';
-import { requestPermissionsAsync } from '@/lib/useNotifications';
+import { getExpoPushTokenAsync, requestPermissionsAsync } from '@/lib/useNotifications';
 import { EDITORIAL, TEXT } from '@/lib/brand';
 import { trackOnboardingScreenView, trackReminderAction, trackNotificationPermissionDenied, trackNotificationPermissionGranted,
   trackNotificationPrimingAllowTapped, trackNotificationPrimingShown, trackNotificationPrimingSkipTapped } from '@/lib/analytics';
@@ -24,6 +25,10 @@ export default function TrialReminderScreen() {
   const pending = useRef(false);
   useEffect(() => { if (focused && entitled === true) router.replace('/welcome/payment'); }, [focused, entitled]);
   useEffect(() => { trackOnboardingScreenView('trial-reminder'); trackNotificationPrimingShown(); }, []);
+  async function registerPushToken() {
+    try { const token = await getExpoPushTokenAsync(); if (token) await api.post('/api/user/push-token', { token }); }
+    catch { /* Local reminders do not require a push token. */ }
+  }
   async function allow() {
     if (pending.current) return;
     pending.current = true;
@@ -45,6 +50,7 @@ export default function TrialReminderScreen() {
         const prefs = await readReminderPreferences(session.user.id);
         await saveReminderPreferences(session.user.id, { ...prefs, trial: true });
         trackReminderAction({ action: 'preferences_changed', meals: prefs.meals, trial: true });
+        void registerPushToken();
       } else trackNotificationPermissionDenied();
     } catch { /* Permission or storage failure must not block plan review. */ }
     finally {

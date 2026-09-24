@@ -11,6 +11,7 @@ import SignIn from '../app/welcome/signin';
 import TrialReminder from '../app/welcome/trial-reminder';
 import * as ExpoNotifications from 'expo-notifications';
 import { readReminderPreferences } from '../lib/notificationSchedule';
+import * as NotificationHelpers from '../lib/useNotifications';
 import Notifications from '../app/welcome/notification-permission';
 import Location from '../app/welcome/location-permission';
 import WelcomeLayout from '../app/welcome/_layout';
@@ -115,6 +116,20 @@ it('asks an anonymous trial reminder opt-in to sign in before permission, then r
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
   expect(ExpoNotifications.requestPermissionsAsync).toHaveBeenCalledTimes(1);
   expect(await readReminderPreferences('buyer')).toEqual({ meals: false, trial: true });
+});
+
+it('registers a push token after a signed-in trial reminder opt-in', async () => {
+  mockSession = { access_token: 'test-token', user: { id: 'buyer' } };
+  (ExpoNotifications.requestPermissionsAsync as jest.Mock).mockResolvedValueOnce({ status: 'granted' });
+  jest.spyOn(NotificationHelpers, 'getExpoPushTokenAsync').mockResolvedValue('ExponentPushToken[buyer]');
+  const screen = renderJourney('/welcome/trial-reminder');
+  await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-allow')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
+  expect(await readReminderPreferences('buyer')).toEqual({ meals: false, trial: true });
+  await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
+    expect.stringContaining('/api/user/push-token'),
+    expect.objectContaining({ method: 'POST', body: JSON.stringify({ token: 'ExponentPushToken[buyer]' }) }),
+  ));
 });
 afterEach(() => { global.fetch = originalFetch; jest.restoreAllMocks(); });
 
