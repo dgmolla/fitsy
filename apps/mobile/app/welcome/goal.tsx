@@ -1,4 +1,4 @@
-import { useOnboardingStep } from '@/lib/onboardingResume';
+import { takeGoalReturnTo, useOnboardingStep } from '@/lib/onboardingResume';
 import React, { useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -23,7 +23,7 @@ export default function GoalScreen() {
 
   useEffect(() => {
     trackOnboardingScreenView('goal');
-    void getOnboardingData().then(data => setSelected(data.goal ?? null));
+    void getOnboardingData().then(data => setSelected(GOALS.find(goal => goal.id === data.goal)?.id ?? null));
   }, []);
 
   return (
@@ -35,7 +35,9 @@ export default function GoalScreen() {
         setBusy(true);
         try {
           await saveOnboardingField('goal', selected);
-          router.push('/welcome/tried');
+          const returnTo = await takeGoalReturnTo();
+          if (returnTo) router.replace(returnTo);
+          else router.push('/welcome/tried');
         } catch { Alert.alert('Could not save your goal', 'Please try again.'); }
         finally { setBusy(false); }
       }}

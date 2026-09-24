@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { saveMacroTargets } from './macroStorage';
 import { saveOnboardingField } from './onboardingStorage';
-import { getOnboardingResume } from './onboardingResume';
+import { clearOnboardingResume, getOnboardingResume, takeGoalReturnTo } from './onboardingResume';
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 beforeEach(async () => { await AsyncStorage.clear(); });
@@ -23,8 +23,22 @@ it.each(['value-abundance', 'value-payoff', 'goal-payoff'])(
     await AsyncStorage.setItem('@fitsy/onboardingStep', checkpoint);
     await saveOnboardingField('tried', 'check_online');
     expect(await getOnboardingResume()).toBe('/welcome/goal');
+    expect(await takeGoalReturnTo()).toBe(checkpoint === 'goal-payoff' ? '/welcome/goal-payoff' : '/welcome/value-payoff');
   },
 );
+
+it('keeps the missing-goal payoff destination through a goal checkpoint and clears it on completion', async () => {
+  await AsyncStorage.setItem('@fitsy/onboardingStep', 'value-payoff');
+  expect(await getOnboardingResume()).toBe('/welcome/goal');
+  await AsyncStorage.setItem('@fitsy/onboardingStep', 'goal');
+  expect(await getOnboardingResume()).toBe('/welcome/goal');
+  expect(await takeGoalReturnTo()).toBe('/welcome/value-payoff');
+  expect(await takeGoalReturnTo()).toBeNull();
+  await AsyncStorage.setItem('@fitsy/onboardingStep', 'goal-payoff');
+  expect(await getOnboardingResume()).toBe('/welcome/goal');
+  await clearOnboardingResume();
+  expect(await takeGoalReturnTo()).toBeNull();
+});
 
 it.each([
   ['value-abundance', '/welcome/value-payoff'],

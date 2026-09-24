@@ -121,3 +121,30 @@ it.each([
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/target-setup'));
   expect(await getOnboardingData()).toEqual(expect.objectContaining({ goal, tried: 'check_online' }));
 });
+
+it('requires a visible goal choice when an old maintenance goal is saved', async () => {
+  await saveOnboardingField('goal', 'maintain');
+  const screen = renderRouter(routes, { initialUrl: '/welcome/goal' });
+  await waitFor(() => expect(screen.getByTestId('welcome-continue').props.accessibilityState?.disabled).toBe(true));
+  for (const goal of ['lose_fat', 'build_muscle', 'performance']) {
+    expect(screen.getByTestId(`goal-${goal}`).props.accessibilityState?.selected).toBe(false);
+  }
+  await act(async () => { fireEvent.press(screen.getByTestId('goal-performance')); });
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/tried'));
+  expect((await getOnboardingData()).goal).toBe('performance');
+});
+
+it('returns a missing-goal legacy payoff to its saved destination after goal selection', async () => {
+  await saveOnboardingField('tried', 'check_online');
+  await AsyncStorage.setItem('@fitsy/onboardingStep', 'value-payoff');
+  expect(await getOnboardingResume()).toBe('/welcome/goal');
+  const screen = renderRouter(routes, { initialUrl: '/welcome/goal' });
+  await waitFor(() => expect(screen.getByTestId('welcome-continue').props.accessibilityState?.disabled).toBe(true));
+  await act(async () => { fireEvent.press(screen.getByTestId('goal-lose_fat')); });
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  expect(await screen.findByTestId('payoff-check_online')).toBeTruthy();
+  expect(screen.getPathname()).toBe('/welcome/value-payoff');
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  expect(await screen.findByText('Consistency with your fat-loss plan')).toBeTruthy();
+});

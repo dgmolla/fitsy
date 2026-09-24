@@ -472,15 +472,16 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
     id: paywall-price-yearly
 - stopApp
 - openLink: com.fitsy.mobile://search?preview=1
-# A fresh simulator can require system confirmation for an app link.
-- tapOn:
-    text: "^Open$"
-    optional: true
+# Relaunch can briefly invalidate the native accessibility hierarchy.
+# Retry the first hierarchy read with the required preview assertion.
 - retry:
     maxRetries: 2
     commands:
       - waitForAnimationToEnd:
           timeout: 10000
+      - tapOn:
+          text: "^Open$"
+          optional: true
       - extendedWaitUntil:
           visible:
             id: preview-guide
