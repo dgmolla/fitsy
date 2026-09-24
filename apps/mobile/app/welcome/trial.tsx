@@ -21,7 +21,7 @@ export default function TrialScreen() {
   useEffect(() => { if (!offering) void refreshOffering(); }, [offering, refreshOffering]);
   return <WelcomeScreen progress={1} title={trial ? 'We want you to try Fitsy for free.' : 'Find your next meal with Fitsy.'}
     subtitle={trial ? 'See how good eating out can feel when it fits your goals.' : 'More meals that fit your goals, wherever the day takes you.'}
-    continueLabel="Continue" canContinue onContinue={() => router.push('/welcome/trial-reminder')}>
+    continueLabel="Continue" canContinue onContinue={() => router.push(trial ? '/welcome/trial-reminder' : '/welcome/payment')}>
     <TrialArtwork />
     <Text style={s.note} testID="trial-offer-note">{trial ? `An eligible plan includes ${trial} free. Review your plan and renewal price before starting.` : 'Review current plans and any eligible trial on the next screens. Your subscription starts only when you confirm.'}</Text>
   </WelcomeScreen>;

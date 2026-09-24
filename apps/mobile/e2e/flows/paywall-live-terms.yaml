@@ -60,20 +60,13 @@ tags: [billing, onboarding, changed-journey]
 - assertVisible: "Find your next meal with Fitsy."
 - tapOn:
     id: welcome-continue
-- assertVisible:
-    id: trial-reminder-skip
-- tapOn:
-    id: trial-reminder-skip
 - extendedWaitUntil:
     visible:
       id: paywall-price-yearly
     timeout: 15000
+- assertNotVisible: "A heads-up before your trial ends."
 - assertVisible:
     id: paywall-timeline
-- tapOn:
-    id: welcome-back
-- assertVisible:
-    id: trial-reminder-skip
 - tapOn:
     id: welcome-back
 - assertVisible:

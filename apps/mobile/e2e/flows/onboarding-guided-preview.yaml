@@ -376,17 +376,13 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
     visible:
       id: trial-offer-note
     timeout: 30000
+- assertVisible: "Find your next meal with Fitsy."
 - tapOn:
     id: welcome-continue
-- assertVisible: "A heads-up before your trial ends."
-# Exercise continuation from an existing native denial without a purchase.
-# reminders.yaml separately verifies fresh system grant and deny interactions.
-- tapOn:
-    id: trial-reminder-allow
-- waitForAnimationToEnd
 - extendedWaitUntil:
     visible: ${'Discover more meals like your pick at ' + output.context.data[2].name + '.'}
     timeout: 30000
+- assertNotVisible: "A heads-up before your trial ends."
 - extendedWaitUntil:
     visible:
       id: welcome-continue
@@ -406,10 +402,6 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
     id: paywall-terms
 - assertTrue: ${maestro.copiedText.includes(output.annualPrice) && maestro.copiedText.includes('Renews automatically') && maestro.copiedText.includes('24 hours')}
 - assertNotVisible: "Leave a review"
-- tapOn:
-    id: welcome-back
-- assertVisible:
-    id: trial-reminder-skip
 - tapOn:
     id: welcome-back
 - assertVisible:
