@@ -348,54 +348,67 @@ export async function runOwnedMaestro(command, args, { cwd, env, dir, timeline, 
   const owned = await startOwnedGroup('Maestro', command, args,
     { cwd, env, stdio: ['ignore', 'inherit', 'inherit'], spawnImpl });
   const ownedPid = owned.pid;
-  event(timeline, { type: 'maestro-start', pid: ownedPid, commandPid: owned.commandPid, command: 'test', deadlineMs: ceilingMs,
-    inactivityDeadlineMs: inactivityMs, expected: 'flow completes with all required commands' });
-  let lastActivity = performance.now(), lastLogSize = -1, reason = null;
-  const capture = async (failure, log) => {
-    try { await diagnostic(failure, { pid: ownedPid, commandPid: owned.commandPid, log, elapsedMs: performance.now() - started,
-      members: owned.keeperResult ? null : otherMembers(owned) }); }
-    catch (error) { event(timeline, { type: 'diagnostic-error', pid: ownedPid, error: error.message }); }
-  };
-  while (!owned.commandResult && !owned.keeperResult) {
-    await sleep(pollMs);
-    const log = latestMaestroLog(dir);
-    if (log) { try { const size = statSync(log).size; if (size !== lastLogSize) { lastLogSize = size; lastActivity = performance.now(); } } catch { /* a rotating log is not evidence of a hang */ } }
-    if (owned.commandResult || owned.keeperResult) break;
-    if (!signal?.aborted && performance.now() - started <= ceilingMs && performance.now() - lastActivity <= inactivityMs) continue;
-    reason = signal?.aborted ? interruptionReason(signal) : performance.now() - started > ceilingMs ? 'wall-deadline' : 'inactivity-deadline';
-    await capture(reason, log);
-    await requestKeeper(owned, 'signal', 'SIGTERM');
-    if (!await waitForOtherMembers(owned, terminationGraceMs)) {
-      event(timeline, { type: 'maestro-escalation', pid: ownedPid, outcome: 'SIGTERM-grace-expired', members: otherMembers(owned) });
-      await killOwnedGroup(owned, 5000);
-    } else await closeKeeper(owned);
-    break;
-  }
-  if (owned.keeperResult && !reason) {
-    reason = 'keeper-ownership-lost';
-    await capture(reason, latestMaestroLog(dir));
-  }
-  if (!reason) {
-    // The keeper's child exit event can precede OS reaping by a few ticks.
-    // A live descendant after that bounded reap interval is a flow failure.
-    if (!await waitForOtherMembers(owned, 1000)) {
-      reason = 'owned-descendant-after-command-exit';
-      await capture(reason, latestMaestroLog(dir));
+  try {
+    event(timeline, { type: 'maestro-start', pid: ownedPid, commandPid: owned.commandPid, command: 'test', deadlineMs: ceilingMs,
+      inactivityDeadlineMs: inactivityMs, expected: 'flow completes with all required commands' });
+    let lastActivity = performance.now(), lastLogSize = -1, reason = null;
+    const capture = async (failure, log) => {
+      try { await diagnostic(failure, { pid: ownedPid, commandPid: owned.commandPid, log, elapsedMs: performance.now() - started,
+        members: owned.keeperResult ? null : otherMembers(owned) }); }
+      catch (error) { event(timeline, { type: 'diagnostic-error', pid: ownedPid, error: error.message }); }
+    };
+    while (!owned.commandResult && !owned.keeperResult) {
+      await sleep(pollMs);
+      const log = latestMaestroLog(dir);
+      if (log) { try { const size = statSync(log).size; if (size !== lastLogSize) { lastLogSize = size; lastActivity = performance.now(); } } catch { /* a rotating log is not evidence of a hang */ } }
+      if (owned.commandResult || owned.keeperResult) break;
+      if (!signal?.aborted && performance.now() - started <= ceilingMs && performance.now() - lastActivity <= inactivityMs) continue;
+      reason = signal?.aborted ? interruptionReason(signal) : performance.now() - started > ceilingMs ? 'wall-deadline' : 'inactivity-deadline';
+      await capture(reason, log);
       await requestKeeper(owned, 'signal', 'SIGTERM');
       if (!await waitForOtherMembers(owned, terminationGraceMs)) {
+        event(timeline, { type: 'maestro-escalation', pid: ownedPid, outcome: 'SIGTERM-grace-expired', members: otherMembers(owned) });
         await killOwnedGroup(owned, 5000);
       } else await closeKeeper(owned);
-    } else await closeKeeper(owned);
+      break;
+    }
+    if (owned.keeperResult && !reason) {
+      reason = 'keeper-ownership-lost';
+      await capture(reason, latestMaestroLog(dir));
+    }
+    if (!reason) {
+      // The keeper's child exit event can precede OS reaping by a few ticks.
+      // A live descendant after that bounded reap interval is a flow failure.
+      if (!await waitForOtherMembers(owned, 1000)) {
+        reason = 'owned-descendant-after-command-exit';
+        await capture(reason, latestMaestroLog(dir));
+        await requestKeeper(owned, 'signal', 'SIGTERM');
+        if (!await waitForOtherMembers(owned, terminationGraceMs)) {
+          await killOwnedGroup(owned, 5000);
+        } else await closeKeeper(owned);
+      } else await closeKeeper(owned);
+    }
+    const result = await waitOrTimeout(owned.completed, 5000);
+    if (!result) throw new Error(`Owned Maestro command ${owned.commandPid} did not provide an exit receipt`);
+    if (signal?.aborted && !reason) {
+      reason = interruptionReason(signal);
+      await capture(reason, latestMaestroLog(dir));
+    }
+    event(timeline, { type: 'maestro-end', pid: ownedPid, outcome: reason || (result.code === 0 ? 'pass' : 'fail'), exitCode: result.code, signal: result.signal,
+      elapsedMs: performance.now() - started, reason });
+    return { ...result, reason, elapsedMs: performance.now() - started, anchor };
+  } catch (error) {
+    // Every callback and evidence write after acquisition can throw. Keep the
+    // original failure while closing only the group whose keeper we still own.
+    if (!owned.keeperResult) {
+      try {
+        await requestKeeper(owned, 'signal', 'SIGTERM');
+        if (await waitForOtherMembers(owned, terminationGraceMs)) await closeKeeper(owned);
+        else await killOwnedGroup(owned, 5000);
+      } catch (cleanupError) { error.cleanupError = cleanupError.message; }
+    }
+    throw error;
   }
-  const result = await waitOrTimeout(owned.completed, 5000);
-  if (!result) throw new Error(`Owned Maestro command ${owned.commandPid} did not provide an exit receipt`);
-  if (signal?.aborted && !reason) {
-    reason = interruptionReason(signal);
-    await capture(reason, latestMaestroLog(dir));
-  }
-  event(timeline, { type: 'maestro-end', pid: ownedPid, outcome: reason || (result.code === 0 ? 'pass' : 'fail'), exitCode: result.code, signal: result.signal,
-    elapsedMs: performance.now() - started, reason });
-  return { ...result, reason, elapsedMs: performance.now() - started, anchor };
 }
 
 export async function runRecordedFlow({ recorderCommand = 'xcrun', recorderArgs = null, recorderSpawnImpl,
@@ -437,23 +450,26 @@ export async function runRecordedFlow({ recorderCommand = 'xcrun', recorderArgs 
     result = { code: null, reason: interruption.signal.aborted ? interruptionReason(interruption.signal) : error.code === 'recorder-ended-early' ? 'recorder-ended-early' : 'runner-error',
       error: error.message, elapsedMs: null, anchor: clock() };
   } finally {
-    recorderStopRequested = true;
-    if (!recorderResult) {
-      try { recorderResult = await stopOwnedRecorder(recorder); }
-      catch (error) { recorderResult = { state: 'stop-error', bytes: null, error: error.message }; }
-    }
-    if (recorderResult.endedBeforeStop) {
-      earlyExit(recorderResult, 'keeper-stop-ack', recorder);
-      if (result.reason !== 'recorder-ended-early') {
-        if (result.reason) result.priorReason = result.reason;
-        result.reason = 'recorder-ended-early';
-        try { await diagnostic(result.reason, { pid: recorderPid, commandPid: null, log: latestMaestroLog(dir),
-          elapsedMs: result.elapsedMs, members: null }); }
-        catch (error) { event(timeline, { type: 'diagnostic-error', pid: recorderPid, error: error.message }); }
+    try {
+      recorderStopRequested = true;
+      if (!recorderResult) {
+        try { recorderResult = await stopOwnedRecorder(recorder); }
+        catch (error) { recorderResult = { state: 'stop-error', bytes: null, error: error.message }; }
       }
+      if (recorderResult.endedBeforeStop) {
+        earlyExit(recorderResult, 'keeper-stop-ack', recorder);
+        if (result.reason !== 'recorder-ended-early') {
+          if (result.reason) result.priorReason = result.reason;
+          result.reason = 'recorder-ended-early';
+          try { await diagnostic(result.reason, { pid: recorderPid, commandPid: null, log: latestMaestroLog(dir),
+            elapsedMs: result.elapsedMs, members: null }); }
+          catch (error) { event(timeline, { type: 'diagnostic-error', pid: recorderPid, error: error.message }); }
+        }
+      }
+      event(timeline, { type: 'recorder-end', pid: recorderPid, ...recorderResult });
+    } finally {
+      process.off('SIGINT', onInt); process.off('SIGTERM', onTerm);
     }
-    event(timeline, { type: 'recorder-end', pid: recorderPid, ...recorderResult });
-    process.off('SIGINT', onInt); process.off('SIGTERM', onTerm);
   }
   if (interruption.signal.aborted && !result.reason) result.reason = interruptionReason(interruption.signal);
   return { result, recorderResult, recorderStartedMs,

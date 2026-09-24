@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
 import { createServer } from 'node:http';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { archiveFailureEvidence, flowFailureReason, requireMetro, runOwnedMaestro, runRecordedFlow, saveRecordedFlowReceipts, startOwnedRecorder, stopOwnedRecorder, summarizeCommands, summarizeFlowTiming, nearestFailure, matchingFailureKey, needsDiagnosis } from './runner-controls.mjs';
@@ -40,6 +40,91 @@ test('healthy long command with driver progress outlives the inactivity interval
     assert.equal(result.code, 0);
     assert.equal(result.reason, null);
     assert.ok(result.elapsedMs >= 1100);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('Maestro start timeline failure reaps only its owned command and keeper', async () => {
+  const dir = temp();
+  const unrelated = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+  let keeperPid = null, commandPid = null;
+  try {
+    const spawnImpl = (...args) => {
+      const child = spawn(...args);
+      keeperPid = child.pid;
+      child.on('message', message => { if (message.type === 'command-start') commandPid = message.pid; });
+      return child;
+    };
+    await assert.rejects(runOwnedMaestro(process.execPath, ['-e', 'setInterval(() => {}, 1000)'],
+      { cwd: dir, env: process.env, dir, timeline: dir, flow: '', diagnostic: async () => {},
+        quietMs: 60000, wallMs: 60000, pollMs: 20, spawnImpl }), /EISDIR/);
+    assert.ok(keeperPid && commandPid);
+    await assertProcessStopped(commandPid);
+    await assertProcessStopped(keeperPid);
+    assert.doesNotThrow(() => process.kill(unrelated.pid, 0));
+  } finally {
+    for (const pid of [commandPid, keeperPid]) if (pid) { try { process.kill(pid, 'SIGKILL'); } catch { /* fixture cleanup */ } }
+    unrelated.kill('SIGTERM'); rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('Maestro diagnostic timeline failure reaps its owned group and preserves callback error', async () => {
+  const dir = temp(), timeline = join(dir, 'events.jsonl');
+  let keeperPid = null, commandPid = null;
+  try {
+    const spawnImpl = (...args) => {
+      const child = spawn(...args);
+      keeperPid = child.pid;
+      child.on('message', message => { if (message.type === 'command-start') commandPid = message.pid; });
+      return child;
+    };
+    await assert.rejects(runOwnedMaestro(process.execPath, ['-e', 'setInterval(() => {}, 1000)'],
+      { cwd: dir, env: process.env, dir, timeline, flow: '', spawnImpl,
+        diagnostic: async () => { rmSync(timeline); mkdirSync(timeline); throw Error('capture failed'); },
+        quietMs: 100, wallMs: 3000, pollMs: 20 }), /EISDIR/);
+    assert.ok(keeperPid && commandPid);
+    await assertProcessStopped(commandPid);
+    await assertProcessStopped(keeperPid);
+  } finally {
+    for (const pid of [commandPid, keeperPid]) if (pid) { try { process.kill(pid, 'SIGKILL'); } catch { /* fixture cleanup */ } }
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('Maestro end timeline failure leaves no owned keeper after command exit', async () => {
+  const dir = temp(), timeline = join(dir, 'events.jsonl');
+  let keeperPid = null, commandPid = null;
+  try {
+    const spawnImpl = (...args) => {
+      const child = spawn(...args);
+      keeperPid = child.pid;
+      child.on('message', message => { if (message.type === 'command-start') commandPid = message.pid; });
+      return child;
+    };
+    const script = "const fs=require('fs');const p=process.argv[1];const wait=()=>{if(!fs.existsSync(p))return setTimeout(wait,10);fs.rmSync(p);fs.mkdirSync(p);process.exit(0)};wait()";
+    await assert.rejects(runOwnedMaestro(process.execPath, ['-e', script, timeline],
+      { cwd: dir, env: process.env, dir, timeline, flow: '', spawnImpl, diagnostic: async () => {},
+        quietMs: 3000, wallMs: 3000, pollMs: 20 }), /EISDIR/);
+    assert.ok(keeperPid && commandPid);
+    await assertProcessStopped(commandPid);
+    await assertProcessStopped(keeperPid);
+  } finally {
+    for (const pid of [commandPid, keeperPid]) if (pid) { try { process.kill(pid, 'SIGKILL'); } catch { /* fixture cleanup */ } }
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('recorded flow removes signal listeners after evidence write failure', async () => {
+  const dir = temp();
+  const intListeners = process.listenerCount('SIGINT'), termListeners = process.listenerCount('SIGTERM');
+  try {
+    await assert.rejects(runRecordedFlow({
+      recorderCommand: process.execPath, recorderArgs: ['-e', 'setInterval(() => {}, 1000)'],
+      maestroCommand: process.execPath, maestroArgs: ['-e', 'setInterval(() => {}, 1000)'],
+      udid: 'test-device', video: join(dir, 'video.mp4'), recorderLog: join(dir, 'recorder.log'),
+      cwd: dir, env: process.env, dir, timeline: dir, flow: '', diagnostic: async () => {},
+    }), /EISDIR/);
+    assert.equal(process.listenerCount('SIGINT'), intListeners);
+    assert.equal(process.listenerCount('SIGTERM'), termListeners);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
