@@ -11,7 +11,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { Stack, router } from 'expo-router';
 import { act, fireEvent, renderRouter, waitFor } from 'expo-router/testing-library';
-import { PurchasesProvider } from '../lib/usePurchases';
 import TrialReminder from '../app/welcome/trial-reminder';
 import { readReminderPreferences, saveReminderPreferences } from '../lib/notificationSchedule';
 
@@ -26,15 +25,30 @@ jest.mock('react-native-purchases', () => jest.requireActual('../__mocks__/react
 jest.mock('react-native-purchases-ui', () => jest.requireActual('../__mocks__/react-native-purchases-ui'));
 jest.mock('expo-constants', () => ({ __esModule: true, default: { expoConfig: { extra: { revenueCat: { ios: 'test-store-key' } } } } }));
 jest.mock('expo-notifications', () => ({ requestPermissionsAsync: jest.fn(), scheduleNotificationAsync: jest.fn() }));
-const routes = { _layout: () => <PurchasesProvider><Stack screenOptions={{ headerShown: false }} /></PurchasesProvider>, 'welcome/trial': () => <Button title="Continue to reminder" onPress={() => router.push('/welcome/trial-reminder')} />,
+let mockEligibility: Record<string, boolean> = { annual: true };
+jest.mock('../lib/usePurchases', () => ({ usePurchases: () => ({
+  offering: { annual: { product: { identifier: 'annual', priceString: '$59.99', subscriptionPeriod: 'P1Y',
+    introPrice: { price: 0, priceString: '$0', period: 'P1W', cycles: 1 } } }, monthly: null },
+  ready: true, introEligibilityReady: true, introEligibility: mockEligibility, refreshOffering: jest.fn(), entitled: false,
+}) }));
+const routes = { _layout: () => <Stack screenOptions={{ headerShown: false }} />, 'welcome/trial': () => <Button title="Continue to reminder" onPress={() => router.push('/welcome/trial-reminder')} />,
   'welcome/trial-reminder': TrialReminder, 'welcome/payment': () => <Text>Choose a plan</Text> };
 const originalFetch = global.fetch;
 afterEach(() => { global.fetch = originalFetch; });
 beforeEach(async () => {
+  mockEligibility = { annual: true };
   global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ active: false }) });
   await AsyncStorage.clear();
   jest.clearAllMocks();
   (Notifications.requestPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
+});
+
+test.each([['ineligible', { annual: false }], ['unknown', {}]])('%s saved reminder checkpoint goes to plans without requesting permission', async (_label, eligibility) => {
+  mockEligibility = eligibility;
+  const screen = renderRouter(routes, { initialUrl: '/welcome/trial-reminder' });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
+  expect(screen.queryByTestId('trial-reminder-allow')).toBeNull();
+  expect(Notifications.requestPermissionsAsync).not.toHaveBeenCalled();
 });
 
 test('opt-in requests permission and saves the trial preference without enabling meal reminders or scheduling prematurely', async () => {

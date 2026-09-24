@@ -76,6 +76,8 @@ export interface PurchasesContextValue {
   offering: PurchasesOffering | null;
   /** Empty while checking, or when the store cannot establish eligibility. */
   introEligibility: Record<string, boolean>;
+  /** True after eligibility has been checked for the current customer and offering. */
+  introEligibilityReady: boolean;
   /**
    * Ask the server for its verdict and store it. Resolves to the verdict now
    * in effect; `null` when it couldn't be asked (`entitled` unchanged);
@@ -195,6 +197,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   const introEligibility = useMemo(() =>
     introResult?.info === customerInfo && introResult?.offering === offering ? introResult.values : {},
   [introResult, customerInfo, offering]);
+  const introEligibilityReady = !!offering && !!customerInfo && introResult?.info === customerInfo && introResult?.offering === offering;
 
   // After RevenueCat reports Pro right out of the StoreKit flow: the user
   // just paid, so `entitled` flips true immediately (cached) and the caller
@@ -258,6 +261,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
       customerInfo,
       offering,
       introEligibility,
+      introEligibilityReady,
       syncEntitlement,
       refresh,
       refreshOffering,
@@ -266,7 +270,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
       showManageSubscriptions: rcShowManageSubscriptions,
       restore,
     }),
-    [entitled, storeConfirmed, customerInfo, offering, introEligibility, syncEntitlement, refresh, refreshOffering, purchase, presentPaywall, restore],
+    [entitled, storeConfirmed, customerInfo, offering, introEligibility, introEligibilityReady, syncEntitlement, refresh, refreshOffering, purchase, presentPaywall, restore],
   );
 
   return <PurchasesContext.Provider value={value}>{children}</PurchasesContext.Provider>;

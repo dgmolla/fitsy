@@ -1,12 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text } from 'react-native';
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { WelcomeActions } from '@/components/WelcomeActions';
 import { TrialArtwork } from '@/components/TrialArtwork';
 import { useOnboardingStep } from '@/lib/onboardingResume';
 import { usePurchases } from '@/lib/usePurchases';
+import { purchaseTerms } from '@/lib/purchaseTerms';
 import { useRouteContinuation } from '@/lib/useRouteContinuation';
 import { api } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
@@ -20,17 +21,20 @@ export default function TrialReminderScreen() {
   const focused = useIsFocused();
   useOnboardingStep('trial-reminder');
   const [busy, setBusy] = useState(false);
-  const { entitled } = usePurchases();
+  const { ready, offering, introEligibility, introEligibilityReady, refreshOffering, entitled } = usePurchases();
+  const offers = [offering?.annual, offering?.monthly].map(pkg => purchaseTerms(pkg?.product, pkg ? introEligibility[pkg.product.identifier] : undefined));
+  const trial = offers.find(terms => terms?.trial)?.trial;
   const { begin } = useRouteContinuation();
   const pending = useRef(false);
   useEffect(() => { if (focused && entitled === true) router.replace('/welcome/payment'); }, [focused, entitled]);
-  useEffect(() => { trackOnboardingScreenView('trial-reminder'); trackNotificationPrimingShown(); }, []);
+  useEffect(() => { if (!offering) void refreshOffering(); }, [offering, refreshOffering]);
+  useEffect(() => { if (trial) { trackOnboardingScreenView('trial-reminder'); trackNotificationPrimingShown(); } }, [trial]);
   async function registerPushToken() {
     try { const token = await getExpoPushTokenAsync(); if (token) await api.post('/api/user/push-token', { token }); }
     catch { /* Local reminders do not require a push token. */ }
   }
   async function allow() {
-    if (pending.current) return;
+    if (!trial || pending.current) return;
     pending.current = true;
     const isCurrent = begin();
     setBusy(true);
@@ -64,6 +68,8 @@ export default function TrialReminderScreen() {
     trackNotificationPrimingSkipTapped();
     router.push('/welcome/payment');
   }
+  if (!ready || (offering && !introEligibilityReady)) return null;
+  if (!trial) return <Redirect href="/welcome/payment" />;
   return <WelcomeScreen progress={1} title="A heads-up before your trial ends."
     subtitle="Allow notifications and we'll remind you before an eligible trial renews."
     canContinue={!busy} showBack={!busy} onContinue={() => { void allow(); }}

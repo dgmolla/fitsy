@@ -16,6 +16,7 @@ import Notifications from '../app/welcome/notification-permission';
 import Location from '../app/welcome/location-permission';
 import WelcomeLayout from '../app/welcome/_layout';
 import { PurchasesProvider } from '../lib/usePurchases';
+import * as PurchasesHooks from '../lib/usePurchases';
 import { getPaywallIntent, getPurchasedContinuation, rememberPaywallIntent } from '../lib/paywallIntent';
 import { recordOnboardingComplete } from '../lib/onboardingCompletion';
 import { resetWelcomeJourney } from '../lib/paywallJourney';
@@ -99,9 +100,10 @@ beforeEach(async () => {
 });
 
 it('asks an anonymous trial reminder opt-in to sign in before permission, then returns to the choice', async () => {
+  installEligibleTrialOffer();
   (ExpoNotifications.requestPermissionsAsync as jest.Mock).mockResolvedValueOnce({ status: 'granted' });
   const screen = renderJourney('/welcome/trial-reminder');
-  await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-allow')); });
+  await act(async () => { fireEvent.press(await screen.findByTestId('trial-reminder-allow')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/signin'));
   expect(ExpoNotifications.requestPermissionsAsync).not.toHaveBeenCalled();
   expect(await readReminderPreferences('buyer')).toEqual({ meals: false, trial: false });
@@ -112,18 +114,19 @@ it('asks an anonymous trial reminder opt-in to sign in before permission, then r
   await act(async () => { fireEvent.press(screen.getByTestId('signup-dev')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/trial-reminder'));
   expect(ExpoNotifications.requestPermissionsAsync).not.toHaveBeenCalled();
-  await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-allow')); });
+  await act(async () => { fireEvent.press(await screen.findByTestId('trial-reminder-allow')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
   expect(ExpoNotifications.requestPermissionsAsync).toHaveBeenCalledTimes(1);
   expect(await readReminderPreferences('buyer')).toEqual({ meals: false, trial: true });
 });
 
 it('registers a push token after a signed-in trial reminder opt-in', async () => {
+  installEligibleTrialOffer();
   mockSession = { access_token: 'test-token', user: { id: 'buyer' } };
   (ExpoNotifications.requestPermissionsAsync as jest.Mock).mockResolvedValueOnce({ status: 'granted' });
   jest.spyOn(NotificationHelpers, 'getExpoPushTokenAsync').mockResolvedValue('ExponentPushToken[buyer]');
   const screen = renderJourney('/welcome/trial-reminder');
-  await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-allow')); });
+  await act(async () => { fireEvent.press(await screen.findByTestId('trial-reminder-allow')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
   expect(await readReminderPreferences('buyer')).toEqual({ meals: false, trial: true });
   await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
@@ -131,6 +134,15 @@ it('registers a push token after a signed-in trial reminder opt-in', async () =>
     expect.objectContaining({ method: 'POST', body: JSON.stringify({ token: 'ExponentPushToken[buyer]' }) }),
   ));
 });
+
+function installEligibleTrialOffer() {
+  const annual = { identifier: '$rc_annual', product: { identifier: 'annual', priceString: '$59.99', subscriptionPeriod: 'P1Y',
+    introPrice: { price: 0, priceString: '$0', period: 'P1W', cycles: 1 } } };
+  const offering = { identifier: 'default', annual, monthly: null, availablePackages: [annual], metadata: {} };
+  jest.spyOn(PurchasesHooks, 'usePurchases').mockReturnValue({ ready: true, entitled: false, offering,
+    introEligibility: { annual: true }, introEligibilityReady: true, refreshOffering: jest.fn(),
+  } as never);
+}
 afterEach(() => { global.fetch = originalFetch; jest.restoreAllMocks(); });
 
 function renderJourney(initialUrl: string) {
