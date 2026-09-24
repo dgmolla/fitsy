@@ -199,8 +199,8 @@ async function execute(udid, names) {
   for (const c of plan.categories) assert(flowSources.some(f => !baseline.includes(f.name) && f.tags.includes(c)), `Add/select a deterministic scenario tagged ${c}`);
   mkdirSync(resumeDir, { recursive: true });
   const admission = admitDisk(root, 'Native run');
-  try { run('ffprobe', ['-version'], { timeout: 5000 }); }
-  catch { throw new Error('ffprobe is required to validate recorded product-flow video before running Maestro'); }
+  try { run('ffprobe', ['-version'], { timeout: 5000 }); run('ffmpeg', ['-version'], { timeout: 5000 }); }
+  catch { throw new Error('ffprobe and ffmpeg are required to validate recorded product-flow video before running Maestro'); }
   const history = existsSync(failuresFile) ? read(failuresFile) : [];
   const previous = history.slice(-2);
   if (needsDiagnosis(history)) {

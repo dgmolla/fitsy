@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync, copyFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync, copyFileSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -89,6 +89,35 @@ test.each(['corrupt bytes', 'truncated MP4'])('rejects %s even when its digest m
   expect(result.status).toBe(1);
   expect(result.stderr).toContain('unplayable video');
 });
+test('rejects metadata-only MP4 when its digest matches', () => {
+  const report = fixture(), flow = report.flows[2]!;
+  const valid = readFileSync(join(dir, flow.video));
+  const atoms: Buffer[] = [];
+  for (let offset = 0; offset < valid.length;) {
+    const size = valid.readUInt32BE(offset);
+    expect(size).toBeGreaterThanOrEqual(8);
+    if (valid.toString('ascii', offset + 4, offset + 8) !== 'mdat') atoms.push(valid.subarray(offset, offset + size));
+    offset += size;
+  }
+  const metadataOnly = Buffer.concat(atoms);
+  expect(metadataOnly.length).toBeLessThan(valid.length);
+  writeFileSync(join(dir, flow.video), metadataOnly); flow.videoHash = sha(metadataOnly);
+  const result = validate(report);
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain('unplayable video');
+});
+test.each([
+  ['decoder failure', '#!/bin/sh\nexit 1\n'],
+  ['decoder timeout', '#!/bin/sh\nexec sleep 20\n'],
+])('rejects %s while preserving video', (_kind, script) => {
+  const file = join(dir, 'ffmpeg'), video = resolve(__dirname, 'fixtures/valid.mp4');
+  writeFileSync(file, script); chmodSync(file, 0o755);
+  const result = evaluate(`gate.isPlayableVideo(${JSON.stringify(video)})`,
+    { ...fixtureEnv(), PATH: `${dir}:${process.env.PATH}` });
+  expect(result.status).toBe(0);
+  expect(JSON.parse(result.stdout)).toBe(false);
+  expect(readFileSync(video).length).toBeGreaterThan(0);
+}, 25000);
 test.each(['stale', 'future', 'expired', 'wrong-native', 'unknown-backend', 'prod', 'unconfigured', 'missing-flow', 'missing-walkthrough', 'missing-recovery'])('rejects %s proof', condition => {
   const report = fixture();
   if (condition === 'stale') report.inputHash = 'previous-inputs';

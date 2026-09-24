@@ -81,8 +81,19 @@ export function isPlayableVideo(file) {
     if (error.code === 'ENOENT') throw new Error('ffprobe is required to validate product-flow video');
     return false;
   }
-  return probe.streams?.some(stream => stream.codec_type === 'video' && stream.codec_name &&
+  const hasDuration = probe.streams?.some(stream => stream.codec_type === 'video' && stream.codec_name &&
     (Number(stream.duration) > 0 || Number(probe.format?.duration) > 0)) === true;
+  if (!hasDuration) return false;
+  try {
+    // Decode one frame, not the recording. A metadata-only MP4 can pass ffprobe.
+    const decoded = execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-xerror', '-i', file,
+      '-map', '0:v:0', '-frames:v', '1', '-f', 'framecrc', 'pipe:1'],
+    { encoding: 'utf8', timeout: 15000, maxBuffer: 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
+    return /^\d+,\s*\d+,\s*\d+,\s*\d+,\s*\d+,\s*0x[\da-f]+$/im.test(decoded);
+  } catch (error) {
+    if (error.code === 'ENOENT') throw new Error('ffmpeg is required to validate product-flow video');
+    return false;
+  }
 }
 
 export function validate(report, plan, hash, directory, now = Date.now(), cwd = root, nativeHash = inputHash(cwd, true)) {
