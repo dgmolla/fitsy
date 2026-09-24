@@ -24,7 +24,10 @@ export default function GoalScreen() {
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<Goal | null>(null);
 
-  useFocusEffect(useCallback(() => () => { void clearGoalReturnTo(); }, []));
+  useFocusEffect(useCallback(() => {
+    setBusy(false);
+    return () => { void clearGoalReturnTo(); };
+  }, []));
 
   useEffect(() => {
     trackOnboardingScreenView('goal');
