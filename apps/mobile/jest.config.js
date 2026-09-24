@@ -51,6 +51,7 @@ const config = {
         '<rootDir>/lib/useEntitlementMismatch.test.ts',
         '<rootDir>/lib/useRedirectOnceEntitled.test.ts',
         '<rootDir>/lib/usePurchases.boot.test.tsx',
+        '<rootDir>/lib/usePurchases.staleBoot.test.tsx',
         '<rootDir>/lib/usePurchases.sync.test.tsx',
         '<rootDir>/lib/usePurchases.purchase.test.tsx',
       ],

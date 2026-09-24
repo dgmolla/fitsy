@@ -20,6 +20,13 @@ it('requires a visible goal choice for an older maintenance target checkpoint', 
   expect(await takeGoalReturnTo()).toBe('/welcome/target-setup');
 });
 
+it('returns a legacy target-setup goal checkpoint to target setup after choosing a goal', async () => {
+  await saveOnboardingField('targetMode', 'estimate');
+  await AsyncStorage.setItem('@fitsy/onboardingStep', 'goal');
+  expect(await getOnboardingResume()).toBe('/welcome/goal');
+  expect(await takeGoalReturnTo()).toBe('/welcome/target-setup');
+});
+
 it.each([
   ['trial', '/welcome/trial'],
   ['trial-reminder', '/welcome/trial-reminder'],

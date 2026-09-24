@@ -21,6 +21,14 @@ export async function getOnboardingResume(): Promise<`/welcome/${Step}` | null> 
   // Earlier versions asked about prior approaches before collecting location.
   if ((step === 'tried' || step === 'response') && !(await getPreviewSetup()).data.area) return '/welcome/location-permission';
   if (step === 'promise') return '/welcome/location-permission';
+  // Older releases collected a target mode before asking for a goal. A
+  // saved goal checkpoint from that route needs to return to target setup.
+  if (step === 'goal' && !(await AsyncStorage.getItem(GOAL_RETURN_KEY))) {
+    const data = await getOnboardingData();
+    if (data.targetMode && !hasChosenWelcomeGoal(data.goal)) {
+      await rememberGoalReturnTo('/welcome/target-setup');
+    }
+  }
   if ((step === 'tried' || step === 'response') && !hasChosenWelcomeGoal((await getOnboardingData()).goal)) {
     await rememberGoalReturnTo(`/welcome/${step}`);
     return '/welcome/goal';

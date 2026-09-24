@@ -227,12 +227,14 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     if (!configuredRef.current) return;
     try {
       return addCustomerInfoListener(() => {
-        const infoGeneration = customerInfoGenerationRef.current;
-        const infoRequest = ++customerInfoReadRequestRef.current;
         void (async () => {
           const { data } = await supabase.auth.getSession();
           const currentUserId = data.session?.user.id;
           if (!currentUserId || await currentPurchasesUserId() !== currentUserId) return;
+          // A queued update from the previous native identity must not
+          // invalidate this account's still-pending boot read.
+          const infoGeneration = customerInfoGenerationRef.current;
+          const infoRequest = ++customerInfoReadRequestRef.current;
           // The event payload can belong to the previous account if auth
           // changed while the callback was queued. Read the verified identity.
           const fresh = await fetchCustomerInfo();
