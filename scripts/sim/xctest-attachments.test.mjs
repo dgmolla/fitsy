@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -11,6 +11,8 @@ const udid = '9E661282-FCE3-4C70-A503-EB2FFA0AD02B';
 const quicktime = readFileSync(new URL('./fixtures/quicktime.mov', import.meta.url));
 const mp4 = readFileSync(new URL('../verify/fixtures/valid.mp4', import.meta.url));
 const audioOnly = readFileSync(new URL('./fixtures/audio-only.mp4', import.meta.url));
+const iso5 = readFileSync(new URL('./fixtures/valid-iso5.mp4', import.meta.url));
+const validHeic = readFileSync(new URL('./fixtures/valid-image.heic', import.meta.url));
 const heic = Buffer.concat([Buffer.from([0, 0, 0, 12]), Buffer.from('ftyp'), Buffer.from('heic')]);
 const unknown = Buffer.concat([Buffer.from([0, 0, 0, 12]), Buffer.from('ftyp'), Buffer.from('zzzz')]);
 const wideQuicktime = Buffer.concat([Buffer.from([0, 0, 0, 8]), Buffer.from('wide'), Buffer.from([0, 0, 0, 16]), Buffer.from('mdat'), Buffer.alloc(8)]);
@@ -77,6 +79,60 @@ test('closeout preserves HEIC and unknown attachments while retiring supported m
     assert.deepEqual(readFileSync(other), unknown);
     assert.throws(() => readFileSync(video), { code: 'ENOENT' });
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('actual closeout classifies movie structure and preserves image, audio and ambiguous files', () => {
+  const { root, attachments } = fixture();
+  try {
+    const before = snapshotXCTestAttachments(udid, { deviceRoot: root });
+    const wideFirst = Buffer.concat([quicktime.subarray(20, 28), quicktime.subarray(0, 20), quicktime.subarray(28)]);
+    const files = new Map([
+      ['quicktime', quicktime], ['wide-quicktime', wideFirst], ['ordinary-mp4', mp4], ['iso5-mp4', iso5],
+      ['heic-image', validHeic], ['audio-only', audioOnly], ['unknown', unknown],
+      ['unprobeable', Buffer.concat([Buffer.from([0, 0, 0, 16]), Buffer.from('ftypiso5'), Buffer.alloc(4),
+        Buffer.from([0, 0, 0, 8]), Buffer.from('moov'), Buffer.from([0, 0, 0, 8]), Buffer.from('mdat')])],
+    ]);
+    for (const [name, content] of files) writeFileSync(join(attachments, name), content);
+    const heicProbe = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_type', '-of', 'json', join(attachments, 'heic-image')],
+      { encoding: 'utf8' }));
+    assert.equal(heicProbe.streams.some(stream => stream.codec_type === 'video'), true,
+      'the valid still image must expose the video-labeled stream ambiguity');
+    const after = snapshotXCTestAttachments(udid, { deviceRoot: root });
+    const checked = [];
+    const result = closeoutXCTestAttachments(before, after, { idleCheck: directory => checked.push(directory) });
+    assert.deepEqual(checked, [attachments]);
+    assert.deepEqual(result.deleted.map(entry => entry.path).sort(),
+      ['quicktime', 'wide-quicktime', 'ordinary-mp4', 'iso5-mp4'].map(name => join(attachments, name)).sort());
+    assert.equal(result.generated.videos, 4);
+    assert.equal(result.uncertainAttachments.some(entry => entry.path === join(attachments, 'unknown')), true);
+    assert.equal(result.uncertainAttachments.some(entry => entry.path === join(attachments, 'unprobeable')), true);
+    for (const name of ['quicktime', 'wide-quicktime', 'ordinary-mp4', 'iso5-mp4'])
+      assert.equal(existsSync(join(attachments, name)), false, `${name} retired`);
+    for (const name of ['heic-image', 'audio-only', 'unknown', 'unprobeable'])
+      assert.deepEqual(readFileSync(join(attachments, name)), files.get(name), `${name} preserved`);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('actual closeout preserves movie-shaped attachment after probe failure', () => {
+  const { root, attachments } = fixture();
+  const priorPath = process.env.PATH;
+  try {
+    const before = snapshotXCTestAttachments(udid, { deviceRoot: root });
+    const video = join(attachments, 'probe-error');
+    writeFileSync(video, iso5);
+    process.env.PATH = `${fakeLsof(root, 'exit 2')}:${priorPath}`;
+    const tool = join(root, 'bin', 'ffprobe');
+    writeFileSync(tool, '#!/bin/sh\nexit 2\n');
+    chmodSync(tool, 0o755);
+    const after = snapshotXCTestAttachments(udid, { deviceRoot: root });
+    assert.equal(after.entries[0].video, false);
+    assert.match(after.entries[0].uncertainty, /ffprobe failed/);
+    assert.equal(closeoutXCTestAttachments(before, after).deleted.length, 0);
+    assert.deepEqual(readFileSync(video), iso5);
+  } finally {
+    process.env.PATH = priorPath;
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('unprobeable wide-first QuickTime candidate is preserved', () => {

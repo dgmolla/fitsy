@@ -1,34 +1,85 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { closeSync, existsSync, lstatSync, openSync, readSync, readdirSync, rmSync, statfsSync } from 'node:fs';
+import { closeSync, existsSync, fstatSync, lstatSync, openSync, readSync, readdirSync, rmSync, statfsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
 const bytes = entries => entries.reduce((total, entry) => total + entry.bytes, 0);
-const videoBrands = new Set(['qt  ', 'isom', 'iso2', 'mp41', 'mp42', 'avc1', 'M4V ']);
+const imageBrands = new Set([
+  'avif', 'avis', 'heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'hevm', 'hevs',
+  'mif1', 'msf1', 'miaf', 'miai',
+]);
+const maxBoxes = 512;
+const maxFtypBytes = 4096;
 
-function movie(file) {
-  const buffer = Buffer.alloc(16);
+function container(file) {
   const fd = openSync(file, 'r');
   try {
-    const length = readSync(fd, buffer, 0, buffer.length, 0);
-    if (length < 8) return false;
-    const atom = buffer.toString('ascii', 4, 8);
-    const supportedBrand = atom === 'ftyp' && length >= 12 && videoBrands.has(buffer.toString('ascii', 8, 12));
-    // XCTest can stage a QuickTime movie with a wide atom before mdat.
-    const secondSize = buffer.readUInt32BE(8);
-    const wideFirst = length >= 16 && buffer.readUInt32BE(0) === 8 && atom === 'wide' &&
-      buffer.toString('ascii', 12, 16) === 'mdat' && (secondSize === 0 || secondSize >= 8);
-    if (!supportedBrand && !wideFirst) return false;
-  }
-  finally { closeSync(fd); }
+    const fileBytes = fstatSync(fd).size;
+    const header = Buffer.alloc(16);
+    let offset = 0;
+    let boxes = 0;
+    let firstType;
+    let hasMovie = false;
+    let hasMedia = false;
+    let imageFamily = false;
+    while (offset < fileBytes && boxes++ < maxBoxes) {
+      if (fileBytes - offset < 8 || readSync(fd, header, 0, 8, offset) !== 8)
+        return { uncertainty: 'incomplete ISO media box header' };
+      const type = header.toString('ascii', 4, 8);
+      if (firstType === undefined) {
+        firstType = type;
+        if (type !== 'ftyp' && type !== 'wide') return {};
+      }
+      let headerBytes = 8;
+      let boxBytes = header.readUInt32BE(0);
+      if (boxBytes === 1) {
+        if (fileBytes - offset < 16 || readSync(fd, header, 8, 8, offset + 8) !== 8)
+          return { uncertainty: 'incomplete extended ISO media box' };
+        const extended = header.readBigUInt64BE(8);
+        if (extended > BigInt(Number.MAX_SAFE_INTEGER)) return { uncertainty: 'ISO media box exceeds safe offset' };
+        boxBytes = Number(extended);
+        headerBytes = 16;
+      } else if (boxBytes === 0) {
+        boxBytes = fileBytes - offset;
+      }
+      if (boxBytes < headerBytes || boxBytes > fileBytes - offset)
+        return { uncertainty: 'invalid ISO media box size' };
+      if (type === 'ftyp') {
+        if (boxBytes < headerBytes + 8 || boxBytes > maxFtypBytes || (boxBytes - headerBytes - 8) % 4)
+          return { uncertainty: 'unreadable ISO media brand list' };
+        const brands = Buffer.alloc(boxBytes - headerBytes);
+        if (readSync(fd, brands, 0, brands.length, offset + headerBytes) !== brands.length)
+          return { uncertainty: 'incomplete ISO media brand list' };
+        for (let index = 0; index < brands.length; index += index === 0 ? 8 : 4) {
+          if (imageBrands.has(brands.toString('ascii', index, index + 4))) imageFamily = true;
+        }
+      }
+      if (type === 'moov') hasMovie = true;
+      if (type === 'mdat') hasMedia = true;
+      offset += boxBytes;
+    }
+    if (imageFamily) return {};
+    if (offset !== fileBytes) return { uncertainty: 'ISO media box scan limit reached' };
+    if (!hasMovie || !hasMedia) return { uncertainty: 'ISO media file lacks complete movie structure' };
+    return { movie: true };
+  } finally { closeSync(fd); }
+}
+
+function movie(file) {
+  const shape = container(file);
+  if (!shape.movie) return { video: false, uncertainty: shape.uncertainty };
   try {
-    const probe = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_type,codec_name', '-of', 'json', file],
+    const probe = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=format_name:stream=codec_type,codec_name', '-of', 'json', file],
       { encoding: 'utf8', timeout: 15000, maxBuffer: 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] }));
-    return probe.streams?.some(stream => stream.codec_type === 'video' && stream.codec_name) === true;
+    if (!probe.format?.format_name?.split(',').some(name => name === 'mov' || name === 'mp4'))
+      return { video: false, uncertainty: 'ffprobe did not identify a movie demuxer' };
+    if (!Array.isArray(probe.streams) || probe.streams.length === 0)
+      return { video: false, uncertainty: 'movie structure has no readable streams' };
+    return { video: probe.streams?.some(stream => stream.codec_type === 'video' && stream.codec_name) === true };
   } catch (error) {
     if (error.code === 'ENOENT') throw new Error('ffprobe is required to identify XCTest video attachments');
-    return false;
+    return { video: false, uncertainty: `ffprobe failed: ${error.code || error.name || 'invalid output'}` };
   }
 }
 
@@ -44,8 +95,9 @@ export function snapshotXCTestAttachments(udid, { deviceRoot = join(homedir(), '
       const path = join(directory, item.name);
       if (!item.isFile()) continue;
       const stat = lstatSync(path);
+      const classification = movie(path);
       entries.push({ path, device: stat.dev, inode: stat.ino, bytes: stat.size,
-        birthtimeMs: stat.birthtimeMs, modifiedMs: stat.mtimeMs, video: movie(path) });
+        birthtimeMs: stat.birthtimeMs, modifiedMs: stat.mtimeMs, ...classification });
     }
   }
   const volume = statfsSync(deviceRoot);
@@ -72,7 +124,7 @@ export function closeoutXCTestAttachments(before, after, { idleCheck = requireId
   for (const directory of new Set(newVideos.map(entry => entry.path.slice(0, entry.path.lastIndexOf('/'))))) idleCheck(directory);
   for (const entry of newVideos) {
     const stat = lstatSync(entry.path);
-    assert(stat.isFile() && stat.dev === entry.device && stat.ino === entry.inode && stat.size === entry.bytes && movie(entry.path),
+    assert(stat.isFile() && stat.dev === entry.device && stat.ino === entry.inode && stat.size === entry.bytes && movie(entry.path).video,
       `XCTest attachment changed before exact-file retirement: ${entry.path}`);
     remove(entry.path);
   }
@@ -82,9 +134,10 @@ export function closeoutXCTestAttachments(before, after, { idleCheck = requireId
     before: { files: before.files, bytes: before.bytes, videos: before.videos, videoBytes: before.videoBytes, freeBytes: before.freeBytes },
     after: { files: after.files, bytes: after.bytes, videos: after.videos, videoBytes: after.videoBytes, freeBytes: after.freeBytes },
     generated: { files: created.length, bytes: bytes(created), videos: newVideos.length, videoBytes: bytes(newVideos) },
+    uncertainAttachments: created.filter(entry => entry.uncertainty).map(entry => ({ path: entry.path, reason: entry.uncertainty })),
     deleted: newVideos.map(entry => ({ path: entry.path, bytes: entry.bytes, device: entry.device, inode: entry.inode })),
     remainingVideos: remaining.map(entry => ({ path: entry.path, bytes: entry.bytes, reason: 'pre-phase ownership unresolved; historical cleanup is separate' })),
     freeBytesAfterRetirement: volume.bavail * volume.bsize,
     measuredRecoveryBytes: volume.bavail * volume.bsize - after.freeBytes,
-    note: 'Before and after snapshots are phase boundaries. Only newly created QuickTime files are retired after writer idle proof.' };
+    note: 'Before and after snapshots are phase boundaries. Only positively identified current-phase movies are retired after writer idle proof; uncertain files are preserved.' };
 }
