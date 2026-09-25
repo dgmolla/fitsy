@@ -71,10 +71,12 @@ else
   if [ -n "${FITSY_REVIEW_EXCEPTION:-}" ]; then EXCEPTION_ARGS=(--exception "$FITSY_REVIEW_EXCEPTION"); fi
   ADOPTION_ARGS=()
   if [ -n "${FITSY_REVIEW_ADOPTION:-}" ]; then ADOPTION_ARGS=(--adoption "$FITSY_REVIEW_ADOPTION"); fi
+  CLOSEOUT_ARGS=()
+  if [ -n "${FITSY_REVIEW_CLOSEOUT:-}" ]; then CLOSEOUT_ARGS=(--closeout "$FITSY_REVIEW_CLOSEOUT"); fi
   if ! python3 scripts/review/review-budget.py begin --ledger "$BUDGET_LEDGER" --round-id "$ROUND_ID" \
       --lens "$LENS" --source-sha "$HEAD_SHA" --attempt-id "$ATTEMPT_ID" \
       --timeout-seconds "${FITSY_REVIEW_TIMEOUT_SECONDS:-900}" \
-      "${EXCEPTION_ARGS[@]}" "${ADOPTION_ARGS[@]}" >&2; then
+      "${EXCEPTION_ARGS[@]}" "${ADOPTION_ARGS[@]}" "${CLOSEOUT_ARGS[@]}" >&2; then
     echo "[run-lens] review cap reached; no independent reviewer started" >&2
     exit 1
   fi

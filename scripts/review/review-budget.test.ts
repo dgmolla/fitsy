@@ -9,13 +9,14 @@ let ledger: string;
 let count: number;
 beforeEach(() => { root = mkdtempSync(join(tmpdir(), "fitsy-review-budget-")); ledger = join(root, "events.jsonl"); count = 0; });
 afterEach(() => rmSync(root, { recursive: true, force: true }));
-function call(action: "begin" | "finish", round: string, lens = "correctness", exception?: string, adoption?: string, timeout?: number) {
+function call(action: "begin" | "finish", round: string, lens = "correctness", exception?: string, adoption?: string, timeout?: number, closeout?: string) {
   const id = `${round}-${lens}-${count}`;
   if (action === "begin") count++;
   const attempt = action === "finish" ? `${round}-${lens}-${count - 1}` : id;
   const args = [script, action, "--ledger", ledger, "--round-id", round, "--lens", lens, "--source-sha", round, "--attempt-id", attempt];
   if (exception) args.push("--exception", exception);
   if (adoption) args.push("--adoption", adoption);
+  if (closeout) args.push("--closeout", closeout);
   if (timeout) args.push("--timeout-seconds", String(timeout));
   return spawnSync("python3", args, { encoding: "utf8" });
 }
@@ -86,4 +87,41 @@ test("adoption refuses a second lens when the aggregate deadline cannot hold it"
   const denied = call("begin", "new-head", "test-quality", undefined, permit, 190);
   expect(denied.status).toBe(1);
   expect(JSON.parse(denied.stdout).reason).toBe("adoption aggregate deadline exhausted");
+});
+test("final delta closeout preserves historical adoption and admits each exact-source lens once", () => {
+  expect(call("begin", "old-1").status).toBe(0);
+  expect(call("begin", "old-2").status).toBe(0);
+  const old = join(root, "adoption.json");
+  writeFileSync(old, JSON.stringify({ version: 1, kind: "one-time-adoption", source_sha: "adopted-head",
+    budget_seconds: 600, lens_timeouts: { correctness: 390, "test-quality": 190 }, authorization: "old approval" }));
+  expect(call("begin", "adopted-head", "correctness", undefined, old, 390).status).toBe(0);
+  expect(call("finish", "adopted-head", "correctness").status).toBe(0);
+  const permit = join(root, "closeout.json");
+  writeFileSync(permit, JSON.stringify({ version: 1, kind: "final-delta-closeout", source_sha: "final-head",
+    budget_seconds: 600, lens_timeouts: { correctness: 390, "test-quality": 190 }, authorization: "bounded final delta" }));
+  expect(call("begin", "wrong-head", "correctness", undefined, undefined, 390, permit).status).toBe(1);
+  expect(call("begin", "final-head", "correctness", undefined, undefined, 900, permit).status).toBe(1);
+  expect(call("begin", "final-head", "correctness", undefined, undefined, 390, permit).status).toBe(0);
+  expect(call("finish", "final-head", "correctness").status).toBe(0);
+  expect(call("begin", "final-head", "correctness", undefined, undefined, 390, permit).status).toBe(1);
+  expect(call("begin", "final-head", "test-quality", undefined, undefined, 190, permit).status).toBe(0);
+  expect(call("finish", "final-head", "test-quality").status).toBe(0);
+  const events = readFileSync(ledger, "utf8").trim().split("\n").map(line => JSON.parse(line));
+  expect(events.filter(event => event.event === "start" && event.adoption)).toHaveLength(1);
+  expect(events.filter(event => event.event === "start" && event.closeout)).toHaveLength(2);
+});
+test("final delta closeout enforces its aggregate deadline", () => {
+  expect(call("begin", "old-1").status).toBe(0);
+  expect(call("begin", "old-2").status).toBe(0);
+  const permit = join(root, "closeout.json");
+  writeFileSync(permit, JSON.stringify({ version: 1, kind: "final-delta-closeout", source_sha: "final-head",
+    budget_seconds: 600, lens_timeouts: { correctness: 390, "test-quality": 190 }, authorization: "bounded final delta" }));
+  expect(call("begin", "final-head", "correctness", undefined, undefined, 390, permit).status).toBe(0);
+  const events = readFileSync(ledger, "utf8").trim().split("\n").map(line => JSON.parse(line));
+  events.at(-1).epoch -= 410;
+  writeFileSync(ledger, events.map(event => JSON.stringify(event)).join("\n") + "\n");
+  expect(call("finish", "final-head", "correctness").status).toBe(0);
+  const denied = call("begin", "final-head", "test-quality", undefined, undefined, 190, permit);
+  expect(denied.status).toBe(1);
+  expect(JSON.parse(denied.stdout).reason).toBe("closeout aggregate deadline exhausted");
 });
