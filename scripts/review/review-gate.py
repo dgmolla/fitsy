@@ -26,8 +26,11 @@ def evaluate(raw, lens, source_sha, diff_sha256, dispositions, root):
         return failure(identity, "invalid raw review")
     if any(f.get("file") == "(runner)" for f in raw["findings"]):
         return failure(identity, "invalid independent review")
-    if not raw["findings"]:
-        return {"gate": "pass" if raw["verdict"] == "pass" else "fail", "reason": "no findings", "identity": identity}
+    confirmed = [(index, finding) for index, finding in enumerate(raw["findings"])
+                 if finding.get("severity") == "CONFIRMED"]
+    if not confirmed:
+        return {"gate": "pass" if raw["verdict"] == "pass" else "fail",
+                "reason": "no confirmed findings", "identity": identity}
     if not dispositions:
         return failure(identity, "missing dispositions")
     try:
@@ -39,10 +42,10 @@ def evaluate(raw, lens, source_sha, diff_sha256, dispositions, root):
     if any(data.get(key) != value for key, value in identity.items()):
         return failure(identity, "stale disposition identity")
     entries = data.get("findings")
-    if not isinstance(entries, list) or len(entries) != len(raw["findings"]):
+    if not isinstance(entries, list) or len(entries) != len(confirmed):
         return failure(identity, "missing or extra dispositions")
     blocked = []
-    for index, (finding, entry) in enumerate(zip(raw["findings"], entries)):
+    for (index, finding), entry in zip(confirmed, entries):
         if not isinstance(entry, dict) or entry.get("index") != index or entry.get("finding_sha256") != digest(finding):
             return failure(identity, f"stale finding disposition {index}")
         priority = finding.get("priority")

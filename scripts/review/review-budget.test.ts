@@ -12,7 +12,7 @@ afterEach(() => rmSync(root, { recursive: true, force: true }));
 function call(action: "begin" | "finish", round: string, lens = "correctness", exception?: string) {
   const id = `${round}-${lens}-${count}`;
   if (action === "begin") count++;
-  const attempt = action === "finish" ? `${round}-${lens}-${count}` : id;
+  const attempt = action === "finish" ? `${round}-${lens}-${count - 1}` : id;
   const args = [script, action, "--ledger", ledger, "--round-id", round, "--lens", lens, "--source-sha", round, "--attempt-id", attempt];
   if (exception) args.push("--exception", exception);
   return spawnSync("python3", args, { encoding: "utf8" });
@@ -30,6 +30,18 @@ test("30 minutes of measured review time stops another lens", () => {
   const now = Date.now() / 1000;
   writeFileSync(ledger, JSON.stringify({ event: "start", epoch: now - 1801, round_id: "head-1", lens: "correctness", source_sha: "head-1", attempt_id: "earlier", exception: false }) + "\n");
   expect(call("begin", "head-1", "test-quality").status).toBe(1);
+});
+test("completed review time counts toward the 30-minute cap", () => {
+  expect(call("begin", "head-1").status).toBe(0);
+  const started = JSON.parse(readFileSync(ledger, "utf8"));
+  started.epoch -= 1801;
+  writeFileSync(ledger, JSON.stringify(started) + "\n");
+  expect(call("finish", "head-1").status).toBe(0);
+  const events = readFileSync(ledger, "utf8").trim().split("\n").map(line => JSON.parse(line));
+  expect(events[1].elapsed_seconds).toBeGreaterThanOrEqual(1800);
+  const capped = call("begin", "head-1", "test-quality");
+  expect(capped.status).toBe(1);
+  expect(JSON.parse(capped.stdout).reason).toBe("review cap reached");
 });
 test("only a named high-impact exception admits scoped review after the cap", () => {
   expect(call("begin", "head-1").status).toBe(0);

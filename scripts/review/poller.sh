@@ -54,7 +54,7 @@ while read -r NUM SHA; do
   # edit its own reviewer (T12), and old branches may predate the harness.
   git checkout -q origin/main -- scripts/review scripts/verify/risk-tiers.yml REVIEW.md .claude/lenses
   for L in $PENDING; do
-    FITSY_REVIEW_BUDGET_LEDGER="$REVIEW_HOME/budgets/$NUM.jsonl" \
+    FITSY_REVIEW_BUDGET_LEDGER="${FITSY_REVIEW_BUDGET_LEDGER:-$REVIEW_HOME/budgets/$NUM.jsonl}" \
       bash scripts/review/run-lens.sh "$NUM" "$L" || echo "[poller] PR #$NUM lens/$L -> fail"
   done
   git checkout -qf origin/main 2>/dev/null || true

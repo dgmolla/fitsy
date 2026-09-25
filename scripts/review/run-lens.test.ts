@@ -24,6 +24,27 @@ function run(model = "fixture-model", provider = "claude", lens = "correctness")
     cwd: root, encoding: "utf8", env: { ...env, FITSY_REVIEW_MODEL: model, FITSY_REVIEW_PROVIDER: provider }, timeout: 15000,
   });
 }
+function runPr() {
+  const gh = join(root, "bin/gh-fixture");
+  writeFileSync(gh, `#!/bin/sh
+if [ "$1" = pr ] && [ "$2" = diff ]; then git diff --abbrev=8 origin/main...HEAD; exit; fi
+if [ "$1" = pr ] && [ "$2" = view ]; then
+  case "$5" in
+    title) printf '%s\\n' 'Fixture change' ;;
+    body) printf '\\n' ;;
+    headRefOid) git rev-parse HEAD ;;
+  esac
+  exit
+fi
+if [ "$1" = api ]; then printf '%s\\n' "$*" >> "$REVIEW_TEST_GH_CALLS"; exit; fi
+if [ "$1" = pr ] && [ "$2" = comment ]; then exit; fi
+exit 1
+`, { mode: 0o755 });
+  return spawnSync("bash", ["scripts/review/run-lens.sh", "123", "correctness"], {
+    cwd: root, encoding: "utf8", env: { ...env, FITSY_REVIEW_MODEL: "fixture-model", FITSY_REVIEW_PROVIDER: "claude",
+      FITSY_GH_BIN: gh, REVIEW_TEST_GH_CALLS: join(root, "gh-calls") }, timeout: 15000,
+  });
+}
 beforeEach(() => {
   // A real hook environment points Git at its caller even when cwd changes.
   // Use a disposable caller repository so this regression cannot damage ours.
@@ -40,7 +61,7 @@ beforeEach(() => {
   mkdirSync(join(root, "scripts/verify"), { recursive: true });
   mkdirSync(join(root, ".claude/lenses"), { recursive: true });
   mkdirSync(join(root, "bin"));
-  for (const name of ["run-lens.sh", "execute-review.py", "extract-verdict.py", "review-gate.py", "review-budget.py", "tier.mjs"]) {
+  for (const name of ["run-lens.sh", "execute-review.py", "extract-verdict.py", "format-comment.py", "review-gate.py", "review-budget.py", "tier.mjs"]) {
     cpSync(join(source, "scripts/review", name), join(root, "scripts/review", name));
   }
   cpSync(join(source, "scripts/verify/risk-tiers.yml"), join(root, "scripts/verify/risk-tiers.yml"));
@@ -118,6 +139,15 @@ test("advisory docs findings remain visible without blocking the caller", () => 
   expect(result.status).toBe(0);
   expect(JSON.parse(result.stdout)).toMatchObject(advisory);
 });
+test("plausible findings retain their raw comment-only status without a disposition", () => {
+  writeFileSync(join(root, "verdict"), JSON.stringify({ lens: "correctness", verdict: "pass", findings: [{
+    severity: "PLAUSIBLE", priority: "P2", impact: "A rare input may fail", file: "app.ts", line: 1,
+    summary: "Possible edge case", scenario: "Rare input may fail", fix: "Investigate the input",
+  }] }));
+  const result = run();
+  expect(result.status).toBe(0);
+  expect(result.stderr).toContain("no confirmed findings");
+});
 
 const impact = { user_outcome: "Native proof starts", trigger: "Historical movie without ffprobe", scope: "No-video simulator run", evidence: "review58 reproduction", contract: "Optional video tools" };
 function hash(value: string) { return createHash("sha256").update(value).digest("hex"); }
@@ -156,12 +186,20 @@ test("deferred P2 passes the effective gate while raw failure and cache stay int
   expect(JSON.parse(accepted.stdout)).toMatchObject({ verdict: "fail", findings: [{ priority: "P2" }] });
   expect(accepted.stderr).toContain('"gate": "pass"');
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(1);
+  const posted = runPr();
+  if (posted.status !== 0) throw new Error(posted.stderr);
+  expect(posted.status).toBe(0);
+  expect(JSON.parse(posted.stdout)).toMatchObject({ verdict: "fail" });
+  expect(readFileSync(join(root, "gh-calls"), "utf8")).toContain("state=success");
 });
 test("P1 remains blocking even with a complete disposition", () => {
   failingReview("P1");
   const rejected = run();
   expect(rejected.status).toBe(1);
   expect(rejected.stderr).toContain("P0/P1 finding blocks");
+  const posted = runPr();
+  if (posted.status !== 1) throw new Error(posted.stderr);
+  expect(readFileSync(join(root, "gh-calls"), "utf8")).toContain("state=failure");
 });
 test("malformed disposition and missing required test fail closed", () => {
   const { disposition, receiptPath } = failingReview("P2");
@@ -186,4 +224,18 @@ test("stale source-bound receipt and changed review inputs cannot reuse a pass",
   writeFileSync(join(root, "REVIEW.md"), "Changed review policy\n");
   expect(run().status).toBe(1);
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(2);
+});
+test("new head rejects an old disposition even with a current required-test receipt", () => {
+  const { disposition, receiptPath } = failingReview("P2");
+  expect(run().status).toBe(0);
+  git("commit", "--amend", "-qm", "same diff, new head");
+  const receipt = JSON.parse(readFileSync(join(root, receiptPath), "utf8"));
+  receipt.source_sha = git("rev-parse", "HEAD").trim();
+  const bytes = JSON.stringify(receipt);
+  writeFileSync(join(root, receiptPath), bytes);
+  disposition.findings[0].required_tests[0].sha256 = hash(bytes);
+  writeFileSync(join(root, ".evidence/review-dispositions/correctness.json"), JSON.stringify(disposition));
+  const result = run();
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain("stale disposition identity");
 });

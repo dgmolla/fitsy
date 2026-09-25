@@ -18,7 +18,7 @@ This review gate does not replace `npm run verify`, product-flow evidence, sourc
 A reviewer must explain user outcome, realistic trigger, scope, evidence and violated contract in each finding's `impact` string.
 The adjudication repeats those five facts as separate fields.
 An absent or mismatched priority, missing disposition, unowned follow-up, invalid test or stale identity fails closed.
-A plausible P0 or P1 remains blocked pending bounded investigation; confidence alone never lowers impact.
+A plausible P0 or P1 gets bounded investigation; if the impact is confirmed, the resulting P0 or P1 blocks.
 This first slice deliberately supports no dismissal or silent priority downgrade.
 If evidence changes the priority, obtain a new independent verdict and record the reasoning outside the raw review.
 
@@ -64,7 +64,8 @@ A version 1 file has this shape:
 A required test receipt is JSON with `id`, `source_sha`, `command`, `result: "pass"`, `exit_code: 0` and `finished_at`.
 Its path must resolve beneath this checkout's `.evidence` directory, and its bytes must match the disposition hash.
 Record an actual completed test command and its result; a receipt is an audit pointer, not permission to skip the underlying canonical gate.
-The sidecar must have exactly one entry for every raw finding, in review order.
+The sidecar must have exactly one entry for every confirmed raw finding, in review order, using its original finding index.
+Plausible and nit findings remain comments and need no disposition.
 For a P0 or P1 entry, set `disposition: "block"` and provide the five impact fields; the gate still fails.
 
 ## Review budget
