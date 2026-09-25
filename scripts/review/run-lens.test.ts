@@ -113,6 +113,25 @@ test("local caller runs independent CLI, records identity, and reuses only match
   expect(run("different-model").status).toBe(0);
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(2);
 });
+test("local review uses the source-bound adoption permit after the historical cap", () => {
+  const head = git("rev-parse", "HEAD").trim();
+  const ledger = join(root, "adoption-budget.jsonl");
+  writeFileSync(ledger, ["old-head-1", "old-head-2"].map((round, index) => JSON.stringify({
+    event: "start", epoch: Date.now() / 1000, round_id: round, lens: "correctness",
+    source_sha: round, attempt_id: `old-${index}`, exception: false,
+  })).join("\n") + "\n");
+  const permit = join(root, "adoption.json");
+  writeFileSync(permit, JSON.stringify({ version: 1, kind: "one-time-adoption", source_sha: head,
+    budget_seconds: 600, lens_timeouts: { correctness: 390, "test-quality": 190 }, authorization: "owner approval" }));
+  env = { ...env, FITSY_REVIEW_BUDGET_LEDGER: ledger, FITSY_REVIEW_ADOPTION: permit,
+    FITSY_REVIEW_TIMEOUT_SECONDS: "390" };
+  expect(run().status).toBe(0);
+  const events = readFileSync(ledger, "utf8").trim().split("\n").map(line => JSON.parse(line));
+  expect(events.filter(event => event.event === "start" && event.adoption)).toHaveLength(1);
+  const repeated = run("different-model");
+  expect(repeated.status).toBe(1);
+  expect(repeated.stderr).toContain("adoption lens already attempted");
+});
 test("nonzero external execution cannot publish or cache a partial pass", () => {
   writeFileSync(join(root, "exit"), "1");
   const result = run();
