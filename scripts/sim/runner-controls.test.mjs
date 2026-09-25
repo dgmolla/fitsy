@@ -157,23 +157,48 @@ test('product-flow run CLI reaches a successful fixture flow with the selected r
       mkdirSync(flowDir);
       const video = join(flowDir, 'video.mp4');
       const fixtureFile = join(flowDir, 'fixture.json');
-      writeFileSync(fixtureFile, JSON.stringify({
+      const commandsFile = join(flowDir, 'commands-test.json');
+      const captureReceipt = join(flowDir, 'capture.jsonl');
+      const reportFile = join(flowDir, 'report.json');
+      const commands = [
+        { command: { applyConfigurationCommand: { config: { appId: 'com.fitsy.mobile', name: 'welcome' } } }, metadata: { status: 'COMPLETED' } },
+        { command: { assertConditionCommand: { condition: { visible: { textRegex: 'Ready' } } } }, metadata: { status: 'COMPLETED' } },
+      ];
+      const maestroScript = `const fs=require('fs');fs.writeFileSync(process.argv[1],${JSON.stringify(JSON.stringify(commands))});fs.writeFileSync(process.argv[2],${JSON.stringify(JSON.stringify({ udid: 'fixture', preferredScreenCaptureFormat: 'screenshots' }) + '\n')});setTimeout(()=>process.exit(0),750)`;
+      const recorderScript = "process.on('SIGINT',()=>{const r=require('child_process').spawnSync('ffmpeg',['-hide_banner','-loglevel','error','-f','lavfi','-i','color=c=black:s=64x64:r=5','-frames:v','3','-pix_fmt','yuv420p','-y',process.argv[1]],{stdio:'ignore'});process.exit(r.status||0)});setInterval(()=>{},1000)";
+      writeFileSync(fixtureFile, JSON.stringify({ flowName: 'welcome', commandsFile, captureReceipt, reportFile, runner: {
         recorderCommand: process.execPath,
-        recorderArgs: ['-e', "process.on('SIGINT',()=>{require('fs').writeFileSync(process.argv[1],'video');process.exit(0)});setInterval(()=>{},1000)", video],
+        recorderArgs: ['-e', recorderScript, video],
         maestroCommand: process.execPath,
-        maestroArgs: ['-e', 'setTimeout(()=>process.exit(0),250)'],
+        maestroArgs: ['-e', maestroScript, commandsFile, captureReceipt],
         udid: 'fixture', video, recorderLog: join(flowDir, 'recorder.log'),
         cwd: flowDir, dir: flowDir, timeline: join(flowDir, 'timeline.jsonl'), flow: '',
-      }));
-      const result = spawnSync(process.execPath,
+      } }));
+      const invoke = () => spawnSync(process.execPath,
         [entry, 'run', 'fixture', '--mode=final-candidate', ...(requested ? ['--record-video'] : [])],
         { cwd: dir, env: { ...process.env, NODE_ENV: 'test', FITSY_PRODUCT_FLOW_TEST_FIXTURE: fixtureFile },
           encoding: 'utf8', timeout: 10000 });
+      const result = invoke();
       assert.equal(result.status, 0, result.stderr);
       assert.deepEqual(JSON.parse(result.stdout.trim()),
-        { code: 0, recorder: requested ? 'stopped' : 'skipped' });
+        { code: 0, recorder: requested ? 'stopped' : 'skipped', report: reportFile });
+      const report = JSON.parse(readFileSync(reportFile, 'utf8'));
+      assert.equal(report.result, 'pass');
+      assert.equal(report.videoRequested, requested);
+      assert.deepEqual(report.flows.map(flow => flow.name), ['welcome']);
+      assert.equal(existsSync(join(flowDir, 'timing-summary.json')), true);
       assert.equal(existsSync(video), requested);
-      if (requested) assert.equal(readFileSync(video, 'utf8'), 'video');
+      assert.equal(Boolean(report.flows[0].video), requested);
+      if (!requested) {
+        const fixture = JSON.parse(readFileSync(fixtureFile, 'utf8'));
+        fixture.runner.maestroArgs = ['-e', 'setTimeout(()=>process.exit(0),100)'];
+        writeFileSync(fixtureFile, JSON.stringify(fixture));
+        rmSync(commandsFile);
+        const missing = invoke();
+        assert.equal(missing.status, 1);
+        assert.match(missing.stderr, /Fixture flow failed: missing-or-empty-command-receipt/);
+        assert.equal(JSON.parse(readFileSync(reportFile, 'utf8')).result, 'fail');
+      }
     }
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

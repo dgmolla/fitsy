@@ -65,6 +65,10 @@ const processIdentity = pid => run('ps', ['-p', String(pid), '-o', 'lstart=,comm
 export function runSelectedRecordedFlow(mode, options) {
   return runRecordedFlow({ ...options, recordVideo: mode?.recordVideo });
 }
+function verifyRecordedFlow({ recorded, captureVerified, captureError = null, ...outcome }) {
+  applyCapturePolicy(recorded.result, { verified: captureVerified, error: captureError });
+  return recordFlowOutcome({ recorded, ...outcome });
+}
 async function stopMetro() {
   if (!existsSync(metroFile)) return;
   const m = read(metroFile);
@@ -194,8 +198,23 @@ async function execute(udid, names, mode) {
   const runFlow = options => runSelectedRecordedFlow(mode, options);
   if (process.env.NODE_ENV === 'test' && process.env.FITSY_PRODUCT_FLOW_TEST_FIXTURE) {
     const fixture = read(process.env.FITSY_PRODUCT_FLOW_TEST_FIXTURE);
-    const recorded = await runFlow({ ...fixture, env: process.env, diagnostic: async () => {} });
-    console.log(JSON.stringify({ code: recorded.result.code, recorder: recorded.recorderResult.state }));
+    const { runner, commandsFile, captureReceipt, reportFile, flowName } = fixture;
+    const report = { result: 'running', evidenceMode: mode.name, videoRequested: mode.recordVideo, flows: [] };
+    save(reportFile, report);
+    const recorded = await runFlow({ ...runner, env: process.env, diagnostic: async () => {} });
+    const commands = existsSync(commandsFile) ? read(commandsFile) : null;
+    const captureEvents = existsSync(captureReceipt) ? readFileSync(captureReceipt, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse) : [];
+    const outcome = verifyRecordedFlow({ recorded, captureVerified: captureEvents.length > 0 &&
+      captureEvents.every(item => item.udid === runner.udid && item.preferredScreenCaptureFormat === 'screenshots'),
+      commands, videoPath: mode.recordVideo ? runner.video : null, videoReceipt: mode.recordVideo ? 'video.mp4' : null,
+      dir: runner.dir, flowName, report, reportFile, timeline: runner.timeline,
+      commandReceipt: existsSync(commandsFile) ? commandsFile : null,
+      failureDetail: failureReason => ({ failureReason, commandReceipt: existsSync(commandsFile) ? commandsFile : null }) });
+    if (outcome.failureReason) throw new Error(`Fixture flow failed: ${outcome.failureReason}`);
+    report.flows.push({ name: flowName, commands: commandsFile, ...(mode.recordVideo ? { video: runner.video } : {}) });
+    report.result = 'pass';
+    save(reportFile, report);
+    console.log(JSON.stringify({ code: recorded.result.code, recorder: recorded.recorderResult.state, report: reportFile }));
     return;
   }
   if (mode.recordVideo) {
@@ -322,7 +341,6 @@ async function execute(udid, names, mode) {
       else if (attachmentCloseout.generated.videos) captureError = `XCTest created ${attachmentCloseout.generated.videos} unexpected video attachment(s); exact files were retired after writer-idle proof`;
       const captureVerified = !captureError && captureEvents.length > 0 &&
         captureEvents.every(item => item.udid === udid && item.preferredScreenCaptureFormat === 'screenshots');
-      applyCapturePolicy(result, { verified: captureVerified, error: captureError });
       event(timeline, { type: 'xctest-capture-check', flow: flow.name, outcome: captureVerified ? 'verified' : 'missing-or-invalid',
         expected: 'owned xcodebuild uses screenshots, never screenRecording', receipt: relative(out, captureReceipt) });
       const commands = files(dir).filter(f => /commands-.*\.json$/.test(f));
@@ -332,7 +350,7 @@ async function execute(udid, names, mode) {
         catch (error) { commandParseError = error.message; }
       }
       const failure = Array.isArray(parsed) ? nearestFailure(parsed) : null;
-      const outcome = recordFlowOutcome({ dir, recorded, commands: parsed, videoPath: mode.recordVideo ? video : null,
+      const outcome = verifyRecordedFlow({ dir, recorded, captureVerified, captureError, commands: parsed, videoPath: mode.recordVideo ? video : null,
         videoReceipt: mode.recordVideo ? relative(out, video) : null,
         flowName: flow.name, report, reportFile: join(out, 'report.json'), timeline,
         commandReceipt: commands.length === 1 ? relative(out, commands[0]) : null,
