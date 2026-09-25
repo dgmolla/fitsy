@@ -18,7 +18,8 @@ test('the publisher path retains every flow command, screen and complete video w
       { commands: 'signup/commands.json', screenshot: 'signup/outcome.png', captureReceipt: 'signup/xctest-capture-policy.jsonl', video: 'signup/flow-untrimmed.mp4', videoHash: 'hash' },
     ],
       exploration: [{ category: 'onboarding', trace: 'mcp/onboarding.jsonl' }],
-      inputHash: 'fixture-input', evidenceMode: 'final-candidate', finishedAt: '2026-01-01T00:00:00Z', storeMode: 'test-store' };
+      inputHash: 'fixture-input', appHash: 'fixture-app', configHash: 'fixture-config', result: 'pass',
+      evidenceMode: 'final-candidate', finishedAt: '2026-01-01T00:00:00Z', storeMode: 'test-store' };
     const required = [
       'report.json',
       'welcome/commands.json',
@@ -39,11 +40,17 @@ test('the publisher path retains every flow command, screen and complete video w
     const head = 'a'.repeat(40);
     const prUrl = 'https://github.com/dgmolla/fitsy/pull/7';
     const states = [];
-    let uploadedBytes = null, suppressUpload = false, corruptDigest = false, validations = 0;
+    let uploadedBytes = null, suppressUpload = false, corruptDigest = false, validations = 0, identityChecks = 0, uploadAttempts = 0;
     const execute = (command, args, options = {}) => {
       if (command === 'tar') return execFileSync('tar', args, { encoding: 'utf8' }).trim();
       if (command === 'git') return args[0] === 'rev-parse' ? head : '';
-      if (command === process.execPath) return '';
+      if (command === process.execPath) {
+        assert.equal(args.at(-1), 'check');
+        identityChecks++;
+        assert.equal(report.appHash, 'fixture-app', 'invalid current app identity');
+        assert.equal(report.configHash, 'fixture-config', 'invalid current configuration identity');
+        return '';
+      }
       assert.equal(command, 'gh');
       if (args[0] === 'pr') return JSON.stringify({ headRefOid: head, baseRefName: 'main', headRepositoryOwner: { login: 'dgmolla' }, state: 'OPEN', url: prUrl });
       if (args[0] === 'api' && args[1].includes('/statuses/')) {
@@ -52,6 +59,7 @@ test('the publisher path retains every flow command, screen and complete video w
       }
       if (args[0] === 'release' && args[1] === 'view') throw new Error('fixture release absent');
       if (args[0] === 'release' && args[1] === 'upload') {
+        uploadAttempts++;
         if (!suppressUpload) uploadedBytes = readFileSync(args[3]);
         return '';
       }
@@ -63,29 +71,45 @@ test('the publisher path retains every flow command, screen and complete video w
       }
       assert.fail(`Unexpected forge command: ${args.join(' ')}`);
     };
+    const validateIdentity = (actual, plan, currentSourceHash) => {
+      validations++;
+      assert.deepEqual(plan.categories, ['onboarding']);
+      assert.equal(currentSourceHash, 'fixture-input', 'publisher must pass the current source hash');
+      assert.equal(actual.inputHash, currentSourceHash, 'invalid source-bound evidence');
+      assert.equal(actual.result, 'pass', 'failed flow evidence cannot be published');
+    };
     const result = await publishProductFlow('7', { execute, evidenceDirectory, publicationDirectory,
       resolvePlan: () => ({ required: true, categories: ['onboarding'] }), sourceHash: () => 'fixture-input',
       validateEvidence: (actual, plan, sourceHash) => {
-        validations++;
+        validateIdentity(actual, plan, sourceHash);
         assert.deepEqual(actual.flows, report.flows);
-        assert.deepEqual(plan.categories, ['onboarding']);
-        assert.equal(sourceHash, report.inputHash);
       } });
     assert.equal(result.status, 'pass');
     assert.equal(validations, 1, 'source-bound validation ran before publication');
+    assert.equal(identityChecks, 1, 'current app and configuration checked before publication');
     assert.deepEqual(states, ['pending', 'success']);
     const options = { execute, evidenceDirectory, publicationDirectory,
       resolvePlan: () => ({ required: true, categories: ['onboarding'] }), sourceHash: () => 'fixture-input',
-      validateEvidence: () => {} };
-    report.inputHash = 'stale-source';
-    writeFileSync(join(evidenceDirectory, 'report.json'), JSON.stringify(report));
-    uploadedBytes = null;
-    await assert.rejects(publishProductFlow('7', { ...options,
-      validateEvidence: actual => { validations++; assert.equal(actual.inputHash, 'fixture-input', 'invalid source-bound evidence'); } }), /invalid source-bound evidence/);
-    assert.equal(validations, 2);
-    assert.equal(uploadedBytes, null, 'invalid evidence cannot reach asset upload');
-    assert.deepEqual(states.slice(-2), ['pending', 'failure']);
-    report.inputHash = 'fixture-input';
+      validateEvidence: validateIdentity };
+    const validIdentity = { inputHash: report.inputHash, appHash: report.appHash, configHash: report.configHash,
+      result: report.result, evidenceMode: report.evidenceMode };
+    for (const [field, change, expected] of [
+      ['source input', { inputHash: 'stale-source' }, /invalid source-bound evidence/],
+      ['status', { result: 'fail' }, /failed flow evidence cannot be published/],
+      ['mode', { evidenceMode: 'development' }, /Final candidate video proof is required/],
+      ['app hash', { appHash: 'stale-app' }, /invalid current app identity/],
+      ['configuration hash', { configHash: 'stale-config' }, /invalid current configuration identity/],
+    ]) {
+      Object.assign(report, validIdentity, change);
+      writeFileSync(join(evidenceDirectory, 'report.json'), JSON.stringify(report));
+      uploadedBytes = null;
+      const attemptsBefore = uploadAttempts;
+      await assert.rejects(publishProductFlow('7', options), expected, field);
+      assert.equal(uploadedBytes, null, `${field} cannot reach asset upload`);
+      assert.equal(uploadAttempts, attemptsBefore, `${field} must reject before upload`);
+      assert.deepEqual(states.slice(-2), ['pending', 'failure'], field);
+    }
+    Object.assign(report, validIdentity);
     writeFileSync(join(evidenceDirectory, 'report.json'), JSON.stringify(report));
     uploadedBytes = null;
     suppressUpload = true;
@@ -111,9 +135,11 @@ test('the publisher path retains every flow command, screen and complete video w
     unlinkSync(join(evidenceDirectory, report.flows[0].video));
     symlinkSync('../unarchived-video.mp4', join(evidenceDirectory, report.flows[0].video));
     assert.equal(artifactPath(report.flows[0].video, evidenceDirectory), realpathSync(unarchived));
+    const attemptsBeforeUnsafeArchive = uploadAttempts;
     await assert.rejects(publishProductFlow('7', { execute, evidenceDirectory, publicationDirectory,
       resolvePlan: () => ({ required: true, categories: ['onboarding'] }), sourceHash: () => 'fixture-input',
       validateEvidence: () => {} }), /regular file/);
+    assert.equal(uploadAttempts, attemptsBeforeUnsafeArchive, 'unsafe archive must reject before upload');
     assert.deepEqual(states.slice(-2), ['pending', 'failure']);
     const archivePath = join(publicationDirectory, 'local-evidence.tar.gz');
     await assert.rejects(createPublicationArchive(report, ['onboarding'], evidenceDirectory, archivePath, execute), /regular file/);

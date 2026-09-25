@@ -18,7 +18,19 @@ test('a final candidate is reused only for the same passing source-bound selecti
   const report = { result: 'pass', evidenceMode: 'final-candidate', simulator: 'device', appHash: 'app', configHash: 'config',
     backendDeployment: 'backend', fixture: 'fixture', flows: [{ name: 'welcome', sourceHash: 'source' }] };
   assert.equal(matchesFinalCandidate(report, selected), true);
-  for (const change of [{ result: 'fail' }, { evidenceMode: 'development' }, { appHash: 'other' },
-    { backendDeployment: 'other' }, { flows: [{ name: 'welcome', sourceHash: 'other' }] }])
-    assert.equal(matchesFinalCandidate({ ...report, ...change }, selected), false);
+  const mismatches = [
+    ['status', { result: 'fail' }],
+    ['mode', { evidenceMode: 'development' }],
+    ['simulator', { simulator: 'other' }],
+    ['app hash', { appHash: 'other' }],
+    ['configuration hash', { configHash: 'other' }],
+    ['backend deployment', { backendDeployment: 'other' }],
+    ['fixture', { fixture: 'other' }],
+    ['flow count', { flows: [] }],
+    ['flow name', { flows: [{ name: 'other', sourceHash: 'source' }] }],
+    ['flow source hash', { flows: [{ name: 'welcome', sourceHash: 'other' }] }],
+  ];
+  for (const [field, change] of mismatches)
+    assert.equal(matchesFinalCandidate({ ...report, ...change }, selected), false, field);
+  assert.equal(matchesFinalCandidate(null, selected), false, 'missing report');
 });
