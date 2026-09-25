@@ -287,6 +287,16 @@ test('publisher default validator accepts complete non-video proof and rejects c
       .includes(flows[0].commands), true);
     assert.equal(execFileSync('tar', ['-tzf', join(publicationDirectory, 'local-evidence.tar.gz')], { encoding: 'utf8' })
       .includes(flows[0].attachmentCloseout), true);
+    const closeoutPath = report.flows[0].attachmentCloseout;
+    const closeoutHash = report.flows[0].attachmentCloseoutHash;
+    delete report.flows[0].attachmentCloseout;
+    delete report.flows[0].attachmentCloseoutHash;
+    writeFileSync(join(evidenceDirectory, 'report.json'), JSON.stringify(report));
+    await assert.rejects(publishProductFlow('9', options), /missing XCTest attachment closeout/);
+    assert.equal(uploads, 1, 'missing closeout must stop before another upload');
+    report.flows[0].attachmentCloseout = closeoutPath;
+    report.flows[0].attachmentCloseoutHash = closeoutHash;
+    writeFileSync(join(evidenceDirectory, 'report.json'), JSON.stringify(report));
     writeFileSync(join(evidenceDirectory, flows[0].commands), '[]');
     await assert.rejects(publishProductFlow('9', options), /changed command artifact/);
     assert.equal(uploads, 1, 'invalid proof must stop before another upload');

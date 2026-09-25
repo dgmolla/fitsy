@@ -139,6 +139,8 @@ export function validate(report, plan, hash, directory, now = Date.now(), cwd = 
     const captures = capture.toString().trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
     insist(captures.length > 0 && captures.every(item => item.udid === report.simulator && item.preferredScreenCaptureFormat === 'screenshots'),
       `missing screenshots-only XCTest launch proof: ${flow.name}`);
+    if (mode === 'final-candidate')
+      insist(flow.attachmentCloseout && flow.attachmentCloseoutHash, `missing XCTest attachment closeout: ${flow.name}`);
     if (flow.attachmentCloseout || flow.attachmentCloseoutHash) {
       insist(flow.attachmentCloseout && flow.attachmentCloseoutHash, `incomplete XCTest attachment closeout: ${flow.name}`);
       const closeout = artifact(flow.attachmentCloseout, directory);
