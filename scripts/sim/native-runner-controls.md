@@ -4,7 +4,8 @@ Use the build, run and finish sequence in [shipping.md](../../docs/engineering/d
 Set `FITSY_SIM_OWNER` and pass the owned simulator UDID.
 The runner checks source, app and public configuration hashes, simulator state, installed app, disk headroom and the owned Metro process before starting each Maestro flow.
 Development and review `run` invocations default to `--mode=development`, which executes the same Maestro assertions and screenshots without starting the explicit recorder.
-Use `--mode=final-candidate` once the PR candidate is stable to produce the complete video required for publication.
+Use `--mode=final-candidate` once the PR candidate is stable for publication evidence.
+Add `--record-video` when a complete video is specifically requested; final candidate runs otherwise retain command receipts and screenshots without starting the explicit recorder.
 Repeating that run reuses a passing, unexpired report only when the current source, app, backend, simulator, fixture and selected flow receipts still validate.
 Use `--mode=requested-video` only for an explicit video request; that report is diagnostic and cannot pass the final candidate publication gate.
 Install `ffprobe` and `ffmpeg` before a video run; the runner checks for them before Maestro and rejects a zero-duration video or one whose first video frame cannot decode, with a failure receipt after recording.
@@ -43,7 +44,8 @@ If a Maestro watchdog fires before the early recorder exit is observed, `recorde
 Each diagnostic has a separate numbered JSON and screenshot path, so a later recorder diagnostic does not overwrite the watchdog evidence.
 The handshake orders keeper observations; it cannot infer the operating system's exact exit instant if exit and stop race before either is observed.
 Inspect the recorder log and preserved partial video, repair the recording failure, then rerun the complete flow.
-The runner waits for command and descendant exit separately from keeper exit; a normal command exit with surviving same-group descendants is a failure and is cleaned up.
+The runner waits for command and descendant exit separately from keeper exit.
+If a successful Maestro command leaves same-group descendants, it records diagnostics and sends TERM to its proven owned group; prompt cleanup preserves the command pass, while descendants that outlive the grace period fail the flow.
 An unexpected keeper exit fails with an ownership-loss diagnostic and no further group signal.
 Children that create their own process group or session are outside this scoped cleanup guarantee.
 If a command fails, inspect `failure.json`, `failure-screen.png`, the original command JSON, Maestro log and any video produced by the selected mode.
@@ -59,6 +61,6 @@ Adopt a new runner commit only when the current simulator owner has finished its
 Record the exact commit and rebuild when the build recipe, mobile source or public configuration identity changes.
 Runner and test changes invalidate evidence bound to a prior PR head, so generate a fresh report and publish `product-flow/local` for the exact PR head when the shipping plan requires product evidence.
 The publisher rejects development and requested-video reports when final proof is required.
-It rejects symlinked artifacts and parent directories, then compares each archived file's extracted bytes with the validated source, including every complete flow video.
+It rejects symlinked artifacts and parent directories, then compares each archived file's extracted bytes with the validated source, including every complete flow video when recording was requested.
 An existing worker has not adopted these controls until its own runner timeline and source-bound receipt show the new commit.
 Repeat identity includes flow, command kind, and normalized direct or nested targets; target and error text are hashed in derived history while original command receipts remain available for diagnosis.
