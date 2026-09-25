@@ -6,7 +6,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { createPublicationArchive, publishProductFlow } from './publish-product-flow.mjs';
-import { artifactPath } from '../verify/product-flow.mjs';
+import { artifactPath, baseline, inputHash, root } from '../verify/product-flow.mjs';
+
+const sha = value => createHash('sha256').update(value).digest('hex');
 
 test('the publisher path retains every flow command, screen and complete video with the report and exploration proof', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'fitsy-publication-'));
@@ -224,5 +226,63 @@ test('final candidate publishes complete non-video proof when recording was not 
     for (const path of required)
       assert.deepEqual(execFileSync('tar', ['-xOf', archive, path]), readFileSync(join(evidenceDirectory, path)));
     assert.doesNotMatch(readFileSync(join(publicationDirectory, 'notes.md'), 'utf8'), /flow videos/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('publisher default validator accepts complete non-video proof and rejects changed commands before upload', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'fitsy-default-publication-'));
+  try {
+    const evidenceDirectory = join(dir, 'product-flow'), publicationDirectory = join(dir, 'publication');
+    const simulator = 'fixture-device', png = Buffer.from('89504e470d0a1a0a00000000', 'hex');
+    const flows = baseline.map(name => {
+      const source = `apps/mobile/e2e/flows/${name}.yaml`;
+      const commands = `${name}/commands.json`, screenshot = `${name}/outcome.png`;
+      const captureReceipt = `${name}/xctest-capture-policy.jsonl`;
+      const raw = JSON.stringify([
+        { command: { applyConfigurationCommand: { config: { appId: 'com.fitsy.mobile', name } } }, metadata: { status: 'COMPLETED' } },
+        { command: { assertConditionCommand: { condition: { visible: { textRegex: 'Welcome' } } } }, metadata: { status: 'COMPLETED' } },
+      ]);
+      const capture = JSON.stringify({ udid: simulator, preferredScreenCaptureFormat: 'screenshots' }) + '\n';
+      for (const path of [commands, screenshot, captureReceipt]) mkdirSync(join(evidenceDirectory, path, '..'), { recursive: true });
+      writeFileSync(join(evidenceDirectory, commands), raw);
+      writeFileSync(join(evidenceDirectory, screenshot), png);
+      writeFileSync(join(evidenceDirectory, captureReceipt), capture);
+      return { name, source, sourceHash: sha(readFileSync(join(root, source))), commands, sha256: sha(raw),
+        screenshot, screenshotHash: sha(png), captureReceipt, captureReceiptHash: sha(capture) };
+    });
+    const source = inputHash(), nativeSourceHash = inputHash(root, true), head = 'c'.repeat(40);
+    const report = { version: 1, evidenceMode: 'final-candidate', videoRequested: false,
+      startedAt: new Date(Date.now() - 10_000).toISOString(), finishedAt: new Date().toISOString(),
+      inputHash: source, nativeSourceHash, result: 'pass', appHash: 'app', bundleHash: 'bundle',
+      backendRevision: 'dev-revision', backend: 'https://dev.fitsy.org', simulator, os: 'iOS 26.4',
+      storeMode: 'test-store', fixture: 'run-owned-user', maestroVersion: '2.3.0', flows, exploration: [] };
+    writeFileSync(join(evidenceDirectory, 'report.json'), JSON.stringify(report));
+    let uploaded = null, uploads = 0;
+    const execute = (command, args, options = {}) => {
+      if (command === 'tar') return execFileSync('tar', args, { encoding: 'utf8' }).trim();
+      if (command === 'git') return args[0] === 'rev-parse' ? head : '';
+      if (command === process.execPath) return '';
+      assert.equal(command, 'gh');
+      if (args[0] === 'pr') return JSON.stringify({ headRefOid: head, baseRefName: 'main',
+        headRepositoryOwner: { login: 'dgmolla' }, state: 'OPEN', url: 'https://github.com/dgmolla/fitsy/pull/9' });
+      if (args[0] === 'release' && args[1] === 'view') throw new Error('fixture release absent');
+      if (args[0] === 'release' && args[1] === 'upload') { uploads++; uploaded = readFileSync(args[3]); return ''; }
+      if (args[0] === 'api' && args[1].includes('/releases/tags/')) return JSON.stringify({ draft: true,
+        html_url: 'https://github.com/dgmolla/fitsy/releases/tag/fixture',
+        assets: [{ name: 'local-evidence.tar.gz', state: 'uploaded', size: uploaded.length,
+          digest: `sha256:${sha(uploaded)}` }] });
+      if (args[0] === 'api' && args[1].includes('/statuses/')) return '';
+      return '';
+    };
+    const options = { execute, evidenceDirectory, publicationDirectory,
+      resolvePlan: () => ({ required: true, categories: [] }), sourceHash: () => source };
+    const published = await publishProductFlow('9', options);
+    assert.equal(published.status, 'pass');
+    assert.equal(uploads, 1);
+    assert.equal(execFileSync('tar', ['-tzf', join(publicationDirectory, 'local-evidence.tar.gz')], { encoding: 'utf8' })
+      .includes(flows[0].commands), true);
+    writeFileSync(join(evidenceDirectory, flows[0].commands), '[]');
+    await assert.rejects(publishProductFlow('9', options), /changed command artifact/);
+    assert.equal(uploads, 1, 'invalid proof must stop before another upload');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
