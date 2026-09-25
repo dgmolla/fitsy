@@ -66,6 +66,31 @@ Development runs remain separate from final publication even when recorded.
 
 The walkthrough JSON is an array with one entry per category: `category`, `expected`, `observed`, `branches: ["primary", "recovery"]`, `result: "pass"`, and `trace` relative to `.evidence/product-flow/`. Traces are JSONL: one `{at, command: {name}, result: {content}}` object per line, recording actual Mobile MCP actions and screen observations. Identify run-owned synthetic fixtures with `FITSY_FIXTURE`; reviewers judge scenario relevance and visual quality.
 
+### Keep mobile walkthroughs focused and recoverable
+
+Before interacting, list the expected primary and recovery checkpoints, required assertions, and a task-appropriate action, retry and elapsed-time budget in the task evidence.
+Use the accessibility screen or relevant subtree where supported to find visible controls and confirm semantic state.
+Save complete successful Mobile MCP responses in the source-bound walkthrough trace, while bringing only the relevant controls and state change into working context.
+Keep any failed response, including `isError: true`, in separate private diagnostic evidence because the product-flow validator rejects failed events in the walkthrough trace.
+Record the failed attempt in the diagnostic action history and include a successful retry in the validated trace only after it actually changes or observes the required state.
+If a target is offscreen, scroll to it deliberately, refresh the accessibility state, and verify reachability before tapping.
+If accessibility data is missing or misleading, record that limitation and use a screenshot or another supported observation instead of inventing a selector.
+Take screenshots at required outcomes and when checking layout, clipping, redundant controls or visual state that the accessibility tree cannot establish.
+Inspect those images against the affected screen's acceptance criteria; semantic success alone does not establish visual quality.
+
+Count attempts without a relevant state change across taps, selector variations, waits and restarts.
+After two such attempts, save the current tree, screenshot and diagnostic action history, then diagnose the failed checkpoint before another action.
+For a stale element, refresh the tree and reacquire the control.
+For an overlay, inspect it, dismiss only a known safe overlay, and confirm the expected screen.
+For delayed accessibility updates, use a bounded state-based wait and compare the screen image before treating the delay as an app failure.
+At the planned budget boundary, record the failed step and cause through the normal recovery path; never turn a skipped assertion into a pass or replace it with a sleep.
+
+Keep complete action responses and the selected raw log window in private task evidence, then read only a scoped excerpt during diagnosis.
+For example, capture a short device window with `xcrun simctl spawn <UDID> log show --last 30s --style compact > .evidence/product-flow/device-log.txt`, then use `rg -n '<relevant-pattern>' .evidence/product-flow/device-log.txt` for the relevant lines.
+Use `scripts/sim/sim logs --seconds 30 --grep '<relevant-pattern>'` when a quick bounded excerpt is sufficient.
+Do not include credentials or personal data in published evidence.
+Record actual tool calls, elapsed time, no-progress attempts, retries and evidence size if comparing flows; external speed claims are not Fitsy measurements.
+
 ```sh
 node scripts/sim/publish-product-flow.mjs <PR_NUMBER>
 ```
