@@ -4,7 +4,10 @@ import { spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { evidenceMode, matchesFinalCandidate, runSelection } from './evidence-mode.mjs';
+
+const moduleDir = fileURLToPath(new URL('.', import.meta.url));
 
 test('wrong XCTest destination is rejected before plist tools or real xcodebuild on every platform', () => {
   const dir = mkdtempSync(join(tmpdir(), 'fitsy-destination-'));
@@ -17,7 +20,7 @@ test('wrong XCTest destination is rejected before plist tools or real xcodebuild
     const real = join(dir, 'real-xcodebuild');
     writeFileSync(real, `#!/bin/sh\ntouch ${JSON.stringify(actual)}\n`); chmodSync(real, 0o755);
     const receipt = join(dir, 'capture.jsonl');
-    const result = spawnSync(join(import.meta.dirname, 'xcodebuild'),
+    const result = spawnSync(join(moduleDir, 'xcodebuild'),
       ['test-without-building', '-xctestrun', config, '-destination', 'id=another-device'],
       { encoding: 'utf8', env: { ...process.env, FITSY_XCTEST_CAPTURE_RECEIPT: receipt,
         FITSY_XCTEST_SIM_UDID: udid, FITSY_XCODEBUILD_REAL: real } });

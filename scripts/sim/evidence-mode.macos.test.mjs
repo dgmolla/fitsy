@@ -4,6 +4,9 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const moduleDir = fileURLToPath(new URL('.', import.meta.url));
 
 test('owned xcodebuild launch changes only its temporary XCTest capture config to screenshots', () => {
   const dir = mkdtempSync(join(tmpdir(), 'fitsy-xctest-policy-'));
@@ -25,7 +28,7 @@ test('owned xcodebuild launch changes only its temporary XCTest capture config t
     const captureFormat = (config) => JSON.parse(execFileSync('plutil', ['-convert', 'json', '-o', '-', config], { encoding: 'utf8' }))['maestro-driver-iosUITests'].PreferredScreenCaptureFormat;
     const valid = fixture('valid-destination');
     const args = ['test-without-building', '-xctestrun', valid.config, '-destination', `id=${udid}`];
-    const wrapper = join(import.meta.dirname, 'xcodebuild');
+    const wrapper = join(moduleDir, 'xcodebuild');
     const launch = spawnSync(wrapper, args, { env: valid.env, encoding: 'utf8' });
     assert.equal(launch.status, 0, launch.stderr);
     const changed = JSON.parse(execFileSync('plutil', ['-convert', 'json', '-o', '-', valid.config], { encoding: 'utf8' }));
