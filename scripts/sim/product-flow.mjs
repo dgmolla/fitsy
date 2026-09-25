@@ -191,6 +191,13 @@ async function build(udid, testStore) {
   } finally { release(); }
 }
 async function execute(udid, names, mode) {
+  const runFlow = options => runSelectedRecordedFlow(mode, options);
+  if (process.env.NODE_ENV === 'test' && process.env.FITSY_PRODUCT_FLOW_TEST_FIXTURE) {
+    const fixture = read(process.env.FITSY_PRODUCT_FLOW_TEST_FIXTURE);
+    const recorded = await runFlow({ ...fixture, env: process.env, diagnostic: async () => {} });
+    console.log(JSON.stringify({ code: recorded.result.code, recorder: recorded.recorderResult.state }));
+    return;
+  }
   if (mode.recordVideo) {
     try { run('ffprobe', ['-version'], { timeout: 5000 }); run('ffmpeg', ['-version'], { timeout: 5000 }); }
     catch { throw new Error('ffprobe and ffmpeg are required to validate recorded product-flow video before running Maestro'); }
@@ -285,7 +292,7 @@ async function execute(udid, names, mode) {
       writeFileSync(captureReceipt, '');
       const attachmentBefore = snapshotXCTestAttachments(udid);
       let recorded, attachmentCloseout, attachmentError;
-      try { recorded = await runSelectedRecordedFlow(mode, {
+      try { recorded = await runFlow({
         maestroCommand: process.env.MAESTRO_BIN || 'maestro',
         maestroArgs: ['test', '--udid', udid, join(root, flow.source), '--format', 'junit', '--output', join(dir, 'junit.xml'), '--debug-output', dir, '--test-output-dir', dir],
         udid, video, recorderLog: join(dir, 'recorder.log'), cwd: root,

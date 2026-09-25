@@ -148,6 +148,36 @@ console.log(JSON.stringify({ code: recorded.result.code, recorder: recorded.reco
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('product-flow run CLI reaches a successful fixture flow with the selected recorder choice', () => {
+  const dir = temp();
+  const entry = new URL('./product-flow.mjs', import.meta.url).pathname;
+  try {
+    for (const requested of [false, true]) {
+      const flowDir = join(dir, requested ? 'requested' : 'default');
+      mkdirSync(flowDir);
+      const video = join(flowDir, 'video.mp4');
+      const fixtureFile = join(flowDir, 'fixture.json');
+      writeFileSync(fixtureFile, JSON.stringify({
+        recorderCommand: process.execPath,
+        recorderArgs: ['-e', "process.on('SIGINT',()=>{require('fs').writeFileSync(process.argv[1],'video');process.exit(0)});setInterval(()=>{},1000)", video],
+        maestroCommand: process.execPath,
+        maestroArgs: ['-e', 'setTimeout(()=>process.exit(0),250)'],
+        udid: 'fixture', video, recorderLog: join(flowDir, 'recorder.log'),
+        cwd: flowDir, dir: flowDir, timeline: join(flowDir, 'timeline.jsonl'), flow: '',
+      }));
+      const result = spawnSync(process.execPath,
+        [entry, 'run', 'fixture', '--mode=final-candidate', ...(requested ? ['--record-video'] : [])],
+        { cwd: dir, env: { ...process.env, NODE_ENV: 'test', FITSY_PRODUCT_FLOW_TEST_FIXTURE: fixtureFile },
+          encoding: 'utf8', timeout: 10000 });
+      assert.equal(result.status, 0, result.stderr);
+      assert.deepEqual(JSON.parse(result.stdout.trim()),
+        { code: 0, recorder: requested ? 'stopped' : 'skipped' });
+      assert.equal(existsSync(video), requested);
+      if (requested) assert.equal(readFileSync(video, 'utf8'), 'video');
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('product-flow run entrypoint applies requested-video preflight before native work', () => {
   const dir = temp();
   const entry = new URL('./product-flow.mjs', import.meta.url).pathname;
