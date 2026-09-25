@@ -53,7 +53,9 @@ node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs 
 ```
 
 Cold-start and sign-in always run. Add/select flows in `apps/mobile/e2e/flows/` tagged for every category in `--plan`, with at least two non-optional outcome assertions per changed journey. Baseline flows cannot cover a paywall change. Promote discovered regressions into deterministic scenarios.
-For development and review runs, omit the mode to skip video while retaining the required assertions and screenshots; that evidence cannot satisfy final publication.
+Final candidate runs retain required assertions, raw Maestro commands, screenshots, XCTest capture receipts, timing and changed-journey walkthroughs without recording video by default.
+When a reviewer explicitly requests video, add `--record-video` to the final candidate run; the runner retains complete untrimmed video and the validator checks each recording before publication.
+Development runs remain separate from final publication even when recorded.
 
 The walkthrough JSON is an array with one entry per category: `category`, `expected`, `observed`, `branches: ["primary", "recovery"]`, `result: "pass"`, and `trace` relative to `.evidence/product-flow/`. Traces are JSONL: one `{at, command: {name}, result: {content}}` object per line, recording actual Mobile MCP actions and screen observations. Identify run-owned synthetic fixtures with `FITSY_FIXTURE`; reviewers judge scenario relevance and visual quality.
 

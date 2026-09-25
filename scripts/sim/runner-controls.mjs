@@ -489,14 +489,24 @@ export async function runOwnedMaestro(command, args, { cwd, env, dir, timeline, 
     }
     if (!reason) {
       // The keeper's child exit event can precede OS reaping by a few ticks.
-      // A live descendant after that bounded reap interval is a flow failure.
+      // A completed Maestro command may leave its owned driver child behind.
+      // Capture that state, bound cleanup, and preserve the command outcome if TERM reaps it.
       if (!await waitForOtherMembers(owned, 1000)) {
-        reason = 'owned-descendant-after-command-exit';
-        await capture(reason, latestMaestroLog(dir));
+        const members = otherMembers(owned);
+        await capture('owned-descendant-after-command-exit', latestMaestroLog(dir));
+        event(timeline, { type: 'maestro-descendant-cleanup', pid: ownedPid, members,
+          expected: 'owned descendants exit or respond to SIGTERM after Maestro command exit', deadlineMs: terminationGraceMs,
+          outcome: 'started' });
         await requestKeeper(owned, 'signal', 'SIGTERM');
         if (!await waitForOtherMembers(owned, terminationGraceMs)) {
+          reason = 'owned-descendant-after-command-exit';
+          event(timeline, { type: 'maestro-descendant-cleanup', pid: ownedPid, members: otherMembers(owned),
+            outcome: 'SIGTERM-grace-expired' });
           await killOwnedGroup(owned, 5000);
-        } else await closeKeeper(owned);
+        } else {
+          event(timeline, { type: 'maestro-descendant-cleanup', pid: ownedPid, members, outcome: 'terminated' });
+          await closeKeeper(owned);
+        }
       } else await closeKeeper(owned);
     }
     const result = await waitOrTimeout(owned.completed, 5000);
@@ -545,7 +555,7 @@ export async function runRecordedFlow({ recorderCommand = 'xcrun', recorderArgs 
       { command: recorderCommand, args: recorderArgs, spawnImpl: recorderSpawnImpl,
         onStart: owned => { recorderPid = owned.pid; recorderStartedMs = Date.now(); event(timeline, { type: 'recorder-start', pid: owned.pid, video }); },
         onComplete: (exit, owned) => { if (!recorderStopRequested) earlyExit(exit, 'completion-before-stop', owned); } });
-    else event(timeline, { type: 'recorder-skipped', reason: 'development evidence mode' });
+    else event(timeline, { type: 'recorder-skipped', reason: 'recording not requested' });
     if (interruption.signal.aborted) throw interruption.signal.reason;
     result = await runOwnedMaestro(maestroCommand, maestroArgs, { cwd, env, dir, timeline, flow, diagnostic,
       signal: interruption.signal, quietMs, wallMs, pollMs, terminationGraceMs, spawnImpl: maestroSpawnImpl });

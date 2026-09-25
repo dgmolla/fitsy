@@ -19,7 +19,7 @@ test('the publisher path retains every flow command, screen and complete video w
     ],
       exploration: [{ category: 'onboarding', trace: 'mcp/onboarding.jsonl' }],
       inputHash: 'fixture-input', appHash: 'fixture-app', configHash: 'fixture-config', result: 'pass',
-      evidenceMode: 'final-candidate', finishedAt: '2026-01-01T00:00:00Z', storeMode: 'test-store' };
+      evidenceMode: 'final-candidate', videoRequested: true, finishedAt: '2026-01-01T00:00:00Z', storeMode: 'test-store' };
     const required = [
       'report.json',
       'welcome/commands.json',
@@ -96,7 +96,7 @@ test('the publisher path retains every flow command, screen and complete video w
     for (const [field, change, expected] of [
       ['source input', { inputHash: 'stale-source' }, /invalid source-bound evidence/],
       ['status', { result: 'fail' }, /failed flow evidence cannot be published/],
-      ['mode', { evidenceMode: 'development' }, /Final candidate video proof is required/],
+      ['mode', { evidenceMode: 'development' }, /Final candidate proof is required/],
       ['app hash', { appHash: 'stale-app' }, /invalid current app identity/],
       ['configuration hash', { configHash: 'stale-config' }, /invalid current configuration identity/],
     ]) {
@@ -159,7 +159,7 @@ test('the publisher path retains every flow command, screen and complete video w
     writeFileSync(join(evidenceDirectory, 'report.json'), JSON.stringify(report));
     await assert.rejects(publishProductFlow('7', { execute, evidenceDirectory, publicationDirectory,
       resolvePlan: () => ({ required: true, categories: ['onboarding'] }), sourceHash: () => 'fixture-input',
-      validateEvidence: () => {} }), /Final candidate video proof is required/);
+      validateEvidence: () => {} }), /Final candidate proof is required/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -179,5 +179,50 @@ test('publisher detects an archive with listed video whose extracted bytes diffe
       return execFileSync('tar', args, { encoding: 'utf8' }).trim();
     };
     await assert.rejects(createPublicationArchive(report, [], evidence, archive, execute), /incomplete or changed bytes: flow\/flow-untrimmed.mp4/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('final candidate publishes complete non-video proof when recording was not requested', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'fitsy-no-video-publication-'));
+  try {
+    const evidenceDirectory = join(dir, 'product-flow'), publicationDirectory = join(dir, 'publication');
+    const report = { evidenceMode: 'final-candidate', videoRequested: false, inputHash: 'source',
+      result: 'pass', finishedAt: '2026-01-01T00:00:00Z', storeMode: 'test-store',
+      flows: [{ commands: 'welcome/commands.json', screenshot: 'welcome/outcome.png',
+        captureReceipt: 'welcome/xctest-capture-policy.jsonl' }],
+      exploration: [{ category: 'onboarding', trace: 'mcp/onboarding.jsonl' }] };
+    const required = ['report.json', 'welcome/commands.json', 'welcome/outcome.png',
+      'welcome/xctest-capture-policy.jsonl', 'mcp/onboarding.jsonl'];
+    for (const path of required) {
+      mkdirSync(join(evidenceDirectory, path, '..'), { recursive: true });
+      writeFileSync(join(evidenceDirectory, path), path === 'report.json' ? JSON.stringify(report) : path);
+    }
+    const head = 'b'.repeat(40), url = 'https://github.com/dgmolla/fitsy/pull/8';
+    let uploaded = null, validations = 0;
+    const execute = (command, args) => {
+      if (command === 'tar') return execFileSync('tar', args, { encoding: 'utf8' }).trim();
+      if (command === 'git') return args[0] === 'rev-parse' ? head : '';
+      if (command === process.execPath) return '';
+      assert.equal(command, 'gh');
+      if (args[0] === 'pr') return JSON.stringify({ headRefOid: head, baseRefName: 'main',
+        headRepositoryOwner: { login: 'dgmolla' }, state: 'OPEN', url });
+      if (args[0] === 'release' && args[1] === 'view') throw new Error('fixture release absent');
+      if (args[0] === 'release' && args[1] === 'upload') uploaded = readFileSync(args[3]);
+      if (args[0] === 'api' && args[1].includes('/releases/tags/')) return JSON.stringify({ draft: true,
+        html_url: 'https://github.com/dgmolla/fitsy/releases/tag/fixture',
+        assets: [{ name: 'local-evidence.tar.gz', state: 'uploaded', size: uploaded.length,
+          digest: `sha256:${createHash('sha256').update(uploaded).digest('hex')}` }] });
+      return '';
+    };
+    const result = await publishProductFlow('8', { execute, evidenceDirectory, publicationDirectory,
+      resolvePlan: () => ({ required: true, categories: ['onboarding'] }), sourceHash: () => 'source',
+      validateEvidence: actual => { validations++; assert.equal(actual.videoRequested, false); assert.equal(actual.result, 'pass'); } });
+    assert.equal(result.status, 'pass');
+    assert.equal(validations, 1);
+    const archive = join(publicationDirectory, 'local-evidence.tar.gz');
+    assert.deepEqual(execFileSync('tar', ['-tzf', archive], { encoding: 'utf8' }).trim().split('\n').sort(), required.sort());
+    for (const path of required)
+      assert.deepEqual(execFileSync('tar', ['-xOf', archive, path]), readFileSync(join(evidenceDirectory, path)));
+    assert.doesNotMatch(readFileSync(join(publicationDirectory, 'notes.md'), 'utf8'), /flow videos/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

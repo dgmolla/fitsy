@@ -110,6 +110,9 @@ export function validate(report, plan, hash, directory, now = Date.now(), cwd = 
   insist(!plan.categories.includes('billing') || report.storeMode !== 'unconfigured', 'billing requires a configured store');
   insist(/^https:\/\/dev\.fitsy\.org\/?$|^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(report.backend), 'product tests require an identified dev backend');
   insist(Array.isArray(report.flows) && report.flows.length > 0, 'no flows executed');
+  insist(report.videoRequested === undefined || typeof report.videoRequested === 'boolean', 'invalid recording selection');
+  const videoRequested = report.videoRequested ?? report.flows.every(flow => Boolean(flow.video && flow.videoHash));
+  insist(mode !== 'requested-video' || videoRequested, 'requested-video proof requires a complete recording');
   const covered = new Set();
   const names = new Set();
   for (const flow of report.flows) {
@@ -136,8 +139,9 @@ export function validate(report, plan, hash, directory, now = Date.now(), cwd = 
     const captures = capture.toString().trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
     insist(captures.length > 0 && captures.every(item => item.udid === report.simulator && item.preferredScreenCaptureFormat === 'screenshots'),
       `missing screenshots-only XCTest launch proof: ${flow.name}`);
-    if (mode === 'development') insist(!flow.video && !flow.videoHash, `Development run unexpectedly claims video: ${flow.name}`);
+    if (!videoRequested) insist(!flow.video && !flow.videoHash, `Unrequested video claim: ${flow.name}`);
     else {
+      insist(flow.video && flow.videoHash, `missing/changed/empty video: ${flow.name}`);
       let video;
       try { video = artifact(flow.video, directory); }
       catch { throw new Error(`missing/changed/empty video: ${flow.name}`); }

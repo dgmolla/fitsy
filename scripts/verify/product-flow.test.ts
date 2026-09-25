@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync, copyFileSync, chmodSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync, copyFileSync, chmodSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -40,7 +40,7 @@ function fixture() {
   })).join('\n');
   writeFileSync(join(dir, 'trace.json'), trace);
   return {
-    version: 1, evidenceMode: 'final-candidate', startedAt: new Date(Date.now() - 10_000).toISOString(), inputHash: 'current-inputs', nativeSourceHash: 'current-inputs', result: 'pass', finishedAt: new Date().toISOString(),
+    version: 1, evidenceMode: 'final-candidate', videoRequested: true, startedAt: new Date(Date.now() - 10_000).toISOString(), inputHash: 'current-inputs', nativeSourceHash: 'current-inputs', result: 'pass', finishedAt: new Date().toISOString(),
     appHash: 'app', bundleHash: 'bundle', backendRevision: 'dev-revision', backend: 'https://dev.fitsy.org', simulator: 'test-device',
     os: 'iOS 26.4', storeMode: 'test-store', fixture: 'run-owned-user', maestroVersion: '2.3.0', flows,
     exploration: [{ category: 'billing', result: 'pass', expected: 'cancel returns to paywall', observed: 'paywall remains usable', branches: ['primary', 'recovery'], trace: 'trace.json', sha256: sha(trace) }],
@@ -54,9 +54,10 @@ function validate(report: ReturnType<typeof fixture>, mode = 'final-candidate') 
 test('accepts identified baseline and billing outcomes with matching artifacts', () => {
   const result = validate(fixture()); expect(result.status).toBe(0); expect(JSON.parse(result.stdout).status).toBe('pass');
 });
-test('development proof retains assertions but never satisfies final video publication', () => {
+test('development proof retains assertions but never satisfies final publication', () => {
   const report = fixture();
   report.evidenceMode = 'development';
+  report.videoRequested = false;
   for (const flow of report.flows) {
     delete (flow as { video?: string }).video;
     delete (flow as { videoHash?: string }).videoHash;
@@ -65,6 +66,50 @@ test('development proof retains assertions but never satisfies final video publi
   const publication = validate(report);
   expect(publication.status).toBe(1);
   expect(publication.stderr).toContain('Expected final-candidate evidence');
+});
+test('final candidate accepts complete native proof without video when recording was not requested', () => {
+  const report = fixture();
+  report.videoRequested = false;
+  for (const flow of report.flows) {
+    delete (flow as { video?: string }).video;
+    delete (flow as { videoHash?: string }).videoHash;
+  }
+  const result = validate(report);
+  expect(result.status).toBe(0);
+  expect(JSON.parse(result.stdout).status).toBe('pass');
+});
+test('non-video proof does not invoke video tooling', () => {
+  const report = fixture();
+  report.videoRequested = false;
+  for (const flow of report.flows) {
+    delete (flow as { video?: string }).video;
+    delete (flow as { videoHash?: string }).videoHash;
+  }
+  const marker = join(dir, 'video-tool-invoked');
+  for (const tool of ['ffprobe', 'ffmpeg']) {
+    const file = join(dir, tool);
+    writeFileSync(file, `#!/bin/sh\ntouch ${JSON.stringify(marker)}\nexit 1\n`);
+    chmodSync(file, 0o755);
+  }
+  writeFileSync(join(dir, 'report.json'), JSON.stringify(report));
+  const result = evaluate(`gate.validate(JSON.parse((await import('node:fs')).readFileSync(${JSON.stringify(join(dir, 'report.json'))}, 'utf8')), {categories:['billing']}, 'current-inputs', ${JSON.stringify(dir)}, Date.now(), ${JSON.stringify(dir)}, 'current-inputs')`,
+    { ...fixtureEnv(), PATH: `${dir}:${process.env.PATH}` });
+  expect(result.status).toBe(0);
+  expect(existsSync(marker)).toBe(false);
+});
+test('recording selection and video claims must agree on every flow', () => {
+  const report = fixture();
+  delete (report.flows[0] as { video?: string }).video;
+  expect(validate(report).stderr).toContain('missing/changed/empty video');
+  report.videoRequested = false;
+  expect(validate(report).stderr).toContain('Unrequested video claim');
+  report.evidenceMode = 'requested-video';
+  expect(validate(report, 'requested-video').stderr).toContain('requested-video proof requires a complete recording');
+});
+test('legacy final candidate with complete recordings remains valid', () => {
+  const report = fixture();
+  delete (report as { videoRequested?: boolean }).videoRequested;
+  expect(validate(report).status).toBe(0);
 });
 test('explicit requested-video proof remains separate from final candidate publication', () => {
   const report = fixture(); report.evidenceMode = 'requested-video';

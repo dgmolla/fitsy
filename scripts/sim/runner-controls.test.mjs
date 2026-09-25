@@ -76,7 +76,7 @@ test('development flow consumes the owned Maestro command receipt and rejects a 
     const outcome = recordFlowOutcome({ dir, recorded, commands: emitted, videoPath: null, videoReceipt: null,
       flowName: 'welcome', report, reportFile, timeline, commandReceipt: commandFile, failureDetail: () => {} });
     assert.equal(outcome.failureReason, null);
-    assert.match(readFileSync(timeline, 'utf8'), /recorder-skipped/);
+    assert.match(readFileSync(timeline, 'utf8'), /"type":"recorder-skipped","reason":"recording not requested"/);
     const noOp = await runRecordedFlow({ recordVideo: false,
       maestroCommand: process.execPath, maestroArgs: ['-e', 'process.exit(0)'],
       udid: 'fixture', video, recorderLog: join(dir, 'recorder.log'), cwd: dir, env: process.env, dir, timeline,
@@ -266,6 +266,53 @@ test('watchdog stops its child group and leaves an unrelated process running', a
     assert.doesNotThrow(() => process.kill(unrelated.pid, 0));
     assert.match(readFileSync(join(dir, 'events.jsonl'), 'utf8'), /maestro-end/);
   } finally { unrelated.kill('SIGTERM'); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('completed Maestro flow reaps a lingering owned driver without changing its passing result', async () => {
+  const dir = temp(), pidFile = join(dir, 'descendant.pid'), timeline = join(dir, 'events.jsonl');
+  const unrelated = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+  let descendantPid = null;
+  try {
+    const script = "const fs=require('fs'),cp=require('child_process');const child=cp.spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'});fs.writeFileSync(process.argv[1],String(child.pid));setTimeout(()=>process.exit(0),150)";
+    const diagnostics = [];
+    const result = await runOwnedMaestro(process.execPath, ['-e', script, pidFile],
+      { cwd: dir, env: process.env, dir, timeline, flow: '', diagnostic: async reason => diagnostics.push(reason),
+        quietMs: 3000, wallMs: 5000, pollMs: 20, terminationGraceMs: 500 });
+    descendantPid = Number(readFileSync(pidFile, 'utf8'));
+    assert.equal(result.code, 0);
+    assert.equal(result.reason, null);
+    assert.deepEqual(diagnostics, ['owned-descendant-after-command-exit']);
+    await assertProcessStopped(descendantPid);
+    assert.doesNotThrow(() => process.kill(unrelated.pid, 0));
+    const events = readFileSync(timeline, 'utf8').trim().split('\n').map(JSON.parse);
+    assert.ok(events.some(item => item.type === 'maestro-descendant-cleanup' && item.outcome === 'terminated'));
+  } finally {
+    if (descendantPid) { try { process.kill(descendantPid, 'SIGKILL'); } catch { /* fixture cleanup */ } }
+    unrelated.kill('SIGTERM'); rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('completed Maestro flow fails if its owned driver resists bounded cleanup', async () => {
+  const dir = temp(), pidFile = join(dir, 'descendant.pid'), readyFile = join(dir, 'ready'), timeline = join(dir, 'events.jsonl');
+  const unrelated = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+  let descendantPid = null;
+  try {
+    const stubborn = "process.on('SIGTERM',()=>{});require('fs').writeFileSync(process.argv[1],'ready');setInterval(()=>{},1000)";
+    const script = `const fs=require('fs'),cp=require('child_process');const child=cp.spawn(process.execPath,['-e',${JSON.stringify(stubborn)},process.argv[2]],{stdio:'ignore'});fs.writeFileSync(process.argv[1],String(child.pid));const wait=setInterval(()=>{if(fs.existsSync(process.argv[2])){clearInterval(wait);process.exit(0)}},10)`;
+    const result = await runOwnedMaestro(process.execPath, ['-e', script, pidFile, readyFile],
+      { cwd: dir, env: process.env, dir, timeline, flow: '', diagnostic: async () => {},
+        quietMs: 3000, wallMs: 5000, pollMs: 20, terminationGraceMs: 100 });
+    descendantPid = Number(readFileSync(pidFile, 'utf8'));
+    assert.equal(result.code, 0);
+    assert.equal(result.reason, 'owned-descendant-after-command-exit');
+    await assertProcessStopped(descendantPid);
+    assert.doesNotThrow(() => process.kill(unrelated.pid, 0));
+    const events = readFileSync(timeline, 'utf8').trim().split('\n').map(JSON.parse);
+    assert.ok(events.some(item => item.type === 'maestro-descendant-cleanup' && item.outcome === 'SIGTERM-grace-expired'));
+  } finally {
+    if (descendantPid) { try { process.kill(descendantPid, 'SIGKILL'); } catch { /* fixture cleanup */ } }
+    unrelated.kill('SIGTERM'); rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('watchdog reaps a TERM-resistant descendant after Maestro parent exits', async () => {

@@ -83,13 +83,19 @@ syncBuiltinESMExports();
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('development is the default; recording requires an explicit run mode', () => {
+test('development and final candidate omit recording unless explicitly requested', () => {
   assert.deepEqual(runSelection(['device', 'billing']).mode, { name: 'development', recordVideo: false, publishable: false });
   assert.deepEqual(runSelection(['device', 'billing', '--mode=final-candidate']).names, ['billing']);
   assert.equal(runSelection(['device', '--mode=final-candidate']).mode.publishable, true);
+  assert.equal(runSelection(['device', '--mode=final-candidate']).mode.recordVideo, false);
+  assert.deepEqual(runSelection(['device', 'billing', '--mode=final-candidate', '--record-video']).names, ['billing']);
+  assert.equal(runSelection(['device', '--mode=final-candidate', '--record-video']).mode.recordVideo, true);
+  assert.equal(runSelection(['device', '--record-video']).mode.recordVideo, true);
   assert.equal(evidenceMode('requested-video').recordVideo, true);
   assert.equal(evidenceMode('requested-video').publishable, false);
   assert.throws(() => runSelection(['device', '--mode=development', '--mode=final-candidate']), /exactly one/);
+  assert.throws(() => runSelection(['device', '--record-video', '--record-video']), /at most once/);
+  assert.throws(() => runSelection(['device', '--record-videos']), /Unknown run option/);
   assert.throws(() => runSelection(['device', '--mode=unknown']), /Unknown evidence mode/);
 });
 
@@ -99,6 +105,10 @@ test('a final candidate is reused only for the same passing source-bound selecti
   const report = { result: 'pass', evidenceMode: 'final-candidate', simulator: 'device', appHash: 'app', configHash: 'config',
     backendDeployment: 'backend', fixture: 'fixture', flows: [{ name: 'welcome', sourceHash: 'source' }] };
   assert.equal(matchesFinalCandidate(report, selected), true);
+  assert.equal(matchesFinalCandidate(report, { ...selected, recordVideo: true }), false);
+  assert.equal(matchesFinalCandidate({ ...report, videoRequested: true }, { ...selected, recordVideo: true }), true);
+  assert.equal(matchesFinalCandidate({ ...report, flows: [{ ...report.flows[0], video: 'welcome.mp4', videoHash: 'hash' }] },
+    { ...selected, recordVideo: true }), true, 'legacy complete recorded report');
   const mismatches = [
     ['status', { result: 'fail' }],
     ['mode', { evidenceMode: 'development' }],

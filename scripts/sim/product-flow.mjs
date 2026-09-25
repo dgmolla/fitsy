@@ -202,7 +202,7 @@ async function execute(udid, names, mode) {
   if (mode.publishable && !process.env.FITSY_SIM_RESET_KEYCHAIN && existsSync(existingReport)) {
     const previous = read(existingReport);
     if (matchesFinalCandidate(previous, { udid, appHash: r.appHash, configHash: r.configHash,
-      backendDeployment: server.backendDeployment, fixture, flows: flowSources })) {
+      backendDeployment: server.backendDeployment, fixture, flows: flowSources, recordVideo: mode.recordVideo })) {
       try {
         validate(previous, plan, hash, out, Date.now(), root, inputHash(root, true), mode.name);
         await checkBundle(previous);
@@ -241,10 +241,12 @@ async function execute(udid, names, mode) {
     }
     mkdirSync(out, { recursive: true });
     const timeline = join(out, 'runner-timeline.jsonl');
-    event(timeline, { type: 'run-start', simulator: udid, inputHash: hash, buildHash: r.appHash, admission, evidenceMode: mode.name });
+    event(timeline, { type: 'run-start', simulator: udid, inputHash: hash, buildHash: r.appHash, admission, evidenceMode: mode.name,
+      videoRequested: mode.recordVideo });
     const { app, ...buildIdentity } = r;
     const report = { version: 1, ...buildIdentity, ...identity, ...server, inputHash: hash, result: 'running', startedAt: new Date().toISOString(),
-      fixture, keychainReset: false, evidenceMode: mode.name, maestroVersion: run(process.env.MAESTRO_BIN || 'maestro', ['--version']), flows: [], exploration: [] };
+      fixture, keychainReset: false, evidenceMode: mode.name, videoRequested: mode.recordVideo,
+      maestroVersion: run(process.env.MAESTRO_BIN || 'maestro', ['--version']), flows: [], exploration: [] };
     save(join(out, 'report.json'), report);
     if (process.env.FITSY_SIM_RESET_KEYCHAIN) {
       assert(process.env.FITSY_SIM_RESET_KEYCHAIN === udid, 'Keychain reset must explicitly name the selected disposable simulator');
@@ -385,5 +387,5 @@ try {
   else if (command === 'finish') await finish(args[0]);
   else if (command === 'check') await check();
   else if (command === 'stop-metro') await stopMetro();
-  else throw new Error('Usage: node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs build UDID | run UDID [flow names] [--mode=development|final-candidate|requested-video] | finish [walkthrough.json]');
+  else throw new Error('Usage: node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs build UDID | run UDID [flow names] [--mode=development|final-candidate|requested-video] [--record-video] | finish [walkthrough.json]');
 } catch (e) { console.error(e.message); process.exitCode = 1; }

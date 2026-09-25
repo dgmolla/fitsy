@@ -77,8 +77,8 @@ export async function publishProductFlow(prNumber, {
   if (evidenceRequired) {
     const dir = evidenceDirectory, reportFile = resolve(dir, 'report.json');
     const report = JSON.parse(readFileSync(reportFile, 'utf8'));
-    assert(report.evidenceMode === 'final-candidate' && report.flows?.every(flow => flow.video && flow.videoHash),
-      'Final candidate video proof is required; rerun with --mode=final-candidate');
+    assert(report.evidenceMode === 'final-candidate',
+      'Final candidate proof is required; rerun with --mode=final-candidate');
     validateEvidence(report, plan, sourceHash(), dir);
     execute(process.execPath, ['--env-file=apps/mobile/.env.development.local', 'scripts/sim/product-flow.mjs', 'check']);
     const tag = `product-flow-${head}`;
@@ -89,7 +89,8 @@ export async function publishProductFlow(prNumber, {
     assert(archiveSize > 0 && archiveSize < 2 * 1024 ** 3, 'Evidence archive exceeds the GitHub release asset limit of under 2 GiB');
     const archiveDigest = `sha256:${await fileDigest(archive)}`;
     const notes = resolve(publicationDirectory, 'notes.md');
-    writeFileSync(notes, `Local simulator evidence for ${pr.url}\n\nCandidate: ${head}\nSource/test hash: ${report.inputHash}\nFinished: ${report.finishedAt}\nStore: ${report.storeMode}\n\nPrivate draft for repository reviewers; do not publish. Includes Maestro commands, complete flow videos, screenshots and changed-journey observations.\n`);
+    const recorded = report.videoRequested ?? report.flows.every(flow => Boolean(flow.video && flow.videoHash));
+    writeFileSync(notes, `Local simulator evidence for ${pr.url}\n\nCandidate: ${head}\nSource/test hash: ${report.inputHash}\nFinished: ${report.finishedAt}\nStore: ${report.storeMode}\n\nPrivate draft for repository reviewers; do not publish. Includes Maestro commands, screenshots and changed-journey observations${recorded ? ', plus complete untrimmed flow videos' : ''}.\n`);
     let release;
     try { release = JSON.parse(gh(['release', 'view', tag, '--repo', repo, '--json', 'isDraft,url'])); } catch { /* create below */ }
     assert(!release || release.isDraft, 'Evidence release must remain a private draft');
@@ -104,7 +105,7 @@ export async function publishProductFlow(prNumber, {
   }
   const latest = JSON.parse(gh(['pr', 'view', prNumber, '--repo', repo, '--json', 'headRefOid']));
   assert(latest.headRefOid === head, 'PR head changed during publication');
-  status('success', evidenceRequired ? 'Local Maestro and required video evidence verified' : 'Not applicable: no mobile-facing product changes', target);
+  status('success', evidenceRequired ? 'Local Maestro and required product evidence verified' : 'Not applicable: no mobile-facing product changes', target);
   return { status: 'pass', context, head, applicability: evidenceRequired ? 'required' : 'not_applicable', url: target };
   } catch (e) {
   if (head) { try { status('failure', 'Local evidence failed; inspect publisher output'); } catch { /* preserve original failure */ } }
