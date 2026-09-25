@@ -118,6 +118,35 @@ test('selected recording mode reaches the runner and omission fails before eithe
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('product-flow recording bridge follows CLI options in a child process', () => {
+  const dir = temp();
+  const productFlowUrl = new URL('./product-flow.mjs', import.meta.url).href;
+  const evidenceModeUrl = new URL('./evidence-mode.mjs', import.meta.url).href;
+  const script = `
+import { join } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { runSelection } from ${JSON.stringify(evidenceModeUrl)};
+import { runSelectedRecordedFlow } from ${JSON.stringify(productFlowUrl)};
+const dir = ${JSON.stringify(dir)};
+const mode = runSelection(process.argv.slice(1)).mode;
+const video = join(dir, 'video.mp4');
+const recorded = await runSelectedRecordedFlow(mode, {
+  recorderCommand: mode.recordVideo ? process.execPath : '/missing-recorder',
+  recorderArgs: ['-e', "process.on('SIGINT',()=>{require('fs').writeFileSync(process.argv[1],'video');process.exit(0)});setInterval(()=>{},1000)", video],
+  maestroCommand: process.execPath, maestroArgs: ['-e', 'setTimeout(()=>process.exit(0),250)'],
+  udid: 'fixture', video, recorderLog: join(dir, 'recorder.log'), cwd: dir,
+  env: process.env, dir, timeline: join(dir, 'timeline.jsonl'), flow: '', diagnostic: async () => {}
+});
+console.log(JSON.stringify({ code: recorded.result.code, recorder: recorded.recorderResult.state,
+  video: existsSync(video) ? readFileSync(video, 'utf8') : null }));`;
+  try {
+    const invoke = args => JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e', script, 'fixture', '--mode=final-candidate', ...args],
+      { cwd: dir, encoding: 'utf8', timeout: 10000 }).trim());
+    assert.deepEqual(invoke([]), { code: 0, recorder: 'skipped', video: null });
+    assert.deepEqual(invoke(['--record-video']), { code: 0, recorder: 'stopped', video: 'video' });
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('pre-XCTest Maestro exit retains primary failure and records missing capture proof', async () => {
   const dir = temp(), timeline = join(dir, 'timeline.jsonl');
   try {

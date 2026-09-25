@@ -6,6 +6,7 @@ import { createServer } from 'node:net';
 import { createHash } from 'node:crypto';
 import { resolve, relative, join, delimiter } from 'node:path';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import { root, inputHash, changedPaths, impact, digest, validate, baseline, repoEnv } from '../verify/product-flow.mjs';
 import { backendRevision } from './backend-identity.mjs';
 import { buildProfile, bundleDelegate, fixtureLabel, metroRoute } from './build-profile.mjs';
@@ -61,6 +62,9 @@ function claim() {
 const release = () => run('bash', ['scripts/sim/sim', 'release'], { stdio: 'inherit' });
 const metroFile = join(buildDir, 'metro.json');
 const processIdentity = pid => run('ps', ['-p', String(pid), '-o', 'lstart=,command=']);
+export function runSelectedRecordedFlow(mode, options) {
+  return runRecordedFlow({ ...options, recordVideo: mode?.recordVideo });
+}
 async function stopMetro() {
   if (!existsSync(metroFile)) return;
   const m = read(metroFile);
@@ -281,13 +285,13 @@ async function execute(udid, names, mode) {
       writeFileSync(captureReceipt, '');
       const attachmentBefore = snapshotXCTestAttachments(udid);
       let recorded, attachmentCloseout, attachmentError;
-      try { recorded = await runRecordedFlow({
+      try { recorded = await runSelectedRecordedFlow(mode, {
         maestroCommand: process.env.MAESTRO_BIN || 'maestro',
         maestroArgs: ['test', '--udid', udid, join(root, flow.source), '--format', 'junit', '--output', join(dir, 'junit.xml'), '--debug-output', dir, '--test-output-dir', dir],
         udid, video, recorderLog: join(dir, 'recorder.log'), cwd: root,
         env: { ...repoEnv(), PATH: `${join(root, 'scripts/sim')}${delimiter}${process.env.PATH || ''}`,
           FITSY_XCTEST_CAPTURE_RECEIPT: captureReceipt, FITSY_XCTEST_SIM_UDID: udid },
-        dir, timeline, flow: flowBytes, diagnostic, recordVideo: mode.recordVideo });
+        dir, timeline, flow: flowBytes, diagnostic });
       } finally {
         try {
           attachmentCloseout = closeoutXCTestAttachments(attachmentBefore, snapshotXCTestAttachments(udid));
@@ -394,7 +398,7 @@ async function check() {
   assert(report.backendDeployment === backend().backendDeployment, 'Dev deployment changed after tests');
   await checkBundle(report);
 }
-try {
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) try {
   const [command, ...args] = process.argv.slice(2);
   if (['build', 'run'].includes(command) && process.platform === 'darwin') {
     const awake = spawn('/usr/bin/caffeinate', ['-i', '-w', String(process.pid)], { stdio: 'ignore' });
