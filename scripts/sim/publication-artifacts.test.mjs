@@ -5,10 +5,13 @@ import { mkdtempSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync,
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { createPublicationArchive, publishProductFlow } from './publish-product-flow.mjs';
+import { createPublicationArchive, publishProductFlow as publishWithMediaEvidence } from './publish-product-flow.mjs';
 import { artifactPath, baseline, inputHash, root } from '../verify/product-flow.mjs';
+import { validateMediaReceipt, writeMediaReceipt } from '../verify/media-integration.mjs';
 
 const sha = value => createHash('sha256').update(value).digest('hex');
+const publishProductFlow = (number, options) => publishWithMediaEvidence(number,
+  { ...options, validateMediaEvidence: () => ({ required: false }) });
 
 test('the publisher path retains every flow command, screen and complete video with the report and exploration proof', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'fitsy-publication-'));
@@ -93,6 +96,19 @@ test('the publisher path retains every flow command, screen and complete video w
     const options = { execute, evidenceDirectory, publicationDirectory,
       resolvePlan: () => ({ required: true, categories: ['onboarding'] }), sourceHash: () => 'fixture-input',
       validateEvidence: validateIdentity };
+    const mediaReceipt = join(dir, 'media-integration.json');
+    writeMediaReceipt(mediaReceipt, head, 'fixture-input');
+    const withMedia = { ...options, validateMediaEvidence: candidate =>
+      validateMediaReceipt(['scripts/sim/runner-controls.mjs'], candidate, 'fixture-input', mediaReceipt) };
+    assert.equal((await publishWithMediaEvidence('7', withMedia)).mediaIntegration, 'required');
+    const staleMedia = JSON.parse(readFileSync(mediaReceipt, 'utf8'));
+    staleMedia.source_sha = 'stale';
+    writeFileSync(mediaReceipt, JSON.stringify(staleMedia));
+    await assert.rejects(publishWithMediaEvidence('7', withMedia), /Stale or failed local media integration receipt/);
+    assert.deepEqual(states.slice(-2), ['pending', 'failure'], 'changed media receipt gates the canonical publisher');
+    await assert.rejects(publishWithMediaEvidence('7', { ...options,
+      validateMediaEvidence: () => { throw new Error('stale media receipt'); } }), /stale media receipt/);
+    assert.deepEqual(states.slice(-2), ['pending', 'failure'], 'media receipt gates the canonical publisher');
     const validIdentity = { inputHash: report.inputHash, appHash: report.appHash, configHash: report.configHash,
       result: report.result, evidenceMode: report.evidenceMode };
     for (const [field, change, expected] of [

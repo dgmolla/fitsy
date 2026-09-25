@@ -35,6 +35,13 @@ The registry determines which checks apply and whether a check is blocking or sh
 Removing obsolete structural exceptions belongs to the changed product domain only when every removed entry names a file in the same diff.
 Allowlist additions, unrelated removals, deletion of the allowlist and unreadable history retain infrastructure ownership.
 
+Changes under `scripts/sim/` or the product-flow verification controls run the blocking local `media-integration` lane in `npm run verify`.
+Install `ffprobe` and `ffmpeg` locally before that run.
+The lane runs real decoder, XCTest attachment and opt-in recorder cases, then records `.evidence/verify/media-integration.json` with the candidate SHA and source/test hash.
+Hosted L2 runs deterministic tests without media tools.
+After committing, rerun `node scripts/verify/run.mjs --only=media-integration --runs=local` so the receipt names the PR head.
+The `product-flow/local` publisher checks that receipt before setting its exact-head status, including when mobile product evidence is not applicable.
+
 **Local product-flow gate.** Local iPhone E2E is blocking for mobile-facing changes. CI runs static checks, unit tests and builds; its optional simulator workflow remains experimental. `npm run verify` and pre-push require fresh `.evidence/product-flow/report.json` when impact selection applies. Missing tools, skipped/failed assertions, missing coverage and stale evidence fail; unrelated changes get explicit `not_applicable`.
 
 Use an owned worktree, `npm run dev:env`, and an explicit simulator UDID. Keep public configuration in the ignored mobile environment file. The builder generates an embedded Release app, disables downloaded OTA updates, and records source/native/JS/configuration identities. A keyless build proves navigation only and cannot cover billing. Never publish credentials or personal data in evidence.

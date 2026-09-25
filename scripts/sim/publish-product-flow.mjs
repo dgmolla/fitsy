@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { root, inputHash, impact, changedPaths, validate, repoEnv } from '../verify/product-flow.mjs';
+import { validateMediaReceipt } from '../verify/media-integration.mjs';
 import { publicationArtifacts } from './publication-artifacts.mjs';
 const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { cwd: root, encoding: 'utf8', env: repoEnv(), maxBuffer: 16 * 1024 * 1024, ...opts })?.trim() || '';
 const assert = (ok, why) => { if (!ok) throw new Error(why); };
@@ -54,6 +55,7 @@ export async function publishProductFlow(prNumber, {
   resolvePlan = () => impact(changedPaths('origin/main')),
   sourceHash = inputHash,
   validateEvidence = validate,
+  validateMediaEvidence = candidate => validateMediaReceipt(changedPaths('origin/main'), candidate, sourceHash()),
 } = {}) {
   const gh = args => execute('gh', args);
   let head;
@@ -71,6 +73,7 @@ export async function publishProductFlow(prNumber, {
   assert(!execute('git', ['status', '--porcelain']), 'Commit all candidate inputs before publishing evidence');
   execute('git', ['fetch', 'origin', 'main']);
   execute('git', ['merge-base', '--is-ancestor', 'origin/main', 'HEAD']);
+  const media = validateMediaEvidence(candidate);
   const plan = resolvePlan();
   const evidenceRequired = plan.required || process.argv.includes('--include-baseline');
   let target = pr.url;
@@ -105,8 +108,11 @@ export async function publishProductFlow(prNumber, {
   }
   const latest = JSON.parse(gh(['pr', 'view', prNumber, '--repo', repo, '--json', 'headRefOid']));
   assert(latest.headRefOid === head, 'PR head changed during publication');
-  status('success', evidenceRequired ? 'Local Maestro and required product evidence verified' : 'Not applicable: no mobile-facing product changes', target);
-  return { status: 'pass', context, head, applicability: evidenceRequired ? 'required' : 'not_applicable', url: target };
+  status('success', evidenceRequired ? 'Local Maestro and required product evidence verified' :
+    media?.required ? 'Local media integration verified; product flow not applicable' :
+      'Not applicable: no mobile-facing product changes', target);
+  return { status: 'pass', context, head, applicability: evidenceRequired ? 'required' : 'not_applicable',
+    mediaIntegration: media?.required ? 'required' : 'not_applicable', url: target };
   } catch (e) {
   if (head) { try { status('failure', 'Local evidence failed; inspect publisher output'); } catch { /* preserve original failure */ } }
   throw e;

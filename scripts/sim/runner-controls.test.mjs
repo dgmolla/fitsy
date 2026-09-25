@@ -12,6 +12,9 @@ import { validate } from '../verify/product-flow.mjs';
 
 const temp = () => mkdtempSync(join(tmpdir(), 'fitsy-runner-'));
 const sha = value => createHash('sha256').update(value).digest('hex');
+// The required local media lane registers these cases; ordinary L2 has no
+// decoder dependency. Selection is explicit and independent of tool presence.
+const mediaTest = process.env.FITSY_MEDIA_INTEGRATION === '1' ? test : () => {};
 test('malformed previous report is a reuse miss without changing its raw bytes', async () => {
   const dir = temp(), reportFile = join(dir, 'report.json');
   const malformed = '{"result":"pass",';
@@ -165,7 +168,7 @@ console.log(JSON.stringify({ code: recorded.result.code, recorder: recorded.reco
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('product-flow run CLI reaches a successful fixture flow with the selected recorder choice', () => {
+mediaTest('product-flow run CLI reaches a successful fixture flow with the selected recorder choice', () => {
   const dir = temp();
   const entry = new URL('./product-flow.mjs', import.meta.url).pathname;
   try {
@@ -1177,7 +1180,7 @@ test('empty commands and abnormal recorder exit fail before walkthrough', () => 
   assert.equal(flowFailureReason(result, command, { state: 'stopped', code: 0, bytes: 5 }), null);
 });
 
-test('successful Maestro with undecodable recorder output records failure before walkthrough', () => {
+mediaTest('successful Maestro with undecodable recorder output records failure before walkthrough', () => {
   const dir = temp(), reportFile = join(dir, 'report.json'), timeline = join(dir, 'runner-timeline.jsonl');
   try {
     const video = join(dir, 'flow-untrimmed.mp4');
@@ -1266,7 +1269,7 @@ test('recording failures match only the same observed cause', () => {
   assert.notEqual(withCommandFailure, differentCommand);
 });
 
-test('production failure history distinguishes recording, command, flow, and receipt boundaries', () => {
+mediaTest('production failure history distinguishes recording, command, flow, and receipt boundaries', () => {
   const root = temp();
   try {
     let count = 0;
@@ -1337,7 +1340,7 @@ test('production failure history distinguishes recording, command, flow, and rec
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test('production outcomes preserve recorder precedence across command receipt and Maestro states', () => {
+mediaTest('production outcomes preserve recorder precedence across command receipt and Maestro states', () => {
   const root = temp();
   try {
     const config = { command: { applyConfigurationCommand: { config: { appId: 'com.fitsy.mobile', name: 'welcome' } } },

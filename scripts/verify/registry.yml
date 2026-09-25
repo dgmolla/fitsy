@@ -98,7 +98,14 @@ checks:
     layer: 2
     blocking: true
     runs: [local, ci]
-    why: api unit tests with coverage gate + scripts tests. --passWithNoTests removed 2026-09-07 (T5).
+    why: api coverage, deterministic scripts tests and mobile tests without hosted media dependencies.
+
+  - name: media-integration
+    script: media-integration.sh
+    layer: 2
+    blocking: true
+    runs: [local]
+    why: Real decoder, attachment and opt-in recording integration tests for changed simulator or product-flow controls; missing local tools fail.
 
   - name: build
     script: build.sh

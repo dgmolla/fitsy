@@ -151,12 +151,6 @@ jobs:
         run: npx prisma migrate deploy
       - name: Seed fixture data (deterministic; no auth users in CI)
         run: npx tsx prisma/seed.ts --data-only
-      - name: Install media tools for native runner tests
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq ffmpeg
-          ffprobe -version >/dev/null
-          ffmpeg -version >/dev/null
       - name: Run L2 checks
         run: node scripts/verify/run.mjs --layer=2 --runs=ci --scope=${{ github.event_name == 'pull_request' && 'changed' || 'all' }}
 

@@ -20,6 +20,8 @@ const malformedLeadingFree = Buffer.concat([Buffer.from([0, 0, 0, 8]), Buffer.fr
   Buffer.from([0, 0, 0, 24]), Buffer.from('ftyp')]);
 const unknown = Buffer.concat([Buffer.from([0, 0, 0, 12]), Buffer.from('ftyp'), Buffer.from('zzzz')]);
 const wideQuicktime = Buffer.concat([Buffer.from([0, 0, 0, 8]), Buffer.from('wide'), Buffer.from([0, 0, 0, 16]), Buffer.from('mdat'), Buffer.alloc(8)]);
+// Real decoder cases register only in the required local media lane.
+const mediaTest = process.env.FITSY_MEDIA_INTEGRATION === '1' ? test : () => {};
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'fitsy-xctest-'));
   const attachments = join(root, udid, 'data/Containers/Data/InternalDaemon/owned/Attachments');
@@ -27,7 +29,7 @@ function fixture() {
   return { root, attachments };
 }
 
-test('phase closeout retires only newly generated extensionless QuickTime after idle proof', () => {
+mediaTest('phase closeout retires only newly generated extensionless QuickTime after idle proof', () => {
   const { root, attachments } = fixture();
   try {
     const oldVideo = join(attachments, 'old-uuid');
@@ -51,7 +53,7 @@ test('phase closeout retires only newly generated extensionless QuickTime after 
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test('active attachment writer blocks exact-file video retirement', () => {
+mediaTest('active attachment writer blocks exact-file video retirement', () => {
   const { root, attachments } = fixture();
   try {
     const before = snapshotXCTestAttachments(udid, { deviceRoot: root });
@@ -63,7 +65,7 @@ test('active attachment writer blocks exact-file video retirement', () => {
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test('closeout preserves HEIC and unknown attachments while retiring supported movies', () => {
+mediaTest('closeout preserves HEIC and unknown attachments while retiring supported movies', () => {
   const { root, attachments } = fixture();
   try {
     const before = snapshotXCTestAttachments(udid, { deviceRoot: root });
@@ -85,7 +87,7 @@ test('closeout preserves HEIC and unknown attachments while retiring supported m
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test('actual closeout classifies movie structure and preserves image, audio and ambiguous files', () => {
+mediaTest('actual closeout classifies movie structure and preserves image, audio and ambiguous files', () => {
   const { root, attachments } = fixture();
   try {
     const before = snapshotXCTestAttachments(udid, { deviceRoot: root });
@@ -158,7 +160,7 @@ test('unprobeable wide-first QuickTime candidate is preserved', () => {
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test('actual closeout preserves audio-only MP4 even with a video-compatible container brand', () => {
+mediaTest('actual closeout preserves audio-only MP4 even with a video-compatible container brand', () => {
   const { root, attachments } = fixture();
   try {
     const before = snapshotXCTestAttachments(udid, { deviceRoot: root });
@@ -181,7 +183,7 @@ function fakeLsof(root, body) {
   return bin;
 }
 
-test('actual closeout rejects lsof warning while an owned child holds the video open', async () => {
+mediaTest('actual closeout rejects lsof warning while an owned child holds the video open', async () => {
   const { root, attachments } = fixture();
   const priorPath = process.env.PATH;
   let child;
@@ -206,7 +208,7 @@ test('actual closeout rejects lsof warning while an owned child holds the video 
   }
 });
 
-test('actual closeout retires extensionless video after clean no-writer lsof result', () => {
+mediaTest('actual closeout retires extensionless video after clean no-writer lsof result', () => {
   const { root, attachments } = fixture();
   const priorPath = process.env.PATH;
   try {
@@ -225,7 +227,7 @@ test('actual closeout retires extensionless video after clean no-writer lsof res
   }
 });
 
-test('no-video phase records zero generated videos without deleting historical attachments', () => {
+mediaTest('no-video phase records zero generated videos without deleting historical attachments', () => {
   const { root, attachments } = fixture();
   try {
     const oldVideo = join(attachments, 'old-uuid');
