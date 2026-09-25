@@ -8,6 +8,7 @@ Use `--mode=final-candidate` once the PR candidate is stable for publication evi
 Add `--record-video` when a complete video is specifically requested; final candidate runs otherwise retain command receipts and screenshots without starting the explicit recorder.
 The flow helper requires an explicit boolean recording choice and fails before starting children if the CLI omits it.
 The product-flow CLI passes its selected mode through `runSelectedRecordedFlow`, which supplies that boolean to the helper; a child-process fixture exercises both CLI choices through this production bridge.
+An entrypoint subprocess also checks that `run --record-video` enters its recording-tool preflight before any native work, while an ordinary `run` does not.
 Repeating that run reuses a passing, unexpired report only when the current source, app, backend, simulator, fixture and selected flow receipts still validate.
 Use `--mode=requested-video` only for an explicit video request; that report is diagnostic and cannot pass the final candidate publication gate.
 Install `ffprobe` and `ffmpeg` before a video run; the runner checks for them before Maestro and rejects a zero-duration video or one whose first video frame cannot decode, with a failure receipt after recording.

@@ -191,6 +191,10 @@ async function build(udid, testStore) {
   } finally { release(); }
 }
 async function execute(udid, names, mode) {
+  if (mode.recordVideo) {
+    try { run('ffprobe', ['-version'], { timeout: 5000 }); run('ffmpeg', ['-version'], { timeout: 5000 }); }
+    catch { throw new Error('ffprobe and ffmpeg are required to validate recorded product-flow video before running Maestro'); }
+  }
   const r = receipt(), identity = device(udid), server = backend();
   const fixture = fixtureLabel(process.env.FITSY_FIXTURE, process.env.FITSY_SIM_RESET_KEYCHAIN === udid);
   const hash = inputHash(), plan = impact(changedPaths(process.env.FITSY_DIFF_BASE));
@@ -218,10 +222,6 @@ async function execute(udid, names, mode) {
   }
   mkdirSync(resumeDir, { recursive: true });
   const admission = admitDisk(root, 'Native run');
-  if (mode.recordVideo) {
-    try { run('ffprobe', ['-version'], { timeout: 5000 }); run('ffmpeg', ['-version'], { timeout: 5000 }); }
-    catch { throw new Error('ffprobe and ffmpeg are required to validate recorded product-flow video before running Maestro'); }
-  }
   const history = existsSync(failuresFile) ? read(failuresFile) : [];
   const previous = history.slice(-2);
   if (needsDiagnosis(history)) {

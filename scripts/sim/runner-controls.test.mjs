@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -137,6 +137,7 @@ const recorded = await runSelectedRecordedFlow(mode, {
   udid: 'fixture', video, recorderLog: join(dir, 'recorder.log'), cwd: dir,
   env: process.env, dir, timeline: join(dir, 'timeline.jsonl'), flow: '', diagnostic: async () => {}
 });
+
 console.log(JSON.stringify({ code: recorded.result.code, recorder: recorded.recorderResult.state,
   video: existsSync(video) ? readFileSync(video, 'utf8') : null }));`;
   try {
@@ -144,6 +145,21 @@ console.log(JSON.stringify({ code: recorded.result.code, recorder: recorded.reco
       { cwd: dir, encoding: 'utf8', timeout: 10000 }).trim());
     assert.deepEqual(invoke([]), { code: 0, recorder: 'skipped', video: null });
     assert.deepEqual(invoke(['--record-video']), { code: 0, recorder: 'stopped', video: 'video' });
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('product-flow run entrypoint applies requested-video preflight before native work', () => {
+  const dir = temp();
+  const entry = new URL('./product-flow.mjs', import.meta.url).pathname;
+  try {
+    const invoke = options => spawnSync(process.execPath, [entry, 'run', 'invalid-udid', '--mode=final-candidate', ...options],
+      { cwd: dir, env: { ...process.env, PATH: dir }, encoding: 'utf8', timeout: 10000 });
+    const ordinary = invoke([]);
+    assert.equal(ordinary.status, 1);
+    assert.doesNotMatch(ordinary.stderr, /ffprobe and ffmpeg are required/);
+    const requested = invoke(['--record-video']);
+    assert.equal(requested.status, 1);
+    assert.match(requested.stderr, /ffprobe and ffmpeg are required to validate recorded product-flow video before running Maestro/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
