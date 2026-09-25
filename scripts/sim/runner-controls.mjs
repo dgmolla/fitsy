@@ -488,6 +488,8 @@ export async function runOwnedMaestro(command, args, { cwd, env, dir, timeline, 
       await capture(reason, latestMaestroLog(dir));
     }
     if (!reason) {
+      // The polling loop cannot reach this branch until commandResult exists.
+      // Keep that ordering: closing the keeper first could discard a delayed exit receipt.
       // The keeper's child exit event can precede OS reaping by a few ticks.
       // A completed Maestro command may leave its owned driver child behind.
       // Capture that state, bound cleanup, and preserve the command outcome if TERM reaps it.

@@ -519,6 +519,46 @@ test('Maestro watchdog keeps its real keeper open until a delayed exit receipt a
   }
 });
 
+test('successful Maestro keeps its keeper open until a delayed exit receipt arrives', async () => {
+  const dir = temp();
+  let releaseReceipt, receiptHeld, closeSent;
+  const held = new Promise(resolve => { receiptHeld = resolve; });
+  const closed = new Promise(resolve => { closeSent = resolve; });
+  const delayedReceiptSpawn = (command, args, options) => {
+    const keeper = spawn(command, args, options), emit = keeper.emit.bind(keeper), send = keeper.send.bind(keeper);
+    keeper.emit = function (name, ...values) {
+      if (name === 'message' && values[0]?.type === 'command-exit') {
+        releaseReceipt = () => emit(name, ...values);
+        receiptHeld();
+        return true;
+      }
+      return emit(name, ...values);
+    };
+    keeper.send = (message, ...values) => {
+      if (message.type === 'close') closeSent();
+      return send(message, ...values);
+    };
+    return keeper;
+  };
+  let running;
+  try {
+    running = runOwnedMaestro(process.execPath, ['-e', 'process.exit(0)'],
+      { cwd: dir, env: process.env, dir, timeline: join(dir, 'events.jsonl'), flow: '', diagnostic: async () => {},
+        quietMs: 2000, wallMs: 5000, pollMs: 20, terminationGraceMs: 500, spawnImpl: delayedReceiptSpawn });
+    await held;
+    const earlyClose = await Promise.race([closed.then(() => true), new Promise(resolve => setTimeout(() => resolve(false), 150))]);
+    assert.equal(earlyClose, false, 'successful command must retain IPC until the command receipt is delivered');
+    releaseReceipt();
+    const result = await running;
+    assert.equal(result.reason, null);
+    assert.equal(result.code, 0);
+  } finally {
+    releaseReceipt?.();
+    await running?.catch(() => {});
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 for (const recorderExitCode of [0, 1]) test(`early recorder exit ${recorderExitCode} with partial video fails its still-running flow`, async () => {
   const dir = temp(), video = join(dir, 'video.mp4'), timeline = join(dir, 'timeline.jsonl');
   const sentinel = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
