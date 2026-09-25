@@ -32,8 +32,11 @@ function fixture() {
     writeFileSync(join(dir, `${name}.mp4`), video);
     const capture = JSON.stringify({ udid: 'test-device', preferredScreenCaptureFormat: 'screenshots' }) + '\n';
     writeFileSync(join(dir, `${name}-capture.jsonl`), capture);
+    const closeout = JSON.stringify({ udid: 'test-device', generated: { videos: 0 }, deleted: [] }) + '\n';
+    writeFileSync(join(dir, `${name}-closeout.json`), closeout);
     return { name, source, sourceHash: sha(yaml), commands: `${name}.json`, sha256: sha(data), screenshot: `${name}.png`, screenshotHash: sha(png),
-      captureReceipt: `${name}-capture.jsonl`, captureReceiptHash: sha(capture), video: `${name}.mp4`, videoHash: sha(video) };
+      captureReceipt: `${name}-capture.jsonl`, captureReceiptHash: sha(capture),
+      attachmentCloseout: `${name}-closeout.json`, attachmentCloseoutHash: sha(closeout), video: `${name}.mp4`, videoHash: sha(video) };
   });
   const trace = ['mobile_click_on_screen_at_coordinates', 'mobile_list_elements_on_screen'].map(name => JSON.stringify({
     at: new Date().toISOString(), command: { name }, result: { content: [{type: 'text', text: 'Paywall visible'}] },
@@ -124,6 +127,17 @@ test('capture receipt must prove screenshots-only XCTest for the selected simula
   const result = validate(report);
   expect(result.status).toBe(1);
   expect(result.stderr).toContain('missing screenshots-only XCTest launch proof');
+});
+test('final candidate requires an unchanged zero-video XCTest closeout for every flow', () => {
+  const missing = fixture();
+  delete (missing.flows[0] as { attachmentCloseout?: string }).attachmentCloseout;
+  delete (missing.flows[0] as { attachmentCloseoutHash?: string }).attachmentCloseoutHash;
+  expect(validate(missing).stderr).toContain('missing XCTest attachment closeout');
+  const changed = fixture();
+  writeFileSync(join(dir, changed.flows[0]!.attachmentCloseout), JSON.stringify({ udid: 'test-device', generated: { videos: 1 }, deleted: [] }));
+  expect(validate(changed).stderr).toContain('changed XCTest attachment closeout');
+  changed.flows[0]!.attachmentCloseoutHash = sha(readFileSync(join(dir, changed.flows[0]!.attachmentCloseout)));
+  expect(validate(changed).stderr).toContain('unexpected XCTest recording');
 });
 test.each(['failed', 'skipped', 'empty', 'one'])("rejects %s required assertions even if the summary says pass", kind => {
   const report = fixture(), flow = report.flows[2]!;

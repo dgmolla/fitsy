@@ -2,13 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { appendRecordedFlowFailure, applyCapturePolicy, archiveFailureEvidence, completeMaestroRun, flowFailureReason, recordFlowOutcome, recordedFlowFailureKey, recordRunFailure, requireMetro, runOwnedMaestro, runRecordedFlow, saveRecordedFlowReceipts, startOwnedRecorder, stopOwnedRecorder, summarizeCommands, summarizeFlowTiming, nearestFailure, matchingFailureKey, needsDiagnosis } from './runner-controls.mjs';
 import { runSelection } from './evidence-mode.mjs';
+import { validate } from '../verify/product-flow.mjs';
 
 const temp = () => mkdtempSync(join(tmpdir(), 'fitsy-runner-'));
+const sha = value => createHash('sha256').update(value).digest('hex');
 test('final timeline failure leaves a failed report and retains the triggering error', () => {
   const dir = temp(), reportFile = join(dir, 'report.json');
   const report = { result: 'running', flows: [{ name: 'welcome' }] };
@@ -155,25 +158,59 @@ test('product-flow run CLI reaches a successful fixture flow with the selected r
     for (const requested of [false, true]) {
       const flowDir = join(dir, requested ? 'requested' : 'default');
       mkdirSync(flowDir);
+      const flowName = requested ? 'welcome' : 'cold-start-welcome';
       const video = join(flowDir, 'video.mp4');
       const fixtureFile = join(flowDir, 'fixture.json');
       const commandsFile = join(flowDir, 'commands-test.json');
       const captureReceipt = join(flowDir, 'capture.jsonl');
       const reportFile = join(flowDir, 'report.json');
       const commands = [
-        { command: { applyConfigurationCommand: { config: { appId: 'com.fitsy.mobile', name: 'welcome' } } }, metadata: { status: 'COMPLETED' } },
+        { command: { applyConfigurationCommand: { config: { appId: 'com.fitsy.mobile', name: flowName } } }, metadata: { status: 'COMPLETED' } },
         { command: { assertConditionCommand: { condition: { visible: { textRegex: 'Ready' } } } }, metadata: { status: 'COMPLETED' } },
       ];
       const maestroScript = `const fs=require('fs');fs.writeFileSync(process.argv[1],${JSON.stringify(JSON.stringify(commands))});fs.writeFileSync(process.argv[2],${JSON.stringify(JSON.stringify({ udid: 'fixture', preferredScreenCaptureFormat: 'screenshots' }) + '\n')});setTimeout(()=>process.exit(0),750)`;
       const recorderScript = "process.on('SIGINT',()=>{const r=require('child_process').spawnSync('ffmpeg',['-hide_banner','-loglevel','error','-f','lavfi','-i','color=c=black:s=64x64:r=5','-frames:v','3','-pix_fmt','yuv420p','-y',process.argv[1]],{stdio:'ignore'});process.exit(r.status||0)});setInterval(()=>{},1000)";
-      writeFileSync(fixtureFile, JSON.stringify({ flowName: 'welcome', commandsFile, captureReceipt, reportFile, runner: {
+      const snapshot = { udid: 'fixture', directories: [flowDir], entries: [], files: 0, bytes: 0,
+        videos: 0, videoBytes: 0, freeBytes: 0 };
+      const setup = { flowName, commandsFile, captureReceipt, reportFile,
+        attachmentSnapshots: { before: snapshot, after: snapshot }, runner: {
         recorderCommand: process.execPath,
         recorderArgs: ['-e', recorderScript, video],
         maestroCommand: process.execPath,
         maestroArgs: ['-e', maestroScript, commandsFile, captureReceipt],
         udid: 'fixture', video, recorderLog: join(flowDir, 'recorder.log'),
         cwd: flowDir, dir: flowDir, timeline: join(flowDir, 'timeline.jsonl'), flow: '',
-      } }));
+      } };
+      if (!requested) {
+        const sourceDir = join(dir, 'apps/mobile/e2e/flows');
+        mkdirSync(sourceDir, { recursive: true });
+        const source = name => {
+          const path = `apps/mobile/e2e/flows/${name}.yaml`;
+          const body = `appId: com.fitsy.mobile\nname: ${name}\n---\n- assertVisible: Ready\n`;
+          writeFileSync(join(dir, path), body);
+          return { source: path, sourceHash: sha(body) };
+        };
+        const png = Buffer.from('89504e470d0a1a0a00000000', 'hex');
+        writeFileSync(join(flowDir, 'outcome.png'), png);
+        const secondCommands = JSON.stringify([
+          { command: { applyConfigurationCommand: { config: { appId: 'com.fitsy.mobile', name: 'signin-options' } } }, metadata: { status: 'COMPLETED' } },
+          { command: { assertConditionCommand: { condition: { visible: { textRegex: 'Ready' } } } }, metadata: { status: 'COMPLETED' } },
+        ]);
+        writeFileSync(join(flowDir, 'signin-commands.json'), secondCommands);
+        const secondCapture = JSON.stringify({ udid: 'fixture', preferredScreenCaptureFormat: 'screenshots' }) + '\n';
+        writeFileSync(join(flowDir, 'signin-capture.jsonl'), secondCapture);
+        const secondCloseout = JSON.stringify({ udid: 'fixture', generated: { videos: 0 }, deleted: [] }) + '\n';
+        writeFileSync(join(flowDir, 'signin-closeout.json'), secondCloseout);
+        setup.flowTemplate = { ...source(flowName), screenshot: 'outcome.png', screenshotHash: sha(png) };
+        setup.reportTemplate = { version: 1, startedAt: new Date(Date.now() - 1000).toISOString(),
+          finishedAt: new Date().toISOString(), inputHash: 'fixture-inputs', nativeSourceHash: 'fixture-inputs',
+          appHash: 'app', bundleHash: 'bundle', backendRevision: 'dev', backend: 'https://dev.fitsy.org',
+          simulator: 'fixture', os: 'iOS fixture', storeMode: 'test-store', fixture: 'run-owned-user', maestroVersion: '2.3.0',
+          flows: [{ name: 'signin-options', ...source('signin-options'), commands: 'signin-commands.json', sha256: sha(secondCommands),
+            screenshot: 'outcome.png', screenshotHash: sha(png), captureReceipt: 'signin-capture.jsonl', captureReceiptHash: sha(secondCapture),
+            attachmentCloseout: 'signin-closeout.json', attachmentCloseoutHash: sha(secondCloseout) }], exploration: [] };
+      }
+      writeFileSync(fixtureFile, JSON.stringify(setup));
       const invoke = () => spawnSync(process.execPath,
         [entry, 'run', 'fixture', '--mode=final-candidate', ...(requested ? ['--record-video'] : [])],
         { cwd: dir, env: { ...process.env, NODE_ENV: 'test', FITSY_PRODUCT_FLOW_TEST_FIXTURE: fixtureFile },
@@ -185,10 +222,12 @@ test('product-flow run CLI reaches a successful fixture flow with the selected r
       const report = JSON.parse(readFileSync(reportFile, 'utf8'));
       assert.equal(report.result, 'pass');
       assert.equal(report.videoRequested, requested);
-      assert.deepEqual(report.flows.map(flow => flow.name), ['welcome']);
+      assert.deepEqual(report.flows.map(flow => flow.name), requested ? ['welcome'] : ['signin-options', 'cold-start-welcome']);
       assert.equal(existsSync(join(flowDir, 'timing-summary.json')), true);
       assert.equal(existsSync(video), requested);
       assert.equal(Boolean(report.flows[0].video), requested);
+      assert.equal(Boolean(report.flows.at(-1).attachmentCloseout), true);
+      if (!requested) assert.equal(validate(report, { categories: [] }, 'fixture-inputs', flowDir, Date.now(), dir, 'fixture-inputs').status, 'pass');
       if (!requested) {
         const fixture = JSON.parse(readFileSync(fixtureFile, 'utf8'));
         fixture.runner.maestroArgs = ['-e', 'setTimeout(()=>process.exit(0),100)'];

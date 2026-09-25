@@ -7,6 +7,7 @@ import { closeoutXCTestAttachments, snapshotXCTestAttachments } from './xctest-a
 
 const udid = '9E661282-FCE3-4C70-A503-EB2FFA0AD02B';
 const quicktime = Buffer.concat([Buffer.from([0, 0, 0, 12]), Buffer.from('ftyp'), Buffer.from('qt  ')]);
+const wideQuicktime = Buffer.concat([Buffer.from([0, 0, 0, 8]), Buffer.from('wide'), Buffer.from([0, 0, 0, 16]), Buffer.from('mdat'), Buffer.alloc(8)]);
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'fitsy-xctest-'));
   const attachments = join(root, udid, 'data/Containers/Data/InternalDaemon/owned/Attachments');
@@ -47,6 +48,23 @@ test('active attachment writer blocks exact-file video retirement', () => {
     const after = snapshotXCTestAttachments(udid, { deviceRoot: root });
     assert.throws(() => closeoutXCTestAttachments(before, after, { idleCheck: () => { throw Error('writer active'); } }), /writer active/);
     assert.equal(readFileSync(newVideo).toString('hex'), quicktime.toString('hex'));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('wide-first QuickTime attachment requires idle proof before retirement', () => {
+  const { root, attachments } = fixture();
+  try {
+    const before = snapshotXCTestAttachments(udid, { deviceRoot: root });
+    const video = join(attachments, 'wide-first-uuid');
+    writeFileSync(video, wideQuicktime);
+    const after = snapshotXCTestAttachments(udid, { deviceRoot: root });
+    assert.equal(after.videos, 1);
+    assert.throws(() => closeoutXCTestAttachments(before, after, { idleCheck: () => { throw Error('writer active'); } }), /writer active/);
+    assert.equal(readFileSync(video).toString('hex'), wideQuicktime.toString('hex'));
+    const result = closeoutXCTestAttachments(before, after, { idleCheck: () => {} });
+    assert.equal(result.generated.videos, 1);
+    assert.equal(result.deleted.length, 1);
+    assert.throws(() => readFileSync(video), { code: 'ENOENT' });
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 

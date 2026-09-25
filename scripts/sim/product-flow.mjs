@@ -4,7 +4,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, rmSync, existsSync, openSync, closeSync, renameSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { createHash } from 'node:crypto';
-import { resolve, relative, join, delimiter } from 'node:path';
+import { resolve, relative, join, dirname, delimiter } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { root, inputHash, changedPaths, impact, digest, validate, baseline, repoEnv } from '../verify/product-flow.mjs';
@@ -68,6 +68,23 @@ export function runSelectedRecordedFlow(mode, options) {
 function verifyRecordedFlow({ recorded, captureVerified, captureError = null, ...outcome }) {
   applyCapturePolicy(recorded.result, { verified: captureVerified, error: captureError });
   return recordFlowOutcome({ recorded, ...outcome });
+}
+function writeAttachmentCloseout({ before, after, udid, dir, timeline, flow }) {
+  const file = join(dir, 'xctest-attachment-closeout.json');
+  try {
+    const receipt = closeoutXCTestAttachments(before, typeof after === 'function' ? after() : after);
+    save(file, receipt);
+    event(timeline, { type: 'xctest-attachment-closeout', flow,
+      generatedVideos: receipt.generated.videos, deletedVideos: receipt.deleted.length,
+      remainingHistoricalVideos: receipt.remainingVideos.length,
+      outcome: receipt.generated.videos ? 'unexpected-video-retired' : 'no-new-video' });
+    return { receipt, file, error: null };
+  } catch (error) {
+    save(file, { at: new Date().toISOString(), udid, error: error.message,
+      action: 'Inspect exact attachment ownership and writer state before another native phase' });
+    event(timeline, { type: 'xctest-attachment-closeout', flow, outcome: 'fail', error: error.message });
+    return { receipt: null, file, error: error.message };
+  }
 }
 async function stopMetro() {
   if (!existsSync(metroFile)) return;
@@ -199,19 +216,31 @@ async function execute(udid, names, mode) {
   if (process.env.NODE_ENV === 'test' && process.env.FITSY_PRODUCT_FLOW_TEST_FIXTURE) {
     const fixture = read(process.env.FITSY_PRODUCT_FLOW_TEST_FIXTURE);
     const { runner, commandsFile, captureReceipt, reportFile, flowName } = fixture;
-    const report = { result: 'running', evidenceMode: mode.name, videoRequested: mode.recordVideo, flows: [] };
+    const report = { ...fixture.reportTemplate, result: 'running', evidenceMode: mode.name,
+      videoRequested: mode.recordVideo, flows: fixture.reportTemplate?.flows || [] };
     save(reportFile, report);
-    const recorded = await runFlow({ ...runner, env: process.env, diagnostic: async () => {} });
+    let recorded, attachment;
+    try { recorded = await runFlow({ ...runner, env: process.env, diagnostic: async () => {} }); }
+    finally {
+      const snapshots = fixture.attachmentSnapshots;
+      attachment = writeAttachmentCloseout({ before: snapshots.before, after: snapshots.after,
+        udid: runner.udid, dir: runner.dir, timeline: runner.timeline, flow: flowName });
+    }
     const commands = existsSync(commandsFile) ? read(commandsFile) : null;
     const captureEvents = existsSync(captureReceipt) ? readFileSync(captureReceipt, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse) : [];
-    const outcome = verifyRecordedFlow({ recorded, captureVerified: captureEvents.length > 0 &&
+    const captureError = attachment.error || (attachment.receipt.generated.videos ? 'XCTest created unexpected video attachment' : null);
+    const outcome = verifyRecordedFlow({ recorded, captureError, captureVerified: !captureError && captureEvents.length > 0 &&
       captureEvents.every(item => item.udid === runner.udid && item.preferredScreenCaptureFormat === 'screenshots'),
       commands, videoPath: mode.recordVideo ? runner.video : null, videoReceipt: mode.recordVideo ? 'video.mp4' : null,
       dir: runner.dir, flowName, report, reportFile, timeline: runner.timeline,
       commandReceipt: existsSync(commandsFile) ? commandsFile : null,
       failureDetail: failureReason => ({ failureReason, commandReceipt: existsSync(commandsFile) ? commandsFile : null }) });
     if (outcome.failureReason) throw new Error(`Fixture flow failed: ${outcome.failureReason}`);
-    report.flows.push({ name: flowName, commands: commandsFile, ...(mode.recordVideo ? { video: runner.video } : {}) });
+    report.flows.push({ ...fixture.flowTemplate, name: flowName,
+      commands: relative(dirname(reportFile), commandsFile), sha256: digest(readFileSync(commandsFile)),
+      captureReceipt: relative(dirname(reportFile), captureReceipt), captureReceiptHash: digest(readFileSync(captureReceipt)),
+      attachmentCloseout: relative(dirname(reportFile), attachment.file), attachmentCloseoutHash: digest(readFileSync(attachment.file)),
+      ...(mode.recordVideo ? { video: relative(dirname(reportFile), runner.video), videoHash: digest(readFileSync(runner.video)) } : {}) });
     report.result = 'pass';
     save(reportFile, report);
     console.log(JSON.stringify({ code: recorded.result.code, recorder: recorded.recorderResult.state, report: reportFile }));
@@ -310,7 +339,7 @@ async function execute(udid, names, mode) {
       const captureReceipt = join(dir, 'xctest-capture-policy.jsonl');
       writeFileSync(captureReceipt, '');
       const attachmentBefore = snapshotXCTestAttachments(udid);
-      let recorded, attachmentCloseout, attachmentError;
+      let recorded, attachment;
       try { recorded = await runFlow({
         maestroCommand: process.env.MAESTRO_BIN || 'maestro',
         maestroArgs: ['test', '--udid', udid, join(root, flow.source), '--format', 'junit', '--output', join(dir, 'junit.xml'), '--debug-output', dir, '--test-output-dir', dir],
@@ -319,26 +348,15 @@ async function execute(udid, names, mode) {
           FITSY_XCTEST_CAPTURE_RECEIPT: captureReceipt, FITSY_XCTEST_SIM_UDID: udid },
         dir, timeline, flow: flowBytes, diagnostic });
       } finally {
-        try {
-          attachmentCloseout = closeoutXCTestAttachments(attachmentBefore, snapshotXCTestAttachments(udid));
-          save(join(dir, 'xctest-attachment-closeout.json'), attachmentCloseout);
-          event(timeline, { type: 'xctest-attachment-closeout', flow: flow.name,
-            generatedVideos: attachmentCloseout.generated.videos, deletedVideos: attachmentCloseout.deleted.length,
-            remainingHistoricalVideos: attachmentCloseout.remainingVideos.length,
-            outcome: attachmentCloseout.generated.videos ? 'unexpected-video-retired' : 'no-new-video' });
-        } catch (error) {
-          attachmentError = error.message;
-          save(join(dir, 'xctest-attachment-closeout.json'), { at: new Date().toISOString(), udid, error: attachmentError,
-            action: 'Inspect exact attachment ownership and writer state before another native phase' });
-          event(timeline, { type: 'xctest-attachment-closeout', flow: flow.name, outcome: 'fail', error: attachmentError });
-        }
+        attachment = writeAttachmentCloseout({ before: attachmentBefore, after: () => snapshotXCTestAttachments(udid),
+          udid, dir, timeline, flow: flow.name });
       }
       const { result, recorderResult } = recorded;
       let captureEvents = [], captureError = null;
       try { captureEvents = readFileSync(captureReceipt, 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line)); }
       catch (error) { captureError = error.message; }
-      if (attachmentError) captureError = `XCTest attachment closeout failed: ${attachmentError}`;
-      else if (attachmentCloseout.generated.videos) captureError = `XCTest created ${attachmentCloseout.generated.videos} unexpected video attachment(s); exact files were retired after writer-idle proof`;
+      if (attachment.error) captureError = `XCTest attachment closeout failed: ${attachment.error}`;
+      else if (attachment.receipt.generated.videos) captureError = `XCTest created ${attachment.receipt.generated.videos} unexpected video attachment(s); exact files were retired after writer-idle proof`;
       const captureVerified = !captureError && captureEvents.length > 0 &&
         captureEvents.every(item => item.udid === udid && item.preferredScreenCaptureFormat === 'screenshots');
       event(timeline, { type: 'xctest-capture-check', flow: flow.name, outcome: captureVerified ? 'verified' : 'missing-or-invalid',
