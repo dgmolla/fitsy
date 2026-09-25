@@ -7,6 +7,7 @@
 # tree an agent or human is editing.
 set -uo pipefail
 REVIEW_HOME="${FITSY_REVIEW_HOME:-$HOME/.fitsy-review}"
+GH_BIN="${FITSY_GH_BIN:-gh}"
 REPO_DIR="$REVIEW_HOME/repo"
 LOG="$REVIEW_HOME/poller.log"
 mkdir -p "$REVIEW_HOME"
@@ -14,18 +15,18 @@ exec >>"$LOG" 2>&1
 echo "[poller] $(date -u +%FT%TZ) tick"
 
 if [ ! -d "$REPO_DIR/.git" ]; then
-  gh repo clone dgmolla/fitsy "$REPO_DIR" -- --quiet || { echo "[poller] clone failed"; exit 0; }
+  "$GH_BIN" repo clone dgmolla/fitsy "$REPO_DIR" -- --quiet || { echo "[poller] clone failed"; exit 0; }
 fi
 cd "$REPO_DIR"
 git fetch -q origin && git checkout -qf origin/main 2>/dev/null
 
-gh pr list --state open --json number,headRefOid --limit 20 --jq '.[] | "\(.number) \(.headRefOid)"' |
+"$GH_BIN" pr list --state open --json number,headRefOid --limit 20 --jq '.[] | "\(.number) \(.headRefOid)"' |
 while read -r NUM SHA; do
   # tier decides the lens: low (docs/bookkeeping) -> docs-sanity, else correctness
-  FILES_FOR_TIER="$(gh pr view "$NUM" --json files --jq '.files[].path')"
+  FILES_FOR_TIER="$("$GH_BIN" pr view "$NUM" --json files --jq '.files[].path')"
   TIER="$(echo "$FILES_FOR_TIER" | node scripts/review/tier.mjs)"
-  LABELS="$(gh pr view "$NUM" --json labels --jq '.labels[].name')"
-  BODY="$(gh pr view "$NUM" --json body --jq '.body // ""')"
+  LABELS="$("$GH_BIN" pr view "$NUM" --json labels --jq '.labels[].name')"
+  BODY="$("$GH_BIN" pr view "$NUM" --json body --jq '.body // ""')"
   if [ "$TIER" = "low" ]; then LENSES="docs-sanity"; else LENSES="correctness"; fi
   [ "$TIER" = "high" ] && LENSES="$LENSES danger-zone"
   # exact label match, not substring (a future "incident-followup" label must not trigger)
@@ -38,7 +39,7 @@ while read -r NUM SHA; do
   # skip if this head commit already has the lens status
   PENDING=""
   for L in $LENSES; do
-    HAVE="$(gh api "repos/{owner}/{repo}/commits/$SHA/statuses" --jq "[.[] | select(.context==\"lens/$L\")] | length" 2>/dev/null || echo 0)"
+    HAVE="$("$GH_BIN" api "repos/{owner}/{repo}/commits/$SHA/statuses" --jq "[.[] | select(.context==\"lens/$L\")] | length" 2>/dev/null || echo 0)"
     [ "${HAVE:-0}" -gt 0 ] || PENDING="$PENDING $L"
   done
   [ -n "$PENDING" ] || continue
@@ -53,7 +54,8 @@ while read -r NUM SHA; do
   # edit its own reviewer (T12), and old branches may predate the harness.
   git checkout -q origin/main -- scripts/review scripts/verify/risk-tiers.yml REVIEW.md .claude/lenses
   for L in $PENDING; do
-    bash scripts/review/run-lens.sh "$NUM" "$L" || echo "[poller] PR #$NUM lens/$L -> fail"
+    FITSY_REVIEW_BUDGET_LEDGER="${FITSY_REVIEW_BUDGET_LEDGER:-$REVIEW_HOME/budgets/$NUM.jsonl}" \
+      bash scripts/review/run-lens.sh "$NUM" "$L" || echo "[poller] PR #$NUM lens/$L -> fail"
   done
   git checkout -qf origin/main 2>/dev/null || true
   git clean -qfd 2>/dev/null || true

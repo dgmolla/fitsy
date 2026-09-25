@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 const extractor = join(__dirname, "extract-verdict.py");
 const pass = { lens: "correctness", verdict: "pass", findings: [] };
-const finding = { severity: "CONFIRMED", file: "app.ts", line: 3, summary: "Wrong output", scenario: "Empty input crashes", fix: "Handle empty input" };
+const finding = { severity: "CONFIRMED", priority: "P1", impact: "Core flow fails for an empty user input", file: "app.ts", line: 3, summary: "Wrong output", scenario: "Empty input crashes", fix: "Handle empty input" };
 function extract(input: unknown, lens = "correctness") {
   return JSON.parse(execFileSync("python3", [extractor, lens], {
     input: typeof input === "string" ? input : JSON.stringify(input), encoding: "utf8",
@@ -29,6 +29,9 @@ test.each([
   { verdict: "pass" }, { ...pass, lens: "test-quality" }, { ...pass, findings: null },
   { ...pass, findings: [finding] }, { ...pass, verdict: "fail" },
   { ...pass, findings: [{ ...finding, severity: "UNKNOWN" }] },
+  { ...pass, verdict: "fail", findings: [{ ...finding, priority: undefined }] },
+  { ...pass, verdict: "fail", findings: [{ ...finding, priority: "P9" }] },
+  { ...pass, verdict: "fail", findings: [{ ...finding, impact: "" }] },
   { ...pass, verdict: "fail", findings: [{ ...finding, line: -1 }] },
   { ...pass, verdict: "fail", findings: [{ ...finding, fix: "" }] },
   { ...pass, verdict: "fail", findings: [{ ...finding, line: true }] },

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # T14: context files must not lie. Every `npm run X` and repo path mentioned
-# in a CLAUDE.md or FEATURE_MAP must exist; a stale pointer misleads every
+# in AGENTS.md, a CLAUDE.md or FEATURE_MAP must exist; a stale pointer misleads every
 # future zero-context author.
 set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$REPO_ROOT"
-FILES="CLAUDE.md apps/api/CLAUDE.md apps/mobile/CLAUDE.md scripts/CLAUDE.md apps/mobile/FEATURE_MAP.md"
+FILES="AGENTS.md CLAUDE.md apps/api/CLAUDE.md apps/mobile/CLAUDE.md scripts/CLAUDE.md apps/mobile/FEATURE_MAP.md"
 BAD=""
 for f in $FILES; do
   [ -f "$f" ] || { BAD="$BAD missing:$f"; continue; }

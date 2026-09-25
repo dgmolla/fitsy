@@ -13,10 +13,12 @@ def validate(value, lens):
     for finding in value["findings"]:
         if not isinstance(finding, dict) or finding.get("severity") not in ("CONFIRMED", "PLAUSIBLE", "NIT"):
             return False
+        if finding.get("priority") not in ("P0", "P1", "P2", "P3"):
+            return False
         if type(finding.get("line")) is not int or finding["line"] < 0:
             return False
         if any(not isinstance(finding.get(key), str) or not finding[key].strip()
-               for key in ("file", "summary", "scenario", "fix")):
+               for key in ("file", "summary", "scenario", "fix", "impact")):
             return False
     confirmed = any(f["severity"] == "CONFIRMED" for f in value["findings"])
     return (value["verdict"] == "fail") == confirmed
@@ -57,10 +59,11 @@ if __name__ == "__main__":
             "lens": lens,
             "verdict": "fail",
             "findings": [{
-                "severity": "CONFIRMED", "file": "(runner)", "line": 0,
+                "severity": "CONFIRMED", "priority": "P1", "file": "(runner)", "line": 0,
                 "summary": "review did not produce a valid completed verdict; failing closed",
                 "scenario": "runner failed or response did not satisfy REVIEW.md's output contract",
                 "fix": "inspect the configured review provider and errors.log, then rerun the same lens",
+                "impact": "Required independent review is invalid, so release evidence is incomplete",
             }],
         }
     print(json.dumps(verdict))

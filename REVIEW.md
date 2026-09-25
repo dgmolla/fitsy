@@ -7,9 +7,17 @@ Design: `docs/engineering/devops/autonomous-shipping.md` §L5.
 
 ## Severity
 
-- **CONFIRMED**: you can name the exact input or state that produces wrong behavior, cite `file:line`, and nothing in the diff or codebase handles it. Blocks merge.
+- **CONFIRMED**: you can name the exact input or state that produces wrong behavior, cite `file:line`, and nothing in the diff or codebase handles it.
 - **PLAUSIBLE**: likely wrong but you could not fully verify. Comment only, never blocks.
 - **NIT**: style or preference. Maximum 5 per review; do not post nits on patterns CI already enforces.
+
+Severity is confidence, not impact or merge priority.
+Assign each finding a separate impact priority: P0 critical, P1 high, P2 medium or P3 low.
+P0/P1 require a concrete realistic path to material security exposure, data loss, wrong-account or payment behavior, a broken core flow, or invalid mandatory evidence.
+State the affected user outcome, trigger, scope, evidence and violated contract in `impact`.
+A confirmed finding is not automatically P1, and a plausible high-impact concern requires bounded investigation.
+The raw verdict remains `fail` when any finding is CONFIRMED, regardless of priority.
+The separate review gate may accept a documented P2/P3 follow-up with current required-test receipts; it never rewrites the raw verdict.
 
 ## Evidence bar
 
@@ -38,7 +46,7 @@ End with exactly one fenced JSON block:
   "lens": "<name>",
   "verdict": "pass" | "fail",
   "findings": [
-    {"severity": "CONFIRMED|PLAUSIBLE|NIT", "file": "path", "line": 0, "summary": "one sentence", "scenario": "input/state -> wrong outcome", "fix": "what to change, citing the pattern file to copy"}
+    {"severity": "CONFIRMED|PLAUSIBLE|NIT", "priority": "P0|P1|P2|P3", "impact": "user outcome, realistic trigger, scope, evidence and contract", "file": "path", "line": 0, "summary": "one sentence", "scenario": "input/state -> wrong outcome", "fix": "what to change, citing the pattern file to copy"}
   ]
 }
 ```
