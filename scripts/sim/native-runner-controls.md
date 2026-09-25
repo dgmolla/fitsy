@@ -6,6 +6,7 @@ The runner checks source, app and public configuration hashes, simulator state, 
 Development and review `run` invocations default to `--mode=development`, which executes the same Maestro assertions and screenshots without starting the explicit recorder.
 Use `--mode=final-candidate` once the PR candidate is stable for publication evidence.
 Add `--record-video` when a complete video is specifically requested; final candidate runs otherwise retain command receipts and screenshots without starting the explicit recorder.
+The flow helper requires an explicit boolean recording choice and fails before starting children if the CLI omits it.
 Repeating that run reuses a passing, unexpired report only when the current source, app, backend, simulator, fixture and selected flow receipts still validate.
 Use `--mode=requested-video` only for an explicit video request; that report is diagnostic and cannot pass the final candidate publication gate.
 Install `ffprobe` and `ffmpeg` before a video run; the runner checks for them before Maestro and rejects a zero-duration video or one whose first video frame cannot decode, with a failure receipt after recording.

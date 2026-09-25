@@ -533,7 +533,8 @@ export async function runOwnedMaestro(command, args, { cwd, env, dir, timeline, 
 
 export async function runRecordedFlow({ recorderCommand = 'xcrun', recorderArgs = null, recorderSpawnImpl,
   maestroCommand, maestroArgs, maestroSpawnImpl, udid, video, recorderLog, cwd, env, dir, timeline, flow, diagnostic,
-  quietMs, wallMs, pollMs, terminationGraceMs, recordVideo = true }) {
+  quietMs, wallMs, pollMs, terminationGraceMs, recordVideo }) {
+  if (typeof recordVideo !== 'boolean') throw new Error('Explicit recordVideo boolean required before native flow');
   const interruption = new AbortController();
   const onInt = () => interruption.abort(new Error('SIGINT received during owned native flow'));
   const onTerm = () => interruption.abort(new Error('SIGTERM received during owned native flow'));

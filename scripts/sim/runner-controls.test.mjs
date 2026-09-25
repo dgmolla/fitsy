@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { appendRecordedFlowFailure, applyCapturePolicy, archiveFailureEvidence, completeMaestroRun, flowFailureReason, recordFlowOutcome, recordedFlowFailureKey, recordRunFailure, requireMetro, runOwnedMaestro, runRecordedFlow, saveRecordedFlowReceipts, startOwnedRecorder, stopOwnedRecorder, summarizeCommands, summarizeFlowTiming, nearestFailure, matchingFailureKey, needsDiagnosis } from './runner-controls.mjs';
+import { runSelection } from './evidence-mode.mjs';
 
 const temp = () => mkdtempSync(join(tmpdir(), 'fitsy-runner-'));
 test('final timeline failure leaves a failed report and retains the triggering error', () => {
@@ -87,6 +88,33 @@ test('development flow consumes the owned Maestro command receipt and rejects a 
       videoPath: null, videoReceipt: null, flowName: 'welcome', report, reportFile, timeline,
       commandReceipt: existsSync(commandFile) ? commandFile : null, failureDetail: () => ({ noReceipt: true }) });
     assert.equal(rejected.failureReason, 'missing-or-empty-command-receipt');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('selected recording mode reaches the runner and omission fails before either child starts', async () => {
+  const dir = temp(), timeline = join(dir, 'timeline.jsonl'), video = join(dir, 'video.mp4');
+  const recorderLog = join(dir, 'recorder.log');
+  const args = { recorderCommand: '/missing-recorder', maestroCommand: process.execPath,
+    maestroArgs: ['-e', 'process.exit(0)'], udid: 'fixture', video, recorderLog,
+    cwd: dir, env: process.env, dir, timeline, flow: '', diagnostic: async () => {} };
+  try {
+    const mode = runSelection(['fixture', '--mode=final-candidate']).mode;
+    const skipped = await runRecordedFlow({ ...args, recordVideo: mode.recordVideo });
+    assert.equal(skipped.result.code, 0);
+    assert.equal(skipped.recorderResult.state, 'skipped');
+    assert.equal(existsSync(video), false);
+    await assert.rejects(runRecordedFlow(args), /Explicit recordVideo boolean required/);
+    assert.equal(readFileSync(timeline, 'utf8').split('recorder-skipped').length - 1, 1,
+      'omitted mode must fail without starting another flow');
+    assert.equal(existsSync(recorderLog), false);
+    const requested = runSelection(['fixture', '--mode=final-candidate', '--record-video']).mode;
+    const recorded = await runRecordedFlow({ ...args, recordVideo: requested.recordVideo,
+      recorderCommand: process.execPath,
+      recorderArgs: ['-e', "process.on('SIGINT',()=>{require('fs').writeFileSync(process.argv[1],'video');process.exit(0)});setInterval(()=>{},1000)", video],
+      maestroArgs: ['-e', 'setTimeout(()=>process.exit(0),250)'] });
+    assert.equal(recorded.result.code, 0);
+    assert.equal(recorded.recorderResult.state, 'stopped');
+    assert.equal(readFileSync(video, 'utf8'), 'video');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -242,7 +270,7 @@ test('recorded flow removes signal listeners after evidence write failure', asyn
   const dir = temp();
   const intListeners = process.listenerCount('SIGINT'), termListeners = process.listenerCount('SIGTERM');
   try {
-    await assert.rejects(runRecordedFlow({
+    await assert.rejects(runRecordedFlow({ recordVideo: true,
       recorderCommand: process.execPath, recorderArgs: ['-e', 'setInterval(() => {}, 1000)'],
       maestroCommand: process.execPath, maestroArgs: ['-e', 'setInterval(() => {}, 1000)'],
       udid: 'test-device', video: join(dir, 'video.mp4'), recorderLog: join(dir, 'recorder.log'),
@@ -566,7 +594,7 @@ for (const recorderExitCode of [0, 1]) test(`early recorder exit ${recorderExitC
     const recorderScript = `require('fs').writeFileSync(process.argv[1],'partial');setTimeout(()=>process.exit(${recorderExitCode}),450)`;
     const maestroScript = 'setTimeout(()=>process.exit(0),2000)';
     const diagnostics = [];
-    const { result, recorderResult } = await runRecordedFlow({
+    const { result, recorderResult } = await runRecordedFlow({ recordVideo: true,
       recorderCommand: process.execPath, recorderArgs: ['-e', recorderScript, video],
       maestroCommand: process.execPath, maestroArgs: ['-e', maestroScript], udid: 'test-device', video,
       recorderLog: join(dir, 'recorder.log'), cwd: dir, env: process.env, dir, timeline, flow: '',
@@ -592,7 +620,7 @@ test('recorder completion during requested stop preserves a passing flow', async
   try {
     const recorderScript = "process.on('SIGINT',()=>{require('fs').writeFileSync(process.argv[1],'complete');process.exit(0)});setInterval(()=>{},1000)";
     const maestroScript = 'setTimeout(()=>process.exit(0),100)';
-    const { result, recorderResult, recorderStartedMs, recorderEndedMs } = await runRecordedFlow({
+    const { result, recorderResult, recorderStartedMs, recorderEndedMs } = await runRecordedFlow({ recordVideo: true,
       recorderCommand: process.execPath, recorderArgs: ['-e', recorderScript, video],
       maestroCommand: process.execPath, maestroArgs: ['-e', maestroScript], udid: 'test-device', video,
       recorderLog: join(dir, 'recorder.log'), cwd: dir, env: process.env, dir, timeline, flow: '',
@@ -635,7 +663,7 @@ test('recorder exit observed by keeper before stop fails even when IPC delivery 
     const recorderScript = "const fs=require('fs');fs.writeFileSync(process.argv[1],'partial');setTimeout(()=>{fs.writeFileSync(process.argv[2],'exiting');process.exit(0)},450)";
     const maestroScript = "const fs=require('fs');const wait=()=>fs.existsSync(process.argv[1])?setTimeout(()=>process.exit(0),180):setTimeout(wait,10);wait()";
     const diagnostics = [];
-    const { result, recorderResult, recorderStartedMs, recorderEndedMs } = await runRecordedFlow({
+    const { result, recorderResult, recorderStartedMs, recorderEndedMs } = await runRecordedFlow({ recordVideo: true,
       recorderCommand: process.execPath, recorderArgs: ['-e', recorderScript, video, marker], recorderSpawnImpl: delayedExitSpawnImpl,
       maestroCommand: process.execPath, maestroArgs: ['-e', maestroScript, marker], udid: 'test-device', video,
       recorderLog: join(dir, 'recorder.log'), cwd: dir, env: process.env, dir, timeline, flow: '',
@@ -657,7 +685,7 @@ test('recorder exit inside startup wait retains partial proof and captures diagn
   try {
     const recorderScript = "require('fs').writeFileSync(process.argv[1],'partial');setTimeout(()=>process.exit(0),40)";
     const diagnostics = [];
-    const { result, recorderResult, recorderStartedMs, recorderEndedMs } = await runRecordedFlow({
+    const { result, recorderResult, recorderStartedMs, recorderEndedMs } = await runRecordedFlow({ recordVideo: true,
       recorderCommand: process.execPath, recorderArgs: ['-e', recorderScript, video],
       maestroCommand: process.execPath, maestroArgs: ['-e', 'setTimeout(()=>process.exit(0),1000)'],
       udid: 'test-device', video, recorderLog: join(dir, 'recorder.log'), cwd: dir, env: process.env,
@@ -680,7 +708,7 @@ test('recorder exit during watchdog diagnostics takes precedence and retains the
   try {
     const recorderScript = "const fs=require('fs');fs.writeFileSync(process.argv[1],'partial');const wait=()=>fs.existsSync(process.argv[2])?process.exit(0):setTimeout(wait,10);wait()";
     const diagnostics = [];
-    const recorded = await runRecordedFlow({
+    const recorded = await runRecordedFlow({ recordVideo: true,
       recorderCommand: process.execPath, recorderArgs: ['-e', recorderScript, video, marker],
       maestroCommand: process.execPath, maestroArgs: ['-e', 'setInterval(()=>{},1000)'],
       udid: 'test-device', video, recorderLog: join(dir, 'recorder.log'), cwd: dir, env: process.env,
@@ -723,7 +751,7 @@ test('watchdog reason remains primary when recorder exits after the accepted sto
   try {
     const recorderScript = "process.on('SIGINT',()=>{require('fs').writeFileSync(process.argv[1],'complete');process.exit(0)});setInterval(()=>{},1000)";
     const diagnostics = [];
-    const { result, recorderResult } = await runRecordedFlow({
+    const { result, recorderResult } = await runRecordedFlow({ recordVideo: true,
       recorderCommand: process.execPath, recorderArgs: ['-e', recorderScript, video],
       maestroCommand: process.execPath, maestroArgs: ['-e', 'setInterval(()=>{},1000)'],
       udid: 'test-device', video, recorderLog: join(dir, 'recorder.log'), cwd: dir, env: process.env,
@@ -946,7 +974,7 @@ import { join } from 'node:path';
 import { runRecordedFlow } from ${JSON.stringify(moduleUrl)};
 const dir = process.argv[2];
 const recorderScript = "process.on('SIGINT',()=>{require('fs').writeFileSync(process.argv[1],'video');process.exit(0)});setInterval(()=>{},1000)";
-const result = await runRecordedFlow({ recorderCommand: process.execPath, recorderArgs: ['-e', recorderScript, join(dir,'video.mp4')],
+const result = await runRecordedFlow({ recordVideo: true, recorderCommand: process.execPath, recorderArgs: ['-e', recorderScript, join(dir,'video.mp4')],
   maestroCommand: process.execPath, maestroArgs: ['-e', ${JSON.stringify(maestroScript)}, join(dir,'descendant.pid')], udid: 'fixture', video: join(dir,'video.mp4'),
   recorderLog: join(dir,'recorder.log'), cwd: dir, env: process.env, dir, timeline: join(dir,'events.jsonl'), flow: '',
   diagnostic: async reason => writeFileSync(join(dir,'diagnostic.json'), JSON.stringify({reason})), quietMs: 60000, wallMs: 60000, pollMs: 20, terminationGraceMs: 100 });
