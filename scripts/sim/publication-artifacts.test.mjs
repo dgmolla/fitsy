@@ -39,7 +39,7 @@ test('the publisher path retains every flow command, screen and complete video w
     const head = 'a'.repeat(40);
     const prUrl = 'https://github.com/dgmolla/fitsy/pull/7';
     const states = [];
-    let uploadedBytes = null, suppressUpload = false, corruptDigest = false;
+    let uploadedBytes = null, suppressUpload = false, corruptDigest = false, validations = 0;
     const execute = (command, args, options = {}) => {
       if (command === 'tar') return execFileSync('tar', args, { encoding: 'utf8' }).trim();
       if (command === 'git') return args[0] === 'rev-parse' ? head : '';
@@ -66,15 +66,27 @@ test('the publisher path retains every flow command, screen and complete video w
     const result = await publishProductFlow('7', { execute, evidenceDirectory, publicationDirectory,
       resolvePlan: () => ({ required: true, categories: ['onboarding'] }), sourceHash: () => 'fixture-input',
       validateEvidence: (actual, plan, sourceHash) => {
+        validations++;
         assert.deepEqual(actual.flows, report.flows);
         assert.deepEqual(plan.categories, ['onboarding']);
         assert.equal(sourceHash, report.inputHash);
       } });
     assert.equal(result.status, 'pass');
+    assert.equal(validations, 1, 'source-bound validation ran before publication');
     assert.deepEqual(states, ['pending', 'success']);
     const options = { execute, evidenceDirectory, publicationDirectory,
       resolvePlan: () => ({ required: true, categories: ['onboarding'] }), sourceHash: () => 'fixture-input',
       validateEvidence: () => {} };
+    report.inputHash = 'stale-source';
+    writeFileSync(join(evidenceDirectory, 'report.json'), JSON.stringify(report));
+    uploadedBytes = null;
+    await assert.rejects(publishProductFlow('7', { ...options,
+      validateEvidence: actual => { validations++; assert.equal(actual.inputHash, 'fixture-input', 'invalid source-bound evidence'); } }), /invalid source-bound evidence/);
+    assert.equal(validations, 2);
+    assert.equal(uploadedBytes, null, 'invalid evidence cannot reach asset upload');
+    assert.deepEqual(states.slice(-2), ['pending', 'failure']);
+    report.inputHash = 'fixture-input';
+    writeFileSync(join(evidenceDirectory, 'report.json'), JSON.stringify(report));
     uploadedBytes = null;
     suppressUpload = true;
     await assert.rejects(publishProductFlow('7', options), /asset digest\/size readback/);

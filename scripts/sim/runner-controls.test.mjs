@@ -132,12 +132,16 @@ test('healthy long command with driver progress outlives the inactivity interval
   const dir = temp();
   try {
     const script = "const fs=require('fs');const p=process.argv[1];const tick=setInterval(()=>fs.appendFileSync(p,'.'),70);setTimeout(()=>{clearInterval(tick);process.exit(0)},1150)";
+    const timeline = join(dir, 'events.jsonl');
     const result = await runOwnedMaestro(process.execPath, ['-e', script, join(dir, 'maestro.log')],
-      { cwd: dir, env: process.env, dir, timeline: join(dir, 'events.jsonl'), flow: 'timeout: 300000', diagnostic: () => { throw Error('unexpected watchdog'); },
-        quietMs: 200, wallMs: 2000, pollMs: 20 });
+      { cwd: dir, env: process.env, dir, timeline, flow: 'timeout: 300000\ndelay: 60000',
+        diagnostic: () => { throw Error('unexpected watchdog'); }, pollMs: 20 });
     assert.equal(result.code, 0);
     assert.equal(result.reason, null);
     assert.ok(result.elapsedMs >= 1100);
+    const start = readFileSync(timeline, 'utf8').trim().split('\n').map(line => JSON.parse(line)).find(entry => entry.type === 'maestro-start');
+    assert.equal(start.inactivityDeadlineMs, 420000);
+    assert.equal(start.deadlineMs, 1680000);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
