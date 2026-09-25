@@ -23,7 +23,8 @@ Video modes also retain the complete untrimmed `flow-untrimmed.mp4` and recorder
 The runner scopes a local `xcodebuild` override to its owned Maestro process, changes only that process's temporary XCTest configuration from `screenRecording` to `screenshots`, and fails when no launch receipt proves the override.
 This prevents Maestro's implicit XCTest video from silently replacing the disabled explicit recorder.
 At each flow boundary, the runner snapshots the exact owned simulator's XCTest attachments and writes `xctest-attachment-closeout.json` with file and byte counts.
-It recognizes extensionless QuickTime files by their header, checks for open attachment writers, and retires only videos created during that flow after their identity is rechecked.
+It uses a QuickTime-compatible header to select candidates, then requires a positively probed video stream, a clean writer-idle scan, and an exact-file identity recheck immediately before retiring only current-flow videos.
+Audio-only, unknown, unprobeable and historical attachments are preserved; an `lsof` warning or scan error blocks retirement rather than proving idleness.
 An unexpected new video fails capture verification even when cleanup succeeds; inspect the capture receipt and recording source before retry.
 Historical videos with unresolved ownership remain listed separately and require an owner-reconciled idle cleanup.
 The final report and publication bind each successful flow's closeout receipt by hash.

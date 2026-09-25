@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { closeSync, existsSync, lstatSync, openSync, readSync, readdirSync, rmSync, statfsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -13,13 +13,23 @@ function movie(file) {
   try {
     const length = readSync(fd, buffer, 0, buffer.length, 0);
     if (length < 8) return false;
-    if (buffer.toString('ascii', 4, 8) === 'ftyp') return length >= 12 && videoBrands.has(buffer.toString('ascii', 8, 12));
+    const atom = buffer.toString('ascii', 4, 8);
+    const supportedBrand = atom === 'ftyp' && length >= 12 && videoBrands.has(buffer.toString('ascii', 8, 12));
     // XCTest can stage a QuickTime movie with a wide atom before mdat.
     const secondSize = buffer.readUInt32BE(8);
-    return length >= 16 && buffer.readUInt32BE(0) === 8 && buffer.toString('ascii', 4, 8) === 'wide' &&
+    const wideFirst = length >= 16 && buffer.readUInt32BE(0) === 8 && atom === 'wide' &&
       buffer.toString('ascii', 12, 16) === 'mdat' && (secondSize === 0 || secondSize >= 8);
+    if (!supportedBrand && !wideFirst) return false;
   }
   finally { closeSync(fd); }
+  try {
+    const probe = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_type,codec_name', '-of', 'json', file],
+      { encoding: 'utf8', timeout: 15000, maxBuffer: 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] }));
+    return probe.streams?.some(stream => stream.codec_type === 'video' && stream.codec_name) === true;
+  } catch (error) {
+    if (error.code === 'ENOENT') throw new Error('ffprobe is required to identify XCTest video attachments');
+    return false;
+  }
 }
 
 export function snapshotXCTestAttachments(udid, { deviceRoot = join(homedir(), 'Library/Developer/CoreSimulator/Devices') } = {}) {
@@ -45,13 +55,10 @@ export function snapshotXCTestAttachments(udid, { deviceRoot = join(homedir(), '
 }
 
 function requireIdle(directory) {
-  try {
-    const output = execFileSync('lsof', ['-nP', '+D', directory], { encoding: 'utf8', timeout: 15000 });
-    throw new Error(`XCTest attachment writer remains active in ${directory}: ${output.slice(0, 500)}`);
-  } catch (error) {
-    if (error.status === 1 && !error.stdout?.trim()) return;
-    throw error;
-  }
+  const scan = spawnSync('lsof', ['-nP', '+D', directory], { encoding: 'utf8', timeout: 15000, maxBuffer: 1024 * 1024 });
+  if (!scan.error && scan.signal === null && scan.status === 1 && !scan.stdout?.trim() && !scan.stderr?.trim()) return;
+  throw new Error(`XCTest attachment writer scan was not clean in ${directory}: status=${scan.status}, ` +
+    `error=${scan.error?.message || 'none'}, stdout=${(scan.stdout || '').slice(0, 500)}, stderr=${(scan.stderr || '').slice(0, 500)}`);
 }
 
 export function closeoutXCTestAttachments(before, after, { idleCheck = requireIdle, remove = rmSync } = {}) {
@@ -67,8 +74,8 @@ export function closeoutXCTestAttachments(before, after, { idleCheck = requireId
     const stat = lstatSync(entry.path);
     assert(stat.isFile() && stat.dev === entry.device && stat.ino === entry.inode && stat.size === entry.bytes && movie(entry.path),
       `XCTest attachment changed before exact-file retirement: ${entry.path}`);
+    remove(entry.path);
   }
-  for (const entry of newVideos) remove(entry.path);
   const remaining = after.entries.filter(entry => entry.video && !newVideos.includes(entry));
   const volume = statfsSync(after.directories[0] || join(homedir(), 'Library/Developer/CoreSimulator/Devices'));
   return { at: new Date().toISOString(), udid: before.udid,
