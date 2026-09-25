@@ -19,6 +19,11 @@ Each flow retains its original Maestro command JSON, screenshots, an XCTest capt
 Video modes also retain the complete untrimmed `flow-untrimmed.mp4` and recorder log.
 The runner scopes a local `xcodebuild` override to its owned Maestro process, changes only that process's temporary XCTest configuration from `screenRecording` to `screenshots`, and fails when no launch receipt proves the override.
 This prevents Maestro's implicit XCTest video from silently replacing the disabled explicit recorder.
+At each flow boundary, the runner snapshots the exact owned simulator's XCTest attachments and writes `xctest-attachment-closeout.json` with file and byte counts.
+It recognizes extensionless QuickTime files by their header, checks for open attachment writers, and retires only videos created during that flow after their identity is rechecked.
+An unexpected new video fails capture verification even when cleanup succeeds; inspect the capture receipt and recording source before retry.
+Historical videos with unresolved ownership remain listed separately and require an owner-reconciled idle cleanup.
+The final report and publication bind each successful flow's closeout receipt by hash.
 The summary lists command condition, declared deadline, outcome and actual retry attempt only when exposed by Maestro.
 Command monotonic timestamps are estimates anchored to the runner clock; Maestro supplies wall timestamps and durations.
 An uncovered command interval is unobserved time, not measured app or recorder idle.

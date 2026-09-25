@@ -238,17 +238,21 @@ test('publisher default validator accepts complete non-video proof and rejects c
       const source = `apps/mobile/e2e/flows/${name}.yaml`;
       const commands = `${name}/commands.json`, screenshot = `${name}/outcome.png`;
       const captureReceipt = `${name}/xctest-capture-policy.jsonl`;
+      const attachmentCloseout = `${name}/xctest-attachment-closeout.json`;
       const raw = JSON.stringify([
         { command: { applyConfigurationCommand: { config: { appId: 'com.fitsy.mobile', name } } }, metadata: { status: 'COMPLETED' } },
         { command: { assertConditionCommand: { condition: { visible: { textRegex: 'Welcome' } } } }, metadata: { status: 'COMPLETED' } },
       ]);
       const capture = JSON.stringify({ udid: simulator, preferredScreenCaptureFormat: 'screenshots' }) + '\n';
-      for (const path of [commands, screenshot, captureReceipt]) mkdirSync(join(evidenceDirectory, path, '..'), { recursive: true });
+      const closeout = JSON.stringify({ udid: simulator, generated: { videos: 0 }, deleted: [] }) + '\n';
+      for (const path of [commands, screenshot, captureReceipt, attachmentCloseout]) mkdirSync(join(evidenceDirectory, path, '..'), { recursive: true });
       writeFileSync(join(evidenceDirectory, commands), raw);
       writeFileSync(join(evidenceDirectory, screenshot), png);
       writeFileSync(join(evidenceDirectory, captureReceipt), capture);
+      writeFileSync(join(evidenceDirectory, attachmentCloseout), closeout);
       return { name, source, sourceHash: sha(readFileSync(join(root, source))), commands, sha256: sha(raw),
-        screenshot, screenshotHash: sha(png), captureReceipt, captureReceiptHash: sha(capture) };
+        screenshot, screenshotHash: sha(png), captureReceipt, captureReceiptHash: sha(capture),
+        attachmentCloseout, attachmentCloseoutHash: sha(closeout) };
     });
     const source = inputHash(), nativeSourceHash = inputHash(root, true), head = 'c'.repeat(40);
     const report = { version: 1, evidenceMode: 'final-candidate', videoRequested: false,
@@ -281,8 +285,20 @@ test('publisher default validator accepts complete non-video proof and rejects c
     assert.equal(uploads, 1);
     assert.equal(execFileSync('tar', ['-tzf', join(publicationDirectory, 'local-evidence.tar.gz')], { encoding: 'utf8' })
       .includes(flows[0].commands), true);
+    assert.equal(execFileSync('tar', ['-tzf', join(publicationDirectory, 'local-evidence.tar.gz')], { encoding: 'utf8' })
+      .includes(flows[0].attachmentCloseout), true);
     writeFileSync(join(evidenceDirectory, flows[0].commands), '[]');
     await assert.rejects(publishProductFlow('9', options), /changed command artifact/);
     assert.equal(uploads, 1, 'invalid proof must stop before another upload');
+    writeFileSync(join(evidenceDirectory, flows[0].attachmentCloseout), JSON.stringify({ udid: simulator, generated: { videos: 1 }, deleted: [] }));
+    report.flows[0].attachmentCloseoutHash = sha(readFileSync(join(evidenceDirectory, flows[0].attachmentCloseout)));
+    writeFileSync(join(evidenceDirectory, flows[0].commands), JSON.stringify([
+      { command: { applyConfigurationCommand: { config: { appId: 'com.fitsy.mobile', name: flows[0].name } } }, metadata: { status: 'COMPLETED' } },
+      { command: { assertConditionCommand: { condition: { visible: { textRegex: 'Welcome' } } } }, metadata: { status: 'COMPLETED' } },
+    ]));
+    report.flows[0].sha256 = sha(readFileSync(join(evidenceDirectory, flows[0].commands)));
+    writeFileSync(join(evidenceDirectory, 'report.json'), JSON.stringify(report));
+    await assert.rejects(publishProductFlow('9', options), /unexpected XCTest recording/);
+    assert.equal(uploads, 1, 'unexpected incidental recording must stop before upload');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

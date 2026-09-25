@@ -1,0 +1,67 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { closeoutXCTestAttachments, snapshotXCTestAttachments } from './xctest-attachments.mjs';
+
+const udid = '9E661282-FCE3-4C70-A503-EB2FFA0AD02B';
+const quicktime = Buffer.concat([Buffer.from([0, 0, 0, 12]), Buffer.from('ftyp'), Buffer.from('qt  ')]);
+function fixture() {
+  const root = mkdtempSync(join(tmpdir(), 'fitsy-xctest-'));
+  const attachments = join(root, udid, 'data/Containers/Data/InternalDaemon/owned/Attachments');
+  mkdirSync(attachments, { recursive: true });
+  return { root, attachments };
+}
+
+test('phase closeout retires only newly generated extensionless QuickTime after idle proof', () => {
+  const { root, attachments } = fixture();
+  try {
+    const oldVideo = join(attachments, 'old-uuid');
+    writeFileSync(oldVideo, quicktime);
+    const before = snapshotXCTestAttachments(udid, { deviceRoot: root });
+    const newVideo = join(attachments, 'new-uuid');
+    const screenshot = join(attachments, 'new-screen');
+    writeFileSync(newVideo, quicktime);
+    writeFileSync(screenshot, Buffer.from('PNG evidence'));
+    const after = snapshotXCTestAttachments(udid, { deviceRoot: root });
+    const checked = [];
+    const result = closeoutXCTestAttachments(before, after, { idleCheck: path => checked.push(path) });
+    assert.deepEqual(checked, [attachments]);
+    assert.equal(result.generated.videos, 1);
+    assert.equal(result.deleted.length, 1);
+    assert.equal(result.remainingVideos.length, 1);
+    assert.equal(result.remainingVideos[0].path, oldVideo);
+    assert.equal(readFileSync(oldVideo).toString('hex'), quicktime.toString('hex'));
+    assert.equal(readFileSync(screenshot, 'utf8'), 'PNG evidence');
+    assert.throws(() => readFileSync(newVideo), { code: 'ENOENT' });
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('active attachment writer blocks exact-file video retirement', () => {
+  const { root, attachments } = fixture();
+  try {
+    const before = snapshotXCTestAttachments(udid, { deviceRoot: root });
+    const newVideo = join(attachments, 'new-uuid');
+    writeFileSync(newVideo, quicktime);
+    const after = snapshotXCTestAttachments(udid, { deviceRoot: root });
+    assert.throws(() => closeoutXCTestAttachments(before, after, { idleCheck: () => { throw Error('writer active'); } }), /writer active/);
+    assert.equal(readFileSync(newVideo).toString('hex'), quicktime.toString('hex'));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('no-video phase records zero generated videos without deleting historical attachments', () => {
+  const { root, attachments } = fixture();
+  try {
+    const oldVideo = join(attachments, 'old-uuid');
+    writeFileSync(oldVideo, quicktime);
+    const before = snapshotXCTestAttachments(udid, { deviceRoot: root });
+    writeFileSync(join(attachments, 'new-screen'), Buffer.from('PNG evidence'));
+    const after = snapshotXCTestAttachments(udid, { deviceRoot: root });
+    const result = closeoutXCTestAttachments(before, after, { idleCheck: () => { throw Error('must not inspect unrelated old video'); } });
+    assert.equal(result.generated.videos, 0);
+    assert.equal(result.deleted.length, 0);
+    assert.equal(result.remainingVideos.length, 1);
+    assert.equal(readFileSync(oldVideo).toString('hex'), quicktime.toString('hex'));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

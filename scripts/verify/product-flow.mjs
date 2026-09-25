@@ -139,6 +139,14 @@ export function validate(report, plan, hash, directory, now = Date.now(), cwd = 
     const captures = capture.toString().trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
     insist(captures.length > 0 && captures.every(item => item.udid === report.simulator && item.preferredScreenCaptureFormat === 'screenshots'),
       `missing screenshots-only XCTest launch proof: ${flow.name}`);
+    if (flow.attachmentCloseout || flow.attachmentCloseoutHash) {
+      insist(flow.attachmentCloseout && flow.attachmentCloseoutHash, `incomplete XCTest attachment closeout: ${flow.name}`);
+      const closeout = artifact(flow.attachmentCloseout, directory);
+      insist(digest(closeout) === flow.attachmentCloseoutHash, `changed XCTest attachment closeout: ${flow.name}`);
+      const receipt = JSON.parse(closeout.toString());
+      insist(receipt.udid === report.simulator && receipt.generated?.videos === 0 && receipt.deleted?.length === 0,
+        `unexpected XCTest recording: ${flow.name}`);
+    }
     if (!videoRequested) insist(!flow.video && !flow.videoHash, `Unrequested video claim: ${flow.name}`);
     else {
       insist(flow.video && flow.videoHash, `missing/changed/empty video: ${flow.name}`);

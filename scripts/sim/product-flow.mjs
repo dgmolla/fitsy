@@ -11,6 +11,7 @@ import { backendRevision } from './backend-identity.mjs';
 import { buildProfile, bundleDelegate, fixtureLabel, metroRoute } from './build-profile.mjs';
 import { admitDisk, appendRecordedFlowFailure, applyCapturePolicy, archiveFailureEvidence, completeMaestroRun, event, latestMaestroLog, nearestFailure, needsDiagnosis, recordFlowOutcome, recordRunFailure, requireMetro, runRecordedFlow } from './runner-controls.mjs';
 import { matchesFinalCandidate, runSelection } from './evidence-mode.mjs';
+import { closeoutXCTestAttachments, snapshotXCTestAttachments } from './xctest-attachments.mjs';
 const yaml = createRequire(import.meta.url)('js-yaml');
 const out = resolve(root, '.evidence/product-flow');
 const buildDir = resolve(root, '.evidence/product-build');
@@ -278,17 +279,36 @@ async function execute(udid, names, mode) {
       const video = join(dir, 'flow-untrimmed.mp4');
       const captureReceipt = join(dir, 'xctest-capture-policy.jsonl');
       writeFileSync(captureReceipt, '');
-      const recorded = await runRecordedFlow({
+      const attachmentBefore = snapshotXCTestAttachments(udid);
+      let recorded, attachmentCloseout, attachmentError;
+      try { recorded = await runRecordedFlow({
         maestroCommand: process.env.MAESTRO_BIN || 'maestro',
         maestroArgs: ['test', '--udid', udid, join(root, flow.source), '--format', 'junit', '--output', join(dir, 'junit.xml'), '--debug-output', dir, '--test-output-dir', dir],
         udid, video, recorderLog: join(dir, 'recorder.log'), cwd: root,
         env: { ...repoEnv(), PATH: `${join(root, 'scripts/sim')}${delimiter}${process.env.PATH || ''}`,
           FITSY_XCTEST_CAPTURE_RECEIPT: captureReceipt, FITSY_XCTEST_SIM_UDID: udid },
         dir, timeline, flow: flowBytes, diagnostic, recordVideo: mode.recordVideo });
+      } finally {
+        try {
+          attachmentCloseout = closeoutXCTestAttachments(attachmentBefore, snapshotXCTestAttachments(udid));
+          save(join(dir, 'xctest-attachment-closeout.json'), attachmentCloseout);
+          event(timeline, { type: 'xctest-attachment-closeout', flow: flow.name,
+            generatedVideos: attachmentCloseout.generated.videos, deletedVideos: attachmentCloseout.deleted.length,
+            remainingHistoricalVideos: attachmentCloseout.remainingVideos.length,
+            outcome: attachmentCloseout.generated.videos ? 'unexpected-video-retired' : 'no-new-video' });
+        } catch (error) {
+          attachmentError = error.message;
+          save(join(dir, 'xctest-attachment-closeout.json'), { at: new Date().toISOString(), udid, error: attachmentError,
+            action: 'Inspect exact attachment ownership and writer state before another native phase' });
+          event(timeline, { type: 'xctest-attachment-closeout', flow: flow.name, outcome: 'fail', error: attachmentError });
+        }
+      }
       const { result, recorderResult } = recorded;
       let captureEvents = [], captureError = null;
       try { captureEvents = readFileSync(captureReceipt, 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line)); }
       catch (error) { captureError = error.message; }
+      if (attachmentError) captureError = `XCTest attachment closeout failed: ${attachmentError}`;
+      else if (attachmentCloseout.generated.videos) captureError = `XCTest created ${attachmentCloseout.generated.videos} unexpected video attachment(s); exact files were retired after writer-idle proof`;
       const captureVerified = !captureError && captureEvents.length > 0 &&
         captureEvents.every(item => item.udid === udid && item.preferredScreenCaptureFormat === 'screenshots');
       applyCapturePolicy(result, { verified: captureVerified, error: captureError });
@@ -333,6 +353,8 @@ async function execute(udid, names, mode) {
       report.flows.push({ ...flow, commands: relative(out, commands[0]), sha256: digest(readFileSync(commands[0])),
         screenshot: relative(out, screenshot), screenshotHash: digest(readFileSync(screenshot)),
         captureReceipt: relative(out, captureReceipt), captureReceiptHash: digest(readFileSync(captureReceipt)),
+        attachmentCloseout: relative(out, join(dir, 'xctest-attachment-closeout.json')),
+        attachmentCloseoutHash: digest(readFileSync(join(dir, 'xctest-attachment-closeout.json'))),
         ...(mode.recordVideo ? { video: relative(out, video), videoHash: digest(readFileSync(video)) } : {}) });
       save(join(out, 'report.json'), report);
       event(timeline, { type: 'flow-end', flow: flow.name, outcome: 'pass', elapsedMs: result.elapsedMs, commandReceipt: relative(out, commands[0]) });
