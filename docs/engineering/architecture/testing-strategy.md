@@ -26,7 +26,7 @@ gets tested in proportion to its blast radius.
 ```mermaid
 graph TD
     subgraph pyramid["Test Pyramid — Fitsy"]
-        E2E["E2E Simulator Tests\n~5% of suite\nMobile MCP + Expo Go\nFinal gate — real device"]
+        E2E["E2E Simulator Tests\n~5% of suite\nMaestro + Mobile MCP\nSource-bound local gate"]
         INT["Integration Tests\n~30% of suite\nAPI routes + DB\nReal DB, mocked external services"]
         UNIT["Unit Tests\n~65% of suite\nPure functions, business logic\nFast, no I/O"]
     end
@@ -42,7 +42,7 @@ graph TD
 |-------|------|-------|-------|
 | Unit | Pure functions, match scoring, macro math | Vitest | <1s |
 | Integration | API routes + Prisma against test DB | Vitest + testcontainers | <30s |
-| E2E Simulator | Critical mobile flows on local simulator | Mobile MCP + Expo Go | minutes |
+| E2E Simulator | Critical mobile flows on local simulator | Maestro + Mobile MCP; see shipping runbook | minutes |
 
 ---
 
@@ -216,66 +216,18 @@ test intent invisible.
 
 ---
 
-## 9. E2E Tests (Mobile MCP + Expo Go Simulator)
+## 9. E2E Tests (Local iPhone Simulator)
 
-E2E testing uses the **mobile MCP** (`@mobilenext/mobile-mcp`) to drive the
-Expo Go simulator on the local machine. This replaces Playwright (which was
-designed for web, not mobile).
-
-### Why Mobile MCP
-
-- Directly controls the iOS simulator — tap, swipe, type, screenshot
-- Works with Expo Go — no native build required
-- Agents can run E2E checks as part of their PR workflow
-- No CI infra needed — runs on any Mac with Xcode + simulator
-
-### Configuration
-
-Already configured in `.mcp.json`:
-```json
-{
-  "mcpServers": {
-    "mobile-mcp": {
-      "command": "npx",
-      "args": ["-y", "@mobilenext/mobile-mcp@latest"]
-    }
-  }
-}
-```
-
-### How to run
-
-1. Start the Expo dev server: `npm run dev:mobile`
-2. Boot the iOS simulator (Expo opens it automatically)
-3. Use mobile MCP tools to interact with the app — tap elements, take
-   screenshots, verify screen state
-
-### Smoke test flows
-
-Before opening a PR, agents should verify these flows via mobile MCP:
-
-- **Welcome/onboarding**: screens render, navigation works
-- **Auth**: register → login → lands on tabs
-- **Search**: search screen loads, results appear (when DB is seeded)
-- **Restaurant detail**: tap restaurant → menu with macros visible
-- **Saved meals**: bookmark a meal → appears in Saved tab
-- **Profile**: profile screen renders with macro targets
+Follow [the shipping runbook](../devops/shipping.md) for the current mobile product-flow gate.
+It selects deterministic Maestro flows for the changed journey, runs them against a source-identified app and dev backend, then requires a Mobile MCP walkthrough of the primary and recovery paths.
+The walkthrough uses accessibility data first, retains raw action traces and screenshots, and stops blind retries after two attempts without progress.
+The simulator must have an exclusive owner, and required assertions and source identity must remain valid through publication.
+The older Expo Go smoke recipe does not satisfy this gate.
 
 ## 10. CI Gate
 
-All of the following must pass before a PR can merge:
-
-```
-1. bash scripts/structural-tests.sh   → no violations
-2. npx tsc --noEmit                   → no type errors
-3. npm test                           → all tests pass
-4. npm run test:coverage              → coverage ≥ 80%
-5. npm run build                      → no build errors
-6. Mobile MCP smoke tests via Expo Go  → E2E pass (pre-PR, local simulator)
-```
-
-CI runs these in parallel where possible. The structural test is fastest and
-runs first to give quick feedback on obvious violations.
+The executable check list and applicability rules are in `scripts/verify/registry.yml` and `scripts/verify/risk-tiers.yml`.
+Use the [shipping runbook](../devops/shipping.md) for local verification, required simulator evidence, independent review and exact-head PR checks.
 
 ---
 
