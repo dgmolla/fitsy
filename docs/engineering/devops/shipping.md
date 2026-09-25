@@ -35,6 +35,13 @@ The registry determines which checks apply and whether a check is blocking or sh
 Removing obsolete structural exceptions belongs to the changed product domain only when every removed entry names a file in the same diff.
 Allowlist additions, unrelated removals, deletion of the allowlist and unreadable history retain infrastructure ownership.
 
+Changes under `scripts/sim/` or the product-flow verification controls run the blocking local `media-integration` lane in `npm run verify`.
+Install `ffprobe` and `ffmpeg` locally before that run.
+The lane runs real decoder, XCTest attachment and opt-in recorder cases, then records `.evidence/verify/media-integration.json` with the candidate SHA and source/test hash.
+Hosted L2 runs deterministic tests without media tools.
+After committing, rerun `node scripts/verify/run.mjs --only=media-integration --runs=local` so the receipt names the PR head.
+The `product-flow/local` publisher checks that receipt before setting its exact-head status, including when mobile product evidence is not applicable.
+
 **Local product-flow gate.** Local iPhone E2E is blocking for mobile-facing changes. CI runs static checks, unit tests and builds; its optional simulator workflow remains experimental. `npm run verify` and pre-push require fresh `.evidence/product-flow/report.json` when impact selection applies. Missing tools, skipped/failed assertions, missing coverage and stale evidence fail; unrelated changes get explicit `not_applicable`.
 
 Use an owned worktree, `npm run dev:env`, and an explicit simulator UDID. Keep public configuration in the ignored mobile environment file. The builder generates an embedded Release app, disables downloaded OTA updates, and records source/native/JS/configuration identities. A keyless build proves navigation only and cannot cover billing. Never publish credentials or personal data in evidence.
@@ -47,12 +54,15 @@ Both configurations use local simulator signing with Xcode's application entitle
 node scripts/verify/product-flow.mjs --plan
 export FITSY_SIM_OWNER=my-task MAESTRO_BIN="$HOME/.maestro/bin/maestro"
 node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs build <UDID>
-node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs run <UDID> <affected-flow-name>
+node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs run <UDID> <affected-flow-name> --mode=final-candidate
 # Capture affected primary and recovery paths through Mobile MCP, then:
 node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs finish .evidence/walkthrough.json
 ```
 
 Cold-start and sign-in always run. Add/select flows in `apps/mobile/e2e/flows/` tagged for every category in `--plan`, with at least two non-optional outcome assertions per changed journey. Baseline flows cannot cover a paywall change. Promote discovered regressions into deterministic scenarios.
+Final candidate runs retain required assertions, raw Maestro commands, screenshots, XCTest capture receipts, timing and changed-journey walkthroughs without recording video by default.
+When a reviewer explicitly requests video, add `--record-video` to the final candidate run; the runner retains complete untrimmed video and the validator checks each recording before publication.
+Development runs remain separate from final publication even when recorded.
 
 The walkthrough JSON is an array with one entry per category: `category`, `expected`, `observed`, `branches: ["primary", "recovery"]`, `result: "pass"`, and `trace` relative to `.evidence/product-flow/`. Traces are JSONL: one `{at, command: {name}, result: {content}}` object per line, recording actual Mobile MCP actions and screen observations. Identify run-owned synthetic fixtures with `FITSY_FIXTURE`; reviewers judge scenario relevance and visual quality.
 

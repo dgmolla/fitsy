@@ -35,6 +35,7 @@ A check without a registry entry, or an entry without a script, is itself a fail
 | `context-freshness.sh` | 1 | CLAUDE.md/FEATURE_MAP commands and paths actually exist (T14) |
 | `migration-safety.sh` | 1 | destructive migrations carry a down.sql (T9) |
 | `test.sh` | 2 | api + scripts + mobile tests |
+| `media-integration.sh` | 2 (local, blocking when simulator or product-flow controls change) | real decoder, attachment and recorder suites plus a source-bound receipt; hosted L2 stays media-tool free |
 | `own-code-mocks.sh` | 2 (shadow) | api tests mock only external services |
 | `build.sh` | 3 | production API build, no stray compiled output |
 | `dev-drift.sh` | 3 | the dev environment has every migration on `main` and holds seed data |

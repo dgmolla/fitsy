@@ -1,20 +1,33 @@
 #!/usr/bin/env node
 // Local-only runner. Build and command receipts are generated, never hand-stamped.
 import { execFileSync, spawn } from 'node:child_process';
-import { readFileSync, writeFileSync, mkdirSync, readdirSync, rmSync, existsSync, openSync, closeSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, rmSync, existsSync, openSync, closeSync, renameSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { createHash } from 'node:crypto';
-import { resolve, relative, join } from 'node:path';
+import { resolve, relative, join, dirname, delimiter } from 'node:path';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import { root, inputHash, changedPaths, impact, digest, validate, baseline, repoEnv } from '../verify/product-flow.mjs';
 import { backendRevision } from './backend-identity.mjs';
 import { buildProfile, bundleDelegate, fixtureLabel, metroRoute } from './build-profile.mjs';
+import { admitDisk, appendRecordedFlowFailure, applyCapturePolicy, archiveFailureEvidence, completeMaestroRun, event, latestMaestroLog, nearestFailure, needsDiagnosis, recordFlowOutcome, recordRunFailure, requireMetro, runRecordedFlow } from './runner-controls.mjs';
+import { matchesFinalCandidate, runSelection } from './evidence-mode.mjs';
+import { closeoutXCTestAttachments, snapshotXCTestAttachments } from './xctest-attachments.mjs';
 const yaml = createRequire(import.meta.url)('js-yaml');
 const out = resolve(root, '.evidence/product-flow');
 const buildDir = resolve(root, '.evidence/product-build');
 const mobile = resolve(root, 'apps/mobile');
+const resumeDir = resolve(root, '.evidence/resume');
+const failuresFile = join(resumeDir, 'native-failures.json');
 const recipeHash = () => digest(['product-flow.mjs', 'build-profile.mjs'].map(f => readFileSync(join(root, 'scripts/sim', f))).join('\0'));
 const read = file => JSON.parse(readFileSync(file, 'utf8'));
+export function readPreviousReportForReuse(file) {
+  try { return { report: read(file), error: null }; }
+  catch (error) {
+    if (!(error instanceof SyntaxError)) throw error;
+    return { report: null, error: `invalid JSON in prior report: ${error.message}` };
+  }
+}
 const save = (file, value) => writeFileSync(file, JSON.stringify(value, null, 2) + '\n');
 const assert = (ok, why) => { if (!ok) throw new Error(why); };
 const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { cwd: root, encoding: 'utf8', env: repoEnv(), maxBuffer: 32 * 1024 * 1024, ...opts })?.trim() || '';
@@ -56,6 +69,30 @@ function claim() {
 const release = () => run('bash', ['scripts/sim/sim', 'release'], { stdio: 'inherit' });
 const metroFile = join(buildDir, 'metro.json');
 const processIdentity = pid => run('ps', ['-p', String(pid), '-o', 'lstart=,command=']);
+export function runSelectedRecordedFlow(mode, options) {
+  return runRecordedFlow({ ...options, recordVideo: mode?.recordVideo });
+}
+function verifyRecordedFlow({ recorded, captureVerified, captureError = null, ...outcome }) {
+  applyCapturePolicy(recorded.result, { verified: captureVerified, error: captureError });
+  return recordFlowOutcome({ recorded, ...outcome });
+}
+function writeAttachmentCloseout({ before, after, udid, dir, timeline, flow }) {
+  const file = join(dir, 'xctest-attachment-closeout.json');
+  try {
+    const receipt = closeoutXCTestAttachments(before, typeof after === 'function' ? after() : after);
+    save(file, receipt);
+    event(timeline, { type: 'xctest-attachment-closeout', flow,
+      generatedVideos: receipt.generated.videos, deletedVideos: receipt.deleted.length,
+      remainingHistoricalVideos: receipt.remainingVideos.length,
+      outcome: receipt.generated.videos ? 'unexpected-video-retired' : 'no-new-video' });
+    return { receipt, file, error: null };
+  } catch (error) {
+    save(file, { at: new Date().toISOString(), udid, error: error.message,
+      action: 'Inspect exact attachment ownership and writer state before another native phase' });
+    event(timeline, { type: 'xctest-attachment-closeout', flow, outcome: 'fail', error: error.message });
+    return { receipt: null, file, error: error.message };
+  }
+}
 async function stopMetro() {
   if (!existsSync(metroFile)) return;
   const m = read(metroFile);
@@ -97,17 +134,22 @@ async function startMetro(r) {
   child.unref();
   const m = { pid: child.pid, port: r.metroPort, processIdentity: processIdentity(child.pid), nativeSourceHash: r.nativeSourceHash, configHash: r.configHash };
   save(metroFile, m);
-  for (let attempt = 0; attempt < 120; attempt++) {
-    let ready = false;
-    try {
-      const response = await fetch(`http://localhost:${m.port}/status`, { signal: AbortSignal.timeout(1000) });
-      ready = await response.text() === 'packager-status:running';
-    } catch { /* startup only; failure below remains blocking */ }
-    if (ready) return { ...m, bundleHash: await metroBundle(m) };
-    assert(processIdentity(m.pid) === m.processIdentity, 'Owned Metro exited during startup; inspect metro.log');
-    await new Promise(done => setTimeout(done, 500));
+  try {
+    for (let attempt = 0; attempt < 120; attempt++) {
+      let ready = false;
+      try {
+        const response = await fetch(`http://localhost:${m.port}/status`, { signal: AbortSignal.timeout(1000) });
+        ready = await response.text() === 'packager-status:running';
+      } catch { /* startup only; failure below remains blocking */ }
+      if (ready) return { ...m, bundleHash: await metroBundle(m) };
+      assert(processIdentity(m.pid) === m.processIdentity, 'Owned Metro exited during startup; inspect metro.log');
+      await new Promise(done => setTimeout(done, 500));
+    }
+    throw new Error('Owned Metro did not become ready; inspect metro.log');
+  } catch (error) {
+    try { await stopMetro(); } catch { /* leave the ownership receipt for explicit cleanup */ }
+    throw error;
   }
-  throw new Error('Owned Metro did not become ready; inspect metro.log');
 }
 async function checkBundle(report) {
   if (report.buildMode === 'owned-metro-test-store') {
@@ -125,6 +167,9 @@ function receipt() {
 async function build(udid, testStore) {
   const config = environment(), identity = device(udid), source = inputHash(root, true);
   const profile = buildProfile(testStore, process.env), buildRecipeHash = recipeHash();
+  mkdirSync(resumeDir, { recursive: true });
+  const admission = admitDisk(root, 'Native build');
+  event(join(resumeDir, 'runner-events.jsonl'), { type: 'build-admission', ...admission, simulator: udid, source });
   claim();
   try {
     mkdirSync(buildDir, { recursive: true });
@@ -173,7 +218,45 @@ async function build(udid, testStore) {
     console.log('Built identified simulator app. Next: run <UDID> [flow names].');
   } finally { release(); }
 }
-async function execute(udid, names) {
+async function execute(udid, names, mode) {
+  const runFlow = options => runSelectedRecordedFlow(mode, options);
+  if (process.env.NODE_ENV === 'test' && process.env.FITSY_PRODUCT_FLOW_TEST_FIXTURE) {
+    const fixture = read(process.env.FITSY_PRODUCT_FLOW_TEST_FIXTURE);
+    const { runner, commandsFile, captureReceipt, reportFile, flowName } = fixture;
+    const report = { ...fixture.reportTemplate, result: 'running', evidenceMode: mode.name,
+      videoRequested: mode.recordVideo, flows: fixture.reportTemplate?.flows || [] };
+    save(reportFile, report);
+    let recorded, attachment;
+    try { recorded = await runFlow({ ...runner, env: process.env, diagnostic: async () => {} }); }
+    finally {
+      const snapshots = fixture.attachmentSnapshots;
+      attachment = writeAttachmentCloseout({ before: snapshots.before, after: snapshots.after,
+        udid: runner.udid, dir: runner.dir, timeline: runner.timeline, flow: flowName });
+    }
+    const commands = existsSync(commandsFile) ? read(commandsFile) : null;
+    const captureEvents = existsSync(captureReceipt) ? readFileSync(captureReceipt, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse) : [];
+    const captureError = attachment.error || (attachment.receipt.generated.videos ? 'XCTest created unexpected video attachment' : null);
+    const outcome = verifyRecordedFlow({ recorded, captureError, captureVerified: !captureError && captureEvents.length > 0 &&
+      captureEvents.every(item => item.udid === runner.udid && item.preferredScreenCaptureFormat === 'screenshots'),
+      commands, videoPath: mode.recordVideo ? runner.video : null, videoReceipt: mode.recordVideo ? 'video.mp4' : null,
+      dir: runner.dir, flowName, report, reportFile, timeline: runner.timeline,
+      commandReceipt: existsSync(commandsFile) ? commandsFile : null,
+      failureDetail: failureReason => ({ failureReason, commandReceipt: existsSync(commandsFile) ? commandsFile : null }) });
+    if (outcome.failureReason) throw new Error(`Fixture flow failed: ${outcome.failureReason}`);
+    report.flows.push({ ...fixture.flowTemplate, name: flowName,
+      commands: relative(dirname(reportFile), commandsFile), sha256: digest(readFileSync(commandsFile)),
+      captureReceipt: relative(dirname(reportFile), captureReceipt), captureReceiptHash: digest(readFileSync(captureReceipt)),
+      attachmentCloseout: relative(dirname(reportFile), attachment.file), attachmentCloseoutHash: digest(readFileSync(attachment.file)),
+      ...(mode.recordVideo ? { video: relative(dirname(reportFile), runner.video), videoHash: digest(readFileSync(runner.video)) } : {}) });
+    report.result = 'pass';
+    save(reportFile, report);
+    console.log(JSON.stringify({ code: recorded.result.code, recorder: recorded.recorderResult.state, report: reportFile }));
+    return;
+  }
+  if (mode.recordVideo) {
+    try { run('ffprobe', ['-version'], { timeout: 5000 }); run('ffmpeg', ['-version'], { timeout: 5000 }); }
+    catch { throw new Error('ffprobe and ffmpeg are required to validate recorded product-flow video before running Maestro'); }
+  }
   const r = receipt(), identity = device(udid), server = backend();
   const fixture = fixtureLabel(process.env.FITSY_FIXTURE, process.env.FITSY_SIM_RESET_KEYCHAIN === udid);
   const hash = inputHash(), plan = impact(changedPaths(process.env.FITSY_DIFF_BASE));
@@ -186,13 +269,52 @@ async function execute(udid, names) {
     return { name, source, sourceHash: digest(bytes), tags: yaml.load(bytes.toString().split(/^---\s*$/m)[0]).tags || [] };
   });
   for (const c of plan.categories) assert(flowSources.some(f => !baseline.includes(f.name) && f.tags.includes(c)), `Add/select a deterministic scenario tagged ${c}`);
+  const existingReport = join(out, 'report.json');
+  if (mode.publishable && !process.env.FITSY_SIM_RESET_KEYCHAIN && existsSync(existingReport)) {
+    const { report: previous, error: priorError } = readPreviousReportForReuse(existingReport);
+    if (priorError) console.log(`Existing final-candidate evidence cannot be reused: ${priorError}. A fresh run will archive it.`);
+    if (matchesFinalCandidate(previous, { udid, appHash: r.appHash, configHash: r.configHash,
+      backendDeployment: server.backendDeployment, fixture, flows: flowSources, recordVideo: mode.recordVideo })) {
+      try {
+        validate(previous, plan, hash, out, Date.now(), root, inputHash(root, true), mode.name);
+        await checkBundle(previous);
+        console.log('Reusing valid final-candidate evidence for this source, app, backend, simulator and flow selection.');
+        return;
+      } catch (error) { console.log(`Existing final-candidate evidence cannot be reused: ${error.message}`); }
+    }
+  }
+  mkdirSync(resumeDir, { recursive: true });
+  const admission = admitDisk(root, 'Native run');
+  const history = existsSync(failuresFile) ? read(failuresFile) : [];
+  const previous = history.slice(-2);
+  if (needsDiagnosis(history)) {
+    const checkpoint = join(resumeDir, 'diagnosis-checkpoint.json');
+    save(checkpoint, { reason: 'Two matching native failures', failures: previous,
+      next: 'Inspect both raw receipts and screen/AX evidence. Write a diagnosis, counterfactual and repair before a new run.' });
+    const supplied = process.env.FITSY_DIAGNOSIS_CHECKPOINT;
+    const diagnosis = supplied && existsSync(supplied) ? read(supplied) : null;
+    if (!diagnosis?.cause || !diagnosis?.counterfactual || !diagnosis?.evidence) throw new Error(`Two matching failures require a diagnosis before retry. Write JSON with cause, counterfactual and evidence; set FITSY_DIAGNOSIS_CHECKPOINT to its path. See ${checkpoint}`);
+    history.at(-1).diagnosis = { file: supplied, at: new Date().toISOString() };
+    save(failuresFile, history);
+  }
   claim();
   try {
-    // A new run invalidates all previous receipts, including after a failed command.
-    rmSync(out, { recursive: true, force: true }); mkdirSync(out, { recursive: true });
+    // Retain complete raw proof from a previous run before invalidating its report.
+    if (existsSync(out)) {
+      const archive = join(resumeDir, `product-flow-${Date.now()}`);
+      renameSync(out, archive);
+      const relocated = archiveFailureEvidence(history, relative(root, out), relative(root, archive));
+      history.splice(0, history.length, ...relocated);
+      save(failuresFile, history);
+    }
+    mkdirSync(out, { recursive: true });
+    const timeline = join(out, 'runner-timeline.jsonl');
+    event(timeline, { type: 'run-start', simulator: udid, inputHash: hash, buildHash: r.appHash, admission, evidenceMode: mode.name,
+      videoRequested: mode.recordVideo });
     const { app, ...buildIdentity } = r;
     const report = { version: 1, ...buildIdentity, ...identity, ...server, inputHash: hash, result: 'running', startedAt: new Date().toISOString(),
-      fixture, keychainReset: false, maestroVersion: run(process.env.MAESTRO_BIN || 'maestro', ['--version']), flows: [], exploration: [] };
+      fixture, keychainReset: false, evidenceMode: mode.name, videoRequested: mode.recordVideo,
+      maestroVersion: run(process.env.MAESTRO_BIN || 'maestro', ['--version']), flows: [], exploration: [] };
     save(join(out, 'report.json'), report);
     if (process.env.FITSY_SIM_RESET_KEYCHAIN) {
       assert(process.env.FITSY_SIM_RESET_KEYCHAIN === udid, 'Keychain reset must explicitly name the selected disposable simulator');
@@ -206,22 +328,101 @@ async function execute(udid, names) {
       save(join(out, 'report.json'), report);
     }
     run('xcrun', ['simctl', 'install', udid, app]);
+    assert(run('xcrun', ['simctl', 'get_app_container', udid, 'com.fitsy.mobile', 'app']), 'Installed app is absent; rebuild and reinstall before Maestro');
     for (const flow of flowSources) {
+      assert(hash === inputHash() && r.appHash === treeHash(app) && r.configHash === environment().configHash, 'Source, app or configuration changed before Maestro; rebuild');
+      if (r.buildMode === 'owned-metro-test-store') await requireMetro(report.metro, { processIdentity, sourceHash: r.nativeSourceHash, configHash: r.configHash });
       const dir = join(out, flow.name); mkdirSync(dir);
-      run(process.env.MAESTRO_BIN || 'maestro', ['test', '--udid', udid, join(root, flow.source), '--format', 'junit', '--output', join(dir, 'junit.xml'), '--debug-output', dir, '--test-output-dir', dir], { stdio: 'inherit' });
+      const flowBytes = readFileSync(join(root, flow.source), 'utf8');
+      event(timeline, { type: 'flow-start', flow: flow.name, expected: 'all required commands complete', sourceHash: flow.sourceHash });
+      let diagnosticCount = 0;
+      const diagnostic = async (reason, details) => {
+        const diagnosticName = `diagnostic-${++diagnosticCount}-${reason.replace(/[^a-z0-9-]/gi, '-')}`;
+        const screenshot = join(dir, `${diagnosticName}-screen.png`);
+        try { run('xcrun', ['simctl', 'io', udid, 'screenshot', screenshot], { timeout: 15000 }); } catch { /* explicitly recorded below */ }
+        save(join(dir, `${diagnosticName}.json`), { reason, ...details, screenshot: existsSync(screenshot) ? relative(out, screenshot) : null,
+          ax: 'unavailable until Maestro writes a failed command hierarchy', networkTiming: 'unavailable' });
+      };
+      const video = join(dir, 'flow-untrimmed.mp4');
+      const captureReceipt = join(dir, 'xctest-capture-policy.jsonl');
+      writeFileSync(captureReceipt, '');
+      const attachmentBefore = snapshotXCTestAttachments(udid);
+      let recorded, attachment;
+      try { recorded = await runFlow({
+        maestroCommand: process.env.MAESTRO_BIN || 'maestro',
+        maestroArgs: ['test', '--udid', udid, join(root, flow.source), '--format', 'junit', '--output', join(dir, 'junit.xml'), '--debug-output', dir, '--test-output-dir', dir],
+        udid, video, recorderLog: join(dir, 'recorder.log'), cwd: root,
+        env: { ...repoEnv(), PATH: `${join(root, 'scripts/sim')}${delimiter}${process.env.PATH || ''}`,
+          FITSY_XCTEST_CAPTURE_RECEIPT: captureReceipt, FITSY_XCTEST_SIM_UDID: udid },
+        dir, timeline, flow: flowBytes, diagnostic });
+      } finally {
+        attachment = writeAttachmentCloseout({ before: attachmentBefore, after: () => snapshotXCTestAttachments(udid),
+          udid, dir, timeline, flow: flow.name });
+      }
+      const { result, recorderResult } = recorded;
+      let captureEvents = [], captureError = null;
+      try { captureEvents = readFileSync(captureReceipt, 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line)); }
+      catch (error) { captureError = error.message; }
+      if (attachment.error) captureError = `XCTest attachment closeout failed: ${attachment.error}`;
+      else if (attachment.receipt.generated.videos) captureError = `XCTest created ${attachment.receipt.generated.videos} unexpected video attachment(s); exact files were retired after writer-idle proof`;
+      const captureVerified = !captureError && captureEvents.length > 0 &&
+        captureEvents.every(item => item.udid === udid && item.preferredScreenCaptureFormat === 'screenshots');
+      event(timeline, { type: 'xctest-capture-check', flow: flow.name, outcome: captureVerified ? 'verified' : 'missing-or-invalid',
+        expected: 'owned xcodebuild uses screenshots, never screenRecording', receipt: relative(out, captureReceipt) });
       const commands = files(dir).filter(f => /commands-.*\.json$/.test(f));
+      let parsed = null, commandParseError = null;
+      if (commands.length === 1) {
+        try { parsed = read(commands[0]); }
+        catch (error) { commandParseError = error.message; }
+      }
+      const failure = Array.isArray(parsed) ? nearestFailure(parsed) : null;
+      const outcome = verifyRecordedFlow({ dir, recorded, captureVerified, captureError, commands: parsed, videoPath: mode.recordVideo ? video : null,
+        videoReceipt: mode.recordVideo ? relative(out, video) : null,
+        flowName: flow.name, report, reportFile: join(out, 'report.json'), timeline,
+        commandReceipt: commands.length === 1 ? relative(out, commands[0]) : null,
+        failureDetail: failureReason => {
+          const screenshot = join(dir, 'failure-screen.png');
+          try { run('xcrun', ['simctl', 'io', udid, 'screenshot', screenshot], { timeout: 15000 }); } catch { /* absence recorded below */ }
+          const log = latestMaestroLog(dir);
+          // Retain raw log; expose only status and duration pairs in the derived summary.
+          const networkTiming = log ? [...readFileSync(log, 'utf8').matchAll(/\bHTTP\s+(\d{3})\b[^\n]{0,100}?\b(\d+)\s*ms\b/g)].map(match => ({ status: Number(match[1]), durationMs: Number(match[2]) })) : [];
+          return { flow: flow.name, failureReason, exitCode: result.code,
+            watchdog: ['inactivity-deadline', 'wall-deadline'].find(reason => reason === (result.priorReason || result.reason)) || null,
+            runnerError: result.error || null, capturePolicyFailure: result.capturePolicyFailure || null,
+            commandReceipt: commands.length === 1 ? relative(out, commands[0]) : null, commandParseError,
+            recorder: { ...recorderResult, file: mode.recordVideo ? relative(out, video) : null },
+            failedCommand: failure && { command: failure.command, expected: failure.expected, deadlineMs: failure.deadlineMs, error: failure.error },
+            nearestScreenshot: existsSync(screenshot) ? relative(out, screenshot) : null,
+            nearestAX: failure?.hierarchy ? 'raw failed command metadata.error.hierarchyRoot' : null,
+            networkTiming: networkTiming.length ? networkTiming : null, networkTimingAbsence: networkTiming.length ? null : 'No structured network status/duration in Maestro log' };
+        } });
+      if (outcome.failureReason) {
+        appendRecordedFlowFailure(history, failure, flow.name, outcome, result,
+          { at: new Date().toISOString(), evidence: relative(root, dir), head: run('git', ['rev-parse', 'HEAD']) });
+        save(failuresFile, history);
+        throw new Error(`Native flow ${flow.name} failed; inspect ${relative(root, join(dir, 'failure.json'))} and raw Maestro receipt before retry`);
+      }
       assert(commands.length === 1, `Expected exactly one command report: ${flow.name}`);
       const screenshot = join(dir, 'outcome.png');
       run('xcrun', ['simctl', 'io', udid, 'screenshot', screenshot]);
-      report.flows.push({ ...flow, commands: relative(out, commands[0]), sha256: digest(readFileSync(commands[0])), screenshot: relative(out, screenshot), screenshotHash: digest(readFileSync(screenshot)) });
+      report.flows.push({ ...flow, commands: relative(out, commands[0]), sha256: digest(readFileSync(commands[0])),
+        screenshot: relative(out, screenshot), screenshotHash: digest(readFileSync(screenshot)),
+        captureReceipt: relative(out, captureReceipt), captureReceiptHash: digest(readFileSync(captureReceipt)),
+        attachmentCloseout: relative(out, join(dir, 'xctest-attachment-closeout.json')),
+        attachmentCloseoutHash: digest(readFileSync(join(dir, 'xctest-attachment-closeout.json'))),
+        ...(mode.recordVideo ? { video: relative(out, video), videoHash: digest(readFileSync(video)) } : {}) });
       save(join(out, 'report.json'), report);
+      event(timeline, { type: 'flow-end', flow: flow.name, outcome: 'pass', elapsedMs: result.elapsedMs, commandReceipt: relative(out, commands[0]) });
     }
     assert(hash === inputHash() && r.appHash === treeHash(app), 'Candidate changed during tests');
     assert(server.backendDeployment === backend().backendDeployment, 'Dev deployment changed during tests');
     await checkBundle(report);
-    report.result = 'awaiting-walkthrough'; report.maestroFinishedAt = new Date().toISOString();
-    save(join(out, 'report.json'), report);
+    completeMaestroRun(join(out, 'report.json'), timeline, report);
     console.log('Maestro complete. Capture affected primary/recovery flows through Mobile MCP, then finish <walkthrough.json>.');
+  } catch (error) {
+    const evidenceErrors = recordRunFailure(join(out, 'report.json'), join(out, 'runner-timeline.jsonl'), error);
+    if (evidenceErrors.length) console.error(`Failure receipt write errors: ${evidenceErrors.join('; ')}`);
+    throw error;
   } finally { release(); }
 }
 async function finish(walkthrough) {
@@ -238,7 +439,8 @@ async function finish(walkthrough) {
     o.sha256 = digest(readFileSync(join(out, o.trace)));
   }
   report.result = 'pass'; report.finishedAt = new Date().toISOString();
-  const result = validate(report, impact(changedPaths(process.env.FITSY_DIFF_BASE)), inputHash(), out);
+  const result = validate(report, impact(changedPaths(process.env.FITSY_DIFF_BASE)), inputHash(), out,
+    Date.now(), root, inputHash(root, true), report.evidenceMode);
   save(join(out, 'report.json'), report); console.log(JSON.stringify(result));
 }
 async function check() {
@@ -247,7 +449,7 @@ async function check() {
   assert(report.backendDeployment === backend().backendDeployment, 'Dev deployment changed after tests');
   await checkBundle(report);
 }
-try {
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) try {
   const [command, ...args] = process.argv.slice(2);
   if (['build', 'run'].includes(command) && process.platform === 'darwin') {
     const awake = spawn('/usr/bin/caffeinate', ['-i', '-w', String(process.pid)], { stdio: 'ignore' });
@@ -258,9 +460,9 @@ try {
     assert(args.length === 1 || (args.length === 2 && args[1] === '--test-store'), 'build UDID [--test-store]');
     await build(args[0], args[1] === '--test-store');
   }
-  else if (command === 'run') await execute(args[0], args.slice(1));
+  else if (command === 'run') { const selected = runSelection(args); await execute(selected.udid, selected.names, selected.mode); }
   else if (command === 'finish') await finish(args[0]);
   else if (command === 'check') await check();
   else if (command === 'stop-metro') await stopMetro();
-  else throw new Error('Usage: node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs build UDID | run UDID [flow names] | finish [walkthrough.json]');
+  else throw new Error('Usage: node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs build UDID | run UDID [flow names] [--mode=development|final-candidate|requested-video] [--record-video] | finish [walkthrough.json]');
 } catch (e) { console.error(e.message); process.exitCode = 1; }
