@@ -29,7 +29,7 @@ function container(file) {
       const type = header.toString('ascii', 4, 8);
       if (firstType === undefined) {
         firstType = type;
-        if (type !== 'ftyp' && type !== 'wide') return {};
+        if (type !== 'ftyp' && type !== 'wide' && type !== 'free') return {};
       }
       let headerBytes = 8;
       let boxBytes = header.readUInt32BE(0);

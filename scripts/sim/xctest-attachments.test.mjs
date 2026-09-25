@@ -10,10 +10,14 @@ import { closeoutXCTestAttachments, snapshotXCTestAttachments } from './xctest-a
 const udid = '9E661282-FCE3-4C70-A503-EB2FFA0AD02B';
 const quicktime = readFileSync(new URL('./fixtures/quicktime.mov', import.meta.url));
 const mp4 = readFileSync(new URL('../verify/fixtures/valid.mp4', import.meta.url));
+const leadingFreeMp4 = readFileSync(new URL('./fixtures/leading-free.mp4', import.meta.url));
 const audioOnly = readFileSync(new URL('./fixtures/audio-only.mp4', import.meta.url));
 const iso5 = readFileSync(new URL('./fixtures/valid-iso5.mp4', import.meta.url));
 const validHeic = readFileSync(new URL('./fixtures/valid-image.heic', import.meta.url));
 const heic = Buffer.concat([Buffer.from([0, 0, 0, 12]), Buffer.from('ftyp'), Buffer.from('heic')]);
+const leadingFreeHeic = Buffer.concat([Buffer.from([0, 0, 0, 8]), Buffer.from('free'), validHeic]);
+const malformedLeadingFree = Buffer.concat([Buffer.from([0, 0, 0, 8]), Buffer.from('free'),
+  Buffer.from([0, 0, 0, 24]), Buffer.from('ftyp')]);
 const unknown = Buffer.concat([Buffer.from([0, 0, 0, 12]), Buffer.from('ftyp'), Buffer.from('zzzz')]);
 const wideQuicktime = Buffer.concat([Buffer.from([0, 0, 0, 8]), Buffer.from('wide'), Buffer.from([0, 0, 0, 16]), Buffer.from('mdat'), Buffer.alloc(8)]);
 function fixture() {
@@ -52,10 +56,10 @@ test('active attachment writer blocks exact-file video retirement', () => {
   try {
     const before = snapshotXCTestAttachments(udid, { deviceRoot: root });
     const newVideo = join(attachments, 'new-uuid');
-    writeFileSync(newVideo, quicktime);
+    writeFileSync(newVideo, leadingFreeMp4);
     const after = snapshotXCTestAttachments(udid, { deviceRoot: root });
     assert.throws(() => closeoutXCTestAttachments(before, after, { idleCheck: () => { throw Error('writer active'); } }), /writer active/);
-    assert.equal(readFileSync(newVideo).toString('hex'), quicktime.toString('hex'));
+    assert.deepEqual(readFileSync(newVideo), leadingFreeMp4);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -87,8 +91,10 @@ test('actual closeout classifies movie structure and preserves image, audio and 
     const before = snapshotXCTestAttachments(udid, { deviceRoot: root });
     const wideFirst = Buffer.concat([quicktime.subarray(20, 28), quicktime.subarray(0, 20), quicktime.subarray(28)]);
     const files = new Map([
-      ['quicktime', quicktime], ['wide-quicktime', wideFirst], ['ordinary-mp4', mp4], ['iso5-mp4', iso5],
-      ['heic-image', validHeic], ['audio-only', audioOnly], ['unknown', unknown],
+      ['quicktime', quicktime], ['wide-quicktime', wideFirst], ['ordinary-mp4', mp4],
+      ['leading-free-mp4', leadingFreeMp4], ['iso5-mp4', iso5],
+      ['heic-image', validHeic], ['leading-free-heic', leadingFreeHeic],
+      ['audio-only', audioOnly], ['unknown', unknown], ['malformed-leading-free', malformedLeadingFree],
       ['unprobeable', Buffer.concat([Buffer.from([0, 0, 0, 16]), Buffer.from('ftypiso5'), Buffer.alloc(4),
         Buffer.from([0, 0, 0, 8]), Buffer.from('moov'), Buffer.from([0, 0, 0, 8]), Buffer.from('mdat')])],
     ]);
@@ -102,13 +108,14 @@ test('actual closeout classifies movie structure and preserves image, audio and 
     const result = closeoutXCTestAttachments(before, after, { idleCheck: directory => checked.push(directory) });
     assert.deepEqual(checked, [attachments]);
     assert.deepEqual(result.deleted.map(entry => entry.path).sort(),
-      ['quicktime', 'wide-quicktime', 'ordinary-mp4', 'iso5-mp4'].map(name => join(attachments, name)).sort());
-    assert.equal(result.generated.videos, 4);
+      ['quicktime', 'wide-quicktime', 'ordinary-mp4', 'leading-free-mp4', 'iso5-mp4'].map(name => join(attachments, name)).sort());
+    assert.equal(result.generated.videos, 5);
     assert.equal(result.uncertainAttachments.some(entry => entry.path === join(attachments, 'unknown')), true);
     assert.equal(result.uncertainAttachments.some(entry => entry.path === join(attachments, 'unprobeable')), true);
-    for (const name of ['quicktime', 'wide-quicktime', 'ordinary-mp4', 'iso5-mp4'])
+    assert.equal(result.uncertainAttachments.some(entry => entry.path === join(attachments, 'malformed-leading-free')), true);
+    for (const name of ['quicktime', 'wide-quicktime', 'ordinary-mp4', 'leading-free-mp4', 'iso5-mp4'])
       assert.equal(existsSync(join(attachments, name)), false, `${name} retired`);
-    for (const name of ['heic-image', 'audio-only', 'unknown', 'unprobeable'])
+    for (const name of ['heic-image', 'leading-free-heic', 'audio-only', 'unknown', 'unprobeable', 'malformed-leading-free'])
       assert.deepEqual(readFileSync(join(attachments, name)), files.get(name), `${name} preserved`);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
@@ -181,7 +188,7 @@ test('actual closeout rejects lsof warning while an owned child holds the video 
   try {
     const before = snapshotXCTestAttachments(udid, { deviceRoot: root });
     const video = join(attachments, 'writer-held-uuid');
-    writeFileSync(video, quicktime);
+    writeFileSync(video, leadingFreeMp4);
     const after = snapshotXCTestAttachments(udid, { deviceRoot: root });
     const ready = join(root, 'holder-ready');
     child = spawn(process.execPath, ['-e',
@@ -191,7 +198,7 @@ test('actual closeout rejects lsof warning while an owned child holds the video 
     assert.equal(existsSync(ready), true, 'owned file holder started');
     process.env.PATH = `${fakeLsof(root, "echo 'lsof: WARNING: scan incomplete' >&2; exit 1")}:${priorPath}`;
     assert.throws(() => closeoutXCTestAttachments(before, after), /writer scan was not clean.*WARNING/);
-    assert.deepEqual(readFileSync(video), quicktime);
+    assert.deepEqual(readFileSync(video), leadingFreeMp4);
   } finally {
     process.env.PATH = priorPath;
     if (child) { child.kill('SIGTERM'); await new Promise(resolve => child.once('exit', resolve)); }
