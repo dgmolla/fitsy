@@ -109,6 +109,10 @@ An existing status from another provider still satisfies the same lens; a cache 
 The implementing agent must not author its own independent review verdict.
 A matching post-PR pass should reuse the local verdict rather than duplicate the expensive review.
 A changed diff or changed review inputs invalidates that reuse.
+Every finding has a separate impact priority, and raw reviewer verdicts remain unchanged.
+The canonical runner accepts an owned, source-bound P2/P3 follow-up only through the disposition and required-test contract in [review-dispositions.md](review-dispositions.md).
+P0/P1 impacts, malformed dispositions, stale receipts and missing required tests remain blocking.
+New independent review execution stops after two reviewed source rounds or 30 minutes of review time for the candidate, with only the documented named P0/P1 exception.
 A rebase may alter the actual diff and requires checking again.
 
 Local mode does not carry the full PR body into its review context.

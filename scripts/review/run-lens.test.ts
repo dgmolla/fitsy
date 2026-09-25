@@ -1,4 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { cpSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -39,7 +40,7 @@ beforeEach(() => {
   mkdirSync(join(root, "scripts/verify"), { recursive: true });
   mkdirSync(join(root, ".claude/lenses"), { recursive: true });
   mkdirSync(join(root, "bin"));
-  for (const name of ["run-lens.sh", "execute-review.py", "extract-verdict.py", "tier.mjs"]) {
+  for (const name of ["run-lens.sh", "execute-review.py", "extract-verdict.py", "review-gate.py", "review-budget.py", "tier.mjs"]) {
     cpSync(join(source, "scripts/review", name), join(root, "scripts/review", name));
   }
   cpSync(join(source, "scripts/verify/risk-tiers.yml"), join(root, "scripts/verify/risk-tiers.yml"));
@@ -111,9 +112,78 @@ test("provider identity separates cache entries", () => {
 
 test("advisory docs findings remain visible without blocking the caller", () => {
   writeFileSync(join(root, ".claude/lenses/docs-sanity.md"), "Review documentation.\n");
-  const advisory = { lens: "docs-sanity", verdict: "fail", findings: [{ severity: "CONFIRMED", file: "docs/setup.md", line: 3, summary: "Missing command", scenario: "Setup command fails", fix: "Use the existing command" }] };
+  const advisory = { lens: "docs-sanity", verdict: "fail", findings: [{ severity: "CONFIRMED", priority: "P2", impact: "Setup instruction fails for new developers", file: "docs/setup.md", line: 3, summary: "Missing command", scenario: "Setup command fails", fix: "Use the existing command" }] };
   writeFileSync(join(root, "verdict"), JSON.stringify(advisory));
   const result = run("fixture-model", "claude", "docs-sanity");
   expect(result.status).toBe(0);
   expect(JSON.parse(result.stdout)).toMatchObject(advisory);
+});
+
+const impact = { user_outcome: "Native proof starts", trigger: "Historical movie without ffprobe", scope: "No-video simulator run", evidence: "review58 reproduction", contract: "Optional video tools" };
+function hash(value: string) { return createHash("sha256").update(value).digest("hex"); }
+function stable(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stable).join(",")}]`;
+  if (value && typeof value === "object") return `{${Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${JSON.stringify(k)}:${stable(v)}`).join(",")}}`;
+  return JSON.stringify(value);
+}
+function failingReview(priority: "P1" | "P2") {
+  const finding = { severity: "CONFIRMED", priority, impact: "A no-video run stops before its required flow", file: "scripts/sim/xctest-attachments.mjs", line: 81,
+    summary: "Historical movie requires ffprobe", scenario: "Historical movie and missing ffprobe -> run aborts", fix: "Classify only new movies" };
+  writeFileSync(join(root, "verdict"), JSON.stringify({ lens: "correctness", verdict: "fail", findings: [finding] }));
+  const first = run();
+  expect(first.status).toBe(1);
+  expect(JSON.parse(first.stdout)).toMatchObject({ verdict: "fail", findings: [{ priority }] });
+  const match = first.stderr.match(/\[run-lens\] gate: (\{[^\n]+\})/);
+  expect(match).not.toBeNull();
+  const identity = JSON.parse(match![1]!).identity;
+  const receiptPath = ".evidence/review-tests/verify.json";
+  mkdirSync(join(root, ".evidence/review-tests"), { recursive: true });
+  const receipt = JSON.stringify({ id: "verify", source_sha: git("rev-parse", "HEAD").trim(), command: "npm run verify", result: "pass", exit_code: 0, finished_at: "2026-09-25T12:00:00Z" });
+  writeFileSync(join(root, receiptPath), receipt);
+  const disposition = { version: 1, lens: "correctness", ...identity, findings: [{ index: 0, finding_sha256: hash(stable(finding)), priority,
+    disposition: priority === "P1" ? "block" : "defer", impact, owner: "shipping follow-up", acceptance: "No-video historical movie snapshot works",
+    required_tests: [{ id: "verify", receipt: receiptPath, sha256: hash(receipt) }] }] };
+  const dir = join(root, ".evidence/review-dispositions");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "correctness.json"), JSON.stringify(disposition));
+  return { first, disposition, receiptPath };
+}
+
+test("deferred P2 passes the effective gate while raw failure and cache stay intact", () => {
+  failingReview("P2");
+  const accepted = run();
+  expect(accepted.status).toBe(0);
+  expect(JSON.parse(accepted.stdout)).toMatchObject({ verdict: "fail", findings: [{ priority: "P2" }] });
+  expect(accepted.stderr).toContain('"gate": "pass"');
+  expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(1);
+});
+test("P1 remains blocking even with a complete disposition", () => {
+  failingReview("P1");
+  const rejected = run();
+  expect(rejected.status).toBe(1);
+  expect(rejected.stderr).toContain("P0/P1 finding blocks");
+});
+test("malformed disposition and missing required test fail closed", () => {
+  const { disposition, receiptPath } = failingReview("P2");
+  const path = join(root, ".evidence/review-dispositions/correctness.json");
+  writeFileSync(path, JSON.stringify({ ...disposition, findings: [{ ...disposition.findings[0], disposition: "pass" }] }));
+  expect(run().status).toBe(1);
+  writeFileSync(path, JSON.stringify(disposition));
+  rmSync(join(root, receiptPath));
+  const missing = run();
+  expect(missing.status).toBe(1);
+  expect(missing.stderr).toContain("missing required test receipt");
+});
+test("stale source-bound receipt and changed review inputs cannot reuse a pass", () => {
+  const { disposition, receiptPath } = failingReview("P2");
+  const receipt = JSON.parse(readFileSync(join(root, receiptPath), "utf8"));
+  receipt.source_sha = "old-head";
+  const bytes = JSON.stringify(receipt);
+  writeFileSync(join(root, receiptPath), bytes);
+  disposition.findings[0].required_tests[0].sha256 = hash(bytes);
+  writeFileSync(join(root, ".evidence/review-dispositions/correctness.json"), JSON.stringify(disposition));
+  expect(run().stderr).toContain("failed or stale required test");
+  writeFileSync(join(root, "REVIEW.md"), "Changed review policy\n");
+  expect(run().status).toBe(1);
+  expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(2);
 });

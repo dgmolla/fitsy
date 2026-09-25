@@ -16,6 +16,7 @@ TARGET="${1:?pr number or --local}"; LENS="${2:?lens name}"
 LENS_FILE=".claude/lenses/$LENS.md"
 [ -f "$LENS_FILE" ] || { echo "unknown lens: $LENS (no $LENS_FILE)" >&2; exit 1; }
 CACHE_DIR="${FITSY_REVIEW_CACHE:-$HOME/.cache/fitsy-review}"
+GH_BIN="${FITSY_GH_BIN:-gh}"
 mkdir -p "$CACHE_DIR"
 umask 077
 
@@ -23,12 +24,12 @@ umask 077
 if [ "$TARGET" = "--local" ]; then
   DIFF="$(git diff --abbrev=8 origin/main...HEAD)"
   TITLE="$(git log -1 --format=%s)"; BODY=""
-  HEAD_SHA=""
+  HEAD_SHA="$(git rev-parse HEAD)"
 else
-  DIFF="$(gh pr diff "$TARGET")"
-  TITLE="$(gh pr view "$TARGET" --json title --jq .title)"
-  BODY="$(gh pr view "$TARGET" --json body --jq .body | head -c 4000)"
-  HEAD_SHA="$(gh pr view "$TARGET" --json headRefOid --jq .headRefOid)"
+  DIFF="$("$GH_BIN" pr diff "$TARGET")"
+  TITLE="$("$GH_BIN" pr view "$TARGET" --json title --jq .title)"
+  BODY="$("$GH_BIN" pr view "$TARGET" --json body --jq .body | head -c 4000)"
+  HEAD_SHA="$("$GH_BIN" pr view "$TARGET" --json headRefOid --jq .headRefOid)"
 fi
 [ -n "$DIFF" ] || { echo "empty diff" >&2; exit 1; }
 
@@ -56,12 +57,24 @@ IDENTITY="$(python3 scripts/review/execute-review.py --identity "$PROVIDER" "$MO
 # --local and PR mode for the same diff, and keying them would defeat the
 # pre-PR -> PR cache reuse. Tradeoff: a title edited after review does not
 # re-trigger; the diff is the reviewed object.
-KEY="$(printf '%s' "$DIFF" | cat - "$LENS_FILE" REVIEW.md "$REPO_ROOT/scripts/review/run-lens.sh" "$REPO_ROOT/scripts/review/execute-review.py" "$REPO_ROOT/scripts/review/extract-verdict.py" <(printf '%s' "$IDENTITY") | shasum -a 256 | cut -d' ' -f1)"
+KEY="$(printf '%s' "$DIFF" | cat - "$LENS_FILE" REVIEW.md "$REPO_ROOT/scripts/review/run-lens.sh" "$REPO_ROOT/scripts/review/execute-review.py" "$REPO_ROOT/scripts/review/extract-verdict.py" "$REPO_ROOT/scripts/review/review-gate.py" "$REPO_ROOT/scripts/review/review-budget.py" <(printf '%s' "$IDENTITY") | shasum -a 256 | cut -d' ' -f1)"
+DIFF_SHA256="$(printf '%s' "$DIFF" | shasum -a 256 | cut -d' ' -f1)"
 CACHE_FILE="$CACHE_DIR/$KEY.json"
 if [ -f "$CACHE_FILE" ]; then
   echo "[run-lens] cache hit ($KEY)" >&2
   RESULT_JSON="$(python3 scripts/review/extract-verdict.py "$LENS" < "$CACHE_FILE")"
 else
+  BUDGET_LEDGER="${FITSY_REVIEW_BUDGET_LEDGER:-$REPO_ROOT/.evidence/review-budget.jsonl}"
+  ROUND_ID="$HEAD_SHA"
+  ATTEMPT_ID="$(python3 -c 'import uuid;print(uuid.uuid4())')"
+  EXCEPTION_ARGS=()
+  if [ -n "${FITSY_REVIEW_EXCEPTION:-}" ]; then EXCEPTION_ARGS=(--exception "$FITSY_REVIEW_EXCEPTION"); fi
+  if ! python3 scripts/review/review-budget.py begin --ledger "$BUDGET_LEDGER" --round-id "$ROUND_ID" \
+      --lens "$LENS" --source-sha "$HEAD_SHA" --attempt-id "$ATTEMPT_ID" \
+      "${EXCEPTION_ARGS[@]}" >&2; then
+    echo "[run-lens] review cap reached; no independent reviewer started" >&2
+    exit 1
+  fi
   PROMPT_FILE="$(mktemp)"
   RAW_FILE="$(mktemp)"
   trap 'rm -f "$PROMPT_FILE" "$RAW_FILE"' EXIT
@@ -85,6 +98,8 @@ else
   else
     RESULT_JSON="$(printf '' | python3 scripts/review/extract-verdict.py "$LENS")"
   fi
+  python3 scripts/review/review-budget.py finish --ledger "$BUDGET_LEDGER" --round-id "$ROUND_ID" \
+    --lens "$LENS" --source-sha "$HEAD_SHA" --attempt-id "$ATTEMPT_ID" >&2
   cp "$RAW_FILE" "$CACHE_DIR/$KEY.raw"
   rm -f "$PROMPT_FILE" "$RAW_FILE"
   trap - EXIT
@@ -104,17 +119,22 @@ fi
 
 VERDICT="$(echo "$RESULT_JSON" | python3 -c 'import sys,json;print(json.load(sys.stdin)["verdict"])')"
 N_FINDINGS="$(echo "$RESULT_JSON" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(len(d.get("findings",[])))')"
+DISPOSITIONS="${FITSY_REVIEW_DISPOSITIONS_DIR:-$REPO_ROOT/.evidence/review-dispositions}/$LENS.json"
+GATE_JSON="$(printf '%s' "$RESULT_JSON" | python3 scripts/review/review-gate.py --lens "$LENS" \
+  --source-sha "$HEAD_SHA" --diff-sha256 "$DIFF_SHA256" --dispositions "$DISPOSITIONS" --root "$REPO_ROOT")" || true
+GATE="$(printf '%s' "$GATE_JSON" | python3 -c 'import sys,json;print(json.load(sys.stdin)["gate"])')"
+echo "[run-lens] gate: $GATE_JSON" >&2
 echo "$RESULT_JSON"
 
 # ── Post (PR mode only) ─────────────────────────────────────────────────────
 if [ "$TARGET" != "--local" ]; then
-  if [ "$BLOCKING" = "0" ]; then STATE=success; else STATE=$([ "$BLOCKING" = "0" ] || [ "$VERDICT" = "pass" ] && echo success || echo failure); fi
-  gh api "repos/{owner}/{repo}/statuses/$HEAD_SHA" -f state="$STATE" \
-    -f context="lens/$LENS" -f description="$N_FINDINGS finding(s), tier $TIER, $PROVIDER/$MODEL" >/dev/null
+  if [ "$BLOCKING" = "0" ]; then STATE=success; else STATE=$([ "$GATE" = "pass" ] && echo success || echo failure); fi
+  "$GH_BIN" api "repos/{owner}/{repo}/statuses/$HEAD_SHA" -f state="$STATE" \
+    -f context="lens/$LENS" -f description="$N_FINDINGS finding(s), raw $VERDICT, gate $GATE, $PROVIDER/$MODEL" >/dev/null
   if [ "$N_FINDINGS" -gt 0 ]; then
     COMMENT="$(echo "$RESULT_JSON" | python3 scripts/review/format-comment.py)"
-    gh pr comment "$TARGET" --body "$COMMENT" >/dev/null
+    "$GH_BIN" pr comment "$TARGET" --body "$COMMENT" >/dev/null
   fi
   echo "[run-lens] posted lens/$LENS=$STATE on ${HEAD_SHA:0:7}" >&2
 fi
-[ "$BLOCKING" = "0" ] || [ "$VERDICT" = "pass" ]
+[ "$BLOCKING" = "0" ] || [ "$GATE" = "pass" ]
