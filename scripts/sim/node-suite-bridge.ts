@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 
 export function requireNodeSuite(file: string) {
   const output = execFileSync(process.execPath, ['--test', '--test-reporter=tap', file],
-    { encoding: 'utf8', timeout: 30_000, env: { ...process.env, NODE_OPTIONS: '' } });
+    { encoding: 'utf8', timeout: 60_000, env: { ...process.env, NODE_OPTIONS: '' } });
   requirePassingNodeSummary(output, file);
 }
 

@@ -33,6 +33,56 @@ test('wrong XCTest destination is rejected before plist tools or real xcodebuild
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('valid XCTest launch rewrites capture policy and records proof on every platform', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'fitsy-capture-portable-'));
+  const udid = '9E661282-FCE3-4C70-A503-EB2FFA0AD02B';
+  try {
+    const work = join(dir, udid); mkdirSync(work);
+    const config = join(work, 'maestro-driver-ios-config.xctestrun');
+    const suite = 'maestro-driver-iosUITests';
+    writeFileSync(config, JSON.stringify({ '__xctestrun_metadata__': { FormatVersion: 1 },
+      [suite]: { PreferredScreenCaptureFormat: 'screenRecording', SystemAttachmentLifetime: 'deleteOnSuccess' } }));
+    const plistTools = join(dir, 'plist-tools.cjs');
+    writeFileSync(plistTools, `const child = require('node:child_process');
+const { syncBuiltinESMExports } = require('node:module');
+const { readFileSync, realpathSync, writeFileSync } = require('node:fs');
+const assert = require('node:assert/strict');
+const original = child.execFileSync;
+child.execFileSync = (command, args, options) => {
+  const file = realpathSync(process.env.FITSY_XCTEST_FAKE_PLIST);
+  if (command === 'plutil') {
+    assert.deepEqual(args, ['-convert', 'json', '-o', '-', file]);
+    return readFileSync(file, 'utf8');
+  }
+  if (command === '/usr/libexec/PlistBuddy') {
+    assert.deepEqual(args, ['-c', 'Set :maestro-driver-iosUITests:PreferredScreenCaptureFormat screenshots', file]);
+    const plist = JSON.parse(readFileSync(file, 'utf8'));
+    plist['maestro-driver-iosUITests'].PreferredScreenCaptureFormat = 'screenshots';
+    writeFileSync(file, JSON.stringify(plist));
+    return '';
+  }
+  return original(command, args, options);
+};
+syncBuiltinESMExports();
+`);
+    const actual = join(dir, 'real-xcodebuild-invoked');
+    const real = join(dir, 'real-xcodebuild');
+    writeFileSync(real, `#!/bin/sh\nprintf '%s\\n' "$@" > ${JSON.stringify(actual)}\n`); chmodSync(real, 0o755);
+    const receipt = join(dir, 'capture.jsonl');
+    const result = spawnSync(join(moduleDir, 'xcodebuild'),
+      ['test-without-building', '-xctestrun', config, '-destination', `id=${udid}`],
+      { encoding: 'utf8', env: { ...process.env, NODE_OPTIONS: `--require=${plistTools}`,
+        FITSY_XCTEST_FAKE_PLIST: config, FITSY_XCTEST_CAPTURE_RECEIPT: receipt,
+        FITSY_XCTEST_SIM_UDID: udid, FITSY_XCODEBUILD_REAL: real } });
+    assert.equal(result.status, 0, result.stderr);
+    const changed = JSON.parse(readFileSync(config, 'utf8'));
+    assert.equal(changed[suite].PreferredScreenCaptureFormat, 'screenshots');
+    assert.equal(changed[suite].SystemAttachmentLifetime, 'deleteOnSuccess');
+    assert.match(readFileSync(actual, 'utf8'), /test-without-building/);
+    assert.equal(JSON.parse(readFileSync(receipt, 'utf8')).preferredScreenCaptureFormat, 'screenshots');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('development is the default; recording requires an explicit run mode', () => {
   assert.deepEqual(runSelection(['device', 'billing']).mode, { name: 'development', recordVideo: false, publishable: false });
   assert.deepEqual(runSelection(['device', 'billing', '--mode=final-candidate']).names, ['billing']);
