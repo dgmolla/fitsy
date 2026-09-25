@@ -12,6 +12,20 @@ import { validate } from '../verify/product-flow.mjs';
 
 const temp = () => mkdtempSync(join(tmpdir(), 'fitsy-runner-'));
 const sha = value => createHash('sha256').update(value).digest('hex');
+test('malformed previous report is a reuse miss without changing its raw bytes', async () => {
+  const dir = temp(), reportFile = join(dir, 'report.json');
+  const malformed = '{"result":"pass",';
+  try {
+    writeFileSync(reportFile, malformed);
+    const { readPreviousReportForReuse } = await import('./product-flow.mjs');
+    const prior = readPreviousReportForReuse(reportFile);
+    assert.equal(prior.report, null);
+    assert.match(prior.error, /invalid JSON/i);
+    assert.equal(readFileSync(reportFile, 'utf8'), malformed);
+    writeFileSync(reportFile, JSON.stringify({ result: 'pass' }));
+    assert.deepEqual(readPreviousReportForReuse(reportFile), { report: { result: 'pass' }, error: null });
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
 test('final timeline failure leaves a failed report and retains the triggering error', () => {
   const dir = temp(), reportFile = join(dir, 'report.json');
   const report = { result: 'running', flows: [{ name: 'welcome' }] };

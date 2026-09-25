@@ -7,6 +7,9 @@ import { closeoutXCTestAttachments, snapshotXCTestAttachments } from './xctest-a
 
 const udid = '9E661282-FCE3-4C70-A503-EB2FFA0AD02B';
 const quicktime = Buffer.concat([Buffer.from([0, 0, 0, 12]), Buffer.from('ftyp'), Buffer.from('qt  ')]);
+const mp4 = Buffer.concat([Buffer.from([0, 0, 0, 12]), Buffer.from('ftyp'), Buffer.from('mp42')]);
+const heic = Buffer.concat([Buffer.from([0, 0, 0, 12]), Buffer.from('ftyp'), Buffer.from('heic')]);
+const unknown = Buffer.concat([Buffer.from([0, 0, 0, 12]), Buffer.from('ftyp'), Buffer.from('zzzz')]);
 const wideQuicktime = Buffer.concat([Buffer.from([0, 0, 0, 8]), Buffer.from('wide'), Buffer.from([0, 0, 0, 16]), Buffer.from('mdat'), Buffer.alloc(8)]);
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'fitsy-xctest-'));
@@ -48,6 +51,28 @@ test('active attachment writer blocks exact-file video retirement', () => {
     const after = snapshotXCTestAttachments(udid, { deviceRoot: root });
     assert.throws(() => closeoutXCTestAttachments(before, after, { idleCheck: () => { throw Error('writer active'); } }), /writer active/);
     assert.equal(readFileSync(newVideo).toString('hex'), quicktime.toString('hex'));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('closeout preserves HEIC and unknown attachments while retiring supported movies', () => {
+  const { root, attachments } = fixture();
+  try {
+    const before = snapshotXCTestAttachments(udid, { deviceRoot: root });
+    const image = join(attachments, 'new-heic');
+    const other = join(attachments, 'new-unknown');
+    const video = join(attachments, 'new-mp4');
+    writeFileSync(image, heic);
+    writeFileSync(other, unknown);
+    writeFileSync(video, mp4);
+    const after = snapshotXCTestAttachments(udid, { deviceRoot: root });
+    const checked = [];
+    const result = closeoutXCTestAttachments(before, after, { idleCheck: path => checked.push(path) });
+    assert.deepEqual(checked, [attachments]);
+    assert.equal(result.generated.videos, 1);
+    assert.deepEqual(result.deleted.map(entry => entry.path), [video]);
+    assert.deepEqual(readFileSync(image), heic);
+    assert.deepEqual(readFileSync(other), unknown);
+    assert.throws(() => readFileSync(video), { code: 'ENOENT' });
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 

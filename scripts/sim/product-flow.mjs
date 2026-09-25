@@ -21,6 +21,13 @@ const resumeDir = resolve(root, '.evidence/resume');
 const failuresFile = join(resumeDir, 'native-failures.json');
 const recipeHash = () => digest(['product-flow.mjs', 'build-profile.mjs'].map(f => readFileSync(join(root, 'scripts/sim', f))).join('\0'));
 const read = file => JSON.parse(readFileSync(file, 'utf8'));
+export function readPreviousReportForReuse(file) {
+  try { return { report: read(file), error: null }; }
+  catch (error) {
+    if (!(error instanceof SyntaxError)) throw error;
+    return { report: null, error: `invalid JSON in prior report: ${error.message}` };
+  }
+}
 const save = (file, value) => writeFileSync(file, JSON.stringify(value, null, 2) + '\n');
 const assert = (ok, why) => { if (!ok) throw new Error(why); };
 const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { cwd: root, encoding: 'utf8', env: repoEnv(), maxBuffer: 32 * 1024 * 1024, ...opts })?.trim() || '';
@@ -264,7 +271,8 @@ async function execute(udid, names, mode) {
   for (const c of plan.categories) assert(flowSources.some(f => !baseline.includes(f.name) && f.tags.includes(c)), `Add/select a deterministic scenario tagged ${c}`);
   const existingReport = join(out, 'report.json');
   if (mode.publishable && !process.env.FITSY_SIM_RESET_KEYCHAIN && existsSync(existingReport)) {
-    const previous = read(existingReport);
+    const { report: previous, error: priorError } = readPreviousReportForReuse(existingReport);
+    if (priorError) console.log(`Existing final-candidate evidence cannot be reused: ${priorError}. A fresh run will archive it.`);
     if (matchesFinalCandidate(previous, { udid, appHash: r.appHash, configHash: r.configHash,
       backendDeployment: server.backendDeployment, fixture, flows: flowSources, recordVideo: mode.recordVideo })) {
       try {

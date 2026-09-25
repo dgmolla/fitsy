@@ -5,6 +5,7 @@ import { join } from 'node:path';
 
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
 const bytes = entries => entries.reduce((total, entry) => total + entry.bytes, 0);
+const videoBrands = new Set(['qt  ', 'isom', 'iso2', 'mp41', 'mp42', 'avc1', 'M4V ']);
 
 function movie(file) {
   const buffer = Buffer.alloc(16);
@@ -12,7 +13,7 @@ function movie(file) {
   try {
     const length = readSync(fd, buffer, 0, buffer.length, 0);
     if (length < 8) return false;
-    if (buffer.toString('ascii', 4, 8) === 'ftyp') return true;
+    if (buffer.toString('ascii', 4, 8) === 'ftyp') return length >= 12 && videoBrands.has(buffer.toString('ascii', 8, 12));
     // XCTest can stage a QuickTime movie with a wide atom before mdat.
     const secondSize = buffer.readUInt32BE(8);
     return length >= 16 && buffer.readUInt32BE(0) === 8 && buffer.toString('ascii', 4, 8) === 'wide' &&
