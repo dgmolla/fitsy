@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync, copyFileSync, chmodSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync, chmodSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -274,6 +274,8 @@ mediaTest.each([
   [['packages/shared/src/search.ts'], ['discovery']],
   [['apps/mobile/components/UnknownButton.tsx'], ['changed-journey']],
   [['apps/api/next.config.ts'], ['changed-journey']],
+  [['apps/api/app/api/health/route.ts', 'apps/api/app/api/health/route.test.ts'], []],
+  [['apps/api/app/api/health/route.ts', 'apps/api/app/api/search/route.ts'], ['discovery']],
 ])('routes %j through product impact selection', (paths, categories) => {
   const result = evaluate(`gate.impact(${JSON.stringify(paths)})`);
   expect(JSON.parse(result.stdout).categories).toEqual(categories);

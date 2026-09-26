@@ -22,10 +22,12 @@ const rules = [
   ['onboarding', /^apps\/mobile\/(app\/welcome\/|components\/Welcome|lib\/(onboarding|macroCalculator))/],
   ['discovery', /^(apps\/mobile\/app\/\(tabs\)|apps\/mobile\/app\/restaurant|apps\/api\/app\/api\/(restaurants|search|user)|packages\/shared\/src\/)/],
 ];
+// The health response serves deployment monitors and is verified over HTTP.
+const serviceHealthPath = path => /^apps\/api\/app\/api\/health\/route(?:\.test)?\.ts$/.test(path);
 
 export function impact(paths) {
   const source = paths.filter(p => !/\.md$/.test(p));
-  const affected = source.filter(p => /^(apps\/mobile\/|packages\/shared\/|apps\/api\/(app\/api\/|lib\/|services\/|[^/]+$)|prisma\/|package(-lock)?\.json$)/.test(p));
+  const affected = source.filter(p => /^(apps\/mobile\/|packages\/shared\/|apps\/api\/(app\/api\/|lib\/|services\/|[^/]+$)|prisma\/|package(-lock)?\.json$)/.test(p) && !serviceHealthPath(p));
   const categories = new Set();
   for (const path of affected) {
     const matched = rules.filter(([, pattern]) => pattern.test(path));
