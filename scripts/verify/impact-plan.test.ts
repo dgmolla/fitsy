@@ -19,6 +19,16 @@ const cli = (file: string, args: string[] = [], extra: Record<string, string> = 
     [`scripts/verify/${file}`, ...args], { cwd: directory, encoding: 'utf8', env: { ...env, ...extra }, timeout: 15000 });
 const plan = (extra: Record<string, string> = {}) => JSON.parse(cli('impact-plan.mjs', [], extra).stdout);
 const event = (name: string, data: object) => { const path = join(directory, `.evidence/${name}.json`); write(`.evidence/${name}.json`, JSON.stringify(data)); return path; };
+function timingHook() {
+  write('scripts/delivery/phase-events.mjs', readFileSync(join(root, 'scripts/delivery/phase-events.mjs'), 'utf8'));
+  write('package.json', JSON.stringify({ private: true, scripts: { verify: 'node scripts/verify/run.mjs --layer=0-2 --scope=changed' } }));
+  const bound = spawnSync(process.execPath, ['scripts/delivery/phase-events.mjs', 'bind', '--issue', '355'],
+    { cwd: directory, env, encoding: 'utf8' });
+  expect(bound.status).toBe(0);
+  write('bin/gh', '#!/bin/sh\ncase "$4" in user) echo \'{"login":"fixture"}\' ;; *"/comments?"*) echo \'[]\' ;; */comments) cat >/dev/null; echo \'{"id":1}\' ;; *) exit 1 ;; esac\n');
+  chmodSync(join(directory, 'bin/gh'), 0o755);
+  return { ...env, PATH: `${join(directory, 'bin')}:${env.PATH}` };
+}
 
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'fitsy-impact-'));
@@ -208,19 +218,23 @@ test('source mutation during a cached run retires the prior receipt', () => {
 
 test('npm verify evidence is reused by the unchanged-source hook invocation', () => {
   cacheFixture();
-  write('package.json', JSON.stringify({ private: true, scripts: { verify: 'node scripts/verify/run.mjs --layer=0-2 --scope=changed' } }));
+  const hookEnv = timingHook();
   write('.githooks/pre-push', readFileSync(join(root, '.githooks/pre-push'), 'utf8'));
-  const npm = spawnSync('npm', ['run', 'verify'], { cwd: directory, encoding: 'utf8', env, timeout: 15000 });
+  const npm = spawnSync('npm', ['run', 'verify'], { cwd: directory, encoding: 'utf8', env: hookEnv, timeout: 15000 });
   expect(npm.status).toBe(0); expect(calls()).toBe(1);
-  const hook = spawnSync('bash', ['.githooks/pre-push'], { cwd: directory, encoding: 'utf8', env, timeout: 15000 });
+  const hook = spawnSync('bash', ['.githooks/pre-push'], { cwd: directory, encoding: 'utf8', env: hookEnv, timeout: 15000 });
   expect(hook.status).toBe(0); expect(hook.stdout).toContain('"cached":true'); expect(calls()).toBe(1);
+  const changed = spawnSync('bash', ['.githooks/pre-push'],
+    { cwd: directory, encoding: 'utf8', env: { ...hookEnv, FITSY_TEST_CHANGED: '1' }, timeout: 15000 });
+  expect(changed.status).toBe(0); expect(changed.stdout).not.toContain('"cached":true'); expect(calls()).toBe(2);
 });
 
 test('pre-push accepts an inapplicable domain gate but refuses its real failure', () => {
   cacheFixture();
+  const hookEnv = timingHook();
   write('.githooks/pre-push', readFileSync(join(root, '.githooks/pre-push'), 'utf8'));
   write('scripts/verify/domain-check.sh', 'echo \'{"status":"skipped"}\'\nexit 2\n');
-  const hook = () => spawnSync('bash', ['.githooks/pre-push'], { cwd: directory, encoding: 'utf8', env, timeout: 15000 });
+  const hook = () => spawnSync('bash', ['.githooks/pre-push'], { cwd: directory, encoding: 'utf8', env: hookEnv, timeout: 15000 });
   expect(hook().status).toBe(0);
   write('scripts/verify/domain-check.sh', 'echo \'{"status":"fail"}\'\nexit 1\n');
   expect(hook().status).toBe(1);
@@ -228,6 +242,7 @@ test('pre-push accepts an inapplicable domain gate but refuses its real failure'
 
 test('real Git push hook preserves outer refs, isolates nested Git, reuses L2, and reruns size/domain gates', () => {
   cacheFixture();
+  const hookEnv = timingHook();
   write('scripts/verify/fixture.sh', `mkdir -p .evidence/inner\ngit -C .evidence/inner init -q\ngit -C .evidence/inner config user.name fixture\ngit -C .evidence/inner config user.email fixture@example.test\necho nested > .evidence/inner/file\ngit -C .evidence/inner add file\ngit -C .evidence/inner commit -qm nested\ngit -C .evidence/inner checkout -qb nested\ntest "$(git -C .evidence/inner branch --show-current)" = nested\necho run >> .evidence/calls\necho '{"summary":"actual check"}'\n`);
   write('.githooks/pre-push', readFileSync(join(root, '.githooks/pre-push'), 'utf8'));
   chmodSync(join(directory, '.githooks/pre-push'), 0o755);
@@ -237,7 +252,7 @@ test('real Git push hook preserves outer refs, isolates nested Git, reuses L2, a
   const remote = join(directory, '.evidence/remote.git');
   execFileSync('git', ['init', '--bare', '-q', remote], { cwd: directory, env });
   const push = (ref: string) => spawnSync('git', ['push', remote, `HEAD:refs/heads/${ref}`],
-    { cwd: directory, env, encoding: 'utf8', timeout: 15000 });
+    { cwd: directory, env: hookEnv, encoding: 'utf8', timeout: 15000 });
   const first = push('first'); expect(first.status).toBe(0); expect(calls()).toBe(1);
   const second = push('second'); expect(second.status).toBe(0);
   expect(second.stdout + second.stderr).toContain('"cached":true'); expect(calls()).toBe(1);

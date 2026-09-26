@@ -33,6 +33,31 @@ else
 fi
 [ -n "$DIFF" ] || { echo "empty diff" >&2; exit 1; }
 
+# The issue binding lives in ignored local evidence. A missing binding is
+# visible, but timing collection never changes the independent review gate.
+TELEMETRY_FILE="$REPO_ROOT/scripts/delivery/phase-events.mjs"
+TELEMETRY_ATTEMPT=""
+TELEMETRY_RESULT="interrupted"
+TELEMETRY_CACHE_HIT=0
+PROMPT_FILE=""
+RAW_FILE=""
+review_exit() {
+  local code=$?
+  if [ -n "$PROMPT_FILE" ]; then rm -f "$PROMPT_FILE" "$RAW_FILE"; fi
+  if [ -n "$TELEMETRY_ATTEMPT" ]; then
+    local status="$TELEMETRY_RESULT"
+    if [ "$status" = "interrupted" ] && [ "$code" != 130 ] && [ "$code" != 143 ]; then status=fail; fi
+    if ! node "$TELEMETRY_FILE" auto-end --attempt-id "$TELEMETRY_ATTEMPT" --status "$status" --source-sha "$HEAD_SHA" >/dev/null; then
+      echo '[run-lens] delivery telemetry closeout failed' >&2
+    fi
+  fi
+}
+trap review_exit EXIT
+if [ -f "$TELEMETRY_FILE" ]; then
+  TELEMETRY_ATTEMPT="$(node "$TELEMETRY_FILE" auto-begin --phase review --producer review-lens \
+    --round-id "$HEAD_SHA" --lens "$LENS" --source-sha "$HEAD_SHA")" || TELEMETRY_ATTEMPT=""
+fi
+
 # ── Tier and review provider ───────────────────────────────────────────────────────────
 # both sides of the diff: a PR that only deletes or renames a high-tier file
 # must still classify high (lens finding, 2026-09-07)
@@ -61,6 +86,7 @@ KEY="$(printf '%s' "$DIFF" | cat - "$LENS_FILE" REVIEW.md "$REPO_ROOT/scripts/re
 DIFF_SHA256="$(printf '%s' "$DIFF" | shasum -a 256 | cut -d' ' -f1)"
 CACHE_FILE="$CACHE_DIR/$KEY.json"
 if [ -f "$CACHE_FILE" ]; then
+  TELEMETRY_CACHE_HIT=1
   echo "[run-lens] cache hit ($KEY)" >&2
   RESULT_JSON="$(python3 scripts/review/extract-verdict.py "$LENS" < "$CACHE_FILE")"
 else
@@ -82,7 +108,6 @@ else
   fi
   PROMPT_FILE="$(mktemp)"
   RAW_FILE="$(mktemp)"
-  trap 'rm -f "$PROMPT_FILE" "$RAW_FILE"' EXIT
   {
     echo "You are a code review lens. Follow these rules exactly."
     echo; echo "===== REVIEW.md ====="; cat REVIEW.md
@@ -107,7 +132,7 @@ else
     --lens "$LENS" --source-sha "$HEAD_SHA" --attempt-id "$ATTEMPT_ID" >&2
   cp "$RAW_FILE" "$CACHE_DIR/$KEY.raw"
   rm -f "$PROMPT_FILE" "$RAW_FILE"
-  trap - EXIT
+  PROMPT_FILE=""; RAW_FILE=""
   RESULT_JSON="$(printf '%s' "$RESULT_JSON" | python3 -c '
 import json,sys
 result=json.load(sys.stdin)
@@ -145,4 +170,11 @@ if [ "$TARGET" != "--local" ]; then
   fi
   echo "[run-lens] posted lens/$LENS=$STATE on ${HEAD_SHA:0:7}" >&2
 fi
-[ "$VERDICT" != "incomplete" ] && { [ "$BLOCKING" = "0" ] || [ "$GATE" = "pass" ]; }
+# A cached adverse verdict still blocks shipping, but did not rerun a model.
+if [ "$TELEMETRY_CACHE_HIT" = 1 ]; then TELEMETRY_RESULT=cached; fi
+if [ "$VERDICT" != "incomplete" ] && { [ "$BLOCKING" = "0" ] || [ "$GATE" = "pass" ]; }; then
+  if [ "$TELEMETRY_CACHE_HIT" != 1 ]; then TELEMETRY_RESULT=pass; fi
+else
+  if [ "$TELEMETRY_CACHE_HIT" != 1 ]; then TELEMETRY_RESULT=fail; fi
+  exit 1
+fi

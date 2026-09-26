@@ -449,8 +449,20 @@ async function check() {
   assert(report.backendDeployment === backend().backendDeployment, 'Dev deployment changed after tests');
   await checkBundle(report);
 }
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) try {
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+let timing, delivery;
+process.on('exit', () => {
+  if (timing) try { delivery.finish(root, timing, 'interrupted'); }
+  catch (error) { console.error(`delivery telemetry: ${error.message}`); }
+});
+try {
   const [command, ...args] = process.argv.slice(2);
+  if (['build', 'run', 'finish', 'check'].includes(command)) {
+    try {
+      delivery = await import('../delivery/phase-events.mjs');
+      timing = delivery.start(root, 'e2e', 'product-flow', { check: command });
+    } catch (error) { console.error(`delivery telemetry: ${error.message}`); }
+  }
   if (['build', 'run'].includes(command) && process.platform === 'darwin') {
     const awake = spawn('/usr/bin/caffeinate', ['-i', '-w', String(process.pid)], { stdio: 'ignore' });
     awake.on('error', error => console.error(`Could not prevent idle sleep: ${error.message}`));
@@ -465,4 +477,15 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   else if (command === 'check') await check();
   else if (command === 'stop-metro') await stopMetro();
   else throw new Error('Usage: node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs build UDID | run UDID [flow names] [--mode=development|final-candidate|requested-video] [--record-video] | finish [walkthrough.json]');
-} catch (e) { console.error(e.message); process.exitCode = 1; }
+  if (timing) { try { delivery.finish(root, timing, 'pass'); }
+    catch (error) { console.error(`delivery telemetry: ${error.message}`); }
+    timing = null;
+  }
+} catch (e) {
+  if (timing) { try { delivery.finish(root, timing, 'fail'); }
+    catch (error) { console.error(`delivery telemetry: ${error.message}`); }
+    timing = null;
+  }
+  console.error(e.message); process.exitCode = 1;
+}
+}

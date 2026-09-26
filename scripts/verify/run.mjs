@@ -41,6 +41,20 @@ const layerArg = args.layer ?? "all";
 const scope = args.scope ?? "changed";
 const runsCtx = args.runs ?? (process.env.CI ? "ci" : "local");
 const only = args.only ? new Set(args.only.split(",")) : null;
+let delivery;
+if (runsCtx === 'local' && existsSync(join(REPO_ROOT, 'scripts/delivery/phase-events.mjs'))) {
+  try { delivery = await import('../delivery/phase-events.mjs'); }
+  catch (error) { console.error(`delivery telemetry: unavailable (${error.message})`); }
+}
+function beginTiming(phase, check) {
+  try { return delivery?.start(REPO_ROOT, phase, 'verify-run', { check }) ?? null; }
+  catch (error) { console.error(`delivery telemetry: ${error.message}`); return null; }
+}
+function endTiming(attempt, status) {
+  if (!attempt) return;
+  try { delivery.finish(REPO_ROOT, attempt, status); }
+  catch (error) { console.error(`delivery telemetry: ${error.message}`); }
+}
 
 const [layerMin, layerMax] =
   layerArg === "all" ? [0, 99] : layerArg.includes("-") ? layerArg.split("-").map(Number) : [Number(layerArg), Number(layerArg)];
@@ -81,9 +95,18 @@ for (const c of registry.checks) {
   }
   selected.push(c);
 }
+const remaining = selected.filter(c => !c.preflight);
+const delegatesDatabase = runsCtx === 'local' && remaining.some(c => c.database) && !process.env.FITSY_VERIFY_OWNED_DB;
+let wholeAttempt = process.env.FITSY_LOCAL_DB === '1' ? null : beginTiming('verification', 'whole');
+process.on('exit', () => { if (wholeAttempt) endTiming(wholeAttempt, 'interrupted'); });
+function closeWhole(status) {
+  if (wholeAttempt) { endTiming(wholeAttempt, status); wholeAttempt = null; }
+}
 
 function runCheck(c) {
+  const attempt = delegatesDatabase ? null : beginTiming(c.layer === 2 ? 'unit' : 'verification', c.name);
   if (c.missing) {
+    endTiming(attempt, 'fail');
     return Promise.resolve({ name: c.name, status: "fail", summary: `registry entry has no script ${c.script}`, fix: "add the script or remove the entry", blocking: c.blocking !== "shadow" });
   }
   return new Promise((resolve) => {
@@ -106,6 +129,7 @@ function runCheck(c) {
         parsed = { name: c.name, summary: (stderr || stdout).trim().split("\n").at(-1)?.slice(0, 200) ?? "" };
       }
       const status = code === 0 ? "pass" : code === 2 ? "skipped" : "fail";
+      endTiming(attempt, status);
       resolve({
         ...parsed,
         name: c.name,
@@ -121,7 +145,6 @@ function runCheck(c) {
 }
 
 const preflight = await Promise.all(selected.filter(c => c.preflight).map(runCheck));
-const remaining = selected.filter(c => !c.preflight);
 const results = [...preflight];
 let delegated = false;
 if (preflight.some(result => result.status === 'fail' && result.blocking)) {
@@ -164,6 +187,10 @@ if (preflight.some(result => result.status === 'fail' && result.blocking)) {
     } else {
       const completed = await Promise.all(remaining.map(c => {
         const prior = args.reuse && c.cache && cache?.read(c);
+        if (prior) {
+          const attempt = beginTiming(c.layer === 2 ? 'unit' : 'verification', c.name);
+          endTiming(attempt, 'cached');
+        }
         if (!prior && c.cache && cache) cache.invalidate(c);
         return prior || runCheck(c);
       }));
@@ -204,3 +231,4 @@ for (const r of blockingFailed) console.error(`FAIL ${r.name}: ${r.summary ?? ""
 // Allow piped diagnostics to drain before Node exits, including failing CI logs.
 process.exitCode = blockingFailed.length ? 1 : 0;
 }
+closeWhole(process.exitCode ? 'fail' : 'pass');
