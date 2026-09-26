@@ -159,17 +159,8 @@ export function buildReport(project, pulls, main, now = new Date()) {
       missing: activeIssues.length - ages.length }, main, highlights };
 }
 
-function safe(value, limit = 90) {
-  const clean = String(value ?? '').replace(/\s+/g, ' ').replace(/[@*`_~|]/g, ' ').replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;').replace(/>/g, '&gt;').trim();
-  if (clean.length <= limit) return clean;
-  const prefix = clean.slice(0, limit - 1);
-  const boundary = prefix.lastIndexOf(' ');
-  return `${prefix.slice(0, boundary > limit / 2 ? boundary : limit - 1).trimEnd()}…`;
-}
-
 function duration(ms) {
-  if (ms === null) return 'unknown';
+  if (ms === null || ms === undefined) return 'unknown';
   const minutes = Math.round(ms / 60000);
   if (minutes < 60) return `${minutes}m`;
   const hours = Math.floor(minutes / 60);
@@ -177,39 +168,23 @@ function duration(ms) {
 }
 
 export function formatReport(report) {
-  const time = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles',
-    hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }).format(new Date(report.generatedAt));
-  const issueCycle = report.issueCycle.sample ?
-    `median ${duration(report.issueCycle.medianMs)} (n=${report.issueCycle.sample}; missing ${report.issueCycle.missing} Done issues)` :
-    `baseline collecting (0 measured; missing ${report.issueCycle.missing} Done issues)`;
-  const gateLinks = [report.main.verify, report.main.deploy].every(url =>
-    /^https:\/\/github\.com\/dgmolla\/fitsy\/actions\/runs\/\d+$/.test(url ?? '')) ?
-    `<${report.main.verify}|Verify> + <${report.main.deploy}|Deploy>` : 'Verify + Deploy';
+  const p = report.local?.phases;
+  const times = [`code ${duration(p?.implementation.observedMs)}`,
+    `checks ${duration(p?.verification.observedMs)}`,
+    `review ${duration(p?.review.observedMs)}`,
+    `ship ${duration(p?.shipping.observedMs)}`];
+  if (p?.e2e.observedMs !== null && p?.e2e.observedMs !== undefined) times.push(`E2E ${duration(p.e2e.observedMs)}`);
+  const coverage = report.local?.coverage;
+  const attention = [`${report.board.blocked} blockers`];
+  if (coverage?.stale) attention.push(`${coverage.stale} stale timing`);
+  const missing = coverage ? Math.max(0, coverage.active - coverage.tracked) : 0;
+  if (missing) attention.push(`${missing} missing timing`);
+  if (coverage?.invalid) attention.push(`${coverage.invalid} invalid timing`);
   const lines = [
-    `*Fitsy delivery · ${time}*`,
-    `*24h:* ${report.prs24h.merged} PRs merged · median open→merge ${duration(report.prs24h.medianMs)} (n=${report.prs24h.sample})`,
-    `*Issue cycle:* ${issueCycle}`,
-    `*Now:* ${report.board.counts['In flight']} In flight · ${report.board.next} Next priority (${report.board.counts.Queued} Queued total) · ${report.board.blocked} flagged blockers`,
-    `*WIP age:* oldest ${duration(report.wipAge.oldestMs)} (known ${report.wipAge.sample}; missing Started at ${report.wipAge.missing})`,
-    `*Main gates:* ${gateLinks} ${report.main.state} at ${report.main.sha.slice(0, 7)} (workflow status only)`,
+    `*Fitsy:* ${report.prs24h.merged} PRs merged /24h · main ${report.main.state}`,
+    `*Local time:* ${times.join(' · ')}`,
+    `*Attention:* ${attention.join(' · ')} · <${BOARD_URL}#fitsy-hour:${report.hourKey}|Details>`,
   ];
-  if (report.local) {
-    const { phases: p, coverage: c, improvements } = report.local;
-    const rounds = report.local.rounds.filter(round => round.attempts || round.running).length;
-    lines.push(`*Local 24h:* impl ${duration(p.implementation.observedMs)} · checks ${duration(p.verification.observedMs)} (UT ${duration(p.unit.observedMs)}) · E2E ${duration(p.e2e.observedMs)} · review ${duration(p.review.observedMs)} (${rounds} ${rounds === 1 ? 'round' : 'rounds'}) · ship ${duration(p.shipping.observedMs)}`);
-    lines.push(`Summed issue time; overlaps removed within phases. Coverage ${c.tracked}/${c.active} active · ${c.stale} stale · ${Object.values(p).reduce((n, v) => n + v.cached, 0)} cache reuses${c.invalid ? ` · ${c.invalid} invalid records` : ''}`);
-    if (improvements) lines.push(`*Hardening shipped:* ${improvements.verified.length} · ${Object.entries(improvements.categories).filter(([, n]) => n).map(([category, n]) => `${n} ${category}`).join(' · ') || 'no verified records yet'}${improvements.pending ? ` · ${improvements.pending} awaiting evidence` : ''}`);
-  }
-  for (const item of report.highlights) {
-    if (!/^https:\/\/github\.com\/dgmolla\/fitsy\/issues\/\d+$/.test(item.url)) throw new Error('Unsafe issue URL');
-    const progressAt = timestamp(item.lastProgressAt);
-    const age = progressAt !== null && progressAt <= Date.parse(report.generatedAt) ?
-      `${duration(Date.parse(report.generatedAt) - progressAt)} ago` : 'time unknown';
-    const detail = item.blocker ? `blocked: ${safe(item.blocker, 80)}` :
-      `progress (${age}): ${safe(item.progress || 'not recorded', 35)}; next: ${safe(item.nextAction || 'not recorded', 45)}`;
-    lines.push(`• <${item.url}|#${item.number} ${safe(item.title, 50)}> · ${detail}`);
-  }
-  lines.push(`<${BOARD_URL}|Fitsy Delivery board> · fitsy-hour:${report.hourKey}`);
   return lines.join('\n');
 }
 

@@ -59,10 +59,14 @@ test('keeps issue cycle, WIP age, PR throughput, and card counts separate', () =
   assert.equal(report.board.counts.Done, 3);
   assert.equal(report.board.next, 1);
   const text = formatReport(report);
-  assert.match(text, /1 Next priority \(1 Queued total\)/);
-  assert.match(text, /Verify \+ Deploy green/);
+  assert.match(text, /1 PRs merged \/24h · main green/);
+  assert.match(text, /\*Local time:\* code unknown · checks unknown · review unknown · ship unknown/);
   assert.doesNotMatch(text, /<@U123>/);
-  assert.ok(text.split('\n').length <= 10);
+  const visible = text.replace(/<[^|>]+\|([^>]+)>/g, '$1').replace(/\*/g, '');
+  assert.equal(visible.split('\n').length, 3);
+  assert.ok(visible.split('\n').every(line => line.length <= 110));
+  assert.ok(visible.split(/\s+/).length <= 45);
+  assert.match(text, /#fitsy-hour:2026-09-26T18\|Details>/);
 });
 
 test('treats impossible calendar dates as missing issue evidence', () => {
@@ -90,30 +94,49 @@ test('main gates require both exact-main workflows to succeed', async () => {
 });
 
 test('Slack history marker prevents duplicate posts and errors fail closed', async () => {
-  const report = { hourKey: '2026-09-26T18' };
+  const report = buildReport({ url: board, items: [] }, [], { state: 'green' }, now);
+  const message = formatReport(report);
   const calls = [];
   const fake = async (url, options) => {
     calls.push({ url, options });
     return { ok: true, status: 200, json: async () => url.includes('history') ?
-      { ok: true, messages: [{ text: 'fitsy-hour:2026-09-26T18' }] } : { ok: true, channel: 'C123', ts: '1.2' } };
+      { ok: true, messages: [{ text: message }] } : { ok: true, channel: 'C123', ts: '1.2' } };
   };
-  assert.deepEqual(await postOnce(fake, 'token', 'C123', report, 'message'),
+  assert.deepEqual(await postOnce(fake, 'token', 'C123', report, message),
     { posted: false, duplicate: true, marker: 'fitsy-hour:2026-09-26T18' });
   assert.equal(calls.length, 1);
   await assert.rejects(postOnce(async () => ({ ok: true, status: 200,
-    json: async () => ({ ok: false, error: 'missing_scope' }) }), 'token', 'C123', report, 'message'), /missing_scope/);
+    json: async () => ({ ok: false, error: 'missing_scope' }) }), 'token', 'C123', report, message), /missing_scope/);
   const posting = await postOnce(async (url) => ({ ok: true, status: 200,
     json: async () => url.includes('history') ? { ok: true, messages: [] } :
-      { ok: true, channel: 'C123', ts: '1.2' } }), 'token', 'C123', report, 'message');
+      { ok: true, channel: 'C123', ts: '1.2' } }), 'token', 'C123', report, message);
   assert.equal(posting.posted, true);
   assert.equal(posting.ts, '1.2');
 });
 
 
-test('cache-only source heads do not inflate review execution rounds', () => {
+test('keeps detailed review diagnostics out of the scan', () => {
   const report = buildReport({ url: board, items: [] }, [], { sha: 'a'.repeat(40), state: 'green' }, now);
   report.local = { phases: Object.fromEntries(['implementation', 'verification', 'unit', 'e2e', 'review', 'shipping'].map(phase =>
     [phase, { observedMs: null, cached: 0 }])), coverage: { active: 0, tracked: 0, stale: 0, invalid: 0 },
     rounds: [{ attempts: 1, running: 0 }, { attempts: 0, running: 0, cached: 3 }] };
-  assert.match(formatReport(report), /review unknown \(1 round\)/);
+  assert.match(formatReport(report), /review unknown/);
+  assert.doesNotMatch(formatReport(report), /round|cache reuse|median|WIP/);
+});
+
+test('compact copy distinguishes gate state, measured E2E, and timing exceptions', () => {
+  const report = buildReport({ url: board, items: [] }, [], { state: 'pending' }, now);
+  report.local = { phases: Object.fromEntries(['implementation', 'verification', 'unit', 'e2e', 'review', 'shipping'].map(phase =>
+    [phase, { observedMs: phase === 'e2e' ? null : 60000 }])),
+  coverage: { active: 4, tracked: 3, stale: 2, invalid: 1 }, rounds: [] };
+  let text = formatReport(report);
+  assert.match(text, /main pending/);
+  assert.doesNotMatch(text, /E2E/);
+  assert.match(text, /2 stale timing · 1 missing timing · 1 invalid timing/);
+  report.main.state = 'failed';
+  report.local.phases.e2e.observedMs = 120000;
+  text = formatReport(report);
+  assert.match(text, /main failed/);
+  assert.match(text, /E2E 2m/);
+  assert.equal(text.split('\n').length, 3);
 });

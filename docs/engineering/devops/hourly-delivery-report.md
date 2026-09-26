@@ -4,6 +4,8 @@ The [Fitsy Delivery project](https://github.com/users/dgmolla/projects/1) is the
 The [hourly workflow](../../../.github/workflows/hourly-delivery.yml) reads that board, merged pull requests, and exact-main Verify and Deploy workflow runs without depending on a Codex or First Mate session.
 It runs at minute 17 each hour only when repository variable `DELIVERY_REPORT_ENABLED` is `true`.
 Manual `workflow_dispatch` defaults to a dry run and retains `report.json` and `report.txt` artifacts.
+Slack shows a three-line scan of 24-hour PR throughput, main gate state, observed local phase time, blockers, and timing coverage exceptions.
+The `Details` link carries the hourly deduplication marker; `report.json` retains medians, issue history, review rounds, cache counts, and full evidence.
 The first live run and actual Slack receipt must be checked before claiming delivery is operational.
 
 ## Issue field protocol
