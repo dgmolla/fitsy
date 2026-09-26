@@ -20,10 +20,13 @@ Board counts are cards, which may include both an issue and its linked PR; do no
 
 ## Activation and failure handling
 
-The workflow needs a read-only Projects credential in `DELIVERY_GITHUB_TOKEN`, repository Actions read through the built-in `GITHUB_TOKEN`, and the existing Fitsy bot's `DELIVERY_SLACK_BOT_TOKEN` and `DELIVERY_SLACK_CHANNEL`.
+Create the `delivery-report` GitHub Actions environment and restrict deployment branches to `main` before adding credentials.
+Store a read-only Projects credential as that environment's `DELIVERY_GITHUB_TOKEN` secret and the existing Fitsy bot token as its `DELIVERY_SLACK_BOT_TOKEN` secret.
+Remove any repository-level copies of those secrets so unreviewed workflows cannot read them.
+The workflow uses the built-in `GITHUB_TOKEN` for repository Actions and pull-request reads, and repository variable `DELIVERY_SLACK_CHANNEL` for the destination.
 The Slack bot must be able to read channel history and post messages; history checks and workflow concurrency prevent repeat posts for the same UTC hour.
 History-read or post failure stops the run rather than risking a duplicate or reporting an unconfirmed send.
 Keep `DELIVERY_REPORT_ENABLED=false` until a manual dry run shows complete board pagination, expected metrics, and an artifact, then verify one authorized live message and Slack `channel`/`ts` receipt.
-If a token expires, rotate it in repository secrets without printing it in logs; rerun dry-run and check the resulting artifact before re-enabling posting.
+If a token expires, rotate it in the restricted environment secrets without printing it in logs; rerun dry-run and check the resulting artifact before re-enabling posting.
 Inspect the failed run's artifact and GitHub Actions log for GraphQL scope, pagination, workflow, or Slack API errors.
 Never substitute a partial project page or an agent's stale handoff for the board.

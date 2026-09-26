@@ -96,9 +96,15 @@ export async function loadMainGates(rest) {
 }
 
 function timestamp(value) {
-  if (typeof value !== 'string' || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z$/.test(value)) return null;
+  if (typeof value !== 'string') return null;
+  const parts = /^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)(?:\.\d+)?Z$/.exec(value);
+  if (!parts) return null;
   const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? parsed : null;
+  if (!Number.isFinite(parsed)) return null;
+  const date = new Date(parsed);
+  const actual = [date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate(),
+    date.getUTCHours(), date.getUTCMinutes(), date.getUTCSeconds()];
+  return actual.every((component, index) => component === Number(parts[index + 1])) ? parsed : null;
 }
 
 export function median(values) {

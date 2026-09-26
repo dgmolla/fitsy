@@ -65,6 +65,15 @@ test('keeps issue cycle, WIP age, PR throughput, and card counts separate', () =
   assert.ok(text.split('\n').length <= 10);
 });
 
+test('treats impossible calendar dates as missing issue evidence', () => {
+  const done = { id: 'invalid', content: { __typename: 'Issue', number: 9 },
+    fields: { Status: 'Done', 'Started at': '2026-02-30T16:00:00Z',
+      'Verified at': '2026-03-03T18:00:00Z' }, labels: [] };
+  const report = buildReport({ url: board, items: [done] }, [], { state: 'pending' }, now);
+  assert.equal(report.issueCycle.sample, 0);
+  assert.equal(report.issueCycle.missing, 1);
+});
+
 test('main gates require both exact-main workflows to succeed', async () => {
   const sha = 'b'.repeat(40);
   const rest = async url => url.endsWith('/commits/main') ? { sha } : { total_count: 2, workflow_runs: [
