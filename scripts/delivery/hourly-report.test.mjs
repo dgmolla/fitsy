@@ -6,7 +6,8 @@ import {
 
 const board = 'https://github.com/users/dgmolla/projects/1';
 const now = new Date('2026-09-26T18:17:00Z');
-const field = (name, value) => ({ field: { name }, ...(name === 'Status' || name === 'Priority' ? { name: value } : { text: value }) });
+const field = (name, value) => ({ field: { name }, ...(name === 'Status' || name === 'Priority' ? { name: value } :
+  name === 'Verified at' ? { date: value } : { text: value }) });
 const item = (id, status = 'Queued') => ({ id,
   content: { __typename: 'Issue', number: id, title: `Issue ${id}`, url: `https://github.com/dgmolla/fitsy/issues/${id}`,
     labels: { nodes: [], pageInfo: { hasNextPage: false } } },
@@ -20,6 +21,10 @@ test('reads every project page and refuses incomplete fields or totals', async (
   const result = await loadProject(query);
   assert.equal(result.items.length, 101);
   assert.equal(result.items.at(-1).content.number, 101);
+  const verified = item(102); verified.fieldValues.nodes.push(field('Verified at', '2026-09-26T18:00:00Z'));
+  const parsed = await loadProject(async () => ({ user: { projectV2: { url: board,
+    items: { totalCount: 1, nodes: [verified], pageInfo: { hasNextPage: false } } } } }));
+  assert.equal(parsed.items[0].fields['Verified at'], '2026-09-26T18:00:00Z');
   await assert.rejects(loadProject(async () => ({ user: { projectV2: { url: board,
     items: { totalCount: 2, nodes: [item(1)], pageInfo: { hasNextPage: false } } } } })), /Incomplete project read/);
   const partial = item(1); partial.fieldValues.pageInfo.hasNextPage = true;
@@ -47,7 +52,8 @@ test('keeps issue cycle, WIP age, PR throughput, and card counts separate', () =
     url: 'https://github.com/dgmolla/fitsy/issues/3' }, fields: { Status: 'In flight', Priority: 'Now',
     'Started at': '2026-09-26T17:00:00Z', Progress: 'Building <@U123>', 'Next action': 'Review' }, labels: [] };
   const prCard = { id: 'pr', content: { __typename: 'PullRequest', number: 7 }, fields: { Status: 'Done' }, labels: [] };
-  const queued = { ...active, id: 'queued', fields: { Status: 'Queued', Priority: 'Next' } };
+  const queued = { ...active, id: 'queued', content: { ...active.content, number: 4 },
+    fields: { Status: 'Queued', Priority: 'Next' } };
   const pulls = [{ number: 7, base: { ref: 'main' }, created_at: '2026-09-26T17:00:00Z', merged_at: '2026-09-26T18:00:00Z' }];
   const report = buildReport({ url: board, items: [done, missing, active, prCard, queued] }, pulls,
     { sha: 'a'.repeat(40), state: 'green' }, now);
@@ -63,9 +69,10 @@ test('keeps issue cycle, WIP age, PR throughput, and card counts separate', () =
   assert.match(text, /\*Local time:\* code unknown · checks unknown · review unknown · ship unknown/);
   assert.doesNotMatch(text, /<@U123>/);
   const visible = text.replace(/<[^|>]+\|([^>]+)>/g, '$1').replace(/\*/g, '');
-  assert.equal(visible.split('\n').length, 3);
+  assert.equal(visible.split('\n').length, 5);
   assert.ok(visible.split('\n').every(line => line.length <= 110));
-  assert.ok(visible.split(/\s+/).length <= 45);
+  assert.match(text, /• \*Shipped:\* <https:\/\/github.com\/dgmolla\/fitsy\/issues\/1\|#1 Done>/);
+  assert.match(text, /• \*Next:\* <https:\/\/github.com\/dgmolla\/fitsy\/issues\/3\|#3 Ping/);
   assert.match(text, /#fitsy-hour:2026-09-26T18\|Details>/);
 });
 
@@ -138,5 +145,35 @@ test('compact copy distinguishes gate state, measured E2E, and timing exceptions
   text = formatReport(report);
   assert.match(text, /main failed/);
   assert.match(text, /E2E 2m/);
-  assert.equal(text.split('\n').length, 3);
+  assert.equal(text.split('\n').length, 5);
+});
+
+test('summary uses recent verified delivery and actionable board priority with bounded safe labels', () => {
+  const card = (number, title, status, priority, verified, blocker = '') => ({
+    id: String(number), content: { __typename: 'Issue', number, title },
+    fields: { Status: status, Priority: priority, 'Verified at': verified, Blocker: blocker }, labels: [],
+  });
+  const cards = [
+    card(1, 'Old done', 'Done', 'Now', '2026-09-24T18:00:00Z'),
+    card(2, 'Merged but unverified', 'Done', 'Now', ''),
+    card(3, 'Newest <@U123> *work* | continuation with a very long title', 'Done', 'Now', '2026-09-26T18:10:00Z'),
+    card(4, 'Second verified', 'Done', 'Now', '2026-09-26T18:00:00Z'),
+    card(5, 'Third verified', 'Done', 'Now', '2026-09-26T17:00:00Z'),
+    card(6, 'Active work', 'In flight', 'Next', ''),
+    card(7, 'Blocked now', 'Queued', 'Now', '', 'Waiting on credentials'),
+    card(8, 'Ready now', 'Queued', 'Now', ''),
+    card(9, 'Ready next', 'Queued', 'Next', ''),
+    card(10, 'Blocked active', 'In flight', 'Now', '', 'Waiting on review'),
+  ];
+  const report = buildReport({ url: board, items: cards }, [], { state: 'green' }, now);
+  assert.deepEqual(report.summary.shipped.map(issue => issue.number), [3, 4]);
+  assert.deepEqual(report.summary.next.map(issue => issue.number), [6, 8]);
+  const lines = formatReport(report).split('\n');
+  assert.equal(lines.length, 5);
+  assert.match(lines[3], /#3 Newest &lt;@U123&gt; work \/ cont/);
+  assert.doesNotMatch(lines[3], /#1|#2|#5|<@U123>|\*work\*/);
+  assert.match(lines[4], /#6 Active work.*#8 Ready now/);
+  assert.doesNotMatch(lines[4], /#7|#9|#10/);
+  const visible = lines.map(line => line.replace(/<[^|>]+\|([^>]+)>/g, '$1').replace(/\*/g, ''));
+  assert.ok(visible.every(line => line.length <= 110));
 });

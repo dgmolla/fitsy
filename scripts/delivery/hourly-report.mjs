@@ -21,6 +21,7 @@ export const PROJECT_QUERY = `query($owner: String!, $number: Int!, $after: Stri
       } fieldValues(first: 100) { pageInfo { hasNextPage } nodes {
         ... on ProjectV2ItemFieldTextValue { text field { ... on ProjectV2Field { name } } }
         ... on ProjectV2ItemFieldSingleSelectValue { name field { ... on ProjectV2SingleSelectField { name } } }
+        ... on ProjectV2ItemFieldDateValue { date field { ... on ProjectV2Field { name } } }
       } } }
     }
   } }
@@ -48,7 +49,7 @@ export async function loadProject(graphql) {
       if (node.content?.labels) assertComplete(node.content.labels, `Project item ${node.id} labels`);
       const fields = Object.fromEntries((node.fieldValues?.nodes ?? [])
         .filter(value => value?.field?.name)
-        .map(value => [value.field.name, value.text ?? value.name ?? '']));
+        .map(value => [value.field.name, value.text ?? value.name ?? value.date ?? '']));
       items.push({ id: node.id, content: node.content, fields,
         labels: node.content?.labels?.nodes?.map(label => label.name) ?? [] });
     }
@@ -125,6 +126,18 @@ export function buildReport(project, pulls, main, now = new Date()) {
   const blocked = cards.filter(item => item.fields.Status !== 'Done' &&
     (item.fields.Blocker?.trim() || item.labels.includes('blocked')));
   const doneIssues = issues.filter(item => item.fields.Status === 'Done');
+  const shipped = doneIssues.map(item => ({ item, verified: timestamp(item.fields['Verified at']) }))
+    .filter(({ verified }) => verified !== null && verified <= nowMs && verified >= nowMs - 24 * 60 * 60 * 1000)
+    .sort((a, b) => b.verified - a.verified || b.item.content.number - a.item.content.number)
+    .slice(0, 2).map(({ item }) => ({ number: item.content.number, title: item.content.title }));
+  const next = issues.filter(item => !item.fields.Blocker?.trim() && !item.labels.includes('blocked') &&
+    (item.fields.Status === 'In flight' ||
+      (item.fields.Status === 'Queued' && ['Now', 'Next'].includes(item.fields.Priority))))
+    .sort((a, b) => Number(b.fields.Status === 'In flight') - Number(a.fields.Status === 'In flight') ||
+      Number(b.fields.Priority === 'Now') - Number(a.fields.Priority === 'Now') ||
+      a.content.number - b.content.number)
+    .slice(0, 2).map(item => ({ number: item.content.number, title: item.content.title,
+      status: item.fields.Status }));
   const cycles = doneIssues.map(item => {
     const start = timestamp(item.fields['Started at']);
     const verified = timestamp(item.fields['Verified at']);
@@ -155,6 +168,7 @@ export function buildReport(project, pulls, main, now = new Date()) {
       next: cards.filter(item => item.fields.Status === 'Queued' && item.fields.Priority === 'Next').length },
     prs24h: { merged: pulls.length, medianMs: median(prTimes), sample: prTimes.length },
     issueCycle: { medianMs: median(cycles), sample: cycles.length, missing: doneIssues.length - cycles.length },
+    summary: { shipped, next },
     wipAge: { oldestMs: ages.length ? Math.max(...ages) : null, sample: ages.length,
       missing: activeIssues.length - ages.length }, main, highlights };
 }
@@ -165,6 +179,16 @@ function duration(ms) {
   if (minutes < 60) return `${minutes}m`;
   const hours = Math.floor(minutes / 60);
   return `${hours}h ${minutes % 60}m`;
+}
+
+function issueLink(issue) {
+  const number = issue.number;
+  if (!Number.isSafeInteger(number) || number < 1) return null;
+  const title = [...String(issue.title ?? '').replace(/[\r\n\t\x00-\x1f\x7f]/g, ' ').replace(/\s+/g, ' ').trim()];
+  const short = title.length > 35 ? `${title.slice(0, 34).join('').trimEnd()}…` : title.join('');
+  const safe = (short || 'Issue').replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/\|/g, '/').replace(/[*_~`]/g, '');
+  return `<https://github.com/dgmolla/fitsy/issues/${number}|#${number} ${safe}>`;
 }
 
 export function formatReport(report) {
@@ -184,6 +208,8 @@ export function formatReport(report) {
     `*Fitsy:* ${report.prs24h.merged} PRs merged /24h · main ${report.main.state}`,
     `*Local time:* ${times.join(' · ')}`,
     `*Attention:* ${attention.join(' · ')} · <${BOARD_URL}#fitsy-hour:${report.hourKey}|Details>`,
+    `• *Shipped:* ${report.summary.shipped.map(issueLink).filter(Boolean).join(' · ') || 'none verified /24h'}`,
+    `• *Next:* ${report.summary.next.map(issueLink).filter(Boolean).join(' · ') || 'none queued'}`,
   ];
   return lines.join('\n');
 }
