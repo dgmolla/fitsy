@@ -39,6 +39,7 @@ export function parseTiming(comment, issue, now) {
 export async function loadTimings(rest, items, now) {
   const candidates = items.filter(item => item.content?.__typename === 'Issue' &&
     (item.fields.Status === 'In flight' || (item.fields.Status === 'Done' &&
+      iso(item.fields['Verified at']) && Date.parse(item.fields['Verified at']) <= +now &&
       Date.parse(item.fields['Verified at']) >= now.getTime() - 86400000)));
   const records = [], improvements = [];
   let invalid = 0;
@@ -85,8 +86,8 @@ export function summarizeTimings(records, now, invalid = 0) {
   let tracked = 0, stale = 0;
   const rounds = [];
   for (const record of records) {
-    const events = record.runs.flatMap(run => run.events).filter(e =>
-      Date.parse(e.finished_at ?? e.started_at) >= since);
+    const events = record.runs.flatMap(run => run.events.filter(e =>
+      Date.parse(e.status === 'running' ? run.updated_at : e.finished_at) >= since));
     if (record.active && events.length) tracked++;
     if (record.active && record.runs.length && Math.max(...record.runs.map(run => Date.parse(run.updated_at))) < stop - 7200000) stale++;
     for (const phase of PHASES) {

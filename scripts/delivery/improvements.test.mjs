@@ -28,3 +28,14 @@ test('counts only merged main fixes with exact-source successful Verify and Depl
   const pending = await verifyImprovements(async url => ({ ...await rest(url), ...(url.includes('/pulls/') ? { merged_at: null } : {}) }), [claim], now);
   assert.equal(pending.verified.length, 0);
 });
+
+test('latest correction supersedes invalid evidence regardless of comment order', async () => {
+  const bad = { ...claim, verify_run: 99, updatedAt: +now - 1000 };
+  const good = { ...claim, updatedAt: +now };
+  const api = async url => url.endsWith('/99') ? { ...await rest(url), conclusion: 'failure' } : rest(url);
+  for (const claims of [[bad, good], [good, bad]]) {
+    const result = await verifyImprovements(api, claims, now);
+    assert.equal(result.verified.length, 1);
+    assert.equal(result.pending, 0);
+  }
+});

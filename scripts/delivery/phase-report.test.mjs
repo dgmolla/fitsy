@@ -58,3 +58,21 @@ test('24h windows clip straddling work and do not treat cached/unfinished spans 
   const result = summarizeTimings([{ issue: 355, active: true, runs: [payload([e])] }], now);
   assert.equal(result.phases.review.observedMs, 3600000);
 });
+
+test('fresh checkpoints retain unfinished attempts started before the window', () => {
+  const e = { ...event('a'), started_at: '2026-09-25T18:00:00Z', finished_at: null,
+    duration_ms: null, status: 'running' };
+  const result = summarizeTimings([{ issue: 355, active: true, runs: [payload([e])] }], now);
+  assert.equal(result.coverage.tracked, 1);
+  assert.equal(result.phases.review.running, 1);
+  assert.equal(result.phases.review.observedMs, null);
+});
+
+test('Done issues require valid verification dates inside the reporting window', async () => {
+  for (const verified of ['2026-09-27T00:00:00Z', '2026-02-30T00:00:00Z', 'invalid']) {
+    let reads = 0;
+    await loadTimings(async () => { reads++; return []; }, [{ content: { __typename: 'Issue', number: 355 },
+      fields: { Status: 'Done', 'Verified at': verified } }], now);
+    assert.equal(reads, 0);
+  }
+});

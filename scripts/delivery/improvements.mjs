@@ -12,18 +12,19 @@ export function parseImprovement(comment, issue) {
         ![d.finding, d.prevention].every(s => typeof s === 'string' && s.trim().length > 0 && s.length <= 500) ||
         ![d.detector_path, d.prevention_path].every(s => typeof s === 'string' && /^[a-zA-Z0-9_./-]+$/.test(s) && !s.split('/').includes('..')) ||
         ![d.verify_run, d.deploy_run].every(n => Number.isSafeInteger(n) && n > 0)) return null;
-    return { ...d, url: comment.html_url };
+    return { ...d, url: comment.html_url, updatedAt: Date.parse(comment.updated_at ?? comment.created_at) || 0 };
   } catch { return null; }
 }
 
 // Source-bound gates prove shipment; the finding/detector relationship is a reviewed writer claim.
 export async function verifyImprovements(rest, claims, now) {
   const verified = [], pending = [];
-  const seen = new Set();
+  const latest = new Map();
   for (const claim of claims) {
     const key = `${claim.pr}:${claim.id}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
+    if (!latest.has(key) || (claim.updatedAt ?? 0) >= (latest.get(key).updatedAt ?? 0)) latest.set(key, claim);
+  }
+  for (const claim of latest.values()) {
     try {
     const pr = await rest(`${API}/pulls/${claim.pr}`);
     const sha = pr.merge_commit_sha;
