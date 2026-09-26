@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 const file = fileURLToPath(import.meta.url);
 export function admitResources({ root = resolve(dirname(file), '../..'), exists = existsSync,
   disk = statfsSync, env = process.env } = {}) {
-  if (!exists(resolve(root, 'node_modules'))) {
+  if (!exists(resolve(root, 'node_modules/js-yaml'))) {
     return { name: 'resource-admission', status: 'fail', summary: 'dependencies are missing',
       fix: 'install the locked dependencies before verification' };
   }

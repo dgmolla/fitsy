@@ -23,7 +23,7 @@ import { impactPlan } from "./impact-plan.mjs";
 
 const VERIFY_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(VERIFY_DIR, "..", "..");
-if (!existsSync(join(REPO_ROOT, "node_modules"))) {
+if (!existsSync(join(REPO_ROOT, "node_modules/js-yaml"))) {
   const { admitResources } = await import("./resource-admission.mjs");
   console.log(JSON.stringify(admitResources({ root: REPO_ROOT })));
   process.exit(1);
