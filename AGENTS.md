@@ -195,8 +195,8 @@ owner decision - flip it per the tuning guide when ready.
 
 ## Project Management
 
-- Follow [task management](docs/engineering/devops/task-management.md) for the Linear queue, exclusive execution ownership, worker lifecycle, progress updates, and delivery timestamps.
-- `proj-mgmt/` retains planning/reference material; do not maintain a competing active task queue after Linear cutover.
+- Follow [task management](docs/engineering/devops/task-management.md) for the GitHub Project queue, exclusive execution ownership, worker lifecycle, progress updates, and delivery timestamps.
+- `proj-mgmt/` retains planning/reference material; do not maintain a competing active task queue.
 
 ## Maintaining this file
 

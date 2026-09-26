@@ -4,22 +4,22 @@
 
 ## Authority
 
-Linear is the selected authoritative queue for Fitsy deliverables.
-This document defines the operating contract; it does not assert that the Linear connection, synchronization, or lifecycle automation is installed.
-The active rollout handoff records connection status, verified team/project identifiers, migration progress, and the current dispatcher.
-Until cutover is verified, that handoff names one temporary queue and its owner; do not start a second writable backlog.
+The [Fitsy Delivery GitHub Project](https://github.com/users/dgmolla/projects/1) is the authoritative queue for Fitsy deliverables.
+GitHub issues hold outcomes, acceptance criteria, dependencies, ownership, and follow-ups.
+The project records the current stage and explicit blocker fields, while pull requests and Actions provide source-bound delivery evidence.
+Do not start a second writable backlog.
 Existing authorized work continues under its existing owner during migration.
 
 | System | Responsibility |
 | --- | --- |
-| Linear | Deliverable, priority, dependencies, acceptance, execution owner, and current stage. |
+| GitHub Issues and Fitsy Delivery Project | Deliverable, priority, dependencies, acceptance, execution owner, current stage, and blockers. |
 | FM or an explicitly delegated coordinator | Claim work, supervise workers, reconcile evidence, and update the same issue. |
 | Repository and GitHub | Canonical checks, source-bound review, PR/merge identity, deployment and verification receipts. |
 | Slack | Notifications linked to the issue and evidence; never a separate task queue. |
 
 ```mermaid
 flowchart LR
-  L[Linear issue] --> C[One dispatcher and execution owner]
+  L[GitHub issue and project card] --> C[One dispatcher and execution owner]
   C --> W[Worker in isolated checkout]
   W --> G[Repository checks and GitHub delivery]
   G --> L
@@ -30,8 +30,8 @@ flowchart LR
 
 Search for an existing issue before creating one.
 Each independently testable deliverable records its outcome, acceptance criteria, priority, dependencies, owning role, execution owner, and applicable release surface.
-Use the real Linear identifier in branch/PR references once available; never manufacture identifiers while disconnected.
-Link related PRs and source-bound follow-up issues rather than copying raw logs or credentials into Linear.
+Use the real GitHub issue number in branch and PR references.
+Link related PRs, Actions runs, deployment receipts, and source-bound follow-up issues rather than copying raw logs or credentials into the project.
 Apply existing PR scope and review rules from [shipping.md](shipping.md); this contract adds no approval or review gate.
 
 One dispatcher assigns the execution owner before starting a worker.
@@ -43,7 +43,7 @@ If ownership cannot be established, reconcile it before launching another worker
 
 ## Stages and evidence
 
-Map these meanings to the existing Linear team's statuses instead of creating duplicates.
+Use the project's existing `Queued`, `In flight`, and `Done` statuses instead of creating duplicates.
 
 | Stage | Required meaning |
 | --- | --- |
@@ -89,10 +89,10 @@ Release simulator, Metro, database and other resource claims only through their 
 
 ## Cutover and recovery
 
-Inventory existing FM and local rollout items, then map each deliverable to an existing or newly created Linear issue.
+Inventory existing FM and local rollout items, then map each deliverable to an existing or newly created GitHub issue.
 Preserve completed PR/deployment links and unresolved findings; do not import old completed generations as new work.
 Store returned issue identifiers before attempting another create; reconcile uncertain writes before retrying.
-Record verified dependencies and the single dispatcher, then mark the previous backlog as a reference to Linear.
+Record verified dependencies and the single dispatcher, then mark the previous backlog as a reference to the Fitsy Delivery project.
 Confirm issue reads, a real task update, owner reconciliation and the configured notification path before declaring the integration operational.
 During an outage, preserve a bounded pending-update log keyed by issue and event identity under the current dispatcher.
 Continue already-owned authorized work when safe; do not dispatch duplicate work or claim unsynchronized statuses were delivered.
