@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { Redirect, router, useFocusEffect } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { TrialArtwork } from '@/components/TrialArtwork';
@@ -44,14 +44,15 @@ export default function TrialScreen() {
       finally { retryInFlight.current = false; if (isCurrent()) setPlansChecked(true); }
       return;
     }
-    router.push(trial ? '/welcome/trial-reminder' : '/welcome/payment');
+    router.push('/welcome/trial-reminder');
   }
-  return <WelcomeScreen progress={1} title={trial ? 'We want you to try Fitsy for free.' : 'Find your next meal with Fitsy.'}
-    subtitle={trial ? 'See how good eating out can feel when it fits your goals.' : 'More meals that fit your goals, wherever the day takes you.'}
+  if (entitled === true || (offering && introEligibilityReady && !trial)) return <Redirect href="/welcome/payment" />;
+  return <WelcomeScreen progress={1} title={trial ? 'We want you to try Fitsy for free.' : 'Checking your available plans.'}
+    subtitle={trial ? 'See how good eating out can feel when it fits your goals.' : 'Your available plans will appear next.'}
     continueLabel={checkingPlans ? 'Checking plans…' : offering ? 'Continue' : 'Retry plans'} canContinue={!checkingPlans}
     onContinue={() => { void continueOrRetry(); }}>
     <TrialArtwork />
-    <Text style={s.note} testID="trial-offer-note">{!offering && plansChecked ? 'Plans could not load. Check your connection and retry to see any eligible trial.' : trial ? `An eligible plan includes ${trial} free. Review your plan and renewal price before starting.` : 'Review current plans and any eligible trial on the next screens. Your subscription starts only when you confirm.'}</Text>
+    <Text style={s.note} testID="trial-offer-note">{!offering && plansChecked ? 'Plans could not load. Check your connection and retry to see any eligible trial.' : trial ? `An eligible plan includes ${trial} free. Review your plan and renewal price before starting.` : 'Checking current plans and trial eligibility…'}</Text>
   </WelcomeScreen>;
 }
 const s = StyleSheet.create({ note: { ...TEXT.bodySmall, color: EDITORIAL.textMid, textAlign: 'center', lineHeight: 21 } });

@@ -6,6 +6,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -53,6 +54,8 @@ export function WelcomeScreen({
   footerContent,
 }: Props) {
   const navigation = useNavigation();
+  const { height, fontScale } = useWindowDimensions();
+  const compact = height < 780 && fontScale <= 1.2;
 
   const handleBack = onBack ?? (() => {
     if (navigation.canGoBack()) router.back();
@@ -69,7 +72,7 @@ export function WelcomeScreen({
         {/* ── Body ── */}
         <ScrollView
           style={styles.flex}
-          contentContainerStyle={styles.body}
+          contentContainerStyle={[styles.body, compact && styles.bodyCompact]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           bounces={false}
@@ -77,7 +80,7 @@ export function WelcomeScreen({
           {beforeTitle}
           <Animated.Text
             entering={FadeInDown.duration(500).delay(80)}
-            style={styles.title}
+            style={[styles.title, compact && styles.titleCompact]}
           >
             {title}
           </Animated.Text>
@@ -85,7 +88,7 @@ export function WelcomeScreen({
           {subtitle && (
             <Animated.Text
               entering={FadeInDown.duration(500).delay(180)}
-              style={styles.subtitle}
+              style={[styles.subtitle, compact && styles.subtitleCompact]}
             >
               {subtitle}
             </Animated.Text>
@@ -97,8 +100,8 @@ export function WelcomeScreen({
         </ScrollView>
 
         {/* ── Footer ── */}
-        {footerContent ? <View style={styles.customFooter}>{footerContent}</View> : !hideFooter && (
-          <Animated.View entering={FadeIn.duration(300).delay(400)} style={styles.footer}>
+        {footerContent ? <View style={[styles.customFooter, compact && styles.footerCompact]}>{footerContent}</View> : !hideFooter && (
+          <Animated.View entering={FadeIn.duration(300).delay(400)} style={[styles.footer, compact && styles.footerCompact]}>
             <AnimatedPress
               style={[styles.continueBtn, !canContinue ? styles.continueDim : undefined]}
               onPress={onContinue}
@@ -125,29 +128,33 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
 
   body: {
-    paddingHorizontal: 36,
-    paddingTop: 28,
-    paddingBottom: 24,
+    paddingHorizontal: 28,
+    paddingTop: 18,
+    paddingBottom: 12,
     flexGrow: 1,
   },
+  bodyCompact: { paddingHorizontal: 24, paddingTop: 8, paddingBottom: 8 },
   title: {
     ...TEXT.headline,
-    marginBottom: 14,
+    marginBottom: 10,
   },
+  titleCompact: { fontSize: 28, lineHeight: 34, marginBottom: 6 },
   subtitle: {
     ...TEXT.subtitle,
-    marginBottom: 36,
+    marginBottom: 18,
   },
+  subtitleCompact: { marginBottom: 10 },
   childWrap: { flex: 1 },
 
   footer: {
     flexDirection: 'column',
     alignItems: 'center',
-    paddingHorizontal: 36,
-    paddingBottom: 16,
-    paddingTop: 8,
+    paddingHorizontal: 28,
+    paddingBottom: 10,
+    paddingTop: 4,
   },
-  customFooter: { paddingHorizontal: 36, paddingTop: 8, paddingBottom: 16 },
+  customFooter: { paddingHorizontal: 28, paddingTop: 4, paddingBottom: 10 },
+  footerCompact: { paddingHorizontal: 24, paddingBottom: 4, paddingTop: 2 },
   skipHit: { minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center' },
   skipTxt: { ...TEXT.body, color: EDITORIAL.textSoft },
 

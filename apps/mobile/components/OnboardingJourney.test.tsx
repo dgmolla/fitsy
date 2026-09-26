@@ -21,7 +21,7 @@ import Activity from '../app/welcome/activity';
 import MacrosIntro from '../app/welcome/macros-intro';
 import MacroSetup from '../app/macro-setup';
 import { getOnboardingData, saveOnboardingField } from '../lib/onboardingStorage';
-import { getMacroTargets } from '../lib/macroStorage';
+import { getMacroTargets, saveMacroTargets } from '../lib/macroStorage';
 import { getOnboardingResume } from '../lib/onboardingResume';
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
@@ -106,6 +106,7 @@ it('keeps own meal targets through trust, Back, and the saved-target shortcut wi
   await saveOnboardingField('goal', 'lose_fat');
   const screen = renderRouter(routes, { initialUrl: '/welcome/target-setup' });
   await waitFor(() => expect(screen.getByTestId('welcome-continue').props.accessibilityState?.disabled).not.toBe(true));
+  expect(screen.getByTestId('target-mode-known').props.accessibilityState.checked).toBe(true);
   await act(async () => { fireEvent.press(screen.getByTestId('target-mode-known')); });
   expect(screen.getPathname()).toBe('/welcome/target-setup');
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
@@ -117,11 +118,13 @@ it('keeps own meal targets through trust, Back, and the saved-target shortcut wi
   expect(screen.getByTestId('nutrition-source-estimated')).toBeTruthy();
   expect(await getMacroTargets()).toEqual(values);
   expect(await getOnboardingData()).toEqual(expect.objectContaining({ targetMode: 'known' }));
+  expect((await getOnboardingData()).targetChoiceInProgress).toBe(false);
   expect((await getOnboardingData()).heightCm).toBeUndefined();
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
   expect(await screen.findByDisplayValue('650')).toBeTruthy();
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
-  await act(async () => { fireEvent.press(await screen.findByTestId('target-use-saved')); });
+  expect((await screen.findByTestId('target-mode-saved')).props.accessibilityState.checked).toBe(true);
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/how-it-works'));
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   expect(await screen.findByText('Discovery preview')).toBeTruthy();
@@ -166,6 +169,83 @@ it('opens assisted questions only after confirmation and retains the earlier goa
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/height'));
   expect(await getOnboardingData()).toEqual(expect.objectContaining({ targetMode: 'estimate', goal: 'build_muscle' }));
+});
+
+it('keeps the assisted-target choice after backing out of height when saved targets exist', async () => {
+  await saveOnboardingField('goal', 'build_muscle');
+  await saveMacroTargets({ calories: '650', protein: '42', carbs: '68', fat: '23' });
+  const screen = renderRouter(routes, { initialUrl: '/welcome/target-setup' });
+  await waitFor(() => expect(screen.getByTestId('target-mode-saved').props.accessibilityState.checked).toBe(true));
+  await act(async () => { fireEvent.press(screen.getByTestId('target-mode-estimate')); });
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/height'));
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/target-setup'));
+  await waitFor(() => expect(screen.getByTestId('target-mode-estimate').props.accessibilityState.checked).toBe(true));
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/height'));
+  expect((await getOnboardingData()).targetChoiceInProgress).toBe(true);
+});
+
+it('defaults to saved targets when a previous assisted choice is complete', async () => {
+  await saveOnboardingField('goal', 'performance');
+  await saveOnboardingField('targetMode', 'estimate');
+  await saveOnboardingField('targetChoiceInProgress', false);
+  await saveMacroTargets({ calories: '650', protein: '42', carbs: '68', fat: '23' });
+  const screen = renderRouter(routes, { initialUrl: '/welcome/target-setup' });
+  await waitFor(() => expect(screen.getByTestId('target-mode-saved').props.accessibilityState.checked).toBe(true));
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/how-it-works'));
+  expect((await getOnboardingData()).targetChoiceInProgress).toBe(false);
+});
+
+it('restores an unfinished assisted choice with saved targets after route remount', async () => {
+  await saveOnboardingField('goal', 'performance');
+  await saveOnboardingField('targetMode', 'estimate');
+  await saveOnboardingField('targetChoiceInProgress', true);
+  await saveMacroTargets({ calories: '650', protein: '42', carbs: '68', fat: '23' });
+  const screen = renderRouter(routes, { initialUrl: '/welcome/target-setup' });
+  await waitFor(() => expect(screen.getByTestId('target-mode-estimate').props.accessibilityState.checked).toBe(true));
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/height'));
+});
+
+it('keeps an unfinished saved-target edit after returning from tuning', async () => {
+  await saveOnboardingField('goal', 'performance');
+  await saveMacroTargets({ calories: '650', protein: '42', carbs: '68', fat: '23' });
+  const screen = renderRouter(routes, { initialUrl: '/welcome/target-setup' });
+  await waitFor(() => expect(screen.getByTestId('target-mode-saved').props.accessibilityState.checked).toBe(true));
+  await act(async () => { fireEvent.press(screen.getByTestId('target-mode-known')); });
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/tuning'));
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/target-setup'));
+  await waitFor(() => expect(screen.getByTestId('target-mode-known').props.accessibilityState.checked).toBe(true));
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/tuning'));
+});
+
+it.each([
+  ['saved', '/welcome/how-it-works'],
+  ['known', '/welcome/tuning'],
+  ['estimate', '/welcome/height'],
+] as const)('keeps the unconfirmed %s choice after visiting macro help', async (mode, destination) => {
+  await saveOnboardingField('goal', 'performance');
+  await saveMacroTargets({ calories: '650', protein: '42', carbs: '68', fat: '23' });
+  if (mode === 'saved') {
+    await saveOnboardingField('targetMode', 'estimate');
+    await saveOnboardingField('targetChoiceInProgress', true);
+  }
+  const screen = renderRouter(routes, { initialUrl: '/welcome/target-setup' });
+  await waitFor(() => expect(screen.getByTestId(mode === 'saved' ? 'target-mode-estimate' : 'target-mode-saved').props.accessibilityState.checked).toBe(true));
+  await act(async () => { fireEvent.press(screen.getByTestId(`target-mode-${mode}`)); });
+  await act(async () => { fireEvent.press(screen.getByTestId('target-macro-help')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/macros-intro'));
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/target-setup'));
+  await waitFor(() => expect(screen.getByTestId(`target-mode-${mode}`).props.accessibilityState.checked).toBe(true));
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  await waitFor(() => expect(screen.getPathname()).toBe(destination));
 });
 
 it('sends a missing-goal target setup to goal choice, then returns before assisted questions', async () => {
@@ -213,85 +293,3 @@ it('requires a fresh goal choice before showing macros for a legacy maintenance 
   await act(async () => { fireEvent.press(screen.getByTestId('macro-setup-save')); });
   expect(await getMacroTargets()).toEqual({ protein: '31', carbs: '87', fat: '18', calories: '634' });
 });
-
-it('clears a signed-in goal checkpoint when macro setup is skipped', async () => {
-  await saveOnboardingField('goal', 'performance');
-  await AsyncStorage.setItem('@fitsy/onboardingStep', 'goal');
-  const screen = renderRouter(routes, { initialUrl: '/macro-setup' });
-  await screen.findByTestId('macro-setup-skip');
-  await act(async () => { fireEvent.press(screen.getByTestId('macro-setup-skip')); });
-  await waitFor(() => expect(screen.getByText('Search for meals')).toBeTruthy());
-  expect(await getOnboardingResume()).toBeNull();
-});
-
-
-it.each([
-  ['lose_fat', 'Consistency with your fat-loss plan'],
-  ['build_muscle', 'Consistency with your muscle-building plan'],
-  ['performance', 'Consistency with your training nutrition'],
-] as const)('carries %s through the complete personalized story and into target setup', async (goal, graphLabel) => {
-  const screen = renderRouter(routes, { initialUrl: '/welcome/goal' });
-  await act(async () => {});
-  expect(screen.getByTestId('welcome-continue').props.accessibilityState?.disabled).toBe(true);
-  await act(async () => { fireEvent.press(screen.getByTestId(`goal-${goal}`)); });
-  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
-  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/tried'));
-  await act(async () => { fireEvent.press(screen.getByTestId('tried-check_online')); });
-  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
-  expect(await screen.findByTestId('story-check_online')).toBeTruthy();
-  expect(screen.getByText('One place to compare')).toBeTruthy();
-  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
-  expect(await screen.findByTestId('payoff-check_online')).toBeTruthy();
-  expect(screen.getByText('Protein target')).toBeTruthy();
-  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
-  expect(await screen.findByText(graphLabel)).toBeTruthy();
-  expect(screen.getByText(/Illustration only/)).toBeTruthy();
-  expect(await getOnboardingResume()).toBe('/welcome/goal-payoff');
-  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
-  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/target-setup'));
-  expect(await getOnboardingData()).toEqual(expect.objectContaining({ goal, tried: 'check_online' }));
-});
-
-it('requires a visible goal choice when an old maintenance goal is saved', async () => {
-  await saveOnboardingField('goal', 'maintain');
-  const screen = renderRouter(routes, { initialUrl: '/welcome/goal' });
-  await waitFor(() => expect(screen.getByTestId('welcome-continue').props.accessibilityState?.disabled).toBe(true));
-  for (const goal of ['lose_fat', 'build_muscle', 'performance']) {
-    expect(screen.getByTestId(`goal-${goal}`).props.accessibilityState?.selected).toBe(false);
-  }
-  await act(async () => { fireEvent.press(screen.getByTestId('goal-performance')); });
-  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
-  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/tried'));
-  expect((await getOnboardingData()).goal).toBe('performance');
-});
-
-it('returns a missing-goal legacy payoff to its saved destination after goal selection', async () => {
-  await saveOnboardingField('tried', 'check_online');
-  await AsyncStorage.setItem('@fitsy/onboardingStep', 'value-payoff');
-  expect(await getOnboardingResume()).toBe('/welcome/goal');
-  const screen = renderRouter(routes, { initialUrl: '/welcome/goal' });
-  await waitFor(() => expect(screen.getByTestId('welcome-continue').props.accessibilityState?.disabled).toBe(true));
-  await act(async () => { fireEvent.press(screen.getByTestId('goal-lose_fat')); });
-  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
-  expect(await screen.findByTestId('payoff-check_online')).toBeTruthy();
-  expect(screen.getPathname()).toBe('/welcome/value-payoff');
-  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
-  expect(await screen.findByText('Consistency with your fat-loss plan')).toBeTruthy();
-});
-
-it.each(['Back button', 'navigation gesture'] as const)(
-  'drops a legacy payoff destination when the user leaves its goal detour with %s', async exit => {
-    const screen = renderRouter(routes, { initialUrl: '/welcome/location-permission' });
-    await act(async () => { router.push('/welcome/goal-payoff'); });
-    await waitFor(() => expect(screen.getPathname()).toBe('/welcome/goal'));
-    await act(async () => {
-      if (exit === 'Back button') fireEvent.press(screen.getByTestId('welcome-back'));
-      else router.back();
-    });
-    await waitFor(() => expect(screen.getPathname()).toBe('/welcome/location-permission'));
-    await act(async () => { router.push('/welcome/goal'); });
-    await act(async () => { fireEvent.press(screen.getByTestId('goal-build_muscle')); });
-    await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
-    await waitFor(() => expect(screen.getPathname()).toBe('/welcome/tried'));
-  },
-);

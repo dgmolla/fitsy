@@ -30,8 +30,9 @@ interface Props {
 
 /** The store supplies all offer copy; this component owns only presentation. */
 export function PaywallView(props: Props) {
-  const { fontScale } = useWindowDimensions();
+  const { height, fontScale } = useWindowDimensions();
   const largeText = fontScale > 1.35;
+  const compact = height < 780 && fontScale <= 1.2;
   const { plan, annual, monthly, loading, restoring } = props;
   const selected = plan === 'yearly' ? annual : monthly;
   const busy = loading || restoring;
@@ -47,18 +48,18 @@ export function PaywallView(props: Props) {
         </Pressable>
       } />
 
-      <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false} bounces={false}>
+      <ScrollView contentContainerStyle={[s.content, compact && s.contentCompact]} showsVerticalScrollIndicator={false} bounces={false}>
         <View>
-          <Text style={s.title}>{selected?.trial ? `Start your ${trialLength} free trial.` : 'Make room for meals that fit.'}</Text>
-          <Text style={s.context}>Explore full menus with Pro.</Text>
-          {!!props.discovery.selected && <Text style={s.context}>Discover more meals like your pick at {props.discovery.selected.name}.</Text>}
-          <PaywallTimeline terms={selected} />
+          <Text style={[s.title, compact && s.titleCompact]}>{selected?.trial ? `Start your ${trialLength} free trial.` : 'Make room for meals that fit.'}</Text>
+          <Text style={[s.context, compact && s.contextCompact]}>Explore full menus with Pro.</Text>
+          {!!props.discovery.selected && <Text style={[s.context, compact && s.contextCompact]}>Discover more meals like your pick at {props.discovery.selected.name}.</Text>}
+          <PaywallTimeline terms={selected} compact={compact} />
 
           <View style={s.plans}>
             {([{ id: 'monthly', name: 'Monthly', terms: monthly }, { id: 'yearly', name: 'Annual', terms: annual }] as const).map(option => {
               const active = option.id === plan;
               return (
-                <AnimatedPress key={option.id} style={[s.plan, largeText && s.planLarge, active && s.planSelected]} onPress={() => props.onSelect(option.id)}
+                <AnimatedPress key={option.id} style={[s.plan, compact && s.planCompact, largeText && s.planLarge, active && s.planSelected]} onPress={() => props.onSelect(option.id)}
                   disabled={planBusy || !option.terms} haptic accessibilityRole="radio" accessibilityState={{ checked: active, disabled: planBusy || !option.terms }} testID={`paywall-plan-${option.id}`}>
                   <View style={[s.radio, active && s.radioSelected]} accessible={false}>
                     {active && <Ionicons name="checkmark" size={13} color={EDITORIAL.cream} />}
@@ -82,10 +83,10 @@ export function PaywallView(props: Props) {
           )}
         </View>
 
-        <View style={s.footer}>
+        <View style={[s.footer, compact && s.footerCompact]}>
           {!!selected?.trial && <Text style={s.noPayment} testID="paywall-no-payment">No payment today</Text>}
-          <Text style={s.disclosure} testID="paywall-terms">{selected?.compactDisclosure ?? 'Fetching current prices and subscription terms from the store…'}</Text>
-          <AnimatedPress style={[s.cta, (!selected || planBusy) && s.disabled]} onPress={props.onPurchase} disabled={!selected || planBusy} haptic
+          <Text style={[s.disclosure, compact && s.disclosureCompact]} testID="paywall-terms">{selected?.compactDisclosure ?? 'Fetching current prices and subscription terms from the store…'}</Text>
+          <AnimatedPress style={[s.cta, compact && s.ctaCompact, (!selected || planBusy) && s.disabled]} onPress={props.onPurchase} disabled={!selected || planBusy} haptic
             accessibilityRole="button" accessibilityLabel={label} testID="welcome-continue">
             <Text style={s.ctaText}>{label}</Text><Ionicons name="arrow-forward" size={17} color={EDITORIAL.cream} />
           </AnimatedPress>
@@ -104,11 +105,15 @@ const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: EDITORIAL.cream },
   navAction: { minWidth: 64, minHeight: 44, justifyContent: 'center' },
   restore: { fontFamily: FONTS.nunitoSans, fontSize: 12, color: EDITORIAL.textMid, textDecorationLine: 'underline', textAlign: 'right' },
-  content: { flexGrow: 1, paddingHorizontal: 36, paddingTop: 14, paddingBottom: 2 },
-  title: { ...TEXT.title, fontSize: 29, lineHeight: 35, color: EDITORIAL.green, textAlign: 'center', marginTop: 10 },
-  context: { ...TEXT.bodySmall, textAlign: 'center', marginTop: 10 },
+  content: { flexGrow: 1, paddingHorizontal: 28, paddingTop: 8, paddingBottom: 2 },
+  contentCompact: { paddingHorizontal: 20, paddingTop: 2 },
+  title: { ...TEXT.title, fontSize: 27, lineHeight: 32, color: EDITORIAL.green, textAlign: 'center', marginTop: 4 },
+  titleCompact: { fontSize: 24, lineHeight: 28, marginTop: 0 },
+  context: { ...TEXT.bodySmall, textAlign: 'center', marginTop: 5 },
+  contextCompact: { marginTop: 2 },
   plans: { flexDirection: 'row', gap: 10 },
-  plan: { flex: 1, alignItems: 'flex-start', gap: 8, padding: 13, minHeight: 136, borderRadius: 15, borderWidth: 1, borderColor: EDITORIAL.border },
+  plan: { flex: 1, alignItems: 'flex-start', gap: 5, padding: 10, minHeight: 104, borderRadius: 15, borderWidth: 1, borderColor: EDITORIAL.border },
+  planCompact: { padding: 8, minHeight: 94, gap: 3 },
   planSelected: { backgroundColor: EDITORIAL.greenAccentTint, borderColor: EDITORIAL.greenMid },
   planLarge: { paddingHorizontal: 10 },
   radio: { alignSelf: 'flex-end', width: 20, height: 20, borderRadius: 10, borderWidth: 1, borderColor: EDITORIAL.textSoft, alignItems: 'center', justifyContent: 'center' },
@@ -121,10 +126,13 @@ const s = StyleSheet.create({
   price: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 19, color: EDITORIAL.green },
   pricePeriod: { fontFamily: FONTS.nunitoSans, fontSize: 11, color: EDITORIAL.textMid },
   retry: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  footer: { marginTop: 'auto', paddingTop: 16 },
+  footer: { marginTop: 'auto', paddingTop: 8 },
+  footerCompact: { paddingTop: 4 },
   noPayment: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 12, lineHeight: 18, color: EDITORIAL.greenMid, textAlign: 'center', marginBottom: 8 },
-  disclosure: { fontFamily: FONTS.nunitoSans, fontSize: 11, lineHeight: 16, color: EDITORIAL.textMid, textAlign: 'center', marginBottom: 12 },
-  cta: { minHeight: 54, paddingVertical: 14, paddingHorizontal: 18, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, borderRadius: 30, backgroundColor: EDITORIAL.green },
+  disclosure: { fontFamily: FONTS.nunitoSans, fontSize: 11, lineHeight: 15, color: EDITORIAL.textMid, textAlign: 'center', marginBottom: 8 },
+  disclosureCompact: { fontSize: 11, lineHeight: 15, marginBottom: 4 },
+  cta: { minHeight: 50, paddingVertical: 11, paddingHorizontal: 18, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, borderRadius: 30, backgroundColor: EDITORIAL.green },
+  ctaCompact: { minHeight: 46, paddingVertical: 8 },
   ctaText: { flexShrink: 1, fontFamily: FONTS.nunitoSansSemiBold, fontSize: 16, lineHeight: 22, color: EDITORIAL.cream, textAlign: 'center' },
   disabled: { opacity: 0.4 },
   links: { flexDirection: 'row', justifyContent: 'center', gap: 14, marginTop: 4 },

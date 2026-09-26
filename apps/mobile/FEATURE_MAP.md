@@ -16,17 +16,17 @@ signed in without targets -> `/macro-setup`.
 | `/welcome/goal` | covered area | `goal-performance`, `goal-build_muscle`, `goal-lose_fat` | Goal personalizes the story and assisted targets |
 | `/welcome/tried` | goal choice | `tried-meal_prep`, `tried-calorie_apps` | Four prior approaches personalize the response, fitness payoff and tour |
 | `/welcome/response` | prior approach | `welcome-continue` | Relevant response, then a personalized fitness-goal payoff |
-| `/welcome/location-permission` | welcome CTA | `location-use-current`, `location-choose-area` | GPS primary; manual area fallback; actual coverage determines continuation |
+| `/welcome/location-permission` | welcome CTA | `location-use-current`, `location-choose-area`, `location-continue-area` | Saved area becomes the primary action; GPS and manual alternatives remain; actual coverage determines continuation |
 | `/welcome/value-abundance` | legacy links only | redirects to value-payoff | Retired benefits screen |
 | `/welcome/value-payoff` | personalized response | `fitness-payoff-diagram`, `welcome-continue` | Connects meal targets and eating out to fitness goals; meal-prep path shows home and restaurant choices |
 | `/welcome/goal-payoff` | approach-specific payoff | `goal-progress-graph` | Clearly illustrative goal-specific consistency graph; then target choice |
 | `/welcome/how-it-works` | confirmed meal targets | `nutrition-source-published`, `nutrition-source-estimated` | Source transparency and portion uncertainty before discovery |
-| `/welcome/target-setup` | fitness payoff | `target-mode-known`, `target-mode-estimate`, `target-use-saved` | Choose then confirm own or assisted targets; saved-target shortcut still visits nutrition trust |
+| `/welcome/target-setup` | fitness payoff | `target-mode-saved`, `target-mode-known`, `target-mode-estimate` | Choose saved, own or assisted targets, then confirm once; saved targets still visit nutrition trust |
 | `/welcome/macros-intro` | optional target help | `welcome-continue` | Returns to target choice |
 | `/welcome/height`, `/welcome/weight`, `/welcome/age`, `/welcome/sex`, `/welcome/activity` | estimate choice only | `welcome-continue` | Original profile questions; known targets bypass body questions |
 | `/welcome/tuning` | known-target choice or profile questions | `meal-target-calories` | Editable per-meal targets; goal and edits persist |
 | `/welcome/preview` | nutrition trust | `preview-pick-1`, `preview-guide` | Real search, restaurant photos, three visible picks and guided tour; locked menus and extra results open plans |
-| `/welcome/trial` | account creation with selected preview | `trial-offer-note` | Free trial promise only with live eligibility; otherwise plan benefits |
+| `/welcome/trial` | account creation with selected preview | `trial-offer-note` | Free trial introduction only with live eligibility; other offers route directly to payment |
 | `/welcome/trial-reminder` | trial introduction | `trial-reminder-allow`, `trial-reminder-skip` | Optional OS permission; schedule only after verified trial purchase |
 | `/welcome/payment` | reminder screen or locked action | `paywall-plan-yearly` | Live plans; root launch has no fabricated Back; explicit decline resets the stack |
 | `/welcome/notification-permission` | legacy links | `notification-allow`, `notification-skip` | Remind me directly asks OS permission; no choices; then selected meal |

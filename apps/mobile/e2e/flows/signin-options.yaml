@@ -6,6 +6,7 @@ appId: com.fitsy.mobile
 ---
 - launchApp:
     clearState: true
+    clearKeychain: true
 # Retry only the first accessibility read: XCTest can reject a moving React frame.
 - retry:
     maxRetries: 2

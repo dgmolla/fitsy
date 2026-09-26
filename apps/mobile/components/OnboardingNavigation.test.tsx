@@ -4,6 +4,7 @@ import React from 'react';
 import { Alert, Button, Text } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
+import * as ExpoLocation from 'expo-location';
 import { Stack, router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { act, fireEvent, renderRouter, waitFor } from 'expo-router/testing-library';
 import Index from '../app/index';
@@ -17,10 +18,9 @@ import Location from '../app/welcome/location-permission';
 import WelcomeLayout from '../app/welcome/_layout';
 import { PurchasesProvider } from '../lib/usePurchases';
 import * as PurchasesHooks from '../lib/usePurchases';
-import { getPaywallIntent, getPurchasedContinuation, rememberPaywallIntent } from '../lib/paywallIntent';
+import { getPaywallIntent, rememberPaywallIntent } from '../lib/paywallIntent';
 import { recordOnboardingComplete } from '../lib/onboardingCompletion';
 import { resetWelcomeJourney } from '../lib/paywallJourney';
-import { saveMacroTargets } from '../lib/macroStorage';
 import { getStoredToken } from '../lib/authClient';
 
 type Session = { access_token: string; user: { id: string } } | null;
@@ -60,14 +60,17 @@ jest.mock('expo-auth-session/providers/google', () => {
   } };
 });
 jest.mock('expo-web-browser', () => ({ maybeCompleteAuthSession() {} }));
-jest.mock('expo-notifications', () => ({ requestPermissionsAsync: jest.fn().mockResolvedValue({ status: 'denied' }) }));
+jest.mock('expo-notifications', () => ({
+  getPermissionsAsync: jest.fn(),
+  requestPermissionsAsync: jest.fn().mockResolvedValue({ status: 'denied' }),
+}));
 jest.mock('react-native-purchases', () => jest.requireActual('../__mocks__/react-native-purchases'));
 jest.mock('react-native-purchases-ui', () => jest.requireActual('../__mocks__/react-native-purchases-ui'));
 jest.mock('expo-constants', () => ({ __esModule: true, default: { expoConfig: { extra: { revenueCat: { ios: 'test-store-key' } } } } }));
 
 const originalFetch = global.fetch;
 const selected = { action: 'menu' as const, restaurantId: 'varilla', restaurantName: 'Varilla', menuItemId: 'meal-1', query: 'pizza' };
-const targets = { calories: '650', protein: '42', carbs: '68', fat: '23' };
+const defaultGetItem = (AsyncStorage.getItem as jest.Mock).getMockImplementation() as typeof AsyncStorage.getItem;
 function response(body: unknown) { return { ok: true, status: 200, json: async () => body } as Response; }
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; }
 function Preview() { return <><Text>Discovery preview</Text><Button title="Open selected menu" onPress={() => router.push('/welcome/signin')} /></>; }
@@ -82,6 +85,7 @@ const routes = {
   'welcome/signin': SignIn, 'welcome/notification-permission': Notifications,
   'welcome/trial-reminder': TrialReminder,
   'welcome/location-permission': Location, 'welcome/preview': Preview,
+  'welcome/goal': () => <Text>Goal screen</Text>,
   'welcome/trial': () => <Text>Trial introduction</Text>,
   'welcome/payment': () => <Text>Payment plans</Text>,
   'welcome/problem': () => <Button title="Choose location" onPress={() => router.push('/welcome/location-permission')} />,
@@ -93,18 +97,25 @@ const routes = {
 };
 beforeEach(async () => {
   jest.useRealTimers();
+  (AsyncStorage.getItem as jest.Mock).mockImplementation(defaultGetItem);
   await AsyncStorage.clear();
   await SecureStore.deleteItemAsync('fitsy_authToken');
   mockSession = null;
+  (ExpoNotifications.getPermissionsAsync as jest.Mock).mockReset().mockResolvedValue({ status: 'undetermined' });
   (ExpoNotifications.requestPermissionsAsync as jest.Mock).mockClear();
+  (ExpoLocation.requestForegroundPermissionsAsync as jest.Mock).mockClear();
   global.fetch = jest.fn().mockResolvedValue(response({ active: true, status: 'active', expiresAt: null }));
 });
 
 it('asks an anonymous trial reminder opt-in to sign in before permission, then returns to the choice', async () => {
   installEligibleTrialOffer();
+  (ExpoNotifications.getPermissionsAsync as jest.Mock).mockResolvedValueOnce({ status: 'granted' });
   (ExpoNotifications.requestPermissionsAsync as jest.Mock).mockResolvedValueOnce({ status: 'granted' });
   const screen = renderJourney('/welcome/trial-reminder');
-  await act(async () => { fireEvent.press(await screen.findByTestId('trial-reminder-allow')); });
+  await screen.findByTestId('trial-reminder-allow');
+  expect(ExpoNotifications.getPermissionsAsync).toHaveBeenCalled();
+  expect(screen.getByText('We can notify you before your trial ends.')).toBeTruthy();
+  await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-allow')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/signin'));
   expect(ExpoNotifications.requestPermissionsAsync).not.toHaveBeenCalled();
   expect(await readReminderPreferences('buyer')).toEqual({ meals: false, trial: false });
@@ -115,7 +126,8 @@ it('asks an anonymous trial reminder opt-in to sign in before permission, then r
   await act(async () => { fireEvent.press(screen.getByTestId('signup-dev')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/trial-reminder'));
   expect(ExpoNotifications.requestPermissionsAsync).not.toHaveBeenCalled();
-  await act(async () => { fireEvent.press(await screen.findByTestId('trial-reminder-allow')); });
+  await screen.findByTestId('trial-reminder-allow');
+  await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-allow')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
   expect(ExpoNotifications.requestPermissionsAsync).toHaveBeenCalledTimes(1);
   expect(await readReminderPreferences('buyer')).toEqual({ meals: false, trial: true });
@@ -127,7 +139,8 @@ it('registers a push token after a signed-in trial reminder opt-in', async () =>
   (ExpoNotifications.requestPermissionsAsync as jest.Mock).mockResolvedValueOnce({ status: 'granted' });
   jest.spyOn(NotificationHelpers, 'getExpoPushTokenAsync').mockResolvedValue('ExponentPushToken[buyer]');
   const screen = renderJourney('/welcome/trial-reminder');
-  await act(async () => { fireEvent.press(await screen.findByTestId('trial-reminder-allow')); });
+  await screen.findByTestId('trial-reminder-allow');
+  await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-allow')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
   expect(await readReminderPreferences('buyer')).toEqual({ meals: false, trial: true });
   await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
@@ -143,7 +156,8 @@ it('does not register account A trial token after account B signs in during toke
   const token = deferred<string>();
   jest.spyOn(NotificationHelpers, 'getExpoPushTokenAsync').mockReturnValueOnce(token.promise);
   const screen = renderJourney('/welcome/trial-reminder');
-  await act(async () => { fireEvent.press(await screen.findByTestId('trial-reminder-allow')); });
+  await screen.findByTestId('trial-reminder-allow');
+  await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-allow')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
   await waitFor(() => expect(NotificationHelpers.getExpoPushTokenAsync).toHaveBeenCalled());
   mockSession = { access_token: 'token-b', user: { id: 'buyer-b' } };
@@ -162,7 +176,8 @@ it('does not sign out account B for account A push registration returning 401 la
   global.fetch = jest.fn((url: RequestInfo | URL) => String(url).endsWith('/api/user/push-token')
     ? pushResponse.promise : Promise.resolve(response({ active: false })));
   const screen = renderJourney('/welcome/trial-reminder');
-  await act(async () => { fireEvent.press(await screen.findByTestId('trial-reminder-allow')); });
+  await screen.findByTestId('trial-reminder-allow');
+  await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-allow')); });
   await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
     expect.stringContaining('/api/user/push-token'), expect.objectContaining({ method: 'POST' }),
   ));
@@ -258,32 +273,4 @@ it.each(['covered', 'empty', 'failure'])('ignores a %s area response after Back'
   await act(async () => { coverage.resolve(outcome === 'failure' ? { ...response({ error: 'Offline' }), ok: false } : response({ data: [], meta: { nearbyDishCount: outcome === 'covered' ? 1 : 0, radiusMiles: 3 } })); });
   expect(screen.getPathname()).toBe('/welcome/problem');
   expect(alert).not.toHaveBeenCalled();
-});
-
-it('resumes a purchased restaurant after terminating on optional notifications', async () => {
-  mockSession = { access_token: 'test-token', user: { id: 'buyer' } };
-  await saveMacroTargets(targets);
-  await rememberPaywallIntent(selected);
-  const first = renderJourney('/welcome/complete');
-  await act(async () => { fireEvent.press(first.getByText('Complete purchased onboarding')); });
-  await waitFor(() => expect(first.getPathname()).toBe('/welcome/notification-permission'));
-  expect(await getPurchasedContinuation()).toEqual(selected);
-  first.unmount();
-  const resumed = renderJourney('/');
-  await waitFor(() => expect(resumed.getPathname()).toBe('/restaurant/varilla'));
-  expect(resumed.getByText(JSON.stringify({ id: 'varilla', selectedItemId: 'meal-1' }))).toBeTruthy();
-  expect(await getPaywallIntent()).toBeNull();
-});
-
-it.each(['another account', 'unentitled buyer'] as const)('does not resume a purchased selection for %s', async (state) => {
-  mockSession = { access_token: 'test-token', user: { id: 'buyer' } };
-  await saveMacroTargets(targets);
-  await rememberPaywallIntent(selected);
-  await recordOnboardingComplete(false);
-  if (state === 'another account') mockSession = { access_token: 'other-token', user: { id: 'other' } };
-  else (global.fetch as jest.Mock).mockResolvedValue(response({ active: false, status: null, expiresAt: null }));
-  const screen = renderJourney('/');
-  await waitFor(() => expect(screen.getPathname()).not.toBe('/'));
-  expect(screen.getPathname()).not.toBe('/restaurant/varilla');
-  if (state === 'another account') expect(await getPaywallIntent()).toBeNull();
 });

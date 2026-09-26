@@ -1,13 +1,12 @@
 import { useOnboardingStep } from '@/lib/onboardingResume';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, StyleSheet, Text } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Location from 'expo-location';
 import * as SecureStore from 'expo-secure-store';
 import { router, useFocusEffect } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { WelcomeActions } from '@/components/WelcomeActions';
 import { OnboardingLocationMap } from '@/components/OnboardingLocationMap';
-import { AnimatedPress } from '@/components/AnimatedPress';
 import { LocationPickerSheet } from '@/components/LocationPickerSheet';
 import { EDITORIAL, TEXT } from '@/lib/brand';
 import { setCachedCoords } from '@/lib/locationCache';
@@ -22,6 +21,8 @@ export default function LocationPermissionScreen() {
   const [busy, setBusy] = useState(false);
   const [picker, setPicker] = useState(false);
   const [area, setArea] = useState<OnboardingArea>();
+  const [areaRead, setAreaRead] = useState<'loading' | 'ready' | 'failed'>('loading');
+  const [readAttempt, setReadAttempt] = useState(0);
   const { begin } = useRouteContinuation();
   useEffect(() => {
     trackLocationPrimingShown();
@@ -29,9 +30,17 @@ export default function LocationPermissionScreen() {
   useFocusEffect(useCallback(() => {
     let current = true;
     setBusy(false);
-    void getOnboardingData().then(data => { if (current) setArea(data.area); });
+    setArea(undefined);
+    setAreaRead('loading');
+    void getOnboardingData().then(data => {
+      if (!current) return;
+      setArea(data.area);
+      setAreaRead('ready');
+    }).catch(() => { if (current) setAreaRead('failed'); });
     return () => { current = false; };
-  }, []));
+    // A retry changes the focus callback identity so the failed read restarts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readAttempt]));
 
   async function choose(next: OnboardingArea, isCurrent = begin()) {
     if (!isCurrent()) return;
@@ -52,7 +61,7 @@ export default function LocationPermissionScreen() {
   }
 
   async function useCurrent() {
-    if (busy) return;
+    if (busy || areaRead !== 'ready') return;
     const isCurrent = begin();
     setPicker(false);
     setBusy(true);
@@ -76,22 +85,28 @@ export default function LocationPermissionScreen() {
   }
 
   return (
-    <WelcomeScreen progress={0.14} title={"Where would you\nlike to eat?"} subtitle="Find restaurants around you." hideFooter canContinue onContinue={() => {}}
-      footerContent={<WelcomeActions label={busy ? 'Checking nearby dishes…' : 'Use my location'} onPress={useCurrent} disabled={busy}
-        testID="location-use-current" secondaryLabel="Choose an area instead" onSecondary={() => setPicker(true)} secondaryTestID="location-choose-area" />}>
+    <WelcomeScreen progress={0.14} title={"Where would you\nlike to eat?"} subtitle="Find restaurants around you." hideFooter canContinue={areaRead === 'ready' && !busy} onContinue={() => {}}
+      footerContent={<WelcomeActions label={busy ? 'Checking nearby dishes…' : areaRead === 'loading' ? 'Loading your area…' : areaRead === 'failed' ? 'Retry loading area' : area ? `Continue with ${area.name}` : 'Use my location'}
+        onPress={areaRead === 'failed' ? () => setReadAttempt(attempt => attempt + 1) : area ? () => { void choose(area); } : useCurrent}
+        disabled={busy || areaRead === 'loading'}
+        testID={areaRead === 'failed' ? 'location-retry-area' : area ? 'location-continue-area' : 'location-use-current'}
+        secondaryLabel={areaRead === 'ready' ? area ? 'Choose another area' : 'Choose an area instead' : undefined}
+        onSecondary={areaRead === 'ready' ? () => setPicker(true) : undefined} secondaryTestID="location-choose-area" />}>
       <OnboardingLocationMap />
       <Text style={s.intro}>Use your location to discover nearby menus. You can change your area anytime.</Text>
-      {area && <AnimatedPress style={s.saved} disabled={busy} onPress={() => choose(area)} accessibilityRole="button" testID="location-continue-area"><Text style={s.savedText}>Continue with {area.name}</Text></AnimatedPress>}
+      {area && <View style={s.alternate}><Pressable style={s.alternateHit} disabled={busy} onPress={useCurrent} accessibilityRole="button" testID="location-use-current"><Text style={s.alternateText}>Use my current location instead</Text></Pressable></View>}
       {busy && <Text style={s.area} accessibilityLiveRegion="polite">Checking nearby dishes…</Text>}
+      {areaRead === 'failed' && <Text style={s.area} accessibilityLiveRegion="polite">Your saved area could not load. Please try again.</Text>}
       <Text style={s.privacy}>Your selected area stays on this device. We use its coordinates to find nearby meals. Device location is optional.</Text>
       <LocationPickerSheet visible={picker} activeName={area?.name} onClose={() => setPicker(false)} onUseCurrent={useCurrent} onPick={loc => choose({ ...loc, source: 'manual' })} />
     </WelcomeScreen>
   );
 }
 const s = StyleSheet.create({
-  intro: { ...TEXT.body, textAlign: 'center', marginTop: 24 },
+  intro: { ...TEXT.body, textAlign: 'center', marginTop: 16 },
   area: { ...TEXT.bodySmall, textAlign: 'center', marginTop: 16 },
-  saved: { minHeight: 48, justifyContent: 'center', padding: 12, borderRadius: 24, borderWidth: 1, borderColor: EDITORIAL.border, marginTop: 20 },
-  savedText: { ...TEXT.body, color: EDITORIAL.green, textAlign: 'center' },
-  privacy: { ...TEXT.bodySmall, fontSize: 12, lineHeight: 18, marginTop: 22, textAlign: 'center' },
+  alternate: { alignItems: 'center', marginTop: 4 },
+  alternateHit: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 },
+  alternateText: { ...TEXT.bodySmall, color: EDITORIAL.green, textAlign: 'center', textDecorationLine: 'underline' },
+  privacy: { ...TEXT.bodySmall, fontSize: 12, lineHeight: 18, marginTop: 12, textAlign: 'center' },
 });

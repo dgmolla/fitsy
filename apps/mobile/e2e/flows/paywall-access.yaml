@@ -57,10 +57,12 @@ tags: [billing, discovery, onboarding, changed-journey]
 - tapOn:
     text: "^Open$"
     optional: true
-# Retired review links enter the store-aware trial introduction.
-- assertVisible:
-    id: trial-offer-note
-- assertVisible: "Find your next meal with Fitsy."
+# Retired review links resolve directly to live plans when no trial is eligible.
+- extendedWaitUntil:
+    visible:
+      id: paywall-plan-yearly
+    timeout: 15000
+- assertNotVisible: "Find your next meal with Fitsy."
 - assertNotVisible: "Leave a review"
 - assertNotVisible: "Allow notifications"
 - assertNotVisible: "Remind me"

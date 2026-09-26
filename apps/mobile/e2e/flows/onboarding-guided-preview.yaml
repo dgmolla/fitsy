@@ -373,21 +373,15 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
 - assertVisible: "650 kcal · 0g protein · 0g carbs · 0g fat"
 - tapOn: "Dev login"
 - extendedWaitUntil:
-    visible:
-      id: trial-offer-note
+    visible: ${'Discover more meals like your pick at ' + output.context.data[2].name + '.'}
     timeout: 30000
-- assertVisible: "Find your next meal with Fitsy."
+- assertNotVisible: "Find your next meal with Fitsy."
 - extendedWaitUntil:
     visible:
       id: welcome-continue
       enabled: true
     timeout: 15000
-- tapOn:
-    id: welcome-continue
-- extendedWaitUntil:
-    visible: ${'Discover more meals like your pick at ' + output.context.data[2].name + '.'}
-    timeout: 30000
-- assertNotVisible: "A heads-up before your trial ends."
+- assertNotVisible: "We can notify you before your trial ends."
 - extendedWaitUntil:
     visible:
       id: welcome-continue
@@ -407,10 +401,6 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
     id: paywall-terms
 - assertTrue: ${maestro.copiedText.includes(output.annualPrice) && maestro.copiedText.includes('Renews automatically') && maestro.copiedText.includes('24 hours')}
 - assertNotVisible: "Leave a review"
-- tapOn:
-    id: welcome-back
-- assertVisible:
-    id: trial-offer-note
 - tapOn:
     id: welcome-back
 - assertVisible:
@@ -438,12 +428,15 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
     optional: true
 - extendedWaitUntil:
     visible:
-      id: target-use-saved
+      id: target-mode-saved
     timeout: 15000
 - assertVisible: "Edit my meal targets.*"
 - assertVisible: "Help me set targets.*"
+- assertVisible:
+    id: target-mode-saved
+    text: "radio button, checked"
 - tapOn:
-    id: target-use-saved
+    id: welcome-continue
 - assertVisible: "A little context.*A better choice.*"
 - tapOn:
     id: welcome-continue

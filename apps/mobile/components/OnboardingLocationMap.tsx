@@ -1,12 +1,13 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { EDITORIAL, TEXT } from '@/lib/brand';
 
 /** Decorative illustration before location permission, not a coverage map. */
 export function OnboardingLocationMap() {
-  return <View style={s.map} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+  const { height, fontScale } = useWindowDimensions();
+  return <View style={[s.map, { height: height < 780 && fontScale <= 1.2 ? 145 : 175 }]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
     <Svg width="100%" height="100%" viewBox="0 0 320 235" preserveAspectRatio="xMidYMid slice">
       <Rect width="320" height="235" fill={EDITORIAL.creamDeep} />
       <Path d="M-5 44H330M-5 143H330M77-5V245M246-5V245M-10 230L330 6" stroke={EDITORIAL.cream} strokeWidth="13" />
@@ -17,7 +18,7 @@ export function OnboardingLocationMap() {
   </View>;
 }
 const s = StyleSheet.create({
-  map: { height: 235, marginTop: 4, borderRadius: 24, overflow: 'hidden' },
+  map: { marginTop: 4, borderRadius: 24, overflow: 'hidden' },
   center: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', gap: 7 },
   label: { ...TEXT.bodySmall, color: EDITORIAL.green, backgroundColor: EDITORIAL.cream, paddingVertical: 7, paddingHorizontal: 13, borderRadius: 18 },
 });

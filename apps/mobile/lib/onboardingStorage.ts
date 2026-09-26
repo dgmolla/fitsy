@@ -14,6 +14,7 @@ export interface OnboardingData {
   tried?: TriedApproach;
   area?: OnboardingArea;
   targetMode?: 'known' | 'estimate';
+  targetChoiceInProgress?: boolean;
   targetBasis?: string;
   previewCraving?: string;
   previewArea?: string;
