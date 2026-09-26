@@ -87,10 +87,12 @@ export default function TrialReminderScreen() {
   if (permission === null) return null;
   // Calendar-month trials have no fixed day count, but their confirmed end
   // date still allows the existing one-off scheduler to choose a safe time.
-  const canSchedule = Platform.OS !== 'web' && offers.some(canOfferTrialReminder);
+  const inBrowser = Platform.OS === 'web';
+  const canSchedule = !inBrowser && offers.some(canOfferTrialReminder);
   const canOptIn = canSchedule && permission !== 'denied';
-  const title = !canSchedule ? 'Review your trial before it ends.' : permission === 'denied' ? 'Notifications are off.' : 'We can notify you before your trial ends.';
-  const subtitle = !canSchedule ? 'This trial may be too short for a reminder before the cancellation deadline.'
+  const title = inBrowser ? 'Trial reminders need the Fitsy mobile app.' : !canSchedule ? 'Review your trial before it ends.' : permission === 'denied' ? 'Notifications are off.' : 'We can notify you before your trial ends.';
+  const subtitle = inBrowser ? 'This browser cannot schedule trial notifications. Review the exact trial and renewal terms on the next screen.'
+    : !canSchedule ? 'This trial may be too short for a reminder before the cancellation deadline.'
     : permission === 'denied' ? 'You can turn on notifications in device settings if you want a trial reminder.'
       : 'Choose a plan with enough trial time, then allow notifications for a reminder.';
   return <WelcomeScreen progress={1} title={title} subtitle={subtitle}

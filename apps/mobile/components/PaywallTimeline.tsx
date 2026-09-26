@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { canOfferTrialReminder, TRIAL_REMINDER_LEAD_DAYS } from '@/lib/notificationPlan';
@@ -8,11 +8,12 @@ import type { purchaseTerms } from '@/lib/purchaseTerms';
 type Terms = ReturnType<typeof purchaseTerms>;
 export function PaywallTimeline({ terms, compact = false }: { terms: Terms; compact?: boolean }) {
   const reminderDay = terms?.trialDays ? terms.trialDays - TRIAL_REMINDER_LEAD_DAYS : null;
-  const canRemind = canOfferTrialReminder(terms);
+  const inBrowser = Platform.OS === 'web';
+  const canRemind = !inBrowser && canOfferTrialReminder(terms);
   const rows = terms?.trial ? [
     { icon: 'lock-open-outline' as const, title: 'Today', body: 'Unlock meals that fit your goals, full menus and saved favorites.' },
-    { icon: 'notifications-outline' as const, title: !canRemind ? 'Reminder unavailable for this trial' : reminderDay ? `Optional reminder around day ${reminderDay}` : 'Optional reminder, if available',
-      body: canRemind ? 'Requires permission and a confirmed trial end date.' : 'This trial ends too soon to schedule a reminder before the cancellation deadline.' },
+    { icon: 'notifications-outline' as const, title: inBrowser ? 'Reminder unavailable in this browser' : !canRemind ? 'Reminder unavailable for this trial' : reminderDay ? `Optional reminder around day ${reminderDay}` : 'Optional reminder, if available',
+      body: inBrowser ? 'Trial notifications require the Fitsy mobile app.' : canRemind ? 'Requires permission and a confirmed trial end date.' : 'This trial ends too soon to schedule a reminder before the cancellation deadline.' },
     { icon: 'card-outline' as const, title: terms.trialDays ? `Day ${terms.trialDays}: payment` : `After ${terms.trial}: payment`, body: `${terms.recurring}, unless canceled at least 24 hours before trial end.` },
   ] : [
     { icon: 'lock-open-outline' as const, title: terms ? 'Access starts today' : 'Your plan, clearly explained', body: 'Find meals that fit your goals, explore full menus and save favorites.' },

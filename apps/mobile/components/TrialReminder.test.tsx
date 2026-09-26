@@ -6,7 +6,7 @@ jest.mock('posthog-react-native', () => {
 });
 jest.unmock('expo-router');
 import React from 'react';
-import { AppState, Button, Text } from 'react-native';
+import { AppState, Button, Platform, Text } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { Stack, router } from 'expo-router';
@@ -64,6 +64,20 @@ test('a previously denied permission does not promise or request a trial reminde
   await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-allow')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
   expect(Notifications.requestPermissionsAsync).not.toHaveBeenCalled();
+});
+
+test('browser trial copy explains why a reminder cannot be scheduled', async () => {
+  const originalOS = Platform.OS;
+  Platform.OS = 'web';
+  try {
+    const screen = renderRouter(routes, { initialUrl: '/welcome/trial-reminder' });
+    await waitFor(() => expect(screen.getByText('Trial reminders need the Fitsy mobile app.')).toBeTruthy());
+    expect(screen.getByText('This browser cannot schedule trial notifications. Review the exact trial and renewal terms on the next screen.')).toBeTruthy();
+    expect(screen.queryByText('Remind me')).toBeNull();
+    await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-allow')); });
+    await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
+    expect(Notifications.requestPermissionsAsync).not.toHaveBeenCalled();
+  } finally { Platform.OS = originalOS; }
 });
 
 test('refreshes the reminder choice when notifications are enabled in device settings', async () => {

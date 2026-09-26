@@ -6,6 +6,7 @@ jest.mock('posthog-react-native', () => {
 });
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
 import React from 'react';
+import { Platform } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 import { PaywallView } from './PaywallView';
 import { PaywallTimeline } from './PaywallTimeline';
@@ -26,6 +27,18 @@ test('timeline derives trial end and reminder day from the selected store offer'
   screen.rerender(<PaywallTimeline terms={purchaseTerms({ ...product, introPrice: { ...product.introPrice, period: 'P2W' } }, true)} />);
   expect(screen.getByText('Optional reminder around day 12')).toBeTruthy();
   expect(screen.getByText('Day 14: payment')).toBeTruthy();
+});
+
+test('browser timeline does not promise a notification for an eligible trial', () => {
+  const originalOS = Platform.OS;
+  Platform.OS = 'web';
+  try {
+    const screen = render(<PaywallTimeline terms={annual} />);
+    expect(screen.getByText('Reminder unavailable in this browser')).toBeTruthy();
+    expect(screen.getByText('Trial notifications require the Fitsy mobile app.')).toBeTruthy();
+    expect(screen.queryByText('Optional reminder around day 5')).toBeNull();
+    expect(screen.getByText('Day 7: payment')).toBeTruthy();
+  } finally { Platform.OS = originalOS; }
 });
 
 test('ineligible and unknown offers never promise a free trial or notification', () => {
