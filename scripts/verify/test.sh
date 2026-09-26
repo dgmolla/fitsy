@@ -12,8 +12,8 @@ else
 fi
 # Real decoder and attachment cases run in the required local media lane;
 # their deterministic contract cases remain registered here.
-FITSY_MEDIA_INTEGRATION=0 npm test --workspace=@fitsy/scripts >&2 || FAIL="${FAIL:+$FAIL, }scripts"
-npm test --workspace=@fitsy/mobile >&2 || FAIL="${FAIL:+$FAIL, }mobile"
+FITSY_MEDIA_INTEGRATION=0 npm test --workspace=@fitsy/scripts -- --runInBand >&2 || FAIL="${FAIL:+$FAIL, }scripts"
+npm test --workspace=@fitsy/mobile -- --runInBand >&2 || FAIL="${FAIL:+$FAIL, }mobile"
 if [ -n "$FAIL" ]; then
   printf '{"name":"test","status":"fail","summary":"tests failed in: %s","fix":"run the failing workspace suite locally (npm run test:coverage -w apps/api or npm test -w @fitsy/scripts) and fix"}\n' "$FAIL"
   exit 1

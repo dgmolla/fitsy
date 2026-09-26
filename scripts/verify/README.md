@@ -43,3 +43,10 @@ A check without a registry entry, or an entry without a script, is itself a fail
 | `api-e2e.sh` | 6 | a deployed API serves health + teaser-lock invariants (read-only by default; `--write` adds the register probe) |
 
 Callers: `.githooks/pre-push` (layers 0-2, changed scope), `npm run verify` (0-2), `npm run verify:all`, and `.github/workflows/verify.yml` (one thin job per layer).
+
+The local pre-push hook still runs size and domain checks on every push.
+For the L2 test check, `--reuse` accepts a successful local receipt no older than six hours only when source files, the selected diff, local configuration, environment, dependency lock, runtime and check definition still match.
+A fresh failure invalidates an older pass, and a source change during verification fails the run and retires the receipt.
+The receipt saves repeated local test work; it is not an independent review or product-flow attestation.
+Hosted CI runs applicable checks independently.
+The owned PostGIS admission and migration steps still run before local database tests, including a cached L2 result.

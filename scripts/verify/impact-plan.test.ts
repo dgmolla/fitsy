@@ -22,7 +22,7 @@ const event = (name: string, data: object) => { const path = join(directory, `.e
 
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'fitsy-impact-'));
-  for (const file of ['impact-plan.mjs', 'run.mjs', 'secrets.sh', 'migration-safety.sh']) {
+  for (const file of ['impact-plan.mjs', 'local-db.mjs', 'db-lock.py', 'receipt-cache.mjs', 'run.mjs', 'run.sh', 'secrets.sh', 'migration-safety.sh']) {
     write(`scripts/verify/${file}`, readFileSync(join(root, 'scripts/verify', file), 'utf8'));
   }
   write('.gitignore', 'node_modules\n.evidence/\n');
@@ -144,4 +144,105 @@ test('the local runner cannot hide an untracked private env file from secrets', 
   commit(); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
   write('apps/api/.env.private', 'PLACEHOLDER=value\n');
   expect(cli('run.mjs', ['--only=secrets', '--runs=local']).status).toBe(1);
+});
+
+function cacheFixture() {
+  write('scripts/verify/registry.yml', 'checks:\n  - name: test\n    script: fixture.sh\n    layer: 2\n    blocking: true\n    cache: true\n');
+  write('scripts/verify/fixture.sh', `mkdir -p .evidence\necho run >> .evidence/calls\necho '{"summary":"actual check"}'\nexit "\${FIXTURE_EXIT:-0}"\n`);
+  write('scripts/verify/size-check.sh', 'echo size >> .evidence/size-calls\necho \'{"status":"pass"}\'\n');
+  write('scripts/verify/domain-check.sh', 'echo domain >> .evidence/domain-calls\necho \'{"status":"pass"}\'\n');
+  commit(); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  write('scripts/example.mjs', 'export const x = 1;\n'); commit();
+}
+const calls = (file = 'calls') => readFileSync(join(directory, `.evidence/${file}`), 'utf8').trim().split('\n').length;
+
+test('unchanged successful L2 is reused; source, environment, and definition changes rerun it', () => {
+  cacheFixture();
+  expect(cli('run.mjs', ['--layer=2']).status).toBe(0); expect(calls()).toBe(1);
+  expect(cli('run.mjs', ['--layer=2', '--reuse']).stdout).toContain('"cached":true'); expect(calls()).toBe(1);
+  write('scripts/example.mjs', 'export const x = 2;\n');
+  expect(cli('run.mjs', ['--layer=2', '--reuse']).status).toBe(0); expect(calls()).toBe(2);
+  expect(cli('run.mjs', ['--layer=2', '--reuse'], { FEATURE_FLAG: 'changed' }).status).toBe(0); expect(calls()).toBe(3);
+  write('scripts/verify/fixture.sh', readFileSync(join(directory, 'scripts/verify/fixture.sh'), 'utf8') + '# new assertion\n');
+  expect(cli('run.mjs', ['--layer=2', '--reuse']).status).toBe(0); expect(calls()).toBe(4);
+});
+
+test('failed and expired receipts never become a reusable pass', () => {
+  cacheFixture();
+  expect(cli('run.mjs', ['--layer=2'], { FIXTURE_EXIT: '1' }).status).toBe(1);
+  expect(cli('run.mjs', ['--layer=2', '--reuse'], { FIXTURE_EXIT: '1' }).status).toBe(1); expect(calls()).toBe(2);
+  expect(cli('run.mjs', ['--layer=2']).status).toBe(0);
+  const receiptFile = join(directory, '.evidence/verify/check-cache/test.json');
+  const receipt = JSON.parse(readFileSync(receiptFile, 'utf8')); receipt.finishedAt = 0;
+  writeFileSync(receiptFile, JSON.stringify(receipt));
+  expect(cli('run.mjs', ['--layer=2', '--reuse']).stdout).not.toContain('"cached":true'); expect(calls()).toBe(4);
+  write('apps/api/.env.local', 'FEATURE_FLAG=changed\n');
+  expect(cli('run.mjs', ['--layer=2', '--reuse']).stdout).not.toContain('"cached":true'); expect(calls()).toBe(5);
+});
+
+test('a fresh failed run invalidates an older successful receipt with the same inputs', () => {
+  cacheFixture();
+  write('scripts/verify/fixture.sh', `mkdir -p .evidence\necho run >> .evidence/calls\necho '{"summary":"actual check"}'\ntest ! -e .evidence/force-fail\n`);
+  expect(cli('run.mjs', ['--layer=2']).status).toBe(0);
+  write('.evidence/force-fail', '1');
+  expect(cli('run.mjs', ['--layer=2']).status).toBe(1);
+  rmSync(join(directory, '.evidence/force-fail'));
+  const retry = cli('run.mjs', ['--layer=2', '--reuse']);
+  expect(retry.status).toBe(0); expect(retry.stdout).not.toContain('"cached":true'); expect(calls()).toBe(3);
+});
+
+test('source mutation during a cached run retires the prior receipt', () => {
+  cacheFixture();
+  write('scripts/verify/registry.yml', readFileSync(join(directory, 'scripts/verify/registry.yml'), 'utf8') +
+    '  - name: mutator\n    script: mutator.sh\n    layer: 2\n    blocking: true\n');
+  write('scripts/verify/mutator.sh', `if [ -e .evidence/mutate ]; then echo 'export const x = 2;' > scripts/example.mjs; fi\necho '{"summary":"mutation check"}'\n`);
+  const original = readFileSync(join(directory, 'scripts/example.mjs'), 'utf8');
+  expect(cli('run.mjs', ['--layer=2']).status).toBe(0);
+  write('.evidence/mutate', '1');
+  const changed = cli('run.mjs', ['--layer=2', '--reuse']);
+  expect(changed.status).toBe(1); expect(changed.stdout).toContain('"name":"source-stability"');
+  write('scripts/example.mjs', original); rmSync(join(directory, '.evidence/mutate'));
+  const retry = cli('run.mjs', ['--layer=2', '--reuse']);
+  expect(retry.status).toBe(0); expect(retry.stdout).not.toContain('"cached":true'); expect(calls()).toBe(2);
+});
+
+test('npm verify evidence is reused by the unchanged-source hook invocation', () => {
+  cacheFixture();
+  write('package.json', JSON.stringify({ private: true, scripts: { verify: 'node scripts/verify/run.mjs --layer=0-2 --scope=changed' } }));
+  write('.githooks/pre-push', readFileSync(join(root, '.githooks/pre-push'), 'utf8'));
+  const npm = spawnSync('npm', ['run', 'verify'], { cwd: directory, encoding: 'utf8', env, timeout: 15000 });
+  expect(npm.status).toBe(0); expect(calls()).toBe(1);
+  const hook = spawnSync('bash', ['.githooks/pre-push'], { cwd: directory, encoding: 'utf8', env, timeout: 15000 });
+  expect(hook.status).toBe(0); expect(hook.stdout).toContain('"cached":true'); expect(calls()).toBe(1);
+});
+
+test('pre-push accepts an inapplicable domain gate but refuses its real failure', () => {
+  cacheFixture();
+  write('.githooks/pre-push', readFileSync(join(root, '.githooks/pre-push'), 'utf8'));
+  write('scripts/verify/domain-check.sh', 'echo \'{"status":"skipped"}\'\nexit 2\n');
+  const hook = () => spawnSync('bash', ['.githooks/pre-push'], { cwd: directory, encoding: 'utf8', env, timeout: 15000 });
+  expect(hook().status).toBe(0);
+  write('scripts/verify/domain-check.sh', 'echo \'{"status":"fail"}\'\nexit 1\n');
+  expect(hook().status).toBe(1);
+});
+
+test('real Git push hook preserves outer refs, isolates nested Git, reuses L2, and reruns size/domain gates', () => {
+  cacheFixture();
+  write('scripts/verify/fixture.sh', `mkdir -p .evidence/inner\ngit -C .evidence/inner init -q\ngit -C .evidence/inner config user.name fixture\ngit -C .evidence/inner config user.email fixture@example.test\necho nested > .evidence/inner/file\ngit -C .evidence/inner add file\ngit -C .evidence/inner commit -qm nested\ngit -C .evidence/inner checkout -qb nested\ntest "$(git -C .evidence/inner branch --show-current)" = nested\necho run >> .evidence/calls\necho '{"summary":"actual check"}'\n`);
+  write('.githooks/pre-push', readFileSync(join(root, '.githooks/pre-push'), 'utf8'));
+  chmodSync(join(directory, '.githooks/pre-push'), 0o755);
+  git('add', '.'); git('commit', '-qm', 'hook fixture'); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  git('config', 'core.hooksPath', '.githooks');
+  const before = git('rev-parse', 'HEAD'), branch = git('branch', '--show-current'), status = git('status', '--porcelain');
+  const remote = join(directory, '.evidence/remote.git');
+  execFileSync('git', ['init', '--bare', '-q', remote], { cwd: directory, env });
+  const push = (ref: string) => spawnSync('git', ['push', remote, `HEAD:refs/heads/${ref}`],
+    { cwd: directory, env, encoding: 'utf8', timeout: 15000 });
+  const first = push('first'); expect(first.status).toBe(0); expect(calls()).toBe(1);
+  const second = push('second'); expect(second.status).toBe(0);
+  expect(second.stdout + second.stderr).toContain('"cached":true'); expect(calls()).toBe(1);
+  expect(calls('size-calls')).toBe(2); expect(calls('domain-calls')).toBe(2);
+  expect(git('rev-parse', 'HEAD')).toBe(before);
+  expect(git('branch', '--show-current')).toBe(branch);
+  expect(git('status', '--porcelain')).toBe(status);
 });

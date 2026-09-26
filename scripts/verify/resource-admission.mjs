@@ -10,6 +10,10 @@ export function admitResources({ root = resolve(dirname(file), '../..'), exists 
     return { name: 'resource-admission', status: 'fail', summary: 'dependencies are missing',
       fix: 'install the locked dependencies before verification' };
   }
+  if (env.FITSY_VERIFY_NEEDS_TEST_DEPS === '1' && !exists(resolve(root, 'node_modules/.bin/jest'))) {
+    return { name: 'resource-admission', status: 'fail', summary: 'dependencies are missing',
+      fix: 'install the locked dependencies before verification' };
+  }
   const minimum = (env.FITSY_VERIFY_NEEDS_NATIVE === '1' ? 8 : 2) * 1024 ** 3;
   const space = disk(root);
   if (space.bavail * space.bsize < minimum) {

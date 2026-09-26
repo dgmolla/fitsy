@@ -6,10 +6,13 @@ import { dirname, join, resolve } from 'node:path';
 
 const source = resolve(__dirname, '../..');
 test.each([
-  { name: 'healthy', hijack: false, deny: false },
-  { name: 'owner changed', hijack: true, deny: false },
-  { name: 'preflight failed', hijack: false, deny: true },
-])('local database runner $name owns admission, URL and post-seed identity', ({ hijack, deny }) => {
+  { name: 'healthy', hijack: false, deny: false, unlocked: false, checkFailure: false, devDrift: false },
+  { name: 'owner changed', hijack: true, deny: false, unlocked: false, checkFailure: false, devDrift: false },
+  { name: 'preflight failed', hijack: false, deny: true, unlocked: false, checkFailure: false, devDrift: false },
+  { name: 'without OS lock', hijack: false, deny: false, unlocked: true, checkFailure: false, devDrift: false },
+  { name: 'failing database check', hijack: false, deny: false, unlocked: false, checkFailure: true, devDrift: false },
+  { name: 'dev drift retains caller URL', hijack: false, deny: false, unlocked: false, checkFailure: false, devDrift: true },
+])('local database runner $name owns admission, URL and post-seed identity', ({ hijack, deny, unlocked, checkFailure, devDrift }) => {
   const directory = mkdtempSync(join(tmpdir(), 'fitsy-db-cli-'));
   const write = (path: string, value: string) => {
     const target = join(directory, path); mkdirSync(dirname(target), { recursive: true }); writeFileSync(target, value);
@@ -19,11 +22,12 @@ test.each([
     !key.startsWith('FITSY_VERIFY_') && key !== 'FITSY_LOCAL_DB'));
   const state = join(directory, 'docker-state.json');
   const reset = join(directory, 'reset');
+  const devUrl = join(directory, 'dev-url');
   const loopback = ['127', '0', '0', '1'].join('.');
   const owner = createHash('sha256').update(realpathSync(directory)).digest('hex').slice(0, 16);
   Object.assign(env, { PATH: `${join(directory, 'bin')}:${env.PATH}`, FITSY_TEST_STATE: state,
     FITSY_TEST_RESET: reset, FITSY_TEST_OWNER: owner, FITSY_TEST_HIJACK: hijack ? '1' : '0',
-    FITSY_TEST_DENY: deny ? '1' : '0',
+    FITSY_TEST_DENY: deny ? '1' : '0', FITSY_TEST_CHECK_FAIL: checkFailure ? '1' : '0', FITSY_TEST_DEV_URL: devUrl,
     POSTGRES_PRISMA_URL: 'postgresql://external.example/prod',
     POSTGRES_URL_NON_POOLING: 'postgresql://external.example/prod' });
   const git = (...args: string[]) => execFileSync('git', args, { cwd: directory, env, encoding: 'utf8' }).trim();
@@ -33,11 +37,17 @@ test.each([
       write(target, readFileSync(join(source, target), 'utf8'));
     }
     write('scripts/verify/registry.yml', 'checks:\n  - name: admission\n    script: admission.sh\n    layer: 0\n    blocking: true\n    preflight: true\n  - name: db-fixture\n    script: fixture.sh\n    layer: 2\n    blocking: true\n    database: true\n');
+    if (devDrift) {
+      write('scripts/verify/registry.yml', readFileSync(join(directory, 'scripts/verify/registry.yml'), 'utf8') +
+        '  - name: dev-drift\n    script: dev-drift.sh\n    layer: 3\n    blocking: shadow\n');
+      write('scripts/verify/dev-drift.sh', '#!/bin/sh\nprintf "%s" "$POSTGRES_URL_NON_POOLING" > "$FITSY_TEST_DEV_URL"\necho \'{"summary":"dev drift checked"}\'\n');
+    }
     write('scripts/verify/admission.sh', '#!/bin/sh\n[ "$FITSY_TEST_DENY" != 1 ]\n');
     write('scripts/verify/fixture.sh', `#!/bin/sh\n[ "$FITSY_VERIFY_DB_LOCKED" = 1 ] && [ -f "$FITSY_TEST_RESET" ] &&
   [ "$POSTGRES_PRISMA_URL" = 'postgresql://fitsy_test:fitsy_test@${loopback}:55432/fitsy_verify' ] &&
   [ "$POSTGRES_URL_NON_POOLING" = "$POSTGRES_PRISMA_URL" ] || exit 1
 printf '%s\\n' '{"summary":"owned database check executed"}'\n`);
+    if (checkFailure) write('scripts/verify/fixture.sh', readFileSync(join(directory, 'scripts/verify/fixture.sh'), 'utf8') + 'exit 1\n');
     write('bin/docker', `#!/usr/bin/env node
 const fs=require('node:fs'); const args=process.argv.slice(2); const state=process.env.FITSY_TEST_STATE;
 if(args[0]==='inspect') { if(!fs.existsSync(state)) { process.stderr.write('No such object'); process.exit(1); }
@@ -63,10 +73,16 @@ if (process.env.FITSY_TEST_HIJACK === '1') {
     write('.gitignore', 'node_modules\n.evidence\n');
     git('init', '-q'); git('config', 'user.name', 'CLI test'); git('config', 'user.email', 'test@example.test');
     git('add', '-A'); git('commit', '-qm', 'fixture'); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
-    const result = spawnSync(process.execPath, ['scripts/verify/run.mjs', '--only=admission,db-fixture', '--runs=local'],
+    const result = spawnSync(process.execPath, unlocked
+      ? ['scripts/verify/local-db.mjs', '--locked-run', '--only=admission,db-fixture', '--runs=local']
+      : ['scripts/verify/run.mjs', `--only=admission,db-fixture${devDrift ? ',dev-drift' : ''}`, '--runs=local'],
       { cwd: directory, env, encoding: 'utf8', timeout: 15000 });
-    expect(result.status).toBe(hijack || deny ? 1 : 0);
-    if (deny) {
+    expect(result.status).toBe(hijack || deny || unlocked || checkFailure ? 1 : 0);
+    if (unlocked) {
+      expect(existsSync(state)).toBe(false);
+      expect(existsSync(reset)).toBe(false);
+      expect(result.stdout).toContain('owned verification database lock is missing');
+    } else if (deny) {
       expect(existsSync(state)).toBe(false);
       expect(existsSync(reset)).toBe(false);
       expect(result.stdout).toContain('preflight failed');
@@ -77,6 +93,8 @@ if (process.env.FITSY_TEST_HIJACK === '1') {
     } else {
       expect(existsSync(reset)).toBe(true);
       expect(result.stdout).toContain('owned database check executed');
+      if (checkFailure) expect(result.stdout).toContain('"name":"db-fixture","status":"fail"');
+      if (devDrift) expect(readFileSync(devUrl, 'utf8')).toBe('postgresql://external.example/prod');
     }
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
