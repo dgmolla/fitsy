@@ -30,3 +30,36 @@ Keep `DELIVERY_REPORT_ENABLED=false` until a manual dry run shows complete board
 If a token expires, rotate it in the restricted environment secrets without printing it in logs; rerun dry-run and check the resulting artifact before re-enabling posting.
 Inspect the failed run's artifact and GitHub Actions log for GraphQL scope, pagination, workflow, or Slack API errors.
 Never substitute a partial project page or an agent's stale handoff for the board.
+
+## Local phases and review hardening
+
+The hosted report reads structured writer-authored issue comments; it never connects to a worker machine.
+Local instrumentation publishes observed attempts with stable run identities.
+Unknown historical implementation time stays unknown.
+The rolling 24-hour phase totals sum each issue's interval union, clipping work at the window boundary.
+They are summed issue time, not global elapsed time or billed compute.
+UT is part of local verification and must not be added to it.
+Cached and skipped attempts contribute no execution time; running attempts stay unfinished rather than estimating a completed duration.
+The JSON artifact includes failed attempts, each source review round's wall time and summed lens effort, and issue evidence links.
+Coverage shows active issues with observations; stale means the latest published run checkpoint is over two hours old.
+Coverage does not certify that every command was instrumented.
+Malformed, untrusted or duplicate run summaries are excluded and counted as invalid.
+
+At each review closeout, the owner records either an evidence-backed pipeline improvement or an explicit explanation that no new hardening was needed.
+A confirmed finding should link its fix, regression detector, prevention mechanism, and verification evidence.
+Do not manufacture changes or count queued follow-ups as improvements.
+Publish each accepted improvement as a writer-authored issue comment using this contract:
+
+````markdown
+<!-- fitsy-improvement:v1:unique-finding-id -->
+```json
+{"v":1,"id":"unique-finding-id","issue":355,"category":"regression","pr":123,"finding":"Confirmed failure mechanism","prevention":"How recurrence is constrained","detector_path":"scripts/example.test.mjs","prevention_path":"scripts/example.mjs","verify_run":1234,"deploy_run":1235}
+```
+````
+
+Categories are `speed`, `regression`, `diagnostics`, `recovery`, and `security`.
+Use one stable finding ID per fix PR, retaining it when correcting a record.
+The reporter counts records only after the fix PR merges into main, both named main Verify and Deploy runs succeed at its exact merge SHA, and detector/prevention files exist at that revision.
+This verifies shipment and file evidence; the independent review remains responsible for whether the detector and prevention address the finding.
+Counts cover active issues and issues verified in the past 24 hours, with successful gate completion in the same window.
+The issue comment and report artifact retain the detailed evidence; Slack carries only category totals.

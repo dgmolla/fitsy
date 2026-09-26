@@ -5,10 +5,11 @@
 set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$REPO_ROOT"
 FAIL=""
+node --test scripts/delivery/*.test.mjs >&2 || FAIL="delivery"
 if [ -n "${POSTGRES_PRISMA_URL:-}" ]; then
-  npm run test:coverage --workspace=apps/api -- --runInBand >&2 || FAIL="apps/api"
+  npm run test:coverage --workspace=apps/api -- --runInBand >&2 || FAIL="${FAIL:+$FAIL, }apps/api"
 else
-  npm run test:coverage --workspace=apps/api >&2 || FAIL="apps/api"
+  npm run test:coverage --workspace=apps/api >&2 || FAIL="${FAIL:+$FAIL, }apps/api"
 fi
 # Real decoder and attachment cases run in the required local media lane;
 # their deterministic contract cases remain registered here.

@@ -14,6 +14,7 @@ permissions:
   contents: read
   actions: read
   pull-requests: read
+  issues: read
 
 concurrency:
   group: fitsy-hourly-delivery
