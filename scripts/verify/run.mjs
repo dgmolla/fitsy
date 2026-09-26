@@ -88,11 +88,16 @@ function runCheck(c) {
   }
   return new Promise((resolve) => {
     const t0 = Date.now();
+    const checkEnv = { ...process.env, FITSY_RUNS: runsCtx,
+      FITSY_VERIFY_NEEDS_NATIVE: plan.native ? '1' : '0',
+      FITSY_VERIFY_NEEDS_TEST_DEPS: selected.some(check => check.name === 'test') ? '1' : '0',
+      ...(plan.comparison.base ? { FITSY_DIFF_BASE: plan.comparison.base } : {}),
+      ...(runsCtx === 'ci' && plan.comparison.head ? { FITSY_DIFF_HEAD: plan.comparison.head } : {}) };
+    if (c.name === 'dev-drift' && process.env.FITSY_VERIFY_OWNED_DB) {
+      checkEnv.POSTGRES_URL_NON_POOLING = process.env.FITSY_VERIFY_CALLER_NON_POOLING_URL ?? '';
+    }
     execFile("bash", [join(VERIFY_DIR, c.script), `--scope=${scope}`], { cwd: REPO_ROOT, maxBuffer: 16 * 1024 * 1024,
-      env: { ...process.env, FITSY_RUNS: runsCtx,
-        FITSY_VERIFY_NEEDS_NATIVE: plan.native ? '1' : '0',
-        ...(plan.comparison.base ? { FITSY_DIFF_BASE: plan.comparison.base } : {}),
-        ...(runsCtx === 'ci' && plan.comparison.head ? { FITSY_DIFF_HEAD: plan.comparison.head } : {}) } }, (err, stdout, stderr) => {
+      env: checkEnv }, (err, stdout, stderr) => {
       const code = err ? (err.code ?? 1) : 0;
       let parsed;
       try {
