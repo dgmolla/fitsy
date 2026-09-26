@@ -61,6 +61,10 @@ P2/P3 follow-ups retain the source-bound disposition and named acceptance from t
 
 Record actual UTC timestamps for request, ready, work start, PR opened, required gates ready, merged, deployed, and acceptance verified.
 Preserve unknown historical values rather than substituting commit times or reconstructing imaginary work starts.
+The execution owner sets the project's `Started at` to the observed ISO UTC time when work starts.
+At material progress or a blocker, update `Progress`, `Next action`, `Last progress at`, and the existing Blocker/Dependencies fields on that project item.
+Set `Verified at` only after acceptance and applicable main Verify, Deploy, and release receipts are linked; a merge or issue close is not verified delivery.
+The [hourly delivery report](hourly-delivery-report.md) uses only valid timestamp pairs and counts missing values as unknown.
 Report request-to-verified-delivery separately from PR-open-to-merge, queue time, active execution, and blocked time.
 Do not sum overlapping reviewer/test durations and label the result wall time.
 Update the issue at material transitions, failures, ownership changes, and completion.
