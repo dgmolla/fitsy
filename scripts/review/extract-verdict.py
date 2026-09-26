@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Validate one provider-neutral verdict, or a Claude result envelope, fail-closed."""
+"""Validate one provider-neutral verdict, or report incomplete review evidence."""
+import argparse
 import json
 import re
 import sys
@@ -52,18 +53,20 @@ def extract(raw, lens):
 
 
 if __name__ == "__main__":
-    lens = sys.argv[1]
+    parser = argparse.ArgumentParser()
+    parser.add_argument("lens")
+    parser.add_argument("--execution-error", action="store_true")
+    args = parser.parse_args()
+    lens = args.lens
     verdict = extract(sys.stdin.read(), lens)
-    if verdict is None:
+    if args.execution_error or verdict is None:
         verdict = {
             "lens": lens,
-            "verdict": "fail",
-            "findings": [{
-                "severity": "CONFIRMED", "priority": "P1", "file": "(runner)", "line": 0,
-                "summary": "review did not produce a valid completed verdict; failing closed",
-                "scenario": "runner failed or response did not satisfy REVIEW.md's output contract",
-                "fix": "inspect the configured review provider and errors.log, then rerun the same lens",
-                "impact": "Required independent review is invalid, so release evidence is incomplete",
-            }],
+            "verdict": "incomplete",
+            "findings": [],
+            "error": {
+                "kind": "execution_error" if args.execution_error else "invalid_output",
+                "message": "reviewer execution failed" if args.execution_error else "reviewer response did not satisfy the output contract",
+            },
         }
     print(json.dumps(verdict))
