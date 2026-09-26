@@ -7,6 +7,14 @@
 # paths: advisory (shadow) checks only; select when --scope=changed matches a glob.
 # Blocking checks always run within their layer/context; path filters cannot hide them.
 checks:
+  - name: resource-admission
+    script: resource-admission.sh
+    layer: 0
+    blocking: true
+    preflight: true
+    runs: [local]
+    why: Check dependencies and disk before local verification.
+
   - name: structural
     script: structural.sh
     layer: 0

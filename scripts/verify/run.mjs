@@ -21,11 +21,15 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { impactPlan } from "./impact-plan.mjs";
 
-const require = createRequire(import.meta.url);
-const yaml = require("js-yaml");
-
 const VERIFY_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(VERIFY_DIR, "..", "..");
+if (!existsSync(join(REPO_ROOT, "node_modules/js-yaml"))) {
+  const { admitResources } = await import("./resource-admission.mjs");
+  console.log(JSON.stringify(admitResources({ root: REPO_ROOT })));
+  process.exit(1);
+}
+const require = createRequire(import.meta.url);
+const yaml = require("js-yaml");
 
 const args = Object.fromEntries(
   process.argv.slice(2).map((a) => {
@@ -86,6 +90,7 @@ function runCheck(c) {
     const t0 = Date.now();
     execFile("bash", [join(VERIFY_DIR, c.script), `--scope=${scope}`], { cwd: REPO_ROOT, maxBuffer: 16 * 1024 * 1024,
       env: { ...process.env, FITSY_RUNS: runsCtx,
+        FITSY_VERIFY_NEEDS_NATIVE: plan.native ? '1' : '0',
         ...(plan.comparison.base ? { FITSY_DIFF_BASE: plan.comparison.base } : {}),
         ...(runsCtx === 'ci' && plan.comparison.head ? { FITSY_DIFF_HEAD: plan.comparison.head } : {}) } }, (err, stdout, stderr) => {
       const code = err ? (err.code ?? 1) : 0;
@@ -110,7 +115,14 @@ function runCheck(c) {
   });
 }
 
-const results = await Promise.all(selected.map(runCheck));
+const preflight = await Promise.all(selected.filter(c => c.preflight).map(runCheck));
+const remaining = selected.filter(c => !c.preflight);
+const results = [...preflight];
+if (preflight.some(result => result.status === 'fail' && result.blocking)) {
+  skipped.push(...remaining.map(c => ({ name: c.name, status: 'skipped', summary: 'preflight failed' })));
+} else {
+  results.push(...await Promise.all(remaining.map(runCheck)));
+}
 for (const r of [...results, ...skipped]) {
   const { stderr, ...line } = r;
   console.log(JSON.stringify(line));
