@@ -4,13 +4,13 @@ import { join } from "node:path";
 const extractor = join(__dirname, "extract-verdict.py");
 const pass = { lens: "correctness", verdict: "pass", findings: [] };
 const finding = { severity: "CONFIRMED", priority: "P1", impact: "Core flow fails for an empty user input", file: "app.ts", line: 3, summary: "Wrong output", scenario: "Empty input crashes", fix: "Handle empty input" };
-function extract(input: unknown, lens = "correctness") {
-  return JSON.parse(execFileSync("python3", [extractor, lens], {
+function extract(input: unknown, lens = "correctness", executionError = false) {
+  return JSON.parse(execFileSync("python3", [extractor, lens, ...(executionError ? ["--execution-error"] : [])], {
     input: typeof input === "string" ? input : JSON.stringify(input), encoding: "utf8",
   }));
 }
 function runnerFailure(input: unknown) {
-  expect(extract(input)).toMatchObject({ verdict: "fail", findings: [{ file: "(runner)" }] });
+  expect(extract(input)).toMatchObject({ verdict: "incomplete", findings: [], error: { kind: "invalid_output" } });
 }
 
 test("accepts a complete plain provider verdict and a successful Claude envelope", () => {
@@ -24,6 +24,11 @@ test("preserves confirmed findings and recorded runner provenance", () => {
 test("rejects authentication errors even when their result contains a pass", () => {
   runnerFailure({ is_error: true, result: JSON.stringify(pass) });
   runnerFailure({ error: "expired auth", result: JSON.stringify(pass) });
+});
+test("failed execution cannot salvage a complete pass from partial output", () => {
+  expect(extract(pass, "correctness", true)).toMatchObject({
+    verdict: "incomplete", findings: [], error: { kind: "execution_error" },
+  });
 });
 test.each([
   { verdict: "pass" }, { ...pass, lens: "test-quality" }, { ...pass, findings: null },

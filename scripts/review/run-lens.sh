@@ -101,7 +101,7 @@ else
     < "$PROMPT_FILE" > "$RAW_FILE" 2>>"$CACHE_DIR/errors.log"; then
     RESULT_JSON="$(python3 scripts/review/extract-verdict.py "$LENS" < "$RAW_FILE")"
   else
-    RESULT_JSON="$(printf '' | python3 scripts/review/extract-verdict.py "$LENS")"
+    RESULT_JSON="$(printf '' | python3 scripts/review/extract-verdict.py "$LENS" --execution-error)"
   fi
   python3 scripts/review/review-budget.py finish --ledger "$BUDGET_LEDGER" --round-id "$ROUND_ID" \
     --lens "$LENS" --source-sha "$HEAD_SHA" --attempt-id "$ATTEMPT_ID" >&2
@@ -113,9 +113,10 @@ import json,sys
 result=json.load(sys.stdin)
 result["reviewer"]=json.loads(sys.argv[1])
 print(json.dumps(result))' "$IDENTITY")"
-  # never cache a runner-error verdict: it would replay a transient failure
-  # against every retry of the same diff (hit exactly this, 2026-09-07)
-  if ! printf '%s' "$RESULT_JSON" | grep -q '"file": "(runner)"'; then
+  # Never cache incomplete reviews or historical runner findings. Both are
+  # transient infrastructure failures, not reusable independent verdicts.
+  if [ "$(printf '%s' "$RESULT_JSON" | python3 -c 'import json,sys;print(json.load(sys.stdin)["verdict"])')" != "incomplete" ] && \
+      ! printf '%s' "$RESULT_JSON" | grep -q '"file": "(runner)"'; then
     CACHE_TMP="$(mktemp "$CACHE_DIR/.verdict.XXXXXX")"
     printf '%s' "$RESULT_JSON" > "$CACHE_TMP"
     mv "$CACHE_TMP" "$CACHE_FILE"
@@ -133,13 +134,15 @@ echo "$RESULT_JSON"
 
 # ── Post (PR mode only) ─────────────────────────────────────────────────────
 if [ "$TARGET" != "--local" ]; then
-  if [ "$BLOCKING" = "0" ]; then STATE=success; else STATE=$([ "$GATE" = "pass" ] && echo success || echo failure); fi
+  if [ "$VERDICT" = "incomplete" ]; then STATE=error
+  elif [ "$BLOCKING" = "0" ]; then STATE=success
+  else STATE=$([ "$GATE" = "pass" ] && echo success || echo failure); fi
   "$GH_BIN" api "repos/{owner}/{repo}/statuses/$HEAD_SHA" -f state="$STATE" \
     -f context="lens/$LENS" -f description="$N_FINDINGS finding(s), raw $VERDICT, gate $GATE, $PROVIDER/$MODEL" >/dev/null
-  if [ "$N_FINDINGS" -gt 0 ]; then
+  if [ "$N_FINDINGS" -gt 0 ] || [ "$VERDICT" = "incomplete" ]; then
     COMMENT="$(echo "$RESULT_JSON" | python3 scripts/review/format-comment.py)"
     "$GH_BIN" pr comment "$TARGET" --body "$COMMENT" >/dev/null
   fi
   echo "[run-lens] posted lens/$LENS=$STATE on ${HEAD_SHA:0:7}" >&2
 fi
-[ "$BLOCKING" = "0" ] || [ "$GATE" = "pass" ]
+[ "$VERDICT" != "incomplete" ] && { [ "$BLOCKING" = "0" ] || [ "$GATE" = "pass" ]; }

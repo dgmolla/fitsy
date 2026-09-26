@@ -24,7 +24,7 @@ function run(model = "fixture-model", provider = "claude", lens = "correctness")
     cwd: root, encoding: "utf8", env: { ...env, FITSY_REVIEW_MODEL: model, FITSY_REVIEW_PROVIDER: provider }, timeout: 15000,
   });
 }
-function runPr() {
+function runPr(lens = "correctness") {
   const gh = join(root, "bin/gh-fixture");
   writeFileSync(gh, `#!/bin/sh
 if [ "$1" = pr ] && [ "$2" = diff ]; then git diff --abbrev=8 origin/main...HEAD; exit; fi
@@ -37,10 +37,10 @@ if [ "$1" = pr ] && [ "$2" = view ]; then
   exit
 fi
 if [ "$1" = api ]; then printf '%s\\n' "$*" >> "$REVIEW_TEST_GH_CALLS"; exit; fi
-if [ "$1" = pr ] && [ "$2" = comment ]; then exit; fi
+if [ "$1" = pr ] && [ "$2" = comment ]; then printf '%s\\n' "$*" >> "$REVIEW_TEST_GH_CALLS"; exit; fi
 exit 1
 `, { mode: 0o755 });
-  return spawnSync("bash", ["scripts/review/run-lens.sh", "123", "correctness"], {
+  return spawnSync("bash", ["scripts/review/run-lens.sh", "123", lens], {
     cwd: root, encoding: "utf8", env: { ...env, FITSY_REVIEW_MODEL: "fixture-model", FITSY_REVIEW_PROVIDER: "claude",
       FITSY_GH_BIN: gh, REVIEW_TEST_GH_CALLS: join(root, "gh-calls") }, timeout: 15000,
   });
@@ -161,11 +161,27 @@ test("nonzero external execution cannot publish or cache a partial pass", () => 
   writeFileSync(join(root, "exit"), "1");
   const result = run();
   expect(result.status).toBe(1);
-  expect(JSON.parse(result.stdout)).toMatchObject({ verdict: "fail", findings: [{ file: "(runner)" }] });
+  expect(JSON.parse(result.stdout)).toMatchObject({ verdict: "incomplete", findings: [], error: { kind: "execution_error" } });
   expect(readdirSync(cache).filter(name => name.endsWith(".json"))).toHaveLength(0);
+  const posted = runPr();
+  expect(posted.status).toBe(1);
+  expect(readFileSync(join(root, "gh-calls"), "utf8")).toContain("state=error");
   writeFileSync(join(root, "exit"), "0");
   expect(run().status).toBe(0);
-  expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(2);
+  expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(3);
+});
+test("invalid reviewer response is incomplete and cannot publish advisory success", () => {
+  writeFileSync(join(root, ".claude/lenses/docs-sanity.md"), "Review documentation.\n");
+  writeFileSync(join(root, "verdict"), '{"lens":"docs-sanity","verdict":"pass"');
+  const local = run("fixture-model", "claude", "docs-sanity");
+  expect(local.status).toBe(1);
+  expect(JSON.parse(local.stdout)).toMatchObject({ verdict: "incomplete", findings: [], error: { kind: "invalid_output" } });
+  expect(readdirSync(cache).filter(name => name.endsWith(".json"))).toHaveLength(0);
+  const posted = runPr("docs-sanity");
+  expect(posted.status).toBe(1);
+  const postedCalls = readFileSync(join(root, "gh-calls"), "utf8");
+  expect(postedCalls).toMatch(/state=error[\s\S]*Independent review incomplete/);
+  expect(postedCalls).not.toMatch(/state=success|P1/);
 });
 test("provider identity separates cache entries", () => {
   expect(run().status).toBe(0);
@@ -174,7 +190,6 @@ test("provider identity separates cache entries", () => {
   expect(JSON.parse(codex.stdout)).toMatchObject({ reviewer: { provider: "codex" } });
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(2);
 });
-
 test("advisory docs findings remain visible without blocking the caller", () => {
   writeFileSync(join(root, ".claude/lenses/docs-sanity.md"), "Review documentation.\n");
   const advisory = { lens: "docs-sanity", verdict: "fail", findings: [{ severity: "CONFIRMED", priority: "P2", impact: "Setup instruction fails for new developers", file: "docs/setup.md", line: 3, summary: "Missing command", scenario: "Setup command fails", fix: "Use the existing command" }] };
@@ -192,7 +207,6 @@ test("plausible findings retain their raw comment-only status without a disposit
   expect(result.status).toBe(0);
   expect(result.stderr).toContain("no confirmed findings");
 });
-
 const impact = { user_outcome: "Native proof starts", trigger: "Historical movie without ffprobe", scope: "No-video simulator run", evidence: "review58 reproduction", contract: "Optional video tools" };
 function hash(value: string) { return createHash("sha256").update(value).digest("hex"); }
 function stable(value: unknown): string {

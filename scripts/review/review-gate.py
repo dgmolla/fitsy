@@ -22,6 +22,8 @@ def failure(identity, reason):
 def evaluate(raw, lens, source_sha, diff_sha256, dispositions, root):
     review = {key: raw.get(key) for key in ("lens", "verdict", "findings")}
     identity = {"source_sha": source_sha, "diff_sha256": diff_sha256, "review_sha256": digest(review)}
+    if raw.get("lens") == lens and raw.get("verdict") == "incomplete":
+        return failure(identity, "independent review incomplete")
     if raw.get("lens") != lens or raw.get("verdict") not in ("pass", "fail") or not isinstance(raw.get("findings"), list):
         return failure(identity, "invalid raw review")
     if any(f.get("file") == "(runner)" for f in raw["findings"]):
