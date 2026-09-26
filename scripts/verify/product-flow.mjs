@@ -62,15 +62,44 @@ export function inputHash(cwd = root, mobileOnly = false) {
 }
 
 const insist = (condition, message) => { if (!condition) throw new Error(message); };
-export function artifact(file, directory) {
+export function artifactPath(file, directory) {
   insist(typeof file === 'string' && file.length > 0, 'missing artifact path');
   const absolute = realpathSync(resolve(directory, file));
   insist(absolute.startsWith(realpathSync(directory) + sep), 'artifact escapes evidence directory');
-  return readFileSync(absolute);
+  return absolute;
+}
+export function artifact(file, directory) {
+  return readFileSync(artifactPath(file, directory));
+}
+export function isPlayableVideo(file) {
+  let probe;
+  try {
+    probe = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_entries',
+      'stream=codec_type,codec_name,duration:format=duration', '-of', 'json', file],
+    { encoding: 'utf8', timeout: 15000, maxBuffer: 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] }));
+  } catch (error) {
+    if (error.code === 'ENOENT') throw new Error('ffprobe is required to validate product-flow video');
+    return false;
+  }
+  const hasDuration = probe.streams?.some(stream => stream.codec_type === 'video' && stream.codec_name &&
+    (Number(stream.duration) > 0 || Number(probe.format?.duration) > 0)) === true;
+  if (!hasDuration) return false;
+  try {
+    // Decode one frame, not the recording. A metadata-only MP4 can pass ffprobe.
+    const decoded = execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-xerror', '-i', file,
+      '-map', '0:v:0', '-frames:v', '1', '-f', 'framecrc', 'pipe:1'],
+    { encoding: 'utf8', timeout: 15000, maxBuffer: 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
+    return /^\d+,\s*\d+,\s*\d+,\s*\d+,\s*\d+,\s*0x[\da-f]+$/im.test(decoded);
+  } catch (error) {
+    if (error.code === 'ENOENT') throw new Error('ffmpeg is required to validate product-flow video');
+    return false;
+  }
 }
 
-export function validate(report, plan, hash, directory, now = Date.now(), cwd = root, nativeHash = inputHash(cwd, true)) {
+export function validate(report, plan, hash, directory, now = Date.now(), cwd = root, nativeHash = inputHash(cwd, true), mode = 'final-candidate') {
   insist(report.version === 1 && report.inputHash === hash, 'missing or stale source/test identity');
+  insist(['development', 'final-candidate', 'requested-video'].includes(mode) && report.evidenceMode === mode,
+    `Expected ${mode} evidence; development or requested-video proof cannot satisfy final publication`);
   const time = Date.parse(report.finishedAt);
   insist(Number.isFinite(time) && time <= now && now - time <= 24 * 3600_000, 'evidence expired or invalid timestamp');
   insist(report.result === 'pass', 'product flow did not pass');
@@ -81,6 +110,9 @@ export function validate(report, plan, hash, directory, now = Date.now(), cwd = 
   insist(!plan.categories.includes('billing') || report.storeMode !== 'unconfigured', 'billing requires a configured store');
   insist(/^https:\/\/dev\.fitsy\.org\/?$|^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(report.backend), 'product tests require an identified dev backend');
   insist(Array.isArray(report.flows) && report.flows.length > 0, 'no flows executed');
+  insist(report.videoRequested === undefined || typeof report.videoRequested === 'boolean', 'invalid recording selection');
+  const videoRequested = report.videoRequested ?? report.flows.every(flow => Boolean(flow.video && flow.videoHash));
+  insist(mode !== 'requested-video' || videoRequested, 'requested-video proof requires a complete recording');
   const covered = new Set();
   const names = new Set();
   for (const flow of report.flows) {
@@ -102,6 +134,30 @@ export function validate(report, plan, hash, directory, now = Date.now(), cwd = 
     insist(commands.every(c => c.metadata?.status === 'COMPLETED' || Object.values(c.command || {}).some(v => v?.optional === true)), `incomplete required command: ${flow.name}`);
     const screen = artifact(flow.screenshot, directory);
     insist(digest(screen) === flow.screenshotHash && screen.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex')), `missing/changed/non-PNG screenshot: ${flow.name}`);
+    const capture = artifact(flow.captureReceipt, directory);
+    insist(digest(capture) === flow.captureReceiptHash, `changed XCTest capture receipt: ${flow.name}`);
+    const captures = capture.toString().trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
+    insist(captures.length > 0 && captures.every(item => item.udid === report.simulator && item.preferredScreenCaptureFormat === 'screenshots'),
+      `missing screenshots-only XCTest launch proof: ${flow.name}`);
+    if (mode === 'final-candidate')
+      insist(flow.attachmentCloseout && flow.attachmentCloseoutHash, `missing XCTest attachment closeout: ${flow.name}`);
+    if (flow.attachmentCloseout || flow.attachmentCloseoutHash) {
+      insist(flow.attachmentCloseout && flow.attachmentCloseoutHash, `incomplete XCTest attachment closeout: ${flow.name}`);
+      const closeout = artifact(flow.attachmentCloseout, directory);
+      insist(digest(closeout) === flow.attachmentCloseoutHash, `changed XCTest attachment closeout: ${flow.name}`);
+      const receipt = JSON.parse(closeout.toString());
+      insist(receipt.udid === report.simulator && receipt.generated?.videos === 0 && receipt.deleted?.length === 0,
+        `unexpected XCTest recording: ${flow.name}`);
+    }
+    if (!videoRequested) insist(!flow.video && !flow.videoHash, `Unrequested video claim: ${flow.name}`);
+    else {
+      insist(flow.video && flow.videoHash, `missing/changed/empty video: ${flow.name}`);
+      let video;
+      try { video = artifact(flow.video, directory); }
+      catch { throw new Error(`missing/changed/empty video: ${flow.name}`); }
+      insist(video.length > 0 && digest(video) === flow.videoHash, `missing/changed/empty video: ${flow.name}`);
+      insist(isPlayableVideo(artifactPath(flow.video, directory)), `unplayable video: ${flow.name}`);
+    }
     if (!baseline.includes(flow.name) && assertions.length >= 2) {
       for (const tag of config.tags || []) covered.add(tag);
     }

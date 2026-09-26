@@ -35,6 +35,13 @@ The registry determines which checks apply and whether a check is blocking or sh
 Removing obsolete structural exceptions belongs to the changed product domain only when every removed entry names a file in the same diff.
 Allowlist additions, unrelated removals, deletion of the allowlist and unreadable history retain infrastructure ownership.
 
+Changes under `scripts/sim/` or the product-flow verification controls run the blocking local `media-integration` lane in `npm run verify`.
+Install `ffprobe` and `ffmpeg` locally before that run.
+The lane runs real decoder, XCTest attachment and opt-in recorder cases, then records `.evidence/verify/media-integration.json` with the candidate SHA and source/test hash.
+Hosted L2 runs deterministic tests without media tools.
+After committing, rerun `node scripts/verify/run.mjs --only=media-integration --runs=local` so the receipt names the PR head.
+The `product-flow/local` publisher checks that receipt before setting its exact-head status, including when mobile product evidence is not applicable.
+
 **Local product-flow gate.** Local iPhone E2E is blocking for mobile-facing changes. CI runs static checks, unit tests and builds; its optional simulator workflow remains experimental. `npm run verify` and pre-push require fresh `.evidence/product-flow/report.json` when impact selection applies. Missing tools, skipped/failed assertions, missing coverage and stale evidence fail; unrelated changes get explicit `not_applicable`.
 
 Use an owned worktree, `npm run dev:env`, and an explicit simulator UDID. Keep public configuration in the ignored mobile environment file. The builder generates an embedded Release app, disables downloaded OTA updates, and records source/native/JS/configuration identities. A keyless build proves navigation only and cannot cover billing. Never publish credentials or personal data in evidence.
@@ -47,14 +54,42 @@ Both configurations use local simulator signing with Xcode's application entitle
 node scripts/verify/product-flow.mjs --plan
 export FITSY_SIM_OWNER=my-task MAESTRO_BIN="$HOME/.maestro/bin/maestro"
 node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs build <UDID>
-node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs run <UDID> <affected-flow-name>
+node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs run <UDID> <affected-flow-name> --mode=final-candidate
 # Capture affected primary and recovery paths through Mobile MCP, then:
 node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs finish .evidence/walkthrough.json
 ```
 
 Cold-start and sign-in always run. Add/select flows in `apps/mobile/e2e/flows/` tagged for every category in `--plan`, with at least two non-optional outcome assertions per changed journey. Baseline flows cannot cover a paywall change. Promote discovered regressions into deterministic scenarios.
+Final candidate runs retain required assertions, raw Maestro commands, screenshots, XCTest capture receipts, timing and changed-journey walkthroughs without recording video by default.
+When a reviewer explicitly requests video, add `--record-video` to the final candidate run; the runner retains complete untrimmed video and the validator checks each recording before publication.
+Development runs remain separate from final publication even when recorded.
 
 The walkthrough JSON is an array with one entry per category: `category`, `expected`, `observed`, `branches: ["primary", "recovery"]`, `result: "pass"`, and `trace` relative to `.evidence/product-flow/`. Traces are JSONL: one `{at, command: {name}, result: {content}}` object per line, recording actual Mobile MCP actions and screen observations. Identify run-owned synthetic fixtures with `FITSY_FIXTURE`; reviewers judge scenario relevance and visual quality.
+
+### Keep mobile walkthroughs focused and recoverable
+
+Before interacting, list the expected primary and recovery checkpoints, required assertions, and a task-appropriate action, retry and elapsed-time budget in the task evidence.
+Use the accessibility screen or relevant subtree where supported to find visible controls and confirm semantic state.
+Save complete successful Mobile MCP responses in the source-bound walkthrough trace, while bringing only the relevant controls and state change into working context.
+Keep any failed response, including `isError: true`, in separate private diagnostic evidence because the product-flow validator rejects failed events in the walkthrough trace.
+Record the failed attempt in the diagnostic action history and include a successful retry in the validated trace only after it actually changes or observes the required state.
+If a target is offscreen, scroll to it deliberately, refresh the accessibility state, and verify reachability before tapping.
+If accessibility data is missing or misleading, record that limitation and use a screenshot or another supported observation instead of inventing a selector.
+Take screenshots at required outcomes and when checking layout, clipping, redundant controls or visual state that the accessibility tree cannot establish.
+Inspect those images against the affected screen's acceptance criteria; semantic success alone does not establish visual quality.
+
+Count attempts without a relevant state change across taps, selector variations, waits and restarts.
+After two such attempts, save the current tree, screenshot and diagnostic action history, then diagnose the failed checkpoint before another action.
+For a stale element, refresh the tree and reacquire the control.
+For an overlay, inspect it, dismiss only a known safe overlay, and confirm the expected screen.
+For delayed accessibility updates, use a bounded state-based wait and compare the screen image before treating the delay as an app failure.
+At the planned budget boundary, record the failed step and cause through the normal recovery path; never turn a skipped assertion into a pass or replace it with a sleep.
+
+Keep complete action responses and the selected raw log window in private task evidence, then read only a scoped excerpt during diagnosis.
+For example, capture a short device window with `xcrun simctl spawn <UDID> log show --last 30s --style compact > .evidence/product-flow/device-log.txt`, then use `rg -n '<relevant-pattern>' .evidence/product-flow/device-log.txt` for the relevant lines.
+Use `scripts/sim/sim logs --seconds 30 --grep '<relevant-pattern>'` when a quick bounded excerpt is sufficient.
+Do not include credentials or personal data in published evidence.
+Record actual tool calls, elapsed time, no-progress attempts, retries and evidence size if comparing flows; external speed claims are not Fitsy measurements.
 
 ```sh
 node scripts/sim/publish-product-flow.mjs <PR_NUMBER>
@@ -109,6 +144,10 @@ An existing status from another provider still satisfies the same lens; a cache 
 The implementing agent must not author its own independent review verdict.
 A matching post-PR pass should reuse the local verdict rather than duplicate the expensive review.
 A changed diff or changed review inputs invalidates that reuse.
+Every finding has a separate impact priority, and raw reviewer verdicts remain unchanged.
+The canonical runner accepts an owned, source-bound P2/P3 follow-up only through the disposition and required-test contract in [review-dispositions.md](review-dispositions.md).
+P0/P1 impacts, malformed dispositions, stale receipts and missing required tests remain blocking.
+New independent review execution stops after two reviewed source rounds or 30 minutes of review time for the candidate, with only the documented named P0/P1 exception.
 A rebase may alter the actual diff and requires checking again.
 
 Local mode does not carry the full PR body into its review context.
