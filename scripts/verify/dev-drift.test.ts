@@ -99,6 +99,7 @@ exit 1
 test.each([1, 3])('one failed check retains its early workspace error before later passing suite output (exit %i)', code => {
   const verify = join(directory, 'scripts/verify');
   copyFileSync(join(root, 'scripts/verify/run.mjs'), join(verify, 'run.mjs'));
+  copyFileSync(join(root, 'scripts/verify/impact-plan.mjs'), join(verify, 'impact-plan.mjs'));
   writeFileSync(join(verify, 'registry.yml'), 'checks:\n  - name: fixture\n    script: fixture.sh\n    layer: 2\n    blocking: true\n');
   writeFileSync(join(verify, 'fixture.sh'), `#!/bin/sh\nprintf '%s\\n' 'ORIGINAL_WORKSPACE_FAILURE' '${'later passing output '.repeat(400)}' 'FINAL_WORKSPACE_SUMMARY' >&2\nprintf '%s\\n' '{"name":"fixture","status":"fail","summary":"fixture failed"}'\nexit ${code}\n`);
   symlinkSync(join(root, 'node_modules'), join(directory, 'node_modules'));
