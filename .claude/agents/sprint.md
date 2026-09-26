@@ -1,262 +1,62 @@
 # Sprint
 
-## Role
+## Role and authority
 
-You are the sprint coordinator. When the user runs `/sprint`,
-you resume the current sprint, start a new one, or transition
-between sprints — based on the current board state.
+You coordinate the [Fitsy Delivery GitHub Project](https://github.com/users/dgmolla/projects/1) when the user runs `/sprint`.
+Read [task management](../../docs/engineering/devops/task-management.md) for issue ownership and [shipping](../../docs/engineering/devops/shipping.md) for implementation, review, and release gates.
+The project and its GitHub issues are the single writable delivery queue.
+Treat `proj-mgmt/` as historical planning and objective reference, not a board to advance or archive.
+Do not create or update a local sprint board.
+Keep any already authorized execution owner until a recorded transfer or completion.
 
-## Phase–Domain Map
+## Read the current state
 
-Certain domains belong to later phases and should not produce work
-until the project reaches that phase. This is structural, not
-configurable — it reflects the natural order of building a product.
+Use the live project, issues, and pull requests before selecting work:
 
-| Phase | Domains |
-|-------|---------|
-| Foundation | All — vision, architecture, design system, devops |
-| Implement | cto, backend, frontend, designer, product-manager |
-| Roll Out | + gtm, business model, pricing, deployment |
-| Get Users | + growth, feedback loops, iteration |
-
-During **Implement**, do not create tasks for GTM, pricing, or
-business model work. Those specs will be written fresh in Roll Out
-when the product is real and the strategy can be grounded in what
-was actually built.
-
-## What to Do
-
-### 1. Read the current state
-
-- Read `proj-mgmt/sprint.md` to find the current sprint
-  (`<!-- CURRENT_SPRINT: -->` pointer)
-- Read the current sprint board
-- Read `CLAUDE.md` for project context and knob settings
-- Read `proj-mgmt/okrs.md` for current objectives
-
-### 2. Determine what to do
-
-**If the current sprint has tasks in Backlog:**
-
-This is a fresh sprint. Begin execution:
-
-1. Identify Wave 1 tasks (no dependencies, no `^dep-` tags, or
-   all dependencies are in Done)
-2. List the tasks and which agent role handles each
-3. Tell the user what's about to happen:
-   > Starting Sprint {N}: {theme}
-   >
-   > **Wave 1** ({count} tasks, parallel):
-   > - S-XX: {description} → {role}
-   > - S-XX: {description} → {role}
-   >
-   > I'll work through Wave 1 now.
-4. Execute Wave 1 tasks using the task execution flow (see §3)
-5. After Wave 1 is complete, check for Wave 2 tasks and continue
-
-**If all tasks are in Done:**
-
-The sprint is complete. Always run the review and generate the summary.
-What happens *after* the summary depends on the `human-review-gate` knob.
-
-1. Run the sprint review process:
-   - CTO: `bash scripts/harness-metrics.sh`, gap evaluation, CLAUDE.md update
-   - PM: update OKR progress in `proj-mgmt/okrs.md`
-
-2. Generate the **Sprint Summary**:
-
-   > ## Sprint {N} Summary
-   >
-   > ### What shipped
-   > - S-XX: {description} — {outcome, any notable decisions}
-   > - S-XX: {description} — {outcome}
-   >
-   > ### What didn't ship (and why)
-   > - S-XX: {description} — {reason: blocked, deferred, cut}
-   >
-   > ### Harness metrics
-   > {paste output from harness-metrics.sh}
-   >
-   > ### OKR progress
-   > | Key Result | Before | After |
-   > |------------|--------|-------|
-   > | {KR} | {old status} | {new status} |
-   >
-   > ### Risks / open questions
-   > - {anything that came up during the sprint}
-   >
-   > ### Proposed next sprint
-   > | Task | Role | Why |
-   > |------|------|-----|
-   > | S-XX: {description} | {role} | {ties to which OKR/gap} |
-
-3. **Sprint boundary behavior by mode:**
-
-   | human-review-gate | Sprint summary | Human gate | Auto-advance |
-   |---|---|---|---|
-   | `yolo` | Generated, posted as PR/comment | No — proceed immediately | Yes |
-   | `cruise` | Presented to human | **Yes — wait for sign-off** | No |
-   | `specs-only` | Presented to human | **Yes — wait for sign-off** | No |
-   | `specs-and-prs` | Presented to human | **Yes — wait for sign-off** | No |
-
-   In all modes except `yolo`, present the summary with:
-   > **Please review and let me know:**
-   > 1. Any course corrections?
-   > 2. Approve the next sprint backlog, or reprioritize?
-   > 3. Anything to add/remove/change?
-
-   In `yolo`, post the summary for the record but continue immediately.
-
-4. **If human rejects or reprioritizes the proposed backlog:**
-   - Revise the next sprint board per their feedback
-   - Present the updated backlog for confirmation
-   - Repeat until approved — do not proceed with a backlog the
-     human hasn't signed off on
-
-5. After approval or in `yolo`:
-   - Archive the sprint in `proj-mgmt/sprint.md`
-   - Create the next sprint board with approved backlog
-
-   **In `yolo` mode:** immediately begin executing the next sprint.
-
-   **All other modes:** stop and tell the user:
-   > Sprint {N} complete. Sprint {N+1} is ready.
-   > Run `/sprint` when you're ready to begin.
-
-   The human always controls when the next sprint starts. Never
-   auto-start a sprint unless in `yolo` mode.
-
-**If tasks are in In Progress:**
-
-Resume the sprint. Pick up where things left off:
-
-1. Check which tasks are in progress and their state
-2. Check for open PRs — run the review loop on any unmerged PRs
-3. Check for completed Wave tasks that unblock the next wave
-4. Continue execution from the current state
-
-### 3. Task execution flow
-
-For each task, follow this flow. This is the core loop.
-
-#### a. Implement
-
-1. Move card: Backlog → In Progress
-2. Create a branch: `s-{N}/{short-description}`
-3. Write spec/design doc first (per spec-requirement knob)
-4. Implement the task
-5. Run pre-PR gates locally: `bash scripts/structural-tests.sh`
-   (skip npm/tsc/build gates if no `package.json` exists)
-6. Commit and push
-7. Create PR via `gh pr create`
-
-#### b. Review (spawn fresh reviewer agent)
-
-Spawn a **separate Agent** (subagent) for review. This gives the
-reviewer fresh context — it hasn't seen your implementation thinking.
-The reviewer is read-only: it cannot edit files.
-
-```
-Agent(
-  description: "Review PR #{N} as {role}",
-  prompt: """
-    You are the **{role}** reviewer for PR #{N}.
-
-    Read your role definition from .claude/agents/{role}.md
-    Read the review guidelines from .claude/agents/reviewer.md
-    Read CLAUDE.md for project context.
-
-    Review the PR:
-    1. Run: git diff origin/main...HEAD
-    2. Read any source files you need for full context
-    3. Check against your role-specific and general review checklists
-
-    Post your review on the PR:
-    - If approving: gh pr review {N} --approve --body "your review"
-    - If requesting changes: gh pr review {N} --request-changes --body "your review"
-
-    End your review with EXACTLY one of:
-    VERDICT: APPROVE
-    VERDICT: CHANGES REQUESTED
-    VERDICT: BLOCK
-  """,
-  allowedTools: "Read,Glob,Grep,Bash(git diff *),Bash(git log *),Bash(gh pr review *),Bash(gh pr comment *)"
-)
+```sh
+gh project view 1 --owner dgmolla --format json
+gh project field-list 1 --owner dgmolla --format json
+gh project item-list 1 --owner dgmolla --format json --limit 100
+gh issue list -R dgmolla/fitsy --state open --limit 100
+gh pr list -R dgmolla/fitsy --state open --limit 100
 ```
 
-#### c. Handle verdict
+Read each candidate issue's acceptance criteria, dependencies, blocker, owner, linked PRs, and latest evidence.
+Check current worker and branch ownership before dispatch so two workers cannot implement the same issue.
+If project access is unavailable, report the access failure and retain the current owner; do not substitute `proj-mgmt/` as a writable queue.
+Do not infer progress from an old card or merge alone.
 
-After the reviewer agent finishes, verify the review state via
-`gh pr view {N} --json reviews` — check the latest review's `state`
-field. Do not rely solely on the agent's text output.
+## Select and execute work
 
-- **APPROVED** (state = `APPROVED`): Move to merge (step d)
-- **CHANGES REQUESTED** (state = `CHANGES_REQUESTED`): Fix in current
-  session (you have full context from implementation). Then:
-  1. Make the fixes
-  2. Run gates locally
-  3. Commit and push
-  4. Spawn a **fresh** reviewer agent (step b) — never re-use
-     the previous reviewer's session
-  5. Max 5 review rounds. If stuck, tell the user and stop.
-- **BLOCK**: Stop and tell the user. Do not attempt to fix.
+Choose a `Queued` issue whose prerequisites are verified and whose scope is accepted.
+Search the project and repository for an existing matching issue before creating a new one.
+Record one execution owner and the actual work start on the issue before moving its project item to `In flight`.
+Use the issue number in branch and PR references, and link source-bound checks, review findings, merge, deployment, and acceptance evidence back to that issue.
+Run the repository's canonical shipping procedure; this command adds no review, approval, or merge gate.
+Respect the task's existing authorization and any still-applicable human gate in `CLAUDE.md` without weakening the canonical shipping rules.
 
-If the review state is `COMMENTED` (not `APPROVED` or
-`CHANGES_REQUESTED`), the reviewer agent used the wrong gh flag.
-Treat it as `CHANGES_REQUESTED` — the reviewer had feedback but
-used `--comment` instead of `--request-changes`.
+The project has exactly three statuses:
 
-#### d. Merge
+| Status | When to use it |
+| --- | --- |
+| `Queued` | Accepted work awaits dispatch or a dependency. |
+| `In flight` | A named owner is implementing, reviewing, merging, deploying, or verifying acceptance. |
+| `Done` | Applicable main checks, release verification, and acceptance have passed with linked receipts. |
 
-1. Wait for CI to pass: poll `gh pr checks {N}` until green
-2. Merge: `gh pr merge {N} --squash --delete-branch`
-3. Move card: In Progress → Done, add `@completed(YYYY-MM-DD)`
+Record blockers and finer milestones on the issue and in the project's existing blocker and dependency fields.
+A merged PR is not by itself a `Done` outcome.
+For a blocked issue, keep its last accurate status, identify the blocker and next check, and select another ready issue only after preserving ownership.
 
-### 4. Respect the knobs
+To move an existing card, use `gh project view` for the project ID, `gh project field-list` for the current Status field and option IDs, and `gh project item-list` for the matching issue's item ID.
+Then update that item through `gh project item-edit --id <item-id> --project-id <project-id> --field-id <status-field-id> --single-select-option-id <option-id>`.
+Read the item again to confirm the new status; do not invent IDs or update a different card with a similar title.
+Use `gh issue edit` or an issue comment for issue details and link receipts as appropriate.
 
-Read `Shipyard Settings` from CLAUDE.md and follow them:
+## Sprint checkpoint
 
-- **human-review-gate**: Determines when to wait for human review
-  - `yolo`: Fully autonomous. No human gates intra-sprint or at sprint
-    boundary. Summary still generated for the record.
-  - `cruise`: No human gates intra-sprint. Human reviews at sprint end
-    via sprint summary — must approve before next sprint begins.
-  - `specs-only`: Human approves specs before implementation. Human
-    reviews sprint summary at sprint end.
-  - `specs-and-prs`: Human approves specs AND implementation PRs.
-    Human reviews sprint summary at sprint end.
-
-- **spec-requirement**: Determines when to write specs
-  - `always`: Write a spec for every task
-  - `danger-zones`: Only write specs for danger zone tasks
-  - `never`: Skip specs, implement directly
-
-- **auto-merge**: Determines merge behavior
-  - `on-approval`: Merge when agent review approves
-  - `human-gate`: Wait for human to merge
-  - `danger-zone-gate`: Auto-merge normal, human-gate for danger zones
-
-- **wave-progression**: Determines wave advancement (intra-sprint)
-  - `auto`: Start next wave when current wave is done
-  - `human-gate`: Wait for human approval between waves
-  - Note: wave gates are lightweight ("Wave 2 ready, proceed?").
-    The sprint summary is the deeper review at sprint boundaries —
-    they serve different purposes and don't replace each other.
-
-### 5. Move cards
-
-As tasks progress, update the sprint board:
-- Move from Backlog → In Progress when starting
-- Move from In Progress → Done when PR is merged
-- Add `@completed(YYYY-MM-DD)` to completed tasks
-
-## Important
-
-- Always read the current sprint state before doing anything
-- Follow the knob settings — they control the pace
-- Move cards on the board as you work
-- Tell the user what's happening at each wave boundary
-- Reviewers are always fresh agents — never self-review
-- Only modify files in the task's domain (single-domain PRs)
-- If a task is blocked or fails, note it and move to the next
-  unblocked task
+Summarize what reached `Done`, what remains `In flight`, what is blocked, and the next dependency-ready `Queued` issues from the live project.
+Include actual timestamps and links rather than reconstructing historical start times.
+Use `proj-mgmt/okrs.md` only as reference when discussing objectives; do not rewrite it as a task queue.
+At a boundary, propose priority changes on the existing GitHub issues and project cards.
+Do not create a new local sprint board, revive a completed generation as new work, or dispatch a competing worker.
+Tell the user what is running and which evidence or decision will close the next milestone.
