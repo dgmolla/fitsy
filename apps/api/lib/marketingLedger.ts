@@ -30,12 +30,15 @@ export async function wasSent(email: string, campaign: Campaign, step: string): 
   return row !== null;
 }
 
-/** Records a confirmed send. Safe to call twice: the unique key makes it a no-op. */
+/**
+ * Records a confirmed send. A repeat for the same step (only the waitlist
+ * confirmation re-sends) refreshes sentAt so the frequency cap sees it.
+ */
 export async function recordSend(email: string, campaign: Campaign, step: string): Promise<void> {
   await prisma.marketingSend.upsert({
     where: { email_campaign_step: { email: normalizeEmail(email), campaign, step } },
     create: { email: normalizeEmail(email), campaign, step },
-    update: {},
+    update: { sentAt: new Date() },
   });
 }
 

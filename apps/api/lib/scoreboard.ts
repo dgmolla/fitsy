@@ -31,6 +31,7 @@ export interface DbMetrics {
   feedback: WeekOverWeek;
   waitlist: WeekOverWeek;
   waitlistTotal: number;
+  waitlistConfirmed: number;
 }
 
 export interface PostHogMetrics {
@@ -81,7 +82,10 @@ export function buildScoreboard(input: ScoreboardInput): string {
   out.push("*Acquisition*");
   out.push(line("Signups", db.signups));
   out.push(`• Total users: *${db.totalUsers}*`);
-  out.push(line("Waitlist (out of area)", db.waitlist) + ` · total ${db.waitlistTotal}`);
+  out.push(
+    line("Waitlist (out of area)", db.waitlist) +
+      ` · total ${db.waitlistTotal} · confirmed ${db.waitlistConfirmed}`,
+  );
   out.push("");
   out.push("*Activation*");
   out.push(

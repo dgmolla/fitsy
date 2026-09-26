@@ -12,6 +12,7 @@ const DB: DbMetrics = {
   feedback: { thisWeek: 3, lastWeek: 3 },
   waitlist: { thisWeek: 12, lastWeek: 5 },
   waitlistTotal: 40,
+  waitlistConfirmed: 31,
 };
 
 const PH: PostHogMetrics = {
@@ -36,6 +37,7 @@ describe("buildScoreboard", () => {
     expect(text).toContain("zero-result 10%");
     expect(text).toContain("D7 return rate: *25%* (5/20");
     expect(text).toContain("Active: *9* · billing issue: 1 · expired: 2");
+    expect(text).toContain("total 40 · confirmed 31");
   });
 
   it("explains a missing PostHog section instead of dropping it", () => {

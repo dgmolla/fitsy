@@ -46,13 +46,15 @@ describeIfDb("marketingAudience (DB)", () => {
         // opted out on the waitlist row only: the account must be excluded
         { email: email("rowoptout"), source: "web", emailOptOutAt: new Date() },
         // lowercase row for the mixed-case account: one recipient, the account
-        { email: email("mixed"), source: "web" },
-        // waitlist-only, eligible
-        { email: email("webonly"), source: "web" },
+        { email: email("mixed"), source: "web", confirmedAt: new Date() },
+        // waitlist-only, confirmed, eligible
+        { email: email("webonly"), source: "web", confirmedAt: new Date() },
+        // waitlist-only but never confirmed: excluded from recurring email
+        { email: email("unconfirmed"), source: "web" },
         // waitlist-only, opted out
         { email: email("weboptout"), source: "web", emailOptOutAt: new Date() },
-        // unlinked row whose ACCOUNT opted out: the reverse direction
-        { email: email("acctoptout"), source: "web" },
+        // unlinked, confirmed row whose ACCOUNT opted out: the reverse direction
+        { email: email("acctoptout"), source: "web", confirmedAt: new Date() },
       ],
     });
   });

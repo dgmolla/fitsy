@@ -2,7 +2,8 @@
  * Who marketing email can go to, across both tables:
  *   - accounts (User) that have not opted out anywhere, and
  *   - optionally, waitlist-only addresses (LaunchWaitlist with no account)
- *     that have not opted out anywhere.
+ *     that confirmed their email (double opt-in) and have not opted out
+ *     anywhere.
  * One address is one recipient: a waitlist row linked to an account is
  * represented by the account. Reserved-TLD seed addresses are excluded so
  * counts reflect the real audience and nothing hard-bounces.
@@ -12,9 +13,9 @@
  * out, and a waitlist row is excluded when an account with its address opted
  * out (the row may be unlinked, e.g. the form was submitted after signup).
  *
- * Waitlist-only rows are opt-in (`includeWaitlistOnly`): recurring email to
- * addresses that only ever typed themselves into a public form waits for the
- * double opt-in confirmation (next PR), which will gate this on confirmedAt.
+ * Waitlist-only rows are opt-in (`includeWaitlistOnly`) and always limited
+ * to confirmed addresses: nothing recurring reaches an address that only
+ * typed itself into the public form until it clicked the confirmation link.
  * The launch blast is the explicitly requested notification and does not go
  * through this helper.
  */
@@ -58,6 +59,7 @@ export async function marketingAudience(opts: {
         `SELECT w.id, w.email FROM "LaunchWaitlist" w
           WHERE w."userId" IS NULL
             AND w."emailOptOutAt" IS NULL
+            AND w."confirmedAt" IS NOT NULL
             AND NOT EXISTS (
               SELECT 1 FROM "User" u
                WHERE lower(u."email") = w."email" AND u."emailOptOutAt" IS NOT NULL
