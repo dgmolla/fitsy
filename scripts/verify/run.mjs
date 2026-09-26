@@ -20,12 +20,16 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { impactPlan } from "./impact-plan.mjs";
-
-const require = createRequire(import.meta.url);
-const yaml = require("js-yaml");
+import { admitResources } from "./resource-admission.mjs";
 
 const VERIFY_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(VERIFY_DIR, "..", "..");
+if (!existsSync(join(REPO_ROOT, "node_modules"))) {
+  console.log(JSON.stringify(admitResources({ root: REPO_ROOT })));
+  process.exit(1);
+}
+const require = createRequire(import.meta.url);
+const yaml = require("js-yaml");
 
 const args = Object.fromEntries(
   process.argv.slice(2).map((a) => {
