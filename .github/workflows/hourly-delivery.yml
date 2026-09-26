@@ -1,0 +1,53 @@
+name: Hourly delivery report
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Generate artifacts without posting to Slack
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: fitsy-hourly-delivery
+  cancel-in-progress: false
+
+jobs:
+  report:
+    if: github.event_name == 'workflow_dispatch' || vars.DELIVERY_REPORT_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Generate delivery report
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          DELIVERY_GITHUB_TOKEN: ${{ secrets.DELIVERY_GITHUB_TOKEN }}
+          DELIVERY_SLACK_BOT_TOKEN: ${{ secrets.DELIVERY_SLACK_BOT_TOKEN }}
+          DELIVERY_SLACK_CHANNEL: ${{ vars.DELIVERY_SLACK_CHANNEL }}
+          DELIVERY_REPORT_ENABLED: ${{ vars.DELIVERY_REPORT_ENABLED }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          mode=--dry-run
+          if [[ "$DELIVERY_REPORT_ENABLED" == true ]]; then
+            if [[ "$GITHUB_EVENT_NAME" == schedule || "$INPUT_DRY_RUN" == false ]]; then
+              mode=--post
+            fi
+          fi
+          node scripts/delivery/hourly-report.mjs --output-dir work/hourly-delivery-report "$mode"
+      - name: Preserve report evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hourly-delivery-${{ github.run_id }}
+          path: work/hourly-delivery-report/
+          if-no-files-found: warn
+          retention-days: 30
