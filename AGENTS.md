@@ -195,7 +195,8 @@ owner decision - flip it per the tuning guide when ready.
 
 ## Project Management
 
-- **OKR board**: `proj-mgmt/okrs.md` | **Sprint board**: `proj-mgmt/sprint.md` | **Backlog**: `proj-mgmt/backlog.md`
+- Follow [task management](docs/engineering/devops/task-management.md) for the Linear queue, exclusive execution ownership, worker lifecycle, progress updates, and delivery timestamps.
+- `proj-mgmt/` retains planning/reference material; do not maintain a competing active task queue after Linear cutover.
 
 ## Maintaining this file
 
