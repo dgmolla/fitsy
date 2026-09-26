@@ -9,7 +9,8 @@ FAIL=""
 # Prefer gitleaks (real ruleset) when installed; the greps below stay as the
 # zero-dependency fallback and run either way.
 if command -v gitleaks >/dev/null; then
-  if ! gitleaks git --no-banner --redact --log-opts="origin/main..HEAD" . >&2 2>&1; then
+  RANGE="$(node scripts/verify/impact-plan.mjs | node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>{const r=JSON.parse(s).comparison;process.stdout.write(r.unknown?"--all":r.base+".."+r.head)})')"
+  if ! gitleaks git --no-banner --redact --log-opts="$RANGE" . >&2 2>&1; then
     FAIL="gitleaks found a secret in the branch commits"
   fi
 fi
@@ -19,7 +20,10 @@ if grep -rn --include="*.ts" --include="*.tsx" \
     apps/ packages/ scripts/ >&2 2>/dev/null; then
   FAIL="hardcoded secret pattern found"
 fi
-CHANGED="$(git diff --name-only origin/main...HEAD 2>/dev/null || git diff --name-only HEAD^ HEAD 2>/dev/null || true)"
+CHANGED="$(node scripts/verify/impact-plan.mjs --files)" || {
+  printf '{"name":"secrets","status":"fail","summary":"comparison history unavailable","fix":"fetch the event base and head before verification"}\n'
+  exit 1
+}
 # .env, .env.dev, .env.local, ... — anything env-shaped except the example.
 # (.env.dev slipped through the exact-match version of this pattern 2026-09-07.)
 if echo "$CHANGED" | grep -E '(^|/)\.env(\.[A-Za-z0-9_.-]+)?$' | grep -v '\.env\.example' >&2; then

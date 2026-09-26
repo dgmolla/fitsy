@@ -6,7 +6,8 @@ import { execFileSync, spawnSync } from 'node:child_process';
 const modulePath = resolve(__dirname, 'product-flow.mjs');
 let dir: string;
 // Never inherit Git-hook repository pointers into fixture subprocesses.
-const fixtureEnv = () => Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
+const fixtureEnv = () => Object.fromEntries(Object.entries(process.env).filter(([key]) =>
+  !key.startsWith('GIT_') && !['FITSY_DIFF_BASE', 'FITSY_DIFF_HEAD'].includes(key)));
 const fixtureGit = (args: string[]) => execFileSync('git', args, { env: fixtureEnv() });
 const evaluate = (expression: string, env = fixtureEnv()) => spawnSync(process.execPath, ['--input-type=module', '-e',
   `import * as gate from ${JSON.stringify(modulePath)}; process.stdout.write(JSON.stringify(${expression}));`], { encoding: 'utf8', env });
@@ -23,7 +24,7 @@ test('working changes and deletions invalidate the source identity', () => {
 
 test('the real local registry blocks missing evidence but permits explicit non-product applicability', () => {
   const verify = join(dir, 'scripts/verify'); mkdirSync(verify, { recursive: true });
-  for (const name of ['run.mjs', 'product-flow.mjs', 'product-flow.sh', 'registry.yml']) {
+  for (const name of ['run.mjs', 'impact-plan.mjs', 'product-flow.mjs', 'product-flow.sh', 'registry.yml']) {
     copyFileSync(join(__dirname, name), join(verify, name));
   }
   symlinkSync(resolve(__dirname, '../../node_modules'), join(dir, 'node_modules'));

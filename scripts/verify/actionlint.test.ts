@@ -31,6 +31,7 @@ function registryEntry(name: string) {
 function select(entry: string, layers = "0-1", runs = "ci") {
   const verify = join(directory, "scripts/verify"); mkdirSync(verify, { recursive: true });
   copyFileSync(join(root, "scripts/verify/run.mjs"), join(verify, "run.mjs"));
+  copyFileSync(join(root, "scripts/verify/impact-plan.mjs"), join(verify, "impact-plan.mjs"));
   writeFileSync(join(verify, "registry.yml"), "checks:\n" + entry);
   const script = entry.match(/script: (\S+)/)![1]!;
   writeFileSync(join(verify, script), '#!/bin/sh\nprintf \'{"status":"pass"}\\n\'\n');

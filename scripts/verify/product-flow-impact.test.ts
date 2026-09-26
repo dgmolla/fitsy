@@ -4,7 +4,8 @@ import { dirname, join, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 
 const modulePath = resolve(__dirname, 'product-flow.mjs');
-const env = () => ({ ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_'))), CI: '' });
+const env = () => ({ ...Object.fromEntries(Object.entries(process.env).filter(([key]) =>
+  !key.startsWith('GIT_') && !['FITSY_DIFF_BASE', 'FITSY_DIFF_HEAD'].includes(key))), CI: '' });
 const evaluate = (paths: readonly string[]) => spawnSync(process.execPath, ['--input-type=module', '-e',
   `import * as gate from ${JSON.stringify(modulePath)}; process.stdout.write(JSON.stringify(gate.impact(${JSON.stringify(paths)})));`],
 { encoding: 'utf8', env: env() });

@@ -9,6 +9,7 @@ beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), "fitsy-verify-output-"));
   mkdirSync(join(directory, "scripts/verify"), { recursive: true });
   copyFileSync(join(root, "scripts/verify/run.mjs"), join(directory, "scripts/verify/run.mjs"));
+  copyFileSync(join(root, "scripts/verify/impact-plan.mjs"), join(directory, "scripts/verify/impact-plan.mjs"));
   symlinkSync(join(root, "node_modules"), join(directory, "node_modules"));
 });
 afterEach(() => rmSync(directory, { recursive: true, force: true }));
