@@ -20,11 +20,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { impactPlan } from "./impact-plan.mjs";
-import { admitResources } from "./resource-admission.mjs";
 
 const VERIFY_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(VERIFY_DIR, "..", "..");
 if (!existsSync(join(REPO_ROOT, "node_modules"))) {
+  const { admitResources } = await import("./resource-admission.mjs");
   console.log(JSON.stringify(admitResources({ root: REPO_ROOT })));
   process.exit(1);
 }
