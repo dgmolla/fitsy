@@ -129,7 +129,8 @@ export function buildReport(project, pulls, main, now = new Date()) {
   const shipped = doneIssues.map(item => ({ item, verified: timestamp(item.fields['Verified at']) }))
     .filter(({ verified }) => verified !== null && verified <= nowMs && verified >= nowMs - 24 * 60 * 60 * 1000)
     .sort((a, b) => b.verified - a.verified || b.item.content.number - a.item.content.number)
-    .slice(0, 2).map(({ item }) => ({ number: item.content.number, title: item.content.title }));
+    .slice(0, 2).map(({ item }) => ({ number: item.content.number, title: item.content.title,
+      url: item.content.url }));
   const next = issues.filter(item => !item.fields.Blocker?.trim() && !item.labels.includes('blocked') &&
     (item.fields.Status === 'In flight' ||
       (item.fields.Status === 'Queued' && ['Now', 'Next'].includes(item.fields.Priority))))
@@ -137,6 +138,7 @@ export function buildReport(project, pulls, main, now = new Date()) {
       Number(b.fields.Priority === 'Now') - Number(a.fields.Priority === 'Now') ||
       a.content.number - b.content.number)
     .slice(0, 2).map(item => ({ number: item.content.number, title: item.content.title,
+      url: item.content.url,
       status: item.fields.Status }));
   const cycles = doneIssues.map(item => {
     const start = timestamp(item.fields['Started at']);
@@ -184,11 +186,14 @@ function duration(ms) {
 function issueLink(issue) {
   const number = issue.number;
   if (!Number.isSafeInteger(number) || number < 1) return null;
+  const url = issue.url;
+  if (typeof url !== 'string' || !/^https:\/\/github\.com\/[A-Za-z0-9-]+\/[A-Za-z0-9_.-]+\/issues\/[0-9]+$/.test(url) ||
+      !url.endsWith(`/issues/${number}`)) return null;
   const title = [...String(issue.title ?? '').replace(/[\r\n\t\x00-\x1f\x7f]/g, ' ').replace(/\s+/g, ' ').trim()];
   const short = title.length > 35 ? `${title.slice(0, 34).join('').trimEnd()}…` : title.join('');
   const safe = (short || 'Issue').replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;').replace(/\|/g, '/').replace(/[*_~`]/g, '');
-  return `<https://github.com/dgmolla/fitsy/issues/${number}|#${number} ${safe}>`;
+  return `<${url}|#${number} ${safe}>`;
 }
 
 export function formatReport(report) {

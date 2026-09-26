@@ -150,14 +150,17 @@ test('compact copy distinguishes gate state, measured E2E, and timing exceptions
 
 test('summary uses recent verified delivery and actionable board priority with bounded safe labels', () => {
   const card = (number, title, status, priority, verified, blocker = '') => ({
-    id: String(number), content: { __typename: 'Issue', number, title },
+    id: String(number), content: { __typename: 'Issue', number, title,
+      url: `https://github.com/dgmolla/fitsy/issues/${number}` },
     fields: { Status: status, Priority: priority, 'Verified at': verified, Blocker: blocker }, labels: [],
   });
   const cards = [
     card(1, 'Old done', 'Done', 'Now', '2026-09-24T18:00:00Z'),
     card(2, 'Merged but unverified', 'Done', 'Now', ''),
     card(3, 'Newest <@U123> *work* | continuation with a very long title', 'Done', 'Now', '2026-09-26T18:10:00Z'),
-    card(4, 'Second verified', 'Done', 'Now', '2026-09-26T18:00:00Z'),
+    { ...card(4, 'Second verified', 'Done', 'Now', '2026-09-26T18:00:00Z'),
+      content: { __typename: 'Issue', number: 4, title: 'Second verified',
+        url: 'https://github.com/dgmolla/other-repo/issues/4' } },
     card(5, 'Third verified', 'Done', 'Now', '2026-09-26T17:00:00Z'),
     card(6, 'Active work', 'In flight', 'Next', ''),
     card(7, 'Blocked now', 'Queued', 'Now', '', 'Waiting on credentials'),
@@ -171,6 +174,7 @@ test('summary uses recent verified delivery and actionable board priority with b
   const lines = formatReport(report).split('\n');
   assert.equal(lines.length, 5);
   assert.match(lines[3], /#3 Newest &lt;@U123&gt; work \/ cont/);
+  assert.match(lines[3], /<https:\/\/github.com\/dgmolla\/other-repo\/issues\/4\|#4 Second verified>/);
   assert.doesNotMatch(lines[3], /#1|#2|#5|<@U123>|\*work\*/);
   assert.match(lines[4], /#6 Active work.*#8 Ready now/);
   assert.doesNotMatch(lines[4], /#7|#9|#10/);
