@@ -20,30 +20,30 @@ const bindingFile = root => join(directory(root), 'binding.json');
 const eventsFile = root => join(directory(root), 'events.jsonl');
 const pendingFile = root => join(directory(root), 'publish-pending.json');
 const publicationsFile = root => join(directory(root), 'publications.jsonl');
-const lockDirectory = root => join(directory(root), 'ledger.lock');
+const lockDirectory = (root, kind = 'ledger') => join(directory(root), `${kind}.lock`);
 const digest = events => createHash('sha256').update(JSON.stringify(events)).digest('hex');
 
-function tryLock(root) {
+function tryLock(root, kind = 'ledger') {
   mkdirSync(directory(root), { recursive: true, mode: 0o700 });
-  try { mkdirSync(lockDirectory(root), { mode: 0o700 }); }
+  try { mkdirSync(lockDirectory(root, kind), { mode: 0o700 }); }
   catch (error) { if (error.code === 'EEXIST') return null; throw error; }
   const owner = { pid: process.pid, acquired_at: new Date().toISOString(), nonce: randomUUID() };
-  const file = join(lockDirectory(root), 'owner.json');
+  const file = join(lockDirectory(root, kind), 'owner.json');
   try { writeFileSync(file, `${JSON.stringify(owner)}\n`, { flag: 'wx', mode: 0o600 }); }
-  catch (error) { rmdirSync(lockDirectory(root)); throw error; }
+  catch (error) { rmdirSync(lockDirectory(root, kind)); throw error; }
   return () => {
     const current = JSON.parse(readFileSync(file, 'utf8'));
     if (current.nonce !== owner.nonce) throw new Error('delivery lock ownership changed');
     unlinkSync(file);
-    rmdirSync(lockDirectory(root));
+    rmdirSync(lockDirectory(root, kind));
   };
 }
 
-function lockError(root) {
+function lockError(root, kind = 'ledger') {
   let owner = 'unknown';
-  try { const value = JSON.parse(readFileSync(join(lockDirectory(root), 'owner.json'), 'utf8'));
+  try { const value = JSON.parse(readFileSync(join(lockDirectory(root, kind), 'owner.json'), 'utf8'));
     owner = `pid ${value.pid} since ${value.acquired_at}`; } catch { /* Creation may still be in progress. */ }
-  return new Error(`delivery ledger locked by ${owner}; confirm the publisher is inactive, remove only ${lockDirectory(root)}, then reconcile issue comments. Preserve publish-pending.json`);
+  return new Error(`delivery ${kind} locked by ${owner}; confirm the owner is inactive, remove only ${lockDirectory(root, kind)}, then reconcile issue comments. Preserve publish-pending.json`);
 }
 
 function withSyncLock(root, action) {
@@ -59,8 +59,8 @@ function withSyncLock(root, action) {
 async function withAsyncLock(root, action) {
   const deadline = Date.now() + 70000;
   let release;
-  while (!(release = tryLock(root))) {
-    if (Date.now() >= deadline) throw lockError(root);
+  while (!(release = tryLock(root, 'publish'))) {
+    if (Date.now() >= deadline) throw lockError(root, 'publish');
     await new Promise(resolve => setTimeout(resolve, 25));
   }
   try { return await action(); } finally { release(); }
@@ -134,6 +134,7 @@ function bindUnlocked(root, issue, newRun = false) {
     if (prior.issue !== issue) throw new Error('different issue requires bind --new-run');
     return prior;
   }
+  if (prior && existsSync(lockDirectory(root, 'publish'))) throw lockError(root, 'publish');
   const rows = prior ? readRows(root) : [];
   if (prior && rows.some(row => row.run_id === prior.run_id && row.status === 'running' &&
       !rows.some(next => next.attempt_id === row.attempt_id && next.status !== 'running'))) {
@@ -188,26 +189,30 @@ function head(root) {
 }
 
 export function start(root, phase, producer, extras = {}, now = new Date().toISOString()) {
-  const binding = context(root);
-  if (!binding) return null;
-  const row = { event_id: randomUUID(), run_id: binding.run_id, issue: binding.issue, phase,
-    attempt_id: randomUUID(), started_at: now, finished_at: null, duration_ms: null,
-    status: 'running', source_sha: head(root), producer, ...extras };
-  append(root, row);
-  return row.attempt_id;
+  return withSyncLock(root, () => {
+    const binding = context(root);
+    if (!binding) return null;
+    const row = { event_id: randomUUID(), run_id: binding.run_id, issue: binding.issue, phase,
+      attempt_id: randomUUID(), started_at: now, finished_at: null, duration_ms: null,
+      status: 'running', source_sha: head(root), producer, ...extras };
+    append(root, row);
+    return row.attempt_id;
+  });
 }
 
 export function finish(root, attemptId, status, now = new Date().toISOString(), sourceSha) {
-  const binding = context(root);
-  if (!binding) return null;
-  const rows = readRows(root).filter(row => row.run_id === binding.run_id && row.attempt_id === attemptId);
-  if (rows.length !== 1 || rows[0].status !== 'running' || status === 'running' || !statuses.has(status)) {
-    throw new Error('delivery attempt is missing, finished, or has invalid status');
-  }
-  const started = rows[0];
-  const duration = status === 'cached' ? 0 : Date.parse(now) - Date.parse(started.started_at);
-  return append(root, { ...started, event_id: randomUUID(), started_at: status === 'cached' ? now : started.started_at, finished_at: now,
-    duration_ms: duration, status, source_sha: sourceSha ?? head(root) });
+  return withSyncLock(root, () => {
+    const binding = context(root);
+    if (!binding) return null;
+    const rows = readRows(root).filter(row => row.run_id === binding.run_id && row.attempt_id === attemptId);
+    if (rows.length !== 1 || rows[0].status !== 'running' || status === 'running' || !statuses.has(status)) {
+      throw new Error('delivery attempt is missing, finished, or has invalid status');
+    }
+    const started = rows[0];
+    const duration = status === 'cached' ? 0 : Date.parse(now) - Date.parse(started.started_at);
+    return append(root, { ...started, event_id: randomUUID(), started_at: status === 'cached' ? now : started.started_at, finished_at: now,
+      duration_ms: duration, status, source_sha: sourceSha ?? head(root) });
+  });
 }
 
 export function closeOnSignals(close) {
@@ -250,10 +255,7 @@ function transportShards(summary) {
   return shards;
 }
 
-async function publishUnlocked(root, api, now) {
-  const binding = readBinding(root);
-  if (!binding) throw new Error('bind an issue before publishing delivery events');
-  const logical = buildSummary(binding.issue, binding.run_id, readRows(root), now ?? new Date().toISOString());
+async function publishUnlocked(root, api, binding, logical) {
   const shards = transportShards(logical);
   const bodies = shards.map(commentBody);
   let pending = existsSync(pendingFile(root)) ? JSON.parse(readFileSync(pendingFile(root), 'utf8')) : null;
@@ -311,7 +313,14 @@ async function publishUnlocked(root, api, now) {
 }
 
 export async function publish(root, api = ghApi, now) {
-  return withAsyncLock(root, () => publishUnlocked(root, api, now));
+  return withAsyncLock(root, () => {
+    const { binding, logical } = withSyncLock(root, () => {
+      const binding = readBinding(root);
+      if (!binding) throw new Error('bind an issue before publishing delivery events');
+      return { binding, logical: buildSummary(binding.issue, binding.run_id, readRows(root), now ?? new Date().toISOString()) };
+    });
+    return publishUnlocked(root, api, binding, logical);
+  });
 }
 
 async function ghApi(method, path, data, timeoutMs = 20000) {

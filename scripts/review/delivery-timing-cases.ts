@@ -27,7 +27,7 @@ method,path=sys.argv[3:5]
 if path=='user': print(json.dumps({'login':'fixture'}))
 elif method=='GET': print(json.dumps(comments))
 elif method=='POST':
- data=json.load(sys.stdin); comment={'id':len(comments)+1,'user':{'login':'fixture'},'body':data['body']}
+ data=json.load(sys.stdin); comment={'id':len(comments)+1,'user':{'login':'fixture'},'body':data['body'],'path':path}
  comments.append(comment); store.write_text(json.dumps(comments)); print(json.dumps(comment))
 elif method=='PATCH':
  data=json.load(sys.stdin); comment=next(c for c in comments if c['id']==int(path.split('/')[-1]))
@@ -46,7 +46,12 @@ else: sys.exit(1)
     expect.objectContaining({ issue: 355, phase: "review", status: "running" }),
     expect.objectContaining({ issue: 355, phase: "review", status: "pass" }),
   ]);
-  expect(JSON.parse(readFileSync(join(root, "timing-comments"), "utf8"))).toHaveLength(1);
+  const published = JSON.parse(readFileSync(join(root, "timing-comments"), "utf8"));
+  expect(published).toHaveLength(1);
+  expect(published[0].path).toBe("repos/dgmolla/fitsy/issues/355/comments");
+  const payload = JSON.parse(published[0].body.match(/```json\s*([\s\S]*?)\s*```/)[1]);
+  expect(payload.issue).toBe(355);
+  expect(payload.events).toEqual([expect.objectContaining({ issue: 355, phase: "review", status: "pass" })]);
   for (const body of ["", "Delivery-Issue: #355\nDelivery-Issue: #356\n", "Delivery-Issue: #356\n"]) {
     const gap = runPr("correctness", body);
     expect(gap.status).toBe(0);

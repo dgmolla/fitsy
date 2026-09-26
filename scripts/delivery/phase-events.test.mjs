@@ -125,7 +125,7 @@ test('parallel publishers and initial bind share one exclusive ledger lock', asy
   assert.equal(fake.calls.filter(call => call.method === 'POST').length, 1);
 });
 
-test('waiting publisher checkpoints an attempt finished while the lock was held', async t => {
+test('workers keep recording during publication and a waiting publisher sees their finish', async t => {
   const { root } = fixture(t);
   bind(root, 355);
   const attempt = start(root, 'implementation', 'cli');
@@ -138,12 +138,16 @@ test('waiting publisher checkpoints an attempt finished while the lock was held'
   });
   await blocked;
   const second = publish(root, fake.api);
+  assert.equal(bind(root, 355).issue, 355);
+  const concurrent = start(root, 'unit', 'verify-run', { check: 'during-publish' });
+  assert.throws(() => bind(root, 355, true), /delivery publish locked/);
   await new Promise(resolve => setTimeout(resolve, 10));
   finish(root, attempt, 'pass');
+  finish(root, concurrent, 'pass');
   release();
   await Promise.all([first, second]);
-  const latest = JSON.parse(fake.comments[0].body.match(/```json\n([^\n]+)/)[1]).events[0];
-  assert.equal(latest.status, 'pass');
+  const latest = JSON.parse(fake.comments[0].body.match(/```json\n([^\n]+)/)[1]).events;
+  assert.deepEqual(latest.map(event => event.status), ['pass', 'pass']);
   assert.equal(fake.comments.length, 1);
 });
 
@@ -187,7 +191,7 @@ test('partial shard creation reconciles before logical run rotation', async t =>
   assert.ok(bind(root, 355, true).run_id);
 });
 
-test('verify CLI records whole run, L2 check, and zero-time reuse in an owned fixture', t => {
+test('verify CLI records whole run, L2 check, reuse and SIGTERM in an owned fixture', async t => {
   const { root } = fixture(t);
   const source = new URL('../..', import.meta.url).pathname;
   mkdirSync(join(root, 'scripts/verify'), { recursive: true });
@@ -199,7 +203,7 @@ test('verify CLI records whole run, L2 check, and zero-time reuse in an owned fi
   symlinkSync(join(source, 'node_modules'), join(root, 'node_modules'));
   writeFileSync(join(root, '.gitignore'), '.evidence/\nnode_modules/\n');
   writeFileSync(join(root, 'scripts/verify/registry.yml'), `checks:\n  - name: fixture\n    script: fixture.sh\n    layer: 2\n    cache: true\n    blocking: true\n    runs: [local]\n`);
-  writeFileSync(join(root, 'scripts/verify/fixture.sh'), `#!/bin/bash\nprintf '%s\\n' '{"name":"fixture","summary":"passed"}'\n`);
+  writeFileSync(join(root, 'scripts/verify/fixture.sh'), `#!/bin/bash\nif test -e .evidence/slow; then\n  touch .evidence/check-started\n  while test ! -e .evidence/release; do sleep .05; done\nfi\nprintf '%s\\n' '{"name":"fixture","summary":"passed"}'\n`);
   execFileSync('git', ['add', 'scripts', '.gitignore'], { cwd: root });
   execFileSync('git', ['commit', '-qm', 'add fixture'], { cwd: root });
   execFileSync('git', ['update-ref', 'refs/remotes/origin/main', 'HEAD'], { cwd: root });
@@ -219,6 +223,20 @@ test('verify CLI records whole run, L2 check, and zero-time reuse in an owned fi
     ['verification', 'whole', 'pass'], ['unit', 'fixture', 'cached'],
   ]);
   assert.equal(events[3].duration_ms, 0);
+  writeFileSync(join(root, '.evidence/slow'), '');
+  const child = spawn(process.execPath, ['scripts/verify/run.mjs', '--layer=2', '--scope=all', '--runs=local'],
+    { cwd: root, env: isolatedEnv });
+  t.after(() => child.kill('SIGKILL'));
+  for (let i = 0; i < 100 && !existsSync(join(root, '.evidence/check-started')); i++)
+    await new Promise(resolve => setTimeout(resolve, 25));
+  assert.equal(existsSync(join(root, '.evidence/check-started')), true, 'owned L2 check did not start');
+  child.kill('SIGTERM');
+  const exit = await new Promise(resolve => child.once('close', (code, signal) => resolve({ code, signal })));
+  writeFileSync(join(root, '.evidence/release'), '');
+  assert.deepEqual(exit, { code: null, signal: 'SIGTERM' });
+  const interrupted = buildSummary(355, binding.run_id, readRows(root), new Date().toISOString()).events.slice(-2);
+  assert.deepEqual(interrupted.map(event => [event.phase, event.check, event.status]),
+    [['verification', 'whole', 'interrupted'], ['unit', 'fixture', 'interrupted']]);
 });
 
 test('publisher creates once, updates same authored comment, and rejects marker hijacking', async t => {
