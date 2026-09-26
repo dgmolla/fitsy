@@ -86,6 +86,7 @@ function runCheck(c) {
     const t0 = Date.now();
     execFile("bash", [join(VERIFY_DIR, c.script), `--scope=${scope}`], { cwd: REPO_ROOT, maxBuffer: 16 * 1024 * 1024,
       env: { ...process.env, FITSY_RUNS: runsCtx,
+        FITSY_VERIFY_NEEDS_NATIVE: plan.native ? '1' : '0',
         ...(plan.comparison.base ? { FITSY_DIFF_BASE: plan.comparison.base } : {}),
         ...(runsCtx === 'ci' && plan.comparison.head ? { FITSY_DIFF_HEAD: plan.comparison.head } : {}) } }, (err, stdout, stderr) => {
       const code = err ? (err.code ?? 1) : 0;
@@ -110,7 +111,14 @@ function runCheck(c) {
   });
 }
 
-const results = await Promise.all(selected.map(runCheck));
+const preflight = await Promise.all(selected.filter(c => c.preflight).map(runCheck));
+const remaining = selected.filter(c => !c.preflight);
+const results = [...preflight];
+if (preflight.some(result => result.status === 'fail' && result.blocking)) {
+  skipped.push(...remaining.map(c => ({ name: c.name, status: 'skipped', summary: 'preflight failed' })));
+} else {
+  results.push(...await Promise.all(remaining.map(runCheck)));
+}
 for (const r of [...results, ...skipped]) {
   const { stderr, ...line } = r;
   console.log(JSON.stringify(line));
