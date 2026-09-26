@@ -102,6 +102,7 @@ checks:
     why: Mock only external services, never your own code (testing-strategy). Shadow until pre-existing offenders migrate to the DB-container tests.
 
   - name: test
+    database: true
     script: test.sh
     layer: 2
     blocking: true

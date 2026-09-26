@@ -118,11 +118,31 @@ function runCheck(c) {
 const preflight = await Promise.all(selected.filter(c => c.preflight).map(runCheck));
 const remaining = selected.filter(c => !c.preflight);
 const results = [...preflight];
+let delegated = false;
 if (preflight.some(result => result.status === 'fail' && result.blocking)) {
   skipped.push(...remaining.map(c => ({ name: c.name, status: 'skipped', summary: 'preflight failed' })));
+} else if (runsCtx === 'local' && remaining.some(c => c.database)) {
+  const { runWithLocalDatabase, assertOwnedDatabase } = await import('./local-db.mjs');
+  if (!process.env.FITSY_VERIFY_OWNED_DB) {
+    delegated = true;
+    try { process.exitCode = runWithLocalDatabase(process.argv.slice(2)); }
+    catch (error) {
+      console.log(JSON.stringify({ name: 'local-database', status: 'fail', summary: error.message,
+        fix: 'repair this worktree\'s owned disposable database and rerun verification' }));
+      process.exitCode = 1;
+    }
+  } else {
+    try { assertOwnedDatabase(); results.push(...await Promise.all(remaining.map(runCheck))); }
+    catch (error) {
+      results.push({ name: 'local-database', status: 'fail', blocking: true,
+        summary: error.message, fix: 'rerun through this worktree\'s owned database wrapper' });
+      skipped.push(...remaining.map(c => ({ name: c.name, status: 'skipped', summary: 'local database admission failed' })));
+    }
+  }
 } else {
   results.push(...await Promise.all(remaining.map(runCheck)));
 }
+if (!delegated) {
 for (const r of [...results, ...skipped]) {
   const { stderr, ...line } = r;
   console.log(JSON.stringify(line));
@@ -142,3 +162,4 @@ console.error(
 for (const r of blockingFailed) console.error(`FAIL ${r.name}: ${r.summary ?? ""}${r.fix ? `\n  fix: ${r.fix}` : ""}`);
 // Allow piped diagnostics to drain before Node exits, including failing CI logs.
 process.exitCode = blockingFailed.length ? 1 : 0;
+}
