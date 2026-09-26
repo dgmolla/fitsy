@@ -59,6 +59,17 @@ P2/P3 follow-ups retain the source-bound disposition and named acceptance from t
 
 ## Progress and elapsed time
 
+Before implementation in an owned worktree, bind the real issue with `node scripts/delivery/phase-events.mjs bind --issue N`.
+Start an observed implementation interval with `begin --phase implementation` and save its returned attempt ID in the task handoff.
+End that attempt with `end --attempt-id ID --status pass` before verification, or use `interrupted` when pausing.
+Start a new implementation attempt for later fixes; never stretch an old interval across testing or review.
+The verify runner, review runner, and product-flow CLI record their own attempts when an issue is bound.
+Product-flow `build`, `run`, `finish`, and `check` attempts remain distinct; a completed build is not completed E2E acceptance.
+Before opening the PR, begin a `shipping` attempt and end it only after applicable main Verify, Deploy, and acceptance receipts are confirmed.
+Use `node scripts/delivery/phase-events.mjs publish` at material transitions and at least hourly while active; it reconciles one bounded issue comment per run.
+The pre-push hook requires a valid issue binding and attempts publication after its existing gates, but a GitHub outage leaves local timing evidence pending without bypassing those gates.
+The [hourly delivery report](hourly-delivery-report.md) summarizes measured phase intervals and keeps missing evidence explicit.
+
 Record actual UTC timestamps for request, ready, work start, PR opened, required gates ready, merged, deployed, and acceptance verified.
 Preserve unknown historical values rather than substituting commit times or reconstructing imaginary work starts.
 The execution owner sets the project's `Started at` to the observed ISO UTC time when work starts.

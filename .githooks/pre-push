@@ -9,7 +9,12 @@ cd "$ROOT"
 while IFS= read -r name; do
   unset "$name"
 done < <(git rev-parse --local-env-vars)
-bash "$ROOT/scripts/verify/run.sh" --layer=0-2 --scope=changed --runs=local --reuse
+# A push must name the issue whose local evidence this hook is about to run.
+node "$ROOT/scripts/delivery/phase-events.mjs" summary >/dev/null || {
+  echo 'pre-push: bind this worktree first with node scripts/delivery/phase-events.mjs bind --issue N' >&2
+  exit 1
+}
+npm run verify -- --runs=local --reuse
 # exit 2 = skipped (not applicable), which must not block the push
 for check in size-check domain-check; do
   if bash "$ROOT/scripts/verify/$check.sh"; then code=0; else code=$?; fi
@@ -18,3 +23,7 @@ for check in size-check domain-check; do
     exit 1
   fi
 done
+# Publishing is recoverable; a GitHub outage must not erase a verified push.
+if ! node "$ROOT/scripts/delivery/phase-events.mjs" publish; then
+  echo 'pre-push: delivery timing remains local; retry phase-events.mjs publish after reconciling GitHub' >&2
+fi
