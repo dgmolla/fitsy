@@ -2,6 +2,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { loadTimings } from './phase-report.mjs';
 
 const OWNER = 'dgmolla';
 const REPO = 'fitsy';
@@ -192,6 +193,12 @@ export function formatReport(report) {
     `*WIP age:* oldest ${duration(report.wipAge.oldestMs)} (known ${report.wipAge.sample}; missing Started at ${report.wipAge.missing})`,
     `*Main gates:* ${gateLinks} ${report.main.state} at ${report.main.sha.slice(0, 7)} (workflow status only)`,
   ];
+  if (report.local) {
+    const { phases: p, coverage: c, improvements } = report.local;
+    lines.push(`*Local 24h:* impl ${duration(p.implementation.observedMs)} · checks ${duration(p.verification.observedMs)} (UT ${duration(p.unit.observedMs)}) · E2E ${duration(p.e2e.observedMs)} · review ${duration(p.review.observedMs)} (${report.local.rounds.length} rounds) · ship ${duration(p.shipping.observedMs)}`);
+    lines.push(`Summed issue time; overlaps removed within phases. Coverage ${c.tracked}/${c.active} active · ${c.stale} stale · ${Object.values(p).reduce((n, v) => n + v.cached, 0)} cache reuses${c.invalid ? ` · ${c.invalid} invalid records` : ''}`);
+    if (improvements) lines.push(`*Hardening shipped:* ${improvements.verified.length} · ${Object.entries(improvements.categories).filter(([, n]) => n).map(([category, n]) => `${n} ${category}`).join(' · ') || 'no verified records yet'}${improvements.pending ? ` · ${improvements.pending} awaiting evidence` : ''}`);
+  }
   for (const item of report.highlights) {
     if (!/^https:\/\/github\.com\/dgmolla\/fitsy\/issues\/\d+$/.test(item.url)) throw new Error('Unsafe issue URL');
     const progressAt = timestamp(item.lastProgressAt);
@@ -211,7 +218,7 @@ async function api(fetchImpl, url, token, options = {}) {
     'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json', ...options.headers,
   } });
   const data = await response.json();
-  if (!response.ok || data.errors) throw new Error(`GitHub API request failed (${response.status})`);
+  if (!response.ok || data.errors) throw Object.assign(new Error(`GitHub API request failed (${response.status})`), { status: response.status });
   return data;
 }
 
@@ -222,7 +229,8 @@ export async function collect(fetchImpl, projectToken, actionsToken, now = new D
   const [project, pulls, main] = await Promise.all([
     loadProject(graphql), loadMergedPulls(rest, now), loadMainGates(rest),
   ]);
-  return buildReport(project, pulls, main, now);
+  const local = await loadTimings(rest, project.items, now);
+  return { ...buildReport(project, pulls, main, now), local };
 }
 
 async function slack(fetchImpl, token, method, params) {
