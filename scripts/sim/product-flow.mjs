@@ -279,7 +279,7 @@ async function execute(udid, names, mode) {
         validate(previous, plan, hash, out, Date.now(), root, inputHash(root, true), mode.name);
         await checkBundle(previous);
         console.log('Reusing valid final-candidate evidence for this source, app, backend, simulator and flow selection.');
-        return;
+        return true;
       } catch (error) { console.log(`Existing final-candidate evidence cannot be reused: ${error.message}`); }
     }
   }
@@ -451,16 +451,22 @@ async function check() {
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
 let timing, delivery;
-process.on('exit', () => {
-  if (timing) try { delivery.finish(root, timing, 'interrupted'); }
+let reused = false;
+function closeTiming(status) {
+  if (!timing) return;
+  const attempt = timing; timing = null;
+  try { delivery.finish(root, attempt, status); }
   catch (error) { console.error(`delivery telemetry: ${error.message}`); }
-});
+}
+process.on('exit', () => closeTiming('interrupted'));
 try {
   const [command, ...args] = process.argv.slice(2);
-  if (['build', 'run', 'finish', 'check'].includes(command)) {
+  const testHarness = process.env.JEST_WORKER_ID || process.env.NODE_TEST_CONTEXT || process.env.FITSY_PRODUCT_FLOW_TEST_FIXTURE;
+  if (!testHarness && ['build', 'run', 'finish', 'check'].includes(command)) {
     try {
       delivery = await import('../delivery/phase-events.mjs');
       timing = delivery.start(root, 'e2e', 'product-flow', { check: command });
+      if (timing) delivery.closeOnSignals(() => closeTiming('interrupted'));
     } catch (error) { console.error(`delivery telemetry: ${error.message}`); }
   }
   if (['build', 'run'].includes(command) && process.platform === 'darwin') {
@@ -472,20 +478,14 @@ try {
     assert(args.length === 1 || (args.length === 2 && args[1] === '--test-store'), 'build UDID [--test-store]');
     await build(args[0], args[1] === '--test-store');
   }
-  else if (command === 'run') { const selected = runSelection(args); await execute(selected.udid, selected.names, selected.mode); }
+  else if (command === 'run') { const selected = runSelection(args); reused = await execute(selected.udid, selected.names, selected.mode) === true; }
   else if (command === 'finish') await finish(args[0]);
   else if (command === 'check') await check();
   else if (command === 'stop-metro') await stopMetro();
   else throw new Error('Usage: node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs build UDID | run UDID [flow names] [--mode=development|final-candidate|requested-video] [--record-video] | finish [walkthrough.json]');
-  if (timing) { try { delivery.finish(root, timing, 'pass'); }
-    catch (error) { console.error(`delivery telemetry: ${error.message}`); }
-    timing = null;
-  }
+  closeTiming(reused ? 'cached' : 'pass');
 } catch (e) {
-  if (timing) { try { delivery.finish(root, timing, 'fail'); }
-    catch (error) { console.error(`delivery telemetry: ${error.message}`); }
-    timing = null;
-  }
+  closeTiming('fail');
   console.error(e.message); process.exitCode = 1;
 }
 }

@@ -76,3 +76,12 @@ test('Done issues require valid verification dates inside the reporting window',
     assert.equal(reads, 0);
   }
 });
+
+
+test('historical observations count as tracked while stale stays separate', () => {
+  const run = payload([{ ...event('old'), started_at: '2026-09-25T18:00:00Z', finished_at: '2026-09-25T18:10:00Z' }]);
+  run.updated_at = '2026-09-25T18:10:00Z';
+  const result = summarizeTimings([{ issue: 355, active: true, runs: [run] }], now);
+  assert.deepEqual(result.coverage, { active: 1, tracked: 1, stale: 1, invalid: 0 });
+  assert.equal(result.phases.review.observedMs, null);
+});

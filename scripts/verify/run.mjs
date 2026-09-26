@@ -42,17 +42,19 @@ const scope = args.scope ?? "changed";
 const runsCtx = args.runs ?? (process.env.CI ? "ci" : "local");
 const only = args.only ? new Set(args.only.split(",")) : null;
 let delivery;
+const activeAttempts = new Set();
 if (runsCtx === 'local' && existsSync(join(REPO_ROOT, 'scripts/delivery/phase-events.mjs'))) {
   try { delivery = await import('../delivery/phase-events.mjs'); }
   catch (error) { console.error(`delivery telemetry: unavailable (${error.message})`); }
 }
 function beginTiming(phase, check) {
-  try { return delivery?.start(REPO_ROOT, phase, 'verify-run', { check }) ?? null; }
+  try { const attempt = delivery?.start(REPO_ROOT, phase, 'verify-run', { check }) ?? null;
+    if (attempt) activeAttempts.add(attempt); return attempt; }
   catch (error) { console.error(`delivery telemetry: ${error.message}`); return null; }
 }
 function endTiming(attempt, status) {
-  if (!attempt) return;
-  try { delivery.finish(REPO_ROOT, attempt, status); }
+  if (!attempt || !activeAttempts.has(attempt)) return;
+  try { delivery.finish(REPO_ROOT, attempt, status); activeAttempts.delete(attempt); }
   catch (error) { console.error(`delivery telemetry: ${error.message}`); }
 }
 
@@ -98,7 +100,12 @@ for (const c of registry.checks) {
 const remaining = selected.filter(c => !c.preflight);
 const delegatesDatabase = runsCtx === 'local' && remaining.some(c => c.database) && !process.env.FITSY_VERIFY_OWNED_DB;
 let wholeAttempt = process.env.FITSY_LOCAL_DB === '1' ? null : beginTiming('verification', 'whole');
-process.on('exit', () => { if (wholeAttempt) endTiming(wholeAttempt, 'interrupted'); });
+function interruptTiming() {
+  for (const attempt of [...activeAttempts]) endTiming(attempt, 'interrupted');
+  wholeAttempt = null;
+}
+process.on('exit', interruptTiming);
+delivery?.closeOnSignals(interruptTiming);
 function closeWhole(status) {
   if (wholeAttempt) { endTiming(wholeAttempt, status); wholeAttempt = null; }
 }

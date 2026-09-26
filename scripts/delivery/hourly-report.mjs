@@ -195,7 +195,8 @@ export function formatReport(report) {
   ];
   if (report.local) {
     const { phases: p, coverage: c, improvements } = report.local;
-    lines.push(`*Local 24h:* impl ${duration(p.implementation.observedMs)} · checks ${duration(p.verification.observedMs)} (UT ${duration(p.unit.observedMs)}) · E2E ${duration(p.e2e.observedMs)} · review ${duration(p.review.observedMs)} (${report.local.rounds.length} rounds) · ship ${duration(p.shipping.observedMs)}`);
+    const rounds = report.local.rounds.filter(round => round.attempts || round.running).length;
+    lines.push(`*Local 24h:* impl ${duration(p.implementation.observedMs)} · checks ${duration(p.verification.observedMs)} (UT ${duration(p.unit.observedMs)}) · E2E ${duration(p.e2e.observedMs)} · review ${duration(p.review.observedMs)} (${rounds} ${rounds === 1 ? 'round' : 'rounds'}) · ship ${duration(p.shipping.observedMs)}`);
     lines.push(`Summed issue time; overlaps removed within phases. Coverage ${c.tracked}/${c.active} active · ${c.stale} stale · ${Object.values(p).reduce((n, v) => n + v.cached, 0)} cache reuses${c.invalid ? ` · ${c.invalid} invalid records` : ''}`);
     if (improvements) lines.push(`*Hardening shipped:* ${improvements.verified.length} · ${Object.entries(improvements.categories).filter(([, n]) => n).map(([category, n]) => `${n} ${category}`).join(' · ') || 'no verified records yet'}${improvements.pending ? ` · ${improvements.pending} awaiting evidence` : ''}`);
   }

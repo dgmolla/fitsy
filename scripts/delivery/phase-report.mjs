@@ -88,7 +88,7 @@ export function summarizeTimings(records, now, invalid = 0) {
   for (const record of records) {
     const events = record.runs.flatMap(run => run.events.filter(e =>
       Date.parse(e.status === 'running' ? run.updated_at : e.finished_at) >= since));
-    if (record.active && events.length) tracked++;
+    if (record.active && record.runs.some(run => run.events.length)) tracked++;
     if (record.active && record.runs.length && Math.max(...record.runs.map(run => Date.parse(run.updated_at))) < stop - 7200000) stale++;
     for (const phase of PHASES) {
       const selected = events.filter(e => e.phase === phase), metric = phases[phase];

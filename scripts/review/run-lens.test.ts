@@ -1,9 +1,9 @@
+import { deliveryTimingCases } from "./delivery-timing-cases";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { cpSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-
 const source = resolve(__dirname, "../..");
 let root: string;
 let guard: string;
@@ -24,14 +24,15 @@ function run(model = "fixture-model", provider = "claude", lens = "correctness")
     cwd: root, encoding: "utf8", env: { ...env, FITSY_REVIEW_MODEL: model, FITSY_REVIEW_PROVIDER: provider }, timeout: 15000,
   });
 }
-function runPr(lens = "correctness") {
+function runPr(lens = "correctness", body = "") {
+  writeFileSync(join(root, "pr-body"), body);
   const gh = join(root, "bin/gh-fixture");
   writeFileSync(gh, `#!/bin/sh
 if [ "$1" = pr ] && [ "$2" = diff ]; then git diff --abbrev=8 origin/main...HEAD; exit; fi
 if [ "$1" = pr ] && [ "$2" = view ]; then
   case "$5" in
     title) printf '%s\\n' 'Fixture change' ;;
-    body) printf '\\n' ;;
+    body) cat ${JSON.stringify(join(root, 'pr-body'))} ;;
     headRefOid) git rev-parse HEAD ;;
   esac
   exit
@@ -102,7 +103,6 @@ afterEach(() => {
     rmSync(guard, { recursive: true, force: true });
   }
 });
-
 test("local caller runs independent CLI, records identity, and reuses only matching cache", () => {
   const first = run();
   expect(first.stderr).not.toContain("Traceback");
@@ -236,7 +236,6 @@ function failingReview(priority: "P1" | "P2") {
   writeFileSync(join(dir, "correctness.json"), JSON.stringify(disposition));
   return { first, disposition, receiptPath };
 }
-
 test("deferred P2 passes the effective gate while raw failure and cache stay intact", () => {
   failingReview("P2");
   const accepted = run();
@@ -297,3 +296,4 @@ test("new head rejects an old disposition even with a current required-test rece
   expect(result.status).toBe(1);
   expect(result.stderr).toContain("stale disposition identity");
 });
+deliveryTimingCases({ root: () => root, env: () => env, source, run, runPr, git });
