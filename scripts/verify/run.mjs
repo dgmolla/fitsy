@@ -18,8 +18,8 @@ import { execFile } from "node:child_process";
 import { readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { execSync } from "node:child_process";
 import { createRequire } from "node:module";
+import { impactPlan } from "./impact-plan.mjs";
 
 const require = createRequire(import.meta.url);
 const yaml = require("js-yaml");
@@ -41,24 +41,6 @@ const only = args.only ? new Set(args.only.split(",")) : null;
 const [layerMin, layerMax] =
   layerArg === "all" ? [0, 99] : layerArg.includes("-") ? layerArg.split("-").map(Number) : [Number(layerArg), Number(layerArg)];
 
-function changedFiles() {
-  // Branch diff PLUS working-tree changes and untracked files: a pre-commit
-  // `npm run verify` must see what you are about to commit, not just what you
-  // already did (skipped the test layer on uncommitted work, 2026-09-07).
-  const collect = (cmd) => {
-    try {
-      return execSync(cmd, { cwd: REPO_ROOT, stdio: ["ignore", "pipe", "ignore"] }).toString().trim().split("\n").filter(Boolean);
-    } catch {
-      return null;
-    }
-  };
-  const branch = collect("git diff --name-only origin/main...HEAD") ?? collect("git diff --name-only HEAD^ HEAD");
-  if (branch === null) return null; // unknown -> run everything
-  const workingTree = collect("git diff --name-only HEAD") ?? [];
-  const untracked = collect("git ls-files -o --exclude-standard") ?? [];
-  return [...new Set([...branch, ...workingTree, ...untracked])];
-}
-
 function globToRegExp(glob) {
   const re = glob
     .replace(/[.+^${}()|[\]\\]/g, "\\$&")
@@ -67,7 +49,8 @@ function globToRegExp(glob) {
 }
 
 const registry = yaml.load(readFileSync(join(VERIFY_DIR, "registry.yml"), "utf8"));
-const files = scope === "changed" ? changedFiles() : null;
+const plan = impactPlan({ base: args.base, head: args.head });
+const files = scope === "changed" ? plan.files : null;
 
 const selected = [];
 const skipped = [];
@@ -101,7 +84,10 @@ function runCheck(c) {
   }
   return new Promise((resolve) => {
     const t0 = Date.now();
-    execFile("bash", [join(VERIFY_DIR, c.script), `--scope=${scope}`], { cwd: REPO_ROOT, maxBuffer: 16 * 1024 * 1024, env: { ...process.env, FITSY_RUNS: runsCtx } }, (err, stdout, stderr) => {
+    execFile("bash", [join(VERIFY_DIR, c.script), `--scope=${scope}`], { cwd: REPO_ROOT, maxBuffer: 16 * 1024 * 1024,
+      env: { ...process.env, FITSY_RUNS: runsCtx,
+        ...(plan.comparison.base ? { FITSY_DIFF_BASE: plan.comparison.base } : {}),
+        ...(plan.comparison.head ? { FITSY_DIFF_HEAD: plan.comparison.head } : {}) } }, (err, stdout, stderr) => {
       const code = err ? (err.code ?? 1) : 0;
       let parsed;
       try {
