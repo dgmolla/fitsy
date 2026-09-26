@@ -45,18 +45,14 @@ If ownership cannot be established, reconcile it before launching another worker
 
 Use the project's existing `Queued`, `In flight`, and `Done` statuses instead of creating duplicates.
 
-| Stage | Required meaning |
+| Project status | Required meaning |
 | --- | --- |
 | Queued | Accepted work awaiting priority or dependencies. |
-| Ready | Acceptance and dependencies permit dispatch. |
-| In progress | A named execution owner is actively implementing or validating. |
-| In review | Current-source checks/reviews or PR checks are running. |
-| Merged | The exact reviewed change is integrated; release verification may remain. |
-| Deployed | The applicable release identity is known; required production verification may remain. |
+| In flight | A named execution owner is implementing, validating, reviewing, integrating, or verifying the release. |
 | Done | Applicable main checks, release verification and acceptance passed, with linked receipts. |
 
-Record blocked reason, blocker owner, next action, and next check separately from the last achieved stage.
-An explicit waiting/blocked status may represent this without implying progress or completion.
+Record ready, review, merge, and deployment milestones in the issue with the source-bound receipts, not as new project statuses.
+Record blocked reason, blocker owner, next action, and next check separately from the current project status.
 Documentation-only work records deployment as not applicable.
 For mobile, distinguish OTA publication, native binary distribution, and observed device uptake; one does not establish the others.
 P2/P3 follow-ups retain the source-bound disposition and named acceptance from the review contract; creating an issue alone does not satisfy that contract.
