@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Local review runner: find open PRs whose head commit lacks a lens status and
+# Local review runner: find open PRs whose head commit lacks a completed lens status and
 # run the appropriate lens. Installed as a LaunchAgent by install-poller.sh;
 # also runnable by hand. Reviews on the Max subscription (no API billing).
 #
@@ -36,11 +36,16 @@ while read -r NUM SHA; do
   FILES="$FILES_FOR_TIER"
   echo "$FILES" | grep -qE '^(\.github/|vercel\.json|apps/mobile/eas\.json|scripts/deploy/)' && LENSES="$LENSES workflow-security"
   echo "$FILES" | grep -qE '\.test\.(ts|tsx)$' && LENSES="$LENSES test-quality"
-  # skip if this head commit already has the lens status
+  # Only a completed verdict closes the lens. An execution error is retried on
+  # a later tick, subject to review-budget.py's existing attempt/time limits.
   PENDING=""
   for L in $LENSES; do
-    HAVE="$("$GH_BIN" api "repos/{owner}/{repo}/commits/$SHA/statuses" --jq "[.[] | select(.context==\"lens/$L\")] | length" 2>/dev/null || echo 0)"
-    [ "${HAVE:-0}" -gt 0 ] || PENDING="$PENDING $L"
+    STATE="$("$GH_BIN" api "repos/{owner}/{repo}/commits/$SHA/statuses" 2>/dev/null |
+      jq -r --arg lens "lens/$L" -f scripts/review/poller-status.jq 2>/dev/null || true)"
+    case "$STATE" in
+      success|failure) ;;
+      *) PENDING="$PENDING $L" ;;
+    esac
   done
   [ -n "$PENDING" ] || continue
   echo "[poller] reviewing PR #$NUM (${PENDING# }) at ${SHA:0:7}"

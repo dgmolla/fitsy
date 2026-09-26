@@ -7,6 +7,7 @@ A failed raw verdict can therefore remain visible when an owned P2 or P3 follow-
 Reviewer execution failure, timeout, authentication failure or invalid output produces `verdict: "incomplete"`, `findings: []` and an `error.kind` of `execution_error` or `invalid_output`.
 An incomplete review has no product priority, cannot be disposed, is never cached and fails the gate even for an advisory lens.
 Its PR commit status is `error`, while a completed review with a blocking code finding reports `failure`.
+The poller treats the latest `error` as incomplete and may retry it within the existing review budget.
 Historical `(runner)` findings remain blocking if encountered in earlier review records.
 This review gate does not replace `npm run verify`, product-flow evidence, source identity or release approval.
 
