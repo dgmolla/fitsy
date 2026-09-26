@@ -121,26 +121,62 @@ const results = [...preflight];
 let delegated = false;
 if (preflight.some(result => result.status === 'fail' && result.blocking)) {
   skipped.push(...remaining.map(c => ({ name: c.name, status: 'skipped', summary: 'preflight failed' })));
-} else if (runsCtx === 'local' && remaining.some(c => c.database)) {
-  const { runWithLocalDatabase, assertOwnedDatabase } = await import('./local-db.mjs');
-  if (!process.env.FITSY_VERIFY_OWNED_DB) {
-    delegated = true;
-    try { process.exitCode = runWithLocalDatabase(process.argv.slice(2)); }
-    catch (error) {
-      console.log(JSON.stringify({ name: 'local-database', status: 'fail', summary: error.message,
-        fix: 'repair this worktree\'s owned disposable database and rerun verification' }));
-      process.exitCode = 1;
-    }
-  } else {
-    try { assertOwnedDatabase(); results.push(...await Promise.all(remaining.map(runCheck))); }
-    catch (error) {
-      results.push({ name: 'local-database', status: 'fail', blocking: true,
-        summary: error.message, fix: 'rerun through this worktree\'s owned database wrapper' });
-      skipped.push(...remaining.map(c => ({ name: c.name, status: 'skipped', summary: 'local database admission failed' })));
-    }
+} else if (runsCtx === 'local' && remaining.some(c => c.database) && !process.env.FITSY_VERIFY_OWNED_DB) {
+  const { runWithLocalDatabase } = await import('./local-db.mjs');
+  delegated = true;
+  try { process.exitCode = runWithLocalDatabase(process.argv.slice(2)); }
+  catch (error) {
+    console.log(JSON.stringify({ name: 'local-database', status: 'fail', summary: error.message,
+      fix: 'repair this worktree\'s owned disposable database and rerun verification' }));
+    process.exitCode = 1;
   }
 } else {
-  results.push(...await Promise.all(remaining.map(runCheck)));
+  if (runsCtx === 'local' && remaining.some(c => c.database)) {
+    try {
+      const { assertOwnedDatabase } = await import('./local-db.mjs');
+      assertOwnedDatabase();
+    } catch (error) {
+      results.push({ name: 'local-database', status: 'fail', blocking: true,
+        summary: error.message, fix: 'rerun through this worktree\'s owned database wrapper' });
+    }
+  }
+  if (results.some(result => result.status === 'fail' && result.blocking)) {
+    skipped.push(...remaining.map(c => ({ name: c.name, status: 'skipped', summary: 'local database admission failed' })));
+  } else {
+    const cacheable = remaining.filter(c => c.cache && runsCtx === 'local');
+    let cache;
+    try {
+      if (cacheable.length && !plan.comparison.unknown) {
+        const { verificationCache } = await import('./receipt-cache.mjs');
+        cache = verificationCache(REPO_ROOT, process.env, plan);
+      }
+    } catch (error) {
+      results.push({ name: 'receipt-cache', status: 'fail', blocking: true, summary: error.message,
+        fix: 'repair the local cache directory and rerun verification' });
+    }
+    if (results.some(result => result.status === 'fail' && result.blocking)) {
+      skipped.push(...remaining.map(c => ({ name: c.name, status: 'skipped', summary: 'receipt cache admission failed' })));
+    } else {
+      const completed = await Promise.all(remaining.map(c => {
+        const prior = args.reuse && c.cache && cache?.read(c);
+        if (!prior && c.cache && cache) cache.invalidate(c);
+        return prior || runCheck(c);
+      }));
+      if (cache) {
+        if (cache.unchanged()) {
+          for (const check of cacheable) {
+            const result = completed.find(r => r.name === check.name);
+            if (!result.cached) cache.write(check, result);
+          }
+        } else {
+          for (const check of cacheable) cache.invalidate(check);
+          completed.push({ name: 'source-stability', status: 'fail', blocking: true,
+            summary: 'source or local configuration changed during verification', fix: 'finish edits and rerun verification on stable inputs' });
+        }
+      }
+      results.push(...completed);
+    }
+  }
 }
 if (!delegated) {
 for (const r of [...results, ...skipped]) {

@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
-# Full local gate on every push: layers 0-2 (structural, secrets, lint, types,
-# tests) plus size and domain checks, against the exact branch state being
-# pushed. Wired automatically by `npm install` (prepare -> core.hooksPath).
-# Bypass (emergencies only, CI still gates): git push --no-verify
-set -u
+# Run the same local gate, reusing only successful source-bound L2 receipts.
+# Size and domain checks still run on every push.
+set -euo pipefail
 ROOT="$(git rev-parse --show-toplevel)"
-bash "$ROOT/scripts/verify/run.sh" --layer=0-2 --scope=changed --runs=local || exit 1
+cd "$ROOT"
+# Git exports repository-local pointers into hooks. Child Git fixtures must
+# resolve their own repositories rather than the outer push checkout.
+while IFS= read -r name; do
+  unset "$name"
+done < <(git rev-parse --local-env-vars)
+bash "$ROOT/scripts/verify/run.sh" --layer=0-2 --scope=changed --runs=local --reuse
 # exit 2 = skipped (not applicable), which must not block the push
 for check in size-check domain-check; do
-  bash "$ROOT/scripts/verify/$check.sh"; code=$?
+  if bash "$ROOT/scripts/verify/$check.sh"; then code=0; else code=$?; fi
   if [ "$code" -ne 0 ] && [ "$code" -ne 2 ]; then
     echo "pre-push: $check failed (see above)" >&2
     exit 1

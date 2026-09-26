@@ -103,6 +103,7 @@ checks:
 
   - name: test
     database: true
+    cache: true
     script: test.sh
     layer: 2
     blocking: true
