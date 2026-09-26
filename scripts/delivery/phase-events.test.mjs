@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { bind, buildSummary, finish, publish, readRows, start, validateEvent } from './phase-events.mjs';
+import { parseTiming } from './phase-report.mjs';
 
 function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), 'fitsy-delivery-events-'));
@@ -83,18 +84,114 @@ test('cached attempts are zero-time snapshots and validation rejects invented da
   assert.throws(() => buildSummary(355, binding.run_id, readRows(root), '2026-09-26T18:59:00.000Z'), /predates/);
 });
 
-test('start stops before comment capacity and allows publication then rotation', async t => {
+test('publication shards a long logical run without losing attempts', async t => {
   const { root } = fixture(t);
-  bind(root, 355);
+  const binding = bind(root, 355);
   const at = '2026-09-26T19:00:00.000Z';
-  for (let i = 0; i < 50; i++) finish(root, start(root, 'unit', 'verify-run', { check: 'test' }, at), 'pass', at);
-  assert.throws(() => start(root, 'unit', 'verify-run', {}, at), /bind --new-run/);
-  await publish(root, github().api, at);
+  for (let i = 0; i < 51; i++) finish(root, start(root, 'unit', 'verify-run', { check: 'test' }, at), 'pass', at);
+  const fake = github();
+  assert.deepEqual(await publish(root, fake.api, at), { action: 'created', id: 2, shards: 2 });
+  const payloads = fake.comments.map(comment => JSON.parse(comment.body.match(/```json\n([^\n]+)/)[1]));
+  assert.deepEqual(payloads.map(item => [item.run_id, item.events.length]),
+    [[binding.run_id, 50], [`${binding.run_id}.p2`, 1]]);
+  assert.ok(payloads.every(item => item.events.every(event => event.run_id === item.run_id)));
+  assert.ok(fake.comments.every(comment => parseTiming({ ...comment, author_association: 'OWNER' }, 355, Date.parse(at))));
+  assert.equal(buildSummary(355, binding.run_id, readRows(root), at).events.length, 51);
   bind(root, 355, true);
   assert.ok(start(root, 'implementation', 'cli', {}, at));
 });
 
-test('verify CLI records whole run, L2 check, and zero-time reuse in an owned fixture', t => {
+test('parallel publishers and initial bind share one exclusive ledger lock', async t => {
+  const { root } = fixture(t);
+  const cli = new URL('./phase-events.mjs', import.meta.url).pathname;
+  const launch = () => new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [cli, 'bind', '--issue', '355'], { cwd: root });
+    let output = '';
+    child.stdout.on('data', chunk => { output += chunk; });
+    child.on('error', reject);
+    child.on('close', code => code === 0 ? resolve(JSON.parse(output)) : reject(new Error(`bind exited ${code}`)));
+  });
+  const [a, b] = await Promise.all([launch(), launch()]);
+  assert.equal(a.run_id, b.run_id);
+  const at = '2026-09-26T19:00:00.000Z';
+  finish(root, start(root, 'unit', 'verify-run', {}, at), 'pass', at);
+  const fake = github();
+  const delayed = async (...args) => {
+    if (args[0] === 'POST') await new Promise(resolve => setTimeout(resolve, 50));
+    return fake.api(...args);
+  };
+  await Promise.all([publish(root, delayed, at), publish(root, delayed, at)]);
+  assert.equal(fake.comments.length, 1);
+  assert.equal(fake.calls.filter(call => call.method === 'POST').length, 1);
+});
+
+test('workers keep recording during publication and a waiting publisher sees their finish', async t => {
+  const { root } = fixture(t);
+  bind(root, 355);
+  const attempt = start(root, 'implementation', 'cli');
+  const fake = github();
+  let entered, release;
+  const blocked = new Promise(resolve => { entered = resolve; });
+  const first = publish(root, async (...args) => {
+    if (args[0] === 'POST') { entered(); await new Promise(resolve => { release = resolve; }); }
+    return fake.api(...args);
+  });
+  await blocked;
+  const second = publish(root, fake.api);
+  assert.equal(bind(root, 355).issue, 355);
+  const concurrent = start(root, 'unit', 'verify-run', { check: 'during-publish' });
+  assert.throws(() => bind(root, 355, true), /delivery publish locked/);
+  await new Promise(resolve => setTimeout(resolve, 10));
+  finish(root, attempt, 'pass');
+  finish(root, concurrent, 'pass');
+  release();
+  await Promise.all([first, second]);
+  const latest = JSON.parse(fake.comments[0].body.match(/```json\n([^\n]+)/)[1]).events;
+  assert.deepEqual(latest.map(event => event.status), ['pass', 'pass']);
+  assert.equal(fake.comments.length, 1);
+});
+
+test('signal closeout records interruption and preserves process signal exit', { timeout: 10000 }, async t => {
+  const { root } = fixture(t);
+  const binding = bind(root, 355);
+  const moduleUrl = new URL('./phase-events.mjs', import.meta.url).href;
+  for (const signal of ['SIGINT', 'SIGTERM']) {
+    const code = `import {start,finish,closeOnSignals} from ${JSON.stringify(moduleUrl)};
+      const id=start(process.cwd(),'verification','verify-run',{check:'signal'});
+      closeOnSignals(()=>finish(process.cwd(),id,'interrupted'));
+      process.stdout.write('ready\\n'); setInterval(()=>{},1000);`;
+    const child = spawn(process.execPath, ['--input-type=module', '-e', code], { cwd: root });
+    t.after(() => { try { child.kill('SIGKILL'); } catch { /* Already stopped. */ } });
+    await new Promise((resolve, reject) => { child.stdout.once('data', resolve); child.once('error', reject); });
+    child.kill(signal);
+    const exit = await new Promise(resolve => child.once('close', (code, actualSignal) => resolve({ code, signal: actualSignal })));
+    assert.deepEqual(exit, { code: null, signal });
+  }
+  const events = buildSummary(355, binding.run_id, readRows(root), new Date().toISOString()).events;
+  assert.deepEqual(events.map(event => event.status), ['interrupted', 'interrupted']);
+  assert.ok(events.every(event => event.duration_ms >= 0 && event.finished_at));
+});
+
+test('partial shard creation reconciles before logical run rotation', async t => {
+  const { root } = fixture(t);
+  const at = '2026-09-26T19:00:00.000Z';
+  bind(root, 355);
+  for (let i = 0; i < 51; i++) finish(root, start(root, 'unit', 'verify-run', {}, at), 'pass', at);
+  const fake = github();
+  let posts = 0;
+  await assert.rejects(publish(root, async (...args) => {
+    const result = await fake.api(...args);
+    if (args[0] === 'POST' && ++posts === 2) throw new Error('lost shard response');
+    return result;
+  }, at), /lost shard response/);
+  assert.throws(() => bind(root, 355, true), /pending/);
+  assert.equal(fake.comments.length, 2);
+  assert.equal((await publish(root, fake.api, at)).shards, 2);
+  assert.equal(fake.comments.length, 2);
+  assert.ok(bind(root, 355, true).run_id);
+});
+
+test('verify CLI records whole run, L2 check, reuse and SIGTERM in an owned fixture', async t => {
   const { root } = fixture(t);
   const source = new URL('../..', import.meta.url).pathname;
   mkdirSync(join(root, 'scripts/verify'), { recursive: true });
@@ -106,7 +203,7 @@ test('verify CLI records whole run, L2 check, and zero-time reuse in an owned fi
   symlinkSync(join(source, 'node_modules'), join(root, 'node_modules'));
   writeFileSync(join(root, '.gitignore'), '.evidence/\nnode_modules/\n');
   writeFileSync(join(root, 'scripts/verify/registry.yml'), `checks:\n  - name: fixture\n    script: fixture.sh\n    layer: 2\n    cache: true\n    blocking: true\n    runs: [local]\n`);
-  writeFileSync(join(root, 'scripts/verify/fixture.sh'), `#!/bin/bash\nprintf '%s\\n' '{"name":"fixture","summary":"passed"}'\n`);
+  writeFileSync(join(root, 'scripts/verify/fixture.sh'), `#!/bin/bash\nif test -e .evidence/slow; then\n  touch .evidence/check-started\n  while test ! -e .evidence/release; do sleep .05; done\nfi\nprintf '%s\\n' '{"name":"fixture","summary":"passed"}'\n`);
   execFileSync('git', ['add', 'scripts', '.gitignore'], { cwd: root });
   execFileSync('git', ['commit', '-qm', 'add fixture'], { cwd: root });
   execFileSync('git', ['update-ref', 'refs/remotes/origin/main', 'HEAD'], { cwd: root });
@@ -126,6 +223,20 @@ test('verify CLI records whole run, L2 check, and zero-time reuse in an owned fi
     ['verification', 'whole', 'pass'], ['unit', 'fixture', 'cached'],
   ]);
   assert.equal(events[3].duration_ms, 0);
+  writeFileSync(join(root, '.evidence/slow'), '');
+  const child = spawn(process.execPath, ['scripts/verify/run.mjs', '--layer=2', '--scope=all', '--runs=local'],
+    { cwd: root, env: isolatedEnv });
+  t.after(() => child.kill('SIGKILL'));
+  for (let i = 0; i < 100 && !existsSync(join(root, '.evidence/check-started')); i++)
+    await new Promise(resolve => setTimeout(resolve, 25));
+  assert.equal(existsSync(join(root, '.evidence/check-started')), true, 'owned L2 check did not start');
+  child.kill('SIGTERM');
+  const exit = await new Promise(resolve => child.once('close', (code, signal) => resolve({ code, signal })));
+  writeFileSync(join(root, '.evidence/release'), '');
+  assert.deepEqual(exit, { code: null, signal: 'SIGTERM' });
+  const interrupted = buildSummary(355, binding.run_id, readRows(root), new Date().toISOString()).events.slice(-2);
+  assert.deepEqual(interrupted.map(event => [event.phase, event.check, event.status]),
+    [['verification', 'whole', 'interrupted'], ['unit', 'fixture', 'interrupted']]);
 });
 
 test('publisher creates once, updates same authored comment, and rejects marker hijacking', async t => {
@@ -143,6 +254,8 @@ test('publisher creates once, updates same authored comment, and rejects marker 
   finish(root, attempt, 'pass', '2026-09-26T19:00:03.000Z');
   assert.equal((await publish(root, fake.api, '2026-09-26T19:00:04.000Z')).action, 'updated');
   assert.equal(fake.comments.length, 1);
+  const ended = JSON.parse(fake.comments[0].body.match(/```json\n([^\n]+)/)[1]).events[0];
+  assert.deepEqual([ended.status, ended.finished_at, ended.duration_ms], ['pass', '2026-09-26T19:00:03.000Z', 3000]);
   assert.ok(fake.calls.every(call => call.timeoutMs > 0 && call.timeoutMs <= 20000));
   fake.comments[0].user.login = 'untrusted';
   await assert.rejects(publish(root, fake.api, '2026-09-26T19:00:05.000Z'), /another author/);

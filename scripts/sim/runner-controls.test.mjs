@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { appendRecordedFlowFailure, applyCapturePolicy, archiveFailureEvidence, completeMaestroRun, flowFailureReason, recordFlowOutcome, recordedFlowFailureKey, recordRunFailure, requireMetro, runOwnedMaestro, runRecordedFlow, saveRecordedFlowReceipts, startOwnedRecorder, stopOwnedRecorder, summarizeCommands, summarizeFlowTiming, nearestFailure, matchingFailureKey, needsDiagnosis } from './runner-controls.mjs';
@@ -271,6 +271,30 @@ test('product-flow run entrypoint applies requested-video preflight before nativ
     const requested = invoke(['--record-video']);
     assert.equal(requested.status, 1);
     assert.match(requested.stderr, /ffprobe and ffmpeg are required to validate recorded product-flow video before running Maestro/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('bound product-flow CLI records failure but excludes nested test-harness attempts', () => {
+  const dir = temp();
+  const source = new URL('../..', import.meta.url).pathname;
+  try {
+    mkdirSync(join(dir, 'scripts'));
+    for (const folder of ['sim', 'verify', 'delivery']) cpSync(join(source, 'scripts', folder), join(dir, 'scripts', folder), { recursive: true });
+    symlinkSync(join(source, 'node_modules'), join(dir, 'node_modules'));
+    writeFileSync(join(dir, '.gitignore'), '.evidence/\nnode_modules/\n');
+    for (const args of [['init', '-q'], ['config', 'user.name', 'Fixture'], ['config', 'user.email', 'fixture@example.test'],
+      ['add', 'scripts', '.gitignore'], ['commit', '-qm', 'fixture']]) execFileSync('git', args, { cwd: dir });
+    execFileSync(process.execPath, ['scripts/delivery/phase-events.mjs', 'bind', '--issue', '355'], { cwd: dir });
+    const invoke = context => spawnSync(process.execPath, ['scripts/sim/product-flow.mjs', 'run', 'invalid-udid', '--mode=final-candidate'],
+      { cwd: dir, env: { ...process.env, NODE_TEST_CONTEXT: context, JEST_WORKER_ID: '' }, encoding: 'utf8', timeout: 10000 });
+    assert.equal(invoke('').status, 1);
+    const events = JSON.parse(execFileSync(process.execPath, ['scripts/delivery/phase-events.mjs', 'summary'],
+      { cwd: dir, encoding: 'utf8' })).events;
+    assert.deepEqual(events.map(event => [event.phase, event.check, event.status]), [['e2e', 'run', 'fail']]);
+    assert.equal(invoke('child-v8').status, 1);
+    const after = JSON.parse(execFileSync(process.execPath, ['scripts/delivery/phase-events.mjs', 'summary'],
+      { cwd: dir, encoding: 'utf8' })).events;
+    assert.equal(after.length, 1);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

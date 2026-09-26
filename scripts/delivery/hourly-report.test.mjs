@@ -108,3 +108,12 @@ test('Slack history marker prevents duplicate posts and errors fail closed', asy
   assert.equal(posting.posted, true);
   assert.equal(posting.ts, '1.2');
 });
+
+
+test('cache-only source heads do not inflate review execution rounds', () => {
+  const report = buildReport({ url: board, items: [] }, [], { sha: 'a'.repeat(40), state: 'green' }, now);
+  report.local = { phases: Object.fromEntries(['implementation', 'verification', 'unit', 'e2e', 'review', 'shipping'].map(phase =>
+    [phase, { observedMs: null, cached: 0 }])), coverage: { active: 0, tracked: 0, stale: 0, invalid: 0 },
+    rounds: [{ attempts: 1, running: 0 }, { attempts: 0, running: 0, cached: 3 }] };
+  assert.match(formatReport(report), /review unknown \(1 round\)/);
+});

@@ -3,7 +3,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { execFileSync } from 'node:child_process';
-import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -20,7 +20,51 @@ const bindingFile = root => join(directory(root), 'binding.json');
 const eventsFile = root => join(directory(root), 'events.jsonl');
 const pendingFile = root => join(directory(root), 'publish-pending.json');
 const publicationsFile = root => join(directory(root), 'publications.jsonl');
+const lockDirectory = (root, kind = 'ledger') => join(directory(root), `${kind}.lock`);
 const digest = events => createHash('sha256').update(JSON.stringify(events)).digest('hex');
+
+function tryLock(root, kind = 'ledger') {
+  mkdirSync(directory(root), { recursive: true, mode: 0o700 });
+  try { mkdirSync(lockDirectory(root, kind), { mode: 0o700 }); }
+  catch (error) { if (error.code === 'EEXIST') return null; throw error; }
+  const owner = { pid: process.pid, acquired_at: new Date().toISOString(), nonce: randomUUID() };
+  const file = join(lockDirectory(root, kind), 'owner.json');
+  try { writeFileSync(file, `${JSON.stringify(owner)}\n`, { flag: 'wx', mode: 0o600 }); }
+  catch (error) { rmdirSync(lockDirectory(root, kind)); throw error; }
+  return () => {
+    const current = JSON.parse(readFileSync(file, 'utf8'));
+    if (current.nonce !== owner.nonce) throw new Error('delivery lock ownership changed');
+    unlinkSync(file);
+    rmdirSync(lockDirectory(root, kind));
+  };
+}
+
+function lockError(root, kind = 'ledger') {
+  let owner = 'unknown';
+  try { const value = JSON.parse(readFileSync(join(lockDirectory(root, kind), 'owner.json'), 'utf8'));
+    owner = `pid ${value.pid} since ${value.acquired_at}`; } catch { /* Creation may still be in progress. */ }
+  return new Error(`delivery ${kind} locked by ${owner}; confirm the owner is inactive, remove only ${lockDirectory(root, kind)}, then reconcile issue comments. Preserve publish-pending.json`);
+}
+
+function withSyncLock(root, action) {
+  const deadline = Date.now() + 3000;
+  let release;
+  while (!(release = tryLock(root))) {
+    if (Date.now() >= deadline) throw lockError(root);
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25);
+  }
+  try { return action(); } finally { release(); }
+}
+
+async function withAsyncLock(root, action) {
+  const deadline = Date.now() + 70000;
+  let release;
+  while (!(release = tryLock(root, 'publish'))) {
+    if (Date.now() >= deadline) throw lockError(root, 'publish');
+    await new Promise(resolve => setTimeout(resolve, 25));
+  }
+  try { return await action(); } finally { release(); }
+}
 
 function validTime(value) {
   return typeof value === 'string' && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(value) &&
@@ -68,7 +112,6 @@ export function buildSummary(issue, runId, rows, updatedAt) {
     byAttempt.set(row.attempt_id, row);
   }
   const events = [...byAttempt.values()];
-  if (events.length > 500) throw new Error('delivery comment exceeds 500 events; split the run');
   if (events.some(event => Date.parse(event.finished_at ?? event.started_at) > Date.parse(updatedAt))) {
     throw new Error('delivery summary predates an event');
   }
@@ -84,13 +127,14 @@ export function readBinding(root = process.cwd()) {
   return value;
 }
 
-export function bind(root, issue, newRun = false) {
+function bindUnlocked(root, issue, newRun = false) {
   if (!Number.isSafeInteger(issue) || issue <= 0) throw new Error('issue must be a positive integer');
   const prior = readBinding(root);
   if (prior && !newRun) {
     if (prior.issue !== issue) throw new Error('different issue requires bind --new-run');
     return prior;
   }
+  if (prior && existsSync(lockDirectory(root, 'publish'))) throw lockError(root, 'publish');
   const rows = prior ? readRows(root) : [];
   if (prior && rows.some(row => row.run_id === prior.run_id && row.status === 'running' &&
       !rows.some(next => next.attempt_id === row.attempt_id && next.status !== 'running'))) {
@@ -100,7 +144,8 @@ export function bind(root, issue, newRun = false) {
   if (prior) {
     const events = buildSummary(prior.issue, prior.run_id, rows, new Date().toISOString()).events;
     const publication = existsSync(publicationsFile(root)) ? readFileSync(publicationsFile(root), 'utf8')
-      .split('\n').filter(Boolean).map(line => JSON.parse(line)).filter(row => row.run_id === prior.run_id).at(-1) : null;
+      .split('\n').filter(Boolean).map(line => JSON.parse(line))
+      .filter(row => row.run_id === prior.run_id && row.scope !== 'shard').at(-1) : null;
     if (events.length && publication?.digest !== digest(events)) {
       throw new Error('publish prior run events before rebinding');
     }
@@ -111,6 +156,10 @@ export function bind(root, issue, newRun = false) {
   writeFileSync(temporary, `${JSON.stringify(value)}\n`, { mode: 0o600 });
   renameSync(temporary, bindingFile(root));
   return value;
+}
+
+export function bind(root, issue, newRun = false) {
+  return withSyncLock(root, () => bindUnlocked(root, issue, newRun));
 }
 
 export function readRows(root = process.cwd()) {
@@ -140,29 +189,40 @@ function head(root) {
 }
 
 export function start(root, phase, producer, extras = {}, now = new Date().toISOString()) {
-  const binding = context(root);
-  if (!binding) return null;
-  if (buildSummary(binding.issue, binding.run_id, readRows(root), now).events.length >= 50) {
-    throw new Error('publish this run and bind --new-run before adding more attempts');
-  }
-  const row = { event_id: randomUUID(), run_id: binding.run_id, issue: binding.issue, phase,
-    attempt_id: randomUUID(), started_at: now, finished_at: null, duration_ms: null,
-    status: 'running', source_sha: head(root), producer, ...extras };
-  append(root, row);
-  return row.attempt_id;
+  return withSyncLock(root, () => {
+    const binding = context(root);
+    if (!binding) return null;
+    const row = { event_id: randomUUID(), run_id: binding.run_id, issue: binding.issue, phase,
+      attempt_id: randomUUID(), started_at: now, finished_at: null, duration_ms: null,
+      status: 'running', source_sha: head(root), producer, ...extras };
+    append(root, row);
+    return row.attempt_id;
+  });
 }
 
 export function finish(root, attemptId, status, now = new Date().toISOString(), sourceSha) {
-  const binding = context(root);
-  if (!binding) return null;
-  const rows = readRows(root).filter(row => row.run_id === binding.run_id && row.attempt_id === attemptId);
-  if (rows.length !== 1 || rows[0].status !== 'running' || status === 'running' || !statuses.has(status)) {
-    throw new Error('delivery attempt is missing, finished, or has invalid status');
-  }
-  const started = rows[0];
-  const duration = status === 'cached' ? 0 : Date.parse(now) - Date.parse(started.started_at);
-  return append(root, { ...started, event_id: randomUUID(), started_at: status === 'cached' ? now : started.started_at, finished_at: now,
-    duration_ms: duration, status, source_sha: sourceSha ?? head(root) });
+  return withSyncLock(root, () => {
+    const binding = context(root);
+    if (!binding) return null;
+    const rows = readRows(root).filter(row => row.run_id === binding.run_id && row.attempt_id === attemptId);
+    if (rows.length !== 1 || rows[0].status !== 'running' || status === 'running' || !statuses.has(status)) {
+      throw new Error('delivery attempt is missing, finished, or has invalid status');
+    }
+    const started = rows[0];
+    const duration = status === 'cached' ? 0 : Date.parse(now) - Date.parse(started.started_at);
+    return append(root, { ...started, event_id: randomUUID(), started_at: status === 'cached' ? now : started.started_at, finished_at: now,
+      duration_ms: duration, status, source_sha: sourceSha ?? head(root) });
+  });
+}
+
+export function closeOnSignals(close) {
+  for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => {
+    try { close(); }
+    finally {
+      process.removeAllListeners(signal);
+      process.kill(process.pid, signal);
+    }
+  });
 }
 
 function commentBody(payload) {
@@ -178,18 +238,30 @@ function existingPayload(body, marker) {
   return JSON.parse(match[1]);
 }
 
-function recordPublication(root, payload, id) {
+function recordPublication(root, payload, id, scope = 'shard') {
   appendFileSync(publicationsFile(root), `${JSON.stringify({ run_id: payload.run_id,
-    digest: digest(payload.events), comment_id: id, at: new Date().toISOString() })}\n`,
+    digest: digest(payload.events), comment_id: id, scope, at: new Date().toISOString() })}\n`,
   { mode: 0o600, flag: 'a' });
 }
 
-export async function publish(root, api = ghApi, now = new Date().toISOString()) {
-  const binding = readBinding(root);
-  if (!binding) throw new Error('bind an issue before publishing delivery events');
-  const payload = buildSummary(binding.issue, binding.run_id, readRows(root), now);
-  const body = commentBody(payload);
-  const marker = `<!-- fitsy-delivery:v1:${binding.run_id} -->`;
+function transportShards(summary) {
+  const shards = [];
+  for (let offset = 0; offset < Math.max(1, summary.events.length); offset += 50) {
+    const runId = offset ? `${summary.run_id}.p${offset / 50 + 1}` : summary.run_id;
+    if (!validToken(runId)) throw new Error('delivery shard ID exceeds token limit; bind a shorter new run');
+    shards.push({ ...summary, run_id: runId,
+      events: summary.events.slice(offset, offset + 50).map(event => ({ ...event, run_id: runId })) });
+  }
+  return shards;
+}
+
+async function publishUnlocked(root, api, binding, logical) {
+  const shards = transportShards(logical);
+  const bodies = shards.map(commentBody);
+  let pending = existsSync(pendingFile(root)) ? JSON.parse(readFileSync(pendingFile(root), 'utf8')) : null;
+  if (pending && (pending.issue !== binding.issue || !shards.some(shard => shard.run_id === pending.run_id))) {
+    throw new Error('pending publication belongs to another run; reconcile before publishing');
+  }
   const deadline = Date.now() + 60000;
   const request = (method, path, data) => {
     const remaining = deadline - Date.now();
@@ -198,41 +270,57 @@ export async function publish(root, api = ghApi, now = new Date().toISOString())
   };
   const viewer = await request('GET', 'user');
   if (!validToken(viewer?.login)) throw new Error('GitHub publisher identity unavailable');
-  const matches = [];
-  for (let page = 1; page <= 100; page++) {
-    const comments = await request('GET', `repos/${repo}/issues/${binding.issue}/comments?per_page=100&page=${page}`);
-    if (!Array.isArray(comments)) throw new Error('issue comments unavailable');
-    matches.push(...comments.filter(comment => comment.body?.includes(marker)));
-    if (comments.length < 100) break;
-    if (page === 100) throw new Error('issue comment pagination limit reached');
-  }
-  if (matches.length > 1) throw new Error('duplicate delivery comments for run');
-  if (matches.length) {
-    const comment = matches[0];
-    if (comment.user?.login !== viewer.login) throw new Error('delivery comment belongs to another author');
-    if (existsSync(pendingFile(root))) unlinkSync(pendingFile(root));
-    const prior = existingPayload(comment.body, marker);
-    if (prior.v !== 1 || prior.issue !== binding.issue || prior.run_id !== binding.run_id ||
-        !Array.isArray(prior.events) || prior.events.some(event => !validateEvent(event))) {
-      throw new Error('existing delivery comment identity mismatch');
+  let outcome;
+  for (const [index, payload] of shards.entries()) {
+    const body = bodies[index], marker = `<!-- fitsy-delivery:v1:${payload.run_id} -->`;
+    const matches = [];
+    for (let page = 1; page <= 100; page++) {
+      const comments = await request('GET', `repos/${repo}/issues/${binding.issue}/comments?per_page=100&page=${page}`);
+      if (!Array.isArray(comments)) throw new Error('issue comments unavailable');
+      matches.push(...comments.filter(comment => comment.body?.includes(marker)));
+      if (comments.length < 100) break;
+      if (page === 100) throw new Error('issue comment pagination limit reached');
     }
-    if (JSON.stringify(prior.events) === JSON.stringify(payload.events) && prior.updated_at === payload.updated_at) {
-      recordPublication(root, payload, comment.id);
-      return { action: 'unchanged', id: comment.id };
+    if (matches.length > 1) throw new Error('duplicate delivery comments for run shard');
+    if (matches.length) {
+      const comment = matches[0];
+      if (comment.user?.login !== viewer.login) throw new Error('delivery comment belongs to another author');
+      const prior = existingPayload(comment.body, marker);
+      if (prior.v !== 1 || prior.issue !== binding.issue || prior.run_id !== payload.run_id ||
+          !Array.isArray(prior.events) || prior.events.some(event =>
+            !validateEvent(event) || event.run_id !== payload.run_id || event.issue !== binding.issue)) {
+        throw new Error('existing delivery comment identity mismatch');
+      }
+      if (pending?.run_id === payload.run_id) { unlinkSync(pendingFile(root)); pending = null; }
+      if (JSON.stringify(prior.events) === JSON.stringify(payload.events) && prior.updated_at === payload.updated_at) {
+        outcome = { action: 'unchanged', id: comment.id };
+      } else {
+        const updated = await request('PATCH', `repos/${repo}/issues/comments/${comment.id}`, { body });
+        outcome = { action: 'updated', id: updated.id };
+      }
+    } else {
+      if (pending) throw new Error('prior comment creation is uncertain; reconcile issue comments before retrying');
+      writeFileSync(pendingFile(root), `${JSON.stringify({ issue: binding.issue, run_id: payload.run_id })}\n`,
+        { flag: 'wx', mode: 0o600 });
+      const created = await request('POST', `repos/${repo}/issues/${binding.issue}/comments`, { body });
+      unlinkSync(pendingFile(root));
+      outcome = { action: 'created', id: created.id };
     }
-    const updated = await request('PATCH', `repos/${repo}/issues/comments/${comment.id}`, { body });
-    recordPublication(root, payload, updated.id);
-    return { action: 'updated', id: updated.id };
+    recordPublication(root, payload, outcome.id);
   }
-  if (existsSync(pendingFile(root))) {
-    throw new Error('prior comment creation is uncertain; reconcile issue comments before retrying');
-  }
-  writeFileSync(pendingFile(root), `${JSON.stringify({ issue: binding.issue, run_id: binding.run_id })}\n`,
-    { flag: 'wx', mode: 0o600 });
-  const created = await request('POST', `repos/${repo}/issues/${binding.issue}/comments`, { body });
-  unlinkSync(pendingFile(root));
-  recordPublication(root, payload, created.id);
-  return { action: 'created', id: created.id };
+  recordPublication(root, logical, outcome.id, 'logical');
+  return shards.length === 1 ? outcome : { ...outcome, shards: shards.length };
+}
+
+export async function publish(root, api = ghApi, now) {
+  return withAsyncLock(root, () => {
+    const { binding, logical } = withSyncLock(root, () => {
+      const binding = readBinding(root);
+      if (!binding) throw new Error('bind an issue before publishing delivery events');
+      return { binding, logical: buildSummary(binding.issue, binding.run_id, readRows(root), now ?? new Date().toISOString()) };
+    });
+    return publishUnlocked(root, api, binding, logical);
+  });
 }
 
 async function ghApi(method, path, data, timeoutMs = 20000) {

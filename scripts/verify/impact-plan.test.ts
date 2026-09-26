@@ -25,7 +25,7 @@ function timingHook() {
   const bound = spawnSync(process.execPath, ['scripts/delivery/phase-events.mjs', 'bind', '--issue', '355'],
     { cwd: directory, env, encoding: 'utf8' });
   expect(bound.status).toBe(0);
-  write('bin/gh', '#!/bin/sh\ncase "$4" in user) echo \'{"login":"fixture"}\' ;; *"/comments?"*) echo \'[]\' ;; */comments) cat >/dev/null; echo \'{"id":1}\' ;; *) exit 1 ;; esac\n');
+  write('bin/gh', '#!/bin/sh\necho "$3 $4" >> .evidence/gh-calls\ncase "$4" in user) echo \'{"login":"fixture"}\' ;; *"/comments?"*) echo \'[]\' ;; */comments) cat >/dev/null; echo \'{"id":1}\' ;; *) exit 1 ;; esac\n');
   chmodSync(join(directory, 'bin/gh'), 0o755);
   return { ...env, PATH: `${join(directory, 'bin')}:${env.PATH}` };
 }
@@ -224,9 +224,20 @@ test('npm verify evidence is reused by the unchanged-source hook invocation', ()
   expect(npm.status).toBe(0); expect(calls()).toBe(1);
   const hook = spawnSync('bash', ['.githooks/pre-push'], { cwd: directory, encoding: 'utf8', env: hookEnv, timeout: 15000 });
   expect(hook.status).toBe(0); expect(hook.stdout).toContain('"cached":true'); expect(calls()).toBe(1);
+  expect(readFileSync(join(directory, '.evidence/gh-calls'), 'utf8')).toContain('POST repos/dgmolla/fitsy/issues/355/comments');
   const changed = spawnSync('bash', ['.githooks/pre-push'],
     { cwd: directory, encoding: 'utf8', env: { ...hookEnv, FITSY_TEST_CHANGED: '1' }, timeout: 15000 });
   expect(changed.status).toBe(0); expect(changed.stdout).not.toContain('"cached":true'); expect(calls()).toBe(2);
+});
+
+test('pre-push refuses an unbound issue before checks or publication', () => {
+  cacheFixture();
+  const hookEnv = timingHook();
+  write('.githooks/pre-push', readFileSync(join(root, '.githooks/pre-push'), 'utf8'));
+  rmSync(join(directory, '.evidence/delivery/binding.json'));
+  const hook = spawnSync('bash', ['.githooks/pre-push'], { cwd: directory, encoding: 'utf8', env: hookEnv, timeout: 15000 });
+  expect(hook.status).toBe(1); expect(hook.stderr).toContain('bind --issue N');
+  expect(existsSync(join(directory, '.evidence/gh-calls'))).toBe(false);
 });
 
 test('pre-push accepts an inapplicable domain gate but refuses its real failure', () => {
@@ -236,8 +247,10 @@ test('pre-push accepts an inapplicable domain gate but refuses its real failure'
   write('scripts/verify/domain-check.sh', 'echo \'{"status":"skipped"}\'\nexit 2\n');
   const hook = () => spawnSync('bash', ['.githooks/pre-push'], { cwd: directory, encoding: 'utf8', env: hookEnv, timeout: 15000 });
   expect(hook().status).toBe(0);
+  const before = readFileSync(join(directory, '.evidence/gh-calls'), 'utf8').split('\n').filter(line => line.startsWith('POST ')).length;
   write('scripts/verify/domain-check.sh', 'echo \'{"status":"fail"}\'\nexit 1\n');
   expect(hook().status).toBe(1);
+  expect(readFileSync(join(directory, '.evidence/gh-calls'), 'utf8').split('\n').filter(line => line.startsWith('POST '))).toHaveLength(before);
 });
 
 test('real Git push hook preserves outer refs, isolates nested Git, reuses L2, and reruns size/domain gates', () => {

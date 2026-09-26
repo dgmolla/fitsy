@@ -66,7 +66,11 @@ Start a new implementation attempt for later fixes; never stretch an old interva
 The verify runner, review runner, and product-flow CLI record their own attempts when an issue is bound.
 Product-flow `build`, `run`, `finish`, and `check` attempts remain distinct; a completed build is not completed E2E acceptance.
 Before opening the PR, begin a `shipping` attempt and end it only after applicable main Verify, Deploy, and acceptance receipts are confirmed.
-Use `node scripts/delivery/phase-events.mjs publish` at material transitions and at least hourly while active; it reconciles one bounded issue comment per run.
+Use `node scripts/delivery/phase-events.mjs publish` at material transitions and at least hourly while active; it reconciles bounded issue comments for each logical run.
+Long runs use stable transport shards without splitting worker identity or dropping attempts.
+Comment count is not worker count.
+Interrupted attempts retain their observed result; a hard-killed worker can leave an unfinished attempt whose duration remains unknown.
+If publication reports a retained lock, inspect its owner and confirm no publisher is active before removing only that lock; reconcile uncertain GitHub writes and never remove the pending-publication guard blindly.
 The pre-push hook requires a valid issue binding and attempts publication after its existing gates, but a GitHub outage leaves local timing evidence pending without bypassing those gates.
 The [hourly delivery report](hourly-delivery-report.md) summarizes measured phase intervals and keeps missing evidence explicit.
 
@@ -108,3 +112,16 @@ Confirm issue reads, a real task update, owner reconciliation and the configured
 During an outage, preserve a bounded pending-update log keyed by issue and event identity under the current dispatcher.
 Continue already-owned authorized work when safe; do not dispatch duplicate work or claim unsynchronized statuses were delivered.
 Replay and reconcile the pending updates after recovery, retaining their original observed timestamps.
+
+### Persistent reviewers and timing coverage
+
+Every PR body includes exactly one `Delivery-Issue: #N` line within its first 4,000 characters, naming the authoritative outcome issue.
+PR-mode review runners isolate their timing binding by PR under `.evidence/review-delivery/` and publish on closeout.
+Missing, ambiguous or conflicting issue metadata creates an explicit timing gap and never borrows another task's binding.
+The poller publishes again after its selected lenses finish to reconcile their combined evidence.
+GitHub reporting outages retain local events and do not convert a failed review into a passing gate or block a passing review.
+Historical accepted observations count as tracked coverage; stale checkpoints remain a separate liveness signal even when their phases are outside the 24-hour duration window.
+
+At each review round closeout, record confirmed findings, impact priority, and either the detector plus prevention change or an owned follow-up under the review disposition contract.
+If no new hardening is warranted, state that explicitly instead of manufacturing a change.
+Publish shipped improvements using the [hourly report evidence contract](hourly-delivery-report.md#local-phases-and-review-hardening); queued fixes do not count as shipped improvements.

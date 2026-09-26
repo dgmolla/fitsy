@@ -36,6 +36,17 @@ fi
 # The issue binding lives in ignored local evidence. A missing binding is
 # visible, but timing collection never changes the independent review gate.
 TELEMETRY_FILE="$REPO_ROOT/scripts/delivery/phase-events.mjs"
+TELEMETRY_ROOT="$REPO_ROOT"
+# A persistent PR reviewer must never inherit another task's issue binding.
+if [ "$TARGET" != "--local" ]; then
+  ISSUE="$(printf '%s\n' "$BODY" | sed -nE 's/^Delivery-Issue: #([1-9][0-9]*)[[:space:]]*$/\1/p')"
+  if [[ "$TARGET" =~ ^[1-9][0-9]*$ && "$ISSUE" =~ ^[1-9][0-9]*$ ]] && [ -f "$TELEMETRY_FILE" ]; then
+    TELEMETRY_ROOT="$REPO_ROOT/.evidence/review-delivery/$TARGET"
+    mkdir -p "$TELEMETRY_ROOT"
+    if ! (cd "$TELEMETRY_ROOT" && node "$TELEMETRY_FILE" bind --issue "$ISSUE") >/dev/null; then TELEMETRY_ROOT=""; fi
+  else TELEMETRY_ROOT=""; fi
+  [ -n "$TELEMETRY_ROOT" ] || echo '[run-lens] timing gap: require one Delivery-Issue: #N field and a valid PR binding' >&2
+fi
 TELEMETRY_ATTEMPT=""
 TELEMETRY_RESULT="interrupted"
 TELEMETRY_CACHE_HIT=0
@@ -47,14 +58,17 @@ review_exit() {
   if [ -n "$TELEMETRY_ATTEMPT" ]; then
     local status="$TELEMETRY_RESULT"
     if [ "$status" = "interrupted" ] && [ "$code" != 130 ] && [ "$code" != 143 ]; then status=fail; fi
-    if ! node "$TELEMETRY_FILE" auto-end --attempt-id "$TELEMETRY_ATTEMPT" --status "$status" --source-sha "$HEAD_SHA" >/dev/null; then
+    if ! (cd "$TELEMETRY_ROOT" && node "$TELEMETRY_FILE" auto-end --attempt-id "$TELEMETRY_ATTEMPT" --status "$status" --source-sha "$HEAD_SHA") >/dev/null; then
       echo '[run-lens] delivery telemetry closeout failed' >&2
+    fi
+    if [ "$TARGET" != "--local" ]; then
+      (cd "$TELEMETRY_ROOT" && node "$TELEMETRY_FILE" publish) >/dev/null || echo '[run-lens] timing publication pending; local evidence retained' >&2
     fi
   fi
 }
 trap review_exit EXIT
-if [ -f "$TELEMETRY_FILE" ]; then
-  TELEMETRY_ATTEMPT="$(node "$TELEMETRY_FILE" auto-begin --phase review --producer review-lens \
+if [ -f "$TELEMETRY_FILE" ] && [ -n "$TELEMETRY_ROOT" ]; then
+  TELEMETRY_ATTEMPT="$(cd "$TELEMETRY_ROOT" && node "$TELEMETRY_FILE" auto-begin --phase review --producer review-lens \
     --round-id "$HEAD_SHA" --lens "$LENS" --source-sha "$HEAD_SHA")" || TELEMETRY_ATTEMPT=""
 fi
 
