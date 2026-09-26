@@ -21,6 +21,7 @@ import { recordOnboardingComplete } from '../lib/onboardingCompletion';
 import { resetWelcomeJourney } from '../lib/paywallJourney';
 import { saveMacroTargets } from '../lib/macroStorage';
 import { hasSeenPreviewTour, hasUsedPreviewSample, markPreviewSampleUsed, markPreviewTourSeen } from '../lib/teaserGate';
+import { getOnboardingData } from '../lib/onboardingStorage';
 
 type Session = { access_token: string; user: { id: string } } | null;
 let mockSession: Session = null;
@@ -149,6 +150,22 @@ it('waits for a saved area before enabling location choices', async () => {
   await act(async () => { fireEvent.press(screen.getByTestId('location-continue-area')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/goal'));
   expect(permission).not.toHaveBeenCalled();
+});
+
+it('lets a saved-area user switch to device location', async () => {
+  await AsyncStorage.setItem('@fitsy/onboarding', JSON.stringify({ area: { lat: 34.05, lng: -118.25, name: 'Downtown', source: 'manual' } }));
+  const permission = jest.spyOn(ExpoLocation, 'requestForegroundPermissionsAsync')
+    .mockResolvedValue({ status: ExpoLocation.PermissionStatus.GRANTED } as never);
+  jest.spyOn(ExpoLocation, 'getCurrentPositionAsync')
+    .mockResolvedValue({ coords: { latitude: 34.1, longitude: -118.2 } } as never);
+  global.fetch = jest.fn().mockResolvedValue(response({ data: [], meta: { nearbyDishCount: 1, radiusMiles: 3 } }));
+  const screen = renderJourney('/welcome/location-permission');
+  await screen.findByTestId('location-continue-area');
+  await act(async () => { fireEvent.press(screen.getByTestId('location-use-current')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/goal'));
+  expect(permission).toHaveBeenCalledTimes(1);
+  expect(ExpoLocation.getCurrentPositionAsync).toHaveBeenCalledTimes(1);
+  expect((await getOnboardingData()).area).toEqual({ lat: 34.1, lng: -118.2, name: 'Your location', source: 'gps' });
 });
 
 it('uses device permission only after confirming there is no saved area', async () => {
