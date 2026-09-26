@@ -1,9 +1,10 @@
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 
 const root = resolve(__dirname, '../..');
+const yaml = require('js-yaml') as { load(value: string): unknown };
 let directory: string;
 const env = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
   !/^(GIT_|GITHUB_|FITSY_DIFF_|FITSY_RUNS$|CI$|PR_NUMBER$)/.test(key)));
@@ -35,8 +36,8 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(directory, { recursive: true, force: true }));
 
-test('actual main push selects all commits after origin/main advances, then runs L2', () => {
-  write('scripts/verify/registry.yml', 'checks:\n  - name: test\n    script: fixture.sh\n    layer: 2\n    blocking: true\n    runs: [ci]\n');
+test('actual main push selects a matching advisory check after origin/main advances', () => {
+  write('scripts/verify/registry.yml', 'checks:\n  - name: test\n    script: fixture.sh\n    layer: 2\n    blocking: shadow\n    runs: [ci]\n    paths: ["apps/api/**"]\n');
   write('scripts/verify/fixture.sh', 'echo \'{"summary":"L2 ran"}\'\n');
   const before = commit();
   git('update-ref', 'refs/remotes/origin/main', before);
@@ -50,6 +51,26 @@ test('actual main push selects all commits after origin/main advances, then runs
   const result = cli('run.mjs', ['--layer=2', '--runs=ci', '--scope=changed'], extra);
   expect(result.status).toBe(0);
   expect(result.stdout).toContain('L2 ran');
+});
+
+test('nested Markdown outside low-risk documentation paths keeps code jobs', () => {
+  write('apps/api/README.md', 'API operations.\n');
+  expect(plan()).toMatchObject({ documentationOnly: false, code: true, tests: true, build: true });
+});
+
+test('the actual workflow baseline stops when its secret check fails', () => {
+  const workflow = yaml.load(readFileSync(join(root, '.github/workflows/verify.yml'), 'utf8')) as {
+    jobs: { classify: { steps: { name?: string; run?: string }[] } } };
+  const baseline = workflow.jobs.classify.steps.find(step => step.name?.startsWith('Baseline checks'))?.run;
+  expect(baseline).toBeTruthy();
+  write('scripts/verify/structural.sh', 'exit 0\n');
+  write('scripts/verify/secrets.sh', 'exit 1\n');
+  mkdirSync(join(directory, '.evidence'), { recursive: true });
+  write('scripts/verify/context-freshness.sh', 'echo later > .evidence/later\n');
+  write('scripts/verify/size-check.sh', 'exit 0\n');
+  const result = spawnSync('bash', ['-c', baseline!], { cwd: directory, env, encoding: 'utf8' });
+  expect(result.status).toBe(1);
+  expect(existsSync(join(directory, '.evidence/later'))).toBe(false);
 });
 
 test('actual main documentation push selects no code jobs after origin/main advances', () => {
@@ -103,4 +124,24 @@ test('mandatory migration and secret checks use the exact main push range', () =
   const extra = { CI: 'true', GITHUB_EVENT_NAME: 'push', GITHUB_EVENT_PATH: event('push', { before, after }) };
   expect(cli('migration-safety.sh', [], extra).status).toBe(1);
   expect(cli('secrets.sh', [], extra).status).toBe(1);
+});
+
+test('the actual secrets CLI passes the entire pushed history to gitleaks', () => {
+  const before = git('rev-parse', 'HEAD');
+  write('docs/first.md', 'First commit.\n'); commit();
+  write('docs/second.md', 'Second commit.\n'); const after = commit();
+  git('update-ref', 'refs/remotes/origin/main', after);
+  write('bin/gitleaks', '#!/bin/sh\nprintf "%s\\n" "$@" > .evidence/gitleaks-args\n');
+  chmodSync(join(directory, 'bin/gitleaks'), 0o755);
+  const extra = { CI: 'true', GITHUB_EVENT_NAME: 'push', GITHUB_EVENT_PATH: event('push', { before, after }),
+    PATH: join(directory, 'bin') + ':' + env.PATH };
+  expect(cli('secrets.sh', [], extra).status).toBe(0);
+  expect(readFileSync(join(directory, '.evidence/gitleaks-args'), 'utf8')).toContain(`--log-opts=${before}..${after}`);
+});
+
+test('the local runner cannot hide an untracked private env file from secrets', () => {
+  write('scripts/verify/registry.yml', 'checks:\n  - name: secrets\n    script: secrets.sh\n    layer: 0\n    blocking: true\n    runs: [local]\n');
+  commit(); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  write('apps/api/.env.private', 'PLACEHOLDER=value\n');
+  expect(cli('run.mjs', ['--only=secrets', '--runs=local']).status).toBe(1);
 });

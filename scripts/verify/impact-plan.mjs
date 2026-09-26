@@ -56,7 +56,7 @@ export function changedFiles(options = {}) {
 export function impactPlan(options = {}) {
   const selection = changedFiles(options);
   const documentationOnly = selection.files !== null && selection.files.every(path =>
-    /\.(md|mdx|rst)$/.test(path) || /^(docs|proj-mgmt)\/.*\.(txt|png|jpe?g|svg|webp)$/.test(path));
+    /^[^/]+\.md$/.test(path) || /^(docs|proj-mgmt)\/.*\.(md|mdx|rst|txt|png|jpe?g|svg|webp)$/.test(path));
   const code = !documentationOnly;
   // Product-flow remains the authority for exact categories and native proof.
   const native = code && (selection.files === null || selection.files.some(path =>

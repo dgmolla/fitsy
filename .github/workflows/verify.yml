@@ -43,6 +43,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -e
           bash scripts/verify/structural.sh
           bash scripts/verify/secrets.sh
           bash scripts/verify/context-freshness.sh

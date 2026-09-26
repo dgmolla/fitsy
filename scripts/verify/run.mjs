@@ -87,7 +87,7 @@ function runCheck(c) {
     execFile("bash", [join(VERIFY_DIR, c.script), `--scope=${scope}`], { cwd: REPO_ROOT, maxBuffer: 16 * 1024 * 1024,
       env: { ...process.env, FITSY_RUNS: runsCtx,
         ...(plan.comparison.base ? { FITSY_DIFF_BASE: plan.comparison.base } : {}),
-        ...(plan.comparison.head ? { FITSY_DIFF_HEAD: plan.comparison.head } : {}) } }, (err, stdout, stderr) => {
+        ...(runsCtx === 'ci' && plan.comparison.head ? { FITSY_DIFF_HEAD: plan.comparison.head } : {}) } }, (err, stdout, stderr) => {
       const code = err ? (err.code ?? 1) : 0;
       let parsed;
       try {
