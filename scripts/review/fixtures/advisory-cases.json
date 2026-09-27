@@ -1,0 +1,315 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "alt_reviewer",
+      "raw": {
+        "verdict": "fail",
+        "priority": "P2",
+        "head": "f65de5df62679efe4028388d06574f7d2d29716c",
+        "source": "https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859441737",
+        "finding": "**CONFIRMED / P2** `scripts/delivery/install-local-dispatcher.sh:87`: Reinstall accepts a Claude worker configuration with an unavailable Codex reviewer.\n  - impact: A Claude worker installation can claim an issue but cannot complete its required independent review when Codex is absent. On reinstall, the Codex availability check is skipped for any existing config (scripts/delivery/install-local-dispatcher.sh:87), while the default reviewer remains Codex (scripts/delivery/install-local-dispatcher.sh:114). The review adapter requires that CLI (scripts/review/execute-review.py:95). Delivery stalls after a recoverable configuration error, violating the dispatcher's required review gate.\n  - scenario: Existing config selects Claude workers and the default Codex reviewer; Codex is removed; --install succeeds -> the next claim cannot complete required review.\n  - fix: Validate availability of the configured reviewer during install, or require the operator to select an available reviewer before accepting the install; follow the CLI availability check in scripts/review/execute-review.py."
+      },
+      "context": "PR #389 dispatcher or installer diff at reviewed head f65de5df62679efe4028388d06574f7d2d29716c. **CONFIRMED / P2** `scripts/delivery/install-local-dispatcher.sh:87`: Reinstall accepts a Claude worker configuration with an unavailable Codex reviewer.",
+      "evidence": "Independent canonical lens at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859441737; actual repair and source-bound deferral are recorded in PR #389 and linked follow-up.",
+      "urgency_rubric": "P0/P1 material impact blocks; confirmed P2 can be deferred only with owner, acceptance and current required tests; P3 is advisory. Essential acceptance and required checks remain independent gates.",
+      "acceptance_criteria": [
+        {
+          "id": "A1",
+          "text": "Reviewer availability verified during reinstall.",
+          "source": "https://github.com/dgmolla/fitsy/issues/388"
+        }
+      ],
+      "owner": "Infrastructure",
+      "followup": "https://github.com/dgmolla/fitsy/issues/390"
+    },
+    {
+      "id": "invalid_terminal",
+      "raw": {
+        "verdict": "fail",
+        "priority": "P2",
+        "head": "f65de5df62679efe4028388d06574f7d2d29716c",
+        "source": "https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859443115",
+        "finding": "**CONFIRMED / P2** `scripts/delivery/local-dispatcher.py:254`: A later malformed terminal comment masks a valid delivery receipt.\n  - impact: A later malformed terminal-marker comment on a completed issue makes verified delivery fail reconciliation and blocks dependent work. In scripts/delivery/local-dispatcher.py:245-266, verification returns false on the first marked comment it reads, before reaching the valid receipt. The merged PR and main CI guards cannot help because they are never reached. This violates the contract that verified Done releases dependencies; recovery requires operator intervention.\n  - scenario: Valid terminal receipt followed by a comment containing the marker and invalid JSON -> terminal_verified returns false and the completed issue is parked.\n  - fix: Continue past invalid marked comments and accept only a receipt that passes all claim, PR, and CI checks."
+      },
+      "context": "PR #389 dispatcher or installer diff at reviewed head f65de5df62679efe4028388d06574f7d2d29716c. **CONFIRMED / P2** `scripts/delivery/local-dispatcher.py:254`: A later malformed terminal comment masks a valid delivery receipt.",
+      "evidence": "Independent canonical lens at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859443115; actual repair and source-bound deferral are recorded in PR #389 and linked follow-up.",
+      "urgency_rubric": "P0/P1 material impact blocks; confirmed P2 can be deferred only with owner, acceptance and current required tests; P3 is advisory. Essential acceptance and required checks remain independent gates.",
+      "acceptance_criteria": [
+        {
+          "id": "A1",
+          "text": "Malformed later comment cannot hide valid delivery receipt.",
+          "source": "https://github.com/dgmolla/fitsy/issues/388"
+        }
+      ],
+      "owner": "Codex dispatcher maintenance",
+      "followup": "https://github.com/dgmolla/fitsy/issues/391"
+    },
+    {
+      "id": "stale_alert",
+      "raw": {
+        "verdict": "fail",
+        "priority": "P2",
+        "head": "f65de5df62679efe4028388d06574f7d2d29716c",
+        "source": "https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859443115",
+        "finding": "**CONFIRMED / P2** `scripts/delivery/install-local-dispatcher.sh:104`: Installation can succeed without the Slack bridge needed for blocker alerts.\n  - impact: An installation whose two Slack configurations name the same missing bridge directory passes the installer checks at scripts/delivery/install-local-dispatcher.sh:102-109. On a blocker, the import at scripts/delivery/local-dispatcher.py:51 fails and tick suppresses the error at line 584-587, so no actionable alert is delivered. The issue remains parked, but the promised notification is absent until an operator notices. The existing publisher checks for bridge.py in scripts/delivery/install-local-report.sh:59.\n  - scenario: Both Slack configuration files contain the same nonexistent bridge_path -> install succeeds, then every blocker alert attempt fails silently.\n  - fix: Validate that bridge.py exists at the configured path during installation, following scripts/delivery/install-local-report.sh:59, and surface persistent delivery failures."
+      },
+      "context": "PR #389 dispatcher or installer diff at reviewed head f65de5df62679efe4028388d06574f7d2d29716c. **CONFIRMED / P2** `scripts/delivery/install-local-dispatcher.sh:104`: Installation can succeed without the Slack bridge needed for blocker alerts.",
+      "evidence": "Independent canonical lens at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859443115; actual repair and source-bound deferral are recorded in PR #389 and linked follow-up.",
+      "urgency_rubric": "P0/P1 material impact blocks; confirmed P2 can be deferred only with owner, acceptance and current required tests; P3 is advisory. Essential acceptance and required checks remain independent gates.",
+      "acceptance_criteria": [
+        {
+          "id": "A1",
+          "text": "Blocker alert bridge is available after installation.",
+          "source": "https://github.com/dgmolla/fitsy/issues/388"
+        }
+      ],
+      "owner": "Infrastructure",
+      "followup": "https://github.com/dgmolla/fitsy/issues/391"
+    },
+    {
+      "id": "orphan_p1",
+      "raw": {
+        "verdict": "fail",
+        "priority": "P1",
+        "head": "f65de5df62679efe4028388d06574f7d2d29716c",
+        "source": "https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859454586",
+        "finding": "**CONFIRMED / P1** `scripts/delivery/local-dispatcher.py:505`: The active claim budget does not apply after the worker exits with a surviving child.\n  - impact: One worker that exits while a child process remains alive can stop pickup of every subsequent ready issue indefinitely. At scripts/delivery/local-dispatcher.py:505, an ownership-uncertain claim waits only for the process group to disappear. This violates the spec's bounded no-progress handling and the documented 90-minute active claim budget; the single dispatcher lane makes the outage material.\n  - scenario: Worker exits before 90 minutes but leaves a long-lived child in its process group -> every later tick retains the lane without a deadline.\n  - fix: Persist a claim deadline and reconcile the owned group when it expires, using the timeout and group-stop pattern at scripts/delivery/local-dispatcher.py:717."
+      },
+      "context": "PR #389 dispatcher or installer diff at reviewed head f65de5df62679efe4028388d06574f7d2d29716c. **CONFIRMED / P1** `scripts/delivery/local-dispatcher.py:505`: The active claim budget does not apply after the worker exits with a surviving child.",
+      "evidence": "Independent canonical lens at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859454586; actual repair and source-bound deferral are recorded in PR #389 and linked follow-up.",
+      "urgency_rubric": "P0/P1 material impact blocks; confirmed P2 can be deferred only with owner, acceptance and current required tests; P3 is advisory. Essential acceptance and required checks remain independent gates.",
+      "acceptance_criteria": [
+        {
+          "id": "A1",
+          "text": "An orphan process group cannot hold the sole lane past 90 minutes.",
+          "source": "https://github.com/dgmolla/fitsy/issues/388"
+        }
+      ],
+      "owner": null,
+      "followup": null
+    },
+    {
+      "id": "historical_dependency",
+      "raw": {
+        "verdict": "fail",
+        "priority": "P2",
+        "head": "f65de5df62679efe4028388d06574f7d2d29716c",
+        "source": "https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859454586",
+        "finding": "**CONFIRMED / P2** `scripts/delivery/local-dispatcher.py:204`: Historical Done cards bypass the specified terminal-receipt requirement for dependency release.\n  - impact: A dependent issue can start without the claim-bound terminal receipt required by the PR's acceptance contract. At scripts/delivery/local-dispatcher.py:204, a preexisting Done card needs only board fields, a closed issue, a merged PR body line and green main runs. The fixture at scripts/delivery/local-dispatcher.test.py:243 explicitly exercises release without a terminal receipt. The effect is bounded to dependencies on such cards, but it bypasses the specified acceptance evidence.\n  - scenario: A Done card has Verified at and a green merged PR but no claim-bound terminal issue comment -> its dependent ready card launches.\n  - fix: Require terminal evidence for dependency release, using the checks in terminal_verified at scripts/delivery/local-dispatcher.py:228, or add an explicit historical exception to the spec and test its limits."
+      },
+      "context": "PR #389 dispatcher or installer diff at reviewed head f65de5df62679efe4028388d06574f7d2d29716c. **CONFIRMED / P2** `scripts/delivery/local-dispatcher.py:204`: Historical Done cards bypass the specified terminal-receipt requirement for dependency release.",
+      "evidence": "Independent canonical lens at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859454586; actual repair and source-bound deferral are recorded in PR #389 and linked follow-up.",
+      "urgency_rubric": "P0/P1 material impact blocks; confirmed P2 can be deferred only with owner, acceptance and current required tests; P3 is advisory. Essential acceptance and required checks remain independent gates.",
+      "acceptance_criteria": [
+        {
+          "id": "A1",
+          "text": "Dependency release uses the acceptance evidence required for its claim type.",
+          "source": "https://github.com/dgmolla/fitsy/issues/388"
+        }
+      ],
+      "owner": null,
+      "followup": null
+    },
+    {
+      "id": "timeout_completion",
+      "raw": {
+        "verdict": "fail",
+        "priority": "P2",
+        "head": "ce799e64c1da21e5bad88de91cae72a0c794a569",
+        "source": "https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859643745",
+        "finding": "**CONFIRMED / P2** `scripts/delivery/local-dispatcher.py:567`: A stopped worker with verified Done is treated as timed out before its delivery evidence is checked.\n  - impact: A completed issue can be moved back to Queued and given dispatch-hold when its worker exits without an exit receipt and reconciliation first runs after the 90-minute deadline. Lines 567-576 mark the stopped worker timed out solely from elapsed time; line 611 then skips verification even when Done has valid terminal evidence. This violates the contract to park only workers without verified Done. The outcome is recoverable manually, but it blocks dependent work and misstates delivery status.\n  - scenario: Worker completes and records verified Done before the deadline, then its launcher dies before writing finished_at; the next tick occurs after the deadline -> the dispatcher marks a timeout and parks the completed issue.\n  - fix: When the process group is proven stopped, check terminal_verified before assigning timed_out or parking. Keep timeout handling for a group that is still running past the budget."
+      },
+      "context": "PR #389 dispatcher or installer diff at reviewed head ce799e64c1da21e5bad88de91cae72a0c794a569. **CONFIRMED / P2** `scripts/delivery/local-dispatcher.py:567`: A stopped worker with verified Done is treated as timed out before its delivery evidence is checked.",
+      "evidence": "Independent canonical lens at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859643745; actual repair and source-bound deferral are recorded in PR #389 and linked follow-up.",
+      "urgency_rubric": "P0/P1 material impact blocks; confirmed P2 can be deferred only with owner, acceptance and current required tests; P3 is advisory. Essential acceptance and required checks remain independent gates.",
+      "acceptance_criteria": [
+        {
+          "id": "A1",
+          "text": "Verified Done is not parked as a timeout.",
+          "source": "https://github.com/dgmolla/fitsy/issues/388"
+        }
+      ],
+      "owner": "Codex dispatcher maintenance",
+      "followup": "https://github.com/dgmolla/fitsy/issues/395"
+    },
+    {
+      "id": "probabilities",
+      "raw": {
+        "verdict": "fail",
+        "priority": "P2",
+        "head": "ce799e64c1da21e5bad88de91cae72a0c794a569",
+        "source": "https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859656645",
+        "finding": "**CONFIRMED / P2** `scripts/delivery/local-dispatcher.py:355`: Persist Jev's validated response, including its probabilities.\n  - impact: The spec says to \"preserve its response\" for Jev classification. For any valid response containing choice probabilities, scripts/delivery/local-dispatcher.py:355 discards those probabilities before caching the result in the claim. Operators cannot reconstruct the advice behind a planning decision. The impact is bounded to classification auditability.\n  - scenario: Jev returns a valid answer with probabilities -> the durable classification contains only choice, confidence and accepted status.\n  - fix: Store the validated response alongside the derived planning fields, and assert its retention in scripts/delivery/local-dispatcher.test.py."
+      },
+      "context": "PR #389 dispatcher or installer diff at reviewed head ce799e64c1da21e5bad88de91cae72a0c794a569. **CONFIRMED / P2** `scripts/delivery/local-dispatcher.py:355`: Persist Jev's validated response, including its probabilities.",
+      "evidence": "Independent canonical lens at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859656645; actual repair and source-bound deferral are recorded in PR #389 and linked follow-up.",
+      "urgency_rubric": "P0/P1 material impact blocks; confirmed P2 can be deferred only with owner, acceptance and current required tests; P3 is advisory. Essential acceptance and required checks remain independent gates.",
+      "acceptance_criteria": [
+        {
+          "id": "A1",
+          "text": "Jev validated response is preserved in the claim.",
+          "source": "https://github.com/dgmolla/fitsy/issues/388"
+        }
+      ],
+      "owner": "Codex dispatcher maintenance",
+      "followup": "https://github.com/dgmolla/fitsy/issues/393"
+    },
+    {
+      "id": "adapter_parity",
+      "raw": {
+        "verdict": "fail",
+        "priority": "P2",
+        "head": "ce799e64c1da21e5bad88de91cae72a0c794a569",
+        "source": "https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859656645",
+        "finding": "**CONFIRMED / P2** `scripts/delivery/local-dispatcher.test.py:493`: Run the process lifecycle fixtures with both worker adapters.\n  - impact: The acceptance contract requires \"the same process lifecycle fixtures\" to pass through Codex and Claude. scripts/delivery/local-dispatcher.test.py:493 runs Claude through one successful claim; the crash, timeout, dependency and retry fixtures run only with the default Codex profile. Claude lifecycle parity therefore lacks the required test evidence for this release.\n  - scenario: The suite runs with the Claude profile -> only the successful claim path is exercised, leaving the required failure and reconciliation paths untested.\n  - fix: Parameterize the lifecycle fixtures in scripts/delivery/local-dispatcher.test.py over Codex and Claude profiles."
+      },
+      "context": "PR #389 dispatcher or installer diff at reviewed head ce799e64c1da21e5bad88de91cae72a0c794a569. **CONFIRMED / P2** `scripts/delivery/local-dispatcher.test.py:493`: Run the process lifecycle fixtures with both worker adapters.",
+      "evidence": "Independent canonical lens at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859656645; actual repair and source-bound deferral are recorded in PR #389 and linked follow-up.",
+      "urgency_rubric": "P0/P1 material impact blocks; confirmed P2 can be deferred only with owner, acceptance and current required tests; P3 is advisory. Essential acceptance and required checks remain independent gates.",
+      "acceptance_criteria": [
+        {
+          "id": "A1",
+          "text": "Same process lifecycle fixtures pass with Codex and Claude.",
+          "source": "https://github.com/dgmolla/fitsy/issues/388"
+        }
+      ],
+      "owner": null,
+      "followup": null
+    },
+    {
+      "id": "managed_dependency",
+      "raw": {
+        "verdict": "fail",
+        "priority": "P2",
+        "head": "a142ddeaed4c9330f2bae51f949bc3f9e9712ac3",
+        "source": "https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859764170",
+        "finding": "**CONFIRMED / P2** `scripts/delivery/local-dispatcher.py:290`: A missing verified-state entry lets a dispatcher-managed dependency use the weaker historical completion rule.\n  - impact: A dependent ready issue can launch without the claim-bound terminal receipt required for dispatcher-managed work. If a managed Done card has no entry in `verified`, `eligible` treats it as historical and accepts a closed issue, merged PR, and green main runs alone (scripts/delivery/local-dispatcher.py:289-292). This can release work before the required acceptance evidence is established; the impact is bounded to affected dependency chains.\n  - scenario: Managed issue #385 is Done and closed with a merged issue-linked PR and green main runs, but has no terminal receipt and `verified` has no `385` entry -> issue #351 with dependency `#385` becomes eligible.\n  - fix: Distinguish historical cards from dispatcher-managed claims using durable claim evidence, then require `terminal_verified` for every managed dependency; retain the historical path only for pre-dispatcher cards."
+      },
+      "context": "PR #389 dispatcher or installer diff at reviewed head a142ddeaed4c9330f2bae51f949bc3f9e9712ac3. **CONFIRMED / P2** `scripts/delivery/local-dispatcher.py:290`: A missing verified-state entry lets a dispatcher-managed dependency use the weaker historical completion rule.",
+      "evidence": "Independent canonical lens at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859764170; actual repair and source-bound deferral are recorded in PR #389 and linked follow-up.",
+      "urgency_rubric": "P0/P1 material impact blocks; confirmed P2 can be deferred only with owner, acceptance and current required tests; P3 is advisory. Essential acceptance and required checks remain independent gates.",
+      "acceptance_criteria": [
+        {
+          "id": "A1",
+          "text": "Managed dependencies require terminal claim proof.",
+          "source": "https://github.com/dgmolla/fitsy/issues/388"
+        }
+      ],
+      "owner": null,
+      "followup": null
+    },
+    {
+      "id": "stale_blocker",
+      "raw": {
+        "verdict": "fail",
+        "priority": "P2",
+        "head": "d4077a74179c76a4ae5f5a283c8dd6d5825bedc1",
+        "source": "https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859869804",
+        "finding": "**CONFIRMED / P2** `scripts/delivery/local-dispatcher.py:286`: Stale Blocker text prevents an otherwise eligible issue from being dispatched.\n  - impact: A ready issue can remain idle after recovery. When an operator removes `dispatch-hold` and renews `dispatch-ready` but leaves stale Blocker text, `scripts/delivery/local-dispatcher.py:286` excludes it. This adds a condition absent from the eligibility contract in `docs/engineering/devops/local-dispatcher.md:4`. The retry fixture clears Blocker text explicitly at `scripts/delivery/local-dispatcher.test.py:434`, so it does not cover this case. The delay is recoverable by clearing the field, which keeps urgency at P2.\n  - scenario: Queued Now or Next issue with `dispatch-ready`, no `dispatch-hold`, satisfied dependencies, and stale Blocker text -> dispatcher leaves it idle\n  - fix: Apply the documented eligibility rule without treating Blocker text as a hold, and extend the retry fixture in `scripts/delivery/local-dispatcher.test.py` to retain stale Blocker text after relabeling."
+      },
+      "context": "PR #389 dispatcher or installer diff at reviewed head d4077a74179c76a4ae5f5a283c8dd6d5825bedc1. **CONFIRMED / P2** `scripts/delivery/local-dispatcher.py:286`: Stale Blocker text prevents an otherwise eligible issue from being dispatched.",
+      "evidence": "Independent canonical lens at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859869804; actual repair and source-bound deferral are recorded in PR #389 and linked follow-up.",
+      "urgency_rubric": "P0/P1 material impact blocks; confirmed P2 can be deferred only with owner, acceptance and current required tests; P3 is advisory. Essential acceptance and required checks remain independent gates.",
+      "acceptance_criteria": [
+        {
+          "id": "A1",
+          "text": "Stale Blocker text does not suppress ready label eligibility.",
+          "source": "https://github.com/dgmolla/fitsy/issues/388"
+        }
+      ],
+      "owner": "Infrastructure",
+      "followup": "https://github.com/dgmolla/fitsy/issues/398"
+    },
+    {
+      "id": "uncertain_prompt",
+      "raw": {
+        "verdict": "fail",
+        "priority": "P1",
+        "head": "d4077a74179c76a4ae5f5a283c8dd6d5825bedc1",
+        "source": "https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859855336",
+        "finding": "**PLAUSIBLE / P1** `scripts/delivery/local-dispatcher.py:475`: Editable issue text reaches a fully privileged implementation worker as instructions.\n  - impact: An issue author can edit the body after `dispatch-ready` is applied. The dispatcher fetches that body at claim time, places it directly in the worker prompt, and launches a worker with unrestricted local permissions. The label guard in scripts/delivery/local-dispatcher.py:280 and the terminal delivery checks do not establish that the body still matches reviewed acceptance text. A malicious instruction could cause credential access or unauthorized commands before any delivery gate runs; actual model compliance was not verified.\n  - scenario: An author edits a ready issue to include an instruction to read a local credential and send it elsewhere -> the next claim includes that text in the prompt of a worker launched with `danger-full-access`.\n  - fix: Bind dispatch to a trusted, immutable acceptance snapshot or require renewed trusted approval when issue text changes. Keep executable and review settings sourced from the private configuration, as scripts/delivery/local-dispatcher.py:673 and scripts/delivery/local-dispatcher.py:739 do."
+      },
+      "context": "PR #389 dispatcher or installer diff at reviewed head d4077a74179c76a4ae5f5a283c8dd6d5825bedc1. **PLAUSIBLE / P1** `scripts/delivery/local-dispatcher.py:475`: Editable issue text reaches a fully privileged implementation worker as instructions.",
+      "evidence": "Independent canonical lens at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859855336; actual repair and source-bound deferral are recorded in PR #389 and linked follow-up.",
+      "urgency_rubric": "P0/P1 material impact blocks; confirmed P2 can be deferred only with owner, acceptance and current required tests; P3 is advisory. Essential acceptance and required checks remain independent gates.",
+      "acceptance_criteria": [
+        {
+          "id": "A1",
+          "text": "Investigate whether edited issue instructions can trigger credential access.",
+          "source": "https://github.com/dgmolla/fitsy/issues/388"
+        }
+      ],
+      "owner": "Infrastructure",
+      "followup": "https://github.com/dgmolla/fitsy/issues/396"
+    },
+    {
+      "id": "uninstall_race",
+      "raw": {
+        "verdict": "fail",
+        "priority": "P1",
+        "head": "30648c55ef29e5859c15e35a6b70449fc41927f4",
+        "source": "https://github.com/dgmolla/fitsy/commit/30648c55ef29e5859c15e35a6b70449fc41927f4",
+        "finding": "Uninstall can race an active dispatcher claim and leave a live process behind."
+      },
+      "context": "Pre-repair dispatcher source at 30648c55ef29e5859c15e35a6b70449fc41927f4; subsequent PR #389 commits repaired owned timeout and uninstall handling.",
+      "evidence": "Historical repair sequence in PR #389 commit history, with process lifecycle fixture coverage.",
+      "urgency_rubric": "P1 material sole-lane blockage blocks release. Essential acceptance and required checks remain independent gates.",
+      "acceptance_criteria": [
+        {
+          "id": "A1",
+          "text": "Uninstall stops the owned service and does not leave a live claimed worker.",
+          "source": "https://github.com/dgmolla/fitsy/issues/388"
+        }
+      ]
+    },
+    {
+      "id": "timeout_descendant",
+      "raw": {
+        "verdict": "fail",
+        "priority": "P1",
+        "head": "14e545bfbc7a6606c4e57d75c5cf82c3f3058e7a",
+        "source": "https://github.com/dgmolla/fitsy/commit/14e545bfbc7a6606c4e57d75c5cf82c3f3058e7a",
+        "finding": "Claim timeout can leave a descendant holding the sole dispatcher lane."
+      },
+      "context": "Pre-repair dispatcher source at 14e545bfbc7a6606c4e57d75c5cf82c3f3058e7a; subsequent PR #389 commits repaired owned timeout and uninstall handling.",
+      "evidence": "Historical repair sequence in PR #389 commit history, with process lifecycle fixture coverage.",
+      "urgency_rubric": "P1 material sole-lane blockage blocks release. Essential acceptance and required checks remain independent gates.",
+      "acceptance_criteria": [
+        {
+          "id": "A1",
+          "text": "The 90-minute claim deadline reaps owned descendants and frees the lane.",
+          "source": "https://github.com/dgmolla/fitsy/issues/388"
+        }
+      ]
+    },
+    {
+      "id": "style_only",
+      "raw": {
+        "verdict": "fail",
+        "priority": "P3",
+        "head": "72090b93369e71524f2b04cf1a55b6b8eea09d57",
+        "source": "https://github.com/dgmolla/fitsy/blob/72090b93369e71524f2b04cf1a55b6b8eea09d57/docs/engineering/devops/review-dispositions.md",
+        "finding": "Prefer a different local variable name; no behavior or acceptance effect is shown."
+      },
+      "context": "Policy control; no source defect established.",
+      "evidence": "No independent reproduction is available for this control.",
+      "urgency_rubric": "P3 is advisory; uncertain claims require investigation. Essential acceptance and required checks remain independent gates.",
+      "acceptance_criteria": []
+    },
+    {
+      "id": "conflicting_evidence",
+      "raw": {
+        "verdict": "fail",
+        "priority": "P2",
+        "head": "72090b93369e71524f2b04cf1a55b6b8eea09d57",
+        "source": "https://github.com/dgmolla/fitsy/blob/72090b93369e71524f2b04cf1a55b6b8eea09d57/docs/engineering/devops/review-dispositions.md",
+        "finding": "The finding claims dependency release is broken, but the supplied test and report disagree on the reproduced state."
+      },
+      "context": "Policy control; no source defect established.",
+      "evidence": "No independent reproduction is available for this control.",
+      "urgency_rubric": "P3 is advisory; uncertain claims require investigation. Essential acceptance and required checks remain independent gates.",
+      "acceptance_criteria": []
+    }
+  ]
+}
