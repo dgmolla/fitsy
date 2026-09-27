@@ -16,7 +16,7 @@ dispatcher = importlib.util.module_from_spec(dispatcher_spec)
 dispatcher_spec.loader.exec_module(dispatcher)
 credential = dispatcher.credential  # Reuse the verified private-key reader.
 
-VERSION = 'finding-advisory-v7'
+VERSION = 'finding-advisory-v9'
 DISPOSITIONS = ('fix_now', 'defer_with_owner', 'investigate', 'likely_unsupported')
 REASONS = {
     'acceptance': 'A named mandatory acceptance criterion is unmet.',
@@ -124,7 +124,8 @@ def recommend(value, config, call=provider_call):
         # A split between compatible explanation labels must not erase a clear
         # disposition. Only the disposition and a fix-now criterion need a
         # confidence floor.
-        if provider_confidence < 0.6 or (choice == 'fix_now' and criterion != 'none' and answers['criterion']['confidence'] < 0.6):
+        confirmed_high = value['raw']['severity'] == 'CONFIRMED' and value['raw']['priority'] in ('P0', 'P1')
+        if provider_confidence < 0.6 or (choice == 'fix_now' and criterion != 'none' and answers['criterion']['confidence'] < 0.6 and not confirmed_high):
             choice = 'investigate'
             reason_text = 'Provider uncertainty requires investigation.'
         else:
@@ -134,14 +135,18 @@ def recommend(value, config, call=provider_call):
             choice, reason_text = 'investigate', 'High-impact finding requires source-bound investigation.'
         if choice in ('defer_with_owner', 'likely_unsupported') and named_criterion:
             choice, reason_text = 'investigate', 'Provider advice conflicts with a potentially unmet acceptance criterion.'
+        if choice in ('defer_with_owner', 'likely_unsupported') and reason == 'acceptance':
+            choice, reason_text = 'investigate', 'Provider advice conflicts with its mandatory-acceptance reason.'
+        if choice == 'defer_with_owner' and value['acceptance_criteria'] and criterion == 'none' and answers['criterion']['confidence'] < 0.6:
+            choice, reason_text = 'investigate', 'Provider is uncertain whether a mandatory acceptance criterion is unmet.'
         if choice == 'defer_with_owner' and (not value.get('owner') or not value.get('followup')):
             choice, reason_text = 'investigate', 'Deferral needs a named owner and follow-up.'
         policy_criterion = {'id': 'confirmed-p0-p1-release-rule',
                             'text': 'Confirmed P0/P1 findings block release until resolved.',
                             'source': 'https://github.com/dgmolla/fitsy/blob/main/docs/engineering/devops/review-dispositions.md#priority-and-supported-dispositions'}
-        if choice == 'fix_now' and not named_criterion and not (value['raw']['severity'] == 'CONFIRMED' and value['raw']['priority'] in ('P0', 'P1')):
+        if choice == 'fix_now' and (not named_criterion or answers['criterion']['confidence'] < 0.6) and not confirmed_high:
             choice, reason_text = 'investigate', 'Fix-now advice needs a named criterion or confirmed P0/P1 release rule.'
-        unmet = (named_criterion or policy_criterion) if choice == 'fix_now' else None
+        unmet = (named_criterion if named_criterion and answers['criterion']['confidence'] >= 0.6 else policy_criterion) if choice == 'fix_now' else None
         potential = named_criterion if choice == 'investigate' and criterion != 'none' else None
         result.update({'status': 'available', 'recommendation': choice, 'reason': reason_text,
                        'confidence': provider_confidence if choice == provider_choice else None,

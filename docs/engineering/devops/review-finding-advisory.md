@@ -41,11 +41,12 @@ An oracle audit then found incorrect mappings of prior #388 P2 deferrals to fix-
 Those earlier scores are invalid for accuracy claims; `.evidence/372-advisory-evaluation-invalid-oracle.json` preserves the last one.
 The corrected oracle uses the pre-existing #388 source-bound outcomes and was hashed before the final provider requests.
 The first review repair exposed follow-up acceptance text incorrectly presented to Jev as mandatory current-release acceptance; the 6/15 diagnostic run is retained as `.evidence/372-advisory-evaluation-v6.json`.
+The next review found a contradictory acceptance reason could still accompany deferral; its repair and diagnostic runs are also retained.
 The final 15-call run matched 13/15 expected decisions, with 2 missed fix-now recommendations, 0 false deferrals, and 0 unnecessary fix-now recommendations.
 The two misses were investigations, not permissions to defer or merge.
-Mean raw provider-choice confidence was 0.914 on correct choices and 0.727 on wrong choices; the selected-choice Brier score was 0.1200 on this small sample.
+Mean raw provider-choice confidence was 0.921 on correct choices and 0.740 on wrong choices; the selected-choice Brier score was 0.1234 on this small sample.
 When a deterministic guard changes the provider choice to investigate, the advisory confidence is unknown and the raw provider confidence remains separately visible.
-The final 15 calls totaled 3,684 ms and an estimated $0.00073219 from returned input token counts and TypeSafe's [published $0.042 per million input token price](https://typesafe.ai/blog/introducing-system-one-models-and-jev).
+The final 15 calls totaled 2,988 ms and an estimated $0.00073219 from returned input token counts and TypeSafe's [published $0.042 per million input token price](https://typesafe.ai/blog/introducing-system-one-models-and-jev).
 Jev returned no billed amount for any of the 15 calls, so actual charged cost is unknown.
 The earlier runs and diagnostic calls are retained in private evidence and are excluded from the final-run cost and latency.
 The detailed final receipt is `.evidence/372-advisory-evaluation.json` in the isolated checkout.
