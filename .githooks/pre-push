@@ -16,11 +16,17 @@ git_core="${PATH%%:*}"
 if [[ "$git_core" == */usr/libexec/git-core ]]; then
   developer_dir="${git_core%/usr/libexec/git-core}"
   export PATH="${PATH#*:}"
-  if [[ "${CPATH-}" == /usr/local/include ]]; then unset CPATH; fi
-  if [[ "${LIBRARY_PATH-}" == /usr/local/lib ]]; then unset LIBRARY_PATH; fi
+  if [[ "${CPATH-}" == /usr/local/include ]]; then unset CPATH
+  elif [[ "${CPATH-}" == *:/usr/local/include ]]; then export CPATH="${CPATH%:/usr/local/include}"
+  fi
+  if [[ "${LIBRARY_PATH-}" == /usr/local/lib ]]; then unset LIBRARY_PATH
+  elif [[ "${LIBRARY_PATH-}" == *:/usr/local/lib ]]; then export LIBRARY_PATH="${LIBRARY_PATH%:/usr/local/lib}"
+  fi
   if [[ "${SDKROOT-}" == "$developer_dir/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk" ]]; then unset SDKROOT; fi
   default_manpath="$developer_dir/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/share/man:$developer_dir/Platforms/MacOSX.platform/usr/share/man:$developer_dir/usr/share/man:$developer_dir/Toolchains/XcodeDefault.xctoolchain/usr/share/man:"
-  if [[ "${MANPATH-}" == "$default_manpath" ]]; then unset MANPATH; fi
+  if [[ "${MANPATH-}" == "$default_manpath" ]]; then unset MANPATH
+  elif [[ "${MANPATH-}" == "$default_manpath"* ]]; then export MANPATH="${MANPATH#"$default_manpath"}"
+  fi
 fi
 # A push must name the issue whose local evidence this hook is about to run.
 node "$ROOT/scripts/delivery/phase-events.mjs" summary >/dev/null || {
