@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildReport, deliverySlot, formatReport, loadMainGates, loadMergedPulls, loadProject, postOnce,
+  scheduledDeliverySlot,
 } from './hourly-report.mjs';
 
 const board = 'https://github.com/users/dgmolla/projects/1';
@@ -135,6 +136,19 @@ test('UTC half-hour slots stay distinct and reject stale fallback requests', () 
   assert.throws(() => deliverySlot(late, '2026-09-26T18:17'), /invalid UTC delivery slot/);
   assert.throws(() => deliverySlot(late, '2026-09-26T19:00'), /future/);
   assert.throws(() => deliverySlot(late, '2026-09-26T17:30'), /stale/);
+});
+
+test('delayed scheduled runs keep the cron slot and reject an untrustworthy delay', () => {
+  assert.equal(scheduledDeliverySlot(new Date('2026-09-26T21:58:00Z'), '17 * * * *'),
+    '2026-09-26T21:00');
+  assert.equal(scheduledDeliverySlot(new Date('2026-09-27T00:40:00Z'), '17 * * * *'),
+    '2026-09-27T00:00');
+  assert.equal(scheduledDeliverySlot(new Date('2026-09-26T21:58:00Z'), '47 * * * *'),
+    '2026-09-26T21:30');
+  assert.throws(() => scheduledDeliverySlot(new Date('2026-09-26T22:05:00Z'), '17 * * * *'),
+    /stale/);
+  assert.throws(() => scheduledDeliverySlot(new Date('2026-09-26T21:58:00Z'), '13 * * * *'),
+    /unknown delivery schedule/);
 });
 
 test('scheduled and fallback reports share one publisher per slot', async () => {

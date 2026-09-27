@@ -129,6 +129,16 @@ export function deliverySlot(now, requested) {
   return requested;
 }
 
+export function scheduledDeliverySlot(now, schedule) {
+  const minute = { '17 * * * *': 17, '47 * * * *': 47 }[schedule];
+  if (minute === undefined) throw new Error('unknown delivery schedule');
+  const due = new Date(now.getTime());
+  due.setUTCMinutes(minute, 0, 0);
+  if (due > now) due.setUTCHours(due.getUTCHours() - 1);
+  due.setUTCMinutes(minute < 30 ? 0 : 30, 0, 0);
+  return deliverySlot(now, due.toISOString().slice(0, 16));
+}
+
 export function buildReport(project, pulls, main, now = new Date(), requestedSlot) {
   const nowMs = now.getTime();
   const hour = new Date(nowMs); hour.setUTCMinutes(0, 0, 0);
@@ -279,8 +289,11 @@ async function main() {
   if (outputIndex < 0 || !args[outputIndex + 1]) throw new Error('--output-dir is required');
   const output = resolve(args[outputIndex + 1]);
   const slotArg = args.find(arg => arg.startsWith('--slot='));
-  const requestedSlot = slotArg?.slice('--slot='.length);
+  const scheduleArg = args.find(arg => arg.startsWith('--schedule='));
+  if (slotArg && scheduleArg) throw new Error('choose either --slot or --schedule');
   const now = new Date();
+  const requestedSlot = scheduleArg ? scheduledDeliverySlot(now, scheduleArg.slice('--schedule='.length)) :
+    slotArg?.slice('--slot='.length);
   deliverySlot(now, requestedSlot);
   await mkdir(output, { recursive: true });
   const post = args.includes('--post');
