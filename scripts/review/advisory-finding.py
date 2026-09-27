@@ -16,7 +16,7 @@ dispatcher = importlib.util.module_from_spec(dispatcher_spec)
 dispatcher_spec.loader.exec_module(dispatcher)
 credential = dispatcher.credential  # Reuse the verified private-key reader.
 
-VERSION = 'finding-advisory-v5'
+VERSION = 'finding-advisory-v7'
 DISPOSITIONS = ('fix_now', 'defer_with_owner', 'investigate', 'likely_unsupported')
 REASONS = {
     'acceptance': 'A named mandatory acceptance criterion is unmet.',
@@ -36,8 +36,8 @@ def validate(value):
     if not isinstance(value, dict) or len(json.dumps(value).encode()) > MAX_BYTES:
         raise ValueError('input must be an object of at most 16000 bytes')
     raw = value.get('raw')
-    if not isinstance(raw, dict) or raw.get('verdict') not in ('pass', 'fail') or raw.get('priority') not in ('P0', 'P1', 'P2', 'P3'):
-        raise ValueError('raw verdict and priority are required')
+    if not isinstance(raw, dict) or raw.get('verdict') not in ('pass', 'fail') or raw.get('priority') not in ('P0', 'P1', 'P2', 'P3') or raw.get('severity') not in ('CONFIRMED', 'PLAUSIBLE', 'NIT'):
+        raise ValueError('raw verdict, priority and severity are required')
     if not isinstance(raw.get('finding'), str) or not raw['finding'].strip() or len(raw['finding']) > 4000:
         raise ValueError('raw finding is required and bounded')
     if not isinstance(raw.get('head'), str) or len(raw['head']) != 40 or any(c not in '0123456789abcdef' for c in raw['head']):
@@ -71,7 +71,7 @@ def questions(value):
             'investigate': 'Conflicting or insufficient evidence, including possible high impact.',
             'likely_unsupported': 'Claim lacks support from the supplied independent evidence.'}},
         'reason': {'type': 'choice', 'instructions': 'Choose the strongest supported reason, without inventing evidence.', 'criteria': REASONS},
-        'criterion': {'type': 'choice', 'instructions': 'Choose a concrete unmet acceptance criterion only if the supplied evidence proves it; otherwise none.', 'criteria': criteria},
+        'criterion': {'type': 'choice', 'instructions': 'Choose a concrete mandatory acceptance criterion for this release only if independent evidence proves it unmet. Follow-up repair acceptance does not count; otherwise choose none.', 'criteria': criteria},
     }
 
 
@@ -109,8 +109,8 @@ def provider_call(value, config):
 def recommend(value, config, call=provider_call):
     validate(value)
     start = time.monotonic()
-    provenance = {'input_sha256': digest(value), 'prompt_version': VERSION, 'provider': config.get('provider', 'jev'), 'model_requested': config.get('model', 'jev-latest'), 'model_returned': None, 'head': value['raw']['head'], 'source': value['raw']['source'], 'raw_verdict': value['raw']['verdict'], 'raw_priority': value['raw']['priority']}
-    result = {'version': 1, 'status': 'unavailable', 'recommendation': 'investigate', 'reason': 'Provider unavailable; apply existing review disposition policy.', 'confidence': None, 'unmet_acceptance_criterion': None, 'owner': None, 'followup': None, 'fallback': 'existing_source_bound_review_policy', 'provenance': provenance, 'cost_usd': None, 'estimated_cost_usd': None}
+    provenance = {'input_sha256': digest(value), 'prompt_version': VERSION, 'provider': config.get('provider', 'jev'), 'model_requested': config.get('model', 'jev-latest'), 'model_returned': None, 'head': value['raw']['head'], 'source': value['raw']['source'], 'raw_verdict': value['raw']['verdict'], 'raw_priority': value['raw']['priority'], 'raw_severity': value['raw']['severity']}
+    result = {'version': 1, 'status': 'unavailable', 'recommendation': 'investigate', 'reason': 'Provider unavailable; apply existing review disposition policy.', 'confidence': None, 'unmet_acceptance_criterion': None, 'potential_unmet_acceptance_criterion': None, 'owner': None, 'followup': None, 'fallback': 'existing_source_bound_review_policy', 'provenance': provenance, 'cost_usd': None, 'estimated_cost_usd': None}
     try:
         response, model = call(value, config)
         answers = response['answers']
@@ -124,22 +124,29 @@ def recommend(value, config, call=provider_call):
         # A split between compatible explanation labels must not erase a clear
         # disposition. Only the disposition and a fix-now criterion need a
         # confidence floor.
-        if provider_confidence < 0.6 or (choice == 'fix_now' and answers['criterion']['confidence'] < 0.6):
+        if provider_confidence < 0.6 or (choice == 'fix_now' and criterion != 'none' and answers['criterion']['confidence'] < 0.6):
             choice = 'investigate'
             reason_text = 'Provider uncertainty requires investigation.'
         else:
             reason_text = REASONS[reason]
+        named_criterion = next((c for c in value['acceptance_criteria'] if c['id'] == criterion), None)
         if value['raw']['priority'] in ('P0', 'P1') and choice in ('defer_with_owner', 'likely_unsupported'):
             choice, reason_text = 'investigate', 'High-impact finding requires source-bound investigation.'
+        if choice in ('defer_with_owner', 'likely_unsupported') and named_criterion:
+            choice, reason_text = 'investigate', 'Provider advice conflicts with a potentially unmet acceptance criterion.'
         if choice == 'defer_with_owner' and (not value.get('owner') or not value.get('followup')):
             choice, reason_text = 'investigate', 'Deferral needs a named owner and follow-up.'
-        if choice == 'fix_now' and criterion == 'none':
-            choice, reason_text = 'investigate', 'Fix-now advice requires a concrete unmet acceptance criterion.'
-        unmet = next((c for c in value['acceptance_criteria'] if c['id'] == criterion), None) if choice == 'fix_now' else None
+        policy_criterion = {'id': 'confirmed-p0-p1-release-rule',
+                            'text': 'Confirmed P0/P1 findings block release until resolved.',
+                            'source': 'https://github.com/dgmolla/fitsy/blob/main/docs/engineering/devops/review-dispositions.md#priority-and-supported-dispositions'}
+        if choice == 'fix_now' and not named_criterion and not (value['raw']['severity'] == 'CONFIRMED' and value['raw']['priority'] in ('P0', 'P1')):
+            choice, reason_text = 'investigate', 'Fix-now advice needs a named criterion or confirmed P0/P1 release rule.'
+        unmet = (named_criterion or policy_criterion) if choice == 'fix_now' else None
+        potential = named_criterion if choice == 'investigate' and criterion != 'none' else None
         result.update({'status': 'available', 'recommendation': choice, 'reason': reason_text,
                        'confidence': provider_confidence if choice == provider_choice else None,
                        'provider_disposition': provider_choice, 'provider_confidence': provider_confidence,
-                       'unmet_acceptance_criterion': unmet,
+                       'unmet_acceptance_criterion': unmet, 'potential_unmet_acceptance_criterion': potential,
                        'owner': value.get('owner') if choice == 'defer_with_owner' else None,
                        'followup': value.get('followup') if choice == 'defer_with_owner' else None})
         result['provider_answers'] = answers

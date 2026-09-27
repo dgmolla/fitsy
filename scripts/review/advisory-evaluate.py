@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 ROOT = Path(__file__).resolve().parents[2]
 CASES = ROOT / 'scripts/review/fixtures/advisory-cases.json'
 ORACLE = ROOT / 'scripts/review/fixtures/advisory-oracle.json'
-EXPECTED_CASES_SHA256 = '9de90d4458c100547a9bf70981480622a1c55228e87f220fbee80fbfa61b6ba8'
+EXPECTED_CASES_SHA256 = '47b6c6f8a407c00b56870b97c2a9f42d1d01528b207daad512b8c82b346a0a6e'
 EXPECTED_ORACLE_SHA256 = 'f91ba40b84ab935fce2200f697283b387edb6fa6de7f9f79a14ccb71d0d9061c'
 
 
@@ -46,6 +46,7 @@ def main():
     historical = [x for x in scored if x['historical']]
     blockers = [x for x in historical if x['expected'] == 'fix_now']
     known = [x for x in scored if x['provider_confidence'] is not None]
+    known_costs = [x['result']['cost_usd'] for x in outputs if x['result']['cost_usd'] is not None]
     metrics = {'cases': len(scored), 'historical_cases': len(historical),
                'matches': sum(x['match'] for x in scored), 'disagreements': [x['id'] for x in scored if not x['match']],
                'missed_blockers': [x['id'] for x in blockers if x['recommendation'] != 'fix_now'],
@@ -55,7 +56,7 @@ def main():
                'provider_confidence_mean_wrong': round(sum(x['provider_confidence'] for x in known if x['provider_disposition'] != x['expected']) / max(1, sum(x['provider_disposition'] != x['expected'] for x in known)), 3),
                'provider_choice_brier': round(sum((x['provider_confidence'] - int(x['provider_disposition'] == x['expected'])) ** 2 for x in known) / max(1, len(known)), 4),
                'latency_ms_total': sum(x['result']['latency_ms'] for x in outputs),
-               'cost_usd_actual_observed': round(sum(x['result']['cost_usd'] or 0 for x in outputs), 8),
+               'cost_usd_actual_observed': round(sum(known_costs), 8) if known_costs else None,
                'cost_unknown_count': sum(x['result']['cost_usd'] is None for x in outputs),
                'cost_usd_list_price_estimate': round(sum(x['result']['estimated_cost_usd'] or 0 for x in outputs), 8)}
     receipt = {'version': 1, 'at': datetime.now(timezone.utc).isoformat(),

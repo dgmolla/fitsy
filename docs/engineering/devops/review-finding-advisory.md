@@ -16,7 +16,8 @@ flowchart LR
 ```
 
 Run `python3 scripts/review/advisory-finding.py path/to/finding.json` from this checkout.
-The file contains one JSON object with `raw` (`verdict`, `priority`, full 40-character `head`, `source`, and verbatim `finding`), bounded `context`, `evidence`, `urgency_rubric`, `acceptance_criteria` as `[{"id":"A1","text":"...","source":"https://..."}]`, and optional `owner` and `followup` for a real defect that might be deferred.
+The file contains one JSON object with `raw` (`verdict`, `priority`, `severity`, full 40-character `head`, `source`, and verbatim `finding`), bounded `context`, `evidence`, `urgency_rubric`, `acceptance_criteria` as `[{"id":"A1","text":"...","source":"https://..."}]`, and optional `owner` and `followup` for a real defect that might be deferred.
+List only acceptance criteria mandatory for the current release; follow-up repair acceptance belongs in the linked follow-up issue.
 The checked-in [frozen case inputs](../../../scripts/review/fixtures/advisory-cases.json) show complete examples.
 The optional `--config` accepts a private JSON file with `provider`, `model`, `endpoint`, `key_file`, and `usd_per_million_input_tokens` for the configured adapter.
 The default reuses the verified #388 Jev credential reader and private credential file.
@@ -27,7 +28,7 @@ Low disposition confidence, a low-confidence fix-now criterion, a P0/P1 deferral
 
 ## Frozen shadow evaluation
 
-The final [15 case inputs](../../../scripts/review/fixtures/advisory-cases.json) and separate [expected decisions](../../../scripts/review/fixtures/advisory-oracle.json) were frozen before the final model run, with SHA-256 values `9de90d4458c100547a9bf70981480622a1c55228e87f220fbee80fbfa61b6ba8` and `f91ba40b84ab935fce2200f697283b387edb6fa6de7f9f79a14ccb71d0d9061c`.
+The final [15 case inputs](../../../scripts/review/fixtures/advisory-cases.json) and separate [expected decisions](../../../scripts/review/fixtures/advisory-oracle.json) were frozen before the final model run, with SHA-256 values `47b6c6f8a407c00b56870b97c2a9f42d1d01528b207daad512b8c82b346a0a6e` and `f91ba40b84ab935fce2200f697283b387edb6fa6de7f9f79a14ccb71d0d9061c`.
 Thirteen cases use prior PR #389 independent lens findings or historical owner repairs, with the pre-existing source-bound owner outcome as the oracle.
 Two explicit policy controls cover unsupported style advice and conflicting evidence; they are separate from historical defect accuracy.
 The set includes orphan and timeout P1s, dependency lookup, stale alert, uninstall race, policy conflict, alternate reviewer recovery, mandatory acceptance, owned debt, and uncertainty.
@@ -39,11 +40,12 @@ Its private receipt is `.evidence/372-advisory-evaluation-initial.json` and is r
 An oracle audit then found incorrect mappings of prior #388 P2 deferrals to fix-now and wrong follow-up links.
 Those earlier scores are invalid for accuracy claims; `.evidence/372-advisory-evaluation-invalid-oracle.json` preserves the last one.
 The corrected oracle uses the pre-existing #388 source-bound outcomes and was hashed before the final provider requests.
-The final 15-call run matched 11/15 expected decisions, with 4 missed fix-now recommendations, 0 false deferrals, and 0 unnecessary fix-now recommendations.
-The four misses were investigations, not permissions to defer or merge.
-Mean raw provider-choice confidence was 0.860 on correct choices and 0.723 on wrong choices; the selected-choice Brier score was 0.1420 on this small sample.
+The first review repair exposed follow-up acceptance text incorrectly presented to Jev as mandatory current-release acceptance; the 6/15 diagnostic run is retained as `.evidence/372-advisory-evaluation-v6.json`.
+The final 15-call run matched 13/15 expected decisions, with 2 missed fix-now recommendations, 0 false deferrals, and 0 unnecessary fix-now recommendations.
+The two misses were investigations, not permissions to defer or merge.
+Mean raw provider-choice confidence was 0.914 on correct choices and 0.727 on wrong choices; the selected-choice Brier score was 0.1200 on this small sample.
 When a deterministic guard changes the provider choice to investigate, the advisory confidence is unknown and the raw provider confidence remains separately visible.
-The final 15 calls totaled 4,242 ms and an estimated $0.00073567 from returned input token counts and TypeSafe's [published $0.042 per million input token price](https://typesafe.ai/blog/introducing-system-one-models-and-jev).
+The final 15 calls totaled 3,684 ms and an estimated $0.00073219 from returned input token counts and TypeSafe's [published $0.042 per million input token price](https://typesafe.ai/blog/introducing-system-one-models-and-jev).
 Jev returned no billed amount for any of the 15 calls, so actual charged cost is unknown.
 The earlier runs and diagnostic calls are retained in private evidence and are excluded from the final-run cost and latency.
 The detailed final receipt is `.evidence/372-advisory-evaluation.json` in the isolated checkout.

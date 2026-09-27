@@ -8,7 +8,7 @@ spec.loader.exec_module(advisory)
 
 
 def fixture(priority='P2'):
-    return {'raw': {'verdict': 'fail', 'priority': priority, 'head': 'a' * 40,
+    return {'raw': {'verdict': 'fail', 'priority': priority, 'severity': 'CONFIRMED', 'head': 'a' * 40,
                     'source': 'https://example.test/review', 'finding': 'A current defect'},
             'context': 'Changed line and relevant context', 'evidence': 'Independent reproduction',
             'urgency_rubric': 'P1 is high material impact; P2 is medium.',
@@ -56,10 +56,24 @@ class AdvisoryTests(unittest.TestCase):
         result = advisory.recommend(value, {}, lambda *_: response(value, 'fix_now', 'none'))
         self.assertEqual(result['recommendation'], 'investigate')
 
+    def test_confirmed_p1_fix_uses_standing_release_rule(self):
+        value = fixture('P1')
+        result = advisory.recommend(value, {}, lambda *_: response(value, 'fix_now', 'none'))
+        self.assertEqual(result['recommendation'], 'fix_now')
+        self.assertEqual(result['unmet_acceptance_criterion']['id'], 'confirmed-p0-p1-release-rule')
+        self.assertTrue(result['unmet_acceptance_criterion']['source'].startswith('https://'))
+
+    def test_conflicting_deferral_cannot_hide_unmet_criterion(self):
+        value = fixture()
+        result = advisory.recommend(value, {}, lambda *_: response(value, 'defer_with_owner', 'A1'))
+        self.assertEqual(result['recommendation'], 'investigate')
+        self.assertEqual(result['potential_unmet_acceptance_criterion']['id'], 'A1')
+        self.assertIsNone(result['confidence'])
+
     def test_owned_deferral_and_cost(self):
         value = fixture()
         result = advisory.recommend(value, {'usd_per_million_input_tokens': .042},
-                                    lambda *_: response(value, 'defer_with_owner'))
+                                    lambda *_: response(value, 'defer_with_owner', 'none'))
         self.assertEqual(result['recommendation'], 'defer_with_owner')
         self.assertEqual(result['owner'], 'Infrastructure')
         self.assertIsNone(result['cost_usd'])
