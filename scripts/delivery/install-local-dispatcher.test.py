@@ -30,7 +30,8 @@ class InstallTest(unittest.TestCase):
             (home / 'firstmate/config/slack-notifications.json').write_text(json.dumps({
                 'channel': 'CCHANNEL', 'user': 'UHUMAN', 'bridge_path': str(base / 'bridge')}))
             (home / '.fitsy-delivery/config.json').write_text(json.dumps({
-                'channel': 'CCHANNEL', 'user': 'USENDER', 'bridge_path': str(base / 'bridge')}))
+                'channel': 'CCHANNEL', 'user': 'USENDER', 'recipient_user': 'UHUMAN',
+                'bridge_path': str(base / 'bridge')}))
             gh = tools / 'gh'
             gh.write_text('#!/bin/sh\nif [ "$1" = api ]; then git rev-parse HEAD; '
                           'else sha=$(git rev-parse HEAD); printf \'[{"workflowName":"Verify","headSha":"%s","status":"completed","conclusion":"success"},{"workflowName":"Deploy","headSha":"%s","status":"completed","conclusion":"success"}]\\n\' "$sha" "$sha"; fi\n')
@@ -65,6 +66,13 @@ class InstallTest(unittest.TestCase):
             self.assertEqual((home / '.fitsy-dispatcher/credentials/jev.env').stat().st_mode & 0o077, 0)
             reporter_path = home / '.fitsy-delivery/config.json'
             reporter = json.loads(reporter_path.read_text())
+            reporter_path.write_text(json.dumps({**{key: value for key, value in reporter.items()
+                                                    if key != 'recipient_user'}, 'user': 'UHUMAN'}))
+            legacy = subprocess.run(['bash', 'scripts/delivery/install-local-dispatcher.sh', '--enable'],
+                                    cwd=repo, env=env, text=True, capture_output=True, timeout=15)
+            self.assertNotEqual(legacy.returncode, 0)
+            self.assertIn('reporter recipient identity is unverified', legacy.stderr)
+            self.assertFalse(json.loads(config_path.read_text())['enabled'])
             reporter_path.write_text(json.dumps({**reporter, 'user': 'UOTHER'}))
             drift = subprocess.run(['bash', 'scripts/delivery/install-local-dispatcher.sh', '--enable'],
                                    cwd=repo, env=env, text=True, capture_output=True, timeout=15)
@@ -78,7 +86,7 @@ class InstallTest(unittest.TestCase):
             recipient_drift = subprocess.run(['bash', 'scripts/delivery/install-local-dispatcher.sh', '--enable'],
                                              cwd=repo, env=env, text=True, capture_output=True, timeout=15)
             self.assertNotEqual(recipient_drift.returncode, 0)
-            self.assertIn('dispatcher Slack identity differs from reporter', recipient_drift.stderr)
+            self.assertIn('reporter recipient identity is unverified', recipient_drift.stderr)
             notification_path.write_text(json.dumps(notification))
             command('bash', 'scripts/delivery/install-local-dispatcher.sh', '--enable')
             self.assertTrue(json.loads(config_path.read_text())['enabled'])
