@@ -41,6 +41,14 @@ for root in roots:
         raise SystemExit(f'no delivery binding at timing root: {path}')
 if mode == '--install' and not roots:
     raise SystemExit('install requires at least one explicit --timing-root')
+local_head = subprocess.check_output(['git', '-C', repo, 'rev-parse', 'HEAD'], text=True).strip()
+main_head = subprocess.check_output(['gh', 'api', 'repos/dgmolla/fitsy/commits/main',
+    '--jq', '.sha'], text=True).strip()
+if local_head != main_head:
+    raise SystemExit('local checkout is not the exact current main commit; installation refused')
+if subprocess.check_output(['git', '-C', repo, 'status', '--porcelain', '--untracked-files=all'],
+                           text=True).strip():
+    raise SystemExit('local checkout has uncommitted files; installation refused')
 source = subprocess.check_output(['gh', 'api',
     'repos/dgmolla/fitsy/contents/.github/workflows/hourly-delivery.yml?ref=main',
     '--jq', '.content'], text=True)

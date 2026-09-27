@@ -57,7 +57,13 @@ export async function loadTimings(rest, items, now, localRoots = []) {
   for (const root of localRoots) {
     const binding = readBinding(root);
     if (!binding) throw new Error(`Local timing root has no issue binding: ${root}`);
-    const run = buildSummary(binding.issue, binding.run_id, readRows(root), now.toISOString());
+    const rows = readRows(root);
+    const observed = rows.filter(row => row.issue === binding.issue && row.run_id === binding.run_id)
+      .map(row => Date.parse(row.finished_at ?? row.started_at));
+    if (!observed.length) continue;
+    const updatedAt = new Date(Math.max(...observed)).toISOString();
+    if (Date.parse(updatedAt) > +now) throw new Error(`Local timing run is in the future: ${root}`);
+    const run = buildSummary(binding.issue, binding.run_id, rows, updatedAt);
     if (!run.events.length) continue;
     const key = `${binding.issue}:${binding.run_id}`;
     if (local.has(key)) throw new Error(`Local timing run registered twice: ${key}`);

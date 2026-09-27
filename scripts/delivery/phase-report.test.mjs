@@ -48,6 +48,21 @@ test('explicit local timing source fills an unpublished attempt without double c
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test('old local running evidence stays stale until a real event updates it', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'fitsy-stale-local-timing-'));
+  try {
+    mkdirSync(join(root, '.evidence/delivery'), { recursive: true });
+    writeFileSync(join(root, '.evidence/delivery/binding.json'), JSON.stringify({ issue: 355, run_id: 'run1' }));
+    const old = { ...event('old'), status: 'running', started_at: '2026-09-25T18:00:00.000Z',
+      finished_at: null, duration_ms: null };
+    writeFileSync(join(root, '.evidence/delivery/events.jsonl'), `${JSON.stringify(old)}\n`);
+    const items = [{ content: { __typename: 'Issue', number: 355 }, fields: { Status: 'In flight' } }];
+    const result = await loadTimings(async () => [], items, now, [root]);
+    assert.equal(result.coverage.stale, 1);
+    assert.equal(result.phases.review.running, 0);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test('only accepts valid writer observations for the exact issue/run', () => {
   const data = payload([event('a')]);
   assert.equal(parseTiming(comment(data), 355, +now).events.length, 1);
