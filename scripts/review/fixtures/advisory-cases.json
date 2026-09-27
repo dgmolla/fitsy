@@ -12,7 +12,7 @@
         "severity": "CONFIRMED"
       },
       "context": "PR #389 dispatcher or installer diff at reviewed head f65de5df62679efe4028388d06574f7d2d29716c. **CONFIRMED / P2** `scripts/delivery/install-local-dispatcher.sh:87`: Reinstall accepts a Claude worker configuration with an unavailable Codex reviewer.",
-      "evidence": "Independent canonical lens at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859441737; actual repair and source-bound deferral are recorded in PR #389 and linked follow-up.",
+      "evidence": "Independent canonical lens finding at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859441737; scenario and impact are described in the raw finding.",
       "urgency_rubric": "P0/P1 material impact blocks; confirmed P2 can be deferred only with owner, acceptance and current required tests; P3 is advisory. Essential acceptance and required checks remain independent gates.",
       "acceptance_criteria": [],
       "owner": "Infrastructure",
@@ -29,7 +29,7 @@
         "severity": "CONFIRMED"
       },
       "context": "PR #389 dispatcher or installer diff at reviewed head f65de5df62679efe4028388d06574f7d2d29716c. **CONFIRMED / P2** `scripts/delivery/local-dispatcher.py:254`: A later malformed terminal comment masks a valid delivery receipt.",
-      "evidence": "Independent canonical lens at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859443115; actual repair and source-bound deferral are recorded in PR #389 and linked follow-up.",
+      "evidence": "Independent canonical lens finding at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859443115; scenario and impact are described in the raw finding.",
       "urgency_rubric": "P0/P1 material impact blocks; confirmed P2 can be deferred only with owner, acceptance and current required tests; P3 is advisory. Essential acceptance and required checks remain independent gates.",
       "acceptance_criteria": [],
       "owner": "Codex dispatcher maintenance",
@@ -46,7 +46,7 @@
         "severity": "CONFIRMED"
       },
       "context": "PR #389 dispatcher or installer diff at reviewed head f65de5df62679efe4028388d06574f7d2d29716c. **CONFIRMED / P2** `scripts/delivery/install-local-dispatcher.sh:104`: Installation can succeed without the Slack bridge needed for blocker alerts.",
-      "evidence": "Independent canonical lens at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859443115; actual repair and source-bound deferral are recorded in PR #389 and linked follow-up.",
+      "evidence": "Independent canonical lens finding at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859443115; scenario and impact are described in the raw finding.",
       "urgency_rubric": "P0/P1 material impact blocks; confirmed P2 can be deferred only with owner, acceptance and current required tests; P3 is advisory. Essential acceptance and required checks remain independent gates.",
       "acceptance_criteria": [],
       "owner": "Infrastructure",
@@ -63,7 +63,7 @@
         "severity": "CONFIRMED"
       },
       "context": "PR #389 dispatcher or installer diff at reviewed head f65de5df62679efe4028388d06574f7d2d29716c. **CONFIRMED / P1** `scripts/delivery/local-dispatcher.py:505`: The active claim budget does not apply after the worker exits with a surviving child.",
-      "evidence": "Independent canonical lens at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859454586; actual repair and source-bound deferral are recorded in PR #389 and linked follow-up.",
+      "evidence": "Independent canonical lens finding at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859454586; scenario and impact are described in the raw finding.",
       "urgency_rubric": "P0/P1 material impact blocks; confirmed P2 can be deferred only with owner, acceptance and current required tests; P3 is advisory. Essential acceptance and required checks remain independent gates.",
       "acceptance_criteria": [
         {
@@ -86,7 +86,7 @@
         "severity": "CONFIRMED"
       },
       "context": "PR #389 dispatcher or installer diff at reviewed head f65de5df62679efe4028388d06574f7d2d29716c. **CONFIRMED / P2** `scripts/delivery/local-dispatcher.py:204`: Historical Done cards bypass the specified terminal-receipt requirement for dependency release.",
-      "evidence": "Independent canonical lens at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859454586; actual repair and source-bound deferral are recorded in PR #389 and linked follow-up.",
+      "evidence": "Independent canonical lens finding at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859454586; scenario and impact are described in the raw finding.",
       "urgency_rubric": "P0/P1 material impact blocks; confirmed P2 can be deferred only with owner, acceptance and current required tests; P3 is advisory. Essential acceptance and required checks remain independent gates.",
       "acceptance_criteria": [
         {
@@ -109,7 +109,7 @@
         "severity": "CONFIRMED"
       },
       "context": "PR #389 dispatcher or installer diff at reviewed head ce799e64c1da21e5bad88de91cae72a0c794a569. **CONFIRMED / P2** `scripts/delivery/local-dispatcher.py:567`: A stopped worker with verified Done is treated as timed out before its delivery evidence is checked.",
-      "evidence": "Independent canonical lens at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859643745; actual repair and source-bound deferral are recorded in PR #389 and linked follow-up.",
+      "evidence": "Independent canonical lens finding at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859643745; scenario and impact are described in the raw finding.",
       "urgency_rubric": "P0/P1 material impact blocks; confirmed P2 can be deferred only with owner, acceptance and current required tests; P3 is advisory. Essential acceptance and required checks remain independent gates.",
       "acceptance_criteria": [],
       "owner": "Codex dispatcher maintenance",
@@ -126,7 +126,7 @@
         "severity": "CONFIRMED"
       },
       "context": "PR #389 dispatcher or installer diff at reviewed head ce799e64c1da21e5bad88de91cae72a0c794a569. **CONFIRMED / P2** `scripts/delivery/local-dispatcher.py:355`: Persist Jev's validated response, including its probabilities.",
-      "evidence": "Independent canonical lens at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859656645; actual repair and source-bound deferral are recorded in PR #389 and linked follow-up.",
+      "evidence": "Independent canonical lens finding at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859656645; scenario and impact are described in the raw finding.",
       "urgency_rubric": "P0/P1 material impact blocks; confirmed P2 can be deferred only with owner, acceptance and current required tests; P3 is advisory. Essential acceptance and required checks remain independent gates.",
       "acceptance_criteria": [],
       "owner": "Codex dispatcher maintenance",
@@ -143,7 +143,7 @@
         "severity": "CONFIRMED"
       },
       "context": "PR #389 dispatcher or installer diff at reviewed head ce799e64c1da21e5bad88de91cae72a0c794a569. **CONFIRMED / P2** `scripts/delivery/local-dispatcher.test.py:493`: Run the process lifecycle fixtures with both worker adapters.",
-      "evidence": "Independent canonical lens at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859656645; actual repair and source-bound deferral are recorded in PR #389 and linked follow-up.",
+      "evidence": "Independent canonical lens finding at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859656645; scenario and impact are described in the raw finding.",
       "urgency_rubric": "P0/P1 material impact blocks; confirmed P2 can be deferred only with owner, acceptance and current required tests; P3 is advisory. Essential acceptance and required checks remain independent gates.",
       "acceptance_criteria": [
         {
@@ -166,7 +166,7 @@
         "severity": "CONFIRMED"
       },
       "context": "PR #389 dispatcher or installer diff at reviewed head a142ddeaed4c9330f2bae51f949bc3f9e9712ac3. **CONFIRMED / P2** `scripts/delivery/local-dispatcher.py:290`: A missing verified-state entry lets a dispatcher-managed dependency use the weaker historical completion rule.",
-      "evidence": "Independent canonical lens at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859764170; actual repair and source-bound deferral are recorded in PR #389 and linked follow-up.",
+      "evidence": "Independent canonical lens finding at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859764170; scenario and impact are described in the raw finding.",
       "urgency_rubric": "P0/P1 material impact blocks; confirmed P2 can be deferred only with owner, acceptance and current required tests; P3 is advisory. Essential acceptance and required checks remain independent gates.",
       "acceptance_criteria": [
         {
@@ -189,7 +189,7 @@
         "severity": "CONFIRMED"
       },
       "context": "PR #389 dispatcher or installer diff at reviewed head d4077a74179c76a4ae5f5a283c8dd6d5825bedc1. **CONFIRMED / P2** `scripts/delivery/local-dispatcher.py:286`: Stale Blocker text prevents an otherwise eligible issue from being dispatched.",
-      "evidence": "Independent canonical lens at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859869804; actual repair and source-bound deferral are recorded in PR #389 and linked follow-up.",
+      "evidence": "Independent canonical lens finding at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859869804; scenario and impact are described in the raw finding.",
       "urgency_rubric": "P0/P1 material impact blocks; confirmed P2 can be deferred only with owner, acceptance and current required tests; P3 is advisory. Essential acceptance and required checks remain independent gates.",
       "acceptance_criteria": [],
       "owner": "Infrastructure",
@@ -206,7 +206,7 @@
         "severity": "PLAUSIBLE"
       },
       "context": "PR #389 dispatcher or installer diff at reviewed head d4077a74179c76a4ae5f5a283c8dd6d5825bedc1. **PLAUSIBLE / P1** `scripts/delivery/local-dispatcher.py:475`: Editable issue text reaches a fully privileged implementation worker as instructions.",
-      "evidence": "Independent canonical lens at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859855336; actual repair and source-bound deferral are recorded in PR #389 and linked follow-up.",
+      "evidence": "Independent canonical lens finding at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859855336; scenario and impact are described in the raw finding.",
       "urgency_rubric": "P0/P1 material impact blocks; confirmed P2 can be deferred only with owner, acceptance and current required tests; P3 is advisory. Essential acceptance and required checks remain independent gates.",
       "acceptance_criteria": [
         {
@@ -228,8 +228,8 @@
         "finding": "Uninstall can race an active dispatcher claim and leave a live process behind.",
         "severity": "CONFIRMED"
       },
-      "context": "Pre-repair dispatcher source at 30648c55ef29e5859c15e35a6b70449fc41927f4; subsequent PR #389 commits repaired owned timeout and uninstall handling.",
-      "evidence": "Historical repair sequence in PR #389 commit history, with process lifecycle fixture coverage.",
+      "context": "Dispatcher source at 30648c55ef29e5859c15e35a6b70449fc41927f4.",
+      "evidence": "Historical source at the stated pre-repair head; scenario and impact are described in the raw finding.",
       "urgency_rubric": "P1 material sole-lane blockage blocks release. Essential acceptance and required checks remain independent gates.",
       "acceptance_criteria": [
         {
@@ -249,8 +249,8 @@
         "finding": "Claim timeout can leave a descendant holding the sole dispatcher lane.",
         "severity": "CONFIRMED"
       },
-      "context": "Pre-repair dispatcher source at 14e545bfbc7a6606c4e57d75c5cf82c3f3058e7a; subsequent PR #389 commits repaired owned timeout and uninstall handling.",
-      "evidence": "Historical repair sequence in PR #389 commit history, with process lifecycle fixture coverage.",
+      "context": "Dispatcher source at 14e545bfbc7a6606c4e57d75c5cf82c3f3058e7a.",
+      "evidence": "Historical source at the stated pre-repair head; scenario and impact are described in the raw finding.",
       "urgency_rubric": "P1 material sole-lane blockage blocks release. Essential acceptance and required checks remain independent gates.",
       "acceptance_criteria": [
         {
@@ -270,8 +270,8 @@
         "finding": "Prefer a different local variable name; no behavior or acceptance effect is shown.",
         "severity": "NIT"
       },
-      "context": "Policy control; no source defect established.",
-      "evidence": "No independent reproduction is available for this control.",
+      "context": "Review suggestion about local variable naming.",
+      "evidence": "The supplied record contains the suggestion and no behavioral reproduction.",
       "urgency_rubric": "P3 is advisory; uncertain claims require investigation. Essential acceptance and required checks remain independent gates.",
       "acceptance_criteria": []
     },
@@ -285,8 +285,8 @@
         "finding": "The finding claims dependency release is broken, but the supplied test and report disagree on the reproduced state.",
         "severity": "PLAUSIBLE"
       },
-      "context": "Policy control; no source defect established.",
-      "evidence": "No independent reproduction is available for this control.",
+      "context": "The report and supplied test disagree on the reproduced dependency state.",
+      "evidence": "Independent cause is unresolved in the supplied record.",
       "urgency_rubric": "P3 is advisory; uncertain claims require investigation. Essential acceptance and required checks remain independent gates.",
       "acceptance_criteria": []
     }

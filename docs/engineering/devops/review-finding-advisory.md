@@ -28,11 +28,15 @@ Low disposition confidence, a low-confidence fix-now criterion, a P0/P1 deferral
 
 ## Frozen shadow evaluation
 
-The final [15 case inputs](../../../scripts/review/fixtures/advisory-cases.json) and separate [expected decisions](../../../scripts/review/fixtures/advisory-oracle.json) were frozen before the final model run, with SHA-256 values `47b6c6f8a407c00b56870b97c2a9f42d1d01528b207daad512b8c82b346a0a6e` and `f91ba40b84ab935fce2200f697283b387edb6fa6de7f9f79a14ccb71d0d9061c`.
+The final exploratory [15 case inputs](../../../scripts/review/fixtures/advisory-cases.json) and separate [expected decisions](../../../scripts/review/fixtures/advisory-oracle.json) were frozen before the final model run, with SHA-256 values `3a327b959c17708eeb2d82c87b2a82a6733dab9edb4a6aaa785c0e4d6f124354` and `f91ba40b84ab935fce2200f697283b387edb6fa6de7f9f79a14ccb71d0d9061c`.
 Thirteen cases use prior PR #389 independent lens findings or historical owner repairs, with the pre-existing source-bound owner outcome as the oracle.
 Two explicit policy controls cover unsupported style advice and conflicting evidence; they are separate from historical defect accuracy.
 The set includes orphan and timeout P1s, dependency lookup, stale alert, uninstall race, policy conflict, alternate reviewer recovery, mandatory acceptance, owned debt, and uncertainty.
 The expected decision never enters the classifier input.
+A spec review found outcome language in earlier case evidence; the leaky fixture is retained at `.evidence/372-advisory-cases-leaky.json`.
+The final inputs remove that language and were frozen with the unchanged independent oracle before this final provider run.
+No success threshold was preregistered before model calls, so this is exploratory evidence rather than a threshold-passing validation.
+A future validation needs prespecified blocker recall and false-deferral thresholds before collecting or running new cases.
 The earlier pilot reported 4/4 intensity and 4/6 P2 disposition matches; that pilot did not measure blocker recall and is not counted as this run.
 
 The first 16-call implementation run over-investigated because it required high confidence in a reason label even when the disposition was clear.
@@ -44,11 +48,11 @@ The first review repair exposed follow-up acceptance text incorrectly presented 
 The next reviews found contradictory evidence reasons could still accompany deferral, whitespace-only ownership could appear valid, and a reserved criterion ID could collide; their repairs and diagnostic runs are also retained.
 The final 15-call run matched 12/15 expected decisions, with 2 missed fix-now recommendations, 0 false deferrals, and 0 unnecessary fix-now recommendations.
 The two misses were investigations, not permissions to defer or merge.
-Mean raw provider-choice confidence was 0.913 on correct choices and 0.723 on wrong choices; the selected-choice Brier score was 0.1189 on this small sample.
+Mean raw provider-choice confidence was 0.949 on correct choices and 0.670 on wrong choices; the selected-choice Brier score was 0.0959 on this small sample.
 When a deterministic guard changes the provider choice to investigate, the advisory confidence is unknown and the raw provider confidence remains separately visible.
-The final 15 calls totaled 3,021 ms and an estimated $0.00073219 from returned input token counts and TypeSafe's [published $0.042 per million input token price](https://typesafe.ai/blog/introducing-system-one-models-and-jev).
+The final 15 calls totaled 3,147 ms and an estimated $0.00072652 from returned input token counts and TypeSafe's [published $0.042 per million input token price](https://typesafe.ai/blog/introducing-system-one-models-and-jev).
 Jev returned no billed amount for any of the 15 calls, so actual charged cost is unknown.
-The earlier runs and diagnostic calls are retained in private evidence and are excluded from the final-run cost and latency.
+The earlier runs, including the outcome-leaking input run, and diagnostic calls are retained in private evidence and are excluded from the final-run cost and latency.
 The detailed final receipt is `.evidence/372-advisory-evaluation.json` in the isolated checkout.
 
 PR #389's issue-bound ledger recorded 2,214.447 seconds of independent review over 14 rounds at inspection.

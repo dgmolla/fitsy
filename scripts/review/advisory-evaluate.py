@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 ROOT = Path(__file__).resolve().parents[2]
 CASES = ROOT / 'scripts/review/fixtures/advisory-cases.json'
 ORACLE = ROOT / 'scripts/review/fixtures/advisory-oracle.json'
-EXPECTED_CASES_SHA256 = '47b6c6f8a407c00b56870b97c2a9f42d1d01528b207daad512b8c82b346a0a6e'
+EXPECTED_CASES_SHA256 = '3a327b959c17708eeb2d82c87b2a82a6733dab9edb4a6aaa785c0e4d6f124354'
 EXPECTED_ORACLE_SHA256 = 'f91ba40b84ab935fce2200f697283b387edb6fa6de7f9f79a14ccb71d0d9061c'
 
 
