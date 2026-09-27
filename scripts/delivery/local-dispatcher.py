@@ -540,8 +540,22 @@ def tick(config, state, state_path, script):
                 return {'state': 'uncertain-launch', 'issue': active['issue']}
         if active.get('pid') and active.get('pid_started') and pid_identity(active['pid']) not in (None, active['pid_started']):
             return {'state': 'uncertain-pid-reuse', 'issue': active['issue']}
-        if active.get('pid') and active.get('finished_at') and group_alive(active.get('worker_pgid', active['pid'])):
+        if active.get('pid') and active.get('finished_at') and other_group_members(active.get('worker_pgid', active['pid']), os.getpid()):
             return {'state': 'worker-group-live', 'issue': active['issue']}
+        if active.get('pid') and not active.get('finished_at'):
+            started = active.get('started_at') or active.get('claimed_at')
+            timeout = config.get('worker_timeout_seconds', 90 * 60)
+            expired = (started and time.time() >=
+                       datetime.fromisoformat(started.replace('Z', '+00:00')).timestamp() + timeout)
+            if expired:
+                pgid = active.get('worker_pgid', active['pid'])
+                if not stop_owned_group(pgid, os.getpid()):
+                    return {'state': 'worker-group-live', 'issue': active['issue']}
+                active['timed_out'] = True
+                active['stage'] = 'finished'
+                active['finished_at'] = utc()
+                active['failure'] = f'worker group exceeded {timeout}s wall-clock budget'
+                write_json(state_path, state)
         if active.get('pid') and not active.get('finished_at'):
             observed = pid_identity(active['pid'])
             if observed == active.get('pid_started'):
