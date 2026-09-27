@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 ROOT = Path(__file__).resolve().parents[2]
 CASES = ROOT / 'scripts/review/fixtures/advisory-cases.json'
 ORACLE = ROOT / 'scripts/review/fixtures/advisory-oracle.json'
-EXPECTED_CASES_SHA256 = '3a327b959c17708eeb2d82c87b2a82a6733dab9edb4a6aaa785c0e4d6f124354'
+EXPECTED_CASES_SHA256 = '227a7a80004e41ea19b95ea220414d72d1d4a677b9a337cb72cd28c3be1fd836'
 EXPECTED_ORACLE_SHA256 = 'f91ba40b84ab935fce2200f697283b387edb6fa6de7f9f79a14ccb71d0d9061c'
 
 
@@ -21,9 +21,15 @@ def read_frozen(path, expected):
     return json.loads(data)
 
 
+def validate_case_inputs(cases):
+    if any('owner' in case or 'followup' in case for case in cases):
+        raise ValueError('shadow cases must not expose historical owner or follow-up outcomes')
+
+
 def main():
     cases = read_frozen(CASES, EXPECTED_CASES_SHA256)['cases']
     oracle = {x['id']: x for x in read_frozen(ORACLE, EXPECTED_ORACLE_SHA256)['cases']}
+    validate_case_inputs(cases)
     spec = importlib.util.spec_from_file_location('advisory', Path(__file__).with_name('advisory-finding.py'))
     advisory = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(advisory)
@@ -51,6 +57,7 @@ def main():
                'matches': sum(x['match'] for x in scored), 'disagreements': [x['id'] for x in scored if not x['match']],
                'missed_blockers': [x['id'] for x in blockers if x['recommendation'] != 'fix_now'],
                'false_deferrals': [x['id'] for x in blockers if x['recommendation'] == 'defer_with_owner'],
+               'provider_false_deferrals': [x['id'] for x in blockers if x['provider_disposition'] == 'defer_with_owner'],
                'unnecessary_blockers': [x['id'] for x in scored if x['recommendation'] == 'fix_now' and x['expected'] != 'fix_now'],
                'provider_confidence_mean_correct': round(sum(x['provider_confidence'] for x in known if x['provider_disposition'] == x['expected']) / max(1, sum(x['provider_disposition'] == x['expected'] for x in known)), 3),
                'provider_confidence_mean_wrong': round(sum(x['provider_confidence'] for x in known if x['provider_disposition'] != x['expected']) / max(1, sum(x['provider_disposition'] != x['expected'] for x in known)), 3),

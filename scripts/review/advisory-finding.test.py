@@ -5,6 +5,9 @@ import unittest
 spec = importlib.util.spec_from_file_location('advisory', Path(__file__).with_name('advisory-finding.py'))
 advisory = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(advisory)
+evaluation_spec = importlib.util.spec_from_file_location('evaluation', Path(__file__).with_name('advisory-evaluate.py'))
+evaluation = importlib.util.module_from_spec(evaluation_spec)
+evaluation_spec.loader.exec_module(evaluation)
 
 
 def fixture(priority='P2'):
@@ -28,6 +31,13 @@ def response(value, disposition, criterion='A1', confidence=.9, reason='acceptan
 
 
 class AdvisoryTests(unittest.TestCase):
+    def test_shadow_cases_hide_historical_owner_outcomes(self):
+        cases = evaluation.read_frozen(evaluation.CASES, evaluation.EXPECTED_CASES_SHA256)['cases']
+        evaluation.validate_case_inputs(cases)
+        for field in ('owner', 'followup'):
+            with self.assertRaisesRegex(ValueError, 'historical owner or follow-up'):
+                evaluation.validate_case_inputs([dict(cases[0], **{field: 'historical outcome'})])
+
     def test_schema_rejects_unbounded_and_stale_identity(self):
         value = fixture()
         value['context'] = 'x' * 6001
