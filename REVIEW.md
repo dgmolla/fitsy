@@ -12,12 +12,24 @@ Design: `docs/engineering/devops/autonomous-shipping.md` §L5.
 - **NIT**: style or preference. Maximum 5 per review; do not post nits on patterns CI already enforces.
 
 Severity is confidence, not impact or merge priority.
-Assign each finding a separate impact priority: P0 critical, P1 high, P2 medium or P3 low.
-P0/P1 require a concrete realistic path to material security exposure, data loss, wrong-account or payment behavior, a broken core flow, or invalid mandatory evidence.
+Assign each finding a separate urgency priority using production impact, blast radius, realistic likelihood, recovery cost, code quality consequences, and relevance to the release being reviewed.
 State the affected user outcome, trigger, scope, evidence and violated contract in `impact`.
-A confirmed finding is not automatically P1, and a plausible high-impact concern requires bounded investigation.
-The raw verdict remains `fail` when any finding is CONFIRMED, regardless of priority.
-The separate review gate may accept a documented P2/P3 follow-up with current required-test receipts; it never rewrites the raw verdict.
+Explain which factors make the finding urgent; confidence alone never raises priority.
+
+| Priority | Urgency and disposition |
+| --- | --- |
+| P0 | Critical active or imminent impact, such as broad security exposure, unrecoverable data loss, or widespread core-service failure. Confirmed findings block. |
+| P1 | A concrete, realistic path to material security, account, payment, data, or core-flow harm that warrants fixing before this release. Consider affected users, frequency and recovery; confirmed findings block. |
+| P2 | Bounded or recoverable incorrect behavior, quality debt, or an edge case whose production impact does not justify holding this release. Normally defer with a named owner, acceptance criteria and current required-test evidence. |
+| P3 | Low-impact clarity, polish, maintainability preference, or housekeeping. Advisory; keep the finding visible without requiring a blocking disposition. |
+
+Code quality matters through concrete consequences such as defect likelihood, inability to recover safely, or a maintenance hazard required by this release; a preferred abstraction alone is not P1.
+Release relevance determines what this change must deliver, not whether a real high-impact finding may be hidden.
+A confirmed finding is not automatically urgent, and a plausible high-impact concern requires bounded investigation rather than automatic dismissal or a fabricated confirmation.
+Required tests and essential acceptance criteria block independently of finding priority.
+Do not relabel an acceptance failure P1 merely to make its independent gate enforceable, or use P2 deferral to waive that gate.
+The raw verdict remains `fail` when any finding is CONFIRMED, including P3.
+The separate review gate preserves that raw verdict while applying the source-bound P2 disposition contract or P3 advisory policy.
 
 ## Evidence bar
 
@@ -55,6 +67,7 @@ End with exactly one fenced JSON block:
 
 ## Convergence
 
-A CONFIRMED finding must describe behavior that is wrong for the diff's purpose, not a hardening opportunity, a stale-context risk in tooling, or a tradeoff the code comments as deliberate.
-If a comment at the site already names the tradeoff you found, do not report it; the decision is made.
+A CONFIRMED finding must demonstrate wrong behavior against the change's required contract.
+A documented tradeoff provides context for urgency; it does not excuse an unmet essential acceptance criterion or proven high-impact failure.
+General hardening opportunities and preferred abstractions belong in proportionate owned follow-ups or advisory comments, not invented blockers.
 Depth-of-review is bounded: report what a strong reviewer would insist on before merge, not everything imaginable.

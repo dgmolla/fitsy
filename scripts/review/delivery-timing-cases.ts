@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, cpSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 type Context = {
@@ -15,6 +15,7 @@ test("PR timing isolates issue ownership and refuses ambiguous or changed bindin
   const root = fixture.root(), env = fixture.env();
   mkdirSync(join(root, "scripts/delivery"), { recursive: true });
   cpSync(join(source, "scripts/delivery/phase-events.mjs"), join(root, "scripts/delivery/phase-events.mjs"));
+  unlinkSync(join(root, ".evidence/delivery/binding.json"));
   const bind = spawnSync(process.execPath, ["scripts/delivery/phase-events.mjs", "bind", "--issue", "999"],
     { cwd: root, env, encoding: "utf8" });
   expect(bind.status).toBe(0);
@@ -54,7 +55,7 @@ else: sys.exit(1)
   expect(payload.events).toEqual([expect.objectContaining({ issue: 355, phase: "review", status: "pass" })]);
   for (const body of ["", "Delivery-Issue: #355\nDelivery-Issue: #356\n", "Delivery-Issue: #356\n"]) {
     const gap = runPr("correctness", body);
-    expect(gap.status).toBe(0);
+    expect(gap.status).toBe(1);
     expect(gap.stderr).toContain("timing gap");
     expect(readFileSync(join(context, "events.jsonl"), "utf8")).toBe(rows);
   }
@@ -65,6 +66,7 @@ test("local timing records pass, cached reuse, and failed independent reviews", 
   const root = fixture.root(), env = fixture.env();
   mkdirSync(join(root, "scripts/delivery"), { recursive: true });
   cpSync(join(source, "scripts/delivery/phase-events.mjs"), join(root, "scripts/delivery/phase-events.mjs"));
+  unlinkSync(join(root, ".evidence/delivery/binding.json"));
   expect(spawnSync(process.execPath, ["scripts/delivery/phase-events.mjs", "bind", "--issue", "355"],
     { cwd: root, env, encoding: "utf8" }).status).toBe(0);
   expect(run().status).toBe(0);
@@ -79,6 +81,8 @@ test("local timing records pass, cached reuse, and failed independent reviews", 
   expect(terminal[1].duration_ms).toBe(0);
   expect(new Set(terminal.map(event => event.attempt_id)).size).toBe(3);
   expect(new Set(terminal.map(event => event.round_id))).toEqual(new Set([git("rev-parse", "HEAD").trim()]));
+  expect(runPr("correctness", "Delivery-Issue: #356\n").status).toBe(1);
+  expect(existsSync(join(root, ".evidence/review-delivery/123/.evidence/delivery/binding.json"))).toBe(false);
 });
 
 }
