@@ -230,6 +230,29 @@ test('npm verify evidence is reused by the unchanged-source hook invocation', ()
   expect(changed.status).toBe(0); expect(changed.stdout).not.toContain('"cached":true'); expect(calls()).toBe(2);
 });
 
+test('real Git push reuses a successful local unit receipt on the same commit', () => {
+  cacheFixture();
+  const hookEnv = timingHook();
+  write('.githooks/pre-push', readFileSync(join(root, '.githooks/pre-push'), 'utf8'));
+  chmodSync(join(directory, '.githooks/pre-push'), 0o755);
+  commit(); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  const local = spawnSync('npm', ['run', 'verify', '--', '--runs=local', '--reuse'],
+    { cwd: directory, encoding: 'utf8', env: hookEnv, timeout: 15000 });
+  expect(local.status).toBe(0); expect(calls()).toBe(1);
+  const remote = join(directory, '.evidence/remote.git');
+  execFileSync('git', ['init', '--bare', '-q', remote], { cwd: directory, env });
+  const push = spawnSync('git', ['-c', 'core.hooksPath=.githooks', 'push', remote, 'HEAD:refs/heads/main'],
+    { cwd: directory, encoding: 'utf8', env: hookEnv, timeout: 15000 });
+  expect(push.status).toBe(0);
+  expect(push.stdout + push.stderr).toMatch(/"name":"test"[^\n]*"duration_ms":0[^\n]*"cached":true/);
+  expect(calls()).toBe(1);
+  const changedEnvironment = spawnSync('git', ['-c', 'core.hooksPath=.githooks', 'push', remote, 'HEAD:refs/heads/changed-env'],
+    { cwd: directory, encoding: 'utf8', env: { ...hookEnv, CPATH: '/opt/fixture/include', MANPATH: '/opt/fixture/man' }, timeout: 15000 });
+  expect(changedEnvironment.status).toBe(0);
+  expect(changedEnvironment.stdout + changedEnvironment.stderr).not.toContain('"cached":true');
+  expect(calls()).toBe(2);
+});
+
 test('pre-push refuses an unbound issue before checks or publication', () => {
   cacheFixture();
   const hookEnv = timingHook();
