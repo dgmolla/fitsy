@@ -181,7 +181,8 @@ test('history pagination and an old hourly post prevent duplicate slot delivery'
     calls.push(url);
     const cursor = new URL(url).searchParams.get('cursor');
     return { ok: true, status: 200, json: async () => ({ ok: true,
-      messages: cursor ? [{ text: 'prior report #fitsy-hour:2026-09-26T18' }] : [],
+      messages: cursor ? [{ text: 'prior report #fitsy-hour:2026-09-26T18',
+        ts: String(Date.parse('2026-09-26T18:40:00Z') / 1000) }] : [],
       response_metadata: cursor ? {} : { next_cursor: 'page2' } }) };
   };
   assert.deepEqual(await postOnce(fake, 'token', 'C123', report, formatReport(report)),
@@ -190,6 +191,21 @@ test('history pagination and an old hourly post prevent duplicate slot delivery'
   assert.ok(calls.every(url => url.includes('conversations.history')));
   assert.equal(new URL(calls[0]).searchParams.get('oldest'),
     String(Date.parse('2026-09-26T18:30:00Z') / 1000));
+});
+
+test('legacy hourly marker from the next half-hour cannot suppress a recovered slot', async () => {
+  const report = buildReport({ url: board, items: [] }, [], { state: 'green' },
+    new Date('2026-09-26T18:55:00Z'), '2026-09-26T18:00');
+  const methods = [];
+  const fake = async url => {
+    methods.push(url.includes('conversations.history') ? 'history' : 'post');
+    return { ok: true, status: 200, json: async () => url.includes('conversations.history')
+      ? { ok: true, messages: [{ text: 'fitsy-hour:2026-09-26T18',
+        ts: String(Date.parse('2026-09-26T18:45:00Z') / 1000) }] }
+      : { ok: true, channel: 'C123', ts: '123.456' } };
+  };
+  assert.equal((await postOnce(fake, 'token', 'C123', report, formatReport(report))).posted, true);
+  assert.deepEqual(methods, ['history', 'post']);
 });
 
 

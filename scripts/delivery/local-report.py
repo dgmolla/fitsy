@@ -35,7 +35,7 @@ def save(path, value):
     os.replace(temporary, path)
 
 
-def post_once(slack, channel, slot, message, cursor='', seen=()):
+def post_once(slack, channel, slot, message, cursor='', seen=(), before_post=lambda: None):
     marker = f'fitsy-slot:{slot}'
     legacy = f'fitsy-hour:{slot[:13]}'
     oldest = str(int(datetime.strptime(slot, '%Y-%m-%dT%H:%M').replace(tzinfo=timezone.utc).timestamp()))
@@ -57,6 +57,7 @@ def post_once(slack, channel, slot, message, cursor='', seen=()):
         if next_cursor in seen:
             raise RuntimeError('Slack history pagination did not advance')
         return {'state': 'scanning', 'cursor': next_cursor, 'seen': [*seen, next_cursor]}
+    before_post()  # Durable pending intent clears the cursor before an uncertain Slack write.
     identity = str(uuid.uuid5(uuid.NAMESPACE_URL, f'fitsy-delivery:{channel}:{slot}'))
     try:
         result = slack.call('chat.postMessage', payload={
@@ -104,7 +105,9 @@ def run_once(config, state, slack, now=None, generator=generate_report):
         try:
             message = generator(runtime, state, slot, config.get('timing_roots', []))
             receipt = post_once(slack, config['channel'], slot, message,
-                                prior.get('cursor', ''), prior.get('seen', []))
+                                prior.get('cursor', ''), prior.get('seen', []),
+                                lambda: save(path, {'slot': slot, 'state': 'pending',
+                                                    'next_attempt': now + 60, 'post_intent': True}))
             if receipt['state'] == 'scanning':
                 save(path, {**receipt, 'slot': slot, 'next_attempt': now + 60})
                 continue

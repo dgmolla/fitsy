@@ -134,6 +134,40 @@ class LocalReportTest(unittest.TestCase):
             self.assertTrue(slack.posts[0]['client_msg_id'])
             self.assertEqual(slack.posts[0]['client_msg_id'], slack.posts[1]['client_msg_id'])
 
+    def test_crash_after_paged_post_restarts_history_at_first_page(self):
+        class CrashSlack(Slack):
+            def __init__(self):
+                super().__init__()
+                self.cursors = []
+
+            def call(self, method, params=None, payload=None):
+                if method == 'conversations.history':
+                    cursor = params.get('cursor', '')
+                    self.cursors.append(cursor)
+                    if len(self.cursors) == 3:
+                        return {'messages': [{'text': self.posts[0]['text'], 'ts': '123.456'}]}
+                    return {'messages': [], 'response_metadata':
+                            {'next_cursor': 'page2' if not cursor else ''}}
+                self.posts.append(payload)
+                raise SystemExit('process stopped after Slack accepted the post')
+
+        with tempfile.TemporaryDirectory() as temp:
+            state = Path(temp)
+            start = epoch('2026-09-27T03:30:00Z')
+            config = {'activated_at': start, 'channel': 'C123'}
+            slack = CrashSlack()
+            generate = lambda _runtime, _state, slot, _roots: f'fitsy-slot:{slot}'
+            reporter.run_once(config, state, slack, start + 120, generate)
+            with self.assertRaises(SystemExit):
+                reporter.run_once(config, state, slack, start + 180, generate)
+            pending = json.loads(next((state / 'slots').glob('*.json')).read_text())
+            self.assertEqual(pending['state'], 'pending')
+            self.assertNotIn('cursor', pending)
+            reporter.run_once(config, state, slack, start + 240, generate)
+            self.assertEqual(slack.cursors, ['', 'page2', ''])
+            self.assertEqual(len(slack.posts), 1)
+            self.assertTrue(json.loads(next((state / 'slots').glob('*.json')).read_text())['duplicate'])
+
     def test_half_hour_due_slots_and_activation_boundary(self):
         activated = epoch('2026-09-27T03:30:00Z')
         self.assertEqual(reporter.due_slots(epoch('2026-09-27T03:31:59Z'), activated), [])

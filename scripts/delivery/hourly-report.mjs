@@ -264,7 +264,8 @@ export async function postOnce(fetchImpl, token, channel, report, message) {
     const history = await slack(fetchImpl, token, 'conversations.history',
       { channel, oldest: String(oldest), limit: '200', ...(cursor ? { cursor } : {}) });
     if (!Array.isArray(history.messages)) throw new Error('Slack history messages unavailable');
-    if (history.messages.some(entry => entry.text?.includes(marker) || entry.text?.includes(legacyMarker))) {
+    if (history.messages.some(entry => entry.text?.includes(marker) ||
+        (entry.text?.includes(legacyMarker) && Number(entry.ts) >= oldest && Number(entry.ts) < oldest + 1800))) {
       return { posted: false, duplicate: true, marker };
     }
     const next = history.response_metadata?.next_cursor;
