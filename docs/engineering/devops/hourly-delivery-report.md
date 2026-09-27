@@ -1,14 +1,23 @@
-# Hourly delivery report
+# Half-hour delivery report
 
 The [Fitsy Delivery project](https://github.com/users/dgmolla/projects/1) is the source for issue progress, ownership, blockers, and status.
-The [hourly workflow](../../../.github/workflows/hourly-delivery.yml) reads that board, merged pull requests, and exact-main Verify and Deploy workflow runs without depending on a Codex or First Mate session.
-It runs at minute 17 each hour only when repository variable `DELIVERY_REPORT_ENABLED` is `true`.
+The [delivery workflow](../../../.github/workflows/hourly-delivery.yml) reads that board, merged pull requests, and exact-main Verify and Deploy workflow runs without depending on a Codex or First Mate session.
+It requests runs at UTC minutes 17 and 47 when repository variable `DELIVERY_REPORT_ENABLED` is `true`.
 Manual `workflow_dispatch` defaults to a dry run and retains `report.json` and `report.txt` artifacts.
-Slack shows a short scan of 24-hour PR throughput, main gate state, observed local phase time, blockers, timing coverage exceptions, and two concise bullets for Shipped and Next.
+Slack shows the slot and main gate state, then short Shipped, Next, and Blocker lines.
+The JSON artifact retains PR throughput, observed local phase time, timing coverage exceptions, and full evidence.
 Shipped lists at most two Done issues with valid Verified at timestamps from the past 24 hours, ordered by verification time.
 Next lists at most two unblocked In flight issues first, then unblocked queued Now or Next issues; the title is shortened and links to the issue.
-The `Details` link carries the hourly deduplication marker; `report.json` retains medians, issue history, review rounds, cache counts, and full evidence.
+The `Details` link carries a UTC half-hour slot marker, `fitsy-slot:YYYY-MM-DDTHH:00` or `:30`.
+Schedule and fallback dispatches share the workflow concurrency group and Slack history check, so a second run for one slot does not send another digest.
+The history check also recognizes an older `fitsy-hour` message sent within the same slot during migration.
 The first live run and actual Slack receipt must be checked before claiming delivery is operational.
+
+GitHub scheduled runs are best effort: the September 26 minute-17 run began at 21:58 UTC, 41 minutes late, and the September 27 run began at 00:40 UTC, 23 minutes late; some expected hourly runs are absent.
+The existing 30-minute Codex heartbeat may dispatch this same workflow with `dry_run=false` and an explicit `slot` such as `2026-09-27T02:30` when that slot lacks a confirmed report.
+An explicit slot must be a current or previous UTC half-hour no more than 60 minutes old; stale dispatches fail rather than posting old progress.
+The heartbeat must not post a separate digest or install a second publisher.
+Keep the fallback owner and its next due time in the active task handoff, and verify one Slack `channel`/`ts` receipt after activation.
 
 ## Issue field protocol
 
@@ -28,7 +37,7 @@ Create the `delivery-report` GitHub Actions environment and restrict deployment 
 Store a read-only Projects credential as that environment's `DELIVERY_GITHUB_TOKEN` secret and the existing Fitsy bot token as its `DELIVERY_SLACK_BOT_TOKEN` secret.
 Remove any repository-level copies of those secrets so unreviewed workflows cannot read them.
 The workflow uses the built-in `GITHUB_TOKEN` for repository Actions and pull-request reads, and repository variable `DELIVERY_SLACK_CHANNEL` for the destination.
-The Slack bot must be able to read channel history and post messages; history checks and workflow concurrency prevent repeat posts for the same UTC hour.
+The Slack bot must be able to read channel history and post messages; history checks and workflow concurrency prevent repeat posts for the same UTC half-hour slot.
 History-read or post failure stops the run rather than risking a duplicate or reporting an unconfirmed send.
 Keep `DELIVERY_REPORT_ENABLED=false` until a manual dry run shows complete board pagination, expected metrics, and an artifact, then verify one authorized live message and Slack `channel`/`ts` receipt.
 If a token expires, rotate it in the restricted environment secrets without printing it in logs; rerun dry-run and check the resulting artifact before re-enabling posting.

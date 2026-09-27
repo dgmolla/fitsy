@@ -41,6 +41,11 @@ Before transfer, persist current source, evidence, running operations, blockers 
 An issue assignment alone is not an atomic process lock; use FM's supported ownership/session controls for runtime exclusion.
 If ownership cannot be established, reconcile it before launching another worker.
 
+For Codex-led work, one coordinator claims the issue and assigns one Sol implementation owner by default.
+Add agents only for bounded independent tasks with explicit file ownership; another lane's blocker does not hold unrelated work.
+Freeze the source while final checks and review run, reuse source-bound check receipts when the canonical runner permits it, and use only the review lenses and limits in [shipping.md](shipping.md).
+Send actionable human-decision, exhausted-review, required-gate, or dependency blockers to Slack immediately with a stable deduplication key and a confirmed receipt; do not wait for the periodic digest or repeat unchanged alerts.
+
 ## Stages and evidence
 
 Use the project's existing `Queued`, `In flight`, and `Done` statuses instead of creating duplicates.
@@ -72,14 +77,14 @@ Comment count is not worker count.
 Interrupted attempts retain their observed result; a hard-killed worker can leave an unfinished attempt whose duration remains unknown.
 If publication reports a retained lock, inspect its owner and confirm no publisher is active before removing only that lock; reconcile uncertain GitHub writes and never remove the pending-publication guard blindly.
 The pre-push hook requires a valid issue binding and attempts publication after its existing gates, but a GitHub outage leaves local timing evidence pending without bypassing those gates.
-The [hourly delivery report](hourly-delivery-report.md) summarizes measured phase intervals and keeps missing evidence explicit.
+The [half-hour delivery report](hourly-delivery-report.md) summarizes measured phase intervals and keeps missing evidence explicit.
 
 Record actual UTC timestamps for request, ready, work start, PR opened, required gates ready, merged, deployed, and acceptance verified.
 Preserve unknown historical values rather than substituting commit times or reconstructing imaginary work starts.
 The execution owner sets the project's `Started at` to the observed ISO UTC time when work starts.
 At material progress or a blocker, update `Progress`, `Next action`, `Last progress at`, and the existing Blocker/Dependencies fields on that project item.
 Set `Verified at` only after acceptance and applicable main Verify, Deploy, and release receipts are linked; a merge or issue close is not verified delivery.
-The [hourly delivery report](hourly-delivery-report.md) uses only valid timestamp pairs and counts missing values as unknown.
+The [half-hour delivery report](hourly-delivery-report.md) uses only valid timestamp pairs and counts missing values as unknown.
 Report request-to-verified-delivery separately from PR-open-to-merge, queue time, active execution, and blocked time.
 Do not sum overlapping reviewer/test durations and label the result wall time.
 Update the issue at material transitions, failures, ownership changes, and completion.
