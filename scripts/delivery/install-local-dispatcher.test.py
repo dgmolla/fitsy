@@ -63,6 +63,15 @@ class InstallTest(unittest.TestCase):
             self.assertEqual(config['worker_timeout_seconds'], 90 * 60)
             self.assertEqual(config['slack']['recipient'], 'UHUMAN')
             self.assertEqual((home / '.fitsy-dispatcher/credentials/jev.env').stat().st_mode & 0o077, 0)
+            reporter_path = home / '.fitsy-delivery/config.json'
+            reporter = json.loads(reporter_path.read_text())
+            reporter_path.write_text(json.dumps({**reporter, 'user': 'UOTHER'}))
+            drift = subprocess.run(['bash', 'scripts/delivery/install-local-dispatcher.sh', '--enable'],
+                                   cwd=repo, env=env, text=True, capture_output=True, timeout=15)
+            self.assertNotEqual(drift.returncode, 0)
+            self.assertIn('dispatcher sender differs from reporter', drift.stderr)
+            self.assertFalse(json.loads(config_path.read_text())['enabled'])
+            reporter_path.write_text(json.dumps(reporter))
             command('bash', 'scripts/delivery/install-local-dispatcher.sh', '--enable')
             self.assertTrue(json.loads(config_path.read_text())['enabled'])
             claude = tools / 'claude'; claude.write_text('#!/bin/sh\nexit 0\n'); claude.chmod(0o700)

@@ -126,6 +126,9 @@ if mode in ('enable', 'pause'):
         current = output('gh', 'api', 'repos/dgmolla/fitsy/commits/main', '--jq', '.sha')
         if config['source_sha'] != current:
             raise SystemExit('installed dispatcher runtime does not match current main')
+        publisher = json.loads((Path.home() / '.fitsy-delivery/config.json').read_text())
+        if config.get('slack', {}).get('sender') != publisher.get('user'):
+            raise SystemExit('dispatcher sender differs from reporter; reinstall before enabling')
         runs = json.loads(output('gh', 'run', 'list', '--branch', 'main', '--limit', '30', '--json',
                                  'workflowName,headSha,status,conclusion'))
         if not all(any(run['workflowName'] == name and run['headSha'] == current and

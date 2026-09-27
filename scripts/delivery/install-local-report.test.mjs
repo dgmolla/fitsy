@@ -74,7 +74,8 @@ fi
   for (const name of ['gh', 'launchctl']) chmodSync(join(bin, name), 0o755);
   const state = join(home, '.fitsy-delivery');
   const env = { ...process.env, HOME: home, PATH: `${bin}:${process.env.PATH}`,
-    FITSY_DELIVERY_HOME: state, TEST_SENDER: 'U_BOT', TEST_MAIN_SHA: head,
+    FITSY_DELIVERY_HOME: state, FITSY_DISPATCH_HOME: join(home, '.fitsy-dispatcher'),
+    TEST_SENDER: 'U_BOT', TEST_MAIN_SHA: head,
     TEST_LAUNCH_STATUS: join(root, 'launch-status'), TEST_LAUNCH_LOG: join(root, 'launch-log'),
     TEST_WORKFLOW_BASE64: Buffer.from('name: manual\non:\n  workflow_dispatch:\n').toString('base64') };
   const install = () => spawnSync('bash', [installer, '--install', '--timing-root', timing],
@@ -167,6 +168,39 @@ test('ambiguous legacy recipient state with receipts is retained for reconciliat
     assert.equal(readFileSync(configPath, 'utf8'), oldState);
     assert.deepEqual(JSON.parse(readFileSync(receipt, 'utf8')),
       { state: 'delivered', ts: '123.456' });
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('legacy migration requires a stale dispatcher to be paused and uninstalled', () => {
+  const { root, home, state, env, install } = fixture();
+  try {
+    assert.equal(install().status, 0);
+    const configPath = join(state, 'config.json');
+    const original = JSON.parse(readFileSync(configPath, 'utf8'));
+    const { recipient_user: _recipient_user, ...legacy } = original;
+    const oldState = JSON.stringify({ ...legacy, user: 'U_RECIPIENT' }) + '\n';
+    writeFileSync(configPath, oldState);
+    const runtime = join(state, 'runtime/local-report.py');
+    writeFileSync(runtime, 'prior reviewed runtime\n');
+    mkdirSync(env.FITSY_DISPATCH_HOME, { recursive: true });
+    const dispatcherConfig = join(env.FITSY_DISPATCH_HOME, 'config.json');
+    writeFileSync(dispatcherConfig, JSON.stringify({ enabled: true,
+      slack: { sender: 'U_RECIPIENT', recipient: 'U_RECIPIENT' } }) + '\n');
+    const dispatcherPlist = join(home, 'Library/LaunchAgents/com.fitsy.local-dispatcher.plist');
+    mkdirSync(join(home, 'Library/LaunchAgents'), { recursive: true });
+    writeFileSync(dispatcherPlist, 'fixture LaunchAgent\n');
+    const refused = install();
+    assert.notEqual(refused.status, 0);
+    assert.match(refused.stderr, /pause and uninstall the stale local dispatcher/);
+    assert.equal(readFileSync(configPath, 'utf8'), oldState);
+    assert.equal(readFileSync(runtime, 'utf8'), 'prior reviewed runtime\n');
+    writeFileSync(dispatcherConfig, JSON.stringify({ enabled: false,
+      slack: { sender: 'U_RECIPIENT', recipient: 'U_RECIPIENT' } }) + '\n');
+    assert.match(install().stderr, /pause and uninstall the stale local dispatcher/);
+    rmSync(dispatcherPlist);
+    const migrated = install();
+    assert.equal(migrated.status, 0, migrated.stderr);
+    assert.deepEqual(JSON.parse(readFileSync(configPath, 'utf8')), original);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 

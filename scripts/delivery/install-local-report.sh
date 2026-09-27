@@ -101,6 +101,17 @@ if path.exists():
                         and not any((state / 'slots').glob('*.json')))
     if old['channel'] != source['channel'] or (old_user != publisher_user and not legacy_recipient):
         raise SystemExit('Slack publisher identity changed; reconcile existing receipts first')
+    if legacy_recipient and old_user != publisher_user:
+        dispatcher_home = Path(os.environ.get('FITSY_DISPATCH_HOME', Path.home() / '.fitsy-dispatcher'))
+        dispatcher_path = dispatcher_home.expanduser() / 'config.json'
+        if dispatcher_path.exists():
+            dispatcher = json.loads(dispatcher_path.read_text())
+            slack = dispatcher.get('slack')
+            if not isinstance(slack, dict) or slack.get('sender') != publisher_user:
+                dispatcher_plist = Path.home() / 'Library/LaunchAgents/com.fitsy.local-dispatcher.plist'
+                if dispatcher.get('enabled') or dispatcher_plist.exists():
+                    raise SystemExit('pause and uninstall the stale local dispatcher before legacy '
+                                     'reporter migration; reinstall dispatcher afterward')
     if old.get('timing_roots') != roots:
         raise SystemExit('timing roots changed; reconcile existing activation and receipts first')
 else:
