@@ -2,6 +2,7 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSy
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
+import { appleGitHookPrologue } from './apple-git-hook-env';
 
 const root = resolve(__dirname, '../..');
 const yaml = require('js-yaml') as { load(value: string): unknown };
@@ -216,18 +217,41 @@ test('source mutation during a cached run retires the prior receipt', () => {
   expect(retry.status).toBe(0); expect(retry.stdout).not.toContain('"cached":true'); expect(calls()).toBe(2);
 });
 
-test('npm verify evidence is reused by the unchanged-source hook invocation', () => {
+test('real Git push reuses local unit receipts and preserves custom environment identity', () => {
   cacheFixture();
   const hookEnv = timingHook();
-  write('.githooks/pre-push', readFileSync(join(root, '.githooks/pre-push'), 'utf8'));
-  const npm = spawnSync('npm', ['run', 'verify'], { cwd: directory, encoding: 'utf8', env: hookEnv, timeout: 15000 });
-  expect(npm.status).toBe(0); expect(calls()).toBe(1);
-  const hook = spawnSync('bash', ['.githooks/pre-push'], { cwd: directory, encoding: 'utf8', env: hookEnv, timeout: 15000 });
-  expect(hook.status).toBe(0); expect(hook.stdout).toContain('"cached":true'); expect(calls()).toBe(1);
+  write('.githooks/pre-push', readFileSync(join(root, '.githooks/pre-push'), 'utf8')
+    .replace('git_core="${PATH%%:*}"', appleGitHookPrologue + 'git_core="${PATH%%:*}"'));
+  chmodSync(join(directory, '.githooks/pre-push'), 0o755);
+  commit(); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  const local = (extra: Record<string, string> = {}) => spawnSync('npm', ['run', 'verify', '--', '--runs=local', '--reuse'],
+    { cwd: directory, encoding: 'utf8', env: { ...hookEnv, ...extra }, timeout: 15000 });
+  const remote = join(directory, '.evidence/remote.git');
+  execFileSync('git', ['init', '--bare', '-q', remote], { cwd: directory, env });
+  const push = (ref: string, extra: Record<string, string> = {}) => spawnSync('git',
+    ['-c', 'core.hooksPath=.githooks', 'push', remote, `HEAD:refs/heads/${ref}`],
+    { cwd: directory, encoding: 'utf8', env: { ...hookEnv, ...extra }, timeout: 15000 });
+  expect(local().status).toBe(0); expect(calls()).toBe(1);
+  const first = push('main'); expect(first.status).toBe(0);
+  expect(first.stdout + first.stderr).toMatch(/"name":"test"[^\n]*"duration_ms":0[^\n]*"cached":true/);
+  expect(calls()).toBe(1);
   expect(readFileSync(join(directory, '.evidence/gh-calls'), 'utf8')).toContain('POST repos/dgmolla/fitsy/issues/355/comments');
-  const changed = spawnSync('bash', ['.githooks/pre-push'],
-    { cwd: directory, encoding: 'utf8', env: { ...hookEnv, FITSY_TEST_CHANGED: '1' }, timeout: 15000 });
-  expect(changed.status).toBe(0); expect(changed.stdout).not.toContain('"cached":true'); expect(calls()).toBe(2);
+  const changed = push('changed-env', { FITSY_TEST_CHANGED: '1' });
+  expect(changed.status).toBe(0); expect(changed.stdout + changed.stderr).not.toContain('"cached":true');
+  expect(calls()).toBe(2);
+  const custom = { CPATH: '/opt/fixture/include', LIBRARY_PATH: '/opt/fixture/lib', MANPATH: '/opt/fixture/man' };
+  expect(local(custom).status).toBe(0); expect(calls()).toBe(3);
+  const matching = push('matching-custom-env', custom); expect(matching.status).toBe(0);
+  expect(matching.stdout + matching.stderr).toMatch(/"name":"test"[^\n]*"duration_ms":0[^\n]*"cached":true/);
+  expect(calls()).toBe(3);
+  const changedCustom = push('different-custom-env', { ...custom, CPATH: '/opt/fixture/other' });
+  expect(changedCustom.status).toBe(0); expect(changedCustom.stdout + changedCustom.stderr).not.toContain('"cached":true');
+  expect(calls()).toBe(4);
+  git('update-ref', 'refs/remotes/origin/main', git('rev-parse', 'HEAD~2')); expect(local(custom).status).toBe(0); expect(calls()).toBe(5);
+  const sourceBaseline = push('source-baseline', custom); expect(sourceBaseline.status).toBe(0); expect(sourceBaseline.stdout + sourceBaseline.stderr).toContain('"cached":true'); expect(calls()).toBe(5);
+  write('scripts/example.mjs', 'export const x = 2;\n'); commit();
+  const changedSource = push('different-source', custom); expect(changedSource.status).toBe(0);
+  expect(changedSource.stdout + changedSource.stderr).not.toContain('"cached":true'); expect(calls()).toBe(6);
 });
 
 test('pre-push refuses an unbound issue before checks or publication', () => {
