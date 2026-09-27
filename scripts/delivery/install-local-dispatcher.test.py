@@ -36,7 +36,10 @@ class InstallTest(unittest.TestCase):
                           'else sha=$(git rev-parse HEAD); printf \'[{"workflowName":"Verify","headSha":"%s","status":"completed","conclusion":"success"},{"workflowName":"Deploy","headSha":"%s","status":"completed","conclusion":"success"}]\\n\' "$sha" "$sha"; fi\n')
             for name in ('gh', 'codex', 'launchctl'):
                 path = tools / name
-                if name != 'gh': path.write_text('#!/bin/sh\nexit 0\n')
+                if name == 'launchctl':
+                    path.write_text('#!/bin/sh\nif [ "$1" = print ] && [ "${FAKE_LAUNCH_LOADED:-0}" != 1 ]; '
+                                    'then exit 1; fi\nexit 0\n')
+                elif name != 'gh': path.write_text('#!/bin/sh\nexit 0\n')
                 path.chmod(0o700)
             env = {**os.environ, 'HOME': str(home), 'PATH': f'{tools}:/usr/bin:/bin',
                    'FITSY_DISPATCH_HOME': str(home / '.fitsy-dispatcher')}
@@ -89,6 +92,12 @@ class InstallTest(unittest.TestCase):
             self.assertIn('active claim', error)
             self.assertTrue((home / 'Library/LaunchAgents/com.fitsy.local-dispatcher.plist').exists())
             (home / '.fitsy-dispatcher/state.json').write_text(json.dumps({'active': None}))
+            env['FAKE_LAUNCH_LOADED'] = '1'
+            retained = subprocess.run(['bash', 'scripts/delivery/install-local-dispatcher.sh', '--uninstall'],
+                                      cwd=repo, env=env, text=True, capture_output=True, timeout=5)
+            self.assertNotEqual(retained.returncode, 0)
+            self.assertTrue((home / 'Library/LaunchAgents/com.fitsy.local-dispatcher.plist').exists())
+            env.pop('FAKE_LAUNCH_LOADED')
             command('bash', 'scripts/delivery/install-local-dispatcher.sh', '--uninstall')
             self.assertFalse((home / 'Library/LaunchAgents/com.fitsy.local-dispatcher.plist').exists())
 

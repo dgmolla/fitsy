@@ -31,7 +31,11 @@ with (state/'dispatcher.lock').open('a') as lock:
         with tempfile.NamedTemporaryFile('w',dir=state,delete=False) as out:
             json.dump(config,out); out.write('\n'); out.flush(); os.fsync(out.fileno()); temporary=Path(out.name)
         temporary.chmod(0o600); os.replace(temporary,config_path)
-    subprocess.run(['launchctl','bootout',f'gui/{os.getuid()}/{label}'],capture_output=True)
+    target=f'gui/{os.getuid()}/{label}'
+    subprocess.run(['launchctl','bootout',target],capture_output=True)
+    loaded=subprocess.run(['launchctl','print',target],capture_output=True)
+    if loaded.returncode == 0:
+        raise SystemExit('LaunchAgent is still loaded; retaining plist for recovery')
     plist.unlink(missing_ok=True)
 PY
   echo "uninstalled $label; claims and receipts retained at $state"

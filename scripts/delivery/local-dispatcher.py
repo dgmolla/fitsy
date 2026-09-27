@@ -556,7 +556,7 @@ def tick(config, state, state_path, script):
         if active:
             items = board(config)
             item = next((entry for entry in items if entry.get('content', {}).get('number') == active['issue']), None)
-            if item and terminal_verified(config, item, active):
+            if item and not active.get('timed_out') and terminal_verified(config, item, active):
                 state.setdefault('verified', {})[str(active['issue'])] = {
                     'id': active['id'], 'issue': active['issue'], 'branch': active['branch']}
                 resolve_incidents(state, active['issue'])

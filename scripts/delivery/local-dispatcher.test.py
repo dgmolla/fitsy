@@ -376,6 +376,23 @@ class DispatcherProcessTest(unittest.TestCase):
         self.assertEqual(self.tick()['state'], 'idle')
         self.assertIn('dispatch-hold', self.board_data()['items'][0]['labels'])
 
+    def test_timeout_cannot_be_overwritten_by_late_verified_receipt(self):
+        delivered = item(385, status='Done')
+        delivered.update({'issue_state': 'CLOSED', 'verified at': '2026-09-27T00:10:00Z',
+                          'branch': 'codex/issue-385-late'})
+        delivered['terminal'] = '<!-- fitsy-dispatch-terminal:v1 -->' + json.dumps({
+            'issue': 385, 'claim_id': 'late', 'branch': delivered['branch'], 'pr': 389,
+            'head_sha': 'a' * 40, 'merge_sha': 'b' * 40, 'verify_run': 11,
+            'deploy_run': 12, 'acceptance': 'verified'})
+        self.set_board([delivered])
+        (self.state / 'state.json').write_text(json.dumps({'active': {'id': 'late', 'issue': 385,
+            'branch': delivered['branch'], 'stage': 'finished', 'timed_out': True,
+            'finished_at': '2026-09-27T00:11:00Z', 'ready_at': '2026-09-27T00:00:00Z'},
+            'readiness': {}, 'classifications': {}, 'parked': {}, 'history': []}))
+        self.assertEqual(self.tick()['state'], 'idle')
+        self.assertEqual(self.state_data()['history'][0]['terminal'], 'parked-after-exit')
+        self.assertNotIn('385', self.state_data().get('verified', {}))
+
     def test_claude_adapter_uses_same_claim_lifecycle(self):
         config = json.loads(self.config.read_text())
         for value in config['profiles'].values():
