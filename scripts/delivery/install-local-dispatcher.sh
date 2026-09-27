@@ -127,8 +127,13 @@ if mode in ('enable', 'pause'):
         if config['source_sha'] != current:
             raise SystemExit('installed dispatcher runtime does not match current main')
         publisher = json.loads((Path.home() / '.fitsy-delivery/config.json').read_text())
-        if config.get('slack', {}).get('sender') != publisher.get('user'):
-            raise SystemExit('dispatcher sender differs from reporter; reinstall before enabling')
+        notification = json.loads((Path.home() / 'firstmate/config/slack-notifications.json').read_text())
+        expected_slack = {'sender': publisher['user'], 'recipient': notification['user'],
+                          'channel': publisher['channel'], 'bridge_path': publisher['bridge_path']}
+        if publisher.get('recipient_user', notification['user']) != notification['user']:
+            raise SystemExit('reporter recipient differs from shared Slack configuration; reinstall reporter')
+        if any(config.get('slack', {}).get(key) != value for key, value in expected_slack.items()):
+            raise SystemExit('dispatcher Slack identity differs from reporter; reinstall before enabling')
         runs = json.loads(output('gh', 'run', 'list', '--branch', 'main', '--limit', '30', '--json',
                                  'workflowName,headSha,status,conclusion'))
         if not all(any(run['workflowName'] == name and run['headSha'] == current and

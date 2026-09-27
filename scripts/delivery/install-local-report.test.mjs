@@ -204,6 +204,42 @@ test('legacy migration requires a stale dispatcher to be paused and uninstalled'
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test('recipient changes require an installed dispatcher to be paused and uninstalled', () => {
+  const { root, home, state, env, install } = fixture();
+  try {
+    assert.equal(install().status, 0);
+    const configPath = join(state, 'config.json');
+    const original = JSON.parse(readFileSync(configPath, 'utf8'));
+    const receipt = join(state, 'slots', '2026-09-27T03-30.json');
+    writeFileSync(receipt, JSON.stringify({ state: 'delivered', ts: '123.456' }) + '\n');
+    const sourcePath = join(home, 'firstmate/config/slack-notifications.json');
+    const source = JSON.parse(readFileSync(sourcePath, 'utf8'));
+    mkdirSync(env.FITSY_DISPATCH_HOME, { recursive: true });
+    const dispatcherConfig = join(env.FITSY_DISPATCH_HOME, 'config.json');
+    writeFileSync(dispatcherConfig, JSON.stringify({ enabled: true, slack: {
+      sender: 'U_BOT', recipient: 'U_RECIPIENT', channel: 'C_REPORT',
+      bridge_path: source.bridge_path } }) + '\n');
+    const dispatcherPlist = join(home, 'Library/LaunchAgents/com.fitsy.local-dispatcher.plist');
+    mkdirSync(join(home, 'Library/LaunchAgents'), { recursive: true });
+    writeFileSync(dispatcherPlist, 'fixture LaunchAgent\n');
+    writeFileSync(sourcePath, JSON.stringify({ ...source, user: 'U_NEW_RECIPIENT' }));
+    const refused = install();
+    assert.notEqual(refused.status, 0);
+    assert.match(refused.stderr, /pause and uninstall the stale local dispatcher/);
+    assert.deepEqual(JSON.parse(readFileSync(configPath, 'utf8')), original);
+    writeFileSync(dispatcherConfig, JSON.stringify({ enabled: false, slack: {
+      sender: 'U_BOT', recipient: 'U_RECIPIENT', channel: 'C_REPORT',
+      bridge_path: source.bridge_path } }) + '\n');
+    rmSync(dispatcherPlist);
+    const changed = install();
+    assert.equal(changed.status, 0, changed.stderr);
+    assert.deepEqual(JSON.parse(readFileSync(configPath, 'utf8')),
+      { ...original, recipient_user: 'U_NEW_RECIPIENT' });
+    assert.deepEqual(JSON.parse(readFileSync(receipt, 'utf8')),
+      { state: 'delivered', ts: '123.456' });
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test('token sender drift refuses reinstall and runtime launch without changing existing receipts', () => {
   const { root, state, env, install } = fixture();
   try {

@@ -101,21 +101,23 @@ if path.exists():
                         and not any((state / 'slots').glob('*.json')))
     if old['channel'] != source['channel'] or (old_user != publisher_user and not legacy_recipient):
         raise SystemExit('Slack publisher identity changed; reconcile existing receipts first')
-    if legacy_recipient and old_user != publisher_user:
-        dispatcher_home = Path(os.environ.get('FITSY_DISPATCH_HOME', Path.home() / '.fitsy-dispatcher'))
-        dispatcher_path = dispatcher_home.expanduser() / 'config.json'
-        if dispatcher_path.exists():
-            dispatcher = json.loads(dispatcher_path.read_text())
-            slack = dispatcher.get('slack')
-            if not isinstance(slack, dict) or slack.get('sender') != publisher_user:
-                dispatcher_plist = Path.home() / 'Library/LaunchAgents/com.fitsy.local-dispatcher.plist'
-                if dispatcher.get('enabled') or dispatcher_plist.exists():
-                    raise SystemExit('pause and uninstall the stale local dispatcher before legacy '
-                                     'reporter migration; reinstall dispatcher afterward')
     if old.get('timing_roots') != roots:
         raise SystemExit('timing roots changed; reconcile existing activation and receipts first')
 else:
     activated = math.ceil(time.time() / 1800) * 1800
+dispatcher_home = Path(os.environ.get('FITSY_DISPATCH_HOME', Path.home() / '.fitsy-dispatcher'))
+dispatcher_path = dispatcher_home.expanduser() / 'config.json'
+if dispatcher_path.exists():
+    dispatcher = json.loads(dispatcher_path.read_text())
+    slack = dispatcher.get('slack')
+    expected = {'sender': publisher_user, 'recipient': source['user'],
+                'channel': source['channel'], 'bridge_path': source['bridge_path']}
+    stale = not isinstance(slack, dict) or any(slack.get(key) != value
+                                                for key, value in expected.items())
+    dispatcher_plist = Path.home() / 'Library/LaunchAgents/com.fitsy.local-dispatcher.plist'
+    if stale and (dispatcher.get('enabled') or dispatcher_plist.exists()):
+        raise SystemExit('pause and uninstall the stale local dispatcher before reporter '
+                         'Slack identity change; reinstall dispatcher afterward')
 value = {'activated_at': activated, 'channel': source['channel'], 'user': publisher_user,
          'recipient_user': source['user'],
          'bridge_path': source['bridge_path'], 'timing_roots': roots}
