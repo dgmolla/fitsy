@@ -34,7 +34,8 @@ Two explicit policy controls cover unsupported style advice and conflicting evid
 The set includes orphan and timeout P1s, dependency lookup, stale alert, uninstall race, policy conflict, alternate reviewer recovery, mandatory acceptance, owned debt, and uncertainty.
 The expected decision and historical owner and follow-up outcomes never enter the classifier input.
 A fixture guard rejects those ownership fields before any provider call; the separate oracle retains actual follow-up links.
-This conservative input cannot demonstrate whether the advisor would select a deferral when a real owner and follow-up are available.
+The evaluator supplies the same synthetic candidate owner and follow-up to every case, independent of its expected outcome.
+That synthetic plan permits deferral advice in the shadow run but is not a real source-bound disposition or permission to defer a defect.
 A spec review found outcome language in earlier case evidence; the leaky fixture is retained at `.evidence/372-advisory-cases-leaky.json`.
 The final inputs remove that language and historical ownership outcomes, and were frozen with the unchanged independent oracle before this final provider run.
 No success threshold was preregistered before model calls, so this is exploratory evidence rather than a threshold-passing validation.
@@ -48,13 +49,13 @@ Those earlier scores are invalid for accuracy claims; `.evidence/372-advisory-ev
 The corrected oracle uses the pre-existing #388 source-bound outcomes and was hashed before the final provider requests.
 The first review repair exposed follow-up acceptance text incorrectly presented to Jev as mandatory current-release acceptance; the 6/15 diagnostic run is retained as `.evidence/372-advisory-evaluation-v6.json`.
 The next reviews found contradictory evidence reasons could still accompany deferral, whitespace-only ownership could appear valid, and a reserved criterion ID could collide; their repairs and diagnostic runs are also retained.
-The final 15-call run matched 6/15 expected decisions, with 2 missed fix-now recommendations, 0 emitted false deferrals, and 0 unnecessary fix-now recommendations.
+The final 15-call run matched 9/15 expected decisions, with 2 missed fix-now recommendations, 0 emitted false deferrals, and 0 unnecessary fix-now recommendations.
 The two misses were investigations rather than permissions to defer or merge, but Jev's raw choices for those cases were deferrals that the deterministic owner guard rejected.
 The raw provider false-deferral count was therefore 2; neither the raw advice nor this small evaluation establishes blocker recall.
 The earlier 12/15 result used historical owner and follow-up fields in the inputs and is invalid as evidence of independent classification; its receipt is retained at `.evidence/372-advisory-evaluation-v11.json`.
-Mean raw provider-choice confidence was 0.915 on correct choices and 0.760 on wrong choices; the selected-choice Brier score was 0.1085 on this small sample.
+Mean raw provider-choice confidence was 0.913 on correct choices and 0.797 on wrong choices; the selected-choice Brier score was 0.1389 on this small sample.
 When a deterministic guard changes the provider choice to investigate, the advisory confidence is unknown and the raw provider confidence remains separately visible.
-The final 15 calls totaled 17,440 ms and an estimated $0.00058733 from returned input token counts and TypeSafe's [published $0.042 per million input token price](https://typesafe.ai/blog/introducing-system-one-models-and-jev).
+The final 15 calls totaled 3,187 ms and an estimated $0.00073311 from returned input token counts and TypeSafe's [published $0.042 per million input token price](https://typesafe.ai/blog/introducing-system-one-models-and-jev).
 Jev returned no billed amount for any of the 15 calls, so actual charged cost is unknown.
 The earlier runs, including the outcome-leaking input run, and diagnostic calls are retained in private evidence and are excluded from the final-run cost and latency.
 The detailed final receipt is `.evidence/372-advisory-evaluation.json` in the isolated checkout.

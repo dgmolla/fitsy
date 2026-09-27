@@ -12,6 +12,8 @@ CASES = ROOT / 'scripts/review/fixtures/advisory-cases.json'
 ORACLE = ROOT / 'scripts/review/fixtures/advisory-oracle.json'
 EXPECTED_CASES_SHA256 = '227a7a80004e41ea19b95ea220414d72d1d4a677b9a337cb72cd28c3be1fd836'
 EXPECTED_ORACLE_SHA256 = 'f91ba40b84ab935fce2200f697283b387edb6fa6de7f9f79a14ccb71d0d9061c'
+SHADOW_OWNER = 'Shadow candidate owner'
+SHADOW_FOLLOWUP = 'https://example.invalid/shadow-followup'
 
 
 def read_frozen(path, expected):
@@ -26,6 +28,10 @@ def validate_case_inputs(cases):
         raise ValueError('shadow cases must not expose historical owner or follow-up outcomes')
 
 
+def shadow_input(case):
+    return {**case, 'owner': SHADOW_OWNER, 'followup': SHADOW_FOLLOWUP}
+
+
 def main():
     cases = read_frozen(CASES, EXPECTED_CASES_SHA256)['cases']
     oracle = {x['id']: x for x in read_frozen(ORACLE, EXPECTED_ORACLE_SHA256)['cases']}
@@ -37,8 +43,9 @@ def main():
               'usd_per_million_input_tokens': .042}
     outputs = []
     for case in cases:
-        # Only the case, never the oracle or expected label, reaches the provider.
-        result = advisory.recommend(case, config)
+        # Offer the same synthetic deferral plan for every case, independently
+        # of the historical outcome. It never authorizes a real disposition.
+        result = advisory.recommend(shadow_input(case), config)
         outputs.append({'id': case['id'], 'result': result})
     scored = []
     for row in outputs:

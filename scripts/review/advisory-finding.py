@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -114,6 +115,9 @@ def recommend(value, config, call=provider_call):
     provenance = {'input_sha256': digest(value), 'prompt_version': VERSION, 'provider': config.get('provider', 'jev'), 'model_requested': config.get('model', 'jev-latest'), 'model_returned': None, 'head': value['raw']['head'], 'source': value['raw']['source'], 'raw_verdict': value['raw']['verdict'], 'raw_priority': value['raw']['priority'], 'raw_severity': value['raw']['severity']}
     result = {'version': 1, 'status': 'unavailable', 'recommendation': 'investigate', 'reason': 'Provider unavailable; apply existing review disposition policy.', 'confidence': None, 'unmet_acceptance_criterion': None, 'potential_unmet_acceptance_criterion': None, 'owner': None, 'followup': None, 'fallback': 'existing_source_bound_review_policy', 'provenance': provenance, 'cost_usd': None, 'estimated_cost_usd': None}
     try:
+        price = config.get('usd_per_million_input_tokens')
+        if price is not None and (isinstance(price, bool) or not isinstance(price, (int, float)) or not math.isfinite(price) or price < 0):
+            raise ValueError('invalid input token price')
         response, model = call(value, config)
         answers = response['answers']
         provenance['model_requested'] = model
@@ -156,22 +160,23 @@ def recommend(value, config, call=provider_call):
             choice, reason_text = 'investigate', 'Fix-now advice needs a named criterion or confirmed P0/P1 release rule.'
         unmet = (named_criterion if named_criterion and answers['criterion']['confidence'] >= 0.6 else policy_criterion) if choice == 'fix_now' else None
         potential = named_criterion if choice == 'investigate' and criterion != 'none' else None
-        result.update({'status': 'available', 'recommendation': choice, 'reason': reason_text,
-                       'confidence': provider_confidence if choice == provider_choice else None,
-                       'provider_disposition': provider_choice, 'provider_confidence': provider_confidence,
-                       'unmet_acceptance_criterion': unmet, 'potential_unmet_acceptance_criterion': potential,
-                       'owner': value.get('owner') if choice == 'defer_with_owner' else None,
-                       'followup': value.get('followup') if choice == 'defer_with_owner' else None})
-        result['provider_answers'] = answers
+        available = {'status': 'available', 'recommendation': choice, 'reason': reason_text,
+                     'confidence': provider_confidence if choice == provider_choice else None,
+                     'provider_disposition': provider_choice, 'provider_confidence': provider_confidence,
+                     'unmet_acceptance_criterion': unmet, 'potential_unmet_acceptance_criterion': potential,
+                     'owner': value.get('owner') if choice == 'defer_with_owner' else None,
+                     'followup': value.get('followup') if choice == 'defer_with_owner' else None,
+                     'provider_answers': answers}
         usage = response.get('usage')
         if isinstance(usage, dict):
-            result['usage'] = usage
+            available['usage'] = usage
             tokens = usage.get('input_tokens')
-            if isinstance(tokens, int) and tokens >= 0 and config.get('usd_per_million_input_tokens') is not None:
-                result['estimated_cost_usd'] = round(tokens * config['usd_per_million_input_tokens'] / 1000000, 10)
+            if isinstance(tokens, int) and tokens >= 0 and price is not None:
+                available['estimated_cost_usd'] = round(tokens * price / 1000000, 10)
         actual_cost = response.get('cost_usd')
         if isinstance(actual_cost, (int, float)) and not isinstance(actual_cost, bool) and actual_cost >= 0:
-            result['cost_usd'] = actual_cost
+            available['cost_usd'] = actual_cost
+        result.update(available)
     except Exception as error:
         result['error_kind'] = type(error).__name__
     result['latency_ms'] = round((time.monotonic() - start) * 1000)

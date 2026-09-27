@@ -34,9 +34,20 @@ class AdvisoryTests(unittest.TestCase):
     def test_shadow_cases_hide_historical_owner_outcomes(self):
         cases = evaluation.read_frozen(evaluation.CASES, evaluation.EXPECTED_CASES_SHA256)['cases']
         evaluation.validate_case_inputs(cases)
+        self.assertEqual({(evaluation.shadow_input(case)['owner'], evaluation.shadow_input(case)['followup'])
+                          for case in cases}, {(evaluation.SHADOW_OWNER, evaluation.SHADOW_FOLLOWUP)})
         for field in ('owner', 'followup'):
             with self.assertRaisesRegex(ValueError, 'historical owner or follow-up'):
                 evaluation.validate_case_inputs([dict(cases[0], **{field: 'historical outcome'})])
+
+    def test_invalid_price_fails_before_provider_call(self):
+        calls = []
+        value = fixture()
+        result = advisory.recommend(value, {'usd_per_million_input_tokens': 'bad'},
+                                    lambda *_: calls.append(True) or response(value, 'defer_with_owner', 'none', reason='bounded_debt'))
+        self.assertEqual(calls, [])
+        self.assertEqual((result['status'], result['recommendation'], result['error_kind']),
+                         ('unavailable', 'investigate', 'ValueError'))
 
     def test_schema_rejects_unbounded_and_stale_identity(self):
         value = fixture()
