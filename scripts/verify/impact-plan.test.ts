@@ -247,6 +247,9 @@ test('real Git push reuses local unit receipts and preserves custom environment 
   const changedCustom = push('different-custom-env', { ...custom, CPATH: '/opt/fixture/other' });
   expect(changedCustom.status).toBe(0); expect(changedCustom.stdout + changedCustom.stderr).not.toContain('"cached":true');
   expect(calls()).toBe(4);
+  write('scripts/example.mjs', 'export const x = 2;\n'); commit();
+  const changedSource = push('different-source', custom); expect(changedSource.status).toBe(0);
+  expect(changedSource.stdout + changedSource.stderr).not.toContain('"cached":true'); expect(calls()).toBe(5);
 });
 
 test('pre-push refuses an unbound issue before checks or publication', () => {
