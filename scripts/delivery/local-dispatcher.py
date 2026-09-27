@@ -29,7 +29,9 @@ def resolve_incidents(state, issue):
     for key, alert in list((state.get('alerts') or {}).items()):
         if alert['issue'] == issue and key.startswith('fitsy-blocker:'):
             if alert['state'] != 'delivered':
-                alert['state'] = 'cancelled'
+                alert['state'] = 'resolution-check' if alert.get('post_intent') else 'cancelled'
+                alert['resolution_check'] = alert['state'] == 'resolution-check'
+                alert['next_attempt'] = 0
                 continue
             resolution = f'fitsy-resolved:{key}'
             if resolution not in state['alerts']:
@@ -37,11 +39,12 @@ def resolve_incidents(state, issue):
                                                'since': utc(), 'state': 'pending', 'next_attempt': 0}
 
 
-def deliver_alerts(config, state, state_path):
+def deliver_alerts(config, state, state_path, exclude_issue=None):
     """Reconcile an uncertain Slack send before posting via the shared rate limiter."""
     alerts = state.get('alerts') or {}
     due = [(key, alert) for key, alert in alerts.items()
-           if alert['state'] in ('pending', 'post-intent') and alert.get('next_attempt', 0) <= time.time()]
+           if alert['state'] in ('pending', 'post-intent', 'resolution-check')
+           and alert['issue'] != exclude_issue and alert.get('next_attempt', 0) <= time.time()]
     if not due or not config.get('slack'):
         return
     slack_config = config['slack']
@@ -70,10 +73,16 @@ def deliver_alerts(config, state, state_path):
                               and key in (msg.get('text') or '')), None)
                 if match:
                     alert.update({'state': 'delivered', 'ts': match['ts'], 'duplicate': True})
+                    if key.startswith('fitsy-blocker:') and alert.get('resolution_check'):
+                        resolve_incidents(state, alert['issue'])
                     break
                 cursor = page.get('response_metadata', {}).get('next_cursor', '')
                 if not cursor:
-                    alert.update({'state': 'post-intent', 'next_attempt': time.time() + 60})
+                    if alert['state'] == 'resolution-check':
+                        alert['state'] = 'cancelled'
+                        break
+                    alert.update({'state': 'post-intent', 'post_intent': True,
+                                  'next_attempt': time.time() + 60})
                     write_json(state_path, state)
                     if key.startswith('fitsy-resolved:'):
                         message = (f"✅ *RESOLVED* Fitsy #{alert['issue']}\n"
@@ -96,7 +105,8 @@ def deliver_alerts(config, state, state_path):
                 seen.add(cursor)
             write_json(state_path, state)
         except Exception as error:
-            alert.update({'state': 'pending', 'next_attempt': max(time.time() + 60, getattr(error, 'retry_at', 0)),
+            retry_state = 'resolution-check' if alert['state'] == 'resolution-check' else 'pending'
+            alert.update({'state': retry_state, 'next_attempt': max(time.time() + 60, getattr(error, 'retry_at', 0)),
                           'error': type(error).__name__})
             write_json(state_path, state)
             return
@@ -460,6 +470,10 @@ def archive(state, claim, status, state_path):
 def tick(config, state, state_path, script):
     active = state.get('active')
     if active:
+        try:
+            deliver_alerts(config, state, state_path, exclude_issue=active['issue'])
+        except Exception:
+            pass
         if active.get('stage') == 'ownership-uncertain':
             pgid = active.get('worker_pgid') or active.get('launcher_pid')
             if not pgid or group_alive(pgid):

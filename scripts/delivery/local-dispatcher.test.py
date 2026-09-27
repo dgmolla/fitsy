@@ -438,6 +438,51 @@ class DispatcherProcessTest(unittest.TestCase):
         self.assertEqual(alert['state'], 'cancelled')
         self.assertEqual(len(state['alerts']), 1)
 
+    def test_uncertain_post_reconciles_before_resolution(self):
+        state = {}
+        dispatcher.incident(state, {'issue': 385, 'id': 'claim-a'}, 'Required gate failed')
+        key, alert = next(iter(state['alerts'].items()))
+        alert.update({'state': 'post-intent', 'post_intent': True})
+        dispatcher.resolve_incidents(state, 385)
+        self.assertEqual(alert['state'], 'resolution-check')
+        class Slack:
+            def __init__(self, store): pass
+            def call(self, method, params=None, payload=None):
+                if method == 'auth.test': return {'user_id': 'USENDER'}
+                if method == 'conversations.history':
+                    return {'messages': [{'user': 'USENDER', 'text': key, 'ts': '123.456'}]}
+                raise AssertionError('stale BLOCKED must not post')
+        bridge = types.SimpleNamespace(load_env=lambda: None,
+            Config=types.SimpleNamespace(from_env=lambda: types.SimpleNamespace(channel='CCHANNEL')),
+            Store=lambda settings: object(), Slack=Slack)
+        config = {'slack': {'bridge_path': str(self.base), 'channel': 'CCHANNEL',
+                            'sender': 'USENDER', 'recipient': 'UHUMAN'}}
+        with mock.patch.dict(sys.modules, {'bridge': bridge}):
+            dispatcher.deliver_alerts(config, state, self.state / 'alerts.json')
+        self.assertEqual(alert['state'], 'delivered')
+        self.assertEqual(state[f'alerts'][f'fitsy-resolved:{key}']['state'], 'pending')
+
+    def test_other_issues_blocker_retries_while_worker_runs(self):
+        state = {'active': {'id': 'live', 'issue': 351, 'stage': 'running'}}
+        dispatcher.incident(state, {'issue': 385, 'id': 'claim-a'}, 'Required gate failed')
+        calls = []
+        class Slack:
+            def __init__(self, store): pass
+            def call(self, method, params=None, payload=None):
+                calls.append(method)
+                if method == 'auth.test': return {'user_id': 'USENDER'}
+                if method == 'conversations.history': return {'messages': []}
+                return {'channel': 'CCHANNEL', 'ts': '123.456'}
+        bridge = types.SimpleNamespace(load_env=lambda: None,
+            Config=types.SimpleNamespace(from_env=lambda: types.SimpleNamespace(channel='CCHANNEL')),
+            Store=lambda settings: object(), Slack=Slack)
+        config = {'slack': {'bridge_path': str(self.base), 'channel': 'CCHANNEL',
+                            'sender': 'USENDER', 'recipient': 'UHUMAN'}}
+        with mock.patch.dict(sys.modules, {'bridge': bridge}):
+            self.assertEqual(dispatcher.tick(config, state, self.state / 'state.json', SCRIPT)['state'],
+                             'uncertain-launch')
+        self.assertEqual(calls.count('chat.postMessage'), 1)
+
     def test_claim_receipt_survives_bounded_history(self):
         state = {'active': {'id': 'claim-101'}, 'history': [{'id': str(i)} for i in range(100)]}
         claim = {'id': 'claim-101', 'issue': 385, 'ready_at': '2026-09-27T00:00:00Z',
