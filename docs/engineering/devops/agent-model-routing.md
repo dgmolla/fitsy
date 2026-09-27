@@ -13,6 +13,18 @@ Model selection never waives those gates or grants permission to start extra wor
 | Unresolved ambiguity, difficult architecture or consequential security/data decisions | Stronger capable model | Record the concrete uncertainty, why the default is insufficient, and the bounded decision or task. |
 | Review-comment triage experiment | Jev, advisory only | Follow #372; no dismissal, priority rewrite, required verdict or merge authority. |
 
+Before invoking the reviewer, explicitly select the policy default through the supported adapter settings.
+The runner's legacy fallback models are not the policy default; omitting these settings can select Haiku, Sonnet or Opus.
+
+```sh
+export FITSY_REVIEW_PROVIDER=codex
+export FITSY_REVIEW_MODEL=gpt-6-sol
+export FITSY_REVIEW_REASONING_EFFORT=high
+bash scripts/review/run-lens.sh --local docs-sanity
+```
+
+Replace `docs-sanity` with the required lens from the canonical plan.
+Record any supported model substitution or escalation in the issue handoff.
 Choose reasoning effort to match the problem and preserve canonical review-adapter settings.
 Do not lower a required review's settings merely to reduce cost.
 If a model is unavailable, preserve the checkpoint and use a supported comparable model with the substitution recorded.
