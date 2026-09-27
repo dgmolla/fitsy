@@ -261,7 +261,7 @@ class DispatcherProcessTest(unittest.TestCase):
         self.assertEqual(self.tick()['state'], 'uncertain-launch')
         self.assertEqual(self.workers(), [])
 
-    def test_expired_orphan_launch_group_releases_lane(self):
+    def test_expired_unwitnessed_launch_group_retains_lane(self):
         self.set_board([item(385, status='In flight'), item(351)])
         launcher = subprocess.Popen(['/bin/sh', '-c', 'sleep 30 &'], start_new_session=True)
         started = run('ps', '-p', str(launcher.pid), '-o', 'lstart=').stdout.strip()
@@ -276,9 +276,29 @@ class DispatcherProcessTest(unittest.TestCase):
                  'claimed_at': '2026-09-27T00:00:00Z', 'ready_at': '2026-09-27T00:00:00Z'},
                  'readiness': {}, 'classifications': {}, 'parked': {}, 'history': []}
         (self.state / 'state.json').write_text(json.dumps(state))
-        self.assertEqual(self.tick()['issue'], 351)
-        self.assertTrue(self.state_data()['history'][0]['timed_out'])
-        self.assertIn('dispatch-hold', self.board_data()['items'][0]['labels'])
+        self.assertEqual(self.tick()['state'], 'uncertain-launch')
+        self.assertTrue(dispatcher.group_alive(launcher.pid))
+        self.assertEqual(self.workers(), [])
+
+    def test_reused_launcher_group_identity_is_never_signaled(self):
+        self.set_board([item(385, status='In flight'), item(351)])
+        unrelated = subprocess.Popen(['sleep', '30'], start_new_session=True)
+        def stop_unrelated():
+            if unrelated.poll() is None:
+                unrelated.terminate()
+            unrelated.wait(timeout=3)
+        self.addCleanup(stop_unrelated)
+        config = json.loads(self.config.read_text())
+        config['worker_timeout_seconds'] = 1
+        self.config.write_text(json.dumps(config))
+        state = {'version': 1, 'active': {'id': 'reused-launch', 'issue': 385, 'stage': 'launching',
+                 'launcher_pid': unrelated.pid, 'launcher_started': 'different process identity',
+                 'claimed_at': '2026-09-27T00:00:00Z', 'ready_at': '2026-09-27T00:00:00Z'},
+                 'readiness': {}, 'classifications': {}, 'parked': {}, 'history': []}
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.assertEqual(self.tick()['state'], 'uncertain-launch')
+        self.assertIsNone(unrelated.poll())
+        self.assertEqual(self.workers(), [])
 
     def test_expired_running_group_without_launcher_receipt_releases_lane(self):
         self.set_board([item(385, status='In flight'), item(351)])
@@ -317,6 +337,7 @@ class DispatcherProcessTest(unittest.TestCase):
     def test_uncertain_group_is_stopped_after_worker_wall_budget(self):
         self.set_board([item(385, status='In flight'), item(351)])
         child = subprocess.Popen(['sleep', '30'], start_new_session=True)
+        started = run('ps', '-p', str(child.pid), '-o', 'lstart=').stdout.strip()
         self.addCleanup(lambda: os.killpg(child.pid, signal.SIGKILL)
                         if dispatcher.group_alive(child.pid) else None)
         config = json.loads(self.config.read_text())
@@ -324,6 +345,7 @@ class DispatcherProcessTest(unittest.TestCase):
         self.config.write_text(json.dumps(config))
         state = {'version': 1, 'active': {'id': 'expired-group', 'issue': 385,
                  'stage': 'ownership-uncertain', 'worker_pgid': child.pid,
+                 'pid': child.pid, 'pid_started': started,
                  'started_at': '2026-09-27T00:00:00Z', 'ready_at': '2026-09-27T00:00:00Z'},
                  'readiness': {}, 'classifications': {}, 'parked': {}, 'history': []}
         (self.state / 'state.json').write_text(json.dumps(state))

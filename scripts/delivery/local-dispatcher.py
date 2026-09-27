@@ -413,6 +413,19 @@ def group_alive(pgid):
         return True
 
 
+def group_owned(active, pgid):
+    """A numeric group ID alone is not proof after its leader exits."""
+    for pid_key, started_key in (('launcher_pid', 'launcher_started'), ('pid', 'pid_started')):
+        pid, started = active.get(pid_key), active.get(started_key)
+        if pid and started and pid_identity(pid) == started:
+            try:
+                if os.getpgid(pid) == pgid:
+                    return True
+            except ProcessLookupError:
+                pass
+    return False
+
+
 def group_members(pgid, own_pid):
     result = subprocess.run(['ps', '-axo', 'pid=,pgid=,stat='], text=True, capture_output=True,
                             start_new_session=True)
@@ -511,7 +524,7 @@ def tick(config, state, state_path, script):
                 timeout = config.get('worker_timeout_seconds', 90 * 60)
                 expired = (started and time.time() >=
                            datetime.fromisoformat(started.replace('Z', '+00:00')).timestamp() + timeout)
-                if not expired or not stop_owned_group(pgid, os.getpid()):
+                if not expired or not group_owned(active, pgid) or not stop_owned_group(pgid, os.getpid()):
                     return {'state': 'ownership-uncertain', 'issue': active['issue']}
                 active['timed_out'] = True
                 active['finished_at'] = utc()
@@ -526,7 +539,7 @@ def tick(config, state, state_path, script):
             expired = (claimed and time.time() >=
                        datetime.fromisoformat(claimed.replace('Z', '+00:00')).timestamp() + timeout)
             if expired and launcher and group_alive(launcher):
-                if not stop_owned_group(launcher, os.getpid()):
+                if not group_owned(active, launcher) or not stop_owned_group(launcher, os.getpid()):
                     return {'state': 'uncertain-launch', 'issue': active['issue']}
                 active['timed_out'] = True
                 active['failure'] = f'launcher group exceeded {timeout}s active claim budget'
@@ -539,7 +552,11 @@ def tick(config, state, state_path, script):
             else:
                 return {'state': 'uncertain-launch', 'issue': active['issue']}
         if active.get('pid') and active.get('pid_started') and pid_identity(active['pid']) not in (None, active['pid_started']):
-            return {'state': 'uncertain-pid-reuse', 'issue': active['issue']}
+            if not active.get('worker_pgid') or group_alive(active['worker_pgid']):
+                return {'state': 'uncertain-pid-reuse', 'issue': active['issue']}
+            active['finished_at'] = utc()
+            active['failure'] = 'worker PID changed and owned group is no longer live'
+            write_json(state_path, state)
         if active.get('pid') and active.get('finished_at') and other_group_members(active.get('worker_pgid', active['pid']), os.getpid()):
             return {'state': 'worker-group-live', 'issue': active['issue']}
         if active.get('pid') and not active.get('finished_at'):
@@ -549,7 +566,7 @@ def tick(config, state, state_path, script):
                        datetime.fromisoformat(started.replace('Z', '+00:00')).timestamp() + timeout)
             if expired:
                 pgid = active.get('worker_pgid', active['pid'])
-                if not stop_owned_group(pgid, os.getpid()):
+                if not group_owned(active, pgid) or not stop_owned_group(pgid, os.getpid()):
                     return {'state': 'worker-group-live', 'issue': active['issue']}
                 active['timed_out'] = True
                 active['stage'] = 'finished'
