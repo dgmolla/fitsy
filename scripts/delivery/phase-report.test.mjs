@@ -18,9 +18,10 @@ test('explicit local timing source fills an unpublished attempt without double c
   try {
     mkdirSync(join(root, '.evidence/delivery'), { recursive: true });
     writeFileSync(join(root, '.evidence/delivery/binding.json'), JSON.stringify({ issue: 355, run_id: 'run1' }));
-    const finished = { ...event('finished'), attempt_id: 'attempt1',
+    const finished = { ...event('finished'), attempt_id: 'attempt1', source_sha: 'b'.repeat(40),
       started_at: '2026-09-26T18:00:00.000Z', finished_at: '2026-09-26T18:10:00.000Z' };
-    const running = { ...finished, event_id: 'running', status: 'running', finished_at: null, duration_ms: null };
+    const running = { ...finished, source_sha: 'a'.repeat(40), event_id: 'running', status: 'running',
+      finished_at: null, duration_ms: null };
     writeFileSync(join(root, '.evidence/delivery/events.jsonl'), `${JSON.stringify(running)}\n${JSON.stringify(finished)}\n`);
     const items = [{ content: { __typename: 'Issue', number: 355 }, fields: { Status: 'In flight' } }];
     const unpublished = await loadTimings(async () => [], items, now, [root]);
@@ -35,7 +36,7 @@ test('explicit local timing source fills an unpublished attempt without double c
       'fitsy-delivery:v1:run1.p1 -->');
     const sharded = await loadTimings(async () => [shardedComment], items, now, [root]);
     assert.equal(sharded.phases.review.attempts, 1);
-    const mutated = comment(payload([{ ...running, source_sha: 'b'.repeat(40) }]));
+    const mutated = comment(payload([{ ...finished, source_sha: 'c'.repeat(40) }]));
     await assert.rejects(loadTimings(async () => [mutated], items, now, [root]),
       /conflicts with published evidence/);
   } finally { rmSync(root, { recursive: true, force: true }); }

@@ -42,10 +42,42 @@ class LocalReportTest(unittest.TestCase):
                                                        'ts': '123.456'}]}
                 return super().call(method, params, payload)
         slack = PagedSlack()
-        receipt = reporter.post_once(slack, 'C123', '2026-09-27T03:30', 'new report')
+        first = reporter.post_once(slack, 'C123', '2026-09-27T03:30', 'new report')
+        self.assertEqual(first['state'], 'scanning')
+        receipt = reporter.post_once(slack, 'C123', '2026-09-27T03:30', 'new report',
+                                     first['cursor'], first['seen'])
         self.assertTrue(receipt['duplicate'])
         self.assertEqual(receipt['ts'], '123.456')
         self.assertEqual(slack.posts, [])
+
+    def test_pagination_cursor_survives_between_timer_wakes(self):
+        class PagedSlack(Slack):
+            def __init__(self):
+                super().__init__()
+                self.cursors = []
+
+            def call(self, method, params=None, payload=None):
+                if method == 'conversations.history':
+                    cursor = params.get('cursor', '')
+                    self.cursors.append(cursor)
+                    if not cursor:
+                        return {'messages': [], 'response_metadata': {'next_cursor': 'page2'}}
+                    return {'messages': [{'text': 'fitsy-slot:2026-09-27T03:30', 'ts': '123.456'}]}
+                return super().call(method, params, payload)
+
+        with tempfile.TemporaryDirectory() as temp:
+            state = Path(temp)
+            start = epoch('2026-09-27T03:30:00Z')
+            config = {'activated_at': start, 'channel': 'C123'}
+            slack = PagedSlack()
+            generate = lambda _runtime, _state, slot, _roots: f'fitsy-slot:{slot}'
+            reporter.run_once(config, state, slack, start + 120, generate)
+            pending = json.loads(next((state / 'slots').glob('*.json')).read_text())
+            self.assertEqual(pending['cursor'], 'page2')
+            reporter.run_once(config, state, slack, start + 180, generate)
+            self.assertEqual(slack.cursors, ['', 'page2'])
+            self.assertEqual(slack.posts, [])
+            self.assertTrue(json.loads(next((state / 'slots').glob('*.json')).read_text())['duplicate'])
 
     def test_half_hour_due_slots_and_activation_boundary(self):
         activated = epoch('2026-09-27T03:30:00Z')

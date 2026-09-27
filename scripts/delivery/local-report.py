@@ -35,32 +35,32 @@ def save(path, value):
     os.replace(temporary, path)
 
 
-def post_once(slack, channel, slot, message):
+def post_once(slack, channel, slot, message, cursor='', seen=()):
     marker = f'fitsy-slot:{slot}'
     legacy = f'fitsy-hour:{slot[:13]}'
     oldest = str(int(datetime.strptime(slot, '%Y-%m-%dT%H:%M').replace(tzinfo=timezone.utc).timestamp()))
-    cursor = ''
-    seen = set()
-    while True:
-        page = slack.call('conversations.history', params={
-            'channel': channel, 'oldest': oldest, 'limit': 200, **({'cursor': cursor} if cursor else {})})
-        if not isinstance(page.get('messages'), list):
-            raise RuntimeError('Slack history messages unavailable')
-        for item in page['messages']:
-            if marker in (item.get('text') or '') or legacy in (item.get('text') or ''):
-                return {'state': 'delivered', 'duplicate': True, 'channel': channel,
-                        'ts': item['ts'], 'marker': marker}
-        cursor = page.get('response_metadata', {}).get('next_cursor', '')
-        if not cursor:
-            break
-        if cursor in seen:
+    page = slack.call('conversations.history', params={
+        'channel': channel, 'oldest': oldest, 'limit': 200, **({'cursor': cursor} if cursor else {})})
+    if not isinstance(page.get('messages'), list):
+        raise RuntimeError('Slack history messages unavailable')
+    for item in page['messages']:
+        if marker in (item.get('text') or '') or legacy in (item.get('text') or ''):
+            return {'state': 'delivered', 'duplicate': True, 'channel': channel,
+                    'ts': item['ts'], 'marker': marker}
+    next_cursor = page.get('response_metadata', {}).get('next_cursor', '')
+    if next_cursor:
+        if next_cursor in seen:
             raise RuntimeError('Slack history pagination did not advance')
-        seen.add(cursor)
+        return {'state': 'scanning', 'cursor': next_cursor, 'seen': [*seen, next_cursor]}
     identity = str(uuid.uuid5(uuid.NAMESPACE_URL, f'fitsy-delivery:{channel}:{slot}'))
-    result = slack.call('chat.postMessage', payload={
-        'channel': channel, 'text': message, 'client_msg_id': identity,
-        'unfurl_links': False, 'unfurl_media': False,
-        'metadata': {'event_type': 'fitsy_delivery', 'event_payload': {'slot': slot}}})
+    try:
+        result = slack.call('chat.postMessage', payload={
+            'channel': channel, 'text': message, 'client_msg_id': identity,
+            'unfurl_links': False, 'unfurl_media': False,
+            'metadata': {'event_type': 'fitsy_delivery', 'event_payload': {'slot': slot}}})
+    except Exception as error:
+        error.post_attempted = True
+        raise
     if result.get('channel') != channel or not result.get('ts'):
         raise RuntimeError('Slack post receipt is incomplete')
     return {'state': 'delivered', 'duplicate': False, 'channel': channel,
@@ -96,12 +96,18 @@ def run_once(config, state, slack, now=None, generator=generate_report):
             continue
         try:
             message = generator(runtime, state, slot, config.get('timing_roots', []))
-            receipt = post_once(slack, config['channel'], slot, message)
+            receipt = post_once(slack, config['channel'], slot, message,
+                                prior.get('cursor', ''), prior.get('seen', []))
+            if receipt['state'] == 'scanning':
+                save(path, {**receipt, 'slot': slot, 'next_attempt': now + 60})
+                continue
             save(path, {**receipt, 'slot': slot, 'confirmed_at': now})
             print(json.dumps({'slot': slot, **receipt}))
         except Exception as error:
             retry_at = max(now + 60, getattr(error, 'retry_at', 0))
-            save(path, {'slot': slot, 'state': 'pending', 'next_attempt': retry_at,
+            continuation = {} if getattr(error, 'post_attempted', False) else {
+                key: prior[key] for key in ('cursor', 'seen') if key in prior}
+            save(path, {'slot': slot, 'state': 'pending', 'next_attempt': retry_at, **continuation,
                         'attempts': prior.get('attempts', 0) + 1,
                         'error': str(error)[:200]})
             print(json.dumps({'slot': slot, 'state': 'pending', 'retry_at': retry_at,

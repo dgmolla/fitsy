@@ -10,6 +10,7 @@ Shipped lists at most two Done issues with valid Verified at timestamps from the
 Next lists at most two unblocked In flight issues first, then unblocked queued Now or Next issues; the title is shortened and links to the issue.
 The `Details` link carries a UTC half-hour slot marker, `fitsy-slot:YYYY-MM-DDTHH:00` or `:30`.
 The local publisher holds one process lock, reads Slack history before posting, and saves a confirmed `channel`/`ts` receipt for each slot.
+History pagination advances one page per timer wake through the shared Slack limiter.
 An uncertain send is reconciled by the same marker and stable Slack client message ID before any retry.
 The history check also recognizes an older `fitsy-hour` message sent within the same slot during migration.
 The first live run and actual Slack receipt must be checked before claiming delivery is operational.
