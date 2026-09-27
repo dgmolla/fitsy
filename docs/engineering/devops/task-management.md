@@ -106,7 +106,8 @@ Reconcile workers on completion and on the supervisor's normal heartbeat.
 After recording completion, use FM's canonical teardown for the completed worker when no child work, owned running operation, pending delivery, or unrecorded evidence remains.
 Keep a completed worker only for a documented recovery need with an owner and expiry/recheck condition.
 Do not keep it idle indefinitely as a substitute for durable task state.
-Do not kill workers solely because of elapsed age, and do not restart them to evade review budgets or erase failed attempts.
+Do not kill workers solely because of elapsed age outside an explicitly configured, issue-bound execution budget, and do not restart them to evade review budgets or erase failed attempts.
+The local dispatcher enforces a 90-minute active claim budget, records a timeout, reconciles its owned process group, and parks the issue without resetting source-bound evidence or review history.
 Worker retirement and worktree deletion are separate operations: preserve unmerged changes, source-bound evidence, review history, and release/rollback receipts.
 Release simulator, Metro, database and other resource claims only through their ownership-aware procedures.
 
