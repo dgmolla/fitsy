@@ -138,7 +138,7 @@ test('UTC half-hour slots stay distinct and reject stale fallback requests', () 
   assert.throws(() => deliverySlot(late, '2026-09-26T17:30'), /stale/);
 });
 
-test('late scheduled starts report the observed slot and fallback can fill the missed slot', () => {
+test('current and explicit recovery slots stay distinct after a delayed wake', () => {
   const project = { url: board, items: [] };
   const late = new Date('2026-09-26T21:58:00Z');
   const scheduled = buildReport(project, [], { state: 'green' }, late);
@@ -148,7 +148,7 @@ test('late scheduled starts report the observed slot and fallback can fill the m
   assert.notEqual(scheduled.slotKey, fallback.slotKey);
 });
 
-test('scheduled and fallback reports share one publisher per slot', async () => {
+test('repeated reports share one Slack marker per slot', async () => {
   const project = { url: board, items: [] };
   const first = buildReport(project, [], { state: 'green' }, new Date('2026-09-26T18:17:00Z'));
   const second = buildReport(project, [], { state: 'green' }, new Date('2026-09-26T18:47:00Z'));

@@ -1,4 +1,5 @@
 import { parseImprovement, verifyImprovements } from './improvements.mjs';
+import { buildSummary, readBinding, readRows } from './phase-events.mjs';
 const API = 'https://api.github.com/repos/dgmolla/fitsy';
 const PHASES = ['implementation', 'verification', 'unit', 'e2e', 'review', 'shipping'];
 const validId = value => typeof value === 'string' && ID.test(value);
@@ -6,6 +7,13 @@ const STATES = ['running', 'pass', 'fail', 'interrupted', 'skipped', 'cached'];
 const ID = /^[a-zA-Z0-9_.-]{1,100}$/;
 const iso = value => typeof value === 'string' && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z$/.test(value) &&
   Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 19) === value.slice(0, 19);
+const sameAttempt = (published, local) => local && published.issue === local.issue &&
+  published.attempt_id === local.attempt_id && published.phase === local.phase &&
+  published.started_at === local.started_at && published.source_sha === local.source_sha &&
+  published.producer === local.producer && published.check === local.check &&
+  published.lens === local.lens && published.round_id === local.round_id &&
+  (published.status === 'running' || (published.status === local.status &&
+    published.finished_at === local.finished_at && published.duration_ms === local.duration_ms));
 
 // These are writer observations, not proof that a source passed a release gate.
 export function parseTiming(comment, issue, now) {
@@ -36,12 +44,22 @@ export function parseTiming(comment, issue, now) {
   } catch { return null; }
 }
 
-export async function loadTimings(rest, items, now) {
+export async function loadTimings(rest, items, now, localRoots = []) {
   const candidates = items.filter(item => item.content?.__typename === 'Issue' &&
     (item.fields.Status === 'In flight' || (item.fields.Status === 'Done' &&
       iso(item.fields['Verified at']) && Date.parse(item.fields['Verified at']) <= +now &&
       Date.parse(item.fields['Verified at']) >= now.getTime() - 86400000)));
   const records = [], improvements = [];
+  const local = new Map();
+  for (const root of localRoots) {
+    const binding = readBinding(root);
+    if (!binding) throw new Error(`Local timing root has no issue binding: ${root}`);
+    const run = buildSummary(binding.issue, binding.run_id, readRows(root), now.toISOString());
+    if (!run.events.length) continue;
+    const key = `${binding.issue}:${binding.run_id}`;
+    if (local.has(key)) throw new Error(`Local timing run registered twice: ${key}`);
+    local.set(key, { ...run, source: 'local' });
+  }
   let invalid = 0;
   for (const item of candidates) {
     const issue = item.content.number;
@@ -64,6 +82,18 @@ export async function loadTimings(rest, items, now) {
       if (comments.length < 100) { complete = true; break; }
     }
     if (!complete) throw new Error(`Issue ${issue} timing pagination exceeded its limit`);
+    for (const [key, run] of local) {
+      if (!key.startsWith(`${issue}:`)) continue;
+      const events = new Map(run.events.map(event => [event.attempt_id, event]));
+      for (const [id, prior] of runs) {
+        if (id !== run.run_id && !id.startsWith(`${run.run_id}.p`)) continue;
+        if (prior.conflict || prior.events.some(old => !sameAttempt(old, events.get(old.attempt_id)))) {
+          throw new Error(`Local timing run conflicts with published evidence: ${key}`);
+        }
+        runs.delete(id);
+      }
+      runs.set(run.run_id, run);
+    }
     records.push({ issue, active: item.fields.Status === 'In flight',
       runs: [...runs.values()].filter(run => !run.conflict) });
   }
@@ -111,5 +141,6 @@ export function summarizeTimings(records, now, invalid = 0) {
     }
   }
   return { window: '24h', phases, rounds, coverage: { active: active.length, tracked, stale, invalid },
-    evidence: records.flatMap(record => record.runs.map(run => ({ issue: record.issue, url: run.url }))) };
+    evidence: records.flatMap(record => record.runs.map(run => ({ issue: record.issue,
+      ...(run.url ? { url: run.url } : { source: run.source ?? 'unknown' }) }))) };
 }

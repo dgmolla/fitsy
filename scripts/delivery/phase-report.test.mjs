@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseTiming, loadTimings, summarizeTimings } from './phase-report.mjs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 const now = new Date('2026-09-26T20:00:00Z');
 const event = (id, start = '18:00:00', end = '18:10:00') => ({ event_id: id, attempt_id: id,
   run_id: 'run1', issue: 355, phase: 'review', producer: 'review', round_id: 'a'.repeat(40),
@@ -9,6 +12,34 @@ const event = (id, start = '18:00:00', end = '18:10:00') => ({ event_id: id, att
 const payload = events => ({ v: 1, issue: 355, run_id: 'run1', updated_at: now.toISOString(), events });
 const comment = data => ({ author_association: 'OWNER', html_url: 'https://github.com/dgmolla/fitsy/issues/355#issuecomment-1',
   body: `<!-- fitsy-delivery:v1:run1 -->\n\n\`\`\`json\n${JSON.stringify(data)}\n\`\`\`` });
+
+test('explicit local timing source fills an unpublished attempt without double counting a stale comment', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'fitsy-local-timing-'));
+  try {
+    mkdirSync(join(root, '.evidence/delivery'), { recursive: true });
+    writeFileSync(join(root, '.evidence/delivery/binding.json'), JSON.stringify({ issue: 355, run_id: 'run1' }));
+    const finished = { ...event('finished'), attempt_id: 'attempt1',
+      started_at: '2026-09-26T18:00:00.000Z', finished_at: '2026-09-26T18:10:00.000Z' };
+    const running = { ...finished, event_id: 'running', status: 'running', finished_at: null, duration_ms: null };
+    writeFileSync(join(root, '.evidence/delivery/events.jsonl'), `${JSON.stringify(running)}\n${JSON.stringify(finished)}\n`);
+    const items = [{ content: { __typename: 'Issue', number: 355 }, fields: { Status: 'In flight' } }];
+    const unpublished = await loadTimings(async () => [], items, now, [root]);
+    assert.equal(unpublished.phases.review.observedMs, 600000);
+    assert.deepEqual(unpublished.evidence, [{ issue: 355, source: 'local' }]);
+    const published = await loadTimings(async () => [comment(payload([running]))], items, now, [root]);
+    assert.equal(published.phases.review.observedMs, 600000);
+    assert.equal(published.phases.review.attempts, 1);
+    const shard = { ...payload([{ ...finished, run_id: 'run1.p1' }]), run_id: 'run1.p1' };
+    const shardedComment = comment(shard);
+    shardedComment.body = shardedComment.body.replace('fitsy-delivery:v1:run1 -->',
+      'fitsy-delivery:v1:run1.p1 -->');
+    const sharded = await loadTimings(async () => [shardedComment], items, now, [root]);
+    assert.equal(sharded.phases.review.attempts, 1);
+    const mutated = comment(payload([{ ...running, source_sha: 'b'.repeat(40) }]));
+    await assert.rejects(loadTimings(async () => [mutated], items, now, [root]),
+      /conflicts with published evidence/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
 
 test('only accepts valid writer observations for the exact issue/run', () => {
   const data = payload([event('a')]);

@@ -228,14 +228,15 @@ async function api(fetchImpl, url, token, options = {}) {
   return data;
 }
 
-export async function collect(fetchImpl, projectToken, actionsToken, now = new Date(), requestedSlot) {
+export async function collect(fetchImpl, projectToken, actionsToken, now = new Date(), requestedSlot,
+  localRoots = []) {
   const graphql = (query, variables) => api(fetchImpl, 'https://api.github.com/graphql', projectToken,
     { method: 'POST', body: JSON.stringify({ query, variables }) }).then(data => data.data);
   const rest = url => api(fetchImpl, url, actionsToken);
   const [project, pulls, main] = await Promise.all([
     loadProject(graphql), loadMergedPulls(rest, now), loadMainGates(rest),
   ]);
-  const local = await loadTimings(rest, project.items, now);
+  const local = await loadTimings(rest, project.items, now, localRoots);
   return { ...buildReport(project, pulls, main, now, requestedSlot), local };
 }
 
@@ -285,6 +286,10 @@ async function main() {
   const slotArg = args.find(arg => arg.startsWith('--slot='));
   const now = new Date();
   const requestedSlot = slotArg?.slice('--slot='.length);
+  const localRoots = JSON.parse(process.env.FITSY_LOCAL_TIMING_ROOTS || '[]');
+  if (!Array.isArray(localRoots) || localRoots.some(root => typeof root !== 'string')) {
+    throw new Error('FITSY_LOCAL_TIMING_ROOTS must be a JSON string array');
+  }
   deliverySlot(now, requestedSlot);
   await mkdir(output, { recursive: true });
   const post = args.includes('--post');
@@ -295,7 +300,7 @@ async function main() {
     throw new Error('DELIVERY_GITHUB_TOKEN and GITHUB_TOKEN are required');
   }
   const report = await collect(fetch, process.env.DELIVERY_GITHUB_TOKEN, process.env.GITHUB_TOKEN,
-    now, requestedSlot);
+    now, requestedSlot, localRoots);
   const message = formatReport(report);
   await writeFile(resolve(output, 'report.txt'), `${message}\n`);
   let delivery = { posted: false, dryRun: true };
