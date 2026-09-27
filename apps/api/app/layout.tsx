@@ -12,6 +12,7 @@ const newsreader = localFont({
   ],
   display: "swap",
   variable: "--font-newsreader",
+  adjustFontFallback: "Times New Roman",
 });
 
 const outfit = localFont({
@@ -28,6 +29,7 @@ const fraunces = localFont({
   ],
   display: "swap",
   variable: "--font-fraunces",
+  adjustFontFallback: "Times New Roman",
   // Both local files retain the optical size axis used by the display CSS.
 });
 
