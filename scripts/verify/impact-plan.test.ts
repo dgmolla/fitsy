@@ -2,7 +2,7 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSy
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { appleGitHookEnvironment } from './apple-git-hook-env';
+import { appleGitHookPrologue } from './apple-git-hook-env';
 
 const root = resolve(__dirname, '../..');
 const yaml = require('js-yaml') as { load(value: string): unknown };
@@ -220,7 +220,8 @@ test('source mutation during a cached run retires the prior receipt', () => {
 test('real Git push reuses local unit receipts and preserves custom environment identity', () => {
   cacheFixture();
   const hookEnv = timingHook();
-  write('.githooks/pre-push', readFileSync(join(root, '.githooks/pre-push'), 'utf8'));
+  write('.githooks/pre-push', readFileSync(join(root, '.githooks/pre-push'), 'utf8')
+    .replace('git_core="${PATH%%:*}"', appleGitHookPrologue + 'git_core="${PATH%%:*}"'));
   chmodSync(join(directory, '.githooks/pre-push'), 0o755);
   commit(); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
   const local = (extra: Record<string, string> = {}) => spawnSync('npm', ['run', 'verify', '--', '--runs=local', '--reuse'],
@@ -229,7 +230,7 @@ test('real Git push reuses local unit receipts and preserves custom environment 
   execFileSync('git', ['init', '--bare', '-q', remote], { cwd: directory, env });
   const push = (ref: string, extra: Record<string, string> = {}) => spawnSync('git',
     ['-c', 'core.hooksPath=.githooks', 'push', remote, `HEAD:refs/heads/${ref}`],
-    { cwd: directory, encoding: 'utf8', env: appleGitHookEnvironment(directory, { ...hookEnv, ...extra }), timeout: 15000 });
+    { cwd: directory, encoding: 'utf8', env: { ...hookEnv, ...extra }, timeout: 15000 });
   expect(local().status).toBe(0); expect(calls()).toBe(1);
   const first = push('main'); expect(first.status).toBe(0);
   expect(first.stdout + first.stderr).toMatch(/"name":"test"[^\n]*"duration_ms":0[^\n]*"cached":true/);
