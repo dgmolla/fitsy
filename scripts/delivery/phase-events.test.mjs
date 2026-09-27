@@ -41,6 +41,17 @@ function github() {
   return { api, comments, calls, loseCreateResponse: () => { failAfterCreate = true; } };
 }
 
+function publishedEvents(payloads, logicalRunId) {
+  return payloads.flatMap(payload => payload.events.map(event => {
+    assert.equal(event.run_id, payload.run_id);
+    return { ...event, run_id: logicalRunId };
+  }));
+}
+
+function publishedPayloads(comments) {
+  return comments.map(comment => JSON.parse(comment.body.match(/```json\n([^\n]+)/)[1]));
+}
+
 test('bind, begin and end retain observed attempt evidence without backfilling', async t => {
   const { root, head } = fixture(t);
   const binding = bind(root, 355);
@@ -89,14 +100,19 @@ test('publication shards a long logical run without losing attempts', async t =>
   const binding = bind(root, 355);
   const at = '2026-09-26T19:00:00.000Z';
   for (let i = 0; i < 51; i++) finish(root, start(root, 'unit', 'verify-run', { check: 'test' }, at), 'pass', at);
+  const logicalEvents = buildSummary(355, binding.run_id, readRows(root), at).events;
   const fake = github();
   assert.deepEqual(await publish(root, fake.api, at), { action: 'created', id: 2, shards: 2 });
-  const payloads = fake.comments.map(comment => JSON.parse(comment.body.match(/```json\n([^\n]+)/)[1]));
+  const payloads = publishedPayloads(fake.comments);
   assert.deepEqual(payloads.map(item => [item.run_id, item.events.length]),
     [[binding.run_id, 50], [`${binding.run_id}.p2`, 1]]);
   assert.ok(payloads.every(item => item.events.every(event => event.run_id === item.run_id)));
+  assert.deepEqual(publishedEvents(payloads, binding.run_id), logicalEvents);
+  const mutated = structuredClone(payloads);
+  mutated[1].events[0] = { ...mutated[0].events[0], run_id: mutated[1].run_id };
+  assert.throws(() => assert.deepEqual(publishedEvents(mutated, binding.run_id), logicalEvents),
+    { name: 'AssertionError' });
   assert.ok(fake.comments.every(comment => parseTiming({ ...comment, author_association: 'OWNER' }, 355, Date.parse(at))));
-  assert.equal(buildSummary(355, binding.run_id, readRows(root), at).events.length, 51);
   bind(root, 355, true);
   assert.ok(start(root, 'implementation', 'cli', {}, at));
 });
@@ -175,8 +191,9 @@ test('signal closeout records interruption and preserves process signal exit', {
 test('partial shard creation reconciles before logical run rotation', async t => {
   const { root } = fixture(t);
   const at = '2026-09-26T19:00:00.000Z';
-  bind(root, 355);
+  const binding = bind(root, 355);
   for (let i = 0; i < 51; i++) finish(root, start(root, 'unit', 'verify-run', {}, at), 'pass', at);
+  const logicalEvents = buildSummary(355, binding.run_id, readRows(root), at).events;
   const fake = github();
   let posts = 0;
   await assert.rejects(publish(root, async (...args) => {
@@ -188,6 +205,7 @@ test('partial shard creation reconciles before logical run rotation', async t =>
   assert.equal(fake.comments.length, 2);
   assert.equal((await publish(root, fake.api, at)).shards, 2);
   assert.equal(fake.comments.length, 2);
+  assert.deepEqual(publishedEvents(publishedPayloads(fake.comments), binding.run_id), logicalEvents);
   assert.ok(bind(root, 355, true).run_id);
 });
 
