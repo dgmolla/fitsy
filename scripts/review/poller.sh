@@ -17,7 +17,7 @@ echo "[poller] $(date -u +%FT%TZ) tick"
 if [ ! -d "$REPO_DIR/.git" ]; then
   "$GH_BIN" repo clone dgmolla/fitsy "$REPO_DIR" -- --quiet || { echo "[poller] clone failed"; exit 0; }
 fi
-cd "$REPO_DIR"
+cd "$REPO_DIR" || exit 1
 git fetch -q origin && git checkout -qf origin/main 2>/dev/null
 
 "$GH_BIN" pr list --state open --json number,headRefOid --limit 20 --jq '.[] | "\(.number) \(.headRefOid)"' |
@@ -37,7 +37,7 @@ while read -r NUM SHA; do
   echo "$FILES" | grep -qE '^(\.github/|vercel\.json|apps/mobile/eas\.json|scripts/deploy/)' && LENSES="$LENSES workflow-security"
   echo "$FILES" | grep -qE '\.test\.(ts|tsx)$' && LENSES="$LENSES test-quality"
   # Only a completed verdict closes the lens. An execution error is retried on
-  # a later tick, subject to review-budget.py's existing attempt/time limits.
+  # a later tick, subject to review-budget.py's cumulative time reservations.
   PENDING=""
   for L in $LENSES; do
     STATE="$("$GH_BIN" api "repos/{owner}/{repo}/commits/$SHA/statuses" 2>/dev/null |
@@ -59,7 +59,7 @@ while read -r NUM SHA; do
   # edit its own reviewer (T12), and old branches may predate the harness.
   git checkout -q origin/main -- scripts/review scripts/delivery/phase-events.mjs scripts/verify/risk-tiers.yml REVIEW.md .claude/lenses
   for L in $PENDING; do
-    FITSY_REVIEW_BUDGET_LEDGER="${FITSY_REVIEW_BUDGET_LEDGER:-$REVIEW_HOME/budgets/$NUM.jsonl}" \
+    FITSY_REVIEW_BUDGET_IMPORT_LEDGER="$REVIEW_HOME/budgets/$NUM.jsonl" \
       bash scripts/review/run-lens.sh "$NUM" "$L" || echo "[poller] PR #$NUM lens/$L -> fail"
   done
   # Reconcile once after all lenses, including concurrent or failed closeouts.

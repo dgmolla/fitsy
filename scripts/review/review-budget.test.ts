@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,122 +6,107 @@ import { join } from "node:path";
 const script = join(__dirname, "review-budget.py");
 let root: string;
 let ledger: string;
-let count: number;
-beforeEach(() => { root = mkdtempSync(join(tmpdir(), "fitsy-review-budget-")); ledger = join(root, "events.jsonl"); count = 0; });
+beforeEach(() => { root = mkdtempSync(join(tmpdir(), "fitsy-review-budget-")); ledger = join(root, "events.jsonl"); });
 afterEach(() => rmSync(root, { recursive: true, force: true }));
-function call(action: "begin" | "finish", round: string, lens = "correctness", exception?: string, adoption?: string, timeout?: number, closeout?: string) {
-  const id = `${round}-${lens}-${count}`;
-  if (action === "begin") count++;
-  const attempt = action === "finish" ? `${round}-${lens}-${count - 1}` : id;
-  const args = [script, action, "--ledger", ledger, "--round-id", round, "--lens", lens, "--source-sha", round, "--attempt-id", attempt];
-  if (exception) args.push("--exception", exception);
-  if (adoption) args.push("--adoption", adoption);
-  if (closeout) args.push("--closeout", closeout);
-  if (timeout) args.push("--timeout-seconds", String(timeout));
-  return spawnSync("python3", args, { encoding: "utf8" });
+function args(action: string, id = "one", timeout = 900, imports: string[] = []) {
+  return [script, action, "--ledger", ledger, "--round-id", id, "--lens", "correctness",
+    "--source-sha", id, "--attempt-id", id, "--timeout-seconds", String(timeout),
+    ...imports.flatMap(path => ["--import-ledger", path])];
 }
-test("two source rounds permit all routed lenses but reject a third head", () => {
-  expect(call("begin", "head-1").status).toBe(0);
-  expect(call("begin", "head-1", "test-quality").status).toBe(0);
-  expect(call("begin", "head-2").status).toBe(0);
-  const capped = call("begin", "head-3");
-  expect(capped.status).toBe(1);
-  expect(JSON.parse(capped.stdout).reason).toBe("review cap reached");
-  expect(readFileSync(ledger, "utf8").trim().split("\n")).toHaveLength(3);
+function call(action: string, id = "one", timeout = 900, imports: string[] = []) {
+  const result = spawnSync("python3", args(action, id, timeout, imports), { encoding: "utf8" });
+  return { ...result, value: JSON.parse(result.stdout) };
+}
+function history(id: string, seconds: number, flags = {}) {
+  return [{ event: "start", epoch: Date.now() / 1000 - seconds, round_id: id, lens: "correctness", source_sha: id, attempt_id: id, ...flags },
+    { event: "finish", elapsed_seconds: seconds, round_id: id, lens: "correctness", source_sha: id, attempt_id: id, ...flags }];
+}
+function seed(events: unknown[], path = ledger) { writeFileSync(path, events.map(row => JSON.stringify(row)).join("\n") + "\n"); }
+
+test("completed source rounds and failed outcomes count time without a head limit", () => {
+  for (const id of ["head-1", "head-2", "head-3", "head-4"]) {
+    expect(call("begin", id).status).toBe(0);
+    expect(call("finish", id).status).toBe(0);
+  }
+  expect(call("status").value).toMatchObject({ rounds: 4, unfinished_attempts: [], reserved_seconds: 0 });
+  expect(call("status").value.completed_seconds).toBeGreaterThan(0);
 });
-test("30 minutes of measured review time stops another lens", () => {
-  const now = Date.now() / 1000;
-  writeFileSync(ledger, JSON.stringify({ event: "start", epoch: now - 1801, round_id: "head-1", lens: "correctness", source_sha: "head-1", attempt_id: "earlier", exception: false }) + "\n");
-  expect(call("begin", "head-1", "test-quality").status).toBe(1);
+test("remaining time bounds the grant, including closeout reserve", () => {
+  seed(history("earlier", 1770));
+  const granted = call("begin", "new-head", 900);
+  expect(granted.status).toBe(0);
+  expect(granted.value).toMatchObject({ timeout_seconds: 25, reservation_seconds: 30, completed_seconds: 1770 });
+  expect(call("begin", "other-lens").status).toBe(1);
 });
-test("completed review time counts toward the 30-minute cap", () => {
-  expect(call("begin", "head-1").status).toBe(0);
-  const started = JSON.parse(readFileSync(ledger, "utf8"));
-  started.epoch -= 1801;
-  writeFileSync(ledger, JSON.stringify(started) + "\n");
-  expect(call("finish", "head-1").status).toBe(0);
-  const events = readFileSync(ledger, "utf8").trim().split("\n").map(line => JSON.parse(line));
-  expect(events[1].elapsed_seconds).toBeGreaterThanOrEqual(1800);
-  const capped = call("begin", "head-1", "test-quality");
-  expect(capped.status).toBe(1);
-  expect(JSON.parse(capped.stdout).reason).toBe("review cap reached");
+test("concurrent invocations atomically reserve the same remaining pool", async () => {
+  const invoke = (id: string) => new Promise<any>((resolve, reject) => {
+    const child = spawn("python3", args("begin", id, 1200));
+    let output = "";
+    child.stdout.on("data", bytes => { output += bytes; });
+    child.on("error", reject);
+    child.on("close", code => resolve({ code, ...JSON.parse(output) }));
+  });
+  const results = await Promise.all([invoke("first"), invoke("second"), invoke("third")]);
+  const admitted = results.filter(row => row.allowed);
+  expect(admitted).toHaveLength(2);
+  expect(admitted.reduce((sum, row) => sum + row.reservation_seconds, 0)).toBe(1800);
+  expect(admitted.map(row => row.timeout_seconds).sort((a, b) => a - b)).toEqual([590, 1200]);
+  expect(call("status").value.remaining_seconds).toBe(0);
 });
-test("only a named high-impact exception admits scoped review after the cap", () => {
-  expect(call("begin", "head-1").status).toBe(0);
-  expect(call("begin", "head-2").status).toBe(0);
-  const exception = join(root, "exception.json");
-  writeFileSync(exception, JSON.stringify({ version: 1, priority: "P1", lens: "correctness", source_sha: "head-3",
-    finding: "required evidence is invalid", realistic_impact: "cannot validate native flow", evidence: "receipt path",
-    repair: "restore validation", exit_condition: "required flow receipt passes", owner: "shipping task", budget_seconds: 300 }));
-  expect(call("begin", "head-3", "test-quality", exception).status).toBe(1);
-  expect(call("begin", "head-3", "correctness", exception).status).toBe(0);
-});
-test("one-time adoption admits one bounded attempt per lens after the historical cap", () => {
-  expect(call("begin", "old-1").status).toBe(0);
-  expect(call("begin", "old-2").status).toBe(0);
-  const permit = join(root, "adoption.json");
-  writeFileSync(permit, JSON.stringify({ version: 1, kind: "one-time-adoption", source_sha: "new-head",
-    budget_seconds: 600, lens_timeouts: { correctness: 390, "test-quality": 190 }, authorization: "owner approval" }));
-  expect(call("begin", "new-head", "correctness", undefined, permit, 390).status).toBe(0);
-  expect(call("finish", "new-head", "correctness").status).toBe(0);
-  expect(call("begin", "new-head", "correctness", undefined, permit, 390).status).toBe(1);
-  expect(call("begin", "other-head", "test-quality", undefined, permit, 190).status).toBe(1);
-  expect(call("begin", "new-head", "test-quality", undefined, permit, 900).status).toBe(1);
-  expect(call("begin", "new-head", "test-quality", undefined, permit, 190).status).toBe(0);
-  expect(call("finish", "new-head", "test-quality").status).toBe(0);
-  expect(call("begin", "new-head", "test-quality", undefined, permit, 190).status).toBe(1);
-  const events = readFileSync(ledger, "utf8").trim().split("\n").map(line => JSON.parse(line));
-  expect(events.filter(event => event.event === "start" && event.adoption)).toHaveLength(2);
-});
-test("adoption refuses a second lens when the aggregate deadline cannot hold it", () => {
-  expect(call("begin", "old-1").status).toBe(0);
-  expect(call("begin", "old-2").status).toBe(0);
-  const permit = join(root, "adoption.json");
-  writeFileSync(permit, JSON.stringify({ version: 1, kind: "one-time-adoption", source_sha: "new-head",
-    budget_seconds: 600, lens_timeouts: { correctness: 390, "test-quality": 190 }, authorization: "owner approval" }));
-  expect(call("begin", "new-head", "correctness", undefined, permit, 390).status).toBe(0);
-  const events = readFileSync(ledger, "utf8").trim().split("\n").map(line => JSON.parse(line));
-  events.at(-1).epoch -= 410;
-  writeFileSync(ledger, events.map(event => JSON.stringify(event)).join("\n") + "\n");
-  expect(call("finish", "new-head", "correctness").status).toBe(0);
-  const denied = call("begin", "new-head", "test-quality", undefined, permit, 190);
+test("legacy exceptions and failed or timed out work all consume the same cap", () => {
+  seed([...history("ordinary", 500), ...history("exception", 600, { exception: true }),
+    ...history("adoption", 400, { adoption: true }), ...history("closeout", 301, { closeout: true })]);
+  const before = readFileSync(ledger, "utf8");
+  const denied = call("begin", "another-head");
   expect(denied.status).toBe(1);
-  expect(JSON.parse(denied.stdout).reason).toBe("adoption aggregate deadline exhausted");
+  expect(denied.value).toMatchObject({ completed_seconds: 1801, remaining_seconds: 0 });
+  expect(readFileSync(ledger, "utf8")).toBe(before);
 });
-test("final delta closeout preserves historical adoption and admits each exact-source lens once", () => {
-  expect(call("begin", "old-1").status).toBe(0);
-  expect(call("begin", "old-2").status).toBe(0);
-  const old = join(root, "adoption.json");
-  writeFileSync(old, JSON.stringify({ version: 1, kind: "one-time-adoption", source_sha: "adopted-head",
-    budget_seconds: 600, lens_timeouts: { correctness: 390, "test-quality": 190 }, authorization: "old approval" }));
-  expect(call("begin", "adopted-head", "correctness", undefined, old, 390).status).toBe(0);
-  expect(call("finish", "adopted-head", "correctness").status).toBe(0);
-  const permit = join(root, "closeout.json");
-  writeFileSync(permit, JSON.stringify({ version: 1, kind: "final-delta-closeout", source_sha: "final-head",
-    budget_seconds: 600, lens_timeouts: { correctness: 390, "test-quality": 190 }, authorization: "bounded final delta" }));
-  expect(call("begin", "wrong-head", "correctness", undefined, undefined, 390, permit).status).toBe(1);
-  expect(call("begin", "final-head", "correctness", undefined, undefined, 900, permit).status).toBe(1);
-  expect(call("begin", "final-head", "correctness", undefined, undefined, 390, permit).status).toBe(0);
-  expect(call("finish", "final-head", "correctness").status).toBe(0);
-  expect(call("begin", "final-head", "correctness", undefined, undefined, 390, permit).status).toBe(1);
-  expect(call("begin", "final-head", "test-quality", undefined, undefined, 190, permit).status).toBe(0);
-  expect(call("finish", "final-head", "test-quality").status).toBe(0);
-  const events = readFileSync(ledger, "utf8").trim().split("\n").map(line => JSON.parse(line));
-  expect(events.filter(event => event.event === "start" && event.adoption)).toHaveLength(1);
-  expect(events.filter(event => event.event === "start" && event.closeout)).toHaveLength(2);
+test("legacy permit arguments never extend cumulative time", () => {
+  seed(history("used", 1800));
+  const permit = join(root, "permit.json"); writeFileSync(permit, "{}");
+  for (const option of ["--exception", "--adoption", "--closeout"]) {
+    const result = spawnSync("python3", [...args("begin"), option, permit], { encoding: "utf8" });
+    expect(result.status).toBe(1);
+    expect(JSON.parse(result.stdout).completed_seconds).toBe(1800);
+  }
 });
-test("final delta closeout enforces its aggregate deadline", () => {
-  expect(call("begin", "old-1").status).toBe(0);
-  expect(call("begin", "old-2").status).toBe(0);
-  const permit = join(root, "closeout.json");
-  writeFileSync(permit, JSON.stringify({ version: 1, kind: "final-delta-closeout", source_sha: "final-head",
-    budget_seconds: 600, lens_timeouts: { correctness: 390, "test-quality": 190 }, authorization: "bounded final delta" }));
-  expect(call("begin", "final-head", "correctness", undefined, undefined, 390, permit).status).toBe(0);
-  const events = readFileSync(ledger, "utf8").trim().split("\n").map(line => JSON.parse(line));
-  events.at(-1).epoch -= 410;
-  writeFileSync(ledger, events.map(event => JSON.stringify(event)).join("\n") + "\n");
-  expect(call("finish", "final-head", "correctness").status).toBe(0);
-  const denied = call("begin", "final-head", "test-quality", undefined, undefined, 190, permit);
-  expect(denied.status).toBe(1);
-  expect(JSON.parse(denied.stdout).reason).toBe("closeout aggregate deadline exhausted");
+test("append-only imports retain flags, deduplicate copies and import later finishes", () => {
+  const old = join(root, "old.jsonl"); const copied = join(root, "copied.jsonl");
+  const prior = [...history("ordinary", 120), ...history("repair", 50, { exception: true })];
+  seed(prior, old); seed(prior, copied);
+  const original = readFileSync(old, "utf8");
+  expect(call("status", "one", 900, [old, copied]).value.completed_seconds).toBe(170);
+  const imported = readFileSync(ledger, "utf8");
+  expect(JSON.parse(imported).events).toEqual(prior);
+  expect(call("status", "one", 900, [old, copied]).value.completed_seconds).toBe(170);
+  expect(readFileSync(ledger, "utf8")).toBe(imported);
+  expect(readFileSync(old, "utf8")).toBe(original);
+  const later = history("later", 30, { closeout: true });
+  seed([...prior, later[0]], old);
+  expect(call("status", "one", 900, [old]).value).toMatchObject({ completed_seconds: 170, reserved_seconds: 1800, remaining_seconds: 0, unfinished_attempts: ["later"] });
+  seed([...prior, ...later], old);
+  expect(call("status", "one", 900, [old]).value).toMatchObject({ completed_seconds: 200, reserved_seconds: 0, remaining_seconds: 1600, unfinished_attempts: [] });
+  expect(readFileSync(ledger, "utf8").startsWith(imported)).toBe(true);
+});
+test("conflicting history and unbounded unfinished legacy execution refuse admission", () => {
+  seed(history("old", 100));
+  const conflict = join(root, "conflict.jsonl"); seed(history("old", 200), conflict);
+  expect(call("begin", "new", 900, [conflict]).value.reason).toContain("conflicting");
+  seed(history("unfinished", 20).slice(0, 1));
+  expect(call("begin", "new").value).toMatchObject({ allowed: false, reserved_seconds: 1800, unfinished_attempts: ["unfinished"] });
+});
+test("closeout validates identity, releases unused reservation, and cannot repeat", () => {
+  expect(call("begin", "one", 60).status).toBe(0);
+  const mismatch = spawnSync("python3", [...args("finish", "one"), "--lens", "test-quality"], { encoding: "utf8" });
+  expect(mismatch.status).toBe(1);
+  expect(call("finish").status).toBe(0);
+  expect(call("finish").status).toBe(1);
+  expect(call("status").value.reserved_seconds).toBe(0);
+  expect(call("begin", "two", 900).status).toBe(0);
+});
+test("malformed time and invalid requested deadlines fail closed", () => {
+  for (const seconds of [-1, 0, 3601]) expect(call("begin", "one", seconds).status).toBe(1);
+  seed([{ ...history("old", 10)[0], epoch: "unknown" }]);
+  expect(call("begin").status).toBe(1);
 });

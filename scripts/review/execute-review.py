@@ -183,7 +183,14 @@ def execute(provider, model, executable, prompt, repository, timeout):
     return output
 
 
+def interrupted(_signum, _frame):
+    raise KeyboardInterrupt
+
+
 def main():
+    # The caller must wait for this closeout before releasing its reservation.
+    for signum in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(signum, interrupted)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--identity", action="store_true")
     parser.add_argument("provider", choices=("claude", "codex"))

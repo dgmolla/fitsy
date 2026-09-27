@@ -1,3 +1,4 @@
+import { policyRunnerCases } from "./policy-runner-cases";
 import { deliveryTimingCases } from "./delivery-timing-cases";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -24,7 +25,7 @@ function run(model = "fixture-model", provider = "claude", lens = "correctness")
     cwd: root, encoding: "utf8", env: { ...env, FITSY_REVIEW_MODEL: model, FITSY_REVIEW_PROVIDER: provider }, timeout: 15000,
   });
 }
-function runPr(lens = "correctness", body = "") {
+function runPr(lens = "correctness", body = "Delivery-Issue: #355\n") {
   writeFileSync(join(root, "pr-body"), body);
   const gh = join(root, "bin/gh-fixture");
   writeFileSync(gh, `#!/bin/sh
@@ -34,6 +35,7 @@ if [ "$1" = pr ] && [ "$2" = view ]; then
     title) printf '%s\\n' 'Fixture change' ;;
     body) cat ${JSON.stringify(join(root, 'pr-body'))} ;;
     headRefOid) git rev-parse HEAD ;;
+    headRefName) git branch --show-current ;;
   esac
   exit
 fi
@@ -70,10 +72,13 @@ beforeEach(() => {
   writeFileSync(join(root, ".claude/lenses/correctness.md"), "Review correctness.\n");
   writeFileSync(join(root, "app.ts"), "export const value = 1;\n");
   const cli = `#!/usr/bin/env python3
-import json,os,pathlib,sys
+import json,os,pathlib,sys,time
 if '--version' in sys.argv:
  print('fixture-cli 1.0'); sys.exit(0)
 with open(${JSON.stringify(calls)},'a') as f: f.write('called\\n')
+pathlib.Path(${JSON.stringify(join(root, 'reviewer-pid'))}).write_text(str(os.getpid()))
+delay=pathlib.Path(${JSON.stringify(join(root, 'delay'))})
+if delay.exists(): time.sleep(float(delay.read_text()))
 result=pathlib.Path(${JSON.stringify(join(root, 'verdict'))}).read_text()
 if '--output-last-message' in sys.argv:
  pathlib.Path(sys.argv[sys.argv.index('--output-last-message')+1]).write_text(result)
@@ -84,11 +89,13 @@ sys.exit(int(pathlib.Path(${JSON.stringify(join(root, 'exit'))}).read_text()))
 `;
   writeFileSync(join(root, "verdict"), verdict); writeFileSync(join(root, "exit"), "0");
   for (const name of ["claude", "codex"]) writeFileSync(join(root, "bin", name), cli, { mode: 0o755 });
-  env = { ...isolatedEnv(), PATH: join(root, "bin") + ":" + process.env.PATH, FITSY_REVIEW_CACHE: cache,
+  env = { ...isolatedEnv(), PATH: join(root, "bin") + ":" + process.env.PATH, FITSY_REVIEW_CACHE: cache, FITSY_REVIEW_HOME: join(root, "old-poller"), FITSY_REVIEW_BUDGET_HOME: join(root, "budgets"),
     REVIEW_TEST_CALLS: calls, REVIEW_TEST_VERDICT: verdict };
   git("init", "-q"); git("config", "user.name", "Review fixture"); git("config", "user.email", "fixture@example.test");
   git("add", "."); git("commit", "-qm", "base"); git("update-ref", "refs/remotes/origin/main", "HEAD");
   writeFileSync(join(root, "app.ts"), "export const value = 2;\n"); git("add", "app.ts"); git("commit", "-qm", "change");
+  mkdirSync(join(root, ".evidence/delivery"), { recursive: true });
+  writeFileSync(join(root, ".evidence/delivery/binding.json"), JSON.stringify({ issue: 355 }));
 });
 afterEach(() => {
   for (const key of Object.keys(process.env)) if (key.startsWith("GIT_")) delete process.env[key];
@@ -112,50 +119,6 @@ test("local caller runs independent CLI, records identity, and reuses only match
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(1);
   expect(run("different-model").status).toBe(0);
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(2);
-});
-test("local review uses the source-bound adoption permit after the historical cap", () => {
-  const head = git("rev-parse", "HEAD").trim();
-  const ledger = join(root, "adoption-budget.jsonl");
-  writeFileSync(ledger, ["old-head-1", "old-head-2"].map((round, index) => JSON.stringify({
-    event: "start", epoch: Date.now() / 1000, round_id: round, lens: "correctness",
-    source_sha: round, attempt_id: `old-${index}`, exception: false,
-  })).join("\n") + "\n");
-  const permit = join(root, "adoption.json");
-  writeFileSync(permit, JSON.stringify({ version: 1, kind: "one-time-adoption", source_sha: head,
-    budget_seconds: 600, lens_timeouts: { correctness: 390, "test-quality": 190 }, authorization: "owner approval" }));
-  env = { ...env, FITSY_REVIEW_BUDGET_LEDGER: ledger, FITSY_REVIEW_ADOPTION: permit,
-    FITSY_REVIEW_TIMEOUT_SECONDS: "390" };
-  expect(run().status).toBe(0);
-  const events = readFileSync(ledger, "utf8").trim().split("\n").map(line => JSON.parse(line));
-  expect(events.filter(event => event.event === "start" && event.adoption)).toHaveLength(1);
-  const repeated = run("different-model");
-  expect(repeated.status).toBe(1);
-  expect(repeated.stderr).toContain("adoption lens already attempted");
-});
-test("local review uses a final delta closeout after an earlier adoption", () => {
-  const head = git("rev-parse", "HEAD").trim();
-  const ledger = join(root, "closeout-budget.jsonl");
-  writeFileSync(ledger, ["old-head-1", "old-head-2"].map((round, index) => JSON.stringify({
-    event: "start", epoch: Date.now() / 1000, round_id: round, lens: "correctness",
-    source_sha: round, attempt_id: `old-${index}`, exception: false,
-  })).join("\n") + "\n" + JSON.stringify({
-    event: "start", epoch: Date.now() / 1000, round_id: "adopted-head", lens: "correctness",
-    source_sha: "adopted-head", attempt_id: "old-adoption", adoption: true,
-  }) + "\n" + JSON.stringify({
-    event: "finish", elapsed_seconds: 60, round_id: "adopted-head", lens: "correctness",
-    source_sha: "adopted-head", attempt_id: "old-adoption", adoption: true,
-  }) + "\n");
-  const permit = join(root, "closeout.json");
-  writeFileSync(permit, JSON.stringify({ version: 1, kind: "final-delta-closeout", source_sha: head,
-    budget_seconds: 600, lens_timeouts: { correctness: 390, "test-quality": 190 }, authorization: "final delta approval" }));
-  env = { ...env, FITSY_REVIEW_BUDGET_LEDGER: ledger, FITSY_REVIEW_CLOSEOUT: permit,
-    FITSY_REVIEW_TIMEOUT_SECONDS: "390" };
-  expect(run().status).toBe(0);
-  const events = readFileSync(ledger, "utf8").trim().split("\n").map(line => JSON.parse(line));
-  expect(events.filter(event => event.event === "start" && event.closeout)).toHaveLength(1);
-  const repeated = run("different-model");
-  expect(repeated.status).toBe(1);
-  expect(repeated.stderr).toContain("closeout lens already attempted");
 });
 test("nonzero external execution cannot publish or cache a partial pass", () => {
   writeFileSync(join(root, "exit"), "1");
@@ -297,3 +260,6 @@ test("new head rejects an old disposition even with a current required-test rece
   expect(result.stderr).toContain("stale disposition identity");
 });
 deliveryTimingCases({ root: () => root, env: () => env, source, run, runPr, git });
+
+policyRunnerCases({ root: () => root, setRoot: value => { root = value; }, env: () => env, setEnv: value => { env = value; },
+  calls: () => calls, cache: () => cache, run, runPr, git, isolatedEnv });
