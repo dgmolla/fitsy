@@ -630,6 +630,17 @@ class DispatcherProcessTest(unittest.TestCase):
         self.assertEqual(receipt['terminal'], 'verified')
         self.assertEqual(receipt['worker_profile']['provider'], 'claude')
 
+class ClaudeDispatcherProcessTest(DispatcherProcessTest):
+    """Run the same crash, race, retry and receipt fixtures with the Claude adapter."""
+
+    def setUp(self):
+        super().setUp()
+        config = json.loads(self.config.read_text())
+        for profile in config['profiles'].values():
+            profile.update({'provider': 'claude', 'model': 'configured-claude-model',
+                            'executable': str(self.claude)})
+        self.config.write_text(json.dumps(config))
+
 
 if __name__ == '__main__':
     unittest.main()
