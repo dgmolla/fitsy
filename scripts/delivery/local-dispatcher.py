@@ -174,6 +174,40 @@ def ready_event(config, number):
     return max(lines) if lines else None
 
 
+def successful_main_runs(config, merge_sha, run_ids=None):
+    if run_ids:
+        runs = [json.loads(gh(config, 'run', 'view', str(run_id), '-R', 'dgmolla/fitsy', '--json',
+                              'workflowName,headSha,headBranch,status,conclusion,databaseId')) for run_id in run_ids]
+    else:
+        runs = json.loads(gh(config, 'run', 'list', '-R', 'dgmolla/fitsy', '--branch', 'main',
+                             '--commit', merge_sha, '--limit', '100', '--json',
+                             'workflowName,headSha,headBranch,status,conclusion,databaseId'))
+    return all(any(run.get('workflowName') == name and run.get('headSha') == merge_sha and
+                   run.get('headBranch') == 'main' and run.get('status') == 'completed' and
+                   run.get('conclusion') == 'success' and (not run_ids or run.get('databaseId') == run_id)
+                   for run in runs) for name, run_id in zip(('Verify', 'Deploy'), run_ids or (None, None)))
+
+
+def historical_verified(config, item):
+    """Existing Done cards use GitHub's linked closing PR and exact main CI."""
+    if item.get('status') != 'Done' or not item.get('verified at'):
+        return False
+    number = item['content']['number']
+    issue = json.loads(gh(config, 'issue', 'view', str(number), '-R', 'dgmolla/fitsy',
+                          '--json', 'state,closedByPullRequestsReferences'))
+    if issue.get('state') != 'CLOSED':
+        return False
+    for linked in issue.get('closedByPullRequestsReferences') or []:
+        pr = json.loads(gh(config, 'pr', 'view', str(linked['number']), '-R', 'dgmolla/fitsy',
+                           '--json', 'state,mergeCommit,body'))
+        merge_sha = (pr.get('mergeCommit') or {}).get('oid')
+        if (pr.get('state') == 'MERGED' and merge_sha and
+                f'Delivery-Issue: #{number}' in (pr.get('body') or '').splitlines() and
+                successful_main_runs(config, merge_sha)):
+            return True
+    return False
+
+
 def terminal_verified(config, item, expected, *, archived=False):
     """Board state is only a hint; independently bind acceptance to merged main CI."""
     if not expected or item.get('status') != 'Done' or not item.get('verified at'):
@@ -207,12 +241,8 @@ def terminal_verified(config, item, expected, *, archived=False):
                     pr.get('headRefOid') != receipt['head_sha'] or pr.get('headRefName') != expected['branch'] or
                     f'Delivery-Issue: #{number}' not in (pr.get('body') or '').splitlines()):
                 return False
-            runs = json.loads(gh(config, 'run', 'list', '-R', 'dgmolla/fitsy', '--branch', 'main', '--limit', '100',
-                                 '--json', 'workflowName,headSha,status,conclusion,databaseId'))
-            if all(any(run.get('workflowName') == name and run.get('headSha') == receipt['merge_sha']
-                       and run.get('status') == 'completed' and run.get('conclusion') == 'success'
-                       and run.get('databaseId') == receipt.get(field) for run in runs)
-                   for name, field in (('Verify', 'verify_run'), ('Deploy', 'deploy_run'))):
+            if successful_main_runs(config, receipt['merge_sha'],
+                                    (receipt['verify_run'], receipt['deploy_run'])):
                 return True
             return False
         except (KeyError, ValueError, TypeError, RuntimeError):
@@ -239,8 +269,9 @@ def eligible(items, readiness, readiness_source, config, verified):
             if not DEPENDENCIES.fullmatch(deps):
                 continue
             numbers = [int(value) for value in re.findall(r'#(\d+)', deps)]
-            if number in numbers or any(not by_number.get(dep) or not terminal_verified(
-                    config, by_number[dep], verified.get(str(dep)), archived=True)
+            if number in numbers or any(not by_number.get(dep) or not (
+                    terminal_verified(config, by_number[dep], verified[str(dep)], archived=True)
+                    if str(dep) in verified else historical_verified(config, by_number[dep]))
                                         for dep in numbers):
                 continue
         event = ready_event(config, number)
@@ -417,7 +448,14 @@ def tick(config, state, state_path, script):
         if active.get('stage') == 'ownership-uncertain':
             return {'state': 'ownership-uncertain', 'issue': active['issue']}
         if active.get('stage') in ('launching', 'running') and not active.get('pid'):
-            return {'state': 'uncertain-launch', 'issue': active['issue']}
+            launcher = active.get('launcher_pid')
+            if launcher and pid_identity(launcher) is None and not group_alive(launcher):
+                active['stage'] = 'finished'
+                active['finished_at'] = utc()
+                active['failure'] = 'launcher exited before recording a worker PID'
+                write_json(state_path, state)
+            else:
+                return {'state': 'uncertain-launch', 'issue': active['issue']}
         if active.get('pid') and active.get('pid_started') and pid_identity(active['pid']) not in (None, active['pid_started']):
             return {'state': 'uncertain-pid-reuse', 'issue': active['issue']}
         if active.get('pid') and active.get('finished_at') and group_alive(active['pid']):
@@ -552,8 +590,12 @@ def tick(config, state, state_path, script):
         (claim_dir / 'prompt.txt').chmod(0o600)
         write_json(state_path, state)
         with (claim_dir / 'launcher.log').open('a') as log:
-            subprocess.Popen([sys.executable, str(script), 'worker', '--config', config['_path'], '--claim-id', claim_id],
-                             stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)
+            launcher = subprocess.Popen([sys.executable, str(script), 'worker', '--config', config['_path'],
+                                         '--claim-id', claim_id], stdin=subprocess.DEVNULL, stdout=log,
+                                        stderr=log, start_new_session=True)
+        claim['launcher_pid'] = launcher.pid
+        claim['launcher_started'] = pid_identity(launcher.pid)
+        write_json(state_path, state)
         return {'state': 'launching', 'issue': number, 'claim': claim_id}
     write_json(state_path, state)
     return {'state': 'idle', 'candidates': 0}

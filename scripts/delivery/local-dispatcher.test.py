@@ -37,7 +37,8 @@ with lock.open('a') as f:
   n=int(a[2]); item=next(x for x in d['items'] if x['content']['number']==n)
   if '-R' not in a: raise SystemExit('issue operation lacks repository identity')
   result=json.dumps({'state':item.get('issue_state','OPEN'),'title':item['content']['title'],
-                     'body':item['content']['body'],'url':item['content']['url']})
+                     'body':item['content']['body'],'url':item['content']['url'],
+                     'closedByPullRequestsReferences':[{'number':389}] if item.get('linked_pr') else []})
  elif a[:2]==['issue','comment']:
   if '-R' not in a: raise SystemExit('comment lacks repository identity')
   d.setdefault('comments',[]).append(a[a.index('--body')+1])
@@ -51,14 +52,15 @@ with lock.open('a') as f:
   n=int(a[1].split('/issues/')[1].split('/')[0]); item=next(x for x in d['items'] if x['content']['number']==n)
   result=json.dumps({'id':1,'body':item.get('terminal','')}) if item.get('terminal') else ''
  elif a[:2]==['pr','view']:
-  item=next(x for x in d['items'] if x.get('terminal'))
+  item=next(x for x in d['items'] if x.get('terminal') or x.get('linked_pr'))
   result=json.dumps({'state':'MERGED','headRefOid':'a'*40,'headRefName':item.get('branch',''),
                      'body':'Delivery-Issue: #'+str(999 if os.environ.get('FAKE_WRONG_PR_ISSUE') else item['content']['number']),
                      'mergeCommit':{'oid':'b'*40}})
- elif a[:2]==['run','list']:
-  result=json.dumps([{'workflowName':name,'headSha':'b'*40,'status':'completed',
-                      'conclusion':'failure' if name=='Verify' and os.environ.get('FAKE_BAD_CI') else 'success',
-                      'databaseId':run} for name,run in [('Verify',11),('Deploy',12)]])
+ elif a[:2]==['run','list'] or a[:2]==['run','view']:
+  runs=[{'workflowName':name,'headSha':'b'*40,'headBranch':'main','status':'completed',
+         'conclusion':'failure' if name=='Verify' and os.environ.get('FAKE_BAD_CI') else 'success',
+         'databaseId':run} for name,run in [('Verify',11),('Deploy',12)]]
+  result=json.dumps(runs if a[1]=='list' else next(x for x in runs if x['databaseId']==int(a[2])))
  else: raise SystemExit('unexpected gh call: '+repr(a))
  p.write_text(json.dumps(d)); print(result)
 '''
@@ -212,6 +214,29 @@ class DispatcherProcessTest(unittest.TestCase):
         self.set_board([foreign, item(351, dependencies='#385')])
         self.assertEqual(self.tick()['state'], 'idle')
         self.assertEqual(self.workers(), [])
+
+    def test_preexisting_verified_dependency_releases_ready_issue(self):
+        historical = item(385, status='Done')
+        historical.update({'issue_state': 'CLOSED', 'verified at': '2026-09-26T00:10:00Z',
+                           'linked_pr': True})
+        self.set_board([historical, item(351, dependencies='#385')])
+        self.assertEqual(self.tick()['issue'], 351)
+        self.until(lambda: self.state_data()['active'].get('finished_at'))
+
+    def test_proven_dead_launcher_parks_and_releases_independent_issue(self):
+        launched = item(385, status='In flight')
+        self.set_board([launched, item(351)])
+        child = subprocess.Popen(['sleep', '0.1'], start_new_session=True)
+        start = run('ps', '-p', str(child.pid), '-o', 'lstart=').stdout.strip()
+        child.wait(timeout=3)
+        state = {'version': 1, 'active': {'id': 'dead-launcher', 'issue': 385, 'item_id': 'item-385',
+                 'stage': 'launching', 'launcher_pid': child.pid, 'launcher_started': start,
+                 'ready_at': '2026-09-27T00:00:00Z'}, 'readiness': {}, 'classifications': {},
+                 'parked': {}, 'history': []}
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.assertEqual(self.tick()['issue'], 351)
+        self.assertEqual(self.state_data()['history'][0]['terminal'], 'parked-after-exit')
+        self.until(lambda: self.state_data()['active'].get('finished_at'))
 
     def test_closed_merged_issue_with_failed_main_ci_cannot_release_dependency(self):
         delivered = item(385, status='Done')
