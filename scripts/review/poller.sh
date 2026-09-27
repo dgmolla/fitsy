@@ -59,8 +59,7 @@ while read -r NUM SHA; do
   # edit its own reviewer (T12), and old branches may predate the harness.
   git checkout -q origin/main -- scripts/review scripts/delivery/phase-events.mjs scripts/verify/risk-tiers.yml REVIEW.md .claude/lenses
   for L in $PENDING; do
-    FITSY_REVIEW_BUDGET_IMPORT_LEDGER="$REVIEW_HOME/budgets/$NUM.jsonl" \
-      bash scripts/review/run-lens.sh "$NUM" "$L" || echo "[poller] PR #$NUM lens/$L -> fail"
+    bash scripts/review/run-lens.sh "$NUM" "$L" || echo "[poller] PR #$NUM lens/$L -> fail"
   done
   # Reconcile once after all lenses, including concurrent or failed closeouts.
   TIMING_ROOT="$REPO_DIR/.evidence/review-delivery/$NUM"

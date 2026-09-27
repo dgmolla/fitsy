@@ -110,3 +110,13 @@ test("malformed time and invalid requested deadlines fail closed", () => {
   seed([{ ...history("old", 10)[0], epoch: "unknown" }]);
   expect(call("begin").status).toBe(1);
 });
+
+test("explicit missing histories fail while absent optional defaults are allowed", () => {
+  const missing = join(root, "missing.jsonl");
+  const explicit = call("begin", "required", 60, [missing]);
+  expect(explicit.status).toBe(1);
+  expect(explicit.value.reason).toContain("missing required review ledger");
+  const optional = spawnSync("python3", [...args("begin", "optional", 60), "--optional-import-ledger", missing], { encoding: "utf8" });
+  expect(optional.status).toBe(0);
+  expect(call("status").value.unfinished_attempts).toEqual(["optional"]);
+});

@@ -57,6 +57,26 @@ test("local and PR review share imported history without resetting exception tim
   } finally { root = localRoot; fixture.setRoot(root); rmSync(prRoot, { recursive: true, force: true }); }
   expect(readFileSync(ledger, "utf8").trim().split("\n")).toHaveLength(6);
 });
+test("a missing explicit historical ledger refuses any reviewer launch", () => {
+  fixture.setEnv({ ...env, FITSY_REVIEW_BUDGET_IMPORT_LEDGER: join(root, "missing-history.jsonl") });
+  const result = run();
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain("missing required review ledger");
+  expect(existsSync(calls)).toBe(false);
+});
+test("a real shallow clone refuses review before deriving a candidate identity", () => {
+  const original = root;
+  const shallow = mkdtempSync(join(tmpdir(), "fitsy-shallow-review-"));
+  execFileSync("git", ["clone", "-q", "--no-local", "--depth", "1", original, shallow], { env: isolatedEnv() });
+  root = shallow; fixture.setRoot(root);
+  try {
+    expect(git("rev-parse", "--is-shallow-repository").trim()).toBe("true");
+    const result = run();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("complete Git ancestry");
+    expect(existsSync(calls)).toBe(false);
+  } finally { root = original; fixture.setRoot(root); rmSync(shallow, { recursive: true, force: true }); }
+});
 test("full PR body is validated before limiting review prompt metadata", () => {
   const longBody = "Description ".repeat(410) + "\nDelivery-Issue: #355\n";
   expect(runPr("correctness", longBody).status).toBe(0);

@@ -20,6 +20,11 @@ GH_BIN="${FITSY_GH_BIN:-gh}"
 mkdir -p "$CACHE_DIR"
 umask 077
 
+if [ "$(git rev-parse --is-shallow-repository)" != false ]; then
+  echo '[run-lens] review requires complete Git ancestry; fetch the missing history first' >&2
+  exit 1
+fi
+
 # ── Gather the diff and context ─────────────────────────────────────────────
 if [ "$TARGET" = "--local" ]; then
   DIFF="$(git diff --abbrev=8 origin/main...HEAD)"
@@ -49,12 +54,12 @@ BUDGET_LEDGER="$BUDGET_HOME/issue-$ISSUE.jsonl"
 # A candidate branch has one issue even when its first PR changes the body/head.
 [ -n "$HEAD_BRANCH" ] || { echo '[run-lens] review requires a named candidate branch' >&2; exit 1; }
 CANDIDATE="$(git rev-list --max-parents=0 HEAD | sort):$HEAD_BRANCH"
-BUDGET_ARGS=(--ledger "$BUDGET_LEDGER" --candidate "$CANDIDATE" --issue "$ISSUE" --import-ledger "$REPO_ROOT/.evidence/review-budget.jsonl")
+BUDGET_ARGS=(--ledger "$BUDGET_LEDGER" --candidate "$CANDIDATE" --issue "$ISSUE" --optional-import-ledger "$REPO_ROOT/.evidence/review-budget.jsonl")
 for LEGACY_LEDGER in "${FITSY_REVIEW_BUDGET_LEDGER:-}" "${FITSY_REVIEW_BUDGET_IMPORT_LEDGER:-}"; do
   [ -z "$LEGACY_LEDGER" ] || BUDGET_ARGS+=(--import-ledger "$LEGACY_LEDGER")
 done
 if [ "$TARGET" != "--local" ]; then
-  BUDGET_ARGS+=(--import-ledger "${FITSY_REVIEW_HOME:-$HOME/.fitsy-review}/budgets/$TARGET.jsonl")
+  BUDGET_ARGS+=(--optional-import-ledger "${FITSY_REVIEW_HOME:-$HOME/.fitsy-review}/budgets/$TARGET.jsonl")
 fi
 if ! python3 scripts/review/review-budget.py status "${BUDGET_ARGS[@]}" >&2; then
   echo '[run-lens] timing gap: candidate budget binding or history refused' >&2

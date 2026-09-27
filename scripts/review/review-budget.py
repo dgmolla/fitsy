@@ -64,13 +64,17 @@ def append(handle, event):
     os.fsync(handle.fileno())
 
 
-def import_history(handle, ledger, paths):
+def import_history(handle, ledger, paths, optional_paths):
     """Retain original events and flags; copied histories count exactly once."""
     events = indexed(read_events(handle))
     pending = []
-    for path in paths:
+    for path, required in [(p, True) for p in paths] + [(p, False) for p in optional_paths]:
         source = Path(path)
-        if source.resolve() == ledger.resolve() or not source.exists():
+        if not source.exists():
+            if required:
+                raise ValueError(f"missing required review ledger: {source}")
+            continue
+        if source.resolve() == ledger.resolve():
             continue
         with source.open() as old:
             fcntl.flock(old, fcntl.LOCK_SH)
@@ -143,6 +147,7 @@ def main():
     parser.add_argument("action", choices=("begin", "finish", "status"))
     parser.add_argument("--ledger", type=Path, required=True)
     parser.add_argument("--import-ledger", action="append", default=[])
+    parser.add_argument("--optional-import-ledger", action="append", default=[])
     for name in ("round-id", "lens", "source-sha", "attempt-id"):
         parser.add_argument(f"--{name}")
     # Retained CLI compatibility: these permits cannot extend the time-only cap.
@@ -159,7 +164,7 @@ def main():
             bind_candidate(args.ledger, args.candidate, args.issue)
         with args.ledger.open("a+") as handle:
             fcntl.flock(handle, fcntl.LOCK_EX)
-            events = import_history(handle, args.ledger, args.import_ledger)
+            events = import_history(handle, args.ledger, args.import_ledger, args.optional_import_ledger)
             starts, finishes, total = usage(events)
             result = {"allowed": True, "reason": "history accounted", "ledger": str(args.ledger.resolve()), **total}
             if args.action != "status" and not all((args.round_id, args.lens, args.source_sha, args.attempt_id)):
