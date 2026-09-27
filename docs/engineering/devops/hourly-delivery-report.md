@@ -14,8 +14,8 @@ The history check also recognizes an older `fitsy-hour` message sent within the 
 The first live run and actual Slack receipt must be checked before claiming delivery is operational.
 
 GitHub scheduled runs are best effort: the September 26 minute-17 run began at 21:58 UTC, 41 minutes late, and the September 27 run began at 00:40 UTC, 23 minutes late; some expected hourly runs are absent.
-The reporter derives a scheduled run's intended half-hour from the triggering cron minute, so those delayed minute-17 runs retain their `:00` slots instead of drifting into `:30`.
-If the derived slot is over 60 minutes old, the run fails closed and the fallback may report the current slot.
+GitHub does not expose the intended triggering hour for a delayed schedule, so a scheduled run reports the current UTC half-hour when it actually starts.
+The fallback may explicitly report the previous missed slot within 60 minutes; both paths use the same marker and Slack history check.
 The existing 30-minute Codex heartbeat may dispatch this same workflow with `dry_run=false` and an explicit `slot` such as `2026-09-27T02:30` when that slot lacks a confirmed report.
 An explicit slot must be a current or previous UTC half-hour no more than 60 minutes old; stale dispatches fail rather than posting old progress.
 The heartbeat must not post a separate digest or install a second publisher.

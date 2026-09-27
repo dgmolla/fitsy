@@ -129,16 +129,6 @@ export function deliverySlot(now, requested) {
   return requested;
 }
 
-export function scheduledDeliverySlot(now, schedule) {
-  const minute = { '17 * * * *': 17, '47 * * * *': 47 }[schedule];
-  if (minute === undefined) throw new Error('unknown delivery schedule');
-  const due = new Date(now.getTime());
-  due.setUTCMinutes(minute, 0, 0);
-  if (due > now) due.setUTCHours(due.getUTCHours() - 1);
-  due.setUTCMinutes(minute < 30 ? 0 : 30, 0, 0);
-  return deliverySlot(now, due.toISOString().slice(0, 16));
-}
-
 export function buildReport(project, pulls, main, now = new Date(), requestedSlot) {
   const nowMs = now.getTime();
   const hour = new Date(nowMs); hour.setUTCMinutes(0, 0, 0);
@@ -198,6 +188,10 @@ export function buildReport(project, pulls, main, now = new Date(), requestedSlo
       .slice(0, 1).map(item => ({ number: item.content.number, title: item.content.title, url: item.content.url })) },
     wipAge: { oldestMs: ages.length ? Math.max(...ages) : null, sample: ages.length,
       missing: activeIssues.length - ages.length }, main, highlights };
+}
+
+export function reportArtifact(report, delivery) {
+  return JSON.stringify({ ...report, delivery }, null, 2);
 }
 
 function issueLink(issue) {
@@ -289,11 +283,8 @@ async function main() {
   if (outputIndex < 0 || !args[outputIndex + 1]) throw new Error('--output-dir is required');
   const output = resolve(args[outputIndex + 1]);
   const slotArg = args.find(arg => arg.startsWith('--slot='));
-  const scheduleArg = args.find(arg => arg.startsWith('--schedule='));
-  if (slotArg && scheduleArg) throw new Error('choose either --slot or --schedule');
   const now = new Date();
-  const requestedSlot = scheduleArg ? scheduledDeliverySlot(now, scheduleArg.slice('--schedule='.length)) :
-    slotArg?.slice('--slot='.length);
+  const requestedSlot = slotArg?.slice('--slot='.length);
   deliverySlot(now, requestedSlot);
   await mkdir(output, { recursive: true });
   const post = args.includes('--post');
@@ -315,7 +306,7 @@ async function main() {
     delivery = await postOnce(fetch, process.env.DELIVERY_SLACK_BOT_TOKEN,
       process.env.DELIVERY_SLACK_CHANNEL, report, message);
   }
-  await writeFile(resolve(output, 'report.json'), `${JSON.stringify({ ...report, delivery }, null, 2)}\n`);
+  await writeFile(resolve(output, 'report.json'), `${reportArtifact(report, delivery)}\n`);
   process.stdout.write(`${message}\n`);
   process.stdout.write(`delivery: ${delivery.posted ? 'posted' : delivery.duplicate ? 'duplicate' : 'dry-run'}\n`);
 }

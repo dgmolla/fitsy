@@ -47,7 +47,6 @@ jobs:
           DELIVERY_REPORT_ENABLED: ${{ vars.DELIVERY_REPORT_ENABLED }}
           INPUT_DRY_RUN: ${{ inputs.dry_run }}
           INPUT_SLOT: ${{ inputs.slot }}
-          INPUT_SCHEDULE: ${{ github.event.schedule }}
         run: |
           mode=--dry-run
           if [[ "$DELIVERY_REPORT_ENABLED" == true ]]; then
@@ -57,7 +56,6 @@ jobs:
           fi
           args=(--output-dir work/hourly-delivery-report "$mode")
           if [[ -n "$INPUT_SLOT" ]]; then args+=("--slot=$INPUT_SLOT"); fi
-          if [[ "$GITHUB_EVENT_NAME" == schedule ]]; then args+=("--schedule=$INPUT_SCHEDULE"); fi
           node scripts/delivery/hourly-report.mjs "${args[@]}"
       - name: Preserve report evidence
         if: always()

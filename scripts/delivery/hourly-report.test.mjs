@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildReport, deliverySlot, formatReport, loadMainGates, loadMergedPulls, loadProject, postOnce,
-  scheduledDeliverySlot,
+  reportArtifact,
 } from './hourly-report.mjs';
 
 const board = 'https://github.com/users/dgmolla/projects/1';
@@ -138,17 +138,14 @@ test('UTC half-hour slots stay distinct and reject stale fallback requests', () 
   assert.throws(() => deliverySlot(late, '2026-09-26T17:30'), /stale/);
 });
 
-test('delayed scheduled runs keep the cron slot and reject an untrustworthy delay', () => {
-  assert.equal(scheduledDeliverySlot(new Date('2026-09-26T21:58:00Z'), '17 * * * *'),
-    '2026-09-26T21:00');
-  assert.equal(scheduledDeliverySlot(new Date('2026-09-27T00:40:00Z'), '17 * * * *'),
-    '2026-09-27T00:00');
-  assert.equal(scheduledDeliverySlot(new Date('2026-09-26T21:58:00Z'), '47 * * * *'),
-    '2026-09-26T21:30');
-  assert.throws(() => scheduledDeliverySlot(new Date('2026-09-26T22:05:00Z'), '17 * * * *'),
-    /stale/);
-  assert.throws(() => scheduledDeliverySlot(new Date('2026-09-26T21:58:00Z'), '13 * * * *'),
-    /unknown delivery schedule/);
+test('late scheduled starts report the observed slot and fallback can fill the missed slot', () => {
+  const project = { url: board, items: [] };
+  const late = new Date('2026-09-26T21:58:00Z');
+  const scheduled = buildReport(project, [], { state: 'green' }, late);
+  const fallback = buildReport(project, [], { state: 'green' }, late, '2026-09-26T21:00');
+  assert.equal(scheduled.slotKey, '2026-09-26T21:30');
+  assert.equal(fallback.slotKey, '2026-09-26T21:00');
+  assert.notEqual(scheduled.slotKey, fallback.slotKey);
 });
 
 test('scheduled and fallback reports share one publisher per slot', async () => {
@@ -216,7 +213,10 @@ test('compact copy shows gate state while detail retains measurements', () => {
   report.local.phases.e2e.observedMs = 120000;
   text = formatReport(report);
   assert.match(text, /main failed/);
-  assert.equal(report.local.phases.e2e.observedMs, 120000);
+  const artifact = JSON.parse(reportArtifact(report, { posted: false, dryRun: true }));
+  assert.equal(artifact.local.phases.e2e.observedMs, 120000);
+  assert.deepEqual(artifact.local.coverage, { active: 4, tracked: 3, stale: 2, invalid: 1 });
+  assert.deepEqual(artifact.delivery, { posted: false, dryRun: true });
   assert.equal(text.split('\n').length, 4);
 });
 
