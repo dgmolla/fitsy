@@ -84,7 +84,7 @@ class LocalReportTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             state = Path(temp)
             start = epoch('2026-09-27T03:30:00Z')
-            config = {'activated_at': start, 'channel': 'C123', 'user': 'U123'}
+            config = {'activated_at': start, 'channel': 'C123', 'publisher_user': 'U123'}
             slack = PagedSlack()
             generate = lambda _runtime, _state, slot, _roots: f'fitsy-slot:{slot}'
             reporter.run_once(config, state, slack, start + 120, generate)
@@ -114,7 +114,7 @@ class LocalReportTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             state = Path(temp)
             start = epoch('2026-09-27T03:30:00Z')
-            config = {'activated_at': start, 'channel': 'C123', 'user': 'U123'}
+            config = {'activated_at': start, 'channel': 'C123', 'publisher_user': 'U123'}
             slack = UncertainSlack()
             generate = lambda _runtime, _state, slot, _roots: f'fitsy-slot:{slot}'
             for offset in (120, 180, 240):
@@ -133,7 +133,7 @@ class LocalReportTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             state = Path(temp)
             start = epoch('2026-09-27T03:30:00Z')
-            config = {'activated_at': start, 'channel': 'C123', 'user': 'U123'}
+            config = {'activated_at': start, 'channel': 'C123', 'publisher_user': 'U123'}
             slack = UncertainSlack()
             generate = lambda _runtime, _state, slot, _roots: f'fitsy-slot:{slot}'
             reporter.run_once(config, state, slack, start + 120, generate)
@@ -162,7 +162,7 @@ class LocalReportTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             state = Path(temp)
             start = epoch('2026-09-27T03:30:00Z')
-            config = {'activated_at': start, 'channel': 'C123', 'user': 'U123'}
+            config = {'activated_at': start, 'channel': 'C123', 'publisher_user': 'U123'}
             slack = CrashSlack()
             generate = lambda _runtime, _state, slot, _roots: f'fitsy-slot:{slot}'
             reporter.run_once(config, state, slack, start + 120, generate)
@@ -189,7 +189,7 @@ class LocalReportTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             state = Path(temp)
             start = epoch('2026-09-27T03:30:00Z')
-            config = {'activated_at': start, 'channel': 'C123', 'user': 'U123'}
+            config = {'activated_at': start, 'channel': 'C123', 'publisher_user': 'U123'}
             calls = []
             def generate(_runtime, _state, slot, _roots):
                 calls.append(slot)
@@ -213,7 +213,7 @@ class LocalReportTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             state = Path(temp)
             start = epoch('2026-09-27T03:30:00Z')
-            config = {'activated_at': start, 'channel': 'C123', 'user': 'U123'}
+            config = {'activated_at': start, 'channel': 'C123', 'publisher_user': 'U123'}
             calls = []
             def generate(_runtime, _state, slot, _roots):
                 calls.append(slot)

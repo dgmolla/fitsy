@@ -27,10 +27,11 @@ while (( $# )); do
   shift 2
 done
 
-python3 - "$repo" "$mode" "${roots[@]}" <<'PY'
+publisher_user="$(python3 - "$repo" "$mode" "${roots[@]}" <<'PY'
 import base64
 import json
 from pathlib import Path
+import runpy
 import subprocess
 import sys
 
@@ -56,11 +57,23 @@ workflow = base64.b64decode(source).decode()
 if '\n  schedule:' in workflow:
     raise SystemExit('main still schedules the GitHub digest; local publisher installation refused')
 config = json.loads((Path.home() / 'firstmate/config/slack-notifications.json').read_text())
+recipient_user = config['user']  # Mention target, not the authenticated publisher.
+if not isinstance(recipient_user, str) or not recipient_user:
+    raise SystemExit('shared Slack recipient identity unavailable')
 if not Path(config['bridge_path'], 'bridge.py').is_file():
     raise SystemExit('shared Slack limiter unavailable')
-print(json.dumps({'mode': mode, 'main_schedule_disabled': True,
-                  'timing_roots': len(roots), 'shared_limiter': True}))
+sys.path.insert(0, config['bridge_path'])
+import bridge
+bridge.load_env()
+settings = bridge.Config.from_env()
+if settings.channel != config['channel']:
+    raise SystemExit('Slack channel does not match shared limiter configuration')
+authenticated_sender = runpy.run_path(str(Path(repo) / 'scripts/delivery/local-report.py'))['authenticated_sender']
+publisher_user = authenticated_sender(bridge.Slack(bridge.Store(settings)))
+print(publisher_user)
 PY
+)"
+echo "checked $mode: current main, shared limiter, channel and token publisher; ${#roots[@]} timing roots"
 
 if [[ "$mode" == --check ]]; then exit 0; fi
 
@@ -69,7 +82,7 @@ chmod 700 "$state" "$state/runtime" "$state/slots" "$state/reports"
 for file in hourly-report.mjs phase-report.mjs phase-events.mjs improvements.mjs local-report.py; do
   install -m 0644 "$repo/scripts/delivery/$file" "$state/runtime/$file"
 done
-python3 - "$state" "${roots[@]}" <<'PY'
+python3 - "$state" "$publisher_user" "${roots[@]}" <<'PY'
 import json
 import math
 import os
@@ -77,17 +90,22 @@ from pathlib import Path
 import sys
 import time
 
-state = Path(sys.argv[1]); roots = [str(Path(root).expanduser().resolve()) for root in sys.argv[2:]]
+state = Path(sys.argv[1]); publisher_user = sys.argv[2]
+roots = [str(Path(root).expanduser().resolve()) for root in sys.argv[3:]]
 source = json.loads((Path.home() / 'firstmate/config/slack-notifications.json').read_text())
 path = state / 'config.json'
 if path.exists():
     old = json.loads(path.read_text())
     activated = old['activated_at']
-    if old['channel'] != source['channel'] or old.get('user') != source['user']:
+    # Legacy recovered state uses `user` for the sender. Never adopt a recipient ID.
+    old_publisher = old.get('publisher_user', old.get('user'))
+    if old['channel'] != source['channel'] or old_publisher != publisher_user:
         raise SystemExit('Slack publisher identity changed; reconcile existing receipts first')
+    if old.get('timing_roots') != roots:
+        raise SystemExit('timing roots changed; reconcile existing activation and receipts first')
 else:
     activated = math.ceil(time.time() / 1800) * 1800
-value = {'activated_at': activated, 'channel': source['channel'], 'user': source['user'],
+value = {'activated_at': activated, 'channel': source['channel'], 'publisher_user': publisher_user,
          'bridge_path': source['bridge_path'], 'timing_roots': roots}
 temporary = path.with_suffix('.tmp'); temporary.write_text(json.dumps(value) + '\n')
 temporary.chmod(0o600); os.replace(temporary, path)

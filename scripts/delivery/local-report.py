@@ -16,6 +16,24 @@ GRACE_SECONDS = 120
 MAX_AGE_SECONDS = 3600
 
 
+def authenticated_sender(slack):
+    """Resolve the token sender, allowing a short shared-limiter backoff."""
+    deadline = time.monotonic() + 30
+    while True:
+        try:
+            identity = slack.call('auth.test')
+            break
+        except Exception as error:
+            delay = getattr(error, 'retry_at', 0) - time.time()
+            if str(error) != 'backoff' or delay <= 0 or delay + 0.05 > deadline - time.monotonic():
+                raise
+            time.sleep(delay + 0.05)
+    sender = identity.get('user_id') if isinstance(identity, dict) else None
+    if not isinstance(identity, dict) or identity.get('ok') is False or not isinstance(sender, str) or not sender:
+        raise RuntimeError('Slack token publisher identity unavailable')
+    return sender
+
+
 def slot_key(epoch):
     return datetime.fromtimestamp(epoch, timezone.utc).strftime('%Y-%m-%dT%H:%M')
 
@@ -105,7 +123,7 @@ def run_once(config, state, slack, now=None, generator=generate_report):
             continue
         try:
             message = generator(runtime, state, slot, config.get('timing_roots', []))
-            receipt = post_once(slack, config['channel'], slot, message, config['user'],
+            receipt = post_once(slack, config['channel'], slot, message, config['publisher_user'],
                                 prior.get('cursor', ''), prior.get('seen', []),
                                 lambda: save(path, {'slot': slot, 'state': 'pending',
                                                     'next_attempt': now + 60, 'post_intent': True}))
@@ -144,8 +162,7 @@ def main():
         if settings.channel != config['channel']:
             raise RuntimeError('Slack channel does not match shared limiter configuration')
         slack = bridge.Slack(bridge.Store(settings))
-        identity = slack.call('auth.test')
-        if identity.get('user_id') != config['user']:
+        if authenticated_sender(slack) != config['publisher_user']:
             raise RuntimeError('Slack token user does not match configured publisher')
         run_once(config, state, slack)
 
