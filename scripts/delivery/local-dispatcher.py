@@ -27,7 +27,10 @@ def incident(state, claim, reason):
 
 def resolve_incidents(state, issue):
     for key, alert in list((state.get('alerts') or {}).items()):
-        if alert['issue'] == issue and alert['state'] == 'delivered' and key.startswith('fitsy-blocker:'):
+        if alert['issue'] == issue and key.startswith('fitsy-blocker:'):
+            if alert['state'] != 'delivered':
+                alert['state'] = 'cancelled'
+                continue
             resolution = f'fitsy-resolved:{key}'
             if resolution not in state['alerts']:
                 state['alerts'][resolution] = {'issue': issue, 'reason': 'Verified delivery completed; blocker cleared.',
@@ -38,7 +41,7 @@ def deliver_alerts(config, state, state_path):
     """Reconcile an uncertain Slack send before posting via the shared rate limiter."""
     alerts = state.get('alerts') or {}
     due = [(key, alert) for key, alert in alerts.items()
-           if alert['state'] != 'delivered' and alert.get('next_attempt', 0) <= time.time()]
+           if alert['state'] in ('pending', 'post-intent') and alert.get('next_attempt', 0) <= time.time()]
     if not due or not config.get('slack'):
         return
     slack_config = config['slack']
@@ -455,14 +458,15 @@ def archive(state, claim, status, state_path):
 
 
 def tick(config, state, state_path, script):
-    try:
-        deliver_alerts(config, state, state_path)
-    except Exception:
-        pass  # A notification fault never changes claim ownership or queue decisions.
     active = state.get('active')
     if active:
         if active.get('stage') == 'ownership-uncertain':
-            return {'state': 'ownership-uncertain', 'issue': active['issue']}
+            pgid = active.get('worker_pgid') or active.get('launcher_pid')
+            if not pgid or group_alive(pgid):
+                return {'state': 'ownership-uncertain', 'issue': active['issue']}
+            active['stage'] = 'finished'
+            active['failure'] = active.get('failure') or 'worker group stopped without verified delivery'
+            write_json(state_path, state)
         if active.get('stage') in ('launching', 'running') and not active.get('pid'):
             launcher = active.get('launcher_pid')
             if launcher and pid_identity(launcher) is None and not group_alive(launcher):
@@ -535,6 +539,10 @@ def tick(config, state, state_path, script):
                     deliver_alerts(config, state, state_path)
                 except Exception:
                     pass
+    try:
+        deliver_alerts(config, state, state_path)
+    except Exception:
+        pass  # A notification fault never changes claim ownership or queue decisions.
     if not config.get('enabled'):
         return {'state': 'disabled'}
     if shutil.disk_usage(config['worktree_root']).free < config.get('min_free_bytes', 8 * 1024**3):

@@ -257,6 +257,20 @@ class DispatcherProcessTest(unittest.TestCase):
         self.assertEqual(self.tick()['state'], 'uncertain-launch')
         self.assertEqual(self.workers(), [])
 
+    def test_uncertain_group_reconciles_after_all_members_stop(self):
+        self.set_board([item(385, status='In flight'), item(351)])
+        child = subprocess.Popen(['sleep', '0.2'], start_new_session=True)
+        state = {'version': 1, 'active': {'id': 'group-uncertain', 'issue': 385,
+                 'stage': 'ownership-uncertain', 'worker_pgid': child.pid,
+                 'ready_at': '2026-09-27T00:00:00Z'}, 'readiness': {}, 'classifications': {},
+                 'parked': {}, 'history': []}
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.assertEqual(self.tick()['state'], 'ownership-uncertain')
+        child.wait(timeout=3)
+        self.assertEqual(self.tick()['issue'], 351)
+        self.assertEqual(self.state_data()['history'][0]['terminal'], 'parked-after-exit')
+        self.until(lambda: self.state_data()['active'].get('finished_at'))
+
     def test_closed_merged_issue_with_failed_main_ci_cannot_release_dependency(self):
         delivered = item(385, status='Done')
         delivered['issue_state'] = 'CLOSED'
@@ -415,6 +429,14 @@ class DispatcherProcessTest(unittest.TestCase):
         alert = next(iter(state['alerts'].values()))
         self.assertEqual(alert['state'], 'delivered')
         self.assertEqual(alert['ts'], '123.456')
+
+    def test_resolution_cancels_undelivered_blocker(self):
+        state = {}
+        dispatcher.incident(state, {'issue': 385, 'id': 'claim-a'}, 'Required gate failed')
+        dispatcher.resolve_incidents(state, 385)
+        alert = next(iter(state['alerts'].values()))
+        self.assertEqual(alert['state'], 'cancelled')
+        self.assertEqual(len(state['alerts']), 1)
 
     def test_claim_receipt_survives_bounded_history(self):
         state = {'active': {'id': 'claim-101'}, 'history': [{'id': str(i)} for i in range(100)]}
