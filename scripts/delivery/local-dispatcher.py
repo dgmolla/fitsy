@@ -174,11 +174,17 @@ def ready_event(config, number):
     return max(lines) if lines else None
 
 
-def terminal_verified(config, item):
+def terminal_verified(config, item, expected, *, archived=False):
     """Board state is only a hint; independently bind acceptance to merged main CI."""
-    if item.get('status') != 'Done' or not item.get('verified at'):
+    if not expected or item.get('status') != 'Done' or not item.get('verified at'):
         return False
     number = item['content']['number']
+    if expected.get('issue') != number or not expected.get('id') or not expected.get('branch'):
+        return False
+    if archived:
+        saved = read_json(Path(config['state_dir']) / 'claims' / expected['id'] / 'receipt.json', {})
+        if saved.get('terminal') != 'verified' or saved.get('issue') != number or saved.get('branch') != expected['branch']:
+            return False
     issue = json.loads(gh(config, 'issue', 'view', str(number), '-R', 'dgmolla/fitsy', '--json', 'state'))
     if issue.get('state') != 'CLOSED':
         return False
@@ -191,11 +197,15 @@ def terminal_verified(config, item):
             continue
         try:
             receipt = json.loads(body.split(marker, 1)[1].strip())
-            if receipt.get('acceptance') != 'verified' or not re.fullmatch(r'[0-9a-f]{40}', receipt['merge_sha']):
+            if (receipt.get('acceptance') != 'verified' or receipt.get('issue') != number or
+                    receipt.get('claim_id') != expected['id'] or receipt.get('branch') != expected['branch'] or
+                    not re.fullmatch(r'[0-9a-f]{40}', receipt['merge_sha'])):
                 return False
             pr = json.loads(gh(config, 'pr', 'view', str(receipt['pr']), '-R', 'dgmolla/fitsy',
-                               '--json', 'state,mergeCommit,headRefOid'))
-            if pr.get('state') != 'MERGED' or pr.get('mergeCommit', {}).get('oid') != receipt['merge_sha'] or pr.get('headRefOid') != receipt['head_sha']:
+                               '--json', 'state,mergeCommit,headRefOid,headRefName,body'))
+            if (pr.get('state') != 'MERGED' or pr.get('mergeCommit', {}).get('oid') != receipt['merge_sha'] or
+                    pr.get('headRefOid') != receipt['head_sha'] or pr.get('headRefName') != expected['branch'] or
+                    f'Delivery-Issue: #{number}' not in (pr.get('body') or '').splitlines()):
                 return False
             runs = json.loads(gh(config, 'run', 'list', '-R', 'dgmolla/fitsy', '--branch', 'main', '--limit', '100',
                                  '--json', 'workflowName,headSha,status,conclusion,databaseId'))
@@ -210,7 +220,7 @@ def terminal_verified(config, item):
     return False
 
 
-def eligible(items, readiness, readiness_source, config):
+def eligible(items, readiness, readiness_source, config, verified):
     by_number = {item.get('content', {}).get('number'): item for item in items
                  if item.get('content', {}).get('repository') == 'dgmolla/fitsy'}
     candidates = []
@@ -229,7 +239,8 @@ def eligible(items, readiness, readiness_source, config):
             if not DEPENDENCIES.fullmatch(deps):
                 continue
             numbers = [int(value) for value in re.findall(r'#(\d+)', deps)]
-            if number in numbers or any(not by_number.get(dep) or not terminal_verified(config, by_number[dep])
+            if number in numbers or any(not by_number.get(dep) or not terminal_verified(
+                    config, by_number[dep], verified.get(str(dep)), archived=True)
                                         for dep in numbers):
                 continue
         event = ready_event(config, number)
@@ -372,9 +383,10 @@ def make_prompt(claim):
             f"{claim['review_profile']['provider']}/{claim['review_profile']['model']} "
             f"at {claim['review_profile']['effort']} effort. "
             'The canonical diff-based review tier is authoritative. '
+            f"This dispatcher claim ID is {claim['id']} and its source branch is {claim['branch']}. "
             'At completion, set board Verified at and Done only after acceptance, then post exactly one issue comment '
             'starting `<!-- fitsy-dispatch-terminal:v1 -->` followed by compact JSON containing '
-            '`{"pr":number,"head_sha":"40-hex","merge_sha":"40-hex","verify_run":number,"deploy_run":number,"acceptance":"verified"}`. '
+            '`{"issue":number,"claim_id":"this-claim-id","branch":"this-branch","pr":number,"head_sha":"40-hex","merge_sha":"40-hex","verify_run":number,"deploy_run":number,"acceptance":"verified"}`. '
             'The dispatcher independently checks the merged PR and successful main Verify and Deploy run IDs at the merge SHA; '
             'missing evidence does not satisfy dependencies. '
             'if blocked, add dispatch-hold with a concrete reason and stop. '
@@ -444,7 +456,9 @@ def tick(config, state, state_path, script):
         if active:
             items = board(config)
             item = next((entry for entry in items if entry.get('content', {}).get('number') == active['issue']), None)
-            if item and terminal_verified(config, item):
+            if item and terminal_verified(config, item, active):
+                state.setdefault('verified', {})[str(active['issue'])] = {
+                    'id': active['id'], 'issue': active['issue'], 'branch': active['branch']}
                 resolve_incidents(state, active['issue'])
                 archive(state, active, 'verified', state_path)
                 write_json(state_path, state)
@@ -472,7 +486,8 @@ def tick(config, state, state_path, script):
     if shutil.disk_usage(config['worktree_root']).free < config.get('min_free_bytes', 8 * 1024**3):
         return {'state': 'resource-hold', 'reason': 'disk below configured minimum'}
     items = board(config)
-    candidates = eligible(items, state.setdefault('readiness', {}), state.setdefault('readiness_source', {}), config)
+    candidates = eligible(items, state.setdefault('readiness', {}), state.setdefault('readiness_source', {}),
+                          config, state.setdefault('verified', {}))
     for item in candidates:
         number = item['content']['number']
         if state.setdefault('parked', {}).get(str(number)) == state['readiness'][str(number)]:
@@ -574,7 +589,9 @@ def worker(config, state_path, lock_path, claim_id):
         time.sleep(config['test_pause_before_child_seconds'])
     review = claim['review_profile']
     environment = {**os.environ, 'FITSY_REVIEW_PROVIDER': review['provider'],
-                   'FITSY_REVIEW_MODEL': review['model'], 'FITSY_REVIEW_REASONING_EFFORT': review['effort']}
+                   'FITSY_REVIEW_MODEL': review['model'], 'FITSY_REVIEW_REASONING_EFFORT': review['effort'],
+                   'FITSY_DISPATCH_CLAIM_ID': claim_id, 'FITSY_DISPATCH_BRANCH': claim['branch'],
+                   'FITSY_DISPATCH_ISSUE': str(claim['issue'])}
     with open(claim['prompt_path']) as prompt, open(claim['output_path'], 'a') as output:
         child = subprocess.Popen(args, stdin=prompt, stdout=output, stderr=subprocess.STDOUT, cwd=worktree,
                                  env=environment, start_new_session=True)

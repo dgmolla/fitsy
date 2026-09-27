@@ -51,7 +51,10 @@ with lock.open('a') as f:
   n=int(a[1].split('/issues/')[1].split('/')[0]); item=next(x for x in d['items'] if x['content']['number']==n)
   result=json.dumps({'id':1,'body':item.get('terminal','')}) if item.get('terminal') else ''
  elif a[:2]==['pr','view']:
-  result=json.dumps({'state':'MERGED','headRefOid':'a'*40,'mergeCommit':{'oid':'b'*40}})
+  item=next(x for x in d['items'] if x.get('terminal'))
+  result=json.dumps({'state':'MERGED','headRefOid':'a'*40,'headRefName':item.get('branch',''),
+                     'body':'Delivery-Issue: #'+str(999 if os.environ.get('FAKE_WRONG_PR_ISSUE') else item['content']['number']),
+                     'mergeCommit':{'oid':'b'*40}})
  elif a[:2]==['run','list']:
   result=json.dumps([{'workflowName':name,'headSha':'b'*40,'status':'completed',
                       'conclusion':'failure' if name=='Verify' and os.environ.get('FAKE_BAD_CI') else 'success',
@@ -73,8 +76,10 @@ with p.with_suffix('.lock').open('a') as f:
  fcntl.flock(f,fcntl.LOCK_EX); d=json.loads(p.read_text())
  item=next(x for x in d['items'] if x['status']=='In flight')
  item['status']='Done'; item['issue_state']='CLOSED'; item['verified at']='2026-09-27T00:10:00Z'
- item['terminal']='<!-- fitsy-dispatch-terminal:v1 -->'+json.dumps({'pr':389,'head_sha':'a'*40,
-  'merge_sha':'b'*40,'verify_run':11,'deploy_run':12,'acceptance':'verified'})
+ item['branch']=os.environ['FITSY_DISPATCH_BRANCH']
+ item['terminal']='<!-- fitsy-dispatch-terminal:v1 -->'+json.dumps({'issue':item['content']['number'],
+  'claim_id':os.environ['FITSY_DISPATCH_CLAIM_ID'],'branch':item['branch'],'pr':389,
+  'head_sha':'a'*40,'merge_sha':'b'*40,'verify_run':11,'deploy_run':12,'acceptance':'verified'})
  p.write_text(json.dumps(d))
 '''
 
@@ -182,6 +187,25 @@ class DispatcherProcessTest(unittest.TestCase):
         self.assertEqual(self.tick()['state'], 'uncertain-launch')
         self.assertEqual(self.workers(), [])
 
+    def test_other_issue_green_pr_cannot_release_dependency(self):
+        delivered = item(385, status='Done')
+        delivered.update({'issue_state': 'CLOSED', 'verified at': '2026-09-27T00:10:00Z',
+                          'branch': 'codex/issue-385-known'})
+        delivered['terminal'] = '<!-- fitsy-dispatch-terminal:v1 -->' + json.dumps({
+            'issue': 385, 'claim_id': 'known', 'branch': delivered['branch'],
+            'pr': 389, 'head_sha': 'a' * 40, 'merge_sha': 'b' * 40,
+            'verify_run': 11, 'deploy_run': 12, 'acceptance': 'verified'})
+        self.set_board([delivered, item(351, dependencies='#385')])
+        receipt = self.state / 'claims/known/receipt.json'
+        receipt.parent.mkdir(parents=True)
+        receipt.write_text(json.dumps({'terminal': 'verified', 'issue': 385, 'branch': delivered['branch']}))
+        (self.state / 'state.json').write_text(json.dumps({'active': None, 'verified': {'385': {
+            'id': 'known', 'issue': 385, 'branch': delivered['branch']}}, 'readiness': {},
+            'classifications': {}, 'parked': {}, 'history': []}))
+        self.env['FAKE_WRONG_PR_ISSUE'] = '1'
+        self.assertEqual(self.tick()['state'], 'idle')
+        self.assertEqual(self.workers(), [])
+
     def test_other_repository_card_cannot_satisfy_dependency(self):
         foreign = item(385, status='Done')
         foreign['content']['repository'] = 'someone/other'
@@ -193,11 +217,38 @@ class DispatcherProcessTest(unittest.TestCase):
         delivered = item(385, status='Done')
         delivered['issue_state'] = 'CLOSED'
         delivered['verified at'] = '2026-09-27T00:10:00Z'
+        delivered['branch'] = 'codex/issue-385-known'
         delivered['terminal'] = '<!-- fitsy-dispatch-terminal:v1 -->' + json.dumps({
+            'issue': 385, 'claim_id': 'known', 'branch': delivered['branch'],
             'pr': 389, 'head_sha': 'a' * 40, 'merge_sha': 'b' * 40,
             'verify_run': 11, 'deploy_run': 12, 'acceptance': 'verified'})
         self.set_board([delivered, item(351, dependencies='#385')])
+        receipt = self.state / 'claims/known/receipt.json'
+        receipt.parent.mkdir(parents=True)
+        receipt.write_text(json.dumps({'terminal': 'verified', 'issue': 385, 'branch': delivered['branch']}))
+        (self.state / 'state.json').write_text(json.dumps({'active': None, 'verified': {'385': {
+            'id': 'known', 'issue': 385, 'branch': delivered['branch']}}, 'readiness': {},
+            'classifications': {}, 'parked': {}, 'history': []}))
         self.env['FAKE_BAD_CI'] = '1'
+        self.assertEqual(self.tick()['state'], 'idle')
+        self.assertEqual(self.workers(), [])
+
+    def test_stale_claim_receipt_cannot_release_dependency(self):
+        delivered = item(385, status='Done')
+        delivered.update({'issue_state': 'CLOSED', 'verified at': '2026-09-27T00:10:00Z',
+                          'branch': 'codex/unrelated'})
+        delivered['terminal'] = '<!-- fitsy-dispatch-terminal:v1 -->' + json.dumps({
+            'issue': 385, 'claim_id': 'old-claim', 'branch': 'codex/unrelated',
+            'pr': 389, 'head_sha': 'a' * 40, 'merge_sha': 'b' * 40,
+            'verify_run': 11, 'deploy_run': 12, 'acceptance': 'verified'})
+        self.set_board([delivered, item(351, dependencies='#385')])
+        receipt = self.state / 'claims/current-claim/receipt.json'
+        receipt.parent.mkdir(parents=True)
+        receipt.write_text(json.dumps({'terminal': 'verified', 'issue': 385,
+                                       'branch': 'codex/issue-385-current'}))
+        (self.state / 'state.json').write_text(json.dumps({'active': None, 'verified': {'385': {
+            'id': 'current-claim', 'issue': 385, 'branch': 'codex/issue-385-current'}},
+            'readiness': {}, 'classifications': {}, 'parked': {}, 'history': []}))
         self.assertEqual(self.tick()['state'], 'idle')
         self.assertEqual(self.workers(), [])
 
