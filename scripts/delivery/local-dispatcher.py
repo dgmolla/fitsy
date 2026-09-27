@@ -507,7 +507,7 @@ def tick(config, state, state_path, script):
             if not pgid:
                 return {'state': 'ownership-uncertain', 'issue': active['issue']}
             if group_alive(pgid):
-                started = active.get('started_at')
+                started = active.get('started_at') or active.get('claimed_at')
                 timeout = config.get('worker_timeout_seconds', 90 * 60)
                 expired = (started and time.time() >=
                            datetime.fromisoformat(started.replace('Z', '+00:00')).timestamp() + timeout)
@@ -521,10 +521,20 @@ def tick(config, state, state_path, script):
             write_json(state_path, state)
         if active.get('stage') in ('launching', 'running') and not active.get('pid'):
             launcher = active.get('launcher_pid')
-            if launcher and pid_identity(launcher) is None and not group_alive(launcher):
+            claimed = active.get('claimed_at')
+            timeout = config.get('worker_timeout_seconds', 90 * 60)
+            expired = (claimed and time.time() >=
+                       datetime.fromisoformat(claimed.replace('Z', '+00:00')).timestamp() + timeout)
+            if expired and launcher and group_alive(launcher):
+                if not stop_owned_group(launcher, os.getpid()):
+                    return {'state': 'uncertain-launch', 'issue': active['issue']}
+                active['timed_out'] = True
+                active['failure'] = f'launcher group exceeded {timeout}s active claim budget'
+            if launcher and (active.get('timed_out') or
+                             (pid_identity(launcher) is None and not group_alive(launcher))):
                 active['stage'] = 'finished'
                 active['finished_at'] = utc()
-                active['failure'] = 'launcher exited before recording a worker PID'
+                active['failure'] = active.get('failure') or 'launcher exited before recording a worker PID'
                 write_json(state_path, state)
             else:
                 return {'state': 'uncertain-launch', 'issue': active['issue']}

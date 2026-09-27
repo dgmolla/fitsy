@@ -261,6 +261,25 @@ class DispatcherProcessTest(unittest.TestCase):
         self.assertEqual(self.tick()['state'], 'uncertain-launch')
         self.assertEqual(self.workers(), [])
 
+    def test_expired_orphan_launch_group_releases_lane(self):
+        self.set_board([item(385, status='In flight'), item(351)])
+        launcher = subprocess.Popen(['/bin/sh', '-c', 'sleep 30 &'], start_new_session=True)
+        started = run('ps', '-p', str(launcher.pid), '-o', 'lstart=').stdout.strip()
+        launcher.wait(timeout=2)
+        self.addCleanup(lambda: os.killpg(launcher.pid, signal.SIGKILL)
+                        if dispatcher.group_alive(launcher.pid) else None)
+        config = json.loads(self.config.read_text())
+        config['worker_timeout_seconds'] = 1
+        self.config.write_text(json.dumps(config))
+        state = {'version': 1, 'active': {'id': 'expired-launch', 'issue': 385, 'stage': 'launching',
+                 'launcher_pid': launcher.pid, 'launcher_started': started,
+                 'claimed_at': '2026-09-27T00:00:00Z', 'ready_at': '2026-09-27T00:00:00Z'},
+                 'readiness': {}, 'classifications': {}, 'parked': {}, 'history': []}
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.assertEqual(self.tick()['issue'], 351)
+        self.assertTrue(self.state_data()['history'][0]['timed_out'])
+        self.assertIn('dispatch-hold', self.board_data()['items'][0]['labels'])
+
     def test_uncertain_group_reconciles_after_all_members_stop(self):
         self.set_board([item(385, status='In flight'), item(351)])
         child = subprocess.Popen(['sleep', '0.2'], start_new_session=True)
