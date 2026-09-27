@@ -210,6 +210,10 @@ def historical_verified(config, item):
                           '--json', 'state,closedByPullRequestsReferences'))
     if issue.get('state') != 'CLOSED':
         return False
+    comments = gh(config, 'api', f'repos/dgmolla/fitsy/issues/{number}/comments?per_page=100',
+                  '--paginate', '--jq', '.[] | .body')
+    if '<!-- fitsy-dispatch-claim:v1:' in comments:
+        return False  # Managed claims require their own terminal receipt.
     linked_numbers = {pr['number'] for pr in issue.get('closedByPullRequestsReferences') or []}
     search = json.loads(gh(config, 'pr', 'list', '-R', 'dgmolla/fitsy', '--state', 'merged',
                            '--search', f'Delivery-Issue: #{number} in:body', '--limit', '100', '--json', 'number'))

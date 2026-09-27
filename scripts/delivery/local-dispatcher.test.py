@@ -51,7 +51,9 @@ with lock.open('a') as f:
   n=int(a[1].split('/issues/')[1].split('/')[0]); result=d['ready_at'].get(str(n),'')
  elif a[:1]==['api'] and '/comments?' in a[1]:
   n=int(a[1].split('/issues/')[1].split('/')[0]); item=next(x for x in d['items'] if x['content']['number']==n)
-  result=json.dumps({'id':1,'body':item.get('terminal','')}) if item.get('terminal') else ''
+  bodies=([{'id':2,'body':'<!-- fitsy-dispatch-claim:v1:known -->'}] if item.get('claim_comment') else [])
+  if item.get('terminal'): bodies.append({'id':1,'body':item['terminal']})
+  result='\n'.join(json.dumps(body) for body in bodies)
  elif a[:2]==['pr','view']:
   item=next(x for x in d['items'] if x.get('terminal') or x.get('linked_pr') or x.get('search_pr'))
   result=json.dumps({'state':'MERGED','headRefOid':'a'*40,'headRefName':item.get('branch',''),
@@ -229,6 +231,14 @@ class DispatcherProcessTest(unittest.TestCase):
         self.set_board([historical, item(351, dependencies='#385')])
         self.assertEqual(self.tick()['issue'], 351)
         self.until(lambda: self.state_data()['active'].get('finished_at'))
+
+    def test_managed_done_without_terminal_receipt_cannot_release_dependency(self):
+        managed = item(385, status='Done')
+        managed.update({'issue_state': 'CLOSED', 'verified at': '2026-09-27T00:10:00Z',
+                        'search_pr': True, 'claim_comment': True})
+        self.set_board([managed, item(351, dependencies='#385')])
+        self.assertEqual(self.tick()['state'], 'idle')
+        self.assertEqual(self.workers(), [])
 
     def test_proven_dead_launcher_parks_and_releases_independent_issue(self):
         launched = item(385, status='In flight')
