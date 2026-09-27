@@ -39,12 +39,12 @@ class LocalReportTest(unittest.TestCase):
                         return {'ok': True, 'messages': [],
                                 'response_metadata': {'next_cursor': 'page2'}}
                     return {'ok': True, 'messages': [{'text': 'old fitsy-hour:2026-09-27T03',
-                                                       'ts': str(epoch('2026-09-27T03:40:00Z'))}]}
+                                                       'ts': str(epoch('2026-09-27T03:40:00Z')), 'user': 'U123'}]}
                 return super().call(method, params, payload)
         slack = PagedSlack()
-        first = reporter.post_once(slack, 'C123', '2026-09-27T03:30', 'new report')
+        first = reporter.post_once(slack, 'C123', '2026-09-27T03:30', 'new report', 'U123')
         self.assertEqual(first['state'], 'scanning')
-        receipt = reporter.post_once(slack, 'C123', '2026-09-27T03:30', 'new report',
+        receipt = reporter.post_once(slack, 'C123', '2026-09-27T03:30', 'new report', 'U123',
                                      first['cursor'], first['seen'])
         self.assertTrue(receipt['duplicate'])
         self.assertEqual(receipt['ts'], str(epoch('2026-09-27T03:40:00Z')))
@@ -52,9 +52,17 @@ class LocalReportTest(unittest.TestCase):
 
     def test_legacy_marker_in_next_half_hour_does_not_suppress_slot(self):
         slack = Slack([{'text': 'fitsy-hour:2026-09-27T03',
-                        'ts': str(epoch('2026-09-27T03:45:00Z'))}])
+                        'ts': str(epoch('2026-09-27T03:45:00Z')), 'user': 'U123'}])
         receipt = reporter.post_once(slack, 'C123', '2026-09-27T03:00',
-                                     'fitsy-slot:2026-09-27T03:00')
+                                     'fitsy-slot:2026-09-27T03:00', 'U123')
+        self.assertFalse(receipt['duplicate'])
+        self.assertEqual(len(slack.posts), 1)
+
+    def test_matching_marker_from_another_sender_does_not_suppress_delivery(self):
+        slack = Slack([{'text': 'fitsy-slot:2026-09-27T03:30',
+                        'ts': str(epoch('2026-09-27T03:32:00Z')), 'user': 'U_OTHER'}])
+        receipt = reporter.post_once(slack, 'C123', '2026-09-27T03:30',
+                                     'fitsy-slot:2026-09-27T03:30 real report', 'U123')
         self.assertFalse(receipt['duplicate'])
         self.assertEqual(len(slack.posts), 1)
 
@@ -70,13 +78,13 @@ class LocalReportTest(unittest.TestCase):
                     self.cursors.append(cursor)
                     if not cursor:
                         return {'messages': [], 'response_metadata': {'next_cursor': 'page2'}}
-                    return {'messages': [{'text': 'fitsy-slot:2026-09-27T03:30', 'ts': '123.456'}]}
+                    return {'messages': [{'text': 'fitsy-slot:2026-09-27T03:30', 'ts': '123.456', 'user': 'U123'}]}
                 return super().call(method, params, payload)
 
         with tempfile.TemporaryDirectory() as temp:
             state = Path(temp)
             start = epoch('2026-09-27T03:30:00Z')
-            config = {'activated_at': start, 'channel': 'C123'}
+            config = {'activated_at': start, 'channel': 'C123', 'user': 'U123'}
             slack = PagedSlack()
             generate = lambda _runtime, _state, slot, _roots: f'fitsy-slot:{slot}'
             reporter.run_once(config, state, slack, start + 120, generate)
@@ -98,15 +106,15 @@ class LocalReportTest(unittest.TestCase):
                     cursor = params.get('cursor', '')
                     self.cursors.append(cursor)
                     if len(self.cursors) == 3:
-                        return {'messages': [{'text': 'fitsy-slot:2026-09-27T03:30', 'ts': '123.456'}]}
+                        return {'messages': [{'text': 'fitsy-slot:2026-09-27T03:30', 'ts': '123.456', 'user': 'U123'}]}
                     return {'messages': [], 'response_metadata':
                             {'next_cursor': 'page2' if not cursor else ''}}
-                return {'channel': 'C123'}  # Slack accepted the post but its receipt lost ts.
+                return {'channel': 'C123', 'user': 'U123'}  # Slack accepted the post but its receipt lost ts.
 
         with tempfile.TemporaryDirectory() as temp:
             state = Path(temp)
             start = epoch('2026-09-27T03:30:00Z')
-            config = {'activated_at': start, 'channel': 'C123'}
+            config = {'activated_at': start, 'channel': 'C123', 'user': 'U123'}
             slack = UncertainSlack()
             generate = lambda _runtime, _state, slot, _roots: f'fitsy-slot:{slot}'
             for offset in (120, 180, 240):
@@ -125,7 +133,7 @@ class LocalReportTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             state = Path(temp)
             start = epoch('2026-09-27T03:30:00Z')
-            config = {'activated_at': start, 'channel': 'C123'}
+            config = {'activated_at': start, 'channel': 'C123', 'user': 'U123'}
             slack = UncertainSlack()
             generate = lambda _runtime, _state, slot, _roots: f'fitsy-slot:{slot}'
             reporter.run_once(config, state, slack, start + 120, generate)
@@ -145,7 +153,7 @@ class LocalReportTest(unittest.TestCase):
                     cursor = params.get('cursor', '')
                     self.cursors.append(cursor)
                     if len(self.cursors) == 3:
-                        return {'messages': [{'text': self.posts[0]['text'], 'ts': '123.456'}]}
+                        return {'messages': [{'text': self.posts[0]['text'], 'ts': '123.456', 'user': 'U123'}]}
                     return {'messages': [], 'response_metadata':
                             {'next_cursor': 'page2' if not cursor else ''}}
                 self.posts.append(payload)
@@ -154,7 +162,7 @@ class LocalReportTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             state = Path(temp)
             start = epoch('2026-09-27T03:30:00Z')
-            config = {'activated_at': start, 'channel': 'C123'}
+            config = {'activated_at': start, 'channel': 'C123', 'user': 'U123'}
             slack = CrashSlack()
             generate = lambda _runtime, _state, slot, _roots: f'fitsy-slot:{slot}'
             reporter.run_once(config, state, slack, start + 120, generate)
@@ -181,7 +189,7 @@ class LocalReportTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             state = Path(temp)
             start = epoch('2026-09-27T03:30:00Z')
-            config = {'activated_at': start, 'channel': 'C123'}
+            config = {'activated_at': start, 'channel': 'C123', 'user': 'U123'}
             calls = []
             def generate(_runtime, _state, slot, _roots):
                 calls.append(slot)
@@ -194,7 +202,7 @@ class LocalReportTest(unittest.TestCase):
             receipt = json.loads(next((state / 'slots').glob('*.json')).read_text())
             self.assertEqual(receipt['ts'], '123.456')
             (state / 'slots' / '2026-09-27T03-30.json').unlink()
-            recovering = Slack([{'text': slack.posts[0]['text'], 'ts': '123.456'}])
+            recovering = Slack([{'text': slack.posts[0]['text'], 'ts': '123.456', 'user': 'U123'}])
             reporter.run_once(config, state, recovering, start + 240, generate)
             self.assertEqual(recovering.posts, [])
             self.assertTrue(json.loads(next((state / 'slots').glob('*.json')).read_text())['duplicate'])
@@ -205,7 +213,7 @@ class LocalReportTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             state = Path(temp)
             start = epoch('2026-09-27T03:30:00Z')
-            config = {'activated_at': start, 'channel': 'C123'}
+            config = {'activated_at': start, 'channel': 'C123', 'user': 'U123'}
             calls = []
             def generate(_runtime, _state, slot, _roots):
                 calls.append(slot)

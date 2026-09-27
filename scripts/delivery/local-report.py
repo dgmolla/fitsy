@@ -35,7 +35,7 @@ def save(path, value):
     os.replace(temporary, path)
 
 
-def post_once(slack, channel, slot, message, cursor='', seen=(), before_post=lambda: None):
+def post_once(slack, channel, slot, message, publisher_user, cursor='', seen=(), before_post=lambda: None):
     marker = f'fitsy-slot:{slot}'
     legacy = f'fitsy-hour:{slot[:13]}'
     oldest = str(int(datetime.strptime(slot, '%Y-%m-%dT%H:%M').replace(tzinfo=timezone.utc).timestamp()))
@@ -49,7 +49,8 @@ def post_once(slack, channel, slot, message, cursor='', seen=(), before_post=lam
         except (TypeError, ValueError):
             posted_at = -1
         text = item.get('text') or ''
-        if marker in text or (legacy in text and int(oldest) <= posted_at < int(oldest) + SLOT_SECONDS):
+        if item.get('user') == publisher_user and (marker in text or
+                (legacy in text and int(oldest) <= posted_at < int(oldest) + SLOT_SECONDS)):
             return {'state': 'delivered', 'duplicate': True, 'channel': channel,
                     'ts': item['ts'], 'marker': marker}
     next_cursor = page.get('response_metadata', {}).get('next_cursor', '')
@@ -104,7 +105,7 @@ def run_once(config, state, slack, now=None, generator=generate_report):
             continue
         try:
             message = generator(runtime, state, slot, config.get('timing_roots', []))
-            receipt = post_once(slack, config['channel'], slot, message,
+            receipt = post_once(slack, config['channel'], slot, message, config['user'],
                                 prior.get('cursor', ''), prior.get('seen', []),
                                 lambda: save(path, {'slot': slot, 'state': 'pending',
                                                     'next_attempt': now + 60, 'post_intent': True}))
@@ -142,7 +143,11 @@ def main():
         settings = bridge.Config.from_env()
         if settings.channel != config['channel']:
             raise RuntimeError('Slack channel does not match shared limiter configuration')
-        run_once(config, state, bridge.Slack(bridge.Store(settings)))
+        slack = bridge.Slack(bridge.Store(settings))
+        identity = slack.call('auth.test')
+        if identity.get('user_id') != config['user']:
+            raise RuntimeError('Slack token user does not match configured publisher')
+        run_once(config, state, slack)
 
 
 if __name__ == '__main__':

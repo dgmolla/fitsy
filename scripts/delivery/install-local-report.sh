@@ -83,11 +83,11 @@ path = state / 'config.json'
 if path.exists():
     old = json.loads(path.read_text())
     activated = old['activated_at']
-    if old['channel'] != source['channel']:
-        raise SystemExit('Slack channel changed; reconcile existing receipts first')
+    if old['channel'] != source['channel'] or old.get('user') != source['user']:
+        raise SystemExit('Slack publisher identity changed; reconcile existing receipts first')
 else:
     activated = math.ceil(time.time() / 1800) * 1800
-value = {'activated_at': activated, 'channel': source['channel'],
+value = {'activated_at': activated, 'channel': source['channel'], 'user': source['user'],
          'bridge_path': source['bridge_path'], 'timing_roots': roots}
 temporary = path.with_suffix('.tmp'); temporary.write_text(json.dumps(value) + '\n')
 temporary.chmod(0o600); os.replace(temporary, path)
