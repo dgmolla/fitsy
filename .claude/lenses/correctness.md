@@ -12,6 +12,16 @@ Read `REVIEW.md` first; its severity, evidence, and output rules apply.
 - Async hazards: unawaited promises whose failure matters, racing writes, retries without idempotency.
 - Data shape drift: API response fields the mobile client reads that the diff renames or removes.
 
+## Maintainability of changed behavior
+
+- Check who owns the changed behavior and its lifecycle, including cleanup, retries, and rollback where relevant.
+- Flag duplicated policy or competing sources of truth only when a concrete drift path changes behavior.
+- Check new coupling or implicit contracts between touched components, including callers, configuration, and persisted state.
+- Check whether a realistic failure can be reproduced, tested, and diagnosed with the available evidence.
+- Cite the changed code, concrete scenario, and consequence; avoid speculative architecture rewrites and style preferences.
+- Apply `REVIEW.md` urgency and dispositions: only actual severe impact warrants P0/P1, bounded P2 debt needs an owned follow-up, and P3 is advisory.
+- Keep these checks inside the existing correctness lens and review budget; do not add a lens.
+
 ## This repo's known traps (grown from real incidents — add here via harness-audit)
 
 - Auth: every route under `apps/api/app/api/restaurants/**` must enforce entitlement server-side (`requireSubscription`/`optionalSubscription`); the client's `isPro` is UX only.
