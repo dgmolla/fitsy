@@ -2,6 +2,7 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSy
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
+import { appleGitHookEnvironment } from './apple-git-hook-env';
 
 const root = resolve(__dirname, '../..');
 const yaml = require('js-yaml') as { load(value: string): unknown };
@@ -228,7 +229,7 @@ test('real Git push reuses local unit receipts and preserves custom environment 
   execFileSync('git', ['init', '--bare', '-q', remote], { cwd: directory, env });
   const push = (ref: string, extra: Record<string, string> = {}) => spawnSync('git',
     ['-c', 'core.hooksPath=.githooks', 'push', remote, `HEAD:refs/heads/${ref}`],
-    { cwd: directory, encoding: 'utf8', env: { ...hookEnv, ...extra }, timeout: 15000 });
+    { cwd: directory, encoding: 'utf8', env: appleGitHookEnvironment(directory, { ...hookEnv, ...extra }), timeout: 15000 });
   expect(local().status).toBe(0); expect(calls()).toBe(1);
   const first = push('main'); expect(first.status).toBe(0);
   expect(first.stdout + first.stderr).toMatch(/"name":"test"[^\n]*"duration_ms":0[^\n]*"cached":true/);
