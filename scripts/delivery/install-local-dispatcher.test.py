@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+"""Disposable install and provider-switch checks; no real LaunchAgent is touched."""
+
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+import unittest
+
+
+INSTALLER = Path(__file__).with_name('install-local-dispatcher.sh')
+RUNTIME = Path(__file__).with_name('local-dispatcher.py')
+
+
+class InstallTest(unittest.TestCase):
+    def test_paused_install_enable_and_claude_only_reinstall(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            home, repo, tools, roots = (base / name for name in ('home', 'repo', 'bin', 'worktrees'))
+            for path in (home / 'Desktop', home / 'firstmate/config', home / '.fitsy-delivery',
+                         repo / 'scripts/delivery', tools, roots):
+                path.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(INSTALLER, repo / 'scripts/delivery/install-local-dispatcher.sh')
+            shutil.copy2(RUNTIME, repo / 'scripts/delivery/local-dispatcher.py')
+            (home / 'Desktop/secrets.env').write_text('jev=fixture-only-not-a-real-key\n')
+            (home / 'firstmate/config/slack-notifications.json').write_text(json.dumps({
+                'channel': 'CCHANNEL', 'user': 'UHUMAN', 'bridge_path': str(base / 'bridge')}))
+            (home / '.fitsy-delivery/config.json').write_text(json.dumps({
+                'channel': 'CCHANNEL', 'user': 'USENDER', 'bridge_path': str(base / 'bridge')}))
+            gh = tools / 'gh'
+            gh.write_text('#!/bin/sh\nif [ "$1" = api ]; then git rev-parse HEAD; '
+                          'else sha=$(git rev-parse HEAD); printf \'[{"workflowName":"Verify","headSha":"%s","status":"completed","conclusion":"success"},{"workflowName":"Deploy","headSha":"%s","status":"completed","conclusion":"success"}]\\n\' "$sha" "$sha"; fi\n')
+            for name in ('gh', 'codex', 'launchctl'):
+                path = tools / name
+                if name != 'gh': path.write_text('#!/bin/sh\nexit 0\n')
+                path.chmod(0o700)
+            env = {**os.environ, 'HOME': str(home), 'PATH': f'{tools}:/usr/bin:/bin',
+                   'FITSY_DISPATCH_HOME': str(home / '.fitsy-dispatcher')}
+            def command(*args):
+                result = subprocess.run(args, cwd=repo, env=env, text=True, capture_output=True,
+                                        timeout=15)
+                if result.returncode:
+                    self.fail(f'{args[0]} failed: {result.stderr[-400:]}')
+                return result.stdout
+            command('git', 'init', '-b', 'main')
+            command('git', '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test',
+                    'add', 'scripts/delivery')
+            command('git', '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test',
+                    'commit', '-m', 'fixture')
+            installed = command('bash', 'scripts/delivery/install-local-dispatcher.sh', '--install',
+                                '--worktree-root', str(roots))
+            self.assertIn('installed_paused', installed)
+            config_path = home / '.fitsy-dispatcher/config.json'
+            config = json.loads(config_path.read_text())
+            self.assertFalse(config['enabled'])
+            self.assertEqual(config['worker_timeout_seconds'], 90 * 60)
+            self.assertEqual(config['slack']['recipient'], 'UHUMAN')
+            self.assertEqual((home / '.fitsy-dispatcher/credentials/jev.env').stat().st_mode & 0o077, 0)
+            command('bash', 'scripts/delivery/install-local-dispatcher.sh', '--enable')
+            self.assertTrue(json.loads(config_path.read_text())['enabled'])
+            claude = tools / 'claude'; claude.write_text('#!/bin/sh\nexit 0\n'); claude.chmod(0o700)
+            for profile in config['profiles'].values():
+                profile.update({'provider': 'claude', 'model': 'fixture-claude', 'executable': str(claude)})
+            config_path.write_text(json.dumps(config))
+            (tools / 'codex').unlink()
+            command('bash', 'scripts/delivery/install-local-dispatcher.sh', '--install',
+                    '--worktree-root', str(roots))
+            reinstalled = json.loads(config_path.read_text())
+            self.assertFalse(reinstalled['enabled'])
+            self.assertEqual(reinstalled['profiles']['standard']['provider'], 'claude')
+
+
+if __name__ == '__main__':
+    unittest.main()
