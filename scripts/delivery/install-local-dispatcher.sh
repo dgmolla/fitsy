@@ -15,17 +15,25 @@ if [[ $# -gt 0 ]]; then
 fi
 
 if [[ "$mode" == --uninstall ]]; then
-  if [[ -f "$state/state.json" ]] && python3 - "$state/state.json" <<'PY'
-import json,sys
-if json.load(open(sys.argv[1])).get('active'):
-    raise SystemExit(1)
+  python3 - "$state" "$plist" "$label" <<'PY'
+import fcntl,json,os,subprocess,sys,tempfile
+from pathlib import Path
+state,plist,label = Path(sys.argv[1]),Path(sys.argv[2]),sys.argv[3]
+state.mkdir(parents=True,exist_ok=True,mode=0o700)
+with (state/'dispatcher.lock').open('a') as lock:
+    fcntl.flock(lock,fcntl.LOCK_EX)
+    active = json.loads((state/'state.json').read_text()).get('active') if (state/'state.json').exists() else None
+    if active:
+        raise SystemExit('active claim must be reconciled before uninstall; use --pause')
+    config_path=state/'config.json'
+    if config_path.exists():
+        config=json.loads(config_path.read_text()); config['enabled']=False
+        with tempfile.NamedTemporaryFile('w',dir=state,delete=False) as out:
+            json.dump(config,out); out.write('\n'); out.flush(); os.fsync(out.fileno()); temporary=Path(out.name)
+        temporary.chmod(0o600); os.replace(temporary,config_path)
+    subprocess.run(['launchctl','bootout',f'gui/{os.getuid()}/{label}'],capture_output=True)
+    plist.unlink(missing_ok=True)
 PY
-  then :; elif [[ -f "$state/state.json" ]]; then
-    echo 'active claim must be reconciled before uninstall; use --pause' >&2
-    exit 1
-  fi
-  launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
-  rm -f "$plist"
   echo "uninstalled $label; claims and receipts retained at $state"
   exit 0
 fi

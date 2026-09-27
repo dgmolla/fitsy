@@ -413,16 +413,44 @@ def group_alive(pgid):
         return True
 
 
-def other_group_members(pgid, own_pid):
+def group_members(pgid, own_pid):
     result = subprocess.run(['ps', '-axo', 'pid=,pgid=,stat='], text=True, capture_output=True,
                             start_new_session=True)
     if result.returncode:
-        return True
+        raise RuntimeError('process group inventory unavailable')
+    members = []
     for line in result.stdout.splitlines():
         fields = line.split()
         if len(fields) >= 3 and int(fields[1]) == pgid and int(fields[0]) != own_pid and not fields[2].startswith('Z'):
-            return True
-    return False
+            members.append(int(fields[0]))
+    return members
+
+
+def other_group_members(pgid, own_pid):
+    try:
+        return bool(group_members(pgid, own_pid))
+    except RuntimeError:
+        return True
+
+
+def stop_owned_group(pgid, own_pid):
+    """On timeout, stop all remaining members without terminating the receipt writer."""
+    for sig, seconds in ((signal.SIGTERM, 10), (signal.SIGKILL, 10)):
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            try:
+                members = group_members(pgid, own_pid)
+            except RuntimeError:
+                return False
+            if not members:
+                return True
+            for pid in members:
+                try:
+                    os.kill(pid, sig)
+                except ProcessLookupError:
+                    pass
+            time.sleep(0.1)
+    return not other_group_members(pgid, own_pid)
 
 
 def make_prompt(claim):
@@ -702,6 +730,8 @@ def worker(config, state_path, lock_path, claim_id):
                 except ProcessLookupError:
                     pass
                 code = child.wait(timeout=10)
+        if timed_out:
+            stop_owned_group(os.getpgrp(), os.getpid())
         remaining_group = other_group_members(os.getpgrp(), os.getpid())
     with lock_path.open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)

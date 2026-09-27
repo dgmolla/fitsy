@@ -68,7 +68,7 @@ with lock.open('a') as f:
  p.write_text(json.dumps(d)); print(result)
 '''
 FAKE_CODEX = r'''#!/usr/bin/env python3
-import fcntl,json,os,sys,time
+import fcntl,json,os,subprocess,sys,time
 from pathlib import Path
 p=Path(os.environ['FAKE_GH_STATE']); log=p.with_suffix('.workers')
 sys.stdin.read()
@@ -76,6 +76,10 @@ with log.open('a') as f: f.write('started\n')
 with p.with_suffix('.args').open('a') as f: f.write(json.dumps(sys.argv[1:])+'\n')
 mode=os.environ.get('FAKE_WORKER_MODE','done')
 if mode=='sleep': time.sleep(float(os.environ.get('FAKE_WORKER_SLEEP','2')))
+if mode=='spawn_child':
+ child=subprocess.Popen(['sleep','30'])
+ p.with_suffix('.childpid').write_text(str(child.pid))
+ time.sleep(30)
 if mode=='fail': raise SystemExit(7)
 with p.with_suffix('.lock').open('a') as f:
  fcntl.flock(f,fcntl.LOCK_EX); d=json.loads(p.read_text())
@@ -325,6 +329,7 @@ class DispatcherProcessTest(unittest.TestCase):
         self.board.write_text(json.dumps(data))
         self.assertEqual(self.tick()['issue'], 385)
         self.until(lambda: len(self.workers()) == 2)
+        self.until(lambda: self.state_data()['active'].get('finished_at'))
 
     def test_live_or_reused_pid_retains_lane(self):
         child = subprocess.Popen(['sleep', '10'])
@@ -351,6 +356,23 @@ class DispatcherProcessTest(unittest.TestCase):
         self.tick()
         self.until(lambda: self.state_data()['active'].get('finished_at'), seconds=5)
         self.assertTrue(self.state_data()['active']['timed_out'])
+        self.assertEqual(self.tick()['state'], 'idle')
+        self.assertIn('dispatch-hold', self.board_data()['items'][0]['labels'])
+
+    def test_timeout_stops_surviving_worker_group_child(self):
+        self.env['FAKE_WORKER_MODE'] = 'spawn_child'
+        config = json.loads(self.config.read_text()); config['worker_timeout_seconds'] = 1
+        self.config.write_text(json.dumps(config))
+        self.tick()
+        self.until(lambda: self.board.with_suffix('.childpid').exists())
+        child_pid = int(self.board.with_suffix('.childpid').read_text())
+        def stop_child():
+            try: os.kill(child_pid, signal.SIGKILL)
+            except ProcessLookupError: pass
+        self.addCleanup(stop_child)
+        self.until(lambda: self.state_data()['active'].get('finished_at'), seconds=8)
+        self.assertTrue(self.state_data()['active']['timed_out'])
+        self.assertNotEqual(self.state_data()['active']['stage'], 'ownership-uncertain')
         self.assertEqual(self.tick()['state'], 'idle')
         self.assertIn('dispatch-hold', self.board_data()['items'][0]['labels'])
 

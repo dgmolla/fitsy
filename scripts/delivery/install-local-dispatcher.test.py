@@ -2,11 +2,13 @@
 """Disposable install and provider-switch checks; no real LaunchAgent is touched."""
 
 import json
+import fcntl
 import os
 from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 
 
@@ -70,6 +72,25 @@ class InstallTest(unittest.TestCase):
             reinstalled = json.loads(config_path.read_text())
             self.assertFalse(reinstalled['enabled'])
             self.assertEqual(reinstalled['profiles']['standard']['provider'], 'claude')
+            lock = (home / '.fitsy-dispatcher/dispatcher.lock').open('a')
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX)
+                pending = subprocess.Popen(['bash', 'scripts/delivery/install-local-dispatcher.sh', '--uninstall'],
+                                           cwd=repo, env=env, text=True, stdout=subprocess.PIPE,
+                                           stderr=subprocess.PIPE)
+                time.sleep(0.2)
+                self.assertIsNone(pending.poll(), 'uninstall bypassed dispatcher lock')
+                (home / '.fitsy-dispatcher/state.json').write_text(json.dumps({'active': {'id': 'claim'}}))
+            finally:
+                fcntl.flock(lock, fcntl.LOCK_UN)
+                lock.close()
+            _, error = pending.communicate(timeout=5)
+            self.assertNotEqual(pending.returncode, 0)
+            self.assertIn('active claim', error)
+            self.assertTrue((home / 'Library/LaunchAgents/com.fitsy.local-dispatcher.plist').exists())
+            (home / '.fitsy-dispatcher/state.json').write_text(json.dumps({'active': None}))
+            command('bash', 'scripts/delivery/install-local-dispatcher.sh', '--uninstall')
+            self.assertFalse((home / 'Library/LaunchAgents/com.fitsy.local-dispatcher.plist').exists())
 
 
 if __name__ == '__main__':
