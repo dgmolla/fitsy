@@ -6,6 +6,7 @@ set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$REPO_ROOT"
 FAIL=""
 node --test scripts/delivery/*.test.mjs >&2 || FAIL="delivery"
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/delivery/local-report.test.py -q >&2 || FAIL="${FAIL:+$FAIL, }local-report"
 if [ -n "${POSTGRES_PRISMA_URL:-}" ]; then
   npm run test:coverage --workspace=apps/api -- --runInBand >&2 || FAIL="${FAIL:+$FAIL, }apps/api"
 else

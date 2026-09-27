@@ -120,3 +120,46 @@ test("explicit missing histories fail while absent optional defaults are allowed
   expect(optional.status).toBe(0);
   expect(call("status").value.unfinished_attempts).toEqual(["optional"]);
 });
+
+test("one issue extension retains history, bounds concurrent grants, and cannot repeat", async () => {
+  seed(history("earlier-timeouts", 1782));
+  const original = readFileSync(ledger, "utf8");
+  const extension = ["--candidate", "repo:branch", "--issue", "378", "--risk", "high", "--required"];
+  const extend = () => spawnSync("python3", [...args("extend"), ...extension], { encoding: "utf8" });
+  expect(extend().status).toBe(0);
+  expect(extend().status).toBe(0);
+  expect(call("status").value).toMatchObject({ cap_seconds: 2700, completed_seconds: 1782, remaining_seconds: 918 });
+  const retained = readFileSync(ledger, "utf8");
+  expect(retained.startsWith(original)).toBe(true);
+  expect(retained.split("\n").filter(row => row.includes('"event": "extension"'))).toHaveLength(1);
+  const invoke = (id: string) => new Promise<any>(resolve => {
+    const child = spawn("python3", [...args("begin", id, 600), ...extension]); let output = "";
+    child.stdout.on("data", bytes => { output += bytes; });
+    child.on("close", code => resolve({ code, ...JSON.parse(output) }));
+  });
+  const results = await Promise.all([invoke("a"), invoke("b"), invoke("c")]);
+  expect(results.filter(row => row.allowed).reduce((sum, row) => sum + row.reservation_seconds, 0)).toBe(918);
+  const changedIssue = spawnSync("python3", [...args("extend"), ...extension, "--issue", "379"], { encoding: "utf8" });
+  expect(changedIssue.status).toBe(1);
+});
+test("automatic required extension excludes low/optional work and parks at the aggregate cap", () => {
+  seed(history("used", 1800));
+  const extra = ["--candidate", "repo:branch", "--issue", "378", "--risk", "medium", "--required"];
+  for (const tail of [["--risk", "low", "--required"], ["--risk", "medium"]]) {
+    expect(spawnSync("python3", [...args("extend"), "--candidate", "repo:branch", "--issue", "378", ...tail]).status).toBe(1);
+  }
+  expect(spawnSync("python3", [...args("begin", "last", 600), ...extra]).status).toBe(0);
+  const extension = JSON.parse(readFileSync(ledger, "utf8").split("\n").find(row => row.includes('"event": "extension"'))!);
+  seed([...history("used", 2700), extension]);
+  const exhausted = spawnSync("python3", [...args("begin", "next"), ...extra], { encoding: "utf8" });
+  expect(JSON.parse(exhausted.stdout)).toMatchObject({ allowed: false, cap_seconds: 2700, action: "park", notification_key: "review-budget:378:exhausted" });
+  expect(spawnSync("python3", [...args("extend"), ...extra]).status).toBe(0);
+  expect(call("status").value).toMatchObject({ cap_seconds: 2700, completed_seconds: 2700, remaining_seconds: 0 });
+});
+test("corrupt or conflicting extension history cannot grant capacity", () => {
+  const event = { event: "extension", attempt_id: "issue-extension", issue: 378, seconds: 900, risk: "high", required: true };
+  for (const records of [[{ ...event, seconds: 1800 }], [event, { ...event, issue: 379 }]]) {
+    seed([...history("used", 1800), ...records]);
+    expect(call("status").status).toBe(1);
+  }
+});

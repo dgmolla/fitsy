@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  buildReport, formatReport, loadMainGates, loadMergedPulls, loadProject, postOnce,
+  buildReport, deliverySlot, formatReport, loadMainGates, loadMergedPulls, loadProject, postOnce,
+  reportArtifact,
 } from './hourly-report.mjs';
 
 const board = 'https://github.com/users/dgmolla/projects/1';
@@ -65,15 +66,15 @@ test('keeps issue cycle, WIP age, PR throughput, and card counts separate', () =
   assert.equal(report.board.counts.Done, 3);
   assert.equal(report.board.next, 1);
   const text = formatReport(report);
-  assert.match(text, /1 PRs merged \/24h · main green/);
-  assert.match(text, /\*Local time:\* code unknown · checks unknown · review unknown · ship unknown/);
+  assert.match(text, /\*Fitsy 18:00 UTC\* · main green/);
   assert.doesNotMatch(text, /<@U123>/);
   const visible = text.replace(/<[^|>]+\|([^>]+)>/g, '$1').replace(/\*/g, '');
-  assert.equal(visible.split('\n').length, 5);
+  assert.equal(visible.split('\n').length, 4);
   assert.ok(visible.split('\n').every(line => line.length <= 110));
   assert.match(text, /• \*Shipped:\* <https:\/\/github.com\/dgmolla\/fitsy\/issues\/1\|#1 Done>/);
   assert.match(text, /• \*Next:\* <https:\/\/github.com\/dgmolla\/fitsy\/issues\/3\|#3 Ping/);
-  assert.match(text, /#fitsy-hour:2026-09-26T18\|Details>/);
+  assert.match(text, /• \*Blocker:\* none/);
+  assert.match(text, /#fitsy-slot:2026-09-26T18:00\|Details>/);
 });
 
 test('treats impossible calendar dates as missing issue evidence', () => {
@@ -110,15 +111,101 @@ test('Slack history marker prevents duplicate posts and errors fail closed', asy
       { ok: true, messages: [{ text: message }] } : { ok: true, channel: 'C123', ts: '1.2' } };
   };
   assert.deepEqual(await postOnce(fake, 'token', 'C123', report, message),
-    { posted: false, duplicate: true, marker: 'fitsy-hour:2026-09-26T18' });
+    { posted: false, duplicate: true, marker: 'fitsy-slot:2026-09-26T18:00' });
   assert.equal(calls.length, 1);
   await assert.rejects(postOnce(async () => ({ ok: true, status: 200,
     json: async () => ({ ok: false, error: 'missing_scope' }) }), 'token', 'C123', report, message), /missing_scope/);
+  await assert.rejects(postOnce(async () => ({ ok: true, status: 200,
+    json: async () => ({ ok: true }) }), 'token', 'C123', report, message), /history messages unavailable/);
   const posting = await postOnce(async (url) => ({ ok: true, status: 200,
     json: async () => url.includes('history') ? { ok: true, messages: [] } :
       { ok: true, channel: 'C123', ts: '1.2' } }), 'token', 'C123', report, message);
   assert.equal(posting.posted, true);
   assert.equal(posting.ts, '1.2');
+});
+
+test('UTC half-hour slots stay distinct and reject stale fallback requests', () => {
+  const early = new Date('2026-09-26T18:17:00Z');
+  const late = new Date('2026-09-26T18:47:00Z');
+  assert.equal(deliverySlot(early), '2026-09-26T18:00');
+  assert.equal(deliverySlot(late), '2026-09-26T18:30');
+  assert.equal(deliverySlot(new Date('2026-09-26T18:55:00Z'), '2026-09-26T18:30'),
+    '2026-09-26T18:30');
+  assert.notEqual(buildReport({ url: board, items: [] }, [], {}, early).slotKey,
+    buildReport({ url: board, items: [] }, [], {}, late).slotKey);
+  assert.throws(() => deliverySlot(late, '2026-09-26T18:17'), /invalid UTC delivery slot/);
+  assert.throws(() => deliverySlot(late, '2026-09-26T19:00'), /future/);
+  assert.throws(() => deliverySlot(late, '2026-09-26T17:30'), /stale/);
+});
+
+test('current and explicit recovery slots stay distinct after a delayed wake', () => {
+  const project = { url: board, items: [] };
+  const late = new Date('2026-09-26T21:58:00Z');
+  const scheduled = buildReport(project, [], { state: 'green' }, late);
+  const fallback = buildReport(project, [], { state: 'green' }, late, '2026-09-26T21:00');
+  assert.equal(scheduled.slotKey, '2026-09-26T21:30');
+  assert.equal(fallback.slotKey, '2026-09-26T21:00');
+  assert.notEqual(scheduled.slotKey, fallback.slotKey);
+});
+
+test('repeated reports share one Slack marker per slot', async () => {
+  const project = { url: board, items: [] };
+  const first = buildReport(project, [], { state: 'green' }, new Date('2026-09-26T18:17:00Z'));
+  const second = buildReport(project, [], { state: 'green' }, new Date('2026-09-26T18:47:00Z'));
+  const fallback = buildReport(project, [], { state: 'green' },
+    new Date('2026-09-26T18:55:00Z'), '2026-09-26T18:30');
+  const messages = [];
+  const fake = async (url, options) => {
+    if (url.includes('conversations.history')) {
+      const oldest = Number(new URL(url).searchParams.get('oldest'));
+      return { ok: true, status: 200, json: async () => ({ ok: true,
+        messages: messages.filter(entry => Number(entry.ts) >= oldest) }) };
+    }
+    const text = JSON.parse(options.body).text;
+    const posted = { text, ts: String(Date.parse(`${text.includes(first.slotKey) ? first.slotKey : second.slotKey}:05Z`) / 1000) };
+    messages.push(posted);
+    return { ok: true, status: 200, json: async () => ({ ok: true, channel: 'C123', ts: posted.ts }) };
+  };
+  assert.equal((await postOnce(fake, 'token', 'C123', first, formatReport(first))).posted, true);
+  assert.equal((await postOnce(fake, 'token', 'C123', second, formatReport(second))).posted, true);
+  assert.deepEqual(await postOnce(fake, 'token', 'C123', fallback, formatReport(fallback)),
+    { posted: false, duplicate: true, marker: 'fitsy-slot:2026-09-26T18:30' });
+  assert.equal(messages.length, 2);
+});
+
+test('history pagination and an old hourly post prevent duplicate slot delivery', async () => {
+  const report = buildReport({ url: board, items: [] }, [], { state: 'green' },
+    new Date('2026-09-26T18:47:00Z'));
+  const calls = [];
+  const fake = async url => {
+    calls.push(url);
+    const cursor = new URL(url).searchParams.get('cursor');
+    return { ok: true, status: 200, json: async () => ({ ok: true,
+      messages: cursor ? [{ text: 'prior report #fitsy-hour:2026-09-26T18',
+        ts: String(Date.parse('2026-09-26T18:40:00Z') / 1000) }] : [],
+      response_metadata: cursor ? {} : { next_cursor: 'page2' } }) };
+  };
+  assert.deepEqual(await postOnce(fake, 'token', 'C123', report, formatReport(report)),
+    { posted: false, duplicate: true, marker: 'fitsy-slot:2026-09-26T18:30' });
+  assert.equal(calls.length, 2);
+  assert.ok(calls.every(url => url.includes('conversations.history')));
+  assert.equal(new URL(calls[0]).searchParams.get('oldest'),
+    String(Date.parse('2026-09-26T18:30:00Z') / 1000));
+});
+
+test('legacy hourly marker from the next half-hour cannot suppress a recovered slot', async () => {
+  const report = buildReport({ url: board, items: [] }, [], { state: 'green' },
+    new Date('2026-09-26T18:55:00Z'), '2026-09-26T18:00');
+  const methods = [];
+  const fake = async url => {
+    methods.push(url.includes('conversations.history') ? 'history' : 'post');
+    return { ok: true, status: 200, json: async () => url.includes('conversations.history')
+      ? { ok: true, messages: [{ text: 'fitsy-hour:2026-09-26T18',
+        ts: String(Date.parse('2026-09-26T18:45:00Z') / 1000) }] }
+      : { ok: true, channel: 'C123', ts: '123.456' } };
+  };
+  assert.equal((await postOnce(fake, 'token', 'C123', report, formatReport(report))).posted, true);
+  assert.deepEqual(methods, ['history', 'post']);
 });
 
 
@@ -127,25 +214,26 @@ test('keeps detailed review diagnostics out of the scan', () => {
   report.local = { phases: Object.fromEntries(['implementation', 'verification', 'unit', 'e2e', 'review', 'shipping'].map(phase =>
     [phase, { observedMs: null, cached: 0 }])), coverage: { active: 0, tracked: 0, stale: 0, invalid: 0 },
     rounds: [{ attempts: 1, running: 0 }, { attempts: 0, running: 0, cached: 3 }] };
-  assert.match(formatReport(report), /review unknown/);
-  assert.doesNotMatch(formatReport(report), /round|cache reuse|median|WIP/);
+  assert.doesNotMatch(formatReport(report), /review|round|cache reuse|median|WIP/);
 });
 
-test('compact copy distinguishes gate state, measured E2E, and timing exceptions', () => {
+test('compact copy shows gate state while detail retains measurements', () => {
   const report = buildReport({ url: board, items: [] }, [], { state: 'pending' }, now);
   report.local = { phases: Object.fromEntries(['implementation', 'verification', 'unit', 'e2e', 'review', 'shipping'].map(phase =>
     [phase, { observedMs: phase === 'e2e' ? null : 60000 }])),
   coverage: { active: 4, tracked: 3, stale: 2, invalid: 1 }, rounds: [] };
   let text = formatReport(report);
   assert.match(text, /main pending/);
-  assert.doesNotMatch(text, /E2E/);
-  assert.match(text, /2 stale timing · 1 missing timing · 1 invalid timing/);
+  assert.doesNotMatch(text, /E2E|stale timing|missing timing|invalid timing/);
   report.main.state = 'failed';
   report.local.phases.e2e.observedMs = 120000;
   text = formatReport(report);
   assert.match(text, /main failed/);
-  assert.match(text, /E2E 2m/);
-  assert.equal(text.split('\n').length, 5);
+  const artifact = JSON.parse(reportArtifact(report, { posted: false, dryRun: true }));
+  assert.equal(artifact.local.phases.e2e.observedMs, 120000);
+  assert.deepEqual(artifact.local.coverage, { active: 4, tracked: 3, stale: 2, invalid: 1 });
+  assert.deepEqual(artifact.delivery, { posted: false, dryRun: true });
+  assert.equal(text.split('\n').length, 4);
 });
 
 test('summary uses recent verified delivery and actionable board priority with bounded safe labels', () => {
@@ -171,13 +259,15 @@ test('summary uses recent verified delivery and actionable board priority with b
   const report = buildReport({ url: board, items: cards }, [], { state: 'green' }, now);
   assert.deepEqual(report.summary.shipped.map(issue => issue.number), [3, 4]);
   assert.deepEqual(report.summary.next.map(issue => issue.number), [6, 8]);
+  assert.deepEqual(report.summary.blockers.map(issue => issue.number), [7]);
   const lines = formatReport(report).split('\n');
-  assert.equal(lines.length, 5);
-  assert.match(lines[3], /#3 Newest &lt;@U123&gt; work \/ cont/);
-  assert.match(lines[3], /<https:\/\/github.com\/dgmolla\/other-repo\/issues\/4\|#4 Second verified>/);
-  assert.doesNotMatch(lines[3], /#1|#2|#5|<@U123>|\*work\*/);
-  assert.match(lines[4], /#6 Active work.*#8 Ready now/);
-  assert.doesNotMatch(lines[4], /#7|#9|#10/);
+  assert.equal(lines.length, 4);
+  assert.match(lines[1], /#3 Newest &lt;@U123&gt; work \/ cont/);
+  assert.match(lines[1], /<https:\/\/github.com\/dgmolla\/other-repo\/issues\/4\|#4 Second verified>/);
+  assert.doesNotMatch(lines[1], /#1|#2|#5|<@U123>|\*work\*/);
+  assert.match(lines[2], /#6 Active work.*#8 Ready now/);
+  assert.doesNotMatch(lines[2], /#7|#9|#10/);
+  assert.match(lines[3], /2 open.*#7 Blocked now/);
   const visible = lines.map(line => line.replace(/<[^|>]+\|([^>]+)>/g, '$1').replace(/\*/g, ''));
   assert.ok(visible.every(line => line.length <= 110));
 });

@@ -116,9 +116,23 @@ export function median(values) {
   return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
 }
 
-export function buildReport(project, pulls, main, now = new Date()) {
+export function deliverySlot(now, requested) {
+  const current = new Date(now.getTime());
+  current.setUTCMinutes(now.getUTCMinutes() < 30 ? 0 : 30, 0, 0);
+  if (requested === undefined) return current.toISOString().slice(0, 16);
+  if (!/^\d{4}-\d\d-\d\dT\d\d:(00|30)$/.test(requested)) throw new Error('invalid UTC delivery slot');
+  const slot = Date.parse(`${requested}:00Z`);
+  if (!Number.isFinite(slot) || new Date(slot).toISOString().slice(0, 16) !== requested ||
+      slot > now.getTime() || now.getTime() - slot > 60 * 60 * 1000) {
+    throw new Error('delivery slot is invalid, future, or stale');
+  }
+  return requested;
+}
+
+export function buildReport(project, pulls, main, now = new Date(), requestedSlot) {
   const nowMs = now.getTime();
   const hour = new Date(nowMs); hour.setUTCMinutes(0, 0, 0);
+  const slotKey = deliverySlot(now, requestedSlot);
   const cards = project.items;
   const issues = cards.filter(item => item.content?.__typename === 'Issue');
   const counts = Object.fromEntries(['Queued', 'In flight', 'Done'].map(status =>
@@ -164,23 +178,20 @@ export function buildReport(project, pulls, main, now = new Date()) {
       url: item.content.url, status: item.fields.Status, blocker: item.fields.Blocker ?? '',
       progress: item.fields.Progress ?? '', nextAction: item.fields['Next action'] ?? '',
       lastProgressAt: item.fields['Last progress at'] ?? '' }));
-  return { version: 1, generatedAt: now.toISOString(), hourKey: hour.toISOString().slice(0, 13),
+  return { version: 1, generatedAt: now.toISOString(), hourKey: hour.toISOString().slice(0, 13), slotKey,
     board: { url: project.url, totalCards: cards.length, counts, blocked: blocked.length,
       now: cards.filter(item => item.fields.Status !== 'Done' && item.fields.Priority === 'Now').length,
       next: cards.filter(item => item.fields.Status === 'Queued' && item.fields.Priority === 'Next').length },
     prs24h: { merged: pulls.length, medianMs: median(prTimes), sample: prTimes.length },
     issueCycle: { medianMs: median(cycles), sample: cycles.length, missing: doneIssues.length - cycles.length },
-    summary: { shipped, next },
+    summary: { shipped, next, blockers: blocked.filter(item => item.content?.__typename === 'Issue')
+      .slice(0, 1).map(item => ({ number: item.content.number, title: item.content.title, url: item.content.url })) },
     wipAge: { oldestMs: ages.length ? Math.max(...ages) : null, sample: ages.length,
       missing: activeIssues.length - ages.length }, main, highlights };
 }
 
-function duration(ms) {
-  if (ms === null || ms === undefined) return 'unknown';
-  const minutes = Math.round(ms / 60000);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  return `${hours}h ${minutes % 60}m`;
+export function reportArtifact(report, delivery) {
+  return JSON.stringify({ ...report, delivery }, null, 2);
 }
 
 function issueLink(issue) {
@@ -197,24 +208,12 @@ function issueLink(issue) {
 }
 
 export function formatReport(report) {
-  const p = report.local?.phases;
-  const times = [`code ${duration(p?.implementation.observedMs)}`,
-    `checks ${duration(p?.verification.observedMs)}`,
-    `review ${duration(p?.review.observedMs)}`,
-    `ship ${duration(p?.shipping.observedMs)}`];
-  if (p?.e2e.observedMs !== null && p?.e2e.observedMs !== undefined) times.push(`E2E ${duration(p.e2e.observedMs)}`);
-  const coverage = report.local?.coverage;
-  const attention = [`${report.board.blocked} blockers`];
-  if (coverage?.stale) attention.push(`${coverage.stale} stale timing`);
-  const missing = coverage ? Math.max(0, coverage.active - coverage.tracked) : 0;
-  if (missing) attention.push(`${missing} missing timing`);
-  if (coverage?.invalid) attention.push(`${coverage.invalid} invalid timing`);
+  const blocker = report.summary.blockers.map(issueLink).filter(Boolean)[0];
   const lines = [
-    `*Fitsy:* ${report.prs24h.merged} PRs merged /24h · main ${report.main.state}`,
-    `*Local time:* ${times.join(' · ')}`,
-    `*Attention:* ${attention.join(' · ')} · <${BOARD_URL}#fitsy-hour:${report.hourKey}|Details>`,
+    `*Fitsy ${report.slotKey.slice(11)} UTC* · main ${report.main.state}`,
     `• *Shipped:* ${report.summary.shipped.map(issueLink).filter(Boolean).join(' · ') || 'none verified /24h'}`,
     `• *Next:* ${report.summary.next.map(issueLink).filter(Boolean).join(' · ') || 'none queued'}`,
+    `• *Blocker:* ${report.board.blocked ? `${report.board.blocked} open` : 'none'}${blocker ? ` · ${blocker}` : ''} · <${BOARD_URL}#fitsy-slot:${report.slotKey}|Details>`,
   ];
   return lines.join('\n');
 }
@@ -229,15 +228,16 @@ async function api(fetchImpl, url, token, options = {}) {
   return data;
 }
 
-export async function collect(fetchImpl, projectToken, actionsToken, now = new Date()) {
+export async function collect(fetchImpl, projectToken, actionsToken, now = new Date(), requestedSlot,
+  localRoots = []) {
   const graphql = (query, variables) => api(fetchImpl, 'https://api.github.com/graphql', projectToken,
     { method: 'POST', body: JSON.stringify({ query, variables }) }).then(data => data.data);
   const rest = url => api(fetchImpl, url, actionsToken);
   const [project, pulls, main] = await Promise.all([
     loadProject(graphql), loadMergedPulls(rest, now), loadMainGates(rest),
   ]);
-  const local = await loadTimings(rest, project.items, now);
-  return { ...buildReport(project, pulls, main, now), local };
+  const local = await loadTimings(rest, project.items, now, localRoots);
+  return { ...buildReport(project, pulls, main, now, requestedSlot), local };
 }
 
 async function slack(fetchImpl, token, method, params) {
@@ -255,14 +255,17 @@ async function slack(fetchImpl, token, method, params) {
 }
 
 export async function postOnce(fetchImpl, token, channel, report, message) {
-  const marker = `fitsy-hour:${report.hourKey}`;
-  const oldest = Math.floor(Date.parse(`${report.hourKey}:00:00Z`) / 1000);
+  const marker = `fitsy-slot:${report.slotKey}`;
+  const legacyMarker = `fitsy-hour:${report.slotKey.slice(0, 13)}`;
+  const oldest = Math.floor(Date.parse(`${report.slotKey}:00Z`) / 1000);
   const cursors = new Set();
   let cursor = '';
   for (;;) {
     const history = await slack(fetchImpl, token, 'conversations.history',
       { channel, oldest: String(oldest), limit: '200', ...(cursor ? { cursor } : {}) });
-    if (history.messages?.some(entry => entry.text?.includes(marker))) {
+    if (!Array.isArray(history.messages)) throw new Error('Slack history messages unavailable');
+    if (history.messages.some(entry => entry.text?.includes(marker) ||
+        (entry.text?.includes(legacyMarker) && Number(entry.ts) >= oldest && Number(entry.ts) < oldest + 1800))) {
       return { posted: false, duplicate: true, marker };
     }
     const next = history.response_metadata?.next_cursor;
@@ -281,6 +284,14 @@ async function main() {
   const outputIndex = args.indexOf('--output-dir');
   if (outputIndex < 0 || !args[outputIndex + 1]) throw new Error('--output-dir is required');
   const output = resolve(args[outputIndex + 1]);
+  const slotArg = args.find(arg => arg.startsWith('--slot='));
+  const now = new Date();
+  const requestedSlot = slotArg?.slice('--slot='.length);
+  const localRoots = JSON.parse(process.env.FITSY_LOCAL_TIMING_ROOTS || '[]');
+  if (!Array.isArray(localRoots) || localRoots.some(root => typeof root !== 'string')) {
+    throw new Error('FITSY_LOCAL_TIMING_ROOTS must be a JSON string array');
+  }
+  deliverySlot(now, requestedSlot);
   await mkdir(output, { recursive: true });
   const post = args.includes('--post');
   if (post && (args.includes('--dry-run') || process.env.DELIVERY_REPORT_ENABLED !== 'true')) {
@@ -289,7 +300,8 @@ async function main() {
   if (!process.env.DELIVERY_GITHUB_TOKEN || !process.env.GITHUB_TOKEN) {
     throw new Error('DELIVERY_GITHUB_TOKEN and GITHUB_TOKEN are required');
   }
-  const report = await collect(fetch, process.env.DELIVERY_GITHUB_TOKEN, process.env.GITHUB_TOKEN);
+  const report = await collect(fetch, process.env.DELIVERY_GITHUB_TOKEN, process.env.GITHUB_TOKEN,
+    now, requestedSlot, localRoots);
   const message = formatReport(report);
   await writeFile(resolve(output, 'report.txt'), `${message}\n`);
   let delivery = { posted: false, dryRun: true };
@@ -300,7 +312,7 @@ async function main() {
     delivery = await postOnce(fetch, process.env.DELIVERY_SLACK_BOT_TOKEN,
       process.env.DELIVERY_SLACK_CHANNEL, report, message);
   }
-  await writeFile(resolve(output, 'report.json'), `${JSON.stringify({ ...report, delivery }, null, 2)}\n`);
+  await writeFile(resolve(output, 'report.json'), `${reportArtifact(report, delivery)}\n`);
   process.stdout.write(`${message}\n`);
   process.stdout.write(`delivery: ${delivery.posted ? 'posted' : delivery.duplicate ? 'duplicate' : 'dry-run'}\n`);
 }

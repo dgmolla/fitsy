@@ -11,6 +11,7 @@ from pathlib import Path
 import time
 
 CAP_SECONDS = 1800
+EXTENSION_SECONDS = 900
 CLOSEOUT_SECONDS = 5
 
 
@@ -35,6 +36,13 @@ def read_events(handle):
         if not isinstance(rows, list):
             raise ValueError("invalid imported review history")
         for row in rows:
+            if isinstance(row, dict) and row.get("event") == "extension":
+                if (row.get("attempt_id") != "issue-extension" or row.get("seconds") != EXTENSION_SECONDS
+                        or type(row.get("issue")) is not int or row["issue"] <= 0
+                        or row.get("risk") not in ("medium", "high") or row.get("required") is not True):
+                    raise ValueError("invalid issue review extension")
+                events.append(row)
+                continue
             if (not isinstance(row, dict) or row.get("event") not in ("start", "finish")
                     or not isinstance(row.get("attempt_id"), str) or not row["attempt_id"]):
                 raise ValueError("invalid review attempt")
@@ -124,6 +132,10 @@ def elapsed(start):
 
 
 def usage(events):
+    extensions = [e for e in events if e["event"] == "extension"]
+    if len(extensions) > 1:
+        raise ValueError("multiple review extensions are not permitted")
+    cap = CAP_SECONDS + (EXTENSION_SECONDS if extensions else 0)
     starts = {e["attempt_id"]: e for e in events if e["event"] == "start"}
     finishes = {e["attempt_id"]: e for e in events if e["event"] == "finish"}
     if any(key not in starts for key in finishes):
@@ -133,9 +145,9 @@ def usage(events):
     active = {key: e for key, e in starts.items() if key not in finishes}
     # An interrupted new attempt retains its full reservation until reconciled.
     # An unbounded legacy attempt has unknown completion and fails closed at the cap.
-    reserved = sum(e.get("reserved_seconds", CAP_SECONDS) for e in active.values())
-    return starts, finishes, {"cap_seconds": CAP_SECONDS, "completed_seconds": completed,
-        "reserved_seconds": reserved, "remaining_seconds": max(0, CAP_SECONDS - completed - reserved),
+    reserved = sum(e.get("reserved_seconds", cap) for e in active.values())
+    return starts, finishes, {"cap_seconds": cap, "extension_issue": extensions[0]["issue"] if extensions else None, "completed_seconds": completed,
+        "reserved_seconds": reserved, "remaining_seconds": max(0, cap - completed - reserved),
         "review_seconds": completed,
         "observed_running_seconds": sum(min(elapsed(e), e["reserved_seconds"]) for e in active.values() if "reserved_seconds" in e),
         "unbounded_attempts": [key for key, e in active.items() if "reserved_seconds" not in e],
@@ -144,16 +156,18 @@ def usage(events):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("begin", "finish", "status"))
+    parser.add_argument("action", choices=("begin", "finish", "status", "extend"))
     parser.add_argument("--ledger", type=Path, required=True)
     parser.add_argument("--import-ledger", action="append", default=[])
     parser.add_argument("--optional-import-ledger", action="append", default=[])
     for name in ("round-id", "lens", "source-sha", "attempt-id"):
         parser.add_argument(f"--{name}")
-    # Retained CLI compatibility: these permits cannot extend the time-only cap.
+    # Historical permits never add capacity; only the one issue extension can.
     for name in ("exception", "adoption", "closeout"):
         parser.add_argument(f"--{name}")
     parser.add_argument("--timeout-seconds", type=int, default=900)
+    parser.add_argument("--risk", choices=("low", "medium", "high"))
+    parser.add_argument("--required", action="store_true")
     parser.add_argument("--candidate")
     parser.add_argument("--issue", type=int)
     parser.add_argument("--outcome", choices=("pass", "fail", "interrupted"), default="interrupted")
@@ -166,9 +180,23 @@ def main():
             fcntl.flock(handle, fcntl.LOCK_EX)
             events = import_history(handle, args.ledger, args.import_ledger, args.optional_import_ledger)
             starts, finishes, total = usage(events)
-            result = {"allowed": True, "reason": "history accounted", "ledger": str(args.ledger.resolve()), **total}
-            if args.action != "status" and not all((args.round_id, args.lens, args.source_sha, args.attempt_id)):
+            if total["extension_issue"] is not None and args.issue is not None and total["extension_issue"] != args.issue:
+                raise ValueError("review extension issue mismatch")
+            if args.action in ("begin", "finish") and not all((args.round_id, args.lens, args.source_sha, args.attempt_id)):
                 raise ValueError("review attempt identity is required")
+            eligible = args.required and args.risk in ("medium", "high") and args.candidate and args.issue
+            if args.action == "extend" and not eligible:
+                raise ValueError("extension requires bound normal/protected required review")
+            needs_extension = args.action == "extend" or (args.action == "begin" and eligible
+                and 1 <= args.timeout_seconds <= 3600 and total["remaining_seconds"] < args.timeout_seconds + CLOSEOUT_SECONDS)
+            if needs_extension and total["extension_issue"] is None:
+                if not eligible or total["unbounded_attempts"]:
+                    raise ValueError("extension requires a bound normal/protected issue with incomplete required review and reconciled history")
+                append(handle, {"event": "extension", "attempt_id": "issue-extension", "at": utc(),
+                    "issue": args.issue, "risk": args.risk, "required": True, "seconds": EXTENSION_SECONDS})
+                events = list(indexed(read_events(handle)).values())
+                starts, finishes, total = usage(events)
+            result = {"allowed": True, "reason": "history accounted", "ledger": str(args.ledger.resolve()), **total}
             if args.action == "begin":
                 if args.attempt_id in starts:
                     result.update(allowed=False, reason="duplicate attempt")
@@ -178,6 +206,8 @@ def main():
                     grant = min(args.timeout_seconds, math.floor(total["remaining_seconds"] - CLOSEOUT_SECONDS))
                     if grant < 1:
                         result.update(allowed=False, reason="cumulative review time exhausted or reserved")
+                        if total["extension_issue"] and not total["unfinished_attempts"]:
+                            result.update(action="park", notification_key=f"review-budget:{total['extension_issue']}:exhausted")
                     else:
                         append(handle, {"event": "start", "at": utc(), "epoch": time.time(),
                             "monotonic": time.monotonic(), "round_id": args.round_id, "lens": args.lens,
