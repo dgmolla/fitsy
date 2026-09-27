@@ -79,6 +79,33 @@ class LocalReportTest(unittest.TestCase):
             self.assertEqual(slack.posts, [])
             self.assertTrue(json.loads(next((state / 'slots').glob('*.json')).read_text())['duplicate'])
 
+    def test_uncertain_post_receipt_restarts_history_from_first_page(self):
+        class UncertainSlack(Slack):
+            def __init__(self):
+                super().__init__()
+                self.cursors = []
+
+            def call(self, method, params=None, payload=None):
+                if method == 'conversations.history':
+                    cursor = params.get('cursor', '')
+                    self.cursors.append(cursor)
+                    if len(self.cursors) == 3:
+                        return {'messages': [{'text': 'fitsy-slot:2026-09-27T03:30', 'ts': '123.456'}]}
+                    return {'messages': [], 'response_metadata':
+                            {'next_cursor': 'page2' if not cursor else ''}}
+                return {'channel': 'C123'}  # Slack accepted the post but its receipt lost ts.
+
+        with tempfile.TemporaryDirectory() as temp:
+            state = Path(temp)
+            start = epoch('2026-09-27T03:30:00Z')
+            config = {'activated_at': start, 'channel': 'C123'}
+            slack = UncertainSlack()
+            generate = lambda _runtime, _state, slot, _roots: f'fitsy-slot:{slot}'
+            for offset in (120, 180, 240):
+                reporter.run_once(config, state, slack, start + offset, generate)
+            self.assertEqual(slack.cursors, ['', 'page2', ''])
+            self.assertTrue(json.loads(next((state / 'slots').glob('*.json')).read_text())['duplicate'])
+
     def test_half_hour_due_slots_and_activation_boundary(self):
         activated = epoch('2026-09-27T03:30:00Z')
         self.assertEqual(reporter.due_slots(epoch('2026-09-27T03:31:59Z'), activated), [])

@@ -62,7 +62,9 @@ def post_once(slack, channel, slot, message, cursor='', seen=()):
         error.post_attempted = True
         raise
     if result.get('channel') != channel or not result.get('ts'):
-        raise RuntimeError('Slack post receipt is incomplete')
+        error = RuntimeError('Slack post receipt is incomplete')
+        error.post_attempted = True
+        raise error
     return {'state': 'delivered', 'duplicate': False, 'channel': channel,
             'ts': result['ts'], 'marker': marker}
 
