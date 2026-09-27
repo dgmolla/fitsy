@@ -37,6 +37,11 @@ class AdvisoryTests(unittest.TestCase):
         value['raw']['head'] = 'short'
         with self.assertRaises(ValueError):
             advisory.validate(value)
+        for reserved in ('none', 'confirmed-p0-p1-release-rule'):
+            value = fixture()
+            value['acceptance_criteria'][0]['id'] = reserved
+            with self.assertRaises(ValueError):
+                advisory.validate(value)
 
     def test_provider_failure_is_explicit_and_preserves_raw(self):
         value = fixture()
@@ -81,6 +86,8 @@ class AdvisoryTests(unittest.TestCase):
         result = advisory.recommend(value, {}, lambda *_: response(value, 'defer_with_owner', 'none', reason='acceptance'))
         self.assertEqual(result['recommendation'], 'investigate')
         self.assertIsNone(result['confidence'])
+        result = advisory.recommend(value, {}, lambda *_: response(value, 'defer_with_owner', 'none', reason='material'))
+        self.assertEqual(result['recommendation'], 'investigate')
 
     def test_uncertain_none_criterion_blocks_deferral(self):
         value = fixture()

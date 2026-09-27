@@ -6,6 +6,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import sys
 import time
 import urllib.request
@@ -16,7 +17,7 @@ dispatcher = importlib.util.module_from_spec(dispatcher_spec)
 dispatcher_spec.loader.exec_module(dispatcher)
 credential = dispatcher.credential  # Reuse the verified private-key reader.
 
-VERSION = 'finding-advisory-v9'
+VERSION = 'finding-advisory-v10'
 DISPOSITIONS = ('fix_now', 'defer_with_owner', 'investigate', 'likely_unsupported')
 REASONS = {
     'acceptance': 'A named mandatory acceptance criterion is unmet.',
@@ -48,7 +49,7 @@ def validate(value):
         if not isinstance(value.get(key), str) or not value[key].strip() or len(value[key]) > limit:
             raise ValueError(f'{key} is required and bounded')
     criteria = value.get('acceptance_criteria')
-    if not isinstance(criteria, list) or len(criteria) > 8 or any(not isinstance(c, dict) or not isinstance(c.get('id'), str) or not c['id'] or len(c['id']) > 80 or not isinstance(c.get('text'), str) or not c['text'] or len(c['text']) > 500 or not isinstance(c.get('source'), str) or not c['source'].startswith('https://') or len(c['source']) > 300 for c in criteria):
+    if not isinstance(criteria, list) or len(criteria) > 8 or any(not isinstance(c, dict) or not isinstance(c.get('id'), str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._:-]{0,79}', c['id']) or c['id'] in ('none', 'confirmed-p0-p1-release-rule') or not isinstance(c.get('text'), str) or not c['text'] or len(c['text']) > 500 or not isinstance(c.get('source'), str) or not c['source'].startswith('https://') or len(c['source']) > 300 for c in criteria):
         raise ValueError('acceptance_criteria must be a bounded list of id/text/source triples')
     if len({c['id'] for c in criteria}) != len(criteria):
         raise ValueError('acceptance criterion IDs must be unique')
@@ -135,8 +136,8 @@ def recommend(value, config, call=provider_call):
             choice, reason_text = 'investigate', 'High-impact finding requires source-bound investigation.'
         if choice in ('defer_with_owner', 'likely_unsupported') and named_criterion:
             choice, reason_text = 'investigate', 'Provider advice conflicts with a potentially unmet acceptance criterion.'
-        if choice in ('defer_with_owner', 'likely_unsupported') and reason == 'acceptance':
-            choice, reason_text = 'investigate', 'Provider advice conflicts with its mandatory-acceptance reason.'
+        if choice in ('defer_with_owner', 'likely_unsupported') and reason in ('acceptance', 'material'):
+            choice, reason_text = 'investigate', 'Provider advice conflicts with its release-defect reason.'
         if choice == 'defer_with_owner' and value['acceptance_criteria'] and criterion == 'none' and answers['criterion']['confidence'] < 0.6:
             choice, reason_text = 'investigate', 'Provider is uncertain whether a mandatory acceptance criterion is unmet.'
         if choice == 'defer_with_owner' and (not value.get('owner') or not value.get('followup')):
