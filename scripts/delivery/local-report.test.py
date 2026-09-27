@@ -39,7 +39,7 @@ class LocalReportTest(unittest.TestCase):
                         return {'ok': True, 'messages': [],
                                 'response_metadata': {'next_cursor': 'page2'}}
                     return {'ok': True, 'messages': [{'text': 'old fitsy-hour:2026-09-27T03',
-                                                       'ts': '123.456'}]}
+                                                       'ts': str(epoch('2026-09-27T03:40:00Z'))}]}
                 return super().call(method, params, payload)
         slack = PagedSlack()
         first = reporter.post_once(slack, 'C123', '2026-09-27T03:30', 'new report')
@@ -47,8 +47,16 @@ class LocalReportTest(unittest.TestCase):
         receipt = reporter.post_once(slack, 'C123', '2026-09-27T03:30', 'new report',
                                      first['cursor'], first['seen'])
         self.assertTrue(receipt['duplicate'])
-        self.assertEqual(receipt['ts'], '123.456')
+        self.assertEqual(receipt['ts'], str(epoch('2026-09-27T03:40:00Z')))
         self.assertEqual(slack.posts, [])
+
+    def test_legacy_marker_in_next_half_hour_does_not_suppress_slot(self):
+        slack = Slack([{'text': 'fitsy-hour:2026-09-27T03',
+                        'ts': str(epoch('2026-09-27T03:45:00Z'))}])
+        receipt = reporter.post_once(slack, 'C123', '2026-09-27T03:00',
+                                     'fitsy-slot:2026-09-27T03:00')
+        self.assertFalse(receipt['duplicate'])
+        self.assertEqual(len(slack.posts), 1)
 
     def test_pagination_cursor_survives_between_timer_wakes(self):
         class PagedSlack(Slack):
@@ -105,6 +113,26 @@ class LocalReportTest(unittest.TestCase):
                 reporter.run_once(config, state, slack, start + offset, generate)
             self.assertEqual(slack.cursors, ['', 'page2', ''])
             self.assertTrue(json.loads(next((state / 'slots').glob('*.json')).read_text())['duplicate'])
+
+    def test_uncertain_post_retry_reuses_client_message_id(self):
+        class UncertainSlack(Slack):
+            def call(self, method, params=None, payload=None):
+                if method == 'conversations.history':
+                    return {'messages': []}
+                self.posts.append(payload)
+                return {'channel': 'C123', **({'ts': '123.456'} if len(self.posts) == 2 else {})}
+
+        with tempfile.TemporaryDirectory() as temp:
+            state = Path(temp)
+            start = epoch('2026-09-27T03:30:00Z')
+            config = {'activated_at': start, 'channel': 'C123'}
+            slack = UncertainSlack()
+            generate = lambda _runtime, _state, slot, _roots: f'fitsy-slot:{slot}'
+            reporter.run_once(config, state, slack, start + 120, generate)
+            reporter.run_once(config, state, slack, start + 180, generate)
+            self.assertEqual(len(slack.posts), 2)
+            self.assertTrue(slack.posts[0]['client_msg_id'])
+            self.assertEqual(slack.posts[0]['client_msg_id'], slack.posts[1]['client_msg_id'])
 
     def test_half_hour_due_slots_and_activation_boundary(self):
         activated = epoch('2026-09-27T03:30:00Z')

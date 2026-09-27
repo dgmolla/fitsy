@@ -39,6 +39,12 @@ test('explicit local timing source fills an unpublished attempt without double c
     const mutated = comment(payload([{ ...finished, source_sha: 'c'.repeat(40) }]));
     await assert.rejects(loadTimings(async () => [mutated], items, now, [root]),
       /conflicts with published evidence/);
+    const cached = { ...finished, event_id: 'cached', status: 'cached',
+      started_at: '2026-09-26T18:10:00.000Z', finished_at: '2026-09-26T18:10:00.000Z', duration_ms: 0 };
+    writeFileSync(join(root, '.evidence/delivery/events.jsonl'),
+      `${JSON.stringify(running)}\n${JSON.stringify(cached)}\n`);
+    const cachedReport = await loadTimings(async () => [comment(payload([running]))], items, now, [root]);
+    assert.equal(cachedReport.phases.review.cached, 1);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 

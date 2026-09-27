@@ -9,7 +9,9 @@ const iso = value => typeof value === 'string' && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d
   Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 19) === value.slice(0, 19);
 const sameAttempt = (published, local) => local && published.issue === local.issue &&
   published.attempt_id === local.attempt_id && published.phase === local.phase &&
-  published.started_at === local.started_at &&
+  (published.started_at === local.started_at || (published.status === 'running' &&
+    local.status === 'cached' && local.started_at === local.finished_at &&
+    local.duration_ms === 0 && Date.parse(local.started_at) >= Date.parse(published.started_at))) &&
   published.producer === local.producer && published.check === local.check &&
   published.lens === local.lens && published.round_id === local.round_id &&
   (published.status === 'running' || (published.status === local.status &&

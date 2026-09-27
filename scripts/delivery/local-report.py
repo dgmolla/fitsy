@@ -44,7 +44,12 @@ def post_once(slack, channel, slot, message, cursor='', seen=()):
     if not isinstance(page.get('messages'), list):
         raise RuntimeError('Slack history messages unavailable')
     for item in page['messages']:
-        if marker in (item.get('text') or '') or legacy in (item.get('text') or ''):
+        try:
+            posted_at = float(item.get('ts', ''))
+        except (TypeError, ValueError):
+            posted_at = -1
+        text = item.get('text') or ''
+        if marker in text or (legacy in text and int(oldest) <= posted_at < int(oldest) + SLOT_SECONDS):
             return {'state': 'delivered', 'duplicate': True, 'channel': channel,
                     'ts': item['ts'], 'marker': marker}
     next_cursor = page.get('response_metadata', {}).get('next_cursor', '')
