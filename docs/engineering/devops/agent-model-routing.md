@@ -3,6 +3,10 @@
 Apply this policy to every Fitsy coordinator, implementation worker and review adapter.
 The canonical [shipping procedure](shipping.md) owns validation, review budgets, dispositions and release gates.
 Model selection never waives those gates or grants permission to start extra work.
+The local dispatcher snapshots a configured implementation provider, model and effort and an independent reviewer provider, model and effort for each claim.
+Its current default is Codex with Sol; a trusted operator can configure the supported Claude worker adapter for a later claim without changing queue ownership, review budgets or release gates.
+Jev provides advisory task planning and cannot choose an executable, provider, reviewer or required lens.
+An active claim retains its original profiles when the configuration changes.
 
 ## Model selection
 
