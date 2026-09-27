@@ -504,8 +504,18 @@ def tick(config, state, state_path, script):
             pass
         if active.get('stage') == 'ownership-uncertain':
             pgid = active.get('worker_pgid') or active.get('launcher_pid')
-            if not pgid or group_alive(pgid):
+            if not pgid:
                 return {'state': 'ownership-uncertain', 'issue': active['issue']}
+            if group_alive(pgid):
+                started = active.get('started_at')
+                timeout = config.get('worker_timeout_seconds', 90 * 60)
+                expired = (started and time.time() >=
+                           datetime.fromisoformat(started.replace('Z', '+00:00')).timestamp() + timeout)
+                if not expired or not stop_owned_group(pgid, os.getpid()):
+                    return {'state': 'ownership-uncertain', 'issue': active['issue']}
+                active['timed_out'] = True
+                active['finished_at'] = utc()
+                active['failure'] = f'worker group exceeded {timeout}s wall-clock budget'
             active['stage'] = 'finished'
             active['failure'] = active.get('failure') or 'worker group stopped without verified delivery'
             write_json(state_path, state)

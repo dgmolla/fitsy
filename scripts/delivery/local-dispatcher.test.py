@@ -275,6 +275,24 @@ class DispatcherProcessTest(unittest.TestCase):
         self.assertEqual(self.state_data()['history'][0]['terminal'], 'parked-after-exit')
         self.until(lambda: self.state_data()['active'].get('finished_at'))
 
+    def test_uncertain_group_is_stopped_after_worker_wall_budget(self):
+        self.set_board([item(385, status='In flight'), item(351)])
+        child = subprocess.Popen(['sleep', '30'], start_new_session=True)
+        self.addCleanup(lambda: os.killpg(child.pid, signal.SIGKILL)
+                        if dispatcher.group_alive(child.pid) else None)
+        config = json.loads(self.config.read_text())
+        config['worker_timeout_seconds'] = 1
+        self.config.write_text(json.dumps(config))
+        state = {'version': 1, 'active': {'id': 'expired-group', 'issue': 385,
+                 'stage': 'ownership-uncertain', 'worker_pgid': child.pid,
+                 'started_at': '2026-09-27T00:00:00Z', 'ready_at': '2026-09-27T00:00:00Z'},
+                 'readiness': {}, 'classifications': {}, 'parked': {}, 'history': []}
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.assertEqual(self.tick()['issue'], 351)
+        self.assertTrue(self.state_data()['history'][0]['timed_out'])
+        child.wait(timeout=3)
+        self.assertIn('dispatch-hold', self.board_data()['items'][0]['labels'])
+
     def test_closed_merged_issue_with_failed_main_ci_cannot_release_dependency(self):
         delivered = item(385, status='Done')
         delivered['issue_state'] = 'CLOSED'
