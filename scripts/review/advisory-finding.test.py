@@ -42,6 +42,11 @@ class AdvisoryTests(unittest.TestCase):
             value['acceptance_criteria'][0]['id'] = reserved
             with self.assertRaises(ValueError):
                 advisory.validate(value)
+        for key in ('owner', 'followup'):
+            value = fixture()
+            value[key] = '   '
+            with self.assertRaises(ValueError):
+                advisory.validate(value)
 
     def test_provider_failure_is_explicit_and_preserves_raw(self):
         value = fixture()
@@ -83,10 +88,13 @@ class AdvisoryTests(unittest.TestCase):
 
     def test_acceptance_reason_cannot_accompany_deferral(self):
         value = fixture()
-        result = advisory.recommend(value, {}, lambda *_: response(value, 'defer_with_owner', 'none', reason='acceptance'))
+        for reason in ('acceptance', 'material', 'insufficient', 'unsupported'):
+            result = advisory.recommend(value, {}, lambda *_: response(value, 'defer_with_owner', 'none', reason=reason))
+            self.assertEqual(result['recommendation'], 'investigate')
+            self.assertIsNone(result['confidence'])
+        result = advisory.recommend(value, {}, lambda *_: response(value, 'likely_unsupported', 'none', reason='bounded_debt'))
         self.assertEqual(result['recommendation'], 'investigate')
-        self.assertIsNone(result['confidence'])
-        result = advisory.recommend(value, {}, lambda *_: response(value, 'defer_with_owner', 'none', reason='material'))
+        result = advisory.recommend(value, {}, lambda *_: response(value, 'fix_now', 'A1', reason='bounded_debt'))
         self.assertEqual(result['recommendation'], 'investigate')
 
     def test_uncertain_none_criterion_blocks_deferral(self):

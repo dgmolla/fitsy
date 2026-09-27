@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import sys
 import time
+import urllib.parse
 import urllib.request
 
 dispatcher_path = Path(__file__).resolve().parents[1] / 'delivery/local-dispatcher.py'
@@ -17,7 +18,7 @@ dispatcher = importlib.util.module_from_spec(dispatcher_spec)
 dispatcher_spec.loader.exec_module(dispatcher)
 credential = dispatcher.credential  # Reuse the verified private-key reader.
 
-VERSION = 'finding-advisory-v10'
+VERSION = 'finding-advisory-v11'
 DISPOSITIONS = ('fix_now', 'defer_with_owner', 'investigate', 'likely_unsupported')
 REASONS = {
     'acceptance': 'A named mandatory acceptance criterion is unmet.',
@@ -55,9 +56,9 @@ def validate(value):
         raise ValueError('acceptance criterion IDs must be unique')
     owner = value.get('owner')
     followup = value.get('followup')
-    if owner is not None and (not isinstance(owner, str) or len(owner) > 120):
+    if owner is not None and (not isinstance(owner, str) or not owner.strip() or len(owner) > 120):
         raise ValueError('owner is invalid')
-    if followup is not None and (not isinstance(followup, str) or len(followup) > 300):
+    if followup is not None and (not isinstance(followup, str) or len(followup) > 300 or any(c.isspace() for c in followup) or urllib.parse.urlparse(followup).scheme != 'https' or not urllib.parse.urlparse(followup).netloc):
         raise ValueError('followup is invalid')
     return value
 
@@ -136,8 +137,14 @@ def recommend(value, config, call=provider_call):
             choice, reason_text = 'investigate', 'High-impact finding requires source-bound investigation.'
         if choice in ('defer_with_owner', 'likely_unsupported') and named_criterion:
             choice, reason_text = 'investigate', 'Provider advice conflicts with a potentially unmet acceptance criterion.'
-        if choice in ('defer_with_owner', 'likely_unsupported') and reason in ('acceptance', 'material'):
-            choice, reason_text = 'investigate', 'Provider advice conflicts with its release-defect reason.'
+        compatible_reasons = {
+            'fix_now': {'acceptance', 'material'},
+            'defer_with_owner': {'bounded_debt'},
+            'investigate': set(REASONS),
+            'likely_unsupported': {'unsupported'},
+        }
+        if reason not in compatible_reasons[choice]:
+            choice, reason_text = 'investigate', 'Provider disposition conflicts with its evidence reason.'
         if choice == 'defer_with_owner' and value['acceptance_criteria'] and criterion == 'none' and answers['criterion']['confidence'] < 0.6:
             choice, reason_text = 'investigate', 'Provider is uncertain whether a mandatory acceptance criterion is unmet.'
         if choice == 'defer_with_owner' and (not value.get('owner') or not value.get('followup')):
