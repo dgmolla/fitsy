@@ -33,6 +33,15 @@ def evaluate(raw, lens, source_sha, diff_sha256, dispositions, root):
     if not confirmed:
         return {"gate": "pass" if raw["verdict"] == "pass" else "fail",
                 "reason": "no confirmed findings", "identity": identity}
+    if any(finding.get("priority") not in ("P0", "P1", "P2", "P3") for _, finding in confirmed):
+        return failure(identity, "missing finding priority")
+    blocked = [index for index, finding in confirmed if finding["priority"] in ("P0", "P1")]
+    if blocked:
+        return failure(identity, "P0/P1 finding blocks: " + ",".join(map(str, blocked)))
+    advisory = {index for index, finding in confirmed if finding["priority"] == "P3"}
+    confirmed = [(index, finding) for index, finding in confirmed if finding["priority"] != "P3"]
+    if not confirmed:
+        return {"gate": "pass", "reason": "P3 findings are advisory; raw verdict retained", "identity": identity}
     if not dispositions:
         return failure(identity, "missing dispositions")
     try:
@@ -44,9 +53,15 @@ def evaluate(raw, lens, source_sha, diff_sha256, dispositions, root):
     if any(data.get(key) != value for key, value in identity.items()):
         return failure(identity, "stale disposition identity")
     entries = data.get("findings")
-    if not isinstance(entries, list) or len(entries) != len(confirmed):
+    if not isinstance(entries, list) or any(not isinstance(entry, dict) for entry in entries):
+        return failure(identity, "invalid dispositions")
+    indexes = [entry.get("index") for entry in entries]
+    if len(set(indexes)) != len(indexes):
+        return failure(identity, "duplicate dispositions")
+    # Preserve old source-bound P3 entries without requiring new advisory paperwork.
+    entries = [entry for entry in entries if entry.get("index") not in advisory]
+    if len(entries) != len(confirmed):
         return failure(identity, "missing or extra dispositions")
-    blocked = []
     for (index, finding), entry in zip(confirmed, entries):
         if not isinstance(entry, dict) or entry.get("index") != index or entry.get("finding_sha256") != digest(finding):
             return failure(identity, f"stale finding disposition {index}")
@@ -56,11 +71,6 @@ def evaluate(raw, lens, source_sha, diff_sha256, dispositions, root):
         impact = entry.get("impact")
         if not isinstance(impact, dict) or any(not nonempty(impact.get(k)) for k in ("user_outcome", "trigger", "scope", "evidence", "contract")):
             return failure(identity, f"incomplete impact evidence {index}")
-        if priority in ("P0", "P1"):
-            if entry.get("disposition") != "block":
-                return failure(identity, f"invalid high-impact disposition {index}")
-            blocked.append(index)
-            continue
         if entry.get("disposition") != "defer" or not nonempty(entry.get("owner")) or not nonempty(entry.get("acceptance")):
             return failure(identity, f"unowned follow-up {index}")
         tests = entry.get("required_tests")
@@ -88,9 +98,7 @@ def evaluate(raw, lens, source_sha, diff_sha256, dispositions, root):
                     or receipt.get("exit_code") != 0 or not nonempty(receipt.get("command"))
                     or not nonempty(receipt.get("finished_at"))):
                 return failure(identity, f"failed or stale required test {index}")
-    if blocked:
-        return failure(identity, "P0/P1 finding blocks: " + ",".join(map(str, blocked)))
-    return {"gate": "pass", "reason": "owned P2/P3 follow-ups with required tests", "identity": identity}
+    return {"gate": "pass", "reason": "owned P2 follow-ups with required tests; P3 advisory", "identity": identity}
 
 
 def main():

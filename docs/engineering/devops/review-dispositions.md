@@ -3,7 +3,7 @@
 The canonical lens runner keeps the independent review JSON unchanged.
 `severity` records confidence, `priority` records user impact, and `verdict` remains `fail` when any finding is `CONFIRMED`.
 `run-lens.sh` evaluates a separate disposition file before setting its effective gate result and commit status.
-A failed raw verdict can therefore remain visible when an owned P2 or P3 follow-up satisfies the gate.
+A failed raw verdict remains visible when an owned P2 follow-up satisfies the gate or its confirmed findings are P3 advisory.
 Reviewer execution failure, timeout, authentication failure or invalid output produces `verdict: "incomplete"`, `findings: []` and an `error.kind` of `execution_error` or `invalid_output`.
 An incomplete review has no product priority, cannot be disposed, is never cached and fails the gate even for an advisory lens.
 Its PR commit status is `error`, while a completed review with a blocking code finding reports `failure`.
@@ -18,13 +18,16 @@ This review gate does not replace `npm run verify`, product-flow evidence, sourc
 | P0 | Critical material impact | `block` | Fail |
 | P1 | High material impact | `block` | Fail |
 | P2 | Medium impact | `defer` with owner, acceptance and current required tests | Pass |
-| P3 | Low impact | `defer` with owner, acceptance and current required tests | Pass |
+| P3 | Low impact | Advisory, raw finding retained | Pass |
 
+The urgency rubric in `REVIEW.md` owns priority calibration across production impact, blast radius, likelihood, recovery, code quality and release relevance.
 A reviewer must explain user outcome, realistic trigger, scope, evidence and violated contract in each finding's `impact` string.
 The adjudication repeats those five facts as separate fields.
-An absent or mismatched priority, missing disposition, unowned follow-up, invalid test or stale identity fails closed.
+An absent or mismatched priority, missing P2 disposition, unowned follow-up, invalid required test or stale identity fails closed.
+Confirmed P0/P1 block without needing a disposition file, including findings from an otherwise advisory lens.
+Required tests and essential acceptance remain independent gates even when a review finding is deferred or advisory.
 A plausible P0 or P1 gets bounded investigation; if the impact is confirmed, the resulting P0 or P1 blocks.
-This first slice deliberately supports no dismissal or silent priority downgrade.
+This contract allows no automatic dismissal or silent priority downgrade.
 If evidence changes the priority, obtain a new independent verdict and record the reasoning outside the raw review.
 
 The disposition file is `.evidence/review-dispositions/<lens>.json` by default, or `<FITSY_REVIEW_DISPOSITIONS_DIR>/<lens>.json` when explicitly configured.
@@ -69,36 +72,78 @@ A version 1 file has this shape:
 A required test receipt is JSON with `id`, `source_sha`, `command`, `result: "pass"`, `exit_code: 0` and `finished_at`.
 Its path must resolve beneath this checkout's `.evidence` directory, and its bytes must match the disposition hash.
 Record an actual completed test command and its result; a receipt is an audit pointer, not permission to skip the underlying canonical gate.
-The sidecar must have exactly one entry for every confirmed raw finding, in review order, using its original finding index.
+The sidecar must have exactly one entry for every confirmed P2 finding, in review order, using its original finding index.
+Existing source-bound P3 entries may remain as history, but new P3 findings need no blocking paperwork.
 Plausible and nit findings remain comments and need no disposition.
 For a P0 or P1 entry, set `disposition: "block"` and provide the five impact fields; the gate still fails.
 
 ## Review budget
 
-The runner records new independent review executions in an append-only JSONL file at `.evidence/review-budget.jsonl` by default.
-Set `FITSY_REVIEW_BUDGET_LEDGER` to one durable candidate-specific path and retain it across local and PR review commands.
-The poller keeps a separate ledger per PR under its review home.
-A source SHA is one round, with all required lenses on that SHA sharing the round.
-A new reviewer execution stops before launch after two distinct reviewed heads or 30 minutes of measured review execution, whichever occurs first.
-Cached raw verdicts can be reevaluated without spending another round.
-Finish active checks safely at the cap and consolidate findings instead of launching broad new reviews.
+The runner allows at most 1,800 seconds of cumulative independent reviewer execution for one delivery issue across every source head, lens, provider, local invocation and PR invocation.
+There is no source-round limit.
+Successful, failed, invalid-output, interrupted and timed-out executions all consume time; a retry, rebase, changed head, worker restart or provider change does not reset history.
+A valid cached verdict spends no new reviewer time and retains its original execution provenance.
 
-A named exception is available only for a concrete P0 or P1 repair.
-Set `FITSY_REVIEW_EXCEPTION` to a JSON file with `version: 1`, `priority: "P0"` or `"P1"`, `lens`, `source_sha`, `finding`, `realistic_impact`, `evidence`, `repair`, `exit_condition`, `owner` and a positive `budget_seconds` no greater than 1800.
-The runner admits only that lens and source while the cumulative exception time remains within its budget.
-An exception does not convert the P0/P1 gate to success or waive required validation.
+Local mode uses the existing delivery issue binding; PR mode requires exactly one `Delivery-Issue: #N` field.
+Both use `~/.cache/fitsy-review/budgets/issue-N.jsonl` by default, including the poller.
+A locked binding under that budget directory ties the repository root ancestry and candidate branch name to its original issue across clones and later heads.
+Keep one delivery issue per candidate branch; changing the PR issue field cannot allocate a fresh pool.
+Read the full PR body for the unique issue field before limiting metadata in the review prompt.
+`FITSY_REVIEW_BUDGET_HOME` may select a shared durable location, but every caller for that issue must use the same location.
+The append-only ledger imports the checkout's historical `.evidence/review-budget.jsonl`, any explicit `FITSY_REVIEW_BUDGET_LEDGER` or `FITSY_REVIEW_BUDGET_IMPORT_LEDGER`, and in PR mode the historical `${FITSY_REVIEW_HOME:-$HOME/.fitsy-review}/budgets/PR_NUMBER.jsonl`.
+Those originals remain unchanged; imported events retain their original exception, adoption and closeout flags and elapsed time.
+Copies of the same events count once, while conflicting copies fail closed.
+The old exception/adoption/closeout permits do not extend the cumulative cap.
+Do not point a resumed candidate at an empty budget location or omit known prior ledgers.
+
+Before reviewer launch, a file lock atomically reserves its granted timeout plus five seconds for process closeout.
+The grant is no larger than the requested timeout or the remaining unreserved capacity.
+The adapter receives that exact deadline and records it in the verdict's execution identity.
+A completed verdict's cache key binds content, provider, model, CLI, security policy and executor definition; changing remaining time alone does not invalidate it.
+Concurrent lenses cannot each spend the same remaining capacity.
+The caller waits for reviewer termination before recording elapsed execution and releasing unused reserved time.
+An unfinished new attempt retains its full reservation; a legacy unfinished attempt with no bounded reservation refuses new execution until its actual completion is reconciled.
+Never manufacture a finish time or a pass to release capacity.
+
+Inspect and migrate history before resuming an older candidate:
+
+```sh
+python3 scripts/review/review-budget.py status \
+  --ledger "$HOME/.cache/fitsy-review/budgets/issue-N.jsonl" \
+  --import-ledger /absolute/path/to/prior/.evidence/review-budget.jsonl
+```
+
+Repeat `--import-ledger` for every known candidate ledger, including prior explicit exceptions or poller histories.
+The response reports completed, reserved and remaining seconds plus unfinished attempts.
+At exhaustion, retain the findings and evidence and stop new reviewer execution.
+Consolidate confirmed blockers and owned deferrals under the existing gate; time exhaustion is not approval, a passing review, or permission to waive required tests.
+Any later authorized policy exception must retain the complete history and name its actual remaining boundary; the runner provides no unlimited reset switch.
+
+## Jev advisory experiment
+
+[Issue #372](https://github.com/dgmolla/fitsy/issues/372) owns the review-triage experiment and remains queued after delivery work.
+It is separate from the simulator/Maestro evaluation in issue #345.
+This policy records the experiment contract only; it enables no vendor integration or transmission.
+
+A shadow evaluator may recommend `fix`, `defer`, `investigate`, or `unsupported` with evidence and uncertainty.
+`Unsupported` means the evaluator could not substantiate a claim; it does not dismiss the independent finding.
+Jev may not change the raw review, impact priority, effective gate, required tests, acceptance, or merge authority.
+A named independent adjudicator decides the correct disposition without using Jev's answer as authority.
+Compare recommendations against that adjudication, including false-dismiss recommendations on confirmed high-impact findings, overall disagreement, false blockers, actual cost and elapsed latency.
+Define the sample, high-impact cases and success thresholds before running the experiment; preserve unfavorable results and compare against the existing process.
+Any high-impact false dismissal must be investigated before considering a change in authority.
+External data sharing and any later gate integration require separate explicit authorization and independently reviewed work.
 
 ## Adoption
 
 Run `npm run verify` and applicable local lenses on the committed branch with `FITSY_REVIEW_PROVIDER` and `FITSY_REVIEW_MODEL` set to authenticated independent review settings.
 Keep the raw JSON emitted by `run-lens.sh` and the initial `gate` identity line.
-For a P2/P3 finding, record the owner, acceptance criteria and actual required-test receipts in the sidecar, then rerun the same lens.
+For a P2 finding, record the owner, acceptance criteria and actual required-test receipts in the sidecar, then rerun the same lens.
 A valid raw cache hit reuses the independent reviewer while the gate evaluates the new disposition.
-For a ready PR, run the same canonical runner in PR mode with `FITSY_GH_BIN=gh-axi` and the same candidate budget and disposition paths, then read back the exact-head statuses.
+For a ready PR, run the same canonical runner in PR mode with `FITSY_GH_BIN=gh-axi` and the same candidate budget directory and disposition paths, then read back the exact-head statuses.
 The PR comment and status description expose raw findings and the effective gate separately.
 Publish `product-flow/local` for a mobile-facing PR; a non-product PR uses the canonical not-applicable selection.
 Merge and deployment remain with the configured authority.
 
-The saved review 58 remains failed and belongs to the paused worker's commit.
-This slice does not repair that P2, launch another review for that candidate or adopt its unmerged implementation.
-The larger one-hour shipping claim requires three comparable end-to-end deliveries and is still unproven.
+Historical review findings and source-bound deferrals remain in [issue #330](https://github.com/dgmolla/fitsy/issues/330) and their original evidence.
+Changing the time policy does not turn an old failed verdict into a pass or prove a delivery-speed target.

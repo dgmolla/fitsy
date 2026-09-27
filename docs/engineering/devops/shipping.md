@@ -145,9 +145,13 @@ The implementing agent must not author its own independent review verdict.
 A matching post-PR pass should reuse the local verdict rather than duplicate the expensive review.
 A changed diff or changed review inputs invalidates that reuse.
 Every finding has a separate impact priority, and raw reviewer verdicts remain unchanged.
-The canonical runner accepts an owned, source-bound P2/P3 follow-up only through the disposition and required-test contract in [review-dispositions.md](review-dispositions.md).
+The canonical runner accepts an owned, source-bound P2 follow-up only through the disposition and required-test contract in [review-dispositions.md](review-dispositions.md).
 P0/P1 impacts, malformed dispositions, stale receipts and missing required tests remain blocking.
-New independent review execution stops after two reviewed source rounds or 30 minutes of review time for the candidate, with only the documented named P0/P1 exception.
+New independent review execution has one cumulative 30-minute budget across all candidate heads and lenses, including failed and timed-out attempts and historical exceptions.
+There is no source-round limit, no history reset, and no automatic authority beyond the cap.
+Use the shared issue-bound ledger, atomic reservations and migration procedure in [review-dispositions.md](review-dispositions.md#review-budget).
+P3 findings remain advisory; confirmed P0/P1, required tests and essential acceptance continue to block independently.
+The Jev review-triage evaluation is a later shadow experiment under issue #372, with no gate or merge authority.
 A rebase may alter the actual diff and requires checking again.
 
 Local mode does not carry the full PR body into its review context.
