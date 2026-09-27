@@ -189,7 +189,7 @@ def successful_main_runs(config, merge_sha, run_ids=None):
 
 
 def historical_verified(config, item):
-    """Existing Done cards use GitHub's linked closing PR and exact main CI."""
+    """Existing Done cards use an issue-bound merged PR and exact main CI."""
     if item.get('status') != 'Done' or not item.get('verified at'):
         return False
     number = item['content']['number']
@@ -197,8 +197,12 @@ def historical_verified(config, item):
                           '--json', 'state,closedByPullRequestsReferences'))
     if issue.get('state') != 'CLOSED':
         return False
-    for linked in issue.get('closedByPullRequestsReferences') or []:
-        pr = json.loads(gh(config, 'pr', 'view', str(linked['number']), '-R', 'dgmolla/fitsy',
+    linked_numbers = {pr['number'] for pr in issue.get('closedByPullRequestsReferences') or []}
+    search = json.loads(gh(config, 'pr', 'list', '-R', 'dgmolla/fitsy', '--state', 'merged',
+                           '--search', f'Delivery-Issue: #{number} in:body', '--limit', '100', '--json', 'number'))
+    linked_numbers.update(pr['number'] for pr in search)
+    for pr_number in linked_numbers:
+        pr = json.loads(gh(config, 'pr', 'view', str(pr_number), '-R', 'dgmolla/fitsy',
                            '--json', 'state,mergeCommit,body'))
         merge_sha = (pr.get('mergeCommit') or {}).get('oid')
         if (pr.get('state') == 'MERGED' and merge_sha and
@@ -396,6 +400,18 @@ def group_alive(pgid):
         return True
 
 
+def other_group_members(pgid, own_pid):
+    result = subprocess.run(['ps', '-axo', 'pid=,pgid=,stat='], text=True, capture_output=True,
+                            start_new_session=True)
+    if result.returncode:
+        return True
+    for line in result.stdout.splitlines():
+        fields = line.split()
+        if len(fields) >= 3 and int(fields[1]) == pgid and int(fields[0]) != own_pid and not fields[2].startswith('Z'):
+            return True
+    return False
+
+
 def make_prompt(claim):
     task = claim['input']
     return (f"Deliver Fitsy issue #{task['issue']}: {task['title']}\n\n{task['body']}\n\n"
@@ -458,7 +474,7 @@ def tick(config, state, state_path, script):
                 return {'state': 'uncertain-launch', 'issue': active['issue']}
         if active.get('pid') and active.get('pid_started') and pid_identity(active['pid']) not in (None, active['pid_started']):
             return {'state': 'uncertain-pid-reuse', 'issue': active['issue']}
-        if active.get('pid') and active.get('finished_at') and group_alive(active['pid']):
+        if active.get('pid') and active.get('finished_at') and group_alive(active.get('worker_pgid', active['pid'])):
             return {'state': 'worker-group-live', 'issue': active['issue']}
         if active.get('pid') and not active.get('finished_at'):
             observed = pid_identity(active['pid'])
@@ -466,7 +482,7 @@ def tick(config, state, state_path, script):
                 return {'state': 'running', 'issue': active['issue'], 'pid': active['pid']}
             if not active.get('pid_started'):
                 return {'state': 'uncertain-pid', 'issue': active['issue']}
-            if group_alive(active['pid']):
+            if group_alive(active.get('worker_pgid', active['pid'])):
                 return {'state': 'worker-group-live', 'issue': active['issue']}
             active['finished_at'] = utc()
             active['exit_code'] = None
@@ -636,7 +652,7 @@ def worker(config, state_path, lock_path, claim_id):
                    'FITSY_DISPATCH_ISSUE': str(claim['issue'])}
     with open(claim['prompt_path']) as prompt, open(claim['output_path'], 'a') as output:
         child = subprocess.Popen(args, stdin=prompt, stdout=output, stderr=subprocess.STDOUT, cwd=worktree,
-                                 env=environment, start_new_session=True)
+                                 env=environment)
         with lock_path.open('a') as lock:
             fcntl.flock(lock, fcntl.LOCK_EX)
             state = read_json(state_path, {})
@@ -644,6 +660,7 @@ def worker(config, state_path, lock_path, claim_id):
                 raise RuntimeError('worker claim lost after spawn')
             state['active']['pid'] = child.pid
             state['active']['pid_started'] = pid_identity(child.pid)
+            state['active']['worker_pgid'] = os.getpgrp()
             state['active']['started_at'] = utc()
             write_json(state_path, state)
         try:
@@ -652,18 +669,18 @@ def worker(config, state_path, lock_path, claim_id):
         except subprocess.TimeoutExpired:
             timed_out = True
             try:
-                os.killpg(child.pid, signal.SIGTERM)
+                child.terminate()
             except ProcessLookupError:
                 pass
             try:
                 code = child.wait(timeout=30)
             except subprocess.TimeoutExpired:
                 try:
-                    os.killpg(child.pid, signal.SIGKILL)
+                    child.kill()
                 except ProcessLookupError:
                     pass
                 code = child.wait(timeout=10)
-        remaining_group = group_alive(child.pid)
+        remaining_group = other_group_members(os.getpgrp(), os.getpid())
     with lock_path.open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         state = read_json(state_path, {})
