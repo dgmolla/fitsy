@@ -123,6 +123,10 @@ vercel env add KEY prod    # Add/update a secret
 
 ---
 
+## Agent routing
+
+Follow [model routing and delegation](docs/engineering/devops/agent-model-routing.md) for model choice, worker ownership, compact handoffs and independent review.
+
 ## Session Discipline
 
 **Commit before you leave** — every session ends with meaningful work committed, even as `wip:` on a branch. Stashes are invisible to future sessions and cause lost work; never rely on them. **Check for prior work first** — at session start, check `git status` (the SessionStart hook surfaces it) before starting new work.
