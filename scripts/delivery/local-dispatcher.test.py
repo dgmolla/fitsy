@@ -320,6 +320,24 @@ class DispatcherProcessTest(unittest.TestCase):
         worker.wait(timeout=3)
         self.assertIn('dispatch-hold', self.board_data()['items'][0]['labels'])
 
+    def test_expired_stopped_worker_without_receipt_releases_lane(self):
+        self.set_board([item(385, status='In flight'), item(351)])
+        worker = subprocess.Popen(['sleep', '0.1'], start_new_session=True)
+        started = run('ps', '-p', str(worker.pid), '-o', 'lstart=').stdout.strip()
+        worker.wait(timeout=2)
+        config = json.loads(self.config.read_text())
+        config['worker_timeout_seconds'] = 1
+        self.config.write_text(json.dumps(config))
+        state = {'version': 1, 'active': {'id': 'expired-stopped', 'issue': 385, 'stage': 'running',
+                 'pid': worker.pid, 'pid_started': started, 'worker_pgid': worker.pid,
+                 'started_at': '2026-09-27T00:00:00Z', 'claimed_at': '2026-09-27T00:00:00Z',
+                 'ready_at': '2026-09-27T00:00:00Z'}, 'readiness': {},
+                 'classifications': {}, 'parked': {}, 'history': []}
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.assertEqual(self.tick()['issue'], 351)
+        self.assertTrue(self.state_data()['history'][0]['timed_out'])
+        self.assertIn('dispatch-hold', self.board_data()['items'][0]['labels'])
+
     def test_uncertain_group_reconciles_after_all_members_stop(self):
         self.set_board([item(385, status='In flight'), item(351)])
         child = subprocess.Popen(['sleep', '0.2'], start_new_session=True)

@@ -566,7 +566,8 @@ def tick(config, state, state_path, script):
                        datetime.fromisoformat(started.replace('Z', '+00:00')).timestamp() + timeout)
             if expired:
                 pgid = active.get('worker_pgid', active['pid'])
-                if not group_owned(active, pgid) or not stop_owned_group(pgid, os.getpid()):
+                if other_group_members(pgid, os.getpid()) and (
+                        not group_owned(active, pgid) or not stop_owned_group(pgid, os.getpid())):
                     return {'state': 'worker-group-live', 'issue': active['issue']}
                 active['timed_out'] = True
                 active['stage'] = 'finished'
