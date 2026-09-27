@@ -2,6 +2,7 @@ import importlib.util
 import json
 from pathlib import Path
 import tempfile
+import time
 import unittest
 from datetime import datetime, timezone
 
@@ -31,6 +32,24 @@ class Slack:
 
 
 class LocalReportTest(unittest.TestCase):
+    def test_authenticated_sender_retries_short_shared_limiter_backoff(self):
+        class LimitedSlack:
+            calls = 0
+
+            def call(self, method):
+                self.calls += 1
+                self.assert_method = method
+                if self.calls == 1:
+                    error = RuntimeError('backoff')
+                    error.retry_at = time.time() + 0.01
+                    raise error
+                return {'ok': True, 'user_id': 'U_BOT'}
+
+        slack = LimitedSlack()
+        self.assertEqual(reporter.authenticated_sender(slack), 'U_BOT')
+        self.assertEqual(slack.calls, 2)
+        self.assertEqual(slack.assert_method, 'auth.test')
+
     def test_history_pagination_and_legacy_marker_prevent_a_second_post(self):
         class PagedSlack(Slack):
             def call(self, method, params=None, payload=None):
@@ -84,7 +103,7 @@ class LocalReportTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             state = Path(temp)
             start = epoch('2026-09-27T03:30:00Z')
-            config = {'activated_at': start, 'channel': 'C123', 'publisher_user': 'U123'}
+            config = {'activated_at': start, 'channel': 'C123', 'user': 'U123'}
             slack = PagedSlack()
             generate = lambda _runtime, _state, slot, _roots: f'fitsy-slot:{slot}'
             reporter.run_once(config, state, slack, start + 120, generate)
@@ -114,7 +133,7 @@ class LocalReportTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             state = Path(temp)
             start = epoch('2026-09-27T03:30:00Z')
-            config = {'activated_at': start, 'channel': 'C123', 'publisher_user': 'U123'}
+            config = {'activated_at': start, 'channel': 'C123', 'user': 'U123'}
             slack = UncertainSlack()
             generate = lambda _runtime, _state, slot, _roots: f'fitsy-slot:{slot}'
             for offset in (120, 180, 240):
@@ -133,7 +152,7 @@ class LocalReportTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             state = Path(temp)
             start = epoch('2026-09-27T03:30:00Z')
-            config = {'activated_at': start, 'channel': 'C123', 'publisher_user': 'U123'}
+            config = {'activated_at': start, 'channel': 'C123', 'user': 'U123'}
             slack = UncertainSlack()
             generate = lambda _runtime, _state, slot, _roots: f'fitsy-slot:{slot}'
             reporter.run_once(config, state, slack, start + 120, generate)
@@ -162,7 +181,7 @@ class LocalReportTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             state = Path(temp)
             start = epoch('2026-09-27T03:30:00Z')
-            config = {'activated_at': start, 'channel': 'C123', 'publisher_user': 'U123'}
+            config = {'activated_at': start, 'channel': 'C123', 'user': 'U123'}
             slack = CrashSlack()
             generate = lambda _runtime, _state, slot, _roots: f'fitsy-slot:{slot}'
             reporter.run_once(config, state, slack, start + 120, generate)
@@ -189,7 +208,7 @@ class LocalReportTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             state = Path(temp)
             start = epoch('2026-09-27T03:30:00Z')
-            config = {'activated_at': start, 'channel': 'C123', 'publisher_user': 'U123'}
+            config = {'activated_at': start, 'channel': 'C123', 'user': 'U123'}
             calls = []
             def generate(_runtime, _state, slot, _roots):
                 calls.append(slot)
@@ -213,7 +232,7 @@ class LocalReportTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             state = Path(temp)
             start = epoch('2026-09-27T03:30:00Z')
-            config = {'activated_at': start, 'channel': 'C123', 'publisher_user': 'U123'}
+            config = {'activated_at': start, 'channel': 'C123', 'user': 'U123'}
             calls = []
             def generate(_runtime, _state, slot, _roots):
                 calls.append(slot)

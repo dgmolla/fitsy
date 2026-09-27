@@ -104,8 +104,8 @@ test('disposable install launches with distinct recipient and sender, then prese
     assert.equal(readFileSync(env.TEST_LAUNCH_STATUS, 'utf8'), '0',
       readFileSync(env.TEST_LAUNCH_LOG, 'utf8'));
     const config = JSON.parse(readFileSync(join(state, 'config.json'), 'utf8'));
-    assert.equal(config.publisher_user, 'U_BOT');
-    assert.notEqual(config.publisher_user, 'U_RECIPIENT');
+    assert.equal(config.user, 'U_BOT');
+    assert.equal(config.recipient_user, 'U_RECIPIENT');
     const receipt = join(state, 'slots', '2026-09-27T03-30.json');
     writeFileSync(receipt, JSON.stringify({ state: 'pending', post_intent: true }) + '\n');
     const again = install();
@@ -124,13 +124,47 @@ test('reinstall migrates recovered sender state without changing activation, roo
     assert.equal(install().status, 0);
     const configPath = join(state, 'config.json');
     const original = JSON.parse(readFileSync(configPath, 'utf8'));
-    const { publisher_user, ...rest } = original;
-    writeFileSync(configPath, JSON.stringify({ ...rest, user: publisher_user }) + '\n');
+    const { recipient_user: _recipient_user, ...legacy } = original;
+    writeFileSync(configPath, JSON.stringify(legacy) + '\n');
     const receipt = join(state, 'slots', '2026-09-27T03-30.json');
     writeFileSync(receipt, JSON.stringify({ state: 'delivered', ts: '123.456' }) + '\n');
     const result = install();
     assert.equal(result.status, 0, result.stderr);
     assert.deepEqual(JSON.parse(readFileSync(configPath, 'utf8')), original);
+    assert.deepEqual(JSON.parse(readFileSync(receipt, 'utf8')),
+      { state: 'delivered', ts: '123.456' });
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('upgrade corrects an empty legacy recipient state while preserving activation and roots', () => {
+  const { root, state, install } = fixture();
+  try {
+    assert.equal(install().status, 0);
+    const configPath = join(state, 'config.json');
+    const original = JSON.parse(readFileSync(configPath, 'utf8'));
+    const { recipient_user: _recipient_user, ...legacy } = original;
+    writeFileSync(configPath, JSON.stringify({ ...legacy, user: 'U_RECIPIENT' }) + '\n');
+    const result = install();
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(JSON.parse(readFileSync(configPath, 'utf8')), original);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('ambiguous legacy recipient state with receipts is retained for reconciliation', () => {
+  const { root, state, install } = fixture();
+  try {
+    assert.equal(install().status, 0);
+    const configPath = join(state, 'config.json');
+    const original = JSON.parse(readFileSync(configPath, 'utf8'));
+    const { recipient_user: _recipient_user, ...legacy } = original;
+    const oldState = JSON.stringify({ ...legacy, user: 'U_RECIPIENT' }) + '\n';
+    writeFileSync(configPath, oldState);
+    const receipt = join(state, 'slots', '2026-09-27T03-30.json');
+    writeFileSync(receipt, JSON.stringify({ state: 'delivered', ts: '123.456' }) + '\n');
+    const result = install();
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /Slack publisher identity changed/);
+    assert.equal(readFileSync(configPath, 'utf8'), oldState);
     assert.deepEqual(JSON.parse(readFileSync(receipt, 'utf8')),
       { state: 'delivered', ts: '123.456' });
   } finally { rmSync(root, { recursive: true, force: true }); }
@@ -142,6 +176,8 @@ test('token sender drift refuses reinstall and runtime launch without changing e
     assert.equal(install().status, 0);
     const configPath = join(state, 'config.json');
     const before = readFileSync(configPath, 'utf8');
+    const runtime = join(state, 'runtime/local-report.py');
+    writeFileSync(runtime, 'prior reviewed runtime\n');
     const receipt = join(state, 'slots', '2026-09-27T03-30.json');
     writeFileSync(receipt, JSON.stringify({ state: 'pending', post_intent: true }) + '\n');
     env.TEST_SENDER = 'U_OTHER_BOT';
@@ -149,8 +185,10 @@ test('token sender drift refuses reinstall and runtime launch without changing e
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /Slack publisher identity changed/);
     assert.equal(readFileSync(configPath, 'utf8'), before);
+    assert.equal(readFileSync(runtime, 'utf8'), 'prior reviewed runtime\n');
     assert.deepEqual(JSON.parse(readFileSync(receipt, 'utf8')),
       { state: 'pending', post_intent: true });
+    copyFileSync(join(delivery, 'local-report.py'), runtime);
     const launched = spawnSync('python3', [join(state, 'runtime/local-report.py')],
       { env: { ...env, FITSY_DELIVERY_STATE: state }, encoding: 'utf8' });
     assert.notEqual(launched.status, 0);

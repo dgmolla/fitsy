@@ -79,9 +79,6 @@ if [[ "$mode" == --check ]]; then exit 0; fi
 
 mkdir -p "$state/runtime" "$state/slots" "$state/reports" "$HOME/Library/LaunchAgents"
 chmod 700 "$state" "$state/runtime" "$state/slots" "$state/reports"
-for file in hourly-report.mjs phase-report.mjs phase-events.mjs improvements.mjs local-report.py; do
-  install -m 0644 "$repo/scripts/delivery/$file" "$state/runtime/$file"
-done
 python3 - "$state" "$publisher_user" "${roots[@]}" <<'PY'
 import json
 import math
@@ -97,19 +94,27 @@ path = state / 'config.json'
 if path.exists():
     old = json.loads(path.read_text())
     activated = old['activated_at']
-    # Legacy recovered state uses `user` for the sender. Never adopt a recipient ID.
-    old_publisher = old.get('publisher_user', old.get('user'))
-    if old['channel'] != source['channel'] or old_publisher != publisher_user:
+    # Legacy installs put the recipient in `user`; recovered installs put the sender there.
+    # Only a legacy recipient without slot history may be migrated automatically.
+    old_user = old.get('user', old.get('publisher_user'))
+    legacy_recipient = ('recipient_user' not in old and old_user == source['user']
+                        and not any((state / 'slots').glob('*.json')))
+    if old['channel'] != source['channel'] or (old_user != publisher_user and not legacy_recipient):
         raise SystemExit('Slack publisher identity changed; reconcile existing receipts first')
     if old.get('timing_roots') != roots:
         raise SystemExit('timing roots changed; reconcile existing activation and receipts first')
 else:
     activated = math.ceil(time.time() / 1800) * 1800
-value = {'activated_at': activated, 'channel': source['channel'], 'publisher_user': publisher_user,
+value = {'activated_at': activated, 'channel': source['channel'], 'user': publisher_user,
+         'recipient_user': source['user'],
          'bridge_path': source['bridge_path'], 'timing_roots': roots}
 temporary = path.with_suffix('.tmp'); temporary.write_text(json.dumps(value) + '\n')
 temporary.chmod(0o600); os.replace(temporary, path)
 PY
+
+for file in hourly-report.mjs phase-report.mjs phase-events.mjs improvements.mjs local-report.py; do
+  install -m 0644 "$repo/scripts/delivery/$file" "$state/runtime/$file"
+done
 
 python_bin="$(command -v python3)"
 cat > "$plist" <<PLIST

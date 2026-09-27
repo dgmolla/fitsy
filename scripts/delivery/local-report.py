@@ -123,7 +123,7 @@ def run_once(config, state, slack, now=None, generator=generate_report):
             continue
         try:
             message = generator(runtime, state, slot, config.get('timing_roots', []))
-            receipt = post_once(slack, config['channel'], slot, message, config['publisher_user'],
+            receipt = post_once(slack, config['channel'], slot, message, config['user'],
                                 prior.get('cursor', ''), prior.get('seen', []),
                                 lambda: save(path, {'slot': slot, 'state': 'pending',
                                                     'next_attempt': now + 60, 'post_intent': True}))
@@ -162,7 +162,8 @@ def main():
         if settings.channel != config['channel']:
             raise RuntimeError('Slack channel does not match shared limiter configuration')
         slack = bridge.Slack(bridge.Store(settings))
-        if authenticated_sender(slack) != config['publisher_user']:
+        # In reporter state, `user` is the bot sender; `recipient_user` is the mention target.
+        if authenticated_sender(slack) != config['user']:
             raise RuntimeError('Slack token user does not match configured publisher')
         run_once(config, state, slack)
 
