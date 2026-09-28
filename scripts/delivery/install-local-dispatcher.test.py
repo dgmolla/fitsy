@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 import unittest
@@ -14,6 +15,7 @@ import unittest
 
 INSTALLER = Path(__file__).with_name('install-local-dispatcher.sh')
 RUNTIME = Path(__file__).with_name('local-dispatcher.py')
+RETIREMENT = Path(__file__).parents[1] / 'sim/retire_task_device.py'
 
 
 class InstallTest(unittest.TestCase):
@@ -22,10 +24,11 @@ class InstallTest(unittest.TestCase):
             base = Path(temporary)
             home, repo, tools, roots = (base / name for name in ('home', 'repo', 'bin', 'worktrees'))
             for path in (home / 'Desktop', home / 'firstmate/config', home / '.fitsy-delivery',
-                         repo / 'scripts/delivery', tools, roots):
+                         repo / 'scripts/delivery', repo / 'scripts/sim', tools, roots):
                 path.mkdir(parents=True, exist_ok=True)
             shutil.copy2(INSTALLER, repo / 'scripts/delivery/install-local-dispatcher.sh')
             shutil.copy2(RUNTIME, repo / 'scripts/delivery/local-dispatcher.py')
+            shutil.copy2(RETIREMENT, repo / 'scripts/sim/retire_task_device.py')
             (home / 'firstmate/config/slack-notifications.json').write_text(json.dumps({
                 'channel': 'CCHANNEL', 'user': 'UHUMAN', 'bridge_path': str(base / 'bridge')}))
             (home / '.fitsy-delivery/config.json').write_text(json.dumps({
@@ -50,12 +53,17 @@ class InstallTest(unittest.TestCase):
                 return result.stdout
             command('git', 'init', '-b', 'main')
             command('git', '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test',
-                    'add', 'scripts/delivery')
+                    'add', 'scripts/delivery', 'scripts/sim')
             command('git', '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test',
                     'commit', '-m', 'fixture')
             installed = command('bash', 'scripts/delivery/install-local-dispatcher.sh', '--install',
                                 '--worktree-root', str(roots))
             self.assertIn('installed_paused', installed)
+            installed_runtime = home / '.fitsy-dispatcher/runtime/local-dispatcher.py'
+            installed_helper = home / '.fitsy-dispatcher/sim/retire_task_device.py'
+            self.assertEqual(installed_helper.read_bytes(), RETIREMENT.read_bytes())
+            self.assertIn('"active": null', command(sys.executable, str(installed_runtime), 'status',
+                                                     '--config', str(home / '.fitsy-dispatcher/config.json')))
             config_path = home / '.fitsy-dispatcher/config.json'
             config = json.loads(config_path.read_text())
             self.assertFalse(config['enabled'])

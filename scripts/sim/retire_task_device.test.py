@@ -52,7 +52,8 @@ import json,os,sys,shutil
 from pathlib import Path
 udid=os.environ['FAKE_UDID']; root=Path(os.environ['FAKE_DEVICE_ROOT'])
 if sys.argv[1:3] == ['simctl','list']:
- print(json.dumps({'devices': {'iOS': [{'udid':udid,'name':os.environ.get('FAKE_DEVICE_NAME','Fitsy-Issue-412'),'state':os.environ.get('FAKE_DEVICE_STATE','Shutdown')}]}}))
+ present=(root/udid).exists()
+ print(json.dumps({'devices': {'iOS': [{'udid':udid,'name':os.environ.get('FAKE_DEVICE_NAME','Fitsy-Issue-412'),'state':os.environ.get('FAKE_DEVICE_STATE','Shutdown')}] if present else []}}))
 elif sys.argv[1:3] == ['simctl','delete']:
  shutil.rmtree(root/udid); Path(os.environ['FAKE_DELETED']).write_text(udid)
 else: raise SystemExit(2)
@@ -81,6 +82,22 @@ else: raise SystemExit(2)
         raw = result['attachments'][0]
         self.assertEqual(Path(raw['archive']).read_bytes(), b'raw evidence')
         self.assertEqual(raw['sha256'], retirement.digest(Path(raw['archive'])))
+        self.assertTrue((self.archive / self.udid / 'retired.json').exists())
+        self.assertEqual(self.retire()['deletionOutcome'], 'simctl delete returned successfully')
+
+    def test_interrupted_delete_reconciles_verified_archive(self):
+        original = retirement.command
+        def interrupted(*args):
+            result = original(*args)
+            if args[:3] == ('xcrun', 'simctl', 'delete'):
+                raise KeyboardInterrupt('process exited after delete')
+            return result
+        with mock.patch.object(retirement, 'command', side_effect=interrupted):
+            with self.assertRaises(KeyboardInterrupt):
+                self.retire()
+        self.assertFalse((self.archive / self.udid / 'retired.json').exists())
+        result = self.retire()
+        self.assertEqual(result['deletionOutcome'], 'observed absent after durable intent')
         self.assertTrue((self.archive / self.udid / 'retired.json').exists())
 
     def test_active_claim_and_unverified_receipt_hold_device(self):

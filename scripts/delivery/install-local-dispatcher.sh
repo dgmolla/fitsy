@@ -148,9 +148,10 @@ PY
 
 if [[ "$mode" == --check ]]; then exit 0; fi
 if [[ "$mode" == --install ]]; then
-  mkdir -p "$state/runtime" "$state/credentials" "$HOME/Library/LaunchAgents"
-  chmod 700 "$state" "$state/runtime" "$state/credentials"
+  mkdir -p "$state/runtime" "$state/sim" "$state/credentials" "$HOME/Library/LaunchAgents"
+  chmod 700 "$state" "$state/runtime" "$state/sim" "$state/credentials"
   install -m 0700 "$repo/scripts/delivery/local-dispatcher.py" "$state/runtime/local-dispatcher.py"
+  install -m 0700 "$repo/scripts/sim/retire_task_device.py" "$state/sim/retire_task_device.py"
   python_bin="$(command -v python3)"
   cat > "$plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

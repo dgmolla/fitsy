@@ -529,7 +529,12 @@ def retire_verified_simulator(config, state, state_path):
     if state.get('active'):
         return
     verified = state.get('verified') or {}
-    for issue_text, identity in sorted(verified.items(), key=lambda entry: int(entry[0])):
+    ordered = sorted(verified.items(), key=lambda entry: int(entry[0]))
+    cursor = state.get('simulator_retirement_cursor')
+    if cursor in [number for number, _ in ordered]:
+        index = next(index for index, (number, _) in enumerate(ordered) if number == cursor)
+        ordered = ordered[index + 1:] + ordered[:index + 1]
+    for issue_text, identity in ordered:
         issue = int(issue_text)
         claim_id = identity.get('id', '')
         if identity.get('issue') != issue or not re.fullmatch(r'[0-9a-f-]{36}', claim_id):
@@ -566,6 +571,7 @@ def retire_verified_simulator(config, state, state_path):
             state.setdefault('simulator_retirement', {})[str(udid)] = {
                 'status': 'absent' if str(error) == 'device is absent' else 'held',
                 'issue': issue, 'reason': str(error)[:300], 'attemptedAt': utc()}
+        state['simulator_retirement_cursor'] = issue_text
         write_json(state_path, state)
         return
 

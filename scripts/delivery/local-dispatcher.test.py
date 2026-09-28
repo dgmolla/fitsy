@@ -171,7 +171,7 @@ class DispatcherProcessTest(unittest.TestCase):
         return log.read_text().splitlines() if log.exists() else []
 
     def test_manual_successor_verified_claim_retires_only_its_receipt_device(self):
-        claim_id = 'claim1234-0000-0000-0000-000000000000'
+        claim_id = '12345678-1234-1234-1234-123456789abc'
         worktree = self.worktrees / f'fitsy-issue-412-{claim_id[:8]}'
         build = worktree / '.evidence/product-build'
         build.mkdir(parents=True)
@@ -202,6 +202,33 @@ class DispatcherProcessTest(unittest.TestCase):
         with mock.patch.object(dispatcher, 'retire_task_device') as retire:
             dispatcher.retire_verified_simulator(config, state, path)
             retire.assert_not_called()
+
+    def test_held_older_device_does_not_starve_later_verified_device(self):
+        state = {'active': None, 'verified': {}, 'history': []}
+        udids = ('9EC11FCA-B224-4380-A91D-235ED2BBF7C4',
+                 'CE4397A7-AB61-4099-B843-51D38DA417D9')
+        for issue, udid in zip((412, 413), udids):
+            claim_id = f'{issue:08x}-1234-1234-1234-123456789abc'
+            branch = f'issue-{issue}'
+            worktree = self.worktrees / f'fitsy-issue-{issue}-{claim_id[:8]}'
+            build = worktree / '.evidence/product-build'
+            build.mkdir(parents=True)
+            (build / 'receipt.json').write_text(json.dumps({'simulator': udid}))
+            state['verified'][str(issue)] = {'id': claim_id, 'issue': issue, 'branch': branch}
+            state['history'].append({'terminal': 'verified', 'id': claim_id, 'issue': issue,
+                                     'branch': branch, 'worktree': str(worktree)})
+        config = json.loads(self.config.read_text())
+        path = self.state / 'state.json'
+        def attempt(**kwargs):
+            if kwargs['issue'] == 412:
+                raise ValueError('device is booted')
+            return {'freeBeforeBytes': 100, 'freeAfterBytes': 200}
+        with mock.patch.object(dispatcher, 'retire_task_device', side_effect=attempt) as retire:
+            dispatcher.retire_verified_simulator(config, state, path)
+            self.assertEqual(state['simulator_retirement'][udids[0]]['status'], 'held')
+            dispatcher.retire_verified_simulator(config, state, path)
+            self.assertEqual(state['simulator_retirement'][udids[1]]['status'], 'retired')
+            self.assertEqual([call.kwargs['issue'] for call in retire.call_args_list], [412, 413])
 
     def test_idle_ready_pickup_race_and_next_dependency(self):
         self.set_board([item(385), item(351, dependencies='#385')])
