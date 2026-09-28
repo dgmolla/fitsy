@@ -89,7 +89,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   domain-check:
-    name: Single-domain PR check
+    name: Single-domain PR check # Preserve the required status context while reporting cross-layer scope.
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -98,20 +98,20 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
       - run: git fetch origin main
-      - name: Enforce single-domain PR
+      - name: Report PR domains
         id: check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         # bash-only check; exit 2 = skipped (no diff), which must not fail the job
         run: bash scripts/verify/domain-check.sh || { c=$?; [ "$c" -eq 2 ] || exit 1; }
-      - name: Comment on failure
+      - name: Comment on classification failure
         if: failure()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh pr comment ${{ github.event.pull_request.number }} \
-            --body "**domain-check**: this PR touches multiple domains. PRs must be scoped to a single domain (routing: \`scripts/route-reviewers.sh\`). Please split." || true
+            --body "**domain-check** could not resolve the PR head, comparison history, or reviewed routing table. Restore that context and rerun the check." || true
 
   test:
     needs: classify

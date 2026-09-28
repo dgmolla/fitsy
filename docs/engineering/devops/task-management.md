@@ -30,6 +30,16 @@ flowchart LR
 
 Search for an existing issue before creating one.
 Each independently testable deliverable records its outcome, acceptance criteria, priority, dependencies, owning role, execution owner, and applicable release surface.
+State the expected user outcome, acceptance evidence, non-goals, one execution owner, and actual blocking dependencies in the issue and PR.
+Separate preferred scheduling order from a dependency that truly prevents independent acceptance.
+Keep coupled API, mobile, and shared-code changes together when their contract is still evolving or neither layer delivers a useful accepted outcome alone.
+Split a larger change only when each slice is independently useful, testable, and safe to ship; line count, file count, and layer boundaries are review signals rather than split rules.
+If a compatible API addition ships before its UI, define the stable interface and verify a small end-to-end contract before starting the dependent slice.
+For example, a new trial step and its changing API response belong to one outcome when neither is useful alone.
+An additive, backward-compatible API capability may ship before its screen when the API has its own acceptance evidence and the screen depends on that stable contract.
+Repair a missing prerequisite in its owning open PR; after that PR ships, use a bounded follow-up with an explicit dependency.
+Do not create a new issue for each review comment or minor adjustment within the accepted outcome.
+Keep required end-to-end checks and risk review across every affected surface.
 Use the real GitHub issue number in branch and PR references.
 Link related PRs, Actions runs, deployment receipts, and source-bound follow-up issues rather than copying raw logs or credentials into the project.
 Apply existing PR scope and review rules from [shipping.md](shipping.md); this contract adds no approval or review gate.

@@ -14,7 +14,7 @@
 | `review` | every open PR, tiered | `com.fitsy.review-poller` LaunchAgent (every 3 min, Max subscription): correctness on medium/high tiers; + `danger-zone` on tier-high paths (`scripts/verify/risk-tiers.yml`); + `harness-audit` on the `incident` label; + `workflow-security` on CI/CD paths; + `test-quality` on test files; `docs-sanity` (comment-only) on tier-low. Statuses post as `lens/<name>`. |
 | `shadow-checks` | `own-code-mocks`, `mutation`, `mobile-e2e`, `dev-drift`, `api-e2e` | `blocking: shadow` in `scripts/verify/registry.yml`; promotion = a PR flipping the field after two clean weeks. |
 | `harden-on-incident` | required | `harness-audit` lens blocks incident-labeled PRs missing fix + detector + constraint + eval case + `Layer:` attribution. |
-| `size-gate` | 600 changed lines | `size-check` (T8); `override-size` label escapes with written justification, logged as a Layer-10 input. |
+| `size-gate` | 600 changed lines | `size-check` reports a review-size signal; scope is judged by coherent outcome and acceptance rather than a hard line cap. |
 | `mutation-break` | 50 (baseline 59.0%, 2026-09-07) | `stryker.config.mjs` `thresholds.break`; ratchet +5/month while green (rollout step 10). |
 | `human-override` | `override-check` label | Logged and reviewed on the Monday scoreboard. |
 

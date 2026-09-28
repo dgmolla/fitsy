@@ -62,7 +62,7 @@ checks:
     layer: 1
     blocking: true
     runs: [ci]
-    why: T8 - PRs over 600 changed lines (excluding lockfiles/migrations/snapshots) are unreviewable; override-size label escapes with justification.
+    why: Report counted review size; a coherent outcome has no arbitrary line cap.
 
   - name: actionlint
     script: actionlint.sh
@@ -77,7 +77,7 @@ checks:
     blocking: true
     standalone: true   # runs only via --only=domain-check (its own CI job with PR context)
     runs: [ci]
-    why: Single-domain PRs (route-reviewers.sh). Moved from reviewer.yml 2026-09-07.
+    why: Report routed domains without rejecting a coherent cross-layer outcome; unresolved comparison still fails.
 
   - name: context-freshness
     script: context-freshness.sh

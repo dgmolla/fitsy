@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# Single-domain PR enforcement via scripts/route-reviewers.sh (main's copy, so
-# PR branches never need a rebase to pick up routing fixes). Moved from
-# reviewer.yml. Runs on the PR diff (PR_NUMBER env) or origin/main...HEAD.
+# Report the domains in a PR without splitting a coherent outcome by layer.
+# Use the reviewed routing table and fail closed when comparison is unavailable.
 set -uo pipefail
-REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$REPO_ROOT"
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$REPO_ROOT" || exit 1
 fail_context() {
   printf '{"name":"domain-check","status":"fail","summary":"Unable to resolve PR files and head","fix":"fetch the comparison history and retry with GitHub access"}\n'
   exit 1
@@ -34,7 +33,7 @@ UNIQUE="$(echo "$RESULT" | tr -d '[]"' | tr ',' '\n' | sed '/^$/d' | sort -u | t
 COUNT="$(echo "$UNIQUE" | wc -w | xargs)"
 echo "domains: $UNIQUE" >&2
 if [ "$COUNT" -gt 1 ]; then
-  printf '{"name":"domain-check","status":"fail","summary":"PR touches %s domains: %s","fix":"split into per-domain PRs (routing table: scripts/route-reviewers.sh)"}\n' "$COUNT" "$UNIQUE"
-  exit 1
+  printf '{"name":"domain-check","status":"pass","summary":"PR touches %s domains: %s","fix":"Confirm one coherent outcome, one owner, and acceptance evidence across the changed layers"}\n' "$COUNT" "$UNIQUE"
+  exit 0
 fi
 printf '{"name":"domain-check","status":"pass","summary":"single domain: %s","fix":""}\n' "$UNIQUE"

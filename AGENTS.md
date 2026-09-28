@@ -119,7 +119,10 @@ vercel env add KEY prod    # Add/update a secret
 - **API calls**: All external API calls go through service wrappers in `apps/api/services/`
 - **Docs structure**: `docs/` children are domains (product, engineering, design, gtm); subdirs are grandchildren. Superseded/historical docs live in each domain's `archive/`. Index + conventions: `docs/README.md`.
 - **Diagrams**: Every spec and design doc must include at least one Mermaid diagram (```mermaid block) of the primary flow/architecture. GitHub and Obsidian render it natively.
-- **Single-domain ownership**: Each agent only modifies files it owns (its `.claude/agents/<role>.md` "You Own"). Needed change in another domain → file a ticket for that domain, don't make it yourself. One `#role` tag per card; one reviewer per PR (CI fails multi-domain PRs).
+- **Outcome ownership**: One execution owner coordinates each coherent issue and PR, including API and mobile changes when their contract evolves together.
+  Assign clear file ownership to collaborating agents, and involve the relevant domain owner or reviewer for changed behavior.
+  The domain and size checks report review scope; they do not require a layer split or impose a hard line cap.
+  Keep required product, security, and acceptance checks for every affected surface.
 
 ---
 
