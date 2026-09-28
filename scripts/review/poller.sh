@@ -29,13 +29,13 @@ while read -r NUM SHA; do
   DANGER=0; WORKFLOW=0
   while IFS= read -r FILE; do
     case "$FILE" in
-      REVIEW.md|.claude/lenses/*|docs/engineering/devops/shipping.md) WORKFLOW=1; continue ;;
+      REVIEW.md|.claude/lenses/*|.github/workflows/*|docs/engineering/devops/shipping.md) WORKFLOW=1; continue ;;
     esac
     case "$FILE" in
       ''|docs/*|proj-mgmt/*|*.md|*.mdx|*.test.*|*.spec.*|*.fixture.*|*/__mocks__/*|apps/mobile/e2e/*) continue ;;
     esac
     case "$FILE" in
-      apps/api/lib/auth*|apps/api/lib/subscription*|apps/api/services/auth*|apps/api/services/revenuecat*|apps/api/app/api/auth/*|apps/api/app/api/revenuecat/*|apps/api/app/api/subscriptions/*|apps/api/app/api/restaurants/route.ts|apps/api/app/api/restaurants/*/menu/route.ts|apps/api/app/api/user/route.ts|apps/mobile/app/auth/*|apps/mobile/app/welcome/payment*|apps/mobile/components/*Auth*|apps/mobile/components/*Paywall*|apps/mobile/components/*Payment*|apps/mobile/lib/*Auth*|apps/mobile/lib/*Purchas*|apps/mobile/lib/*paywall*|apps/mobile/lib/*purchase*|prisma/schema.prisma|prisma/migrations/*) DANGER=1 ;;
+      apps/api/lib/auth*|apps/api/lib/subscription*|apps/api/services/auth*|apps/api/services/revenuecat*|apps/api/app/api/auth/*|apps/api/app/api/revenuecat/*|apps/api/app/api/subscriptions/*|apps/api/app/api/restaurants/route.ts|apps/api/app/api/restaurants/*/menu/route.ts|apps/api/app/api/user/route.ts|apps/mobile/app/auth/*|apps/mobile/app/welcome/payment*|apps/mobile/app/welcome/resubscribe.tsx|apps/mobile/components/*Auth*|apps/mobile/components/*Paywall*|apps/mobile/components/*Payment*|apps/mobile/lib/*Auth*|apps/mobile/lib/auth*|apps/mobile/lib/*Entitle*|apps/mobile/lib/entitle*|apps/mobile/lib/*Purchas*|apps/mobile/lib/*Paywall*|apps/mobile/lib/*paywall*|apps/mobile/lib/*purchase*|prisma/schema.prisma|prisma/migrations/*) DANGER=1 ;;
     esac
     case "$FILE" in
       .github/workflows/*|scripts/delivery/*|scripts/deploy/*|scripts/review/*.sh|scripts/review/*.py|scripts/review/*.mjs|scripts/review/*.jq|scripts/verify/*.sh|scripts/verify/*.mjs|scripts/verify/registry.yml|scripts/verify/risk-tiers.yml|scripts/sim/publish-product-flow.mjs|vercel.json|apps/mobile/eas.json|apps/mobile/app.config.ts) WORKFLOW=1 ;;
