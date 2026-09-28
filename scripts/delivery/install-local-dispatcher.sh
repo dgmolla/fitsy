@@ -87,18 +87,22 @@ if mode == 'install':
     codex = shutil.which('codex')
     if not previous and not codex:
         raise SystemExit('Codex CLI missing for default profile')
-    secret_source = Path.home() / 'Desktop/secrets.env'
-    if not secret_source.is_file() or secret_source.stat().st_uid != os.getuid():
-        raise SystemExit('authorized Jev source file unavailable')
-    matches = []
-    for line in secret_source.read_text().splitlines():
-        match = re.fullmatch(r'\s*(?:export\s+)?jev\s*=\s*(["\']?)([^"\']+)\1\s*', line)
-        if match:
-            matches.append(match.group(2))
-    if len(matches) != 1:
-        raise SystemExit('expected one lowercase jev credential')
+    jev_enabled = previous.get('jev_enabled', False) if previous else False
+    if not isinstance(jev_enabled, bool):
+        raise SystemExit('jev_enabled must be a boolean')
     key_file = state / 'credentials/jev.env'
-    save(key_file, 'jev=' + matches[0] + '\n')
+    if jev_enabled:
+        secret_source = Path.home() / 'Desktop/secrets.env'
+        if not secret_source.is_file() or secret_source.stat().st_uid != os.getuid():
+            raise SystemExit('authorized Jev source file unavailable')
+        matches = []
+        for line in secret_source.read_text().splitlines():
+            match = re.fullmatch(r'\s*(?:export\s+)?jev\s*=\s*(["\']?)([^"\']+)\1\s*', line)
+            if match:
+                matches.append(match.group(2))
+        if len(matches) != 1:
+            raise SystemExit('expected one lowercase jev credential')
+        save(key_file, 'jev=' + matches[0] + '\n')
     notification = json.loads((Path.home() / 'firstmate/config/slack-notifications.json').read_text())
     publisher = json.loads((Path.home() / '.fitsy-delivery/config.json').read_text())
     if notification['channel'] != publisher['channel'] or notification['bridge_path'] != publisher['bridge_path']:
@@ -113,10 +117,12 @@ if mode == 'install':
                           'gh_bin': shutil.which('gh'), 'git_bin': shutil.which('git'),
                           'profiles': profiles, 'review': {'provider': 'codex', 'model': 'gpt-6-sol', 'effort': 'high'},
                           'min_free_bytes': 8 * 1024**3, 'worker_timeout_seconds': 90 * 60}
-    config.update({'enabled': False, 'source_sha': head, 'jev_key_file': str(key_file),
+    config.update({'enabled': False, 'source_sha': head, 'jev_enabled': jev_enabled,
+                   'jev_key_file': str(key_file) if jev_enabled else None,
                    'repo_root': str(repo), 'worktree_root': str(root), 'slack': slack})
     save(config_path, json.dumps(config, sort_keys=True) + '\n')
-    print(json.dumps({'installed_paused': True, 'credential_private': key_file.stat().st_mode & 0o077 == 0,
+    print(json.dumps({'installed_paused': True, 'jev_enabled': jev_enabled,
+                      'credential_private': key_file.stat().st_mode & 0o077 == 0 if jev_enabled else None,
                       'worker_provider': config['profiles']['standard']['provider']}))
 if mode in ('enable', 'pause'):
     if not config_path.is_file():
@@ -142,7 +148,7 @@ PY
 
 if [[ "$mode" == --check ]]; then exit 0; fi
 if [[ "$mode" == --install ]]; then
-  mkdir -p "$state/runtime" "$HOME/Library/LaunchAgents"
+  mkdir -p "$state/runtime" "$state/credentials" "$HOME/Library/LaunchAgents"
   chmod 700 "$state" "$state/runtime" "$state/credentials"
   install -m 0700 "$repo/scripts/delivery/local-dispatcher.py" "$state/runtime/local-dispatcher.py"
   python_bin="$(command -v python3)"

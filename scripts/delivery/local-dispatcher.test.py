@@ -535,7 +535,8 @@ class DispatcherProcessTest(unittest.TestCase):
                       'task_type': {'choice': 'bugfix', 'confidence': .99, 'accepted': True},
                       'risk': {'choice': 'medium', 'confidence': .32, 'accepted': False},
                       'profile': {'choice': 'deep', 'confidence': .62, 'accepted': True}}}
-        config = json.loads(self.config.read_text()); state = {'classifications': {}}
+        config = json.loads(self.config.read_text()); config['jev_enabled'] = True
+        state = {'classifications': {}}
         with mock.patch.object(dispatcher, 'jev', return_value=result):
             digest, classified = dispatcher.classify(config, state, board_item)
         self.assertEqual(classified['planning_risk'], 'unknown')
@@ -544,6 +545,23 @@ class DispatcherProcessTest(unittest.TestCase):
         self.assertEqual(classified['answers']['risk']['confidence'], .32)
         with mock.patch.object(dispatcher, 'jev', side_effect=AssertionError('cache miss')):
             self.assertEqual(dispatcher.classify(config, state, board_item)[0], digest)
+
+    def test_jev_disabled_uses_deterministic_profile_without_provider_call(self):
+        board_item = item(385)
+        config = json.loads(self.config.read_text())
+        state = {'classifications': {}}
+        with mock.patch.object(dispatcher, 'jev', side_effect=AssertionError('provider called')):
+            digest, classified = dispatcher.classify(config, state, board_item)
+            self.assertEqual(dispatcher.classify(config, state, board_item)[0], digest)
+        self.assertEqual(classified['source'], 'deterministic')
+        self.assertEqual(classified['profile'], 'standard')
+        self.assertEqual(classified['planning_risk'], 'unknown')
+        self.assertIsNone(classified['model_requested'])
+        config['jev_enabled'] = True
+        with mock.patch.object(dispatcher, 'jev', side_effect=RuntimeError('offline')):
+            opt_in_digest, fallback = dispatcher.classify(config, state, board_item)
+        self.assertNotEqual(digest, opt_in_digest)
+        self.assertEqual(fallback['source'], 'deterministic-fallback')
 
     def test_blocker_alert_has_single_confirmed_receipt(self):
         calls = []

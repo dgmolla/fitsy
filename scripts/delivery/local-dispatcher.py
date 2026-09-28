@@ -364,12 +364,21 @@ def jev(value, key_path, endpoint='https://api.typesafe.ai/v1/systemone'):
 
 def classify(config, state, item):
     value = bounded_input(item)
-    digest = hashlib.sha256(json.dumps({'version': PROMPT_VERSION, 'model': JEV_MODEL,
+    enabled = config.get('jev_enabled', False)
+    digest = hashlib.sha256(json.dumps({'version': PROMPT_VERSION, 'jev_enabled': enabled,
+                                       'model': JEV_MODEL if enabled else None,
                                        'profiles': config['profiles'], 'value': value}, sort_keys=True).encode()).hexdigest()
     cached = state.setdefault('classifications', {}).get(digest)
     if cached:
         return digest, cached
     floor = risk_floor(value)
+    if not enabled:
+        result = {'source': 'deterministic', 'reason': 'jev-disabled',
+                  'model_requested': None, 'model_returned': None, 'latency_ms': 0,
+                  'task_type': 'implementation', 'planning_risk': 'unknown' if floor == 'low' else floor,
+                  'floor': floor, 'profile': 'deep' if floor == 'high' else 'standard'}
+        state['classifications'][digest] = result
+        return digest, result
     started = time.monotonic()
     try:
         result = jev(value, config.get('jev_key_file'), config.get('jev_endpoint', 'https://api.typesafe.ai/v1/systemone'))
@@ -813,6 +822,8 @@ def main():
     if path.stat().st_uid != os.getuid() or path.stat().st_mode & 0o077:
         raise RuntimeError('dispatcher config must be owned and private')
     config = json.loads(path.read_text())
+    if not isinstance(config.get('jev_enabled', False), bool):
+        raise RuntimeError('jev_enabled must be a boolean')
     for name in ('standard', 'deep'):
         profile = config.get('profiles', {}).get(name)
         if not isinstance(profile, dict) or profile.get('provider') not in ('codex', 'claude') or not isinstance(profile.get('model'), str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}', profile['model']):

@@ -26,7 +26,6 @@ class InstallTest(unittest.TestCase):
                 path.mkdir(parents=True, exist_ok=True)
             shutil.copy2(INSTALLER, repo / 'scripts/delivery/install-local-dispatcher.sh')
             shutil.copy2(RUNTIME, repo / 'scripts/delivery/local-dispatcher.py')
-            (home / 'Desktop/secrets.env').write_text('jev=fixture-only-not-a-real-key\n')
             (home / 'firstmate/config/slack-notifications.json').write_text(json.dumps({
                 'channel': 'CCHANNEL', 'user': 'UHUMAN', 'bridge_path': str(base / 'bridge')}))
             (home / '.fitsy-delivery/config.json').write_text(json.dumps({
@@ -60,9 +59,24 @@ class InstallTest(unittest.TestCase):
             config_path = home / '.fitsy-dispatcher/config.json'
             config = json.loads(config_path.read_text())
             self.assertFalse(config['enabled'])
+            self.assertFalse(config['jev_enabled'])
+            self.assertIsNone(config['jev_key_file'])
             self.assertEqual(config['worker_timeout_seconds'], 90 * 60)
             self.assertEqual(config['slack']['recipient'], 'UHUMAN')
+            self.assertFalse((home / '.fitsy-dispatcher/credentials/jev.env').exists())
+            (home / 'Desktop/secrets.env').write_text('jev=fixture-only-not-a-real-key\n')
+            config['jev_enabled'] = True
+            config_path.write_text(json.dumps(config))
+            command('bash', 'scripts/delivery/install-local-dispatcher.sh', '--install',
+                    '--worktree-root', str(roots))
+            opt_in = json.loads(config_path.read_text())
+            self.assertTrue(opt_in['jev_enabled'])
             self.assertEqual((home / '.fitsy-dispatcher/credentials/jev.env').stat().st_mode & 0o077, 0)
+            opt_in['jev_enabled'] = False
+            config_path.write_text(json.dumps(opt_in))
+            command('bash', 'scripts/delivery/install-local-dispatcher.sh', '--install',
+                    '--worktree-root', str(roots))
+            self.assertFalse(json.loads(config_path.read_text())['jev_enabled'])
             command('bash', 'scripts/delivery/install-local-dispatcher.sh', '--enable')
             self.assertTrue(json.loads(config_path.read_text())['enabled'])
             claude = tools / 'claude'; claude.write_text('#!/bin/sh\nexit 0\n'); claude.chmod(0o700)
