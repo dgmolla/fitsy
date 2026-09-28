@@ -99,6 +99,28 @@ class InstallTest(unittest.TestCase):
             notification_path.write_text(json.dumps(notification))
             command('bash', 'scripts/delivery/install-local-dispatcher.sh', '--enable')
             self.assertTrue(json.loads(config_path.read_text())['enabled'])
+            custom_state = home / 'custom-reporter'
+            custom_state.mkdir()
+            custom_reporter_path = custom_state / 'config.json'
+            custom_reporter_path.write_text(json.dumps(reporter))
+            reporter_path.write_text(json.dumps({**reporter, 'user': 'USTALE'}))
+            env['FITSY_DELIVERY_HOME'] = str(custom_state)
+            command('bash', 'scripts/delivery/install-local-dispatcher.sh', '--install',
+                    '--worktree-root', str(roots))
+            self.assertEqual(json.loads(config_path.read_text())['reporter_config_path'],
+                             str(custom_reporter_path.resolve()))
+            self.assertEqual(json.loads(config_path.read_text())['slack']['sender'], 'USENDER')
+            env.pop('FITSY_DELIVERY_HOME')
+            command('bash', 'scripts/delivery/install-local-dispatcher.sh', '--enable')
+            custom_reporter_path.write_text(json.dumps({**reporter, 'user': 'UOTHER'}))
+            custom_drift = subprocess.run(['bash', 'scripts/delivery/install-local-dispatcher.sh', '--enable'],
+                                          cwd=repo, env=env, text=True, capture_output=True, timeout=15)
+            self.assertNotEqual(custom_drift.returncode, 0)
+            self.assertIn('dispatcher Slack identity differs from reporter', custom_drift.stderr)
+            custom_reporter_path.write_text(json.dumps(reporter))
+            reporter_path.write_text(json.dumps(reporter))
+            command('bash', 'scripts/delivery/install-local-dispatcher.sh', '--install',
+                    '--worktree-root', str(roots))
             claude = tools / 'claude'; claude.write_text('#!/bin/sh\nexit 0\n'); claude.chmod(0o700)
             for profile in config['profiles'].values():
                 profile.update({'provider': 'claude', 'model': 'fixture-claude', 'executable': str(claude)})

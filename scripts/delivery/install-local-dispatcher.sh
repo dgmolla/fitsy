@@ -54,6 +54,8 @@ state.mkdir(parents=True, exist_ok=True, mode=0o700)
 lock = (state / 'dispatcher.lock').open('a')
 fcntl.flock(lock, fcntl.LOCK_EX)
 config_path = state / 'config.json'
+reporter_config_path = (Path(os.environ.get('FITSY_DELIVERY_HOME',
+                         str(Path.home() / '.fitsy-delivery'))).expanduser().resolve() / 'config.json')
 
 def output(*args):
     return subprocess.check_output(args, text=True).strip()
@@ -100,7 +102,7 @@ if mode == 'install':
     key_file = state / 'credentials/jev.env'
     save(key_file, 'jev=' + matches[0] + '\n')
     notification = json.loads((Path.home() / 'firstmate/config/slack-notifications.json').read_text())
-    publisher = json.loads((Path.home() / '.fitsy-delivery/config.json').read_text())
+    publisher = json.loads(reporter_config_path.read_text())
     if notification['channel'] != publisher['channel'] or notification['bridge_path'] != publisher['bridge_path']:
         raise SystemExit('shared Slack channel and bridge configuration differ')
     if not re.fullmatch(r'U[A-Z0-9]+', notification['user']) or not re.fullmatch(r'U[A-Z0-9]+', publisher['user']):
@@ -115,6 +117,7 @@ if mode == 'install':
                           'min_free_bytes': 8 * 1024**3, 'worker_timeout_seconds': 90 * 60}
     config.update({'enabled': False, 'source_sha': head, 'jev_key_file': str(key_file),
                    'repo_root': str(repo), 'worktree_root': str(root), 'slack': slack})
+    config['reporter_config_path'] = str(reporter_config_path)
     save(config_path, json.dumps(config, sort_keys=True) + '\n')
     print(json.dumps({'installed_paused': True, 'credential_private': key_file.stat().st_mode & 0o077 == 0,
                       'worker_provider': config['profiles']['standard']['provider']}))
@@ -126,7 +129,10 @@ if mode in ('enable', 'pause'):
         current = output('gh', 'api', 'repos/dgmolla/fitsy/commits/main', '--jq', '.sha')
         if config['source_sha'] != current:
             raise SystemExit('installed dispatcher runtime does not match current main')
-        publisher = json.loads((Path.home() / '.fitsy-delivery/config.json').read_text())
+        installed_reporter_path = Path(config.get('reporter_config_path', str(reporter_config_path)))
+        if 'FITSY_DELIVERY_HOME' in os.environ and installed_reporter_path != reporter_config_path:
+            raise SystemExit('reporter state directory differs from dispatcher install; reinstall dispatcher')
+        publisher = json.loads(installed_reporter_path.read_text())
         notification = json.loads((Path.home() / 'firstmate/config/slack-notifications.json').read_text())
         if notification['channel'] != publisher['channel'] or notification['bridge_path'] != publisher['bridge_path']:
             raise SystemExit('shared Slack channel or bridge differs from reporter; reinstall reporter')
