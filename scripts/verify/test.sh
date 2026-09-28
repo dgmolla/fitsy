@@ -9,6 +9,7 @@ node --test scripts/delivery/*.test.mjs >&2 || FAIL="delivery"
 PYTHONDONTWRITEBYTECODE=1 python3 scripts/delivery/local-report.test.py -q >&2 || FAIL="${FAIL:+$FAIL, }local-report"
 PYTHONDONTWRITEBYTECODE=1 python3 scripts/delivery/local-dispatcher.test.py -q >&2 || FAIL="${FAIL:+$FAIL, }local-dispatcher"
 PYTHONDONTWRITEBYTECODE=1 python3 scripts/delivery/install-local-dispatcher.test.py -q >&2 || FAIL="${FAIL:+$FAIL, }install-local-dispatcher"
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/review/advisory-finding.test.py -q >&2 || FAIL="${FAIL:+$FAIL, }advisory-finding"
 if [ -n "${POSTGRES_PRISMA_URL:-}" ]; then
   npm run test:coverage --workspace=apps/api -- --runInBand >&2 || FAIL="${FAIL:+$FAIL, }apps/api"
 else
