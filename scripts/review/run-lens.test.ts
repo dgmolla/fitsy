@@ -39,6 +39,10 @@ if [ "$1" = pr ] && [ "$2" = view ]; then
   esac
   exit
 fi
+if [ "$1" = issue ] && [ "$2" = view ]; then
+  if [ -f ${JSON.stringify(join(root, 'issue-fail'))} ]; then exit 1; fi
+  cat ${JSON.stringify(join(root, 'issue-body'))}; exit
+fi
 if [ "$1" = api ]; then printf '%s\\n' "$*" >> "$REVIEW_TEST_GH_CALLS"; exit; fi
 if [ "$1" = pr ] && [ "$2" = comment ]; then printf '%s\\n' "$*" >> "$REVIEW_TEST_GH_CALLS"; exit; fi
 exit 1
@@ -71,10 +75,13 @@ beforeEach(() => {
   writeFileSync(join(root, "REVIEW.md"), "Review rules\n");
   writeFileSync(join(root, ".claude/lenses/correctness.md"), "Review correctness.\n");
   writeFileSync(join(root, "app.ts"), "export const value = 1;\n");
+  writeFileSync(join(root, "issue-body"), "Goal: Preserve the required release behavior.\nStatus: In flight\n<details>\nAcceptance: changed behavior is verified.\n</details>\n");
+  writeFileSync(join(root, "bin/gh"), `#!/bin/sh\nif [ "$1" = issue ] && [ "$2" = view ]; then\n  if [ -f ${JSON.stringify(join(root, 'issue-fail'))} ]; then exit 1; fi\n  cat ${JSON.stringify(join(root, 'issue-body'))}; exit\nfi\nexit 1\n`, { mode: 0o755 });
   const cli = `#!/usr/bin/env python3
 import json,os,pathlib,sys,time
 if '--version' in sys.argv:
  print('fixture-cli 1.0'); sys.exit(0)
+pathlib.Path(${JSON.stringify(join(root, 'prompt'))}).write_text(sys.stdin.read())
 with open(${JSON.stringify(calls)},'a') as f: f.write('called\\n')
 pathlib.Path(${JSON.stringify(join(root, 'reviewer-pid'))}).write_text(str(os.getpid()))
 delay=pathlib.Path(${JSON.stringify(join(root, 'delay'))})
@@ -119,6 +126,31 @@ test("local caller runs independent CLI, records identity, and reuses only match
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(1);
   expect(run("different-model").status).toBe(0);
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(2);
+});
+test("bound acceptance reaches reviewer and changes only when its substance changes", () => {
+  expect(run().status).toBe(0);
+  expect(readFileSync(join(root, "prompt"), "utf8")).toContain("Acceptance: changed behavior is verified.");
+  writeFileSync(join(root, "issue-body"), "Goal: Preserve the required release behavior.\nStatus: Done\n<details>\nAcceptance: changed behavior is verified.\n</details>\n");
+  expect(run().status).toBe(0);
+  expect(runPr().status).toBe(0);
+  expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(1);
+  writeFileSync(join(root, "issue-body"), "Goal: Preserve the required release behavior.\nStatus: Done\n<details>\nAcceptance: changed behavior also handles retries.\n</details>\n");
+  expect(run().status).toBe(0);
+  expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(2);
+  writeFileSync(join(root, "issue-body"), `Goal: Preserve the required release behavior.\n${"Background context. ".repeat(400)}\n<details>\nAcceptance: later requirement must be seen.\nStatus: required release state must persist.\n</details>\n`);
+  expect(run().status).toBe(0);
+  expect(readFileSync(join(root, "prompt"), "utf8")).toContain("Acceptance: later requirement must be seen.");
+  expect(readFileSync(join(root, "prompt"), "utf8")).toContain("Status: required release state must persist.");
+});
+test("issue fetch failure cannot reuse or publish a review without acceptance", () => {
+  expect(run().status).toBe(0);
+  writeFileSync(join(root, "issue-fail"), "1");
+  const local = run();
+  expect(local.status).toBe(1);
+  expect(local.stderr).toContain("bound issue brief unavailable");
+  const pr = runPr();
+  expect(pr.status).toBe(1);
+  expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(1);
 });
 test("nonzero external execution cannot publish or cache a partial pass", () => {
   writeFileSync(join(root, "exit"), "1");
