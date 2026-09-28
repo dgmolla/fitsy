@@ -18,6 +18,10 @@ flowchart LR
 Inspect active worktrees and compare changes against each branch's merge base before integrating overlapping work.
 Do not change another agent's checkout or force-push its branch.
 Keep dependency chains explicit and rebase the dependent branch after its prerequisite lands.
+Define one accepted user outcome per PR, with acceptance evidence, non-goals, and one execution owner.
+An API and mobile change may ship in one PR when their contract evolves together; split only independently useful and safe outcomes.
+Distinguish actual blockers from preferred order, and verify a backward-compatible interface with a small end-to-end contract check before shipping an API-first sequence.
+The domain and 600-line checks report scope for review; neither imposes an automatic split or replaces affected product and security gates.
 Use a fresh checkout for integration/deployment when the primary checkout is occupied.
 Do not use a feature-branch mobile publication as a substitute for integrating the intended release commit.
 
@@ -170,6 +174,7 @@ Use additional review only for a concrete uncovered risk or an explicit user req
 ## PR, integration, and deployment
 
 Open the PR with scope, intent, actual verification results, relevant evidence paths, and remaining limits.
+State the coherent outcome, acceptance evidence, non-goals, owner, and blocking dependencies.
 Use `--body-file` for multiline CLI PR bodies.
 Include `Spec:` or the incident reference where applicable.
 Check the current PR head, its CI, and required lens statuses before merging; an earlier commit's green result is insufficient.

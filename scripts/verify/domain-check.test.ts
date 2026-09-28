@@ -30,13 +30,22 @@ test('the real domain gate accepts a frontend fix that retires only its own exce
   const result = check();
   expect(result.status).toBe(0); expect(JSON.parse(result.stdout).summary).toBe('single domain: frontend');
 });
-test.each(['addition', 'unrelated removal', 'file deletion'])('the real gate retains infrastructure review for %s', scenario => {
+test.each(['addition', 'unrelated removal', 'file deletion'])('the real gate reports infrastructure ownership for %s', scenario => {
   write(mobile, 'changed screen');
   if (scenario === 'addition') write(allowlist, readFileSync(join(directory, allowlist), 'utf8') + 'long-file apps/mobile/app/new.tsx\n');
   if (scenario === 'unrelated removal') { write(allowlist, ''); write(mobile, 'old screen'); write('apps/mobile/app/other.tsx', 'different screen'); }
   if (scenario === 'file deletion') rmSync(join(directory, allowlist));
   commit(); const result = check();
-  expect(result.status).toBe(1); expect(JSON.parse(result.stdout).summary).toContain('cto frontend');
+  expect(result.status).toBe(0); expect(JSON.parse(result.stdout).summary).toContain('cto frontend');
+});
+test('a coherent API and mobile change reports both domains without a layer split', () => {
+  mkdirSync(join(directory, 'apps/api/app'), { recursive: true });
+  write('apps/api/app/route.ts', 'new API contract');
+  write(mobile, 'new UI for API contract');
+  commit();
+  const result = check();
+  expect(result.status).toBe(0);
+  expect(JSON.parse(result.stdout)).toMatchObject({ status: 'pass', summary: 'PR touches 2 domains: backend frontend' });
 });
 test('an allowlist-only cleanup retains its infrastructure owner', () => {
   write(allowlist, ''); commit(); const result = check();
@@ -61,13 +70,13 @@ test.each(['addition', 'cleanup', 'unavailable', 'missing history'])('PR mode us
   writeFileSync(join(bin, 'gh'), program, { mode: 0o755 });
   const head = scenario === 'addition' ? remoteHead : scenario === 'cleanup' ? git('rev-parse', 'HEAD') : scenario === 'missing history' ? 'a'.repeat(40) : '';
   const result = check({ PR_NUMBER: '1', FIXTURE_PR_HEAD: head, PATH: bin + ':' + fixtureEnv.PATH });
-  expect(result.status).toBe(scenario === 'cleanup' ? 0 : 1);
+  expect(result.status).toBe(['addition', 'cleanup'].includes(scenario) ? 0 : 1);
   expect(JSON.parse(result.stdout).summary).toBe(scenario === 'cleanup' ? 'single domain: frontend' : scenario === 'addition' ? 'PR touches 2 domains: cto frontend' : 'Unable to resolve PR files and head');
 });
 test('unrecognized exception categories keep infrastructure ownership', () => {
   write(allowlist, `future-rule ${mobile}\n`); commit(); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
   write(mobile, 'changed screen'); write(allowlist, ''); commit();
-  const result = check(); expect(result.status).toBe(1); expect(JSON.parse(result.stdout).summary).toContain('cto frontend');
+  const result = check(); expect(result.status).toBe(0); expect(JSON.parse(result.stdout).summary).toContain('cto frontend');
 });
 
 test('a PR beyond the API file page still checks every changed domain', () => {
@@ -79,7 +88,7 @@ test('a PR beyond the API file page still checks every changed domain', () => {
   const program = `#!/usr/bin/env node\nprocess.stdout.write(${JSON.stringify(head)} + (process.argv.includes('headRefOid,files') ? '\\n' + ${JSON.stringify(truncated)} : ''));\n`;
   writeFileSync(join(bin, 'gh'), program, { mode: 0o755 });
   const result = check({ PR_NUMBER: '1', PATH: bin + ':' + fixtureEnv.PATH });
-  expect(result.status).toBe(1); expect(JSON.parse(result.stdout).summary).toBe('PR touches 2 domains: cto frontend');
+  expect(result.status).toBe(0); expect(JSON.parse(result.stdout).summary).toBe('PR touches 2 domains: cto frontend');
 });
 
 test('changed routing uses the reviewed commit instead of a different local checkout', () => {
@@ -90,5 +99,5 @@ test('changed routing uses the reviewed commit instead of a different local chec
   const bin = join(directory, 'bin'); mkdirSync(bin);
   writeFileSync(join(bin, 'gh'), `#!/usr/bin/env node\nprocess.stdout.write(${JSON.stringify(head)});\n`, { mode: 0o755 });
   const result = check({ PR_NUMBER: '1', PATH: bin + ':' + fixtureEnv.PATH });
-  expect(result.status).toBe(1); expect(JSON.parse(result.stdout).summary).toBe('PR touches 2 domains: cto frontend');
+  expect(result.status).toBe(0); expect(JSON.parse(result.stdout).summary).toBe('PR touches 2 domains: cto frontend');
 });

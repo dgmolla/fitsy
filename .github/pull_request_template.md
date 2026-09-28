@@ -1,10 +1,10 @@
 ## Summary
 
-<!-- What does this PR do? -->
+<!-- One coherent user outcome, execution owner, blocking dependencies (or none), and non-goals. -->
 
 ## Test plan
 
-<!-- How was this tested? -->
+<!-- Acceptance evidence for every affected layer, including a contract check when an API ships before its UI. -->
 
 ## Local product-flow evidence
 
