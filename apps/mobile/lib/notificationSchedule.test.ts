@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { planReminders, REMINDER_PREFIX } from './notificationPlan';
 import { readReminderPreferences, readScheduledReminders, saveReminderPreferences, replaceReminders, reconcileReminderOwnership, reminderDestination, REMINDER_CHANNEL } from './notificationSchedule';
+import { clearDevTrialReminder, scheduleDevTrialReminder } from './devTrialReminderProbe';
 
 jest.mock('@react-native-async-storage/async-storage', () => ({ __esModule: true, default: { getItem: jest.fn(), setItem: jest.fn() } }));
 jest.mock('expo-notifications', () => ({
@@ -73,6 +74,27 @@ test('a seven-day trial creates exactly one native day-six request on a fixed cl
     await replaceReminders('one', []);
     expect(pending.size).toBe(0);
   } finally { jest.useRealTimers(); }
+});
+test('development device probe uses the native bridge once, clears it, and cannot run in production', async () => {
+  const prior = Object.getOwnPropertyDescriptor(globalThis, '__DEV__');
+  Object.defineProperty(globalThis, '__DEV__', { value: true, configurable: true });
+  try {
+    const now = new Date(2026, 8, 28, 4);
+    const first = await scheduleDevTrialReminder('one', now);
+    expect(first).toEqual({ count: 1, identifier: expect.stringMatching(/^fitsy\.reminder\.trial\./), scheduledFor: expect.any(String) });
+    expect(new Date(first.scheduledFor!).getHours()).toBe(9);
+    expect(pending.size).toBe(1);
+    expect(await scheduleDevTrialReminder('one', now)).toEqual(first);
+    expect(pending.size).toBe(1);
+    expect(await clearDevTrialReminder('one')).toEqual({ count: 0, identifier: null, scheduledFor: null });
+    expect(pending.size).toBe(0);
+    Object.defineProperty(globalThis, '__DEV__', { value: false, configurable: true });
+    await expect(scheduleDevTrialReminder('one', now)).rejects.toThrow('Development sign-in required');
+    expect(sdk.scheduleNotificationAsync).toHaveBeenCalledTimes(2);
+  } finally {
+    if (prior) Object.defineProperty(globalThis, '__DEV__', prior);
+    else Reflect.deleteProperty(globalThis, '__DEV__');
+  }
 });
 test('an opt-out queued during a native schedule removes that late request', async () => {
   let release!: () => void; let started!: () => void;
