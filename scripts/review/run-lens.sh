@@ -57,7 +57,13 @@ fi
 ISSUE_BRIEF="$(printf '%s' "$ISSUE_BRIEF" | python3 -c '
 import re,sys
 lines=sys.stdin.read().splitlines()
-print("\n".join(line for line in lines if not re.match(r"^\s*(?:\*\*)?(?:Status|Next|Done|Blocker)(?:\*\*)?\s*:",line,re.I))[:6000])
+in_details=False
+kept=[]
+for line in lines:
+    if re.match(r"^\s*<details(?:\s|>)",line,re.I): in_details=True
+    if not in_details and re.match(r"^\s*(?:\*\*)?(?:Status|Next|Done|Blocker)(?:\*\*)?\s*:",line,re.I): continue
+    kept.append(line)
+print("\n".join(kept))
 ')"
 [ -n "$ISSUE_BRIEF" ] || { echo '[run-lens] bound issue brief is empty; review cannot verify release acceptance' >&2; exit 1; }
 BUDGET_HOME="${FITSY_REVIEW_BUDGET_HOME:-$HOME/.cache/fitsy-review/budgets}"
