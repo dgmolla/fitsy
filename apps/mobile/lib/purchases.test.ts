@@ -1,4 +1,4 @@
-import { Linking } from 'react-native';
+import { Linking, Platform } from 'react-native';
 import Purchases, { type CustomerInfo } from 'react-native-purchases';
 import { PAYWALL_RESULT } from 'react-native-purchases-ui';
 import {
@@ -145,7 +145,8 @@ describe('mapPaywallResult', () => {
 });
 
 describe('showManageSubscriptions', () => {
-  afterEach(() => jest.restoreAllMocks());
+  const initialPlatform = Platform.OS;
+  afterEach(() => { Platform.OS = initialPlatform; jest.restoreAllMocks(); });
 
   it('opens the native sheet when the SDK supports it', async () => {
     const native = jest.spyOn(Purchases, 'showManageSubscriptions').mockResolvedValue(undefined);
@@ -161,5 +162,14 @@ describe('showManageSubscriptions', () => {
     const url = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
     await showManageSubscriptions();
     expect(url).toHaveBeenCalledWith(MANAGE_SUBSCRIPTIONS_URL);
+  });
+
+  it('opens Google Play subscriptions on Android without calling the iOS-only sheet', async () => {
+    Platform.OS = 'android';
+    const native = jest.spyOn(Purchases, 'showManageSubscriptions');
+    const url = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    await showManageSubscriptions();
+    expect(native).not.toHaveBeenCalled();
+    expect(url).toHaveBeenCalledWith('https://play.google.com/store/account/subscriptions');
   });
 });
