@@ -7,7 +7,7 @@ jest.mock('posthog-react-native', () => {
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
 jest.mock('expo-notifications', () => ({ getPermissionsAsync: jest.fn().mockImplementation(() => new Promise(() => {})) }));
 import React from 'react';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { PaywallView } from './PaywallView';
@@ -46,6 +46,27 @@ test('granted permission remains conditional until a native request is scheduled
   await waitFor(() => expect(Notifications.getPermissionsAsync).toHaveBeenCalled());
   expect(screen.getByText('Day 6: optional reminder')).toBeTruthy();
   expect(screen.getByText(/Check settings for the scheduled time/)).toBeTruthy();
+});
+
+test('a stale denied response cannot replace a newer granted permission', async () => {
+  let first!: (value: Notifications.NotificationPermissionsStatus) => void;
+  let second!: (value: Notifications.NotificationPermissionsStatus) => void;
+  jest.mocked(Notifications.getPermissionsAsync)
+    .mockImplementationOnce(() => new Promise(resolve => { first = resolve; }))
+    .mockImplementationOnce(() => new Promise(resolve => { second = resolve; }));
+  let onAppState!: (state: 'active') => void;
+  const listener = jest.spyOn(AppState, 'addEventListener').mockImplementation((_, callback) => {
+    onAppState = callback as typeof onAppState;
+    return { remove: jest.fn() } as never;
+  });
+  try {
+    const screen = render(<PaywallTimeline terms={annual} />);
+    act(() => onAppState('active'));
+    await act(async () => second({ status: 'granted' } as Notifications.NotificationPermissionsStatus));
+    await act(async () => first({ status: 'denied' } as Notifications.NotificationPermissionsStatus));
+    expect(screen.getByText('Day 6: optional reminder')).toBeTruthy();
+    expect(screen.queryByText('Reminders are off')).toBeNull();
+  } finally { listener.mockRestore(); }
 });
 
 test('browser timeline does not promise a notification for an eligible trial', () => {

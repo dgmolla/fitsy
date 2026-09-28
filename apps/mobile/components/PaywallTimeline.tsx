@@ -15,10 +15,16 @@ export function PaywallTimeline({ terms, compact = false }: { terms: Terms; comp
   useEffect(() => {
     if (inBrowser || !canRemind) return;
     let live = true;
-    const refresh = () => { void Notifications.getPermissionsAsync().then(value => { if (live) setPermission(value.status); }).catch(() => { if (live) setPermission('undetermined'); }); };
+    let request = 0;
+    const refresh = () => {
+      const latest = ++request;
+      void Notifications.getPermissionsAsync()
+        .then(value => { if (live && latest === request) setPermission(value.status); })
+        .catch(() => { if (live && latest === request) setPermission('undetermined'); });
+    };
     refresh();
     const listener = AppState.addEventListener('change', state => { if (state === 'active') refresh(); });
-    return () => { live = false; listener.remove(); };
+    return () => { live = false; listener?.remove(); };
   }, [inBrowser, canRemind]);
   const rows = terms?.trial ? [
     { icon: 'lock-open-outline' as const, title: 'Day 1: access starts', body: 'Unlock meals that fit your goals, full menus and saved favorites.' },
