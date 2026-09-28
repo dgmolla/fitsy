@@ -10,7 +10,10 @@ import { showManageSubscriptions } from '@/lib/purchases';
 
 export default function NotificationSettingsScreen() {
   const { userId, preferences, scheduled, save } = useReminders();
-  const { entitled } = usePurchases();
+  const { entitled, customerInfo } = usePurchases();
+  const trial = customerInfo?.entitlements.all.pro;
+  const trialEnd = trial?.isActive && trial.periodType === 'TRIAL' && trial.expirationDate && Number.isFinite(Date.parse(trial.expirationDate))
+    ? new Date(trial.expirationDate).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : null;
   const [permission, setPermission] = useState<string>();
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -41,11 +44,12 @@ export default function NotificationSettingsScreen() {
     </View>
     {userId && (!preferences.meals || !preferences.trial) && <Pressable style={s.action} disabled={busy} onPress={() => { void enable(); }} accessibilityRole="button" testID="reminders-enable"><Text style={s.link}>{busy ? 'Asking…' : 'Remind me'}</Text></Pressable>}
     {userId && entitled !== true && <Text style={s.body}>Reminders start with your active Fitsy subscription.</Text>}
+    {trialEnd && <Text style={s.body} testID="reminder-trial-end">Trial {trial?.willRenew ? 'renews' : 'ends'}: {trialEnd}</Text>}
     <Text style={s.title}>Upcoming reminders</Text>
     {!scheduled.length && <Text style={s.body} testID="reminders-empty">No upcoming reminders</Text>}
     {(['meal', 'trial'] as const).map(kind => {
       const next = scheduled.find(item => item.kind === kind);
-      return next ? <Text key={kind} style={s.body} testID={`reminder-next-${kind}`}>{kind === 'meal' ? 'Meal inspiration' : 'Trial renewal'}: {new Date(next.date).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</Text> : null;
+      return next ? <Text key={kind} style={s.body} testID={`reminder-next-${kind}`}>{kind === 'meal' ? 'Meal inspiration' : 'Trial renewal'}: {new Date(next.date).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</Text> : null;
     })}
     <Pressable style={s.action} onPress={() => { void showManageSubscriptions(); }} accessibilityRole="button" testID="reminders-manage-subscription"><Text style={s.link}>Manage subscription</Text></Pressable>
   </ScrollView></SafeAreaView>;

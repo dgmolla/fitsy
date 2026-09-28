@@ -25,11 +25,11 @@ test('timeline derives trial end and reminder day from the selected store offer'
   const screen = render(<PaywallTimeline terms={annual} />);
   expect(screen.getByText('Day 1: access starts')).toBeTruthy();
   expect(screen.getByText('Day 6: optional reminder')).toBeTruthy();
-  expect(screen.getByText('Day 7: payment')).toBeTruthy();
-  expect(screen.getByText(/Requires notification permission and a confirmed trial end date/)).toBeTruthy();
+  expect(screen.getByText('Day 7 ends: payment')).toBeTruthy();
+  expect(screen.getByText(/Trial days are full 24-hour periods from purchase/)).toBeTruthy();
   screen.rerender(<PaywallTimeline terms={purchaseTerms({ ...product, introPrice: { ...product.introPrice, period: 'P2W' } }, true)} />);
   expect(screen.getByText('Day 13: optional reminder')).toBeTruthy();
-  expect(screen.getByText('Day 14: payment')).toBeTruthy();
+  expect(screen.getByText('Day 14 ends: payment')).toBeTruthy();
 });
 
 test('denied permission gives a concise disabled state instead of promising delivery', async () => {
@@ -45,7 +45,7 @@ test('granted permission remains conditional until a native request is scheduled
   const screen = render(<PaywallTimeline terms={annual} />);
   await waitFor(() => expect(Notifications.getPermissionsAsync).toHaveBeenCalled());
   expect(screen.getByText('Day 6: optional reminder')).toBeTruthy();
-  expect(screen.getByText(/Check settings for the scheduled time/)).toBeTruthy();
+  expect(screen.getByText(/check settings for the exact time/)).toBeTruthy();
 });
 
 test('a stale denied response cannot replace a newer granted permission', async () => {
@@ -77,7 +77,7 @@ test('browser timeline does not promise a notification for an eligible trial', (
     expect(screen.getByText('Reminder unavailable in this browser')).toBeTruthy();
     expect(screen.getByText('Trial notifications require the Fitsy mobile app.')).toBeTruthy();
     expect(screen.queryByText('Day 6: optional reminder')).toBeNull();
-    expect(screen.getByText('Day 7: payment')).toBeTruthy();
+    expect(screen.getByText('Day 7 ends: payment')).toBeTruthy();
   } finally { Platform.OS = originalOS; }
 });
 
@@ -104,7 +104,7 @@ test('the selected short trial has a truthful reminder step, even after a longer
   expect(screen.getByText('Day 6: optional reminder')).toBeTruthy();
   screen.rerender(<PaywallView {...p} plan="monthly" />);
   expect(screen.getByText('Reminder unavailable for this trial')).toBeTruthy();
-  expect(screen.getByText('Day 2: payment')).toBeTruthy();
+  expect(screen.getByText('Day 2 ends: payment')).toBeTruthy();
   expect(screen.queryByText('Day 6: optional reminder')).toBeNull();
   expect(screen.getByTestId('paywall-terms').props.children).toContain('2 days free');
   screen.rerender(<PaywallView {...p} plan="yearly" />);
