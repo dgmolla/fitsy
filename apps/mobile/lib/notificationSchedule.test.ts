@@ -56,6 +56,24 @@ test('permission denial cancels prior reminders and never prompts or schedules',
   await replaceReminders('one', plan());
   expect(pending.size).toBe(0); expect(sdk.scheduleNotificationAsync).not.toHaveBeenCalled();
 });
+test('a seven-day trial creates exactly one native day-six request on a fixed clock', async () => {
+  jest.useFakeTimers().setSystemTime(new Date(2026, 8, 7, 9));
+  try {
+    const expiration = new Date(2026, 8, 14, 12);
+    const trial = planReminders({ now: new Date(), userId: 'one', entitled: true,
+      preferences: { meals: false, trial: true },
+      subscription: { isActive: true, periodType: 'TRIAL', willRenew: true,
+        latestPurchaseDate: new Date(2026, 8, 7, 9).toISOString(), expirationDate: expiration.toISOString() } });
+    await replaceReminders('one', trial);
+    await replaceReminders('one', trial);
+    expect(pending.size).toBe(1);
+    expect(await readScheduledReminders('one')).toEqual([{ kind: 'trial', date: trial[0].date.toISOString() }]);
+    expect(trial[0].date.getTime()).toBeLessThan(expiration.getTime() - 24 * 3_600_000);
+    expect(sdk.scheduleNotificationAsync.mock.calls.at(-1)?.[0].trigger).toMatchObject({ type: 'date', date: trial[0].date });
+    await replaceReminders('one', []);
+    expect(pending.size).toBe(0);
+  } finally { jest.useRealTimers(); }
+});
 test('an opt-out queued during a native schedule removes that late request', async () => {
   let release!: () => void; let started!: () => void;
   const entered = new Promise<void>(resolve => { started = resolve; });

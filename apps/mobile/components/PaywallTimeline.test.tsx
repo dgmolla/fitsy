@@ -5,9 +5,11 @@ jest.mock('posthog-react-native', () => {
   return jest.fn().mockImplementation(() => ({ capture() {}, identify() {} }));
 });
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
+jest.mock('expo-notifications', () => ({ getPermissionsAsync: jest.fn().mockImplementation(() => new Promise(() => {})) }));
 import React from 'react';
 import { Platform } from 'react-native';
-import { fireEvent, render } from '@testing-library/react-native';
+import * as Notifications from 'expo-notifications';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { PaywallView } from './PaywallView';
 import { PaywallTimeline } from './PaywallTimeline';
 import { purchaseTerms } from '../lib/purchaseTerms';
@@ -21,12 +23,29 @@ function props() { return { annual, monthly, plan: 'yearly' as const, discovery:
 
 test('timeline derives trial end and reminder day from the selected store offer', () => {
   const screen = render(<PaywallTimeline terms={annual} />);
-  expect(screen.getByText('Optional reminder around day 5')).toBeTruthy();
+  expect(screen.getByText('Day 1: access starts')).toBeTruthy();
+  expect(screen.getByText('Day 6: optional reminder')).toBeTruthy();
   expect(screen.getByText('Day 7: payment')).toBeTruthy();
-  expect(screen.getByText('Requires permission and a confirmed trial end date.')).toBeTruthy();
+  expect(screen.getByText(/Requires notification permission and a confirmed trial end date/)).toBeTruthy();
   screen.rerender(<PaywallTimeline terms={purchaseTerms({ ...product, introPrice: { ...product.introPrice, period: 'P2W' } }, true)} />);
-  expect(screen.getByText('Optional reminder around day 12')).toBeTruthy();
+  expect(screen.getByText('Day 13: optional reminder')).toBeTruthy();
   expect(screen.getByText('Day 14: payment')).toBeTruthy();
+});
+
+test('denied permission gives a concise disabled state instead of promising delivery', async () => {
+  jest.mocked(Notifications.getPermissionsAsync).mockResolvedValueOnce({ status: 'denied' } as Notifications.NotificationPermissionsStatus);
+  const screen = render(<PaywallTimeline terms={annual} />);
+  await waitFor(() => expect(screen.getByText('Reminders are off')).toBeTruthy());
+  expect(screen.getByText('Allow notifications in device settings to receive one.')).toBeTruthy();
+  await act(async () => { screen.unmount(); });
+});
+
+test('granted permission remains conditional until a native request is scheduled', async () => {
+  jest.mocked(Notifications.getPermissionsAsync).mockResolvedValueOnce({ status: 'granted' } as Notifications.NotificationPermissionsStatus);
+  const screen = render(<PaywallTimeline terms={annual} />);
+  await waitFor(() => expect(Notifications.getPermissionsAsync).toHaveBeenCalled());
+  expect(screen.getByText('Day 6: optional reminder')).toBeTruthy();
+  expect(screen.getByText(/Check settings for the scheduled time/)).toBeTruthy();
 });
 
 test('browser timeline does not promise a notification for an eligible trial', () => {
@@ -36,7 +55,7 @@ test('browser timeline does not promise a notification for an eligible trial', (
     const screen = render(<PaywallTimeline terms={annual} />);
     expect(screen.getByText('Reminder unavailable in this browser')).toBeTruthy();
     expect(screen.getByText('Trial notifications require the Fitsy mobile app.')).toBeTruthy();
-    expect(screen.queryByText('Optional reminder around day 5')).toBeNull();
+    expect(screen.queryByText('Day 6: optional reminder')).toBeNull();
     expect(screen.getByText('Day 7: payment')).toBeTruthy();
   } finally { Platform.OS = originalOS; }
 });
@@ -61,14 +80,14 @@ test('the selected short trial has a truthful reminder step, even after a longer
   const short = purchaseTerms({ ...product, subscriptionPeriod: 'P1M', introPrice: { ...product.introPrice, period: 'P2D' } }, true);
   const p = { ...props(), monthly: short };
   const screen = render(<PaywallView {...p} />);
-  expect(screen.getByText('Optional reminder around day 5')).toBeTruthy();
+  expect(screen.getByText('Day 6: optional reminder')).toBeTruthy();
   screen.rerender(<PaywallView {...p} plan="monthly" />);
   expect(screen.getByText('Reminder unavailable for this trial')).toBeTruthy();
   expect(screen.getByText('Day 2: payment')).toBeTruthy();
-  expect(screen.queryByText('Optional reminder around day 5')).toBeNull();
+  expect(screen.queryByText('Day 6: optional reminder')).toBeNull();
   expect(screen.getByTestId('paywall-terms').props.children).toContain('2 days free');
   screen.rerender(<PaywallView {...p} plan="yearly" />);
-  expect(screen.getByText('Optional reminder around day 5')).toBeTruthy();
+  expect(screen.getByText('Day 6: optional reminder')).toBeTruthy();
 });
 
 test('plan selection, purchase, restore and decline remain operable with live totals', () => {
