@@ -39,7 +39,10 @@ if [ "$1" = pr ] && [ "$2" = view ]; then
   esac
   exit
 fi
-if [ "$1" = issue ] && [ "$2" = view ]; then cat ${JSON.stringify(join(root, 'issue-body'))}; exit; fi
+if [ "$1" = issue ] && [ "$2" = view ]; then
+  if [ -f ${JSON.stringify(join(root, 'issue-fail'))} ]; then exit 1; fi
+  cat ${JSON.stringify(join(root, 'issue-body'))}; exit
+fi
 if [ "$1" = api ]; then printf '%s\\n' "$*" >> "$REVIEW_TEST_GH_CALLS"; exit; fi
 if [ "$1" = pr ] && [ "$2" = comment ]; then printf '%s\\n' "$*" >> "$REVIEW_TEST_GH_CALLS"; exit; fi
 exit 1
@@ -73,7 +76,7 @@ beforeEach(() => {
   writeFileSync(join(root, ".claude/lenses/correctness.md"), "Review correctness.\n");
   writeFileSync(join(root, "app.ts"), "export const value = 1;\n");
   writeFileSync(join(root, "issue-body"), "Goal: Preserve the required release behavior.\nStatus: In flight\n<details>\nAcceptance: changed behavior is verified.\n</details>\n");
-  writeFileSync(join(root, "bin/gh"), `#!/bin/sh\nif [ "$1" = issue ] && [ "$2" = view ]; then cat ${JSON.stringify(join(root, 'issue-body'))}; exit; fi\nexit 1\n`, { mode: 0o755 });
+  writeFileSync(join(root, "bin/gh"), `#!/bin/sh\nif [ "$1" = issue ] && [ "$2" = view ]; then\n  if [ -f ${JSON.stringify(join(root, 'issue-fail'))} ]; then exit 1; fi\n  cat ${JSON.stringify(join(root, 'issue-body'))}; exit\nfi\nexit 1\n`, { mode: 0o755 });
   const cli = `#!/usr/bin/env python3
 import json,os,pathlib,sys,time
 if '--version' in sys.argv:
@@ -134,6 +137,16 @@ test("bound acceptance reaches reviewer and changes only when its substance chan
   writeFileSync(join(root, "issue-body"), "Goal: Preserve the required release behavior.\nStatus: Done\n<details>\nAcceptance: changed behavior also handles retries.\n</details>\n");
   expect(run().status).toBe(0);
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(2);
+});
+test("issue fetch failure cannot reuse or publish a review without acceptance", () => {
+  expect(run().status).toBe(0);
+  writeFileSync(join(root, "issue-fail"), "1");
+  const local = run();
+  expect(local.status).toBe(1);
+  expect(local.stderr).toContain("bound issue brief unavailable");
+  const pr = runPr();
+  expect(pr.status).toBe(1);
+  expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(1);
 });
 test("nonzero external execution cannot publish or cache a partial pass", () => {
   writeFileSync(join(root, "exit"), "1");

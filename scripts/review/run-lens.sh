@@ -50,13 +50,16 @@ fi
 [[ "$ISSUE" =~ ^[1-9][0-9]*$ ]] || { echo '[run-lens] timing gap: review budget requires one bound Delivery-Issue candidate' >&2; exit 1; }
 # The bound issue supplies release intent, never reviewer instructions or proof.
 # Ignore changing task status so local and PR reviews reuse the same acceptance.
-ISSUE_BRIEF="$("$GH_BIN" issue view "$ISSUE" --json body --jq .body 2>/dev/null || true)"
+if ! ISSUE_BRIEF="$("$GH_BIN" issue view "$ISSUE" --json body --jq .body 2>/dev/null)"; then
+  echo '[run-lens] bound issue brief unavailable; review cannot verify release acceptance' >&2
+  exit 1
+fi
 ISSUE_BRIEF="$(printf '%s' "$ISSUE_BRIEF" | python3 -c '
 import re,sys
 lines=sys.stdin.read().splitlines()
 print("\n".join(line for line in lines if not re.match(r"^\s*(?:\*\*)?(?:Status|Next|Done|Blocker)(?:\*\*)?\s*:",line,re.I))[:6000])
 ')"
-[ -n "$ISSUE_BRIEF" ] || echo '[run-lens] bound issue brief unavailable; reviewer must verify release acceptance independently' >&2
+[ -n "$ISSUE_BRIEF" ] || { echo '[run-lens] bound issue brief is empty; review cannot verify release acceptance' >&2; exit 1; }
 BUDGET_HOME="${FITSY_REVIEW_BUDGET_HOME:-$HOME/.cache/fitsy-review/budgets}"
 BUDGET_LEDGER="$BUDGET_HOME/issue-$ISSUE.jsonl"
 # Root commit identity is stable across local clones and remote URL spellings.
