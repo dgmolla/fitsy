@@ -21,7 +21,7 @@ test("poller retries the latest review error and leaves completed statuses alone
     writeFileSync(join(bin, "gh"), `#!/bin/sh
 if [ "$1" = pr ] && [ "$2" = list ]; then printf '7 deadbeef\\n'; exit; fi
 if [ "$1" = pr ] && [ "$2" = view ]; then
-  case "$5" in files) printf 'scripts/review/poller.sh\\n' ;; labels|body) printf '\\n' ;; esac
+  case "$5" in files) printf 'apps/mobile/components/Home.tsx\\n' ;; labels|body) printf '\\n' ;; esac
   exit
 fi
 if [ "$1" = api ]; then cat "$FITSY_REVIEW_TEST_STATUSES"; exit; fi

@@ -22,29 +22,47 @@ git fetch -q origin && git checkout -qf origin/main 2>/dev/null
 
 "$GH_BIN" pr list --state open --json number,headRefOid --limit 20 --jq '.[] | "\(.number) \(.headRefOid)"' |
 while read -r NUM SHA; do
-  # tier decides the lens: low (docs/bookkeeping) -> docs-sanity, else correctness
+  # Every change gets one correctness review, including docs, tests and specs.
+  # Specialists are reserved for changed production risk and release controls.
   FILES_FOR_TIER="$("$GH_BIN" pr view "$NUM" --json files --jq '.files[].path')"
-  TIER="$(echo "$FILES_FOR_TIER" | node scripts/review/tier.mjs)"
-  LABELS="$("$GH_BIN" pr view "$NUM" --json labels --jq '.labels[].name')"
-  BODY="$("$GH_BIN" pr view "$NUM" --json body --jq '.body // ""')"
-  if [ "$TIER" = "low" ]; then LENSES="docs-sanity"; else LENSES="correctness"; fi
-  [ "$TIER" = "high" ] && LENSES="$LENSES danger-zone"
-  # exact label match, not substring (a future "incident-followup" label must not trigger)
-  echo "$LABELS" | grep -qx incident && LENSES="$LENSES harness-audit"
-  # spec-conformance runs when the PR declares a spec
-  echo "$BODY" | grep -qiE '^spec:' && LENSES="$LENSES spec-conformance"
-  FILES="$FILES_FOR_TIER"
-  echo "$FILES" | grep -qE '^(\.github/|vercel\.json|apps/mobile/eas\.json|scripts/deploy/)' && LENSES="$LENSES workflow-security"
-  echo "$FILES" | grep -qE '\.test\.(ts|tsx)$' && LENSES="$LENSES test-quality"
-  # Only a completed verdict closes the lens. An execution error is retried on
-  # a later tick, subject to review-budget.py's cumulative time reservations.
+  LENSES="correctness"
+  DANGER=0; WORKFLOW=0
+  while IFS= read -r FILE; do
+    case "$FILE" in
+      ''|docs/*|proj-mgmt/*|*.md|*.mdx|*.test.*|*.spec.*|*.fixture.*|*/__mocks__/*|apps/mobile/e2e/*) continue ;;
+    esac
+    case "$FILE" in
+      apps/api/lib/auth*|apps/api/lib/subscription*|apps/api/services/auth*|apps/api/services/revenuecat*|apps/api/app/api/auth/*|apps/api/app/api/revenuecat/*|apps/mobile/app/auth/*|apps/mobile/app/welcome/payment*|apps/mobile/components/*Auth*|apps/mobile/components/*Paywall*|apps/mobile/components/*Payment*|apps/mobile/lib/*Auth*|apps/mobile/lib/*Purchas*|apps/mobile/lib/*paywall*|apps/mobile/lib/*purchase*|prisma/schema.prisma|prisma/migrations/*) DANGER=1 ;;
+    esac
+    case "$FILE" in
+      .github/workflows/*|scripts/deploy/*|scripts/review/*.sh|scripts/review/*.py|scripts/review/*.mjs|scripts/verify/*.sh|scripts/verify/*.mjs|scripts/sim/publish-product-flow.mjs|.claude/lenses/*|REVIEW.md|vercel.json|apps/mobile/eas.json|apps/mobile/app.config.ts) WORKFLOW=1 ;;
+    esac
+  done <<< "$FILES_FOR_TIER"
+  [ "$DANGER" = 0 ] || LENSES="$LENSES danger-zone"
+  [ "$WORKFLOW" = 0 ] || LENSES="$LENSES workflow-security"
+  # An incomplete execution gets one later retry; the raw statuses and budget
+  # history remain, and a second failure requires independent coordination.
   PENDING=""
   for L in $LENSES; do
-    STATE="$("$GH_BIN" api "repos/{owner}/{repo}/commits/$SHA/statuses" 2>/dev/null |
-      jq -r --arg lens "lens/$L" -f scripts/review/poller-status.jq 2>/dev/null || true)"
+    if ! STATUS_ROWS="$("$GH_BIN" api "repos/{owner}/{repo}/commits/$SHA/statuses?per_page=100" 2>/dev/null)"; then
+      echo "[poller] PR #$NUM: status read failed; skipping this tick"
+      PENDING=""; break
+    fi
+    if ! printf '%s' "$STATUS_ROWS" | jq -e 'type == "array"' >/dev/null 2>&1; then
+      echo "[poller] PR #$NUM: invalid status response; skipping this tick"
+      PENDING=""; break
+    fi
+    STATE="$(printf '%s' "$STATUS_ROWS" | jq -r --arg lens "lens/$L" -f scripts/review/poller-status.jq 2>/dev/null || true)"
     case "$STATE" in
       success|failure) ;;
-      *) PENDING="$PENDING $L" ;;
+      *)
+        ERRORS="$(printf '%s' "$STATUS_ROWS" | jq -r --arg lens "lens/$L" '[.[] | select(.context == $lens and .state == "error")] | length' 2>/dev/null || echo 0)"
+        if [ "$STATE" = error ] && [ "$ERRORS" -ge 2 ]; then
+          "$GH_BIN" api "repos/{owner}/{repo}/statuses/$SHA" -f state=failure -f context="lens/$L" \
+            -f description='needs-coordinator: independent review incomplete after one retry' >/dev/null || \
+            echo "[poller] PR #$NUM lens/$L: coordinator status publication failed"
+          echo "[poller] PR #$NUM lens/$L: needs-coordinator; raw incomplete attempts retained"
+        else PENDING="$PENDING $L"; fi ;;
     esac
   done
   [ -n "$PENDING" ] || continue
@@ -59,7 +77,8 @@ while read -r NUM SHA; do
   # edit its own reviewer (T12), and old branches may predate the harness.
   git checkout -q origin/main -- scripts/review scripts/delivery/phase-events.mjs scripts/verify/risk-tiers.yml REVIEW.md .claude/lenses
   for L in $PENDING; do
-    bash scripts/review/run-lens.sh "$NUM" "$L" || echo "[poller] PR #$NUM lens/$L -> fail"
+    FITSY_REVIEW_TIMEOUT_SECONDS="${FITSY_REVIEW_TIMEOUT_SECONDS:-300}" \
+      bash scripts/review/run-lens.sh "$NUM" "$L" || echo "[poller] PR #$NUM lens/$L -> fail"
   done
   # Reconcile once after all lenses, including concurrent or failed closeouts.
   TIMING_ROOT="$REPO_DIR/.evidence/review-delivery/$NUM"
