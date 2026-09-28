@@ -245,7 +245,7 @@ test('monthly-only trial routes through reminder to monthly checkout and purchas
     annual: { status: 1, description: 'Ineligible' }, monthly: { status: 2, description: 'Eligible' },
   });
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
-  await waitFor(() => expect(screen.getByText('We want you to try Fitsy for free.')).toBeTruthy());
+  await waitFor(() => expect(screen.getByText('Try Fitsy free')).toBeTruthy());
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/trial-reminder'));
   await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-skip')); });

@@ -381,7 +381,7 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
       id: welcome-continue
       enabled: true
     timeout: 15000
-- assertNotVisible: "We can notify you before your trial ends."
+- assertNotVisible: "Get a trial reminder"
 - extendedWaitUntil:
     visible:
       id: welcome-continue
