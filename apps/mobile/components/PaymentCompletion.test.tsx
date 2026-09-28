@@ -98,6 +98,33 @@ async function openPayment() {
   return screen;
 }
 
+test('development visual trial uses live price but never enters checkout or restore', async () => {
+  const alert = jest.spyOn(Alert, 'alert');
+  const screen = renderRouter(routes, { initialUrl: '/welcome/payment?devTrialVisual=1' });
+  await waitFor(() => expect(screen.getByTestId('dev-trial-visual-note')).toBeTruthy());
+  expect(screen.getByTestId('paywall-price-yearly').props.children).toBe('$59.99');
+  expect(screen.getByText('Day 7: first charge')).toBeTruthy();
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  await act(async () => { fireEvent.press(screen.getByTestId('paywall-restore')); });
+  expect(alert).toHaveBeenCalledWith('Visual preview only', expect.any(String));
+  expect(Purchases.purchasePackage).not.toHaveBeenCalled();
+  expect(Purchases.restorePurchases).not.toHaveBeenCalled();
+  expect(await AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY)).toBeNull();
+});
+
+test('development visual flag stays on the three real welcome screens', async () => {
+  const screen = renderRouter(routes, { initialUrl: '/welcome/trial?devTrialVisual=1' });
+  await waitFor(() => expect(screen.getByText('Try Fitsy free')).toBeTruthy());
+  expect(screen.getByTestId('trial-offer-note').props.children).toContain('Synthetic trial eligibility');
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/trial-reminder'));
+  expect(screen.getByTestId('trial-reminder-note').props.children).toContain('Synthetic trial eligibility');
+  await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-allow')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
+  expect(screen.getByTestId('dev-trial-visual-note')).toBeTruthy();
+  expect(Purchases.purchasePackage).not.toHaveBeenCalled();
+});
+
 test.each(['cancelled', 'no active entitlement'])('%s stays on the real paywall without recording completion', async outcome => {
   if (outcome === 'cancelled') (Purchases.purchasePackage as jest.Mock).mockRejectedValue({ userCancelled: true });
   else (Purchases.purchasePackage as jest.Mock).mockResolvedValue({ customerInfo: noSubscription });

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AppState, Platform, StyleSheet, Text } from 'react-native';
-import { Redirect, router } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { WelcomeActions } from '@/components/WelcomeActions';
@@ -8,6 +8,7 @@ import { TrialArtwork } from '@/components/TrialArtwork';
 import { useOnboardingStep } from '@/lib/onboardingResume';
 import { usePurchases } from '@/lib/usePurchases';
 import { purchaseTerms } from '@/lib/purchaseTerms';
+import { devTrialVisualOffer } from '@/lib/devTrialVisualOffer';
 import { canOfferTrialReminder } from '@/lib/notificationPlan';
 import { useRouteContinuation } from '@/lib/useRouteContinuation';
 import { supabase } from '@/lib/supabase';
@@ -19,12 +20,18 @@ import { trackOnboardingScreenView, trackReminderAction, trackNotificationPermis
   trackNotificationPrimingAllowTapped, trackNotificationPrimingShown, trackNotificationPrimingSkipTapped } from '@/lib/analytics';
 
 export default function TrialReminderScreen() {
+  const { devTrialVisual } = useLocalSearchParams<{ devTrialVisual?: string }>();
+  const visualRequested = __DEV__ && devTrialVisual === '1';
   const focused = useIsFocused();
   useOnboardingStep('trial-reminder');
   const [busy, setBusy] = useState(false);
   const [permission, setPermission] = useState<NotificationPermissionStatus | null>(null);
   const { ready, offering, introEligibility, introEligibilityReady, entitled } = usePurchases();
-  const offers = [offering?.annual, offering?.monthly].map(pkg => purchaseTerms(pkg?.product, pkg ? introEligibility[pkg.product.identifier] : undefined));
+  const visual = devTrialVisualOffer(offering, visualRequested);
+  const shownOffering = visual?.offering ?? offering;
+  const shownEligibility = visual?.eligibility ?? introEligibility;
+  const eligibilityReady = !!visual || introEligibilityReady;
+  const offers = [shownOffering?.annual, shownOffering?.monthly].map(pkg => purchaseTerms(pkg?.product, pkg ? shownEligibility[pkg.product.identifier] : undefined));
   const trialOffer = offers.find(terms => terms?.trial);
   const trial = trialOffer?.trial;
   const { begin } = useRouteContinuation();
@@ -32,7 +39,7 @@ export default function TrialReminderScreen() {
   const navigating = useRef(false);
   useEffect(() => { if (focused) navigating.current = false; }, [focused]);
   useEffect(() => { if (focused && entitled === true) router.replace('/welcome/payment'); }, [focused, entitled]);
-  useEffect(() => { if (trial) { trackOnboardingScreenView('trial-reminder'); trackNotificationPrimingShown(); } }, [trial]);
+  useEffect(() => { if (trial && !visualRequested) { trackOnboardingScreenView('trial-reminder'); trackNotificationPrimingShown(); } }, [trial, visualRequested]);
   useEffect(() => {
     if (!focused) return;
     let current = true;
@@ -47,6 +54,11 @@ export default function TrialReminderScreen() {
   }, [focused]);
   async function allow() {
     if (!trial || pending.current || navigating.current) return;
+    if (visualRequested) {
+      navigating.current = true;
+      router.push('/welcome/payment?devTrialVisual=1');
+      return;
+    }
     pending.current = true;
     const isCurrent = begin();
     setBusy(true);
@@ -83,12 +95,12 @@ export default function TrialReminderScreen() {
   function skip() {
     if (pending.current || navigating.current) return;
     navigating.current = true;
-    trackNotificationPrimingSkipTapped();
-    router.push('/welcome/payment');
+    if (!visualRequested) trackNotificationPrimingSkipTapped();
+    router.push(visualRequested ? '/welcome/payment?devTrialVisual=1' : '/welcome/payment');
   }
   if (!ready) return null;
-  if (!offering) return <Redirect href="/welcome/trial" />;
-  if (!introEligibilityReady) return null;
+  if (!shownOffering) return <Redirect href="/welcome/trial" />;
+  if (!eligibilityReady) return null;
   if (!trial) return <Redirect href="/welcome/payment" />;
   if (permission === null) return null;
   // Calendar-month trials have no fixed day count, but their confirmed end
@@ -106,7 +118,7 @@ export default function TrialReminderScreen() {
     footerContent={<WelcomeActions label={busy ? 'Asking…' : canOptIn ? 'Remind me' : 'Continue to plans'} onPress={canOptIn ? () => { void allow(); } : skip} disabled={busy}
       testID="trial-reminder-allow" secondaryLabel={canOptIn ? 'Not now' : undefined} onSecondary={canOptIn ? skip : undefined} secondaryTestID="trial-reminder-skip" />}>
     <TrialArtwork reminder />
-    <Text style={s.note}>{canOptIn ? 'We schedule it after purchase, once the store confirms your trial end date. Check settings for its exact time.' : 'Review the exact trial and renewal terms on the next screen.'}</Text>
+    <Text style={s.note} testID="trial-reminder-note">{visual ? 'Synthetic trial eligibility for visual testing. Device permission is real; this preview schedules nothing.' : canOptIn ? 'We schedule it after purchase, once the store confirms your trial end date. Check settings for its exact time.' : 'Review the exact trial and renewal terms on the next screen.'}</Text>
   </WelcomeScreen>;
 }
 const s = StyleSheet.create({

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useOnboardingStep } from '@/lib/onboardingResume';
 import { useIsFocused } from '@react-navigation/native';
 import { Alert } from 'react-native';
-import { router, useNavigation } from 'expo-router';
+import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { PaywallView } from '@/components/PaywallView';
 import { PaywallExitModals, type PaywallExitModal } from '@/components/PaywallExitModals';
 import { recordOnboardingComplete } from '@/lib/onboardingCompletion';
@@ -15,10 +15,13 @@ import { rememberPaywallDecline } from '@/lib/paywallAccess';
 import { usePaywallDiscovery } from '@/lib/usePaywallDiscovery';
 import { openPurchasedDestination, resetWelcomeJourney } from '@/lib/paywallJourney';
 import { purchaseTerms, savingPercent } from '@/lib/purchaseTerms';
+import { devTrialVisualOffer } from '@/lib/devTrialVisualOffer';
 
 type PlanId = 'monthly' | 'yearly';
 
 export default function PaymentScreen() {
+  const { devTrialVisual } = useLocalSearchParams<{ devTrialVisual?: string }>();
+  const visualRequested = __DEV__ && devTrialVisual === '1';
   useOnboardingStep('payment');
   const navigation = useNavigation();
   const focused = useIsFocused();
@@ -30,6 +33,10 @@ export default function PaymentScreen() {
   const [restoring, setRestoring] = useState(false);
   const [modal, setModal] = useState<PaywallExitModal>('none');
   const { offering, introEligibility, introEligibilityReady, refreshOffering, purchase, restore, entitled } = usePurchases();
+  const visual = devTrialVisualOffer(offering, visualRequested);
+  const shownOffering = visual?.offering ?? offering;
+  const shownEligibility = visual?.eligibility ?? introEligibility;
+  const eligibilityReady = !!visual || introEligibilityReady;
   const purchaseBusy = useRef(false);
   const settledDefaultPlan = useRef<PlanId | null>(null);
 
@@ -44,13 +51,13 @@ export default function PaymentScreen() {
     onEntitled: () => { void completeOnboarding(false); },
   });
 
-  const annualTerms = purchaseTerms(offering?.annual?.product, offering?.annual ? introEligibility[offering.annual.product.identifier] : false);
-  const monthlyTerms = purchaseTerms(offering?.monthly?.product, offering?.monthly ? introEligibility[offering.monthly.product.identifier] : false);
+  const annualTerms = purchaseTerms(shownOffering?.annual?.product, shownOffering?.annual ? shownEligibility[shownOffering.annual.product.identifier] : false);
+  const monthlyTerms = purchaseTerms(shownOffering?.monthly?.product, shownOffering?.monthly ? shownEligibility[shownOffering.monthly.product.identifier] : false);
   // Follow the trial promised earlier in onboarding unless the user has
   // explicitly chosen another available plan. Recompute when store terms or
   // eligibility change while the paywall is open.
   const defaultPlan: PlanId = monthlyTerms?.trial && !annualTerms?.trial ? 'monthly' : annualTerms ? 'yearly' : monthlyTerms ? 'monthly' : 'yearly';
-  const checkingPlans = !!offering && !introEligibilityReady;
+  const checkingPlans = !!shownOffering && !eligibilityReady;
   if (!checkingPlans) settledDefaultPlan.current = defaultPlan;
   const heldPlan = settledDefaultPlan.current;
   const automaticPlan = checkingPlans && heldPlan && (heldPlan === 'yearly' ? annualTerms : monthlyTerms) ? heldPlan : defaultPlan;
@@ -63,9 +70,9 @@ export default function PaymentScreen() {
   const discountPercent = savingPercent(offering?.annual?.product, discountedAnnual?.product);
 
   useEffect(() => {
-    trackOnboardingScreenView('payment');
+    if (!visualRequested) trackOnboardingScreenView('payment');
 
-  }, []);
+  }, [visualRequested]);
 
   // The boot-time offering fetch can fail (offline at launch, StoreKit hiccup).
   // Retry when this screen opens without one so the CTA isn't dead on arrival.
@@ -74,12 +81,12 @@ export default function PaymentScreen() {
   }, [offering, refreshOffering]);
 
   useEffect(() => {
-    if (!offering) return;
+    if (!offering || visualRequested) return;
     const key = `${offering.identifier}:${variants.access}:trial_timeline`;
     if (exposure.current === key) return;
     exposure.current = key;
     trackPaywallExperimentExposure({ offering_id: offering.identifier, access_variant: variants.access, image_variant: 'none', layout_variant: 'trial_timeline' });
-  }, [offering, variants.access]);
+  }, [offering, variants.access, visualRequested]);
 
   async function declineSubscription() {
     try {
@@ -104,6 +111,10 @@ export default function PaymentScreen() {
   // selected package directly through the RevenueCat SDK (no dashboard-designed
   // hosted paywall).
   async function handleStart(discounted = false) {
+    if (visualRequested) {
+      Alert.alert('Visual preview only', 'This synthetic trial cannot be purchased. Open the regular paywall for live Test Store plans.');
+      return;
+    }
     if (purchaseBusy.current || restoring || checkingPlans) return;
     purchaseBusy.current = true;
     setLoading(true);
@@ -138,6 +149,10 @@ export default function PaymentScreen() {
   // Apple requires a Restore Purchases path. It lives here (the paywall) rather
   // than in-app, since a reinstalled subscriber re-runs onboarding.
   async function handleRestore() {
+    if (visualRequested) {
+      Alert.alert('Visual preview only', 'Restore is unavailable in the synthetic trial preview.');
+      return;
+    }
     if (purchaseBusy.current || restoring) return;
     purchaseBusy.current = true;
     setRestoring(true);
@@ -165,6 +180,7 @@ export default function PaymentScreen() {
         loading={loading}
         restoring={restoring}
         checkingPlans={checkingPlans}
+        visualPreview={!!visual}
         onSelect={setChosenPlan}
         onBack={navigation.canGoBack() ? () => router.back() : undefined}
         onRestore={() => { void handleRestore(); }}
