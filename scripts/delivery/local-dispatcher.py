@@ -558,16 +558,23 @@ def retire_verified_simulator(config, state, state_path):
             previous = (state.get('simulator_retirement') or {}).get(udid)
             if previous and previous.get('status') in ('retired', 'absent'):
                 continue
+            def still_verified():
+                current = next((entry for entry in board(config) if
+                                entry.get('content', {}).get('number') == issue), None)
+                return bool(current and terminal_verified(config, current, identity, archived=True))
+            if not still_verified():
+                raise ValueError('issue is no longer terminal-verified')
             result = retire_task_device(
                 issue=issue, udid=udid, worktree=worktree,
                 archive_root=Path(config['state_dir']) / 'retired-simulator-evidence',
                 device_root=Path.home() / 'Library/Developer/CoreSimulator/Devices',
-                claim_file=Path.home() / '.fitsy-sim-claim.json')
+                claim_file=Path.home() / '.fitsy-sim-claim.json', confirm_verified=still_verified)
             state.setdefault('simulator_retirement', {})[udid] = {
                 'status': 'retired', 'issue': issue,
                 'receipt': str(Path(config['state_dir']) / 'retired-simulator-evidence' / udid / 'retired.json'),
                 'freeBeforeBytes': result['freeBeforeBytes'], 'freeAfterBytes': result['freeAfterBytes']}
-        except (OSError, ValueError, KeyError, subprocess.SubprocessError, json.JSONDecodeError) as error:
+        except Exception as error:
+            # Retirement is best effort; an uncertain proof must never delete or stall dispatch.
             state.setdefault('simulator_retirement', {})[str(udid)] = {
                 'status': 'absent' if str(error) == 'device is absent' else 'held',
                 'issue': issue, 'reason': str(error)[:300], 'attemptedAt': utc()}

@@ -70,6 +70,7 @@ def evidence(worktree, udid):
     receipt, report = json.loads(build.read_text()), json.loads(report_file.read_text())
     if (receipt.get('simulator') != udid or report.get('simulator') != udid or
             report.get('result') != 'pass' or report.get('appHash') != receipt.get('appHash') or
+            report.get('evidenceMode') != 'final-candidate' or not report.get('finishedAt') or
             not report.get('flows')):
         raise ValueError('build and passing product-flow identities do not match device')
     app = Path(receipt['app']).resolve()
@@ -78,6 +79,7 @@ def evidence(worktree, udid):
     if app_hash(app) != receipt['appHash']:
         raise ValueError('exported app digest changed')
     root = report_file.parent
+    names = set()
     for flow in report['flows']:
         for field, hash_field in (('commands', 'sha256'), ('screenshot', 'screenshotHash'),
                                   ('captureReceipt', 'captureReceiptHash'),
@@ -87,6 +89,35 @@ def evidence(worktree, udid):
                 checked_file(root, flow[field], flow.get(hash_field))
         if not flow.get('commands') or not flow.get('captureReceipt') or not flow.get('attachmentCloseout'):
             raise ValueError('product-flow assertion is incomplete')
+        name = flow.get('name')
+        if not isinstance(name, str) or name in names:
+            raise ValueError('product-flow name is missing or duplicated')
+        names.add(name)
+        source = flow.get('source')
+        if not isinstance(source, str) or not re.fullmatch(r'apps/mobile/e2e/flows/[a-z0-9-]+\.yaml', source):
+            raise ValueError('product-flow source path is invalid')
+        checked_file(worktree, source, flow.get('sourceHash'))
+        commands = json.loads((root / flow['commands']).read_text())
+        if not isinstance(commands, list) or not commands:
+            raise ValueError('empty product-flow command report')
+        applied = [row['command']['applyConfigurationCommand'].get('config', {}) for row in commands
+                   if 'applyConfigurationCommand' in row.get('command', {})]
+        assertions = [row for row in commands if 'assertConditionCommand' in row.get('command', {}) and
+                      row['command']['assertConditionCommand'].get('optional') is not True]
+        if (not any(config.get('appId') == 'com.fitsy.mobile' and config.get('name', name) == name for config in applied) or
+                not assertions or any(row.get('metadata', {}).get('status') != 'COMPLETED' for row in assertions) or
+                any(row.get('metadata', {}).get('status') == 'FAILED' for row in commands)):
+            raise ValueError('required product-flow assertions did not pass')
+        if not (root / flow['screenshot']).read_bytes().startswith(bytes.fromhex('89504e470d0a1a0a')):
+            raise ValueError('product-flow screenshot is not PNG')
+        captures = [json.loads(line) for line in (root / flow['captureReceipt']).read_text().splitlines() if line]
+        if not captures or any(row.get('udid') != udid or row.get('preferredScreenCaptureFormat') != 'screenshots' for row in captures):
+            raise ValueError('XCTest capture receipt is incomplete')
+        closeout = json.loads((root / flow['attachmentCloseout']).read_text())
+        if closeout.get('udid') != udid or closeout.get('generated', {}).get('videos') != 0 or closeout.get('deleted') != []:
+            raise ValueError('XCTest attachment closeout is incomplete')
+    if not {'cold-start-welcome', 'signin-options'}.issubset(names):
+        raise ValueError('baseline product-flow proof is missing')
     for entry in report.get('exploration', []):
         if entry.get('trace'):
             checked_file(root, entry['trace'], entry.get('sha256'))
@@ -149,7 +180,15 @@ def reconcile_absent(target, issue, udid, worktree, device_root):
     return mapping
 
 
-def retire(*, issue, udid, worktree, archive_root, device_root, claim_file):
+def raw_files(source_root):
+    entries = list(source_root.glob('*/Attachments/**/*'))
+    if any(path.is_symlink() for path in entries):
+        raise ValueError('raw attachment tree contains a symlink')
+    return sorted(path for path in entries if path.is_file())
+
+
+def retire(*, issue, udid, worktree, archive_root, device_root, claim_file,
+           confirm_verified=lambda: True):
     """Called under dispatcher.lock only for an exact terminal-verified claim."""
     if not isinstance(issue, int) or issue < 1 or not UDID.fullmatch(udid or ''):
         raise ValueError('issue or device identity invalid')
@@ -167,9 +206,7 @@ def retire(*, issue, udid, worktree, archive_root, device_root, claim_file):
     if target.exists() and not (target / 'mapping.json').exists():
         raise ValueError('incomplete prior archive; inspect before retrying')
     source_root = device_path / 'data/Containers/Data/InternalDaemon'
-    if any(path.is_symlink() for path in source_root.glob('*/Attachments/**/*')):
-        raise ValueError('raw attachment tree contains a symlink')
-    sources = sorted(path for path in source_root.glob('*/Attachments/**/*') if path.is_file())
+    sources = raw_files(source_root)
     if not sources:
         raise ValueError('raw attachment inventory is empty or unavailable')
     mapping = []
@@ -195,9 +232,13 @@ def retire(*, issue, udid, worktree, archive_root, device_root, claim_file):
     device(udid, issue, device_root)
     evidence(worktree, udid)
     idle(udid, worktree, device_path, claim_file)
+    if raw_files(source_root) != sources:
+        raise ValueError('raw attachment inventory changed before deletion')
     for entry in mapping:
         if digest(Path(entry['source'])) != entry['sha256'] or digest(Path(entry['archive'])) != entry['sha256']:
             raise ValueError('raw attachment changed before deletion')
+    if not confirm_verified():
+        raise ValueError('issue is no longer terminal-verified before deletion')
     durable_json(target / 'delete-intent.json', {'issue': issue, 'udid': udid,
         'worktree': str(worktree), 'mappingSha256': digest(target / 'mapping.json')})
     command('xcrun', 'simctl', 'delete', udid)

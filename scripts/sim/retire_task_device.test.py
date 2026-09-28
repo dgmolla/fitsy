@@ -25,16 +25,31 @@ class RetirementTest(unittest.TestCase):
         (self.app / 'main.jsbundle').write_text('exported app')
         self.flow = self.worktree / '.evidence/product-flow'
         self.flow.mkdir(parents=True)
-        for name, data in [('commands.json', b'[]'), ('outcome.png', b'png'),
-                           ('capture.jsonl', b'{}\n'), ('closeout.json', b'{}'),
-                           ('mcp.jsonl', b'{}\n')]:
-            (self.flow / name).write_bytes(data)
-        flow = {'commands': 'commands.json', 'sha256': retirement.digest(self.flow / 'commands.json'),
-                'screenshot': 'outcome.png', 'screenshotHash': retirement.digest(self.flow / 'outcome.png'),
-                'captureReceipt': 'capture.jsonl', 'captureReceiptHash': retirement.digest(self.flow / 'capture.jsonl'),
-                'attachmentCloseout': 'closeout.json', 'attachmentCloseoutHash': retirement.digest(self.flow / 'closeout.json')}
+        (self.flow / 'mcp.jsonl').write_bytes(b'{}\n')
+        flows = []
+        for name in ('cold-start-welcome', 'signin-options'):
+            source = self.worktree / f'apps/mobile/e2e/flows/{name}.yaml'
+            source.parent.mkdir(parents=True, exist_ok=True)
+            source.write_text(f'name: {name}\n')
+            commands = self.flow / f'{name}-commands.json'
+            commands.write_text(json.dumps([
+                {'command': {'applyConfigurationCommand': {'config': {'appId': 'com.fitsy.mobile', 'name': name}}},
+                 'metadata': {'status': 'COMPLETED'}},
+                {'command': {'assertConditionCommand': {'optional': False}}, 'metadata': {'status': 'COMPLETED'}}]))
+            screenshot = self.flow / f'{name}-outcome.png'
+            screenshot.write_bytes(bytes.fromhex('89504e470d0a1a0a') + b'png')
+            capture = self.flow / f'{name}-capture.jsonl'
+            capture.write_text(json.dumps({'udid': self.udid, 'preferredScreenCaptureFormat': 'screenshots'}) + '\n')
+            closeout = self.flow / f'{name}-closeout.json'
+            closeout.write_text(json.dumps({'udid': self.udid, 'generated': {'videos': 0}, 'deleted': []}))
+            flows.append({'name': name, 'source': str(source.relative_to(self.worktree)),
+                'sourceHash': retirement.digest(source), 'commands': commands.name, 'sha256': retirement.digest(commands),
+                'screenshot': screenshot.name, 'screenshotHash': retirement.digest(screenshot),
+                'captureReceipt': capture.name, 'captureReceiptHash': retirement.digest(capture),
+                'attachmentCloseout': closeout.name, 'attachmentCloseoutHash': retirement.digest(closeout)})
         (self.flow / 'report.json').write_text(json.dumps({'simulator': self.udid, 'result': 'pass',
-            'appHash': retirement.app_hash(self.app), 'flows': [flow],
+            'evidenceMode': 'final-candidate', 'finishedAt': '2026-09-28T00:00:00Z',
+            'appHash': retirement.app_hash(self.app), 'flows': flows,
             'exploration': [{'trace': 'mcp.jsonl', 'sha256': retirement.digest(self.flow / 'mcp.jsonl')}]}))
         (self.worktree / '.evidence/product-build/receipt.json').write_text(json.dumps({
             'simulator': self.udid, 'app': str(self.app), 'appHash': retirement.app_hash(self.app)}))
@@ -69,9 +84,9 @@ else: raise SystemExit(2)
         self.env.start()
         self.addCleanup(self.env.stop)
 
-    def retire(self):
+    def retire(self, **kwargs):
         return retirement.retire(issue=self.issue, udid=self.udid, worktree=self.worktree,
-            archive_root=self.archive, device_root=self.devices, claim_file=self.claim)
+            archive_root=self.archive, device_root=self.devices, claim_file=self.claim, **kwargs)
 
     def test_archives_raw_and_keeps_exported_proof_before_exact_device_delete(self):
         result = self.retire()
@@ -117,7 +132,7 @@ else: raise SystemExit(2)
         with mock.patch.dict(os.environ, {'FAKE_DEVICE_NAME': 'Fitsy-Issue-414'}):
             with self.assertRaisesRegex(ValueError, 'name does not match'):
                 self.retire()
-        (self.flow / 'outcome.png').write_bytes(b'changed')
+        (self.flow / 'cold-start-welcome-outcome.png').write_bytes(b'changed')
         with self.assertRaisesRegex(ValueError, 'receipt file missing or changed'):
             self.retire()
         self.assertFalse((self.root / 'deleted').exists())
@@ -126,6 +141,49 @@ else: raise SystemExit(2)
         with mock.patch.dict(os.environ, {'FAKE_DEVICE_STATE': 'Booted'}):
             with self.assertRaisesRegex(ValueError, 'not shut down'):
                 self.retire()
+        self.assertTrue(self.attachment.exists())
+        self.assertFalse((self.root / 'deleted').exists())
+
+    def test_hashed_but_empty_assertions_and_non_png_hold_device(self):
+        report_file = self.flow / 'report.json'
+        report = json.loads(report_file.read_text())
+        commands = self.flow / report['flows'][0]['commands']
+        commands.write_text('[]')
+        report['flows'][0]['sha256'] = retirement.digest(commands)
+        report_file.write_text(json.dumps(report))
+        with self.assertRaisesRegex(ValueError, 'empty product-flow command report'):
+            self.retire()
+        commands.write_text(json.dumps([
+            {'command': {'applyConfigurationCommand': {'config': {'appId': 'com.fitsy.mobile'}}},
+             'metadata': {'status': 'COMPLETED'}},
+            {'command': {'assertConditionCommand': {'optional': False}}, 'metadata': {'status': 'COMPLETED'}}]))
+        report['flows'][0]['sha256'] = retirement.digest(commands)
+        screenshot = self.flow / report['flows'][0]['screenshot']
+        screenshot.write_bytes(b'not-png')
+        report['flows'][0]['screenshotHash'] = retirement.digest(screenshot)
+        report_file.write_text(json.dumps(report))
+        with self.assertRaisesRegex(ValueError, 'not PNG'):
+            self.retire()
+        self.assertFalse((self.root / 'deleted').exists())
+
+    def test_late_raw_attachment_is_retained_with_device(self):
+        original = retirement.idle
+        calls = 0
+        def late(*args):
+            nonlocal calls
+            original(*args)
+            calls += 1
+            if calls == 2:
+                (self.attachment.parent / 'late-raw').write_bytes(b'late evidence')
+        with mock.patch.object(retirement, 'idle', side_effect=late):
+            with self.assertRaisesRegex(ValueError, 'inventory changed'):
+                self.retire()
+        self.assertTrue(self.attachment.exists())
+        self.assertFalse((self.root / 'deleted').exists())
+
+    def test_reopened_issue_at_final_boundary_retains_device(self):
+        with self.assertRaisesRegex(ValueError, 'no longer terminal-verified'):
+            self.retire(confirm_verified=lambda: False)
         self.assertTrue(self.attachment.exists())
         self.assertFalse((self.root / 'deleted').exists())
 

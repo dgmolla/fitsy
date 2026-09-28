@@ -184,7 +184,9 @@ class DispatcherProcessTest(unittest.TestCase):
                              {'terminal': 'verified', 'issue': 412, 'id': claim_id,
                               'branch': 'issue-412', 'worktree': str(worktree)}]}
         path = self.state / 'state.json'
-        with mock.patch.object(dispatcher, 'retire_task_device', return_value={
+        with mock.patch.object(dispatcher, 'board', return_value=[item(412, status='Done')]), \
+             mock.patch.object(dispatcher, 'terminal_verified', return_value=True), \
+             mock.patch.object(dispatcher, 'retire_task_device', return_value={
                 'freeBeforeBytes': 100, 'freeAfterBytes': 200}) as retire:
             dispatcher.retire_verified_simulator(config, state, path)
             retire.assert_called_once()
@@ -202,6 +204,13 @@ class DispatcherProcessTest(unittest.TestCase):
         with mock.patch.object(dispatcher, 'retire_task_device') as retire:
             dispatcher.retire_verified_simulator(config, state, path)
             retire.assert_not_called()
+        state['active'] = None
+        with mock.patch.object(dispatcher, 'board', return_value=[item(412, status='Queued')]), \
+             mock.patch.object(dispatcher, 'terminal_verified', return_value=False), \
+             mock.patch.object(dispatcher, 'retire_task_device') as retire:
+            dispatcher.retire_verified_simulator(config, state, path)
+            retire.assert_not_called()
+            self.assertEqual(state['simulator_retirement'][udid]['status'], 'held')
 
     def test_held_older_device_does_not_starve_later_verified_device(self):
         state = {'active': None, 'verified': {}, 'history': []}
@@ -223,7 +232,9 @@ class DispatcherProcessTest(unittest.TestCase):
             if kwargs['issue'] == 412:
                 raise ValueError('device is booted')
             return {'freeBeforeBytes': 100, 'freeAfterBytes': 200}
-        with mock.patch.object(dispatcher, 'retire_task_device', side_effect=attempt) as retire:
+        with mock.patch.object(dispatcher, 'board', return_value=[item(412, status='Done'), item(413, status='Done')]), \
+             mock.patch.object(dispatcher, 'terminal_verified', return_value=True), \
+             mock.patch.object(dispatcher, 'retire_task_device', side_effect=attempt) as retire:
             dispatcher.retire_verified_simulator(config, state, path)
             self.assertEqual(state['simulator_retirement'][udids[0]]['status'], 'held')
             dispatcher.retire_verified_simulator(config, state, path)
