@@ -1,18 +1,12 @@
 jest.unmock('react-native');
 jest.unmock('expo-router');
-import React, { useEffect } from 'react';
-import { Alert, Text } from 'react-native';
+import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Purchases, { type CustomerInfo, type PurchasesOffering } from 'react-native-purchases';
-import { Stack, useLocalSearchParams } from 'expo-router';
 import { act, fireEvent, renderRouter, waitFor } from 'expo-router/testing-library';
-import PaymentScreen from '../app/welcome/payment';
-import TrialScreen from '../app/welcome/trial';
-import TrialReminderScreen from '../app/welcome/trial-reminder';
-import WelcomeLayout from '../app/welcome/_layout';
-import { PurchasesProvider } from '../lib/usePurchases';
 import { getPaywallIntent, rememberPaywallIntent } from '../lib/paywallIntent';
 import { ONBOARDING_COMPLETE_KEY } from '../lib/onboardingCompletion';
+import { paymentCompletionRoutes } from './paymentCompletionRoutes';
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
@@ -53,18 +47,7 @@ const offering = { identifier: 'default', annual, monthly: null, availablePackag
 const selected = { action: 'menu' as const, restaurantId: 'varilla', restaurantName: 'Varilla', menuItemId: 'meal-1', query: 'pizza' };
 let notificationMounts = 0;
 let nativeUserId: string | null = null;
-function Restaurant() {
-  const params = useLocalSearchParams();
-  return <Text>{JSON.stringify(params)}</Text>;
-}
-function OldNotificationScreen() { useEffect(() => { notificationMounts++; }, []); return <Text>Old notification step</Text>; }
-const routes = {
-  _layout: () => <PurchasesProvider><Stack screenOptions={{ headerShown: false }} /></PurchasesProvider>,
-  'welcome/_layout': WelcomeLayout, 'welcome/trial': TrialScreen, 'welcome/trial-reminder': TrialReminderScreen,
-  'welcome/payment': PaymentScreen,
-  'welcome/notification-permission': OldNotificationScreen,
-  '(tabs)/_layout': () => <Stack />, '(tabs)/search': () => <Text>Meal search</Text>, 'restaurant/[id]': Restaurant,
-};
+const routes = paymentCompletionRoutes(() => { notificationMounts++; });
 const originalFetch = global.fetch;
 beforeEach(async () => {
   jest.useRealTimers();
