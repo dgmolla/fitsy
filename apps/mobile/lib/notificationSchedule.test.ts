@@ -79,15 +79,17 @@ test('development device probe uses the native bridge once, clears it, and canno
   const prior = Object.getOwnPropertyDescriptor(globalThis, '__DEV__');
   Object.defineProperty(globalThis, '__DEV__', { value: true, configurable: true });
   try {
+    const realIdentifier = `${REMINDER_PREFIX}meal.real`;
+    pending.set(realIdentifier, { identifier: realIdentifier, content: { data: { userId: 'one', kind: 'meal' } }, trigger: null });
     const now = new Date(2026, 8, 28, 4);
     const first = await scheduleDevTrialReminder('one', now);
-    expect(first).toEqual({ count: 1, identifier: expect.stringMatching(/^fitsy\.reminder\.trial\./), scheduledFor: expect.any(String) });
+    expect(first).toEqual({ count: 1, identifier: expect.stringMatching(/^fitsy\.dev-trial-reminder\./), scheduledFor: expect.any(String) });
     expect(new Date(first.scheduledFor!).getHours()).toBe(9);
-    expect(pending.size).toBe(1);
+    expect(pending.size).toBe(2);
     expect(await scheduleDevTrialReminder('one', now)).toEqual(first);
-    expect(pending.size).toBe(1);
+    expect(pending.size).toBe(2);
     expect(await clearDevTrialReminder('one')).toEqual({ count: 0, identifier: null, scheduledFor: null });
-    expect(pending.size).toBe(0);
+    expect([...pending.keys()]).toEqual([realIdentifier]);
     Object.defineProperty(globalThis, '__DEV__', { value: false, configurable: true });
     await expect(scheduleDevTrialReminder('one', now)).rejects.toThrow('Development sign-in required');
     expect(sdk.scheduleNotificationAsync).toHaveBeenCalledTimes(2);

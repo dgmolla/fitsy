@@ -1,6 +1,8 @@
 import * as Notifications from 'expo-notifications';
 import { planReminders, trialReminderDate } from './notificationPlan';
-import { replaceReminders } from './notificationSchedule';
+import { prepareReminderChannel, scheduleNativeReminder } from './notificationSchedule';
+
+const DEV_PREFIX = 'fitsy.dev-trial-reminder.';
 
 // Device-only acceptance probe. It never changes the purchase, entitlement,
 // account, or stored reminder preferences used by the real provider.
@@ -31,19 +33,27 @@ export async function scheduleDevTrialReminder(userId: string | null, now = new 
   if (plan.length !== 1 || plan[0].date.getTime() !== trialReminderDate(expiration).getTime()) {
     throw new Error('Controlled trial did not produce exactly one valid reminder');
   }
-  await replaceReminders(userId, plan);
-  return readDevTrialReminder(userId, plan[0].identifier);
+  await clearDevTrialReminder(userId);
+  if ((await Notifications.getPermissionsAsync()).status !== 'granted') return readDevTrialReminder(userId);
+  await prepareReminderChannel();
+  const fixture = { ...plan[0], identifier: `${DEV_PREFIX}${expiration.getTime()}` };
+  await scheduleNativeReminder(userId, fixture);
+  return readDevTrialReminder(userId, fixture.identifier);
 }
 
 export async function clearDevTrialReminder(userId: string | null) {
   requireDevelopment(userId);
-  await replaceReminders(userId, []);
+  for (const request of await Notifications.getAllScheduledNotificationsAsync()) {
+    if (request.identifier.startsWith(DEV_PREFIX) && request.content.data?.userId === userId) {
+      await Notifications.cancelScheduledNotificationAsync(request.identifier);
+    }
+  }
   return readDevTrialReminder(userId);
 }
 
 async function readDevTrialReminder(userId: string, identifier?: string) {
   const requests = (await Notifications.getAllScheduledNotificationsAsync()).filter(request =>
-    request.identifier.startsWith('fitsy.reminder.') && request.content.data?.userId === userId);
+    request.identifier.startsWith(DEV_PREFIX) && request.content.data?.userId === userId);
   const trial = requests.filter(request => request.content.data?.kind === 'trial');
   const match = identifier ? trial.find(request => request.identifier === identifier) : undefined;
   return { count: requests.length, identifier: match?.identifier ?? null,

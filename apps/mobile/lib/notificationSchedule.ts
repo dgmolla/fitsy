@@ -30,6 +30,15 @@ export async function prepareReminderChannel(): Promise<void> {
   });
 }
 
+/** Shared native writer for ordinary reconciliation and the development probe. */
+export async function scheduleNativeReminder(userId: string, reminder: PlannedReminder): Promise<void> {
+  await Notifications.scheduleNotificationAsync({
+    identifier: reminder.identifier,
+    content: { title: reminder.title, body: reminder.body, sound: 'default', data: { kind: reminder.kind, userId, scheduledFor: reminder.date.toISOString() } },
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: reminder.date, channelId: REMINDER_CHANNEL },
+  });
+}
+
 let queue: Promise<unknown> = Promise.resolve();
 let generation = 0;
 /** Serialize replacement, so a late schedule cannot survive a later opt-out or
@@ -59,11 +68,7 @@ export function replaceReminders(userId: string | null | undefined, reminders: P
     for (const reminder of reminders) {
       if (revision !== generation) return;
       if (reminder.date.getTime() <= Date.now()) continue;
-      await Notifications.scheduleNotificationAsync({
-        identifier: reminder.identifier,
-        content: { title: reminder.title, body: reminder.body, sound: 'default', data: { kind: reminder.kind, userId, scheduledFor: reminder.date.toISOString() } },
-        trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: reminder.date, channelId: REMINDER_CHANNEL },
-      });
+      await scheduleNativeReminder(userId, reminder);
     }
   });
   queue = work;
