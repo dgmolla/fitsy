@@ -279,7 +279,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
       refreshOffering,
       purchase,
       presentPaywall,
-      showManageSubscriptions: rcShowManageSubscriptions,
+      showManageSubscriptions: () => rcShowManageSubscriptions(customerInfoRef.current),
       restore,
     }),
     [entitled, storeConfirmed, customerInfo, offering, introEligibility, introEligibilityReady, syncEntitlement, refresh, refreshOffering, purchase, presentPaywall, restore],

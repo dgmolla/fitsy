@@ -379,11 +379,15 @@ export const MANAGE_SUBSCRIPTIONS_URL = 'https://apps.apple.com/account/subscrip
 export const MANAGE_SUBSCRIPTIONS_ANDROID_URL = 'https://play.google.com/store/account/subscriptions';
 
 /**
- * Open the platform's subscription management page. The SDK sheet is iOS-only;
- * Android goes directly to Google Play, while older iOS falls back to Apple's
- * account URL. Used by paywall and account-management actions.
+ * Open the active subscription's store when RevenueCat knows it. A purchase
+ * made on another platform must be managed there. Otherwise use the device
+ * store; the native sheet is iOS-only. Used by paywall and account actions.
  */
-export async function showManageSubscriptions(): Promise<void> {
+export async function showManageSubscriptions(customerInfo: CustomerInfo | null = null): Promise<void> {
+  if (customerInfo?.managementURL) {
+    await Linking.openURL(customerInfo.managementURL);
+    return;
+  }
   if (Platform.OS === 'android') {
     await Linking.openURL(MANAGE_SUBSCRIPTIONS_ANDROID_URL);
     return;

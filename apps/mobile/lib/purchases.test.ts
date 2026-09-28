@@ -172,4 +172,17 @@ describe('showManageSubscriptions', () => {
     expect(native).not.toHaveBeenCalled();
     expect(url).toHaveBeenCalledWith('https://play.google.com/store/account/subscriptions');
   });
+
+  it('uses the subscription owner on a cross-platform account', async () => {
+    Platform.OS = 'android';
+    const native = jest.spyOn(Purchases, 'showManageSubscriptions');
+    const url = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    await showManageSubscriptions({ managementURL: MANAGE_SUBSCRIPTIONS_URL } as CustomerInfo);
+    expect(native).not.toHaveBeenCalled();
+    expect(url).toHaveBeenCalledWith(MANAGE_SUBSCRIPTIONS_URL);
+    Platform.OS = 'ios';
+    await showManageSubscriptions({ managementURL: 'https://play.google.com/store/account/subscriptions' } as CustomerInfo);
+    expect(native).not.toHaveBeenCalled();
+    expect(url).toHaveBeenLastCalledWith('https://play.google.com/store/account/subscriptions');
+  });
 });
