@@ -38,7 +38,7 @@ while read -r NUM SHA; do
       apps/api/lib/auth*|apps/api/lib/subscription*|apps/api/services/auth*|apps/api/services/revenuecat*|apps/api/app/api/auth/*|apps/api/app/api/revenuecat/*|apps/api/app/api/subscriptions/*|apps/mobile/app/auth/*|apps/mobile/app/welcome/payment*|apps/mobile/components/*Auth*|apps/mobile/components/*Paywall*|apps/mobile/components/*Payment*|apps/mobile/lib/*Auth*|apps/mobile/lib/*Purchas*|apps/mobile/lib/*paywall*|apps/mobile/lib/*purchase*|prisma/schema.prisma|prisma/migrations/*) DANGER=1 ;;
     esac
     case "$FILE" in
-      .github/workflows/*|scripts/deploy/*|scripts/review/*.sh|scripts/review/*.py|scripts/review/*.mjs|scripts/review/*.jq|scripts/verify/*.sh|scripts/verify/*.mjs|scripts/sim/publish-product-flow.mjs|vercel.json|apps/mobile/eas.json|apps/mobile/app.config.ts) WORKFLOW=1 ;;
+      .github/workflows/*|scripts/deploy/*|scripts/review/*.sh|scripts/review/*.py|scripts/review/*.mjs|scripts/review/*.jq|scripts/verify/*.sh|scripts/verify/*.mjs|scripts/verify/registry.yml|scripts/verify/risk-tiers.yml|scripts/sim/publish-product-flow.mjs|vercel.json|apps/mobile/eas.json|apps/mobile/app.config.ts) WORKFLOW=1 ;;
     esac
   done <<< "$FILES_FOR_TIER"
   [ "$DANGER" = 0 ] || LENSES="$LENSES danger-zone"

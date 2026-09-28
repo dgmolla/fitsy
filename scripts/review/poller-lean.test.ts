@@ -84,7 +84,7 @@ test("actual sensitive source adds only its matching specialist", () => {
     writeFileSync(f.files, ".github/workflows/deploy.yml\n");
     f.tick("high");
     expect(readFileSync(f.calls, "utf8")).toBe("correctness\nworkflow-security\n");
-    for (const path of ["REVIEW.md", ".claude/lenses/workflow-security.md", "scripts/review/poller-status.jq", "docs/engineering/devops/shipping.md"]) {
+    for (const path of ["REVIEW.md", ".claude/lenses/workflow-security.md", "scripts/review/poller-status.jq", "docs/engineering/devops/shipping.md", "scripts/verify/registry.yml", "scripts/verify/risk-tiers.yml"]) {
       writeFileSync(f.calls, "");
       writeFileSync(f.files, `${path}\n`);
       f.tick("high");
