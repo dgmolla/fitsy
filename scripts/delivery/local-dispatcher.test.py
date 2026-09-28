@@ -170,6 +170,39 @@ class DispatcherProcessTest(unittest.TestCase):
         log = self.board.with_suffix('.workers')
         return log.read_text().splitlines() if log.exists() else []
 
+    def test_manual_successor_verified_claim_retires_only_its_receipt_device(self):
+        claim_id = 'claim1234-0000-0000-0000-000000000000'
+        worktree = self.worktrees / f'fitsy-issue-412-{claim_id[:8]}'
+        build = worktree / '.evidence/product-build'
+        build.mkdir(parents=True)
+        udid = '9EC11FCA-B224-4380-A91D-235ED2BBF7C4'
+        (build / 'receipt.json').write_text(json.dumps({'simulator': udid}))
+        config = json.loads(self.config.read_text())
+        state = {'active': None, 'verified': {'412': {'id': claim_id, 'issue': 412, 'branch': 'issue-412'}},
+                 'history': [{'terminal': 'parked-after-exit', 'issue': 412, 'id': claim_id,
+                              'branch': 'issue-412', 'worktree': str(worktree)},
+                             {'terminal': 'verified', 'issue': 412, 'id': claim_id,
+                              'branch': 'issue-412', 'worktree': str(worktree)}]}
+        path = self.state / 'state.json'
+        with mock.patch.object(dispatcher, 'retire_task_device', return_value={
+                'freeBeforeBytes': 100, 'freeAfterBytes': 200}) as retire:
+            dispatcher.retire_verified_simulator(config, state, path)
+            retire.assert_called_once()
+            self.assertEqual(retire.call_args.kwargs['udid'], udid)
+            self.assertEqual(state['simulator_retirement'][udid]['status'], 'retired')
+            dispatcher.retire_verified_simulator(config, state, path)
+            retire.assert_called_once()
+        state['simulator_retirement'] = {}
+        state['history'][-1]['id'] = 'other-claim'
+        with mock.patch.object(dispatcher, 'retire_task_device') as retire:
+            dispatcher.retire_verified_simulator(config, state, path)
+            retire.assert_not_called()
+        state['history'][-1]['id'] = claim_id
+        state['active'] = {'issue': 414}
+        with mock.patch.object(dispatcher, 'retire_task_device') as retire:
+            dispatcher.retire_verified_simulator(config, state, path)
+            retire.assert_not_called()
+
     def test_idle_ready_pickup_race_and_next_dependency(self):
         self.set_board([item(385), item(351, dependencies='#385')])
         self.env['FAKE_WORKER_MODE'] = 'sleep'

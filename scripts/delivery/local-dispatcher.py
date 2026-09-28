@@ -18,6 +18,9 @@ from datetime import datetime, timezone
 import urllib.request
 import uuid
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'sim'))
+from retire_task_device import retire as retire_task_device
+
 
 def incident(state, claim, reason):
     key = f"fitsy-blocker:{claim['issue']}:{claim['id']}"
@@ -521,6 +524,52 @@ def archive(state, claim, status, state_path):
     state['active'] = None
 
 
+def retire_verified_simulator(config, state, state_path):
+    """One exact terminal claim per tick, before the next disk admission."""
+    if state.get('active'):
+        return
+    verified = state.get('verified') or {}
+    for issue_text, identity in sorted(verified.items(), key=lambda entry: int(entry[0])):
+        issue = int(issue_text)
+        claim_id = identity.get('id', '')
+        if identity.get('issue') != issue or not re.fullmatch(r'[0-9a-f-]{36}', claim_id):
+            continue
+        matching = [entry for entry in state.get('history', []) if
+                    entry.get('terminal') == 'verified' and entry.get('issue') == issue and
+                    entry.get('id') == claim_id and entry.get('branch') == identity.get('branch')]
+        if len(matching) != 1:
+            continue
+        worktree = Path(matching[0].get('worktree', '')).resolve()
+        expected = Path(config['worktree_root']).resolve() / f'fitsy-issue-{issue}-{claim_id[:8]}'
+        if worktree != expected:
+            continue
+        receipt_file = worktree / '.evidence/product-build/receipt.json'
+        if not receipt_file.is_file():
+            continue
+        try:
+            udid = json.loads(receipt_file.read_text()).get('simulator')
+            if not isinstance(udid, str):
+                continue
+            previous = (state.get('simulator_retirement') or {}).get(udid)
+            if previous and previous.get('status') in ('retired', 'absent'):
+                continue
+            result = retire_task_device(
+                issue=issue, udid=udid, worktree=worktree,
+                archive_root=Path(config['state_dir']) / 'retired-simulator-evidence',
+                device_root=Path.home() / 'Library/Developer/CoreSimulator/Devices',
+                claim_file=Path.home() / '.fitsy-sim-claim.json')
+            state.setdefault('simulator_retirement', {})[udid] = {
+                'status': 'retired', 'issue': issue,
+                'receipt': str(Path(config['state_dir']) / 'retired-simulator-evidence' / udid / 'retired.json'),
+                'freeBeforeBytes': result['freeBeforeBytes'], 'freeAfterBytes': result['freeAfterBytes']}
+        except (OSError, ValueError, KeyError, subprocess.SubprocessError, json.JSONDecodeError) as error:
+            state.setdefault('simulator_retirement', {})[str(udid)] = {
+                'status': 'absent' if str(error) == 'device is absent' else 'held',
+                'issue': issue, 'reason': str(error)[:300], 'attemptedAt': utc()}
+        write_json(state_path, state)
+        return
+
+
 def tick(config, state, state_path, script):
     active = state.get('active')
     if active:
@@ -652,6 +701,7 @@ def tick(config, state, state_path, script):
         pass  # A notification fault never changes claim ownership or queue decisions.
     if not config.get('enabled'):
         return {'state': 'disabled'}
+    retire_verified_simulator(config, state, state_path)
     if shutil.disk_usage(config['worktree_root']).free < config.get('min_free_bytes', 8 * 1024**3):
         return {'state': 'resource-hold', 'reason': 'disk below configured minimum'}
     items = board(config)

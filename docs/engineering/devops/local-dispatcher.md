@@ -18,3 +18,10 @@ The installer starts paused from a clean, current main revision.
 Enabling requires that revision's main Verify and Deploy success and no active claim.
 The dispatcher posts actionable blocker incidents through the shared Slack limiter with a stable key, history reconciliation and confirmed receipt.
 It does not publish the periodic digest.
+
+Before admitting the next claim, an idle dispatcher makes one bounded simulator-retirement attempt for a terminal-verified issue.
+The exact claim checkout, build receipt, passing product-flow report, exported app digest, and device UDID must agree; a dedicated device name alone proves nothing.
+The device must be shut down, unclaimed, and free of open files or referencing processes.
+Every raw XCTest attachment is cloned outside the device and hash-checked before `simctl delete` names that one device; the shared runtime and exported app remain.
+The private retirement receipt records the source-to-archive mapping, checks, and measured free space, while incomplete or blocked claims retain their devices.
+This deliberately retains all raw attachments, including files not referenced by the final report, so retirement does not also become an evidence-pruning policy.
