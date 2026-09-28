@@ -106,27 +106,27 @@ Commit the tested change locally before reviewing it with the local review runne
 Fetch the base first and ensure the branch contains the current review definitions.
 If it predates the harness, rebase/update it deliberately in its own worktree before review; do not silently skip missing lenses.
 
-Use the same lenses that the project poller selects:
+Use the same lean lens selection as the trusted-main poller:
 
-| Condition | Required local lens |
+| Changed surface | Required local lens |
 |---|---|
-| Low tier | `docs-sanity` (advisory) |
-| Medium/high tier | `correctness` |
-| High tier | Also `danger-zone` |
-| Incident | Also `harness-audit` |
-| PR declares `Spec:` | Also `spec-conformance` |
-| CI/deployment paths selected by the poller | Also `workflow-security` |
-| Test files selected by the poller | Also `test-quality` |
+| Every PR, including docs and tests | `correctness`, including maintainability and required acceptance |
+| Production auth, billing or data-loss code | Also `danger-zone` |
+| Production deployment/security or review/release controls | Also `workflow-security` |
 
-Determine the tier using `scripts/review/tier.mjs`; exact routing is in `scripts/review/poller.sh`.
-Do not reinterpret every change as the highest tier.
+Exact path routing is in `scripts/review/poller.sh`; ordinary test, fixture and documentation paths do not trigger specialists by name alone, while review and release policy files do.
+If the changed behavior exposes a sensitive control outside those paths, add the relevant specialist before merge.
+An `incident` label, `Spec:` line or test file does not by itself add a separate lens; correctness still checks the named acceptance and relevant tests.
 
 ```sh
 bash scripts/review/run-lens.sh --local correctness
 # Substitute/add each applicable lens from the routing above.
 ```
 
-Address confirmed findings, commit the fixes, and rerun affected checks/lenses.
+Group material defects and mandatory acceptance failures into one repair pass, while preserving bounded P2 debt as owned, source-bound follow-ups.
+After repair, review the affected behavior and its consequences against the current source; do not reopen unrelated adjudicated questions without new evidence.
+Freeze source before expensive canonical checks, run applicable verification once, and reuse only receipts whose source, environment and test identity still match.
+Rerun invalidated checks and lenses after a source change; never reuse an old-head verdict as a fresh pass.
 Review requirements are independent of the implementing agent, model vendor and subscription.
 The runner supports `claude` and `codex` adapters; choose an authenticated provider explicitly with `FITSY_REVIEW_PROVIDER`.
 Set `FITSY_REVIEW_MODEL` to the intended model; Codex requires it, while existing Claude installations retain their tier-based defaults.
@@ -144,6 +144,11 @@ An existing status from another provider still satisfies the same lens; a cache 
 The implementing agent must not author its own independent review verdict.
 A matching post-PR pass should reuse the local verdict rather than duplicate the expensive review.
 A changed diff or changed review inputs invalidates that reuse.
+The poller gives an incomplete independent review one bounded same-head retry, using a 300-second default deadline unless explicitly configured.
+After a second incomplete result, it records `lens/<name>=failure` with `needs-coordinator` and stops automatic retries for that head.
+Timeouts and invalid output are execution failures, not code findings or passing reviews.
+An independent coordinator may assess an ordinary exact-head change using the existing PR review and status path only after reading its required acceptance, raw attempts, current checks and diff; record the assessment and source SHA before publishing a success status.
+The implementer cannot supply that assessment, and a required sensitive specialist remains required rather than being replaced by ordinary coordinator review.
 Every finding has a separate impact priority, and raw reviewer verdicts remain unchanged.
 The canonical runner accepts an owned, source-bound P2 follow-up only through the disposition and required-test contract in [review-dispositions.md](review-dispositions.md).
 P0/P1 impacts, malformed dispositions, stale receipts and missing required tests remain blocking.
@@ -154,8 +159,8 @@ P3 findings remain advisory; confirmed P0/P1, required tests and essential accep
 The Jev review-triage evaluation is a later shadow experiment under issue #372, with no gate or merge authority.
 A rebase may alter the actual diff and requires checking again.
 
-Local mode does not carry the full PR body into its review context.
-For a spec-conformance judgment that depends on the PR's linked spec or acceptance text, ensure the reviewer actually reads that spec; require a PR-context review when the local evidence does not establish conformance.
+Local mode carries the bound issue brief, not the full PR body.
+Keep release acceptance in that issue; if a requirement exists only in PR text, require a PR-context correctness review before relying on a cached local verdict.
 Do not use the content-only cache as proof that changed requirements were reviewed.
 The same applies when a reviewer relied on context outside the cached diff and that context changed.
 
