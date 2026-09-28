@@ -12,7 +12,6 @@ import { ensureSessionForPurchase } from '@/lib/purchaseSession';
 import { trackOnboardingScreenView, trackPaywallExperimentExposure } from '@/lib/analytics';
 import { usePreviewAccess } from '@/lib/usePreviewAccess';
 import { rememberPaywallDecline } from '@/lib/paywallAccess';
-import { usePaywallDiscovery } from '@/lib/usePaywallDiscovery';
 import { openPurchasedDestination, resetWelcomeJourney } from '@/lib/paywallJourney';
 import { purchaseTerms, savingPercent } from '@/lib/purchaseTerms';
 import { devTrialVisualOffer } from '@/lib/devTrialVisualOffer';
@@ -25,14 +24,13 @@ export default function PaymentScreen() {
   useOnboardingStep('payment');
   const navigation = useNavigation();
   const focused = useIsFocused();
-  const discovery = usePaywallDiscovery(focused);
   const [chosenPlan, setChosenPlan] = useState<PlanId | null>(null);
   const variants = usePreviewAccess();
   const exposure = useRef('');
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [modal, setModal] = useState<PaywallExitModal>('none');
-  const { offering, introEligibility, introEligibilityReady, refreshOffering, purchase, restore, entitled } = usePurchases();
+  const { offering, introEligibility, introEligibilityReady, refreshOffering, purchase, restore, showManageSubscriptions, entitled } = usePurchases();
   const visual = devTrialVisualOffer(offering, visualRequested);
   const shownOffering = visual?.offering ?? offering;
   const shownEligibility = visual?.eligibility ?? introEligibility;
@@ -176,7 +174,6 @@ export default function PaymentScreen() {
         plan={plan}
         annual={annualTerms}
         monthly={monthlyTerms}
-        discovery={discovery}
         loading={loading}
         restoring={restoring}
         checkingPlans={checkingPlans}
@@ -184,6 +181,7 @@ export default function PaymentScreen() {
         onSelect={setChosenPlan}
         onBack={navigation.canGoBack() ? () => router.back() : undefined}
         onRestore={() => { void handleRestore(); }}
+        onManage={() => { void showManageSubscriptions(); }}
         onRetry={() => { void refreshOffering(); }}
         onPurchase={() => { void handleStart(false); }}
         onDecline={() => { if (!loading && !restoring) setModal(discountTerms && discountPercent ? 'discount' : 'goodbye'); }}

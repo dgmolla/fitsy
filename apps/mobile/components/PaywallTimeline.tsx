@@ -7,7 +7,7 @@ import { canOfferTrialReminder } from '@/lib/notificationPlan';
 import type { purchaseTerms } from '@/lib/purchaseTerms';
 
 type Terms = ReturnType<typeof purchaseTerms>;
-export function PaywallTimeline({ terms, compact = false }: { terms: Terms; compact?: boolean }) {
+export function PaywallTimeline({ terms, compact = false, concise = false }: { terms: Terms; compact?: boolean; concise?: boolean }) {
   const reminderDay = terms?.trialDays ? terms.trialDays - 1 : null;
   const inBrowser = Platform.OS === 'web';
   const canRemind = !inBrowser && canOfferTrialReminder(terms);
@@ -27,14 +27,14 @@ export function PaywallTimeline({ terms, compact = false }: { terms: Terms; comp
     return () => { live = false; listener?.remove(); };
   }, [inBrowser, canRemind]);
   const rows = terms?.trial ? [
-    { icon: 'lock-open-outline' as const, title: 'Day 1: trial access', body: 'Start using Fitsy Pro.' },
+    { icon: 'lock-open-outline' as const, title: 'Day 1: trial access', body: concise ? 'Fitsy Pro starts.' : 'Start using Fitsy Pro.' },
     { icon: 'notifications-outline' as const, title: inBrowser ? 'Reminder unavailable in this browser' : !canRemind ? 'Reminder unavailable for this trial' : permission === 'denied' ? 'Reminders are off' : reminderDay ? `Day ${reminderDay}: optional reminder` : 'Reminder before trial end, if available',
-      body: inBrowser ? 'Trial notifications require the Fitsy mobile app.' : !canRemind ? 'This trial is too short for a reminder before the cancellation deadline.' : permission === 'denied' ? 'Turn on notifications in device settings to receive one.' : 'Requires permission and a store-confirmed trial end date.' },
-    { icon: 'card-outline' as const, title: terms.trialDays ? `Day ${terms.trialDays}: first charge` : `After ${terms.trial}: first charge`, body: `${terms.recurring} after the full trial period, unless canceled at least 24 hours before it ends.` },
+      body: inBrowser ? (concise ? 'Use the mobile app for reminders.' : 'Trial notifications require the Fitsy mobile app.') : !canRemind ? (concise ? 'This trial ends before a reminder is possible.' : 'This trial is too short for a reminder before the cancellation deadline.') : permission === 'denied' ? (concise ? 'Turn on notifications in settings.' : 'Turn on notifications in device settings to receive one.') : concise ? 'If enabled and the store confirms your trial end.' : 'Requires permission and a store-confirmed trial end date.' },
+    { icon: 'card-outline' as const, title: terms.trialDays ? `Day ${terms.trialDays}: first charge` : `After ${terms.trial}: first charge`, body: concise ? `${terms.recurring}, unless canceled at least 24 hours before trial end.` : `${terms.recurring} after the full trial period, unless canceled at least 24 hours before it ends.` },
   ] : [
-    { icon: 'lock-open-outline' as const, title: terms ? 'Access starts today' : 'Your plan', body: terms ? 'Fitsy Pro begins after purchase.' : 'Store plans are loading.' },
+    { icon: 'lock-open-outline' as const, title: terms ? 'Access starts today' : 'Your plan', body: terms ? (concise ? 'After purchase.' : 'Fitsy Pro begins after purchase.') : 'Store plans are loading.' },
     { icon: 'card-outline' as const, title: terms ? 'Your first payment' : 'Checking store terms', body: terms?.charge ?? 'Current prices and eligible offers appear when the store finishes loading.' },
-    { icon: 'calendar-outline' as const, title: 'Renewal', body: terms ? `${terms.recurring}. Cancel in subscription settings at least 24 hours before renewal.` : 'Renewal terms appear with store prices.' },
+    { icon: 'calendar-outline' as const, title: 'Renewal', body: terms ? (concise ? `${terms.recurring}. Cancel at least 24 hours before renewal.` : `${terms.recurring}. Cancel in subscription settings at least 24 hours before renewal.`) : 'Renewal terms appear with store prices.' },
   ];
   return <View style={[s.timeline, compact && s.timelineCompact]} testID="paywall-timeline">{rows.map((row, i) => <View key={row.title} style={s.row}>
     <View style={s.track}>{i < rows.length - 1 && <View style={s.line} />}<View style={[s.icon, i === rows.length - 1 && s.lastIcon]}>
