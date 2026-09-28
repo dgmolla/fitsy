@@ -3,6 +3,14 @@ import { planReminders, trialReminderDate } from './notificationPlan';
 import { prepareReminderChannel, scheduleNativeReminder } from './notificationSchedule';
 
 const DEV_PREFIX = 'fitsy.dev-trial-reminder.';
+let queue: Promise<unknown> = Promise.resolve();
+let generation = 0;
+function enqueue<T>(work: (revision: number) => Promise<T>): Promise<T> {
+  const revision = ++generation;
+  const result = queue.catch(() => undefined).then(() => work(revision));
+  queue = result;
+  return result;
+}
 
 // Device-only acceptance probe. It never changes the purchase, entitlement,
 // account, or stored reminder preferences used by the real provider.
@@ -22,33 +30,45 @@ function nextAllowedTime(now: Date): Date {
 
 export async function scheduleDevTrialReminder(userId: string | null, now = new Date()) {
   requireDevelopment(userId);
-  const due = nextAllowedTime(now);
-  const expiration = new Date(due.getTime() + 30 * 3_600_000);
-  const trialStart = new Date(expiration.getTime() - 7 * 24 * 3_600_000);
-  const plan = planReminders({
-    now, userId, entitled: true, preferences: { meals: false, trial: true },
-    subscription: { isActive: true, periodType: 'TRIAL', willRenew: true,
-      latestPurchaseDate: trialStart.toISOString(), expirationDate: expiration.toISOString() },
+  return enqueue(async revision => {
+    const due = nextAllowedTime(now);
+    const expiration = new Date(due.getTime() + 30 * 3_600_000);
+    const trialStart = new Date(expiration.getTime() - 7 * 24 * 3_600_000);
+    const plan = planReminders({
+      now, userId, entitled: true, preferences: { meals: false, trial: true },
+      subscription: { isActive: true, periodType: 'TRIAL', willRenew: true,
+        latestPurchaseDate: trialStart.toISOString(), expirationDate: expiration.toISOString() },
+    });
+    if (plan.length !== 1 || plan[0].date.getTime() !== trialReminderDate(expiration).getTime()) {
+      throw new Error('Controlled trial did not produce exactly one valid reminder');
+    }
+    await clearProbeRequests(() => true);
+    if (revision !== generation || (await Notifications.getPermissionsAsync()).status !== 'granted') return readDevTrialReminder(userId);
+    await prepareReminderChannel();
+    if (revision !== generation) return readDevTrialReminder(userId);
+    const fixture = { ...plan[0], identifier: `${DEV_PREFIX}${expiration.getTime()}` };
+    await scheduleNativeReminder(userId, fixture);
+    return readDevTrialReminder(userId, fixture.identifier);
   });
-  if (plan.length !== 1 || plan[0].date.getTime() !== trialReminderDate(expiration).getTime()) {
-    throw new Error('Controlled trial did not produce exactly one valid reminder');
+}
+
+async function clearProbeRequests(remove: (owner: unknown) => boolean) {
+  for (const request of await Notifications.getAllScheduledNotificationsAsync()) {
+    if (request.identifier.startsWith(DEV_PREFIX) && remove(request.content.data?.userId)) {
+      await Notifications.cancelScheduledNotificationAsync(request.identifier);
+    }
   }
-  await clearDevTrialReminder(userId);
-  if ((await Notifications.getPermissionsAsync()).status !== 'granted') return readDevTrialReminder(userId);
-  await prepareReminderChannel();
-  const fixture = { ...plan[0], identifier: `${DEV_PREFIX}${expiration.getTime()}` };
-  await scheduleNativeReminder(userId, fixture);
-  return readDevTrialReminder(userId, fixture.identifier);
 }
 
 export async function clearDevTrialReminder(userId: string | null) {
   requireDevelopment(userId);
-  for (const request of await Notifications.getAllScheduledNotificationsAsync()) {
-    if (request.identifier.startsWith(DEV_PREFIX) && request.content.data?.userId === userId) {
-      await Notifications.cancelScheduledNotificationAsync(request.identifier);
-    }
-  }
-  return readDevTrialReminder(userId);
+  return enqueue(async () => { await clearProbeRequests(owner => owner === userId); return readDevTrialReminder(userId); });
+}
+
+/** Account changes also remove test-only requests from the former account. */
+export function reconcileDevTrialReminderOwnership(userId: string | null) {
+  if (!__DEV__) return Promise.resolve();
+  return enqueue(async () => { await clearProbeRequests(owner => !userId || owner !== userId); });
 }
 
 async function readDevTrialReminder(userId: string, identifier?: string) {

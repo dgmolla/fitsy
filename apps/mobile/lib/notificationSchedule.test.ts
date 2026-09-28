@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { planReminders, REMINDER_PREFIX } from './notificationPlan';
 import { readReminderPreferences, readScheduledReminders, saveReminderPreferences, replaceReminders, reconcileReminderOwnership, reminderDestination, REMINDER_CHANNEL } from './notificationSchedule';
-import { clearDevTrialReminder, scheduleDevTrialReminder } from './devTrialReminderProbe';
+import { clearDevTrialReminder, reconcileDevTrialReminderOwnership, scheduleDevTrialReminder } from './devTrialReminderProbe';
 
 jest.mock('@react-native-async-storage/async-storage', () => ({ __esModule: true, default: { getItem: jest.fn(), setItem: jest.fn() } }));
 jest.mock('expo-notifications', () => ({
@@ -93,6 +93,45 @@ test('development device probe uses the native bridge once, clears it, and canno
     Object.defineProperty(globalThis, '__DEV__', { value: false, configurable: true });
     await expect(scheduleDevTrialReminder('one', now)).rejects.toThrow('Development sign-in required');
     expect(sdk.scheduleNotificationAsync).toHaveBeenCalledTimes(2);
+  } finally {
+    if (prior) Object.defineProperty(globalThis, '__DEV__', prior);
+    else Reflect.deleteProperty(globalThis, '__DEV__');
+  }
+});
+test('concurrent probe taps cannot duplicate and account changes remove only probe requests', async () => {
+  const prior = Object.getOwnPropertyDescriptor(globalThis, '__DEV__');
+  Object.defineProperty(globalThis, '__DEV__', { value: true, configurable: true });
+  try {
+    const realIdentifier = `${REMINDER_PREFIX}meal.real`;
+    pending.set(realIdentifier, { identifier: realIdentifier, content: { data: { userId: 'one' } }, trigger: null });
+    const now = new Date(2026, 8, 28, 4);
+    await Promise.all([scheduleDevTrialReminder('one', now), scheduleDevTrialReminder('one', now)]);
+    expect([...pending.keys()].filter(id => id.startsWith('fitsy.dev-trial-reminder.'))).toHaveLength(1);
+    await reconcileDevTrialReminderOwnership('two');
+    expect([...pending.keys()]).toEqual([realIdentifier]);
+    await scheduleDevTrialReminder('two', now);
+    await reconcileDevTrialReminderOwnership(null);
+    expect([...pending.keys()]).toEqual([realIdentifier]);
+  } finally {
+    if (prior) Object.defineProperty(globalThis, '__DEV__', prior);
+    else Reflect.deleteProperty(globalThis, '__DEV__');
+  }
+});
+test('account change during a native probe write removes the late request', async () => {
+  const prior = Object.getOwnPropertyDescriptor(globalThis, '__DEV__');
+  Object.defineProperty(globalThis, '__DEV__', { value: true, configurable: true });
+  try {
+    let release!: () => void; let started!: () => void;
+    const entered = new Promise<void>(resolve => { started = resolve; });
+    sdk.scheduleNotificationAsync.mockImplementationOnce(async request => {
+      started(); await new Promise<void>(resolve => { release = resolve; });
+      pending.set(request.identifier!, request); return request.identifier!;
+    });
+    const old = scheduleDevTrialReminder('one', new Date(2026, 8, 28, 4));
+    await entered;
+    const changed = reconcileDevTrialReminderOwnership('two');
+    release(); await Promise.all([old, changed]);
+    expect(pending.size).toBe(0);
   } finally {
     if (prior) Object.defineProperty(globalThis, '__DEV__', prior);
     else Reflect.deleteProperty(globalThis, '__DEV__');
