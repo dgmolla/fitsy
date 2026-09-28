@@ -128,6 +128,8 @@ if mode in ('enable', 'pause'):
             raise SystemExit('installed dispatcher runtime does not match current main')
         publisher = json.loads((Path.home() / '.fitsy-delivery/config.json').read_text())
         notification = json.loads((Path.home() / 'firstmate/config/slack-notifications.json').read_text())
+        if notification['channel'] != publisher['channel'] or notification['bridge_path'] != publisher['bridge_path']:
+            raise SystemExit('shared Slack channel or bridge differs from reporter; reinstall reporter')
         expected_slack = {'sender': publisher['user'], 'recipient': notification['user'],
                           'channel': publisher['channel'], 'bridge_path': publisher['bridge_path']}
         if publisher.get('recipient_user') != notification['user']:

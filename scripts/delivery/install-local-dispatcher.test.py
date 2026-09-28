@@ -88,6 +88,15 @@ class InstallTest(unittest.TestCase):
             self.assertNotEqual(recipient_drift.returncode, 0)
             self.assertIn('reporter recipient identity is unverified', recipient_drift.stderr)
             notification_path.write_text(json.dumps(notification))
+            for changed_key, changed_value in (('channel', 'COTHER'),
+                                               ('bridge_path', str(base / 'other-bridge'))):
+                notification_path.write_text(json.dumps({**notification, changed_key: changed_value}))
+                shared_drift = subprocess.run(['bash', 'scripts/delivery/install-local-dispatcher.sh', '--enable'],
+                                              cwd=repo, env=env, text=True, capture_output=True, timeout=15)
+                self.assertNotEqual(shared_drift.returncode, 0)
+                self.assertIn('shared Slack channel or bridge differs from reporter', shared_drift.stderr)
+                self.assertFalse(json.loads(config_path.read_text())['enabled'])
+            notification_path.write_text(json.dumps(notification))
             command('bash', 'scripts/delivery/install-local-dispatcher.sh', '--enable')
             self.assertTrue(json.loads(config_path.read_text())['enabled'])
             claude = tools / 'claude'; claude.write_text('#!/bin/sh\nexit 0\n'); claude.chmod(0o700)
