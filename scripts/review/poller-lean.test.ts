@@ -74,7 +74,7 @@ test("actual sensitive source adds only its matching specialist", () => {
     writeFileSync(f.files, "apps/api/services/menuSources/uberEatsSource.ts\n");
     f.tick("high");
     expect(readFileSync(f.calls, "utf8")).toBe("correctness\n");
-    for (const path of ["apps/mobile/lib/usePurchases.tsx", "prisma/migrations/20260928/migration.sql"]) {
+    for (const path of ["apps/mobile/lib/usePurchases.tsx", "prisma/migrations/20260928/migration.sql", "apps/api/app/api/subscriptions/sync/route.ts"]) {
       writeFileSync(f.calls, "");
       writeFileSync(f.files, `${path}\n`);
       f.tick("high");
@@ -84,6 +84,12 @@ test("actual sensitive source adds only its matching specialist", () => {
     writeFileSync(f.files, ".github/workflows/deploy.yml\n");
     f.tick("high");
     expect(readFileSync(f.calls, "utf8")).toBe("correctness\nworkflow-security\n");
+    for (const path of ["REVIEW.md", ".claude/lenses/workflow-security.md", "scripts/review/poller-status.jq", "docs/engineering/devops/shipping.md"]) {
+      writeFileSync(f.calls, "");
+      writeFileSync(f.files, `${path}\n`);
+      f.tick("high");
+      expect(readFileSync(f.calls, "utf8")).toBe("correctness\nworkflow-security\n");
+    }
   } finally { rmSync(f.home, { recursive: true, force: true }); }
 });
 

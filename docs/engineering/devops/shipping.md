@@ -114,7 +114,7 @@ Use the same lean lens selection as the trusted-main poller:
 | Production auth, billing or data-loss code | Also `danger-zone` |
 | Production deployment/security or review/release controls | Also `workflow-security` |
 
-Exact path routing is in `scripts/review/poller.sh`; test, fixture and documentation paths do not trigger specialists by name alone.
+Exact path routing is in `scripts/review/poller.sh`; ordinary test, fixture and documentation paths do not trigger specialists by name alone, while review and release policy files do.
 If the changed behavior exposes a sensitive control outside those paths, add the relevant specialist before merge.
 An `incident` label, `Spec:` line or test file does not by itself add a separate lens; correctness still checks the named acceptance and relevant tests.
 
