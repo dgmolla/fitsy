@@ -74,7 +74,7 @@ test("actual sensitive source adds only its matching specialist", () => {
     writeFileSync(f.files, "apps/api/services/menuSources/uberEatsSource.ts\n");
     f.tick("high");
     expect(readFileSync(f.calls, "utf8")).toBe("correctness\n");
-    for (const path of ["apps/mobile/lib/usePurchases.tsx", "prisma/migrations/20260928/migration.sql", "apps/api/app/api/subscriptions/sync/route.ts"]) {
+    for (const path of ["apps/mobile/lib/usePurchases.tsx", "prisma/migrations/20260928/migration.sql", "apps/api/app/api/subscriptions/sync/route.ts", "apps/api/app/api/restaurants/route.ts", "apps/api/app/api/restaurants/[id]/menu/route.ts", "apps/api/app/api/user/route.ts"]) {
       writeFileSync(f.calls, "");
       writeFileSync(f.files, `${path}\n`);
       f.tick("high");
@@ -84,12 +84,16 @@ test("actual sensitive source adds only its matching specialist", () => {
     writeFileSync(f.files, ".github/workflows/deploy.yml\n");
     f.tick("high");
     expect(readFileSync(f.calls, "utf8")).toBe("correctness\nworkflow-security\n");
-    for (const path of ["REVIEW.md", ".claude/lenses/workflow-security.md", "scripts/review/poller-status.jq", "docs/engineering/devops/shipping.md", "scripts/verify/registry.yml", "scripts/verify/risk-tiers.yml"]) {
+    for (const path of ["REVIEW.md", ".claude/lenses/workflow-security.md", "scripts/review/poller-status.jq", "docs/engineering/devops/shipping.md", "scripts/verify/registry.yml", "scripts/verify/risk-tiers.yml", "scripts/delivery/hourly-report.mjs"]) {
       writeFileSync(f.calls, "");
       writeFileSync(f.files, `${path}\n`);
       f.tick("high");
       expect(readFileSync(f.calls, "utf8")).toBe("correctness\nworkflow-security\n");
     }
+    writeFileSync(f.calls, "");
+    writeFileSync(f.files, "apps/api/app/api/restaurants/preview/route.ts\n");
+    f.tick("high");
+    expect(readFileSync(f.calls, "utf8")).toBe("correctness\n");
   } finally { rmSync(f.home, { recursive: true, force: true }); }
 });
 
