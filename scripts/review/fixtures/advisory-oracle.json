@@ -1,0 +1,109 @@
+{
+  "version": 1,
+  "adjudicated_before_model": true,
+  "adjudicator": "Pre-existing PR #389 independent verdicts, owner source-bound P2 dispositions and historical repairs; two policy controls separated",
+  "cases": [
+    {
+      "id": "alt_reviewer",
+      "expected": "defer_with_owner",
+      "basis": "Prior independent canonical finding and PR #389 owner outcome, before this classifier execution",
+      "source": "https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859441737",
+      "followup": "https://github.com/dgmolla/fitsy/issues/390"
+    },
+    {
+      "id": "invalid_terminal",
+      "expected": "defer_with_owner",
+      "basis": "Prior #388 source-bound P2 deferral and owned follow-up, before this corrected classifier run",
+      "source": "https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859443115",
+      "followup": "https://github.com/dgmolla/fitsy/issues/391"
+    },
+    {
+      "id": "stale_alert",
+      "expected": "defer_with_owner",
+      "basis": "Prior independent canonical finding and PR #389 owner outcome, before this classifier execution",
+      "source": "https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859443115",
+      "followup": "https://github.com/dgmolla/fitsy/issues/391"
+    },
+    {
+      "id": "orphan_p1",
+      "expected": "fix_now",
+      "basis": "Prior independent canonical finding and PR #389 owner outcome, before this classifier execution",
+      "source": "https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859454586",
+      "followup": null
+    },
+    {
+      "id": "historical_dependency",
+      "expected": "investigate",
+      "basis": "Prior independent canonical finding and PR #389 owner outcome, before this classifier execution",
+      "source": "https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859454586",
+      "followup": null
+    },
+    {
+      "id": "timeout_completion",
+      "expected": "defer_with_owner",
+      "basis": "Prior #388 source-bound P2 deferral and owned follow-up, before this corrected classifier run",
+      "source": "https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859643745",
+      "followup": "https://github.com/dgmolla/fitsy/issues/395"
+    },
+    {
+      "id": "probabilities",
+      "expected": "defer_with_owner",
+      "basis": "Prior #388 source-bound P2 deferral and owned follow-up, before this corrected classifier run",
+      "source": "https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859656645",
+      "followup": "https://github.com/dgmolla/fitsy/issues/393"
+    },
+    {
+      "id": "adapter_parity",
+      "expected": "fix_now",
+      "basis": "Prior independent canonical finding and PR #389 owner outcome, before this classifier execution",
+      "source": "https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859656645",
+      "followup": null
+    },
+    {
+      "id": "managed_dependency",
+      "expected": "fix_now",
+      "basis": "Prior independent canonical finding and PR #389 owner outcome, before this classifier execution",
+      "source": "https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859764170",
+      "followup": null
+    },
+    {
+      "id": "stale_blocker",
+      "expected": "defer_with_owner",
+      "basis": "Prior independent canonical finding and PR #389 owner outcome, before this classifier execution",
+      "source": "https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859869804",
+      "followup": "https://github.com/dgmolla/fitsy/issues/398"
+    },
+    {
+      "id": "uncertain_prompt",
+      "expected": "investigate",
+      "basis": "Prior independent canonical finding and PR #389 owner outcome, before this classifier execution",
+      "source": "https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859855336",
+      "followup": "https://github.com/dgmolla/fitsy/issues/396"
+    },
+    {
+      "id": "uninstall_race",
+      "expected": "fix_now",
+      "basis": "Historical #388 owner repair before this classifier execution",
+      "source": "https://github.com/dgmolla/fitsy/commit/30648c55ef29e5859c15e35a6b70449fc41927f4"
+    },
+    {
+      "id": "timeout_descendant",
+      "expected": "fix_now",
+      "basis": "Historical #388 owner repair before this classifier execution",
+      "source": "https://github.com/dgmolla/fitsy/commit/14e545bfbc7a6606c4e57d75c5cf82c3f3058e7a"
+    },
+    {
+      "id": "style_only",
+      "expected": "likely_unsupported",
+      "basis": "Policy control from review-dispositions.md; not a historical independent defect finding",
+      "source": "https://github.com/dgmolla/fitsy/blob/72090b93369e71524f2b04cf1a55b6b8eea09d57/docs/engineering/devops/review-dispositions.md"
+    },
+    {
+      "id": "conflicting_evidence",
+      "expected": "investigate",
+      "basis": "Policy control from review-dispositions.md; not a historical independent defect finding",
+      "source": "https://github.com/dgmolla/fitsy/blob/72090b93369e71524f2b04cf1a55b6b8eea09d57/docs/engineering/devops/review-dispositions.md"
+    }
+  ],
+  "oracle_correction": "Earlier frozen v1 mislabeled source-bound #393 and #395 P2 deferrals as fix-now and mapped follow-ups incorrectly; earlier scores invalid."
+}
