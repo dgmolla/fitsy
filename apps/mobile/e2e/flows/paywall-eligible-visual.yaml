@@ -1,0 +1,58 @@
+# Synthetic eligibility on live Test Store prices. Visual proof only, never a purchase receipt.
+appId: com.fitsy.mobile
+tags: [billing, onboarding, changed-journey]
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - assertVisible:
+          id: welcome-start
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn:
+    point: "92%,93%"
+- openLink: com.fitsy.mobile://welcome/trial?devTrialVisual=1
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible: "Try Fitsy free"
+    timeout: 30000
+- assertVisible:
+    id: trial-offer-note
+- assertVisible: "Synthetic trial eligibility for visual testing.*"
+- tapOn:
+    id: welcome-continue
+- extendedWaitUntil:
+    visible:
+      id: trial-reminder-note
+    timeout: 15000
+- assertVisible: "Synthetic trial eligibility for visual testing.*"
+- tapOn:
+    id: trial-reminder-allow
+- extendedWaitUntil:
+    visible:
+      id: dev-trial-visual-note
+    timeout: 15000
+- assertVisible: "Day 1: trial access"
+- assertVisible: "Day 6: optional reminder|Reminders are off"
+- assertVisible: "Day 7: first charge"
+- assertVisible:
+    id: paywall-price-yearly
+- tapOn:
+    id: paywall-plan-monthly
+- assertVisible:
+    id: paywall-price-monthly
+- assertVisible: "Day 7: first charge"
+- tapOn:
+    id: welcome-back
+- assertVisible:
+    id: trial-reminder-note
+- tapOn:
+    id: welcome-back
+- assertVisible: "Try Fitsy free"

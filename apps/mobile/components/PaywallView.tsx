@@ -20,6 +20,7 @@ interface Props {
   loading: boolean;
   restoring: boolean;
   checkingPlans: boolean;
+  visualPreview?: boolean;
   onSelect: (plan: PlanId) => void;
   onBack?: () => void;
   onRestore: () => void;
@@ -38,7 +39,7 @@ export function PaywallView(props: Props) {
   const busy = loading || restoring;
   const planBusy = busy || props.checkingPlans;
   const trialLength = selected?.trialDays ? `${selected.trialDays}-day` : selected?.trial;
-  const label = loading ? 'Setting up…' : props.checkingPlans ? 'Checking plans…' : selected?.trial ? `Start my ${trialLength} free trial` : 'Find meals that fit';
+  const label = loading ? 'Setting up…' : props.checkingPlans ? 'Checking plans…' : selected?.trial ? `Start ${trialLength} free trial` : 'Continue to purchase';
 
   return (
     <SafeAreaView key={fontScale} style={s.safe}>
@@ -50,8 +51,8 @@ export function PaywallView(props: Props) {
 
       <ScrollView contentContainerStyle={[s.content, compact && s.contentCompact]} showsVerticalScrollIndicator={false} bounces={false}>
         <View>
-          <Text style={[s.title, compact && s.titleCompact]}>{selected?.trial ? `Start your ${trialLength} free trial.` : 'Make room for meals that fit.'}</Text>
-          <Text style={[s.context, compact && s.contextCompact]}>Explore full menus with Pro.</Text>
+          <Text style={[s.title, compact && s.titleCompact]}>{selected?.trial ? 'Your trial timeline' : 'Choose your plan'}</Text>
+          {props.visualPreview && <Text style={s.visualNote} testID="dev-trial-visual-note">Synthetic trial eligibility for visual testing. Prices are from the live Test Store; purchase is disabled.</Text>}
           {!!props.discovery.selected && <Text style={[s.context, compact && s.contextCompact]}>Discover more meals like your pick at {props.discovery.selected.name}.</Text>}
           <PaywallTimeline terms={selected} compact={compact} />
 
@@ -84,7 +85,6 @@ export function PaywallView(props: Props) {
         </View>
 
         <View style={[s.footer, compact && s.footerCompact]}>
-          {!!selected?.trial && <Text style={s.noPayment} testID="paywall-no-payment">No payment today</Text>}
           <Text style={[s.disclosure, compact && s.disclosureCompact]} testID="paywall-terms">{selected?.compactDisclosure ?? 'Fetching current prices and subscription terms from the store…'}</Text>
           <AnimatedPress style={[s.cta, compact && s.ctaCompact, (!selected || planBusy) && s.disabled]} onPress={props.onPurchase} disabled={!selected || planBusy} haptic
             accessibilityRole="button" accessibilityLabel={label} testID="welcome-continue">
@@ -111,6 +111,7 @@ const s = StyleSheet.create({
   titleCompact: { fontSize: 24, lineHeight: 28, marginTop: 0 },
   context: { ...TEXT.bodySmall, textAlign: 'center', marginTop: 5 },
   contextCompact: { marginTop: 2 },
+  visualNote: { ...TEXT.bodySmall, color: EDITORIAL.textMid, textAlign: 'center', marginTop: 5 },
   plans: { flexDirection: 'row', gap: 10 },
   plan: { flex: 1, alignItems: 'flex-start', gap: 5, padding: 10, minHeight: 104, borderRadius: 15, borderWidth: 1, borderColor: EDITORIAL.border },
   planCompact: { padding: 8, minHeight: 94, gap: 3 },
@@ -128,7 +129,6 @@ const s = StyleSheet.create({
   retry: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   footer: { marginTop: 'auto', paddingTop: 8 },
   footerCompact: { paddingTop: 4 },
-  noPayment: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 12, lineHeight: 18, color: EDITORIAL.greenMid, textAlign: 'center', marginBottom: 8 },
   disclosure: { fontFamily: FONTS.nunitoSans, fontSize: 11, lineHeight: 15, color: EDITORIAL.textMid, textAlign: 'center', marginBottom: 8 },
   disclosureCompact: { fontSize: 11, lineHeight: 15, marginBottom: 4 },
   cta: { minHeight: 50, paddingVertical: 11, paddingHorizontal: 18, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, borderRadius: 30, backgroundColor: EDITORIAL.green },

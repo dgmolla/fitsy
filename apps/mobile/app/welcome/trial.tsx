@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text } from 'react-native';
-import { Redirect, router, useFocusEffect } from 'expo-router';
+import { Redirect, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { TrialArtwork } from '@/components/TrialArtwork';
 import { useOnboardingStep } from '@/lib/onboardingResume';
 import { usePurchases } from '@/lib/usePurchases';
 import { purchaseTerms } from '@/lib/purchaseTerms';
+import { devTrialVisualOffer } from '@/lib/devTrialVisualOffer';
 import { EDITORIAL, TEXT } from '@/lib/brand';
 import { trackOnboardingScreenView } from '@/lib/analytics';
 import { withinMs } from '@/lib/async';
@@ -15,18 +16,26 @@ import { useRouteContinuation } from '@/lib/useRouteContinuation';
 const OFFERING_RETRY_CAP_MS = 5000;
 
 export default function TrialScreen() {
+  const { devTrialVisual } = useLocalSearchParams<{ devTrialVisual?: string }>();
+  const visualRequested = __DEV__ && devTrialVisual === '1';
   const focused = useIsFocused();
   useOnboardingStep('trial');
   const { ready, offering, introEligibility, introEligibilityReady, refreshOffering, entitled } = usePurchases();
-  const offers = [offering?.annual, offering?.monthly].map(pkg => purchaseTerms(pkg?.product, pkg ? introEligibility[pkg.product.identifier] : undefined));
+  const visual = devTrialVisualOffer(offering, visualRequested);
+  const shownOffering = visual?.offering ?? offering;
+  const shownEligibility = visual?.eligibility ?? introEligibility;
+  const eligibilityReady = !!visual || introEligibilityReady;
+  const offers = [shownOffering?.annual, shownOffering?.monthly].map(pkg => purchaseTerms(pkg?.product, pkg ? shownEligibility[pkg.product.identifier] : undefined));
   const trial = offers.find(terms => terms?.trial)?.trial;
   const [plansChecked, setPlansChecked] = useState(false);
   const retryInFlight = useRef(false);
+  const navigating = useRef(false);
   const { begin } = useRouteContinuation();
-  const checkingPlans = !ready || (offering ? !introEligibilityReady : !plansChecked);
+  const checkingPlans = !ready || (shownOffering ? !eligibilityReady : !plansChecked);
   useEffect(() => { if (focused && entitled === true) router.replace('/welcome/payment'); }, [focused, entitled]);
-  useEffect(() => { trackOnboardingScreenView('trial'); }, []);
+  useEffect(() => { if (!visualRequested) trackOnboardingScreenView('trial'); }, [visualRequested]);
   useFocusEffect(useCallback(() => {
+    navigating.current = false;
     if (offering) return;
     let current = true;
     setPlansChecked(false);
@@ -34,7 +43,7 @@ export default function TrialScreen() {
     return () => { current = false; };
   }, [offering, refreshOffering]));
   async function continueOrRetry() {
-    if (checkingPlans) return;
+    if (checkingPlans || navigating.current) return;
     if (!offering) {
       if (retryInFlight.current) return;
       retryInFlight.current = true;
@@ -44,15 +53,16 @@ export default function TrialScreen() {
       finally { retryInFlight.current = false; if (isCurrent()) setPlansChecked(true); }
       return;
     }
-    router.push('/welcome/trial-reminder');
+    navigating.current = true;
+    router.push(visualRequested ? '/welcome/trial-reminder?devTrialVisual=1' : '/welcome/trial-reminder');
   }
-  if (entitled === true || (offering && introEligibilityReady && !trial)) return <Redirect href="/welcome/payment" />;
-  return <WelcomeScreen progress={1} title={trial ? 'We want you to try Fitsy for free.' : 'Checking your available plans.'}
-    subtitle={trial ? 'See how good eating out can feel when it fits your goals.' : 'Your available plans will appear next.'}
-    continueLabel={checkingPlans ? 'Checking plans…' : offering ? 'Continue' : 'Retry plans'} canContinue={!checkingPlans}
+  if (entitled === true || (shownOffering && eligibilityReady && !trial)) return <Redirect href="/welcome/payment" />;
+  return <WelcomeScreen progress={1} title={trial ? 'Try Fitsy free' : 'Checking your plans'}
+    subtitle={trial ? `Get ${trial} of Fitsy Pro with an eligible plan.` : 'Your available plans will appear next.'}
+    continueLabel={checkingPlans ? 'Checking plans…' : shownOffering ? 'Continue' : 'Retry plans'} canContinue={!checkingPlans}
     onContinue={() => { void continueOrRetry(); }}>
     <TrialArtwork />
-    <Text style={s.note} testID="trial-offer-note">{!offering && plansChecked ? 'Plans could not load. Check your connection and retry to see any eligible trial.' : trial ? `An eligible plan includes ${trial} free. Review your plan and renewal price before starting.` : 'Checking current plans and trial eligibility…'}</Text>
+    <Text style={s.note} testID="trial-offer-note">{visual ? 'Synthetic trial eligibility for visual testing. Live Test Store prices appear on the next screen.' : !offering && plansChecked ? 'Plans could not load. Check your connection and retry.' : trial ? 'Review the price and renewal terms before you start.' : 'Checking current plans and trial eligibility…'}</Text>
   </WelcomeScreen>;
 }
 const s = StyleSheet.create({ note: { ...TEXT.bodySmall, color: EDITORIAL.textMid, textAlign: 'center', lineHeight: 21 } });

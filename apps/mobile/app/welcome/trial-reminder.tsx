@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AppState, Platform, StyleSheet, Text } from 'react-native';
-import { Redirect, router } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { WelcomeActions } from '@/components/WelcomeActions';
@@ -8,6 +8,7 @@ import { TrialArtwork } from '@/components/TrialArtwork';
 import { useOnboardingStep } from '@/lib/onboardingResume';
 import { usePurchases } from '@/lib/usePurchases';
 import { purchaseTerms } from '@/lib/purchaseTerms';
+import { devTrialVisualOffer } from '@/lib/devTrialVisualOffer';
 import { canOfferTrialReminder } from '@/lib/notificationPlan';
 import { useRouteContinuation } from '@/lib/useRouteContinuation';
 import { supabase } from '@/lib/supabase';
@@ -19,18 +20,26 @@ import { trackOnboardingScreenView, trackReminderAction, trackNotificationPermis
   trackNotificationPrimingAllowTapped, trackNotificationPrimingShown, trackNotificationPrimingSkipTapped } from '@/lib/analytics';
 
 export default function TrialReminderScreen() {
+  const { devTrialVisual } = useLocalSearchParams<{ devTrialVisual?: string }>();
+  const visualRequested = __DEV__ && devTrialVisual === '1';
   const focused = useIsFocused();
   useOnboardingStep('trial-reminder');
   const [busy, setBusy] = useState(false);
   const [permission, setPermission] = useState<NotificationPermissionStatus | null>(null);
   const { ready, offering, introEligibility, introEligibilityReady, entitled } = usePurchases();
-  const offers = [offering?.annual, offering?.monthly].map(pkg => purchaseTerms(pkg?.product, pkg ? introEligibility[pkg.product.identifier] : undefined));
+  const visual = devTrialVisualOffer(offering, visualRequested);
+  const shownOffering = visual?.offering ?? offering;
+  const shownEligibility = visual?.eligibility ?? introEligibility;
+  const eligibilityReady = !!visual || introEligibilityReady;
+  const offers = [shownOffering?.annual, shownOffering?.monthly].map(pkg => purchaseTerms(pkg?.product, pkg ? shownEligibility[pkg.product.identifier] : undefined));
   const trialOffer = offers.find(terms => terms?.trial);
   const trial = trialOffer?.trial;
   const { begin } = useRouteContinuation();
   const pending = useRef(false);
+  const navigating = useRef(false);
+  useEffect(() => { if (focused) navigating.current = false; }, [focused]);
   useEffect(() => { if (focused && entitled === true) router.replace('/welcome/payment'); }, [focused, entitled]);
-  useEffect(() => { if (trial) { trackOnboardingScreenView('trial-reminder'); trackNotificationPrimingShown(); } }, [trial]);
+  useEffect(() => { if (trial && !visualRequested) { trackOnboardingScreenView('trial-reminder'); trackNotificationPrimingShown(); } }, [trial, visualRequested]);
   useEffect(() => {
     if (!focused) return;
     let current = true;
@@ -44,7 +53,12 @@ export default function TrialReminderScreen() {
     return () => { current = false; listener.remove(); };
   }, [focused]);
   async function allow() {
-    if (!trial || pending.current) return;
+    if (!trial || pending.current || navigating.current) return;
+    if (visualRequested) {
+      navigating.current = true;
+      router.push('/welcome/payment?devTrialVisual=1');
+      return;
+    }
     pending.current = true;
     const isCurrent = begin();
     setBusy(true);
@@ -72,17 +86,21 @@ export default function TrialReminderScreen() {
     finally {
       pending.current = false;
       setBusy(false);
-      if (isCurrent()) router.push(returnToSignIn ? '/welcome/signin?returnTo=trial-reminder' : '/welcome/payment');
+      if (isCurrent()) {
+        navigating.current = true;
+        router.push(returnToSignIn ? '/welcome/signin?returnTo=trial-reminder' : '/welcome/payment');
+      }
     }
   }
   function skip() {
-    if (pending.current) return;
-    trackNotificationPrimingSkipTapped();
-    router.push('/welcome/payment');
+    if (pending.current || navigating.current) return;
+    navigating.current = true;
+    if (!visualRequested) trackNotificationPrimingSkipTapped();
+    router.push(visualRequested ? '/welcome/payment?devTrialVisual=1' : '/welcome/payment');
   }
   if (!ready) return null;
-  if (!offering) return <Redirect href="/welcome/trial" />;
-  if (!introEligibilityReady) return null;
+  if (!shownOffering) return <Redirect href="/welcome/trial" />;
+  if (!eligibilityReady) return null;
   if (!trial) return <Redirect href="/welcome/payment" />;
   if (permission === null) return null;
   // Calendar-month trials have no fixed day count, but their confirmed end
@@ -90,21 +108,19 @@ export default function TrialReminderScreen() {
   const inBrowser = Platform.OS === 'web';
   const canSchedule = !inBrowser && offers.some(canOfferTrialReminder);
   const canOptIn = canSchedule && permission !== 'denied';
-  const title = inBrowser ? 'Trial reminders need the Fitsy mobile app.' : !canSchedule ? 'Review your trial before it ends.' : permission === 'denied' ? 'Notifications are off.' : 'We can notify you before your trial ends.';
-  const subtitle = inBrowser ? 'This browser cannot schedule trial notifications. Review the exact trial and renewal terms on the next screen.'
-    : !canSchedule ? 'This trial may be too short for a reminder before the cancellation deadline.'
-    : permission === 'denied' ? 'You can turn on notifications in device settings if you want a trial reminder.'
-      : 'Choose a plan with enough trial time, then allow notifications for a reminder.';
+  const title = inBrowser ? 'Reminders need the mobile app' : !canSchedule ? 'Review your trial' : permission === 'denied' ? 'Reminders are off' : 'Get a trial reminder';
+  const subtitle = inBrowser ? 'You can still review your plan and renewal terms.'
+    : !canSchedule ? 'This offer is too short for a reminder before the cancellation deadline.'
+    : permission === 'denied' ? 'Turn on notifications in device settings if you want a reminder.'
+      : `With notifications allowed, we can remind you before your ${trial} trial ends.`;
   return <WelcomeScreen progress={1} title={title} subtitle={subtitle}
     canContinue={!busy} showBack={!busy} onContinue={() => { if (canOptIn) void allow(); else skip(); }}
     footerContent={<WelcomeActions label={busy ? 'Asking…' : canOptIn ? 'Remind me' : 'Continue to plans'} onPress={canOptIn ? () => { void allow(); } : skip} disabled={busy}
       testID="trial-reminder-allow" secondaryLabel={canOptIn ? 'Not now' : undefined} onSecondary={canOptIn ? skip : undefined} secondaryTestID="trial-reminder-skip" />}>
     <TrialArtwork reminder />
-    <Text style={s.note}>{canOptIn ? 'If permission is granted and your confirmed trial end date allows it, Fitsy schedules a local reminder around day 6 of a seven-day trial. Check settings for its exact time.' : 'You can review the exact trial and renewal terms on the next screen.'}</Text>
-    <Text style={s.quiet}>Notifications are optional. You can manage them in settings.</Text>
+    <Text style={s.note} testID="trial-reminder-note">{visual ? 'Synthetic trial eligibility for visual testing. Device permission is real; this preview schedules nothing.' : canOptIn ? 'We schedule it after purchase, once the store confirms your trial end date. Check settings for its exact time.' : 'Review the exact trial and renewal terms on the next screen.'}</Text>
   </WelcomeScreen>;
 }
 const s = StyleSheet.create({
   note: { ...TEXT.bodySmall, color: EDITORIAL.textMid, textAlign: 'center', lineHeight: 21 },
-  quiet: { ...TEXT.bodySmall, textAlign: 'center', marginTop: 18, color: EDITORIAL.textSoft },
 });

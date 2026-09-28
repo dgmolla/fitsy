@@ -114,7 +114,7 @@ it('asks an anonymous trial reminder opt-in to sign in before permission, then r
   const screen = renderJourney('/welcome/trial-reminder');
   await screen.findByTestId('trial-reminder-allow');
   expect(ExpoNotifications.getPermissionsAsync).toHaveBeenCalled();
-  expect(screen.getByText('We can notify you before your trial ends.')).toBeTruthy();
+  expect(screen.getByText('Get a trial reminder')).toBeTruthy();
   await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-allow')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/signin'));
   expect(ExpoNotifications.requestPermissionsAsync).not.toHaveBeenCalled();

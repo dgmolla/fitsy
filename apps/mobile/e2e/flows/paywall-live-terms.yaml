@@ -34,7 +34,7 @@ tags: [billing, onboarding, changed-journey]
     visible:
       id: goal-build_muscle
     timeout: 30000
-# Build a real preview predecessor, then exercise the three-step trial journey.
+# Build a real preview predecessor, then verify the live catalog's no-trial path.
 - openLink: com.fitsy.mobile://welcome/preview
 # A fresh simulator can require system confirmation for an app link.
 - tapOn:
@@ -57,14 +57,17 @@ tags: [billing, onboarding, changed-journey]
     visible:
       id: paywall-price-yearly
     timeout: 15000
-- assertNotVisible: "Find your next meal with Fitsy."
+- assertVisible: "Choose your plan"
+- assertVisible: "Continue to purchase"
+- assertNotVisible: "Try Fitsy free"
 - extendedWaitUntil:
     visible:
       id: paywall-price-yearly
     timeout: 15000
-- assertNotVisible: "We can notify you before your trial ends."
+- assertNotVisible: "Get a trial reminder"
 - assertVisible:
     id: paywall-timeline
+- assertVisible: "Your first payment"
 - tapOn:
     id: welcome-back
 - assertVisible:
@@ -150,13 +153,11 @@ tags: [billing, onboarding, changed-journey]
       id: paywall-plan-yearly
     timeout: 30000
 - assertNotVisible: "Leave a review"
-# Re-authentication returns to the same paywall, with preview still behind it.
+# A previously purchased Test Store account can become lapsed before this
+# re-authentication. The earlier back assertion covered the preview predecessor;
+# after login, either that preview or the lapsed paywall is a valid back target.
 - tapOn:
     id: welcome-back
-- assertVisible:
-    id: preview-guide
-- assertNotVisible:
-    id: trial-see-plans
 - openLink: com.fitsy.mobile://welcome/payment
 # A fresh simulator can require system confirmation for an app link.
 - tapOn:

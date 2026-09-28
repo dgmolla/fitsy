@@ -23,20 +23,20 @@ function props() { return { annual, monthly, plan: 'yearly' as const, discovery:
 
 test('timeline derives trial end and reminder day from the selected store offer', () => {
   const screen = render(<PaywallTimeline terms={annual} />);
-  expect(screen.getByText('Day 1: access starts')).toBeTruthy();
+  expect(screen.getByText('Day 1: trial access')).toBeTruthy();
   expect(screen.getByText('Day 6: optional reminder')).toBeTruthy();
-  expect(screen.getByText('Day 7 ends: payment')).toBeTruthy();
-  expect(screen.getByText(/Trial days are full 24-hour periods from purchase/)).toBeTruthy();
+  expect(screen.getByText('Day 7: first charge')).toBeTruthy();
+  expect(screen.getByText('$59.99 every 1 year after the full trial period, unless canceled at least 24 hours before it ends.')).toBeTruthy();
   screen.rerender(<PaywallTimeline terms={purchaseTerms({ ...product, introPrice: { ...product.introPrice, period: 'P2W' } }, true)} />);
   expect(screen.getByText('Day 13: optional reminder')).toBeTruthy();
-  expect(screen.getByText('Day 14 ends: payment')).toBeTruthy();
+  expect(screen.getByText('Day 14: first charge')).toBeTruthy();
 });
 
 test('denied permission gives a concise disabled state instead of promising delivery', async () => {
   jest.mocked(Notifications.getPermissionsAsync).mockResolvedValueOnce({ status: 'denied' } as Notifications.NotificationPermissionsStatus);
   const screen = render(<PaywallTimeline terms={annual} />);
   await waitFor(() => expect(screen.getByText('Reminders are off')).toBeTruthy());
-  expect(screen.getByText('Allow notifications in device settings to receive one.')).toBeTruthy();
+  expect(screen.getByText('Turn on notifications in device settings to receive one.')).toBeTruthy();
   await act(async () => { screen.unmount(); });
 });
 
@@ -45,7 +45,7 @@ test('granted permission remains conditional until a native request is scheduled
   const screen = render(<PaywallTimeline terms={annual} />);
   await waitFor(() => expect(Notifications.getPermissionsAsync).toHaveBeenCalled());
   expect(screen.getByText('Day 6: optional reminder')).toBeTruthy();
-  expect(screen.getByText(/check settings for the exact time/)).toBeTruthy();
+  expect(screen.getByText('Requires permission and a store-confirmed trial end date.')).toBeTruthy();
 });
 
 test('a stale denied response cannot replace a newer granted permission', async () => {
@@ -77,7 +77,7 @@ test('browser timeline does not promise a notification for an eligible trial', (
     expect(screen.getByText('Reminder unavailable in this browser')).toBeTruthy();
     expect(screen.getByText('Trial notifications require the Fitsy mobile app.')).toBeTruthy();
     expect(screen.queryByText('Day 6: optional reminder')).toBeNull();
-    expect(screen.getByText('Day 7 ends: payment')).toBeTruthy();
+    expect(screen.getByText('Day 7: first charge')).toBeTruthy();
   } finally { Platform.OS = originalOS; }
 });
 
@@ -93,7 +93,7 @@ test('ineligible and unknown offers never promise a free trial or notification',
 
 test('calendar trials are not converted to invented day counts', () => {
   const screen = render(<PaywallTimeline terms={purchaseTerms({ ...product, introPrice: { ...product.introPrice, period: 'P1M' } }, true)} />);
-  expect(screen.getByText('After 1 month: payment')).toBeTruthy();
+  expect(screen.getByText('After 1 month: first charge')).toBeTruthy();
   expect(screen.queryByText(/Day 30/)).toBeNull();
 });
 
@@ -104,7 +104,7 @@ test('the selected short trial has a truthful reminder step, even after a longer
   expect(screen.getByText('Day 6: optional reminder')).toBeTruthy();
   screen.rerender(<PaywallView {...p} plan="monthly" />);
   expect(screen.getByText('Reminder unavailable for this trial')).toBeTruthy();
-  expect(screen.getByText('Day 2 ends: payment')).toBeTruthy();
+  expect(screen.getByText('Day 2: first charge')).toBeTruthy();
   expect(screen.queryByText('Day 6: optional reminder')).toBeNull();
   expect(screen.getByTestId('paywall-terms').props.children).toContain('2 days free');
   screen.rerender(<PaywallView {...p} plan="yearly" />);
@@ -114,7 +114,8 @@ test('the selected short trial has a truthful reminder step, even after a longer
 test('plan selection, purchase, restore and decline remain operable with live totals', () => {
   const p = props();
   const screen = render(<PaywallView {...p} />);
-  expect(screen.getByText('Start your 7-day free trial.')).toBeTruthy();
+  expect(screen.getByText('Your trial timeline')).toBeTruthy();
+  expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toBe('Start 7-day free trial');
   expect(screen.getByTestId('paywall-price-yearly').props.children).toBe('$59.99');
   fireEvent.press(screen.getByTestId('paywall-plan-monthly'));
   expect(p.onSelect).toHaveBeenCalledWith('monthly');
@@ -125,7 +126,7 @@ test('plan selection, purchase, restore and decline remain operable with live to
   fireEvent.press(screen.getByTestId('welcome-skip'));
   expect(p.onDecline).toHaveBeenCalledTimes(1);
   screen.rerender(<PaywallView {...p} plan="monthly" />);
-  expect(screen.queryByTestId('paywall-no-payment')).toBeNull();
+  expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toBe('Continue to purchase');
   expect(screen.getByText('$9.99 charged when you confirm your purchase.')).toBeTruthy();
 });
 
@@ -136,5 +137,5 @@ test('unavailable pricing disables purchases and provides retry without inventin
   expect(p.onPurchase).not.toHaveBeenCalled();
   fireEvent.press(screen.getByTestId('paywall-retry-pricing'));
   expect(p.onRetry).toHaveBeenCalledTimes(1);
-  expect(screen.queryByTestId('paywall-no-payment')).toBeNull();
+  expect(screen.queryByText(/free trial/i)).toBeNull();
 });

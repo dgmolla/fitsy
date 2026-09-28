@@ -128,7 +128,14 @@ test('eligible trial introduction keeps the optional reminder choice', async () 
   mockEligibilityReady = true;
   mockEligibility = { annual: true, monthly: false };
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
-  await waitFor(() => expect(screen.getByText('We want you to try Fitsy for free.')).toBeTruthy());
+  await waitFor(() => expect(screen.getByText('Try Fitsy free')).toBeTruthy());
+  expect(screen.getByText('Get 7 days of Fitsy Pro with an eligible plan.')).toBeTruthy();
+  const continueButton = screen.getByTestId('welcome-continue');
+  fireEvent.press(continueButton);
+  fireEvent.press(continueButton);
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/trial-reminder'));
+  await act(async () => { router.back(); });
+  expect(screen.getPathname()).toBe('/welcome/trial');
   fireEvent.press(screen.getByTestId('welcome-continue'));
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/trial-reminder'));
 });

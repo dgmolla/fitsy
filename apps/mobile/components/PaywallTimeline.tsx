@@ -27,14 +27,14 @@ export function PaywallTimeline({ terms, compact = false }: { terms: Terms; comp
     return () => { live = false; listener?.remove(); };
   }, [inBrowser, canRemind]);
   const rows = terms?.trial ? [
-    { icon: 'lock-open-outline' as const, title: 'Day 1: access starts', body: 'Unlock meals that fit your goals, full menus and saved favorites.' },
+    { icon: 'lock-open-outline' as const, title: 'Day 1: trial access', body: 'Start using Fitsy Pro.' },
     { icon: 'notifications-outline' as const, title: inBrowser ? 'Reminder unavailable in this browser' : !canRemind ? 'Reminder unavailable for this trial' : permission === 'denied' ? 'Reminders are off' : reminderDay ? `Day ${reminderDay}: optional reminder` : 'Reminder before trial end, if available',
-      body: inBrowser ? 'Trial notifications require the Fitsy mobile app.' : !canRemind ? 'This trial ends too soon to schedule a reminder before the cancellation deadline.' : permission === 'denied' ? 'Allow notifications in device settings to receive one.' : 'Trial days are full 24-hour periods from purchase. Requires permission and a confirmed trial end date; check settings for the exact time.' },
-    { icon: 'card-outline' as const, title: terms.trialDays ? `Day ${terms.trialDays} ends: payment` : `After ${terms.trial}: payment`, body: `${terms.recurring} after the full trial period, unless canceled at least 24 hours before trial end. The store confirms the exact date.` },
+      body: inBrowser ? 'Trial notifications require the Fitsy mobile app.' : !canRemind ? 'This trial is too short for a reminder before the cancellation deadline.' : permission === 'denied' ? 'Turn on notifications in device settings to receive one.' : 'Requires permission and a store-confirmed trial end date.' },
+    { icon: 'card-outline' as const, title: terms.trialDays ? `Day ${terms.trialDays}: first charge` : `After ${terms.trial}: first charge`, body: `${terms.recurring} after the full trial period, unless canceled at least 24 hours before it ends.` },
   ] : [
-    { icon: 'lock-open-outline' as const, title: terms ? 'Access starts today' : 'Your plan, clearly explained', body: 'Find meals that fit your goals, explore full menus and save favorites.' },
+    { icon: 'lock-open-outline' as const, title: terms ? 'Access starts today' : 'Your plan', body: terms ? 'Fitsy Pro begins after purchase.' : 'Store plans are loading.' },
     { icon: 'card-outline' as const, title: terms ? 'Your first payment' : 'Checking store terms', body: terms?.charge ?? 'Current prices and eligible offers appear when the store finishes loading.' },
-    { icon: 'calendar-outline' as const, title: 'You stay in control', body: 'Manage your subscription in settings. Cancel at least 24 hours before renewal.' },
+    { icon: 'calendar-outline' as const, title: 'Renewal', body: terms ? `${terms.recurring}. Cancel in subscription settings at least 24 hours before renewal.` : 'Renewal terms appear with store prices.' },
   ];
   return <View style={[s.timeline, compact && s.timelineCompact]} testID="paywall-timeline">{rows.map((row, i) => <View key={row.title} style={s.row}>
     <View style={s.track}>{i < rows.length - 1 && <View style={s.line} />}<View style={[s.icon, i === rows.length - 1 && s.lastIcon]}>
