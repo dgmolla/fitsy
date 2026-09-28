@@ -7,6 +7,7 @@ import { trackReminderAction } from './analytics';
 import { usePurchases } from './usePurchases';
 import { DEFAULT_REMINDER_PREFERENCES, REMINDER_PREFIX, planReminders, type ReminderPreferences } from './notificationPlan';
 import { readReminderPreferences, readScheduledReminders, reconcileReminderOwnership, replaceReminders, reminderDestination, saveReminderPreferences, subscribeReminderPreferences } from './notificationSchedule';
+import { reconcileDevTrialReminderOwnership } from './devTrialReminderProbe';
 
 interface ReminderContextValue { userId: string | null; preferences: ReminderPreferences; scheduled: { kind: string; date: string }[]; save: (value: ReminderPreferences) => Promise<void> }
 const ReminderContext = createContext<ReminderContextValue | null>(null);
@@ -29,7 +30,10 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       authEventReceived = true;
       if (live) setAccount({ ready: true, id: session?.user.id ?? null });
-      if (!session) void replaceReminders(null, []).catch(reportFailure);
+      if (!session) {
+        void replaceReminders(null, []).catch(reportFailure);
+        void reconcileDevTrialReminderOwnership(null).catch(reportFailure);
+      }
     });
     void supabase.auth.getSession().then(({ data: sessionData }) => {
       if (live && !authEventReceived) setAccount({ ready: true, id: sessionData.session?.user.id ?? null });
@@ -45,7 +49,7 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
     if (!account.ready || scheduledAccountRef.current === account.id) return;
     let live = true;
     // Keep the resolved account's jobs if its preference read fails at boot.
-    void reconcileReminderOwnership(account.id)
+    void Promise.all([reconcileReminderOwnership(account.id), reconcileDevTrialReminderOwnership(account.id)])
       .then(() => { if (live) scheduledAccountRef.current = account.id; })
       .catch(reportFailure);
     return () => { live = false; };

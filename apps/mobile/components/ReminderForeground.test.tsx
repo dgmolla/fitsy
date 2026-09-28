@@ -4,6 +4,7 @@ import { AppState, Text } from 'react-native';
 import { act, render, waitFor } from '@testing-library/react-native';
 import { ReminderProvider, useReminders } from '../lib/useReminders';
 import { readReminderPreferences, reconcileReminderOwnership, replaceReminders } from '../lib/notificationSchedule';
+import { reconcileDevTrialReminderOwnership } from '../lib/devTrialReminderProbe';
 
 jest.mock('expo-router', () => ({ router: { push: jest.fn() }, usePathname: () => '/notification-settings' }));
 jest.mock('expo-notifications', () => ({
@@ -32,6 +33,7 @@ jest.mock('../lib/notificationSchedule', () => ({
   saveReminderPreferences: jest.fn(),
   reminderDestination: jest.fn(),
 }));
+jest.mock('../lib/devTrialReminderProbe', () => ({ reconcileDevTrialReminderOwnership: jest.fn(async () => {}) }));
 
 beforeEach(() => {
   mockAccountId = 'reminder-owner';
@@ -88,6 +90,7 @@ test('switching accounts clears prior meal reminders when the new account storag
   await waitFor(() => expect(read).toHaveBeenCalledWith('next-owner', { throwOnError: true }));
   expect(screen.getByText('Meal reminders off')).toBeTruthy();
   expect(reconcileReminderOwnership).toHaveBeenCalledWith('next-owner');
+  expect(reconcileDevTrialReminderOwnership).toHaveBeenCalledWith('next-owner');
   expect(replace).not.toHaveBeenCalledWith(null, []);
 });
 

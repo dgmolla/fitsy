@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { planReminders, REMINDER_PREFIX } from './notificationPlan';
 import { readReminderPreferences, readScheduledReminders, saveReminderPreferences, replaceReminders, reconcileReminderOwnership, reminderDestination, REMINDER_CHANNEL } from './notificationSchedule';
+import { clearDevTrialReminder, reconcileDevTrialReminderOwnership, scheduleDevTrialReminder } from './devTrialReminderProbe';
 
 jest.mock('@react-native-async-storage/async-storage', () => ({ __esModule: true, default: { getItem: jest.fn(), setItem: jest.fn() } }));
 jest.mock('expo-notifications', () => ({
@@ -55,6 +56,86 @@ test('permission denial cancels prior reminders and never prompts or schedules',
   sdk.scheduleNotificationAsync.mockClear();
   await replaceReminders('one', plan());
   expect(pending.size).toBe(0); expect(sdk.scheduleNotificationAsync).not.toHaveBeenCalled();
+});
+test('a seven-day trial creates exactly one native day-six request on a fixed clock', async () => {
+  jest.useFakeTimers().setSystemTime(new Date(2026, 8, 7, 9));
+  try {
+    const expiration = new Date(2026, 8, 14, 12);
+    const trial = planReminders({ now: new Date(), userId: 'one', entitled: true,
+      preferences: { meals: false, trial: true },
+      subscription: { isActive: true, periodType: 'TRIAL', willRenew: true,
+        latestPurchaseDate: new Date(2026, 8, 7, 9).toISOString(), expirationDate: expiration.toISOString() } });
+    await replaceReminders('one', trial);
+    await replaceReminders('one', trial);
+    expect(pending.size).toBe(1);
+    expect(await readScheduledReminders('one')).toEqual([{ kind: 'trial', date: trial[0].date.toISOString() }]);
+    expect(trial[0].date.getTime()).toBeLessThan(expiration.getTime() - 24 * 3_600_000);
+    expect(sdk.scheduleNotificationAsync.mock.calls.at(-1)?.[0].trigger).toMatchObject({ type: 'date', date: trial[0].date });
+    await replaceReminders('one', []);
+    expect(pending.size).toBe(0);
+  } finally { jest.useRealTimers(); }
+});
+test('development device probe uses the native bridge once, clears it, and cannot run in production', async () => {
+  const prior = Object.getOwnPropertyDescriptor(globalThis, '__DEV__');
+  Object.defineProperty(globalThis, '__DEV__', { value: true, configurable: true });
+  try {
+    const realIdentifier = `${REMINDER_PREFIX}meal.real`;
+    pending.set(realIdentifier, { identifier: realIdentifier, content: { data: { userId: 'one', kind: 'meal' } }, trigger: null });
+    const now = new Date(2026, 8, 28, 4);
+    const first = await scheduleDevTrialReminder('one', now);
+    expect(first).toEqual({ count: 1, identifier: expect.stringMatching(/^fitsy\.dev-trial-reminder\./), scheduledFor: expect.any(String) });
+    expect(new Date(first.scheduledFor!).getHours()).toBe(9);
+    expect(pending.size).toBe(2);
+    expect(await scheduleDevTrialReminder('one', now)).toEqual(first);
+    expect(pending.size).toBe(2);
+    expect(await clearDevTrialReminder('one')).toEqual({ count: 0, identifier: null, scheduledFor: null });
+    expect([...pending.keys()]).toEqual([realIdentifier]);
+    Object.defineProperty(globalThis, '__DEV__', { value: false, configurable: true });
+    await expect(scheduleDevTrialReminder('one', now)).rejects.toThrow('Development sign-in required');
+    expect(sdk.scheduleNotificationAsync).toHaveBeenCalledTimes(2);
+  } finally {
+    if (prior) Object.defineProperty(globalThis, '__DEV__', prior);
+    else Reflect.deleteProperty(globalThis, '__DEV__');
+  }
+});
+test('concurrent probe taps cannot duplicate and account changes remove only probe requests', async () => {
+  const prior = Object.getOwnPropertyDescriptor(globalThis, '__DEV__');
+  Object.defineProperty(globalThis, '__DEV__', { value: true, configurable: true });
+  try {
+    const realIdentifier = `${REMINDER_PREFIX}meal.real`;
+    pending.set(realIdentifier, { identifier: realIdentifier, content: { data: { userId: 'one' } }, trigger: null });
+    const now = new Date(2026, 8, 28, 4);
+    await Promise.all([scheduleDevTrialReminder('one', now), scheduleDevTrialReminder('one', now)]);
+    expect([...pending.keys()].filter(id => id.startsWith('fitsy.dev-trial-reminder.'))).toHaveLength(1);
+    await reconcileDevTrialReminderOwnership('two');
+    expect([...pending.keys()]).toEqual([realIdentifier]);
+    await scheduleDevTrialReminder('two', now);
+    await reconcileDevTrialReminderOwnership(null);
+    expect([...pending.keys()]).toEqual([realIdentifier]);
+  } finally {
+    if (prior) Object.defineProperty(globalThis, '__DEV__', prior);
+    else Reflect.deleteProperty(globalThis, '__DEV__');
+  }
+});
+test('account change during a native probe write removes the late request', async () => {
+  const prior = Object.getOwnPropertyDescriptor(globalThis, '__DEV__');
+  Object.defineProperty(globalThis, '__DEV__', { value: true, configurable: true });
+  try {
+    let release!: () => void; let started!: () => void;
+    const entered = new Promise<void>(resolve => { started = resolve; });
+    sdk.scheduleNotificationAsync.mockImplementationOnce(async request => {
+      started(); await new Promise<void>(resolve => { release = resolve; });
+      pending.set(request.identifier!, request); return request.identifier!;
+    });
+    const old = scheduleDevTrialReminder('one', new Date(2026, 8, 28, 4));
+    await entered;
+    const changed = reconcileDevTrialReminderOwnership('two');
+    release(); await Promise.all([old, changed]);
+    expect(pending.size).toBe(0);
+  } finally {
+    if (prior) Object.defineProperty(globalThis, '__DEV__', prior);
+    else Reflect.deleteProperty(globalThis, '__DEV__');
+  }
 });
 test('an opt-out queued during a native schedule removes that late request', async () => {
   let release!: () => void; let started!: () => void;

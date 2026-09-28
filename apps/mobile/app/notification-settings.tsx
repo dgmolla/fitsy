@@ -7,12 +7,17 @@ import { useReminders } from '@/lib/useReminders';
 import { usePurchases } from '@/lib/usePurchases';
 import { getNotificationPermission, requestPermissionsAsync } from '@/lib/useNotifications';
 import { showManageSubscriptions } from '@/lib/purchases';
+import { clearDevTrialReminder, scheduleDevTrialReminder } from '@/lib/devTrialReminderProbe';
 
 export default function NotificationSettingsScreen() {
   const { userId, preferences, scheduled, save } = useReminders();
-  const { entitled } = usePurchases();
+  const { entitled, customerInfo } = usePurchases();
+  const trial = customerInfo?.entitlements.all.pro;
+  const trialEnd = trial?.isActive && trial.periodType === 'TRIAL' && trial.expirationDate && Number.isFinite(Date.parse(trial.expirationDate))
+    ? new Date(trial.expirationDate).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : null;
   const [permission, setPermission] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [probe, setProbe] = useState<string>();
   useEffect(() => {
     let live = true;
     const update = () => { void getNotificationPermission().then(value => { if (live) setPermission(value); }); };
@@ -41,12 +46,28 @@ export default function NotificationSettingsScreen() {
     </View>
     {userId && (!preferences.meals || !preferences.trial) && <Pressable style={s.action} disabled={busy} onPress={() => { void enable(); }} accessibilityRole="button" testID="reminders-enable"><Text style={s.link}>{busy ? 'Asking…' : 'Remind me'}</Text></Pressable>}
     {userId && entitled !== true && <Text style={s.body}>Reminders start with your active Fitsy subscription.</Text>}
+    {trialEnd && <Text style={s.body} testID="reminder-trial-end">Trial {trial?.willRenew ? 'renews' : 'ends'}: {trialEnd}</Text>}
     <Text style={s.title}>Upcoming reminders</Text>
     {!scheduled.length && <Text style={s.body} testID="reminders-empty">No upcoming reminders</Text>}
     {(['meal', 'trial'] as const).map(kind => {
       const next = scheduled.find(item => item.kind === kind);
-      return next ? <Text key={kind} style={s.body} testID={`reminder-next-${kind}`}>{kind === 'meal' ? 'Meal inspiration' : 'Trial renewal'}: {new Date(next.date).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</Text> : null;
+      return next ? <Text key={kind} style={s.body} testID={`reminder-next-${kind}`}>{kind === 'meal' ? 'Meal inspiration' : 'Trial renewal'}: {new Date(next.date).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</Text> : null;
     })}
+    {__DEV__ && <View style={s.card}>
+      <Text style={s.title}>Development reminder probe</Text>
+      <Text style={s.body}>Synthetic seven-day trial dates; does not change your subscription. {userId ? '' : 'Sign in to use this probe.'}</Text>
+      <Pressable style={s.action} disabled={busy || !userId} onPress={() => { void scheduleDevTrialReminder(userId)
+        .then(value => setProbe(`Native pending: ${value.count}; trial: ${value.scheduledFor ?? 'none'}`))
+        .catch(error => setProbe(String(error))); }} accessibilityRole="button" testID="dev-reminder-schedule">
+        <Text style={s.link}>Schedule test trial reminder</Text>
+      </Pressable>
+      <Pressable style={s.action} disabled={busy || !userId} onPress={() => { void clearDevTrialReminder(userId)
+        .then(value => setProbe(`Native pending after clear: ${value.count}`))
+        .catch(error => setProbe(String(error))); }} accessibilityRole="button" testID="dev-reminder-clear">
+        <Text style={s.link}>Clear test reminders</Text>
+      </Pressable>
+      {probe && <Text style={s.body} testID="dev-reminder-result">{probe}</Text>}
+    </View>}
     <Pressable style={s.action} onPress={() => { void showManageSubscriptions(); }} accessibilityRole="button" testID="reminders-manage-subscription"><Text style={s.link}>Manage subscription</Text></Pressable>
   </ScrollView></SafeAreaView>;
 }

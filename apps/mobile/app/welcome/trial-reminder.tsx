@@ -100,7 +100,7 @@ export default function TrialReminderScreen() {
     footerContent={<WelcomeActions label={busy ? 'Asking…' : canOptIn ? 'Remind me' : 'Continue to plans'} onPress={canOptIn ? () => { void allow(); } : skip} disabled={busy}
       testID="trial-reminder-allow" secondaryLabel={canOptIn ? 'Not now' : undefined} onSecondary={canOptIn ? skip : undefined} secondaryTestID="trial-reminder-skip" />}>
     <TrialArtwork reminder />
-    <Text style={s.note}>{canOptIn ? 'If permission is granted and your confirmed trial end date allows it, Fitsy schedules a local reminder about two days before renewal.' : 'You can review the exact trial and renewal terms on the next screen.'}</Text>
+    <Text style={s.note}>{canOptIn ? 'If permission is granted and your confirmed trial end date allows it, Fitsy schedules a local reminder around day 6 of a seven-day trial. Check settings for its exact time.' : 'You can review the exact trial and renewal terms on the next screen.'}</Text>
     <Text style={s.quiet}>Notifications are optional. You can manage them in settings.</Text>
   </WelcomeScreen>;
 }

@@ -1,20 +1,36 @@
-import React from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { AppState, Platform, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Notifications from 'expo-notifications';
 import { EDITORIAL, FONTS } from '@/lib/brand';
-import { canOfferTrialReminder, TRIAL_REMINDER_LEAD_DAYS } from '@/lib/notificationPlan';
+import { canOfferTrialReminder } from '@/lib/notificationPlan';
 import type { purchaseTerms } from '@/lib/purchaseTerms';
 
 type Terms = ReturnType<typeof purchaseTerms>;
 export function PaywallTimeline({ terms, compact = false }: { terms: Terms; compact?: boolean }) {
-  const reminderDay = terms?.trialDays ? terms.trialDays - TRIAL_REMINDER_LEAD_DAYS : null;
+  const reminderDay = terms?.trialDays ? terms.trialDays - 1 : null;
   const inBrowser = Platform.OS === 'web';
   const canRemind = !inBrowser && canOfferTrialReminder(terms);
+  const [permission, setPermission] = useState<string | null>(null);
+  useEffect(() => {
+    if (inBrowser || !canRemind) return;
+    let live = true;
+    let request = 0;
+    const refresh = () => {
+      const latest = ++request;
+      void Notifications.getPermissionsAsync()
+        .then(value => { if (live && latest === request) setPermission(value.status); })
+        .catch(() => { if (live && latest === request) setPermission('undetermined'); });
+    };
+    refresh();
+    const listener = AppState.addEventListener('change', state => { if (state === 'active') refresh(); });
+    return () => { live = false; listener?.remove(); };
+  }, [inBrowser, canRemind]);
   const rows = terms?.trial ? [
-    { icon: 'lock-open-outline' as const, title: 'Today', body: 'Unlock meals that fit your goals, full menus and saved favorites.' },
-    { icon: 'notifications-outline' as const, title: inBrowser ? 'Reminder unavailable in this browser' : !canRemind ? 'Reminder unavailable for this trial' : reminderDay ? `Optional reminder around day ${reminderDay}` : 'Optional reminder, if available',
-      body: inBrowser ? 'Trial notifications require the Fitsy mobile app.' : canRemind ? 'Requires permission and a confirmed trial end date.' : 'This trial ends too soon to schedule a reminder before the cancellation deadline.' },
-    { icon: 'card-outline' as const, title: terms.trialDays ? `Day ${terms.trialDays}: payment` : `After ${terms.trial}: payment`, body: `${terms.recurring}, unless canceled at least 24 hours before trial end.` },
+    { icon: 'lock-open-outline' as const, title: 'Day 1: access starts', body: 'Unlock meals that fit your goals, full menus and saved favorites.' },
+    { icon: 'notifications-outline' as const, title: inBrowser ? 'Reminder unavailable in this browser' : !canRemind ? 'Reminder unavailable for this trial' : permission === 'denied' ? 'Reminders are off' : reminderDay ? `Day ${reminderDay}: optional reminder` : 'Reminder before trial end, if available',
+      body: inBrowser ? 'Trial notifications require the Fitsy mobile app.' : !canRemind ? 'This trial ends too soon to schedule a reminder before the cancellation deadline.' : permission === 'denied' ? 'Allow notifications in device settings to receive one.' : 'Trial days are full 24-hour periods from purchase. Requires permission and a confirmed trial end date; check settings for the exact time.' },
+    { icon: 'card-outline' as const, title: terms.trialDays ? `Day ${terms.trialDays} ends: payment` : `After ${terms.trial}: payment`, body: `${terms.recurring} after the full trial period, unless canceled at least 24 hours before trial end. The store confirms the exact date.` },
   ] : [
     { icon: 'lock-open-outline' as const, title: terms ? 'Access starts today' : 'Your plan, clearly explained', body: 'Find meals that fit your goals, explore full menus and save favorites.' },
     { icon: 'card-outline' as const, title: terms ? 'Your first payment' : 'Checking store terms', body: terms?.charge ?? 'Current prices and eligible offers appear when the store finishes loading.' },
