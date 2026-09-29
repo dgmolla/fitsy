@@ -13,6 +13,7 @@ import { rememberPaywallDecline } from '../lib/paywallAccess';
 import { saveOnboardingField } from '../lib/onboardingStorage';
 import { saveMacroTargets } from '../lib/macroStorage';
 import { usePreviewAccess } from '../lib/usePreviewAccess';
+import { rememberOnboardingPreviewEntry } from '../lib/onboardingPreviewEntry';
 
 function AccessProbe() {
   const direct = usePreviewAccess();
@@ -98,4 +99,21 @@ it('allows a returning onboarding preview after decline but still gates full men
   await act(async () => { fireEvent.press(screen.getByTestId('payment-back')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
   expect(screen.queryByTestId('preview-guide')).toBeNull();
+});
+
+it('leaves a cold-start preview when Back has no navigation history', async () => {
+  await AsyncStorage.clear();
+  await rememberPaywallDecline();
+  await saveOnboardingField('goal', 'lose_fat');
+  await saveMacroTargets({ calories: '600', protein: '0', carbs: '0', fat: '0' });
+  await rememberOnboardingPreviewEntry();
+  const screen = renderRouter({
+    _layout: () => <PurchasesProvider><Stack /></PurchasesProvider>,
+    'welcome/how-it-works': HowItWorks, 'welcome/preview': Preview,
+    'welcome/payment': () => <Text>Payment plans</Text>,
+  }, { initialUrl: '/welcome/preview' });
+  await screen.findByTestId('preview-guide');
+  await act(async () => { fireEvent.press(screen.getByTestId('preview-back')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/how-it-works'));
+  expect(await AsyncStorage.getItem('@fitsy/onboardingPreviewEntry')).toBeNull();
 });

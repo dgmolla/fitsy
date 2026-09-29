@@ -160,7 +160,7 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
       edges={isOnboardingPreview ? ['top', 'right', 'bottom', 'left'] : ['top', 'right', 'left']}
       style={{ flex: 1, backgroundColor: EDITORIAL.cream }}
     >
-      {isOnboardingPreview && <WelcomeNav progress={0.75} backTestID="preview-back" onBack={navigation.canGoBack() ? onPreviewBack ?? (() => router.back()) : undefined} />}
+      {isOnboardingPreview && <WelcomeNav progress={0.75} backTestID="preview-back" onBack={onPreviewBack ?? (navigation.canGoBack() ? () => router.back() : undefined)} />}
       <Masthead preview={isOnboardingPreview} locationRef={tourLocationRef} locationLabel={locationLabel} onLocationPress={handleOpenLocationPicker} />
       {!loading && error !== null && (
         <View style={s.errorBanner}>

@@ -13,7 +13,10 @@ export default function PreviewScreen() {
   const { entitled } = usePurchases();
   const focused = useIsFocused();
   const goBack = useCallback(() => {
-    void clearOnboardingPreviewEntry().then(() => router.back())
+    void clearOnboardingPreviewEntry().then(() => {
+      if (router.canGoBack()) router.back();
+      else router.replace('/welcome/how-it-works');
+    })
       .catch(() => Alert.alert('Could not leave preview', 'Please try again.'));
   }, []);
   useEffect(() => {
