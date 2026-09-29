@@ -87,6 +87,15 @@ tags: [billing, discovery, onboarding, changed-journey]
     id: preview-guide
 - assertVisible:
     id: preview-pick-2
+# A cold-start resume keeps this specific, user-entered preview pass.
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: preview-guide
+    timeout: 30000
+- assertVisible:
+    id: preview-pick-2
 # Restaurant details still require payment; preview is not an entitlement.
 - tapOn:
     id: preview-pick-2

@@ -40,7 +40,7 @@ jest.mock('../components/DiscoveryScreen', () => {
       React.createElement(Text, null, 'Full menu with Pro'))) };
 });
 
-it.each(['/search?preview=1', '/welcome/preview'])('keeps a declined anonymous user on payment when opening %s', async (initialUrl) => {
+it.each(['/search?preview=1', '/welcome/preview', '/welcome/preview?entry=onboarding'])('keeps a declined anonymous user on payment when opening %s', async (initialUrl) => {
   await AsyncStorage.clear();
   await rememberPaywallDecline();
   const screen = renderRouter({
@@ -69,6 +69,7 @@ it('allows a returning onboarding preview after decline but still gates full men
   await screen.findByTestId('nutrition-source-published');
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   expect(await screen.findByTestId('preview-guide')).toBeTruthy();
+  expect(await AsyncStorage.getItem('@fitsy/onboardingPreviewEntry')).toBe('1');
   expect(screen.queryByText('Paid search results')).toBeNull();
   await act(async () => { fireEvent.press(screen.getByTestId('locked-full-menu')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));

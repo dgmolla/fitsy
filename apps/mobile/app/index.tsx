@@ -8,6 +8,7 @@ import { paywallVariants, readPaywallDecline } from '@/lib/paywallAccess';
 import { ONBOARDING_COMPLETE_KEY } from '@/lib/onboardingCompletion';
 import { getStoredToken } from '@/lib/authClient';
 import { getMacroTargets } from '@/lib/macroStorage';
+import { readOnboardingPreviewEntry } from '@/lib/onboardingPreviewEntry';
 import { usePurchases } from '@/lib/usePurchases';
 import { onboardingEntry, type EntryDestination } from '@/lib/onboardingEntry';
 import { EDITORIAL, FONTS } from '@/lib/brand';
@@ -22,9 +23,9 @@ export default function Index() {
     let current = true;
     async function resolve() {
       try {
-        const [token, resume, declined, completed, targets] = await Promise.all([
+        const [token, resume, declined, completed, targets, onboardingPreviewEntry] = await Promise.all([
           getStoredToken(), getOnboardingResume(), readPaywallDecline(),
-          AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY), getMacroTargets(),
+          AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY), getMacroTargets(), readOnboardingPreviewEntry(),
         ]);
         if (!current) return;
         if (token && purchasesReady && entitled === true && targets) {
@@ -33,7 +34,7 @@ export default function Index() {
         }
         setDestination(onboardingEntry({
           signedIn: !!token, resume, declined, completed: completed === 'true',
-          hasTargets: !!targets, purchasesReady, entitled, isLapsed,
+          hasTargets: !!targets, purchasesReady, entitled, isLapsed, onboardingPreviewEntry,
           access: paywallVariants(offering?.metadata).access,
         }));
       } catch {

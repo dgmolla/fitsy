@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { canPreviewAfterDecline, paywallVariants, readPaywallDecline, rememberPaywallDecline } from './paywallAccess';
 
-jest.mock('@react-native-async-storage/async-storage', () => ({ __esModule: true, default: { getItem: jest.fn(), setItem: jest.fn() } }));
+jest.mock('@react-native-async-storage/async-storage', () => ({ __esModule: true, default: { getItem: jest.fn(), setItem: jest.fn(), removeItem: jest.fn() } }));
 
 test('approved launch defaults use meal imagery and a hard paywall; explicit variants remain available', () => {
   expect(paywallVariants()).toEqual({ access: 'hard', image: 'meal' });
@@ -16,9 +16,11 @@ test('a pending storage read cannot reopen preview after the user declines', asy
   let resolve!: (value: string | null) => void;
   jest.mocked(AsyncStorage.getItem).mockReturnValue(new Promise(done => { resolve = done; }));
   jest.mocked(AsyncStorage.setItem).mockResolvedValue();
+  jest.mocked(AsyncStorage.removeItem).mockResolvedValue();
   const pending = readPaywallDecline();
   await rememberPaywallDecline(); resolve(null);
   expect(await pending).toBe(true);
   expect(await readPaywallDecline()).toBe(true);
   expect(AsyncStorage.setItem).toHaveBeenCalledWith('@fitsy/paywallDeclined', '1');
+  expect(AsyncStorage.removeItem).toHaveBeenCalledWith('@fitsy/onboardingPreviewEntry');
 });

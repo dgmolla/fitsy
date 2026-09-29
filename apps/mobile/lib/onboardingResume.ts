@@ -4,6 +4,7 @@ import { useFocusEffect } from 'expo-router';
 import { getMacroTargets } from './macroStorage';
 import { getOnboardingData } from './onboardingStorage';
 import { getPreviewSetup } from './previewSetup';
+import { clearOnboardingPreviewEntry } from './onboardingPreviewEntry';
 
 const KEY = '@fitsy/onboardingStep';
 const GOAL_RETURN_KEY = '@fitsy/onboardingGoalReturnTo';
@@ -70,4 +71,5 @@ export async function clearGoalReturnTo(): Promise<void> {
 export async function clearOnboardingResume(): Promise<void> {
   await AsyncStorage.removeItem(KEY);
   await AsyncStorage.removeItem(GOAL_RETURN_KEY);
+  await clearOnboardingPreviewEntry();
 }

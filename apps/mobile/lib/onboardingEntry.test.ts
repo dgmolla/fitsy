@@ -4,6 +4,7 @@ type State = Parameters<typeof onboardingEntry>[0];
 const baseline: State = {
   signedIn: false, purchasesReady: false, entitled: null, isLapsed: false,
   completed: false, declined: false, resume: null, hasTargets: false, access: 'hard',
+  onboardingPreviewEntry: false,
 };
 const resolve = (state: Partial<State>) => onboardingEntry({ ...baseline, ...state });
 
@@ -26,6 +27,9 @@ it('waits for the assigned access policy after anonymous decline', () => {
   expect(resolve({ declined: true, resume: '/welcome/preview' })).toBeNull();
   expect(resolve({ declined: true, purchasesReady: true, access: 'hard' })).toBe('/welcome/payment');
   expect(resolve({ declined: true, purchasesReady: true, access: 'preview' })).toBe('/welcome/preview');
+  expect(resolve({ declined: true, purchasesReady: true, resume: '/welcome/preview', onboardingPreviewEntry: true })).toBe('/welcome/preview');
+  expect(resolve({ declined: true, purchasesReady: true, resume: '/welcome/preview', onboardingPreviewEntry: false })).toBe('/welcome/payment');
+  expect(resolve({ declined: true, purchasesReady: true, resume: '/welcome/preview', onboardingPreviewEntry: true, isLapsed: true, signedIn: true, hasTargets: true })).toBe('/welcome/resubscribe');
 });
 it('routes a lapsed account to resubscribe while the server-confirmed subscriber enters search', () => {
   const lapsed: Partial<State> = { signedIn: true, purchasesReady: true, hasTargets: true, isLapsed: true, entitled: false, resume: '/welcome/payment' };

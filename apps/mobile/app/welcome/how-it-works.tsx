@@ -1,18 +1,21 @@
 import { requireWelcomeGoal } from '@/lib/requireWelcomeGoal';
 import React, { useEffect } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { EDITORIAL, TEXT } from '@/lib/brand';
 import { useOnboardingStep } from '@/lib/onboardingResume';
 import { trackOnboardingScreenView } from '@/lib/analytics';
+import { rememberOnboardingPreviewEntry } from '@/lib/onboardingPreviewEntry';
 
 function HowItWorksScreen() {
   useOnboardingStep('how-it-works');
   useEffect(() => { trackOnboardingScreenView('how_it_works'); }, []);
   return <WelcomeScreen progress={0.61} title={"A little context.\nA better choice."}
     subtitle="Every nutrition label tells you where the numbers come from."
-    canContinue onContinue={() => router.push({ pathname: '/welcome/preview', params: { entry: 'onboarding' } })} continueLabel="Explore restaurants">
+    canContinue onContinue={() => { void rememberOnboardingPreviewEntry()
+      .then(() => router.push('/welcome/preview'))
+      .catch(() => Alert.alert('Could not open preview', 'Please try again.')); }} continueLabel="Explore restaurants">
     <View style={s.panels}>
       <View style={s.panel} testID="nutrition-source-published">
         <Text style={s.badge}>Published</Text><Text style={s.title}>From the restaurant.</Text>
