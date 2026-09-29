@@ -1,6 +1,6 @@
 /**
  * PurchasesProvider boot: who decides (the server), what stands in while it
- * can't (cache, then the device as a last resort), and that `entitled` is
+ * can't (an account-bound cache), and that `entitled` is
  * set exactly once per boot (`ready` is `entitled !== null`).
  */
 import {
@@ -110,15 +110,18 @@ describe('boot', () => {
     useFakeTimersKeepingFlush();
     const identity = deferred<typeof proInfo>();
     mockRc.identifyPurchasesUser.mockReturnValueOnce(identity.promise);
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() });
     const { result } = renderProvider();
     await flush();
     act(() => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
     await flush();
-    expect(result.current.entitled).toBe(false);
+    expect(result.current.entitled).toBeNull();
+    expect(result.current.isUnknown).toBe(true);
     await act(async () => { identity.resolve(proInfo); });
     await flush();
     expect(result.current.isPro).toBe(true);
     expect(mockApi.syncSubscription).toHaveBeenCalledWith('mismatch');
+    expect(result.current.entitled).toBe(true);
   });
 
   it('ignores an old identity result after a new account signs in during boot', async () => {
@@ -168,7 +171,7 @@ describe('boot', () => {
     expect(result.current.entitled).toBeNull();
     act(() => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
     await flush();
-    expect(result.current.entitled).toBe(false);
+    expect(result.current.entitled).toBeNull();
     const listener = mockRc.addCustomerInfoListener.mock.calls[0][0];
     await act(async () => { listener(proInfo); });
     await waitFor(() => expect(result.current.entitled).toBe(true));
@@ -186,7 +189,7 @@ describe('boot', () => {
     await flush();
     act(() => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
     await flush();
-    expect(result.current.entitled).toBe(false);
+    expect(result.current.entitled).toBeNull();
     const sameUserRead = deferred<{ data: { session: { user: { id: string } } } }>();
     mockAuth.getSession.mockReturnValueOnce(sameUserRead.promise);
     await act(async () => { identity.resolve(freeInfo); });

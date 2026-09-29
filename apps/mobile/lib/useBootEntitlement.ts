@@ -21,8 +21,13 @@ export function useBootEntitlement({ verdictGenerationRef, customerInfoRef, fetc
       const generation = verdictGenerationRef.current;
       const cachedP = userId ? withinMs(readCachedEntitlement(userId), BOOT_VERDICT_CAP_MS) : Promise.resolve(null);
       const answer = userId ? fetchVerdict('boot', userId) : Promise.resolve(null);
+      let identitySettled = false;
+      const identity = rcReady.then(
+        (value) => { identitySettled = true; return value; },
+        () => { identitySettled = true; return null; },
+      );
       const [info, cached, server] = await Promise.all([
-        withinMs(rcReady, BOOT_VERDICT_CAP_MS),
+        withinMs(identity, BOOT_VERDICT_CAP_MS),
         cachedP,
         withinMs(answer, BOOT_VERDICT_CAP_MS),
       ]);
@@ -31,6 +36,24 @@ export function useBootEntitlement({ verdictGenerationRef, customerInfoRef, fetc
         // Anonymous: never left on null, and a stale cache must not count.
         setEntitled(false);
         setClassification('never_subscribed');
+        return;
+      }
+      if (server !== null && server.verdict !== 'active' && server.verdict !== 'unknown' && !identitySettled) {
+        // A capped identity read is still pending. Do not show first-time
+        // payment until it can rule out an active purchase on this device.
+        setClassification('unknown');
+        setEntitled(null);
+        void identity.then(async (late) => {
+          if (isCancelled() || verdictGenerationRef.current !== generation) return;
+          if (!isProActive(late)) {
+            applyVerdict('boot', server, userId);
+            return;
+          }
+          const reconciled = await fetchVerdict('mismatch', userId);
+          if (reconciled?.verdict === 'active' && !isCancelled() && verdictGenerationRef.current === generation) {
+            applyVerdict('mismatch', reconciled, userId);
+          }
+        });
         return;
       }
       // Applied only now, after the RevenueCat read, so the mismatch event
@@ -87,9 +110,8 @@ export function useBootEntitlement({ verdictGenerationRef, customerInfoRef, fetc
         if (cached?.active) rememberActivePeriod(userId, cached.expiresAt);
         setClassification(cached?.verdict ?? (isProActive(info) ? 'active' : 'unknown'));
       }
-      // The single settled signal: server, else cache, else the device (so an
-      // offline subscriber isn't bounced). `current` covers an answer that
-      // landed via another path meanwhile.
+      // The server or a fresh account-bound cache settles the gate. Device
+      // state only helps detect a mismatch; `current` covers a newer answer.
       if (server?.verdict !== 'unknown') setEntitled((current) => current ?? effective ?? cached?.active ?? isProActive(info));
       if (server === null) {
         // Slow server: apply its answer when it finally lands.

@@ -36,7 +36,7 @@ const Root = createNavigatorFactory(StackNavigator)();
 const App = createNavigatorFactory(StackNavigator)();
 const Welcome = createNavigatorFactory(StackNavigator)();
 const Tabs = createNavigatorFactory(TabNavigator)();
-let action: 'payment' | 'notification' | 'purchased';
+let action: 'payment' | 'notification' | 'purchased' | 'resubscribe';
 let declineDestination: 'payment' | 'preview';
 let paymentRenders = 0;
 function Payment() {
@@ -44,8 +44,9 @@ function Payment() {
   paymentRenders++;
   if (paymentRenders > 8) throw new Error('Payment remounted in a navigation loop');
   useEffect(() => {
-    if (action === 'notification') resetWelcomeJourney(navigation, 'notification-permission');
-    if (action === 'purchased') void openPurchasedDestination(navigation);
+  if (action === 'notification') resetWelcomeJourney(navigation, 'notification-permission');
+  if (action === 'purchased') void openPurchasedDestination(navigation);
+  if (action === 'resubscribe') void openPurchasedDestination(navigation, { requireTargets: true });
   }, [navigation]);
   return <>
     <Text>{navigation.canGoBack() ? 'Earlier screens remain' : 'No earlier screens'}</Text>
@@ -96,7 +97,7 @@ beforeEach(async () => {
 });
 
 it('routes a restored account with no local targets through macro setup', async () => {
-  action = 'purchased';
+  action = 'resubscribe';
   await clearMacroTargets();
   const screen = render(<Journey />);
   await waitFor(() => expect(screen.getByText('Set macro targets')).toBeTruthy());

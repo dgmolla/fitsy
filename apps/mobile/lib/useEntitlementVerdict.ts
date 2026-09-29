@@ -6,8 +6,8 @@
  * sources of truth disagreeing (the phone's CustomerInfo gated screens while
  * the API gated data from a webhook-fed row). Screens gate on `entitled`;
  * the phone's RevenueCat state only triggers a sync, with exactly two
- * exceptions where it counts as a verdict: the offline fallback at boot /
- * sign-in, and a confirmed store purchase/restore (`markStoreConfirmed`).
+ * exception where it counts as a verdict: a confirmed store purchase/restore
+ * (`markStoreConfirmed`). An account-bound fresh cache can bridge boot offline.
  *
  * `entitled === null` means "not settled on this launch" and is the hold
  * signal for every gate. It is set exactly once per resolution (boot, sign-in,
@@ -47,8 +47,8 @@ import { trackEntitlementMismatch, trackEntitlementSyncFailed } from './analytic
 export const STORE_GRACE_MS = 60_000;
 
 // Each boot/sign-in prerequisite uses this cap so a stalled read cannot hold
-// every gate indefinitely. The cache (at boot) or the device's RevenueCat
-// state stands in when the server cannot answer; a late server answer applies.
+// every gate indefinitely. A fresh account-bound cache can bridge an offline
+// boot; otherwise the gate holds unknown until a server answer applies.
 
 export type { EntitlementVerdict } from './entitlementVerdictTypes';
 
@@ -72,7 +72,6 @@ export function useEntitlementVerdict({
       return value;
     });
   }, []);
-  // When the store last confirmed Pro (markStoreConfirmed); 0 = never.
   const storeConfirmedAtRef = useRef(0);
   const activePeriodRef = useRef<{ userId: string; expiresAt: number } | null>(null);
   const proofRef = useRef<{ userId: string; verifiedAt: number } | null>(null);

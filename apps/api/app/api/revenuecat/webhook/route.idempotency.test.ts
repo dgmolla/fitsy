@@ -200,7 +200,7 @@ describe("POST /api/revenuecat/webhook - idempotency", () => {
     expect(mockLogStatusChange).not.toHaveBeenCalled();
   });
 
-  it("retries a renewal when an active REST row wins but keeps the old expiry", async () => {
+  it.each(["RENEWAL", "SUBSCRIPTION_EXTENDED"])("retries %s when an active REST row wins but keeps the old expiry", async (type) => {
     const prior = { userExists: true, row: {
       status: "active", expiresAt: new Date(EXP_MS), lastEventAt: new Date(EVENT_MS - 60_000),
     } };
@@ -210,7 +210,7 @@ describe("POST /api/revenuecat/webhook - idempotency", () => {
     mockReadUserAndRow.mockResolvedValueOnce(prior).mockResolvedValue(raced);
     mockSubscriptionUpdateMany.mockResolvedValueOnce({ count: 0 });
     mockSync.mockResolvedValue(true);
-    const res = await POST(makeRequest(event({ type: "RENEWAL", expiration_at_ms: EXP_MS + 30 * 24 * 3600 * 1000 }), AUTH));
+    const res = await POST(makeRequest(event({ type, expiration_at_ms: EXP_MS + 30 * 24 * 3600 * 1000 }), AUTH));
     expect(res.status).toBe(500);
     expect(mockSync).toHaveBeenCalledWith("user-1");
     expect(mockLogStatusChange).not.toHaveBeenCalled();

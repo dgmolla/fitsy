@@ -167,21 +167,18 @@ test('a pending boot identity keeps repeated checkout attempts blocked until the
   (Purchases.logIn as jest.Mock).mockImplementationOnce(() => new Promise(resolve => { resolveIdentity = resolve; }));
   const screen = await openPayment();
   await waitFor(() => expect(resolveIdentity).toBeDefined());
-  await waitFor(() => expect(screen.getByTestId('welcome-continue').props.accessibilityState.disabled).toBe(false), { timeout: 3000 });
-  jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick', 'queueMicrotask'] });
+  expect(screen.getByTestId('welcome-continue').props.accessibilityState.disabled).toBe(true);
   for (let attempt = 1; attempt <= 2; attempt++) {
     await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
-    await act(async () => { jest.advanceTimersByTime(5000); });
-    expect(alert).toHaveBeenCalledTimes(attempt);
-    expect(alert).toHaveBeenLastCalledWith('Payment service still connecting', 'Fully close and reopen Fitsy, then try again.');
     expect(Purchases.purchasePackage).not.toHaveBeenCalled();
   }
+  expect(alert).not.toHaveBeenCalled();
   expect(Purchases.logIn).toHaveBeenCalledTimes(1);
   await act(async () => { nativeUserId = 'buyer'; resolveIdentity({ customerInfo: noSubscription, created: false }); });
   expect(Purchases.purchasePackage).not.toHaveBeenCalled();
+  await waitFor(() => expect(screen.getByTestId('welcome-continue').props.accessibilityState.disabled).toBe(false));
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   expect(Purchases.purchasePackage).toHaveBeenCalledWith(annual);
-  jest.useRealTimers();
 });
 
 test('a fresh provider mount verifies the current auth and native payment identities before checkout', async () => {

@@ -250,10 +250,8 @@ describe('sign-in', () => {
     expect(mockApi.syncSubscription).toHaveBeenCalledTimes(1);
     expect(seen).toEqual([null, false, null, true]);
   });
-
   it('a SIGNED_IN emitted while boot is still pending is ignored, and the listener never blocks', async () => {
-    // Device free, so boot's own fold has no escalation to make; any sync
-    // request would come from the (ignored) SIGNED_IN.
+    // Only the ignored SIGNED_IN could trigger a sync here.
     const identify = deferred<typeof freeInfo>();
     mockRc.identifyPurchasesUser.mockReturnValue(identify.promise);
     const { result } = renderProvider();
