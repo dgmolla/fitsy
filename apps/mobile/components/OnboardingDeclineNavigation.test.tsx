@@ -12,6 +12,13 @@ import { PurchasesProvider } from '../lib/usePurchases';
 import { rememberPaywallDecline } from '../lib/paywallAccess';
 import { saveOnboardingField } from '../lib/onboardingStorage';
 import { saveMacroTargets } from '../lib/macroStorage';
+import { usePreviewAccess } from '../lib/usePreviewAccess';
+
+function AccessProbe() {
+  const direct = usePreviewAccess();
+  const onboarding = usePreviewAccess(true);
+  return <Text testID="access-probe">{`direct:${direct.canPreview}|onboarding:${onboarding.canPreview}`}</Text>;
+}
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
@@ -60,7 +67,7 @@ it('allows a returning onboarding preview after decline but still gates full men
   await saveOnboardingField('goal', 'lose_fat');
   await saveMacroTargets({ calories: '600', protein: '0', carbs: '0', fat: '0' });
   const screen = renderRouter({
-    _layout: () => <PurchasesProvider><Stack /></PurchasesProvider>,
+    _layout: () => <PurchasesProvider><AccessProbe /><Stack /></PurchasesProvider>,
     '(tabs)/_layout': Tabs, '(tabs)/search': () => <Text>Paid search results</Text>,
     'welcome/how-it-works': () => <HowItWorks />, 'welcome/preview': Preview,
     'welcome/signin': () => <Text>Create an account</Text>,
@@ -70,12 +77,14 @@ it('allows a returning onboarding preview after decline but still gates full men
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   expect(await screen.findByTestId('preview-guide')).toBeTruthy();
   expect(await AsyncStorage.getItem('@fitsy/onboardingPreviewEntry')).toBe('1');
+  await waitFor(() => expect(screen.getByTestId('access-probe').props.children).toBe('direct:false|onboarding:true'));
   expect(screen.queryByText('Paid search results')).toBeNull();
   await act(async () => { fireEvent.press(screen.getByTestId('locked-full-menu')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
   expect(screen.queryByText('Paid search results')).toBeNull();
   expect(await AsyncStorage.getItem('@fitsy/paywallDeclined')).toBe('1');
   expect(await AsyncStorage.getItem('@fitsy/onboardingPreviewEntry')).toBeNull();
+  await waitFor(() => expect(screen.getByTestId('access-probe').props.children).toBe('direct:false|onboarding:false'));
   await act(async () => { fireEvent.press(screen.getByTestId('payment-back')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
   expect(screen.queryByTestId('preview-guide')).toBeNull();
