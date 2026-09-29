@@ -1,10 +1,12 @@
 """Actual disposable simctl boundary for verified task-device retirement."""
 
 import json
+import fcntl
 import os
 from pathlib import Path
 import sys
 import tempfile
+import time
 import unittest
 import subprocess
 from unittest import mock
@@ -70,7 +72,7 @@ class RetirementTest(unittest.TestCase):
         self.attachment.parent.mkdir(parents=True)
         self.attachment.write_bytes(b'raw evidence')
         self.archive = self.root / 'archive'
-        self.claim = self.root / 'claim.json'
+        self.claim = self.root / '.fitsy-sim-claim.json'
         self.bin = self.root / 'bin'
         self.bin.mkdir()
         xcrun = self.bin / 'xcrun'
@@ -100,7 +102,8 @@ exit 1
         lsof.chmod(0o700)
         self.env = mock.patch.dict(os.environ, {'PATH': str(self.bin) + ':' + os.environ['PATH'],
             'FAKE_UDID': self.udid, 'FAKE_DEVICE_ROOT': str(self.devices),
-            'FAKE_DELETED': str(self.root / 'deleted'), 'FAKE_WORKTREE': str(self.worktree.resolve())})
+            'FAKE_DELETED': str(self.root / 'deleted'), 'FAKE_WORKTREE': str(self.worktree.resolve()),
+            'HOME': str(self.root)})
         self.env.start()
         self.addCleanup(self.env.stop)
 
@@ -137,6 +140,42 @@ exit 1
         self.assertEqual(result['deletionOutcome'], 'observed absent after durable intent')
         self.assertTrue((self.archive / self.udid / 'retired.json').exists())
         self.assertEqual(len(result['proof']), 2)
+
+    def test_repeat_rejects_corrupted_archived_report(self):
+        self.retire()
+        archived = self.archive / self.udid / 'proof/product-flow-report.json'
+        archived.write_text('{}')
+        with self.assertRaisesRegex(ValueError, 'archived proof digest differs'):
+            self.retire()
+
+    def test_claim_waits_for_shared_retirement_lock(self):
+        lock_file = self.claim.with_suffix('.lock')
+        lock_file.touch()
+        with lock_file.open('r+') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            script = Path(__file__).parent / 'sim'
+            child = subprocess.Popen([str(script), 'claim', '--minutes', '1'],
+                                     env={**os.environ, 'FITSY_SIM_OWNER': 'new-owner'},
+                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            time.sleep(0.25)
+            self.assertIsNone(child.poll(), 'claim passed the retirement lock')
+            fcntl.flock(lock, fcntl.LOCK_UN)
+            output, error = child.communicate(timeout=5)
+        self.assertEqual(child.returncode, 0, error)
+        self.assertEqual(json.loads(output)['status'], 'pass')
+
+    def test_delete_holds_shared_retirement_lock(self):
+        original = retirement.command
+        def checked(*args):
+            if args[:3] == ('xcrun', 'simctl', 'delete'):
+                probe = subprocess.run([sys.executable, '-c',
+                    'import fcntl,sys; f=open(sys.argv[1], "r+"); '
+                    'fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)',
+                    str(self.claim.with_suffix('.lock'))], capture_output=True)
+                self.assertNotEqual(probe.returncode, 0, 'delete did not hold shared lock')
+            return original(*args)
+        with mock.patch.object(retirement, 'command', side_effect=checked):
+            self.retire()
 
     def test_active_claim_and_unverified_receipt_hold_device(self):
         self.claim.write_text(json.dumps({'owner': 'current', 'expires': 9999999999}))

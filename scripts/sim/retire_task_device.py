@@ -1,6 +1,7 @@
 """Retire one verified task simulator while preserving its app and raw evidence."""
 
 import hashlib
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -229,9 +230,6 @@ def reconcile_absent(target, issue, udid, worktree, device_root):
         archive = Path(entry['archive']).resolve()
         if not archive.is_relative_to(target.resolve()) or digest(archive) != entry['sha256']:
             raise ValueError('absent device archive digest differs')
-    retired = target / 'retired.json'
-    if retired.is_file():
-        return json.loads(retired.read_text())
     proof = mapping.get('proof', [])
     if len(proof) != 2:
         raise ValueError('absent device archived proof is incomplete')
@@ -243,6 +241,9 @@ def reconcile_absent(target, issue, udid, worktree, device_root):
     if (build.get('simulator') != udid or report.get('simulator') != udid or
             report.get('result') != 'pass' or report.get('appHash') != mapping.get('appHash')):
         raise ValueError('absent device archived proof identity differs')
+    retired = target / 'retired.json'
+    if retired.is_file():
+        return json.loads(retired.read_text())
     mapping.update({'deleted': True, 'deletionOutcome': 'observed absent after durable intent',
                     'freeAfterBytes': shutil.disk_usage(device_root).free})
     durable_json(retired, mapping)
@@ -258,7 +259,20 @@ def raw_files(source_root):
 
 def retire(*, issue, udid, worktree, archive_root, device_root, claim_file,
            confirm_verified=lambda: True):
-    """Called under dispatcher.lock only for an exact terminal-verified claim."""
+    """Serialize the final owner scan and delete with simulator commands."""
+    lock_file = Path(claim_file).with_suffix('.lock')
+    lock_file.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(lock_file, os.O_CREAT | os.O_RDWR, 0o600)
+    with os.fdopen(fd, 'r+') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        return _retire_locked(issue=issue, udid=udid, worktree=worktree,
+                              archive_root=archive_root, device_root=device_root,
+                              claim_file=claim_file, confirm_verified=confirm_verified)
+
+
+def _retire_locked(*, issue, udid, worktree, archive_root, device_root, claim_file,
+                   confirm_verified):
+    """Called under dispatcher.lock and the shared simulator claim lock."""
     if not isinstance(issue, int) or issue < 1 or not UDID.fullmatch(udid or ''):
         raise ValueError('issue or device identity invalid')
     worktree, archive_root, device_root = (Path(path).resolve() for path in (worktree, archive_root, device_root))
