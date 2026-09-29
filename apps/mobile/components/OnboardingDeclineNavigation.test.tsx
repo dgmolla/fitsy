@@ -109,7 +109,7 @@ it('leaves a cold-start preview when Back has no navigation history', async () =
   await rememberOnboardingPreviewEntry();
   const screen = renderRouter({
     _layout: () => <PurchasesProvider><Stack /></PurchasesProvider>,
-    'welcome/how-it-works': HowItWorks, 'welcome/preview': Preview,
+    'welcome/how-it-works': () => <HowItWorks />, 'welcome/preview': Preview,
     'welcome/payment': () => <Text>Payment plans</Text>,
   }, { initialUrl: '/welcome/preview' });
   await screen.findByTestId('preview-guide');
