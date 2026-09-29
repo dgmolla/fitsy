@@ -124,4 +124,22 @@ describe('syncEntitlement', () => {
     expect(result.current.isUnknown).toBe(false);
     expect(mockApi.syncSubscription).toHaveBeenCalledWith('mismatch');
   });
+
+  it('holds an expired known period as unknown when foreground reconciliation fails', async () => {
+    const before = Date.now();
+    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active',
+      expiresAt: new Date(before + 5_000).toISOString(), verdict: 'active', lastRcVerifiedAt: new Date(before).toISOString() });
+    const { result } = renderProvider();
+    await waitFor(() => expect(result.current.entitled).toBe(true));
+    const now = jest.spyOn(Date, 'now').mockReturnValue(before + 10_000);
+    try {
+      mockApi.syncSubscription.mockRejectedValue(new Error('offline'));
+      await act(async () => { mockForeground.listener?.('active'); });
+      await waitFor(() => expect(result.current.isUnknown).toBe(true));
+      expect(result.current.entitled).toBeNull();
+      expect(result.current.isLapsed).toBe(false);
+    } finally {
+      now.mockRestore();
+    }
+  });
 });

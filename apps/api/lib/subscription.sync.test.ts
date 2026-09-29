@@ -208,6 +208,19 @@ describe("syncSubscriptionFromRevenueCat", () => {
     expect(mockUpdateMany).not.toHaveBeenCalled();
   });
 
+  it("applies a newer active read after an older empty-account sync inserts first", async () => {
+    mockFetchProEntitlement.mockResolvedValue({ active: true, plan: "p", expiresAt, transactionId: "txn", billingIssue: false });
+    mockFindUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      status: "never_subscribed", expiresAt: null, lastEventAt: new Date(NOW.getTime() - 1_000),
+    });
+    mockCreate.mockRejectedValueOnce(new Error("unique userId"));
+    expect(await syncSubscriptionFromRevenueCat("u1")).toBe(true);
+    expect(mockUpdateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: "active", lastEventAt: NOW }),
+      where: expect.objectContaining({ OR: [{ lastEventAt: null }, { lastEventAt: { lt: NOW } }] }),
+    }));
+  });
+
   it("does not overwrite a newer purchase webhook on an existing never row", async () => {
     mockFetchProEntitlement.mockResolvedValue({ active: false, hadProEntitlement: false, plan: null, expiresAt: null, transactionId: null, billingIssue: false });
     mockFindUnique.mockResolvedValueOnce({ status: "never_subscribed", lastEventAt: new Date(NOW.getTime() - 1_000) })
@@ -215,7 +228,7 @@ describe("syncSubscriptionFromRevenueCat", () => {
     mockUpdateMany.mockResolvedValueOnce({ count: 0 });
     expect(await syncSubscriptionFromRevenueCat("u1")).toBe(true);
     expect(mockUpdateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({
-      userId: "u1", OR: [{ lastEventAt: null }, { lastEventAt: { lte: NOW } }],
+      userId: "u1", OR: [{ lastEventAt: null }, { lastEventAt: { lt: NOW } }],
     }) }));
     expect(mockCreate).not.toHaveBeenCalled();
   });

@@ -7,13 +7,14 @@ import { isProActive } from './purchases';
 import { withinMs } from './async';
 export const BOOT_VERDICT_CAP_MS = 1500;
 
-export function useBootEntitlement({ verdictGenerationRef, customerInfoRef, fetchVerdict, applyVerdict, setEntitled, setClassification }: {
+export function useBootEntitlement({ verdictGenerationRef, customerInfoRef, fetchVerdict, applyVerdict, setEntitled, setClassification, rememberActivePeriod }: {
   verdictGenerationRef: MutableRefObject<number>;
   customerInfoRef: MutableRefObject<CustomerInfo | null>;
   fetchVerdict: (reason: EntitlementSyncReason, userId: string) => Promise<SubscriptionStatusResult | null>;
   applyVerdict: (reason: EntitlementSyncReason, result: SubscriptionStatusResult, userId: string) => boolean | null;
   setEntitled: (next: boolean | null | ((current: boolean | null) => boolean | null)) => void;
   setClassification: (next: SubscriptionVerdict | 'loading') => void;
+  rememberActivePeriod: (userId: string, expiresAt: string | null) => void;
 }) {
   const resolveAtBoot = useCallback(
     async (userId: string | undefined, rcReady: Promise<CustomerInfo | null>, isCancelled: () => boolean) => {
@@ -60,6 +61,7 @@ export function useBootEntitlement({ verdictGenerationRef, customerInfoRef, fetc
         setClassification('unknown');
         setEntitled(null);
       } else if (server === null) {
+        if (cached?.active) rememberActivePeriod(userId, cached.expiresAt);
         setClassification(cached?.verdict ?? (isProActive(info) ? 'active' : 'unknown'));
       }
       // The single settled signal: server, else cache, else the device (so an
@@ -82,17 +84,18 @@ export function useBootEntitlement({ verdictGenerationRef, customerInfoRef, fetc
         });
       }
     },
-    [fetchVerdict, applyVerdict, setEntitled, setClassification],
+    [fetchVerdict, applyVerdict, rememberActivePeriod, setEntitled, setClassification],
   );
 
   const settleAfterBootFailure = useCallback(
     async (userId: string | undefined, isCancelled: () => boolean) => {
       const cached = userId ? await withinMs(readCachedEntitlement(userId), BOOT_VERDICT_CAP_MS) : null;
       if (isCancelled()) return;
+      if (userId && cached?.active) rememberActivePeriod(userId, cached.expiresAt);
       setEntitled((current) => current ?? cached?.active ?? (userId ? isProActive(customerInfoRef.current) : false));
       setClassification(userId ? (cached?.verdict ?? (isProActive(customerInfoRef.current) ? 'active' : 'unknown')) : 'never_subscribed');
     },
-    [customerInfoRef, setEntitled, setClassification],
+    [customerInfoRef, rememberActivePeriod, setEntitled, setClassification],
   );
 
   return { resolveAtBoot, settleAfterBootFailure };

@@ -72,6 +72,11 @@ export function useEntitlementVerdict({
   }, []);
   // When the store last confirmed Pro (markStoreConfirmed); 0 = never.
   const storeConfirmedAtRef = useRef(0);
+  const activePeriodRef = useRef<{ userId: string; expiresAt: number } | null>(null);
+  const rememberActivePeriod = useCallback((userId: string, expiresAt: string | null) => {
+    const parsed = expiresAt ? Date.parse(expiresAt) : NaN;
+    activePeriodRef.current = Number.isFinite(parsed) ? { userId, expiresAt: parsed } : null;
+  }, []);
   // A native update or purchase may settle while boot is still reading the
   // older account verdict. Boot must not replace that newer result.
   const verdictGenerationRef = useRef(0);
@@ -115,6 +120,7 @@ export function useEntitlementVerdict({
         // StoreKit has already confirmed this purchase or restore. Keep its
         // bounded grace verdict while the API has no usable RevenueCat proof.
         if (inStoreGrace()) return true;
+        activePeriodRef.current = null;
         setClassification('unknown');
         setEntitled(null);
         return null;
@@ -134,18 +140,31 @@ export function useEntitlementVerdict({
       }
       setClassification(result.verdict);
       setEntitled(active);
+      rememberActivePeriod(userId, active ? result.expiresAt : null);
       void writeCachedEntitlement(userId, result);
       return active;
     },
-    [customerInfoRef, inStoreGrace, setEntitled, setClassification],
+    [customerInfoRef, inStoreGrace, rememberActivePeriod, setEntitled, setClassification],
   );
 
   const runSync = useCallback(
     async (reason: EntitlementSyncReason, userId: string): Promise<boolean | null> => {
       const result = await fetchVerdict(reason, userId);
-      return result === null ? null : applyVerdict(reason, result, userId);
+      if (result === null) {
+        const period = activePeriodRef.current;
+        if (period?.userId === userId && period.expiresAt <= Date.now() && !inStoreGrace()) {
+          const { data } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+          if (data.session?.user.id !== userId) return null;
+          verdictGenerationRef.current += 1;
+          activePeriodRef.current = null;
+          setClassification('unknown');
+          setEntitled(null);
+        }
+        return null;
+      }
+      return applyVerdict(reason, result, userId);
     },
-    [fetchVerdict, applyVerdict],
+    [fetchVerdict, applyVerdict, inStoreGrace, setClassification, setEntitled],
   );
 
   const syncEntitlement = useCallback(
@@ -174,7 +193,7 @@ export function useEntitlementVerdict({
   );
 
   const { resolveAtBoot, settleAfterBootFailure } = useBootEntitlement({
-    verdictGenerationRef, customerInfoRef, fetchVerdict, applyVerdict, setEntitled, setClassification,
+    verdictGenerationRef, customerInfoRef, fetchVerdict, applyVerdict, setEntitled, setClassification, rememberActivePeriod,
   });
 
   const resolveAfterSignIn = useCallback(
@@ -231,6 +250,7 @@ export function useEntitlementVerdict({
     setClassification('loading');
     void clearCachedEntitlement();
     storeConfirmedAtRef.current = 0;
+    activePeriodRef.current = null;
   }, [setEntitled, setClassification]);
 
   const settleAfterSignOut = useCallback(() => {

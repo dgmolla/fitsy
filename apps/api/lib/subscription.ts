@@ -213,6 +213,36 @@ export async function syncSubscriptionFromRevenueCat(
   // response time: a RENEWAL emitted after it is applied even if Vercel's
   // clock runs ahead, and one emitted before it is stale by definition.
   const lastEventAt = state.requestDate ?? readStartedAt;
+  const updateExisting = async (observed: NonNullable<SubscriptionRow>): Promise<boolean | null> => {
+    if (observed.lastEventAt && observed.lastEventAt.getTime() >= lastEventAt.getTime()) {
+      return rowEntitled(observed);
+    }
+    const updated = await prisma.subscription.updateMany({
+      where: {
+        userId,
+        OR: [{ lastEventAt: null }, { lastEventAt: { lt: lastEventAt } }],
+      },
+      // Only overwrite what RevenueCat actually reported. Once an entitlement
+      // is gone (lapsed, or transferred to another account) it comes back with
+      // no product/expiry/transaction, and the row should keep the record of
+      // what was subscribed to and when it ended - support and refund disputes
+      // need it, and "expired" is already what revokes access.
+      data: {
+        status,
+        lastEventAt,
+        ...(state.plan ? { plan: state.plan } : {}),
+        ...(state.expiresAt ? { expiresAt: state.expiresAt } : {}),
+        ...(state.transactionId ? { appleTransactionId: state.transactionId } : {}),
+      },
+    });
+    if (updated.count === 0) {
+      // The webhook or a second sync won after our initial row read.
+      const raced = await readRow(userId);
+      return raced ? rowEntitled(raced) : null;
+    }
+    logStatusChange(userId, observed.status, status, "sync");
+    return state.active;
+  };
   if (!existing) {
     // Insert only: a webhook may create a newer row while this read is in
     // flight. A blind upsert would overwrite that purchase or renewal.
@@ -228,34 +258,10 @@ export async function syncSubscriptionFromRevenueCat(
     } catch (error) {
       const raced = await readRow(userId);
       if (!raced) throw error;
-      return rowEntitled(raced);
+      return updateExisting(raced);
     }
   }
-  const updated = await prisma.subscription.updateMany({
-    where: {
-      userId,
-      OR: [{ lastEventAt: null }, { lastEventAt: { lte: lastEventAt } }],
-    },
-    // Only overwrite what RevenueCat actually reported. Once an entitlement
-    // is gone (lapsed, or transferred to another account) it comes back with
-    // no product/expiry/transaction, and the row should keep the record of
-    // what was subscribed to and when it ended - support and refund disputes
-    // need it, and "expired" is already what revokes access.
-    data: {
-      status,
-      lastEventAt,
-      ...(state.plan ? { plan: state.plan } : {}),
-      ...(state.expiresAt ? { expiresAt: state.expiresAt } : {}),
-      ...(state.transactionId ? { appleTransactionId: state.transactionId } : {}),
-    },
-  });
-  if (updated.count === 0) {
-    // The webhook or a second sync won after our initial row read.
-    const raced = await readRow(userId);
-    return raced ? rowEntitled(raced) : null;
-  }
-  logStatusChange(userId, existing?.status ?? null, status, "sync");
-  return state.active;
+  return updateExisting(existing);
 }
 
 /**

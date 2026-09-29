@@ -119,6 +119,8 @@ export async function routeToPaywall(options: { replace?: boolean; intent?: Payw
         target = '/welcome/subscription-check';
         let status = await fetchSubscriptionStatus();
         if (status.verdict === 'unknown') status = await syncSubscription('mismatch');
+        const current = await supabase.auth.getSession();
+        if (current.data.session?.user.id !== data.session.user.id) return;
         if (status.verdict === 'expired') target = '/welcome/resubscribe';
         else if (status.verdict === 'never_subscribed') target = '/welcome/payment';
         else if (status.verdict === 'active') return;
