@@ -23,7 +23,7 @@ export type EntitlementSyncReason = 'boot' | SubscriptionSyncReason;
 
 /** Last server verdict, scoped to the Fitsy user and bounded by its RC proof. */
 export const ENTITLEMENT_CACHE_KEY = '@fitsy/entitlement';
-const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+export const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 export type CachedEntitlement = Pick<SubscriptionStatusResult,
   'active' | 'verdict' | 'expiresAt' | 'lastRcVerifiedAt'>;

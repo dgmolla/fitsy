@@ -67,10 +67,9 @@ describe("POST /api/revenuecat/webhook - idempotency", () => {
   });
 
   it("acks an out-of-order older event that agrees with the row without writing or syncing", async () => {
-    mockReadUserAndRow.mockResolvedValue({
-      userExists: true,
-      row: { status: "active", expiresAt: new Date(EXP_MS), lastEventAt: new Date(EVENT_MS + 60_000) },
-    });
+    mockReadUserAndRow.mockResolvedValue({ userExists: true, row: {
+      status: "active", expiresAt: new Date(EXP_MS), lastEventAt: new Date(EVENT_MS + 60_000),
+    } });
     const res = await POST(makeRequest(event({ type: "RENEWAL", expiration_at_ms: EXP_MS }), AUTH));
     expect(res.status).toBe(200);
     expect(mockSubscriptionUpdateMany).not.toHaveBeenCalled();
@@ -82,10 +81,13 @@ describe("POST /api/revenuecat/webhook - idempotency", () => {
     // The sync-vs-renewal race: same "active" status, later period end. Without
     // the expiry comparison the row would keep the old expiresAt and lock the
     // user out when it passes.
-    mockReadUserAndRow.mockResolvedValue({
-      userExists: true,
-      row: { status: "active", expiresAt: new Date(EXP_MS), lastEventAt: new Date(EVENT_MS + 60_000) },
-    });
+    mockReadUserAndRow
+      .mockResolvedValueOnce({ userExists: true, row: {
+        status: "active", expiresAt: new Date(EXP_MS), lastEventAt: new Date(EVENT_MS + 60_000),
+      } })
+      .mockResolvedValueOnce({ userExists: true, row: {
+        status: "active", expiresAt: new Date(EXP_MS + 30 * 24 * 3600 * 1000), lastEventAt: new Date(EVENT_MS + 60_000),
+      } });
     mockSync.mockResolvedValue(true);
     const res = await POST(
       makeRequest(event({ type: "RENEWAL", expiration_at_ms: EXP_MS + 30 * 24 * 3600 * 1000 }), AUTH),
@@ -94,6 +96,16 @@ describe("POST /api/revenuecat/webhook - idempotency", () => {
     expect(mockSubscriptionUpdateMany).not.toHaveBeenCalled();
     expect(mockSync).toHaveBeenCalledWith("user-1");
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("expiresAt"));
+  });
+
+  it("retries a stale renewal while the REST snapshot still has the old active period", async () => {
+    mockReadUserAndRow.mockResolvedValue({ userExists: true, row: {
+      status: "active", expiresAt: new Date(EXP_MS), lastEventAt: new Date(EVENT_MS + 60_000),
+    } });
+    mockSync.mockResolvedValue(true);
+    const res = await POST(makeRequest(event({ type: "RENEWAL", expiration_at_ms: EXP_MS + 30 * 24 * 3600 * 1000 }), AUTH));
+    expect(res.status).toBe(500);
+    expect(mockSync).toHaveBeenCalledWith("user-1");
   });
 
   it("re-reads RevenueCat as the tiebreaker when a stale event disagrees with the row", async () => {
@@ -175,12 +187,31 @@ describe("POST /api/revenuecat/webhook - idempotency", () => {
       } })
       .mockResolvedValueOnce({ userExists: true, row: {
         status: "expired", lastEventAt: new Date(EVENT_MS + 60_000),
+      } })
+      .mockResolvedValueOnce({ userExists: true, row: {
+        status: "expired", lastEventAt: new Date(EVENT_MS + 60_000),
       } });
     mockSubscriptionUpdateMany.mockResolvedValueOnce({ count: 0 });
     mockSync.mockResolvedValue(false);
     const res = await POST(makeRequest(event({ type: "INITIAL_PURCHASE" }), AUTH));
     expect(res.status).toBe(500);
-    expect(mockReadUserAndRow).toHaveBeenCalledTimes(2);
+    expect(mockReadUserAndRow).toHaveBeenCalledTimes(3);
+    expect(mockSync).toHaveBeenCalledWith("user-1");
+    expect(mockLogStatusChange).not.toHaveBeenCalled();
+  });
+
+  it("retries a renewal when an active REST row wins but keeps the old expiry", async () => {
+    const prior = { userExists: true, row: {
+      status: "active", expiresAt: new Date(EXP_MS), lastEventAt: new Date(EVENT_MS - 60_000),
+    } };
+    const raced = { userExists: true, row: {
+      status: "active", expiresAt: new Date(EXP_MS), lastEventAt: new Date(EVENT_MS + 60_000),
+    } };
+    mockReadUserAndRow.mockResolvedValueOnce(prior).mockResolvedValue(raced);
+    mockSubscriptionUpdateMany.mockResolvedValueOnce({ count: 0 });
+    mockSync.mockResolvedValue(true);
+    const res = await POST(makeRequest(event({ type: "RENEWAL", expiration_at_ms: EXP_MS + 30 * 24 * 3600 * 1000 }), AUTH));
+    expect(res.status).toBe(500);
     expect(mockSync).toHaveBeenCalledWith("user-1");
     expect(mockLogStatusChange).not.toHaveBeenCalled();
   });

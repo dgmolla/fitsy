@@ -8,6 +8,7 @@ import { StackActions, StackRouter, TabRouter } from '@react-navigation/routers'
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { openPurchasedDestination, resetWelcomeJourney } from '../lib/paywallJourney';
 import { getPaywallIntent, rememberPaywallIntent } from '../lib/paywallIntent';
+import { saveMacroTargets, clearMacroTargets } from '../lib/macroStorage';
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 jest.mock('@supabase/supabase-js', () => {
@@ -70,6 +71,7 @@ function Meal() {
   const route = useRoute();
   return <Text>{JSON.stringify(route.params)}</Text>;
 }
+function MacroSetup() { return <Text>Set macro targets</Text>; }
 function WelcomeScreens() {
   return <Welcome.Navigator><Welcome.Screen name="payment" component={Payment} /><Welcome.Screen name="preview" component={Preview} /><Welcome.Screen name="notification-permission" component={Notifications} /></Welcome.Navigator>;
 }
@@ -77,7 +79,7 @@ function TabScreens() {
   return <Tabs.Navigator><Tabs.Screen name="saved" component={Saved} /><Tabs.Screen name="search" component={Search} /></Tabs.Navigator>;
 }
 function AppScreens() {
-  return <App.Navigator><App.Screen name="welcome" component={WelcomeScreens} /><App.Screen name="(tabs)" component={TabScreens} /><App.Screen name="restaurant/[id]" component={Meal} /></App.Navigator>;
+  return <App.Navigator><App.Screen name="welcome" component={WelcomeScreens} /><App.Screen name="(tabs)" component={TabScreens} /><App.Screen name="restaurant/[id]" component={Meal} /><App.Screen name="macro-setup" component={MacroSetup} /></App.Navigator>;
 }
 function Journey() {
   // Expo wraps the app and carries deep-link destination params on its parent.
@@ -86,7 +88,20 @@ function Journey() {
     { name: '__root', params: { screen: 'welcome', params: { screen: 'payment' } } },
   ] }}><Root.Navigator><Root.Screen name="__root" component={AppScreens} /></Root.Navigator></NavigationContainer>;
 }
-beforeEach(async () => { await AsyncStorage.clear(); paymentRenders = 0; declineDestination = 'payment'; });
+beforeEach(async () => {
+  await AsyncStorage.clear();
+  await saveMacroTargets({ calories: '700', protein: '40', carbs: '80', fat: '20' });
+  paymentRenders = 0;
+  declineDestination = 'payment';
+});
+
+it('routes a restored account with no local targets through macro setup', async () => {
+  action = 'purchased';
+  await clearMacroTargets();
+  const screen = render(<Journey />);
+  await waitFor(() => expect(screen.getByText('Set macro targets')).toBeTruthy());
+  expect(screen.queryByText('Meal search')).toBeNull();
+});
 
 it('shows optional reminders without replaying stale parent payment params', async () => {
   action = 'notification';

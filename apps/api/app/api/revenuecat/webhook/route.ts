@@ -4,8 +4,14 @@ import { prisma } from "@/lib/restaurantService";
 import {
   readUserAndRow,
   syncSubscriptionFromRevenueCat,
+  type SubscriptionRow,
 } from "@/lib/subscription";
 import { persistEvent } from "./persistEvent";
+
+function purchaseRecorded(row: SubscriptionRow, expiresAt: Date | null): boolean {
+  return row?.status === "active" &&
+    (!expiresAt || (row.expiresAt != null && row.expiresAt.getTime() >= expiresAt.getTime()));
+}
 
 /** Constant-time compare for the webhook auth header (avoids timing leaks). */
 function safeEqual(a: string, b: string): boolean {
@@ -262,8 +268,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             `disagrees with row @ ${existing.lastEventAt.toISOString()} (${differs.join(", ")}); re-syncing`,
         );
         const reconciled = await syncSubscriptionFromRevenueCat(appUserId);
-        const pendingPurchase = purchaseEvent && ["never_subscribed", "expired"].includes(existing.status);
-        if (reconciled === null || (pendingPurchase && reconciled !== true)) {
+        const pendingPurchase = purchaseEvent && !purchaseRecorded((await readUserAndRow(appUserId)).row, expiresAt);
+        if (reconciled === null || pendingPurchase) {
           console.warn(`[subscription] ${appUserId} tiebreak sync failed: RevenueCat ${reconciled === null ? "unreachable" : "still inactive after purchase"}`);
           return NextResponse.json({ error: "RevenueCat lookup unresolved" }, { status: 500 });
         }
@@ -274,9 +280,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const applied = await persistEvent({ userId: appUserId, existing, plan, status, expiresAt, appleTransactionId, eventAt });
     if (!applied && purchaseEvent) {
       const latest = (await readUserAndRow(appUserId)).row;
-      if (latest && ["never_subscribed", "expired"].includes(latest.status) &&
-          (await syncSubscriptionFromRevenueCat(appUserId)) !== true) {
-        return NextResponse.json({ error: "RevenueCat purchase reconciliation pending" }, { status: 500 });
+      if (!purchaseRecorded(latest, expiresAt)) {
+        await syncSubscriptionFromRevenueCat(appUserId);
+        if (!purchaseRecorded((await readUserAndRow(appUserId)).row, expiresAt)) {
+          return NextResponse.json({ error: "RevenueCat purchase reconciliation pending" }, { status: 500 });
+        }
       }
     }
 

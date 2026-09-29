@@ -209,7 +209,7 @@ describe('sign-in', () => {
     expect(mockApi.syncSubscription).toHaveBeenCalledWith('sign_in');
   });
 
-  it('with a slow server: null during the wait, the device verdict at the cap, then the server answer', async () => {
+  it('with a slow server: unknown at the cap, then the account-bound server answer', async () => {
     mockAuth.session = null;
     const { result, seen } = renderProviderTracking();
     await waitFor(() => expect(result.current.entitled).toBe(false));
@@ -227,11 +227,12 @@ describe('sign-in', () => {
     expect(result.current.ready).toBe(false);
     act(() => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
     await flush();
-    expect(result.current.entitled).toBe(true); // device fallback
+    expect(result.current.entitled).toBeNull();
+    expect(result.current.isUnknown).toBe(true);
     await act(async () => { pending.resolve({ active: false, synced: true, verdict: 'never_subscribed', lastRcVerifiedAt: new Date().toISOString() }); });
     await flush();
     expect(result.current.entitled).toBe(false); // late server answer wins
-    expect(seen).toEqual([null, false, null, true, false]);
+    expect(seen).toEqual([null, false, null, false]);
     jest.useRealTimers();
   });
 

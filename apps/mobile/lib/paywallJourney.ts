@@ -1,5 +1,6 @@
 import { StackRouter, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import { clearPaywallIntent, getPaywallIntent, getPurchasedContinuation } from './paywallIntent';
+import { getMacroTargets } from './macroStorage';
 
 type Navigation = Pick<NavigationProp<ParamListBase>, 'reset' | 'getParent'> & {
   getState: () => ReturnType<NavigationProp<ParamListBase>['getState']> | undefined;
@@ -50,6 +51,11 @@ export function resetWelcomeJourney(navigation: Navigation, screen: 'payment' | 
 export async function openPurchasedDestination(navigation: Navigation, options?: { resumeOnly: true; isCurrent: () => boolean }): Promise<boolean> {
   const intent = options?.resumeOnly ? await getPurchasedContinuation() : await getPaywallIntent();
   if (options && (!intent || !options.isCurrent())) return false;
+  if (!(await getMacroTargets())) {
+    if (options && !options.isCurrent()) return false;
+    resetJourney(navigation, { index: 0, routes: [{ name: 'macro-setup' }] });
+    return true;
+  }
   const routes = [nestedRoute('(tabs)', { index: 0, routes: [{ name: 'search', ...(intent?.query ? { params: { query: intent.query } } : {}) }] }),
     ...(intent?.restaurantId ? [{ name: 'restaurant/[id]', params: {
       id: intent.restaurantId,

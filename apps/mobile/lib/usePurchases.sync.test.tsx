@@ -15,6 +15,7 @@ import {
   cachedEntitlementVerdict,
   proInfo,
   renderProvider,
+  seedEntitlementCache,
   setupPurchasesMocks,
 } from './usePurchasesTestKit';
 import { act, waitFor } from '@testing-library/react-native';
@@ -82,6 +83,17 @@ describe('syncEntitlement', () => {
     expect(mockAnalytics.trackEntitlementSyncFailed).toHaveBeenCalledWith({ reason: 'mismatch' });
   });
 
+  it('keeps a valid account-bound offline cache through a failed foreground refresh', async () => {
+    seedEntitlementCache('active');
+    mockApi.fetchSubscriptionStatus.mockRejectedValue(new Error('offline'));
+    const { result } = renderProvider();
+    await waitFor(() => expect(result.current.entitled).toBe(true));
+    mockApi.syncSubscription.mockRejectedValue(new Error('offline'));
+    await act(async () => { mockForeground.listener?.('active'); });
+    expect(result.current.entitled).toBe(true);
+    expect(result.current.isUnknown).toBe(false);
+  });
+
   it('drops an answer whose session changed or ended mid-flight', async () => {
     mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() });
     const { result } = renderProvider();
@@ -142,4 +154,26 @@ describe('syncEntitlement', () => {
       now.mockRestore();
     }
   });
+
+  it.each(['active', 'never_subscribed'] as const)(
+    'holds a %s in-memory verdict as unknown when its 24-hour proof expires and foreground sync fails',
+    async (verdict) => {
+      const before = Date.now();
+      mockApi.fetchSubscriptionStatus.mockResolvedValue({
+        active: verdict === 'active', status: verdict, expiresAt: verdict === 'active' ? new Date(before + 30 * 86_400_000).toISOString() : null,
+        verdict, lastRcVerifiedAt: new Date(before).toISOString(),
+      });
+      const { result } = renderProvider();
+      await waitFor(() => expect(result.current.entitled).toBe(verdict === 'active'));
+      const now = jest.spyOn(Date, 'now').mockReturnValue(before + 25 * 3_600_000);
+      try {
+        mockApi.syncSubscription.mockRejectedValue(new Error('offline'));
+        await act(async () => { mockForeground.listener?.('active'); });
+        await waitFor(() => expect(result.current.isUnknown).toBe(true));
+        expect(result.current.entitled).toBeNull();
+      } finally {
+        now.mockRestore();
+      }
+    },
+  );
 });

@@ -118,7 +118,7 @@ describe('boot verdict', () => {
     jest.useRealTimers();
   });
 
-  it('past the cap with no cache falls back to the device, and a slow server answer still replaces it', async () => {
+  it('past the cap with no cache holds unknown until a slow server answer arrives', async () => {
     useFakeTimersKeepingFlush();
     mockRc.identifyPurchasesUser.mockResolvedValue(proInfo);
     const pending = deferred<StatusResult>();
@@ -130,20 +130,21 @@ describe('boot verdict', () => {
     act(() => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
     await flush();
     expect(result.current.ready).toBe(true);
-    expect(result.current.entitled).toBe(true);
+    expect(result.current.entitled).toBeNull();
+    expect(result.current.isUnknown).toBe(true);
     await act(async () => { pending.resolve({ active: false, status: null, expiresAt: null, verdict: 'never_subscribed', lastRcVerifiedAt: new Date().toISOString() }); });
     await flush();
     expect(result.current.entitled).toBe(false);
     jest.useRealTimers();
   });
 
-  it('falls back to the device verdict only when offline with no cache (subscriber not bounced)', async () => {
+  it('holds unknown when offline with no account-bound proof, even if the device says Pro', async () => {
     mockApi.fetchSubscriptionStatus.mockRejectedValue(new Error('offline'));
     mockRc.identifyPurchasesUser.mockResolvedValue(proInfo);
     const { result } = renderProvider();
     await waitFor(() => expect(result.current.ready).toBe(true));
-    expect(result.current.entitled).toBe(true);
-    expect(result.current.isPro).toBe(true);
+    expect(result.current.entitled).toBeNull();
+    expect(result.current.isUnknown).toBe(true);
     expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBeUndefined();
     expect(mockAnalytics.trackEntitlementSyncFailed).toHaveBeenCalledWith({ reason: 'boot' });
   });

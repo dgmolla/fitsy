@@ -67,9 +67,9 @@ export function useBootEntitlement({ verdictGenerationRef, customerInfoRef, fetc
         });
         return;
       }
-      if (server === null && cached && !cached.active && isProActive(info)) {
-        // An offline cached negative may predate a purchase on another device.
-        // Keep the conflict recoverable until the backend can verify it.
+      if (server === null && (!cached || (!cached.active && isProActive(info)))) {
+        // Without account-bound proof, or when a cached negative conflicts
+        // with device Pro, hold recovery until the backend can verify access.
         setClassification('unknown');
         setEntitled(null);
         void answer.then((late) => {
@@ -105,7 +105,7 @@ export function useBootEntitlement({ verdictGenerationRef, customerInfoRef, fetc
     async (userId: string | undefined, isCancelled: () => boolean) => {
       const cached = userId ? await withinMs(readCachedEntitlement(userId), BOOT_VERDICT_CAP_MS) : null;
       if (isCancelled()) return;
-      if (userId && cached && !cached.active && isProActive(customerInfoRef.current)) {
+      if (userId && (!cached || (!cached.active && isProActive(customerInfoRef.current)))) {
         setClassification('unknown');
         setEntitled(null);
         return;

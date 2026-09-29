@@ -25,8 +25,10 @@ import type { SubscriptionStatusResult, SubscriptionVerdict } from './apiClient'
 import { supabase } from './supabase';
 import { withinMs } from './async';
 import {
+  CACHE_MAX_AGE_MS,
   clearCachedEntitlement,
   fetchServerEntitlement,
+  readCachedEntitlement,
   writeCachedEntitlement,
   type EntitlementSyncReason,
 } from './entitlement';
@@ -73,6 +75,7 @@ export function useEntitlementVerdict({
   // When the store last confirmed Pro (markStoreConfirmed); 0 = never.
   const storeConfirmedAtRef = useRef(0);
   const activePeriodRef = useRef<{ userId: string; expiresAt: number } | null>(null);
+  const proofRef = useRef<{ userId: string; verifiedAt: number } | null>(null);
   const rememberActivePeriod = useCallback((userId: string, expiresAt: string | null) => {
     const parsed = expiresAt ? Date.parse(expiresAt) : NaN;
     activePeriodRef.current = Number.isFinite(parsed) ? { userId, expiresAt: parsed } : null;
@@ -121,6 +124,7 @@ export function useEntitlementVerdict({
         // bounded grace verdict while the API has no usable RevenueCat proof.
         if (inStoreGrace()) return true;
         activePeriodRef.current = null;
+        proofRef.current = null;
         setClassification('unknown');
         setEntitled(null);
         return null;
@@ -140,6 +144,8 @@ export function useEntitlementVerdict({
       }
       setClassification(result.verdict);
       setEntitled(active);
+      const verifiedAt = result.lastRcVerifiedAt ? Date.parse(result.lastRcVerifiedAt) : NaN;
+      proofRef.current = Number.isFinite(verifiedAt) ? { userId, verifiedAt } : null;
       rememberActivePeriod(userId, active ? result.expiresAt : null);
       void writeCachedEntitlement(userId, result);
       return active;
@@ -152,11 +158,18 @@ export function useEntitlementVerdict({
       const result = await fetchVerdict(reason, userId);
       if (result === null) {
         const period = activePeriodRef.current;
-        if (period?.userId === userId && period.expiresAt <= Date.now() && !inStoreGrace()) {
+        const proof = proofRef.current;
+        const cached = proof?.userId === userId ? null : await readCachedEntitlement(userId);
+        const verifiedAt = proof?.userId === userId ? proof.verifiedAt :
+          (cached?.lastRcVerifiedAt ? Date.parse(cached.lastRcVerifiedAt) : null);
+        const expiredPeriod = period?.userId === userId && period.expiresAt <= Date.now();
+        const staleProof = verifiedAt === null || Date.now() - verifiedAt > CACHE_MAX_AGE_MS;
+        if ((expiredPeriod || staleProof) && !inStoreGrace()) {
           const { data } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
           if (data.session?.user.id !== userId) return null;
           verdictGenerationRef.current += 1;
           activePeriodRef.current = null;
+          proofRef.current = null;
           setClassification('unknown');
           setEntitled(null);
         }
@@ -216,8 +229,8 @@ export function useEntitlementVerdict({
       if (epoch !== signInEpochRef.current) return;
       // Same fallback rule as boot; the still-running sync applies the late answer.
       if (server === null && classificationRef.current === 'loading') {
-        setClassification(isProActive(info) ? 'active' : 'unknown');
-        setEntitled((current) => current ?? (isProActive(info) ? true : null));
+        setClassification('unknown');
+        setEntitled(null);
       }
       if (info === null) {
         // A slow identity can reveal Pro only after the first server sync has
@@ -256,6 +269,7 @@ export function useEntitlementVerdict({
     void clearCachedEntitlement();
     storeConfirmedAtRef.current = 0;
     activePeriodRef.current = null;
+    proofRef.current = null;
   }, [setEntitled, setClassification]);
 
   const settleAfterSignOut = useCallback(() => {
