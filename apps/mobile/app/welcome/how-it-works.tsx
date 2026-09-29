@@ -12,7 +12,7 @@ function HowItWorksScreen() {
   useEffect(() => { trackOnboardingScreenView('how_it_works'); }, []);
   return <WelcomeScreen progress={0.61} title={"A little context.\nA better choice."}
     subtitle="Every nutrition label tells you where the numbers come from."
-    canContinue onContinue={() => router.push('/welcome/preview')} continueLabel="Explore restaurants">
+    canContinue onContinue={() => router.push({ pathname: '/welcome/preview', params: { entry: 'onboarding' } })} continueLabel="Explore restaurants">
     <View style={s.panels}>
       <View style={s.panel} testID="nutrition-source-published">
         <Text style={s.badge}>Published</Text><Text style={s.title}>From the restaurant.</Text>

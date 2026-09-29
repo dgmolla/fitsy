@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { DiscoveryScreen } from '@/components/DiscoveryScreen';
 import { usePreviewAccess } from '@/lib/usePreviewAccess';
@@ -7,7 +7,8 @@ import { usePurchases } from '@/lib/usePurchases';
 import { routeToPaywall } from '@/lib/teaserGate';
 
 export default function PreviewScreen() {
-  const access = usePreviewAccess();
+  const { entry } = useLocalSearchParams<{ entry?: string }>();
+  const access = usePreviewAccess(entry === 'onboarding');
   const { entitled } = usePurchases();
   const focused = useIsFocused();
   useEffect(() => {
