@@ -119,6 +119,18 @@ describe("POST /api/revenuecat/webhook - idempotency", () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("tiebreak sync failed"));
   });
 
+  it("retries a delayed purchase while the empty REST snapshot still lags", async () => {
+    mockReadUserAndRow.mockResolvedValue({ userExists: true, row: {
+      status: "never_subscribed", expiresAt: null, lastEventAt: new Date(EVENT_MS + 60_000),
+    } });
+    mockSync.mockResolvedValue(false);
+    const res = await POST(makeRequest(event({ type: "INITIAL_PURCHASE", event_timestamp_ms: EVENT_MS }), AUTH));
+    expect(res.status).toBe(500);
+    expect(mockSync).toHaveBeenCalledWith("user-1");
+    expect(mockSubscriptionUpdateMany).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("still inactive after purchase"));
+  });
+
   it("applies a newer event over an older stored one", async () => {
     mockReadUserAndRow.mockResolvedValue({ userExists: true, row: { status: "active", lastEventAt: new Date(EVENT_MS - 60_000) } });
     await POST(

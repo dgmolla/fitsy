@@ -11,9 +11,10 @@ export default function SubscriptionCheck() {
 
   useEffect(() => {
     if (!purchases.ready || purchases.isUnknown) return;
-    router.replace(purchases.entitled ? '/(tabs)/search' :
-      purchases.isLapsed ? '/welcome/resubscribe' : '/welcome/payment');
-  }, [purchases.ready, purchases.isUnknown, purchases.entitled, purchases.isLapsed]);
+    // The entry resolver restores a saved meal, unfinished onboarding, and
+    // the appropriate subscribed or lapsed destination for this account.
+    router.replace('/');
+  }, [purchases.ready, purchases.isUnknown]);
 
   const retry = async () => {
     if (retrying) return;

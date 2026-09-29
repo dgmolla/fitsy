@@ -259,9 +259,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           `[subscription] ${appUserId} stale ${event.type} (${eventAt.toISOString()}) ` +
             `disagrees with row @ ${existing.lastEventAt.toISOString()} (${differs.join(", ")}); re-syncing`,
         );
-        if ((await syncSubscriptionFromRevenueCat(appUserId)) === null) {
-          console.warn(`[subscription] ${appUserId} tiebreak sync failed: RevenueCat unreachable`);
-          return NextResponse.json({ error: "RevenueCat lookup unavailable" }, { status: 500 });
+        const reconciled = await syncSubscriptionFromRevenueCat(appUserId);
+        const pendingPurchase = existing.status === "never_subscribed" && status === "active" &&
+          ["INITIAL_PURCHASE", "RENEWAL", "NON_RENEWING_PURCHASE"].includes(event.type);
+        if (reconciled === null || (pendingPurchase && reconciled !== true)) {
+          console.warn(`[subscription] ${appUserId} tiebreak sync failed: RevenueCat ${reconciled === null ? "unreachable" : "still inactive after purchase"}`);
+          return NextResponse.json({ error: "RevenueCat lookup unresolved" }, { status: 500 });
         }
       }
       return NextResponse.json({ received: true }, { status: 200 });
