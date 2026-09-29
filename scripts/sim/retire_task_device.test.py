@@ -141,6 +141,22 @@ exit 1
         self.assertTrue((self.archive / self.udid / 'retired.json').exists())
         self.assertEqual(len(result['proof']), 2)
 
+    def test_partial_predelete_archive_resumes(self):
+        original = retirement.durable_json
+        def interrupted(path, value):
+            if path.name == 'mapping.json':
+                raise KeyboardInterrupt('interrupted before mapping')
+            return original(path, value)
+        with mock.patch.object(retirement, 'durable_json', side_effect=interrupted):
+            with self.assertRaises(KeyboardInterrupt):
+                self.retire()
+        destination = self.archive / self.udid / self.attachment.relative_to(self.devices / self.udid)
+        self.assertTrue(destination.is_file())
+        self.assertFalse((self.archive / self.udid / 'mapping.json').exists())
+        destination.write_bytes(b'partial copy')
+        self.assertTrue(self.retire()['deleted'])
+        self.assertEqual(destination.read_bytes(), b'raw evidence')
+
     def test_repeat_rejects_corrupted_archived_report(self):
         self.retire()
         archived = self.archive / self.udid / 'proof/product-flow-report.json'

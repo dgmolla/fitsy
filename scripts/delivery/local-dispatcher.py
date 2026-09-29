@@ -556,6 +556,7 @@ def retire_verified_simulator(config, state, state_path):
         receipt_file = worktree / '.evidence/product-build/receipt.json'
         if not receipt_file.is_file():
             continue
+        udid = None
         try:
             udid = json.loads(receipt_file.read_text()).get('simulator')
             if not isinstance(udid, str):
@@ -580,7 +581,7 @@ def retire_verified_simulator(config, state, state_path):
                 'freeBeforeBytes': result['freeBeforeBytes'], 'freeAfterBytes': result['freeAfterBytes']}
         except Exception as error:
             # Retirement is best effort; an uncertain proof must never delete or stall dispatch.
-            state.setdefault('simulator_retirement', {})[str(udid)] = {
+            state.setdefault('simulator_retirement', {})[udid or f'claim:{claim_id}'] = {
                 'status': 'held',
                 'issue': issue, 'reason': str(error)[:300], 'attemptedAt': utc()}
         state['simulator_retirement_cursor'] = issue_text

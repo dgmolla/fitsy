@@ -25,6 +25,7 @@ The report must match the checkout's current source and build recipe, and Metro-
 The device must be shut down, unclaimed, and free of open files or referencing processes, including processes working from the claim checkout.
 Simulator CLI commands and retirement share the local claim lock through the final owner check and exact device deletion.
 Every raw XCTest attachment is cloned outside the device and hash-checked before `simctl delete` names that one device; the shared runtime and exported app remain.
+An interrupted pre-delete copy is rebuilt from the still-present device and checked before the mapping is committed.
 The delete intent also binds archived build and report proof so an interrupted deletion can finish its receipt even if the checkout changes afterward.
 The private retirement receipt records the source-to-archive mapping, checks, and measured free space, while incomplete or blocked claims retain their devices.
 The scan rotates past held devices, and a durable delete intent lets the next tick reconcile an interrupted deletion without guessing that an absent device was retired.

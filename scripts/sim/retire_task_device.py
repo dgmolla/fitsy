@@ -60,6 +60,30 @@ def archive_proof(source, destination):
     return {'archive': str(destination), 'sha256': digest(destination)}
 
 
+def archive_raw(source, destination):
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.is_symlink():
+        raise ValueError('raw archive destination is linked')
+    source_hash = digest(source)
+    if destination.is_file() and digest(destination) == source_hash:
+        return source_hash
+    temporary = destination.with_name(destination.name + '.pending')
+    if temporary.exists() or temporary.is_symlink():
+        temporary.unlink()
+    command('cp', '-c', '-p', str(source), str(temporary))
+    with temporary.open('rb') as copied:
+        os.fsync(copied.fileno())
+    if digest(temporary) != source_hash:
+        raise ValueError('raw archive copy differs from source')
+    os.replace(temporary, destination)
+    directory = os.open(destination.parent, os.O_RDONLY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+    return source_hash
+
+
 def app_hash(directory):
     hash_ = hashlib.sha256()
     # Node's product-flow treeHash sorts full path strings, not Path components.
@@ -288,8 +312,6 @@ def _retire_locked(*, issue, udid, worktree, archive_root, device_root, claim_fi
         raise
     build, report, app = evidence(worktree, udid)
     idle(udid, worktree, device_path, claim_file)
-    if target.exists() and not (target / 'mapping.json').exists():
-        raise ValueError('incomplete prior archive; inspect before retrying')
     source_root = device_path / 'data/Containers/Data/InternalDaemon'
     if not source_root.is_dir() or source_root.is_symlink():
         raise ValueError('raw attachment inventory is unavailable')
@@ -300,12 +322,7 @@ def _retire_locked(*, issue, udid, worktree, archive_root, device_root, claim_fi
             raise ValueError('raw attachment has unsafe path')
         relative = source.relative_to(device_path)
         destination = target / relative
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        if not destination.exists():
-            command('cp', '-c', '-p', str(source), str(destination))
-        source_hash = digest(source)
-        if digest(destination) != source_hash:
-            raise ValueError('raw archive digest differs')
+        source_hash = archive_raw(source, destination)
         mapping.append({'source': str(source), 'archive': str(destination),
                         'sha256': source_hash, 'bytes': source.stat().st_size})
     manifest = {'schema': 'fitsy.simulator-retirement.v1', 'issue': issue, 'udid': udid,

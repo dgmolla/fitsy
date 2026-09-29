@@ -292,6 +292,19 @@ class DispatcherProcessTest(unittest.TestCase):
             self.assertEqual(state['simulator_retirement'][udid]['status'], 'retired')
             self.assertEqual(retire.call_count, 2)
 
+    def test_malformed_build_receipt_is_held_without_stalling_tick(self):
+        claim_id = '12345678-1234-1234-1234-123456789abc'
+        worktree = self.worktrees / f'fitsy-issue-412-{claim_id[:8]}'
+        build = worktree / '.evidence/product-build'
+        build.mkdir(parents=True)
+        (build / 'receipt.json').write_text('{bad json')
+        config = json.loads(self.config.read_text())
+        state = {'active': None, 'verified': {'412': {'id': claim_id, 'issue': 412,
+                 'branch': 'issue-412'}}, 'history': [{'terminal': 'verified', 'issue': 412,
+                 'id': claim_id, 'branch': 'issue-412', 'worktree': str(worktree)}]}
+        dispatcher.retire_verified_simulator(config, state, self.state / 'state.json')
+        self.assertEqual(state['simulator_retirement'][f'claim:{claim_id}']['status'], 'held')
+
     def test_idle_ready_pickup_race_and_next_dependency(self):
         self.set_board([item(385), item(351, dependencies='#385')])
         self.env['FAKE_WORKER_MODE'] = 'sleep'
