@@ -180,10 +180,10 @@ describe('boot verdict', () => {
     jest.useRealTimers();
   });
 
-  it('server "false" + device Pro with a slow re-read: settles false at the cap, the late "true" still lets them in', async () => {
+  it('server never + device Pro with a slow re-read: holds unknown at the cap until the late active proof', async () => {
     useFakeTimersKeepingFlush();
     mockRc.identifyPurchasesUser.mockResolvedValue(proInfo);
-    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: false, status: 'expired', expiresAt: null, verdict: 'expired', lastRcVerifiedAt: new Date().toISOString() });
+    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: false, status: 'never_subscribed', expiresAt: null, verdict: 'never_subscribed', lastRcVerifiedAt: new Date().toISOString() });
     const pending = deferred<SyncResult>();
     mockApi.syncSubscription.mockReturnValue(pending.promise);
     const { result } = renderProvider();
@@ -192,7 +192,8 @@ describe('boot verdict', () => {
     expect(result.current.entitled).toBeNull();
     act(() => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
     await flush();
-    expect(result.current.entitled).toBe(false);
+    expect(result.current.entitled).toBeNull();
+    expect(result.current.isUnknown).toBe(true);
     await act(async () => { pending.resolve({ active: true, synced: true, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() }); });
     await flush();
     expect(result.current.entitled).toBe(true);

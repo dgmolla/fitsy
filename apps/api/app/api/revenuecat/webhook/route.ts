@@ -218,6 +218,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       ? new Date(event.expiration_at_ms)
       : null;
   const status = statusForEvent(event.type, expiresAt);
+  const purchaseEvent = status === "active" &&
+    ["INITIAL_PURCHASE", "RENEWAL", "NON_RENEWING_PURCHASE"].includes(event.type);
   const plan = event.product_id ?? "unknown";
   const appleTransactionId =
     event.original_transaction_id ?? event.transaction_id ?? null;
@@ -260,8 +262,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             `disagrees with row @ ${existing.lastEventAt.toISOString()} (${differs.join(", ")}); re-syncing`,
         );
         const reconciled = await syncSubscriptionFromRevenueCat(appUserId);
-        const pendingPurchase = existing.status === "never_subscribed" && status === "active" &&
-          ["INITIAL_PURCHASE", "RENEWAL", "NON_RENEWING_PURCHASE"].includes(event.type);
+        const pendingPurchase = purchaseEvent && ["never_subscribed", "expired"].includes(existing.status);
         if (reconciled === null || (pendingPurchase && reconciled !== true)) {
           console.warn(`[subscription] ${appUserId} tiebreak sync failed: RevenueCat ${reconciled === null ? "unreachable" : "still inactive after purchase"}`);
           return NextResponse.json({ error: "RevenueCat lookup unresolved" }, { status: 500 });
@@ -270,7 +271,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ received: true }, { status: 200 });
     }
 
-    await persistEvent({ userId: appUserId, existing, plan, status, expiresAt, appleTransactionId, eventAt });
+    const applied = await persistEvent({ userId: appUserId, existing, plan, status, expiresAt, appleTransactionId, eventAt });
+    if (!applied && purchaseEvent) {
+      const latest = (await readUserAndRow(appUserId)).row;
+      if (latest && ["never_subscribed", "expired"].includes(latest.status) &&
+          (await syncSubscriptionFromRevenueCat(appUserId)) !== true) {
+        return NextResponse.json({ error: "RevenueCat purchase reconciliation pending" }, { status: 500 });
+      }
+    }
 
     return NextResponse.json({ received: true }, { status: 200 });
   } catch {

@@ -131,6 +131,17 @@ describe("POST /api/revenuecat/webhook - idempotency", () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("still inactive after purchase"));
   });
 
+  it("retries a delayed repurchase while the expired REST snapshot still lags", async () => {
+    mockReadUserAndRow.mockResolvedValue({ userExists: true, row: {
+      status: "expired", expiresAt: new Date(EVENT_MS - 1_000), lastEventAt: new Date(EVENT_MS + 60_000),
+    } });
+    mockSync.mockResolvedValue(false);
+    const res = await POST(makeRequest(event({ type: "INITIAL_PURCHASE", event_timestamp_ms: EVENT_MS }), AUTH));
+    expect(res.status).toBe(500);
+    expect(mockSync).toHaveBeenCalledWith("user-1");
+    expect(mockSubscriptionUpdateMany).not.toHaveBeenCalled();
+  });
+
   it("applies a newer event over an older stored one", async () => {
     mockReadUserAndRow.mockResolvedValue({ userExists: true, row: { status: "active", lastEventAt: new Date(EVENT_MS - 60_000) } });
     await POST(
@@ -154,6 +165,23 @@ describe("POST /api/revenuecat/webhook - idempotency", () => {
       where: { userId: "user-1", OR: [{ lastEventAt: null }, { lastEventAt: { lte: new Date(EVENT_MS) } }] },
       data: expect.objectContaining({ status: "expired" }),
     }));
+    expect(mockLogStatusChange).not.toHaveBeenCalled();
+  });
+
+  it("retries a purchase when an expired REST row wins after the webhook's row read", async () => {
+    mockReadUserAndRow
+      .mockResolvedValueOnce({ userExists: true, row: {
+        status: "expired", lastEventAt: new Date(EVENT_MS - 60_000),
+      } })
+      .mockResolvedValueOnce({ userExists: true, row: {
+        status: "expired", lastEventAt: new Date(EVENT_MS + 60_000),
+      } });
+    mockSubscriptionUpdateMany.mockResolvedValueOnce({ count: 0 });
+    mockSync.mockResolvedValue(false);
+    const res = await POST(makeRequest(event({ type: "INITIAL_PURCHASE" }), AUTH));
+    expect(res.status).toBe(500);
+    expect(mockReadUserAndRow).toHaveBeenCalledTimes(2);
+    expect(mockSync).toHaveBeenCalledWith("user-1");
     expect(mockLogStatusChange).not.toHaveBeenCalled();
   });
 

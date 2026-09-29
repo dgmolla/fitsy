@@ -54,6 +54,19 @@ export function useBootEntitlement({ verdictGenerationRef, customerInfoRef, fetc
         }
         lateEscalation = escalation;
       }
+      if (lateEscalation) {
+        // Device Pro conflicts with the backend's older negative proof. A
+        // capped re-read stays recoverable instead of flashing payment.
+        setClassification('unknown');
+        setEntitled(null);
+        const fallbackGeneration = verdictGenerationRef.current;
+        void lateEscalation.then((late) => {
+          if (late !== null && !isCancelled() && verdictGenerationRef.current === fallbackGeneration) {
+            applyVerdict('mismatch', late, userId);
+          }
+        });
+        return;
+      }
       const effective = server === null ? null : applyVerdict('boot', server, userId);
       if (server?.verdict === 'unknown') {
         // A missing or stale RC proof must never route to the first-time
@@ -68,15 +81,6 @@ export function useBootEntitlement({ verdictGenerationRef, customerInfoRef, fetc
       // offline subscriber isn't bounced). `current` covers an answer that
       // landed via another path meanwhile.
       if (server?.verdict !== 'unknown') setEntitled((current) => current ?? effective ?? cached?.active ?? isProActive(info));
-      if (lateEscalation) {
-        // A capped escalation may still resolve after the boot fallback.
-        const fallbackGeneration = verdictGenerationRef.current;
-        void lateEscalation.then((late) => {
-          if (late !== null && !isCancelled() && verdictGenerationRef.current === fallbackGeneration) {
-            applyVerdict('mismatch', late, userId);
-          }
-        });
-      }
       if (server === null) {
         // Slow server: apply its answer when it finally lands.
         void answer.then((late) => {
