@@ -67,6 +67,16 @@ export function useBootEntitlement({ verdictGenerationRef, customerInfoRef, fetc
         });
         return;
       }
+      if (server === null && cached && !cached.active && isProActive(info)) {
+        // An offline cached negative may predate a purchase on another device.
+        // Keep the conflict recoverable until the backend can verify it.
+        setClassification('unknown');
+        setEntitled(null);
+        void answer.then((late) => {
+          if (late !== null && !isCancelled() && verdictGenerationRef.current === generation) applyVerdict('boot', late, userId);
+        });
+        return;
+      }
       const effective = server === null ? null : applyVerdict('boot', server, userId);
       if (server?.verdict === 'unknown') {
         // A missing or stale RC proof must never route to the first-time
@@ -95,6 +105,11 @@ export function useBootEntitlement({ verdictGenerationRef, customerInfoRef, fetc
     async (userId: string | undefined, isCancelled: () => boolean) => {
       const cached = userId ? await withinMs(readCachedEntitlement(userId), BOOT_VERDICT_CAP_MS) : null;
       if (isCancelled()) return;
+      if (userId && cached && !cached.active && isProActive(customerInfoRef.current)) {
+        setClassification('unknown');
+        setEntitled(null);
+        return;
+      }
       if (userId && cached?.active) rememberActivePeriod(userId, cached.expiresAt);
       setEntitled((current) => current ?? cached?.active ?? (userId ? isProActive(customerInfoRef.current) : false));
       setClassification(userId ? (cached?.verdict ?? (isProActive(customerInfoRef.current) ? 'active' : 'unknown')) : 'never_subscribed');

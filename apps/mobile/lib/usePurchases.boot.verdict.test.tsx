@@ -148,14 +148,15 @@ describe('boot verdict', () => {
     expect(mockAnalytics.trackEntitlementSyncFailed).toHaveBeenCalledWith({ reason: 'boot' });
   });
 
-  it('offline with a cache keeps the cache, not the device', async () => {
+  it('offline with a cached negative and current device Pro holds recovery, not the ordinary paywall', async () => {
     seedEntitlementCache('never_subscribed');
     mockApi.fetchSubscriptionStatus.mockRejectedValue(new Error('offline'));
     mockRc.identifyPurchasesUser.mockResolvedValue(proInfo);
     const { result } = renderProvider();
     await waitFor(() => expect(result.current.ready).toBe(true));
     await flush();
-    expect(result.current.entitled).toBe(false);
+    expect(result.current.entitled).toBeNull();
+    expect(result.current.isUnknown).toBe(true);
   });
 
   it('server "false" + device Pro: escalates ONCE to a RevenueCat re-read before settling, so no paywall flash', async () => {
