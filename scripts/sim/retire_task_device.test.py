@@ -101,6 +101,14 @@ fi
 exit 1
 ''')
         lsof.chmod(0o700)
+        cp = self.bin / 'cp'
+        cp.write_text('''#!/usr/bin/env python3
+import shutil,sys
+if sys.argv[1:3] != ['-c','-p'] or len(sys.argv) != 5:
+    raise SystemExit(2)
+shutil.copy2(sys.argv[3],sys.argv[4])
+''')
+        cp.chmod(0o700)
         self.env = mock.patch.dict(os.environ, {'PATH': str(self.bin) + ':' + os.environ['PATH'],
             'FAKE_UDID': self.udid, 'FAKE_DEVICE_ROOT': str(self.devices),
             'FAKE_DELETED': str(self.root / 'deleted'), 'FAKE_WORKTREE': str(self.worktree.resolve()),
