@@ -18,6 +18,9 @@ from datetime import datetime, timezone
 import urllib.request
 import uuid
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'sim'))
+from retire_task_device import retire as retire_task_device
+
 
 def incident(state, claim, reason):
     key = f"fitsy-blocker:{claim['issue']}:{claim['id']}"
@@ -521,6 +524,71 @@ def archive(state, claim, status, state_path):
     state['active'] = None
 
 
+def retire_verified_simulator(config, state, state_path):
+    """One exact terminal claim per tick, before the next disk admission."""
+    if state.get('active'):
+        return
+    verified = state.get('verified') or {}
+    ordered = sorted(verified.items(), key=lambda entry: int(entry[0]))
+    cursor = state.get('simulator_retirement_cursor')
+    if cursor in [number for number, _ in ordered]:
+        index = next(index for index, (number, _) in enumerate(ordered) if number == cursor)
+        ordered = ordered[index + 1:] + ordered[:index + 1]
+    for issue_text, identity in ordered:
+        issue = int(issue_text)
+        claim_id = identity.get('id', '')
+        if identity.get('issue') != issue or not re.fullmatch(r'[0-9a-f-]{36}', claim_id):
+            continue
+        matching = [entry for entry in state.get('history', []) if
+                    entry.get('terminal') == 'verified' and entry.get('issue') == issue and
+                    entry.get('id') == claim_id and entry.get('branch') == identity.get('branch')]
+        if len(matching) > 1:
+            continue
+        claim = matching[0] if matching else read_json(
+            Path(config['state_dir']) / 'claims' / claim_id / 'receipt.json', {})
+        if (claim.get('terminal') != 'verified' or claim.get('issue') != issue or
+                claim.get('id') != claim_id or claim.get('branch') != identity.get('branch')):
+            continue
+        worktree = Path(claim.get('worktree', '')).resolve()
+        expected = Path(config['worktree_root']).resolve() / f'fitsy-issue-{issue}-{claim_id[:8]}'
+        if worktree != expected:
+            continue
+        receipt_file = worktree / '.evidence/product-build/receipt.json'
+        if not receipt_file.is_file():
+            continue
+        udid = None
+        try:
+            udid = json.loads(receipt_file.read_text()).get('simulator')
+            if not isinstance(udid, str):
+                continue
+            previous = (state.get('simulator_retirement') or {}).get(udid)
+            if previous and previous.get('status') == 'retired':
+                continue
+            def still_verified():
+                current = next((entry for entry in board(config) if
+                                entry.get('content', {}).get('number') == issue), None)
+                return bool(current and terminal_verified(config, current, identity, archived=True))
+            if not still_verified():
+                raise ValueError('issue is no longer terminal-verified')
+            result = retire_task_device(
+                issue=issue, udid=udid, worktree=worktree,
+                archive_root=Path(config['state_dir']) / 'retired-simulator-evidence',
+                device_root=Path.home() / 'Library/Developer/CoreSimulator/Devices',
+                claim_file=Path.home() / '.fitsy-sim-claim.json', confirm_verified=still_verified)
+            state.setdefault('simulator_retirement', {})[udid] = {
+                'status': 'retired', 'issue': issue,
+                'receipt': str(Path(config['state_dir']) / 'retired-simulator-evidence' / udid / 'retired.json'),
+                'freeBeforeBytes': result['freeBeforeBytes'], 'freeAfterBytes': result['freeAfterBytes']}
+        except Exception as error:
+            # Retirement is best effort; an uncertain proof must never delete or stall dispatch.
+            state.setdefault('simulator_retirement', {})[udid or f'claim:{claim_id}'] = {
+                'status': 'held',
+                'issue': issue, 'reason': str(error)[:300], 'attemptedAt': utc()}
+        state['simulator_retirement_cursor'] = issue_text
+        write_json(state_path, state)
+        return
+
+
 def tick(config, state, state_path, script):
     active = state.get('active')
     if active:
@@ -652,6 +720,7 @@ def tick(config, state, state_path, script):
         pass  # A notification fault never changes claim ownership or queue decisions.
     if not config.get('enabled'):
         return {'state': 'disabled'}
+    retire_verified_simulator(config, state, state_path)
     if shutil.disk_usage(config['worktree_root']).free < config.get('min_free_bytes', 8 * 1024**3):
         return {'state': 'resource-hold', 'reason': 'disk below configured minimum'}
     items = board(config)

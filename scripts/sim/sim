@@ -18,6 +18,21 @@ REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 EVID="$REPO_ROOT/.evidence/sim"; mkdir -p "$EVID"
 CMD="${1:-status}"; shift || true
 
+# Hold the same lock as completed-task retirement for the whole simulator
+# command. In particular, claim check/write and simctl delete cannot race.
+if [ "${FITSY_SIM_LOCKED:-}" != 1 ]; then
+  python3 - "$HOME/.fitsy-sim-claim.lock" "$0" "$CMD" "$@" <<'PY'
+import fcntl, os, subprocess, sys
+lock_path, script, *args = sys.argv[1:]
+fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+with os.fdopen(fd, 'r+') as lock:
+    fcntl.flock(lock, fcntl.LOCK_EX)
+    env = {**os.environ, 'FITSY_SIM_LOCKED': '1'}
+    raise SystemExit(subprocess.run(['bash', script, *args], env=env).returncode)
+PY
+  exit $?
+fi
+
 # grep exits 1 on no booted device; do not let set -e kill the script for that
 booted_udid() { xcrun simctl list devices booted | grep -oE '[0-9A-F-]{36}' | head -1 || true; }
 
