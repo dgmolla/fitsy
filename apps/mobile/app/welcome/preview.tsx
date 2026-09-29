@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { Alert } from 'react-native';
+import React, { useCallback, useEffect } from 'react';
+import { Alert, BackHandler } from 'react-native';
 import { router } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { DiscoveryScreen } from '@/components/DiscoveryScreen';
@@ -12,14 +12,20 @@ export default function PreviewScreen() {
   const access = usePreviewAccess(true);
   const { entitled } = usePurchases();
   const focused = useIsFocused();
+  const goBack = useCallback(() => {
+    void clearOnboardingPreviewEntry().then(() => router.back())
+      .catch(() => Alert.alert('Could not leave preview', 'Please try again.'));
+  }, []);
+  useEffect(() => {
+    if (!focused) return;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => { goBack(); return true; });
+    return () => subscription.remove();
+  }, [focused, goBack]);
   useEffect(() => {
     if (!focused || !access.ready || entitled === null) return;
     if (entitled) router.replace('/(tabs)/search');
     else if (!access.canPreview) void routeToPaywall({ replace: true });
   }, [focused, access.ready, access.canPreview, entitled]);
   if (!access.ready || !access.canPreview || entitled) return null;
-  return <DiscoveryScreen onboardingPreview onPreviewBack={() => {
-    void clearOnboardingPreviewEntry().then(() => router.back())
-      .catch(() => Alert.alert('Could not leave preview', 'Please try again.'));
-  }} />;
+  return <DiscoveryScreen onboardingPreview onPreviewBack={goBack} />;
 }
