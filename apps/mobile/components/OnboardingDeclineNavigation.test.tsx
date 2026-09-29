@@ -42,7 +42,8 @@ jest.mock('../components/DiscoveryScreen', () => {
   const React = require('react');
   const { Pressable, Text, View } = require('react-native');
   const { routeToPaywall } = require('../lib/teaserGate');
-  return { DiscoveryScreen: () => React.createElement(View, { testID: 'preview-guide' },
+  return { DiscoveryScreen: ({ onPreviewBack }: { onPreviewBack?: () => void }) => React.createElement(View, { testID: 'preview-guide' },
+    React.createElement(Pressable, { testID: 'preview-back', onPress: onPreviewBack }, React.createElement(Text, null, 'Back')),
     React.createElement(Pressable, { testID: 'locked-full-menu', onPress: () => { void routeToPaywall(); } },
       React.createElement(Text, null, 'Full menu with Pro'))) };
 });
@@ -79,6 +80,15 @@ it('allows a returning onboarding preview after decline but still gates full men
   expect(await AsyncStorage.getItem('@fitsy/onboardingPreviewEntry')).toBe('1');
   await waitFor(() => expect(screen.getByTestId('access-probe').props.children).toBe('direct:false|onboarding:true'));
   expect(screen.queryByText('Paid search results')).toBeNull();
+  await act(async () => { fireEvent.press(screen.getByTestId('preview-back')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/how-it-works'));
+  expect(await AsyncStorage.getItem('@fitsy/onboardingPreviewEntry')).toBeNull();
+  await act(async () => { router.push('/welcome/preview'); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
+  await act(async () => { router.push('/welcome/how-it-works'); });
+  await screen.findByTestId('nutrition-source-published');
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  expect(await screen.findByTestId('preview-guide')).toBeTruthy();
   await act(async () => { fireEvent.press(screen.getByTestId('locked-full-menu')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
   expect(screen.queryByText('Paid search results')).toBeNull();

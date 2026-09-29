@@ -18,7 +18,7 @@ import { s } from './DiscoveryScreen.styles';
 import { Masthead, MacroStrip, SearchBar } from './DiscoveryChrome';
 import { HeroCard, RestaurantSection } from './DiscoveryCards';
 const FREE_RESULT_COUNT = 3;
-export function DiscoveryScreen({ onboardingPreview = false }: { onboardingPreview?: boolean }) {
+export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { onboardingPreview?: boolean; onPreviewBack?: () => void }) {
   const { navigation, isOnboardingPreview, tried, inputs, query, setQuery, canSearch, hasQuery, location,
     locationLabel, results, heroResult, listResults, nextCursor, loading, loadingMore, refreshing, error, locked, outOfArea,
     filterVisible, setFilterVisible, locationPickerVisible, setLocationPickerVisible, tourReady, tourVisible, startTour,
@@ -160,7 +160,7 @@ export function DiscoveryScreen({ onboardingPreview = false }: { onboardingPrevi
       edges={isOnboardingPreview ? ['top', 'right', 'bottom', 'left'] : ['top', 'right', 'left']}
       style={{ flex: 1, backgroundColor: EDITORIAL.cream }}
     >
-      {isOnboardingPreview && <WelcomeNav progress={0.75} backTestID="preview-back" onBack={navigation.canGoBack() ? () => router.back() : undefined} />}
+      {isOnboardingPreview && <WelcomeNav progress={0.75} backTestID="preview-back" onBack={navigation.canGoBack() ? onPreviewBack ?? (() => router.back()) : undefined} />}
       <Masthead preview={isOnboardingPreview} locationRef={tourLocationRef} locationLabel={locationLabel} onLocationPress={handleOpenLocationPicker} />
       {!loading && error !== null && (
         <View style={s.errorBanner}>
