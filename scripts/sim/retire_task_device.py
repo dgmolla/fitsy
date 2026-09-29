@@ -55,6 +55,30 @@ def app_hash(directory):
     return hash_.hexdigest()
 
 
+def input_hash(worktree, mobile_only=False):
+    """Match the product-flow inputHash over current tracked and untracked inputs."""
+    env = {key: value for key, value in os.environ.items() if not key.startswith('GIT_')}
+    paths = subprocess.check_output(['git', '-C', str(worktree), 'ls-files', '-z', '--cached',
+                                     '--others', '--exclude-standard'], env=env).decode().split('\0')
+    hash_ = hashlib.sha256()
+    for relative in sorted(set(paths)):
+        if not relative or relative.startswith('.evidence/') or relative.endswith('.md'):
+            continue
+        if mobile_only and not re.match(r'^(apps/mobile/(?!e2e/)|packages/shared/|package(-lock)?\.json$)', relative):
+            continue
+        hash_.update(relative.encode() + b'\0')
+        path = worktree / relative
+        hash_.update(path.read_bytes() if path.exists() else b'<deleted>')
+        hash_.update(b'\0')
+    return hash_.hexdigest()
+
+
+def recipe_hash(worktree):
+    files = ('product-flow.mjs', 'build-profile.mjs')
+    return hashlib.sha256(b'\0'.join((worktree / 'scripts/sim' / name).read_bytes()
+                                      for name in files)).hexdigest()
+
+
 def checked_file(root, relative, expected):
     if not isinstance(relative, str) or not re.fullmatch(r'[0-9a-f]{64}', expected or ''):
         raise ValueError('receipt file or digest missing')
@@ -73,11 +97,23 @@ def evidence(worktree, udid):
             report.get('evidenceMode') != 'final-candidate' or not report.get('finishedAt') or
             not report.get('flows')):
         raise ValueError('build and passing product-flow identities do not match device')
+    if (receipt.get('buildMode') != 'embedded-release' or receipt.get('configuration') != 'Release' or
+            report.get('buildMode') != receipt.get('buildMode')):
+        raise ValueError('Metro-dependent app is not a compatible retained export')
+    for field in ('configHash', 'nativeSourceHash', 'buildRecipeHash', 'bundleHash', 'storeMode'):
+        if not receipt.get(field) or report.get(field) != receipt[field]:
+            raise ValueError(f'build and report {field} identities differ')
+    if (report.get('inputHash') != input_hash(worktree) or
+            receipt['nativeSourceHash'] != input_hash(worktree, mobile_only=True) or
+            receipt['buildRecipeHash'] != recipe_hash(worktree)):
+        raise ValueError('product-flow source or build identity is stale')
     app = Path(receipt['app']).resolve()
     if not app.is_relative_to((worktree / '.evidence/product-build').resolve()) or not app.is_dir():
         raise ValueError('exported app is missing or outside claim checkout')
     if app_hash(app) != receipt['appHash']:
         raise ValueError('exported app digest changed')
+    if not (app / 'main.jsbundle').is_file() or digest(app / 'main.jsbundle') != receipt['bundleHash']:
+        raise ValueError('embedded app bundle digest changed')
     root = report_file.parent
     names = set()
     for flow in report['flows']:
@@ -206,9 +242,9 @@ def retire(*, issue, udid, worktree, archive_root, device_root, claim_file,
     if target.exists() and not (target / 'mapping.json').exists():
         raise ValueError('incomplete prior archive; inspect before retrying')
     source_root = device_path / 'data/Containers/Data/InternalDaemon'
+    if not source_root.is_dir() or source_root.is_symlink():
+        raise ValueError('raw attachment inventory is unavailable')
     sources = raw_files(source_root)
-    if not sources:
-        raise ValueError('raw attachment inventory is empty or unavailable')
     mapping = []
     for source in sources:
         if source.is_symlink() or not source.resolve().is_relative_to(device_path):

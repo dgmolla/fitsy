@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+import subprocess
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -20,9 +21,13 @@ class RetirementTest(unittest.TestCase):
         self.issue = 412
         self.udid = '9EC11FCA-B224-4380-A91D-235ED2BBF7C4'
         self.worktree = self.root / 'fitsy-issue-412-claim123'
-        self.app = self.worktree / '.evidence/product-build/Build/Products/Debug-iphonesimulator/Fitsy.app'
+        self.app = self.worktree / '.evidence/product-build/Build/Products/Release-iphonesimulator/Fitsy.app'
         self.app.mkdir(parents=True)
         (self.app / 'main.jsbundle').write_text('exported app')
+        recipe = self.worktree / 'scripts/sim'
+        recipe.mkdir(parents=True)
+        (recipe / 'product-flow.mjs').write_text('product flow recipe')
+        (recipe / 'build-profile.mjs').write_text('build profile recipe')
         self.flow = self.worktree / '.evidence/product-flow'
         self.flow.mkdir(parents=True)
         (self.flow / 'mcp.jsonl').write_bytes(b'{}\n')
@@ -47,12 +52,19 @@ class RetirementTest(unittest.TestCase):
                 'screenshot': screenshot.name, 'screenshotHash': retirement.digest(screenshot),
                 'captureReceipt': capture.name, 'captureReceiptHash': retirement.digest(capture),
                 'attachmentCloseout': closeout.name, 'attachmentCloseoutHash': retirement.digest(closeout)})
+        subprocess.run(['git', 'init', '-q', str(self.worktree)], check=True)
+        subprocess.run(['git', '-C', str(self.worktree), 'add', 'apps', 'scripts'], check=True)
+        identity = {'configHash': 'c' * 64, 'nativeSourceHash': retirement.input_hash(self.worktree, True),
+                    'buildRecipeHash': retirement.recipe_hash(self.worktree),
+                    'bundleHash': retirement.digest(self.app / 'main.jsbundle'),
+                    'buildMode': 'embedded-release', 'configuration': 'Release', 'storeMode': 'unconfigured'}
         (self.flow / 'report.json').write_text(json.dumps({'simulator': self.udid, 'result': 'pass',
             'evidenceMode': 'final-candidate', 'finishedAt': '2026-09-28T00:00:00Z',
-            'appHash': retirement.app_hash(self.app), 'flows': flows,
+            'appHash': retirement.app_hash(self.app), 'inputHash': retirement.input_hash(self.worktree),
+            **identity, 'flows': flows,
             'exploration': [{'trace': 'mcp.jsonl', 'sha256': retirement.digest(self.flow / 'mcp.jsonl')}]}))
         (self.worktree / '.evidence/product-build/receipt.json').write_text(json.dumps({
-            'simulator': self.udid, 'app': str(self.app), 'appHash': retirement.app_hash(self.app)}))
+            'simulator': self.udid, 'app': str(self.app), 'appHash': retirement.app_hash(self.app), **identity}))
         self.devices = self.root / 'devices'
         self.attachment = self.devices / self.udid / 'data/Containers/Data/InternalDaemon/owner/Attachments/raw-without-extension'
         self.attachment.parent.mkdir(parents=True)
@@ -185,6 +197,32 @@ else: raise SystemExit(2)
         with self.assertRaisesRegex(ValueError, 'no longer terminal-verified'):
             self.retire(confirm_verified=lambda: False)
         self.assertTrue(self.attachment.exists())
+        self.assertFalse((self.root / 'deleted').exists())
+
+    def test_verified_empty_attachment_inventory_retires_device(self):
+        self.attachment.unlink()
+        result = self.retire()
+        self.assertEqual(result['attachments'], [])
+        self.assertTrue((self.root / 'deleted').exists())
+
+    def test_stale_full_source_with_unchanged_app_retains_device(self):
+        source = self.worktree / 'apps/api/changed.ts'
+        source.parent.mkdir(parents=True)
+        source.write_text('export const changed = true;')
+        with self.assertRaisesRegex(ValueError, 'source or build identity is stale'):
+            self.retire()
+        self.assertFalse((self.root / 'deleted').exists())
+
+    def test_metro_dependent_test_store_app_retains_device(self):
+        receipt_file = self.worktree / '.evidence/product-build/receipt.json'
+        report_file = self.flow / 'report.json'
+        receipt, report = json.loads(receipt_file.read_text()), json.loads(report_file.read_text())
+        for item in (receipt, report):
+            item.update({'buildMode': 'owned-metro-test-store', 'configuration': 'Debug', 'storeMode': 'test-store'})
+        receipt_file.write_text(json.dumps(receipt))
+        report_file.write_text(json.dumps(report))
+        with self.assertRaisesRegex(ValueError, 'not a compatible retained export'):
+            self.retire()
         self.assertFalse((self.root / 'deleted').exists())
 
 
