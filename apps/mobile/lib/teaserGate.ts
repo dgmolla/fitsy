@@ -4,6 +4,7 @@ import { supabase } from './supabase';
 import { rememberPaywallIntent, type PaywallIntent } from './paywallIntent';
 import { fetchCustomerInfo, hasLapsedEntitlement } from './purchases';
 import { readPaywallDecline } from './paywallAccess';
+import { clearOnboardingPreviewEntry } from './onboardingPreviewEntry';
 
 const PREVIEW_SAMPLE_USED_KEY = '@fitsy/previewSampleUsed';
 const PREVIEW_TOUR_SEEN_KEY = '@fitsy/previewTourSeen';
@@ -104,6 +105,9 @@ export async function routeToPaywall(options: { replace?: boolean; intent?: Payw
   // Persisted decline survives anonymous sessions and legacy preview links.
   let target: '/welcome/payment' | '/welcome/resubscribe' | '/welcome/signin' = '/welcome/signin';
   try {
+    // A locked choice ends this onboarding preview pass. Returning to the
+    // preview now requires another Continue from the nutrition-source screen.
+    await clearOnboardingPreviewEntry();
     if (await readPaywallDecline()) target = '/welcome/payment';
     if (options.intent) await rememberPaywallIntent(options.intent);
     try {

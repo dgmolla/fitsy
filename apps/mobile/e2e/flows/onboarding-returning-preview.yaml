@@ -105,3 +105,14 @@ tags: [billing, discovery, onboarding, changed-journey]
     timeout: 15000
 - assertNotVisible:
     id: preview-guide
+# A direct preview link after the locked choice cannot reuse the old entry.
+- openLink: com.fitsy.mobile://welcome/preview
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: paywall-timeline
+    timeout: 15000
+- assertNotVisible:
+    id: preview-guide

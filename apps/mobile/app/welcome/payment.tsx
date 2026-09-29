@@ -15,6 +15,7 @@ import { rememberPaywallDecline } from '@/lib/paywallAccess';
 import { openPurchasedDestination, resetWelcomeJourney } from '@/lib/paywallJourney';
 import { purchaseTerms, savingPercent } from '@/lib/purchaseTerms';
 import { devTrialVisualOffer } from '@/lib/devTrialVisualOffer';
+import { clearOnboardingPreviewEntry } from '@/lib/onboardingPreviewEntry';
 
 type PlanId = 'monthly' | 'yearly';
 
@@ -24,6 +25,9 @@ export default function PaymentScreen() {
   useOnboardingStep('payment');
   const navigation = useNavigation();
   const focused = useIsFocused();
+  useEffect(() => {
+    if (focused) void clearOnboardingPreviewEntry();
+  }, [focused]);
   const [chosenPlan, setChosenPlan] = useState<PlanId | null>(null);
   const variants = usePreviewAccess();
   const exposure = useRef('');
