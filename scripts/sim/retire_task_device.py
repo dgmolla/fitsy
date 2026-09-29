@@ -215,6 +215,8 @@ def idle(udid, worktree, device_path, claim_file):
 
 def reconcile_absent(target, issue, udid, worktree, device_root):
     """Complete only a durable delete intent whose archive still verifies."""
+    if (device_root / udid).exists() or (device_root / udid).is_symlink():
+        raise ValueError('device directory still exists despite absent simulator listing')
     intent_file, mapping_file = target / 'delete-intent.json', target / 'mapping.json'
     if not intent_file.is_file() or not mapping_file.is_file():
         raise ValueError('device is absent')

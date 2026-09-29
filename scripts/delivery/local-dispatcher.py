@@ -561,7 +561,7 @@ def retire_verified_simulator(config, state, state_path):
             if not isinstance(udid, str):
                 continue
             previous = (state.get('simulator_retirement') or {}).get(udid)
-            if previous and previous.get('status') in ('retired', 'absent'):
+            if previous and previous.get('status') == 'retired':
                 continue
             def still_verified():
                 current = next((entry for entry in board(config) if
@@ -581,7 +581,7 @@ def retire_verified_simulator(config, state, state_path):
         except Exception as error:
             # Retirement is best effort; an uncertain proof must never delete or stall dispatch.
             state.setdefault('simulator_retirement', {})[str(udid)] = {
-                'status': 'absent' if str(error) == 'device is absent' else 'held',
+                'status': 'held',
                 'issue': issue, 'reason': str(error)[:300], 'attemptedAt': utc()}
         state['simulator_retirement_cursor'] = issue_text
         write_json(state_path, state)

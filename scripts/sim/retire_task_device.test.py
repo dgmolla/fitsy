@@ -81,7 +81,7 @@ import json,os,sys,shutil
 from pathlib import Path
 udid=os.environ['FAKE_UDID']; root=Path(os.environ['FAKE_DEVICE_ROOT'])
 if sys.argv[1:3] == ['simctl','list']:
- present=(root/udid).exists()
+ present=(root/udid).exists() and os.environ.get('FAKE_HIDE_DEVICE') != '1'
  print(json.dumps({'devices': {'iOS': [{'udid':udid,'name':os.environ.get('FAKE_DEVICE_NAME','Fitsy-Issue-412'),'state':os.environ.get('FAKE_DEVICE_STATE','Shutdown')}] if present else []}}))
 elif sys.argv[1:3] == ['simctl','delete']:
  shutil.rmtree(root/udid); Path(os.environ['FAKE_DELETED']).write_text(udid)
@@ -205,6 +205,14 @@ exit 1
                 self.retire()
         self.assertTrue(self.attachment.exists())
         self.assertFalse((self.root / 'deleted').exists())
+
+    def test_list_omission_while_directory_exists_is_retryable(self):
+        with mock.patch.dict(os.environ, {'FAKE_HIDE_DEVICE': '1'}):
+            with self.assertRaisesRegex(ValueError, 'directory still exists'):
+                self.retire()
+        self.assertTrue(self.attachment.exists())
+        self.assertFalse((self.root / 'deleted').exists())
+        self.assertTrue(self.retire()['deleted'])
 
     def test_process_with_only_checkout_cwd_retains_device(self):
         with mock.patch.dict(os.environ, {'FAKE_LSOF_CHECKOUT': '1'}):
