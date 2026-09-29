@@ -87,6 +87,19 @@ tags: [billing, discovery, onboarding, changed-journey]
     id: preview-guide
 - assertVisible:
     id: preview-pick-2
+# Replay can move back and forward without erasing the prior decline.
+- tapOn:
+    id: preview-back
+- assertVisible:
+    id: nutrition-source-published
+- tapOn:
+    id: welcome-continue
+- extendedWaitUntil:
+    visible:
+      id: preview-guide
+    timeout: 30000
+- assertVisible:
+    id: preview-pick-2
 # A cold-start resume keeps this specific, user-entered preview pass.
 - stopApp
 - launchApp

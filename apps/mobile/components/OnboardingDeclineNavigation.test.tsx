@@ -1,9 +1,9 @@
 jest.unmock('react-native');
 jest.unmock('expo-router');
 import React from 'react';
-import { Text } from 'react-native';
+import { Pressable, Text } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Stack } from 'expo-router';
+import { router, Stack } from 'expo-router';
 import { act, fireEvent, renderRouter, waitFor } from 'expo-router/testing-library';
 import Tabs from '../app/(tabs)/_layout';
 import HowItWorks from '../app/welcome/how-it-works';
@@ -64,7 +64,7 @@ it('allows a returning onboarding preview after decline but still gates full men
     '(tabs)/_layout': Tabs, '(tabs)/search': () => <Text>Paid search results</Text>,
     'welcome/how-it-works': () => <HowItWorks />, 'welcome/preview': Preview,
     'welcome/signin': () => <Text>Create an account</Text>,
-    'welcome/payment': () => <Text>Payment plans</Text>,
+    'welcome/payment': () => <><Text>Payment plans</Text><Pressable testID="payment-back" onPress={() => router.back()}><Text>Back</Text></Pressable></>,
   }, { initialUrl: '/welcome/how-it-works' });
   await screen.findByTestId('nutrition-source-published');
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
@@ -75,4 +75,8 @@ it('allows a returning onboarding preview after decline but still gates full men
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
   expect(screen.queryByText('Paid search results')).toBeNull();
   expect(await AsyncStorage.getItem('@fitsy/paywallDeclined')).toBe('1');
+  expect(await AsyncStorage.getItem('@fitsy/onboardingPreviewEntry')).toBeNull();
+  await act(async () => { fireEvent.press(screen.getByTestId('payment-back')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
+  expect(screen.queryByTestId('preview-guide')).toBeNull();
 });
