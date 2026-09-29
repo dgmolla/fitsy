@@ -32,3 +32,4 @@ The scan rotates past held devices, and a durable delete intent lets the next ti
 An absent simulator listing remains retryable until the directory is also gone and a matching durable deletion intent proves retirement.
 If a held device outlives the bounded in-memory history, the dispatcher resolves its exact verified claim from the durable claim receipt.
 This deliberately retains all raw attachments, including files not referenced by the final report, so retirement does not also become an evidence-pruning policy.
+A simulator with no InternalDaemon attachment directory has an empty raw inventory and remains eligible when its other proofs pass.

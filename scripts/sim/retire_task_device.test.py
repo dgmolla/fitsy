@@ -4,6 +4,7 @@ import json
 import fcntl
 import os
 from pathlib import Path
+import shutil
 import sys
 import tempfile
 import time
@@ -282,6 +283,12 @@ exit 1
 
     def test_verified_empty_attachment_inventory_retires_device(self):
         self.attachment.unlink()
+        result = self.retire()
+        self.assertEqual(result['attachments'], [])
+        self.assertTrue((self.root / 'deleted').exists())
+
+    def test_missing_internal_daemon_is_valid_empty_inventory(self):
+        shutil.rmtree(self.attachment.parents[2])
         result = self.retire()
         self.assertEqual(result['attachments'], [])
         self.assertTrue((self.root / 'deleted').exists())

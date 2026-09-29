@@ -313,7 +313,7 @@ def _retire_locked(*, issue, udid, worktree, archive_root, device_root, claim_fi
     build, report, app = evidence(worktree, udid)
     idle(udid, worktree, device_path, claim_file)
     source_root = device_path / 'data/Containers/Data/InternalDaemon'
-    if not source_root.is_dir() or source_root.is_symlink():
+    if source_root.is_symlink() or (source_root.exists() and not source_root.is_dir()):
         raise ValueError('raw attachment inventory is unavailable')
     sources = raw_files(source_root)
     mapping = []
