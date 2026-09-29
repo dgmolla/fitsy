@@ -40,7 +40,7 @@ export default function ResubscribeScreen() {
   const { claim } = useRedirectOnceEntitled({
     entitled,
     busy: loading || restoring || !focused,
-    onEntitled: () => { void openPurchasedDestination(navigation); },
+    onEntitled: () => { void openPurchasedDestination(navigation, { requireTargets: true }); },
   });
   // A locked teaser of what resubscribing unlocks, same cards + fetch as the
   // onboarding teaser (welcome/results.tsx). A fetch failure just hides the
@@ -74,7 +74,7 @@ export default function ResubscribeScreen() {
       const isPro = await purchase(annual, 'resubscribe');
       if (isPro) {
         claim();
-        await openPurchasedDestination(navigation);
+        await openPurchasedDestination(navigation, { requireTargets: true });
       }
     } finally {
       setLoading(false);
@@ -88,7 +88,7 @@ export default function ResubscribeScreen() {
       const isPro = await restore();
       if (isPro) {
         claim();
-        await openPurchasedDestination(navigation);
+        await openPurchasedDestination(navigation, { requireTargets: true });
       } else if (isPro === false) {
         Alert.alert('Nothing to restore', "We couldn't find an active subscription for this account.");
       }

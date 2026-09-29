@@ -34,6 +34,7 @@ it('waits for the assigned access policy after anonymous decline', () => {
 it('routes a lapsed account to resubscribe while the server-confirmed subscriber enters search', () => {
   const lapsed: Partial<State> = { signedIn: true, purchasesReady: true, hasTargets: true, isLapsed: true, entitled: false, resume: '/welcome/payment' };
   expect(resolve(lapsed)).toBe('/welcome/resubscribe');
+  expect(resolve({ ...lapsed, hasTargets: false })).toBe('/welcome/resubscribe');
   expect(resolve({ ...lapsed, entitled: true })).toBe('/(tabs)/search');
 });
 it('requires missing meal targets before entering the app', () => {

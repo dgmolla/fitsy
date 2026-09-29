@@ -106,7 +106,7 @@ beforeEach(async () => {
   (ExpoNotifications.getPermissionsAsync as jest.Mock).mockReset().mockResolvedValue({ status: 'undetermined' });
   (ExpoNotifications.requestPermissionsAsync as jest.Mock).mockClear();
   (ExpoLocation.requestForegroundPermissionsAsync as jest.Mock).mockClear();
-  global.fetch = jest.fn().mockResolvedValue(response({ active: true, status: 'active', expiresAt: null }));
+  global.fetch = jest.fn().mockResolvedValue(response({ active: true, status: 'active', expiresAt: null, verdict: 'active', lastRcVerifiedAt: new Date().toISOString(), stale: false }));
 });
 afterEach(() => { global.fetch = originalFetch; jest.restoreAllMocks(); });
 
@@ -237,7 +237,7 @@ it.each(['another account', 'unentitled buyer'] as const)('does not resume a pur
   await rememberPaywallIntent(selected);
   await recordOnboardingComplete(false);
   if (state === 'another account') mockSession = { access_token: 'other-token', user: { id: 'other' } };
-  else (global.fetch as jest.Mock).mockResolvedValue(response({ active: false, status: null, expiresAt: null }));
+  else (global.fetch as jest.Mock).mockResolvedValue(response({ active: false, status: 'never_subscribed', expiresAt: null, verdict: 'never_subscribed', lastRcVerifiedAt: new Date().toISOString(), stale: false }));
   const screen = renderJourney('/');
   await waitFor(() => expect(screen.getPathname()).not.toBe('/'));
   expect(screen.getPathname()).not.toBe('/restaurant/varilla');

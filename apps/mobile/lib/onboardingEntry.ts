@@ -1,7 +1,7 @@
 import type { getOnboardingResume } from './onboardingResume';
 
 type Resume = Awaited<ReturnType<typeof getOnboardingResume>>;
-export type EntryDestination = Resume | '/(tabs)/search' | '/welcome/problem' | '/macro-setup' | '/welcome/resubscribe';
+export type EntryDestination = Resume | '/(tabs)/search' | '/welcome/problem' | '/macro-setup' | '/welcome/resubscribe' | '/welcome/subscription-check';
 interface EntryState {
   signedIn: boolean;
   purchasesReady: boolean;
@@ -29,6 +29,7 @@ export function onboardingEntry(state: EntryState): EntryDestination {
     if (!state.purchasesReady) return null;
     return state.access === 'preview' ? '/welcome/preview' : '/welcome/payment';
   }
+  if (state.isLapsed && state.entitled !== true) return '/welcome/resubscribe';
   if (!state.hasTargets) return '/macro-setup';
-  return state.entitled === true || !state.isLapsed ? '/(tabs)/search' : '/welcome/resubscribe';
+  return '/(tabs)/search';
 }

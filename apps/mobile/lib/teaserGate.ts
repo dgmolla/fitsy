@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { supabase } from './supabase';
 import { rememberPaywallIntent, type PaywallIntent } from './paywallIntent';
-import { fetchCustomerInfo, hasLapsedEntitlement } from './purchases';
+import type { SubscriptionVerdict } from './apiClient';
 import { readPaywallDecline } from './paywallAccess';
 import { clearOnboardingPreviewEntry } from './onboardingPreviewEntry';
 
@@ -83,6 +83,13 @@ export function markPreviewSampleUsed(): void {
 // otherwise fire two independent navigations (two overlapping getSession()
 // calls, two router.push calls) before either resolves.
 let navigating = false;
+let paywallVerdictSync: (() => Promise<SubscriptionVerdict>) | null = null;
+
+/** The mounted purchases provider owns both the API read and the applied gate. */
+export function registerPaywallVerdictSync(sync: () => Promise<SubscriptionVerdict>): () => void {
+  paywallVerdictSync = sync;
+  return () => { if (paywallVerdictSync === sync) paywallVerdictSync = null; };
+}
 
 /**
  * Sends a locked-out browser to the right paywall entry point:
@@ -103,7 +110,7 @@ export async function routeToPaywall(options: { replace?: boolean; intent?: Payw
   navigating = true;
   const replace = options.replace ?? false;
   // Persisted decline survives anonymous sessions and legacy preview links.
-  let target: '/welcome/payment' | '/welcome/resubscribe' | '/welcome/signin' = '/welcome/signin';
+  let target: '/welcome/payment' | '/welcome/resubscribe' | '/welcome/signin' | '/welcome/subscription-check' = '/welcome/signin';
   try {
     // A locked choice ends this onboarding preview pass. Returning to the
     // preview now requires another Continue from the nutrition-source screen.
@@ -113,12 +120,19 @@ export async function routeToPaywall(options: { replace?: boolean; intent?: Payw
     try {
       const { data } = await supabase.auth.getSession();
       if (data.session) {
-        // fetchCustomerInfo is null when RevenueCat isn't configured or the
-        // read fails - treated as "never subscribed", i.e. the paywall.
-        target = hasLapsedEntitlement(await fetchCustomerInfo()) ? '/welcome/resubscribe' : '/welcome/payment';
+        // The same authenticated backend verdict gates paid data and decides
+        // which paywall is appropriate. A failed or stale lookup is never a
+        // claim that this account has not subscribed before.
+        target = '/welcome/subscription-check';
+        const verdict = await paywallVerdictSync?.() ?? 'unknown';
+        const current = await supabase.auth.getSession();
+        if (current.data.session?.user.id !== data.session.user.id) return;
+        if (verdict === 'expired') target = '/welcome/resubscribe';
+        else if (verdict === 'never_subscribed') target = '/welcome/payment';
+        else if (verdict === 'active') return;
       }
     } catch {
-      // Keep the persisted entry choice if the session lookup fails.
+      target = '/welcome/subscription-check';
     }
     if (replace) router.replace(target);
     else router.push(target);

@@ -10,6 +10,7 @@ import {
   mockAuth,
   mockRc,
   mockStore,
+  cachedEntitlementVerdict,
   proInfo,
   renderProvider,
   renderProviderTracking,
@@ -22,10 +23,11 @@ import { BOOT_VERDICT_CAP_MS } from './usePurchases';
 
 setupPurchasesMocks();
 
-type SyncResult = { active: boolean; synced: boolean };
+type SyncResult = { active: boolean; synced: boolean; verdict: 'active' | 'expired' | 'never_subscribed'; lastRcVerifiedAt: string };
 
 describe('sign-out', () => {
   it('drops old lapsed CustomerInfo before a new free account can route to resubscribe', async () => {
+    mockApi.fetchSubscriptionStatus.mockResolvedValueOnce({ active: false, status: 'expired', expiresAt: null, verdict: 'expired', lastRcVerifiedAt: new Date().toISOString() });
     mockRc.identifyPurchasesUser.mockResolvedValueOnce({ entitlements: { active: {}, all: { pro: {} } } });
     const { result } = renderProvider();
     await waitFor(() => expect(result.current.ready).toBe(true));
@@ -55,7 +57,7 @@ describe('sign-out', () => {
     useFakeTimersKeepingFlush();
     mockRc.identifyPurchasesUser.mockImplementationOnce(() => new Promise(() => {}));
     mockRc.logoutPurchasesUser.mockImplementationOnce(() => new Promise(() => {}));
-    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null });
+    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() });
     const { result } = renderProvider();
     await flush();
     expect(result.current.entitled).toBeNull();
@@ -82,7 +84,7 @@ describe('sign-out', () => {
     await waitFor(() => expect(mockApi.syncSubscription).toHaveBeenCalled());
     mockAuth.session = null;
     await act(async () => { mockAuth.listener?.('SIGNED_OUT', null); });
-    await act(async () => { sync.resolve({ active: true, synced: true }); });
+    await act(async () => { sync.resolve({ active: true, synced: true, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() }); });
     await flush();
     expect(result.current.entitled).toBeNull();
     await act(async () => { logout.resolve(undefined); });
@@ -92,10 +94,10 @@ describe('sign-out', () => {
   });
 
   it('goes false -> null (gates hold while the caller navigates) -> false once the logout settles', async () => {
-    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null });
+    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() });
     const { result, seen } = renderProviderTracking();
     await waitFor(() => expect(result.current.entitled).toBe(true));
-    expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBe('true');
+    expect(cachedEntitlementVerdict()).toBe('active');
     const logout = deferred<undefined>();
     mockRc.logoutPurchasesUser.mockReturnValue(logout.promise);
     mockAuth.session = null;
@@ -126,7 +128,7 @@ describe('sign-out', () => {
   });
 
   it('leaves the verdict to a fast re-sign-in instead of forcing false', async () => {
-    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null });
+    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() });
     const { result } = renderProvider();
     await waitFor(() => expect(result.current.entitled).toBe(true));
     const logout = deferred<undefined>();
@@ -137,7 +139,7 @@ describe('sign-out', () => {
     });
     // Someone signed in again before the logout settled, and their sync says yes.
     mockAuth.session = { user: { id: 'u2' } };
-    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() });
     await act(async () => { mockAuth.listener?.('SIGNED_IN', { user: { id: 'u2' } }); });
     await waitFor(() => expect(result.current.entitled).toBe(true));
     await act(async () => { logout.resolve(undefined); });

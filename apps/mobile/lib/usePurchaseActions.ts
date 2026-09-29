@@ -13,7 +13,7 @@ export const PURCHASE_IDENTITY_CAP_MS = 5000;
 
 export function usePurchaseActions({ setCustomerInfo, markStoreConfirmed, syncEntitlement }: {
   setCustomerInfo: (info: CustomerInfo | null) => void;
-  markStoreConfirmed: () => void;
+  markStoreConfirmed: () => Promise<void>;
   syncEntitlement: (reason: EntitlementSyncReason) => Promise<boolean | null>;
 }) {
   // After RevenueCat reports Pro right out of the StoreKit flow: the user
@@ -28,7 +28,7 @@ export function usePurchaseActions({ setCustomerInfo, markStoreConfirmed, syncEn
     async (info: CustomerInfo | null, reason: 'purchase' | 'restore'): Promise<boolean> => {
       const pro = isProActive(info);
       if (!pro) return false;
-      markStoreConfirmed();
+      await markStoreConfirmed();
       await withinMs(syncEntitlement(reason), POST_PURCHASE_SYNC_CAP_MS);
       return pro;
     },

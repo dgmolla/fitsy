@@ -45,7 +45,9 @@ export default function TabLayout() {
   // server "false": they belong on the win-back screen, not the free-trial
   // paywall, which promises a trial Apple won't grant them twice.
   const unentitledTarget = purchases.isLapsed ? '/welcome/resubscribe' : '/welcome/payment';
-  if (purchases.entitled === null || !reviewer.ready || !previewAccess.ready) return null;
+  if (!purchases.ready || !reviewer.ready || !previewAccess.ready) return null;
+  if (purchases.isUnknown) return <Redirect href="/welcome/subscription-check" />;
+  if (purchases.entitled === null) return null;
   if (allowTeaser) return <Redirect href="/welcome/preview" />;
   if (!entitled && !allowTeaser) return <Redirect href={unentitledTarget} />;
 

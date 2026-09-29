@@ -25,7 +25,7 @@ before(async () => {
   delete process.env['DEMO_REVIEW_EMAILS'];
   const email = `${userId}@example.test`;
   await prisma.user.create({ data: { id: userId, email,
-    subscription: { create: { plan: 'monthly', status: 'active' } } } });
+    subscription: { create: { plan: 'monthly', status: 'active', lastEventAt: new Date() } } } });
   token = await new SignJWT({ email }).setProtectedHeader({ alg: 'ES256', kid: 'fixture' })
     .setSubject(userId).setIssuer(`${process.env['SUPABASE_URL']}/auth/v1`)
     .setAudience('authenticated').setExpirationTime('5m').sign(privateKey);
@@ -38,4 +38,3 @@ export const request = (query: string, authenticated = true) => new NextRequest(
   `http://localhost/api/restaurants?lat=34.05&lng=-118.25&${query}`,
   authenticated ? { headers: { authorization: `Bearer ${token}` } } : {},
 );
-

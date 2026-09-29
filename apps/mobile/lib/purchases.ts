@@ -9,8 +9,8 @@
  *
  * The SERVER is the source of truth for "is this user allowed in?" (see
  * `syncEntitlement` in usePurchases.tsx). What this file reads client-side
- * via `customerInfo.entitlements.active` is a fast hint that triggers a sync,
- * plus the copy source for lapsed-vs-never-subscribed. The client does NOT
+ * via `customerInfo.entitlements.active` is a fast hint that triggers a sync.
+ * The backend classifies lapsed-vs-never-subscribed. The client does NOT
  * validate receipts itself.
  *
  * Keys are read from `app.config.ts` → `extra.revenueCat`, which pulls from

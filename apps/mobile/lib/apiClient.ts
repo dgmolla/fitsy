@@ -226,12 +226,12 @@ export async function voteFeedback(
   }
 }
 
-export interface SubscriptionSyncResult {
-  /** Server-trusted entitlement after the sync. */
-  active: boolean;
+export interface SubscriptionSyncResult extends SubscriptionStatusResult {
   /** False when the server couldn't reach RevenueCat and `active` is its existing state. */
   synced: boolean;
 }
+
+export type SubscriptionVerdict = 'active' | 'expired' | 'never_subscribed' | 'unknown';
 
 /** Why the client asks for a re-read; the server refuses to persist a downgrade on 'purchase'/'restore'. */
 export type SubscriptionSyncReason = 'purchase' | 'restore' | 'sign_in' | 'mismatch';
@@ -253,6 +253,9 @@ export interface SubscriptionStatusResult {
   active: boolean;
   status: string | null;
   expiresAt: string | null;
+  verdict: SubscriptionVerdict;
+  lastRcVerifiedAt: string | null;
+  stale: boolean;
 }
 
 /**

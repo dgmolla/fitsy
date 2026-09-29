@@ -43,14 +43,16 @@ afterEach(() => jest.restoreAllMocks());
 
 describe('fetchServerEntitlement', () => {
   it('boot reads the stored row (cheap) instead of re-reading RevenueCat', async () => {
-    mockFetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null });
-    expect(await fetchServerEntitlement('boot')).toBe(true);
+    const status = { active: true, status: 'active', expiresAt: null, verdict: 'active', lastRcVerifiedAt: '2026-09-29T06:00:00Z', stale: false };
+    mockFetchSubscriptionStatus.mockResolvedValue(status);
+    expect(await fetchServerEntitlement('boot')).toEqual(status);
     expect(mockSyncSubscription).not.toHaveBeenCalled();
   });
 
   it.each(['purchase', 'restore', 'sign_in', 'mismatch'] as const)('%s re-reads RevenueCat via sync, telling the server why', async (reason) => {
-    mockSyncSubscription.mockResolvedValue({ active: false, synced: true });
-    expect(await fetchServerEntitlement(reason)).toBe(false);
+    const status = { active: false, synced: true, verdict: 'expired', lastRcVerifiedAt: '2026-09-29T06:00:00Z', stale: false };
+    mockSyncSubscription.mockResolvedValue(status);
+    expect(await fetchServerEntitlement(reason)).toEqual(status);
     expect(mockSyncSubscription).toHaveBeenCalledWith(reason);
     expect(mockFetchSubscriptionStatus).not.toHaveBeenCalled();
   });
@@ -61,28 +63,44 @@ describe('fetchServerEntitlement', () => {
     expect(await fetchServerEntitlement('boot')).toBeNull();
     expect(await fetchServerEntitlement('mismatch')).toBeNull();
   });
+
+  it('rejects a status without the shared verdict instead of treating it as never subscribed', async () => {
+    mockFetchSubscriptionStatus.mockResolvedValue({ active: false, status: null });
+    expect(await fetchServerEntitlement('boot')).toBeNull();
+  });
 });
 
 describe('entitlement cache', () => {
-  it('round-trips both verdicts and is null when unset or unreadable', async () => {
-    expect(await readCachedEntitlement()).toBeNull();
-    await writeCachedEntitlement(true);
-    expect(store[ENTITLEMENT_CACHE_KEY]).toBe('true');
-    expect(await readCachedEntitlement()).toBe(true);
-    await writeCachedEntitlement(false);
-    expect(await readCachedEntitlement()).toBe(false);
+  const proof = (verdict: 'active' | 'expired' | 'never_subscribed') => ({
+    active: verdict === 'active', verdict, status: verdict, stale: false,
+    expiresAt: verdict === 'active' ? new Date(Date.now() + 60_000).toISOString() : null,
+    lastRcVerifiedAt: new Date().toISOString(),
+  });
+
+  it('round-trips a bounded account-bound verdict and rejects missing or mismatched accounts', async () => {
+    expect(await readCachedEntitlement('u1')).toBeNull();
+    await writeCachedEntitlement('u1', proof('active'));
+    expect(await readCachedEntitlement('u1')).toEqual(expect.objectContaining({ verdict: 'active', active: true }));
+    expect(await readCachedEntitlement('u2')).toBeNull();
+    await writeCachedEntitlement('u1', proof('expired'));
+    expect(await readCachedEntitlement('u1')).toEqual(expect.objectContaining({ verdict: 'expired', active: false }));
     store[ENTITLEMENT_CACHE_KEY] = 'garbage';
-    expect(await readCachedEntitlement()).toBeNull();
+    expect(await readCachedEntitlement('u1')).toBeNull();
     await clearCachedEntitlement();
-    expect(await readCachedEntitlement()).toBeNull();
+    expect(await readCachedEntitlement('u1')).toBeNull();
+  });
+
+  it('rejects an expired paid period even when its last RC proof is recent', async () => {
+    await writeCachedEntitlement('u1', { ...proof('active'), expiresAt: new Date(Date.now() - 1000).toISOString() });
+    expect(await readCachedEntitlement('u1')).toBeNull();
   });
 
   it('swallows storage failures (a broken cache only costs a slower boot)', async () => {
     (AsyncStorage.getItem as jest.Mock).mockRejectedValueOnce(new Error('disk'));
     (AsyncStorage.setItem as jest.Mock).mockRejectedValueOnce(new Error('disk'));
     (AsyncStorage.removeItem as jest.Mock).mockRejectedValueOnce(new Error('disk'));
-    expect(await readCachedEntitlement()).toBeNull();
-    await expect(writeCachedEntitlement(true)).resolves.toBeUndefined();
+    expect(await readCachedEntitlement('u1')).toBeNull();
+    await expect(writeCachedEntitlement('u1', proof('active'))).resolves.toBeUndefined();
     await expect(clearCachedEntitlement()).resolves.toBeUndefined();
   });
 });

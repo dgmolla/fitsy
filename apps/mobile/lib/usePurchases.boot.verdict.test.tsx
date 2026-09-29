@@ -11,6 +11,8 @@ import {
   mockAuth,
   mockRc,
   mockStore,
+  seedEntitlementCache,
+  cachedEntitlementVerdict,
   proInfo,
   renderProvider,
   setupPurchasesMocks,
@@ -25,7 +27,8 @@ import { BOOT_VERDICT_CAP_MS } from './usePurchases';
 
 setupPurchasesMocks();
 
-type StatusResult = { active: boolean; status: null; expiresAt: null };
+type StatusResult = { active: boolean; status: string | null; expiresAt: string | null; verdict: 'active' | 'expired' | 'never_subscribed'; lastRcVerifiedAt: string };
+type SyncResult = { active: boolean; synced: boolean; verdict: 'active' | 'expired' | 'never_subscribed'; lastRcVerifiedAt: string };
 
 describe('boot verdict', () => {
   it('ignores an old eligibility response after the offering changes', async () => {
@@ -45,7 +48,7 @@ describe('boot verdict', () => {
   });
 
   it('reads the stored verdict (status, not sync), stores it, caches it, and only then becomes ready', async () => {
-    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null });
+    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() });
     const { result } = renderProvider();
     expect(result.current.ready).toBe(false);
     expect(result.current.entitled).toBeNull();
@@ -53,7 +56,7 @@ describe('boot verdict', () => {
     expect(result.current.entitled).toBe(true);
     expect(mockApi.fetchSubscriptionStatus).toHaveBeenCalledTimes(1);
     expect(mockApi.syncSubscription).not.toHaveBeenCalled();
-    expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBe('true');
+    expect(cachedEntitlementVerdict()).toBe('active');
     // Device (free) disagreed with the server (active): measured.
     expect(mockAnalytics.trackEntitlementMismatch).toHaveBeenCalledWith({
       reason: 'boot', device_pro: false, server_active: true,
@@ -62,7 +65,7 @@ describe('boot verdict', () => {
 
   it('a stale cached "false" never gates: entitled stays null until the prompt server "true" lands', async () => {
     useFakeTimersKeepingFlush();
-    mockStore[ENTITLEMENT_CACHE_KEY] = 'false';
+    seedEntitlementCache('never_subscribed');
     const pending = deferred<StatusResult>();
     mockApi.fetchSubscriptionStatus.mockReturnValue(pending.promise);
     const { result } = renderProvider();
@@ -70,17 +73,17 @@ describe('boot verdict', () => {
     await flush();
     expect(result.current.entitled).toBeNull();
     expect(result.current.ready).toBe(false);
-    await act(async () => { pending.resolve({ active: true, status: null, expiresAt: null }); });
+    await act(async () => { pending.resolve({ active: true, status: null, expiresAt: null, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() }); });
     await flush();
     expect(result.current.ready).toBe(true);
     expect(result.current.entitled).toBe(true);
-    expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBe('true');
+    expect(cachedEntitlementVerdict()).toBe('active');
     jest.useRealTimers();
   });
 
   it('past the cap the cached verdict stands and becomes ready; the late server answer is still applied', async () => {
     useFakeTimersKeepingFlush();
-    mockStore[ENTITLEMENT_CACHE_KEY] = 'false';
+    seedEntitlementCache('never_subscribed');
     const pending = deferred<StatusResult>();
     mockApi.fetchSubscriptionStatus.mockReturnValue(pending.promise);
     const { result } = renderProvider();
@@ -91,31 +94,31 @@ describe('boot verdict', () => {
     await flush();
     expect(result.current.ready).toBe(true);
     expect(result.current.entitled).toBe(false);
-    await act(async () => { pending.resolve({ active: true, status: null, expiresAt: null }); });
+    await act(async () => { pending.resolve({ active: true, status: null, expiresAt: null, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() }); });
     await flush();
     expect(result.current.entitled).toBe(true);
-    expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBe('true');
+    expect(cachedEntitlementVerdict()).toBe('active');
     jest.useRealTimers();
   });
 
   it('a cached "true" never flashes the app: a prompt server "false" is what settles it', async () => {
     useFakeTimersKeepingFlush();
-    mockStore[ENTITLEMENT_CACHE_KEY] = 'true';
+    seedEntitlementCache('active');
     const pending = deferred<StatusResult>();
     mockApi.fetchSubscriptionStatus.mockReturnValue(pending.promise);
     const { result } = renderProvider();
     await flush();
     await flush();
     expect(result.current.entitled).toBeNull();
-    await act(async () => { pending.resolve({ active: false, status: null, expiresAt: null }); });
+    await act(async () => { pending.resolve({ active: false, status: null, expiresAt: null, verdict: 'never_subscribed', lastRcVerifiedAt: new Date().toISOString() }); });
     await flush();
     expect(result.current.ready).toBe(true);
     expect(result.current.entitled).toBe(false);
-    expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBe('false');
+    expect(cachedEntitlementVerdict()).toBe('never_subscribed');
     jest.useRealTimers();
   });
 
-  it('past the cap with no cache falls back to the device, and a slow server answer still replaces it', async () => {
+  it('past the cap with no cache holds unknown until a slow server answer arrives', async () => {
     useFakeTimersKeepingFlush();
     mockRc.identifyPurchasesUser.mockResolvedValue(proInfo);
     const pending = deferred<StatusResult>();
@@ -127,40 +130,42 @@ describe('boot verdict', () => {
     act(() => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
     await flush();
     expect(result.current.ready).toBe(true);
-    expect(result.current.entitled).toBe(true);
-    await act(async () => { pending.resolve({ active: false, status: null, expiresAt: null }); });
+    expect(result.current.entitled).toBeNull();
+    expect(result.current.isUnknown).toBe(true);
+    await act(async () => { pending.resolve({ active: false, status: null, expiresAt: null, verdict: 'never_subscribed', lastRcVerifiedAt: new Date().toISOString() }); });
     await flush();
     expect(result.current.entitled).toBe(false);
     jest.useRealTimers();
   });
 
-  it('falls back to the device verdict only when offline with no cache (subscriber not bounced)', async () => {
+  it('holds unknown when offline with no account-bound proof, even if the device says Pro', async () => {
     mockApi.fetchSubscriptionStatus.mockRejectedValue(new Error('offline'));
     mockRc.identifyPurchasesUser.mockResolvedValue(proInfo);
     const { result } = renderProvider();
     await waitFor(() => expect(result.current.ready).toBe(true));
-    expect(result.current.entitled).toBe(true);
-    expect(result.current.isPro).toBe(true);
+    expect(result.current.entitled).toBeNull();
+    expect(result.current.isUnknown).toBe(true);
     expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBeUndefined();
     expect(mockAnalytics.trackEntitlementSyncFailed).toHaveBeenCalledWith({ reason: 'boot' });
   });
 
-  it('offline with a cache keeps the cache, not the device', async () => {
-    mockStore[ENTITLEMENT_CACHE_KEY] = 'false';
+  it('offline with a cached negative and current device Pro holds recovery, not the ordinary paywall', async () => {
+    seedEntitlementCache('never_subscribed');
     mockApi.fetchSubscriptionStatus.mockRejectedValue(new Error('offline'));
     mockRc.identifyPurchasesUser.mockResolvedValue(proInfo);
     const { result } = renderProvider();
     await waitFor(() => expect(result.current.ready).toBe(true));
     await flush();
-    expect(result.current.entitled).toBe(false);
+    expect(result.current.entitled).toBeNull();
+    expect(result.current.isUnknown).toBe(true);
   });
 
   it('server "false" + device Pro: escalates ONCE to a RevenueCat re-read before settling, so no paywall flash', async () => {
     useFakeTimersKeepingFlush();
-    mockStore[ENTITLEMENT_CACHE_KEY] = 'true';
+    seedEntitlementCache('active');
     mockRc.identifyPurchasesUser.mockResolvedValue(proInfo);
-    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: false, status: 'expired', expiresAt: null });
-    const pending = deferred<{ active: boolean; synced: boolean }>();
+    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: false, status: 'expired', expiresAt: null, verdict: 'expired', lastRcVerifiedAt: new Date().toISOString() });
+    const pending = deferred<SyncResult>();
     mockApi.syncSubscription.mockReturnValue(pending.promise);
     const { result } = renderProvider();
     await flush();
@@ -169,19 +174,19 @@ describe('boot verdict', () => {
     expect(result.current.entitled).toBeNull();
     expect(mockApi.syncSubscription).toHaveBeenCalledTimes(1);
     expect(mockApi.syncSubscription).toHaveBeenCalledWith('mismatch');
-    await act(async () => { pending.resolve({ active: true, synced: true }); });
+    await act(async () => { pending.resolve({ active: true, synced: true, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() }); });
     await flush();
     expect(result.current.entitled).toBe(true);
-    expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBe('true');
+    expect(cachedEntitlementVerdict()).toBe('active');
     expect(mockApi.fetchSubscriptionStatus).toHaveBeenCalledTimes(1);
     jest.useRealTimers();
   });
 
-  it('server "false" + device Pro with a slow re-read: settles false at the cap, the late "true" still lets them in', async () => {
+  it('server never + device Pro with a slow re-read: holds unknown at the cap until the late active proof', async () => {
     useFakeTimersKeepingFlush();
     mockRc.identifyPurchasesUser.mockResolvedValue(proInfo);
-    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: false, status: 'expired', expiresAt: null });
-    const pending = deferred<{ active: boolean; synced: boolean }>();
+    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: false, status: 'never_subscribed', expiresAt: null, verdict: 'never_subscribed', lastRcVerifiedAt: new Date().toISOString() });
+    const pending = deferred<SyncResult>();
     mockApi.syncSubscription.mockReturnValue(pending.promise);
     const { result } = renderProvider();
     await flush();
@@ -189,8 +194,9 @@ describe('boot verdict', () => {
     expect(result.current.entitled).toBeNull();
     act(() => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
     await flush();
-    expect(result.current.entitled).toBe(false);
-    await act(async () => { pending.resolve({ active: true, synced: true }); });
+    expect(result.current.entitled).toBeNull();
+    expect(result.current.isUnknown).toBe(true);
+    await act(async () => { pending.resolve({ active: true, synced: true, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() }); });
     await flush();
     expect(result.current.entitled).toBe(true);
     expect(mockApi.syncSubscription).toHaveBeenCalledTimes(1);
@@ -198,7 +204,7 @@ describe('boot verdict', () => {
   });
 
   it('does not escalate a server "false" when the device agrees', async () => {
-    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: false, status: 'expired', expiresAt: null });
+    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: false, status: 'expired', expiresAt: null, verdict: 'expired', lastRcVerifiedAt: new Date().toISOString() });
     const { result } = renderProvider();
     await waitFor(() => expect(result.current.entitled).toBe(false));
     await flush();
@@ -207,7 +213,7 @@ describe('boot verdict', () => {
 
   it('without a session settles to false at once, never asks the server, and ignores a stale cache', async () => {
     mockAuth.session = null;
-    mockStore[ENTITLEMENT_CACHE_KEY] = 'true';
+    seedEntitlementCache('active');
     const { result } = renderProvider();
     await waitFor(() => expect(result.current.ready).toBe(true));
     expect(result.current.entitled).toBe(false);
@@ -217,7 +223,7 @@ describe('boot verdict', () => {
 
   it('keeps the server verdict when offering fails, and settles when identity fails', async () => {
     // Store catalog failure cannot make a stale cache overrule the server.
-    mockStore[ENTITLEMENT_CACHE_KEY] = 'true';
+    seedEntitlementCache('active');
     mockRc.fetchCurrentOffering.mockRejectedValueOnce(new Error('boom'));
     const a = renderProvider();
     await waitFor(() => expect(a.result.current.ready).toBe(true));
@@ -245,7 +251,7 @@ describe('boot verdict', () => {
 
   it('still resolves a verdict when the SDK has no key (Expo Go, web)', async () => {
     mockRc.configurePurchases.mockReturnValueOnce(false);
-    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null });
+    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() });
     const { result } = renderProvider();
     await waitFor(() => expect(result.current.ready).toBe(true));
     expect(result.current.entitled).toBe(true);

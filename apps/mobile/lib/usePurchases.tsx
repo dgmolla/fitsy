@@ -8,25 +8,26 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { AppState } from 'react-native';
 import type {
   CustomerInfo,
   PurchasesOffering,
-  PurchasesPackage,
 } from 'react-native-purchases';
 import { supabase } from './supabase';
 import { usePurchaseActions } from './usePurchaseActions';
 import { usePurchaseIntroEligibility } from './usePurchaseIntroEligibility';
 import { withinMs } from './async';
-import type { EntitlementSyncReason } from './entitlement';
 import { BOOT_VERDICT_CAP_MS, useEntitlementVerdict } from './useEntitlementVerdict';
 import { useAuthLifecycle } from './useAuthLifecycle';
+import { registerPaywallVerdictSync } from './teaserGate';
+import type { PurchasesContextValue } from './purchasesContextTypes';
+export type { PurchasesContextValue } from './purchasesContextTypes';
 import {
   addCustomerInfoListener,
   configurePurchases,
   currentPurchasesUserId,
   fetchCurrentOffering,
   fetchCustomerInfo,
-  hasLapsedEntitlement,
   identifyPurchasesUser,
   isProActive,
   showManageSubscriptions as rcShowManageSubscriptions,
@@ -36,57 +37,6 @@ export { BOOT_VERDICT_CAP_MS, STORE_GRACE_MS } from './useEntitlementVerdict';
 
 export { POST_PURCHASE_SYNC_CAP_MS, PURCHASE_IDENTITY_CAP_MS } from './usePurchaseActions';
 export { INTRO_ELIGIBILITY_CAP_MS } from './usePurchaseIntroEligibility';
-
-export interface PurchasesContextValue {
-  /** `entitled !== null`: the verdict has settled on this launch. */
-  ready: boolean;
-  /**
-   * The server's verdict: may this user use the app? `null` while unsettled
-   * (boot, sign-in, sign-out in progress). This is what gates screens;
-   * `isPro` is not.
-   */
-  entitled: boolean | null;
-  /** Device hint: RevenueCat says the `pro` entitlement is active. */
-  isPro: boolean;
-  /** True when `pro` was active before but has lapsed - see `hasLapsedEntitlement`. */
-  isLapsed: boolean;
-  customerInfo: CustomerInfo | null;
-  /** Current offering; its `.annual`/`.monthly` packages back the in-app paywall. */
-  offering: PurchasesOffering | null;
-  /** Empty while checking, or when the store cannot establish eligibility. */
-  introEligibility: Record<string, boolean>;
-  /** True after eligibility settles, times out, or CustomerInfo is unavailable. */
-  introEligibilityReady: boolean;
-  /**
-   * Ask the server for its verdict and store it. Resolves to the verdict now
-   * in effect; `null` when it couldn't be asked (`entitled` unchanged);
-   * `false` without a Supabase session, with no request made.
-   */
-  syncEntitlement: (reason: EntitlementSyncReason) => Promise<boolean | null>;
-  /** Re-fetch CustomerInfo from RevenueCat. */
-  refresh: () => Promise<void>;
-  /**
-   * Re-fetch the current offering. The boot fetch can fail (offline at
-   * launch, StoreKit hiccup); paywalls call this rather than showing "plans
-   * are still loading" until relaunch. Resolves to the offering so callers
-   * can retry a purchase in one step.
-   */
-  refreshOffering: () => Promise<PurchasesOffering | null>;
-  /**
-   * Buy a package from our own paywall UI. `source` tags analytics (e.g.
-   * 'onboarding', 'profile'). Resolves to true whenever the store flow
-   * confirmed Pro (and sets `entitled` true) - see settleAfterStore.
-   */
-  purchase: (pkg: PurchasesPackage, source: string) => Promise<boolean>;
-  /** Present the RevenueCat paywall. `source` tags analytics. Resolves like `purchase`. */
-  presentPaywall: (source: string) => Promise<boolean>;
-  /** Open the owning store's subscription management when known. */
-  showManageSubscriptions: () => Promise<void>;
-  /** The store confirmed a purchase/restore within the last STORE_GRACE_MS. */
-  storeConfirmed: boolean;
-  /** True for Pro, false for a completed restore with no Pro, null if restore could not complete. */
-  restore: () => Promise<boolean | null>;
-}
 
 const PurchasesContext = createContext<PurchasesContextValue | undefined>(undefined);
 
@@ -121,6 +71,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     setCustomerInfoSettled(true);
   }, []);
   const verdict = useEntitlementVerdict({ customerInfoRef });
+  useEffect(() => registerPaywallVerdictSync(verdict.syncForPaywall), [verdict.syncForPaywall]);
   const { entitled, inStoreGrace, syncEntitlement, resolveAtBoot, settleAfterBootFailure, markStoreConfirmed } = verdict;
   const auth = useAuthLifecycle({ verdict, setCustomerInfo });
 
@@ -240,6 +191,16 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     }
   }, [setCustomerInfo, syncEntitlement]);
 
+  // The store can expire while this process is suspended. Reconcile the same
+  // account-bound backend verdict on every foreground return; the phone SDK
+  // alone cannot classify a lapsed subscription for navigation.
+  useEffect(() => {
+    const sub = AppState?.addEventListener('change', state => {
+      if (state === 'active') void syncEntitlement('mismatch');
+    });
+    return () => sub?.remove();
+  }, [syncEntitlement]);
+
   const refresh = useCallback(async () => {
     setCustomerInfo(await fetchCustomerInfo());
   }, [setCustomerInfo]);
@@ -265,11 +226,12 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   const storeConfirmed = inStoreGrace();
   const value = useMemo<PurchasesContextValue>(
     () => ({
-      ready: entitled !== null,
+      ready: verdict.classification !== 'loading',
       entitled,
       storeConfirmed,
       isPro: isProActive(customerInfo),
-      isLapsed: hasLapsedEntitlement(customerInfo),
+      isLapsed: verdict.classification === 'expired',
+      isUnknown: verdict.classification === 'unknown',
       customerInfo,
       offering,
       introEligibility,
@@ -282,7 +244,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
       showManageSubscriptions: () => rcShowManageSubscriptions(customerInfoRef.current),
       restore,
     }),
-    [entitled, storeConfirmed, customerInfo, offering, introEligibility, introEligibilityReady, syncEntitlement, refresh, refreshOffering, purchase, presentPaywall, restore],
+    [entitled, verdict.classification, storeConfirmed, customerInfo, offering, introEligibility, introEligibilityReady, syncEntitlement, refresh, refreshOffering, purchase, presentPaywall, restore],
   );
 
   return <PurchasesContext.Provider value={value}>{children}</PurchasesContext.Provider>;

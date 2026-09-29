@@ -11,10 +11,6 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 }));
 jest.mock('expo-router', () => ({ router: { push: jest.fn(), replace: jest.fn() } }));
 jest.mock('./supabase', () => ({ supabase: { auth: { getSession: jest.fn() } } }));
-jest.mock('./purchases', () => ({
-  fetchCustomerInfo: jest.fn(async () => null),
-  hasLapsedEntitlement: jest.fn((info: unknown) => info !== null && (info as { lapsed?: boolean }).lapsed === true),
-}));
 
 // Fresh module per test so the in-memory mirror starts empty. resetModules
 // also re-instantiates the expo-router / supabase mocks, so the handles the
@@ -25,13 +21,15 @@ async function load() {
   const g = await import('./teaserGate');
   const { router } = await import('expo-router');
   const { supabase } = await import('./supabase');
-  const purchases = await import('./purchases');
+  const syncPaywallVerdict = jest.fn();
+  g.registerPaywallVerdictSync(syncPaywallVerdict);
+  (supabase.auth.getSession as jest.Mock).mockResolvedValue({ data: { session: { user: { id: 'u1' } } } });
   return {
     ...g,
     push: router.push as jest.Mock,
     replace: router.replace as jest.Mock,
     getSession: supabase.auth.getSession as jest.Mock,
-    fetchCustomerInfo: purchases.fetchCustomerInfo as jest.Mock,
+    syncPaywallVerdict,
   };
 }
 
@@ -118,37 +116,72 @@ describe('routeToPaywall', () => {
     expect(store.has('@fitsy/onboardingPreviewEntry')).toBe(false);
     expect(g.push).toHaveBeenCalledWith('/welcome/signin');
   });
-  it('sends a session-less caller to sign-in, a signed-in one to payment', async () => {
+  it('sends a session-less caller to sign-in, a confirmed first-time account to payment', async () => {
     const g = await load();
     g.getSession.mockResolvedValueOnce({ data: { session: null } });
     await g.routeToPaywall();
     expect(g.push).toHaveBeenLastCalledWith('/welcome/signin');
-    g.getSession.mockResolvedValueOnce({ data: { session: {} } });
+    g.getSession.mockResolvedValueOnce({ data: { session: { user: { id: 'u1' } } } });
+    g.syncPaywallVerdict.mockResolvedValueOnce('never_subscribed');
     await g.routeToPaywall({ replace: true });
     expect(g.replace).toHaveBeenLastCalledWith('/welcome/payment');
   });
 
   it('sends a signed-in *lapsed* subscriber to the win-back screen, not the free-trial paywall', async () => {
     const g = await load();
-    g.getSession.mockResolvedValueOnce({ data: { session: {} } });
-    g.fetchCustomerInfo.mockResolvedValueOnce({ lapsed: true });
+    g.getSession.mockResolvedValueOnce({ data: { session: { user: { id: 'u1' } } } });
+    g.syncPaywallVerdict.mockResolvedValueOnce('expired');
     await g.routeToPaywall();
     expect(g.push).toHaveBeenLastCalledWith('/welcome/resubscribe');
   });
 
-  it('treats an unreadable customer record as never-subscribed (paywall)', async () => {
+  it('uses the provider-applied active verdict to leave a newly entitled user in place', async () => {
     const g = await load();
-    g.getSession.mockResolvedValueOnce({ data: { session: {} } });
-    g.fetchCustomerInfo.mockResolvedValueOnce(null);
+    g.syncPaywallVerdict.mockResolvedValueOnce('active');
     await g.routeToPaywall();
-    expect(g.push).toHaveBeenLastCalledWith('/welcome/payment');
+    expect(g.syncPaywallVerdict).toHaveBeenCalledTimes(1);
+    expect(g.push).not.toHaveBeenCalled();
   });
 
-  it('defaults to sign-in when the session check throws, and releases its in-flight guard', async () => {
+  it('holds a signed-in account when the backend cannot verify its history', async () => {
+    const g = await load();
+    g.getSession.mockResolvedValueOnce({ data: { session: { user: { id: 'u1' } } } });
+    g.syncPaywallVerdict.mockRejectedValueOnce(new Error('offline'));
+    await g.routeToPaywall();
+    expect(g.push).toHaveBeenLastCalledWith('/welcome/subscription-check');
+  });
+
+  it('reconciles an unknown row before choosing the lapsed route', async () => {
+    const g = await load();
+    g.getSession.mockResolvedValueOnce({ data: { session: { user: { id: 'u1' } } } });
+    g.syncPaywallVerdict.mockResolvedValueOnce('expired');
+    await g.routeToPaywall();
+    expect(g.push).toHaveBeenLastCalledWith('/welcome/resubscribe');
+  });
+
+  it('ignores a lapsed response after the signed-in account changes', async () => {
+    const g = await load();
+    let finishStatus!: (value: string) => void;
+    let statusRequested!: () => void;
+    const requested = new Promise<void>(resolve => { statusRequested = resolve; });
+    g.syncPaywallVerdict.mockImplementationOnce(() => {
+      statusRequested();
+      return new Promise(resolve => { finishStatus = resolve; });
+    });
+    const pending = g.routeToPaywall();
+    await requested;
+    g.getSession.mockResolvedValue({ data: { session: { user: { id: 'u2' } } } });
+    finishStatus('expired');
+    await pending;
+    expect(g.push).not.toHaveBeenCalled();
+    expect(g.replace).not.toHaveBeenCalled();
+  });
+
+  it('holds when the session check throws, and releases its in-flight guard', async () => {
     const g = await load();
     g.getSession.mockRejectedValueOnce(new Error('offline'));
     await g.routeToPaywall();
-    expect(g.push).toHaveBeenLastCalledWith('/welcome/signin');
+    expect(g.push).toHaveBeenLastCalledWith('/welcome/subscription-check');
     // Guard released: a second call navigates again rather than being swallowed.
     g.getSession.mockResolvedValueOnce({ data: { session: null } });
     await g.routeToPaywall();

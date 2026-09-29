@@ -1,7 +1,7 @@
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 const mockRequireAuth = jest.fn();
 const mockSync = jest.fn();
-const mockIsEntitled = jest.fn();
+const mockGetEntitlementStatus = jest.fn();
 const mockBypass = jest.fn();
 
 jest.mock("@/lib/auth", () => ({
@@ -9,7 +9,7 @@ jest.mock("@/lib/auth", () => ({
 }));
 jest.mock("@/lib/subscription", () => ({
   syncSubscriptionFromRevenueCat: (...args: unknown[]) => mockSync(...args),
-  isEntitled: (...args: unknown[]) => mockIsEntitled(...args),
+  getEntitlementStatus: (...args: unknown[]) => mockGetEntitlementStatus(...args),
   subscriptionBypass: (...args: unknown[]) => mockBypass(...args),
 }));
 
@@ -28,6 +28,10 @@ beforeEach(() => {
   jest.resetAllMocks();
   mockRequireAuth.mockResolvedValue({ sub: "user-1", email: "a@b.c" });
   mockBypass.mockReturnValue(false);
+  mockGetEntitlementStatus.mockResolvedValue({
+    active: true, status: "active", expiresAt: null,
+    verdict: "active", lastRcVerifiedAt: null, stale: false,
+  });
 });
 
 describe("POST /api/subscriptions/sync", () => {
@@ -42,7 +46,7 @@ describe("POST /api/subscriptions/sync", () => {
     mockSync.mockResolvedValue(true);
     const res = await POST(req);
     expect(mockSync).toHaveBeenCalledWith("user-1", { neverDowngrade: false });
-    expect(await res.json()).toEqual({ active: true, synced: true });
+    expect(await res.json()).toEqual(expect.objectContaining({ active: true, verdict: "active", synced: true }));
   });
 
   it.each(["purchase", "restore"])("never downgrades on a %s sync", async (reason) => {
@@ -59,19 +63,20 @@ describe("POST /api/subscriptions/sync", () => {
 
   it("reports inactive when RevenueCat says the user is not entitled", async () => {
     mockSync.mockResolvedValue(false);
-    expect(await (await POST(req)).json()).toEqual({ active: false, synced: true });
+    mockGetEntitlementStatus.mockResolvedValue({ active: false, status: "expired", expiresAt: null, verdict: "expired", lastRcVerifiedAt: null, stale: false });
+    expect(await (await POST(req)).json()).toEqual(expect.objectContaining({ active: false, verdict: "expired", synced: true }));
   });
 
   it("falls back to the DB state when RevenueCat can't be consulted", async () => {
     mockSync.mockResolvedValue(null);
-    mockIsEntitled.mockResolvedValue(true);
-    expect(await (await POST(req)).json()).toEqual({ active: true, synced: false });
-    expect(mockIsEntitled).toHaveBeenCalledWith("user-1", "a@b.c");
+    mockGetEntitlementStatus.mockResolvedValue({ active: false, status: "expired", expiresAt: null, verdict: "expired", lastRcVerifiedAt: null, stale: false });
+    expect(await (await POST(req)).json()).toEqual(expect.objectContaining({ active: false, verdict: "expired", synced: false }));
+    expect(mockGetEntitlementStatus).toHaveBeenCalledWith("user-1", "a@b.c");
   });
 
   it("short-circuits for bypassed (demo/stub) accounts", async () => {
     mockBypass.mockReturnValue(true);
-    expect(await (await POST(req)).json()).toEqual({ active: true, synced: false });
+    expect(await (await POST(req)).json()).toEqual(expect.objectContaining({ active: true, verdict: "active", synced: false }));
     expect(mockSync).not.toHaveBeenCalled();
   });
 });

@@ -42,6 +42,7 @@ describe("fetchProEntitlement", () => {
     const state = await fetchProEntitlement("u1");
     expect(state).toEqual({
       active: true,
+      hadProEntitlement: true,
       plan: "com.fitsy.mobile.yearly",
       expiresAt: new Date(expires),
       transactionId: "2000001",
@@ -58,7 +59,7 @@ describe("fetchProEntitlement", () => {
     mockFetch(200, {
       subscriber: { entitlements: { pro: { expires_date: expires, product_identifier: "p" } } },
     });
-    expect(await fetchProEntitlement("u1")).toMatchObject({ active: false, plan: "p" });
+    expect(await fetchProEntitlement("u1")).toMatchObject({ active: false, hadProEntitlement: true, plan: "p" });
   });
 
   it("reports a null requestDate when the response has no request_date_ms", async () => {
@@ -68,10 +69,16 @@ describe("fetchProEntitlement", () => {
     expect(await fetchProEntitlement("u1")).toMatchObject({ active: true, requestDate: null });
   });
 
+  it("treats a malformed expiry as unknown rather than a lifetime grant", async () => {
+    mockFetch(200, { subscriber: { entitlements: { pro: { expires_date: "not-a-date", product_identifier: "p" } } } });
+    expect(await fetchProEntitlement("u1")).toBeNull();
+  });
+
   it("reports no entitlement as inactive (not unknown)", async () => {
     mockFetch(200, { subscriber: { entitlements: {}, subscriptions: {} } });
     expect(await fetchProEntitlement("u1")).toEqual({
       active: false,
+      hadProEntitlement: false,
       plan: null,
       expiresAt: null,
       transactionId: null,

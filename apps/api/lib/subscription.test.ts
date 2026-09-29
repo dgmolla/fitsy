@@ -29,6 +29,7 @@ import {
   subscriptionBypass,
   optionalSubscription,
   logStatusChange,
+  classifySubscription,
 } from "./subscription";
 
 const ENV = process.env;
@@ -43,6 +44,9 @@ afterAll(() => {
 });
 
 const req = {} as unknown as NextRequest;
+const verified = (status: string, expiresAt: Date | null) => ({
+  status, expiresAt, lastEventAt: new Date(),
+});
 
 describe("subscriptionBypass", () => {
   it("bypasses when ALLOW_STUB_SUBSCRIPTIONS=true (dev/staging)", () => {
@@ -64,32 +68,32 @@ describe("subscriptionBypass", () => {
 
 describe("isEntitled", () => {
   it("true for an active subscription with no expiry", async () => {
-    mockFindUnique.mockResolvedValue({ status: "active", expiresAt: null });
+    mockFindUnique.mockResolvedValue(verified("active", null));
     expect(await isEntitled("u1", "a@b.com")).toBe(true);
   });
 
   it("true for an active subscription expiring in the future", async () => {
-    mockFindUnique.mockResolvedValue({ status: "active", expiresAt: new Date(Date.now() + 86_400_000) });
+    mockFindUnique.mockResolvedValue(verified("active", new Date(Date.now() + 86_400_000)));
     expect(await isEntitled("u1", "a@b.com")).toBe(true);
   });
 
   it("false for an active subscription that has already lapsed", async () => {
-    mockFindUnique.mockResolvedValue({ status: "active", expiresAt: new Date(Date.now() - 1_000) });
+    mockFindUnique.mockResolvedValue(verified("active", new Date(Date.now() - 1_000)));
     expect(await isEntitled("u1", "a@b.com")).toBe(false);
   });
 
   it("false for an expired status", async () => {
-    mockFindUnique.mockResolvedValue({ status: "expired", expiresAt: null });
+    mockFindUnique.mockResolvedValue(verified("expired", null));
     expect(await isEntitled("u1", "a@b.com")).toBe(false);
   });
 
   it("true for billing_issue while the grace period hasn't lapsed (store keeps the user subscribed)", async () => {
-    mockFindUnique.mockResolvedValue({ status: "billing_issue", expiresAt: new Date(Date.now() + 86_400_000) });
+    mockFindUnique.mockResolvedValue(verified("billing_issue", new Date(Date.now() + 86_400_000)));
     expect(await isEntitled("u1", "a@b.com")).toBe(true);
   });
 
   it("false for billing_issue once the period has lapsed", async () => {
-    mockFindUnique.mockResolvedValue({ status: "billing_issue", expiresAt: new Date(Date.now() - 1_000) });
+    mockFindUnique.mockResolvedValue(verified("billing_issue", new Date(Date.now() - 1_000)));
     expect(await isEntitled("u1", "a@b.com")).toBe(false);
   });
 
@@ -115,7 +119,7 @@ describe("optionalSubscription", () => {
 
   it("reports entitled: true with the payload when authenticated AND entitled", async () => {
     mockRequireAuth.mockResolvedValue({ sub: "u1", email: "a@b.com" });
-    mockFindUnique.mockResolvedValue({ status: "active", expiresAt: null });
+    mockFindUnique.mockResolvedValue(verified("active", null));
     expect(await optionalSubscription(req)).toEqual({
       payload: { sub: "u1", email: "a@b.com" },
       entitled: true,
@@ -136,22 +140,26 @@ describe("getEntitlementStatus", () => {
   const expiresAt = new Date(Date.now() + 86_400_000);
 
   it("reports the row alongside the same verdict as isEntitled", async () => {
-    mockFindUnique.mockResolvedValue({ status: "active", expiresAt });
-    expect(await getEntitlementStatus("u1", "a@b.com")).toEqual({
+    mockFindUnique.mockResolvedValue(verified("active", expiresAt));
+    expect(await getEntitlementStatus("u1", "a@b.com")).toEqual(expect.objectContaining({
       active: true,
       status: "active",
       expiresAt,
-    });
+      verdict: "active",
+      stale: false,
+    }));
   });
 
   it("keeps the lapsed row visible while reporting inactive", async () => {
     const past = new Date(Date.now() - 1_000);
-    mockFindUnique.mockResolvedValue({ status: "active", expiresAt: past });
-    expect(await getEntitlementStatus("u1", "a@b.com")).toEqual({
+    mockFindUnique.mockResolvedValue(verified("active", past));
+    expect(await getEntitlementStatus("u1", "a@b.com")).toEqual(expect.objectContaining({
       active: false,
       status: "active",
       expiresAt: past,
-    });
+      verdict: "unknown",
+      stale: true,
+    }));
   });
 
   it("returns nulls for a user who never subscribed", async () => {
@@ -160,6 +168,9 @@ describe("getEntitlementStatus", () => {
       active: false,
       status: null,
       expiresAt: null,
+      verdict: "unknown",
+      stale: true,
+      lastRcVerifiedAt: null,
     });
   });
 
@@ -170,7 +181,30 @@ describe("getEntitlementStatus", () => {
       active: true,
       status: null,
       expiresAt: null,
+      verdict: "active",
+      stale: false,
+      lastRcVerifiedAt: null,
     });
+  });
+});
+
+describe("RevenueCat verdict freshness", () => {
+  it("distinguishes a confirmed first-time account from a missing proof", () => {
+    expect(classifySubscription(null).verdict).toBe("unknown");
+    expect(classifySubscription(verified("never_subscribed", null)).verdict).toBe("never_subscribed");
+  });
+
+  it("holds an old active period until a renewal or expiration is verified", () => {
+    const ended = new Date(Date.now() - 1000);
+    expect(classifySubscription(verified("active", ended))).toEqual(expect.objectContaining({ verdict: "unknown", stale: true }));
+    expect(classifySubscription({ status: "expired", expiresAt: ended, lastEventAt: new Date() })).toEqual(
+      expect.objectContaining({ verdict: "expired", stale: false }),
+    );
+  });
+
+  it("holds any row whose last RC proof is older than the bounded policy", () => {
+    const row = { status: "expired", expiresAt: new Date(Date.now() - 90_000), lastEventAt: new Date(Date.now() - 25 * 60 * 60 * 1000) };
+    expect(classifySubscription(row)).toEqual(expect.objectContaining({ verdict: "unknown", stale: true }));
   });
 });
 

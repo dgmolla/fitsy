@@ -11,10 +11,10 @@ import { getEntitlementStatus } from "@/lib/subscription";
  * dev/demo bypass in `lib/subscription`; POST /api/subscriptions/sync is the
  * heavier path that re-reads RevenueCat first.
  *
- * Response: `{ active, status, expiresAt }` - `status` is the stored row
- * status ("active" | "billing_issue" | "expired") or null for a user who has
- * never subscribed; `expiresAt` is ISO-8601 or null. Clients gate on `active`
- * only; the other two are for support and copy ("renews on ...").
+ * Response includes the account-bound `verdict`, `lastRcVerifiedAt` and
+ * `stale` fields alongside legacy `active`, raw `status` and `expiresAt`.
+ * A missing row is unknown until a successful RC sync confirms whether this
+ * this user has Pro history.
  *
  * Replaces the old stubbed `/api/subscriptions/verify` receipt-validation
  * endpoint - clients no longer send receipts; RevenueCat validates and notifies
@@ -23,10 +23,13 @@ import { getEntitlementStatus } from "@/lib/subscription";
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
-  const { active, status, expiresAt } = await getEntitlementStatus(auth.sub, auth.email);
+  const { active, status, expiresAt, verdict, lastRcVerifiedAt, stale } = await getEntitlementStatus(auth.sub, auth.email);
   return NextResponse.json({
     active,
     status,
     expiresAt: expiresAt ? expiresAt.toISOString() : null,
+    verdict,
+    lastRcVerifiedAt: lastRcVerifiedAt?.toISOString() ?? null,
+    stale,
   });
 }
