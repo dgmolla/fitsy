@@ -8,6 +8,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { AppState } from 'react-native';
 import type {
   CustomerInfo,
   PurchasesOffering,
@@ -26,7 +27,6 @@ import {
   currentPurchasesUserId,
   fetchCurrentOffering,
   fetchCustomerInfo,
-  hasLapsedEntitlement,
   identifyPurchasesUser,
   isProActive,
   showManageSubscriptions as rcShowManageSubscriptions,
@@ -48,8 +48,10 @@ export interface PurchasesContextValue {
   entitled: boolean | null;
   /** Device hint: RevenueCat says the `pro` entitlement is active. */
   isPro: boolean;
-  /** True when `pro` was active before but has lapsed - see `hasLapsedEntitlement`. */
+  /** True when the account-bound backend verdict is `expired`. */
   isLapsed: boolean;
+  /** The backend could not yet establish this account's subscription history. */
+  isUnknown: boolean;
   customerInfo: CustomerInfo | null;
   /** Current offering; its `.annual`/`.monthly` packages back the in-app paywall. */
   offering: PurchasesOffering | null;
@@ -240,6 +242,16 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     }
   }, [setCustomerInfo, syncEntitlement]);
 
+  // The store can expire while this process is suspended. Reconcile the same
+  // account-bound backend verdict on every foreground return; the phone SDK
+  // alone cannot classify a lapsed subscription for navigation.
+  useEffect(() => {
+    const sub = AppState?.addEventListener('change', state => {
+      if (state === 'active') void syncEntitlement('mismatch');
+    });
+    return () => sub?.remove();
+  }, [syncEntitlement]);
+
   const refresh = useCallback(async () => {
     setCustomerInfo(await fetchCustomerInfo());
   }, [setCustomerInfo]);
@@ -265,11 +277,12 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   const storeConfirmed = inStoreGrace();
   const value = useMemo<PurchasesContextValue>(
     () => ({
-      ready: entitled !== null,
+      ready: verdict.classification !== 'loading',
       entitled,
       storeConfirmed,
       isPro: isProActive(customerInfo),
-      isLapsed: hasLapsedEntitlement(customerInfo),
+      isLapsed: verdict.classification === 'expired',
+      isUnknown: verdict.classification === 'unknown',
       customerInfo,
       offering,
       introEligibility,
@@ -282,7 +295,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
       showManageSubscriptions: () => rcShowManageSubscriptions(customerInfoRef.current),
       restore,
     }),
-    [entitled, storeConfirmed, customerInfo, offering, introEligibility, introEligibilityReady, syncEntitlement, refresh, refreshOffering, purchase, presentPaywall, restore],
+    [entitled, verdict.classification, storeConfirmed, customerInfo, offering, introEligibility, introEligibilityReady, syncEntitlement, refresh, refreshOffering, purchase, presentPaywall, restore],
   );
 
   return <PurchasesContext.Provider value={value}>{children}</PurchasesContext.Provider>;

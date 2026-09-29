@@ -21,6 +21,7 @@
 import { useCallback, useRef, useState, type MutableRefObject } from 'react';
 import type { EntitlementVerdict } from './entitlementVerdictTypes';
 import type { CustomerInfo } from 'react-native-purchases';
+import type { SubscriptionStatusResult, SubscriptionVerdict } from './apiClient';
 import { supabase } from './supabase';
 import { withinMs } from './async';
 import {
@@ -55,6 +56,12 @@ export function useEntitlementVerdict({
   customerInfoRef: MutableRefObject<CustomerInfo | null>;
 }): EntitlementVerdict {
   const [entitled, setEntitledState] = useState<boolean | null>(null);
+  const [classification, setClassificationState] = useState<SubscriptionVerdict | 'loading'>('loading');
+  const classificationRef = useRef<SubscriptionVerdict | 'loading'>('loading');
+  const setClassification = useCallback((next: SubscriptionVerdict | 'loading') => {
+    classificationRef.current = next;
+    setClassificationState(next);
+  }, []);
   const entitledRef = useRef<boolean | null>(null);
   const setEntitled = useCallback((next: boolean | null | ((current: boolean | null) => boolean | null)) => {
     setEntitledState((current) => {
@@ -83,8 +90,8 @@ export function useEntitlementVerdict({
     // existing row and mark the real INITIAL_PURCHASE webhook stale. The
     // caller's reason still tags the client-side analytics below.
     const wireReason = reason !== 'boot' && inStoreGrace() ? 'purchase' : reason;
-    const active = await fetchServerEntitlement(wireReason);
-    if (active === null) {
+    const result = await fetchServerEntitlement(wireReason);
+    if (result === null) {
       trackEntitlementSyncFailed({ reason });
       return null;
     }
@@ -97,12 +104,19 @@ export function useEntitlementVerdict({
     } catch {
       return null;
     }
-    return active;
+    return result;
   }, [inStoreGrace]);
 
   /** Store a server answer; resolves to the verdict now in effect. */
   const applyVerdict = useCallback(
-    (reason: EntitlementSyncReason, active: boolean): boolean => {
+    (reason: EntitlementSyncReason, result: SubscriptionStatusResult, userId: string): boolean | null => {
+      if (result.verdict === 'unknown') {
+        verdictGenerationRef.current += 1;
+        setClassification('unknown');
+        setEntitled(null);
+        return null;
+      }
+      const active = result.verdict === 'active';
       const devicePro = isProActive(customerInfoRef.current);
       if (devicePro !== active) {
         trackEntitlementMismatch({ reason, device_pro: devicePro, server_active: active });
@@ -115,17 +129,18 @@ export function useEntitlementVerdict({
         // to the paywall is the worse failure.
         return true;
       }
+      setClassification(result.verdict);
       setEntitled(active);
-      void writeCachedEntitlement(active);
+      void writeCachedEntitlement(userId, result);
       return active;
     },
-    [customerInfoRef, inStoreGrace, setEntitled],
+    [customerInfoRef, inStoreGrace, setEntitled, setClassification],
   );
 
   const runSync = useCallback(
     async (reason: EntitlementSyncReason, userId: string): Promise<boolean | null> => {
-      const active = await fetchVerdict(reason, userId);
-      return active === null ? null : applyVerdict(reason, active);
+      const result = await fetchVerdict(reason, userId);
+      return result === null ? null : applyVerdict(reason, result, userId);
     },
     [fetchVerdict, applyVerdict],
   );
@@ -144,6 +159,7 @@ export function useEntitlementVerdict({
           // rare drop-during-StoreKit case). Mirrors applyVerdict.
           if (inStoreGrace()) return entitledRef.current;
           setEntitled(false);
+          setClassification('never_subscribed');
           return false;
         }
         return await runSync(reason, data.session.user.id);
@@ -151,14 +167,14 @@ export function useEntitlementVerdict({
         return null;
       }
     },
-    [runSync, inStoreGrace, setEntitled],
+    [runSync, inStoreGrace, setEntitled, setClassification],
   );
 
   const resolveAtBoot = useCallback(
     async (userId: string | undefined, rcReady: Promise<CustomerInfo | null>, isCancelled: () => boolean) => {
       const generation = verdictGenerationRef.current;
-      const cachedP = withinMs(readCachedEntitlement(), BOOT_VERDICT_CAP_MS);
-      const answer = userId ? fetchVerdict('boot', userId) : Promise.resolve(false);
+      const cachedP = userId ? withinMs(readCachedEntitlement(userId), BOOT_VERDICT_CAP_MS) : Promise.resolve(null);
+      const answer = userId ? fetchVerdict('boot', userId) : Promise.resolve(null);
       const [info, cached, server] = await Promise.all([
         withinMs(rcReady, BOOT_VERDICT_CAP_MS),
         cachedP,
@@ -168,12 +184,13 @@ export function useEntitlementVerdict({
       if (!userId) {
         // Anonymous: never left on null, and a stale cache must not count.
         setEntitled(false);
+        setClassification('never_subscribed');
         return;
       }
       // Applied only now, after the RevenueCat read, so the mismatch event
       // compares against the real device state.
-      let lateEscalation: Promise<boolean | null> | null = null;
-      if (server === false && isProActive(info)) {
+      let lateEscalation: Promise<SubscriptionStatusResult | null> | null = null;
+      if (server !== null && (server.verdict === 'unknown' || (server.verdict !== 'active' && isProActive(info)))) {
         // The stored row says no while the device says Pro: a missed webhook
         // or an earlier lagging sync. The boot read is a cheap DB read, so
         // escalate once to a RevenueCat re-read BEFORE anything settles, so
@@ -184,44 +201,53 @@ export function useEntitlementVerdict({
         const escalation = fetchVerdict('mismatch', userId);
         const escalatedAnswer = await withinMs(escalation, BOOT_VERDICT_CAP_MS);
         if (isCancelled() || verdictGenerationRef.current !== generation) return;
-        if (escalatedAnswer !== null) {
-          const escalated = applyVerdict('mismatch', escalatedAnswer);
+        if (escalatedAnswer !== null && escalatedAnswer.verdict !== 'unknown') {
+          const escalated = applyVerdict('mismatch', escalatedAnswer, userId);
           setEntitled((current) => current ?? escalated);
           return;
         }
         lateEscalation = escalation;
       }
-      const effective = server === null ? null : applyVerdict('boot', server);
+      const effective = server === null ? null : applyVerdict('boot', server, userId);
+      if (server?.verdict === 'unknown') {
+        // A missing or stale RC proof must never route to the first-time
+        // paywall. The late reconciliation below can still settle it.
+        setClassification('unknown');
+        setEntitled(null);
+      } else if (server === null) {
+        setClassification(cached?.verdict ?? (isProActive(info) ? 'active' : 'unknown'));
+      }
       // The single settled signal: server, else cache, else the device (so an
       // offline subscriber isn't bounced). `current` covers an answer that
       // landed via another path meanwhile.
-      setEntitled((current) => current ?? effective ?? cached ?? isProActive(info));
+      if (server?.verdict !== 'unknown') setEntitled((current) => current ?? effective ?? cached?.active ?? isProActive(info));
       if (lateEscalation) {
         // A capped escalation may still resolve after the boot fallback.
         const fallbackGeneration = verdictGenerationRef.current;
         void lateEscalation.then((late) => {
           if (late !== null && !isCancelled() && verdictGenerationRef.current === fallbackGeneration) {
-            applyVerdict('mismatch', late);
+            applyVerdict('mismatch', late, userId);
           }
         });
       }
       if (server === null) {
         // Slow server: apply its answer when it finally lands.
         void answer.then((late) => {
-          if (late !== null && !isCancelled() && verdictGenerationRef.current === generation) applyVerdict('boot', late);
+          if (late !== null && !isCancelled() && verdictGenerationRef.current === generation) applyVerdict('boot', late, userId);
         });
       }
     },
-    [fetchVerdict, applyVerdict, setEntitled],
+    [fetchVerdict, applyVerdict, setEntitled, setClassification],
   );
 
   const settleAfterBootFailure = useCallback(
     async (userId: string | undefined, isCancelled: () => boolean) => {
-      const cached = userId ? await withinMs(readCachedEntitlement(), BOOT_VERDICT_CAP_MS) : null;
+      const cached = userId ? await withinMs(readCachedEntitlement(userId), BOOT_VERDICT_CAP_MS) : null;
       if (isCancelled()) return;
-      setEntitled((current) => current ?? cached ?? (userId ? isProActive(customerInfoRef.current) : false));
+      setEntitled((current) => current ?? cached?.active ?? (userId ? isProActive(customerInfoRef.current) : false));
+      setClassification(userId ? (cached?.verdict ?? (isProActive(customerInfoRef.current) ? 'active' : 'unknown')) : 'never_subscribed');
     },
-    [customerInfoRef, setEntitled],
+    [customerInfoRef, setEntitled, setClassification],
   );
 
   const resolveAfterSignIn = useCallback(
@@ -231,13 +257,17 @@ export function useEntitlementVerdict({
       // subscriber to the paywall for the length of a round trip.
       const epoch = ++signInEpochRef.current;
       setEntitled(null);
+      setClassification('loading');
       const identity = identify().catch(() => null);
       const info = await withinMs(identity, BOOT_VERDICT_CAP_MS);
       if (epoch !== signInEpochRef.current) return;
       const server = await withinMs(syncEntitlement('sign_in'), BOOT_VERDICT_CAP_MS);
       if (epoch !== signInEpochRef.current) return;
       // Same fallback rule as boot; the still-running sync applies the late answer.
-      if (server === null) setEntitled((current) => current ?? isProActive(info));
+      if (server === null && classificationRef.current === 'loading') {
+        setClassification(isProActive(info) ? 'active' : 'unknown');
+        setEntitled((current) => current ?? (isProActive(info) ? true : null));
+      }
       if (info === null) {
         // A slow identity can reveal Pro only after the first server sync has
         // settled false. Re-read the authoritative server for that same user,
@@ -251,15 +281,18 @@ export function useEntitlementVerdict({
         });
       }
     },
-    [syncEntitlement, setEntitled],
+    [syncEntitlement, setEntitled, setClassification],
   );
 
   const markStoreConfirmed = useCallback(() => {
     storeConfirmedAtRef.current = Date.now();
     verdictGenerationRef.current += 1;
     setEntitled(true);
-    void writeCachedEntitlement(true);
-  }, [setEntitled]);
+    setClassification('active');
+    // The old confirmed "never subscribed" cache predates this StoreKit
+    // result. Drop it now; the next successful RC sync writes a new proof.
+    return clearCachedEntitlement();
+  }, [setEntitled, setClassification]);
 
   const beginSignOut = useCallback(() => {
     // Null, not false: a false here would have the still-mounted tabs layout
@@ -268,9 +301,10 @@ export function useEntitlementVerdict({
     // Invalidate a pending sign-in fallback before it can reopen the gates.
     signOutEpochRef.current = ++signInEpochRef.current;
     setEntitled(null);
+    setClassification('loading');
     void clearCachedEntitlement();
     storeConfirmedAtRef.current = 0;
-  }, [setEntitled]);
+  }, [setEntitled, setClassification]);
 
   const settleAfterSignOut = useCallback(() => {
     // Decided from the auth events alone, never from getSession: auth-js
@@ -280,10 +314,12 @@ export function useEntitlementVerdict({
     // null must never be left behind.
     if (signInEpochRef.current !== signOutEpochRef.current) return;
     setEntitled((current) => current ?? false);
-  }, [setEntitled]);
+    setClassification('never_subscribed');
+  }, [setEntitled, setClassification]);
 
   return {
     entitled,
+    classification,
     entitledRef,
     inStoreGrace,
     syncEntitlement,

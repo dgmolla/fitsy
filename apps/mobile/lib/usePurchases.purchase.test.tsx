@@ -14,6 +14,7 @@ import {
   mockAuth,
   mockRc,
   mockStore,
+  cachedEntitlementVerdict,
   proInfo,
   renderProvider,
   setupPurchasesMocks,
@@ -27,7 +28,7 @@ import { POST_PURCHASE_SYNC_CAP_MS, PURCHASE_IDENTITY_CAP_MS, STORE_GRACE_MS } f
 
 setupPurchasesMocks();
 
-type SyncResult = { active: boolean; synced: boolean };
+type SyncResult = { active: boolean; synced: boolean; verdict: 'active' | 'expired' | 'never_subscribed'; lastRcVerifiedAt: string };
 
 /** Restore with the server held mid-flight; resolves once the cap has passed. */
 async function restoreWithStalledSync(result: ProviderResult) {
@@ -84,14 +85,14 @@ describe('purchase / restore', () => {
     await waitFor(() => expect(result.current.ready).toBe(true));
     expect(result.current.entitled).toBe(false);
     mockRc.purchasePackage.mockResolvedValue({ outcome: 'purchased', customerInfo: proInfo });
-    mockApi.syncSubscription.mockResolvedValue({ active: false, synced: true });
+    mockApi.syncSubscription.mockResolvedValue({ active: false, synced: true, verdict: 'never_subscribed', lastRcVerifiedAt: new Date().toISOString() });
     let got: boolean | undefined;
     await act(async () => { got = await result.current.purchase({} as never, 'test'); });
     // payment.tsx does `if (!isPro) return`: a charged user must get in.
     expect(got).toBe(true);
     expect(result.current.isPro).toBe(true);
     expect(result.current.entitled).toBe(true);
-    expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBe('true');
+    expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBeUndefined();
     expect(mockApi.syncSubscription).toHaveBeenCalledWith('purchase');
     expect(mockAnalytics.trackEntitlementMismatch).toHaveBeenCalledWith({
       reason: 'purchase', device_pro: true, server_active: false,
@@ -119,10 +120,10 @@ describe('purchase / restore', () => {
     expect(got).toBe(true);
     expect(result.current.entitled).toBe(true);
     expect(mockAnalytics.trackPurchasesRestored).toHaveBeenCalledWith({ is_pro: true });
-    await act(async () => { pending.resolve({ active: false, synced: true }); });
+    await act(async () => { pending.resolve({ active: false, synced: true, verdict: 'never_subscribed', lastRcVerifiedAt: new Date().toISOString() }); });
     await flush();
     expect(result.current.entitled).toBe(true);
-    expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBe('true');
+    expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBeUndefined();
     expect(mockAnalytics.trackEntitlementMismatch).toHaveBeenCalledWith({
       reason: 'restore', device_pro: true, server_active: false,
     });
@@ -136,8 +137,8 @@ describe('purchase / restore', () => {
     const { pending } = await restoreWithStalledSync(result);
     // Simulate the optimistic cache write being lost, so the late answer is what refills it.
     delete mockStore[ENTITLEMENT_CACHE_KEY];
-    await act(async () => { pending.resolve({ active: true, synced: true }); });
-    await waitFor(() => expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBe('true'));
+    await act(async () => { pending.resolve({ active: true, synced: true, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() }); });
+    await waitFor(() => expect(cachedEntitlementVerdict()).toBe('active'));
     expect(result.current.entitled).toBe(true);
     jest.useRealTimers();
   });
@@ -147,18 +148,18 @@ describe('purchase / restore', () => {
     await waitFor(() => expect(result.current.ready).toBe(true));
     useFakeTimersKeepingFlush();
     mockRc.purchasePackage.mockResolvedValue({ outcome: 'purchased', customerInfo: proInfo });
-    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() });
     await act(async () => { await result.current.purchase({} as never, 'test'); });
     expect(result.current.entitled).toBe(true);
 
     // The search screen's mismatch handler fires right away; REST still lags.
     mockApi.syncSubscription.mockClear();
-    mockApi.syncSubscription.mockResolvedValue({ active: false, synced: true });
+    mockApi.syncSubscription.mockResolvedValue({ active: false, synced: true, verdict: 'never_subscribed', lastRcVerifiedAt: new Date().toISOString() });
     let verdict: boolean | null = null;
     await act(async () => { verdict = await result.current.syncEntitlement('mismatch'); });
     expect(verdict).toBe(true);
     expect(result.current.entitled).toBe(true);
-    expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBe('true');
+    expect(cachedEntitlementVerdict()).toBe('active');
     // Never-downgrade on the server side too: the wire reason is 'purchase'.
     expect(mockApi.syncSubscription).toHaveBeenLastCalledWith('purchase');
     expect(mockAnalytics.trackEntitlementMismatch).toHaveBeenLastCalledWith({
@@ -169,7 +170,7 @@ describe('purchase / restore', () => {
     await act(async () => { verdict = await result.current.syncEntitlement('mismatch'); });
     expect(verdict).toBe(false);
     expect(result.current.entitled).toBe(false);
-    expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBe('false');
+    expect(cachedEntitlementVerdict()).toBe('never_subscribed');
     expect(mockApi.syncSubscription).toHaveBeenLastCalledWith('mismatch');
     jest.useRealTimers();
   });
@@ -179,7 +180,7 @@ describe('purchase / restore', () => {
     await waitFor(() => expect(result.current.ready).toBe(true));
     useFakeTimersKeepingFlush();
     mockRc.purchasePackage.mockResolvedValue({ outcome: 'purchased', customerInfo: proInfo });
-    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() });
     await act(async () => { await result.current.purchase({} as never, 'test'); });
     expect(result.current.entitled).toBe(true);
 
@@ -202,12 +203,12 @@ describe('purchase / restore', () => {
     expect(result.current.storeConfirmed).toBe(false);
     useFakeTimersKeepingFlush();
     mockRc.purchasePackage.mockResolvedValue({ outcome: 'purchased', customerInfo: proInfo });
-    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() });
     await act(async () => { await result.current.purchase({} as never, 'test'); });
     expect(result.current.storeConfirmed).toBe(true);
     act(() => { jest.advanceTimersByTime(STORE_GRACE_MS); });
     // Any re-render re-reads the window; a sync is the natural trigger.
-    mockApi.syncSubscription.mockResolvedValue({ active: false, synced: true });
+    mockApi.syncSubscription.mockResolvedValue({ active: false, synced: true, verdict: 'never_subscribed', lastRcVerifiedAt: new Date().toISOString() });
     await act(async () => { await result.current.syncEntitlement('mismatch'); });
     expect(result.current.storeConfirmed).toBe(false);
     jest.useRealTimers();

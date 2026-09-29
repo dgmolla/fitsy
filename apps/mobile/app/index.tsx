@@ -17,7 +17,7 @@ import { openPurchasedDestination } from '@/lib/paywallJourney';
 export default function Index() {
   const navigation = useNavigation();
   const [destination, setDestination] = useState<EntryDestination>(null);
-  const { ready: purchasesReady, entitled, isLapsed, offering } = usePurchases();
+  const { ready: purchasesReady, entitled, isLapsed, isUnknown, offering } = usePurchases();
 
   useEffect(() => {
     let current = true;
@@ -28,6 +28,10 @@ export default function Index() {
           AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY), getMacroTargets(), readOnboardingPreviewEntry(),
         ]);
         if (!current) return;
+        if (token && purchasesReady && isUnknown) {
+          setDestination('/welcome/subscription-check');
+          return;
+        }
         if (token && purchasesReady && entitled === true && targets) {
           const resumed = await openPurchasedDestination(navigation, { resumeOnly: true, isCurrent: () => current });
           if (!current || resumed) return;
@@ -43,7 +47,7 @@ export default function Index() {
     }
     void resolve();
     return () => { current = false; };
-  }, [purchasesReady, entitled, isLapsed, offering, navigation]);
+  }, [purchasesReady, entitled, isLapsed, isUnknown, offering, navigation]);
 
   if (!destination) {
     return (

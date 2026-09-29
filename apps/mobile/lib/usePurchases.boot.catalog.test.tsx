@@ -22,7 +22,7 @@ import { BOOT_VERDICT_CAP_MS } from './usePurchases';
 
 setupPurchasesMocks();
 
-type StatusResult = { active: boolean; status: null; expiresAt: null };
+type StatusResult = { active: boolean; status: string | null; expiresAt: string | null; verdict: 'active' | 'expired' | 'never_subscribed'; lastRcVerifiedAt: string };
 
 describe('boot', () => {
   it('keeps plans loaded by Retry when an older boot catalog succeeds late', async () => {
@@ -67,7 +67,7 @@ describe('boot', () => {
     const sessionRead = deferred<{ data: { session: { user: { id: string } } } }>();
     mockAuth.getSession.mockReturnValueOnce(sessionRead.promise);
     mockAuth.session = { user: { id: 'u2' } };
-    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() });
     const { result } = renderProvider();
     await flush();
     expect(result.current.ready).toBe(false);
@@ -84,7 +84,7 @@ describe('boot', () => {
     useFakeTimersKeepingFlush();
     const storage = jest.requireMock('@react-native-async-storage/async-storage').default;
     jest.spyOn(storage, 'getItem').mockImplementationOnce(() => new Promise(() => {}));
-    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null });
+    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() });
     const { result } = renderProvider();
     await flush();
     act(() => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
@@ -95,7 +95,7 @@ describe('boot', () => {
   it('bounds an identity read that never settles while preserving a signed-in server verdict', async () => {
     useFakeTimersKeepingFlush();
     mockRc.identifyPurchasesUser.mockImplementationOnce(() => new Promise(() => {}));
-    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null });
+    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() });
     const { result } = renderProvider();
     await flush();
     expect(result.current.ready).toBe(false);
@@ -125,7 +125,7 @@ describe('boot', () => {
     useFakeTimersKeepingFlush();
     const oldIdentity = deferred<typeof proInfo>();
     mockRc.identifyPurchasesUser.mockReturnValueOnce(oldIdentity.promise).mockResolvedValueOnce(proInfo);
-    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null });
+    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() });
     const { result } = renderProvider();
     await flush();
     mockAuth.session = { user: { id: 'u2' } };
@@ -151,7 +151,7 @@ describe('boot', () => {
     expect(mockRc.addCustomerInfoListener).toHaveBeenCalledTimes(1);
     const listener = mockRc.addCustomerInfoListener.mock.calls[0][0];
     mockRc.fetchCustomerInfo.mockResolvedValueOnce(proInfo);
-    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() });
     await act(async () => { listener(proInfo); });
     await waitFor(() => expect(result.current.entitled).toBe(true));
   });
@@ -161,7 +161,7 @@ describe('boot', () => {
     const bootServer = deferred<StatusResult>();
     mockApi.fetchSubscriptionStatus.mockReturnValueOnce(bootServer.promise);
     mockRc.fetchCustomerInfo.mockResolvedValueOnce(proInfo);
-    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() });
     const { result } = renderProvider();
     await flush();
     expect(mockApi.fetchSubscriptionStatus).toHaveBeenCalledTimes(1);
@@ -172,7 +172,7 @@ describe('boot', () => {
     const listener = mockRc.addCustomerInfoListener.mock.calls[0][0];
     await act(async () => { listener(proInfo); });
     await waitFor(() => expect(result.current.entitled).toBe(true));
-    await act(async () => { bootServer.resolve({ active: false, status: null, expiresAt: null }); });
+    await act(async () => { bootServer.resolve({ active: false, status: null, expiresAt: null, verdict: 'never_subscribed', lastRcVerifiedAt: new Date().toISOString() }); });
     expect(result.current.entitled).toBe(true);
     expect(mockApi.syncSubscription).toHaveBeenCalledWith('mismatch');
     jest.useRealTimers();
@@ -191,7 +191,7 @@ describe('boot', () => {
     mockAuth.getSession.mockReturnValueOnce(sameUserRead.promise);
     await act(async () => { identity.resolve(freeInfo); });
     mockRc.purchasePackage.mockResolvedValue({ outcome: 'purchased', customerInfo: proInfo });
-    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() });
     await act(async () => { expect(await result.current.purchase({} as never, 'test')).toBe(true); });
     expect(result.current.isPro).toBe(true);
     await act(async () => { sameUserRead.resolve({ data: { session: mockAuth.session! } }); });
@@ -205,7 +205,7 @@ describe('boot', () => {
     const listenerRead = deferred<typeof proInfo>();
     mockRc.identifyPurchasesUser.mockReturnValueOnce(identity.promise);
     mockRc.fetchCustomerInfo.mockReturnValueOnce(listenerRead.promise).mockResolvedValue(proInfo);
-    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() });
     const { result } = renderProvider();
     await waitFor(() => expect(mockRc.identifyPurchasesUser).toHaveBeenCalledTimes(1));
     const listener = mockRc.addCustomerInfoListener.mock.calls[0][0];

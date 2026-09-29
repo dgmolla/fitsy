@@ -1,10 +1,12 @@
 import type { MutableRefObject } from 'react';
 import type { CustomerInfo } from 'react-native-purchases';
 import type { EntitlementSyncReason } from './entitlement';
+import type { SubscriptionVerdict } from './apiClient';
 
 export interface EntitlementVerdict {
   /** The server's verdict; null until settled on this launch. Gates screens. */
   entitled: boolean | null;
+  classification: SubscriptionVerdict | 'loading';
   /** Same value, readable from async callbacks. */
   entitledRef: MutableRefObject<boolean | null>;
   /** True inside STORE_GRACE_MS after the store confirmed a purchase/restore. */
@@ -34,7 +36,7 @@ export interface EntitlementVerdict {
    */
   resolveAfterSignIn: (userId: string, identify: () => Promise<CustomerInfo | null>) => Promise<void>;
   /** The store just confirmed Pro: entitled now, cached, grace window open. */
-  markStoreConfirmed: () => void;
+  markStoreConfirmed: () => Promise<void>;
   /** Sign-out, synchronous half: hold the gates (null), drop cache and grace window. */
   beginSignOut: () => void;
   /** Sign-out, after the RevenueCat logout: not entitled unless a sign-in arrived meanwhile. Lock-free. */

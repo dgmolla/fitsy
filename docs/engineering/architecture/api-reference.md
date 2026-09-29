@@ -328,9 +328,11 @@ Returns `204` on success.
 **File:** `apps/api/app/api/subscriptions/status/route.ts`
 
 The server's entitlement verdict, which the mobile app gates on at every launch (the on-device RevenueCat state is only a hint that triggers a sync).
-Returns `{ active, status, expiresAt }` from the `Subscription` table plus the dev/demo bypass.
-`active` is the same verdict `optionalSubscription` uses; `status` is the stored row status (`active` | `billing_issue` | `expired`) or `null` for a user who never subscribed; `expiresAt` is ISO-8601 or `null`.
-Clients rely on `active` only.
+Returns `{ active, verdict, status, expiresAt, lastRcVerifiedAt, stale }` from the authenticated user's `Subscription` row plus the dev/demo bypass.
+`verdict` is `active`, `expired`, `never_subscribed`, or `unknown`; the same classification controls paid access and mobile paywall selection.
+`status` retains the raw stored row state for support, while `lastRcVerifiedAt` is the latest applied RevenueCat event or REST snapshot time.
+A proof older than 24 hours, a missing row, or an active period whose expiry has passed without a newer proof yields `unknown` with `stale: true` until reconciliation.
+The mobile app holds and offers retry for `unknown`; it never treats failed or missing lookup as a first subscription.
 Replaced the old stubbed `/api/subscriptions/verify` receipt endpoint: clients never send receipts, RevenueCat validates and notifies the webhook.
 
 ---
@@ -344,7 +346,8 @@ Replaced the old stubbed `/api/subscriptions/verify` receipt endpoint: clients n
 Pull path for entitlement state: asks RevenueCat for the caller's `pro` entitlement (`services/revenuecatService.ts`) and upserts the `Subscription` row.
 Optional JSON body `{ reason }` with one of `boot` | `purchase` | `restore` | `sign_in` | `mismatch` (unknown values are ignored).
 For `purchase` and `restore` the server never persists a downgrade: an inactive RevenueCat read is re-read every 1 s for up to 6 s, and if still inactive nothing is written and a `[subscription]` warning is logged, because RevenueCat's REST view can lag StoreKit by seconds right after a purchase.
-Returns `{ active, synced }`; `synced: false` means nothing was written (RevenueCat could not be consulted, or a downgrade was withheld) and `active` is the existing DB state.
+Returns the same status fields plus `synced`; `synced: false` means RevenueCat could not be consulted or a purchase/restore downgrade was withheld, so the existing proof remains in effect.
+An RC-confirmed empty account is recorded as `never_subscribed`; an expired `pro` entitlement is recorded as `expired` even when its webhook was missed.
 A successful sync stamps the row's `lastEventAt` with RevenueCat's `request_date_ms` (falling back to a time captured before the read), so a webhook event generated earlier but delivered later is ignored while one emitted after the read is still applied (see the webhook below).
 The mobile client calls it right after a purchase or restore, on every sign-in, and when the device says Pro while the API serves locked responses.
 This covers the cases the webhook alone cannot: `TRANSFER` events carry no product/expiry, the first search after purchase can race webhook delivery, and a missed delivery would otherwise lock a paying user out until the next renewal.

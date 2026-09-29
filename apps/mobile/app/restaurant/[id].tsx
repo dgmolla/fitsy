@@ -260,7 +260,7 @@ export default function RestaurantDetailScreen() {
 
   if (!purchases.ready || !reviewer.ready || !previewAccess.ready) return null;
   if (!purchases.entitled && !reviewer.isReviewer && !previewAccess.canPreview) {
-    return <Redirect href={purchases.isLapsed ? '/welcome/resubscribe' : '/welcome/payment'} />;
+    return <Redirect href={purchases.isUnknown ? '/welcome/subscription-check' : purchases.isLapsed ? '/welcome/resubscribe' : '/welcome/payment'} />;
   }
 
   const backControl = <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/search')} style={s.navBtn} hitSlop={8} accessibilityRole="button" accessibilityLabel="Go back" testID="restaurant-back">

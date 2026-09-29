@@ -21,9 +21,21 @@ import { BOOT_VERDICT_CAP_MS } from './usePurchases';
 
 setupPurchasesMocks();
 
-type SyncResult = { active: boolean; synced: boolean };
+type SyncResult = { active: boolean; synced: boolean; verdict: 'active' | 'expired' | 'never_subscribed'; lastRcVerifiedAt: string };
 
 describe('sign-in', () => {
+  it('keeps an unknown backend answer held even when the phone has a Pro hint', async () => {
+    mockAuth.session = null;
+    const { result } = renderProvider();
+    await waitFor(() => expect(result.current.entitled).toBe(false));
+    mockAuth.session = { user: { id: 'u2' } };
+    mockRc.identifyPurchasesUser.mockResolvedValueOnce(proInfo);
+    mockApi.syncSubscription.mockResolvedValueOnce({ active: false, synced: false, verdict: 'unknown', lastRcVerifiedAt: null, stale: true });
+    await act(async () => { mockAuth.listener?.('SIGNED_IN', mockAuth.session); });
+    await waitFor(() => expect(result.current.isUnknown).toBe(true));
+    expect(result.current.entitled).toBeNull();
+  });
+
   it('bounds a never-settling RevenueCat identify and still applies the signed-in server verdict', async () => {
     mockAuth.session = null;
     const { result } = renderProvider();
@@ -31,7 +43,7 @@ describe('sign-in', () => {
     useFakeTimersKeepingFlush();
     mockAuth.session = { user: { id: 'u2' } };
     mockRc.identifyPurchasesUser.mockImplementationOnce(() => new Promise(() => {}));
-    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() });
     await act(async () => { mockAuth.listener?.('SIGNED_IN', mockAuth.session); });
     expect(result.current.entitled).toBeNull();
     act(() => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
@@ -46,7 +58,7 @@ describe('sign-in', () => {
     await waitFor(() => expect(result.current.entitled).toBe(false));
     mockAuth.session = { user: { id: 'u2' } };
     mockRc.identifyPurchasesUser.mockRejectedValueOnce(new Error('store unavailable'));
-    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() });
     await act(async () => { mockAuth.listener?.('SIGNED_IN', mockAuth.session); });
     await waitFor(() => expect(result.current.entitled).toBe(true));
   });
@@ -58,8 +70,8 @@ describe('sign-in', () => {
     useFakeTimersKeepingFlush();
     const identity = deferred<typeof proInfo>();
     mockRc.identifyPurchasesUser.mockReturnValueOnce(identity.promise);
-    mockApi.syncSubscription.mockResolvedValueOnce({ active: false, synced: true })
-      .mockResolvedValueOnce({ active: true, synced: true });
+    mockApi.syncSubscription.mockResolvedValueOnce({ active: false, synced: true, verdict: 'never_subscribed', lastRcVerifiedAt: new Date().toISOString() })
+      .mockResolvedValueOnce({ active: true, synced: true, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() });
     mockAuth.session = { user: { id: 'u2' } };
     await act(async () => { mockAuth.listener?.('SIGNED_IN', mockAuth.session); });
     await act(async () => { mockAuth.listener?.('SIGNED_IN', mockAuth.session); });
@@ -82,7 +94,7 @@ describe('sign-in', () => {
     useFakeTimersKeepingFlush();
     const oldIdentity = deferred<typeof proInfo>();
     mockRc.identifyPurchasesUser.mockReturnValueOnce(oldIdentity.promise).mockResolvedValueOnce(freeInfo);
-    mockApi.syncSubscription.mockResolvedValue({ active: false, synced: true });
+    mockApi.syncSubscription.mockResolvedValue({ active: false, synced: true, verdict: 'never_subscribed', lastRcVerifiedAt: new Date().toISOString() });
     mockAuth.session = { user: { id: 'u2' } };
     await act(async () => { mockAuth.listener?.('SIGNED_IN', mockAuth.session); });
     act(() => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
@@ -108,7 +120,7 @@ describe('sign-in', () => {
     useFakeTimersKeepingFlush();
     const identity = deferred<typeof proInfo>();
     mockRc.identifyPurchasesUser.mockReturnValueOnce(identity.promise);
-    mockApi.syncSubscription.mockResolvedValue({ active: false, synced: true });
+    mockApi.syncSubscription.mockResolvedValue({ active: false, synced: true, verdict: 'never_subscribed', lastRcVerifiedAt: new Date().toISOString() });
     mockAuth.session = { user: { id: 'u2' } };
     await act(async () => { mockAuth.listener?.('SIGNED_IN', mockAuth.session); });
     act(() => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
@@ -130,7 +142,7 @@ describe('sign-in', () => {
     useFakeTimersKeepingFlush();
     const freeIdentity = deferred<typeof freeInfo>();
     mockRc.identifyPurchasesUser.mockReturnValueOnce(freeIdentity.promise);
-    mockApi.syncSubscription.mockResolvedValueOnce({ active: false, synced: true });
+    mockApi.syncSubscription.mockResolvedValueOnce({ active: false, synced: true, verdict: 'never_subscribed', lastRcVerifiedAt: new Date().toISOString() });
     mockAuth.session = { user: { id: 'u2' } };
     await act(async () => { mockAuth.listener?.('SIGNED_IN', mockAuth.session); });
     act(() => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
@@ -141,7 +153,7 @@ describe('sign-in', () => {
 
     const rejectedIdentity = deferred<typeof proInfo>();
     mockRc.identifyPurchasesUser.mockReturnValueOnce(rejectedIdentity.promise);
-    mockApi.syncSubscription.mockResolvedValueOnce({ active: false, synced: true })
+    mockApi.syncSubscription.mockResolvedValueOnce({ active: false, synced: true, verdict: 'never_subscribed', lastRcVerifiedAt: new Date().toISOString() })
       .mockRejectedValueOnce(new Error('offline'));
     mockAuth.session = { user: { id: 'u3' } };
     await act(async () => { mockAuth.listener?.('SIGNED_IN', mockAuth.session); });
@@ -154,7 +166,7 @@ describe('sign-in', () => {
 
     const pendingIdentity = deferred<typeof proInfo>();
     mockRc.identifyPurchasesUser.mockReturnValueOnce(pendingIdentity.promise);
-    mockApi.syncSubscription.mockResolvedValueOnce({ active: false, synced: true })
+    mockApi.syncSubscription.mockResolvedValueOnce({ active: false, synced: true, verdict: 'never_subscribed', lastRcVerifiedAt: new Date().toISOString() })
       .mockImplementationOnce(() => new Promise(() => {}));
     mockAuth.session = { user: { id: 'u4' } };
     await act(async () => { mockAuth.listener?.('SIGNED_IN', mockAuth.session); });
@@ -173,7 +185,7 @@ describe('sign-in', () => {
     await waitFor(() => expect(result.current.entitled).toBe(false));
     const oldIdentity = deferred<typeof freeInfo>();
     mockRc.identifyPurchasesUser.mockReturnValueOnce(oldIdentity.promise).mockResolvedValueOnce(proInfo);
-    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() });
     mockAuth.session = { user: { id: 'u2' } };
     await act(async () => { mockAuth.listener?.('SIGNED_IN', mockAuth.session); });
     mockAuth.session = { user: { id: 'u3' } };
@@ -189,7 +201,7 @@ describe('sign-in', () => {
     const { result, seen } = renderProviderTracking();
     await waitFor(() => expect(result.current.entitled).toBe(false));
     mockAuth.session = { user: { id: 'u2' } };
-    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() });
     await act(async () => { mockAuth.listener?.('SIGNED_IN', { user: { id: 'u2' } }); });
     await waitFor(() => expect(result.current.entitled).toBe(true));
     expect(seen).toEqual([null, false, null, true]);
@@ -216,7 +228,7 @@ describe('sign-in', () => {
     act(() => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS); });
     await flush();
     expect(result.current.entitled).toBe(true); // device fallback
-    await act(async () => { pending.resolve({ active: false, synced: true }); });
+    await act(async () => { pending.resolve({ active: false, synced: true, verdict: 'never_subscribed', lastRcVerifiedAt: new Date().toISOString() }); });
     await flush();
     expect(result.current.entitled).toBe(false); // late server answer wins
     expect(seen).toEqual([null, false, null, true, false]);
@@ -228,7 +240,7 @@ describe('sign-in', () => {
     const { result, seen } = renderProviderTracking();
     await waitFor(() => expect(result.current.entitled).toBe(false));
     mockAuth.session = { user: { id: 'u2' } };
-    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() });
     await act(async () => { mockAuth.listener?.('SIGNED_IN', { user: { id: 'u2' } }); });
     await waitFor(() => expect(result.current.entitled).toBe(true));
     await act(async () => { mockAuth.listener?.('SIGNED_IN', { user: { id: 'u2' } }); });
@@ -262,7 +274,7 @@ describe('sign-in', () => {
     await flush();
     expect(result.current.entitled).toBeNull();
     mockAuth.session = { user: { id: 'u2' } };
-    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true });
+    mockApi.syncSubscription.mockResolvedValue({ active: true, synced: true, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() });
     await act(async () => { mockAuth.listener?.('SIGNED_IN', { user: { id: 'u2' } }); });
     await flush();
     expect(mockRc.identifyPurchasesUser).toHaveBeenCalledTimes(1); // boot's, still pending
@@ -275,7 +287,7 @@ describe('sign-in', () => {
   });
 
   it('ignores the SIGNED_IN that session recovery re-emits for the user boot already resolved', async () => {
-    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null });
+    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() });
     const { result, seen } = renderProviderTracking();
     await waitFor(() => expect(result.current.entitled).toBe(true));
     const identifies = mockRc.identifyPurchasesUser.mock.calls.length;

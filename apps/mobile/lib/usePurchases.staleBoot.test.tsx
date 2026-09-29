@@ -1,6 +1,7 @@
 import { act, waitFor } from '@testing-library/react-native';
 import {
   deferred,
+  mockApi,
   mockRc,
   proInfo,
   renderProvider,
@@ -11,6 +12,7 @@ import {
 setupPurchasesMocks();
 
 it('keeps a signed-in boot identity read after a stale native account update', async () => {
+  mockApi.fetchSubscriptionStatus.mockResolvedValueOnce({ active: false, status: 'expired', expiresAt: null, verdict: 'expired', lastRcVerifiedAt: new Date().toISOString() });
   const identity = deferred<Info>();
   const lapsedInfo: Info = { entitlements: { active: {}, all: { pro: {} } } };
   mockRc.identifyPurchasesUser.mockReturnValueOnce(identity.promise);

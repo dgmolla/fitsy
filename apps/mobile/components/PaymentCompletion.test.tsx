@@ -67,7 +67,7 @@ beforeEach(async () => {
   jest.spyOn(Purchases, 'getOfferings').mockResolvedValue({ current: offering, all: { default: offering } });
   jest.spyOn(Purchases, 'restorePurchases').mockResolvedValue(subscribed);
   jest.spyOn(Purchases, 'addCustomerInfoUpdateListener').mockImplementation(() => {});
-  global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ active: false, synced: true }) });
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ active: false, synced: true, verdict: 'never_subscribed', lastRcVerifiedAt: new Date().toISOString(), stale: false }) });
   await rememberPaywallIntent(selected);
 });
 afterEach(() => { global.fetch = originalFetch; jest.restoreAllMocks(); });
@@ -220,7 +220,7 @@ test('a late current-user Pro identity rechecks the server and opens search from
   (Purchases.logIn as jest.Mock).mockImplementationOnce(() => new Promise(resolve => { resolveIdentity = resolve; }));
   global.fetch = jest.fn().mockImplementation((_url: string, init?: RequestInit) => {
     const reason = init?.body ? JSON.parse(String(init.body)).reason as string : undefined;
-    return Promise.resolve({ ok: true, status: 200, json: async () => ({ active: reason === 'mismatch', synced: true }) });
+    return Promise.resolve({ ok: true, status: 200, json: async () => ({ active: reason === 'mismatch', synced: true, verdict: reason === 'mismatch' ? 'active' : 'never_subscribed', lastRcVerifiedAt: new Date().toISOString(), stale: false }) });
   });
   jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick', 'queueMicrotask'] });
   mockAuthSession = { access_token: 'returning-token', user: { id: 'returning-pro' } };

@@ -3,14 +3,14 @@
  * allowed in?".
  *
  * The SERVER is the single source of truth for entitlement. The phone's
- * RevenueCat CustomerInfo is only a fast hint that triggers a sync (and the
- * copy source for "lapsed" vs "never subscribed"). The one place that
+ * RevenueCat CustomerInfo is only a fast hint that triggers a sync. The
+ * backend classifies "lapsed" vs "never subscribed". The one place that
  * decides and stores the verdict is `syncEntitlement` in usePurchases.tsx;
  * this module gives it the transport, the cache, and the resolution rule,
  * each testable without React.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { fetchSubscriptionStatus, syncSubscription, type SubscriptionSyncReason } from './apiClient';
+import { fetchSubscriptionStatus, syncSubscription, type SubscriptionStatusResult, type SubscriptionSyncReason } from './apiClient';
 
 /**
  * Why a sync is being asked for. `boot` is a cheap DB read of the server's
@@ -21,23 +21,40 @@ import { fetchSubscriptionStatus, syncSubscription, type SubscriptionSyncReason 
  */
 export type EntitlementSyncReason = 'boot' | SubscriptionSyncReason;
 
-/** Last server verdict, persisted so the next launch can gate instantly. */
+/** Last server verdict, scoped to the Fitsy user and bounded by its RC proof. */
 export const ENTITLEMENT_CACHE_KEY = '@fitsy/entitlement';
+const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
-export async function readCachedEntitlement(): Promise<boolean | null> {
+export type CachedEntitlement = Pick<SubscriptionStatusResult,
+  'active' | 'verdict' | 'expiresAt' | 'lastRcVerifiedAt'>;
+
+export async function readCachedEntitlement(userId: string): Promise<CachedEntitlement | null> {
   try {
     const raw = await AsyncStorage.getItem(ENTITLEMENT_CACHE_KEY);
-    if (raw === 'true') return true;
-    if (raw === 'false') return false;
-    return null;
+    if (!raw) return null;
+    const cache = JSON.parse(raw) as CachedEntitlement & { userId?: string };
+    const verified = cache.lastRcVerifiedAt ? Date.parse(cache.lastRcVerifiedAt) : NaN;
+    if (cache.userId !== userId ||
+        !['active', 'expired', 'never_subscribed'].includes(cache.verdict) ||
+        cache.active !== (cache.verdict === 'active') ||
+        !Number.isFinite(verified) ||
+        Date.now() - verified > CACHE_MAX_AGE_MS || verified > Date.now() + 60_000 ||
+        (cache.verdict === 'active' && cache.expiresAt &&
+          (typeof cache.expiresAt !== 'string' || !Number.isFinite(Date.parse(cache.expiresAt)) ||
+            Date.parse(cache.expiresAt) <= Date.now()))) return null;
+    return cache;
   } catch {
     return null;
   }
 }
 
-export async function writeCachedEntitlement(active: boolean): Promise<void> {
+export async function writeCachedEntitlement(userId: string, status: SubscriptionStatusResult): Promise<void> {
   try {
-    await AsyncStorage.setItem(ENTITLEMENT_CACHE_KEY, active ? 'true' : 'false');
+    if (status.verdict === 'unknown' || status.stale || !status.lastRcVerifiedAt) return;
+    await AsyncStorage.setItem(ENTITLEMENT_CACHE_KEY, JSON.stringify({
+      userId, active: status.verdict === 'active', verdict: status.verdict,
+      expiresAt: status.expiresAt, lastRcVerifiedAt: status.lastRcVerifiedAt,
+    }));
   } catch {
     // Best effort: a failed cache write only costs a slower next boot.
   }
@@ -59,10 +76,12 @@ export async function clearCachedEntitlement(): Promise<void> {
  * (token wiped, bounced to the problem screen), which is the wrong outcome
  * for an anonymous teaser visitor.
  */
-export async function fetchServerEntitlement(reason: EntitlementSyncReason): Promise<boolean | null> {
+export async function fetchServerEntitlement(reason: EntitlementSyncReason): Promise<SubscriptionStatusResult | null> {
   try {
-    const { active } = reason === 'boot' ? await fetchSubscriptionStatus() : await syncSubscription(reason);
-    return active;
+    const result = reason === 'boot' ? await fetchSubscriptionStatus() : await syncSubscription(reason);
+    if (result.verdict !== 'active' && result.verdict !== 'expired' &&
+        result.verdict !== 'never_subscribed' && result.verdict !== 'unknown') return null;
+    return result;
   } catch (err) {
     console.warn('[entitlement] sync failed', reason, err instanceof Error ? err.message : err);
     return null;

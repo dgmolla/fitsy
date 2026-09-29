@@ -3,6 +3,7 @@
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 const mockFindUnique = jest.fn();
 const mockUpsert = jest.fn();
+const mockCreate = jest.fn();
 const mockUserFindUnique = jest.fn();
 const mockRequireAuth = jest.fn();
 const mockFetchProEntitlement = jest.fn();
@@ -12,6 +13,7 @@ jest.mock("@/lib/restaurantService", () => ({
     subscription: {
       findUnique: (...args: unknown[]) => mockFindUnique(...args),
       upsert: (...args: unknown[]) => mockUpsert(...args),
+      create: (...args: unknown[]) => mockCreate(...args),
     },
     user: { findUnique: (...args: unknown[]) => mockUserFindUnique(...args) },
   },
@@ -45,6 +47,7 @@ describe("syncSubscriptionFromRevenueCat", () => {
   beforeEach(() => {
     mockUserFindUnique.mockResolvedValue({ id: "u1" });
     mockUpsert.mockResolvedValue({});
+    mockCreate.mockResolvedValue({});
     log = jest.spyOn(console, "info").mockImplementation(() => {});
     warn = jest.spyOn(console, "warn").mockImplementation(() => {});
     jest.useFakeTimers({ now: new Date("2026-09-06T12:00:00Z") });
@@ -178,7 +181,7 @@ describe("syncSubscriptionFromRevenueCat", () => {
     );
   });
 
-  it("writes nothing for a user who never subscribed", async () => {
+  it("persists RevenueCat's confirmed lack of subscription history", async () => {
     mockFetchProEntitlement.mockResolvedValue({
       active: false,
       plan: null,
@@ -188,6 +191,27 @@ describe("syncSubscriptionFromRevenueCat", () => {
     });
     mockFindUnique.mockResolvedValue(null);
     expect(await syncSubscriptionFromRevenueCat("u1")).toBe(false);
+    expect(mockCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ status: "never_subscribed", lastEventAt: NOW }) });
+    expect(mockUpsert).not.toHaveBeenCalled();
+  });
+
+  it("preserves expired history when the webhook never created a row", async () => {
+    mockFetchProEntitlement.mockResolvedValue({
+      active: false, hadProEntitlement: true, plan: "p", expiresAt: new Date(NOW.getTime() - 1_000),
+      transactionId: null, billingIssue: false,
+    });
+    mockFindUnique.mockResolvedValue(null);
+    expect(await syncSubscriptionFromRevenueCat("u1")).toBe(false);
+    expect(mockCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ status: "expired" }) });
+  });
+
+  it("does not replace an active purchase row that races an empty-account read", async () => {
+    mockFetchProEntitlement.mockResolvedValue({ active: false, hadProEntitlement: false, plan: null, expiresAt: null, transactionId: null, billingIssue: false });
+    mockFindUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      status: "active", expiresAt: new Date(NOW.getTime() + 60_000), lastEventAt: NOW,
+    });
+    mockCreate.mockRejectedValueOnce(new Error("unique userId"));
+    expect(await syncSubscriptionFromRevenueCat("u1")).toBe(true);
     expect(mockUpsert).not.toHaveBeenCalled();
   });
 

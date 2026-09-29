@@ -29,18 +29,21 @@ describe("GET /api/subscriptions/status", () => {
 
   it("returns the verdict with the row status and an ISO expiry", async () => {
     const expiresAt = new Date("2027-01-01T00:00:00.000Z");
-    mockGetEntitlementStatus.mockResolvedValue({ active: true, status: "active", expiresAt });
+    mockGetEntitlementStatus.mockResolvedValue({ active: true, status: "active", expiresAt, verdict: "active", lastRcVerifiedAt: new Date("2026-12-31T00:00:00.000Z"), stale: false });
     const res = await GET(req);
     expect(mockGetEntitlementStatus).toHaveBeenCalledWith("user-1", "a@b.c");
     expect(await res.json()).toEqual({
       active: true,
       status: "active",
       expiresAt: "2027-01-01T00:00:00.000Z",
+      verdict: "active",
+      lastRcVerifiedAt: "2026-12-31T00:00:00.000Z",
+      stale: false,
     });
   });
 
   it("returns nulls for a user with no subscription row", async () => {
-    mockGetEntitlementStatus.mockResolvedValue({ active: false, status: null, expiresAt: null });
-    expect(await (await GET(req)).json()).toEqual({ active: false, status: null, expiresAt: null });
+    mockGetEntitlementStatus.mockResolvedValue({ active: false, status: null, expiresAt: null, verdict: "unknown", lastRcVerifiedAt: null, stale: true });
+    expect(await (await GET(req)).json()).toEqual({ active: false, status: null, expiresAt: null, verdict: "unknown", lastRcVerifiedAt: null, stale: true });
   });
 });
