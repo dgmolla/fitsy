@@ -7,7 +7,7 @@ import { usePurchases } from '@/lib/usePurchases';
 import { routeToPaywall } from '@/lib/teaserGate';
 
 export default function PreviewScreen() {
-  const access = usePreviewAccess();
+  const access = usePreviewAccess(true);
   const { entitled } = usePurchases();
   const focused = useIsFocused();
   useEffect(() => {

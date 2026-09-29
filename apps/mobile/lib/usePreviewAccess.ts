@@ -4,7 +4,7 @@ import { canPreviewAfterDecline, paywallVariants, readPaywallDecline, subscribeP
 import { readOnboardingPreviewEntry, subscribeOnboardingPreviewEntry } from './onboardingPreviewEntry';
 
 /** This bounds the product preview; the API still enforces data access. */
-export function usePreviewAccess() {
+export function usePreviewAccess(allowOnboardingEntry = false) {
   const { offering, isLapsed } = usePurchases();
   const [declined, setDeclined] = useState<boolean | null>(null);
   const [onboardingEntry, setOnboardingEntry] = useState<boolean | null>(null);
@@ -27,5 +27,5 @@ export function usePreviewAccess() {
   // full menus and paid tabs keep their independent entitlement checks.
   const ready = declined !== null && onboardingEntry !== null;
   return { ...variants, ready, canPreview: ready &&
-    (canPreviewAfterDecline(declined || isLapsed, variants.access) || (onboardingEntry && !isLapsed)) };
+    (canPreviewAfterDecline(declined || isLapsed, variants.access) || (allowOnboardingEntry && onboardingEntry && !isLapsed)) };
 }
