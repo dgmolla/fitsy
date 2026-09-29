@@ -86,13 +86,21 @@ elif sys.argv[1:3] == ['simctl','delete']:
 else: raise SystemExit(2)
 ''')
         xcrun.chmod(0o700)
-        for name in ('ps', 'lsof'):
-            binary = self.bin / name
-            binary.write_text('#!/bin/sh\nexit 1\n' if name == 'lsof' else '#!/bin/sh\nexit 0\n')
-            binary.chmod(0o700)
+        ps = self.bin / 'ps'
+        ps.write_text('#!/bin/sh\nexit 0\n')
+        ps.chmod(0o700)
+        lsof = self.bin / 'lsof'
+        lsof.write_text('''#!/bin/sh
+if [ "$FAKE_LSOF_CHECKOUT" = 1 ] && [ "$2" = "$FAKE_WORKTREE" ]; then
+  printf 'COMMAND PID USER FD TYPE NAME\\nnode 123 test cwd DIR %s\\n' "$FAKE_WORKTREE"
+  exit 0
+fi
+exit 1
+''')
+        lsof.chmod(0o700)
         self.env = mock.patch.dict(os.environ, {'PATH': str(self.bin) + ':' + os.environ['PATH'],
             'FAKE_UDID': self.udid, 'FAKE_DEVICE_ROOT': str(self.devices),
-            'FAKE_DELETED': str(self.root / 'deleted')})
+            'FAKE_DELETED': str(self.root / 'deleted'), 'FAKE_WORKTREE': str(self.worktree.resolve())})
         self.env.start()
         self.addCleanup(self.env.stop)
 
@@ -123,9 +131,12 @@ else: raise SystemExit(2)
             with self.assertRaises(KeyboardInterrupt):
                 self.retire()
         self.assertFalse((self.archive / self.udid / 'retired.json').exists())
+        (self.worktree / 'apps/api').mkdir(parents=True)
+        (self.worktree / 'apps/api/changed.ts').write_text('changed after deletion')
         result = self.retire()
         self.assertEqual(result['deletionOutcome'], 'observed absent after durable intent')
         self.assertTrue((self.archive / self.udid / 'retired.json').exists())
+        self.assertEqual(len(result['proof']), 2)
 
     def test_active_claim_and_unverified_receipt_hold_device(self):
         self.claim.write_text(json.dumps({'owner': 'current', 'expires': 9999999999}))
@@ -152,6 +163,13 @@ else: raise SystemExit(2)
     def test_booted_device_is_retained(self):
         with mock.patch.dict(os.environ, {'FAKE_DEVICE_STATE': 'Booted'}):
             with self.assertRaisesRegex(ValueError, 'not shut down'):
+                self.retire()
+        self.assertTrue(self.attachment.exists())
+        self.assertFalse((self.root / 'deleted').exists())
+
+    def test_process_with_only_checkout_cwd_retains_device(self):
+        with mock.patch.dict(os.environ, {'FAKE_LSOF_CHECKOUT': '1'}):
+            with self.assertRaisesRegex(ValueError, 'checkout has an active process'):
                 self.retire()
         self.assertTrue(self.attachment.exists())
         self.assertFalse((self.root / 'deleted').exists())

@@ -41,6 +41,24 @@ def durable_json(path, value):
         os.close(directory)
 
 
+def archive_proof(source, destination):
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_name(destination.name + '.tmp')
+    with source.open('rb') as original, temporary.open('wb') as output:
+        shutil.copyfileobj(original, output)
+        output.flush()
+        os.fsync(output.fileno())
+    os.replace(temporary, destination)
+    directory = os.open(destination.parent, os.O_RDONLY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+    if digest(source) != digest(destination):
+        raise ValueError('archived product proof differs from source')
+    return {'archive': str(destination), 'sha256': digest(destination)}
+
+
 def app_hash(directory):
     hash_ = hashlib.sha256()
     # Node's product-flow treeHash sorts full path strings, not Path components.
@@ -187,6 +205,11 @@ def idle(udid, worktree, device_path, claim_file):
     opened = subprocess.run(['lsof', '+D', str(device_path)], text=True, capture_output=True, timeout=20)
     if opened.returncode not in (0, 1) or opened.stdout.strip() or opened.stderr.strip():
         raise ValueError('device has open files or ownership scan failed')
+    checkout_opened = subprocess.run(['lsof', '+D', str(worktree)], text=True,
+                                     capture_output=True, timeout=20)
+    if (checkout_opened.returncode not in (0, 1) or checkout_opened.stdout.strip() or
+            checkout_opened.stderr.strip()):
+        raise ValueError('claim checkout has an active process or ownership scan failed')
 
 
 def reconcile_absent(target, issue, udid, worktree, device_root):
@@ -202,7 +225,6 @@ def reconcile_absent(target, issue, udid, worktree, device_root):
     if (mapping.get('issue') != issue or mapping.get('udid') != udid or
             mapping.get('worktree') != str(worktree)):
         raise ValueError('absent device archive identity differs')
-    evidence(worktree, udid)
     for entry in mapping['attachments']:
         archive = Path(entry['archive']).resolve()
         if not archive.is_relative_to(target.resolve()) or digest(archive) != entry['sha256']:
@@ -210,6 +232,17 @@ def reconcile_absent(target, issue, udid, worktree, device_root):
     retired = target / 'retired.json'
     if retired.is_file():
         return json.loads(retired.read_text())
+    proof = mapping.get('proof', [])
+    if len(proof) != 2:
+        raise ValueError('absent device archived proof is incomplete')
+    for entry in proof:
+        archive = Path(entry['archive']).resolve()
+        if not archive.is_relative_to(target.resolve()) or digest(archive) != entry['sha256']:
+            raise ValueError('absent device archived proof digest differs')
+    build, report = (json.loads(Path(entry['archive']).read_text()) for entry in proof)
+    if (build.get('simulator') != udid or report.get('simulator') != udid or
+            report.get('result') != 'pass' or report.get('appHash') != mapping.get('appHash')):
+        raise ValueError('absent device archived proof identity differs')
     mapping.update({'deleted': True, 'deletionOutcome': 'observed absent after durable intent',
                     'freeAfterBytes': shutil.disk_usage(device_root).free})
     durable_json(retired, mapping)
@@ -263,6 +296,8 @@ def retire(*, issue, udid, worktree, archive_root, device_root, claim_file,
                 'worktree': str(worktree), 'buildReceipt': str(build), 'report': str(report),
                 'app': str(app), 'appHash': app_hash(app), 'attachments': mapping,
                 'freeBeforeBytes': shutil.disk_usage(device_root).free}
+    manifest['proof'] = [archive_proof(build, target / 'proof/build-receipt.json'),
+                         archive_proof(report, target / 'proof/product-flow-report.json')]
     durable_json(target / 'mapping.json', manifest)
     # The source may change while copies are made. Check ownership and every byte again.
     device(udid, issue, device_root)
@@ -273,6 +308,9 @@ def retire(*, issue, udid, worktree, archive_root, device_root, claim_file,
     for entry in mapping:
         if digest(Path(entry['source'])) != entry['sha256'] or digest(Path(entry['archive'])) != entry['sha256']:
             raise ValueError('raw attachment changed before deletion')
+    if (digest(build) != manifest['proof'][0]['sha256'] or
+            digest(report) != manifest['proof'][1]['sha256']):
+        raise ValueError('product proof changed before deletion')
     if not confirm_verified():
         raise ValueError('issue is no longer terminal-verified before deletion')
     durable_json(target / 'delete-intent.json', {'issue': issue, 'udid': udid,
