@@ -1,17 +1,31 @@
 import { useEffect, useState } from 'react';
 import { usePurchases } from './usePurchases';
 import { canPreviewAfterDecline, paywallVariants, readPaywallDecline, subscribePaywallAccess } from './paywallAccess';
+import { readOnboardingPreviewEntry, subscribeOnboardingPreviewEntry } from './onboardingPreviewEntry';
 
 /** This bounds the product preview; the API still enforces data access. */
-export function usePreviewAccess() {
+export function usePreviewAccess(allowOnboardingEntry = false) {
   const { offering, isLapsed } = usePurchases();
   const [declined, setDeclined] = useState<boolean | null>(null);
+  const [onboardingEntry, setOnboardingEntry] = useState<boolean | null>(null);
   const variants = paywallVariants(offering?.metadata);
   useEffect(() => {
     let live = true;
-    const read = () => { void readPaywallDecline().then(value => { if (live) setDeclined(value); }); };
-    const unsubscribe = subscribePaywallAccess(read); read();
-    return () => { live = false; unsubscribe(); };
+    let revision = 0;
+    const read = () => {
+      const current = ++revision;
+      void Promise.all([readPaywallDecline(), readOnboardingPreviewEntry()])
+        .then(([value, entry]) => { if (live && current === revision) { setDeclined(value); setOnboardingEntry(entry); } });
+    };
+    const unsubscribePaywall = subscribePaywallAccess(read);
+    const unsubscribeEntry = subscribeOnboardingPreviewEntry(read);
+    read();
+    return () => { live = false; unsubscribePaywall(); unsubscribeEntry(); };
   }, []);
-  return { ...variants, ready: declined !== null, canPreview: declined !== null && canPreviewAfterDecline(declined || isLapsed, variants.access) };
+  // A new onboarding pass may show the bounded restaurant preview after an
+  // earlier paywall decline. Lapsed accounts still take the win-back route;
+  // full menus and paid tabs keep their independent entitlement checks.
+  const ready = declined !== null && onboardingEntry !== null;
+  return { ...variants, ready, canPreview: ready &&
+    (canPreviewAfterDecline(declined || isLapsed, variants.access) || (allowOnboardingEntry && onboardingEntry && !isLapsed)) };
 }

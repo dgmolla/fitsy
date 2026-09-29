@@ -18,8 +18,8 @@ const product = { priceString: '$59.99', subscriptionPeriod: 'P1Y',
   introPrice: { price: 0, priceString: '$0.00', period: 'P1W', periodUnit: 'WEEK', periodNumberOfUnits: 1, cycles: 1 } };
 const annual = purchaseTerms(product, true);
 const monthly = purchaseTerms({ ...product, priceString: '$9.99', subscriptionPeriod: 'P1M', introPrice: null }, false);
-function props() { return { annual, monthly, plan: 'yearly' as const, discovery: {}, loading: false, restoring: false, checkingPlans: false,
-  onSelect: jest.fn(), onRestore: jest.fn(), onRetry: jest.fn(), onPurchase: jest.fn(), onDecline: jest.fn() }; }
+function props() { return { annual, monthly, plan: 'yearly' as const, loading: false, restoring: false, checkingPlans: false,
+  onSelect: jest.fn(), onRestore: jest.fn(), onManage: jest.fn(), onRetry: jest.fn(), onPurchase: jest.fn(), onDecline: jest.fn() }; }
 
 test('timeline derives trial end and reminder day from the selected store offer', () => {
   const screen = render(<PaywallTimeline terms={annual} />);
@@ -114,7 +114,7 @@ test('the selected short trial has a truthful reminder step, even after a longer
 test('plan selection, purchase, restore and decline remain operable with live totals', () => {
   const p = props();
   const screen = render(<PaywallView {...p} />);
-  expect(screen.getByText('Your trial timeline')).toBeTruthy();
+  expect(screen.getByText('Your trial')).toBeTruthy();
   expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toBe('Start 7-day free trial');
   expect(screen.getByTestId('paywall-price-yearly').props.children).toBe('$59.99');
   fireEvent.press(screen.getByTestId('paywall-plan-monthly'));
@@ -123,11 +123,15 @@ test('plan selection, purchase, restore and decline remain operable with live to
   expect(p.onPurchase).toHaveBeenCalledTimes(1);
   fireEvent.press(screen.getByTestId('paywall-restore'));
   expect(p.onRestore).toHaveBeenCalledTimes(1);
+  fireEvent.press(screen.getByTestId('paywall-manage-link'));
+  expect(p.onManage).toHaveBeenCalledTimes(1);
   fireEvent.press(screen.getByTestId('welcome-skip'));
   expect(p.onDecline).toHaveBeenCalledTimes(1);
   screen.rerender(<PaywallView {...p} plan="monthly" />);
   expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toBe('Continue to purchase');
+  expect(screen.getByText('Fitsy Pro')).toBeTruthy();
   expect(screen.getByText('$9.99 charged when you confirm your purchase.')).toBeTruthy();
+  expect(screen.queryByText(/trial access/i)).toBeNull();
 });
 
 test('unavailable pricing disables purchases and provides retry without inventing terms', () => {

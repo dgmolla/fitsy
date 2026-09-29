@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { clearOnboardingPreviewEntry } from './onboardingPreviewEntry';
 
 const DECLINED_KEY = '@fitsy/paywallDeclined';
 const listeners = new Set<() => void>();
@@ -27,6 +28,7 @@ export function readPaywallDecline(): Promise<boolean> {
 }
 export async function rememberPaywallDecline(): Promise<void> {
   declined = true;
+  await clearOnboardingPreviewEntry();
   for (const listener of listeners) listener();
   await AsyncStorage.setItem(DECLINED_KEY, '1');
 }

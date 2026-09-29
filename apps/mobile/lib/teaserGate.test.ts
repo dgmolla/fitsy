@@ -110,6 +110,14 @@ describe('preview tour flag', () => {
 });
 
 describe('routeToPaywall', () => {
+  it('ends a returning preview pass before routing to locked content', async () => {
+    const g = await load();
+    store.set('@fitsy/onboardingPreviewEntry', '1');
+    g.getSession.mockResolvedValueOnce({ data: { session: null } });
+    await g.routeToPaywall();
+    expect(store.has('@fitsy/onboardingPreviewEntry')).toBe(false);
+    expect(g.push).toHaveBeenCalledWith('/welcome/signin');
+  });
   it('sends a session-less caller to sign-in, a signed-in one to payment', async () => {
     const g = await load();
     g.getSession.mockResolvedValueOnce({ data: { session: null } });

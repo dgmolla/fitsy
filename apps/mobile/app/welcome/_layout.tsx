@@ -8,6 +8,8 @@ export default function WelcomeLayout() {
         animation: 'slide_from_right',
         gestureEnabled: true,
       }}
-    />
+    >
+      <Stack.Screen name="preview" options={{ gestureEnabled: false }} />
+    </Stack>
   );
 }

@@ -5,7 +5,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPress } from './AnimatedPress';
 import { WelcomeNav } from './WelcomeNav';
 import { PaywallTimeline } from './PaywallTimeline';
-import type { PaywallDiscovery } from '@/lib/usePaywallDiscovery';
 import { EDITORIAL, FONTS, TEXT } from '@/lib/brand';
 import { openLegalLink } from '@/lib/legalLinks';
 import type { purchaseTerms } from '@/lib/purchaseTerms';
@@ -16,7 +15,6 @@ interface Props {
   plan: PlanId;
   annual: Terms;
   monthly: Terms;
-  discovery: PaywallDiscovery;
   loading: boolean;
   restoring: boolean;
   checkingPlans: boolean;
@@ -24,6 +22,7 @@ interface Props {
   onSelect: (plan: PlanId) => void;
   onBack?: () => void;
   onRestore: () => void;
+  onManage: () => void;
   onRetry: () => void;
   onPurchase: () => void;
   onDecline: () => void;
@@ -51,10 +50,9 @@ export function PaywallView(props: Props) {
 
       <ScrollView contentContainerStyle={[s.content, compact && s.contentCompact]} showsVerticalScrollIndicator={false} bounces={false}>
         <View>
-          <Text style={[s.title, compact && s.titleCompact]}>{selected?.trial ? 'Your trial timeline' : 'Choose your plan'}</Text>
+          <Text style={[s.title, compact && s.titleCompact]}>{selected?.trial ? 'Your trial' : 'Fitsy Pro'}</Text>
           {props.visualPreview && <Text style={s.visualNote} testID="dev-trial-visual-note">Synthetic trial eligibility for visual testing. Prices are from the live Test Store; purchase is disabled.</Text>}
-          {!!props.discovery.selected && <Text style={[s.context, compact && s.contextCompact]}>Discover more meals like your pick at {props.discovery.selected.name}.</Text>}
-          <PaywallTimeline terms={selected} compact={compact} />
+          <PaywallTimeline terms={selected} compact={compact} concise />
 
           <View style={s.plans}>
             {([{ id: 'monthly', name: 'Monthly', terms: monthly }, { id: 'yearly', name: 'Annual', terms: annual }] as const).map(option => {
@@ -67,7 +65,7 @@ export function PaywallView(props: Props) {
                   </View>
                   <View style={s.planInfo}>
                     <Text style={s.planName}>{option.name}</Text>
-                    <Text style={s.planNote}>{option.terms?.trial ? `${option.terms.trial} free` : option.terms ? `Billed every ${option.terms.period}` : 'Fetching store terms…'}</Text>
+                    {!!option.terms?.trial && <Text style={s.planNote}>{option.terms.trial} free</Text>}
                   </View>
                   <View style={[s.priceWrap, largeText && s.priceWrapLarge]}>
                     <Text testID={`paywall-price-${option.id}`} style={s.price}>{option.terms?.price ?? 'Loading…'}</Text>
@@ -91,6 +89,7 @@ export function PaywallView(props: Props) {
             <Text style={s.ctaText}>{label}</Text><Ionicons name="arrow-forward" size={17} color={EDITORIAL.cream} />
           </AnimatedPress>
           <View style={s.links}>
+            <Pressable style={s.legalHit} onPress={props.onManage} accessibilityRole="link" testID="paywall-manage-link"><Text style={s.legalLink}>Manage</Text></Pressable>
             <Pressable style={s.legalHit} onPress={() => openLegalLink('terms')} accessibilityRole="link" testID="paywall-terms-link"><Text style={s.legalLink}>Terms</Text></Pressable>
             <Pressable style={s.legalHit} onPress={() => openLegalLink('privacy')} accessibilityRole="link" testID="paywall-privacy-link"><Text style={s.legalLink}>Privacy</Text></Pressable>
           </View>
@@ -109,21 +108,19 @@ const s = StyleSheet.create({
   contentCompact: { paddingHorizontal: 20, paddingTop: 2 },
   title: { ...TEXT.title, fontSize: 27, lineHeight: 32, color: EDITORIAL.green, textAlign: 'center', marginTop: 4 },
   titleCompact: { fontSize: 24, lineHeight: 28, marginTop: 0 },
-  context: { ...TEXT.bodySmall, textAlign: 'center', marginTop: 5 },
-  contextCompact: { marginTop: 2 },
   visualNote: { ...TEXT.bodySmall, color: EDITORIAL.textMid, textAlign: 'center', marginTop: 5 },
-  plans: { flexDirection: 'row', gap: 10 },
-  plan: { flex: 1, alignItems: 'flex-start', gap: 5, padding: 10, minHeight: 104, borderRadius: 15, borderWidth: 1, borderColor: EDITORIAL.border },
-  planCompact: { padding: 8, minHeight: 94, gap: 3 },
+  plans: { gap: 9 },
+  plan: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 10, minHeight: 68, borderRadius: 15, borderWidth: 1, borderColor: EDITORIAL.border },
+  planCompact: { paddingVertical: 7, minHeight: 58, gap: 10 },
   planSelected: { backgroundColor: EDITORIAL.greenAccentTint, borderColor: EDITORIAL.greenMid },
   planLarge: { paddingHorizontal: 10 },
-  radio: { alignSelf: 'flex-end', width: 20, height: 20, borderRadius: 10, borderWidth: 1, borderColor: EDITORIAL.textSoft, alignItems: 'center', justifyContent: 'center' },
+  radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 1, borderColor: EDITORIAL.textSoft, alignItems: 'center', justifyContent: 'center' },
   radioSelected: { backgroundColor: EDITORIAL.greenMid, borderColor: EDITORIAL.greenMid },
-  planInfo: { alignSelf: 'stretch' },
+  planInfo: { flex: 1, minWidth: 0 },
   planName: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 15, lineHeight: 20, color: EDITORIAL.green },
   planNote: { fontFamily: FONTS.nunitoSans, fontSize: 11, lineHeight: 15, color: EDITORIAL.textMid, marginTop: 1 },
-  priceWrap: { alignItems: 'flex-start', flexShrink: 1, maxWidth: '100%' },
-  priceWrapLarge: { width: '100%' },
+  priceWrap: { alignItems: 'flex-end', flexShrink: 1 },
+  priceWrapLarge: { flexShrink: 1 },
   price: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 19, color: EDITORIAL.green },
   pricePeriod: { fontFamily: FONTS.nunitoSans, fontSize: 11, color: EDITORIAL.textMid },
   retry: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },

@@ -12,6 +12,7 @@ interface EntryState {
   resume: Resume;
   hasTargets: boolean;
   access: 'hard' | 'preview';
+  onboardingPreviewEntry: boolean;
 }
 
 /** Resolve persisted onboarding and settled account access in one precedence order. */
@@ -19,7 +20,8 @@ export function onboardingEntry(state: EntryState): EntryDestination {
   // A purchase can complete before its onboarding storage writes finish.
   // Wait for that account's verdict before resuming an old payment screen.
   if (state.signedIn && !state.purchasesReady) return null;
-  if (!state.isLapsed && !state.completed && state.resume && !state.declined && state.entitled !== true) {
+  if (!state.isLapsed && !state.completed && state.resume &&
+    (!state.declined || (state.resume === '/welcome/preview' && state.onboardingPreviewEntry)) && state.entitled !== true) {
     return state.signedIn && state.resume === '/welcome/signin' ? '/welcome/trial' : state.resume;
   }
   if (!state.signedIn) {

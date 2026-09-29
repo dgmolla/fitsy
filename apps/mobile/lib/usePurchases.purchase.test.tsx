@@ -7,6 +7,7 @@
  */
 import {
   deferred,
+  freeInfo,
   flush,
   mockAnalytics,
   mockApi,
@@ -227,5 +228,6 @@ describe('purchase / restore', () => {
     await waitFor(() => expect(result.current.ready).toBe(true));
     await act(async () => { await result.current.showManageSubscriptions(); });
     expect(mockRc.showManageSubscriptions).toHaveBeenCalledTimes(1);
+    expect(mockRc.showManageSubscriptions).toHaveBeenCalledWith(freeInfo);
   });
 });

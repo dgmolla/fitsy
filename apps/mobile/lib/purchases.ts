@@ -376,15 +376,22 @@ export async function presentPaywallIfNeeded(
 }
 
 export const MANAGE_SUBSCRIPTIONS_URL = 'https://apps.apple.com/account/subscriptions';
+export const MANAGE_SUBSCRIPTIONS_ANDROID_URL = 'https://play.google.com/store/account/subscriptions';
 
 /**
- * Open the App Store's manage-subscriptions sheet. Falls back to the account
- * subscriptions URL when the native sheet isn't available (older iOS, the
- * SDK not configured, Android), so the user always lands somewhere they can
- * cancel. Used by the delete-account dialog: deleting a Fitsy account does
- * not cancel the Apple subscription, and this is the one-tap way to do that.
+ * Open the active subscription's store when RevenueCat knows it. A purchase
+ * made on another platform must be managed there. Otherwise use the device
+ * store; the native sheet is iOS-only. Used by paywall and account actions.
  */
-export async function showManageSubscriptions(): Promise<void> {
+export async function showManageSubscriptions(customerInfo: CustomerInfo | null = null): Promise<void> {
+  if (customerInfo?.managementURL) {
+    await Linking.openURL(customerInfo.managementURL);
+    return;
+  }
+  if (Platform.OS === 'android') {
+    await Linking.openURL(MANAGE_SUBSCRIPTIONS_ANDROID_URL);
+    return;
+  }
   try {
     await Purchases.showManageSubscriptions();
   } catch (err) {

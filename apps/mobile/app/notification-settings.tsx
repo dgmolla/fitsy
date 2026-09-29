@@ -6,12 +6,11 @@ import { EDITORIAL, TEXT } from '@/lib/brand';
 import { useReminders } from '@/lib/useReminders';
 import { usePurchases } from '@/lib/usePurchases';
 import { getNotificationPermission, requestPermissionsAsync } from '@/lib/useNotifications';
-import { showManageSubscriptions } from '@/lib/purchases';
 import { clearDevTrialReminder, scheduleDevTrialReminder } from '@/lib/devTrialReminderProbe';
 
 export default function NotificationSettingsScreen() {
   const { userId, preferences, scheduled, save } = useReminders();
-  const { entitled, customerInfo } = usePurchases();
+  const { entitled, customerInfo, showManageSubscriptions } = usePurchases();
   const trial = customerInfo?.entitlements.all.pro;
   const trialEnd = trial?.isActive && trial.periodType === 'TRIAL' && trial.expirationDate && Number.isFinite(Date.parse(trial.expirationDate))
     ? new Date(trial.expirationDate).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : null;

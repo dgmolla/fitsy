@@ -80,7 +80,7 @@ export interface PurchasesContextValue {
   purchase: (pkg: PurchasesPackage, source: string) => Promise<boolean>;
   /** Present the RevenueCat paywall. `source` tags analytics. Resolves like `purchase`. */
   presentPaywall: (source: string) => Promise<boolean>;
-  /** Open the App Store's manage-subscriptions sheet (URL fallback inside). */
+  /** Open the owning store's subscription management when known. */
   showManageSubscriptions: () => Promise<void>;
   /** The store confirmed a purchase/restore within the last STORE_GRACE_MS. */
   storeConfirmed: boolean;
@@ -279,7 +279,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
       refreshOffering,
       purchase,
       presentPaywall,
-      showManageSubscriptions: rcShowManageSubscriptions,
+      showManageSubscriptions: () => rcShowManageSubscriptions(customerInfoRef.current),
       restore,
     }),
     [entitled, storeConfirmed, customerInfo, offering, introEligibility, introEligibilityReady, syncEntitlement, refresh, refreshOffering, purchase, presentPaywall, restore],

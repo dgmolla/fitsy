@@ -57,7 +57,7 @@ tags: [billing, onboarding, changed-journey]
     visible:
       id: paywall-price-yearly
     timeout: 15000
-- assertVisible: "Choose your plan"
+- assertVisible: "Fitsy Pro"
 - assertVisible: "Continue to purchase"
 - assertNotVisible: "Try Fitsy free"
 - extendedWaitUntil:

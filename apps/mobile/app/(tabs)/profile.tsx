@@ -123,17 +123,15 @@ export default function ProfileScreen() {
     }
   }, []);
 
-  // Deleting the Fitsy account does NOT cancel the App Store subscription:
-  // that lives on the Apple ID and keeps renewing until cancelled there. A
-  // Pro user gets told so, with a one-tap route to the manage sheet, before
-  // they can delete. Device RevenueCat state is fine for this: it is copy,
-  // not a gate.
+  // Deleting the Fitsy account does not cancel the subscription with its
+  // owning store. A Pro user gets a management action before deletion.
+  // Device RevenueCat state is fine for this copy; it is not an access gate.
   const { isPro, showManageSubscriptions } = usePurchases();
   const confirmDelete = useCallback(() => {
     if (isPro) {
       Alert.alert(
         'Delete account?',
-        'Deleting your account does not cancel your Fitsy Pro subscription. It stays on your Apple ID and keeps renewing until you cancel it in the App Store.',
+        'Deleting your account does not cancel your Fitsy Pro subscription. It may keep renewing until you cancel it with the store where you subscribed.',
         [
           { text: 'Manage subscription', onPress: () => void showManageSubscriptions() },
           { text: 'Delete anyway', style: 'destructive', onPress: handleDelete },

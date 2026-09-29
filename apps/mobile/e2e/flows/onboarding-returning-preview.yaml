@@ -1,0 +1,131 @@
+# A prior hard-paywall decline must not skip a new, bounded onboarding preview.
+# The flag is created through the real paywall UI; no storage fixture is injected.
+appId: com.fitsy.mobile
+tags: [billing, discovery, onboarding, changed-journey]
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - assertVisible:
+          id: welcome-start
+- tapOn:
+    point: "92%,93%"
+- openLink: com.fitsy.mobile://welcome/location-permission
+- tapOn:
+    text: "^Open$"
+    optional: true
+- tapOn:
+    id: location-choose-area
+- tapOn: "Search near DTLA"
+- extendedWaitUntil:
+    visible:
+      id: goal-lose_fat
+    timeout: 30000
+- tapOn:
+    id: goal-lose_fat
+- tapOn:
+    id: welcome-continue
+- openLink: com.fitsy.mobile://welcome/payment
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: paywall-timeline
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: welcome-skip
+    direction: DOWN
+- tapOn:
+    id: welcome-skip
+- tapOn:
+    id: paywall-discount-decline
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: paywall-decline
+    timeout: 10000
+- tapOn:
+    id: paywall-decline
+- extendedWaitUntil:
+    visible:
+      id: paywall-timeline
+    timeout: 15000
+# The ordinary deep link remains hard-gated after the saved decline.
+- openLink: com.fitsy.mobile://welcome/preview
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: paywall-timeline
+    timeout: 15000
+# Continuing from the real nutrition-source screen carries onboarding intent.
+- openLink: com.fitsy.mobile://welcome/how-it-works
+- tapOn:
+    text: "^Open$"
+    optional: true
+- assertVisible:
+    id: nutrition-source-published
+- assertVisible:
+    id: nutrition-source-estimated
+- tapOn:
+    id: welcome-continue
+- extendedWaitUntil:
+    visible:
+      id: coachmark-skip
+    timeout: 30000
+- tapOn:
+    id: coachmark-skip
+- assertVisible:
+    id: preview-guide
+- assertVisible:
+    id: preview-pick-2
+# Replay can move back and forward without erasing the prior decline.
+- tapOn:
+    id: preview-back
+- assertVisible:
+    id: nutrition-source-published
+- tapOn:
+    id: welcome-continue
+- extendedWaitUntil:
+    visible:
+      id: preview-guide
+    timeout: 30000
+- assertVisible:
+    id: preview-pick-2
+# A cold-start resume keeps this specific, user-entered preview pass.
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: preview-guide
+    timeout: 30000
+- assertVisible:
+    id: preview-pick-2
+# Restaurant details still require payment; preview is not an entitlement.
+- tapOn:
+    id: discovery-hero
+- extendedWaitUntil:
+    visible:
+      id: paywall-timeline
+    timeout: 15000
+- assertNotVisible:
+    id: preview-guide
+# A direct preview link after the locked choice cannot reuse the old entry.
+- openLink: com.fitsy.mobile://welcome/preview
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: paywall-timeline
+    timeout: 15000
+- assertNotVisible:
+    id: preview-guide
