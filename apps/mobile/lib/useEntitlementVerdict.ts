@@ -27,11 +27,12 @@ import { withinMs } from './async';
 import {
   clearCachedEntitlement,
   fetchServerEntitlement,
-  readCachedEntitlement,
   writeCachedEntitlement,
   type EntitlementSyncReason,
 } from './entitlement';
 import { isProActive } from './purchases';
+import { BOOT_VERDICT_CAP_MS, useBootEntitlement } from './useBootEntitlement';
+export { BOOT_VERDICT_CAP_MS } from './useBootEntitlement';
 import { trackEntitlementMismatch, trackEntitlementSyncFailed } from './analytics';
 
 // After the store confirms a purchase/restore, the server is not allowed to
@@ -46,7 +47,6 @@ export const STORE_GRACE_MS = 60_000;
 // Each boot/sign-in prerequisite uses this cap so a stalled read cannot hold
 // every gate indefinitely. The cache (at boot) or the device's RevenueCat
 // state stands in when the server cannot answer; a late server answer applies.
-export const BOOT_VERDICT_CAP_MS = 1500;
 
 export type { EntitlementVerdict } from './entitlementVerdictTypes';
 
@@ -112,6 +112,9 @@ export function useEntitlementVerdict({
     (reason: EntitlementSyncReason, result: SubscriptionStatusResult, userId: string): boolean | null => {
       if (result.verdict === 'unknown') {
         verdictGenerationRef.current += 1;
+        // StoreKit has already confirmed this purchase or restore. Keep its
+        // bounded grace verdict while the API has no usable RevenueCat proof.
+        if (inStoreGrace()) return true;
         setClassification('unknown');
         setEntitled(null);
         return null;
@@ -170,85 +173,9 @@ export function useEntitlementVerdict({
     [runSync, inStoreGrace, setEntitled, setClassification],
   );
 
-  const resolveAtBoot = useCallback(
-    async (userId: string | undefined, rcReady: Promise<CustomerInfo | null>, isCancelled: () => boolean) => {
-      const generation = verdictGenerationRef.current;
-      const cachedP = userId ? withinMs(readCachedEntitlement(userId), BOOT_VERDICT_CAP_MS) : Promise.resolve(null);
-      const answer = userId ? fetchVerdict('boot', userId) : Promise.resolve(null);
-      const [info, cached, server] = await Promise.all([
-        withinMs(rcReady, BOOT_VERDICT_CAP_MS),
-        cachedP,
-        withinMs(answer, BOOT_VERDICT_CAP_MS),
-      ]);
-      if (isCancelled() || verdictGenerationRef.current !== generation) return;
-      if (!userId) {
-        // Anonymous: never left on null, and a stale cache must not count.
-        setEntitled(false);
-        setClassification('never_subscribed');
-        return;
-      }
-      // Applied only now, after the RevenueCat read, so the mismatch event
-      // compares against the real device state.
-      let lateEscalation: Promise<SubscriptionStatusResult | null> | null = null;
-      if (server !== null && (server.verdict === 'unknown' || (server.verdict !== 'active' && isProActive(info)))) {
-        // The stored row says no while the device says Pro: a missed webhook
-        // or an earlier lagging sync. The boot read is a cheap DB read, so
-        // escalate once to a RevenueCat re-read BEFORE anything settles, so
-        // the common case lands on search with no paywall flash. Past the
-        // cap, fold as usual and let the late answer apply. Without this a
-        // subscriber is locked out until they tap Restore: the mismatch
-        // handler lives on the search screen, which never mounts.
-        const escalation = fetchVerdict('mismatch', userId);
-        const escalatedAnswer = await withinMs(escalation, BOOT_VERDICT_CAP_MS);
-        if (isCancelled() || verdictGenerationRef.current !== generation) return;
-        if (escalatedAnswer !== null && escalatedAnswer.verdict !== 'unknown') {
-          const escalated = applyVerdict('mismatch', escalatedAnswer, userId);
-          setEntitled((current) => current ?? escalated);
-          return;
-        }
-        lateEscalation = escalation;
-      }
-      const effective = server === null ? null : applyVerdict('boot', server, userId);
-      if (server?.verdict === 'unknown') {
-        // A missing or stale RC proof must never route to the first-time
-        // paywall. The late reconciliation below can still settle it.
-        setClassification('unknown');
-        setEntitled(null);
-      } else if (server === null) {
-        setClassification(cached?.verdict ?? (isProActive(info) ? 'active' : 'unknown'));
-      }
-      // The single settled signal: server, else cache, else the device (so an
-      // offline subscriber isn't bounced). `current` covers an answer that
-      // landed via another path meanwhile.
-      if (server?.verdict !== 'unknown') setEntitled((current) => current ?? effective ?? cached?.active ?? isProActive(info));
-      if (lateEscalation) {
-        // A capped escalation may still resolve after the boot fallback.
-        const fallbackGeneration = verdictGenerationRef.current;
-        void lateEscalation.then((late) => {
-          if (late !== null && !isCancelled() && verdictGenerationRef.current === fallbackGeneration) {
-            applyVerdict('mismatch', late, userId);
-          }
-        });
-      }
-      if (server === null) {
-        // Slow server: apply its answer when it finally lands.
-        void answer.then((late) => {
-          if (late !== null && !isCancelled() && verdictGenerationRef.current === generation) applyVerdict('boot', late, userId);
-        });
-      }
-    },
-    [fetchVerdict, applyVerdict, setEntitled, setClassification],
-  );
-
-  const settleAfterBootFailure = useCallback(
-    async (userId: string | undefined, isCancelled: () => boolean) => {
-      const cached = userId ? await withinMs(readCachedEntitlement(userId), BOOT_VERDICT_CAP_MS) : null;
-      if (isCancelled()) return;
-      setEntitled((current) => current ?? cached?.active ?? (userId ? isProActive(customerInfoRef.current) : false));
-      setClassification(userId ? (cached?.verdict ?? (isProActive(customerInfoRef.current) ? 'active' : 'unknown')) : 'never_subscribed');
-    },
-    [customerInfoRef, setEntitled, setClassification],
-  );
+  const { resolveAtBoot, settleAfterBootFailure } = useBootEntitlement({
+    verdictGenerationRef, customerInfoRef, fetchVerdict, applyVerdict, setEntitled, setClassification,
+  });
 
   const resolveAfterSignIn = useCallback(
     async (userId: string, identify: () => Promise<CustomerInfo | null>) => {

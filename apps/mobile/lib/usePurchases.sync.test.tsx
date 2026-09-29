@@ -12,14 +12,12 @@ import {
   freeInfo,
   mockAuth,
   mockRc,
-  mockStore,
   cachedEntitlementVerdict,
   proInfo,
   renderProvider,
   setupPurchasesMocks,
 } from './usePurchasesTestKit';
 import { act, waitFor } from '@testing-library/react-native';
-import { ENTITLEMENT_CACHE_KEY } from './entitlement';
 
 setupPurchasesMocks();
 

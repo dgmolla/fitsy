@@ -45,7 +45,7 @@ describeIfDb("isEntitled (DB)", () => {
   it("active subscription -> entitled", async () => {
     const u = await makeUser("active");
     await prisma.subscription.create({
-      data: { userId: u.id, plan: "monthly", status: "active", expiresAt: new Date(Date.now() + 86_400_000) },
+      data: { userId: u.id, plan: "monthly", status: "active", expiresAt: new Date(Date.now() + 86_400_000), lastEventAt: new Date() },
     });
     expect(await isEntitled(u.id, u.email)).toBe(true);
   });

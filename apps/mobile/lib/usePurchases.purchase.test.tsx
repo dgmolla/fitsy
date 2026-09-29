@@ -112,6 +112,19 @@ describe('purchase / restore', () => {
     expect(mockAnalytics.trackEntitlementSyncFailed).toHaveBeenCalledWith({ reason: 'purchase' });
   });
 
+  it('keeps confirmed Pro through an unknown server response during the purchase grace window', async () => {
+    const { result } = renderProvider();
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    mockRc.purchasePackage.mockResolvedValue({ outcome: 'purchased', customerInfo: proInfo });
+    mockApi.syncSubscription.mockResolvedValue({ active: false, synced: false, verdict: 'unknown', lastRcVerifiedAt: null });
+    let got: boolean | undefined;
+    await act(async () => { got = await result.current.purchase({} as never, 'test'); });
+    expect(got).toBe(true);
+    expect(result.current.entitled).toBe(true);
+    expect(result.current.isUnknown).toBe(false);
+    expect(mockStore[ENTITLEMENT_CACHE_KEY]).toBeUndefined();
+  });
+
   it('lets the user in when the sync stalls past the cap, and a late "false" inside the grace window is not applied', async () => {
     const { result } = renderProvider();
     await waitFor(() => expect(result.current.ready).toBe(true));

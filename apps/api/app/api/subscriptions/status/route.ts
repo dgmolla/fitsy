@@ -14,7 +14,7 @@ import { getEntitlementStatus } from "@/lib/subscription";
  * Response includes the account-bound `verdict`, `lastRcVerifiedAt` and
  * `stale` fields alongside legacy `active`, raw `status` and `expiresAt`.
  * A missing row is unknown until a successful RC sync confirms whether this
- * user has any Pro history.
+ * this user has Pro history.
  *
  * Replaces the old stubbed `/api/subscriptions/verify` receipt-validation
  * endpoint - clients no longer send receipts; RevenueCat validates and notifies
