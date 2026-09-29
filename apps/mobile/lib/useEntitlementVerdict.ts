@@ -192,6 +192,11 @@ export function useEntitlementVerdict({
     [runSync, inStoreGrace, setEntitled, setClassification],
   );
 
+  const syncForPaywall = useCallback(async (): Promise<SubscriptionVerdict> => {
+    const settled = await syncEntitlement('mismatch');
+    return settled === null || classificationRef.current === 'loading' ? 'unknown' : classificationRef.current;
+  }, [syncEntitlement]);
+
   const { resolveAtBoot, settleAfterBootFailure } = useBootEntitlement({
     verdictGenerationRef, customerInfoRef, fetchVerdict, applyVerdict, setEntitled, setClassification, rememberActivePeriod,
   });
@@ -270,6 +275,7 @@ export function useEntitlementVerdict({
     entitledRef,
     inStoreGrace,
     syncEntitlement,
+    syncForPaywall,
     resolveAtBoot,
     settleAfterBootFailure,
     resolveAfterSignIn,

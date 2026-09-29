@@ -11,10 +11,6 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 }));
 jest.mock('expo-router', () => ({ router: { push: jest.fn(), replace: jest.fn() } }));
 jest.mock('./supabase', () => ({ supabase: { auth: { getSession: jest.fn() } } }));
-jest.mock('./apiClient', () => ({
-  fetchSubscriptionStatus: jest.fn(),
-  syncSubscription: jest.fn(),
-}));
 
 // Fresh module per test so the in-memory mirror starts empty. resetModules
 // also re-instantiates the expo-router / supabase mocks, so the handles the
@@ -25,15 +21,15 @@ async function load() {
   const g = await import('./teaserGate');
   const { router } = await import('expo-router');
   const { supabase } = await import('./supabase');
-  const api = await import('./apiClient');
+  const syncPaywallVerdict = jest.fn();
+  g.registerPaywallVerdictSync(syncPaywallVerdict);
   (supabase.auth.getSession as jest.Mock).mockResolvedValue({ data: { session: { user: { id: 'u1' } } } });
   return {
     ...g,
     push: router.push as jest.Mock,
     replace: router.replace as jest.Mock,
     getSession: supabase.auth.getSession as jest.Mock,
-    fetchSubscriptionStatus: api.fetchSubscriptionStatus as jest.Mock,
-    syncSubscription: api.syncSubscription as jest.Mock,
+    syncPaywallVerdict,
   };
 }
 
@@ -126,7 +122,7 @@ describe('routeToPaywall', () => {
     await g.routeToPaywall();
     expect(g.push).toHaveBeenLastCalledWith('/welcome/signin');
     g.getSession.mockResolvedValueOnce({ data: { session: { user: { id: 'u1' } } } });
-    g.fetchSubscriptionStatus.mockResolvedValueOnce({ verdict: 'never_subscribed' });
+    g.syncPaywallVerdict.mockResolvedValueOnce('never_subscribed');
     await g.routeToPaywall({ replace: true });
     expect(g.replace).toHaveBeenLastCalledWith('/welcome/payment');
   });
@@ -134,15 +130,23 @@ describe('routeToPaywall', () => {
   it('sends a signed-in *lapsed* subscriber to the win-back screen, not the free-trial paywall', async () => {
     const g = await load();
     g.getSession.mockResolvedValueOnce({ data: { session: { user: { id: 'u1' } } } });
-    g.fetchSubscriptionStatus.mockResolvedValueOnce({ verdict: 'expired' });
+    g.syncPaywallVerdict.mockResolvedValueOnce('expired');
     await g.routeToPaywall();
     expect(g.push).toHaveBeenLastCalledWith('/welcome/resubscribe');
+  });
+
+  it('uses the provider-applied active verdict to leave a newly entitled user in place', async () => {
+    const g = await load();
+    g.syncPaywallVerdict.mockResolvedValueOnce('active');
+    await g.routeToPaywall();
+    expect(g.syncPaywallVerdict).toHaveBeenCalledTimes(1);
+    expect(g.push).not.toHaveBeenCalled();
   });
 
   it('holds a signed-in account when the backend cannot verify its history', async () => {
     const g = await load();
     g.getSession.mockResolvedValueOnce({ data: { session: { user: { id: 'u1' } } } });
-    g.fetchSubscriptionStatus.mockRejectedValueOnce(new Error('offline'));
+    g.syncPaywallVerdict.mockRejectedValueOnce(new Error('offline'));
     await g.routeToPaywall();
     expect(g.push).toHaveBeenLastCalledWith('/welcome/subscription-check');
   });
@@ -150,25 +154,24 @@ describe('routeToPaywall', () => {
   it('reconciles an unknown row before choosing the lapsed route', async () => {
     const g = await load();
     g.getSession.mockResolvedValueOnce({ data: { session: { user: { id: 'u1' } } } });
-    g.fetchSubscriptionStatus.mockResolvedValueOnce({ verdict: 'unknown' });
-    g.syncSubscription.mockResolvedValueOnce({ verdict: 'expired' });
+    g.syncPaywallVerdict.mockResolvedValueOnce('expired');
     await g.routeToPaywall();
     expect(g.push).toHaveBeenLastCalledWith('/welcome/resubscribe');
   });
 
   it('ignores a lapsed response after the signed-in account changes', async () => {
     const g = await load();
-    let finishStatus!: (value: { verdict: string }) => void;
+    let finishStatus!: (value: string) => void;
     let statusRequested!: () => void;
     const requested = new Promise<void>(resolve => { statusRequested = resolve; });
-    g.fetchSubscriptionStatus.mockImplementationOnce(() => {
+    g.syncPaywallVerdict.mockImplementationOnce(() => {
       statusRequested();
       return new Promise(resolve => { finishStatus = resolve; });
     });
     const pending = g.routeToPaywall();
     await requested;
     g.getSession.mockResolvedValue({ data: { session: { user: { id: 'u2' } } } });
-    finishStatus({ verdict: 'expired' });
+    finishStatus('expired');
     await pending;
     expect(g.push).not.toHaveBeenCalled();
     expect(g.replace).not.toHaveBeenCalled();

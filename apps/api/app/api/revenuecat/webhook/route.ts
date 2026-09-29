@@ -2,10 +2,10 @@ import { timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/restaurantService";
 import {
-  logStatusChange,
   readUserAndRow,
   syncSubscriptionFromRevenueCat,
 } from "@/lib/subscription";
+import { persistEvent } from "./persistEvent";
 
 /** Constant-time compare for the webhook auth header (avoids timing leaks). */
 function safeEqual(a: string, b: string): boolean {
@@ -267,25 +267,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ received: true }, { status: 200 });
     }
 
-    await prisma.subscription.upsert({
-      where: { userId: appUserId },
-      create: {
-        userId: appUserId,
-        plan,
-        status,
-        expiresAt,
-        appleTransactionId,
-        lastEventAt: eventAt,
-      },
-      update: {
-        plan,
-        status,
-        expiresAt,
-        appleTransactionId,
-        lastEventAt: eventAt,
-      },
-    });
-    logStatusChange(appUserId, existing?.status ?? null, status, "webhook");
+    await persistEvent({ userId: appUserId, existing, plan, status, expiresAt, appleTransactionId, eventAt });
 
     return NextResponse.json({ received: true }, { status: 200 });
   } catch {

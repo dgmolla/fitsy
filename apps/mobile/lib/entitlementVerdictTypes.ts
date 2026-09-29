@@ -18,6 +18,7 @@ export interface EntitlementVerdict {
    * (`entitled` unchanged); `false` without a session, with no request made.
    */
   syncEntitlement: (reason: EntitlementSyncReason) => Promise<boolean | null>;
+  syncForPaywall: () => Promise<SubscriptionVerdict>;
   /**
    * Boot: bounded cache, server, and RevenueCat identity reads run in
    * parallel, then one fold: server, else cache, else the device.

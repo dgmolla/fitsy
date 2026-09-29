@@ -29,6 +29,7 @@ export function onboardingEntry(state: EntryState): EntryDestination {
     if (!state.purchasesReady) return null;
     return state.access === 'preview' ? '/welcome/preview' : '/welcome/payment';
   }
+  if (state.isLapsed && state.entitled !== true) return '/welcome/resubscribe';
   if (!state.hasTargets) return '/macro-setup';
-  return state.entitled === true || !state.isLapsed ? '/(tabs)/search' : '/welcome/resubscribe';
+  return '/(tabs)/search';
 }

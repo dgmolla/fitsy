@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { supabase } from './supabase';
 import { rememberPaywallIntent, type PaywallIntent } from './paywallIntent';
-import { fetchSubscriptionStatus, syncSubscription } from './apiClient';
+import type { SubscriptionVerdict } from './apiClient';
 import { readPaywallDecline } from './paywallAccess';
 import { clearOnboardingPreviewEntry } from './onboardingPreviewEntry';
 
@@ -83,6 +83,13 @@ export function markPreviewSampleUsed(): void {
 // otherwise fire two independent navigations (two overlapping getSession()
 // calls, two router.push calls) before either resolves.
 let navigating = false;
+let paywallVerdictSync: (() => Promise<SubscriptionVerdict>) | null = null;
+
+/** The mounted purchases provider owns both the API read and the applied gate. */
+export function registerPaywallVerdictSync(sync: () => Promise<SubscriptionVerdict>): () => void {
+  paywallVerdictSync = sync;
+  return () => { if (paywallVerdictSync === sync) paywallVerdictSync = null; };
+}
 
 /**
  * Sends a locked-out browser to the right paywall entry point:
@@ -117,13 +124,12 @@ export async function routeToPaywall(options: { replace?: boolean; intent?: Payw
         // which paywall is appropriate. A failed or stale lookup is never a
         // claim that this account has not subscribed before.
         target = '/welcome/subscription-check';
-        let status = await fetchSubscriptionStatus();
-        if (status.verdict === 'unknown') status = await syncSubscription('mismatch');
+        const verdict = await paywallVerdictSync?.() ?? 'unknown';
         const current = await supabase.auth.getSession();
         if (current.data.session?.user.id !== data.session.user.id) return;
-        if (status.verdict === 'expired') target = '/welcome/resubscribe';
-        else if (status.verdict === 'never_subscribed') target = '/welcome/payment';
-        else if (status.verdict === 'active') return;
+        if (verdict === 'expired') target = '/welcome/resubscribe';
+        else if (verdict === 'never_subscribed') target = '/welcome/payment';
+        else if (verdict === 'active') return;
       }
     } catch {
       target = '/welcome/subscription-check';

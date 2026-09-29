@@ -4,15 +4,17 @@
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
 const mockReadUserAndRow = jest.fn();
-const mockSubscriptionUpsert = jest.fn();
+const mockSubscriptionCreate = jest.fn();
 const mockSubscriptionUpdateMany = jest.fn();
+const mockSubscriptionFindUnique = jest.fn();
 const mockSync = jest.fn();
 const mockLogStatusChange = jest.fn();
 
 jest.mock("@/lib/restaurantService", () => ({
   prisma: {
     subscription: {
-      upsert: mockSubscriptionUpsert,
+      create: mockSubscriptionCreate,
+      findUnique: mockSubscriptionFindUnique,
       updateMany: mockSubscriptionUpdateMany,
     },
   },
@@ -35,7 +37,8 @@ beforeEach(() => {
   jest.resetAllMocks();
   process.env["REVENUECAT_WEBHOOK_AUTH"] = AUTH;
   mockReadUserAndRow.mockResolvedValue({ userExists: true, row: null });
-  mockSubscriptionUpsert.mockResolvedValue({});
+  mockSubscriptionCreate.mockResolvedValue({});
+  mockSubscriptionUpdateMany.mockResolvedValue({ count: 1 });
   warn = jest.spyOn(console, "warn").mockImplementation(() => {});
 });
 
@@ -47,10 +50,9 @@ afterEach(() => {
 describe("POST /api/revenuecat/webhook - idempotency", () => {
   it("stamps lastEventAt with the event time on a fresh write", async () => {
     await POST(makeRequest(event(), AUTH));
-    expect(mockSubscriptionUpsert).toHaveBeenCalledWith(
+    expect(mockSubscriptionCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        create: expect.objectContaining({ lastEventAt: new Date(EVENT_MS) }),
-        update: expect.objectContaining({ lastEventAt: new Date(EVENT_MS) }),
+        data: expect.objectContaining({ lastEventAt: new Date(EVENT_MS) }),
       }),
     );
   });
@@ -59,7 +61,7 @@ describe("POST /api/revenuecat/webhook - idempotency", () => {
     mockReadUserAndRow.mockResolvedValue({ userExists: true, row: { status: "active", lastEventAt: new Date(EVENT_MS) } });
     const res = await POST(makeRequest(event(), AUTH));
     expect(res.status).toBe(200);
-    expect(mockSubscriptionUpsert).toHaveBeenCalledTimes(1);
+    expect(mockSubscriptionUpdateMany).toHaveBeenCalledTimes(1);
     expect(mockLogStatusChange).toHaveBeenCalledWith("user-1", "active", "active", "webhook");
     expect(mockSync).not.toHaveBeenCalled();
   });
@@ -71,7 +73,7 @@ describe("POST /api/revenuecat/webhook - idempotency", () => {
     });
     const res = await POST(makeRequest(event({ type: "RENEWAL", expiration_at_ms: EXP_MS }), AUTH));
     expect(res.status).toBe(200);
-    expect(mockSubscriptionUpsert).not.toHaveBeenCalled();
+    expect(mockSubscriptionUpdateMany).not.toHaveBeenCalled();
     expect(mockSync).not.toHaveBeenCalled();
     expect(warn).not.toHaveBeenCalled();
   });
@@ -89,7 +91,7 @@ describe("POST /api/revenuecat/webhook - idempotency", () => {
       makeRequest(event({ type: "RENEWAL", expiration_at_ms: EXP_MS + 30 * 24 * 3600 * 1000 }), AUTH),
     );
     expect(res.status).toBe(200);
-    expect(mockSubscriptionUpsert).not.toHaveBeenCalled();
+    expect(mockSubscriptionUpdateMany).not.toHaveBeenCalled();
     expect(mockSync).toHaveBeenCalledWith("user-1");
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("expiresAt"));
   });
@@ -101,7 +103,7 @@ describe("POST /api/revenuecat/webhook - idempotency", () => {
       makeRequest(event({ type: "EXPIRATION", expiration_at_ms: Date.now() - 1000 }), AUTH),
     );
     expect(res.status).toBe(200);
-    expect(mockSubscriptionUpsert).not.toHaveBeenCalled();
+    expect(mockSubscriptionUpdateMany).not.toHaveBeenCalled();
     expect(mockSync).toHaveBeenCalledWith("user-1");
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("[subscription] user-1 stale EXPIRATION"));
   });
@@ -113,7 +115,7 @@ describe("POST /api/revenuecat/webhook - idempotency", () => {
       makeRequest(event({ type: "EXPIRATION", expiration_at_ms: Date.now() - 1000 }), AUTH),
     );
     expect(res.status).toBe(500);
-    expect(mockSubscriptionUpsert).not.toHaveBeenCalled();
+    expect(mockSubscriptionUpdateMany).not.toHaveBeenCalled();
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("tiebreak sync failed"));
   });
 
@@ -122,19 +124,41 @@ describe("POST /api/revenuecat/webhook - idempotency", () => {
     await POST(
       makeRequest(event({ type: "EXPIRATION", expiration_at_ms: Date.now() - 1000 }), AUTH),
     );
-    expect(mockSubscriptionUpsert).toHaveBeenCalledWith(
+    expect(mockSubscriptionUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        update: expect.objectContaining({ status: "expired", lastEventAt: new Date(EVENT_MS) }),
+        data: expect.objectContaining({ status: "expired", lastEventAt: new Date(EVENT_MS) }),
       }),
     );
+  });
+
+  it("cannot overwrite a renewal that lands after the webhook's row read", async () => {
+    mockReadUserAndRow.mockResolvedValue({ userExists: true, row: {
+      status: "active", expiresAt: new Date(EXP_MS), lastEventAt: new Date(EVENT_MS - 60_000),
+    } });
+    mockSubscriptionUpdateMany.mockResolvedValueOnce({ count: 0 });
+    const res = await POST(makeRequest(event({ type: "EXPIRATION", expiration_at_ms: EVENT_MS - 1_000 }), AUTH));
+    expect(res.status).toBe(200);
+    expect(mockSubscriptionUpdateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { userId: "user-1", OR: [{ lastEventAt: null }, { lastEventAt: { lte: new Date(EVENT_MS) } }] },
+      data: expect.objectContaining({ status: "expired" }),
+    }));
+    expect(mockLogStatusChange).not.toHaveBeenCalled();
+  });
+
+  it("does not replace a newer purchase when a first-row insert races it", async () => {
+    mockSubscriptionCreate.mockRejectedValueOnce(Object.assign(new Error("unique"), { code: "P2002" }));
+    mockSubscriptionFindUnique.mockResolvedValueOnce({ status: "active", lastEventAt: new Date(EVENT_MS + 60_000) });
+    const res = await POST(makeRequest(event({ type: "EXPIRATION", expiration_at_ms: EVENT_MS - 1_000 }), AUTH));
+    expect(res.status).toBe(200);
+    expect(mockSubscriptionUpdateMany).not.toHaveBeenCalled();
   });
 
   it("applies an event with no timestamp as 'now' rather than dropping it", async () => {
     const before = Date.now();
     mockReadUserAndRow.mockResolvedValue({ userExists: true, row: { status: "expired", lastEventAt: new Date(EVENT_MS) } });
     await POST(makeRequest(event({ event_timestamp_ms: undefined }), AUTH));
-    expect(mockSubscriptionUpsert).toHaveBeenCalledTimes(1);
-    const stamped = mockSubscriptionUpsert.mock.calls[0][0].update.lastEventAt as Date;
+    expect(mockSubscriptionUpdateMany).toHaveBeenCalledTimes(1);
+    const stamped = mockSubscriptionUpdateMany.mock.calls[0][0].data.lastEventAt as Date;
     expect(stamped.getTime()).toBeGreaterThanOrEqual(before);
   });
 
@@ -147,13 +171,13 @@ describe("POST /api/revenuecat/webhook - idempotency", () => {
     });
     const res = await POST(makeRequest(event({ event_timestamp_ms: EVENT_MS, expiration_at_ms: EXP_MS }), AUTH));
     expect(res.status).toBe(200);
-    expect(mockSubscriptionUpsert).not.toHaveBeenCalled();
+    expect(mockSubscriptionUpdateMany).not.toHaveBeenCalled();
     expect(mockSync).not.toHaveBeenCalled();
   });
 
   it("still applies an event when the row has no lastEventAt yet (pre-migration rows)", async () => {
     mockReadUserAndRow.mockResolvedValue({ userExists: true, row: { status: "active", lastEventAt: null } });
     await POST(makeRequest(event({ event_timestamp_ms: EVENT_MS - 10 * 365 * 24 * 3600 * 1000 }), AUTH));
-    expect(mockSubscriptionUpsert).toHaveBeenCalledTimes(1);
+    expect(mockSubscriptionUpdateMany).toHaveBeenCalledTimes(1);
   });
 });

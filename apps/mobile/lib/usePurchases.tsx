@@ -19,6 +19,7 @@ import { usePurchaseIntroEligibility } from './usePurchaseIntroEligibility';
 import { withinMs } from './async';
 import { BOOT_VERDICT_CAP_MS, useEntitlementVerdict } from './useEntitlementVerdict';
 import { useAuthLifecycle } from './useAuthLifecycle';
+import { registerPaywallVerdictSync } from './teaserGate';
 import type { PurchasesContextValue } from './purchasesContextTypes';
 export type { PurchasesContextValue } from './purchasesContextTypes';
 import {
@@ -70,6 +71,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     setCustomerInfoSettled(true);
   }, []);
   const verdict = useEntitlementVerdict({ customerInfoRef });
+  useEffect(() => registerPaywallVerdictSync(verdict.syncForPaywall), [verdict.syncForPaywall]);
   const { entitled, inStoreGrace, syncEntitlement, resolveAtBoot, settleAfterBootFailure, markStoreConfirmed } = verdict;
   const auth = useAuthLifecycle({ verdict, setCustomerInfo });
 
