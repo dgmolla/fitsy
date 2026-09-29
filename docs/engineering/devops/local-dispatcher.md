@@ -27,4 +27,5 @@ Every raw XCTest attachment is cloned outside the device and hash-checked before
 The delete intent also binds archived build and report proof so an interrupted deletion can finish its receipt even if the checkout changes afterward.
 The private retirement receipt records the source-to-archive mapping, checks, and measured free space, while incomplete or blocked claims retain their devices.
 The scan rotates past held devices, and a durable delete intent lets the next tick reconcile an interrupted deletion without guessing that an absent device was retired.
+If a held device outlives the bounded in-memory history, the dispatcher resolves its exact verified claim from the durable claim receipt.
 This deliberately retains all raw attachments, including files not referenced by the final report, so retirement does not also become an evidence-pruning policy.

@@ -241,6 +241,35 @@ class DispatcherProcessTest(unittest.TestCase):
             self.assertEqual(state['simulator_retirement'][udids[1]]['status'], 'retired')
             self.assertEqual([call.kwargs['issue'] for call in retire.call_args_list], [412, 413])
 
+    def test_pruned_history_uses_exact_durable_verified_claim(self):
+        claim_id = '12345678-1234-1234-1234-123456789abc'
+        worktree = self.worktrees / f'fitsy-issue-412-{claim_id[:8]}'
+        build = worktree / '.evidence/product-build'
+        build.mkdir(parents=True)
+        udid = '9EC11FCA-B224-4380-A91D-235ED2BBF7C4'
+        (build / 'receipt.json').write_text(json.dumps({'simulator': udid}))
+        saved = self.state / 'claims' / claim_id / 'receipt.json'
+        saved.parent.mkdir(parents=True)
+        claim = {'terminal': 'verified', 'issue': 412, 'id': claim_id,
+                 'branch': 'issue-412', 'worktree': str(worktree)}
+        saved.write_text(json.dumps(claim))
+        config = json.loads(self.config.read_text())
+        state = {'active': None, 'verified': {'412': {'id': claim_id, 'issue': 412,
+                 'branch': 'issue-412'}}, 'history': [{'terminal': 'verified', 'issue': 999}] * 100}
+        path = self.state / 'state.json'
+        with mock.patch.object(dispatcher, 'board', return_value=[item(412, status='Done')]), \
+             mock.patch.object(dispatcher, 'terminal_verified', return_value=True), \
+             mock.patch.object(dispatcher, 'retire_task_device', return_value={
+                'freeBeforeBytes': 100, 'freeAfterBytes': 200}) as retire:
+            dispatcher.retire_verified_simulator(config, state, path)
+            retire.assert_called_once()
+            self.assertEqual(state['simulator_retirement'][udid]['status'], 'retired')
+        state['simulator_retirement'] = {}
+        saved.write_text(json.dumps({**claim, 'id': 'wrong-claim'}))
+        with mock.patch.object(dispatcher, 'retire_task_device') as retire:
+            dispatcher.retire_verified_simulator(config, state, path)
+            retire.assert_not_called()
+
     def test_idle_ready_pickup_race_and_next_dependency(self):
         self.set_board([item(385), item(351, dependencies='#385')])
         self.env['FAKE_WORKER_MODE'] = 'sleep'

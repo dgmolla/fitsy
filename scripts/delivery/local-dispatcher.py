@@ -542,9 +542,14 @@ def retire_verified_simulator(config, state, state_path):
         matching = [entry for entry in state.get('history', []) if
                     entry.get('terminal') == 'verified' and entry.get('issue') == issue and
                     entry.get('id') == claim_id and entry.get('branch') == identity.get('branch')]
-        if len(matching) != 1:
+        if len(matching) > 1:
             continue
-        worktree = Path(matching[0].get('worktree', '')).resolve()
+        claim = matching[0] if matching else read_json(
+            Path(config['state_dir']) / 'claims' / claim_id / 'receipt.json', {})
+        if (claim.get('terminal') != 'verified' or claim.get('issue') != issue or
+                claim.get('id') != claim_id or claim.get('branch') != identity.get('branch')):
+            continue
+        worktree = Path(claim.get('worktree', '')).resolve()
         expected = Path(config['worktree_root']).resolve() / f'fitsy-issue-{issue}-{claim_id[:8]}'
         if worktree != expected:
             continue
