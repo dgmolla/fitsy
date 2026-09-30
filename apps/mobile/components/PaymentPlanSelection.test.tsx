@@ -127,6 +127,7 @@ test('an explicit paid plan choice overrides the monthly trial and remains the p
   });
   const screen = renderRouter(routes, { initialUrl: '/welcome/payment' });
   await waitFor(() => expect(screen.getByTestId('paywall-plan-monthly').props.accessibilityState.checked).toBe(true));
+  await waitFor(() => expect(screen.getByTestId('welcome-continue').props.accessibilityState.disabled).toBe(false));
   await act(async () => { fireEvent.press(screen.getByTestId('paywall-plan-yearly')); });
   expect(screen.getByTestId('paywall-plan-yearly').props.accessibilityState.checked).toBe(true);
   expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).not.toContain('free trial');
@@ -161,7 +162,7 @@ test('a CustomerInfo refresh cannot switch a monthly trial to a paid annual purc
   }).mockImplementationOnce(() => new Promise(resolve => { settleEligibility = resolve; }));
   const screen = renderRouter(routes, { initialUrl: '/welcome/payment' });
   await waitFor(() => expect(screen.getByTestId('paywall-plan-monthly').props.accessibilityState.checked).toBe(true));
-  expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toContain('free trial');
+  await waitFor(() => expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toContain('free trial'));
 
   const updatedInfo = { ...noSubscription } as CustomerInfo;
   (Purchases.getCustomerInfo as jest.Mock).mockResolvedValue(updatedInfo);

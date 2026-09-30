@@ -97,8 +97,9 @@ test('development visual trial uses live price but never enters checkout or rest
 
 test('development visual flag stays on the three real welcome screens', async () => {
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial?devTrialVisual=1' });
-  await waitFor(() => expect(screen.getByText('Meet Fitsy Pro')).toBeTruthy());
-  expect(screen.getByTestId('trial-offer-note').props.children).toContain('Synthetic trial (14 days)');
+  await waitFor(() => expect(screen.getByText('Try Fitsy')).toBeTruthy());
+  expect(screen.getByTestId('trial-no-payment')).toBeTruthy();
+  expect(screen.queryByTestId('trial-offer-note')).toBeNull();
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/trial-reminder'));
   expect(screen.getByTestId('trial-reminder-note').props.children).toContain('Synthetic trial eligibility');
@@ -252,7 +253,7 @@ test('monthly-only trial routes through reminder to monthly checkout and purchas
     annual: { status: 1, description: 'Ineligible' }, monthly: { status: 2, description: 'Eligible' },
   });
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
-  await waitFor(() => expect(screen.getByText('Meet Fitsy Pro')).toBeTruthy());
+  await waitFor(() => expect(screen.getByText('Try Fitsy')).toBeTruthy());
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/trial-reminder'));
   await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-skip')); });
