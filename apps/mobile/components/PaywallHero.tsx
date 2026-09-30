@@ -1,55 +1,53 @@
 import React from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { DISHES } from '@/lib/dishImages';
 import { EDITORIAL, FONTS } from '@/lib/brand';
+import { RestaurantPhoto } from './RestaurantPhoto';
+import type { PaywallDiscovery } from '@/lib/usePaywallDiscovery';
 
-/** An illustrative Fitsy result using the same dish photography as welcome. */
-export function PaywallHero({ compact = false }: { compact?: boolean }) {
-  return <View style={[s.hero, compact && s.heroCompact]} testID="paywall-hero" accessibilityLabel="Illustrative Fitsy meal result preview">
-    <View style={s.mosaic} accessible={false} importantForAccessibility="no-hide-descendants">
-      <Image source={DISHES[3]} style={[s.tile, s.tileOne]} />
-      <Image source={DISHES[8]} style={[s.tile, s.tileTwo]} />
-      <Image source={DISHES[14]} style={[s.tile, s.tileThree]} />
-      <Image source={DISHES[19]} style={[s.tile, s.tileFour]} />
-      <View style={s.softener} />
-    </View>
-    <View style={[s.preview, compact && s.previewCompact]}>
-      <Image source={DISHES[0]} style={[s.mealPhoto, compact && s.mealPhotoCompact]} resizeMode="cover" accessibilityLabel="Illustrative chicken bowl" />
-      <View style={[s.previewInfo, compact && s.previewInfoCompact]}>
-        <Text style={s.previewEyebrow}>FITSY MEAL PREVIEW</Text>
-        <Text style={[s.mealName, compact && s.mealNameCompact]} numberOfLines={1}>Chicken bowl</Text>
-        <View style={[s.fitRow, compact && s.fitRowCompact]}><Ionicons name="sparkles" size={13} color={EDITORIAL.green} /><Text style={s.fitText}>Fit score for your goals</Text></View>
-        <Text style={[s.macroHeading, compact && s.macroHeadingCompact]}>ESTIMATED NUTRITION</Text>
-        <Text style={s.macros} numberOfLines={2}>Calories  ·  Protein  ·  Carbs  ·  Fat</Text>
+/** Welcome imagery continues across the upper screen behind the real preview. */
+export function PaywallMosaic({ height }: { height: number }) {
+  return <View pointerEvents="none" style={[s.mosaic, { height }]} testID="paywall-mosaic" accessible={false} importantForAccessibility="no-hide-descendants">
+    {DISHES.slice(0, 15).map((source, index) => {
+      const column = index % 3;
+      const row = Math.floor(index / 3);
+      return <Image key={index} source={source} style={[s.tile, {
+        left: `${column * 34 - 1}%`, top: row * 91 - (column === 1 ? 44 : 12),
+        transform: [{ rotate: column === 1 ? '3deg' : '-3deg' }],
+      }]} resizeMode="cover" />;
+    })}
+    <LinearGradient colors={['rgba(253,251,247,0.48)', 'rgba(253,251,247,0.70)', EDITORIAL.cream]} locations={[0, 0.58, 1]} style={StyleSheet.absoluteFillObject} />
+  </View>;
+}
+
+/** Restaurant identity and photo are sourced from the selection or live catalog. */
+export function PaywallHero({ discovery }: { discovery: PaywallDiscovery }) {
+  const restaurant = discovery.selected;
+  return <View style={s.frame} testID="paywall-hero">
+    {restaurant ? <View style={s.card} testID="paywall-restaurant-card">
+      <RestaurantPhoto uri={restaurant.photoUrl} name={restaurant.name} style={s.photo} />
+      <View style={s.info}>
+        <Text style={s.eyebrow}>{discovery.catalogFallback ? 'FROM THE LOS ANGELES CATALOG' : 'YOUR PREVIEW PICK'}</Text>
+        <Text style={s.name} numberOfLines={2} testID="paywall-restaurant-name">{restaurant.name}</Text>
+        <Text style={s.detail}>Explore meals and estimated nutrition</Text>
       </View>
-    </View>
+    </View> : <View style={[s.card, s.empty]} testID="paywall-restaurant-unavailable">
+      <Text style={s.eyebrow}>{discovery.loading ? 'FINDING YOUR PREVIEW' : 'EXPLORE WITH FITSY'}</Text>
+      <Text style={s.detail}>{discovery.loading ? 'Loading a restaurant from your preview…' : 'Discover restaurants in Los Angeles'}</Text>
+    </View>}
   </View>;
 }
 
 const s = StyleSheet.create({
-  hero: { height: 178, marginBottom: 18, borderRadius: 22, overflow: 'hidden', backgroundColor: EDITORIAL.greenAccentTint, justifyContent: 'center' },
-  heroCompact: { height: 130, marginBottom: 10 },
-  mosaic: { ...StyleSheet.absoluteFillObject },
-  tile: { position: 'absolute', width: '48%', height: 98, borderRadius: 13, opacity: 0.32 },
-  tileOne: { left: -18, top: -34, transform: [{ rotate: '-9deg' }] },
-  tileTwo: { right: -16, top: -31, transform: [{ rotate: '9deg' }] },
-  tileThree: { left: -32, bottom: -40, transform: [{ rotate: '8deg' }] },
-  tileFour: { right: -28, bottom: -40, transform: [{ rotate: '-8deg' }] },
-  softener: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(253,251,247,0.43)' },
-  preview: { marginHorizontal: 25, height: 136, borderRadius: 18, backgroundColor: EDITORIAL.cream, flexDirection: 'row', overflow: 'hidden', borderWidth: 1, borderColor: EDITORIAL.border, shadowColor: EDITORIAL.green, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.14, shadowRadius: 14, elevation: 4 },
-  previewCompact: { marginHorizontal: 14, height: 108 },
-  mealPhoto: { width: 104, height: '100%' },
-  mealPhotoCompact: { width: 83 },
-  previewInfo: { flex: 1, minWidth: 0, paddingHorizontal: 13, paddingVertical: 12, justifyContent: 'center' },
-  previewInfoCompact: { paddingVertical: 7 },
-  previewEyebrow: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 9, letterSpacing: 1.2, color: EDITORIAL.textMid },
-  mealName: { fontFamily: FONTS.frauncesDisplayBold, fontSize: 19, lineHeight: 25, color: EDITORIAL.green, marginTop: 2 },
-  mealNameCompact: { fontSize: 17, lineHeight: 21 },
-  fitRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 5 },
-  fitRowCompact: { marginTop: 2 },
-  fitText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 10, color: EDITORIAL.green },
-  macroHeading: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 8, letterSpacing: 0.8, color: EDITORIAL.textMid, marginTop: 9 },
-  macroHeadingCompact: { marginTop: 5 },
-  macros: { fontFamily: FONTS.nunitoSans, fontSize: 10, lineHeight: 14, color: EDITORIAL.green, marginTop: 1 },
+  mosaic: { position: 'absolute', top: 0, left: 0, right: 0, overflow: 'hidden', backgroundColor: EDITORIAL.cream },
+  tile: { position: 'absolute', width: '32%', height: 112, borderRadius: 9 },
+  frame: { marginTop: 36, marginBottom: 13, paddingHorizontal: 22 },
+  card: { minHeight: 106, flexDirection: 'row', overflow: 'hidden', borderRadius: 18, backgroundColor: EDITORIAL.cream, borderWidth: 1, borderColor: EDITORIAL.border, shadowColor: EDITORIAL.green, shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.16, shadowRadius: 14, elevation: 4 },
+  photo: { width: 102, height: 106 },
+  info: { flex: 1, minWidth: 0, justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 9 },
+  eyebrow: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 9, letterSpacing: 1, color: EDITORIAL.textMid },
+  name: { fontFamily: FONTS.frauncesDisplayBold, fontSize: 19, lineHeight: 24, color: EDITORIAL.green, marginTop: 3 },
+  detail: { fontFamily: FONTS.nunitoSans, fontSize: 11, lineHeight: 15, color: EDITORIAL.textMid, marginTop: 3 },
+  empty: { flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 12 },
 });

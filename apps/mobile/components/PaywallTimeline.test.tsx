@@ -19,6 +19,7 @@ const product = { priceString: '$59.99', subscriptionPeriod: 'P1Y',
 const annual = purchaseTerms(product, true);
 const monthly = purchaseTerms({ ...product, priceString: '$9.99', subscriptionPeriod: 'P1M', introPrice: null }, false);
 function props() { return { annual, monthly, plan: 'yearly' as const, loading: false, restoring: false, checkingPlans: false,
+  annualSavingPercent: 50, discovery: { selected: { id: 'r1', name: 'Actual Preview Pick', photoUrl: 'https://example.com/restaurant.jpg' } },
   onSelect: jest.fn(), onRestore: jest.fn(), onManage: jest.fn(), onRetry: jest.fn(), onPurchase: jest.fn(), onDecline: jest.fn() }; }
 
 test('timeline derives trial end and reminder day from the selected store offer', () => {
@@ -97,25 +98,24 @@ test('calendar trials are not converted to invented day counts', () => {
   expect(screen.queryByText(/Day 30/)).toBeNull();
 });
 
-test('the selected short trial has a truthful reminder step, even after a longer plan offered opt-in', () => {
+test('the final paywall has selected offer terms without repeating the trial timeline', () => {
   const short = purchaseTerms({ ...product, subscriptionPeriod: 'P1M', introPrice: { ...product.introPrice, period: 'P2D' } }, true);
   const p = { ...props(), monthly: short };
   const screen = render(<PaywallView {...p} />);
-  expect(screen.getByText('Day 6: optional reminder')).toBeTruthy();
+  expect(screen.queryByTestId('paywall-timeline')).toBeNull();
   screen.rerender(<PaywallView {...p} plan="monthly" />);
-  expect(screen.getByText('Reminder unavailable for this trial')).toBeTruthy();
-  expect(screen.getByText('Day 2: first charge')).toBeTruthy();
-  expect(screen.queryByText('Day 6: optional reminder')).toBeNull();
   expect(screen.getByTestId('paywall-terms').props.children).toContain('2 days free');
   screen.rerender(<PaywallView {...p} plan="yearly" />);
-  expect(screen.getByText('Day 6: optional reminder')).toBeTruthy();
+  expect(screen.getByTestId('paywall-terms').props.children).toContain('7 days free');
 });
 
 test('plan selection, purchase, restore and decline remain operable with live totals', () => {
   const p = props();
   const screen = render(<PaywallView {...p} />);
   expect(screen.getByText('Find meals that fit.')).toBeTruthy();
-  expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toBe('Start 7-day free trial');
+  expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toBe('Start free trial');
+  expect(screen.getByTestId('paywall-restaurant-name').props.children).toBe('Actual Preview Pick');
+  expect(screen.getByTestId('paywall-annual-saving').props.children).toEqual(['Save ', 50, '%']);
   expect(screen.getByTestId('paywall-price-yearly').props.children).toBe('$59.99');
   fireEvent.press(screen.getByTestId('paywall-plan-monthly'));
   expect(p.onSelect).toHaveBeenCalledWith('monthly');
@@ -130,7 +130,7 @@ test('plan selection, purchase, restore and decline remain operable with live to
   screen.rerender(<PaywallView {...p} plan="monthly" />);
   expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toBe('Continue to purchase');
   expect(screen.getByTestId('paywall-terms').props.children).toContain('Fitsy Pro');
-  expect(screen.getByText('$9.99 charged when you confirm your purchase.')).toBeTruthy();
+  expect(screen.getByTestId('paywall-terms').props.children).toContain('$9.99 when you confirm');
   expect(screen.queryByText(/trial access/i)).toBeNull();
 });
 

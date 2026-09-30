@@ -53,3 +53,13 @@ export function savingPercent(regular: ComparableProduct | null | undefined, dis
     !Number.isFinite(regular.price) || !Number.isFinite(discounted.price) || regular.price <= 0 || discounted.price < 0 || discounted.price >= regular.price) return null;
   return Math.round((1 - discounted.price / regular.price) * 100);
 }
+
+/** Annual price against twelve months from the same store and currency. */
+export function annualSavingPercent(annual: ComparableProduct | null | undefined, monthly: ComparableProduct | null | undefined): number | null {
+  if (!annual || !monthly || annual.currencyCode !== monthly.currencyCode ||
+    annual.subscriptionPeriod !== 'P1Y' || monthly.subscriptionPeriod !== 'P1M' ||
+    !Number.isFinite(annual.price) || !Number.isFinite(monthly.price) ||
+    annual.price <= 0 || monthly.price <= 0) return null;
+  const percent = Math.round((1 - annual.price / (monthly.price * 12)) * 100);
+  return percent > 0 && percent < 100 ? percent : null;
+}

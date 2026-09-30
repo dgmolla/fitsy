@@ -47,7 +47,7 @@ it('does not retain a previous selection when refocusing after a storage failure
   await act(async () => { rerender({ focused: true }); });
   await settleDiscovery();
   expect(result.current.selected).toBeUndefined();
-  expect(global.fetch).not.toHaveBeenCalled();
+  expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/api/restaurants/preview?lat=34.0522&lng=-118.2437'), expect.any(Object));
 });
 
 it('shows the new selection after refocusing without consulting cached search results', async () => {
@@ -60,4 +60,11 @@ it('shows the new selection after refocusing without consulting cached search re
   await waitFor(() => expect(result.current.selected?.id).toBe('new'));
   await settleDiscovery();
   expect(global.fetch).not.toHaveBeenCalled();
+});
+
+it('uses the live Los Angeles catalog when there is no preview selection', async () => {
+  (global.fetch as jest.Mock).mockResolvedValue({ ok: true, json: async () => ({ data: [{ id: 'catalog-1', name: 'Catalog Restaurant', cuisineTags: [], distanceMiles: 1, photoUrl: 'https://example.com/catalog.jpg' }] }) });
+  const { result } = renderHook(() => usePaywallDiscovery(true));
+  await waitFor(() => expect(result.current.selected).toEqual({ id: 'catalog-1', name: 'Catalog Restaurant', photoUrl: 'https://example.com/catalog.jpg' }));
+  expect(result.current.catalogFallback).toBe(true);
 });

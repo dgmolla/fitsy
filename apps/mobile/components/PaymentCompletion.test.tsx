@@ -77,7 +77,7 @@ async function openPayment() {
   jest.setSystemTime(now);
   await waitFor(() => expect(screen.getByTestId('paywall-price-yearly').props.children).toBe('$59.99'));
   await act(async () => {});
-  expect(mockCapture).toHaveBeenCalledWith('paywall_experiment_exposed', expect.objectContaining({ image_variant: 'none', layout_variant: 'trial_timeline' }));
+  expect(mockCapture).toHaveBeenCalledWith('paywall_experiment_exposed', expect.objectContaining({ image_variant: 'meal', layout_variant: 'mosaic_benefits' }));
   return screen;
 }
 
@@ -86,7 +86,7 @@ test('development visual trial uses live price but never enters checkout or rest
   const screen = renderRouter(routes, { initialUrl: '/welcome/payment?devTrialVisual=1' });
   await waitFor(() => expect(screen.getByTestId('dev-trial-visual-note')).toBeTruthy());
   expect(screen.getByTestId('paywall-price-yearly').props.children).toBe('$59.99');
-  expect(screen.getByText('Day 7: first charge')).toBeTruthy();
+  expect(screen.getByTestId('paywall-logo')).toBeTruthy();
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   await act(async () => { fireEvent.press(screen.getByTestId('paywall-restore')); });
   expect(alert).toHaveBeenCalledWith('Visual preview only', expect.any(String));

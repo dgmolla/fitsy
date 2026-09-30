@@ -35,6 +35,12 @@ tags: [billing, onboarding, changed-journey]
 - assertVisible: "Find meals that fit."
 - assertVisible:
     id: paywall-hero
+- assertVisible:
+    id: paywall-logo
+- assertVisible: "Discover meals in Los Angeles"
+- assertVisible: "Find nearby options for your goals"
+- assertVisible: "Compare estimated nutrition"
+- assertVisible: "No commitment, cancel anytime"
 - assertVisible: "Continue to purchase"
 - assertNotVisible: "Try Fitsy free"
 - extendedWaitUntil:
@@ -42,11 +48,8 @@ tags: [billing, onboarding, changed-journey]
       id: paywall-price-yearly
     timeout: 15000
 - assertNotVisible: "Get a trial reminder"
-- scrollUntilVisible:
-    element:
-      id: paywall-timeline
-    direction: DOWN
-- assertVisible: "Your first payment"
+- assertNotVisible:
+    id: paywall-timeline
 - copyTextFrom:
     id: paywall-price-yearly
 - evalScript: ${output.annualPrice = maestro.copiedText}
@@ -56,10 +59,6 @@ tags: [billing, onboarding, changed-journey]
     direction: DOWN
 - tapOn:
     id: paywall-plan-monthly
-- scrollUntilVisible:
-    element:
-      id: paywall-timeline
-    direction: DOWN
 - copyTextFrom:
     id: paywall-price-monthly
 - evalScript: ${output.monthlyPrice = maestro.copiedText}

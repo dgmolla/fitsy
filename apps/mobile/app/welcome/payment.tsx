@@ -13,9 +13,10 @@ import { trackOnboardingScreenView, trackPaywallExperimentExposure } from '@/lib
 import { usePreviewAccess } from '@/lib/usePreviewAccess';
 import { rememberPaywallDecline } from '@/lib/paywallAccess';
 import { openPurchasedDestination, resetWelcomeJourney } from '@/lib/paywallJourney';
-import { purchaseTerms, savingPercent } from '@/lib/purchaseTerms';
+import { annualSavingPercent, purchaseTerms, savingPercent } from '@/lib/purchaseTerms';
 import { devTrialVisualOffer } from '@/lib/devTrialVisualOffer';
 import { clearOnboardingPreviewEntry } from '@/lib/onboardingPreviewEntry';
+import { usePaywallDiscovery } from '@/lib/usePaywallDiscovery';
 
 type PlanId = 'monthly' | 'yearly';
 
@@ -25,6 +26,7 @@ export default function PaymentScreen() {
   useOnboardingStep('payment');
   const navigation = useNavigation();
   const focused = useIsFocused();
+  const discovery = usePaywallDiscovery(focused);
   useEffect(() => {
     if (focused) void clearOnboardingPreviewEntry();
   }, [focused]);
@@ -70,6 +72,7 @@ export default function PaymentScreen() {
   const terms = purchaseTerms(selected?.product, selected ? introEligibility[selected.product.identifier] : false);
   const discountTerms = purchaseTerms(discountedAnnual?.product, discountedAnnual ? introEligibility[discountedAnnual.product.identifier] : false);
   const discountPercent = savingPercent(offering?.annual?.product, discountedAnnual?.product);
+  const annualPercent = annualSavingPercent(shownOffering?.annual?.product, shownOffering?.monthly?.product);
 
   useEffect(() => {
     if (!visualRequested) trackOnboardingScreenView('payment');
@@ -84,10 +87,10 @@ export default function PaymentScreen() {
 
   useEffect(() => {
     if (!offering || visualRequested) return;
-    const key = `${offering.identifier}:${variants.access}:trial_timeline`;
+    const key = `${offering.identifier}:${variants.access}:mosaic_benefits`;
     if (exposure.current === key) return;
     exposure.current = key;
-    trackPaywallExperimentExposure({ offering_id: offering.identifier, access_variant: variants.access, image_variant: 'none', layout_variant: 'trial_timeline' });
+    trackPaywallExperimentExposure({ offering_id: offering.identifier, access_variant: variants.access, image_variant: 'meal', layout_variant: 'mosaic_benefits' });
   }, [offering, variants.access, visualRequested]);
 
   async function declineSubscription() {
@@ -178,6 +181,8 @@ export default function PaymentScreen() {
         plan={plan}
         annual={annualTerms}
         monthly={monthlyTerms}
+        annualSavingPercent={annualPercent}
+        discovery={discovery}
         loading={loading}
         restoring={restoring}
         checkingPlans={checkingPlans}

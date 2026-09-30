@@ -41,13 +41,10 @@ tags: [billing, onboarding, changed-journey]
     timeout: 15000
 - assertVisible:
     id: paywall-hero
-- scrollUntilVisible:
-    element:
-      id: paywall-timeline
-    direction: DOWN
-- assertVisible: "Day 1: trial access"
-- assertVisible: "Day 6: optional reminder|Reminders are off"
-- assertVisible: "Day 7: first charge"
+- assertVisible: "Start free trial"
+- assertVisible: "No commitment, cancel anytime"
+- assertNotVisible:
+    id: paywall-timeline
 - scrollUntilVisible:
     element:
       id: paywall-price-yearly
@@ -56,9 +53,6 @@ tags: [billing, onboarding, changed-journey]
     id: paywall-plan-monthly
 - assertVisible:
     id: paywall-price-monthly
-- scrollUntilVisible:
-    element: "Day 7: first charge"
-    direction: DOWN
 - tapOn:
     id: welcome-back
 - assertVisible:
