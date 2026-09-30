@@ -3,7 +3,7 @@
 The final mobile paywall reads one `paywall_layout_config` value from the current RevenueCat offering metadata.
 Absent or invalid metadata resolves to A-only with version `default-a`.
 Variant A shows the real search hero card and three benefits.
-Variant B shows the same mosaic and purchase controls with a selected-offer timeline.
+Variant B shows the same mosaic and purchase controls with a selected-offer timeline for eligible trials, or the three benefits for no-trial offers.
 The current release default is A-only; no live segmented allocation has been selected.
 
 ```mermaid
@@ -38,9 +38,10 @@ On a development build, open `/welcome/payment?devPaywallVariant=A` or `...=B` t
 The tester override changes presentation only; RevenueCat's live eligibility, product and entitlement remain authoritative.
 The existing `devTrialVisual=1` fixture separately marks synthetic trial eligibility and disables purchase.
 
-Variant B calculates a conditional first-charge calendar date from the selected eligible store trial period and the current day.
-It projects the reminder day with the same lead time and quiet-hour adjustment used by the existing notification scheduler.
+Variant B calculates the projected first-charge day number from the selected eligible store trial period and the current day.
+It projects the reminder day number with the same lead time and quiet-hour adjustment used by the existing notification scheduler.
+The timeline omits calendar dates and repeats neither plan prices nor renewal terms; those remain in the plan controls and billing disclosure.
 The middle step distinguishes opted-in, available opt-in, permission-off and unavailable states, and never claims a notification has been scheduled before the store confirms the trial end.
-No-trial offers show immediate paid terms without a trial timeline.
+No-trial offers show only the three supported benefits in the main content area, with immediate paid terms in the purchase disclosure.
 The store confirms the actual purchase and charge date before checkout.
 When #431 ships a centralized selected-offer model, this projection should consume that model rather than maintaining a separate policy.

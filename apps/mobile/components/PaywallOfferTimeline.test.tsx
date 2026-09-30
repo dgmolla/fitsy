@@ -3,13 +3,13 @@ jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import { render } from '@testing-library/react-native';
-import { PaywallOfferTimeline, projectedChargeDate } from './PaywallOfferTimeline';
+import { PAYWALL_BENEFITS, PaywallOfferTimeline, projectedChargeDate } from './PaywallOfferTimeline';
 import { purchaseTerms } from '../lib/purchaseTerms';
 import { trialReminderDate } from '../lib/notificationPlan';
 
 const now = new Date(2026, 8, 30, 12);
 const product = (period: string, priceString: string, subscriptionPeriod = 'P1Y') =>
-  ({ priceString, subscriptionPeriod, introPrice: { price: 0, priceString: '$0', period, cycles: 1 } });
+  ({ priceString, subscriptionPeriod, introPrice: { price: 0, priceString: '$0', period, periodUnit: period.endsWith('W') ? 'WEEK' : 'DAY', periodNumberOfUnits: Number(period.slice(1, -1)), cycles: 1 } });
 
 test.each([
   ['P2W', '$79.99', 'P1Y', 14],
@@ -23,21 +23,22 @@ test.each([
   expect(view.getByTestId('paywall-step-today')).toBeTruthy();
   expect(view.getByTestId('paywall-step-reminder')).toBeTruthy();
   expect(view.getByTestId('paywall-step-charge')).toBeTruthy();
-  expect(view.getByText(new RegExp(`Day ${days}.*Oct`))).toBeTruthy();
-  expect(view.getByText(new RegExp(`Day .* ${reminder.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`))).toBeTruthy();
-  expect(view.getByText(new RegExp(`first \\${price} charge`))).toBeTruthy();
-  expect(view.getByText(/Turn it on in notification settings/)).toBeTruthy();
+  expect(view.getByText(`Day ${days} first charge`)).toBeTruthy();
+  const reminderDay = Math.round((Date.UTC(reminder.getFullYear(), reminder.getMonth(), reminder.getDate()) - Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) / 86_400_000);
+  expect(view.getByText(`Day ${reminderDay} reminder`)).toBeTruthy();
+  expect(view.getByText(/turn on reminders after purchase/)).toBeTruthy();
+  expect(view.queryByText(/Oct|\$79|\$9/)).toBeNull();
   expect(view.queryByText(/Your Fitsy plan/)).toBeNull();
 });
 
 test('reminder states do not promise delivery before store confirmation', () => {
   const terms = purchaseTerms(product('P1W', '$9.99', 'P1M'), true);
   const view = render(<PaywallOfferTimeline terms={terms} now={now} reminderAvailability="permission-off" />);
-  expect(view.getByText(/Notifications are off/)).toBeTruthy();
+  expect(view.getByText(/Notifications off/)).toBeTruthy();
   view.rerender(<PaywallOfferTimeline terms={terms} now={now} reminderAvailability="enabled" />);
-  expect(view.getByText(/schedule it after the store confirms/)).toBeTruthy();
+  expect(view.getByText(/scheduling follows store confirmation/)).toBeTruthy();
   view.rerender(<PaywallOfferTimeline terms={terms} now={now} reminderAvailability="unavailable" />);
-  expect(view.getByText(/scheduling is unavailable/)).toBeTruthy();
+  expect(view.getByText(/Unavailable; check your trial end/)).toBeTruthy();
 });
 
 test('connectors use their own wrapping row height and meet the next circle edge', () => {
@@ -55,11 +56,12 @@ test('connectors use their own wrapping row height and meet the next circle edge
   expect(view.queryByTestId('paywall-step-charge-connector')).toBeNull();
 });
 
-test('ineligible offer shows immediate paid terms without a fictitious trial', () => {
+test('ineligible offer shows only the three supported benefits in main content', () => {
   const terms = purchaseTerms(product('P2W', '$79.99'), false);
   expect(projectedChargeDate(terms, now)).toBeNull();
   const view = render(<PaywallOfferTimeline terms={terms} now={now} />);
   expect(view.getByTestId('paywall-offer-paid')).toBeTruthy();
   expect(view.queryByTestId('paywall-step-reminder')).toBeNull();
-  expect(view.getByText(/\$79.99 when you confirm/)).toBeTruthy();
+  for (const benefit of PAYWALL_BENEFITS) expect(view.getByText(benefit)).toBeTruthy();
+  expect(view.queryByText(/Unlock Fitsy|when you confirm|Renewal/)).toBeNull();
 });
