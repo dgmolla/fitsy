@@ -22,6 +22,10 @@ tags: [onboarding, discovery, changed-journey]
     id: welcome-start
 - tapOn:
     id: location-choose-area
+# On a small iPhone, DTLA exists in accessibility but sits below the visible sheet.
+- swipe:
+    start: "50%,78%"
+    end: "50%,47%"
 - tapOn: "Search near DTLA"
 - extendedWaitUntil:
     visible:
