@@ -8,6 +8,7 @@ import { PaywallTimeline } from './PaywallTimeline';
 import { EDITORIAL, FONTS, TEXT } from '@/lib/brand';
 import { openLegalLink } from '@/lib/legalLinks';
 import type { purchaseTerms } from '@/lib/purchaseTerms';
+import { trialPresentation } from '@/lib/trialPresentation';
 
 type Terms = ReturnType<typeof purchaseTerms>;
 type PlanId = 'monthly' | 'yearly';
@@ -35,9 +36,10 @@ export function PaywallView(props: Props) {
   const compact = height < 780 && fontScale <= 1.2;
   const { plan, annual, monthly, loading, restoring } = props;
   const selected = plan === 'yearly' ? annual : monthly;
+  const presentation = trialPresentation(selected);
   const busy = loading || restoring;
   const planBusy = busy || props.checkingPlans;
-  const trialLength = selected?.trialDays ? `${selected.trialDays}-day` : selected?.trial;
+  const trialLength = presentation.days ? `${presentation.days}-day` : presentation.trial;
   const label = loading ? 'Setting up…' : props.checkingPlans ? 'Checking plans…' : selected?.trial ? `Start ${trialLength} free trial` : 'Continue to purchase';
 
   return (

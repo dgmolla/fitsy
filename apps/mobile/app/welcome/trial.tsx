@@ -7,6 +7,7 @@ import { TrialArtwork } from '@/components/TrialArtwork';
 import { useOnboardingStep } from '@/lib/onboardingResume';
 import { usePurchases } from '@/lib/usePurchases';
 import { purchaseTerms } from '@/lib/purchaseTerms';
+import { defaultTrialPlan, trialPresentation } from '@/lib/trialPresentation';
 import { devTrialVisualOffer } from '@/lib/devTrialVisualOffer';
 import { EDITORIAL, TEXT } from '@/lib/brand';
 import { trackOnboardingScreenView } from '@/lib/analytics';
@@ -25,8 +26,10 @@ export default function TrialScreen() {
   const shownOffering = visual?.offering ?? offering;
   const shownEligibility = visual?.eligibility ?? introEligibility;
   const eligibilityReady = !!visual || introEligibilityReady;
-  const offers = [shownOffering?.annual, shownOffering?.monthly].map(pkg => purchaseTerms(pkg?.product, pkg ? shownEligibility[pkg.product.identifier] : undefined));
-  const trial = offers.find(terms => terms?.trial)?.trial;
+  const annual = purchaseTerms(shownOffering?.annual?.product, shownOffering?.annual ? shownEligibility[shownOffering.annual.product.identifier] : undefined);
+  const monthly = purchaseTerms(shownOffering?.monthly?.product, shownOffering?.monthly ? shownEligibility[shownOffering.monthly.product.identifier] : undefined);
+  const selectedPlan = defaultTrialPlan(annual, monthly);
+  const trial = trialPresentation(selectedPlan === 'yearly' ? annual : monthly).trial;
   const [plansChecked, setPlansChecked] = useState(false);
   const retryInFlight = useRef(false);
   const navigating = useRef(false);
@@ -58,7 +61,7 @@ export default function TrialScreen() {
   }
   if (entitled === true || (shownOffering && eligibilityReady && !trial)) return <Redirect href="/welcome/payment" />;
   return <WelcomeScreen progress={1} title={trial ? 'Try Fitsy free' : 'Checking your plans'}
-    subtitle={trial ? `Get ${trial} of Fitsy Pro with an eligible plan.` : 'Your available plans will appear next.'}
+    subtitle={trial ? `Get ${trial} of Fitsy Pro with the selected ${selectedPlan === 'yearly' ? 'annual' : 'monthly'} plan.` : 'Your available plans will appear next.'}
     continueLabel={checkingPlans ? 'Checking plans…' : shownOffering ? 'Continue' : 'Retry plans'} canContinue={!checkingPlans}
     onContinue={() => { void continueOrRetry(); }}>
     <TrialArtwork />

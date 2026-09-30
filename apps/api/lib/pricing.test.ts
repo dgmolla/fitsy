@@ -90,6 +90,7 @@ const TRIAL = [
 ];
 
 beforeEach(() => {
+  jest.mocked(reportServerError).mockClear();
   for (const k of ENV) {
     saved[k] = process.env[k];
     delete process.env[k];
@@ -127,6 +128,8 @@ describe("fetchPricingFromAsc", () => {
       annual: "$39.99",
       trialDays: 3,
     });
+    expect(reportServerError).toHaveBeenCalledWith("ASC monthly trial catalog mismatch", expect.any(Error));
+    expect(reportServerError).toHaveBeenCalledWith("ASC annual trial catalog mismatch", expect.any(Error));
   });
 
   it("ignores scheduled and preserved price rows and formats to two decimals", async () => {
@@ -153,7 +156,7 @@ describe("fetchPricingFromAsc", () => {
     expect(p.annual).toBe("$44.50");
   });
 
-  it("reports no trial when there is no live free-trial offer, and the shorter one if plans differ", async () => {
+  it("omits the generic trial claim when there is no offer or durations differ", async () => {
     primeCreds();
     primeAsc([
       {
@@ -194,9 +197,7 @@ describe("fetchPricingFromAsc", () => {
         ],
       },
     ]);
-    await expect(fetchPricingFromAsc(TODAY)).resolves.toMatchObject({
-      trialDays: 3,
-    });
+    await expect(fetchPricingFromAsc(TODAY)).resolves.toMatchObject({ trialDays: 0 });
   });
 
   it("throws when a product is missing so the caller can fall back", async () => {
@@ -236,7 +237,7 @@ describe("fetchPricingFromAsc", () => {
 });
 
 describe("getDisplayPricing", () => {
-  it("returns the decision-record fallback quietly when ASC is not configured", async () => {
+  it("returns prices without a trial claim when ASC is not configured", async () => {
     const fetchMock = jest.spyOn(globalThis, "fetch");
     await expect(getDisplayPricing()).resolves.toBe(PRICING_FALLBACK);
     expect(fetchMock).not.toHaveBeenCalled();

@@ -1,5 +1,6 @@
 import type { PurchasesEntitlementInfo } from 'react-native-purchases';
-import type { purchaseTerms } from './purchaseTerms';
+import { TRIAL_CATALOG_POLICY } from '../../../packages/shared/src/contracts/trialPolicy';
+import { trialPresentation, type Terms } from './trialPresentation';
 
 export interface ReminderPreferences { meals: boolean; trial: boolean }
 export const DEFAULT_REMINDER_PREFERENCES: ReminderPreferences = { meals: false, trial: false };
@@ -13,12 +14,11 @@ export interface PlannedReminder {
   body: string;
 }
 type Subscription = Pick<PurchasesEntitlementInfo, 'isActive' | 'periodType' | 'willRenew' | 'expirationDate' | 'latestPurchaseDate'>;
-// The reminder belongs around elapsed day six of a seven-day trial. Leave a
-// six-hour margin beyond the store's 24-hour cancellation deadline.
-export const TRIAL_REMINDER_LEAD_HOURS = 30;
+// Six hours of margin beyond the store's cancellation deadline.
+export const TRIAL_REMINDER_LEAD_HOURS = TRIAL_CATALOG_POLICY.reminderLeadHours;
 /** Very short offers cannot support a useful reminder before cancellation. */
-export function canOfferTrialReminder(terms: ReturnType<typeof purchaseTerms>): boolean {
-  return !!terms?.trial && (terms.trialDays === null || terms.trialDays > 2);
+export function canOfferTrialReminder(terms: Terms): boolean {
+  return trialPresentation(terms).reminderAvailable;
 }
 const HOUR = 3_600_000;
 const localDay = (d: Date) => `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
@@ -48,9 +48,10 @@ export function planReminders({ now, userId, entitled, preferences, subscription
   const until = Number.isFinite(expiration) ? Math.min(horizon.getTime(), expiration) : horizon.getTime();
 
   if (preferences.trial && subscription?.isActive && subscription.periodType === 'TRIAL' && subscription.willRenew &&
-    Number.isFinite(expiration) && Number.isFinite(trialStart) && expiration - trialStart > 2 * 24 * HOUR) {
+    Number.isFinite(expiration) && Number.isFinite(trialStart) &&
+    expiration - trialStart > (TRIAL_CATALOG_POLICY.reminderLeadHours + TRIAL_CATALOG_POLICY.cancellationLeadHours) * HOUR) {
     const date = trialReminderDate(new Date(expiration));
-    if (date.getTime() > now.getTime() && date.getTime() <= expiration - 24 * HOUR) {
+    if (date.getTime() > now.getTime() && date.getTime() <= expiration - TRIAL_CATALOG_POLICY.cancellationLeadHours * HOUR) {
       reminders.push({ identifier: `${REMINDER_PREFIX}trial.${expiration}`, kind: 'trial', date,
         title: 'Review your Fitsy trial',
         body: 'Check your trial end date and renewal status in subscription settings. Cancel at least 24 hours before renewal if you do not want to continue.' });

@@ -129,7 +129,7 @@ test('eligible trial introduction keeps the optional reminder choice', async () 
   mockEligibility = { annual: true, monthly: false };
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
   await waitFor(() => expect(screen.getByText('Try Fitsy free')).toBeTruthy());
-  expect(screen.getByText('Get 7 days of Fitsy Pro with an eligible plan.')).toBeTruthy();
+  expect(screen.getByText('Get 7 days of Fitsy Pro with the selected annual plan.')).toBeTruthy();
   const continueButton = screen.getByTestId('welcome-continue');
   fireEvent.press(continueButton);
   fireEvent.press(continueButton);
@@ -138,6 +138,16 @@ test('eligible trial introduction keeps the optional reminder choice', async () 
   expect(screen.getPathname()).toBe('/welcome/trial');
   fireEvent.press(screen.getByTestId('welcome-continue'));
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/trial-reminder'));
+});
+
+test('mixed duration onboarding describes the annual plan selected at checkout', async () => {
+  mockOffering = { annual: { product: { ...annual.product, introPrice: { ...annual.product.introPrice, period: 'P2D' } } },
+    monthly: { product: { identifier: 'monthly', priceString: '$9.99', subscriptionPeriod: 'P1M',
+      introPrice: { price: 0, priceString: '$0', period: 'P1W', cycles: 1 } } } } as unknown as typeof mockOffering;
+  mockEligibilityReady = true;
+  mockEligibility = { annual: true, monthly: true };
+  const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
+  expect(screen.getByText('Get 2 days of Fitsy Pro with the selected annual plan.')).toBeTruthy();
 });
 
 test('pending eligibility holds Continue before choosing the reminder or plans', async () => {

@@ -156,6 +156,6 @@ macro match — proxy for trust and utility).
 
 ## Business model
 
-Paid subscription with 7-day free trial — RevenueCat + Apple IAP.
+Paid subscription with an introductory free trial when the selected Apple offer is eligible; RevenueCat and Apple IAP supply the actual duration.
 See `docs/product/business-model.md` for pricing, entitlement flow, and the
 Pricing Decision Record.

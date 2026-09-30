@@ -1,4 +1,5 @@
 import { unstable_cache } from "next/cache";
+import { TRIAL_CATALOG_POLICY, trialCatalogMismatch } from "../../../packages/shared/src/contracts/trialPolicy";
 import { reportServerError } from "./errorAlert";
 import {
   ascAppId,
@@ -31,17 +32,17 @@ export interface DisplayPricing {
   trialDays: number;
 }
 
-/** Mirrors docs/product/business-model.md, Pricing Decision Record. */
+/** Fallback retail prices; an unavailable catalog cannot justify a trial claim. */
 export const PRICING_FALLBACK: DisplayPricing = {
   monthly: "$7.99",
   annual: "$39.99",
-  trialDays: 3,
+  trialDays: 0,
 };
 
 /** ASC product identifiers (App Store Connect, Subscriptions). */
 const KEY_BY_PRODUCT_ID: Record<string, "monthly" | "annual"> = {
-  "com.fitsy.mobile.monthly": "monthly",
-  "com.fitsy.mobile.yearly": "annual",
+  [TRIAL_CATALOG_POLICY.productIds[0]]: "monthly",
+  [TRIAL_CATALOG_POLICY.productIds[1]]: "annual",
 };
 
 const TERRITORY = "USA";
@@ -178,11 +179,15 @@ export async function fetchPricingFromAsc(
       `ASC pricing incomplete: monthly=${monthly?.price ?? "?"} annual=${annual?.price ?? "?"}`,
     );
   }
-  // Both plans carry the same trial today; advertise the shorter one if they ever differ.
+  for (const plan of [monthly, annual]) {
+    const mismatch = trialCatalogMismatch(plan.trialDays);
+    if (mismatch) reportServerError(`ASC ${plan.key} trial catalog mismatch`, new Error(mismatch));
+  }
+  // A generic website claim is only true when both plans share the same offer.
   return {
     monthly: monthly.price,
     annual: annual.price,
-    trialDays: Math.min(monthly.trialDays, annual.trialDays),
+    trialDays: monthly.trialDays === annual.trialDays ? monthly.trialDays : 0,
   };
 }
 

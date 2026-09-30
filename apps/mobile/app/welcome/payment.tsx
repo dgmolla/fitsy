@@ -14,10 +14,9 @@ import { usePreviewAccess } from '@/lib/usePreviewAccess';
 import { rememberPaywallDecline } from '@/lib/paywallAccess';
 import { openPurchasedDestination, resetWelcomeJourney } from '@/lib/paywallJourney';
 import { purchaseTerms, savingPercent } from '@/lib/purchaseTerms';
+import { defaultTrialPlan, type PlanId } from '@/lib/trialPresentation';
 import { devTrialVisualOffer } from '@/lib/devTrialVisualOffer';
 import { clearOnboardingPreviewEntry } from '@/lib/onboardingPreviewEntry';
-
-type PlanId = 'monthly' | 'yearly';
 
 export default function PaymentScreen() {
   const { devTrialVisual } = useLocalSearchParams<{ devTrialVisual?: string }>();
@@ -58,7 +57,7 @@ export default function PaymentScreen() {
   // Follow the trial promised earlier in onboarding unless the user has
   // explicitly chosen another available plan. Recompute when store terms or
   // eligibility change while the paywall is open.
-  const defaultPlan: PlanId = monthlyTerms?.trial && !annualTerms?.trial ? 'monthly' : annualTerms ? 'yearly' : monthlyTerms ? 'monthly' : 'yearly';
+  const defaultPlan = defaultTrialPlan(annualTerms, monthlyTerms);
   const checkingPlans = !!shownOffering && !eligibilityReady;
   if (!checkingPlans) settledDefaultPlan.current = defaultPlan;
   const heldPlan = settledDefaultPlan.current;

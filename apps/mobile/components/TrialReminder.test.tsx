@@ -118,12 +118,12 @@ test('a two-day trial does not offer an unschedulable reminder', async () => {
   expect(Notifications.requestPermissionsAsync).not.toHaveBeenCalled();
 });
 
-test('an eligible longer trial can offer a reminder when another plan has only two days', async () => {
+test('a short selected annual trial cannot promise a reminder from the longer monthly offer', async () => {
   mockOffering = { annual: shortAnnual, monthly };
   mockEligibility = { annual: true, monthly: true };
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial-reminder' });
-  await waitFor(() => expect(screen.getByText('Get a trial reminder')).toBeTruthy());
-  expect(screen.getByTestId('trial-reminder-skip')).toBeTruthy();
+  await waitFor(() => expect(screen.getByText('Review your trial')).toBeTruthy());
+  expect(screen.queryByTestId('trial-reminder-skip')).toBeNull();
   expect(Notifications.scheduleNotificationAsync).not.toHaveBeenCalled();
 });
 

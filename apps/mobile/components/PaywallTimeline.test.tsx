@@ -26,7 +26,7 @@ test('timeline derives trial end and reminder day from the selected store offer'
   expect(screen.getByText('Day 1: trial access')).toBeTruthy();
   expect(screen.getByText('Day 6: optional reminder')).toBeTruthy();
   expect(screen.getByText('Day 7: first charge')).toBeTruthy();
-  expect(screen.getByText('$59.99 every 1 year after the full trial period, unless canceled at least 24 hours before it ends.')).toBeTruthy();
+  expect(screen.getByText(/\$59\.99 every 1 year after the full trial period.*Estimated .* if started today; store confirms the exact date/)).toBeTruthy();
   screen.rerender(<PaywallTimeline terms={purchaseTerms({ ...product, introPrice: { ...product.introPrice, period: 'P2W' } }, true)} />);
   expect(screen.getByText('Day 13: optional reminder')).toBeTruthy();
   expect(screen.getByText('Day 14: first charge')).toBeTruthy();

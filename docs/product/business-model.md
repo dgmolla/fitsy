@@ -17,7 +17,8 @@ deprecated.
 
 - **Entitlement:** `pro` (single entitlement; all features require it)
 - **Plans:** Annual and Monthly (see Pricing Decision Record below for exact prices)
-- **Trial:** Seven-day introductory free trial configured for eligible monthly and annual subscribers in existing offer territories.
+- **Trial:** A fourteen-day introductory free trial is the desired catalog policy for the existing monthly and annual offer territories.
+  The last verified live catalog still has seven-day offers until the coordinated App Store change is completed.
   The selected live StoreKit product and RevenueCat eligibility determine the actual offer; the discounted annual product has no introductory trial.
 - **SDK:** `react-native-purchases` (RevenueCat React Native SDK)
 - **Paywall:** `apps/mobile/app/welcome/payment.tsx` reads localized prices, billing periods, introductory duration, and eligibility from live store data through RevenueCat.
@@ -134,7 +135,8 @@ See `docs/product/pre-launch-action-items.md` for the full critical path.
 
 ## Pricing Decision Record
 
-> **Trial configuration verified 2026-09-22:** Seven-day monthly/yearly introductory offers for eligible subscribers; discounted annual has no introductory offer.
+> **Trial configuration verified 2026-09-30:** The App Store Connect catalog still has 175 one-week free-trial territories for each regular product and no introductory offer for discounted annual.
+> The desired policy in `packages/shared/src/contracts/trialPolicy.ts` is fourteen days; this setting alone does not modify Apple offers.
 
 App Store Connect configures subscription products, prices, and introductory offers.
 The mobile paywall uses the selected live StoreKit product through RevenueCat and the customer's current introductory-offer eligibility.
@@ -142,11 +144,12 @@ This document records configuration, not a guarantee that every customer receive
 
 | Plan | US retail price | App Store product | Introductory configuration |
 |------|-----------------|-------------------|---------------------------|
-| Monthly | $7.99/month | `com.fitsy.mobile.monthly` | Seven days free for eligible subscribers |
-| Annual | $39.99/year | `com.fitsy.mobile.yearly` | Seven days free for eligible subscribers |
+| Monthly | $7.99/month | `com.fitsy.mobile.monthly` | Seven days currently verified; fourteen days desired for eligible subscribers |
+| Annual | $39.99/year | `com.fitsy.mobile.yearly` | Seven days currently verified; fourteen days desired for eligible subscribers |
 | Discounted annual | $29.99/year | `com.fitsy.mobile.yearly_discount` | No introductory offer; billed on confirmation |
 
-A read-only App Store Connect check on 2026-09-22 found 175 `ONE_WEEK`, `FREE_TRIAL`, one-period offers for each regular product and no introductory offers for the discounted annual product.
+A read-only App Store Connect check on 2026-09-30 found 175 `ONE_WEEK`, `FREE_TRIAL`, one-period offers for each regular product and no introductory offers for the discounted annual product.
+The two regular products have the same 175 offer territory codes; the candidate has not changed the catalog.
 The seven-day rollout preserved existing offer territories and product availability; it did not expand availability to every offer territory.
 Store configuration verification does not establish a particular customer's eligibility or prove an Apple sandbox purchase.
 
@@ -159,8 +162,9 @@ Discount percentages are calculated only between comparable live products.
 The June three-day copy and fixed-price mobile fallbacks are superseded.
 
 The website reads US prices and introductory duration from App Store Connect in `apps/api/lib/pricing.ts`, caching successful reads for 24 hours.
-Its existing failure path still uses a legacy static fallback, including a three-day trial; this is separate from the mobile paywall and remains an unresolved inconsistency.
-Do not treat that fallback as the current offer configuration or claim that all website terms are already free of hardcoded values.
+If App Store Connect is unavailable, the website shows its existing fallback prices without claiming a free trial.
+Live App Store Connect reads report a mismatch with the desired duration while continuing to display the real effective offer terms.
+The generic website trial claim appears only when both regular plans have the same live introductory duration.
 
 ### Historical decisions
 
