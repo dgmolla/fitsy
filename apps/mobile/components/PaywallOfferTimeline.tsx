@@ -39,7 +39,7 @@ export function PaywallOfferTimeline({ terms, now }: { terms: Terms; now: Date }
 }
 
 const s = StyleSheet.create({
-  panel: { alignSelf: 'stretch', paddingHorizontal: 22, paddingTop: 17, paddingBottom: 9, minHeight: 266 },
+  panel: { alignSelf: 'stretch', marginHorizontal: 5, marginTop: 14, paddingHorizontal: 17, paddingTop: 15, paddingBottom: 9, minHeight: 252, borderRadius: 20, backgroundColor: 'rgba(253,251,247,0.84)' },
   title: { fontFamily: FONTS.frauncesDisplayBold, fontSize: 25, lineHeight: 31, color: EDITORIAL.green, textAlign: 'center', marginBottom: 16 },
   row: { flexDirection: 'row', gap: 14, alignItems: 'flex-start' },
   icon: { width: 32, height: 32, borderRadius: 16, backgroundColor: EDITORIAL.greenMid, alignItems: 'center', justifyContent: 'center' },
