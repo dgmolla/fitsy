@@ -23,9 +23,8 @@ tags: [billing, onboarding, changed-journey]
 - extendedWaitUntil:
     visible: "We want you to try Fitsy for free"
     timeout: 30000
-- assertVisible:
-    id: trial-offer-note
-- assertVisible: 'Synthetic trial \(14 days\) for visual testing.*'
+- assertVisible: "Try Fitsy"
+- assertVisible: "No payment due now"
 - tapOn:
     id: welcome-continue
 - extendedWaitUntil:

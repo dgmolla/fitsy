@@ -62,12 +62,12 @@ export default function TrialScreen() {
     router.push(visualRequested ? '/welcome/trial-reminder?devTrialVisual=1' : '/welcome/trial-reminder');
   }
   if (entitled === true || (shownOffering && eligibilityReady && !trial)) return <Redirect href="/welcome/payment" />;
-  return <WelcomeScreen progress={1} title={trial ? 'Meet Fitsy Pro' : 'Checking your plans'}
+  return <WelcomeScreen progress={1} title={trial ? 'Try Fitsy' : 'Checking your plans'}
     subtitle={trial ? 'We want you to try Fitsy for free' : 'Your available plans will appear next.'}
     continueLabel={checkingPlans ? 'Checking plans…' : shownOffering ? 'Continue' : 'Retry plans'} canContinue={!checkingPlans}
     onContinue={() => { void continueOrRetry(); }}
     beforeContinue={trial && !checkingPlans ? <View style={s.reassurance} testID="trial-no-payment"><Ionicons name="checkmark" size={20} color={EDITORIAL.green} /><Text style={s.reassuranceText}>No payment due now</Text></View> : undefined}
-    afterContinue={<Text style={s.note} testID="trial-offer-note">{visual && trial ? `Synthetic trial (${trial}) for visual testing. Purchase is disabled. ${selectedTerms?.charge ?? ''}` : !offering && plansChecked ? 'Plans could not load. Check your connection and retry.' : trial ? selectedTerms?.charge : 'Checking current plans and trial eligibility…'}</Text>}>
+    afterContinue={!offering && plansChecked ? <Text style={s.note} testID="trial-offer-note">Plans could not load. Check your connection and retry.</Text> : undefined}>
     <TrialArtwork />
   </WelcomeScreen>;
 }

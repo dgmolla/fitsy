@@ -129,10 +129,12 @@ test('eligible trial introduction keeps the optional reminder choice', async () 
   mockEligibilityReady = true;
   mockEligibility = { annual: true, monthly: false };
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
-  await waitFor(() => expect(screen.getByText('Meet Fitsy Pro')).toBeTruthy());
+  await waitFor(() => expect(screen.getByText('Try Fitsy')).toBeTruthy());
+  expect(screen.getByText('We want you to try Fitsy for free')).toBeTruthy();
   expect(screen.getByTestId('trial-no-payment')).toBeTruthy();
   expect(screen.getByText('No payment due now')).toBeTruthy();
-  expect(screen.getByText('7 days free, then $59.99 every 1 year. No charge until the trial ends.')).toBeTruthy();
+  expect(screen.queryByTestId('trial-offer-note')).toBeNull();
+  expect(screen.queryByText(/7 days free|\$59\.99|No charge until/)).toBeNull();
   const continueButton = screen.getByTestId('welcome-continue');
   fireEvent.press(continueButton);
   fireEvent.press(continueButton);
@@ -151,7 +153,8 @@ test('mixed duration onboarding describes the annual plan selected at checkout',
   mockEligibility = { annual: true, monthly: true };
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
   expect(screen.getByTestId('trial-no-payment')).toBeTruthy();
-  expect(screen.getByText('2 days free, then $59.99 every 1 year. No charge until the trial ends.')).toBeTruthy();
+  expect(screen.getByText('Try Fitsy')).toBeTruthy();
+  expect(screen.queryByTestId('trial-offer-note')).toBeNull();
 });
 
 test('pending eligibility holds Continue before choosing the reminder or plans', async () => {
