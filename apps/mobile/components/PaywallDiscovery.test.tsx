@@ -11,6 +11,10 @@ jest.mock('@supabase/supabase-js', () => {
   return { createClient: () => ({ auth: { getSession: async () => ({ data: { session: null } }), startAutoRefresh() {}, stopAutoRefresh() {} } }) };
 });
 const originalFetch = global.fetch;
+const resultFor = (id: string) => ({ id, name: `Restaurant ${id}`, address: '123 Main', lat: 34.0869, lng: -118.2702,
+  distanceMiles: 1, cuisineTags: [], chainFlag: false, photoUrl: 'https://example.com/restaurant.jpg',
+  bestMatch: { menuItemId: `meal-${id}`, name: 'Real meal', calories: 500, proteinG: 40, carbsG: 40, fatG: 20,
+    confidence: 'HIGH' as const, matchScore: 0.2, nutritionBasis: 'estimated' as const } });
 const selection = (id: string) => ({
   action: 'menu' as const,
   restaurantId: id,
@@ -28,7 +32,7 @@ beforeEach(async () => { await AsyncStorage.clear(); global.fetch = jest.fn(); }
 afterEach(() => { global.fetch = originalFetch; });
 
 it('uses the saved selection without a search and clears it on blur', async () => {
-  await rememberPaywallIntent(selection('old'));
+  await rememberPaywallIntent({ ...selection('old'), previewResult: resultFor('old') });
   const { result, rerender } = renderHook(({ focused }) => usePaywallDiscovery(focused), { initialProps: { focused: true } });
   await waitFor(() => expect(result.current.selected?.name).toBe('Restaurant old'));
   await settleDiscovery();
@@ -38,7 +42,7 @@ it('uses the saved selection without a search and clears it on blur', async () =
 });
 
 it('does not retain a previous selection when refocusing after a storage failure', async () => {
-  await rememberPaywallIntent(selection('old'));
+  await rememberPaywallIntent({ ...selection('old'), previewResult: resultFor('old') });
   const { result, rerender } = renderHook(({ focused }) => usePaywallDiscovery(focused), { initialProps: { focused: true } });
   await waitFor(() => expect(result.current.selected?.id).toBe('old'));
   rerender({ focused: false });
@@ -47,15 +51,15 @@ it('does not retain a previous selection when refocusing after a storage failure
   await act(async () => { rerender({ focused: true }); });
   await settleDiscovery();
   expect(result.current.selected).toBeUndefined();
-  expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/api/restaurants/preview?lat=34.0522&lng=-118.2437'), expect.any(Object));
+  expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('guided=1&lat=34.0522&lng=-118.2437'), expect.any(Object));
 });
 
 it('shows the new selection after refocusing without consulting cached search results', async () => {
-  await rememberPaywallIntent(selection('old'));
+  await rememberPaywallIntent({ ...selection('old'), previewResult: resultFor('old') });
   const { result, rerender } = renderHook(({ focused }) => usePaywallDiscovery(focused), { initialProps: { focused: true } });
   await waitFor(() => expect(result.current.selected?.id).toBe('old'));
   rerender({ focused: false });
-  await rememberPaywallIntent(selection('new'));
+  await rememberPaywallIntent({ ...selection('new'), previewResult: resultFor('new') });
   await act(async () => { rerender({ focused: true }); });
   await waitFor(() => expect(result.current.selected?.id).toBe('new'));
   await settleDiscovery();
@@ -63,8 +67,8 @@ it('shows the new selection after refocusing without consulting cached search re
 });
 
 it('uses the live Los Angeles catalog when there is no preview selection', async () => {
-  (global.fetch as jest.Mock).mockResolvedValue({ ok: true, json: async () => ({ data: [{ id: 'catalog-1', name: 'Catalog Restaurant', cuisineTags: [], distanceMiles: 1, photoUrl: 'https://example.com/catalog.jpg' }] }) });
+  (global.fetch as jest.Mock).mockResolvedValue({ ok: true, json: async () => ({ data: [{ ...resultFor('catalog-1'), name: 'Catalog Restaurant' }], meta: { nearbyDishCount: 1, radiusMiles: 3 } }) });
   const { result } = renderHook(() => usePaywallDiscovery(true));
-  await waitFor(() => expect(result.current.selected).toEqual({ id: 'catalog-1', name: 'Catalog Restaurant', photoUrl: 'https://example.com/catalog.jpg' }));
+  await waitFor(() => expect(result.current.selected).toMatchObject({ id: 'catalog-1', name: 'Catalog Restaurant', bestMatch: { name: 'Real meal' } }));
   expect(result.current.catalogFallback).toBe(true);
 });

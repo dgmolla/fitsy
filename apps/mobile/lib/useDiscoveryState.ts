@@ -115,6 +115,7 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
         action: restaurant ? 'menu' : 'discovery', restaurantId: restaurant?.id,
         menuItemId: restaurant?.bestMatch?.menuItemId, mealName: restaurant?.bestMatch?.name,
         restaurantName: restaurant?.name, photoUrl: restaurant?.photoUrl,
+        previewResult: restaurant,
         nearbyRestaurants: results.filter(r => r.id !== restaurant?.id).slice(0, 2).map(r => ({ id: r.id, name: r.name, photoUrl: r.photoUrl })),
         area: { lat: location.lat, lng: location.lng }, targets: inputs,
         areaName: location.name, query: query.trim(),

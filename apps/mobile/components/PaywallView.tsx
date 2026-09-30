@@ -8,6 +8,8 @@ import { EDITORIAL, FONTS, TEXT } from '@/lib/brand';
 import { openLegalLink } from '@/lib/legalLinks';
 import type { purchaseTerms } from '@/lib/purchaseTerms';
 import type { PaywallDiscovery } from '@/lib/usePaywallDiscovery';
+import type { PaywallVariant } from '@/lib/paywallVariant';
+import { PaywallOfferTimeline } from './PaywallOfferTimeline';
 
 type Terms = ReturnType<typeof purchaseTerms>;
 type PlanId = 'monthly' | 'yearly';
@@ -17,6 +19,7 @@ interface Props {
   monthly: Terms;
   annualSavingPercent: number | null;
   discovery: PaywallDiscovery;
+  variant?: PaywallVariant;
   loading: boolean;
   restoring: boolean;
   checkingPlans: boolean;
@@ -54,12 +57,12 @@ export function PaywallView(props: Props) {
 
       <ScrollView style={s.scroll} contentContainerStyle={[s.content, compact && s.contentCompact]} showsVerticalScrollIndicator={false} bounces={false}>
         <View>
-          <PaywallHero discovery={props.discovery} compact={compact} />
+          {props.variant !== 'B' ? <><PaywallHero discovery={props.discovery} compact={compact} />
           <Text style={[s.title, compact && s.titleCompact]}>Find meals that fit.</Text>
           <View style={[s.benefits, compact && s.benefitsCompact]}>
             {['Discover meals in Los Angeles', 'Find nearby options for your goals', 'Compare estimated nutrition'].map(benefit =>
               <View key={benefit} style={s.benefitRow}><Ionicons name="checkmark-circle" size={17} color={EDITORIAL.greenMid} /><Text style={[s.benefit, compact && s.benefitCompact]}>{benefit}</Text></View>)}
-          </View>
+          </View></> : <PaywallOfferTimeline terms={selected} now={new Date()} />}
           <Text style={[s.cancel, compact && s.cancelCompact]}>No commitment, cancel anytime</Text>
           {props.visualPreview && <Text style={s.visualNote} testID="dev-trial-visual-note">Synthetic trial eligibility for visual testing. Prices are from the live Test Store; purchase is disabled.</Text>}
           <View style={s.plans}>

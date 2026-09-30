@@ -1,4 +1,10 @@
 jest.unmock('react-native');
+jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
+jest.mock('@supabase/supabase-js', () => {
+  process.env.EXPO_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'unit-test-anon-key';
+  return { createClient: () => ({ auth: { getSession: async () => ({ data: { session: null } }) } }) };
+});
 jest.mock('expo-font', () => ({ isLoaded: () => true, loadAsync: jest.fn() }));
 jest.mock('posthog-react-native', () => {
   process.env.EXPO_PUBLIC_POSTHOG_API_KEY = 'unit-test-analytics';
@@ -19,7 +25,7 @@ const product = { priceString: '$59.99', subscriptionPeriod: 'P1Y',
 const annual = purchaseTerms(product, true);
 const monthly = purchaseTerms({ ...product, priceString: '$9.99', subscriptionPeriod: 'P1M', introPrice: null }, false);
 function props() { return { annual, monthly, plan: 'yearly' as const, loading: false, restoring: false, checkingPlans: false,
-  annualSavingPercent: 50, discovery: { selected: { id: 'r1', name: 'Actual Preview Pick', photoUrl: 'https://example.com/restaurant.jpg' } },
+  annualSavingPercent: 50, discovery: { selected: { id: 'r1', name: 'Actual Preview Pick', photoUrl: 'https://example.com/restaurant.jpg', address: '123 Main', lat: 34, lng: -118, distanceMiles: 1, cuisineTags: [], chainFlag: false, bestMatch: { menuItemId: 'm1', name: 'Real bowl', calories: 500, proteinG: 40, carbsG: 45, fatG: 15, confidence: 'HIGH' as const, matchScore: 0.2, nutritionBasis: 'estimated' as const } } },
   onSelect: jest.fn(), onRestore: jest.fn(), onManage: jest.fn(), onRetry: jest.fn(), onPurchase: jest.fn(), onDecline: jest.fn() }; }
 
 test('timeline derives trial end and reminder day from the selected store offer', () => {
@@ -142,4 +148,17 @@ test('unavailable pricing disables purchases and provides retry without inventin
   fireEvent.press(screen.getByTestId('paywall-retry-pricing'));
   expect(p.onRetry).toHaveBeenCalledTimes(1);
   expect(screen.queryByText(/free trial/i)).toBeNull();
+});
+
+test('variant B follows selected plan and shows truthful paid state when trial is unavailable', () => {
+  const p = props();
+  const screen = render(<PaywallView {...p} variant="B" />);
+  expect(screen.getByTestId('paywall-offer-timeline')).toBeTruthy();
+  expect(screen.getByText('Your Fitsy trial')).toBeTruthy();
+  expect(screen.queryByTestId('paywall-restaurant-card')).toBeNull();
+  screen.rerender(<PaywallView {...p} variant="B" plan="monthly" />);
+  expect(screen.getByText('Your Fitsy plan')).toBeTruthy();
+  expect(screen.queryByText(/reminder/i)).toBeNull();
+  expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toBe('Continue to purchase');
+  expect(screen.getByTestId('paywall-terms').props.children).toContain('$9.99 when you confirm');
 });

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { getPaywallIntent } from './paywallIntent';
-import { fetchPreviewRestaurants } from './previewSearch';
+import { fetchGuidedPreview } from './guidedPreview';
+import type { RestaurantResult } from '@fitsy/shared';
 
-export type PaywallRestaurant = { id: string; name: string; photoUrl?: string };
-export interface PaywallDiscovery { selected?: PaywallRestaurant; catalogFallback?: boolean; loading?: boolean }
+export interface PaywallDiscovery { selected?: RestaurantResult; catalogFallback?: boolean; loading?: boolean }
 const EMPTY_DISCOVERY: PaywallDiscovery = {};
 const LOS_ANGELES = { lat: 34.0522, lng: -118.2437 };
 
@@ -17,15 +17,17 @@ export function usePaywallDiscovery(focused: boolean): PaywallDiscovery {
     setValue({ loading: true });
     void getPaywallIntent().then(async intent => {
       if (!live) return;
-      if (intent?.restaurantId && intent.restaurantName) {
-        setValue({ selected: { id: intent.restaurantId, name: intent.restaurantName, photoUrl: intent.photoUrl } });
+      if (intent?.previewResult && intent.previewResult.id === intent.restaurantId) {
+        setValue({ selected: intent.previewResult });
         return;
       }
-      // The fallback is a real catalog result, queried for the launch city.
-      // Never turn an illustrative stock photo into a claimed restaurant photo.
-      const restaurants = await fetchPreviewRestaurants(LOS_ANGELES);
-      if (live) setValue(restaurants[0]
-        ? { selected: { id: restaurants[0].id, name: restaurants[0].name, photoUrl: restaurants[0].photoUrl }, catalogFallback: true }
+      // The guided public sample carries the same result contract as search.
+      // A stored summary from an older app version cannot fabricate meal data.
+      const area = intent?.area ?? LOS_ANGELES;
+      const response = await fetchGuidedPreview(area, intent?.query ?? '', intent?.targets ?? null);
+      const selected = response.data.find(row => row.id === intent?.restaurantId) ?? response.data[0];
+      if (live) setValue(selected
+        ? { selected, catalogFallback: true }
         : EMPTY_DISCOVERY);
     }).catch(() => { if (live) setValue(EMPTY_DISCOVERY); });
     return () => { live = false; };

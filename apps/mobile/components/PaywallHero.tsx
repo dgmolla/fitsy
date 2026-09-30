@@ -3,7 +3,7 @@ import { Image, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { DISHES } from '@/lib/dishImages';
 import { EDITORIAL, FONTS } from '@/lib/brand';
-import { RestaurantPhoto } from './RestaurantPhoto';
+import { HeroCard } from './DiscoveryCards';
 import type { PaywallDiscovery } from '@/lib/usePaywallDiscovery';
 
 /** Welcome imagery continues across the upper screen behind the real preview. */
@@ -25,16 +25,9 @@ export function PaywallMosaic({ height }: { height: number }) {
 export function PaywallHero({ discovery, compact = false }: { discovery: PaywallDiscovery; compact?: boolean }) {
   const restaurant = discovery.selected;
   return <View style={[s.frame, compact && s.frameCompact]} testID="paywall-hero">
-    {restaurant ? <View style={s.card} testID="paywall-restaurant-card">
-      <View style={s.photoFrame}>
-        <RestaurantPhoto uri={restaurant.photoUrl} name={restaurant.name} style={s.photo} />
-      </View>
-      <View style={s.info}>
-        <Text style={s.eyebrow}>{discovery.catalogFallback ? 'FROM THE LOS ANGELES CATALOG' : 'YOUR PREVIEW PICK'}</Text>
-        <Text style={s.name} numberOfLines={2} testID="paywall-restaurant-name">{restaurant.name}</Text>
-        <Text style={s.detail}>Explore meals and estimated nutrition</Text>
-      </View>
-    </View> : <View style={[s.card, s.empty]} testID="paywall-restaurant-unavailable">
+    {restaurant ? <><HeroCard result={restaurant} locked={false} paywallPreview />
+      {discovery.catalogFallback && <Text style={s.fallback}>A meal from the local catalog</Text>}</>
+      : <View style={[s.card, s.empty]} testID="paywall-restaurant-unavailable">
       <Text style={s.eyebrow}>{discovery.loading ? 'FINDING YOUR PREVIEW' : 'EXPLORE WITH FITSY'}</Text>
       <Text style={s.detail}>{discovery.loading ? 'Loading a restaurant from your preview…' : 'Discover restaurants in Los Angeles'}</Text>
     </View>}
@@ -44,7 +37,7 @@ export function PaywallHero({ discovery, compact = false }: { discovery: Paywall
 const s = StyleSheet.create({
   mosaic: { position: 'absolute', top: 0, left: 0, right: 0, overflow: 'hidden', backgroundColor: EDITORIAL.cream },
   tile: { position: 'absolute', width: '32%', height: 112, borderRadius: 9 },
-  frame: { marginTop: 27, marginBottom: 13, paddingHorizontal: 22 },
+  frame: { marginTop: 19, marginBottom: 8, paddingHorizontal: 22 },
   frameCompact: { marginTop: 18, marginBottom: 8 },
   card: { minHeight: 106, flexDirection: 'row', overflow: 'hidden', borderRadius: 18, backgroundColor: EDITORIAL.cream, borderWidth: 1, borderColor: EDITORIAL.border, shadowColor: EDITORIAL.green, shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.16, shadowRadius: 14, elevation: 4 },
   photoFrame: { width: 102, alignSelf: 'stretch', overflow: 'hidden' },
@@ -54,4 +47,5 @@ const s = StyleSheet.create({
   name: { fontFamily: FONTS.frauncesDisplayBold, fontSize: 19, lineHeight: 24, color: EDITORIAL.green, marginTop: 3 },
   detail: { fontFamily: FONTS.nunitoSans, fontSize: 11, lineHeight: 15, color: EDITORIAL.textMid, marginTop: 3 },
   empty: { flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 12 },
+  fallback: { fontFamily: FONTS.nunitoSans, fontSize: 10, color: EDITORIAL.textMid, textAlign: 'center', marginTop: 2 },
 });

@@ -9,7 +9,7 @@ import { recordOnboardingComplete } from '@/lib/onboardingCompletion';
 import { usePurchases } from '@/lib/usePurchases';
 import { useRedirectOnceEntitled } from '@/lib/useRedirectOnceEntitled';
 import { ensureSessionForPurchase } from '@/lib/purchaseSession';
-import { trackOnboardingScreenView, trackPaywallExperimentExposure } from '@/lib/analytics';
+import { trackOnboardingScreenView, trackPaywallExperimentExposure, trackPaywallShown } from '@/lib/analytics';
 import { usePreviewAccess } from '@/lib/usePreviewAccess';
 import { rememberPaywallDecline } from '@/lib/paywallAccess';
 import { openPurchasedDestination, resetWelcomeJourney } from '@/lib/paywallJourney';
@@ -17,11 +17,13 @@ import { annualSavingPercent, purchaseTerms, savingPercent } from '@/lib/purchas
 import { devTrialVisualOffer } from '@/lib/devTrialVisualOffer';
 import { clearOnboardingPreviewEntry } from '@/lib/onboardingPreviewEntry';
 import { usePaywallDiscovery } from '@/lib/usePaywallDiscovery';
+import { paywallVariantConfig, resolvePaywallVariant, type PaywallVariant } from '@/lib/paywallVariant';
+import { supabase } from '@/lib/supabase';
 
 type PlanId = 'monthly' | 'yearly';
 
 export default function PaymentScreen() {
-  const { devTrialVisual } = useLocalSearchParams<{ devTrialVisual?: string }>();
+  const { devTrialVisual, devPaywallVariant } = useLocalSearchParams<{ devTrialVisual?: string; devPaywallVariant?: string }>();
   const visualRequested = __DEV__ && devTrialVisual === '1';
   useOnboardingStep('payment');
   const navigation = useNavigation();
@@ -33,10 +35,23 @@ export default function PaymentScreen() {
   const [chosenPlan, setChosenPlan] = useState<PlanId | null>(null);
   const variants = usePreviewAccess();
   const exposure = useRef('');
+  const [userId, setUserId] = useState<string | null>(null);
+  const [identityReady, setIdentityReady] = useState(false);
+  const testerOverride: PaywallVariant | undefined = __DEV__ && (devPaywallVariant === 'A' || devPaywallVariant === 'B') ? devPaywallVariant : undefined;
+  useEffect(() => {
+    if (!focused) return;
+    let active = true;
+    void supabase.auth.getSession().then(({ data }) => { if (active) setUserId(data.session?.user.id ?? null); })
+      .catch(() => { if (active) setUserId(null); })
+      .finally(() => { if (active) setIdentityReady(true); });
+    return () => { active = false; };
+  }, [focused]);
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [modal, setModal] = useState<PaywallExitModal>('none');
   const { offering, introEligibility, introEligibilityReady, refreshOffering, purchase, restore, showManageSubscriptions, entitled } = usePurchases();
+  const variantConfig = paywallVariantConfig(offering?.metadata);
+  const paywallVariant = resolvePaywallVariant(variantConfig, userId, testerOverride);
   const visual = devTrialVisualOffer(offering, visualRequested);
   const shownOffering = visual?.offering ?? offering;
   const shownEligibility = visual?.eligibility ?? introEligibility;
@@ -86,12 +101,14 @@ export default function PaymentScreen() {
   }, [offering, refreshOffering]);
 
   useEffect(() => {
-    if (!offering || visualRequested) return;
-    const key = `${offering.identifier}:${variants.access}:mosaic_benefits`;
+    if (!offering || visualRequested || !userId || !focused || !identityReady) return;
+    const key = `${userId}:${offering.identifier}:${variants.access}:${paywallVariant}:${variantConfig.version}`;
     if (exposure.current === key) return;
     exposure.current = key;
-    trackPaywallExperimentExposure({ offering_id: offering.identifier, access_variant: variants.access, image_variant: 'meal', layout_variant: 'mosaic_benefits' });
-  }, [offering, variants.access, visualRequested]);
+    const attribution = { paywall_variant: paywallVariant, paywall_config_version: variantConfig.version };
+    trackPaywallShown({ source: 'onboarding', ...attribution });
+    trackPaywallExperimentExposure({ offering_id: offering.identifier, access_variant: variants.access, image_variant: 'meal', layout_variant: paywallVariant === 'A' ? 'mosaic_benefits' : 'trial_timeline', ...attribution });
+  }, [offering, variants.access, visualRequested, userId, focused, identityReady, paywallVariant, variantConfig.version]);
 
   async function declineSubscription() {
     try {
@@ -142,7 +159,7 @@ export default function PaymentScreen() {
         return;
       }
       if (!(await ensureSessionForPurchase())) return;
-      const isPro = await purchase(pkg, discounted ? 'onboarding_discount' : 'onboarding');
+      const isPro = await purchase(pkg, discounted ? 'onboarding_discount' : 'onboarding', { paywall_variant: paywallVariant, paywall_config_version: variantConfig.version });
       if (!isPro) return; // cancelled or errored - stay on screen
       await completeOnboarding(discounted);
     } finally {
@@ -175,6 +192,7 @@ export default function PaymentScreen() {
     }
   }
 
+  if (!identityReady) return null;
   return (
     <>
       <PaywallView
@@ -183,6 +201,7 @@ export default function PaymentScreen() {
         monthly={monthlyTerms}
         annualSavingPercent={annualPercent}
         discovery={discovery}
+        variant={paywallVariant}
         loading={loading}
         restoring={restoring}
         checkingPlans={checkingPlans}
