@@ -25,8 +25,8 @@ export function PaywallMosaic({ height }: { height: number }) {
 export function PaywallHero({ discovery, compact = false }: { discovery: PaywallDiscovery; compact?: boolean }) {
   const restaurant = discovery.selected;
   return <View style={[s.frame, compact && s.frameCompact]} testID="paywall-hero">
-    {restaurant ? <><HeroCard result={restaurant} locked={false} paywallPreview />
-      {discovery.catalogFallback && <Text style={s.fallback}>A meal from the local catalog</Text>}</>
+    {restaurant ? <><HeroCard result={restaurant} locked={false} paywallPreview hideDistance={discovery.catalogFallback} />
+      {discovery.catalogFallback && <Text style={s.fallback}>Catalog sample</Text>}</>
       : <View style={[s.card, s.empty]} testID="paywall-restaurant-unavailable">
       <Text style={s.eyebrow}>{discovery.loading ? 'FINDING YOUR PREVIEW' : 'EXPLORE WITH FITSY'}</Text>
       <Text style={s.detail}>{discovery.loading ? 'Loading a restaurant from your preview…' : 'Discover restaurants in Los Angeles'}</Text>

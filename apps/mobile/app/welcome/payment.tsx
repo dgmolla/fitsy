@@ -102,13 +102,13 @@ export default function PaymentScreen() {
 
   useEffect(() => {
     if (!offering || visualRequested || !userId || !focused || !identityReady) return;
-    const key = `${userId}:${offering.identifier}:${variants.access}:${paywallVariant}:${variantConfig.version}`;
+    const key = `${userId}:${offering.identifier}:${variants.access}:${paywallVariant}:${variantConfig.version}:${!!testerOverride}`;
     if (exposure.current === key) return;
     exposure.current = key;
-    const attribution = { paywall_variant: paywallVariant, paywall_config_version: variantConfig.version };
+    const attribution = { paywall_variant: paywallVariant, paywall_config_version: variantConfig.version, paywall_tester_override: !!testerOverride };
     trackPaywallShown({ source: 'onboarding', ...attribution });
     trackPaywallExperimentExposure({ offering_id: offering.identifier, access_variant: variants.access, image_variant: 'meal', layout_variant: paywallVariant === 'A' ? 'mosaic_benefits' : 'trial_timeline', ...attribution });
-  }, [offering, variants.access, visualRequested, userId, focused, identityReady, paywallVariant, variantConfig.version]);
+  }, [offering, variants.access, visualRequested, userId, focused, identityReady, paywallVariant, variantConfig.version, testerOverride]);
 
   async function declineSubscription() {
     try {
@@ -159,7 +159,7 @@ export default function PaymentScreen() {
         return;
       }
       if (!(await ensureSessionForPurchase())) return;
-      const isPro = await purchase(pkg, discounted ? 'onboarding_discount' : 'onboarding', { paywall_variant: paywallVariant, paywall_config_version: variantConfig.version });
+      const isPro = await purchase(pkg, discounted ? 'onboarding_discount' : 'onboarding', { paywall_variant: paywallVariant, paywall_config_version: variantConfig.version, paywall_tester_override: !!testerOverride });
       if (!isPro) return; // cancelled or errored - stay on screen
       await completeOnboarding(discounted);
     } finally {

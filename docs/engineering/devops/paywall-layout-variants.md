@@ -32,6 +32,7 @@ The same authenticated Supabase user ID and version resolve to the same variant 
 No email or relay address enters the assignment.
 The paywall view events `paywall_shown` and `paywall_experiment_exposed`, plus the purchase outcome event `paywall_result`, carry `paywall_variant` and `paywall_config_version`.
 Filter those events by user ID, version and offering ID in PostHog to inspect assignment.
+Exclude `paywall_tester_override=true` when evaluating cohorts.
 
 On a development build, open `/welcome/payment?devPaywallVariant=A` or `...=B` to review both layouts on one phone.
 The tester override changes presentation only; RevenueCat's live eligibility, product and entitlement remain authoritative.

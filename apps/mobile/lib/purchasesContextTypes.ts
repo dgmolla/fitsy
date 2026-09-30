@@ -43,7 +43,7 @@ export interface PurchasesContextValue {
    * 'onboarding', 'profile'). Resolves to true whenever the store flow
    * confirmed Pro (and sets `entitled` true) - see settleAfterStore.
    */
-  purchase: (pkg: PurchasesPackage, source: string, attribution?: { paywall_variant: 'A' | 'B'; paywall_config_version: string }) => Promise<boolean>;
+  purchase: (pkg: PurchasesPackage, source: string, attribution?: { paywall_variant: 'A' | 'B'; paywall_config_version: string; paywall_tester_override?: boolean }) => Promise<boolean>;
   /** Present the RevenueCat paywall. `source` tags analytics. Resolves like `purchase`. */
   presentPaywall: (source: string) => Promise<boolean>;
   /** Open the owning store's subscription management when known. */

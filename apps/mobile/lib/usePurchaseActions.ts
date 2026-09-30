@@ -36,7 +36,7 @@ export function usePurchaseActions({ setCustomerInfo, markStoreConfirmed, syncEn
   );
 
   const purchase = useCallback(
-    async (pkg: PurchasesPackage, source: string, attribution?: { paywall_variant: 'A' | 'B'; paywall_config_version: string }): Promise<boolean> => {
+    async (pkg: PurchasesPackage, source: string, attribution?: { paywall_variant: 'A' | 'B'; paywall_config_version: string; paywall_tester_override?: boolean }): Promise<boolean> => {
       const { data } = await supabase.auth.getSession();
       const userId = data.session?.user.id;
       const identified = userId

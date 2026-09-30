@@ -90,7 +90,7 @@ async function openRestaurantOrPaywall(
 
 // ─── Hero card (#01) ──────────────────────────────────────────────────────────
 
-export function HeroCard({ result, locked, unlocking, containerRef, onOpen, paywallPreview = false }: { result: RestaurantResult; locked: boolean; unlocking?: () => void; containerRef?: React.RefObject<View | null>; onOpen?: () => void; paywallPreview?: boolean }) {
+export function HeroCard({ result, locked, unlocking, containerRef, onOpen, paywallPreview = false, hideDistance = false }: { result: RestaurantResult; locked: boolean; unlocking?: () => void; containerRef?: React.RefObject<View | null>; onOpen?: () => void; paywallPreview?: boolean; hideDistance?: boolean }) {
   const bm = result.bestMatch;
   return (
     <View ref={containerRef} collapsable={false} testID={paywallPreview ? 'paywall-restaurant-card' : 'preview-pick-1'}>
@@ -128,7 +128,7 @@ export function HeroCard({ result, locked, unlocking, containerRef, onOpen, payw
             <Text style={hero.indexText}>01</Text>
           </View>}
           <DietaryBadges options={result.dietaryOptions} />
-          {Number.isFinite(result.distanceMiles) && <Text style={hero.distText}>{result.distanceMiles.toFixed(1)} mi</Text>}
+          {!hideDistance && Number.isFinite(result.distanceMiles) && <Text style={hero.distText}>{result.distanceMiles.toFixed(1)} mi</Text>}
         </View>
         <Text style={[hero.restName, paywallPreview && paywallCard.name]} numberOfLines={1} testID={paywallPreview ? 'paywall-restaurant-name' : undefined}>{result.name}</Text>
         {locked && <LockedDishTeaser variant="hero" />}
