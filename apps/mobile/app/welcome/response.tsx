@@ -21,7 +21,7 @@ function ResponseScreen() {
     return () => { live = false; };
   }, []));
   return <WelcomeScreen progress={0.29} title={pitch?.headline ?? 'Made for your meals.'} subtitle={pitch?.body}
-    canContinue={!!pitch} onContinue={() => router.push('/welcome/value-payoff')} continueLabel="Show me how">
+    canContinue={!!pitch} onContinue={() => router.push('/welcome/goal-payoff')} continueLabel="See how it fits">
     {pitch && <OnboardingApproachStory approach={pitch.approach} />}
   </WelcomeScreen>;
 }

@@ -5,7 +5,7 @@ import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { OnboardingGoalGraph } from '@/components/OnboardingGoalGraph';
 import { rememberGoalReturnTo, useOnboardingStep } from '@/lib/onboardingResume';
 import { getOnboardingData, type OnboardingData } from '@/lib/onboardingStorage';
-import { onboardingGoalStory } from '@/lib/onboardingPersonalization';
+import { onboardingGoalPayoff } from '@/lib/onboardingPersonalization';
 import { trackOnboardingScreenView } from '@/lib/analytics';
 
 function GoalPayoffScreen() {
@@ -22,12 +22,12 @@ function GoalPayoffScreen() {
         return;
       }
       setData(saved);
-      trackOnboardingScreenView(`goal_payoff_${saved.goal}`);
+      trackOnboardingScreenView(`goal_payoff_${saved.goal}_${saved.tried ?? 'nothing'}`);
     });
     return () => { live = false; };
   }, []));
   if (!data?.goal) return null;
-  const story = onboardingGoalStory(data?.goal);
+  const story = onboardingGoalPayoff(data.goal, data.tried);
   return <WelcomeScreen progress={0.4} title={story.title} subtitle={story.body}
     canContinue onContinue={() => router.push('/welcome/target-setup')} continueLabel="Set my meal targets">
     <OnboardingGoalGraph goal={data.goal} />

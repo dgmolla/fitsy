@@ -73,13 +73,10 @@ it.each([
   await act(async () => { fireEvent.press(screen.getByTestId('tried-check_online')); });
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   expect(await screen.findByTestId('story-check_online')).toBeTruthy();
-  expect(screen.getByText('One place to compare')).toBeTruthy();
-  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
-  expect(await screen.findByTestId('payoff-check_online')).toBeTruthy();
-  expect(screen.getByText('Protein target')).toBeTruthy();
+  expect(screen.getByText('Nutrition in view')).toBeTruthy();
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   expect(await screen.findByText(graphLabel)).toBeTruthy();
-  expect(screen.getByText(/Illustration only/)).toBeTruthy();
+  expect(screen.getByText(/Conceptual paths/)).toBeTruthy();
   expect(await getOnboardingResume()).toBe('/welcome/goal-payoff');
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/target-setup'));
@@ -107,9 +104,7 @@ it('returns a missing-goal legacy payoff to its saved destination after goal sel
   await waitFor(() => expect(screen.getByTestId('welcome-continue').props.accessibilityState?.disabled).toBe(true));
   await act(async () => { fireEvent.press(screen.getByTestId('goal-lose_fat')); });
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
-  expect(await screen.findByTestId('payoff-check_online')).toBeTruthy();
-  expect(screen.getPathname()).toBe('/welcome/value-payoff');
-  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  expect(screen.getPathname()).toBe('/welcome/goal-payoff');
   expect(await screen.findByText('Consistency with your fat-loss plan')).toBeTruthy();
 });
 

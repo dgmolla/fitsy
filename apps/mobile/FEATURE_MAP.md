@@ -14,12 +14,12 @@ signed in without targets -> `/macro-setup`.
 | `/welcome/problem` | fresh install | "Find meals that fit"; login link reads "Have an account? Log in" | animated dish columns; first onboarding screen |
 | `/welcome/promise` | legacy links | redirects to location | Retired duplicate introduction |
 | `/welcome/goal` | covered area | `goal-performance`, `goal-build_muscle`, `goal-lose_fat` | Goal personalizes the story and assisted targets |
-| `/welcome/tried` | goal choice | `tried-meal_prep`, `tried-calorie_apps` | Four prior approaches personalize the response, fitness payoff and tour |
-| `/welcome/response` | prior approach | `welcome-continue` | Relevant response, then a personalized fitness-goal payoff |
+| `/welcome/tried` | goal choice | `tried-meal_prep`, `tried-calorie_apps` | Four prior approaches personalize the response, graph payoff and tour |
+| `/welcome/response` | prior approach | `welcome-continue` | First payoff, then the personalized goal graph |
 | `/welcome/location-permission` | welcome CTA | `location-use-current`, `location-choose-area`, `location-continue-area` | Saved area becomes the primary action; GPS and manual alternatives remain; actual coverage determines continuation |
-| `/welcome/value-abundance` | legacy links only | redirects to value-payoff | Retired benefits screen |
-| `/welcome/value-payoff` | personalized response | `fitness-payoff-diagram`, `welcome-continue` | Connects meal targets and eating out to fitness goals; meal-prep path shows home and restaurant choices |
-| `/welcome/goal-payoff` | approach-specific payoff | `goal-progress-graph` | Clearly illustrative goal-specific consistency graph; then target choice |
+| `/welcome/value-abundance` | legacy links only | redirects to goal-payoff | Retired benefits screen |
+| `/welcome/value-payoff` | legacy links only | redirects to goal-payoff | Retired middle payoff screen |
+| `/welcome/goal-payoff` | response | `goal-progress-graph` | Second payoff; conceptual graph and copy reflect goal and prior approach, then target choice |
 | `/welcome/how-it-works` | confirmed meal targets | `nutrition-source-published`, `nutrition-source-estimated` | Source transparency and portion uncertainty before discovery |
 | `/welcome/target-setup` | fitness payoff | `target-mode-saved`, `target-mode-known`, `target-mode-estimate` | Choose saved, own or assisted targets, then confirm once; saved targets still visit nutrition trust |
 | `/welcome/macros-intro` | optional target help | `welcome-continue` | Returns to target choice |

@@ -22,6 +22,10 @@ tags: [onboarding, discovery, changed-journey]
     id: welcome-start
 - tapOn:
     id: location-choose-area
+# On a small iPhone, DTLA exists in accessibility but sits below the visible sheet.
+- swipe:
+    start: "50%,78%"
+    end: "50%,47%"
 - tapOn: "Search near DTLA"
 - extendedWaitUntil:
     visible:
@@ -51,12 +55,8 @@ tags: [onboarding, discovery, changed-journey]
 - tapOn:
     id: welcome-continue
 - assertVisible:
-    id: payoff-meal_prep
-- assertVisible: "A night out.*Still your kind of meal.*"
-- tapOn:
-    id: welcome-continue
-- assertVisible:
     id: goal-progress-graph
+- assertVisible: ".*When dinner isn't prepped.*"
 - assertVisible: "Consistency with your training nutrition"
 - tapOn:
     id: welcome-continue
