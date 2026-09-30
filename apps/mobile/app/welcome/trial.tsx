@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Redirect, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
@@ -29,7 +30,8 @@ export default function TrialScreen() {
   const annual = purchaseTerms(shownOffering?.annual?.product, shownOffering?.annual ? shownEligibility[shownOffering.annual.product.identifier] : undefined);
   const monthly = purchaseTerms(shownOffering?.monthly?.product, shownOffering?.monthly ? shownEligibility[shownOffering.monthly.product.identifier] : undefined);
   const selectedPlan = defaultTrialPlan(annual, monthly);
-  const trial = trialPresentation(selectedPlan === 'yearly' ? annual : monthly).trial;
+  const selectedTerms = selectedPlan === 'yearly' ? annual : monthly;
+  const trial = trialPresentation(selectedTerms).trial;
   const [plansChecked, setPlansChecked] = useState(false);
   const retryInFlight = useRef(false);
   const navigating = useRef(false);
@@ -63,9 +65,14 @@ export default function TrialScreen() {
   return <WelcomeScreen progress={1} title={trial ? 'Meet Fitsy Pro' : 'Checking your plans'}
     subtitle={trial ? 'We want you to try Fitsy for free' : 'Your available plans will appear next.'}
     continueLabel={checkingPlans ? 'Checking plans…' : shownOffering ? 'Continue' : 'Retry plans'} canContinue={!checkingPlans}
-    onContinue={() => { void continueOrRetry(); }}>
+    onContinue={() => { void continueOrRetry(); }}
+    beforeContinue={trial && !checkingPlans ? <View style={s.reassurance} testID="trial-no-payment"><Ionicons name="checkmark" size={20} color={EDITORIAL.green} /><Text style={s.reassuranceText}>No payment due now</Text></View> : undefined}
+    afterContinue={<Text style={s.note} testID="trial-offer-note">{visual && trial ? `Synthetic trial (${trial}) for visual testing. Purchase is disabled. ${selectedTerms?.charge ?? ''}` : !offering && plansChecked ? 'Plans could not load. Check your connection and retry.' : trial ? selectedTerms?.charge : 'Checking current plans and trial eligibility…'}</Text>}>
     <TrialArtwork />
-    <Text style={s.note} testID="trial-offer-note">{visual ? `Synthetic trial (${trial}) for visual testing. Purchase is disabled.` : !offering && plansChecked ? 'Plans could not load. Check your connection and retry.' : trial ? `${trial} with the selected eligible plan. Review price and renewal terms next.` : 'Checking current plans and trial eligibility…'}</Text>
   </WelcomeScreen>;
 }
-const s = StyleSheet.create({ note: { ...TEXT.bodySmall, color: EDITORIAL.textMid, textAlign: 'center', lineHeight: 21 } });
+const s = StyleSheet.create({
+  reassurance: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, marginBottom: 8 },
+  reassuranceText: { ...TEXT.body, color: EDITORIAL.green },
+  note: { ...TEXT.bodySmall, color: EDITORIAL.textMid, textAlign: 'center', lineHeight: 19, marginTop: 8 },
+});

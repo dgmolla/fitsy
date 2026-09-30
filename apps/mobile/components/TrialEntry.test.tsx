@@ -119,6 +119,7 @@ test.each([
   mockEligibility = eligibility;
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
+  expect(screen.queryByTestId('trial-no-payment')).toBeNull();
   expect(screen.queryByText('Find your next meal with Fitsy.')).toBeNull();
   expect(screen.queryByText('Trial reminder choice')).toBeNull();
 });
@@ -129,7 +130,9 @@ test('eligible trial introduction keeps the optional reminder choice', async () 
   mockEligibility = { annual: true, monthly: false };
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
   await waitFor(() => expect(screen.getByText('Meet Fitsy Pro')).toBeTruthy());
-  expect(screen.getByText('7 days with the selected eligible plan. Review price and renewal terms next.')).toBeTruthy();
+  expect(screen.getByTestId('trial-no-payment')).toBeTruthy();
+  expect(screen.getByText('No payment due now')).toBeTruthy();
+  expect(screen.getByText('7 days free, then $59.99 every 1 year. No charge until the trial ends.')).toBeTruthy();
   const continueButton = screen.getByTestId('welcome-continue');
   fireEvent.press(continueButton);
   fireEvent.press(continueButton);
@@ -147,7 +150,8 @@ test('mixed duration onboarding describes the annual plan selected at checkout',
   mockEligibilityReady = true;
   mockEligibility = { annual: true, monthly: true };
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
-  expect(screen.getByText('2 days with the selected eligible plan. Review price and renewal terms next.')).toBeTruthy();
+  expect(screen.getByTestId('trial-no-payment')).toBeTruthy();
+  expect(screen.getByText('2 days free, then $59.99 every 1 year. No charge until the trial ends.')).toBeTruthy();
 });
 
 test('pending eligibility holds Continue before choosing the reminder or plans', async () => {
@@ -157,6 +161,7 @@ test('pending eligibility holds Continue before choosing the reminder or plans',
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
   fireEvent.press(screen.getByTestId('welcome-continue'));
   expect(screen.getPathname()).toBe('/welcome/trial');
+  expect(screen.queryByTestId('trial-no-payment')).toBeNull();
 });
 
 test('missing offering requires an explicit retry before trial routing', async () => {
