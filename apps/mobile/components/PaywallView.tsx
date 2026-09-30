@@ -54,13 +54,13 @@ export function PaywallView(props: Props) {
 
       <ScrollView style={s.scroll} contentContainerStyle={[s.content, compact && s.contentCompact]} showsVerticalScrollIndicator={false} bounces={false}>
         <View>
-          <PaywallHero discovery={props.discovery} />
+          <PaywallHero discovery={props.discovery} compact={compact} />
           <Text style={[s.title, compact && s.titleCompact]}>Find meals that fit.</Text>
           <View style={[s.benefits, compact && s.benefitsCompact]}>
             {['Discover meals in Los Angeles', 'Find nearby options for your goals', 'Compare estimated nutrition'].map(benefit =>
               <View key={benefit} style={s.benefitRow}><Ionicons name="checkmark-circle" size={17} color={EDITORIAL.greenMid} /><Text style={[s.benefit, compact && s.benefitCompact]}>{benefit}</Text></View>)}
           </View>
-          <Text style={s.cancel}>No commitment, cancel anytime</Text>
+          <Text style={[s.cancel, compact && s.cancelCompact]}>No commitment, cancel anytime</Text>
           {props.visualPreview && <Text style={s.visualNote} testID="dev-trial-visual-note">Synthetic trial eligibility for visual testing. Prices are from the live Test Store; purchase is disabled.</Text>}
           <View style={s.plans}>
             {([{ id: 'yearly', name: 'Annual', terms: annual }, { id: 'monthly', name: 'Monthly', terms: monthly }] as const).map(option => {
@@ -127,6 +127,7 @@ const s = StyleSheet.create({
   benefit: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 13, lineHeight: 19, color: EDITORIAL.green },
   benefitCompact: { fontSize: 12, lineHeight: 18 },
   cancel: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 12, lineHeight: 17, color: EDITORIAL.green, textAlign: 'center', marginTop: 9, marginBottom: 12 },
+  cancelCompact: { marginTop: 7, marginBottom: 8 },
   visualNote: { ...TEXT.bodySmall, fontSize: 11, lineHeight: 15, color: EDITORIAL.textMid, textAlign: 'center', marginBottom: 8 },
   plans: { gap: 7 },
   plan: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 6, minHeight: 52, borderRadius: 13, borderWidth: 1, borderColor: EDITORIAL.border, backgroundColor: EDITORIAL.cream },

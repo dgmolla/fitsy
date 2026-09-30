@@ -22,9 +22,9 @@ export function PaywallMosaic({ height }: { height: number }) {
 }
 
 /** Restaurant identity and photo are sourced from the selection or live catalog. */
-export function PaywallHero({ discovery }: { discovery: PaywallDiscovery }) {
+export function PaywallHero({ discovery, compact = false }: { discovery: PaywallDiscovery; compact?: boolean }) {
   const restaurant = discovery.selected;
-  return <View style={s.frame} testID="paywall-hero">
+  return <View style={[s.frame, compact && s.frameCompact]} testID="paywall-hero">
     {restaurant ? <View style={s.card} testID="paywall-restaurant-card">
       <RestaurantPhoto uri={restaurant.photoUrl} name={restaurant.name} style={s.photo} />
       <View style={s.info}>
@@ -43,6 +43,7 @@ const s = StyleSheet.create({
   mosaic: { position: 'absolute', top: 0, left: 0, right: 0, overflow: 'hidden', backgroundColor: EDITORIAL.cream },
   tile: { position: 'absolute', width: '32%', height: 112, borderRadius: 9 },
   frame: { marginTop: 27, marginBottom: 13, paddingHorizontal: 22 },
+  frameCompact: { marginTop: 18, marginBottom: 8 },
   card: { minHeight: 106, flexDirection: 'row', overflow: 'hidden', borderRadius: 18, backgroundColor: EDITORIAL.cream, borderWidth: 1, borderColor: EDITORIAL.border, shadowColor: EDITORIAL.green, shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.16, shadowRadius: 14, elevation: 4 },
   photo: { width: 102, height: 106 },
   info: { flex: 1, minWidth: 0, justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 9 },
