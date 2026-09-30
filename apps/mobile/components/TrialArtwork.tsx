@@ -10,14 +10,18 @@ export function TrialArtwork({ reminder = false }: { reminder?: boolean }) {
     {reminder ? <>
       <View style={[s.orbit, compact && s.orbitCompact]}><View style={[s.inner, compact && s.innerCompact]}><Ionicons name="notifications-outline" size={compact ? 70 : 88} color={EDITORIAL.green} /></View></View>
       <View style={s.badge}><Ionicons name="checkmark-circle" size={20} color={EDITORIAL.greenMid} /><Text style={s.badgeText}>A little heads-up</Text></View>
-    </> : <Image source={require('../assets/app-screenshot.png')} resizeMode="contain" style={[s.appScreenshot, compact && s.appScreenshotCompact]} />}
+    </> : <View style={[s.phone, compact && s.phoneCompact]}>
+      <Image source={require('../assets/app-screenshot.png')} resizeMode="contain" style={[s.display, compact && s.displayCompact]} />
+    </View>}
   </View>;
 }
 const s = StyleSheet.create({
   wrap: { alignItems: 'center', justifyContent: 'center', paddingVertical: 18 },
   wrapCompact: { paddingVertical: 8 },
-  appScreenshot: { width: 166, height: 361, borderRadius: 20, borderWidth: 1, borderColor: EDITORIAL.border },
-  appScreenshotCompact: { width: 132, height: 287, borderRadius: 16 },
+  phone: { width: 178, height: 373, padding: 5, borderRadius: 29, backgroundColor: '#252b28', borderWidth: 1, borderColor: '#626a65', shadowColor: '#17251c', shadowOpacity: 0.16, shadowRadius: 12, shadowOffset: { width: 0, height: 7 }, elevation: 5 },
+  phoneCompact: { width: 142, height: 297, padding: 4, borderRadius: 24 },
+  display: { width: 166, height: 361, borderRadius: 23, overflow: 'hidden' },
+  displayCompact: { width: 132, height: 287, borderRadius: 19 },
   orbit: { width: 186, height: 186, borderRadius: 93, borderWidth: 1, borderColor: EDITORIAL.border, alignItems: 'center', justifyContent: 'center' },
   orbitCompact: { width: 150, height: 150, borderRadius: 75 },
   inner: { width: 148, height: 148, borderRadius: 74, backgroundColor: EDITORIAL.greenAccentTint, alignItems: 'center', justifyContent: 'center' },
