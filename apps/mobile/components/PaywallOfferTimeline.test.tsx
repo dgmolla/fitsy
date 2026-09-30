@@ -1,25 +1,65 @@
 jest.unmock('react-native');
+jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { render } from '@testing-library/react-native';
 import { PaywallOfferTimeline, projectedChargeDate } from './PaywallOfferTimeline';
 import { purchaseTerms } from '../lib/purchaseTerms';
+import { trialReminderDate } from '../lib/notificationPlan';
 
-const annual = { priceString: '$79.99', subscriptionPeriod: 'P1Y', introPrice: { price: 0, priceString: '$0', period: 'P2W', periodUnit: 'WEEK', periodNumberOfUnits: 2, cycles: 1 } };
+const now = new Date(2026, 8, 30, 12);
+const product = (period: string, priceString: string, subscriptionPeriod = 'P1Y') =>
+  ({ priceString, subscriptionPeriod, introPrice: { price: 0, priceString: '$0', period, cycles: 1 } });
 
-test('selected eligible store offer drives trial duration and projected date', () => {
-  const terms = purchaseTerms(annual, true);
-  expect(projectedChargeDate(terms, new Date(2026, 8, 30))?.toDateString()).toBe(new Date(2026, 9, 14).toDateString());
-  const view = render(<PaywallOfferTimeline terms={terms} now={new Date(2026, 8, 30)} />);
-  expect(view.getByText('After 14 days')).toBeTruthy();
-  expect(view.getByText(/first \$79.99 charge is October 14, 2026/)).toBeTruthy();
-  expect(view.queryByText(/reminder/i)).toBeNull();
+test.each([
+  ['P2W', '$79.99', 'P1Y', 14],
+  ['P1W', '$9.99', 'P1M', 7],
+])('selected %s offer drives all three steps and actual reminder policy', (trialPeriod, price, billingPeriod, days) => {
+  const terms = purchaseTerms(product(trialPeriod, price, billingPeriod), true);
+  const charge = projectedChargeDate(terms, now)!;
+  const reminder = trialReminderDate(charge);
+  const view = render(<PaywallOfferTimeline terms={terms} now={now} reminderAvailability="opt-in" />);
+  expect(charge.toDateString()).toBe(new Date(2026, 8, 30 + days, 12).toDateString());
+  expect(view.getByTestId('paywall-step-today')).toBeTruthy();
+  expect(view.getByTestId('paywall-step-reminder')).toBeTruthy();
+  expect(view.getByTestId('paywall-step-charge')).toBeTruthy();
+  expect(view.getByText(new RegExp(`Day ${days}.*Oct`))).toBeTruthy();
+  expect(view.getByText(new RegExp(`Day .* ${reminder.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`))).toBeTruthy();
+  expect(view.getByText(new RegExp(`first \\${price} charge`))).toBeTruthy();
+  expect(view.getByText(/Turn it on in notification settings/)).toBeTruthy();
+  expect(view.queryByText(/Your Fitsy plan/)).toBeNull();
 });
 
-test('ineligible offer shows paid first charge without trial promise', () => {
-  const terms = purchaseTerms(annual, false);
-  expect(projectedChargeDate(terms, new Date(2026, 8, 30))).toBeNull();
-  const view = render(<PaywallOfferTimeline terms={terms} now={new Date(2026, 8, 30)} />);
-  expect(view.getByText('Your Fitsy plan')).toBeTruthy();
-  expect(view.queryByText(/trial/i)).toBeNull();
-  expect(view.getByText(/\$79.99 is charged/)).toBeTruthy();
+test('reminder states do not promise delivery before store confirmation', () => {
+  const terms = purchaseTerms(product('P1W', '$9.99', 'P1M'), true);
+  const view = render(<PaywallOfferTimeline terms={terms} now={now} reminderAvailability="permission-off" />);
+  expect(view.getByText(/Notifications are off/)).toBeTruthy();
+  view.rerender(<PaywallOfferTimeline terms={terms} now={now} reminderAvailability="enabled" />);
+  expect(view.getByText(/schedule it after the store confirms/)).toBeTruthy();
+  view.rerender(<PaywallOfferTimeline terms={terms} now={now} reminderAvailability="unavailable" />);
+  expect(view.getByText(/scheduling is unavailable/)).toBeTruthy();
+});
+
+test('connectors use their own wrapping row height and meet the next circle edge', () => {
+  const terms = purchaseTerms(product('P1W', '$9.99', 'P1M'), true);
+  const view = render(<PaywallOfferTimeline terms={terms} now={now} />);
+  for (const id of ['paywall-step-today', 'paywall-step-reminder']) {
+    const row = StyleSheet.flatten(view.getByTestId(id).props.style);
+    const connector = StyleSheet.flatten(view.getByTestId(`${id}-connector`).props.style);
+    const circle = StyleSheet.flatten(view.getByTestId(`${id}-circle`).props.style);
+    expect(row.height).toBeUndefined();
+    expect(connector.top).toBe(circle.height);
+    expect(connector.bottom).toBe(0);
+    expect(connector.left + connector.width / 2).toBe(circle.width / 2);
+  }
+  expect(view.queryByTestId('paywall-step-charge-connector')).toBeNull();
+});
+
+test('ineligible offer shows immediate paid terms without a fictitious trial', () => {
+  const terms = purchaseTerms(product('P2W', '$79.99'), false);
+  expect(projectedChargeDate(terms, now)).toBeNull();
+  const view = render(<PaywallOfferTimeline terms={terms} now={now} />);
+  expect(view.getByTestId('paywall-offer-paid')).toBeTruthy();
+  expect(view.queryByTestId('paywall-step-reminder')).toBeNull();
+  expect(view.getByText(/\$79.99 when you confirm/)).toBeTruthy();
 });

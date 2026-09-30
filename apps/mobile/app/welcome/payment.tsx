@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useOnboardingStep } from '@/lib/onboardingResume';
 import { useIsFocused } from '@react-navigation/native';
-import { Alert } from 'react-native';
+import { Alert, AppState } from 'react-native';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { PaywallView } from '@/components/PaywallView';
 import { PaywallExitModals, type PaywallExitModal } from '@/components/PaywallExitModals';
@@ -19,6 +19,9 @@ import { clearOnboardingPreviewEntry } from '@/lib/onboardingPreviewEntry';
 import { usePaywallDiscovery } from '@/lib/usePaywallDiscovery';
 import { paywallVariantConfig, resolvePaywallVariant, type PaywallVariant } from '@/lib/paywallVariant';
 import { supabase } from '@/lib/supabase';
+import { readReminderPreferences } from '@/lib/notificationSchedule';
+import { getNotificationPermission } from '@/lib/useNotifications';
+import type { ReminderAvailability } from '@/components/PaywallOfferTimeline';
 
 type PlanId = 'monthly' | 'yearly';
 
@@ -37,6 +40,7 @@ export default function PaymentScreen() {
   const exposure = useRef('');
   const [userId, setUserId] = useState<string | null>(null);
   const [identityReady, setIdentityReady] = useState(false);
+  const [reminderAvailability, setReminderAvailability] = useState<ReminderAvailability>('unavailable');
   const testerOverride: PaywallVariant | undefined = __DEV__ && (devPaywallVariant === 'A' || devPaywallVariant === 'B') ? devPaywallVariant : undefined;
   useEffect(() => {
     if (!focused) return;
@@ -46,6 +50,21 @@ export default function PaymentScreen() {
       .finally(() => { if (active) setIdentityReady(true); });
     return () => { active = false; };
   }, [focused]);
+  useEffect(() => {
+    if (!focused || !userId) return;
+    let active = true;
+    const refresh = () => {
+      void Promise.all([getNotificationPermission(), readReminderPreferences(userId, { throwOnError: true })])
+        .then(([permission, preferences]) => {
+          if (active) setReminderAvailability(permission === 'denied' ? 'permission-off'
+            : permission === 'granted' && preferences.trial ? 'enabled' : 'opt-in');
+        })
+        .catch(() => { if (active) setReminderAvailability('unavailable'); });
+    };
+    refresh();
+    const listener = AppState.addEventListener('change', state => { if (state === 'active') refresh(); });
+    return () => { active = false; listener.remove(); };
+  }, [focused, userId]);
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [modal, setModal] = useState<PaywallExitModal>('none');
@@ -202,6 +221,7 @@ export default function PaymentScreen() {
         annualSavingPercent={annualPercent}
         discovery={discovery}
         variant={paywallVariant}
+        reminderAvailability={reminderAvailability}
         loading={loading}
         restoring={restoring}
         checkingPlans={checkingPlans}

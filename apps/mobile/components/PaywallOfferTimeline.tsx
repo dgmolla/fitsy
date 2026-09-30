@@ -2,9 +2,11 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { EDITORIAL, FONTS } from '@/lib/brand';
+import { canOfferTrialReminder, trialReminderDate } from '@/lib/notificationPlan';
 import type { purchaseTerms } from '@/lib/purchaseTerms';
 
 type Terms = ReturnType<typeof purchaseTerms>;
+export type ReminderAvailability = 'enabled' | 'opt-in' | 'permission-off' | 'unavailable';
 
 /** Calendar-aware projected first charge, conditional on starting today. */
 export function projectedChargeDate(terms: Terms, now: Date): Date | null {
@@ -19,33 +21,73 @@ export function projectedChargeDate(terms: Terms, now: Date): Date | null {
   return Number.isFinite(date.getTime()) ? date : null;
 }
 
-export function PaywallOfferTimeline({ terms, now }: { terms: Terms; now: Date }) {
-  const date = projectedChargeDate(terms, now);
-  const trial = !!terms?.trial && !!date;
+function elapsedCalendarDays(now: Date, date: Date): number {
+  const day = (value: Date) => Date.UTC(value.getFullYear(), value.getMonth(), value.getDate());
+  return Math.max(0, Math.round((day(date) - day(now)) / 86_400_000));
+}
+
+function dateLabel(date: Date): string {
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function Step({ icon, title, detail, last = false, testID }: {
+  icon: React.ComponentProps<typeof Ionicons>['name']; title: string; detail: string; last?: boolean; testID: string;
+}) {
+  return <View style={[s.step, last && s.lastStep]} testID={testID}>
+    {!last && <View style={s.connector} testID={`${testID}-connector`} />}
+    <View style={s.icon} testID={`${testID}-circle`}><Ionicons name={icon} size={17} color={EDITORIAL.cream} /></View>
+    <View style={s.copy}><Text style={s.when}>{title}</Text><Text style={s.detail}>{detail}</Text></View>
+  </View>;
+}
+
+export function PaywallOfferTimeline({ terms, now, reminderAvailability = 'unavailable' }: {
+  terms: Terms; now: Date; reminderAvailability?: ReminderAvailability;
+}) {
+  const chargeDate = projectedChargeDate(terms, now);
+  if (!terms?.trial || !chargeDate) {
+    return <View style={s.paidPanel} testID="paywall-offer-paid">
+      <Text style={s.paidTitle}>Unlock Fitsy today</Text>
+      <Text style={s.paidDetail}>{terms ? `${terms.price} when you confirm, then ${terms.recurring}.` : 'The store will show your price before purchase.'}</Text>
+    </View>;
+  }
+
+  const reminderDate = canOfferTrialReminder(terms) ? trialReminderDate(chargeDate) : null;
+  const usefulReminder = reminderDate && reminderDate > now && reminderDate < chargeDate;
+  const reminderDay = usefulReminder ? elapsedCalendarDays(now, reminderDate) : null;
+  const chargeDay = elapsedCalendarDays(now, chargeDate);
+  const reminderCopy = reminderAvailability === 'enabled'
+    ? 'Reminder opted in. We schedule it after the store confirms your trial end; check settings afterward.'
+    : reminderAvailability === 'permission-off'
+      ? 'Notifications are off. Enable them in device settings if you want a reminder.'
+      : reminderAvailability === 'opt-in'
+        ? 'Optional reminder. Turn it on in notification settings after purchase.'
+        : 'Reminder scheduling is unavailable. Check your trial end in subscription settings.';
+
   return <View style={s.panel} testID="paywall-offer-timeline">
-    <Text style={s.title}>{trial ? 'Your Fitsy trial' : 'Your Fitsy plan'}</Text>
-    <View style={s.row}>
-      <View style={s.icon}><Ionicons name="lock-open-outline" size={17} color={EDITORIAL.cream} /></View>
-      <View style={s.copy}><Text style={s.when}>Today</Text><Text style={s.detail}>{trial ? 'Unlock meals that fit when you start your trial.' : 'Unlock meals that fit when you confirm your purchase.'}</Text></View>
-    </View>
-    <View style={s.line} />
-    <View style={s.row}>
-      <View style={s.icon}><Ionicons name="calendar-outline" size={17} color={EDITORIAL.cream} /></View>
-      <View style={s.copy}><Text style={s.when}>{trial ? `After ${terms?.trial}` : 'When you confirm'}</Text>
-        <Text style={s.detail}>{trial ? `If you start today, your first ${terms?.price} charge is ${date?.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}. Then ${terms?.recurring}.` : `${terms?.price ?? 'Store price'} is charged, then ${terms?.recurring ?? 'the selected plan renews'}.`}</Text></View>
-    </View>
-    <Text style={s.note}>{trial ? 'Your store confirms the exact trial end and charge date before purchase.' : 'Your store confirms the exact charge before purchase.'}</Text>
+    <Step icon="lock-open-outline" title="Today" detail="Start your trial and unlock Fitsy Pro features." testID="paywall-step-today" />
+    <Step icon="notifications-outline"
+      title={usefulReminder ? `Day ${reminderDay} · ${dateLabel(reminderDate)}` : 'Before your trial ends'}
+      detail={reminderCopy} testID="paywall-step-reminder" />
+    <Step icon="calendar-outline" title={`Day ${chargeDay} · ${dateLabel(chargeDate)}`}
+      detail={`If you start today, your first ${terms.price} charge begins on ${dateLabel(chargeDate)}. Then ${terms.recurring}.`}
+      last testID="paywall-step-charge" />
+    <Text style={s.note}>Projected dates. The store confirms your exact trial end and charge date before purchase.</Text>
   </View>;
 }
 
 const s = StyleSheet.create({
-  panel: { alignSelf: 'stretch', marginHorizontal: 5, marginTop: 14, paddingHorizontal: 17, paddingTop: 15, paddingBottom: 9, minHeight: 252, borderRadius: 20, backgroundColor: 'rgba(253,251,247,0.84)' },
-  title: { fontFamily: FONTS.frauncesDisplayBold, fontSize: 25, lineHeight: 31, color: EDITORIAL.green, textAlign: 'center', marginBottom: 16 },
-  row: { flexDirection: 'row', gap: 14, alignItems: 'flex-start' },
-  icon: { width: 32, height: 32, borderRadius: 16, backgroundColor: EDITORIAL.greenMid, alignItems: 'center', justifyContent: 'center' },
-  copy: { flex: 1, paddingBottom: 9 },
+  panel: { alignSelf: 'stretch', marginHorizontal: 5, marginTop: 14, paddingHorizontal: 17, paddingTop: 18, paddingBottom: 12, borderRadius: 20, backgroundColor: 'rgba(253,251,247,0.88)' },
+  paidPanel: { alignSelf: 'stretch', marginHorizontal: 5, marginTop: 24, paddingHorizontal: 19, paddingVertical: 19, borderRadius: 20, backgroundColor: 'rgba(253,251,247,0.88)' },
+  paidTitle: { fontFamily: FONTS.frauncesDisplayBold, fontSize: 23, lineHeight: 29, color: EDITORIAL.green, textAlign: 'center' },
+  paidDetail: { fontFamily: FONTS.nunitoSans, fontSize: 13, lineHeight: 19, color: EDITORIAL.textMid, textAlign: 'center', marginTop: 7 },
+  step: { flexDirection: 'row', alignItems: 'flex-start', gap: 14, position: 'relative', paddingBottom: 14, minHeight: 46 },
+  lastStep: { paddingBottom: 0 },
+  // The rail spans the actual row height, including wrapped copy and spacing.
+  // The next circle begins at this row's bottom edge.
+  connector: { position: 'absolute', left: 15, top: 32, bottom: 0, width: 2, backgroundColor: EDITORIAL.greenMid },
+  icon: { width: 32, height: 32, borderRadius: 16, backgroundColor: EDITORIAL.greenMid, alignItems: 'center', justifyContent: 'center', zIndex: 1 },
+  copy: { flex: 1, minWidth: 0, minHeight: 32 },
   when: { fontFamily: FONTS.nunitoSansSemiBold, color: EDITORIAL.green, fontSize: 16, lineHeight: 21 },
   detail: { fontFamily: FONTS.nunitoSans, color: EDITORIAL.textMid, fontSize: 12, lineHeight: 17 },
-  line: { width: 2, height: 20, backgroundColor: EDITORIAL.greenAccentTint, marginLeft: 15, marginVertical: 2 },
-  note: { fontFamily: FONTS.nunitoSans, color: EDITORIAL.textMid, fontSize: 10, lineHeight: 14, textAlign: 'center', marginTop: 10 },
+  note: { fontFamily: FONTS.nunitoSans, color: EDITORIAL.textMid, fontSize: 10, lineHeight: 14, textAlign: 'center', marginTop: 9 },
 });

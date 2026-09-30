@@ -39,5 +39,8 @@ The tester override changes presentation only; RevenueCat's live eligibility, pr
 The existing `devTrialVisual=1` fixture separately marks synthetic trial eligibility and disables purchase.
 
 Variant B calculates a conditional first-charge calendar date from the selected eligible store trial period and the current day.
+It projects the reminder day with the same lead time and quiet-hour adjustment used by the existing notification scheduler.
+The middle step distinguishes opted-in, available opt-in, permission-off and unavailable states, and never claims a notification has been scheduled before the store confirms the trial end.
+No-trial offers show immediate paid terms without a trial timeline.
 The store confirms the actual purchase and charge date before checkout.
-No reminder is shown until a verified selected-offer reminder state is available from #431.
+When #431 ships a centralized selected-offer model, this projection should consume that model rather than maintaining a separate policy.

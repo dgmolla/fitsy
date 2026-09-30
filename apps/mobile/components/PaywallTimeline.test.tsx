@@ -154,10 +154,11 @@ test('variant B follows selected plan and shows truthful paid state when trial i
   const p = props();
   const screen = render(<PaywallView {...p} variant="B" />);
   expect(screen.getByTestId('paywall-offer-timeline')).toBeTruthy();
-  expect(screen.getByText('Your Fitsy trial')).toBeTruthy();
+  expect(screen.getByTestId('paywall-step-reminder')).toBeTruthy();
+  expect(screen.getByTestId('paywall-step-charge')).toBeTruthy();
   expect(screen.queryByTestId('paywall-restaurant-card')).toBeNull();
   screen.rerender(<PaywallView {...p} variant="B" plan="monthly" />);
-  expect(screen.getByText('Your Fitsy plan')).toBeTruthy();
+  expect(screen.getByTestId('paywall-offer-paid')).toBeTruthy();
   expect(screen.queryByText(/reminder/i)).toBeNull();
   expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toBe('Continue to purchase');
   expect(screen.getByTestId('paywall-terms').props.children).toContain('$9.99 when you confirm');
