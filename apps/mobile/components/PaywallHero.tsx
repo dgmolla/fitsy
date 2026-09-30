@@ -26,7 +26,9 @@ export function PaywallHero({ discovery, compact = false }: { discovery: Paywall
   const restaurant = discovery.selected;
   return <View style={[s.frame, compact && s.frameCompact]} testID="paywall-hero">
     {restaurant ? <View style={s.card} testID="paywall-restaurant-card">
-      <RestaurantPhoto uri={restaurant.photoUrl} name={restaurant.name} style={s.photo} />
+      <View style={s.photoFrame}>
+        <RestaurantPhoto uri={restaurant.photoUrl} name={restaurant.name} style={s.photo} />
+      </View>
       <View style={s.info}>
         <Text style={s.eyebrow}>{discovery.catalogFallback ? 'FROM THE LOS ANGELES CATALOG' : 'YOUR PREVIEW PICK'}</Text>
         <Text style={s.name} numberOfLines={2} testID="paywall-restaurant-name">{restaurant.name}</Text>
@@ -45,7 +47,8 @@ const s = StyleSheet.create({
   frame: { marginTop: 27, marginBottom: 13, paddingHorizontal: 22 },
   frameCompact: { marginTop: 18, marginBottom: 8 },
   card: { minHeight: 106, flexDirection: 'row', overflow: 'hidden', borderRadius: 18, backgroundColor: EDITORIAL.cream, borderWidth: 1, borderColor: EDITORIAL.border, shadowColor: EDITORIAL.green, shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.16, shadowRadius: 14, elevation: 4 },
-  photo: { width: 102, height: 106 },
+  photoFrame: { width: 102, alignSelf: 'stretch', overflow: 'hidden' },
+  photo: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
   info: { flex: 1, minWidth: 0, justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 9 },
   eyebrow: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 9, letterSpacing: 1, color: EDITORIAL.textMid },
   name: { fontFamily: FONTS.frauncesDisplayBold, fontSize: 19, lineHeight: 24, color: EDITORIAL.green, marginTop: 3 },
