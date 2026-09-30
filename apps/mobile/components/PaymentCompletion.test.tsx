@@ -86,7 +86,7 @@ test('development visual trial uses live price but never enters checkout or rest
   const screen = renderRouter(routes, { initialUrl: '/welcome/payment?devTrialVisual=1' });
   await waitFor(() => expect(screen.getByTestId('dev-trial-visual-note')).toBeTruthy());
   expect(screen.getByTestId('paywall-price-yearly').props.children).toBe('$59.99');
-  expect(screen.getByText('Day 7: first charge')).toBeTruthy();
+  expect(screen.getByText('Day 14: first charge')).toBeTruthy();
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   await act(async () => { fireEvent.press(screen.getByTestId('paywall-restore')); });
   expect(alert).toHaveBeenCalledWith('Visual preview only', expect.any(String));
@@ -97,8 +97,8 @@ test('development visual trial uses live price but never enters checkout or rest
 
 test('development visual flag stays on the three real welcome screens', async () => {
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial?devTrialVisual=1' });
-  await waitFor(() => expect(screen.getByText('Try Fitsy free')).toBeTruthy());
-  expect(screen.getByTestId('trial-offer-note').props.children).toContain('Synthetic trial eligibility');
+  await waitFor(() => expect(screen.getByText('Meet Fitsy Pro')).toBeTruthy());
+  expect(screen.getByTestId('trial-offer-note').props.children).toContain('Synthetic trial (14 days)');
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/trial-reminder'));
   expect(screen.getByTestId('trial-reminder-note').props.children).toContain('Synthetic trial eligibility');
@@ -252,7 +252,7 @@ test('monthly-only trial routes through reminder to monthly checkout and purchas
     annual: { status: 1, description: 'Ineligible' }, monthly: { status: 2, description: 'Eligible' },
   });
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
-  await waitFor(() => expect(screen.getByText('Try Fitsy free')).toBeTruthy());
+  await waitFor(() => expect(screen.getByText('Meet Fitsy Pro')).toBeTruthy());
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/trial-reminder'));
   await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-skip')); });

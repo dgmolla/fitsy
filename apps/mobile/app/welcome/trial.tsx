@@ -60,12 +60,12 @@ export default function TrialScreen() {
     router.push(visualRequested ? '/welcome/trial-reminder?devTrialVisual=1' : '/welcome/trial-reminder');
   }
   if (entitled === true || (shownOffering && eligibilityReady && !trial)) return <Redirect href="/welcome/payment" />;
-  return <WelcomeScreen progress={1} title={trial ? 'Try Fitsy free' : 'Checking your plans'}
-    subtitle={trial ? `Get ${trial} of Fitsy Pro with the selected ${selectedPlan === 'yearly' ? 'annual' : 'monthly'} plan.` : 'Your available plans will appear next.'}
+  return <WelcomeScreen progress={1} title={trial ? 'Meet Fitsy Pro' : 'Checking your plans'}
+    subtitle={trial ? 'We want you to try Fitsy for free' : 'Your available plans will appear next.'}
     continueLabel={checkingPlans ? 'Checking plans…' : shownOffering ? 'Continue' : 'Retry plans'} canContinue={!checkingPlans}
     onContinue={() => { void continueOrRetry(); }}>
     <TrialArtwork />
-    <Text style={s.note} testID="trial-offer-note">{visual ? 'Synthetic trial eligibility for visual testing. Live Test Store prices appear on the next screen.' : !offering && plansChecked ? 'Plans could not load. Check your connection and retry.' : trial ? 'Review the price and renewal terms before you start.' : 'Checking current plans and trial eligibility…'}</Text>
+    <Text style={s.note} testID="trial-offer-note">{visual ? `Synthetic trial (${trial}) for visual testing. Purchase is disabled.` : !offering && plansChecked ? 'Plans could not load. Check your connection and retry.' : trial ? `${trial} with the selected eligible plan. Review price and renewal terms next.` : 'Checking current plans and trial eligibility…'}</Text>
   </WelcomeScreen>;
 }
 const s = StyleSheet.create({ note: { ...TEXT.bodySmall, color: EDITORIAL.textMid, textAlign: 'center', lineHeight: 21 } });
