@@ -21,59 +21,8 @@ tags: [billing, onboarding, changed-journey]
     timeout: 3000
 - tapOn:
     point: "92%,93%"
-# Choose a real area so the preview has valid restaurant data and no implicit GPS fallback.
-- openLink: com.fitsy.mobile://welcome/location-permission
-# A fresh simulator can require system confirmation for an app link.
-- tapOn:
-    text: "^Open$"
-    optional: true
-- tapOn:
-    id: location-choose-area
-- tapOn: "Search near DTLA"
-- extendedWaitUntil:
-    visible:
-      id: goal-build_muscle
-    timeout: 30000
-# Build a real preview predecessor, then verify the live catalog's no-trial path.
-- openLink: com.fitsy.mobile://welcome/preview
-# A fresh simulator can require system confirmation for an app link.
-- tapOn:
-    text: "^Open$"
-    optional: true
-- extendedWaitUntil:
-    visible:
-      id: coachmark-skip
-    timeout: 30000
-- tapOn:
-    id: coachmark-skip
-- assertVisible:
-    id: preview-guide
-- openLink: com.fitsy.mobile://welcome/trial
-# A fresh simulator can require system confirmation for an app link.
-- tapOn:
-    text: "^Open$"
-    optional: true
-- extendedWaitUntil:
-    visible:
-      id: paywall-price-yearly
-    timeout: 15000
-- assertVisible: "Fitsy Pro"
-- assertVisible: "Continue to purchase"
-- assertNotVisible: "Try Fitsy free"
-- extendedWaitUntil:
-    visible:
-      id: paywall-price-yearly
-    timeout: 15000
-- assertNotVisible: "Get a trial reminder"
-- assertVisible:
-    id: paywall-timeline
-- assertVisible: "Your first payment"
-- tapOn:
-    id: welcome-back
-- assertVisible:
-    id: preview-guide
-- assertNotVisible:
-    id: paywall-plan-yearly
+# Open the actual no-trial paywall without depending on the guided preview's
+# remote restaurant lookup. The separate paywall-access flow covers that gate.
 - openLink: com.fitsy.mobile://welcome/payment
 # A fresh simulator can require system confirmation for an app link.
 - tapOn:
@@ -83,6 +32,21 @@ tags: [billing, onboarding, changed-journey]
     visible:
       id: paywall-price-yearly
     timeout: 15000
+- assertVisible: "Find meals that fit."
+- assertVisible:
+    id: paywall-hero
+- assertVisible: "Continue to purchase"
+- assertNotVisible: "Try Fitsy free"
+- extendedWaitUntil:
+    visible:
+      id: paywall-price-yearly
+    timeout: 15000
+- assertNotVisible: "Get a trial reminder"
+- scrollUntilVisible:
+    element:
+      id: paywall-timeline
+    direction: DOWN
+- assertVisible: "Your first payment"
 - copyTextFrom:
     id: paywall-price-yearly
 - evalScript: ${output.annualPrice = maestro.copiedText}
@@ -92,8 +56,10 @@ tags: [billing, onboarding, changed-journey]
     direction: DOWN
 - tapOn:
     id: paywall-plan-monthly
-- assertVisible:
-    id: paywall-timeline
+- scrollUntilVisible:
+    element:
+      id: paywall-timeline
+    direction: DOWN
 - copyTextFrom:
     id: paywall-price-monthly
 - evalScript: ${output.monthlyPrice = maestro.copiedText}
@@ -154,10 +120,7 @@ tags: [billing, onboarding, changed-journey]
     timeout: 30000
 - assertNotVisible: "Leave a review"
 # A previously purchased Test Store account can become lapsed before this
-# re-authentication. The earlier back assertion covered the preview predecessor;
-# after login, either that preview or the lapsed paywall is a valid back target.
-- tapOn:
-    id: welcome-back
+# re-authentication. Reopen payment directly to exercise the visible plan.
 - openLink: com.fitsy.mobile://welcome/payment
 # A fresh simulator can require system confirmation for an app link.
 - tapOn:

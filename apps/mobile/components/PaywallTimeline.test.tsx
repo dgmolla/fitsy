@@ -114,7 +114,7 @@ test('the selected short trial has a truthful reminder step, even after a longer
 test('plan selection, purchase, restore and decline remain operable with live totals', () => {
   const p = props();
   const screen = render(<PaywallView {...p} />);
-  expect(screen.getByText('Your trial')).toBeTruthy();
+  expect(screen.getByText('Find meals that fit.')).toBeTruthy();
   expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toBe('Start 7-day free trial');
   expect(screen.getByTestId('paywall-price-yearly').props.children).toBe('$59.99');
   fireEvent.press(screen.getByTestId('paywall-plan-monthly'));
@@ -129,7 +129,7 @@ test('plan selection, purchase, restore and decline remain operable with live to
   expect(p.onDecline).toHaveBeenCalledTimes(1);
   screen.rerender(<PaywallView {...p} plan="monthly" />);
   expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toBe('Continue to purchase');
-  expect(screen.getByText('Fitsy Pro')).toBeTruthy();
+  expect(screen.getByTestId('paywall-terms').props.children).toContain('Fitsy Pro');
   expect(screen.getByText('$9.99 charged when you confirm your purchase.')).toBeTruthy();
   expect(screen.queryByText(/trial access/i)).toBeNull();
 });

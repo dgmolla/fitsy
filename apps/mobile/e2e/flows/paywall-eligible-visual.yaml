@@ -39,16 +39,26 @@ tags: [billing, onboarding, changed-journey]
     visible:
       id: dev-trial-visual-note
     timeout: 15000
+- assertVisible:
+    id: paywall-hero
+- scrollUntilVisible:
+    element:
+      id: paywall-timeline
+    direction: DOWN
 - assertVisible: "Day 1: trial access"
 - assertVisible: "Day 6: optional reminder|Reminders are off"
 - assertVisible: "Day 7: first charge"
-- assertVisible:
-    id: paywall-price-yearly
+- scrollUntilVisible:
+    element:
+      id: paywall-price-yearly
+    direction: UP
 - tapOn:
     id: paywall-plan-monthly
 - assertVisible:
     id: paywall-price-monthly
-- assertVisible: "Day 7: first charge"
+- scrollUntilVisible:
+    element: "Day 7: first charge"
+    direction: DOWN
 - tapOn:
     id: welcome-back
 - assertVisible:

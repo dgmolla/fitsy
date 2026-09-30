@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPress } from './AnimatedPress';
 import { WelcomeNav } from './WelcomeNav';
 import { PaywallTimeline } from './PaywallTimeline';
+import { PaywallHero } from './PaywallHero';
 import { EDITORIAL, FONTS, TEXT } from '@/lib/brand';
 import { openLegalLink } from '@/lib/legalLinks';
 import type { purchaseTerms } from '@/lib/purchaseTerms';
@@ -48,12 +49,15 @@ export function PaywallView(props: Props) {
         </Pressable>
       } />
 
-      <ScrollView contentContainerStyle={[s.content, compact && s.contentCompact]} showsVerticalScrollIndicator={false} bounces={false}>
+      <ScrollView style={s.scroll} contentContainerStyle={[s.content, compact && s.contentCompact]} showsVerticalScrollIndicator={false} bounces={false}>
         <View>
-          <Text style={[s.title, compact && s.titleCompact]}>{selected?.trial ? 'Your trial' : 'Fitsy Pro'}</Text>
+          <PaywallHero compact={compact} />
+          <Text style={[s.title, compact && s.titleCompact]}>Find meals that fit.</Text>
+          <View style={[s.benefits, compact && s.benefitsCompact]}>
+            <Text style={[s.benefit, compact && s.benefitCompact]}>Discover nearby meals for your goals.</Text>
+            <Text style={[s.benefit, compact && s.benefitCompact]}>Compare estimated nutrition at a glance.</Text>
+          </View>
           {props.visualPreview && <Text style={s.visualNote} testID="dev-trial-visual-note">Synthetic trial eligibility for visual testing. Prices are from the live Test Store; purchase is disabled.</Text>}
-          <PaywallTimeline terms={selected} compact={compact} concise />
-
           <View style={s.plans}>
             {([{ id: 'monthly', name: 'Monthly', terms: monthly }, { id: 'yearly', name: 'Annual', terms: annual }] as const).map(option => {
               const active = option.id === plan;
@@ -80,7 +84,9 @@ export function PaywallView(props: Props) {
               <Text style={s.restore}>Retry loading plans</Text>
             </Pressable>
           )}
+          <PaywallTimeline terms={selected} compact={compact} concise />
         </View>
+      </ScrollView>
 
         <View style={[s.footer, compact && s.footerCompact]}>
           <Text style={[s.disclosure, compact && s.disclosureCompact]} testID="paywall-terms">{selected?.compactDisclosure ?? 'Fetching current prices and subscription terms from the store…'}</Text>
@@ -95,21 +101,25 @@ export function PaywallView(props: Props) {
           </View>
           <Pressable style={s.decline} onPress={props.onDecline} disabled={busy} accessibilityRole="button" testID="welcome-skip"><Text style={[s.declineText, busy && s.disabled]}>Not now</Text></Pressable>
         </View>
-      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: EDITORIAL.cream },
+  scroll: { flex: 1 },
   navAction: { minWidth: 64, minHeight: 44, justifyContent: 'center' },
   restore: { fontFamily: FONTS.nunitoSans, fontSize: 12, color: EDITORIAL.textMid, textDecorationLine: 'underline', textAlign: 'right' },
-  content: { flexGrow: 1, paddingHorizontal: 28, paddingTop: 8, paddingBottom: 2 },
-  contentCompact: { paddingHorizontal: 20, paddingTop: 2 },
-  title: { ...TEXT.title, fontSize: 27, lineHeight: 32, color: EDITORIAL.green, textAlign: 'center', marginTop: 4 },
-  titleCompact: { fontSize: 24, lineHeight: 28, marginTop: 0 },
-  visualNote: { ...TEXT.bodySmall, color: EDITORIAL.textMid, textAlign: 'center', marginTop: 5 },
-  plans: { gap: 9 },
+  content: { paddingHorizontal: 28, paddingTop: 10, paddingBottom: 22 },
+  contentCompact: { paddingHorizontal: 20, paddingTop: 4 },
+  title: { ...TEXT.title, fontSize: 26, lineHeight: 32, color: EDITORIAL.green, textAlign: 'center' },
+  titleCompact: { fontSize: 23, lineHeight: 29 },
+  benefits: { alignItems: 'center', gap: 4, marginTop: 7, marginBottom: 18 },
+  benefitsCompact: { gap: 2, marginTop: 4, marginBottom: 8 },
+  benefit: { fontFamily: FONTS.nunitoSans, fontSize: 13, lineHeight: 19, color: EDITORIAL.textMid, textAlign: 'center' },
+  benefitCompact: { fontSize: 12, lineHeight: 17 },
+  visualNote: { ...TEXT.bodySmall, fontSize: 11, lineHeight: 15, color: EDITORIAL.textMid, textAlign: 'center', marginBottom: 8 },
+  plans: { gap: 9, marginBottom: 8 },
   plan: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 10, minHeight: 68, borderRadius: 15, borderWidth: 1, borderColor: EDITORIAL.border },
   planCompact: { paddingVertical: 7, minHeight: 58, gap: 10 },
   planSelected: { backgroundColor: EDITORIAL.greenAccentTint, borderColor: EDITORIAL.greenMid },
@@ -124,10 +134,10 @@ const s = StyleSheet.create({
   price: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 19, color: EDITORIAL.green },
   pricePeriod: { fontFamily: FONTS.nunitoSans, fontSize: 11, color: EDITORIAL.textMid },
   retry: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  footer: { marginTop: 'auto', paddingTop: 8 },
-  footerCompact: { paddingTop: 4 },
+  footer: { borderTopWidth: 1, borderColor: EDITORIAL.border, backgroundColor: EDITORIAL.cream, paddingHorizontal: 28, paddingTop: 10 },
+  footerCompact: { paddingHorizontal: 20, paddingTop: 7 },
   disclosure: { fontFamily: FONTS.nunitoSans, fontSize: 11, lineHeight: 15, color: EDITORIAL.textMid, textAlign: 'center', marginBottom: 8 },
-  disclosureCompact: { fontSize: 11, lineHeight: 15, marginBottom: 4 },
+  disclosureCompact: { marginBottom: 6 },
   cta: { minHeight: 50, paddingVertical: 11, paddingHorizontal: 18, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, borderRadius: 30, backgroundColor: EDITORIAL.green },
   ctaCompact: { minHeight: 46, paddingVertical: 8 },
   ctaText: { flexShrink: 1, fontFamily: FONTS.nunitoSansSemiBold, fontSize: 16, lineHeight: 22, color: EDITORIAL.cream, textAlign: 'center' },
