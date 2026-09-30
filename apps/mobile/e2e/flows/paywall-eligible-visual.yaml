@@ -21,11 +21,11 @@ tags: [billing, onboarding, changed-journey]
     text: "^Open$"
     optional: true
 - extendedWaitUntil:
-    visible: "Try Fitsy free"
+    visible: "We want you to try Fitsy for free"
     timeout: 30000
 - assertVisible:
     id: trial-offer-note
-- assertVisible: "Synthetic trial eligibility for visual testing.*"
+- assertVisible: 'Synthetic trial \(14 days\) for visual testing.*'
 - tapOn:
     id: welcome-continue
 - extendedWaitUntil:
@@ -40,19 +40,19 @@ tags: [billing, onboarding, changed-journey]
       id: dev-trial-visual-note
     timeout: 15000
 - assertVisible: "Day 1: trial access"
-- assertVisible: "Day 6: optional reminder|Reminders are off"
-- assertVisible: "Day 7: first charge"
+- assertVisible: "Day 13: optional reminder|Reminders are off"
+- assertVisible: "Day 14: first charge"
 - assertVisible:
     id: paywall-price-yearly
 - tapOn:
     id: paywall-plan-monthly
 - assertVisible:
     id: paywall-price-monthly
-- assertVisible: "Day 7: first charge"
+- assertVisible: "Day 14: first charge"
 - tapOn:
     id: welcome-back
 - assertVisible:
     id: trial-reminder-note
 - tapOn:
     id: welcome-back
-- assertVisible: "Try Fitsy free"
+- assertVisible: "We want you to try Fitsy for free"
