@@ -38,14 +38,14 @@ export async function getOnboardingResume(): Promise<`/welcome/${Step}` | '/macr
   // Earlier onboarding asked about prior approaches before the goal choice.
   // A resumed payoff must collect that choice before showing a goal-specific graph.
   if ((step === 'value-abundance' || step === 'value-payoff' || step === 'goal-payoff') && !hasChosenWelcomeGoal((await getOnboardingData()).goal)) {
-    await rememberGoalReturnTo(step === 'goal-payoff' ? '/welcome/goal-payoff' : '/welcome/value-payoff');
+    await rememberGoalReturnTo('/welcome/goal-payoff');
     return '/welcome/goal';
   }
   if (step && ['how-it-works', 'target-setup', 'macros-intro', 'height', 'weight', 'age', 'sex', 'activity', 'tuning', 'preview'].includes(step) && !hasChosenWelcomeGoal((await getOnboardingData()).goal)) {
     await rememberGoalReturnTo('/welcome/target-setup');
     return '/welcome/goal';
   }
-  if (step === 'value-abundance') return '/welcome/value-payoff';
+  if (step === 'value-abundance' || step === 'value-payoff') return '/welcome/goal-payoff';
   // The old flow showed nutrition trust before targets; the new flow follows them.
   if (step === 'how-it-works' && !(await getMacroTargets())) return '/welcome/target-setup';
   return step && STEPS.includes(step as Step) ? `/welcome/${step as Step}` : null;
@@ -61,7 +61,8 @@ export async function rememberMacroSetup(): Promise<void> {
 export async function takeGoalReturnTo(): Promise<GoalReturnTo | null> {
   const saved = await AsyncStorage.getItem(GOAL_RETURN_KEY);
   await AsyncStorage.removeItem(GOAL_RETURN_KEY);
-  return saved === '/welcome/tried' || saved === '/welcome/response' || saved === '/welcome/value-payoff' || saved === '/welcome/goal-payoff' || saved === '/welcome/target-setup' || saved === '/macro-setup' || saved === '/macro-setup?fromOnboarding=1' ? saved : null;
+  if (saved === '/welcome/value-payoff') return '/welcome/goal-payoff';
+  return saved === '/welcome/tried' || saved === '/welcome/response' || saved === '/welcome/goal-payoff' || saved === '/welcome/target-setup' || saved === '/macro-setup' || saved === '/macro-setup?fromOnboarding=1' ? saved : null;
 }
 
 export async function clearGoalReturnTo(): Promise<void> {

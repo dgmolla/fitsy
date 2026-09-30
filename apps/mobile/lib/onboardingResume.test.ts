@@ -58,7 +58,7 @@ it.each(['value-abundance', 'value-payoff', 'goal-payoff'])(
     await AsyncStorage.setItem('@fitsy/onboardingStep', checkpoint);
     await saveOnboardingField('tried', 'check_online');
     expect(await getOnboardingResume()).toBe('/welcome/goal');
-    expect(await takeGoalReturnTo()).toBe(checkpoint === 'goal-payoff' ? '/welcome/goal-payoff' : '/welcome/value-payoff');
+    expect(await takeGoalReturnTo()).toBe('/welcome/goal-payoff');
   },
 );
 
@@ -67,7 +67,7 @@ it('keeps the missing-goal payoff destination through a goal checkpoint and clea
   expect(await getOnboardingResume()).toBe('/welcome/goal');
   await AsyncStorage.setItem('@fitsy/onboardingStep', 'goal');
   expect(await getOnboardingResume()).toBe('/welcome/goal');
-  expect(await takeGoalReturnTo()).toBe('/welcome/value-payoff');
+  expect(await takeGoalReturnTo()).toBe('/welcome/goal-payoff');
   expect(await takeGoalReturnTo()).toBeNull();
   await AsyncStorage.setItem('@fitsy/onboardingStep', 'goal-payoff');
   expect(await getOnboardingResume()).toBe('/welcome/goal');
@@ -76,8 +76,8 @@ it('keeps the missing-goal payoff destination through a goal checkpoint and clea
 });
 
 it.each([
-  ['value-abundance', '/welcome/value-payoff'],
-  ['value-payoff', '/welcome/value-payoff'],
+  ['value-abundance', '/welcome/goal-payoff'],
+  ['value-payoff', '/welcome/goal-payoff'],
   ['goal-payoff', '/welcome/goal-payoff'],
 ])('preserves the %s checkpoint after goal selection', async (checkpoint, expected) => {
   await AsyncStorage.setItem('@fitsy/onboardingStep', checkpoint);

@@ -51,12 +51,8 @@ tags: [onboarding, discovery, changed-journey]
 - tapOn:
     id: welcome-continue
 - assertVisible:
-    id: payoff-meal_prep
-- assertVisible: "A night out.*Still your kind of meal.*"
-- tapOn:
-    id: welcome-continue
-- assertVisible:
     id: goal-progress-graph
+- assertVisible: ".*When dinner isn't prepped.*"
 - assertVisible: "Consistency with your training nutrition"
 - tapOn:
     id: welcome-continue

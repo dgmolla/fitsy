@@ -52,7 +52,7 @@ beforeEach(async () => {
 it.each([
   ['/welcome/tried', '/welcome/tried'],
   ['/welcome/response', '/welcome/response'],
-  ['/welcome/value-payoff', '/welcome/value-payoff'],
+  ['/welcome/value-payoff', '/welcome/goal-payoff'],
   ['/welcome/goal-payoff', '/welcome/goal-payoff'],
   ['/welcome/target-setup', '/welcome/target-setup'],
   ['/welcome/macros-intro', '/welcome/target-setup'],
@@ -74,7 +74,7 @@ it.each([
   },
 );
 
-it('updates the fitness payoff after going back and choosing another prior approach', async () => {
+it('shows exactly two payoff screens and updates the graph after changing the prior approach', async () => {
   await saveOnboardingField('goal', 'performance');
   const screen = renderRouter(routes, { initialUrl: '/welcome/tried' });
   await screen.findByTestId('tried-meal_prep');
@@ -82,22 +82,22 @@ it('updates the fitness payoff after going back and choosing another prior appro
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/response'));
   expect(screen.getByTestId('story-meal_prep')).toBeTruthy();
-  expect(screen.getByText('“Dinner out tonight?”')).toBeTruthy();
+  expect(screen.getByText('Dinner out')).toBeTruthy();
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
-  expect(await screen.findByTestId('payoff-meal_prep')).toBeTruthy();
-  expect(screen.getByText('The same meal targets')).toBeTruthy();
-  expect(screen.getByText('A meal at home')).toBeTruthy();
+  expect(await screen.findByTestId('goal-progress-graph')).toBeTruthy();
+  expect(screen.getByText(/When dinner isn't prepped/)).toBeTruthy();
+  expect(screen.getPathname()).toBe('/welcome/goal-payoff');
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
+  expect(await screen.findByTestId('story-meal_prep')).toBeTruthy();
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
   await act(async () => { fireEvent.press(screen.getByTestId('tried-calorie_apps')); });
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
-  expect(await screen.findByTestId('payoff-calorie_apps')).toBeTruthy();
-  expect(screen.getByText('Published or estimated')).toBeTruthy();
-  expect(screen.queryByText('A meal at home')).toBeNull();
+  expect(await screen.findByTestId('goal-progress-graph')).toBeTruthy();
+  expect(screen.getByText(/beyond tracker entries/)).toBeTruthy();
+  expect(screen.queryByText(/When dinner isn't prepped/)).toBeNull();
   expect((await getOnboardingData()).tried).toBe('calorie_apps');
-  expect(await getOnboardingResume()).toBe('/welcome/value-payoff');
-  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  expect(await getOnboardingResume()).toBe('/welcome/goal-payoff');
   expect(await screen.findByText('Consistency with your training nutrition')).toBeTruthy();
   expect((await getOnboardingData()).goal).toBe('performance');
 });

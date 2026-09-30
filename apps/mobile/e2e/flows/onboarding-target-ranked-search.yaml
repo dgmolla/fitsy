@@ -56,12 +56,8 @@ tags: [discovery, onboarding, changed-journey]
 - tapOn:
     id: welcome-continue
 - assertVisible:
-    id: payoff-calorie_apps
-- assertVisible: "From a dish name.*to an informed order.*"
-- tapOn:
-    id: welcome-continue
-- assertVisible:
     id: goal-progress-graph
+- assertVisible: ".*beyond tracker entries.*"
 - assertVisible: "Consistency with your fat-loss plan"
 - assertVisible: "With Fitsy"
 - assertVisible: "Without Fitsy"
