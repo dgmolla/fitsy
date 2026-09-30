@@ -17,7 +17,7 @@ export function PaywallMosaic({ height }: { height: number }) {
         transform: [{ rotate: column === 1 ? '3deg' : '-3deg' }],
       }]} resizeMode="cover" />;
     })}
-    <LinearGradient colors={['rgba(253,251,247,0.48)', 'rgba(253,251,247,0.70)', EDITORIAL.cream]} locations={[0, 0.58, 1]} style={StyleSheet.absoluteFillObject} />
+    <LinearGradient colors={['rgba(253,251,247,0.64)', 'rgba(253,251,247,0.84)', EDITORIAL.cream]} locations={[0, 0.58, 1]} style={StyleSheet.absoluteFillObject} />
   </View>;
 }
 
@@ -42,7 +42,7 @@ export function PaywallHero({ discovery }: { discovery: PaywallDiscovery }) {
 const s = StyleSheet.create({
   mosaic: { position: 'absolute', top: 0, left: 0, right: 0, overflow: 'hidden', backgroundColor: EDITORIAL.cream },
   tile: { position: 'absolute', width: '32%', height: 112, borderRadius: 9 },
-  frame: { marginTop: 36, marginBottom: 13, paddingHorizontal: 22 },
+  frame: { marginTop: 27, marginBottom: 13, paddingHorizontal: 22 },
   card: { minHeight: 106, flexDirection: 'row', overflow: 'hidden', borderRadius: 18, backgroundColor: EDITORIAL.cream, borderWidth: 1, borderColor: EDITORIAL.border, shadowColor: EDITORIAL.green, shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.16, shadowRadius: 14, elevation: 4 },
   photo: { width: 102, height: 106 },
   info: { flex: 1, minWidth: 0, justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 9 },

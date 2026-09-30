@@ -144,7 +144,7 @@ const s = StyleSheet.create({
   price: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 17, color: EDITORIAL.green },
   pricePeriod: { fontFamily: FONTS.nunitoSans, fontSize: 11, color: EDITORIAL.textMid },
   retry: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  footer: { marginTop: 'auto', paddingTop: 10 },
+  footer: { paddingTop: 10 },
   footerCompact: { paddingTop: 6 },
   disclosure: { fontFamily: FONTS.nunitoSans, fontSize: 10, lineHeight: 14, color: EDITORIAL.textMid, textAlign: 'center', marginBottom: 8 },
   disclosureCompact: { marginBottom: 5 },

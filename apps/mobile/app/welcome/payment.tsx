@@ -188,7 +188,7 @@ export default function PaymentScreen() {
         checkingPlans={checkingPlans}
         visualPreview={!!visual}
         onSelect={setChosenPlan}
-        onBack={navigation.canGoBack() ? () => router.back() : undefined}
+        onBack={() => { if (navigation.canGoBack()) router.back(); else router.replace('/welcome/trial-reminder'); }}
         onRestore={() => { void handleRestore(); }}
         onManage={() => { void showManageSubscriptions(); }}
         onRetry={() => { void refreshOffering(); }}
