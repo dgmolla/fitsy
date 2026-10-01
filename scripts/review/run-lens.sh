@@ -144,7 +144,8 @@ fi
 # must still classify high (lens finding, 2026-09-07)
 CHANGED="$(echo "$DIFF" | grep -E '^(\+\+\+ b/|--- a/|rename (from|to) )' | sed -E 's#^\+\+\+ b/##; s#^--- a/##; s#^rename (from|to) ##' | grep -v '^/dev/null$' | sort -u)"
 TIER="$(echo "$CHANGED" | node scripts/review/tier.mjs)"
-BUDGET_ARGS+=(--risk "$TIER" --required)
+BUDGET_ARGS+=(--risk "$TIER")
+case "$LENS" in correctness|danger-zone|workflow-security) BUDGET_ARGS+=(--required) ;; esac
 PROVIDER="${FITSY_REVIEW_PROVIDER:-claude}"
 if [ "$LENS" = "docs-sanity" ]; then BLOCKING=0; else BLOCKING=1; fi
 # Preserve the installed Claude defaults; other adapters require an explicit model.
