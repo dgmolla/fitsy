@@ -13,6 +13,11 @@ import time
 CAP_SECONDS = 1800
 EXTENSION_SECONDS = 900
 CLOSEOUT_SECONDS = 5
+# One human-authorized, issue-bound exception. Other issues retain the normal cap.
+AUTHORIZED_GRANT = {"issue": 428, "seconds": 600,
+    "provenance": "https://github.com/dgmolla/fitsy/issues/428#issuecomment-5935945700"}
+AUTHORIZED_BASELINE_ATTEMPT = "88a154b4-95fa-47c9-b108-cd59332809e4"
+AUTHORIZED_BASELINE_SECONDS = 2360.544
 
 
 def utc():
@@ -36,6 +41,12 @@ def read_events(handle):
         if not isinstance(rows, list):
             raise ValueError("invalid imported review history")
         for row in rows:
+            if isinstance(row, dict) and row.get("event") == "authorized-grant":
+                if (row.get("attempt_id") != "issue-428-authorized-grant"
+                        or any(row.get(key) != value for key, value in AUTHORIZED_GRANT.items())):
+                    raise ValueError("invalid authorized review grant")
+                events.append(row)
+                continue
             if isinstance(row, dict) and row.get("event") == "extension":
                 if (row.get("attempt_id") != "issue-extension" or row.get("seconds") != EXTENSION_SECONDS
                         or type(row.get("issue")) is not int or row["issue"] <= 0
@@ -133,9 +144,12 @@ def elapsed(start):
 
 def usage(events):
     extensions = [e for e in events if e["event"] == "extension"]
+    grants = [e for e in events if e["event"] == "authorized-grant"]
     if len(extensions) > 1:
         raise ValueError("multiple review extensions are not permitted")
-    cap = CAP_SECONDS + (EXTENSION_SECONDS if extensions else 0)
+    if len(grants) > 1 or (grants and (len(extensions) != 1 or extensions[0]["issue"] != AUTHORIZED_GRANT["issue"])):
+        raise ValueError("duplicate or mismatched authorized review grant")
+    cap = CAP_SECONDS + (EXTENSION_SECONDS if extensions else 0) + (AUTHORIZED_GRANT["seconds"] if grants else 0)
     starts = {e["attempt_id"]: e for e in events if e["event"] == "start"}
     finishes = {e["attempt_id"]: e for e in events if e["event"] == "finish"}
     if any(key not in starts for key in finishes):
@@ -146,7 +160,8 @@ def usage(events):
     # An interrupted new attempt retains its full reservation until reconciled.
     # An unbounded legacy attempt has unknown completion and fails closed at the cap.
     reserved = sum(e.get("reserved_seconds", cap) for e in active.values())
-    return starts, finishes, {"cap_seconds": cap, "extension_issue": extensions[0]["issue"] if extensions else None, "completed_seconds": completed,
+    return starts, finishes, {"cap_seconds": cap, "extension_issue": extensions[0]["issue"] if extensions else None,
+        "authorized_grant_issue": grants[0]["issue"] if grants else None, "completed_seconds": completed,
         "reserved_seconds": reserved, "remaining_seconds": max(0, cap - completed - reserved),
         "review_seconds": completed,
         "observed_running_seconds": sum(min(elapsed(e), e["reserved_seconds"]) for e in active.values() if "reserved_seconds" in e),
@@ -156,7 +171,7 @@ def usage(events):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("begin", "finish", "status", "extend"))
+    parser.add_argument("action", choices=("begin", "finish", "status", "extend", "grant-authorized"))
     parser.add_argument("--ledger", type=Path, required=True)
     parser.add_argument("--import-ledger", action="append", default=[])
     parser.add_argument("--optional-import-ledger", action="append", default=[])
@@ -170,6 +185,7 @@ def main():
     parser.add_argument("--required", action="store_true")
     parser.add_argument("--candidate")
     parser.add_argument("--issue", type=int)
+    parser.add_argument("--authorization")
     parser.add_argument("--outcome", choices=("pass", "fail", "interrupted"), default="interrupted")
     args = parser.parse_args()
     args.ledger.parent.mkdir(parents=True, exist_ok=True)
@@ -182,6 +198,18 @@ def main():
             starts, finishes, total = usage(events)
             if total["extension_issue"] is not None and args.issue is not None and total["extension_issue"] != args.issue:
                 raise ValueError("review extension issue mismatch")
+            if total["authorized_grant_issue"] is not None and args.issue is not None and total["authorized_grant_issue"] != args.issue:
+                raise ValueError("authorized review grant issue mismatch")
+            if args.action == "grant-authorized":
+                if (args.issue != AUTHORIZED_GRANT["issue"] or args.authorization != AUTHORIZED_GRANT["provenance"]
+                        or args.ledger.name != f"issue-{args.issue}.jsonl" or total["extension_issue"] != args.issue
+                        or total["authorized_grant_issue"] is not None or total["unbounded_attempts"]
+                        or AUTHORIZED_BASELINE_ATTEMPT not in finishes
+                        or total["completed_seconds"] < AUTHORIZED_BASELINE_SECONDS):
+                    raise ValueError("authorized review grant requires the original issue ledger, provenance, prior extension and no duplicate")
+                append(handle, {"event": "authorized-grant", "attempt_id": "issue-428-authorized-grant", "at": utc(), **AUTHORIZED_GRANT})
+                events = list(indexed(read_events(handle)).values())
+                starts, finishes, total = usage(events)
             if args.action in ("begin", "finish") and not all((args.round_id, args.lens, args.source_sha, args.attempt_id)):
                 raise ValueError("review attempt identity is required")
             eligible = args.required and args.risk in ("medium", "high") and args.candidate and args.issue

@@ -118,6 +118,9 @@ The response reports completed, reserved and remaining seconds plus unfinished a
 At exhaustion, retain the findings and evidence and stop new reviewer execution.
 Consolidate confirmed blockers and owned deferrals under the existing gate; time exhaustion is not approval, a passing review, or permission to waive required tests.
 Any later authorized policy exception must retain the complete history and name its actual remaining boundary; the runner provides no unlimited reset switch.
+Issue #428 has one such explicit 600-second grant, recorded in [the authorization comment](https://github.com/dgmolla/fitsy/issues/428#issuecomment-5935945700).
+The `grant-authorized` action accepts it only once on the original issue ledger after validating the retained baseline and prior extension, for a maximum cumulative boundary of 3,300 seconds.
+Other issues retain the normal policy.
 
 ## Jev advisory experiment
 

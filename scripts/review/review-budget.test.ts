@@ -163,3 +163,30 @@ test("corrupt or conflicting extension history cannot grant capacity", () => {
     expect(call("status").status).toBe(1);
   }
 });
+
+test("the explicit #428 grant preserves history and rejects duplicate, mismatch and reset", () => {
+  const authorization = "https://github.com/dgmolla/fitsy/issues/428#issuecomment-5935945700";
+  const issueLedger = join(root, "issue-428.jsonl");
+  seed([...history("88a154b4-95fa-47c9-b108-cd59332809e4", 2360.545),
+    { event: "extension", attempt_id: "issue-extension", issue: 428, seconds: 900, risk: "medium", required: true }], issueLedger);
+  const original = readFileSync(issueLedger, "utf8");
+  const grant = (issue = 428, path = issueLedger, provenance = authorization) =>
+    spawnSync("python3", [script, "grant-authorized", "--ledger", path,
+      "--issue", String(issue), "--authorization", provenance], { encoding: "utf8" });
+  expect(grant(429).status).toBe(1);
+  expect(grant(428, ledger).status).toBe(1);
+  expect(grant(428, issueLedger, "unapproved").status).toBe(1);
+  seed([...history("reset", 100), { event: "extension", attempt_id: "issue-extension", issue: 428,
+    seconds: 900, risk: "medium", required: true }], issueLedger);
+  expect(grant().status).toBe(1);
+  writeFileSync(issueLedger, original);
+  expect(readFileSync(issueLedger, "utf8")).toBe(original);
+  expect(grant().status).toBe(0);
+  expect(grant().status).toBe(1);
+  expect(readFileSync(issueLedger, "utf8").startsWith(original)).toBe(true);
+  const status = spawnSync("python3", [script, "status", "--ledger", issueLedger, "--issue", "428"], { encoding: "utf8" });
+  expect(JSON.parse(status.stdout)).toMatchObject({ cap_seconds: 3300, completed_seconds: 2360.545,
+    authorized_grant_issue: 428 });
+  expect(JSON.parse(status.stdout).remaining_seconds).toBeCloseTo(939.455, 3);
+  expect(spawnSync("python3", [script, "status", "--ledger", issueLedger, "--issue", "429"]).status).toBe(1);
+});
