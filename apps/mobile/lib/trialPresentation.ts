@@ -22,6 +22,6 @@ export function trialPresentation(terms: Terms, now = new Date()) {
   return {
     terms, trial, days, reminderAvailable, reminderDay, projectedChargeDate,
     chargeTitle: trial ? days !== null ? `Day ${days}: first charge` : `After ${trial}: first charge` : 'Your first payment',
-    catalogMismatch: days !== null ? trialCatalogMismatch(days) : null,
+    catalogMismatch: trial ? trialCatalogMismatch(days ?? trial) : null,
   };
 }

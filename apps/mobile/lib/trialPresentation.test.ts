@@ -41,3 +41,10 @@ test('selected short offer cannot borrow reminder eligibility from another plan'
   expect(trialPresentation(short).reminderAvailable).toBe(false);
   expect(trialPresentation(long).reminderAvailable).toBe(true);
 });
+
+test('calendar-month trial reports a catalog mismatch without inventing a day count', () => {
+  const terms = purchaseTerms({ ...product, introPrice: { ...product.introPrice, period: 'P1M' } }, true);
+  expect(trialPresentation(terms, start)).toMatchObject({
+    trial: '1 month', days: null, catalogMismatch: expect.stringContaining('1 month'),
+  });
+});

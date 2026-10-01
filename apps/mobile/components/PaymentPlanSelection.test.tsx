@@ -151,6 +151,21 @@ test('a matching two-week selected offer does not report a catalog mismatch', as
   expect(mockCapture.mock.calls.filter(([event]) => event === 'trial_catalog_mismatch')).toHaveLength(0);
 });
 
+test('an eligible calendar-month offer reports its actual period without assuming a fixed day count', async () => {
+  const monthMonthly = { ...monthly, product: { ...monthly.product,
+    introPrice: { price: 0, priceString: '$0', period: 'P1M', cycles: 1 } } };
+  const both = { ...offering, annual, monthly: monthMonthly, availablePackages: [annual, monthMonthly] } as unknown as PurchasesOffering;
+  jest.spyOn(Purchases, 'getOfferings').mockResolvedValue({ current: both, all: { default: both } });
+  jest.spyOn(Purchases, 'checkTrialOrIntroductoryPriceEligibility').mockResolvedValue({
+    annual: { status: 1, description: 'Ineligible' }, monthly: { status: 2, description: 'Eligible' },
+  });
+  const screen = renderRouter(routes, { initialUrl: '/welcome/payment' });
+  await waitFor(() => expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toContain('1 month free trial'));
+  await waitFor(() => expect(mockCapture).toHaveBeenCalledWith('trial_catalog_mismatch', expect.objectContaining({
+    product_id: 'monthly', actual_days: null, actual_period: '1 month', desired_days: 14,
+  })));
+});
+
 test('a short annual offer defaults to the schedulable monthly trial and plan switches keep the purchase target', async () => {
   const shortAnnual = { ...annual, product: { ...annual.product,
     introPrice: { price: 0, priceString: '$0', period: 'P2D', cycles: 1 } } };

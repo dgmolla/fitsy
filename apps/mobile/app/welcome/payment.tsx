@@ -94,12 +94,12 @@ export default function PaymentScreen() {
   useEffect(() => {
     if (visualRequested || !offering || !selected || !eligibilityReady) return;
     const presentation = trialPresentation(terms);
-    if (!presentation.catalogMismatch || presentation.days === null) return;
-    const key = `${offering.identifier}:${selected.product.identifier}:${presentation.days}`;
+    if (!presentation.catalogMismatch || !presentation.trial) return;
+    const key = `${offering.identifier}:${selected.product.identifier}:${presentation.trial}`;
     if (reportedCatalogMismatches.current.has(key)) return;
     reportedCatalogMismatches.current.add(key);
     trackTrialCatalogMismatch({ offering_id: offering.identifier, product_id: selected.product.identifier,
-      actual_days: presentation.days, desired_days: TRIAL_CATALOG_POLICY.desiredDays });
+      actual_days: presentation.days, actual_period: presentation.trial, desired_days: TRIAL_CATALOG_POLICY.desiredDays });
   }, [visualRequested, offering, selected, eligibilityReady, terms]);
 
   async function declineSubscription() {
