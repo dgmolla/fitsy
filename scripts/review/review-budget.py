@@ -279,7 +279,14 @@ def main():
                 elif not 1 <= args.timeout_seconds <= 3600:
                     result.update(allowed=False, reason="review timeout must be between 1 and 3600 seconds")
                 else:
-                    grant = min(args.timeout_seconds, math.floor(total["remaining_seconds"] - CLOSEOUT_SECONDS))
+                    ceiling = args.timeout_seconds
+                    if latest and latest.get("failure_kind") in ("timeout", "transient_provider") and total["authorized_grant_issue"] is None:
+                        previous = starts.get(latest["attempt_id"], {}).get("timeout_seconds")
+                        # Legacy attempts lacking a granted deadline cannot authorize
+                        # automatic growth beyond the request or executor ceiling.
+                        if type(previous) is int and previous > 0:
+                            ceiling = min(ceiling, previous * 2, 3600)
+                    grant = min(ceiling, math.floor(total["remaining_seconds"] - CLOSEOUT_SECONDS))
                     if grant < 1:
                         result.update(allowed=False, reason="cumulative review time exhausted or reserved")
                         if total["extension_issue"] and not total["unfinished_attempts"]:

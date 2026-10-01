@@ -112,17 +112,27 @@ test("remaining budget is the real executor deadline and incomplete timeout is n
 });
 test("signal stops reviewer before releasing its reservation", async () => {
   writeFileSync(join(root, "delay"), "60");
+  // Reproduce slow CLI startup before the reviewer publishes its ready PID.
+  const cli = join(root, "bin/claude");
+  writeFileSync(cli, readFileSync(cli, "utf8").replace("if '--version' in sys.argv:", "if '--version' in sys.argv: time.sleep(2.2)\nif '--version' in sys.argv:"), { mode: 0o755 });
   const child = spawn("bash", ["scripts/review/run-lens.sh", "--local", "correctness"], {
     cwd: root, env: { ...env, FITSY_REVIEW_MODEL: "fixture-model", FITSY_REVIEW_PROVIDER: "claude" }, stdio: "ignore",
   });
   const done = new Promise(resolve => child.on("close", resolve));
-  for (let count = 0; count < 200 && !existsSync(join(root, "reviewer-pid")); count++) await new Promise(resolve => setTimeout(resolve, 10));
-  expect(existsSync(join(root, "reviewer-pid"))).toBe(true);
-  child.kill("SIGTERM"); await done;
+  try {
+    const deadline = Date.now() + 10_000;
+    while (!existsSync(join(root, "reviewer-pid")) && child.exitCode === null && Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    expect(existsSync(join(root, "reviewer-pid"))).toBe(true);
+  } finally {
+    child.kill("SIGTERM");
+    await done;
+  }
   expect(() => process.kill(Number(readFileSync(join(root, "reviewer-pid"), "utf8")), 0)).toThrow();
   const events = readFileSync(join(root, "budgets/issue-355.jsonl"), "utf8").trim().split("\n").map(row => JSON.parse(row));
   expect(events.at(-1)).toMatchObject({ event: "finish", outcome: "interrupted" });
-});
+}, 20_000);
 test("a completed short-deadline verdict reuses cache after remaining time is exhausted", () => {
   const rows = [
     { event: "extension", attempt_id: "issue-extension", seconds: 900, issue: 355, risk: "medium", required: true },

@@ -138,6 +138,8 @@ def run_process(argv, prompt, cwd, timeout, env, diagnostics=True, structured_er
                 raise subprocess.TimeoutExpired(argv, timeout)
             try:
                 output, errors = process.communicate(prompt if first else None, timeout=min(1, remaining))
+                if len(output.encode()) + len(errors.encode()) > observed_bytes:
+                    last_activity = time.monotonic() - started
                 break
             except subprocess.TimeoutExpired as progress:
                 count = len(progress.output or b"") + len(progress.stderr or b"")

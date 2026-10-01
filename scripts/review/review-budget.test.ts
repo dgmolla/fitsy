@@ -237,3 +237,13 @@ test("outside-cwd invocation cannot authorize a checkout-owned manifest", () => 
     expect(JSON.parse(result.stdout).reason).toContain("private external operator manifest");
   } finally { rmSync(inside, { force: true }); }
 });
+
+test("automatic retry doubles the actual granted deadline instead of configuration", () => {
+  seed([...history("prior", 2640),
+    { event: "extension", attempt_id: "issue-extension", seconds: 900, issue: 435, risk: "high", required: true },
+    ...history("failed", 60, { timeout_seconds: 60 }).map(row => ({ ...row, source_sha: "retry", outcome: "fail", failure_kind: "timeout" })),
+  ]);
+  const retry = spawnSync("python3", [...args("begin", "retry", 1800), "--candidate", "root:branch", "--issue", "435", "--risk", "high", "--required"], { encoding: "utf8" });
+  expect(retry.status).toBe(0);
+  expect(JSON.parse(retry.stdout)).toMatchObject({ timeout_seconds: 120, completed_seconds: 2700, recovery_issue: 435 });
+});

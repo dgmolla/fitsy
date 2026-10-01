@@ -154,6 +154,15 @@ sys.exit(7)
         time.sleep(1.2)
         self.assertFalse(marker.exists())
 
+    def test_fast_completed_output_records_activity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            receipt = Path(directory) / "receipt.json"
+            with patch.dict(os.environ, {"FITSY_REVIEW_DIAGNOSTIC_FILE": str(receipt)}):
+                runner.run_process([sys.executable, "-c", "print('fast output')"], "", directory, 5, os.environ.copy())
+            report = json.loads(receipt.read_text())
+            self.assertTrue(report["stream_activity"]["observed"])
+            self.assertGreater(report["stdout_bytes"], 0)
+
     def test_timeout_preserves_private_progress_and_classifies_failure(self):
         self.cli("codex", "import sys,time\nprint('reading billing contract',flush=True)\nprint('network trace',file=sys.stderr,flush=True)\ntime.sleep(30)\n")
         diagnostic = self.root / "execution.json"
