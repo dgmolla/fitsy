@@ -226,7 +226,7 @@ def main():
                 # This is operator authorization, never inferred from reviewer output.
                 # Keep the approval manifest outside the branch being reviewed.
                 path = args.authorization_file.resolve() if args.authorization_file else None
-                if (not path or Path.cwd().resolve() == path or Path.cwd().resolve() in path.parents
+                if (not path or Path(__file__).resolve().parents[2] == path or Path(__file__).resolve().parents[2] in path.parents
                         or path.stat().st_uid != os.getuid() or path.stat().st_mode & 0o022
                         or not args.candidate or args.ledger.name != f"issue-{args.issue}.jsonl"
                         or total["unfinished_attempts"]):

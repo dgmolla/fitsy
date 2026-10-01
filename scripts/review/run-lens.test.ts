@@ -303,3 +303,10 @@ test("invalid reviewer preflight publishes configuration failure without startin
   expect(readFileSync(join(root, "gh-calls"), "utf8")).toContain("execution/configuration");
   expect(readdirSync(root)).not.toContain("calls");
 });
+
+test("missing final response is invalid output instead of completed execution", () => {
+  writeFileSync(join(root, "bin/codex"), "#!/bin/sh\nif [ \"$1\" = --version ]; then echo fake-cli; fi\nexit 0\n", { mode: 0o755 });
+  const result = run("fixture-model", "codex");
+  expect(result.status).toBe(1);
+  expect(JSON.parse(result.stdout)).toMatchObject({ verdict: "incomplete", error: { kind: "invalid_output" } });
+});

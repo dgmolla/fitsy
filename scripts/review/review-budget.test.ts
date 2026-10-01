@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -225,4 +225,15 @@ test.each(["authorized-grant", "recovery_extension"])("untrusted import cannot a
   expect(result.status).toBe(1);
   expect(result.value.reason).toContain("cannot grant new review authority");
   expect(readFileSync(ledger, "utf8")).toBe("");
+});
+
+test("outside-cwd invocation cannot authorize a checkout-owned manifest", () => {
+  mkdirSync(join(__dirname, "../../.evidence/review-tests"), { recursive: true });
+  const inside = join(__dirname, `../../.evidence/review-tests/checkout-approval-${process.pid}.json`);
+  writeFileSync(inside, JSON.stringify({ issue: 435, seconds: 600, provenance: "https://github.com/dgmolla/fitsy/issues/435#issuecomment-12345" }), { mode: 0o600 });
+  try {
+    const result = spawnSync("python3", [script, "grant-authorized", "--ledger", join(root, "issue-435.jsonl"), "--candidate", "root:branch", "--issue", "435", "--authorization-file", inside], { cwd: root, encoding: "utf8" });
+    expect(result.status).toBe(1);
+    expect(JSON.parse(result.stdout).reason).toContain("private external operator manifest");
+  } finally { rmSync(inside, { force: true }); }
 });

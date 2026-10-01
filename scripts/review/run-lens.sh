@@ -233,6 +233,7 @@ else
     RESULT_JSON="$(printf '' | python3 scripts/review/extract-verdict.py "$LENS" --execution-error)"
   fi
   FAILURE_KIND="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("kind", "process_error"))' "$EXECUTION_FILE" 2>/dev/null || echo process_error)"
+  if [ "$BUDGET_OUTCOME" = fail ] && [ "$FAILURE_KIND" = completed ]; then FAILURE_KIND=invalid_output; fi
   if [ "$BUDGET_OUTCOME" = pass ] && [ "$(printf '%s' "$RESULT_JSON" | python3 -c 'import json,sys;print(json.load(sys.stdin)["verdict"])')" = incomplete ]; then
     FAILURE_KIND=invalid_output
     BUDGET_OUTCOME=fail
