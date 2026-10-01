@@ -876,6 +876,11 @@ export function trackPaywallExperimentExposure(props: { offering_id: string; acc
   catch (error) { logCaptureError('paywall_experiment_exposed', error); }
 }
 
+export function trackTrialCatalogMismatch(props: { offering_id: string; product_id: string; actual_days: number; desired_days: number }): void {
+  try { getPostHogClient().capture('trial_catalog_mismatch', props); }
+  catch (error) { logCaptureError('trial_catalog_mismatch', error); }
+}
+
 export function trackReminderAction(props: { action: 'opened'; kind: 'meal' | 'trial' } | { action: 'preferences_changed'; meals: boolean; trial: boolean }): void {
   try { getPostHogClient().capture('reminder_action', props); }
   catch (error) { logCaptureError('reminder_action', error); }

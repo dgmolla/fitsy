@@ -9,12 +9,13 @@ import { recordOnboardingComplete } from '@/lib/onboardingCompletion';
 import { usePurchases } from '@/lib/usePurchases';
 import { useRedirectOnceEntitled } from '@/lib/useRedirectOnceEntitled';
 import { ensureSessionForPurchase } from '@/lib/purchaseSession';
-import { trackOnboardingScreenView, trackPaywallExperimentExposure } from '@/lib/analytics';
+import { trackOnboardingScreenView, trackPaywallExperimentExposure, trackTrialCatalogMismatch } from '@/lib/analytics';
 import { usePreviewAccess } from '@/lib/usePreviewAccess';
 import { rememberPaywallDecline } from '@/lib/paywallAccess';
 import { openPurchasedDestination, resetWelcomeJourney } from '@/lib/paywallJourney';
 import { purchaseTerms, savingPercent } from '@/lib/purchaseTerms';
-import { defaultTrialPlan, type PlanId } from '@/lib/trialPresentation';
+import { defaultTrialPlan, trialPresentation, type PlanId } from '@/lib/trialPresentation';
+import { TRIAL_CATALOG_POLICY } from '../../../../packages/shared/src/contracts/trialPolicy';
 import { devTrialVisualOffer } from '@/lib/devTrialVisualOffer';
 import { clearOnboardingPreviewEntry } from '@/lib/onboardingPreviewEntry';
 
@@ -30,6 +31,7 @@ export default function PaymentScreen() {
   const [chosenPlan, setChosenPlan] = useState<PlanId | null>(null);
   const variants = usePreviewAccess();
   const exposure = useRef('');
+  const reportedCatalogMismatches = useRef(new Set<string>());
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [modal, setModal] = useState<PaywallExitModal>('none');
@@ -88,6 +90,17 @@ export default function PaymentScreen() {
     exposure.current = key;
     trackPaywallExperimentExposure({ offering_id: offering.identifier, access_variant: variants.access, image_variant: 'none', layout_variant: 'trial_timeline' });
   }, [offering, variants.access, visualRequested]);
+
+  useEffect(() => {
+    if (visualRequested || !offering || !selected || !eligibilityReady) return;
+    const presentation = trialPresentation(terms);
+    if (!presentation.catalogMismatch || presentation.days === null) return;
+    const key = `${offering.identifier}:${selected.product.identifier}:${presentation.days}`;
+    if (reportedCatalogMismatches.current.has(key)) return;
+    reportedCatalogMismatches.current.add(key);
+    trackTrialCatalogMismatch({ offering_id: offering.identifier, product_id: selected.product.identifier,
+      actual_days: presentation.days, desired_days: TRIAL_CATALOG_POLICY.desiredDays });
+  }, [visualRequested, offering, selected, eligibilityReady, terms]);
 
   async function declineSubscription() {
     try {
