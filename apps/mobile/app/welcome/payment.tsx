@@ -26,8 +26,9 @@ import type { ReminderAvailability } from '@/components/PaywallOfferTimeline';
 type PlanId = 'monthly' | 'yearly';
 
 export default function PaymentScreen() {
-  const { devTrialVisual, devPaywallVariant } = useLocalSearchParams<{ devTrialVisual?: string; devPaywallVariant?: string }>();
-  const visualRequested = __DEV__ && devTrialVisual === '1';
+  const { devTrialVisual, devPaywallVariant, devReminderEnabled } = useLocalSearchParams<{ devTrialVisual?: string; devPaywallVariant?: string; devReminderEnabled?: string }>();
+  const visualRequested = __DEV__ && (devTrialVisual === '1' || devTrialVisual === '14');
+  const simulatedReminder = visualRequested && devReminderEnabled === '1';
   useOnboardingStep('payment');
   const navigation = useNavigation();
   const focused = useIsFocused();
@@ -71,7 +72,7 @@ export default function PaymentScreen() {
   const { offering, introEligibility, introEligibilityReady, refreshOffering, purchase, restore, showManageSubscriptions, entitled } = usePurchases();
   const variantConfig = paywallVariantConfig(offering?.metadata);
   const paywallVariant = resolvePaywallVariant(variantConfig, userId, testerOverride);
-  const visual = devTrialVisualOffer(offering, visualRequested);
+  const visual = devTrialVisualOffer(offering, visualRequested, __DEV__, devTrialVisual === '14' ? 14 : 7);
   const shownOffering = visual?.offering ?? offering;
   const shownEligibility = visual?.eligibility ?? introEligibility;
   const eligibilityReady = !!visual || introEligibilityReady;
@@ -221,11 +222,12 @@ export default function PaymentScreen() {
         annualSavingPercent={annualPercent}
         discovery={discovery}
         variant={paywallVariant}
-        reminderAvailability={reminderAvailability}
+        reminderAvailability={simulatedReminder ? 'enabled' : reminderAvailability}
         loading={loading}
         restoring={restoring}
         checkingPlans={checkingPlans}
-        visualPreview={!!visual}
+        visualPreview={visual ? (devTrialVisual === '14' ? 14 : 7) : undefined}
+        visualReminderSimulated={simulatedReminder}
         onSelect={setChosenPlan}
         onBack={() => { if (navigation.canGoBack()) router.back(); else router.replace('/welcome/trial-reminder'); }}
         onRestore={() => { void handleRestore(); }}
