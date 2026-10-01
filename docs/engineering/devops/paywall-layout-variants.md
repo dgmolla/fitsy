@@ -1,21 +1,21 @@
 # Paywall layout variants
 
 The final mobile paywall reads one `paywall_layout_config` value from the current RevenueCat offering metadata.
-Absent or invalid metadata resolves to A-only with version `default-a`.
+Absent or invalid metadata resolves to B-only with version `default-b`.
 Variant A shows the real search hero card and three benefits.
 Variant B shows the same mosaic and purchase controls with a selected-offer timeline for eligible trials, or the three benefits for no-trial offers.
-The current release default is A-only; no live segmented allocation has been selected.
+The chosen release default is B-only; no live segmented allocation has been selected.
 
 ```mermaid
 flowchart LR
   O[Current offering metadata] --> V[Validate mode, version and allocation]
-  V -->|invalid or absent| A[Variant A]
+  V -->|invalid or absent| B[Variant B]
   V -->|A-only or B-only| F[Fixed variant]
   V -->|segmented| H[Hash version and authenticated user ID]
   H --> C[Stable A or B cohort]
   F --> P[Shared purchase shell]
   C --> P
-  A --> P
+  B --> P
 ```
 
 Set the offering metadata field to one of these JSON values to flip all users or disable segmentation:

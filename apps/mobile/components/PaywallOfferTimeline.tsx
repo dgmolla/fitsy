@@ -80,10 +80,10 @@ export function PaywallOfferTimeline({ terms, now, reminderAvailability = 'unava
 
 const s = StyleSheet.create({
   panel: { alignSelf: 'stretch', marginHorizontal: 5, marginTop: 14, paddingHorizontal: 17, paddingTop: 20, paddingBottom: 18, borderRadius: 20, backgroundColor: 'rgba(253,251,247,0.88)' },
-  benefits: { alignSelf: 'center', gap: 8, marginTop: 34, marginBottom: 28 },
-  benefitRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  benefit: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 13, lineHeight: 19, color: EDITORIAL.green },
-  step: { flexDirection: 'row', alignItems: 'flex-start', gap: 14, position: 'relative', paddingBottom: 24, minHeight: 68 },
+  benefits: { alignSelf: 'center', gap: 15, marginTop: 28, marginBottom: 12 },
+  benefitRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  benefit: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 16, lineHeight: 22, color: EDITORIAL.green },
+  step: { flexDirection: 'row', alignItems: 'flex-start', gap: 14, position: 'relative', paddingBottom: 28, minHeight: 72 },
   lastStep: { paddingBottom: 0 },
   // The rail spans the actual row height, including wrapped copy and spacing.
   // The next circle begins at this row's bottom edge.

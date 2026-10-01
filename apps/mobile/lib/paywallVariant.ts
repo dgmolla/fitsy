@@ -1,8 +1,8 @@
 export type PaywallVariant = 'A' | 'B';
 export type PaywallVariantConfig = { mode: 'A-only' | 'B-only' | 'segmented'; version: string; percentB?: number };
 
-// A remains the release default until an allocation is explicitly approved.
-const DEFAULT: PaywallVariantConfig = { mode: 'A-only', version: 'default-a' };
+// The chosen B layout is the release default. Segmentation requires explicit configuration.
+const DEFAULT: PaywallVariantConfig = { mode: 'B-only', version: 'default-b' };
 
 export function parsePaywallVariantConfig(raw: string | undefined): PaywallVariantConfig {
   if (!raw) return DEFAULT;

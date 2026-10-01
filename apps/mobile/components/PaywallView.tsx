@@ -39,6 +39,7 @@ export function PaywallView(props: Props) {
   const { height, fontScale } = useWindowDimensions();
   const largeText = fontScale > 1.35;
   const compact = height < 780 && fontScale <= 1.2;
+  const timelineLayout = props.variant === 'B';
   const { plan, annual, monthly, loading, restoring } = props;
   const selected = plan === 'yearly' ? annual : monthly;
   const busy = loading || restoring;
@@ -57,16 +58,18 @@ export function PaywallView(props: Props) {
       </View>
 
       <ScrollView style={s.scroll} contentContainerStyle={[s.content, compact && s.contentCompact]} showsVerticalScrollIndicator={false} bounces={false}>
-        <View>
-          {props.variant !== 'B' ? <><PaywallHero discovery={props.discovery} compact={compact} />
+        <View style={timelineLayout && s.mainTimeline}>
+          {!timelineLayout ? <><PaywallHero discovery={props.discovery} compact={compact} />
           <Text style={[s.title, compact && s.titleCompact]}>Find meals that fit.</Text>
           <View style={[s.benefits, compact && s.benefitsCompact]}>
             {PAYWALL_BENEFITS.map(benefit =>
               <View key={benefit} style={s.benefitRow}><Ionicons name="checkmark-circle" size={17} color={EDITORIAL.greenMid} /><Text style={[s.benefit, compact && s.benefitCompact]}>{benefit}</Text></View>)}
           </View></> : <PaywallOfferTimeline terms={selected} now={new Date()} reminderAvailability={props.reminderAvailability} />}
-          <View style={[s.cancelRow, compact && s.cancelRowCompact]}><Ionicons name="checkmark" size={15} color={EDITORIAL.green} /><Text style={s.cancel}>No commitment, cancel anytime</Text></View>
+        </View>
+        <View>
+          <View style={[s.cancelRow, compact && s.cancelRowCompact, timelineLayout && s.cancelRowTimeline]}><Ionicons name="checkmark" size={timelineLayout ? 18 : 15} color={EDITORIAL.green} /><Text style={[s.cancel, timelineLayout && s.cancelTimeline]}>No commitment, cancel anytime</Text></View>
           {props.visualPreview && <Text style={s.visualNote} testID="dev-trial-visual-note">Synthetic trial eligibility for visual testing. Prices are from the live Test Store; purchase is disabled.</Text>}
-          <View style={s.plans}>
+          <View style={[s.plans, timelineLayout && s.plansTimeline]}>
             {([{ id: 'yearly', name: 'Annual', terms: annual }, { id: 'monthly', name: 'Monthly', terms: monthly }] as const).map(option => {
               const active = option.id === plan;
               return (
@@ -94,7 +97,7 @@ export function PaywallView(props: Props) {
             </Pressable>
           )}
         </View>
-        <View style={[s.footer, compact && s.footerCompact]}>
+        <View style={[s.footer, compact && s.footerCompact, timelineLayout && s.footerTimeline]}>
           <Text style={[s.disclosure, compact && s.disclosureCompact]} testID="paywall-terms">{selected?.compactDisclosure ?? 'Fetching current prices and subscription terms from the store…'}</Text>
           <AnimatedPress style={[s.cta, compact && s.ctaCompact, (!selected || planBusy) && s.disabled]} onPress={props.onPurchase} disabled={!selected || planBusy} haptic
             accessibilityRole="button" accessibilityLabel={label} testID="welcome-continue">
@@ -123,6 +126,7 @@ const s = StyleSheet.create({
   restore: { fontFamily: FONTS.nunitoSans, fontSize: 12, color: EDITORIAL.textMid, textDecorationLine: 'underline', textAlign: 'right' },
   content: { flexGrow: 1, paddingHorizontal: 20, paddingBottom: 5 },
   contentCompact: { paddingHorizontal: 17 },
+  mainTimeline: { flexGrow: 1, justifyContent: 'center' },
   title: { ...TEXT.title, fontSize: 25, lineHeight: 30, color: EDITORIAL.green, textAlign: 'center' },
   titleCompact: { fontSize: 23, lineHeight: 28 },
   benefits: { alignSelf: 'center', gap: 5, marginTop: 9 },
@@ -132,9 +136,12 @@ const s = StyleSheet.create({
   benefitCompact: { fontSize: 12, lineHeight: 18 },
   cancelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: 9, marginBottom: 12 },
   cancelRowCompact: { marginTop: 7, marginBottom: 8 },
+  cancelRowTimeline: { marginTop: 8, marginBottom: 14 },
   cancel: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 12, lineHeight: 17, color: EDITORIAL.green, textAlign: 'center' },
+  cancelTimeline: { fontSize: 15, lineHeight: 21 },
   visualNote: { ...TEXT.bodySmall, fontSize: 11, lineHeight: 15, color: EDITORIAL.textMid, textAlign: 'center', marginBottom: 8 },
   plans: { gap: 7 },
+  plansTimeline: { gap: 12 },
   plan: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 6, minHeight: 52, borderRadius: 13, borderWidth: 1, borderColor: EDITORIAL.border, backgroundColor: EDITORIAL.cream },
   planCompact: { paddingVertical: 4, minHeight: 48, gap: 8 },
   planSelected: { backgroundColor: EDITORIAL.greenAccentTint, borderColor: EDITORIAL.greenMid },
@@ -152,6 +159,7 @@ const s = StyleSheet.create({
   retry: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   footer: { paddingTop: 18 },
   footerCompact: { paddingTop: 14 },
+  footerTimeline: { paddingTop: 18 },
   disclosure: { fontFamily: FONTS.nunitoSans, fontSize: 10, lineHeight: 14, color: EDITORIAL.textMid, textAlign: 'center', marginBottom: 8 },
   disclosureCompact: { marginBottom: 5 },
   cta: { minHeight: 47, paddingVertical: 8, paddingHorizontal: 18, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, borderRadius: 30, backgroundColor: EDITORIAL.green },

@@ -1,8 +1,8 @@
 import { parsePaywallVariantConfig, paywallVariantConfig, resolvePaywallVariant } from './paywallVariant';
 
-test('invalid or missing allocation safely remains A', () => {
+test('invalid or missing allocation safely uses the chosen B layout', () => {
   for (const raw of [undefined, '', '{', '{"mode":"segmented","version":"v1","percentB":101}', '{"mode":"B-only"}']) {
-    expect(resolvePaywallVariant(parsePaywallVariantConfig(raw), 'user-1')).toBe('A');
+    expect(resolvePaywallVariant(parsePaywallVariantConfig(raw), 'user-1')).toBe('B');
   }
 });
 
@@ -21,5 +21,5 @@ test('explicit modes and stable account segmentation use authenticated IDs', () 
 
 test('RevenueCat metadata is the single remote configuration input', () => {
   expect(paywallVariantConfig({ paywall_layout_config: { mode: 'B-only', version: 'review-1' } })).toEqual({ mode: 'B-only', version: 'review-1' });
-  expect(paywallVariantConfig({ paywall_layout_config: { mode: 'segmented', version: 'bad' } }).mode).toBe('A-only');
+  expect(paywallVariantConfig({ paywall_layout_config: { mode: 'segmented', version: 'bad' } }).mode).toBe('B-only');
 });
