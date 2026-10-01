@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -43,13 +43,27 @@ export function PaywallView(props: Props) {
   const timelineLayout = props.variant === 'B';
   const { plan, annual, monthly, loading, restoring } = props;
   const selected = plan === 'yearly' ? annual : monthly;
+  const safe = useRef<View>(null);
+  const [firstStepTop, setFirstStepTop] = useState<number | null>(null);
+  const onFirstStepTop = useCallback((screenTop: number) => {
+    safe.current?.measureInWindow((_, rootTop) => {
+      const top = screenTop - rootTop;
+      setFirstStepTop(previous => previous !== null && Math.abs(previous - top) < 1 ? previous : top);
+    });
+  }, []);
+  const trialTimeline = timelineLayout && !!selected?.trial;
+  // Layout measurements keep the fade above Today as the content moves with
+  // screen height, selected offer, and accessibility text size.
+  const mosaicHeight = trialTimeline
+    ? firstStepTop === null ? Math.min(height * 0.2, 180) : Math.max(44, firstStepTop - 8)
+    : Math.max(300, Math.min(height * 0.49, 410));
   const busy = loading || restoring;
   const planBusy = busy || props.checkingPlans;
   const label = loading ? 'Setting up…' : props.checkingPlans ? 'Checking plans…' : selected?.trial ? 'Start free trial' : 'Continue to purchase';
 
   return (
-    <SafeAreaView key={fontScale} style={s.safe}>
-      <PaywallMosaic height={Math.max(300, Math.min(height * 0.49, 410))} />
+    <SafeAreaView ref={safe} key={fontScale} style={s.safe}>
+      <PaywallMosaic height={mosaicHeight} />
       <View style={s.nav}>
         {props.onBack && !busy ? <Pressable onPress={props.onBack} style={s.back} accessibilityRole="button" accessibilityLabel="Go back" testID="welcome-back"><Ionicons name="chevron-back" size={22} color={EDITORIAL.green} /></Pressable> : <View style={s.back} />}
         <Text style={s.logo} testID="paywall-logo">fitsy<Text style={s.logoDot}>.</Text></Text>
@@ -65,7 +79,7 @@ export function PaywallView(props: Props) {
           <View style={[s.benefits, compact && s.benefitsCompact]}>
             {PAYWALL_BENEFITS.map(benefit =>
               <View key={benefit} style={s.benefitRow}><Ionicons name="checkmark-circle" size={17} color={EDITORIAL.greenMid} /><Text style={[s.benefit, compact && s.benefitCompact]}>{benefit}</Text></View>)}
-          </View></> : <PaywallOfferTimeline terms={selected} now={new Date()} reminderAvailability={props.reminderAvailability} />}
+          </View></> : <PaywallOfferTimeline terms={selected} now={new Date()} reminderAvailability={props.reminderAvailability} onFirstStepTop={onFirstStepTop} />}
         </View>
         <View>
           <View style={[s.cancelRow, compact && s.cancelRowCompact, timelineLayout && s.cancelRowTimeline]}><Ionicons name="checkmark" size={timelineLayout ? 18 : 15} color={EDITORIAL.green} /><Text style={[s.cancel, timelineLayout && s.cancelTimeline]}>No commitment, cancel anytime</Text></View>

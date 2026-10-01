@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { EDITORIAL, FONTS } from '@/lib/brand';
@@ -32,18 +32,20 @@ export const PAYWALL_BENEFITS = [
   'Compare estimated nutrition',
 ] as const;
 
-function Step({ icon, title, detail, last = false, testID }: {
-  icon: React.ComponentProps<typeof Ionicons>['name']; title: string; detail: string; last?: boolean; testID: string;
+function Step({ icon, title, detail, last = false, testID, onTop }: {
+  icon: React.ComponentProps<typeof Ionicons>['name']; title: string; detail: string; last?: boolean; testID: string; onTop?: (top: number) => void;
 }) {
-  return <View style={[s.step, last && s.lastStep]} testID={testID}>
+  const step = useRef<View>(null);
+  return <View ref={step} style={[s.step, last && s.lastStep]} testID={testID}
+    onLayout={onTop ? () => requestAnimationFrame(() => step.current?.measureInWindow((_, top) => onTop(top))) : undefined}>
     {!last && <View style={s.connector} testID={`${testID}-connector`} />}
     <View style={s.icon} testID={`${testID}-circle`}><Ionicons name={icon} size={17} color={EDITORIAL.cream} /></View>
     <View style={s.copy}><Text style={s.when}>{title}</Text><Text style={s.detail}>{detail}</Text></View>
   </View>;
 }
 
-export function PaywallOfferTimeline({ terms, now, reminderAvailability = 'unavailable' }: {
-  terms: Terms; now: Date; reminderAvailability?: ReminderAvailability;
+export function PaywallOfferTimeline({ terms, now, reminderAvailability = 'unavailable', onFirstStepTop }: {
+  terms: Terms; now: Date; reminderAvailability?: ReminderAvailability; onFirstStepTop?: (top: number) => void;
 }) {
   const chargeDate = projectedChargeDate(terms, now);
   if (!terms?.trial || !chargeDate) {
@@ -69,7 +71,7 @@ export function PaywallOfferTimeline({ terms, now, reminderAvailability = 'unava
 
   const chargeDateLabel = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).format(chargeDate);
   return <View style={s.panel} testID="paywall-offer-timeline">
-    <Step icon="lock-open-outline" title="Today" detail="Unlock our library of Los Angeles restaurant nutrition, tailored to you" testID="paywall-step-today" />
+    <Step icon="lock-open-outline" title="Today" detail="Unlock our library of Los Angeles restaurant nutrition, tailored to you" testID="paywall-step-today" onTop={onFirstStepTop} />
     <Step icon="notifications-outline"
       title={usefulReminder ? `In ${reminderDay} days` : 'Reminder unavailable'}
       detail={reminderCopy} testID="paywall-step-reminder" />
@@ -80,7 +82,7 @@ export function PaywallOfferTimeline({ terms, now, reminderAvailability = 'unava
 }
 
 const s = StyleSheet.create({
-  panel: { alignSelf: 'stretch', marginHorizontal: 5, marginTop: 14, paddingHorizontal: 17, paddingTop: 20, paddingBottom: 18, borderRadius: 20, backgroundColor: 'rgba(253,251,247,0.88)' },
+  panel: { alignSelf: 'stretch', marginHorizontal: 5, marginTop: 14, paddingHorizontal: 17, paddingTop: 20, paddingBottom: 18 },
   benefits: { alignSelf: 'center', gap: 15, marginTop: 28, marginBottom: 12 },
   benefitRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   benefit: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 16, lineHeight: 22, color: EDITORIAL.green },
