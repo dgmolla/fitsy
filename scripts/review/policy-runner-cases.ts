@@ -85,8 +85,10 @@ test("full PR body is validated before limiting review prompt metadata", () => {
 });
 test("remaining budget is the real executor deadline and incomplete timeout is not cached", () => {
   const rows = [
-    { event: "start", epoch: Date.now() / 1000 - 1794, round_id: "old", lens: "correctness", source_sha: "old", attempt_id: "old" },
-    { event: "finish", elapsed_seconds: 1794, round_id: "old", lens: "correctness", source_sha: "old", attempt_id: "old" },
+    { event: "extension", attempt_id: "issue-extension", seconds: 900, issue: 355, risk: "medium", required: true },
+    { event: "recovery_extension", attempt_id: "issue-recovery", seconds: 1800, issue: 355, failed_attempt: "old" },
+    { event: "start", epoch: Date.now() / 1000 - 4494, round_id: "old", lens: "correctness", source_sha: "old", attempt_id: "old" },
+    { event: "finish", elapsed_seconds: 4494, round_id: "old", lens: "correctness", source_sha: "old", attempt_id: "old", outcome: "fail", failure_kind: "timeout" },
   ];
   writeFileSync(join(root, ".evidence/review-budget.jsonl"), rows.map(row => JSON.stringify(row)).join("\n") + "\n");
   writeFileSync(join(root, "delay"), "60");
@@ -100,7 +102,7 @@ test("remaining budget is the real executor deadline and incomplete timeout is n
   const status = spawnSync("python3", ["scripts/review/review-budget.py", "status", "--ledger", join(root, "budgets/issue-355.jsonl")], { cwd: root, encoding: "utf8" });
   expect(status.status).toBe(0);
   const total = JSON.parse(status.stdout);
-  expect(total.completed_seconds).toBeCloseTo(1794 + events.at(-1).elapsed_seconds, 5);
+  expect(total.completed_seconds).toBeCloseTo(4494 + events.at(-1).elapsed_seconds, 5);
   expect(total.remaining_seconds).toBeLessThan(5);
   expect(run().status).toBe(1);
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(1);
@@ -122,8 +124,10 @@ test("signal stops reviewer before releasing its reservation", async () => {
 });
 test("a completed short-deadline verdict reuses cache after remaining time is exhausted", () => {
   const rows = [
-    { event: "start", epoch: Date.now() / 1000 - 1794, round_id: "old", lens: "correctness", source_sha: "old", attempt_id: "old" },
-    { event: "finish", elapsed_seconds: 1794, round_id: "old", lens: "correctness", source_sha: "old", attempt_id: "old" },
+    { event: "extension", attempt_id: "issue-extension", seconds: 900, issue: 355, risk: "medium", required: true },
+    { event: "recovery_extension", attempt_id: "issue-recovery", seconds: 1800, issue: 355, failed_attempt: "old" },
+    { event: "start", epoch: Date.now() / 1000 - 4494, round_id: "old", lens: "correctness", source_sha: "old", attempt_id: "old" },
+    { event: "finish", elapsed_seconds: 4494, round_id: "old", lens: "correctness", source_sha: "old", attempt_id: "old", outcome: "fail", failure_kind: "timeout" },
   ];
   writeFileSync(join(root, ".evidence/review-budget.jsonl"), rows.map(row => JSON.stringify(row)).join("\n") + "\n");
   const first = run();
@@ -138,12 +142,13 @@ test("poller legacy history imports before another independent PR review", () =>
   mkdirSync(join(root, "old-poller/budgets"), { recursive: true });
   const legacy = join(root, "old-poller/budgets/123.jsonl");
   writeFileSync(legacy, [
-    { event: "start", epoch: Date.now() / 1000 - 1800, round_id: "old", lens: "correctness", source_sha: "old", attempt_id: "old", exception: true },
-    { event: "finish", elapsed_seconds: 1800, round_id: "old", lens: "correctness", source_sha: "old", attempt_id: "old", exception: true },
+    { event: "extension", attempt_id: "issue-extension", seconds: 900, issue: 355, risk: "medium", required: true },
+    { event: "start", epoch: Date.now() / 1000 - 2700, round_id: "old", lens: "correctness", source_sha: "old", attempt_id: "old", exception: true },
+    { event: "finish", elapsed_seconds: 2700, round_id: "old", lens: "correctness", source_sha: "old", attempt_id: "old", exception: true },
   ].map(row => JSON.stringify(row)).join("\n") + "\n");
   const result = runPr();
   expect(result.status).toBe(1);
-  expect(result.stderr).toContain('"completed_seconds": 1800');
+  expect(result.stderr).toContain('"completed_seconds": 2700');
   expect(existsSync(calls)).toBe(false);
 });
 test("confirmed P1 blocks even an otherwise advisory docs lens", () => {

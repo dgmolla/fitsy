@@ -147,3 +147,28 @@ Merge and deployment remain with the configured authority.
 
 Historical review findings and source-bound deferrals remain in [issue #330](https://github.com/dgmolla/fitsy/issues/330) and their original evidence.
 Changing the time policy does not turn an old failed verdict into a pass or prove a delivery-speed target.
+
+
+### Execution recovery and explicit authorization
+
+Per-attempt wall time, cumulative reviewer execution and delivery-worker lifetime are separate constraints.
+The default independent attempt is 900 seconds; one classified timeout/transient retry on the same head may double that deadline, capped at 3600 seconds and the remaining reserved issue allowance.
+A later poller tick supplies backoff; authentication, configuration, invalid output and unknown failures receive no blind automatic retry.
+Private per-attempt execution receipts retain stdout/stderr, failure kind, elapsed seconds and observed stream activity.
+Stream activity is transport evidence, not semantic progress or a verdict; repeated output never grants more time inside an attempt.
+A hard deadline still kills the process group and rejects any partial pass.
+
+One issue-wide infrastructure recovery extension supplies 1800 seconds after the ordinary 900-second extension is used, only for a retained failed same-head/lens timeout or transient provider error.
+The ordinary maximum is 4500 cumulative seconds across all heads and lenses, with atomic reservations and all failed cost retained.
+Human-authorized grants retain their separate explicit ceiling and suppress automatic recovery expansion.
+
+To avoid editing review-control code for each approval, a trusted coordinator may use `review-budget.py grant-authorized --authorization-file /absolute/private/approval.json` with the original issue ledger, candidate and issue arguments.
+The owner-controlled, non-group-writable manifest must live outside the reviewed checkout and contain exactly `issue`, `seconds` and the GitHub issue-comment `provenance` of explicit human approval.
+The coordinator must verify that approval before creating the manifest; a URL alone is not evidence of approval.
+The runner records its hash, retains prior grants, rejects duplicate provenance and active unreconciled attempts, and limits cumulative explicitly granted additions to 14400 seconds.
+This operator ceiling is finite and separate from ordinary automatic capacity; it is not an unlimited reset switch.
+Historical finite authorized-grant events remain readable without issue-specific code.
+
+Recommended worker policy: allow a three-hour default delivery window for native build/review/E2E work, with a bounded extension to four hours when the recorded owner has concrete recent phase progress.
+Idle heartbeats, log noise and a still-existing process do not establish that progress.
+This recommendation does not change dispatcher worker scheduling in this patch.

@@ -148,7 +148,9 @@ An existing status from another provider still satisfies the same lens; a cache 
 The implementing agent must not author its own independent review verdict.
 A matching post-PR pass should reuse the local verdict rather than duplicate the expensive review.
 A changed diff or changed review inputs invalidates that reuse.
-The poller gives an incomplete independent review one bounded same-head retry, using a 300-second default deadline unless explicitly configured.
+The poller gives an incomplete independent review one bounded same-head retry, using the same 900-second default deadline as local review unless explicitly configured.
+Only a classified timeout or transient provider failure gets one later-tick retry, with twice the initial deadline up to the 3600-second executor ceiling.
+Authentication, configuration, malformed output and unclassified historical failures require diagnosis before another attempt.
 After a second incomplete result, it records `lens/<name>=failure` with `needs-coordinator` and stops automatic retries for that head.
 Timeouts and invalid output are execution failures, not code findings or passing reviews.
 An independent coordinator may assess an ordinary exact-head change using the existing PR review and status path only after reading its required acceptance, raw attempts, current checks and diff; record the assessment and source SHA before publishing a success status.
@@ -157,7 +159,11 @@ Every finding has a separate impact priority, and raw reviewer verdicts remain u
 The canonical runner accepts an owned, source-bound P2 follow-up only through the disposition and required-test contract in [review-dispositions.md](review-dispositions.md).
 P0/P1 impacts, malformed dispositions, stale receipts and missing required tests remain blocking.
 New independent review execution has one cumulative 30-minute budget across all candidate heads and lenses, including failed and timed-out attempts and historical exceptions.
-There is no source-round limit, no history reset, and no automatic authority beyond the cap.
+There is no source-round limit or history reset.
+Required normal/protected reviews retain the existing one-time 900-second extension.
+A retained same-head, same-lens timeout or transient provider failure may receive one issue-wide 1800-second infrastructure recovery allowance, with an ordinary cumulative ceiling of 4500 seconds.
+Every failed second remains charged; the allowance is recorded separately and cannot repeat, overlap an unreconciled attempt or relax product findings.
+An existing human-authorized grant retains its explicit boundary and disables further automatic recovery grants.
 Use the shared issue-bound ledger, atomic reservations and migration procedure in [review-dispositions.md](review-dispositions.md#review-budget).
 P3 findings remain advisory; confirmed P0/P1, required tests and essential acceptance continue to block independently.
 The Jev review-triage evaluation is a later shadow experiment under issue #372, with no gate or merge authority.

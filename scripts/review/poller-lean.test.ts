@@ -12,7 +12,7 @@ function fixture() {
   mkdirSync(bin);
   for (const file of ["poller.sh", "poller-status.jq"]) cpSync(join(__dirname, file), join(repo, "scripts/review", file));
   writeFileSync(join(repo, "scripts/review/tier.mjs"), 'process.stdout.write(process.env.REVIEW_TEST_TIER || "medium")\n');
-  writeFileSync(join(repo, "scripts/review/run-lens.sh"), 'printf "%s\\n" "$2" >> "$REVIEW_TEST_CALLS"\n');
+  writeFileSync(join(repo, "scripts/review/run-lens.sh"), 'printf "%s\\n" "$2" >> "$REVIEW_TEST_CALLS"\nprintf "%s\\n" "$FITSY_REVIEW_TIMEOUT_SECONDS" >> "$REVIEW_TEST_CALLS.timeouts"\n');
   writeFileSync(join(bin, "git"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
   writeFileSync(join(bin, "gh"), `#!/bin/sh
 if [ "$1" = pr ] && [ "$2" = list ]; then printf '7 deadbeef\\n'; exit; fi
@@ -100,7 +100,7 @@ test("actual sensitive source adds only its matching specialist", () => {
 test("two incomplete same-head reviews stop automatic retries and request coordination", () => {
   const f = fixture();
   try {
-    const error = (id: number) => ({ context: "lens/correctness", state: "error", id, created_at: `2026-09-28T00:00:0${id}Z` });
+    const error = (id: number) => ({ context: "lens/correctness", state: "error", description: "execution/timeout: independent review incomplete", id, created_at: `2026-09-28T00:00:0${id}Z` });
     writeFileSync(f.statuses, JSON.stringify([error(1)]));
     f.tick();
     expect(readFileSync(f.calls, "utf8")).toBe("correctness\n");
@@ -117,5 +117,29 @@ test("two incomplete same-head reviews stop automatic retries and request coordi
     writeFileSync(f.statuses, "not JSON");
     f.tick();
     expect(readFileSync(f.calls, "utf8")).toBe("");
+  } finally { rmSync(f.home, { recursive: true, force: true }); }
+});
+
+
+test.each(["authentication", "invalid_output", "process_error"])("%s does not trigger an automatic retry", kind => {
+  const f = fixture();
+  try {
+    writeFileSync(f.statuses, JSON.stringify([{ context: "lens/correctness", state: "error", id: 1,
+      created_at: "2026-10-01T00:00:00Z", description: `execution/${kind}: independent review incomplete` }]));
+    f.tick();
+    expect(readFileSync(f.calls, "utf8")).toBe("");
+    expect(readFileSync(f.posts, "utf8")).toContain("needs-coordinator");
+  } finally { rmSync(f.home, { recursive: true, force: true }); }
+});
+
+test("poller uses the runner deadline and relaxes only one classified retry", () => {
+  const f = fixture();
+  try {
+    f.tick();
+    expect(readFileSync(f.calls + ".timeouts", "utf8")).toBe("900\n");
+    writeFileSync(f.statuses, JSON.stringify([{ context: "lens/correctness", state: "error", id: 1,
+      created_at: "2026-10-01T00:00:00Z", description: "execution/timeout: independent review incomplete" }]));
+    f.tick();
+    expect(readFileSync(f.calls + ".timeouts", "utf8")).toBe("900\n1800\n");
   } finally { rmSync(f.home, { recursive: true, force: true }); }
 });

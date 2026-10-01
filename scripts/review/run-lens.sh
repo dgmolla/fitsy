@@ -144,6 +144,7 @@ fi
 # must still classify high (lens finding, 2026-09-07)
 CHANGED="$(echo "$DIFF" | grep -E '^(\+\+\+ b/|--- a/|rename (from|to) )' | sed -E 's#^\+\+\+ b/##; s#^--- a/##; s#^rename (from|to) ##' | grep -v '^/dev/null$' | sort -u)"
 TIER="$(echo "$CHANGED" | node scripts/review/tier.mjs)"
+BUDGET_ARGS+=(--risk "$TIER" --required)
 PROVIDER="${FITSY_REVIEW_PROVIDER:-claude}"
 if [ "$LENS" = "docs-sanity" ]; then BLOCKING=0; else BLOCKING=1; fi
 # Preserve the installed Claude defaults; other adapters require an explicit model.
@@ -209,7 +210,8 @@ else
   IDENTITY="$(printf '%s' "$IDENTITY" | python3 -c 'import json,sys; d=json.load(sys.stdin); d["timeout_seconds"]=int(sys.argv[1]); print(json.dumps(d,sort_keys=True))' "$GRANTED_TIMEOUT")"
   echo "[run-lens] $LENS on ${TARGET} (tier=$TIER provider=$PROVIDER model=$MODEL)" >&2
   # Never salvage a pass from partial output produced by a failed execution.
-  FITSY_REVIEW_TIMEOUT_SECONDS="$GRANTED_TIMEOUT" python3 scripts/review/execute-review.py "$PROVIDER" "$MODEL" \
+  EXECUTION_FILE="$CACHE_DIR/$KEY.$ATTEMPT_ID.execution.receipt"
+  FITSY_REVIEW_DIAGNOSTIC_FILE="$EXECUTION_FILE" FITSY_REVIEW_TIMEOUT_SECONDS="$GRANTED_TIMEOUT" python3 scripts/review/execute-review.py "$PROVIDER" "$MODEL" \
     < "$PROMPT_FILE" > "$RAW_FILE" 2>>"$CACHE_DIR/errors.log" &
   REVIEW_PID=$!
   if wait "$REVIEW_PID"; then
@@ -221,7 +223,15 @@ else
     BUDGET_OUTCOME=fail
     RESULT_JSON="$(printf '' | python3 scripts/review/extract-verdict.py "$LENS" --execution-error)"
   fi
-  python3 scripts/review/review-budget.py finish "${BUDGET_ARGS[@]}" --round-id "$HEAD_SHA" \
+  FAILURE_KIND="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("kind", "process_error"))' "$EXECUTION_FILE" 2>/dev/null || echo process_error)"
+  if [ "$BUDGET_OUTCOME" = pass ] && [ "$(printf '%s' "$RESULT_JSON" | python3 -c 'import json,sys;print(json.load(sys.stdin)["verdict"])')" = incomplete ]; then
+    FAILURE_KIND=invalid_output
+    BUDGET_OUTCOME=fail
+  fi
+  if [ "$BUDGET_OUTCOME" = fail ]; then
+    RESULT_JSON="$(printf '%s' "$RESULT_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); d["error"]["kind"]=sys.argv[1]; d["error"]["execution_evidence"]=sys.argv[2]; print(json.dumps(d))' "$FAILURE_KIND" "$EXECUTION_FILE")"
+  fi
+  python3 scripts/review/review-budget.py finish "${BUDGET_ARGS[@]}" --failure-kind "$FAILURE_KIND" --round-id "$HEAD_SHA" \
     --lens "$LENS" --source-sha "$HEAD_SHA" --attempt-id "$ATTEMPT_ID" --outcome "$BUDGET_OUTCOME" >&2
   BUDGET_OPEN=0
   cp "$RAW_FILE" "$CACHE_DIR/$KEY.raw"
@@ -260,8 +270,10 @@ if [ "$TARGET" != "--local" ]; then
   if [ "$VERDICT" = "incomplete" ]; then STATE=error
   elif [ "$BLOCKING" = "0" ]; then STATE=success
   else STATE=$([ "$GATE" = "pass" ] && echo success || echo failure); fi
+  DESCRIPTION="$N_FINDINGS finding(s), raw $VERDICT, gate $GATE, $PROVIDER/$MODEL"
+  if [ "$VERDICT" = incomplete ]; then DESCRIPTION="execution/$FAILURE_KIND: independent review incomplete"; fi
   "$GH_BIN" api "repos/{owner}/{repo}/statuses/$HEAD_SHA" -f state="$STATE" \
-    -f context="lens/$LENS" -f description="$N_FINDINGS finding(s), raw $VERDICT, gate $GATE, $PROVIDER/$MODEL" >/dev/null
+    -f context="lens/$LENS" -f description="$DESCRIPTION" >/dev/null
   if [ "$N_FINDINGS" -gt 0 ] || [ "$VERDICT" = "incomplete" ]; then
     COMMENT="$(echo "$RESULT_JSON" | python3 scripts/review/format-comment.py)"
     "$GH_BIN" pr comment "$TARGET" --body "$COMMENT" >/dev/null

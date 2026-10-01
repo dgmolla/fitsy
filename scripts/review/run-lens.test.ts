@@ -156,7 +156,7 @@ test("nonzero external execution cannot publish or cache a partial pass", () => 
   writeFileSync(join(root, "exit"), "1");
   const result = run();
   expect(result.status).toBe(1);
-  expect(JSON.parse(result.stdout)).toMatchObject({ verdict: "incomplete", findings: [], error: { kind: "execution_error" } });
+  expect(JSON.parse(result.stdout)).toMatchObject({ verdict: "incomplete", findings: [], error: { kind: "process_error" } });
   expect(readdirSync(cache).filter(name => name.endsWith(".json"))).toHaveLength(0);
   const posted = runPr();
   expect(posted.status).toBe(1);

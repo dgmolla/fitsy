@@ -46,6 +46,7 @@ while read -r NUM SHA; do
   # An incomplete execution gets one later retry; the raw statuses and budget
   # history remain, and a second failure requires independent coordination.
   PENDING=""
+  RETRY_LENSES=""
   for L in $LENSES; do
     if ! STATUS_ROWS="$("$GH_BIN" api "repos/{owner}/{repo}/commits/$SHA/statuses?per_page=100" 2>/dev/null)"; then
       echo "[poller] PR #$NUM: status read failed; skipping this tick"
@@ -60,12 +61,18 @@ while read -r NUM SHA; do
       success|failure) ;;
       *)
         ERRORS="$(printf '%s' "$STATUS_ROWS" | jq -r --arg lens "lens/$L" '[.[] | select(.context == $lens and .state == "error")] | length' 2>/dev/null || echo 0)"
-        if [ "$STATE" = error ] && [ "$ERRORS" -ge 2 ]; then
+        ERROR_DESCRIPTION="$(printf '%s' "$STATUS_ROWS" | jq -r --arg lens "lens/$L" '[.[] | select(.context == $lens and .state == "error")][0].description // ""')"
+        RETRYABLE=0
+        case "$ERROR_DESCRIPTION" in execution/timeout:*|execution/transient_provider:*) RETRYABLE=1 ;; esac
+        if [ "$STATE" = error ] && { [ "$ERRORS" -ge 2 ] || [ "$RETRYABLE" = 0 ]; }; then
           "$GH_BIN" api "repos/{owner}/{repo}/statuses/$SHA" -f state=failure -f context="lens/$L" \
-            -f description='needs-coordinator: independent review incomplete after one retry' >/dev/null || \
+            -f description='needs-coordinator: independent review requires diagnosed execution recovery' >/dev/null || \
             echo "[poller] PR #$NUM lens/$L: coordinator status publication failed"
           echo "[poller] PR #$NUM lens/$L: needs-coordinator; raw incomplete attempts retained"
-        else PENDING="$PENDING $L"; fi ;;
+        else
+          PENDING="$PENDING $L"
+          if [ "$STATE" = error ]; then RETRY_LENSES="$RETRY_LENSES $L"; fi
+        fi ;;
     esac
   done
   [ -n "$PENDING" ] || continue
@@ -80,7 +87,11 @@ while read -r NUM SHA; do
   # edit its own reviewer (T12), and old branches may predate the harness.
   git checkout -q origin/main -- scripts/review scripts/delivery/phase-events.mjs scripts/verify/risk-tiers.yml REVIEW.md .claude/lenses
   for L in $PENDING; do
-    FITSY_REVIEW_TIMEOUT_SECONDS="${FITSY_REVIEW_TIMEOUT_SECONDS:-300}" \
+    ATTEMPT_TIMEOUT="${FITSY_REVIEW_TIMEOUT_SECONDS:-900}"
+    case " $RETRY_LENSES " in *" $L "*)
+      ATTEMPT_TIMEOUT="$(python3 -c 'import sys; n=int(sys.argv[1]); assert 1<=n<=3600; print(min(3600,n*2))' "$ATTEMPT_TIMEOUT")" ;;
+    esac
+    FITSY_REVIEW_TIMEOUT_SECONDS="$ATTEMPT_TIMEOUT" \
       bash scripts/review/run-lens.sh "$NUM" "$L" || echo "[poller] PR #$NUM lens/$L -> fail"
   done
   # Reconcile once after all lenses, including concurrent or failed closeouts.

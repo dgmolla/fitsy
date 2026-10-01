@@ -154,6 +154,20 @@ sys.exit(7)
         time.sleep(1.2)
         self.assertFalse(marker.exists())
 
+    def test_timeout_preserves_private_progress_and_classifies_failure(self):
+        self.cli("codex", "import sys,time\nprint('reading billing contract',flush=True)\nprint('network trace',file=sys.stderr,flush=True)\ntime.sleep(30)\n")
+        diagnostic = self.root / "execution.json"
+        result = self.invoke(env=dict(self.env, FITSY_REVIEW_TIMEOUT_SECONDS="1",
+                                      FITSY_REVIEW_DIAGNOSTIC_FILE=str(diagnostic)))
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout, "")
+        report = json.loads(diagnostic.read_text())
+        self.assertEqual(report["kind"], "timeout")
+        self.assertGreater(report["stdout_bytes"], 0)
+        self.assertIn("reading billing contract", Path(str(diagnostic) + ".stdout.log").read_text())
+        self.assertIn("network trace", Path(str(diagnostic) + ".stderr.log").read_text())
+        self.assertIn("stream_activity", report)
+
     def test_codex_rejects_a_temporary_directory_inside_a_project(self):
         binary = self.cli("codex", "raise AssertionError('must not execute')\n")
         with patch.object(tempfile, "tempdir", str(self.repository)):

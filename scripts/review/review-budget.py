@@ -7,12 +7,15 @@ import hashlib
 import json
 import math
 import os
+import re
 from pathlib import Path
 import time
 
 CAP_SECONDS = 1800
 EXTENSION_SECONDS = 900
+RECOVERY_SECONDS = 1800
 CLOSEOUT_SECONDS = 5
+FAILURE_KINDS = ("completed", "timeout", "transient_provider", "authentication", "process_error", "invalid_output", "interrupted")
 
 
 def utc():
@@ -36,6 +39,21 @@ def read_events(handle):
         if not isinstance(rows, list):
             raise ValueError("invalid imported review history")
         for row in rows:
+            if isinstance(row, dict) and row.get("event") == "authorized-grant":
+                if (type(row.get("issue")) is not int or row["issue"] <= 0
+                        or type(row.get("seconds")) is not int or not 1 <= row["seconds"] <= 14400
+                        or not isinstance(row.get("attempt_id"), str) or not row["attempt_id"]
+                        or not re.fullmatch(r"https://github.com/dgmolla/fitsy/issues/" + str(row["issue"]) + r"#issuecomment-[1-9][0-9]*", row.get("provenance", ""))):
+                    raise ValueError("invalid authorized review grant")
+                events.append(row)
+                continue
+            if isinstance(row, dict) and row.get("event") == "recovery_extension":
+                if (row.get("attempt_id") != "issue-recovery" or row.get("seconds") != RECOVERY_SECONDS
+                        or type(row.get("issue")) is not int or row["issue"] <= 0
+                        or not isinstance(row.get("failed_attempt"), str)):
+                    raise ValueError("invalid infrastructure recovery extension")
+                events.append(row)
+                continue
             if isinstance(row, dict) and row.get("event") == "extension":
                 if (row.get("attempt_id") != "issue-extension" or row.get("seconds") != EXTENSION_SECONDS
                         or type(row.get("issue")) is not int or row["issue"] <= 0
@@ -135,18 +153,32 @@ def usage(events):
     extensions = [e for e in events if e["event"] == "extension"]
     if len(extensions) > 1:
         raise ValueError("multiple review extensions are not permitted")
-    cap = CAP_SECONDS + (EXTENSION_SECONDS if extensions else 0)
+    recoveries = [e for e in events if e["event"] == "recovery_extension"]
+    if len(recoveries) > 1:
+        raise ValueError("multiple infrastructure recovery extensions are not permitted")
+    grants = [e for e in events if e["event"] == "authorized-grant"]
+    if len({e["issue"] for e in grants}) > 1 or len({e["provenance"] for e in grants}) != len(grants) or sum(e["seconds"] for e in grants) > 14400:
+        raise ValueError("duplicate, mismatched or excessive authorized grants")
+    if grants and extensions and grants[0]["issue"] != extensions[0]["issue"]:
+        raise ValueError("authorized review grant issue mismatch")
+    cap = sum(e["seconds"] for e in grants) + CAP_SECONDS + (EXTENSION_SECONDS if extensions else 0) + (RECOVERY_SECONDS if recoveries else 0)
     starts = {e["attempt_id"]: e for e in events if e["event"] == "start"}
     finishes = {e["attempt_id"]: e for e in events if e["event"] == "finish"}
     if any(key not in starts for key in finishes):
         raise ValueError("review finish has no retained start")
+    if recoveries:
+        if not extensions or recoveries[0]["issue"] != extensions[0]["issue"]:
+            raise ValueError("infrastructure recovery issue mismatch")
+        evidence = finishes.get(recoveries[0]["failed_attempt"])
+        if not evidence or evidence.get("outcome") != "fail" or evidence.get("failure_kind") not in ("timeout", "transient_provider"):
+            raise ValueError("infrastructure recovery lacks retained failure evidence")
     # Exception/adoption/closeout flags are historical provenance, never excluded time.
     completed = sum(e["elapsed_seconds"] for e in finishes.values())
     active = {key: e for key, e in starts.items() if key not in finishes}
     # An interrupted new attempt retains its full reservation until reconciled.
     # An unbounded legacy attempt has unknown completion and fails closed at the cap.
     reserved = sum(e.get("reserved_seconds", cap) for e in active.values())
-    return starts, finishes, {"cap_seconds": cap, "extension_issue": extensions[0]["issue"] if extensions else None, "completed_seconds": completed,
+    return starts, finishes, {"cap_seconds": cap, "extension_issue": extensions[0]["issue"] if extensions else None, "authorized_grant_issue": grants[0]["issue"] if grants else None, "recovery_issue": recoveries[0]["issue"] if recoveries else None, "completed_seconds": completed,
         "reserved_seconds": reserved, "remaining_seconds": max(0, cap - completed - reserved),
         "review_seconds": completed,
         "observed_running_seconds": sum(min(elapsed(e), e["reserved_seconds"]) for e in active.values() if "reserved_seconds" in e),
@@ -156,7 +188,7 @@ def usage(events):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("begin", "finish", "status", "extend"))
+    parser.add_argument("action", choices=("begin", "finish", "status", "extend", "grant-authorized"))
     parser.add_argument("--ledger", type=Path, required=True)
     parser.add_argument("--import-ledger", action="append", default=[])
     parser.add_argument("--optional-import-ledger", action="append", default=[])
@@ -170,6 +202,8 @@ def main():
     parser.add_argument("--required", action="store_true")
     parser.add_argument("--candidate")
     parser.add_argument("--issue", type=int)
+    parser.add_argument("--authorization-file", type=Path)
+    parser.add_argument("--failure-kind", choices=FAILURE_KINDS)
     parser.add_argument("--outcome", choices=("pass", "fail", "interrupted"), default="interrupted")
     args = parser.parse_args()
     args.ledger.parent.mkdir(parents=True, exist_ok=True)
@@ -182,6 +216,33 @@ def main():
             starts, finishes, total = usage(events)
             if total["extension_issue"] is not None and args.issue is not None and total["extension_issue"] != args.issue:
                 raise ValueError("review extension issue mismatch")
+            if total["authorized_grant_issue"] is not None and args.issue is not None and total["authorized_grant_issue"] != args.issue:
+                raise ValueError("authorized grant issue mismatch")
+            if total["recovery_issue"] is not None and args.issue is not None and total["recovery_issue"] != args.issue:
+                raise ValueError("infrastructure recovery issue mismatch")
+            if args.action == "grant-authorized":
+                # This is operator authorization, never inferred from reviewer output.
+                # Keep the approval manifest outside the branch being reviewed.
+                path = args.authorization_file.resolve() if args.authorization_file else None
+                if (not path or Path.cwd().resolve() == path or Path.cwd().resolve() in path.parents
+                        or path.stat().st_uid != os.getuid() or path.stat().st_mode & 0o022
+                        or not args.candidate or args.ledger.name != f"issue-{args.issue}.jsonl"
+                        or total["unfinished_attempts"]):
+                    raise ValueError("authorized grant requires a private external operator manifest and released issue ledger")
+                raw = path.read_bytes()
+                approval = json.loads(raw)
+                if set(approval) != {"issue", "seconds", "provenance"} or approval["issue"] != args.issue:
+                    raise ValueError("authorization manifest issue/schema mismatch")
+                grant = {"event": "authorized-grant", "attempt_id": "authorized-" + hashlib.sha256(approval["provenance"].encode()).hexdigest(),
+                         "at": utc(), **approval, "authorization_sha256": hashlib.sha256(raw).hexdigest()}
+                # Validate the proposed history before append, including dedupe and ceiling.
+                proposed = events + [grant]
+                import io
+                validated = read_events(io.StringIO("\n".join(json.dumps(e) for e in proposed)))
+                usage(validated)
+                append(handle, grant)
+                events = list(indexed(read_events(handle)).values())
+                starts, finishes, total = usage(events)
             if args.action in ("begin", "finish") and not all((args.round_id, args.lens, args.source_sha, args.attempt_id)):
                 raise ValueError("review attempt identity is required")
             eligible = args.required and args.risk in ("medium", "high") and args.candidate and args.issue
@@ -194,6 +255,19 @@ def main():
                     raise ValueError("extension requires a bound normal/protected issue with incomplete required review and reconciled history")
                 append(handle, {"event": "extension", "attempt_id": "issue-extension", "at": utc(),
                     "issue": args.issue, "risk": args.risk, "required": True, "seconds": EXTENSION_SECONDS})
+                events = list(indexed(read_events(handle)).values())
+                starts, finishes, total = usage(events)
+            # One issue-wide infrastructure allowance, tied to a same-head/lens
+            # failed execution. All elapsed time remains charged and visible.
+            failures = [e for e in finishes.values() if e.get("source_sha") == args.source_sha
+                        and e.get("lens") == args.lens and e.get("outcome") == "fail"]
+            latest = failures[-1] if failures else None
+            if (args.action == "begin" and eligible and total["recovery_issue"] is None
+                    and total["extension_issue"] is not None and total["authorized_grant_issue"] is None and not total["unfinished_attempts"]
+                    and total["remaining_seconds"] < args.timeout_seconds + CLOSEOUT_SECONDS
+                    and latest and latest.get("failure_kind") in ("timeout", "transient_provider")):
+                append(handle, {"event": "recovery_extension", "attempt_id": "issue-recovery", "at": utc(),
+                                "issue": args.issue, "seconds": RECOVERY_SECONDS, "failed_attempt": latest["attempt_id"]})
                 events = list(indexed(read_events(handle)).values())
                 starts, finishes, total = usage(events)
             result = {"allowed": True, "reason": "history accounted", "ledger": str(args.ledger.resolve()), **total}
@@ -227,6 +301,7 @@ def main():
                     append(handle, {"event": "finish", "at": utc(), "attempt_id": args.attempt_id,
                         "round_id": args.round_id, "lens": args.lens, "source_sha": args.source_sha,
                         "elapsed_seconds": seconds, "outcome": args.outcome,
+                        **({"failure_kind": args.failure_kind} if args.failure_kind else {}),
                         **{key: start[key] for key in ("exception", "adoption", "closeout") if key in start}})
                     result.update(reason="recorded", elapsed_seconds=seconds)
         print(json.dumps(result))

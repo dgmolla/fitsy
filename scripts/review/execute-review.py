@@ -16,6 +16,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 
 DEFAULT_TIMEOUT = 900
 MAX_TIMEOUT = 3600
@@ -95,22 +96,67 @@ def child_environment():
     return env
 
 
-def run_process(argv, prompt, cwd, timeout, env):
+def retain_execution(kind, output, errors, started, last_activity, returncode):
+    target = os.environ.get("FITSY_REVIEW_DIAGNOSTIC_FILE")
+    report = {"kind": kind, "elapsed_seconds": time.monotonic() - started,
+              "stdout_bytes": len(output.encode()), "stderr_bytes": len(errors.encode()),
+              "returncode": returncode,
+              # Stream activity is transport evidence, not semantic progress or a verdict.
+              "stream_activity": {"observed": last_activity is not None,
+                                  "last_seconds": last_activity}}
+    if target:
+        path = Path(target)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        for destination, content in ((Path(str(path) + ".stdout.log"), output),
+                                     (Path(str(path) + ".stderr.log"), errors),
+                                     (path, json.dumps(report, sort_keys=True))):
+            with open(destination, "w", opener=lambda name, flags: os.open(name, flags, 0o600)) as handle:
+                handle.write(content)
+    return report
+
+
+def run_process(argv, prompt, cwd, timeout, env, diagnostics=True):
+    started = time.monotonic()
+    last_activity = None
+    observed_bytes = 0
     process = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE, cwd=cwd, env=env,
                                text=True, start_new_session=True)
     try:
-        output, errors = process.communicate(prompt, timeout=timeout)
+        first = True
+        while True:
+            remaining = timeout - (time.monotonic() - started)
+            if remaining <= 0:
+                raise subprocess.TimeoutExpired(argv, timeout)
+            try:
+                output, errors = process.communicate(prompt if first else None, timeout=min(1, remaining))
+                break
+            except subprocess.TimeoutExpired as progress:
+                count = len(progress.output or b"") + len(progress.stderr or b"")
+                if count > observed_bytes:
+                    last_activity = time.monotonic() - started
+                    observed_bytes = count
+                first = False
     except (subprocess.TimeoutExpired, KeyboardInterrupt) as error:
-        # Kill the entire process group, including shell/tool subprocesses.
         try:
             os.killpg(process.pid, signal.SIGKILL)
         except ProcessLookupError:
             pass
-        process.communicate()
-        raise RunnerError(f"Reviewer exceeded its {timeout}s deadline or was interrupted") from error
+        output, errors = process.communicate()
+        kind = "timeout" if isinstance(error, subprocess.TimeoutExpired) else "interrupted"
+        if diagnostics:
+            retain_execution(kind, output, errors, started, last_activity, process.returncode)
+        raise RunnerError(f"Reviewer exceeded its {timeout}s deadline or was interrupted ({kind}); private execution evidence retained") from error
+    if diagnostics:
+        kind = "completed"
+        if process.returncode != 0:
+            kind = "process_error"
+            if re.search(r"unauthorized|authentication|invalid.api.key|not.logged.in|401", errors, re.I):
+                kind = "authentication"
+            elif re.search(r"rate.limit|429|service.unavailable|connection.reset|502|503", errors, re.I):
+                kind = "transient_provider"
+        retain_execution(kind, output, errors, started, last_activity, process.returncode)
     if process.returncode != 0:
-        # Discard stdout even if a failed process printed a passing verdict.
         if errors:
             sys.stderr.write(errors)
         raise RunnerError(f"Reviewer exited {process.returncode}; no verdict accepted")
@@ -130,7 +176,7 @@ def identity(provider, model, executable, timeout):
     # Probe outside the checkout so even version discovery cannot select its
     # project customizations. No model invocation occurs in identity mode.
     with tempfile.TemporaryDirectory(prefix="fitsy-review-identity-") as directory:
-        version, _ = run_process([executable, "--version"], "", directory, 10, child_environment())
+        version, _ = run_process([executable, "--version"], "", directory, 10, child_environment(), diagnostics=False)
     if not version.strip():
         raise RunnerError("Reviewer did not identify its CLI version")
     digest = hashlib.sha256()
