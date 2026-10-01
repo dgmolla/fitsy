@@ -13,7 +13,7 @@ jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock
 jest.mock('expo-font', () => ({ isLoaded: () => true, loadAsync: jest.fn() }));
 const mockCapture = jest.fn();
 let mockAuthSession: { access_token: string; user: { id: string } } | null = null;
-let mockAuthListener: ((event: string, session: typeof mockAuthSession) => void) | undefined;
+const mockAuthListeners = new Set<(event: string, session: typeof mockAuthSession) => void>();
 jest.mock('posthog-react-native', () => {
   process.env.EXPO_PUBLIC_POSTHOG_API_KEY = 'unit-test-analytics';
   return jest.fn().mockImplementation(() => ({ capture: (...args: unknown[]) => mockCapture(...args), identify() {} }));
@@ -23,9 +23,9 @@ jest.mock('@supabase/supabase-js', () => {
   process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'unit-test-anon-key';
   return { createClient: () => ({ auth: {
     getSession: async () => ({ data: { session: mockAuthSession } }),
-    onAuthStateChange: (listener: typeof mockAuthListener) => {
-      mockAuthListener = listener;
-      return { data: { subscription: { unsubscribe() {} } } };
+    onAuthStateChange: (listener: (event: string, session: typeof mockAuthSession) => void) => {
+      mockAuthListeners.add(listener);
+      return { data: { subscription: { unsubscribe() { mockAuthListeners.delete(listener); } } } };
     },
     startAutoRefresh() {}, stopAutoRefresh() {},
   } }) };
@@ -52,7 +52,7 @@ const originalFetch = global.fetch;
 beforeEach(async () => {
   jest.useRealTimers();
   mockAuthSession = { access_token: 'test-token', user: { id: 'buyer' } };
-  mockAuthListener = undefined;
+  mockAuthListeners.clear();
   await AsyncStorage.clear();
   notificationMounts = 0;
   nativeUserId = null;
@@ -90,6 +90,17 @@ test('an anonymous paywall view is attributed once across plan changes', async (
   })));
   await act(async () => { fireEvent.press(screen.getByTestId('paywall-plan-monthly')); });
   expect(mockCapture.mock.calls.filter(([name]) => name === 'paywall_experiment_exposed')).toHaveLength(1);
+});
+
+test('signing in while payment is focused records the authenticated exposure once', async () => {
+  mockAuthSession = null;
+  const screen = renderRouter(routes, { initialUrl: '/welcome/payment' });
+  await waitFor(() => expect(mockCapture.mock.calls.filter(([name]) => name === 'paywall_experiment_exposed')).toHaveLength(1));
+  mockAuthSession = { access_token: 'test-token', user: { id: 'buyer' } };
+  await act(async () => { for (const listener of mockAuthListeners) listener('SIGNED_IN', mockAuthSession); });
+  await waitFor(() => expect(mockCapture.mock.calls.filter(([name]) => name === 'paywall_experiment_exposed')).toHaveLength(2));
+  await act(async () => { fireEvent.press(screen.getByTestId('paywall-plan-monthly')); });
+  expect(mockCapture.mock.calls.filter(([name]) => name === 'paywall_experiment_exposed')).toHaveLength(2);
 });
 
 test('development visual trial uses live price but never enters checkout or restore', async () => {
@@ -216,7 +227,7 @@ test.each(['account change', 'sign-out'])('%s during pending checkout identity p
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   await waitFor(() => expect(resolveIdentity).toBeDefined());
   mockAuthSession = change === 'sign-out' ? null : { access_token: 'second-token', user: { id: 'second-buyer' } };
-  await act(async () => { mockAuthListener?.(change === 'sign-out' ? 'SIGNED_OUT' : 'SIGNED_IN', mockAuthSession); });
+  await act(async () => { for (const listener of mockAuthListeners) listener(change === 'sign-out' ? 'SIGNED_OUT' : 'SIGNED_IN', mockAuthSession); });
   await act(async () => { nativeUserId = 'buyer'; resolveIdentity({ customerInfo: noSubscription, created: false }); });
   expect(Purchases.purchasePackage).not.toHaveBeenCalled();
   expect(await AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY)).toBeNull();
@@ -232,7 +243,7 @@ test('a late current-user Pro identity rechecks the server and opens search from
   });
   jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick', 'queueMicrotask'] });
   mockAuthSession = { access_token: 'returning-token', user: { id: 'returning-pro' } };
-  await act(async () => { mockAuthListener?.('SIGNED_IN', mockAuthSession); });
+  await act(async () => { for (const listener of mockAuthListeners) listener('SIGNED_IN', mockAuthSession); });
   await act(async () => { jest.advanceTimersByTime(1500); });
   await waitFor(() => expect((global.fetch as jest.Mock).mock.calls.some(([, init]) =>
     init?.body && JSON.parse(String(init.body)).reason === 'sign_in')).toBe(true));

@@ -119,6 +119,12 @@ test.each([
   expect(Purchases.purchasePackage).toHaveBeenCalledWith(annualWithTrial);
 });
 
+test('Back from a directly opened no-trial payment leaves the paywall', async () => {
+  const screen = await openPayment();
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/search'));
+});
+
 test('an explicit paid plan choice overrides the monthly trial and remains the purchase target', async () => {
   const both = { ...offering, annual, monthly, availablePackages: [annual, monthly] } as unknown as PurchasesOffering;
   jest.spyOn(Purchases, 'getOfferings').mockResolvedValue({ current: both, all: { default: both } });

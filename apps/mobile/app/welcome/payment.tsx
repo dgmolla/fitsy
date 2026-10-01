@@ -39,17 +39,31 @@ export default function PaymentScreen() {
   const [chosenPlan, setChosenPlan] = useState<PlanId | null>(null);
   const variants = usePreviewAccess();
   const exposure = useRef('');
+  const identityResolvedForFocus = useRef(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [identityReady, setIdentityReady] = useState(false);
   const [reminderAvailability, setReminderAvailability] = useState<ReminderAvailability>('unavailable');
   const testerOverride: PaywallVariant | undefined = __DEV__ && (devPaywallVariant === 'A' || devPaywallVariant === 'B') ? devPaywallVariant : undefined;
   useEffect(() => {
-    if (!focused) return;
+    identityResolvedForFocus.current = false;
+    setIdentityReady(false);
+    if (!focused) { setUserId(null); return; }
     let active = true;
-    void supabase.auth.getSession().then(({ data }) => { if (active) setUserId(data.session?.user.id ?? null); })
-      .catch(() => { if (active) setUserId(null); })
-      .finally(() => { if (active) setIdentityReady(true); });
-    return () => { active = false; };
+    let authEventReceived = false;
+    const resolveIdentity = (id: string | null) => {
+      if (!active) return;
+      setUserId(id);
+      identityResolvedForFocus.current = true;
+      setIdentityReady(true);
+    };
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      authEventReceived = true;
+      resolveIdentity(session?.user.id ?? null);
+    });
+    void supabase.auth.getSession().then(({ data }) => {
+      if (!authEventReceived) resolveIdentity(data.session?.user.id ?? null);
+    }).catch(() => { if (!authEventReceived) resolveIdentity(null); });
+    return () => { active = false; listener.subscription.unsubscribe(); };
   }, [focused]);
   useEffect(() => {
     if (!focused || !userId) return;
@@ -122,10 +136,12 @@ export default function PaymentScreen() {
 
   useEffect(() => {
     if (!focused) { exposure.current = ''; return; }
-    if (!offering || visualRequested || !identityReady || exposure.current) return;
+    if (!offering || visualRequested || !identityReady || !identityResolvedForFocus.current) return;
     // A visible anonymous paywall is still a view. Cohort selection remains
-    // account-bound, and the focus guard prevents duplicate rerender exposure.
-    exposure.current = 'shown';
+    // account-bound; repeat only when the actual identity or variant changes.
+    const key = `${userId ?? 'anonymous'}:${offering.identifier}:${variants.access}:${paywallVariant}:${variantConfig.version}:${!!testerOverride}`;
+    if (exposure.current === key) return;
+    exposure.current = key;
     const attribution = { paywall_variant: paywallVariant, paywall_config_version: variantConfig.version, paywall_tester_override: !!testerOverride };
     trackPaywallShown({ source: 'onboarding', ...attribution });
     trackPaywallExperimentExposure({ offering_id: offering.identifier, access_variant: variants.access, image_variant: 'meal', layout_variant: paywallVariant === 'A' ? 'mosaic_benefits' : 'trial_timeline', ...attribution });
@@ -230,7 +246,10 @@ export default function PaymentScreen() {
         visualPreview={visual ? (devTrialVisual === '14' ? 14 : 7) : undefined}
         visualReminderSimulated={simulatedReminder}
         onSelect={setChosenPlan}
-        onBack={() => { if (navigation.canGoBack()) router.back(); else router.replace('/welcome/trial-reminder'); }}
+        onBack={() => {
+          if (navigation.canGoBack()) router.back();
+          else router.replace(annualTerms?.trial || monthlyTerms?.trial ? '/welcome/trial-reminder' : '/(tabs)/search');
+        }}
         onRestore={() => { void handleRestore(); }}
         onManage={() => { void showManageSubscriptions(); }}
         onRetry={() => { void refreshOffering(); }}

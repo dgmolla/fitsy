@@ -83,6 +83,19 @@ tags: [billing, onboarding, changed-journey]
 - copyTextFrom:
     id: paywall-terms
 - assertTrue: ${maestro.copiedText.includes(output.annualPrice) && maestro.copiedText.includes('Renews automatically')}
+# Direct no-trial entry has no previous route. Back must leave payment rather
+# than bounce through the ineligible trial-reminder screen.
+- tapOn:
+    id: welcome-back
+- assertVisible: "Search restaurants or dishes"
+- openLink: com.fitsy.mobile://welcome/payment
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: paywall-plan-yearly
+    timeout: 15000
 # The decline action follows the legal links and may be below the safe area.
 - scrollUntilVisible:
     element:
@@ -113,65 +126,5 @@ tags: [billing, onboarding, changed-journey]
     id: paywall-restore
 - assertVisible: "Continue with Apple"
 - assertVisible: "Continue with Google"
-- tapOn: "Dev login"
-- extendedWaitUntil:
-    visible:
-      id: paywall-plan-yearly
-    timeout: 30000
-- assertNotVisible: "Leave a review"
-# A previously purchased Test Store account can become lapsed before this
-# re-authentication. Reopen payment directly to exercise the visible plan.
-- openLink: com.fitsy.mobile://welcome/payment
-# A fresh simulator can require system confirmation for an app link.
-- tapOn:
-    text: "^Open$"
-    optional: true
-- extendedWaitUntil:
-    visible:
-      id: paywall-plan-yearly
-    timeout: 15000
-# The decline action follows the legal links and may be below the safe area.
-- scrollUntilVisible:
-    element:
-      id: welcome-skip
-    direction: DOWN
-- tapOn:
-    id: welcome-skip
-- tapOn:
-    id: paywall-discount-buy
-- extendedWaitUntil:
-    visible: "Test Store Purchase"
-    timeout: 15000
-- tapOn: "Cancel"
-- extendedWaitUntil:
-    visible:
-      id: welcome-continue
-      enabled: true
-    timeout: 15000
-- assertNotVisible: "Test Store Purchase"
-# RevenueCat emits a Debug console-error toast for this expected cancellation.
-# This corner is outside the payment CTA when no toast is present.
-- tapOn:
-    point: "92%,93%"
-# The decline action follows the legal links and may be below the safe area.
-- scrollUntilVisible:
-    element:
-      id: welcome-skip
-    direction: DOWN
-- tapOn:
-    id: welcome-skip
-- tapOn:
-    id: paywall-discount-buy
-- extendedWaitUntil:
-    visible: "Test Store Purchase"
-    timeout: 15000
-- tapOn: "Test failed purchase"
-- assertVisible: "Purchase not completed"
-- assertVisible: "Please try again. You can also restore an existing subscription."
-- tapOn: "OK"
-- extendedWaitUntil:
-    visible:
-      id: welcome-continue
-      enabled: true
-    timeout: 15000
-- assertNotVisible: "Test Store Purchase"
+# The fixed Dev login account may already be active. Its purchase branch is
+# covered separately by SDK tests until an unentitled native account is ready.
