@@ -151,6 +151,28 @@ test('a matching two-week selected offer does not report a catalog mismatch', as
   expect(mockCapture.mock.calls.filter(([event]) => event === 'trial_catalog_mismatch')).toHaveLength(0);
 });
 
+test('a short annual offer defaults to the schedulable monthly trial and plan switches keep the purchase target', async () => {
+  const shortAnnual = { ...annual, product: { ...annual.product,
+    introPrice: { price: 0, priceString: '$0', period: 'P2D', cycles: 1 } } };
+  const twoWeekMonthly = { ...monthly, product: { ...monthly.product,
+    introPrice: { price: 0, priceString: '$0', period: 'P2W', cycles: 1 } } };
+  const both = { ...offering, annual: shortAnnual, monthly: twoWeekMonthly,
+    availablePackages: [shortAnnual, twoWeekMonthly] } as unknown as PurchasesOffering;
+  jest.spyOn(Purchases, 'getOfferings').mockResolvedValue({ current: both, all: { default: both } });
+  jest.spyOn(Purchases, 'checkTrialOrIntroductoryPriceEligibility').mockResolvedValue({
+    annual: { status: 2, description: 'Eligible' }, monthly: { status: 2, description: 'Eligible' },
+  });
+  const screen = renderRouter(routes, { initialUrl: '/welcome/payment' });
+  await waitFor(() => expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toContain('14-day free trial'));
+  expect(screen.getByTestId('paywall-plan-monthly').props.accessibilityState.checked).toBe(true);
+  await act(async () => { fireEvent.press(screen.getByTestId('paywall-plan-yearly')); });
+  expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toContain('2-day free trial');
+  await act(async () => { fireEvent.press(screen.getByTestId('paywall-plan-monthly')); });
+  expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toContain('14-day free trial');
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  expect(Purchases.purchasePackage).toHaveBeenCalledWith(twoWeekMonthly);
+});
+
 test('eligibility changes on the paywall update its selection and purchase target', async () => {
   const both = { ...offering, annual: annualWithTrial, monthly, availablePackages: [annualWithTrial, monthly] } as unknown as PurchasesOffering;
   jest.spyOn(Purchases, 'getOfferings').mockResolvedValue({ current: both, all: { default: both } });

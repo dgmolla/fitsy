@@ -37,7 +37,7 @@ test('ineligible selected offer has no trial or reminder even if another product
 test('selected short offer cannot borrow reminder eligibility from another plan', () => {
   const short = purchaseTerms({ ...product, introPrice: { ...product.introPrice, period: 'P2D' } }, true);
   const long = purchaseTerms(product, true);
-  expect(defaultTrialPlan(short, long)).toBe('yearly');
+  expect(defaultTrialPlan(short, long)).toBe('monthly');
   expect(trialPresentation(short).reminderAvailable).toBe(false);
   expect(trialPresentation(long).reminderAvailable).toBe(true);
 });

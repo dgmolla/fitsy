@@ -6,7 +6,9 @@ export type Terms = ReturnType<typeof purchaseTerms>;
 
 /** The same initial selection is shown throughout onboarding and at checkout. */
 export function defaultTrialPlan(annual: Terms, monthly: Terms): PlanId {
-  return monthly?.trial && !annual?.trial ? 'monthly' : annual ? 'yearly' : 'monthly';
+  if (monthly?.trial && (!annual?.trial ||
+    (!trialPresentation(annual).reminderAvailable && trialPresentation(monthly).reminderAvailable))) return 'monthly';
+  return annual ? 'yearly' : 'monthly';
 }
 
 export function trialPresentation(terms: Terms, now = new Date()) {
