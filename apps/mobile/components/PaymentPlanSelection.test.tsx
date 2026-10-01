@@ -95,7 +95,7 @@ async function openPayment() {
   jest.setSystemTime(now);
   await waitFor(() => expect(screen.getByTestId('paywall-price-yearly').props.children).toBe('$59.99'));
   await act(async () => {});
-  expect(mockCapture).toHaveBeenCalledWith('paywall_experiment_exposed', expect.objectContaining({ image_variant: 'meal', layout_variant: 'mosaic_benefits' }));
+  expect(mockCapture).toHaveBeenCalledWith('paywall_experiment_exposed', expect.objectContaining({ image_variant: 'meal', layout_variant: 'trial_timeline' }));
   return screen;
 }
 

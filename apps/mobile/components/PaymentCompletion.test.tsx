@@ -77,9 +77,20 @@ async function openPayment() {
   jest.setSystemTime(now);
   await waitFor(() => expect(screen.getByTestId('paywall-price-yearly').props.children).toBe('$59.99'));
   await act(async () => {});
-  expect(mockCapture).toHaveBeenCalledWith('paywall_experiment_exposed', expect.objectContaining({ image_variant: 'meal', layout_variant: 'mosaic_benefits' }));
+  expect(mockCapture).toHaveBeenCalledWith('paywall_experiment_exposed', expect.objectContaining({ image_variant: 'meal', layout_variant: 'trial_timeline' }));
   return screen;
 }
+
+test('an anonymous paywall view is attributed once across plan changes', async () => {
+  mockAuthSession = null;
+  const screen = renderRouter(routes, { initialUrl: '/welcome/payment' });
+  await waitFor(() => expect(screen.getByTestId('paywall-price-yearly')).toBeTruthy());
+  await waitFor(() => expect(mockCapture).toHaveBeenCalledWith('paywall_experiment_exposed', expect.objectContaining({
+    paywall_variant: 'B', layout_variant: 'trial_timeline',
+  })));
+  await act(async () => { fireEvent.press(screen.getByTestId('paywall-plan-monthly')); });
+  expect(mockCapture.mock.calls.filter(([name]) => name === 'paywall_experiment_exposed')).toHaveLength(1);
+});
 
 test('development visual trial uses live price but never enters checkout or restore', async () => {
   const alert = jest.spyOn(Alert, 'alert');

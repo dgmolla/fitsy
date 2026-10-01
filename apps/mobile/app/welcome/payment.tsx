@@ -121,10 +121,11 @@ export default function PaymentScreen() {
   }, [offering, refreshOffering]);
 
   useEffect(() => {
-    if (!offering || visualRequested || !userId || !focused || !identityReady) return;
-    const key = `${userId}:${offering.identifier}:${variants.access}:${paywallVariant}:${variantConfig.version}:${!!testerOverride}`;
-    if (exposure.current === key) return;
-    exposure.current = key;
+    if (!focused) { exposure.current = ''; return; }
+    if (!offering || visualRequested || !identityReady || exposure.current) return;
+    // A visible anonymous paywall is still a view. Cohort selection remains
+    // account-bound, and the focus guard prevents duplicate rerender exposure.
+    exposure.current = 'shown';
     const attribution = { paywall_variant: paywallVariant, paywall_config_version: variantConfig.version, paywall_tester_override: !!testerOverride };
     trackPaywallShown({ source: 'onboarding', ...attribution });
     trackPaywallExperimentExposure({ offering_id: offering.identifier, access_variant: variants.access, image_variant: 'meal', layout_variant: paywallVariant === 'A' ? 'mosaic_benefits' : 'trial_timeline', ...attribution });

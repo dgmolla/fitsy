@@ -16,8 +16,16 @@ export function projectedChargeDate(terms: Terms, now: Date): Date | null {
   const date = new Date(now);
   if (match[2] === 'D') date.setDate(date.getDate() + count);
   if (match[2] === 'W') date.setDate(date.getDate() + count * 7);
-  if (match[2] === 'M') date.setMonth(date.getMonth() + count);
-  if (match[2] === 'Y') date.setFullYear(date.getFullYear() + count);
+  if (match[2] === 'M' || match[2] === 'Y') {
+    const day = date.getDate();
+    // Store calendar periods end on the last day of a short destination month.
+    // setMonth/setFullYear alone roll January 31 into March.
+    date.setDate(1);
+    if (match[2] === 'M') date.setMonth(date.getMonth() + count);
+    else date.setFullYear(date.getFullYear() + count);
+    const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+    date.setDate(Math.min(day, lastDay));
+  }
   return Number.isFinite(date.getTime()) ? date : null;
 }
 

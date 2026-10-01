@@ -24,6 +24,8 @@ const product = { priceString: '$59.99', subscriptionPeriod: 'P1Y',
   introPrice: { price: 0, priceString: '$0.00', period: 'P1W', periodUnit: 'WEEK', periodNumberOfUnits: 1, cycles: 1 } };
 const annual = purchaseTerms(product, true);
 const monthly = purchaseTerms({ ...product, priceString: '$9.99', subscriptionPeriod: 'P1M', introPrice: null }, false);
+beforeEach(() => { jest.spyOn(AppState, 'addEventListener').mockImplementation(() => ({ remove: jest.fn() }) as never); });
+afterEach(() => { jest.restoreAllMocks(); });
 function props() { return { annual, monthly, plan: 'yearly' as const, loading: false, restoring: false, checkingPlans: false,
   annualSavingPercent: 50, discovery: { selected: { id: 'r1', name: 'Actual Preview Pick', photoUrl: 'https://example.com/restaurant.jpg', address: '123 Main', lat: 34, lng: -118, distanceMiles: 1, cuisineTags: [], chainFlag: false, bestMatch: { menuItemId: 'm1', name: 'Real bowl', calories: 500, proteinG: 40, carbsG: 45, fatG: 15, confidence: 'HIGH' as const, matchScore: 0.2, nutritionBasis: 'estimated' as const } } },
   onSelect: jest.fn(), onRestore: jest.fn(), onManage: jest.fn(), onRetry: jest.fn(), onPurchase: jest.fn(), onDecline: jest.fn() }; }
@@ -162,4 +164,15 @@ test('variant B follows selected plan and shows truthful paid state when trial i
   expect(screen.queryByText(/reminder/i)).toBeNull();
   expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toBe('Continue to purchase');
   expect(screen.getByTestId('paywall-terms').props.children).toContain('$9.99 when you confirm');
+});
+
+test('variant B refreshes the projected charge date when checkout crosses midnight', () => {
+  jest.useFakeTimers();
+  jest.setSystemTime(new Date(2026, 8, 30, 23, 59, 59));
+  try {
+    const screen = render(<PaywallView {...props()} variant="B" />);
+    expect(screen.getByText("You'll be charged on October 7, 2026")).toBeTruthy();
+    act(() => { jest.advanceTimersByTime(2000); });
+    expect(screen.getByText("You'll be charged on October 8, 2026")).toBeTruthy();
+  } finally { jest.useRealTimers(); }
 });

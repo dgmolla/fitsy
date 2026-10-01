@@ -32,8 +32,9 @@ tags: [billing, onboarding, changed-journey]
     visible:
       id: paywall-price-yearly
     timeout: 15000
-- assertVisible: "Find meals that fit."
 - assertVisible:
+    id: paywall-offer-paid
+- assertNotVisible:
     id: paywall-hero
 - assertVisible:
     id: paywall-logo

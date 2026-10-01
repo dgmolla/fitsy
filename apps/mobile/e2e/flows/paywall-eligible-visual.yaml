@@ -40,6 +40,14 @@ tags: [billing, onboarding, changed-journey]
       id: dev-trial-visual-note
     timeout: 15000
 - assertVisible:
+    id: paywall-offer-timeline
+- assertVisible:
+    id: paywall-step-today
+- assertVisible:
+    id: paywall-step-reminder
+- assertVisible:
+    id: paywall-step-charge
+- assertNotVisible:
     id: paywall-hero
 - assertVisible: "Start free trial"
 - assertVisible: "No commitment, cancel anytime"

@@ -46,6 +46,14 @@ test('reminder states do not promise delivery without permission and opt-in', ()
   expect(view.getByText(/Unavailable; check your trial end/)).toBeTruthy();
 });
 
+test.each([
+  [new Date(2026, 0, 31, 12), 'P1M', new Date(2026, 1, 28, 12)],
+  [new Date(2024, 1, 29, 12), 'P1Y', new Date(2025, 1, 28, 12)],
+])('calendar trial ending on a short month is clamped to its last day', (start, period, expected) => {
+  const terms = purchaseTerms(product(period, '$79.99'), true);
+  expect(projectedChargeDate(terms, start)?.toDateString()).toBe(expected.toDateString());
+});
+
 test('connectors use their own wrapping row height and meet the next circle edge', () => {
   const terms = purchaseTerms(product('P1W', '$9.99', 'P1M'), true);
   const view = render(<PaywallOfferTimeline terms={terms} now={now} />);

@@ -1,5 +1,5 @@
-import React, { useCallback, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPress } from './AnimatedPress';
@@ -37,6 +37,21 @@ interface Props {
 
 /** The store supplies all offer copy; this component owns only presentation. */
 export function PaywallView(props: Props) {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    let timeout: ReturnType<typeof setTimeout>;
+    const refresh = () => {
+      const current = new Date();
+      setNow(current);
+      const nextMidnight = new Date(current.getFullYear(), current.getMonth(), current.getDate() + 1);
+      timeout = setTimeout(refresh, Math.max(1000, nextMidnight.getTime() - current.getTime()));
+    };
+    refresh();
+    const listener = AppState.addEventListener('change', state => {
+      if (state === 'active') { clearTimeout(timeout); refresh(); }
+    });
+    return () => { clearTimeout(timeout); listener.remove(); };
+  }, []);
   const { height, fontScale } = useWindowDimensions();
   const largeText = fontScale > 1.35;
   const compact = height < 780 && fontScale <= 1.2;
@@ -79,7 +94,7 @@ export function PaywallView(props: Props) {
           <View style={[s.benefits, compact && s.benefitsCompact]}>
             {PAYWALL_BENEFITS.map(benefit =>
               <View key={benefit} style={s.benefitRow}><Ionicons name="checkmark-circle" size={17} color={EDITORIAL.greenMid} /><Text style={[s.benefit, compact && s.benefitCompact]}>{benefit}</Text></View>)}
-          </View></> : <PaywallOfferTimeline terms={selected} now={new Date()} reminderAvailability={props.reminderAvailability} onFirstStepTop={onFirstStepTop} />}
+          </View></> : <PaywallOfferTimeline terms={selected} now={now} reminderAvailability={props.reminderAvailability} onFirstStepTop={onFirstStepTop} />}
         </View>
         <View>
           <View style={[s.cancelRow, compact && s.cancelRowCompact, timelineLayout && s.cancelRowTimeline]}><Ionicons name="checkmark" size={timelineLayout ? 18 : 15} color={EDITORIAL.green} /><Text style={[s.cancel, timelineLayout && s.cancelTimeline]}>No commitment, cancel anytime</Text></View>
