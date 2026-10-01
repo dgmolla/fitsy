@@ -248,7 +248,8 @@ export default function PaymentScreen() {
         onSelect={setChosenPlan}
         onBack={() => {
           if (navigation.canGoBack()) router.back();
-          else router.replace(annualTerms?.trial || monthlyTerms?.trial ? '/welcome/trial-reminder' : '/(tabs)/search');
+          else if (annualTerms?.trial || monthlyTerms?.trial) router.replace('/welcome/trial-reminder');
+          else setModal(discountTerms && discountPercent ? 'discount' : 'goodbye');
         }}
         onRestore={() => { void handleRestore(); }}
         onManage={() => { void showManageSubscriptions(); }}

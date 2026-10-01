@@ -119,10 +119,11 @@ test.each([
   expect(Purchases.purchasePackage).toHaveBeenCalledWith(annualWithTrial);
 });
 
-test('Back from a directly opened no-trial payment leaves the paywall', async () => {
+test('Back from a directly opened no-trial payment offers the existing exit flow', async () => {
   const screen = await openPayment();
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
-  await waitFor(() => expect(screen.getPathname()).toBe('/search'));
+  await waitFor(() => expect(screen.getByTestId('paywall-back-to-plans')).toBeTruthy());
+  expect(screen.getPathname()).toBe('/welcome/payment');
 });
 
 test('an explicit paid plan choice overrides the monthly trial and remains the purchase target', async () => {
