@@ -67,7 +67,8 @@ export default function TrialScreen() {
     continueLabel={checkingPlans ? 'Checking plans…' : shownOffering ? 'Continue' : 'Retry plans'} canContinue={!checkingPlans}
     onContinue={() => { void continueOrRetry(); }}
     beforeContinue={trial && !checkingPlans ? <View style={s.reassurance} testID="trial-no-payment"><Ionicons name="checkmark" size={20} color={EDITORIAL.green} /><Text style={s.reassuranceText}>No payment due now</Text></View> : undefined}
-    afterContinue={!offering && plansChecked ? <Text style={s.note} testID="trial-offer-note">Plans could not load. Check your connection and retry.</Text> : undefined}>
+    afterContinue={visual ? <Text style={s.note} testID="trial-visual-note">Synthetic trial eligibility for visual testing. Purchase is disabled.</Text>
+      : !offering && plansChecked ? <Text style={s.note} testID="trial-offer-note">Plans could not load. Check your connection and retry.</Text> : undefined}>
     <TrialArtwork />
   </WelcomeScreen>;
 }

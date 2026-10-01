@@ -99,6 +99,7 @@ test('development visual flag stays on the three real welcome screens', async ()
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial?devTrialVisual=1' });
   await waitFor(() => expect(screen.getByText('Try Fitsy')).toBeTruthy());
   expect(screen.getByTestId('trial-no-payment')).toBeTruthy();
+  expect(screen.getByTestId('trial-visual-note').props.children).toContain('Synthetic trial eligibility');
   expect(screen.queryByTestId('trial-offer-note')).toBeNull();
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/trial-reminder'));
