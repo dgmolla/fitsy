@@ -112,6 +112,8 @@ def import_history(handle, ledger, paths, optional_paths):
             if key in events and events[key] != event:
                 raise ValueError(f"conflicting retained review history in {source}")
             if key not in events:
+                if event["event"] in ("authorized-grant", "recovery_extension"):
+                    raise ValueError("imported history cannot grant new review authority; verify authorization through the external operator manifest")
                 new.append(event)
                 events[key] = event
         if new:

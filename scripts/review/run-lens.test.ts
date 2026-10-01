@@ -25,7 +25,7 @@ function run(model = "fixture-model", provider = "claude", lens = "correctness")
     cwd: root, encoding: "utf8", env: { ...env, FITSY_REVIEW_MODEL: model, FITSY_REVIEW_PROVIDER: provider }, timeout: 15000,
   });
 }
-function runPr(lens = "correctness", body = "Delivery-Issue: #355\n") {
+function runPr(lens = "correctness", body = "Delivery-Issue: #355\n", provider = "claude") {
   writeFileSync(join(root, "pr-body"), body);
   const gh = join(root, "bin/gh-fixture");
   writeFileSync(gh, `#!/bin/sh
@@ -48,7 +48,7 @@ if [ "$1" = pr ] && [ "$2" = comment ]; then printf '%s\\n' "$*" >> "$REVIEW_TES
 exit 1
 `, { mode: 0o755 });
   return spawnSync("bash", ["scripts/review/run-lens.sh", "123", lens], {
-    cwd: root, encoding: "utf8", env: { ...env, FITSY_REVIEW_MODEL: "fixture-model", FITSY_REVIEW_PROVIDER: "claude",
+    cwd: root, encoding: "utf8", env: { ...env, FITSY_REVIEW_MODEL: "fixture-model", FITSY_REVIEW_PROVIDER: provider,
       FITSY_GH_BIN: gh, REVIEW_TEST_GH_CALLS: join(root, "gh-calls") }, timeout: 15000,
   });
 }
@@ -295,3 +295,11 @@ deliveryTimingCases({ root: () => root, env: () => env, source, run, runPr, git 
 
 policyRunnerCases({ root: () => root, setRoot: value => { root = value; }, env: () => env, setEnv: value => { env = value; },
   calls: () => calls, cache: () => cache, run, runPr, git, isolatedEnv });
+
+test("invalid reviewer preflight publishes configuration failure without starting a model", () => {
+  env = { ...env, FITSY_REVIEW_REASONING_EFFORT: "invalid" };
+  const failed = runPr("correctness", "Delivery-Issue: #355\n", "codex");
+  expect(failed.status).toBe(1);
+  expect(readFileSync(join(root, "gh-calls"), "utf8")).toContain("execution/configuration");
+  expect(readdirSync(root)).not.toContain("calls");
+});

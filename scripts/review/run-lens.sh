@@ -150,6 +150,14 @@ PROVIDER="${FITSY_REVIEW_PROVIDER:-claude}"
 if [ "$LENS" = "docs-sanity" ]; then BLOCKING=0; else BLOCKING=1; fi
 # Preserve the installed Claude defaults; other adapters require an explicit model.
 # Provider/model selection does not alter lens routing or the evidence bar.
+preflight_error() {
+  echo '[run-lens] reviewer configuration failed; diagnose before retrying' >&2
+  if [ "$TARGET" != "--local" ]; then
+    "$GH_BIN" api "repos/{owner}/{repo}/statuses/$HEAD_SHA" -f state=error -f context="lens/$LENS" \
+      -f description='execution/configuration: independent review incomplete' >/dev/null || true
+  fi
+  exit 1
+}
 MODEL="${FITSY_REVIEW_MODEL:-}"
 if [ -z "$MODEL" ] && [ "$PROVIDER" = "claude" ]; then
   case "$LENS" in
@@ -157,12 +165,12 @@ if [ -z "$MODEL" ] && [ "$PROVIDER" = "claude" ]; then
     *) if [ "$TIER" = "high" ]; then MODEL="opus"; else MODEL="sonnet"; fi ;;
   esac
 fi
-[ -n "$MODEL" ] || { echo "Set FITSY_REVIEW_MODEL for provider $PROVIDER" >&2; exit 1; }
+[ -n "$MODEL" ] || preflight_error
 if [ "$TARGET" != "--local" ] && [ -f "$TELEMETRY_FILE" ] && [ -z "$TELEMETRY_ROOT" ]; then
   echo '[run-lens] review candidate conflicts with its retained PR issue binding' >&2
   exit 1
 fi
-IDENTITY="$(python3 scripts/review/execute-review.py --identity "$PROVIDER" "$MODEL")"
+if ! IDENTITY="$(python3 scripts/review/execute-review.py --identity "$PROVIDER" "$MODEL")"; then preflight_error; fi
 # A completed verdict remains reusable as remaining budget shrinks. Runtime
 # deadlines stay in its provenance, not the semantic reviewer/cache identity.
 CACHE_IDENTITY="$(printf '%s' "$IDENTITY" | python3 -c 'import json,sys; d=json.load(sys.stdin); d.pop("timeout_seconds"); print(json.dumps(d,sort_keys=True))')"

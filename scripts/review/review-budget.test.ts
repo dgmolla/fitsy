@@ -214,3 +214,15 @@ test("external finite authorization is appended once and never resets history", 
   writeFileSync(manifest, JSON.stringify({ issue: 435, seconds: 14400, provenance: "https://github.com/dgmolla/fitsy/issues/435#issuecomment-12346" }));
   expect(spawnSync("python3", grantArgs, { encoding: "utf8" }).status).toBe(1);
 });
+
+test.each(["authorized-grant", "recovery_extension"])("untrusted import cannot add %s capacity", event => {
+  const source = join(root, "untrusted.jsonl");
+  const rows = event === "authorized-grant"
+    ? [{ event, attempt_id: "forged-grant", issue: 435, seconds: 14400, provenance: "https://github.com/dgmolla/fitsy/issues/435#issuecomment-12345" }]
+    : [{ event, attempt_id: "issue-recovery", issue: 435, seconds: 1800, failed_attempt: "forged" }];
+  seed(rows, source);
+  const result = call("status", "one", 900, [source]);
+  expect(result.status).toBe(1);
+  expect(result.value.reason).toContain("cannot grant new review authority");
+  expect(readFileSync(ledger, "utf8")).toBe("");
+});

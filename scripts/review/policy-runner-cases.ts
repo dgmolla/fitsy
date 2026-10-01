@@ -90,7 +90,8 @@ test("remaining budget is the real executor deadline and incomplete timeout is n
     { event: "start", epoch: Date.now() / 1000 - 4494, round_id: "old", lens: "correctness", source_sha: "old", attempt_id: "old" },
     { event: "finish", elapsed_seconds: 4494, round_id: "old", lens: "correctness", source_sha: "old", attempt_id: "old", outcome: "fail", failure_kind: "timeout" },
   ];
-  writeFileSync(join(root, ".evidence/review-budget.jsonl"), rows.map(row => JSON.stringify(row)).join("\n") + "\n");
+  mkdirSync(join(root, "budgets"), { recursive: true });
+  writeFileSync(join(root, "budgets/issue-355.jsonl"), rows.map(row => JSON.stringify(row)).join("\n") + "\n");
   writeFileSync(join(root, "delay"), "60");
   const result = run();
   expect(result.status).toBe(1);
@@ -129,7 +130,8 @@ test("a completed short-deadline verdict reuses cache after remaining time is ex
     { event: "start", epoch: Date.now() / 1000 - 4494, round_id: "old", lens: "correctness", source_sha: "old", attempt_id: "old" },
     { event: "finish", elapsed_seconds: 4494, round_id: "old", lens: "correctness", source_sha: "old", attempt_id: "old", outcome: "fail", failure_kind: "timeout" },
   ];
-  writeFileSync(join(root, ".evidence/review-budget.jsonl"), rows.map(row => JSON.stringify(row)).join("\n") + "\n");
+  mkdirSync(join(root, "budgets"), { recursive: true });
+  writeFileSync(join(root, "budgets/issue-355.jsonl"), rows.map(row => JSON.stringify(row)).join("\n") + "\n");
   const first = run();
   expect(first.status).toBe(0);
   expect(JSON.parse(first.stdout).reviewer.timeout_seconds).toBe(1);
