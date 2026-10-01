@@ -1,8 +1,9 @@
+import { executionFailureCases } from "./execution-failure-cases";
 import { policyRunnerCases } from "./policy-runner-cases";
 import { deliveryTimingCases } from "./delivery-timing-cases";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cpSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 const source = resolve(__dirname, "../..");
@@ -295,18 +296,4 @@ deliveryTimingCases({ root: () => root, env: () => env, source, run, runPr, git 
 
 policyRunnerCases({ root: () => root, setRoot: value => { root = value; }, env: () => env, setEnv: value => { env = value; },
   calls: () => calls, cache: () => cache, run, runPr, git, isolatedEnv });
-
-test("invalid reviewer preflight publishes configuration failure without starting a model", () => {
-  env = { ...env, FITSY_REVIEW_REASONING_EFFORT: "invalid" };
-  const failed = runPr("correctness", "Delivery-Issue: #355\n", "codex");
-  expect(failed.status).toBe(1);
-  expect(readFileSync(join(root, "gh-calls"), "utf8")).toContain("execution/configuration");
-  expect(readdirSync(root)).not.toContain("calls");
-});
-
-test("missing final response is invalid output instead of completed execution", () => {
-  writeFileSync(join(root, "bin/codex"), "#!/bin/sh\nif [ \"$1\" = --version ]; then echo fake-cli; fi\nexit 0\n", { mode: 0o755 });
-  const result = run("fixture-model", "codex");
-  expect(result.status).toBe(1);
-  expect(JSON.parse(result.stdout)).toMatchObject({ verdict: "incomplete", error: { kind: "invalid_output" } });
-});
+executionFailureCases({ root: () => root, env: () => env, setEnv: value => { env = value; }, run, runPr });

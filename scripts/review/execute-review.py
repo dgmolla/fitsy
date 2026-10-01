@@ -115,7 +115,15 @@ def retain_execution(kind, output, errors, started, last_activity, returncode):
     return report
 
 
-def run_process(argv, prompt, cwd, timeout, env, diagnostics=True):
+def failure_kind(message):
+    if re.search(r"unauthorized|authentication|invalid.api.key|not.logged.in|401", message, re.I):
+        return "authentication"
+    if re.search(r"rate.limit|429|service.unavailable|connection.reset|502|503", message, re.I):
+        return "transient_provider"
+    return "process_error"
+
+
+def run_process(argv, prompt, cwd, timeout, env, diagnostics=True, structured_errors=False):
     started = time.monotonic()
     last_activity = None
     observed_bytes = 0
@@ -150,11 +158,16 @@ def run_process(argv, prompt, cwd, timeout, env, diagnostics=True):
     if diagnostics:
         kind = "completed"
         if process.returncode != 0:
-            kind = "process_error"
-            if re.search(r"unauthorized|authentication|invalid.api.key|not.logged.in|401", errors, re.I):
-                kind = "authentication"
-            elif re.search(r"rate.limit|429|service.unavailable|connection.reset|502|503", errors, re.I):
-                kind = "transient_provider"
+            kind = failure_kind(errors)
+        elif structured_errors:
+            # Only the Claude CLI's outer envelope is transport authority.
+            # Codex final responses and nested model text cannot grant retries.
+            try:
+                envelope = json.loads(output)
+            except (ValueError, TypeError):
+                envelope = None
+            if isinstance(envelope, dict) and (envelope.get("is_error") is True or envelope.get("error")):
+                kind = failure_kind(json.dumps(envelope))
         retain_execution(kind, output, errors, started, last_activity, process.returncode)
     if process.returncode != 0:
         if errors:
@@ -194,7 +207,7 @@ def execute(provider, model, executable, prompt, repository, timeout):
         raise RunnerError("Refusing an empty review prompt")
     env = child_environment()
     if provider == "claude":
-        output, errors = run_process([executable, *CLAUDE_ARGS, "--model", model], prompt, repository, timeout, env)
+        output, errors = run_process([executable, *CLAUDE_ARGS, "--model", model], prompt, repository, timeout, env, structured_errors=True)
     else:
         # Never make the repository a Codex working directory: that would load
         # its .codex/config.toml even with --ignore-user-config. Read-only shell
