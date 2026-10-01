@@ -18,7 +18,7 @@ deprecated.
 - **Entitlement:** `pro` (single entitlement; all features require it)
 - **Plans:** Annual and Monthly (see Pricing Decision Record below for exact prices)
 - **Trial:** A fourteen-day introductory free trial is the desired catalog policy for the existing monthly and annual offer territories.
-  The last verified live catalog still has seven-day offers until the coordinated App Store change is completed.
+  App Store Connect lists two-week free-trial offers in the same 175 territories for both regular plans as of 2026-10-01 UTC.
   The selected live StoreKit product and RevenueCat eligibility determine the actual offer; the discounted annual product has no introductory trial.
 - **SDK:** `react-native-purchases` (RevenueCat React Native SDK)
 - **Paywall:** `apps/mobile/app/welcome/payment.tsx` reads localized prices, billing periods, introductory duration, and eligibility from live store data through RevenueCat.
@@ -135,8 +135,9 @@ See `docs/product/pre-launch-action-items.md` for the full critical path.
 
 ## Pricing Decision Record
 
-> **Trial configuration verified 2026-09-30:** The App Store Connect catalog still has 175 one-week free-trial territories for each regular product and no introductory offer for discounted annual.
-> The desired policy in `packages/shared/src/contracts/trialPolicy.ts` is fourteen days; this setting alone does not modify Apple offers.
+> **App Store Connect configuration verified 2026-10-01 UTC:** The monthly and annual products each list 175 two-week free-trial territories, with the original territory sets retained.
+> The discounted annual product still has no introductory offer.
+> Real eligible Apple purchase and entitlement-expiration acceptance remain separate from this catalog check.
 
 App Store Connect configures subscription products, prices, and introductory offers.
 The mobile paywall uses the selected live StoreKit product through RevenueCat and the customer's current introductory-offer eligibility.
@@ -144,12 +145,13 @@ This document records configuration, not a guarantee that every customer receive
 
 | Plan | US retail price | App Store product | Introductory configuration |
 |------|-----------------|-------------------|---------------------------|
-| Monthly | $7.99/month | `com.fitsy.mobile.monthly` | Seven days currently verified; fourteen days desired for eligible subscribers |
-| Annual | $39.99/year | `com.fitsy.mobile.yearly` | Seven days currently verified; fourteen days desired for eligible subscribers |
+| Monthly | $7.99/month | `com.fitsy.mobile.monthly` | Two weeks configured for eligible subscribers |
+| Annual | $39.99/year | `com.fitsy.mobile.yearly` | Two weeks configured for eligible subscribers |
 | Discounted annual | $29.99/year | `com.fitsy.mobile.yearly_discount` | No introductory offer; billed on confirmation |
 
-A read-only App Store Connect check on 2026-09-30 found 175 `ONE_WEEK`, `FREE_TRIAL`, one-period offers for each regular product and no introductory offers for the discounted annual product.
-The two regular products have the same 175 offer territory codes; the candidate has not changed the catalog.
+A read-only App Store Connect check after the change found 175 `TWO_WEEKS`, `FREE_TRIAL`, one-period offers for each regular product and no introductory offers for the discounted annual product.
+The two regular products retain their original 175 offer territory codes, US prices, and monthly or annual renewal periods.
+The prior 2026-09-30 baseline was 175 `ONE_WEEK` offers per regular product.
 The seven-day rollout preserved existing offer territories and product availability; it did not expand availability to every offer territory.
 Store configuration verification does not establish a particular customer's eligibility or prove an Apple sandbox purchase.
 
