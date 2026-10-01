@@ -1,6 +1,6 @@
 jest.unmock('react-native');
 import React from 'react';
-import { AppState, Text } from 'react-native';
+import { Alert, AppState, Text } from 'react-native';
 import { act, render, waitFor } from '@testing-library/react-native';
 import { ReminderProvider, useReminders } from '../lib/useReminders';
 import { readReminderPreferences, reconcileReminderOwnership, replaceReminders } from '../lib/notificationSchedule';
@@ -131,4 +131,23 @@ test('foreground recovery retries failed account ownership cleanup', async () =>
   expect(reconcile.mock.calls.filter(([id]) => id === 'next-owner')).toHaveLength(1);
   await act(async () => { foreground?.('active'); });
   await waitFor(() => expect(reconcile.mock.calls.filter(([id]) => id === 'next-owner')).toHaveLength(2));
+});
+
+test('a native trial scheduling failure tells the buyer the reminder is unconfirmed', async () => {
+  const now = Date.now();
+  mockCustomerInfo.entitlements.all.pro = {
+    isActive: true, periodType: 'TRIAL', willRenew: true,
+    latestPurchaseDate: new Date(now).toISOString(),
+    expirationDate: new Date(now + 7 * 24 * 3_600_000).toISOString(),
+  } as typeof mockCustomerInfo.entitlements.all.pro;
+  jest.mocked(readReminderPreferences).mockResolvedValue({ meals: false, trial: true });
+  jest.mocked(replaceReminders).mockImplementation(async (_id, jobs) => {
+    if (jobs.some(job => job.kind === 'trial')) throw new Error('Native schedule failed');
+  });
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+  render(<ReminderProvider><SettingsView /></ReminderProvider>);
+  await waitFor(() => expect(alert).toHaveBeenCalledWith('Trial reminder unavailable', expect.stringContaining('Check your trial end date')));
+  expect(warn).toHaveBeenCalledWith('[reminders]', 'Native schedule failed');
+  mockCustomerInfo.entitlements.all.pro = { isActive: true };
 });

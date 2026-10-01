@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
-import { AppState } from 'react-native';
+import { Alert, AppState } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { router, usePathname } from 'expo-router';
 import { supabase } from './supabase';
@@ -23,6 +23,7 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
   const [response, setResponse] = useState<Notifications.NotificationResponse | null>(null);
   const userRef = useRef(account.id); userRef.current = account.id;
   const scheduledAccountRef = useRef<string | null | undefined>(undefined);
+  const failedTrialNoticeRef = useRef<string | null>(null);
   const preferences = loaded?.id === account.id ? loaded.values : DEFAULT_REMINDER_PREFERENCES;
 
   useEffect(() => {
@@ -67,8 +68,20 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
     let live = true;
     const userId = account.ready && ready && loaded?.id === account.id ? account.id : undefined;
     const plan = planReminders({ now: new Date(), userId: account.id, entitled: entitled === true, preferences, subscription: customerInfo?.entitlements.all.pro });
+    const trial = plan.find(item => item.kind === 'trial');
     void replaceReminders(userId, plan).then(() => readScheduledReminders(account.id))
-      .then(values => { if (live) setScheduled({ id: account.id, values }); }).catch(reportFailure);
+      .then(values => {
+        if (live) {
+          setScheduled({ id: account.id, values });
+          if (trial && values.some(value => value.kind === 'trial' && value.date === trial.date.toISOString())) failedTrialNoticeRef.current = null;
+        }
+      }).catch(error => {
+        reportFailure(error);
+        if (live && trial && failedTrialNoticeRef.current !== trial.identifier) {
+          failedTrialNoticeRef.current = trial.identifier;
+          Alert.alert('Trial reminder unavailable', 'We could not confirm your trial reminder. Check your trial end date and renewal in subscription settings.');
+        }
+      });
     return () => { live = false; };
   }, [account, ready, loaded, entitled, preferences, customerInfo, revision]);
 
