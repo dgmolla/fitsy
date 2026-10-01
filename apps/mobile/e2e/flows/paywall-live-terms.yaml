@@ -121,5 +121,60 @@ tags: [billing, onboarding, changed-journey]
     id: paywall-restore
 - assertVisible: "Continue with Apple"
 - assertVisible: "Continue with Google"
-# The fixed Dev login account may already be active. Its purchase branch is
-# covered separately by SDK tests until an unentitled native account is ready.
+# The native purchase branch uses a disposable, unentitled development account
+# selected by EXPO_PUBLIC_DEV_LOGIN_EMAIL for this Test Store build.
+- tapOn: "Dev login"
+- extendedWaitUntil:
+    visible:
+      id: paywall-plan-yearly
+    timeout: 30000
+- assertNotVisible: "Leave a review"
+- openLink: com.fitsy.mobile://welcome/payment
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: paywall-plan-yearly
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: welcome-skip
+    direction: DOWN
+- tapOn:
+    id: welcome-skip
+- tapOn:
+    id: paywall-discount-buy
+- extendedWaitUntil:
+    visible: "Test Store Purchase"
+    timeout: 15000
+- tapOn: "Cancel"
+- extendedWaitUntil:
+    visible:
+      id: welcome-continue
+      enabled: true
+    timeout: 15000
+- assertNotVisible: "Test Store Purchase"
+- tapOn:
+    point: "92%,93%"
+- scrollUntilVisible:
+    element:
+      id: welcome-skip
+    direction: DOWN
+- tapOn:
+    id: welcome-skip
+- tapOn:
+    id: paywall-discount-buy
+- extendedWaitUntil:
+    visible: "Test Store Purchase"
+    timeout: 15000
+- tapOn: "Test failed purchase"
+- assertVisible: "Purchase not completed"
+- assertVisible: "Please try again. You can also restore an existing subscription."
+- tapOn: "OK"
+- extendedWaitUntil:
+    visible:
+      id: welcome-continue
+      enabled: true
+    timeout: 15000
+- assertNotVisible: "Test Store Purchase"

@@ -72,3 +72,29 @@ it('uses the live Los Angeles catalog when there is no preview selection', async
   await waitFor(() => expect(result.current.selected).toMatchObject({ id: 'catalog-1', name: 'Catalog Restaurant', bestMatch: { name: 'Real meal' } }));
   expect(result.current.catalogFallback).toBe(true);
 });
+
+it('retries the real catalog without a saved query when that query has no matches', async () => {
+  await rememberPaywallIntent(selection('missing'));
+  (global.fetch as jest.Mock).mockImplementation(async (url: string) => ({ ok: true, json: async () => ({
+    data: new URL(url).searchParams.get('q') ? [] : [resultFor('catalog-2')],
+    meta: { nearbyDishCount: 1, radiusMiles: 3 },
+  }) }));
+  const { result } = renderHook(() => usePaywallDiscovery(true));
+  await waitFor(() => expect(result.current.selected?.id).toBe('catalog-2'));
+  expect(result.current.catalogFallback).toBe(true);
+  expect(global.fetch).toHaveBeenCalledTimes(2);
+});
+
+it('ignores an old catalog response after payment loses focus and returns with a new selection', async () => {
+  await rememberPaywallIntent(selection('old'));
+  let resolveOld!: (value: unknown) => void;
+  (global.fetch as jest.Mock).mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve; }));
+  const { result, rerender } = renderHook(({ focused }) => usePaywallDiscovery(focused), { initialProps: { focused: true } });
+  await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+  rerender({ focused: false });
+  await rememberPaywallIntent({ ...selection('new'), previewResult: resultFor('new') });
+  rerender({ focused: true });
+  await waitFor(() => expect(result.current.selected?.id).toBe('new'));
+  await act(async () => { resolveOld({ ok: true, json: async () => ({ data: [resultFor('old')], meta: { nearbyDishCount: 1, radiusMiles: 3 } }) }); });
+  expect(result.current.selected?.id).toBe('new');
+});

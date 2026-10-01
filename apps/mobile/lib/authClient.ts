@@ -129,7 +129,9 @@ export async function registerAndStore(
 // registers on first run, then stores the token + adopts the session. Shared by
 // app/auth/login.tsx and app/welcome/signin.tsx — callers handle nav/analytics.
 export async function devLogin(): Promise<AuthResponse> {
-  const creds = { email: 'dev@fitsy.local', password: 'dev12345' };
+  // An isolated Test Store run can use a disposable development account
+  // without changing the shared Dev login account or its billing eligibility.
+  const creds = { email: (__DEV__ && process.env.EXPO_PUBLIC_DEV_LOGIN_EMAIL) || 'dev@fitsy.local', password: 'dev12345' };
   const attempt = async (path: string) => {
     const res = await fetch(`${BASE_URL}${path}`, {
       method: 'POST',

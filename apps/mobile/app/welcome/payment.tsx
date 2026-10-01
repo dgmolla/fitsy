@@ -42,7 +42,8 @@ export default function PaymentScreen() {
   const identityResolvedForFocus = useRef(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [identityReady, setIdentityReady] = useState(false);
-  const [reminderAvailability, setReminderAvailability] = useState<ReminderAvailability>('unavailable');
+  const [reminderState, setReminderState] = useState<{ userId: string; availability: ReminderAvailability } | null>(null);
+  const reminderAvailability = reminderState?.userId === userId ? reminderState.availability : 'unavailable';
   const testerOverride: PaywallVariant | undefined = __DEV__ && (devPaywallVariant === 'A' || devPaywallVariant === 'B') ? devPaywallVariant : undefined;
   useEffect(() => {
     identityResolvedForFocus.current = false;
@@ -66,15 +67,15 @@ export default function PaymentScreen() {
     return () => { active = false; listener.subscription.unsubscribe(); };
   }, [focused]);
   useEffect(() => {
-    if (!focused || !userId) return;
+    if (!focused || !userId) { setReminderState(null); return; }
     let active = true;
     const refresh = () => {
       void Promise.all([getNotificationPermission(), readReminderPreferences(userId, { throwOnError: true })])
         .then(([permission, preferences]) => {
-          if (active) setReminderAvailability(permission === 'denied' ? 'permission-off'
-            : permission === 'granted' && preferences.trial ? 'enabled' : 'opt-in');
+          if (active) setReminderState({ userId, availability: permission === 'denied' ? 'permission-off'
+            : permission === 'granted' && preferences.trial ? 'enabled' : 'opt-in' });
         })
-        .catch(() => { if (active) setReminderAvailability('unavailable'); });
+        .catch(() => { if (active) setReminderState({ userId, availability: 'unavailable' }); });
     };
     refresh();
     const listener = AppState.addEventListener('change', state => { if (state === 'active') refresh(); });
@@ -248,7 +249,6 @@ export default function PaymentScreen() {
         onSelect={setChosenPlan}
         onBack={() => {
           if (navigation.canGoBack()) router.back();
-          else if ((plan === 'yearly' ? annualTerms : monthlyTerms)?.trial) router.replace('/welcome/trial-reminder');
           else setModal(discountTerms && discountPercent ? 'discount' : 'goodbye');
         }}
         onRestore={() => { void handleRestore(); }}
