@@ -59,21 +59,22 @@ export function PaywallOfferTimeline({ terms, now, reminderAvailability = 'unava
   const usefulReminder = reminderDate && reminderDate > now && reminderDate < chargeDate;
   const reminderDay = usefulReminder ? elapsedCalendarDays(now, reminderDate) : null;
   const chargeDay = elapsedCalendarDays(now, chargeDate);
-  const reminderCopy = reminderAvailability === 'enabled'
-    ? 'Requested; scheduling follows store confirmation.'
+  const reminderCopy = reminderAvailability === 'enabled' && usefulReminder
+    ? "We'll send you a reminder that your trial is ending soon"
     : reminderAvailability === 'permission-off'
       ? 'Notifications off. Enable them in settings.'
       : reminderAvailability === 'opt-in'
         ? 'Optional; turn on reminders after purchase.'
         : 'Unavailable; check your trial end in settings.';
 
+  const chargeDateLabel = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).format(chargeDate);
   return <View style={s.panel} testID="paywall-offer-timeline">
-    <Step icon="lock-open-outline" title="Today" detail="Unlock Fitsy Pro with your free trial." testID="paywall-step-today" />
+    <Step icon="lock-open-outline" title="Today" detail="Unlock our library of Los Angeles restaurant nutrition, tailored to you" testID="paywall-step-today" />
     <Step icon="notifications-outline"
-      title={usefulReminder ? `Day ${reminderDay} reminder` : 'Reminder unavailable'}
+      title={usefulReminder ? `In ${reminderDay} days` : 'Reminder unavailable'}
       detail={reminderCopy} testID="paywall-step-reminder" />
-    <Step icon="calendar-outline" title={`Day ${chargeDay} first charge`}
-      detail="Your paid plan starts unless you cancel before the trial ends."
+    <Step icon="calendar-outline" title={`In ${chargeDay} days`}
+      detail={`You'll be charged on ${chargeDateLabel}`}
       last testID="paywall-step-charge" />
   </View>;
 }

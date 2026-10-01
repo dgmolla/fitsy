@@ -18,25 +18,30 @@ test.each([
   const terms = purchaseTerms(product(trialPeriod, price, billingPeriod), true);
   const charge = projectedChargeDate(terms, now)!;
   const reminder = trialReminderDate(charge);
-  const view = render(<PaywallOfferTimeline terms={terms} now={now} reminderAvailability="opt-in" />);
+  const view = render(<PaywallOfferTimeline terms={terms} now={now} reminderAvailability="enabled" />);
   expect(charge.toDateString()).toBe(new Date(2026, 8, 30 + days, 12).toDateString());
   expect(view.getByTestId('paywall-step-today')).toBeTruthy();
   expect(view.getByTestId('paywall-step-reminder')).toBeTruthy();
   expect(view.getByTestId('paywall-step-charge')).toBeTruthy();
-  expect(view.getByText(`Day ${days} first charge`)).toBeTruthy();
+  expect(view.getByText(`In ${days} days`)).toBeTruthy();
   const reminderDay = Math.round((Date.UTC(reminder.getFullYear(), reminder.getMonth(), reminder.getDate()) - Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) / 86_400_000);
-  expect(view.getByText(`Day ${reminderDay} reminder`)).toBeTruthy();
-  expect(view.getByText(/turn on reminders after purchase/)).toBeTruthy();
-  expect(view.queryByText(/Oct|\$79|\$9/)).toBeNull();
+  expect(reminderDay).toBe(days - 2);
+  expect(view.getByText(`In ${reminderDay} days`)).toBeTruthy();
+  expect(view.getByText("We'll send you a reminder that your trial is ending soon")).toBeTruthy();
+  expect(view.getByText('Unlock our library of Los Angeles restaurant nutrition, tailored to you')).toBeTruthy();
+  expect(view.getByText(`You'll be charged on ${new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).format(charge)}`)).toBeTruthy();
+  expect(view.queryByText(/\$79|\$9/)).toBeNull();
   expect(view.queryByText(/Your Fitsy plan/)).toBeNull();
 });
 
-test('reminder states do not promise delivery before store confirmation', () => {
+test('reminder states do not promise delivery without permission and opt-in', () => {
   const terms = purchaseTerms(product('P1W', '$9.99', 'P1M'), true);
   const view = render(<PaywallOfferTimeline terms={terms} now={now} reminderAvailability="permission-off" />);
   expect(view.getByText(/Notifications off/)).toBeTruthy();
   view.rerender(<PaywallOfferTimeline terms={terms} now={now} reminderAvailability="enabled" />);
-  expect(view.getByText(/scheduling follows store confirmation/)).toBeTruthy();
+  expect(view.getByText(/We'll send you a reminder/)).toBeTruthy();
+  view.rerender(<PaywallOfferTimeline terms={terms} now={now} reminderAvailability="opt-in" />);
+  expect(view.getByText(/turn on reminders after purchase/)).toBeTruthy();
   view.rerender(<PaywallOfferTimeline terms={terms} now={now} reminderAvailability="unavailable" />);
   expect(view.getByText(/Unavailable; check your trial end/)).toBeTruthy();
 });
