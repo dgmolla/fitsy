@@ -68,19 +68,24 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
     let live = true;
     const userId = account.ready && ready && loaded?.id === account.id ? account.id : undefined;
     const plan = planReminders({ now: new Date(), userId: account.id, entitled: entitled === true, preferences, subscription: customerInfo?.entitlements.all.pro });
-    const trial = plan.find(item => item.kind === 'trial');
+    const trial = userId ? plan.find(item => item.kind === 'trial') : undefined;
+    const notifyUnconfirmedTrial = () => {
+      if (!live || !trial) return;
+      const key = `${account.id}:${trial.identifier}`;
+      if (failedTrialNoticeRef.current === key) return;
+      failedTrialNoticeRef.current = key;
+      Alert.alert('Trial reminder unavailable', 'We could not confirm your trial reminder. Check your trial end date and renewal in subscription settings.');
+    };
     void replaceReminders(userId, plan).then(() => readScheduledReminders(account.id))
       .then(values => {
         if (live) {
           setScheduled({ id: account.id, values });
           if (trial && values.some(value => value.kind === 'trial' && value.date === trial.date.toISOString())) failedTrialNoticeRef.current = null;
+          else notifyUnconfirmedTrial();
         }
       }).catch(error => {
         reportFailure(error);
-        if (live && trial && failedTrialNoticeRef.current !== trial.identifier) {
-          failedTrialNoticeRef.current = trial.identifier;
-          Alert.alert('Trial reminder unavailable', 'We could not confirm your trial reminder. Check your trial end date and renewal in subscription settings.');
-        }
+        notifyUnconfirmedTrial();
       });
     return () => { live = false; };
   }, [account, ready, loaded, entitled, preferences, customerInfo, revision]);

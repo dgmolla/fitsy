@@ -151,3 +151,18 @@ test('a native trial scheduling failure tells the buyer the reminder is unconfir
   expect(warn).toHaveBeenCalledWith('[reminders]', 'Native schedule failed');
   mockCustomerInfo.entitlements.all.pro = { isActive: true };
 });
+
+test('a silently skipped trial job also tells the buyer the reminder is unconfirmed', async () => {
+  const now = Date.now();
+  mockCustomerInfo.entitlements.all.pro = {
+    isActive: true, periodType: 'TRIAL', willRenew: true,
+    latestPurchaseDate: new Date(now).toISOString(),
+    expirationDate: new Date(now + 7 * 24 * 3_600_000).toISOString(),
+  } as typeof mockCustomerInfo.entitlements.all.pro;
+  jest.mocked(readReminderPreferences).mockResolvedValue({ meals: false, trial: true });
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  render(<ReminderProvider><SettingsView /></ReminderProvider>);
+  await waitFor(() => expect(alert).toHaveBeenCalledWith('Trial reminder unavailable', expect.stringContaining('Check your trial end date')));
+  expect(replaceReminders).toHaveBeenCalledWith('reminder-owner', expect.arrayContaining([expect.objectContaining({ kind: 'trial' })]));
+  mockCustomerInfo.entitlements.all.pro = { isActive: true };
+});
