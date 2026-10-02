@@ -23,9 +23,10 @@ jest.mock('../lib/supabase', () => ({ supabase: { auth: {
 } } }));
 const mockRefresh = jest.fn(async () => {});
 const mockCustomerInfo = { entitlements: { all: { pro: { isActive: true } } } };
+let mockCustomerInfoResult: typeof mockCustomerInfo | null = mockCustomerInfo;
 jest.mock('../lib/usePurchases', () => ({ usePurchases: () => ({
   entitled: true, ready: true, refresh: mockRefresh,
-  customerInfo: mockCustomerInfo,
+  customerInfo: mockCustomerInfoResult,
 }) }));
 jest.mock('../lib/notificationSchedule', () => ({
   readReminderPreferences: jest.fn(),
@@ -40,6 +41,7 @@ jest.mock('../lib/devTrialReminderProbe', () => ({ reconcileDevTrialReminderOwne
 
 beforeEach(() => {
   mockAccountId = 'reminder-owner';
+  mockCustomerInfoResult = mockCustomerInfo;
   mockAuthListener = undefined;
   jest.clearAllMocks();
   jest.mocked(readReminderPreferences).mockReset();
@@ -117,6 +119,28 @@ test('cold launch read failure preserves the current account scheduled jobs', as
   expect(screen.getByText('Meal reminders off')).toBeTruthy();
   expect(reconcileReminderOwnership).toHaveBeenCalledWith('reminder-owner');
   expect(replace).not.toHaveBeenCalledWith(null, []);
+});
+
+test('active server entitlement preserves a delivered trial notice while native identity is unresolved', async () => {
+  const now = Date.now();
+  mockCustomerInfoResult = null;
+  jest.mocked(readReminderPreferences).mockResolvedValue({ meals: false, trial: true });
+  const replace = jest.mocked(replaceReminders);
+  const screen = render(<ReminderProvider><SettingsView /></ReminderProvider>);
+  await waitFor(() => expect(readReminderPreferences).toHaveBeenCalledWith('reminder-owner', { throwOnError: true }));
+  await act(async () => { await Promise.resolve(); });
+  expect(replace.mock.calls.some(([id]) => id === 'reminder-owner')).toBe(false);
+  mockCustomerInfo.entitlements.all.pro = {
+    isActive: true, periodType: 'TRIAL', willRenew: true,
+    latestPurchaseDate: new Date(now).toISOString(),
+    expirationDate: new Date(now + 7 * 24 * 3_600_000).toISOString(),
+  } as typeof mockCustomerInfo.entitlements.all.pro;
+  try {
+    mockCustomerInfoResult = mockCustomerInfo;
+    screen.rerender(<ReminderProvider><SettingsView /></ReminderProvider>);
+    await waitFor(() => expect(replace.mock.calls.some(([id, jobs]) =>
+      id === 'reminder-owner' && jobs.some(job => job.kind === 'trial'))).toBe(true));
+  } finally { mockCustomerInfo.entitlements.all.pro = { isActive: true }; }
 });
 
 test('foreground recovery retries failed account ownership cleanup', async () => {
