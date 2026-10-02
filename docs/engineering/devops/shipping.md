@@ -154,6 +154,8 @@ Before reusing a completed same-head status, a nonexecuting identity probe check
 A changed identity requires one new complete round; identity failure withdraws reuse, and a retained needs-coordinator failure still requires diagnosis.
 Existing `lens/<domain>` statuses are derived only from one complete independent result.
 Missing domain results make the entire round incomplete.
+PR patches are generated from the exact checked-out head and immutable target base commit, with a head recheck before execution.
+Changed-input success statuses are withdrawn before replacement execution, including when the finite budget denies that execution.
 Legacy `run-lens.sh` delegates the whole round and cannot run separate routine reviewers.
 The default independent provider is Codex, model `gpt-6-sol`, high reasoning effort.
 Each actual round execution or retry charges the retained issue ledger once; cached projections charge no new execution.

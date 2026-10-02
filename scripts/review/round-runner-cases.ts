@@ -23,8 +23,13 @@ if [ "$1" = pr ] && [ "$2" = view ]; then
   case "$5" in
     title) printf '%s\\n' 'Fixture change' ;;
     body) cat ${JSON.stringify(join(root, 'pr-body'))} ;;
-    headRefOid) git rev-parse HEAD ;;
+    headRefOid)
+      if [ -f ${JSON.stringify(join(root, 'race-head'))} ]; then
+        n=$(cat ${JSON.stringify(join(root, 'race-head'))}); n=$((n+1)); printf '%s' "$n" > ${JSON.stringify(join(root, 'race-head'))}
+        if [ "$n" -gt 1 ]; then printf '%040d\\n' 1; else git rev-parse HEAD; fi
+      else git rev-parse HEAD; fi ;;
     headRefName) git branch --show-current ;;
+    baseRefOid) git rev-parse origin/main ;;
   esac
   exit
 fi
@@ -85,13 +90,14 @@ test("missing required domain refuses every passing projection", () => {
 });
 
 
-test("cache normalizes optional hunk labels but preserves actual patch content", () => {
+test("local and PR share exact committed patch and changed source invalidates cache", () => {
   expect(run().status).toBe(0);
   const diff = git("diff", "--abbrev=8", "origin/main...HEAD");
   writeFileSync(join(root, "pr-diff"), diff.replace(/(@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@).*$/gm, "$1 function example"));
   expect(runPr().status).toBe(0);
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(1);
-  writeFileSync(join(root, "pr-diff"), diff.replace("+export const value = 2;", "+export const value = 3;"));
+  writeFileSync(join(root, "app.ts"), "export const value = 3;\n");
+  git("add", "app.ts"); git("commit", "-qm", "changed actual source");
   expect(runPr().status).toBe(0);
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(2);
 });
@@ -118,6 +124,42 @@ test("current input probe tracks acceptance without executing or charging a revi
   expect(existsSync(calls)).toBe(false);
   const budget = readFileSync(join(root, "budgets/issue-355.jsonl"), "utf8").trim().split("\n").filter(Boolean).map(line => JSON.parse(line));
   expect(budget.filter(row => row.event === "start")).toHaveLength(0);
+});
+
+
+test("PR budget denial withdraws every required result without executing a reviewer", () => {
+  const rows = [
+    { event: "extension", attempt_id: "issue-extension", seconds: 900, issue: 355, risk: "medium", required: true },
+    { event: "recovery_extension", attempt_id: "issue-recovery", seconds: 1800, issue: 355, failed_attempt: "old" },
+    { event: "start", epoch: Date.now() / 1000 - 4500, round_id: "old", lens: "correctness", source_sha: "old", attempt_id: "old" },
+    { event: "finish", elapsed_seconds: 4500, round_id: "old", lens: "correctness", source_sha: "old", attempt_id: "old", outcome: "fail", failure_kind: "timeout" },
+  ];
+  mkdirSync(join(root, "budgets"), { recursive: true });
+  writeFileSync(join(root, "budgets/issue-355.jsonl"), rows.map(row => JSON.stringify(row)).join("\n") + "\n");
+  expect(runPr().status).toBe(1);
+  expect(existsSync(calls)).toBe(false);
+  const posts = readFileSync(join(root, "gh-calls"), "utf8");
+  expect(posts).toContain("state=error");
+  expect(posts).toContain("context=lens/correctness");
+  expect(posts).toContain("context=review/round");
+  expect(posts).not.toContain("state=success");
+});
+
+test("PR push during input gathering cannot launch or publish a wrong-head review", () => {
+  writeFileSync(join(root, "race-head"), "0");
+  const result = runPr();
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain("source changed during input gathering");
+  expect(existsSync(calls)).toBe(false);
+  expect(existsSync(join(root, "gh-calls"))).toBe(false);
+});
+
+test("PR patch comes from exact immutable commits rather than a separately fetched diff", () => {
+  writeFileSync(join(root, "pr-diff"), git("diff", "--abbrev=8", "origin/main...HEAD").replace("+export const value = 2;", "+export const value = 999;"));
+  expect(runPr().status).toBe(0);
+  const prompt = readFileSync(join(root, "prompt"), "utf8");
+  expect(prompt).toContain("+export const value = 2;");
+  expect(prompt).not.toContain("+export const value = 999;");
 });
 
 }

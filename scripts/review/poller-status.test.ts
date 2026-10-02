@@ -16,7 +16,7 @@ test("poller retries the latest review error and leaves completed statuses alone
     cpSync(join(__dirname, "poller.sh"), join(repo, "scripts/review/poller.sh"));
     cpSync(join(__dirname, "poller-status.jq"), join(repo, "scripts/review/poller-status.jq"));
     writeFileSync(join(repo, "scripts/review/tier.mjs"), 'process.stdout.write("medium\\n")\n');
-    writeFileSync(join(repo, "scripts/review/run-review.sh"), 'if [ "$2" = --identity ]; then printf \'{"cache_key":"fixture"}\\n\'; exit; fi\nprintf "%s\\n" "review-round" >> "$FITSY_REVIEW_TEST_CALLS"\n');
+    writeFileSync(join(repo, "scripts/review/run-review.sh"), 'if [ "$2" = --identity ]; then printf \'{"cache_key":"fixture","domains":["correctness","workflow-security"]}\\n\'; exit; fi\nprintf "%s\\n" "review-round" >> "$FITSY_REVIEW_TEST_CALLS"\n');
     writeFileSync(join(bin, "git"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
     writeFileSync(join(bin, "gh"), `#!/bin/sh
 if [ "$1" = pr ] && [ "$2" = list ]; then printf '7 deadbeef\\n'; exit; fi

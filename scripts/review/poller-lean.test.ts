@@ -12,7 +12,7 @@ function fixture() {
   mkdirSync(bin);
   for (const file of ["poller.sh", "poller-status.jq"]) cpSync(join(__dirname, file), join(repo, "scripts/review", file));
   writeFileSync(join(repo, "scripts/review/tier.mjs"), 'process.stdout.write(process.env.REVIEW_TEST_TIER || "medium")\n');
-  writeFileSync(join(repo, "scripts/review/run-review.sh"), 'if [ "$2" = --identity ]; then printf \'{"cache_key":"fixture"}\\n\'; exit; fi\nprintf "%s\\n" "review-round" >> "$REVIEW_TEST_CALLS"\nprintf "%s\\n" "$FITSY_REVIEW_TIMEOUT_SECONDS" >> "$REVIEW_TEST_CALLS.timeouts"\n');
+  writeFileSync(join(repo, "scripts/review/run-review.sh"), 'if [ "$2" = --identity ]; then printf \'{"cache_key":"fixture","domains":["correctness","workflow-security"]}\\n\'; exit; fi\nprintf "%s\\n" "review-round" >> "$REVIEW_TEST_CALLS"\nprintf "%s\\n" "$FITSY_REVIEW_TIMEOUT_SECONDS" >> "$REVIEW_TEST_CALLS.timeouts"\n');
   writeFileSync(join(bin, "git"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
   writeFileSync(join(bin, "gh"), `#!/bin/sh
 if [ "$1" = pr ] && [ "$2" = list ]; then printf '7 deadbeef\\n'; exit; fi
@@ -165,6 +165,22 @@ test("same-head acceptance or harness identity changes invalidate a completed ro
     expect(readFileSync(f.calls, "utf8")).toBe("");
     writeFileSync(f.statuses, JSON.stringify([{ context: "review/round", state: "success", id: 1, created_at: "2026-10-01T00:00:00Z", description: "round-key:old-acceptance-or-harness complete:pass" }]));
     f.tick();
+    expect(readFileSync(f.calls, "utf8")).toBe("review-round\n");
+  } finally { rmSync(f.home, { recursive: true, force: true }); }
+});
+
+
+test("changed-input old success is withdrawn before a denied replacement", () => {
+  const f = fixture();
+  try {
+    writeFileSync(f.statuses, JSON.stringify([{ context: "review/round", state: "success", id: 1, created_at: "2026-10-01T00:00:00Z", description: "round-key:old complete:pass" }]));
+    const runner = join(f.home, "repo/scripts/review/run-review.sh");
+    writeFileSync(runner, readFileSync(runner, "utf8") + "exit 1\n");
+    f.tick();
+    const posts = readFileSync(f.posts, "utf8");
+    expect(posts).toContain("state=pending");
+    for (const context of ["lens/correctness", "lens/workflow-security", "review/round"]) expect(posts).toContain(`context=${context}`);
+    expect(posts).not.toContain("state=success");
     expect(readFileSync(f.calls, "utf8")).toBe("review-round\n");
   } finally { rmSync(f.home, { recursive: true, force: true }); }
 });

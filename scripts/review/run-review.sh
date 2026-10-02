@@ -23,19 +23,25 @@ if [ "$(git rev-parse --is-shallow-repository)" != false ]; then
 fi
 
 if [ "$TARGET" = "--local" ]; then
-  DIFF="$(git diff --abbrev=8 origin/main...HEAD)"
-  TITLE="$(git log -1 --format=%s)"; BODY=""
   HEAD_SHA="$(git rev-parse HEAD)"
+  BASE_SHA="$(git rev-parse origin/main)"
+  DIFF="$(git diff --abbrev=8 "$BASE_SHA...$HEAD_SHA")"
+  TITLE="$(git log -1 --format=%s)"; BODY=""
   HEAD_BRANCH="$(git symbolic-ref --quiet --short HEAD)"
 else
-  DIFF="$("$GH_BIN" pr diff "$TARGET")"
   TITLE="$("$GH_BIN" pr view "$TARGET" --json title --jq .title)"
   BODY="$("$GH_BIN" pr view "$TARGET" --json body --jq .body)"
   HEAD_SHA="$("$GH_BIN" pr view "$TARGET" --json headRefOid --jq .headRefOid)"
   HEAD_BRANCH="$("$GH_BIN" pr view "$TARGET" --json headRefName --jq .headRefName)"
   [ "$(git rev-parse HEAD)" = "$HEAD_SHA" ] || { echo "PR context is not the requested source head" >&2; exit 1; }
+  BASE_SHA="$("$GH_BIN" pr view "$TARGET" --json baseRefOid --jq .baseRefOid)"
+  [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "PR base identity unavailable" >&2; exit 1; }
+  git cat-file -e "$BASE_SHA^{commit}" || git fetch -q origin "$BASE_SHA"
+  DIFF="$(git diff --abbrev=8 "$BASE_SHA...$HEAD_SHA")"
+  [ "$("$GH_BIN" pr view "$TARGET" --json headRefOid --jq .headRefOid)" = "$HEAD_SHA" ] || { echo "PR source changed during input gathering" >&2; exit 1; }
 fi
-# GitHub and local Git differ in optional hunk-heading labels, never code.
+[ "$(git rev-parse HEAD)" = "$HEAD_SHA" ] || { echo "checkout source changed during input gathering" >&2; exit 1; }
+# Optional hunk-heading labels are not code; retain every patch body/index line.
 DIFF="$(printf '%s' "$DIFF" | python3 -I -c 'import re,sys; print(re.sub(r"(?m)^(@@ -[0-9]+(?:,[0-9]+)? \+[0-9]+(?:,[0-9]+)? @@).*$",r"\1",sys.stdin.read()),end="")')"
 [ -n "$DIFF" ] || { echo "empty diff" >&2; exit 1; }
 
@@ -149,16 +155,13 @@ TIER="$(echo "$CHANGED" | node scripts/review/tier.mjs)"
 BUDGET_ARGS+=(--risk "$TIER")
 BUDGET_ARGS+=(--required)
 PROVIDER="${FITSY_REVIEW_PROVIDER:-codex}"
-preflight_error() {
-  echo '[run-review] reviewer configuration failed; diagnose before retrying' >&2
-  if [ "$TARGET" != "--local" ]; then
-    for DOMAIN in $DOMAINS; do
-      "$GH_BIN" api "repos/{owner}/{repo}/statuses/$HEAD_SHA" -f state=error -f context="lens/$DOMAIN" -f description='execution/configuration: independent review incomplete' >/dev/null || true
-    done
-    "$GH_BIN" api "repos/{owner}/{repo}/statuses/$HEAD_SHA" -f state=error -f context=review/round -f description='execution/configuration: independent review incomplete' >/dev/null || true
-  fi
-  exit 1
+incomplete_status() {
+  [ "$TARGET" != --local ] || return 0
+  for CONTEXT in $(printf 'lens/%s\n' $DOMAINS) review/round; do
+    "$GH_BIN" api "repos/{owner}/{repo}/statuses/$HEAD_SHA" -f state=error -f context="$CONTEXT" -f description="execution/$1: independent review incomplete" >/dev/null || true
+  done
 }
+preflight_error() { echo '[run-review] reviewer configuration failed; diagnose before retrying' >&2; incomplete_status configuration; exit 1; }
 MODEL="${FITSY_REVIEW_MODEL:-}"
 if [ -z "$MODEL" ]; then
   case "$PROVIDER" in codex) MODEL=gpt-6-sol ;; claude) if [ "$TIER" = high ]; then MODEL=opus; else MODEL=sonnet; fi ;; *) preflight_error ;; esac
@@ -211,6 +214,7 @@ else
       --timeout-seconds "${FITSY_REVIEW_TIMEOUT_SECONDS:-900}")"; then
     echo "$BUDGET_GRANT" >&2
     echo "[run-review] review time unavailable; no independent reviewer started" >&2
+    incomplete_status budget
     exit 1
   fi
   BUDGET_OPEN=1
@@ -288,7 +292,7 @@ if [ "$TARGET" != --local ]; then
   "$GH_BIN" api "repos/{owner}/{repo}/statuses/$HEAD_SHA" -f state="$ROUND_STATE" -f context=review/round -f description="$ROUND_DESCRIPTION" >/dev/null
 fi
 # Persist source provenance without converting raw adverse findings to passes.
-RESULT_JSON="$(printf '%s' "$RESULT_JSON" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); d["source"]={"head_sha":sys.argv[1],"diff_sha256":sys.argv[2],"cache_key":sys.argv[3]}; print(json.dumps(d))' "$HEAD_SHA" "$DIFF_SHA256" "$KEY")"
+RESULT_JSON="$(printf '%s' "$RESULT_JSON" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); d["source"]={"head_sha":sys.argv[1],"base_sha":sys.argv[4],"diff_sha256":sys.argv[2],"cache_key":sys.argv[3]}; print(json.dumps(d))' "$HEAD_SHA" "$DIFF_SHA256" "$KEY" "$BASE_SHA")"
 echo "$RESULT_JSON"
 if [ "$TARGET" != --local ] && { [ "$N_FINDINGS" -gt 0 ] || [ "$VERDICT" = incomplete ]; }; then
   COMMENT="$(printf '%s' "$RESULT_JSON" | python3 -I scripts/review/format-comment.py)"

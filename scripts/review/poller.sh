@@ -74,6 +74,10 @@ while read -r NUM SHA; do
     CURRENT_KEY="$(printf '%s' "$CURRENT_IDENTITY" | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["cache_key"])')" || continue
     PRIOR_DESCRIPTION="$(printf '%s' "$STATUS_ROWS" | jq -r '[.[] | select(.context == "review/round")] | sort_by(.created_at,.id) | last | .description // ""')"
     case "$PRIOR_DESCRIPTION" in "round-key:$CURRENT_KEY "*) continue ;; esac
+    CURRENT_DOMAINS="$(printf '%s' "$CURRENT_IDENTITY" | python3 -I -c 'import json,sys; print(" ".join(json.load(sys.stdin)["domains"]))')" || continue
+    for CONTEXT in $(printf 'lens/%s\n' $CURRENT_DOMAINS) review/round; do
+      "$GH_BIN" api "repos/{owner}/{repo}/statuses/$SHA" -f state=pending -f context="$CONTEXT" -f description='review inputs changed: replacement complete round required' >/dev/null || continue 2
+    done
     echo "[poller] PR #$NUM: review inputs changed; one complete round required" ;;
   esac
   FITSY_REVIEW_TIMEOUT_SECONDS="$ATTEMPT_TIMEOUT" \
