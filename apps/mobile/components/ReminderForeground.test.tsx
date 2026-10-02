@@ -255,6 +255,31 @@ test('enabling trial reminders after the 48-hour send time explains the missed w
   } finally { mockCustomerInfo.entitlements.all.pro = { isActive: true }; }
 });
 
+test('a late opt-in waits for native subscription details before explaining the missed window', async () => {
+  const now = Date.now();
+  mockCustomerInfoResult = null;
+  jest.mocked(readReminderPreferences).mockResolvedValue({ meals: false, trial: false });
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  const screen = render(<ReminderProvider><TrialToggle /></ReminderProvider>);
+  await waitFor(() => expect(replaceReminders).toHaveBeenCalledWith('reminder-owner', [], undefined));
+  expect(screen.getByText('Trial reminder off')).toBeTruthy();
+  await act(async () => { fireEvent.press(screen.getByTestId('trial-toggle')); });
+  await waitFor(() => expect(saveReminderPreferences).toHaveBeenCalledWith('reminder-owner', { meals: false, trial: true }));
+  expect(alert).not.toHaveBeenCalled();
+  mockCustomerInfo.entitlements.all.pro = {
+    isActive: true, periodType: 'TRIAL', willRenew: true,
+    latestPurchaseDate: new Date(now - 5 * 24 * 3_600_000).toISOString(),
+    expirationDate: new Date(now + 36 * 3_600_000).toISOString(),
+  } as typeof mockCustomerInfo.entitlements.all.pro;
+  try {
+    mockCustomerInfoResult = mockCustomerInfo;
+    screen.rerender(<ReminderProvider><TrialToggle /></ReminderProvider>);
+    await waitFor(() => expect(alert).toHaveBeenCalledWith('Trial reminder time passed',
+      expect.stringContaining('cannot schedule it now')));
+    expect(alert).toHaveBeenCalledTimes(1);
+  } finally { mockCustomerInfo.entitlements.all.pro = { isActive: true }; }
+});
+
 test('a due reminder with revoked device permission reports uncertain delivery', async () => {
   const now = Date.now();
   mockCustomerInfo.entitlements.all.pro = {

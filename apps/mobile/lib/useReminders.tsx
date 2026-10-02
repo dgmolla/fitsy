@@ -8,10 +8,20 @@ import { usePurchases } from './usePurchases';
 import { DEFAULT_REMINDER_PREFERENCES, REMINDER_PREFIX, planReminders, trialReminderDate, type ReminderPreferences } from './notificationPlan';
 import { readReminderPreferences, readScheduledReminders, reconcileReminderOwnership, replaceReminders, reminderDestination, saveReminderPreferences, subscribeReminderPreferences } from './notificationSchedule';
 import { reconcileDevTrialReminderOwnership } from './devTrialReminderProbe';
+import type { PurchasesEntitlementInfo } from 'react-native-purchases';
 
 interface ReminderContextValue { userId: string | null; preferences: ReminderPreferences; scheduled: { kind: string; date: string }[]; save: (value: ReminderPreferences) => Promise<void> }
 const ReminderContext = createContext<ReminderContextValue | null>(null);
 const reportFailure = (error: unknown) => console.warn('[reminders]', error instanceof Error ? error.message : error);
+const missedTrialReminderWindow = (subscription: PurchasesEntitlementInfo | undefined, now: number) => {
+  const expiration = Date.parse(subscription?.expirationDate ?? '');
+  const start = Date.parse(subscription?.latestPurchaseDate ?? '');
+  return !!subscription?.isActive && subscription.periodType === 'TRIAL' && subscription.willRenew &&
+    Number.isFinite(expiration) && Number.isFinite(start) && expiration - start > 2 * 24 * 3_600_000 &&
+    expiration > now && trialReminderDate(new Date(expiration)).getTime() <= now;
+};
+const explainMissedTrialReminder = () => Alert.alert('Trial reminder time passed',
+  'The 48-hour reminder time for this trial has passed, so Fitsy cannot schedule it now. Check your trial end date and renewal in subscription settings.');
 
 export function ReminderProvider({ children }: { children: React.ReactNode }) {
   const { entitled, customerInfo, ready, refresh } = usePurchases();
@@ -24,6 +34,7 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
   const userRef = useRef(account.id); userRef.current = account.id;
   const scheduledAccountRef = useRef<string | null | undefined>(undefined);
   const failedTrialNoticeRef = useRef<string | null>(null);
+  const pendingTrialOptInRef = useRef<string | null>(null);
   const preferences = loaded?.id === account.id ? loaded.values : DEFAULT_REMINDER_PREFERENCES;
 
   useEffect(() => {
@@ -69,6 +80,11 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
     const userId = account.ready && ready && loaded?.id === account.id ? account.id : undefined;
     const now = new Date();
     const subscription = customerInfo?.entitlements.all.pro;
+    if (pendingTrialOptInRef.current && pendingTrialOptInRef.current !== account.id) pendingTrialOptInRef.current = null;
+    if (pendingTrialOptInRef.current && customerInfo) {
+      pendingTrialOptInRef.current = null;
+      if (preferences.trial && entitled === true && missedTrialReminderWindow(subscription, now.getTime())) explainMissedTrialReminder();
+    }
     const nativeUnresolved = !!userId && entitled === true && preferences.trial && !customerInfo;
     const plan = planReminders({ now, userId: account.id, entitled: entitled === true, preferences, subscription });
     const trial = userId ? plan.find(item => item.kind === 'trial') : undefined;
@@ -140,20 +156,14 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
   async function save(values: ReminderPreferences) {
     if (!account.id) throw new Error('Sign in to change reminders.');
     const id = account.id;
-    const subscription = customerInfo?.entitlements.all.pro;
-    const expiration = Date.parse(subscription?.expirationDate ?? '');
-    const start = Date.parse(subscription?.latestPurchaseDate ?? '');
-    const now = Date.now();
-    const lateTrialOptIn = !preferences.trial && values.trial && entitled === true && subscription?.isActive &&
-      subscription.periodType === 'TRIAL' && subscription.willRenew && Number.isFinite(expiration) &&
-      Number.isFinite(start) && expiration - start > 2 * 24 * 3_600_000 && expiration > now &&
-      trialReminderDate(new Date(expiration)).getTime() <= now;
+    const newTrialOptIn = !preferences.trial && values.trial && entitled === true;
     await saveReminderPreferences(id, values);
     trackReminderAction({ action: 'preferences_changed', ...values });
     if (userRef.current === id) {
       setLoaded({ id, values });
-      if (lateTrialOptIn) Alert.alert('Trial reminder time passed',
-        'The 48-hour reminder time for this trial has passed, so Fitsy cannot schedule it now. Check your trial end date and renewal in subscription settings.');
+      if (!values.trial) pendingTrialOptInRef.current = null;
+      else if (newTrialOptIn && !customerInfo) pendingTrialOptInRef.current = id;
+      else if (newTrialOptIn && missedTrialReminderWindow(customerInfo?.entitlements.all.pro, Date.now())) explainMissedTrialReminder();
     }
   }
   return <ReminderContext.Provider value={{ userId: account.id, preferences, scheduled: scheduled.id === account.id ? scheduled.values : [], save }}>{children}</ReminderContext.Provider>;
