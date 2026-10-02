@@ -34,6 +34,18 @@ test.each([
   expect(view.queryByText(/Your Fitsy plan/)).toBeNull();
 });
 
+test('a morning trial still labels its quiet-hours reminder as two days before charge', () => {
+  const morning = new Date(2026, 9, 1, 8);
+  const terms = purchaseTerms(product('P2W', '$79.99'), true);
+  const charge = projectedChargeDate(terms, morning)!;
+  const reminder = trialReminderDate(charge);
+  expect(reminder).toEqual(new Date(2026, 9, 12, 19));
+  expect(charge.getTime() - reminder.getTime()).toBeGreaterThanOrEqual(48 * 3_600_000);
+  const view = render(<PaywallOfferTimeline terms={terms} now={morning} reminderAvailability="enabled" />);
+  expect(view.getByText('In 12 days')).toBeTruthy();
+  expect(view.getByText('In 14 days')).toBeTruthy();
+});
+
 test('reminder states do not promise delivery without permission and opt-in', () => {
   const terms = purchaseTerms(product('P1W', '$9.99', 'P1M'), true);
   const view = render(<PaywallOfferTimeline terms={terms} now={now} reminderAvailability="permission-off" />);

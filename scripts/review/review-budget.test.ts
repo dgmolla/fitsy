@@ -216,6 +216,12 @@ test("the later #428 grant retains timed-out attempts and is finite and issue-bo
     "--issue", "428"], { encoding: "utf8" });
   expect(JSON.parse(status.stdout)).toMatchObject({ cap_seconds: 10500,
     liberal_grant_issue: 428, unfinished_attempts: [] });
+  const oversized = spawnSync("python3", [script, "begin", "--ledger", issueLedger,
+    "--issue", "428", "--round-id", "new-head", "--lens", "correctness",
+    "--source-sha", "new-head", "--attempt-id", "oversized",
+    "--timeout-seconds", "3600"], { encoding: "utf8" });
+  expect(oversized.status).toBe(1);
+  expect(JSON.parse(oversized.stdout).reason).toMatch(/1200/);
   expect(spawnSync("python3", [script, "status", "--ledger", issueLedger,
     "--issue", "429"]).status).toBe(1);
   seed([priorExtension, priorGrant, ...history("older", 2360.545)], issueLedger);

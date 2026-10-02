@@ -123,6 +123,7 @@ The `grant-authorized` action accepts it only once on the original issue ledger 
 Other issues retain the normal policy.
 The later [issue #428 authorization](https://github.com/dgmolla/fitsy/issues/428#issuecomment-5938480556) adds one further 7,200-second grant after the three retained 300-second incomplete attempts, yielding a 10,500-second cumulative ceiling.
 `grant-liberal` accepts that grant once on the original issue ledger with the authorization URL and completed baseline; it never resets history or applies to other issues.
+While this grant is active, individual issue #428 attempts are capped at 1,200 seconds; the separately authorized 1,800-second exception requires a diagnosed timeout and a source-bound control update before use.
 
 ## Jev advisory experiment
 

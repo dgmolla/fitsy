@@ -263,6 +263,8 @@ def main():
                     result.update(allowed=False, reason="duplicate attempt")
                 elif not 1 <= args.timeout_seconds <= 3600:
                     result.update(allowed=False, reason="review timeout must be between 1 and 3600 seconds")
+                elif total["liberal_grant_issue"] == LIBERAL_GRANT["issue"] and args.timeout_seconds > 1200:
+                    result.update(allowed=False, reason="issue 428 review attempts are limited to 1200 seconds without a diagnosed timeout")
                 else:
                     grant = min(args.timeout_seconds, math.floor(total["remaining_seconds"] - CLOSEOUT_SECONDS))
                     if grant < 1:

@@ -34,6 +34,14 @@ function elapsedCalendarDays(now: Date, date: Date): number {
   return Math.max(0, Math.round((day(date) - day(now)) / 86_400_000));
 }
 
+function roundedUpLocalDays(now: Date, date: Date): number {
+  const clock = (value: Date) => value.getHours() * 3_600_000 + value.getMinutes() * 60_000
+    + value.getSeconds() * 1000 + value.getMilliseconds();
+  // A quiet-hours adjustment may deliver on the prior calendar date, but a
+  // partial day still belongs to the offer's next day in the countdown.
+  return elapsedCalendarDays(now, date) + Number(clock(date) > clock(now));
+}
+
 export const PAYWALL_BENEFITS = [
   'Discover meals in Los Angeles',
   'Find nearby options for your goals',
@@ -67,7 +75,7 @@ export function PaywallOfferTimeline({ terms, now, reminderAvailability = 'unava
 
   const reminderDate = canOfferTrialReminder(terms) ? trialReminderDate(chargeDate) : null;
   const usefulReminder = reminderDate && reminderDate > now && reminderDate < chargeDate;
-  const reminderDay = usefulReminder ? elapsedCalendarDays(now, reminderDate) : null;
+  const reminderDay = usefulReminder ? roundedUpLocalDays(now, reminderDate) : null;
   const chargeDay = elapsedCalendarDays(now, chargeDate);
   const reminderCopy = reminderAvailability === 'enabled' && usefulReminder
     ? "We'll send you a reminder that your trial is ending soon"
