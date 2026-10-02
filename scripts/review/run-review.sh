@@ -5,7 +5,9 @@ REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$REPO_ROOT"
 TARGET="${1:?pr number or --local}"; shift
 DOMAIN_ARGS=()
+PROBE=0
 while [ "$#" -gt 0 ]; do
+  if [ "$1" = --identity ]; then PROBE=1; shift; continue; fi
   [ "$1" = --add-domain ] && [ "$#" -ge 2 ] || { echo 'use --add-domain <domain> to add sensitive coverage' >&2; exit 1; }
   DOMAIN_ARGS+=(--add-domain "$2"); shift 2
 done
@@ -20,7 +22,6 @@ if [ "$(git rev-parse --is-shallow-repository)" != false ]; then
   exit 1
 fi
 
-# ── Gather the diff and context ─────────────────────────────────────────────
 if [ "$TARGET" = "--local" ]; then
   DIFF="$(git diff --abbrev=8 origin/main...HEAD)"
   TITLE="$(git log -1 --format=%s)"; BODY=""
@@ -38,7 +39,6 @@ fi
 DIFF="$(printf '%s' "$DIFF" | python3 -I -c 'import re,sys; print(re.sub(r"(?m)^(@@ -[0-9]+(?:,[0-9]+)? \+[0-9]+(?:,[0-9]+)? @@).*$",r"\1",sys.stdin.read()),end="")')"
 [ -n "$DIFF" ] || { echo "empty diff" >&2; exit 1; }
 
-# All callers share one issue-bound candidate, independent of source SHA or clone.
 if [ "$TARGET" = "--local" ]; then
   ISSUE="$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1])).get("issue", ""))' \
     "$REPO_ROOT/.evidence/delivery/binding.json" 2>/dev/null || true)"
@@ -132,14 +132,12 @@ review_exit() {
 trap review_exit EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM HUP
-if [ -f "$TELEMETRY_FILE" ] && [ -n "$TELEMETRY_ROOT" ]; then
+if [ "$PROBE" = 0 ] && [ -f "$TELEMETRY_FILE" ] && [ -n "$TELEMETRY_ROOT" ]; then
   TELEMETRY_ATTEMPT="$(cd "$TELEMETRY_ROOT" && node "$TELEMETRY_FILE" auto-begin --phase review --producer review-round \
     --round-id "$HEAD_SHA" --lens "$LENS" --source-sha "$HEAD_SHA")" || TELEMETRY_ATTEMPT=""
 fi
 
-# ── Tier and review provider ───────────────────────────────────────────────────────────
-# both sides of the diff: a PR that only deletes or renames a high-tier file
-# must still classify high (lens finding, 2026-09-07)
+# Classify both sides, including deleted and renamed sensitive files.
 CHANGED="$(echo "$DIFF" | grep -E '^(\+\+\+ b/|--- a/|rename (from|to) )' | sed -E 's#^\+\+\+ b/##; s#^--- a/##; s#^rename (from|to) ##' | grep -v '^/dev/null$' | sort -u)"
 DOMAINS="$(printf '%s\n' "$CHANGED" | python3 -I scripts/review/review-domains.py "${DOMAIN_ARGS[@]}")"
 DOMAIN_FILES=()
@@ -174,12 +172,15 @@ if ! IDENTITY="$(python3 -I scripts/review/execute-review.py --identity "$PROVID
 # deadlines stay in its provenance, not the semantic reviewer/cache identity.
 CACHE_IDENTITY="$(printf '%s' "$IDENTITY" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); d.pop("timeout_seconds"); print(json.dumps(d,sort_keys=True))')"
 
-# ── Cache ───────────────────────────────────────────────────────────────────
 # Key on reviewed content and the bound release brief. PR title/body can change
 # without altering acceptance, while an issue acceptance edit must rerun review.
 KEY="$(printf '%s' "$DIFF" | cat - "${DOMAIN_FILES[@]}" REVIEW.md "$REPO_ROOT/scripts/review/run-review.sh" "$REPO_ROOT/scripts/review/review-domains.py" "$REPO_ROOT/scripts/review/review-round.py" "$REPO_ROOT/scripts/review/execute-review.py" "$REPO_ROOT/scripts/review/extract-verdict.py" "$REPO_ROOT/scripts/review/review-gate.py" "$REPO_ROOT/scripts/review/review-budget.py" <(printf '%s' "$DOMAINS:$CACHE_IDENTITY") <(printf '%s' "$ISSUE:$ISSUE_BRIEF") | shasum -a 256 | cut -d' ' -f1)"
 DIFF_SHA256="$(printf '%s' "$DIFF" | shasum -a 256 | cut -d' ' -f1)"
 CACHE_FILE="$CACHE_DIR/$KEY.json"
+if [ "$PROBE" = 1 ]; then
+  python3 -I -c 'import json,sys; print(json.dumps({"cache_key":sys.argv[1],"domains":sys.argv[2].split(),"head_sha":sys.argv[3]}))' "$KEY" "$DOMAINS" "$HEAD_SHA"
+  exit 0
+fi
 if [ -f "$CACHE_FILE" ]; then
   TELEMETRY_CACHE_HIT=1
   echo "[run-review] cache hit ($KEY)" >&2
@@ -283,7 +284,7 @@ for DOMAIN in $DOMAINS; do
 done
 if [ "$TARGET" != --local ]; then
   if [ "$VERDICT" = incomplete ]; then ROUND_STATE=error; ROUND_DESCRIPTION="execution/${FAILURE_KIND:-invalid_output}: independent review incomplete"
-  else ROUND_STATE=$([ "$ROUND_GATE" = pass ] && echo success || echo failure); ROUND_DESCRIPTION="complete domains: $DOMAINS"; fi
+  else ROUND_STATE=$([ "$ROUND_GATE" = pass ] && echo success || echo failure); ROUND_DESCRIPTION="round-key:$KEY complete:$ROUND_GATE"; fi
   "$GH_BIN" api "repos/{owner}/{repo}/statuses/$HEAD_SHA" -f state="$ROUND_STATE" -f context=review/round -f description="$ROUND_DESCRIPTION" >/dev/null
 fi
 # Persist source provenance without converting raw adverse findings to passes.

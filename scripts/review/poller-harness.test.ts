@@ -51,10 +51,11 @@ test("installed launcher retains trusted main outside a PR-mutated clone", () =>
     expect(readFileSync(join(home, "Library/LaunchAgents/com.fitsy.review-poller.plist"), "utf8")).toContain(installed);
     expect(execFileSync("bash", [installed], { env, encoding: "utf8" }).trim()).toBe("trusted-launcher");
     const plist = join(home, "Library/LaunchAgents/com.fitsy.review-poller.plist");
-    const configured = readFileSync(plist, "utf8").replace("<dict>\n    <key>PATH", "<dict>\n    <key>FITSY_REVIEW_PROVIDER</key><string>codex</string>\n    <key>PATH");
+    const configured = execFileSync("python3", ["-I", "-c", "import plistlib,sys; p=sys.argv[1]; d=plistlib.load(open(p,'rb')); d['ProgramArguments']=['/bin/bash',sys.argv[2]]; d['EnvironmentVariables']['FITSY_REVIEW_MODEL']='retained-model'; print(plistlib.dumps(d).decode(),end='')", plist, join(repo, "scripts/review/poller.sh")], { encoding: "utf8" });
     writeFileSync(plist, configured);
     execFileSync("bash", [join(__dirname, "install-poller.sh"), "--refresh-runtime"], { env, stdio: "pipe" });
-    expect(readFileSync(plist, "utf8")).toBe(configured);
+    const refreshed = execFileSync("python3", ["-I", "-c", "import json,plistlib,sys; print(json.dumps(plistlib.load(open(sys.argv[1],'rb'))))", plist], { encoding: "utf8" });
+    expect(JSON.parse(refreshed)).toMatchObject({ ProgramArguments: ["/bin/bash", installed], EnvironmentVariables: { FITSY_REVIEW_MODEL: "retained-model" } });
     expect(execFileSync("bash", [installed], { env, encoding: "utf8" }).trim()).toBe("trusted-launcher");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

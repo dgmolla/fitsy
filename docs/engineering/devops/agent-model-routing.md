@@ -39,7 +39,7 @@ For the local review poller, include these entries in its LaunchAgent `Environme
 ```
 
 Read back the loaded service configuration and confirm the actual provider/model in its next reviewer receipt before declaring rollout complete.
-Use `install-poller.sh --refresh-runtime` to refresh the trusted executable while preserving the service environment and enabled state.
+Use `install-poller.sh --refresh-runtime` to refresh the trusted executable and migrate a legacy launcher while preserving the service environment and loaded state.
 A merge alone does not prove the installed dispatcher or poller adopted the new runner; retain installer and runtime receipts.
 Record any supported model substitution or escalation in the issue handoff.
 Choose reasoning effort to match the problem and preserve canonical review-adapter settings.

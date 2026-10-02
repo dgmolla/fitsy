@@ -32,7 +32,10 @@ while read -r NUM SHA; do
     continue
   fi
   STATE="$(printf '%s' "$STATUS_ROWS" | jq -r --arg lens review/round -f scripts/review/poller-status.jq)"
-  case "$STATE" in success|failure) continue ;; esac
+  PRIOR_DESCRIPTION="$(printf '%s' "$STATUS_ROWS" | jq -r '[.[] | select(.context == "review/round")] | sort_by(.created_at,.id) | last | .description // ""')"
+  if [ "$STATE" = failure ]; then
+    case "$PRIOR_DESCRIPTION" in needs-coordinator:*) continue ;; esac
+  fi
   ATTEMPT_TIMEOUT="${FITSY_REVIEW_TIMEOUT_SECONDS:-900}"
   if [ "$STATE" = error ]; then
     ERRORS="$(printf '%s' "$STATUS_ROWS" | jq '[.[] | select(.context == "review/round" and .state == "error")] | length')"
@@ -60,6 +63,19 @@ while read -r NUM SHA; do
     echo "[poller] PR #$NUM: trusted harness restoration failed; skipping this tick"
     continue
   fi
+  case "$STATE" in success|failure)
+    if ! CURRENT_IDENTITY="$(bash scripts/review/run-review.sh "$NUM" --identity)"; then
+      echo "[poller] PR #$NUM: current review-input identity unavailable; no verdict reuse"
+      for CONTEXT in lens/correctness review/round; do
+        "$GH_BIN" api "repos/{owner}/{repo}/statuses/$SHA" -f state=error -f context="$CONTEXT" -f description='execution/input_identity: independent review identity unavailable' >/dev/null || true
+      done
+      continue
+    fi
+    CURRENT_KEY="$(printf '%s' "$CURRENT_IDENTITY" | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["cache_key"])')" || continue
+    PRIOR_DESCRIPTION="$(printf '%s' "$STATUS_ROWS" | jq -r '[.[] | select(.context == "review/round")] | sort_by(.created_at,.id) | last | .description // ""')"
+    case "$PRIOR_DESCRIPTION" in "round-key:$CURRENT_KEY "*) continue ;; esac
+    echo "[poller] PR #$NUM: review inputs changed; one complete round required" ;;
+  esac
   FITSY_REVIEW_TIMEOUT_SECONDS="$ATTEMPT_TIMEOUT" \
     bash scripts/review/run-review.sh "$NUM" || echo "[poller] PR #$NUM review round -> fail"
   # Reconcile once after the round, including concurrent or failed closeouts.

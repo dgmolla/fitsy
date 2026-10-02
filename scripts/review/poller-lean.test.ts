@@ -12,7 +12,7 @@ function fixture() {
   mkdirSync(bin);
   for (const file of ["poller.sh", "poller-status.jq"]) cpSync(join(__dirname, file), join(repo, "scripts/review", file));
   writeFileSync(join(repo, "scripts/review/tier.mjs"), 'process.stdout.write(process.env.REVIEW_TEST_TIER || "medium")\n');
-  writeFileSync(join(repo, "scripts/review/run-review.sh"), 'printf "%s\\n" "review-round" >> "$REVIEW_TEST_CALLS"\nprintf "%s\\n" "$FITSY_REVIEW_TIMEOUT_SECONDS" >> "$REVIEW_TEST_CALLS.timeouts"\n');
+  writeFileSync(join(repo, "scripts/review/run-review.sh"), 'if [ "$2" = --identity ]; then printf \'{"cache_key":"fixture"}\\n\'; exit; fi\nprintf "%s\\n" "review-round" >> "$REVIEW_TEST_CALLS"\nprintf "%s\\n" "$FITSY_REVIEW_TIMEOUT_SECONDS" >> "$REVIEW_TEST_CALLS.timeouts"\n');
   writeFileSync(join(bin, "git"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
   writeFileSync(join(bin, "gh"), `#!/bin/sh
 if [ "$1" = pr ] && [ "$2" = list ]; then printf '7 deadbeef\\n'; exit; fi
@@ -111,7 +111,7 @@ test("two incomplete same-head reviews stop automatic retries and request coordi
     expect(readFileSync(f.posts, "utf8")).toContain("needs-coordinator");
     expect(readFileSync(f.posts, "utf8")).toContain("state=failure");
     const posts = readFileSync(f.posts, "utf8");
-    writeFileSync(f.statuses, JSON.stringify([error(1), error(2), { ...error(3), state: "failure" }]));
+    writeFileSync(f.statuses, JSON.stringify([error(1), error(2), { ...error(3), state: "failure", description: "needs-coordinator: independent review requires diagnosed execution recovery" }]));
     f.tick();
     expect(readFileSync(f.posts, "utf8")).toBe(posts);
     writeFileSync(f.statuses, "not JSON");
@@ -153,5 +153,18 @@ test("separate legacy lens successes do not replace one complete round receipt",
     f.tick();
     expect(readFileSync(f.calls, "utf8")).toBe("review-round\n");
     expect(readFileSync(f.calls + ".timeouts", "utf8")).toBe("900\n");
+  } finally { rmSync(f.home, { recursive: true, force: true }); }
+});
+
+
+test("same-head acceptance or harness identity changes invalidate a completed round", () => {
+  const f = fixture();
+  try {
+    writeFileSync(f.statuses, JSON.stringify([{ context: "review/round", state: "success", id: 1, created_at: "2026-10-01T00:00:00Z", description: "round-key:fixture complete:pass" }]));
+    f.tick();
+    expect(readFileSync(f.calls, "utf8")).toBe("");
+    writeFileSync(f.statuses, JSON.stringify([{ context: "review/round", state: "success", id: 1, created_at: "2026-10-01T00:00:00Z", description: "round-key:old-acceptance-or-harness complete:pass" }]));
+    f.tick();
+    expect(readFileSync(f.calls, "utf8")).toBe("review-round\n");
   } finally { rmSync(f.home, { recursive: true, force: true }); }
 });

@@ -32,34 +32,39 @@ trap 'rm -f "$STAGED_SCRIPT"' EXIT
 git -C "$REVIEW_HOME/repo" show origin/main:scripts/review/poller.sh > "$STAGED_SCRIPT"
 chmod 700 "$STAGED_SCRIPT"
 mv "$STAGED_SCRIPT" "$SCRIPT"
-# Refresh executable only, preserving enabled state and persistent provider settings.
-if [ "${1:-}" = --refresh-runtime ]; then
-  echo "refreshed trusted runtime: $SCRIPT"
+# Preserve existing provider/settings when upgrading a legacy mutable-clone
+# launcher. Refresh does not start an absent or disabled service.
+REFRESH="${1:-}"
+WAS_LOADED=0
+if launchctl print "gui/$(id -u)/$LABEL" >/dev/null 2>&1; then WAS_LOADED=1; fi
+python3 -I - "$PLIST" "$SCRIPT" "$LABEL" "$REVIEW_HOME" "$REFRESH" <<'PYTHON'
+import os,plistlib,sys,tempfile
+from pathlib import Path
+path,script,label,review_home,mode=sys.argv[1:]
+p=Path(path)
+value=plistlib.loads(p.read_bytes()) if p.exists() else {}
+if mode == '--refresh-runtime' and not value:
+    raise SystemExit(0)
+value.update({'Label':label,'ProgramArguments':['/bin/bash',script]})
+if mode != '--refresh-runtime':
+    value.update({'StartInterval':180,'RunAtLoad':True,'StandardOutPath':review_home+'/launchd.log','StandardErrorPath':review_home+'/launchd.log'})
+    env=value.setdefault('EnvironmentVariables',{})
+    env.setdefault('PATH',str(Path.home())+'/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin')
+    env.setdefault('FITSY_REVIEW_PROVIDER','codex')
+    env.setdefault('FITSY_REVIEW_MODEL','gpt-6-sol')
+    env.setdefault('FITSY_REVIEW_REASONING_EFFORT','high')
+with tempfile.NamedTemporaryFile('wb',dir=p.parent,delete=False) as out:
+    plistlib.dump(value,out); out.flush(); os.fsync(out.fileno()); temporary=Path(out.name)
+temporary.chmod(0o600); os.replace(temporary,p)
+PYTHON
+if [ "$REFRESH" = --refresh-runtime ]; then
+  if [ "$WAS_LOADED" = 1 ]; then
+    launchctl bootout "gui/$(id -u)/$LABEL"
+    launchctl bootstrap "gui/$(id -u)" "$PLIST"
+  fi
+  echo "refreshed trusted runtime and launcher; prior loaded state=$WAS_LOADED"
   exit 0
 fi
-
-cat > "$PLIST" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key><string>$LABEL</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>/bin/bash</string>
-    <string>$SCRIPT</string>
-  </array>
-  <key>StartInterval</key><integer>180</integer>
-  <key>RunAtLoad</key><true/>
-  <key>EnvironmentVariables</key>
-  <dict>
-    <key>PATH</key><string>$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
-  </dict>
-  <key>StandardOutPath</key><string>$REVIEW_HOME/launchd.log</string>
-  <key>StandardErrorPath</key><string>$REVIEW_HOME/launchd.log</string>
-</dict>
-</plist>
-PLIST
 
 launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
 launchctl bootstrap "gui/$(id -u)" "$PLIST"

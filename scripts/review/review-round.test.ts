@@ -37,3 +37,10 @@ test("sensitive routing cannot be reduced by an additive override", () => {
   const invalid = spawnSync("python3", ["-I", join(__dirname, "review-domains.py"), "--add-domain", "none"], { input: paths, encoding: "utf8" });
   expect(invalid.status).not.toBe(0);
 });
+
+
+test.each(["shipping.md", "review-dispositions.md", "agent-model-routing.md", "task-management.md", "autonomous-shipping.md"])("review and release policy %s requires security in the same round", file => {
+  const result = spawnSync("python3", ["-I", join(__dirname, "review-domains.py")], { input: `docs/engineering/devops/${file}\n`, encoding: "utf8" });
+  expect(result.status).toBe(0);
+  expect(result.stdout.trim()).toBe("correctness workflow-security");
+});

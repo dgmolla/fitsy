@@ -149,7 +149,9 @@ An existing status from another provider still satisfies the same lens; a cache 
 The implementing agent must not author its own independent review verdict.
 A matching post-PR pass reuses the complete local round rather than invoking the provider again.
 The cache binds every required domain and instruction, provider identity, acceptance brief and patch; only optional hunk-heading labels are normalized.
-The trusted main poller invokes the canonical runner once and publishes `review/round` after all required compatibility statuses.
+The trusted main poller invokes the reviewer once and publishes `review/round` with its complete input identity after all required compatibility statuses.
+Before reusing a completed same-head status, a nonexecuting identity probe checks current acceptance, routing, instructions, provider and patch inputs.
+A changed identity requires one new complete round; identity failure withdraws reuse, and a retained needs-coordinator failure still requires diagnosis.
 Existing `lens/<domain>` statuses are derived only from one complete independent result.
 Missing domain results make the entire round incomplete.
 Legacy `run-lens.sh` delegates the whole round and cannot run separate routine reviewers.
