@@ -243,6 +243,10 @@ test("malformed disposition and missing required test fail closed", () => {
   const missing = run();
   expect(missing.status).toBe(1);
   expect(missing.stderr).toContain("missing required test receipt");
+  const cached = spawnSync("bash", ["scripts/review/run-review.sh", "--local", "--cached-only"], { cwd: root, env: { ...env, FITSY_REVIEW_MODEL: "fixture-model", FITSY_REVIEW_PROVIDER: "claude" }, encoding: "utf8" });
+  expect(cached.status).toBe(1);
+  expect(cached.stderr).toContain("missing required test receipt");
+  expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(1);
 });
 test("stale source-bound receipt and changed review inputs cannot reuse a pass", () => {
   const { disposition, receiptPath } = failingReview("P2");

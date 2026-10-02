@@ -31,6 +31,7 @@ The runner selects every required domain in one independent invocation.
 Use additive `--add-domain workflow-security` for sensitive controls outside path routing.
 The trusted issue/candidate-bound domain registry retains added coverage across local and PR replacements; automatic routing can only add to it.
 Round reuse requires the same immutable head and base commits, normalized patch, acceptance, required domains and reviewer policy.
+The poller revalidates live disposition and required-test receipts through `--cached-only`; it cannot execute another provider when the complete cache is absent.
 For automated reviews, the installer or rollout owner must set the same three variables in the scheduler's persistent environment before enabling it; interactive shell exports do not reach launchd.
 For the local review poller, include these entries in its LaunchAgent `EnvironmentVariables` dictionary:
 

@@ -6,7 +6,9 @@ cd "$REPO_ROOT"
 TARGET="${1:?pr number or --local}"; shift
 DOMAIN_ARGS=()
 PROBE=0
+CACHED_ONLY=0
 while [ "$#" -gt 0 ]; do
+  if [ "$1" = --cached-only ]; then CACHED_ONLY=1; shift; continue; fi
   if [ "$1" = --identity ]; then PROBE=1; shift; continue; fi
   [ "$1" = --add-domain ] && [ "$#" -ge 2 ] || { echo 'use --add-domain <domain> to add sensitive coverage' >&2; exit 1; }
   DOMAIN_ARGS+=(--add-domain "$2"); shift 2
@@ -138,7 +140,7 @@ review_exit() {
 trap review_exit EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM HUP
-if [ "$PROBE" = 0 ] && [ -f "$TELEMETRY_FILE" ] && [ -n "$TELEMETRY_ROOT" ]; then
+if [ "$PROBE" = 0 ] && [ "$CACHED_ONLY" = 0 ] && [ -f "$TELEMETRY_FILE" ] && [ -n "$TELEMETRY_ROOT" ]; then
   TELEMETRY_ATTEMPT="$(cd "$TELEMETRY_ROOT" && node "$TELEMETRY_FILE" auto-begin --phase review --producer review-round \
     --round-id "$HEAD_SHA" --lens "$LENS" --source-sha "$HEAD_SHA")" || TELEMETRY_ATTEMPT=""
 fi
@@ -189,6 +191,11 @@ if [ -f "$CACHE_FILE" ]; then
   echo "[run-review] cache hit ($KEY)" >&2
   RESULT_JSON="$(python3 -I scripts/review/review-round.py "$DOMAINS" < "$CACHE_FILE")"
 else
+  if [ "$CACHED_ONLY" = 1 ]; then
+    echo "[run-review] required complete review cache unavailable; no execution authorized" >&2
+    incomplete_status cache_unavailable
+    exit 1
+  fi
   ATTEMPT_ID="$(python3 -I -c 'import uuid;print(uuid.uuid4())')"
   PROMPT_FILE="$(mktemp)"
   RAW_FILE="$(mktemp)"
@@ -294,7 +301,7 @@ fi
 # Persist source provenance without converting raw adverse findings to passes.
 RESULT_JSON="$(printf '%s' "$RESULT_JSON" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); d["source"]={"head_sha":sys.argv[1],"base_sha":sys.argv[4],"diff_sha256":sys.argv[2],"cache_key":sys.argv[3]}; print(json.dumps(d))' "$HEAD_SHA" "$DIFF_SHA256" "$KEY" "$BASE_SHA")"
 echo "$RESULT_JSON"
-if [ "$TARGET" != --local ] && { [ "$N_FINDINGS" -gt 0 ] || [ "$VERDICT" = incomplete ]; }; then
+if [ "$TARGET" != --local ] && [ "$CACHED_ONLY" = 0 ] && { [ "$N_FINDINGS" -gt 0 ] || [ "$VERDICT" = incomplete ]; }; then
   COMMENT="$(printf '%s' "$RESULT_JSON" | python3 -I scripts/review/format-comment.py)"
   "$GH_BIN" pr comment "$TARGET" --body "$COMMENT" >/dev/null
 fi

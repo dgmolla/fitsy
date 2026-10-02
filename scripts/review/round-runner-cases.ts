@@ -195,4 +195,11 @@ test.each(["binary", "mode"])("%s-only sensitive changes route and execute one r
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(1);
 });
 
+test("cache-only revalidation cannot execute a missing independent result", () => {
+  const result = spawnSync("bash", ["scripts/review/run-review.sh", "--local", "--cached-only"], { cwd: root, env: { ...fixture.env(), FITSY_REVIEW_MODEL: "fixture-model", FITSY_REVIEW_PROVIDER: "claude" }, encoding: "utf8" });
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain("cache unavailable");
+  expect(existsSync(calls)).toBe(false);
+});
+
 }
