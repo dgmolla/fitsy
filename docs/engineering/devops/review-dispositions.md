@@ -93,6 +93,8 @@ Read the full PR body for the unique issue field before limiting metadata in the
 The append-only ledger imports the checkout's historical `.evidence/review-budget.jsonl`, any explicit `FITSY_REVIEW_BUDGET_LEDGER` or `FITSY_REVIEW_BUDGET_IMPORT_LEDGER`, and in PR mode the historical `${FITSY_REVIEW_HOME:-$HOME/.fitsy-review}/budgets/PR_NUMBER.jsonl`.
 Those originals remain unchanged; imported events retain their original exception, adoption and closeout flags and elapsed time.
 Copies of the same events count once, while conflicting copies fail closed.
+Imported checkout history cannot introduce capacity events or close an attempt that remains unfinished in the shared issue ledger.
+Apply an authorized grant or reconcile an unfinished attempt through the trusted issue ledger commands after inspecting its original execution record.
 The old exception/adoption/closeout permits do not extend the cumulative cap.
 Do not point a resumed candidate at an empty budget location or omit known prior ledgers.
 

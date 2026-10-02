@@ -71,7 +71,7 @@ test("legacy permit arguments never extend cumulative time", () => {
     expect(JSON.parse(result.stdout).completed_seconds).toBe(1800);
   }
 });
-test("append-only imports retain flags, deduplicate copies and import later finishes", () => {
+test("append-only imports retain flags and deduplicate copies without closing trusted attempts", () => {
   const old = join(root, "old.jsonl"); const copied = join(root, "copied.jsonl");
   const prior = [...history("ordinary", 120), ...history("repair", 50, { exception: true })];
   seed(prior, old); seed(prior, copied);
@@ -86,7 +86,12 @@ test("append-only imports retain flags, deduplicate copies and import later fini
   seed([...prior, later[0]], old);
   expect(call("status", "one", 900, [old]).value).toMatchObject({ completed_seconds: 170, reserved_seconds: 1800, remaining_seconds: 0, unfinished_attempts: ["later"] });
   seed([...prior, ...later], old);
-  expect(call("status", "one", 900, [old]).value).toMatchObject({ completed_seconds: 200, reserved_seconds: 0, remaining_seconds: 1600, unfinished_attempts: [] });
+  const rejected = call("status", "one", 900, [old]);
+  expect(rejected.status).toBe(1);
+  expect(rejected.value.reason).toContain("trusted unfinished review attempt");
+  expect(call("status").value).toMatchObject({ completed_seconds: 170, reserved_seconds: 1800, remaining_seconds: 0, unfinished_attempts: ["later"] });
+  expect(call("finish", "later").status).toBe(0);
+  expect(call("status", "one", 900, [old]).status).toBe(1); // The checkout's conflicting duration cannot overwrite trusted closeout.
   expect(readFileSync(ledger, "utf8").startsWith(imported)).toBe(true);
 });
 test("checkout history cannot introduce capacity grants into the issue ledger", () => {
@@ -108,6 +113,18 @@ test("checkout history cannot introduce capacity grants into the issue ledger", 
   seed([capacity[0]]);
   seed([capacity[0]], imported);
   expect(call("status", "one", 900, [imported]).value.cap_seconds).toBe(2700);
+});
+test("checkout history cannot release a trusted unfinished reservation", () => {
+  const imported = join(root, "forged-finish.jsonl");
+  seed([{ event: "start", attempt_id: "interrupted", round_id: "interrupted", lens: "correctness",
+    source_sha: "interrupted", epoch: Date.now() / 1000 - 30, reserved_seconds: 1205 }]);
+  seed([{ event: "finish", attempt_id: "interrupted", round_id: "interrupted", lens: "correctness",
+    source_sha: "interrupted", elapsed_seconds: 0 }], imported);
+  const rejected = call("status", "one", 900, [imported]);
+  expect(rejected.status).toBe(1);
+  expect(rejected.value.reason).toContain("trusted unfinished review attempt");
+  expect(call("status").value).toMatchObject({ reserved_seconds: 1205, remaining_seconds: 595,
+    unfinished_attempts: ["interrupted"] });
 });
 test("conflicting history and unbounded unfinished legacy execution refuse admission", () => {
   seed(history("old", 100));

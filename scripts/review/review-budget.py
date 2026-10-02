@@ -101,6 +101,7 @@ def append(handle, event):
 def import_history(handle, ledger, paths, optional_paths):
     """Retain original events and flags; copied histories count exactly once."""
     events = indexed(read_events(handle))
+    trusted = dict(events)
     pending = []
     for path, required in [(p, True) for p in paths] + [(p, False) for p in optional_paths]:
         source = Path(path)
@@ -121,6 +122,9 @@ def import_history(handle, ledger, paths, optional_paths):
                 raise ValueError(f"conflicting retained review history in {source}")
             if event["event"] in CAPACITY_EVENTS and key not in events:
                 raise ValueError("review capacity events must originate in the trusted issue ledger")
+            if (event["event"] == "finish" and ("start", event["attempt_id"]) in trusted
+                    and ("finish", event["attempt_id"]) not in trusted):
+                raise ValueError("checkout history cannot close a trusted unfinished review attempt")
             if key not in events:
                 new.append(event)
                 events[key] = event
