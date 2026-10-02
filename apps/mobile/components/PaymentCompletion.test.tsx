@@ -1,16 +1,19 @@
 jest.unmock('react-native');
 jest.unmock('expo-router');
-import { Alert } from 'react-native';
+import { Alert, AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
 import Purchases, { type CustomerInfo, type PurchasesOffering } from 'react-native-purchases';
 import { act, fireEvent, renderRouter, waitFor } from 'expo-router/testing-library';
 import { getPaywallIntent, rememberPaywallIntent } from '../lib/paywallIntent';
 import { ONBOARDING_COMPLETE_KEY } from '../lib/onboardingCompletion';
+import { saveReminderPreferences } from '../lib/notificationSchedule';
 import { paymentCompletionRoutes } from './paymentCompletionRoutes';
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
 jest.mock('expo-font', () => ({ isLoaded: () => true, loadAsync: jest.fn() }));
+jest.mock('expo-notifications', () => ({ ...jest.requireActual('expo-notifications'), getPermissionsAsync: jest.fn() }));
 const mockCapture = jest.fn();
 let mockAuthSession: { access_token: string; user: { id: string } } | null = null;
 const mockAuthListeners = new Set<(event: string, session: typeof mockAuthSession) => void>();
@@ -50,6 +53,7 @@ const routes = paymentCompletionRoutes(() => { notificationMounts++; });
 const originalFetch = global.fetch;
 beforeEach(async () => {
   jest.useRealTimers();
+  jest.mocked(Notifications.getPermissionsAsync).mockReset().mockResolvedValue({ status: 'undetermined' } as Notifications.NotificationPermissionsStatus);
   mockAuthSession = { access_token: 'test-token', user: { id: 'buyer' } };
   mockAuthListeners.clear(); await AsyncStorage.clear();
   notificationMounts = 0; nativeUserId = null; mockCapture.mockClear();
@@ -80,6 +84,30 @@ test('an anonymous paywall view is attributed once across plan changes', async (
   await waitFor(() => expect(mockCapture).toHaveBeenCalledWith('paywall_experiment_exposed', expect.objectContaining({ paywall_variant: 'B', layout_variant: 'trial_timeline' })));
   await act(async () => { fireEvent.press(screen.getByTestId('paywall-plan-monthly')); });
   expect(mockCapture.mock.calls.filter(([name]) => name === 'paywall_experiment_exposed')).toHaveLength(1);
+});
+
+test('a stale granted permission read cannot restore a reminder promise after foreground denial', async () => {
+  const trialAnnual = { ...annual, product: { ...annual.product, introPrice: monthly.product.introPrice } };
+  const trialOffering = { ...offering, annual: trialAnnual, availablePackages: [trialAnnual] } as unknown as PurchasesOffering;
+  jest.spyOn(Purchases, 'getOfferings').mockResolvedValue({ current: trialOffering, all: { default: trialOffering } });
+  jest.spyOn(Purchases, 'checkTrialOrIntroductoryPriceEligibility').mockResolvedValue({ annual: { status: 2, description: 'Eligible' } });
+  await saveReminderPreferences('buyer', { meals: false, trial: true });
+  let resolveFirst!: (value: Notifications.NotificationPermissionsStatus) => void;
+  const permission = jest.mocked(Notifications.getPermissionsAsync)
+    .mockImplementationOnce(() => new Promise(resolve => { resolveFirst = resolve; }))
+    .mockResolvedValue({ status: 'denied' } as Notifications.NotificationPermissionsStatus);
+  const listeners: Array<(state: string) => void> = [];
+  jest.spyOn(AppState, 'addEventListener').mockImplementation((_, listener) => {
+    listeners.push(listener as (state: string) => void);
+    return { remove: jest.fn() } as never;
+  });
+  const screen = renderRouter(routes, { initialUrl: '/welcome/payment' });
+  await waitFor(() => expect(screen.getByTestId('paywall-offer-timeline')).toBeTruthy());
+  await waitFor(() => expect(permission).toHaveBeenCalled());
+  await act(async () => { listeners.forEach(listener => listener('active')); });
+  await waitFor(() => expect(screen.getByText('Notifications off. Enable them in settings.')).toBeTruthy());
+  await act(async () => resolveFirst({ status: 'granted' } as Notifications.NotificationPermissionsStatus));
+  expect(screen.queryByText("We'll send you a reminder that your trial is ending soon")).toBeNull();
 });
 
 test('signing in while payment is focused records the authenticated exposure once', async () => {

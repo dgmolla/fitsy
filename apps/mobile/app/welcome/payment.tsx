@@ -69,13 +69,16 @@ export default function PaymentScreen() {
   useEffect(() => {
     if (!focused || !userId) { setReminderState(null); return; }
     let active = true;
+    let request = 0;
     const refresh = () => {
+      const latest = ++request;
+      setReminderState(null);
       void Promise.all([getNotificationPermission(), readReminderPreferences(userId, { throwOnError: true })])
         .then(([permission, preferences]) => {
-          if (active) setReminderState({ userId, availability: permission === 'denied' ? 'permission-off'
+          if (active && latest === request) setReminderState({ userId, availability: permission === 'denied' ? 'permission-off'
             : permission === 'granted' && preferences.trial ? 'enabled' : 'opt-in' });
         })
-        .catch(() => { if (active) setReminderState({ userId, availability: 'unavailable' }); });
+        .catch(() => { if (active && latest === request) setReminderState({ userId, availability: 'unavailable' }); });
     };
     refresh();
     const listener = AppState.addEventListener('change', state => { if (state === 'active') refresh(); });
