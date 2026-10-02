@@ -190,3 +190,14 @@ test('variant B refreshes the projected charge date when checkout crosses midnig
     expect(screen.getByText("You'll be charged on October 8, 2026")).toBeTruthy();
   } finally { jest.useRealTimers(); }
 });
+
+test('variant B refreshes the scheduled reminder day when checkout crosses 9 a.m.', () => {
+  jest.useFakeTimers();
+  jest.setSystemTime(new Date(2026, 9, 1, 8, 59, 59));
+  try {
+    const screen = render(<PaywallView {...props()} variant="B" />);
+    expect(screen.getByText('In 4 days')).toBeTruthy();
+    act(() => { jest.advanceTimersByTime(2000); });
+    expect(screen.getByText('In 5 days')).toBeTruthy();
+  } finally { jest.useRealTimers(); }
+});

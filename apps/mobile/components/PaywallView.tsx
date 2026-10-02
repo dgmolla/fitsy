@@ -44,7 +44,11 @@ export function PaywallView(props: Props) {
       const current = new Date();
       setNow(current);
       const nextMidnight = new Date(current.getFullYear(), current.getMonth(), current.getDate() + 1);
-      timeout = setTimeout(refresh, Math.max(1000, nextMidnight.getTime() - current.getTime()));
+      const nextMorning = new Date(current);
+      nextMorning.setHours(9, 0, 0, 0);
+      if (nextMorning <= current) nextMorning.setDate(nextMorning.getDate() + 1);
+      const nextRefresh = Math.min(nextMidnight.getTime(), nextMorning.getTime());
+      timeout = setTimeout(refresh, Math.max(1000, nextRefresh - current.getTime()));
     };
     refresh();
     const listener = AppState.addEventListener('change', state => {
