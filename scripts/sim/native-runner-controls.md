@@ -2,7 +2,8 @@
 
 Use the build, run and finish sequence in [shipping.md](../../docs/engineering/devops/shipping.md).
 Set `FITSY_SIM_OWNER` and pass the owned simulator UDID.
-The runner checks source, app and public configuration hashes, simulator state, installed app, disk headroom and the owned Metro process before starting each Maestro flow.
+The runner checks resolved native/profile identity, app and installed-app hashes, separate JavaScript and public configuration hashes, simulator state, disk headroom and the owned Metro process before starting each Maestro flow.
+The [native binary reuse cookbook](../../docs/engineering/devops/native-binary-reuse.md) lists the exact compile cases and example decisions.
 Development and review `run` invocations default to `--mode=development`, which executes the same Maestro assertions and screenshots without starting the explicit recorder.
 Use `--mode=final-candidate` once the PR candidate is stable for publication evidence.
 Add `--record-video` when a complete video is specifically requested; final candidate runs otherwise retain command receipts and screenshots without starting the explicit recorder.
@@ -67,7 +68,7 @@ Inspect both attempts, then write a JSON diagnosis with `cause`, `counterfactual
 Do not use a diagnosis file as a substitute for an actual repair or native recheck.
 
 Adopt a new runner commit only when the current simulator owner has finished its active native phase and released the claim.
-Record the exact commit and rebuild when the build recipe, mobile source or public configuration identity changes.
+Record the exact commit for acceptance, and rebuild only when the resolved native inputs, required profile or verified artifact integrity demands it.
 Runner and test changes invalidate evidence bound to a prior PR head, so generate a fresh report and publish `product-flow/local` for the exact PR head when the shipping plan requires product evidence.
 The publisher rejects development and requested-video reports when final proof is required.
 It rejects symlinked artifacts and parent directories, then compares each archived file's extracted bytes with the validated source, including every complete flow video when recording was requested.

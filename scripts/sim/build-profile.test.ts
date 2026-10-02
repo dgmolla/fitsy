@@ -66,3 +66,19 @@ test.each([true, false])('custom account/scenario names remain usable with reset
   const r = fixture('paywall-cancel-retry-account', reset);
   expect(r.status).toBe(0); expect(r.stdout).toBe('paywall-cancel-retry-account');
 });
+
+test('an old embedded Release bundle cannot claim current JavaScript or public configuration', () => {
+  const script = `import { embeddedBundleCompatibility } from ${JSON.stringify(resolve(__dirname, 'build-profile.mjs'))};
+    const release={buildMode:'embedded-release',jsHash:'old-js',configHash:'old-config'};
+    process.stdout.write(JSON.stringify([
+      embeddedBundleCompatibility(release,'old-js','old-config'),
+      embeddedBundleCompatibility(release,'new-js','old-config'),
+      embeddedBundleCompatibility(release,'old-js','new-config'),
+      embeddedBundleCompatibility({...release,buildMode:'owned-metro-test-store'},'new-js','new-config')]));`;
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8' });
+  expect(result.status).toBe(0);
+  const decisions = JSON.parse(result.stdout);
+  expect(decisions.map((item: {compatible: boolean}) => item.compatible)).toEqual([true, false, false, true]);
+  expect(decisions[1].reason).toContain('JavaScript');
+  expect(decisions[2].reason).toContain('configuration');
+});

@@ -52,7 +52,9 @@ export function inputHash(cwd = root, mobileOnly = false) {
   // Working contents matter; a report remains reusable after an evidence-only commit.
   const paths = git(['ls-files', '-z', '--cached', '--others', '--exclude-standard'], cwd).split('\0')
     .filter(p => p && !p.startsWith('.evidence/') && !p.endsWith('.md'))
-    .filter(p => !mobileOnly || /^(apps\/mobile\/(?!e2e\/)|packages\/shared\/|package(-lock)?\.json$)/.test(p));
+    .filter(p => mobileOnly === 'js'
+      ? /^(apps\/mobile\/(?!e2e\/|ios\/|android\/)|packages\/shared\/|package(-lock)?\.json$)/.test(p) && !/(?:\.test\.|\.spec\.|__tests__\/)/.test(p)
+      : !mobileOnly || /^(apps\/mobile\/(?!e2e\/)|packages\/shared\/|package(-lock)?\.json$)/.test(p));
   const hash = createHash('sha256');
   for (const path of [...new Set(paths)].sort()) {
     hash.update(path + '\0');
@@ -98,17 +100,20 @@ export function isPlayableVideo(file) {
   }
 }
 
-export function validate(report, plan, hash, directory, now = Date.now(), cwd = root, nativeHash = inputHash(cwd, true), mode = 'final-candidate') {
+export function validate(report, plan, hash, directory, now = Date.now(), cwd = root, nativeHash = null, mode = 'final-candidate') {
   insist(report.version === 1 && report.inputHash === hash, 'missing or stale source/test identity');
   insist(['development', 'final-candidate', 'requested-video'].includes(mode) && report.evidenceMode === mode,
     `Expected ${mode} evidence; development or requested-video proof cannot satisfy final publication`);
   const time = Date.parse(report.finishedAt);
   insist(Number.isFinite(time) && time <= now && now - time <= 24 * 3600_000, 'evidence expired or invalid timestamp');
   insist(report.result === 'pass', 'product flow did not pass');
-  for (const field of ['appHash', 'nativeSourceHash', 'bundleHash', 'backendRevision', 'simulator', 'os', 'storeMode', 'fixture', 'maestroVersion']) {
+  for (const field of ['appHash', 'bundleHash', 'backendRevision', 'simulator', 'os', 'storeMode', 'fixture', 'maestroVersion']) {
     insist(typeof report[field] === 'string' && report[field].trim() && !/^(unknown|none|n\/a)$/i.test(report[field]), `missing ${field}`);
   }
-  insist(report.nativeSourceHash === nativeHash, 'native build was not produced from these inputs');
+  insist(Boolean(report.nativeIdentity?.hash || report.nativeSourceHash), 'missing native binary identity');
+  if (report.nativeIdentity) insist(typeof report.jsHash === 'string' && report.jsHash.length === 64,
+    'missing JavaScript identity');
+  if (nativeHash) insist((report.nativeIdentity?.hash || report.nativeSourceHash) === nativeHash, 'native build was not produced from these inputs');
   insist(!plan.categories.includes('billing') || report.storeMode !== 'unconfigured', 'billing requires a configured store');
   insist(/^https:\/\/dev\.fitsy\.org\/?$|^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(report.backend), 'product tests require an identified dev backend');
   insist(Array.isArray(report.flows) && report.flows.length > 0, 'no flows executed');

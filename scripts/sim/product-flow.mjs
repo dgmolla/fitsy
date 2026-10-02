@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Local-only runner. Build and command receipts are generated, never hand-stamped.
 import { execFileSync, spawn } from 'node:child_process';
-import { readFileSync, writeFileSync, mkdirSync, readdirSync, rmSync, existsSync, openSync, closeSync, renameSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, rmSync, existsSync, openSync, closeSync, renameSync, realpathSync, copyFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { createHash } from 'node:crypto';
 import { resolve, relative, join, dirname, delimiter } from 'node:path';
@@ -9,7 +9,8 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { root, inputHash, changedPaths, impact, digest, validate, baseline, repoEnv } from '../verify/product-flow.mjs';
 import { backendRevision } from './backend-identity.mjs';
-import { buildProfile, bundleDelegate, fixtureLabel, metroRoute } from './build-profile.mjs';
+import { buildProfile, bundleDelegate, embeddedBundleCompatibility, fixtureLabel, metroRoute } from './build-profile.mjs';
+import { nativeIdentity, profileIdentity, nativeBuildDecision, sealReceipt } from './native-identity.mjs';
 import { admitDisk, appendRecordedFlowFailure, applyCapturePolicy, archiveFailureEvidence, completeMaestroRun, event, latestMaestroLog, nearestFailure, needsDiagnosis, recordFlowOutcome, recordRunFailure, requireMetro, runRecordedFlow } from './runner-controls.mjs';
 import { matchesFinalCandidate, runSelection } from './evidence-mode.mjs';
 import { closeoutXCTestAttachments, snapshotXCTestAttachments } from './xctest-attachments.mjs';
@@ -112,7 +113,7 @@ async function stopMetro() {
 }
 async function metroBundle(m) {
   assert(processIdentity(m.pid) === m.processIdentity, 'The identified Metro process is no longer running');
-  assert(m.nativeSourceHash === inputHash(root, true) && m.configHash === environment().configHash, 'Metro source/configuration changed; start a fresh run');
+  assert(m.jsHash === inputHash(root, 'js') && m.configHash === environment().configHash, 'Metro JavaScript/configuration changed; start a fresh owned server');
   const response = await fetch(`http://localhost:${m.port}${metroRoute}`, { signal: AbortSignal.timeout(120_000) });
   assert(response.ok, `Metro bundle failed: HTTP ${response.status}`);
   return digest(Buffer.from(await response.arrayBuffer()));
@@ -132,7 +133,7 @@ async function startMetro(r) {
   closeSync(fd);
   await new Promise((ready, reject) => { child.once('spawn', ready); child.once('error', reject); });
   child.unref();
-  const m = { pid: child.pid, port: r.metroPort, processIdentity: processIdentity(child.pid), nativeSourceHash: r.nativeSourceHash, configHash: r.configHash };
+  const m = { pid: child.pid, port: r.metroPort, processIdentity: processIdentity(child.pid), jsHash: inputHash(root, 'js'), configHash: environment().configHash };
   save(metroFile, m);
   try {
     for (let attempt = 0; attempt < 120; attempt++) {
@@ -155,24 +156,66 @@ async function checkBundle(report) {
   if (report.buildMode === 'owned-metro-test-store') {
     assert(report.metro && report.bundleHash === await metroBundle(report.metro), 'Metro served a different bundle after testing');
   }
+  else {
+    const built = receipt(report.simulator);
+    assert(embeddedBundleCompatibility(built, inputHash(root, 'js'), environment().configHash).compatible &&
+      report.bundleHash === built.bundleHash,
+      'Embedded Release bundle is stale or changed; fresh JavaScript evidence requires a compatible owned Metro binary');
+  }
 }
-function receipt() {
-  const r = read(join(buildDir, 'receipt.json'));
-  assert(r.buildRecipeHash === recipeHash(), 'Rebuild: the simulator build recipe changed');
-  assert(r.nativeSourceHash === inputHash(root, true), 'Rebuild: mobile inputs changed');
-  assert(r.configHash === environment().configHash, 'Rebuild: public configuration changed');
-  assert(r.appHash === treeHash(r.app), 'Rebuild: app bundle changed');
+function installedApp(udid, appHash) {
+  const installed = run('xcrun', ['simctl', 'get_app_container', udid, 'com.fitsy.mobile', 'app']);
+  assert(installed && existsSync(installed) && treeHash(installed) === appHash,
+    'Installed simulator app differs from the verified native artifact; reinstall the intact artifact');
+}
+function existingReceipt() {
+  try { return read(join(buildDir, 'receipt.json')); }
+  catch (error) {
+    if (error.code === 'ENOENT') return null;
+    if (error instanceof SyntaxError) return { invalidReceipt: error.message };
+    throw error;
+  }
+}
+function intact(r) {
+  try { return r?.app && realpathSync(r.app).startsWith(realpathSync(buildDir) + '/') &&
+    r.appHash === treeHash(r.app); }
+  catch { return false; }
+}
+function buildDecision(udid, profile) {
+  const r = existingReceipt();
+  const identity = device(udid);
+  const native = nativeIdentity(root);
+  const compatibility = profileIdentity(profile, identity);
+  return { r, identity, native, compatibility,
+    decision: nativeBuildDecision({ receipt: r, native, profile: compatibility, appIntact: intact(r) }) };
+}
+function receipt(udid) {
+  const r = existingReceipt();
+  assert(r, 'Native artifact missing: run build with the required profile');
+  const profile = buildProfile(r.storeMode === 'test-store', process.env);
+  const { decision } = buildDecision(udid || r.simulator, profile);
+  assert(!decision.rebuild, `Native build required: ${decision.reasons.join('; ')}`);
   return r;
 }
-async function build(udid, testStore) {
-  const config = environment(), identity = device(udid), source = inputHash(root, true);
+async function build(udid, testStore, forceReason = null) {
+  const config = environment();
   const profile = buildProfile(testStore, process.env), buildRecipeHash = recipeHash();
+  const { r: previous, identity, native, compatibility, decision } = buildDecision(udid, profile);
+  if (!decision.rebuild && !forceReason) {
+    console.log(JSON.stringify({ action: 'reuse', app: previous.app, appHash: previous.appHash,
+      nativeIdentity: native.hash, profileIdentity: compatibility.hash, reason: 'verified compatible native artifact' }));
+    return true;
+  }
+  const reasons = forceReason ? [`operator forced diagnostic rebuild: ${forceReason}`, ...decision.reasons] : decision.reasons;
+  assert(reasons.length > 0, 'Native compile requires a changed input, missing artifact, or recorded diagnostic reason');
+  console.log(JSON.stringify({ action: 'rebuild', reasons, nativeIdentity: native.hash, profileIdentity: compatibility.hash }));
   mkdirSync(resumeDir, { recursive: true });
   const admission = admitDisk(root, 'Native build');
-  event(join(resumeDir, 'runner-events.jsonl'), { type: 'build-admission', ...admission, simulator: udid, source });
+  event(join(resumeDir, 'runner-events.jsonl'), { type: 'build-admission', ...admission, simulator: udid, reasons, nativeIdentity: native.hash });
   claim();
   try {
     mkdirSync(buildDir, { recursive: true });
+    if (previous) copyFileSync(join(buildDir, 'receipt.json'), join(resumeDir, `native-receipt-superseded-${Date.now()}.json`));
     // Keyless Release is useful for baseline navigation, but cannot verify billing.
     const env = { ...repoEnv(), EXPO_NO_DOTENV: '1', NODE_ENV: testStore ? 'development' : 'production', FITSY_ALLOW_MISSING_PUBLIC_ENV: '1', CI: '1', FORCE_BUNDLING: '1', SKIP_BUNDLING: '' };
     const packageFile = join(mobile, 'package.json'), packageBefore = readFileSync(packageFile);
@@ -210,12 +253,18 @@ async function build(udid, testStore) {
     const entitlementsFile = join(buildDir, `Build/Intermediates.noindex/Fitsy.build/${profile.configuration}-iphonesimulator/Fitsy.build/Fitsy.app-Simulated.xcent`);
     const entitlements = JSON.parse(run('plutil', ['-convert', 'json', '-o', '-', entitlementsFile]));
     assert(entitlements['application-identifier']?.endsWith('.com.fitsy.mobile'), 'Simulator keychain application entitlement is missing');
-    assert(source === inputHash(root, true), 'Build changed source inputs; inspect changes and rebuild');
+    const builtNative = nativeIdentity(root);
+    const changedDuringBuild = native.hash !== builtNative.hash;
+    if (changedDuringBuild) event(join(resumeDir, 'runner-events.jsonl'), { type: 'resolved-native-graph-after-pods',
+      before: native.hash, after: builtNative.hash, simulator: udid });
     assert(buildRecipeHash === recipeHash(), 'Build recipe changed during compilation');
     const bundleHash = digest(readFileSync(join(app, 'main.jsbundle')));
-    save(join(buildDir, 'receipt.json'), { ...config, ...identity, nativeSourceHash: source, app, appHash: treeHash(app), bundleHash,
-      ...profile, buildRecipeHash, simulatorApplicationIdentifier: entitlements['application-identifier'], builtAt: new Date().toISOString() });
+    save(join(buildDir, 'receipt.json'), sealReceipt({ ...config, ...identity, nativeIdentity: builtNative,
+      profileIdentity: compatibility, jsHash: inputHash(root, 'js'), app, appHash: treeHash(app), bundleHash,
+      ...profile, buildRecipeHash, simulatorApplicationIdentifier: entitlements['application-identifier'],
+      buildReasons: reasons, builtAt: new Date().toISOString() }));
     console.log('Built identified simulator app. Next: run <UDID> [flow names].');
+    return false;
   } finally { release(); }
 }
 async function execute(udid, names, mode) {
@@ -257,10 +306,13 @@ async function execute(udid, names, mode) {
     try { run('ffprobe', ['-version'], { timeout: 5000 }); run('ffmpeg', ['-version'], { timeout: 5000 }); }
     catch { throw new Error('ffprobe and ffmpeg are required to validate recorded product-flow video before running Maestro'); }
   }
-  const r = receipt(), identity = device(udid), server = backend();
+  const r = receipt(udid), identity = device(udid), server = backend();
+  const embedded = embeddedBundleCompatibility(r, inputHash(root, 'js'), environment().configHash);
+  assert(embedded.compatible, `${embedded.reason}; use a compatible owned Metro profile or build an appropriate embedded artifact`);
   const fixture = fixtureLabel(process.env.FITSY_FIXTURE, process.env.FITSY_SIM_RESET_KEYCHAIN === udid);
   const hash = inputHash(), plan = impact(changedPaths(process.env.FITSY_DIFF_BASE));
-  assert(!plan.categories.includes('billing') || r.storeMode !== 'unconfigured', 'Billing evidence requires a configured store');
+  const currentStoreMode = buildProfile(r.buildMode === 'owned-metro-test-store', process.env).storeMode;
+  assert(!plan.categories.includes('billing') || currentStoreMode !== 'unconfigured', 'Billing evidence requires a configured store');
   const selected = [...new Set([...baseline, ...names])];
   const flowSources = selected.map(name => {
     assert(/^[a-z0-9-]+$/.test(name), 'Invalid flow name');
@@ -273,10 +325,10 @@ async function execute(udid, names, mode) {
   if (mode.publishable && !process.env.FITSY_SIM_RESET_KEYCHAIN && existsSync(existingReport)) {
     const { report: previous, error: priorError } = readPreviousReportForReuse(existingReport);
     if (priorError) console.log(`Existing final-candidate evidence cannot be reused: ${priorError}. A fresh run will archive it.`);
-    if (matchesFinalCandidate(previous, { udid, appHash: r.appHash, configHash: r.configHash,
+    if (matchesFinalCandidate(previous, { udid, appHash: r.appHash, configHash: environment().configHash,
       backendDeployment: server.backendDeployment, fixture, flows: flowSources, recordVideo: mode.recordVideo })) {
       try {
-        validate(previous, plan, hash, out, Date.now(), root, inputHash(root, true), mode.name);
+        validate(previous, plan, hash, out, Date.now(), root, r.nativeIdentity.hash, mode.name);
         await checkBundle(previous);
         console.log('Reusing valid final-candidate evidence for this source, app, backend, simulator and flow selection.');
         return true;
@@ -312,7 +364,10 @@ async function execute(udid, names, mode) {
     event(timeline, { type: 'run-start', simulator: udid, inputHash: hash, buildHash: r.appHash, admission, evidenceMode: mode.name,
       videoRequested: mode.recordVideo });
     const { app, ...buildIdentity } = r;
-    const report = { version: 1, ...buildIdentity, ...identity, ...server, inputHash: hash, result: 'running', startedAt: new Date().toISOString(),
+    const report = { version: 1, ...buildIdentity, storeMode: currentStoreMode,
+      ...identity, ...server, inputHash: hash,
+      jsHash: inputHash(root, 'js'), configHash: environment().configHash,
+      result: 'running', startedAt: new Date().toISOString(),
       fixture, keychainReset: false, evidenceMode: mode.name, videoRequested: mode.recordVideo,
       maestroVersion: run(process.env.MAESTRO_BIN || 'maestro', ['--version']), flows: [], exploration: [] };
     save(join(out, 'report.json'), report);
@@ -328,10 +383,13 @@ async function execute(udid, names, mode) {
       save(join(out, 'report.json'), report);
     }
     run('xcrun', ['simctl', 'install', udid, app]);
-    assert(run('xcrun', ['simctl', 'get_app_container', udid, 'com.fitsy.mobile', 'app']), 'Installed app is absent; rebuild and reinstall before Maestro');
+    installedApp(udid, r.appHash);
     for (const flow of flowSources) {
-      assert(hash === inputHash() && r.appHash === treeHash(app) && r.configHash === environment().configHash, 'Source, app or configuration changed before Maestro; rebuild');
-      if (r.buildMode === 'owned-metro-test-store') await requireMetro(report.metro, { processIdentity, sourceHash: r.nativeSourceHash, configHash: r.configHash });
+      assert(hash === inputHash() && r.appHash === treeHash(app) && report.configHash === environment().configHash,
+        'Acceptance inputs, artifact or public configuration changed before Maestro; start a fresh run');
+      installedApp(udid, r.appHash);
+      if (r.buildMode === 'owned-metro-test-store') await requireMetro(report.metro, { processIdentity,
+        sourceHash: report.jsHash, configHash: report.configHash });
       const dir = join(out, flow.name); mkdirSync(dir);
       const flowBytes = readFileSync(join(root, flow.source), 'utf8');
       event(timeline, { type: 'flow-start', flow: flow.name, expected: 'all required commands complete', sourceHash: flow.sourceHash });
@@ -426,7 +484,8 @@ async function execute(udid, names, mode) {
   } finally { release(); }
 }
 async function finish(walkthrough) {
-  const report = read(join(out, 'report.json')), r = receipt();
+  const report = read(join(out, 'report.json'));
+  const r = receipt(report.simulator);
   assert(report.result === 'awaiting-walkthrough', 'A completed deterministic run is required');
   assert(report.inputHash === inputHash() && report.appHash === r.appHash, 'Candidate changed after tests');
   assert(report.backendDeployment === backend().backendDeployment, 'Backend changed after tests');
@@ -440,13 +499,19 @@ async function finish(walkthrough) {
   }
   report.result = 'pass'; report.finishedAt = new Date().toISOString();
   const result = validate(report, impact(changedPaths(process.env.FITSY_DIFF_BASE)), inputHash(), out,
-    Date.now(), root, inputHash(root, true), report.evidenceMode);
+    Date.now(), root, r.nativeIdentity.hash, report.evidenceMode);
   save(join(out, 'report.json'), report); console.log(JSON.stringify(result));
 }
 async function check() {
-  const report = read(join(out, 'report.json')), r = receipt();
-  assert(report.appHash === r.appHash && report.configHash === r.configHash, 'Build/configuration changed after tests');
+  const report = read(join(out, 'report.json'));
+  const r = receipt(report.simulator);
+  assert(report.appHash === r.appHash && report.configHash === environment().configHash,
+    'Artifact or public configuration changed after tests');
+  assert(report.jsHash === inputHash(root, 'js'), 'JavaScript changed after tests');
+  if (r.buildMode === 'embedded-release') assert(report.jsHash === r.jsHash && report.bundleHash === r.bundleHash,
+    'Embedded Release bundle cannot provide evidence for newer JavaScript');
   assert(report.backendDeployment === backend().backendDeployment, 'Dev deployment changed after tests');
+  installedApp(report.simulator, r.appHash);
   await checkBundle(report);
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -475,8 +540,13 @@ try {
     awake.unref();
   }
   if (command === 'build') {
-    assert(args.length === 1 || (args.length === 2 && args[1] === '--test-store'), 'build UDID [--test-store]');
-    await build(args[0], args[1] === '--test-store');
+    const force = args.indexOf('--force-rebuild');
+    const reason = args.find(arg => arg.startsWith('--reason='))?.slice('--reason='.length);
+    assert(args.length >= 1 && args.every((arg, index) => index === 0 || arg === '--test-store' ||
+      arg === '--force-rebuild' || arg.startsWith('--reason=')), 'build UDID [--test-store] [--force-rebuild --reason=WHY]');
+    assert((force >= 0) === Boolean(reason) && (!reason || reason.trim().length >= 8),
+      'Diagnostic force rebuild requires --force-rebuild and a recorded --reason of at least eight characters');
+    reused = await build(args[0], args.includes('--test-store'), reason);
   }
   else if (command === 'run') { const selected = runSelection(args); reused = await execute(selected.udid, selected.names, selected.mode) === true; }
   else if (command === 'finish') await finish(args[0]);
