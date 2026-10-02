@@ -247,3 +247,13 @@ test("automatic retry doubles the actual granted deadline instead of configurati
   expect(retry.status).toBe(0);
   expect(JSON.parse(retry.stdout)).toMatchObject({ timeout_seconds: 120, completed_seconds: 2700, recovery_issue: 435 });
 });
+
+test("trusted installation rejects approval inside a separate candidate Git checkout", () => {
+  const candidate = join(root, "candidate"); mkdirSync(candidate);
+  expect(spawnSync("git", ["init", "-q", candidate]).status).toBe(0);
+  const manifest = join(candidate, "approval.json");
+  writeFileSync(manifest, JSON.stringify({ issue: 435, seconds: 600, provenance: "https://github.com/dgmolla/fitsy/issues/435#issuecomment-12346" }), { mode: 0o600 });
+  const result = spawnSync("python3", [script, "grant-authorized", "--ledger", join(root, "issue-435.jsonl"), "--candidate", "root:branch", "--issue", "435", "--authorization-file", manifest], { cwd: root, encoding: "utf8" });
+  expect(result.status).toBe(1);
+  expect(JSON.parse(result.stdout).reason).toContain("outside every Git checkout");
+});

@@ -8,6 +8,7 @@ import json
 import math
 import os
 import re
+import subprocess
 from pathlib import Path
 import time
 
@@ -231,6 +232,13 @@ def main():
                         or not args.candidate or args.ledger.name != f"issue-{args.issue}.jsonl"
                         or total["unfinished_attempts"]):
                     raise ValueError("authorized grant requires a private external operator manifest and released issue ledger")
+                # A separately installed trusted script must also reject any
+                # candidate Git checkout, not only its own installation root.
+                git_env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+                checkout = subprocess.run(["git", "-C", str(path.parent), "rev-parse", "--show-toplevel"],
+                                          env=git_env, capture_output=True, text=True)
+                if checkout.returncode == 0:
+                    raise ValueError("authorization manifest must be outside every Git checkout")
                 raw = path.read_bytes()
                 approval = json.loads(raw)
                 if set(approval) != {"issue", "seconds", "provenance"} or approval["issue"] != args.issue:
