@@ -18,7 +18,10 @@ if [ ! -d "$REPO_DIR/.git" ]; then
   "$GH_BIN" repo clone dgmolla/fitsy "$REPO_DIR" -- --quiet || { echo "[poller] clone failed"; exit 0; }
 fi
 cd "$REPO_DIR" || exit 1
-git fetch -q origin && git checkout -qf origin/main 2>/dev/null
+if ! (git fetch -q origin && git checkout -qf origin/main 2>/dev/null); then
+  echo "[poller] trusted main checkout unavailable; stopping this tick"
+  exit 1
+fi
 
 "$GH_BIN" pr list --state open --json number,headRefOid --limit 20 --jq '.[] | "\(.number) \(.headRefOid)"' |
 while read -r NUM SHA; do

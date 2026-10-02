@@ -32,3 +32,23 @@ test("trusted poller restoration removes PR-owned and untracked Python import si
     expect(existsSync(join(root, "scripts/review/ignored.py"))).toBe(false);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+
+test("installed launcher retains trusted main outside a PR-mutated clone", () => {
+  const root = mkdtempSync(join(tmpdir(), "fitsy-poller-install-"));
+  const home = join(root, "home"), repo = join(home, ".fitsy-review/repo"), bin = join(root, "bin");
+  mkdirSync(repo, { recursive: true }); mkdirSync(bin);
+  const env = { ...process.env, HOME: home, PATH: `${bin}:${process.env.PATH}` };
+  const git = (...args: string[]) => execFileSync("git", args, { cwd: repo, env, stdio: "pipe" });
+  try {
+    git("init", "-q"); git("config", "user.name", "Fixture"); git("config", "user.email", "fixture@example.test");
+    mkdirSync(join(repo, "scripts/review"), { recursive: true });
+    writeFileSync(join(repo, "scripts/review/poller.sh"), "#!/bin/bash\necho trusted-launcher\n");
+    git("add", "."); git("commit", "-qm", "main"); git("branch", "-M", "main"); git("remote", "add", "origin", repo);
+    writeFileSync(join(bin, "launchctl"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+    execFileSync("bash", [join(__dirname, "install-poller.sh")], { env, stdio: "pipe" });
+    writeFileSync(join(repo, "scripts/review/poller.sh"), "#!/bin/bash\necho candidate-executed\n");
+    const installed = join(home, ".fitsy-review/runtime/poller.sh");
+    expect(readFileSync(join(home, "Library/LaunchAgents/com.fitsy.review-poller.plist"), "utf8")).toContain(installed);
+    expect(execFileSync("bash", [installed], { env, encoding: "utf8" }).trim()).toBe("trusted-launcher");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
