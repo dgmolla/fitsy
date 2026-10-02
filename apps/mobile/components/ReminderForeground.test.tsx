@@ -3,7 +3,7 @@ import React from 'react';
 import { Alert, AppState, Pressable, Text } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { ReminderProvider, useReminders } from '../lib/useReminders';
-import { readReminderPreferences, reconcileReminderOwnership, replaceReminders } from '../lib/notificationSchedule';
+import { readReminderPreferences, reconcileReminderOwnership, replaceReminders, wasTrialReminderConfirmed } from '../lib/notificationSchedule';
 import { reconcileDevTrialReminderOwnership } from '../lib/devTrialReminderProbe';
 
 jest.mock('expo-router', () => ({ router: { push: jest.fn() }, usePathname: () => '/notification-settings' }));
@@ -28,6 +28,9 @@ jest.mock('../lib/usePurchases', () => ({ usePurchases: () => ({
 jest.mock('../lib/notificationSchedule', () => ({
   readReminderPreferences: jest.fn(),
   readScheduledReminders: jest.fn(async () => []),
+  recordTrialReminderConfirmation: jest.fn(async () => {}),
+  wasTrialReminderConfirmed: jest.fn(async () => false),
+  clearFutureTrialReminderConfirmation: jest.fn(async () => {}),
   replaceReminders: jest.fn(async () => {}),
   reconcileReminderOwnership: jest.fn(async () => {}),
   subscribeReminderPreferences: () => () => {},
@@ -179,6 +182,24 @@ test('opt-out and retry warns again when native trial scheduling still fails', a
     await waitFor(() => expect(screen.getByText('Trial reminder off')).toBeTruthy());
     await act(async () => { fireEvent.press(screen.getByTestId('trial-toggle')); });
     await waitFor(() => expect(alert).toHaveBeenCalledTimes(2));
+  } finally { mockCustomerInfo.entitlements.all.pro = { isActive: true }; }
+});
+
+test('a confirmed reminder that has already fired is not reported as unavailable', async () => {
+  const now = Date.now();
+  const expiry = now + 36 * 3_600_000;
+  mockCustomerInfo.entitlements.all.pro = {
+    isActive: true, periodType: 'TRIAL', willRenew: true,
+    latestPurchaseDate: new Date(now - 5 * 24 * 3_600_000).toISOString(),
+    expirationDate: new Date(expiry).toISOString(),
+  } as typeof mockCustomerInfo.entitlements.all.pro;
+  try {
+    jest.mocked(readReminderPreferences).mockResolvedValue({ meals: false, trial: true });
+    jest.mocked(wasTrialReminderConfirmed).mockResolvedValue(true);
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    render(<ReminderProvider><TrialToggle /></ReminderProvider>);
+    await waitFor(() => expect(wasTrialReminderConfirmed).toHaveBeenCalledWith('reminder-owner', expiry));
+    expect(alert).not.toHaveBeenCalled();
   } finally { mockCustomerInfo.entitlements.all.pro = { isActive: true }; }
 });
 

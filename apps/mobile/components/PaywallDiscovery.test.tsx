@@ -5,10 +5,11 @@ import { usePaywallDiscovery } from '../lib/usePaywallDiscovery';
 import { clearPaywallIntent, rememberPaywallIntent } from '../lib/paywallIntent';
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
+let mockSessionId: string | null = null;
 jest.mock('@supabase/supabase-js', () => {
   process.env.EXPO_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
   process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'unit-test-anon-key';
-  return { createClient: () => ({ auth: { getSession: async () => ({ data: { session: null } }), startAutoRefresh() {}, stopAutoRefresh() {} } }) };
+  return { createClient: () => ({ auth: { getSession: async () => ({ data: { session: mockSessionId ? { user: { id: mockSessionId } } : null } }), startAutoRefresh() {}, stopAutoRefresh() {} } }) };
 });
 const originalFetch = global.fetch;
 const resultFor = (id: string) => ({ id, name: `Restaurant ${id}`, address: '123 Main', lat: 34.0869, lng: -118.2702,
@@ -28,7 +29,7 @@ const selection = (id: string) => ({
 async function settleDiscovery() {
   await act(async () => { await new Promise(resolve => setImmediate(resolve)); });
 }
-beforeEach(async () => { await AsyncStorage.clear(); global.fetch = jest.fn(); });
+beforeEach(async () => { mockSessionId = null; await AsyncStorage.clear(); global.fetch = jest.fn(); });
 afterEach(() => { global.fetch = originalFetch; });
 
 it('uses the saved selection without a search and clears it on blur', async () => {
@@ -39,6 +40,20 @@ it('uses the saved selection without a search and clears it on blur', async () =
   expect(global.fetch).not.toHaveBeenCalled();
   rerender({ focused: false });
   expect(result.current.selected).toBeUndefined();
+});
+
+it('clears a focused preview immediately when its account signs out or changes', async () => {
+  mockSessionId = 'owner-a';
+  await rememberPaywallIntent({ ...selection('old'), previewResult: resultFor('old') });
+  const { result, rerender } = renderHook(({ userId }) => usePaywallDiscovery(true, userId), { initialProps: { userId: 'owner-a' as string | null } });
+  await waitFor(() => expect(result.current.selected?.id).toBe('old'));
+  mockSessionId = null;
+  rerender({ userId: null });
+  expect(result.current.selected).toBeUndefined();
+  mockSessionId = 'owner-b';
+  await rememberPaywallIntent({ ...selection('new'), previewResult: resultFor('new') });
+  rerender({ userId: 'owner-b' });
+  await waitFor(() => expect(result.current.selected?.id).toBe('new'));
 });
 
 it('does not retain a previous selection when refocusing after a storage failure', async () => {

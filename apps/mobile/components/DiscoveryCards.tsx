@@ -133,7 +133,7 @@ export function HeroCard({ result, locked, unlocking, containerRef, onOpen, payw
         <Text style={[hero.restName, paywallPreview && paywallCard.name]} numberOfLines={1} testID={paywallPreview ? 'paywall-restaurant-name' : undefined}>{result.name}</Text>
         {locked && <LockedDishTeaser variant="hero" />}
         {!locked && bm && <Text style={[hero.dishName, paywallPreview && paywallCard.dish]} numberOfLines={1}>{bm.name}</Text>}
-        {!locked && bm && (
+        {!locked && bm && (!paywallPreview || bm.nutritionBasis === 'published') && (
           <View style={hero.macroRow}>
             <Text style={hero.macroText}>P {bm.proteinG}g</Text>
             <Text style={hero.dot}>·</Text>

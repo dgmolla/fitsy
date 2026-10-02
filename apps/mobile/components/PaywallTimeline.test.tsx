@@ -142,6 +142,20 @@ test('plan selection, purchase, restore and decline remain operable with live to
   expect(screen.queryByText(/trial access/i)).toBeNull();
 });
 
+test('variant A omits exact estimated macros while retaining supported restaurant details', () => {
+  const p = props();
+  const selected = p.discovery.selected;
+  const low = { ...selected, bestMatch: { ...selected.bestMatch, confidence: 'LOW' as const } };
+  const screen = render(<PaywallView {...p} discovery={{ selected: low }} variant="A" />);
+  expect(screen.getByText('Actual Preview Pick')).toBeTruthy();
+  expect(screen.getByText('Real bowl')).toBeTruthy();
+  expect(screen.getByText('Estimated nutrition · low confidence')).toBeTruthy();
+  expect(screen.queryByText('P 40g')).toBeNull();
+  expect(screen.queryByText('500 kcal')).toBeNull();
+  screen.rerender(<PaywallView {...p} discovery={{ selected: { ...low, bestMatch: { ...low.bestMatch, nutritionBasis: 'published' as const } } }} variant="A" />);
+  expect(screen.getByText('P 40g')).toBeTruthy();
+});
+
 test('unavailable pricing disables purchases and provides retry without inventing terms', () => {
   const p = { ...props(), annual: null, monthly: null };
   const screen = render(<PaywallView {...p} />);

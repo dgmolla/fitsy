@@ -46,11 +46,12 @@ export async function rememberPaywallIntent(intent: PaywallIntent): Promise<void
     await AsyncStorage.setItem(KEY, JSON.stringify(record));
   });
 }
-export async function getPaywallIntent(): Promise<PaywallIntent | null> {
+export async function getPaywallIntent(expectedUserId?: string | null): Promise<PaywallIntent | null> {
   try {
     await pendingWrite;
     const [record, { data }] = await Promise.all([readIntentRecord(), supabase.auth.getSession()]);
-    return record && record.userId === (data.session?.user.id ?? null) ? record.intent : null;
+    return record && record.userId === (data.session?.user.id ?? null) &&
+      (expectedUserId === undefined || record.userId === expectedUserId) ? record.intent : null;
   } catch { return null; }
 }
 /** Only an explicit sign-in continuation can attach an anonymous selection. */
