@@ -102,6 +102,16 @@ test('post-due reconciliation keeps the owner\'s unread trial notice until sign-
   await replaceReminders(null, []);
   expect(sdk.dismissNotificationAsync).toHaveBeenCalledWith(identifier);
 });
+test('a resolved paid period preserves the owner\'s unread trial notice until opt-out', async () => {
+  const expiration = Date.now() - 12 * 3_600_000;
+  const identifier = `${REMINDER_PREFIX}trial.${expiration}`;
+  sdk.getPresentedNotificationsAsync.mockResolvedValue([{ request: { identifier,
+    content: { data: { userId: 'one', kind: 'trial' } } } }] as unknown as Notifications.Notification[]);
+  await replaceReminders('one', plan(), 'presented-current-account-trial');
+  expect(sdk.dismissNotificationAsync).not.toHaveBeenCalled();
+  await replaceReminders('one', plan());
+  expect(sdk.dismissNotificationAsync).toHaveBeenCalledWith(identifier);
+});
 test('unresolved native identity preserves trial requests while meal jobs still reconcile', async () => {
   const expiry = Date.now() + 36 * 3_600_000;
   const identifier = `${REMINDER_PREFIX}trial.${expiry}`;

@@ -43,7 +43,7 @@ let queue: Promise<unknown> = Promise.resolve();
 let generation = 0;
 /** Serialize replacement, so a late schedule cannot survive a later opt-out or
  * account change. Cancel only this feature's requests; other push flows survive. */
-export function replaceReminders(userId: string | null | undefined, reminders: PlannedReminder[], retainedTrial?: number | 'current-account-trial'): Promise<void> {
+export function replaceReminders(userId: string | null | undefined, reminders: PlannedReminder[], retainedTrial?: number | 'current-account-trial' | 'presented-current-account-trial'): Promise<void> {
   if (userId === undefined) return Promise.resolve(); // Still loading; null alone means signed out.
   const revision = ++generation;
   const work = queue.catch(() => undefined).then(async () => {
@@ -69,7 +69,8 @@ export function replaceReminders(userId: string | null | undefined, reminders: P
       if (revision !== generation) return;
       const request = notification.request;
       const currentTrial = !!userId && request.content.data?.userId === userId && request.content.data?.kind === 'trial' &&
-        (retainCurrentTrial || (retainExpiry !== null && request.identifier === `${REMINDER_PREFIX}trial.${retainExpiry}`));
+        (retainCurrentTrial || retainedTrial === 'presented-current-account-trial' ||
+          (retainExpiry !== null && request.identifier === `${REMINDER_PREFIX}trial.${retainExpiry}`));
       if (request.identifier.startsWith(REMINDER_PREFIX) &&
         (!userId || request.content.data?.userId !== userId ||
           (!currentTrial && !reminders.some(r => r.kind === request.content.data?.kind)))) {

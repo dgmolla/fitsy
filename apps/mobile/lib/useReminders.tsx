@@ -91,7 +91,8 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
     // While native identity is unresolved, update meal jobs without removing
     // this account's trial request or an unread delivered trial notice.
     const replacement = nativeUnresolved ? replaceReminders(userId, plan, 'current-account-trial')
-      : legacyExpiry === undefined ? replaceReminders(userId, plan) : replaceReminders(userId, plan, legacyExpiry);
+      : legacyExpiry !== undefined ? replaceReminders(userId, plan, legacyExpiry)
+        : replaceReminders(userId, plan, userId && preferences.trial ? 'presented-current-account-trial' : undefined);
     void replacement.then(() => readScheduledReminders(account.id))
       .then(async values => {
         if (live) {
