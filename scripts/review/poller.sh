@@ -93,7 +93,7 @@ while read -r NUM SHA; do
   for L in $PENDING; do
     ATTEMPT_TIMEOUT="${FITSY_REVIEW_TIMEOUT_SECONDS:-900}"
     case " $RETRY_LENSES " in *" $L "*)
-      ATTEMPT_TIMEOUT="$(python3 -c 'import sys; n=int(sys.argv[1]); assert 1<=n<=3600; print(min(3600,n*2))' "$ATTEMPT_TIMEOUT")" ;;
+      ATTEMPT_TIMEOUT="$(python3 -I -c 'import sys; n=int(sys.argv[1]); assert 1<=n<=3600; print(min(3600,n*2))' "$ATTEMPT_TIMEOUT")" ;;
     esac
     FITSY_REVIEW_TIMEOUT_SECONDS="$ATTEMPT_TIMEOUT" \
       bash scripts/review/run-lens.sh "$NUM" "$L" || echo "[poller] PR #$NUM lens/$L -> fail"

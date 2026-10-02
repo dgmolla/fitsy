@@ -42,7 +42,7 @@ fi
 
 # All callers share one issue-bound candidate, independent of source SHA or clone.
 if [ "$TARGET" = "--local" ]; then
-  ISSUE="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("issue", ""))' \
+  ISSUE="$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1])).get("issue", ""))' \
     "$REPO_ROOT/.evidence/delivery/binding.json" 2>/dev/null || true)"
 else
   ISSUE="$(printf '%s\n' "$BODY" | sed -nE 's/^Delivery-Issue: #([1-9][0-9]*)[[:space:]]*$/\1/p')"
@@ -54,7 +54,7 @@ if ! ISSUE_BRIEF="$("$GH_BIN" issue view "$ISSUE" --json body --jq .body 2>/dev/
   echo '[run-lens] bound issue brief unavailable; review cannot verify release acceptance' >&2
   exit 1
 fi
-ISSUE_BRIEF="$(printf '%s' "$ISSUE_BRIEF" | python3 -c '
+ISSUE_BRIEF="$(printf '%s' "$ISSUE_BRIEF" | python3 -I -c '
 import re,sys
 lines=sys.stdin.read().splitlines()
 in_details=False
@@ -79,7 +79,7 @@ done
 if [ "$TARGET" != "--local" ]; then
   BUDGET_ARGS+=(--optional-import-ledger "${FITSY_REVIEW_HOME:-$HOME/.fitsy-review}/budgets/$TARGET.jsonl")
 fi
-if ! python3 scripts/review/review-budget.py status "${BUDGET_ARGS[@]}" >&2; then
+if ! python3 -I scripts/review/review-budget.py status "${BUDGET_ARGS[@]}" >&2; then
   echo '[run-lens] timing gap: candidate budget binding or history refused' >&2
   exit 1
 fi
@@ -114,7 +114,7 @@ review_exit() {
     REVIEW_PID=""
   fi
   if [ "$BUDGET_OPEN" = 1 ]; then
-    python3 scripts/review/review-budget.py finish "${BUDGET_ARGS[@]}" --round-id "$HEAD_SHA" \
+    python3 -I scripts/review/review-budget.py finish "${BUDGET_ARGS[@]}" --round-id "$HEAD_SHA" \
       --lens "$LENS" --source-sha "$HEAD_SHA" --attempt-id "$ATTEMPT_ID" --outcome "$BUDGET_OUTCOME" >&2 || code=1
   fi
   if [ -n "$PROMPT_FILE" ]; then rm -f "$PROMPT_FILE" "$RAW_FILE"; fi
@@ -170,10 +170,10 @@ if [ "$TARGET" != "--local" ] && [ -f "$TELEMETRY_FILE" ] && [ -z "$TELEMETRY_RO
   echo '[run-lens] review candidate conflicts with its retained PR issue binding' >&2
   exit 1
 fi
-if ! IDENTITY="$(python3 scripts/review/execute-review.py --identity "$PROVIDER" "$MODEL")"; then preflight_error; fi
+if ! IDENTITY="$(python3 -I scripts/review/execute-review.py --identity "$PROVIDER" "$MODEL")"; then preflight_error; fi
 # A completed verdict remains reusable as remaining budget shrinks. Runtime
 # deadlines stay in its provenance, not the semantic reviewer/cache identity.
-CACHE_IDENTITY="$(printf '%s' "$IDENTITY" | python3 -c 'import json,sys; d=json.load(sys.stdin); d.pop("timeout_seconds"); print(json.dumps(d,sort_keys=True))')"
+CACHE_IDENTITY="$(printf '%s' "$IDENTITY" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); d.pop("timeout_seconds"); print(json.dumps(d,sort_keys=True))')"
 
 # ── Cache ───────────────────────────────────────────────────────────────────
 # Key on reviewed content and the bound release brief. PR title/body can change
@@ -184,9 +184,9 @@ CACHE_FILE="$CACHE_DIR/$KEY.json"
 if [ -f "$CACHE_FILE" ]; then
   TELEMETRY_CACHE_HIT=1
   echo "[run-lens] cache hit ($KEY)" >&2
-  RESULT_JSON="$(python3 scripts/review/extract-verdict.py "$LENS" < "$CACHE_FILE")"
+  RESULT_JSON="$(python3 -I scripts/review/extract-verdict.py "$LENS" < "$CACHE_FILE")"
 else
-  ATTEMPT_ID="$(python3 -c 'import uuid;print(uuid.uuid4())')"
+  ATTEMPT_ID="$(python3 -I -c 'import uuid;print(uuid.uuid4())')"
   PROMPT_FILE="$(mktemp)"
   RAW_FILE="$(mktemp)"
   {
@@ -206,7 +206,7 @@ else
     echo "Review the diff through this lens only. You may read repo files for context."
     echo "End with the fenced JSON block required by REVIEW.md's output contract."
   } > "$PROMPT_FILE"
-  if ! BUDGET_GRANT="$(python3 scripts/review/review-budget.py begin "${BUDGET_ARGS[@]}" --round-id "$HEAD_SHA" \
+  if ! BUDGET_GRANT="$(python3 -I scripts/review/review-budget.py begin "${BUDGET_ARGS[@]}" --round-id "$HEAD_SHA" \
       --lens "$LENS" --source-sha "$HEAD_SHA" --attempt-id "$ATTEMPT_ID" \
       --timeout-seconds "${FITSY_REVIEW_TIMEOUT_SECONDS:-900}")"; then
     echo "$BUDGET_GRANT" >&2
@@ -215,46 +215,46 @@ else
   fi
   BUDGET_OPEN=1
   echo "$BUDGET_GRANT" >&2
-  GRANTED_TIMEOUT="$(printf '%s' "$BUDGET_GRANT" | python3 -c 'import json,sys; print(json.load(sys.stdin)["timeout_seconds"])')"
-  IDENTITY="$(printf '%s' "$IDENTITY" | python3 -c 'import json,sys; d=json.load(sys.stdin); d["timeout_seconds"]=int(sys.argv[1]); print(json.dumps(d,sort_keys=True))' "$GRANTED_TIMEOUT")"
+  GRANTED_TIMEOUT="$(printf '%s' "$BUDGET_GRANT" | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["timeout_seconds"])')"
+  IDENTITY="$(printf '%s' "$IDENTITY" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); d["timeout_seconds"]=int(sys.argv[1]); print(json.dumps(d,sort_keys=True))' "$GRANTED_TIMEOUT")"
   echo "[run-lens] $LENS on ${TARGET} (tier=$TIER provider=$PROVIDER model=$MODEL)" >&2
   # Never salvage a pass from partial output produced by a failed execution.
   EXECUTION_FILE="$CACHE_DIR/$KEY.$ATTEMPT_ID.execution.receipt"
-  FITSY_REVIEW_DIAGNOSTIC_FILE="$EXECUTION_FILE" FITSY_REVIEW_TIMEOUT_SECONDS="$GRANTED_TIMEOUT" python3 scripts/review/execute-review.py "$PROVIDER" "$MODEL" \
+  FITSY_REVIEW_DIAGNOSTIC_FILE="$EXECUTION_FILE" FITSY_REVIEW_TIMEOUT_SECONDS="$GRANTED_TIMEOUT" python3 -I scripts/review/execute-review.py "$PROVIDER" "$MODEL" \
     < "$PROMPT_FILE" > "$RAW_FILE" 2>>"$CACHE_DIR/errors.log" &
   REVIEW_PID=$!
   if wait "$REVIEW_PID"; then
     REVIEW_PID=""
     BUDGET_OUTCOME=pass
-    RESULT_JSON="$(python3 scripts/review/extract-verdict.py "$LENS" < "$RAW_FILE")"
+    RESULT_JSON="$(python3 -I scripts/review/extract-verdict.py "$LENS" < "$RAW_FILE")"
   else
     REVIEW_PID=""
     BUDGET_OUTCOME=fail
-    RESULT_JSON="$(printf '' | python3 scripts/review/extract-verdict.py "$LENS" --execution-error)"
+    RESULT_JSON="$(printf '' | python3 -I scripts/review/extract-verdict.py "$LENS" --execution-error)"
   fi
-  FAILURE_KIND="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("kind", "process_error"))' "$EXECUTION_FILE" 2>/dev/null || echo process_error)"
+  FAILURE_KIND="$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1])).get("kind", "process_error"))' "$EXECUTION_FILE" 2>/dev/null || echo process_error)"
   if [ "$BUDGET_OUTCOME" = fail ] && [ "$FAILURE_KIND" = completed ]; then FAILURE_KIND=invalid_output; fi
-  if [ "$BUDGET_OUTCOME" = pass ] && [ "$(printf '%s' "$RESULT_JSON" | python3 -c 'import json,sys;print(json.load(sys.stdin)["verdict"])')" = incomplete ]; then
+  if [ "$BUDGET_OUTCOME" = pass ] && [ "$(printf '%s' "$RESULT_JSON" | python3 -I -c 'import json,sys;print(json.load(sys.stdin)["verdict"])')" = incomplete ]; then
     if [ "$FAILURE_KIND" = completed ]; then FAILURE_KIND=invalid_output; fi
     BUDGET_OUTCOME=fail
   fi
   if [ "$BUDGET_OUTCOME" = fail ]; then
-    RESULT_JSON="$(printf '%s' "$RESULT_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); d["error"]["kind"]=sys.argv[1]; d["error"]["execution_evidence"]=sys.argv[2]; print(json.dumps(d))' "$FAILURE_KIND" "$EXECUTION_FILE")"
+    RESULT_JSON="$(printf '%s' "$RESULT_JSON" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); d["error"]["kind"]=sys.argv[1]; d["error"]["execution_evidence"]=sys.argv[2]; print(json.dumps(d))' "$FAILURE_KIND" "$EXECUTION_FILE")"
   fi
-  python3 scripts/review/review-budget.py finish "${BUDGET_ARGS[@]}" --failure-kind "$FAILURE_KIND" --round-id "$HEAD_SHA" \
+  python3 -I scripts/review/review-budget.py finish "${BUDGET_ARGS[@]}" --failure-kind "$FAILURE_KIND" --round-id "$HEAD_SHA" \
     --lens "$LENS" --source-sha "$HEAD_SHA" --attempt-id "$ATTEMPT_ID" --outcome "$BUDGET_OUTCOME" >&2
   BUDGET_OPEN=0
   cp "$RAW_FILE" "$CACHE_DIR/$KEY.raw"
   rm -f "$PROMPT_FILE" "$RAW_FILE"
   PROMPT_FILE=""; RAW_FILE=""
-  RESULT_JSON="$(printf '%s' "$RESULT_JSON" | python3 -c '
+  RESULT_JSON="$(printf '%s' "$RESULT_JSON" | python3 -I -c '
 import json,sys
 result=json.load(sys.stdin)
 result["reviewer"]=json.loads(sys.argv[1])
 print(json.dumps(result))' "$IDENTITY")"
   # Never cache incomplete reviews or historical runner findings. Both are
   # transient infrastructure failures, not reusable independent verdicts.
-  if [ "$(printf '%s' "$RESULT_JSON" | python3 -c 'import json,sys;print(json.load(sys.stdin)["verdict"])')" != "incomplete" ] && \
+  if [ "$(printf '%s' "$RESULT_JSON" | python3 -I -c 'import json,sys;print(json.load(sys.stdin)["verdict"])')" != "incomplete" ] && \
       ! printf '%s' "$RESULT_JSON" | grep -q '"file": "(runner)"'; then
     CACHE_TMP="$(mktemp "$CACHE_DIR/.verdict.XXXXXX")"
     printf '%s' "$RESULT_JSON" > "$CACHE_TMP"
@@ -262,16 +262,16 @@ print(json.dumps(result))' "$IDENTITY")"
   fi
 fi
 
-VERDICT="$(echo "$RESULT_JSON" | python3 -c 'import sys,json;print(json.load(sys.stdin)["verdict"])')"
-N_FINDINGS="$(echo "$RESULT_JSON" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(len(d.get("findings",[])))')"
+VERDICT="$(echo "$RESULT_JSON" | python3 -I -c 'import sys,json;print(json.load(sys.stdin)["verdict"])')"
+N_FINDINGS="$(echo "$RESULT_JSON" | python3 -I -c 'import sys,json;d=json.load(sys.stdin);print(len(d.get("findings",[])))')"
 DISPOSITIONS="${FITSY_REVIEW_DISPOSITIONS_DIR:-$REPO_ROOT/.evidence/review-dispositions}/$LENS.json"
-GATE_JSON="$(printf '%s' "$RESULT_JSON" | python3 scripts/review/review-gate.py --lens "$LENS" \
+GATE_JSON="$(printf '%s' "$RESULT_JSON" | python3 -I scripts/review/review-gate.py --lens "$LENS" \
   --source-sha "$HEAD_SHA" --diff-sha256 "$DIFF_SHA256" --dispositions "$DISPOSITIONS" --root "$REPO_ROOT")" || true
-GATE="$(printf '%s' "$GATE_JSON" | python3 -c 'import sys,json;print(json.load(sys.stdin)["gate"])')"
+GATE="$(printf '%s' "$GATE_JSON" | python3 -I -c 'import sys,json;print(json.load(sys.stdin)["gate"])')"
 echo "[run-lens] gate: $GATE_JSON" >&2
 echo "$RESULT_JSON"
 # Advisory lens routing never waives a confirmed urgent impact.
-if printf '%s' "$RESULT_JSON" | python3 -c 'import json,sys; sys.exit(0 if any(f.get("severity") == "CONFIRMED" and f.get("priority") in ("P0", "P1") for f in json.load(sys.stdin)["findings"]) else 1)'; then
+if printf '%s' "$RESULT_JSON" | python3 -I -c 'import json,sys; sys.exit(0 if any(f.get("severity") == "CONFIRMED" and f.get("priority") in ("P0", "P1") for f in json.load(sys.stdin)["findings"]) else 1)'; then
   BLOCKING=1
 fi
 
@@ -285,7 +285,7 @@ if [ "$TARGET" != "--local" ]; then
   "$GH_BIN" api "repos/{owner}/{repo}/statuses/$HEAD_SHA" -f state="$STATE" \
     -f context="lens/$LENS" -f description="$DESCRIPTION" >/dev/null
   if [ "$N_FINDINGS" -gt 0 ] || [ "$VERDICT" = "incomplete" ]; then
-    COMMENT="$(echo "$RESULT_JSON" | python3 scripts/review/format-comment.py)"
+    COMMENT="$(echo "$RESULT_JSON" | python3 -I scripts/review/format-comment.py)"
     "$GH_BIN" pr comment "$TARGET" --body "$COMMENT" >/dev/null
   fi
   echo "[run-lens] posted lens/$LENS=$STATE on ${HEAD_SHA:0:7}" >&2
