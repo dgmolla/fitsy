@@ -33,7 +33,7 @@ It never uses HEAD age or a general mobile-source hash as a rebuild reason.
 | --- | --- | --- |
 | Swift/Obj-C source, generated iOS compile source, resolved Expo or React Native autolinking module, Pod graph, native plugin output or native build recipe | Rebuild with each changed file, graph field or recipe step named | Rerun affected scenarios. |
 | Resolved entitlements, permissions, plist, URL scheme, bundle ID, native icon/splash/plugin resource or effective native build setting | Rebuild with changed config or resource field named | Rerun affected scenarios. |
-| Simulator versus device, OS/architecture compatibility, Debug versus Release, Test Store capability, build flags or Xcode/SDK identity | Rebuild for the required profile, naming each changed field | Use the profile that can serve or embed the required JavaScript. |
+| Simulator versus device, OS/architecture compatibility, Debug versus Release, Test Store capability, build flags or Xcode/SDK identity | Select an intact verified artifact for the required profile; rebuild only when none matches, naming each changed field | Use the profile that can serve or embed the required JavaScript. |
 | Receipt absent, legacy or changed receipt, app absent or tree hash changed | Build with an initial, unverifiable provenance or artifact-integrity reason | Preserve the prior receipt in `.evidence/resume/` before replacement. |
 | JavaScript/UI or JS-only package and lockfile change | Reuse the binary if resolved native graph and profile still match | Start fresh owned Metro and capture its served bundle/config hash; rerun affected scenarios. |
 | Android-only native source change while testing iOS | Reuse the iOS binary | Keep the iOS acceptance decision tied to affected flows. |
@@ -43,6 +43,10 @@ It never uses HEAD age or a general mobile-source hash as a rebuild reason.
 | Public environment change that changes a native scheme, plist, entitlement or plugin result | Rebuild with the changed resolved config path | Rerun affected scenarios. |
 
 An embedded Release app is accepted only when its build-time JavaScript and public configuration identities still match the candidate.
+When switching Debug to Release and back, the CLI searches retained sealed receipts and reactivates an intact compatible Debug artifact without compiling.
+The current generated iOS tree must be attested by an intact receipt before a different profile's generated tree can be ignored for this selection.
+Manual changes to an unattested generated tree still require a build with the changed file named.
+The run report binds the selected simulator UDID; a compatible artifact built on another UDID can be reused and the run-owned device can later be retired with its raw evidence.
 Submission-only `eas.json` fields are outside the local simulator build, served bundle and acceptance identities.
 Retirement rechecks the current public configuration before archiving proof or deleting a task simulator.
 Public configuration receipts retain hashes per key, so a changed RevenueCat key selects billing acceptance even when its ignored environment file is the only edit.

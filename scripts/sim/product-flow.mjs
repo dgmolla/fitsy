@@ -3,14 +3,14 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, rmSync, existsSync, openSync, closeSync, renameSync, realpathSync, copyFileSync } from 'node:fs';
 import { createServer } from 'node:net';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { resolve, relative, join, dirname, delimiter } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { root, inputHash, changedPaths, impact, digest, validate, baseline, repoEnv, publicConfigIdentity, requiredPublicConfigKeys } from '../verify/product-flow.mjs';
 import { backendRevision } from './backend-identity.mjs';
 import { buildProfile, bundleDelegate, embeddedBundleCompatibility, embeddedArtifactPlan, fixtureLabel, metroRoute } from './build-profile.mjs';
-import { nativeIdentity, buildInputDrift, profileIdentity, nativeBuildDecision, sealReceipt, identityHash } from './native-identity.mjs';
+import { nativeIdentity, buildInputDrift, profileIdentity, nativeBuildDecision, reusableNativeReceipt, sealReceipt, identityHash } from './native-identity.mjs';
 import { admitDisk, appendRecordedFlowFailure, applyCapturePolicy, archiveFailureEvidence, completeMaestroRun, event, latestMaestroLog, nearestFailure, needsDiagnosis, recordFlowOutcome, recordRunFailure, requireMetro, runRecordedFlow } from './runner-controls.mjs';
 import { matchesFinalCandidate, runSelection } from './evidence-mode.mjs';
 import { closeoutXCTestAttachments, snapshotXCTestAttachments } from './xctest-attachments.mjs';
@@ -183,27 +183,43 @@ function existingReceipt() {
     throw error;
   }
 }
+function retainedReceipts() {
+  if (!existsSync(resumeDir)) return [];
+  return readdirSync(resumeDir).filter(name => /^native-receipt-superseded-[0-9]+(?:-[0-9a-f-]{36})?\.json$/.test(name))
+    .sort().reverse().flatMap(name => {
+      try { return [read(join(resumeDir, name))]; }
+      catch { return []; } // Preserve unreadable raw receipts without trusting them.
+    });
+}
+function archiveActiveReceipt() {
+  const file = join(buildDir, 'receipt.json');
+  if (existsSync(file)) copyFileSync(file, join(resumeDir, `native-receipt-superseded-${Date.now()}-${randomUUID()}.json`));
+}
 function intact(r) {
   try { return r?.app && realpathSync(r.app).startsWith(realpathSync(buildDir) + '/') &&
     r.appHash === treeHash(r.app); }
   catch { return false; }
 }
 function buildDecision(udid, profile) {
-  const r = existingReceipt();
+  const active = existingReceipt();
   const identity = device(udid);
   const native = nativeIdentity(root, { ...process.env, NODE_ENV: profile.configuration === 'Debug' ? 'development' : 'production' });
   const compatibility = profileIdentity(profile, identity);
   const recipe = recipeIdentity();
-  return { r, identity, native, compatibility,
-    decision: nativeBuildDecision({ receipt: r, native, profile: compatibility, recipe, appIntact: intact(r) }) };
+  const selected = reusableNativeReceipt([active, ...retainedReceipts()], native, compatibility, recipe, intact);
+  const r = selected || active;
+  return { r, active, identity, native, compatibility,
+    decision: selected ? { rebuild: false, reasons: [] } :
+      nativeBuildDecision({ receipt: r, native, profile: compatibility, recipe, appIntact: intact(r) }) };
 }
 function receipt(udid) {
-  const r = existingReceipt();
-  assert(r, 'Native artifact missing: run build with the required profile');
-  const profile = buildProfile(r.storeMode === 'test-store', process.env);
-  const { decision } = buildDecision(udid || r.simulator, profile);
+  const active = existingReceipt();
+  assert(active, 'Native artifact missing: run build with the required profile');
+  const profile = buildProfile(active.storeMode === 'test-store', process.env);
+  const { r, active: checkedActive, decision } = buildDecision(udid || active.simulator, profile);
   assert(!decision.rebuild, `Native build required: ${decision.reasons.join('; ')}`);
-  return r;
+  assert(r === checkedActive, 'A retained compatible artifact must be activated through build before product flows');
+  return checkedActive;
 }
 function prepareNative(profile, testStore) {
   // Keyless Release is useful for baseline navigation, but cannot verify billing.
@@ -250,16 +266,22 @@ function compileNative(profile, udid, env) {
 async function build(udid, testStore, forceReason = null, refreshEmbedded = false) {
   const config = environment();
   const profile = buildProfile(testStore, process.env), buildRecipe = recipeIdentity();
-  const { r: previous, identity, native, compatibility, decision } = buildDecision(udid, profile);
+  const { r: previous, active, identity, native, compatibility, decision } = buildDecision(udid, profile);
   const sourceJsHash = inputHash(root, 'js');
   const embeddedPlan = embeddedArtifactPlan(previous, sourceJsHash, config.configHash, refreshEmbedded);
   if (refreshEmbedded) assert(!testStore && previous?.buildMode === 'embedded-release' &&
     embeddedPlan.action === 'rebuild', '--refresh-embedded-js requires a stale embedded Release artifact');
   const initialBuildInputs = { native, jsHash: sourceJsHash, configHash: config.configHash, recipe: buildRecipe };
-  if (!decision.rebuild && !forceReason && !refreshEmbedded) {
+  const reusable = decision.rebuild ? null : previous;
+  if (reusable && !forceReason && !refreshEmbedded) {
     assert(embeddedPlan.action !== 'requires-artifact',
       `${embeddedPlan.reason}; select a compatible owned Metro profile or explicitly run build ${udid} --refresh-embedded-js`);
-    console.log(JSON.stringify({ action: 'reuse', app: previous.app, appHash: previous.appHash,
+    if (reusable !== active) {
+      mkdirSync(resumeDir, { recursive: true });
+      archiveActiveReceipt();
+      save(join(buildDir, 'receipt.json'), reusable);
+    }
+    console.log(JSON.stringify({ action: 'reuse', app: reusable.app, appHash: reusable.appHash,
       nativeIdentity: native.hash, profileIdentity: compatibility.hash, reason: 'verified compatible native artifact' }));
     return true;
   }
@@ -273,7 +295,7 @@ async function build(udid, testStore, forceReason = null, refreshEmbedded = fals
   claim();
   try {
     mkdirSync(buildDir, { recursive: true });
-    if (previous) copyFileSync(join(buildDir, 'receipt.json'), join(resumeDir, `native-receipt-superseded-${Date.now()}.json`));
+    archiveActiveReceipt();
     const env = prepareNative(profile, testStore);
     const preparedNative = nativeIdentity(root, env);
     const preparedJsHash = inputHash(root, 'js');

@@ -191,6 +191,21 @@ export function environment() {
         self.assertEqual(result['deletionOutcome'], 'simctl delete returned successfully')
         self.assertEqual(len(result['attachments']), 1)
 
+    def test_new_native_receipt_allows_verified_artifact_from_compatible_simulator(self):
+        self.modern_receipt()
+        build_file = self.worktree / '.evidence/product-build/receipt.json'
+        receipt = json.loads(build_file.read_text())
+        receipt['simulator'] = 'A88FB95C-9CC6-41B8-A2BA-A68F3A5C4AF4'
+        receipt.pop('receiptHash')
+        module = self.worktree / 'scripts/sim/native-identity.mjs'
+        sealed = subprocess.check_output(['node', '--input-type=module', '-e',
+            'const {sealReceipt}=await import(process.argv[1]); process.stdout.write(JSON.stringify(sealReceipt(JSON.parse(process.argv[2]))));',
+            str(module), json.dumps(receipt)], text=True)
+        build_file.write_text(sealed)
+        result = self.retire()
+        self.assertEqual(result['deletionOutcome'], 'simctl delete returned successfully')
+        self.assertEqual(json.loads(self.flow.joinpath('report.json').read_text())['simulator'], self.udid)
+
     def test_new_native_receipt_rejects_stale_embedded_javascript(self):
         self.modern_receipt()
         (self.worktree / 'apps/mobile/lib').mkdir(parents=True, exist_ok=True)

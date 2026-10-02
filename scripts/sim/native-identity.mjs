@@ -147,3 +147,24 @@ export function nativeBuildDecision({ receipt, native, profile, recipe = null, a
     reasons.push(...compareNativeInputs(receipt.recipeIdentity?.inputs, recipe.inputs).map(path => `native build recipe changed: ${path}`));
   return { rebuild: reasons.length > 0, reasons: [...new Set(reasons)] };
 }
+
+// Generated iOS files can reflect the most recently prepared profile while an
+// older profile's intact app remains reusable. Accept that difference only
+// when another sealed, intact receipt attests the exact current generated tree.
+export function reusableNativeReceipt(receipts, native, profile, recipe, appIntact) {
+  const valid = receipt => !nativeBuildDecision({ receipt, native: receipt.nativeIdentity,
+    profile: receipt.profileIdentity, recipe: receipt.recipeIdentity, appIntact: appIntact(receipt) }).rebuild;
+  const currentTreeAttested = receipts.some(receipt => receipt?.nativeIdentity?.hash === native.hash && valid(receipt));
+  for (const receipt of receipts) {
+    if (!receipt?.nativeIdentity?.inputs) continue;
+    let decision = nativeBuildDecision({ receipt, native, profile, recipe, appIntact: appIntact(receipt) });
+    if (decision.rebuild && currentTreeAttested &&
+        nativeSourceIdentityHash(receipt.nativeIdentity) === nativeSourceIdentityHash(native)) {
+      const inputs = { ...native.inputs, generatedFiles: receipt.nativeIdentity.inputs.generatedFiles };
+      decision = nativeBuildDecision({ receipt, native: { inputs, hash: identityHash(inputs) },
+        profile, recipe, appIntact: appIntact(receipt) });
+    }
+    if (!decision.rebuild) return receipt;
+  }
+  return null;
+}

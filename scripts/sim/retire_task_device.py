@@ -192,7 +192,8 @@ def evidence(worktree, udid):
     build = worktree / '.evidence/product-build/receipt.json'
     report_file = worktree / '.evidence/product-flow/report.json'
     receipt, report = json.loads(build.read_text()), json.loads(report_file.read_text())
-    if (receipt.get('simulator') != udid or report.get('simulator') != udid or
+    modern = bool(receipt.get('nativeIdentity'))
+    if ((not modern and receipt.get('simulator') != udid) or report.get('simulator') != udid or
             report.get('result') != 'pass' or report.get('appHash') != receipt.get('appHash') or
             report.get('evidenceMode') != 'final-candidate' or not report.get('finishedAt') or
             not report.get('flows')):
@@ -200,7 +201,6 @@ def evidence(worktree, udid):
     if (receipt.get('buildMode') != 'embedded-release' or receipt.get('configuration') != 'Release' or
             report.get('buildMode') != receipt.get('buildMode')):
         raise ValueError('Metro-dependent app is not a compatible retained export')
-    modern = bool(receipt.get('nativeIdentity'))
     fields = ('configHash', 'nativeIdentity', 'profileIdentity', 'recipeIdentity', 'jsHash',
               'buildRecipeHash', 'bundleHash', 'storeMode') if modern else (
               'configHash', 'nativeSourceHash', 'buildRecipeHash', 'bundleHash', 'storeMode')

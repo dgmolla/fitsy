@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path';
 const modulePath = resolve(__dirname, 'native-identity.mjs');
 const cleanEnv = () => Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
 const runCase = (body: string) => JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e',
-  `import {nativeIdentity,nativeBuildDecision,profileIdentity,sealReceipt,identityHash,buildInputDrift} from ${JSON.stringify(modulePath)};
+  `import {nativeIdentity,nativeBuildDecision,reusableNativeReceipt,profileIdentity,sealReceipt,identityHash,buildInputDrift} from ${JSON.stringify(modulePath)};
    import {writeFileSync,readFileSync} from 'node:fs';
    const root=process.env.FITSY_FIXTURE_ROOT;
    const fixture=()=>JSON.parse(readFileSync(root+'/fixture.json'));
@@ -117,6 +117,25 @@ test('Release public store-key presence changes JS configuration without changin
     const configured=profileIdentity({configuration:'Release',storeMode:'apple-simulator',buildMode:'embedded-release'}, {os:'iOS 26.0'}, {}, execute);
     process.stdout.write(JSON.stringify({same:keyless.hash===configured.hash,capability:configured.inputs.storeCapability}));`);
   expect(result).toEqual({ same: true, capability: 'apple-native' });
+});
+
+test('Debug, Release, Debug selects the retained intact binary without another compile', () => {
+  const result = runCase(`
+    const debug=profileIdentity({configuration:'Debug',storeMode:'test-store',buildMode:'owned-metro-test-store'}, {os:'iOS 26.0'}, {}, execute);
+    const release=profileIdentity({configuration:'Release',storeMode:'unconfigured',buildMode:'embedded-release'}, {os:'iOS 26.0'}, {}, execute);
+    const recipe={inputs:{prepareNative:'same'},hash:identityHash({prepareNative:'same'})};
+    writeFileSync(root+'/apps/mobile/ios/Generated.swift','Debug generated');
+    const debugReceipt=sealReceipt({nativeIdentity:nativeIdentity(root,{},execute),profileIdentity:debug,recipeIdentity:recipe,app:'Debug.app'});
+    writeFileSync(root+'/apps/mobile/ios/Generated.swift','Release generated');
+    const current=nativeIdentity(root,{},execute);
+    const releaseReceipt=sealReceipt({nativeIdentity:current,profileIdentity:release,recipeIdentity:recipe,app:'Release.app'});
+    const receipts=[releaseReceipt,debugReceipt];
+    const chosen=reusableNativeReceipt(receipts,current,debug,recipe,()=>true);
+    writeFileSync(root+'/apps/mobile/ios/Generated.swift','manual native edit');
+    const edited=reusableNativeReceipt(receipts,nativeIdentity(root,{},execute),debug,recipe,()=>true);
+    const tampered=reusableNativeReceipt([releaseReceipt,{...debugReceipt,app:'forged'}],current,debug,recipe,()=>true);
+    process.stdout.write(JSON.stringify({chosen:chosen?.app,edited:edited?.app||null,tampered:tampered?.app||null}));`);
+  expect(result).toEqual({ chosen: 'Debug.app', edited: null, tampered: null });
 });
 
 test('editing an Expo plugin native sound resource requires a rebuild with its path', () => {
