@@ -52,6 +52,9 @@ export function buildPublicConfigAcceptance(previous, current, retained = null) 
 }
 
 export function requiredPublicConfigKeys(report, build, current) {
+  if (report?.result === 'pass' && report.evidenceMode === 'final-candidate' &&
+      report.publicConfigAcceptance?.verifiedConfigHash === current.configHash)
+    return [];
   return [...new Set([
     ...(report?.publicConfigAcceptance?.keys || []),
     ...(build?.publicConfigAcceptance?.keys || []),
@@ -217,7 +220,12 @@ export function validate(report, plan, hash, directory, now = Date.now(), cwd = 
     }
   }
   for (const name of baseline) insist(names.has(name), `missing baseline flow: ${name}`);
-  for (const category of plan.categories) {
+  // A completed configuration acceptance remains part of the retained proof
+  // even when that configuration no longer requires a new run.
+  const acceptedCategories = typeof report.publicConfigAcceptance?.verifiedConfigHash === 'string' &&
+    report.publicConfigAcceptance.verifiedConfigHash === report.configHash
+    ? impact([], report.publicConfigAcceptance.keys || []).categories : [];
+  for (const category of new Set([...plan.categories, ...acceptedCategories])) {
     insist(covered.has(category), `no deterministic coverage for ${category}`);
     const observation = report.exploration?.find(o => o.category === category);
     insist(observation?.result === 'pass' && observation.expected?.trim() && observation.observed?.trim(), `missing walkthrough outcome: ${category}`);

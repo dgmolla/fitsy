@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Local-only runner. Build and command receipts are generated, never hand-stamped.
 import { execFileSync, spawn } from 'node:child_process';
-import { readFileSync, writeFileSync, mkdirSync, readdirSync, rmSync, existsSync, openSync, closeSync, renameSync, realpathSync, copyFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, rmSync, existsSync, openSync, closeSync, renameSync, realpathSync, copyFileSync, cpSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { createHash, randomUUID } from 'node:crypto';
 import { resolve, relative, join, dirname, delimiter } from 'node:path';
@@ -191,12 +191,31 @@ function retainedReceipts() {
       catch { return []; } // Preserve unreadable raw receipts without trusting them.
     });
 }
-function archiveActiveReceipt() {
-  const file = join(buildDir, 'receipt.json');
-  if (existsSync(file)) copyFileSync(file, join(resumeDir, `native-receipt-superseded-${Date.now()}-${randomUUID()}.json`));
+export function archiveActiveReceipt(overwritingApp = null, buildDirectory = buildDir, archiveDirectory = resumeDir) {
+  const file = join(buildDirectory, 'receipt.json');
+  if (!existsSync(file)) return;
+  const archive = join(archiveDirectory, `native-receipt-superseded-${Date.now()}-${randomUUID()}.json`);
+  let active;
+  try { active = read(file); }
+  catch (error) {
+    if (!(error instanceof SyntaxError)) throw error;
+    copyFileSync(file, archive);
+    return;
+  }
+  const verified = active?.nativeIdentity && active?.profileIdentity && !nativeBuildDecision({ receipt: active,
+    native: active.nativeIdentity, profile: active.profileIdentity, recipe: active.recipeIdentity,
+    appIntact: intact(active, buildDirectory) }).rebuild;
+  if (overwritingApp && verified && resolve(active.app) === resolve(overwritingApp)) {
+    const preserved = join(buildDirectory, 'native-artifacts', randomUUID(), 'Fitsy.app');
+    mkdirSync(dirname(preserved), { recursive: true });
+    cpSync(active.app, preserved, { recursive: true });
+    assert(treeHash(preserved) === active.appHash, 'Preserved native artifact differs from verified source');
+    const { receiptHash, ...artifact } = active;
+    save(archive, sealReceipt({ ...artifact, app: preserved }));
+  } else copyFileSync(file, archive);
 }
-function intact(r) {
-  try { return r?.app && realpathSync(r.app).startsWith(realpathSync(buildDir) + '/') &&
+function intact(r, buildDirectory = buildDir) {
+  try { return r?.app && realpathSync(r.app).startsWith(realpathSync(buildDirectory) + '/') &&
     r.appHash === treeHash(r.app); }
   catch { return false; }
 }
@@ -301,7 +320,7 @@ async function build(udid, testStore, forceReason = null, refreshEmbedded = fals
   claim();
   try {
     mkdirSync(buildDir, { recursive: true });
-    archiveActiveReceipt();
+    archiveActiveReceipt(join(buildDir, `Build/Products/${profile.configuration}-iphonesimulator/Fitsy.app`));
     const env = prepareNative(profile, testStore);
     const preparedNative = nativeIdentity(root, env);
     const preparedJsHash = inputHash(root, 'js');
@@ -571,6 +590,8 @@ async function finish(walkthrough) {
   const result = validate(report, impact(changedPaths(process.env.FITSY_DIFF_BASE),
     requiredPublicConfigKeys(report, r, environment())), inputHash(), out,
     Date.now(), root, r.nativeIdentity.hash, report.evidenceMode);
+  if (report.evidenceMode === 'final-candidate')
+    report.publicConfigAcceptance.verifiedConfigHash = report.configHash;
   save(join(out, 'report.json'), report); console.log(JSON.stringify(result));
 }
 async function check() {

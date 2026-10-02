@@ -59,6 +59,15 @@ test('the real CLI plan requires billing after an ignored public store-key chang
       { cwd: dir, encoding: 'utf8', env: { ...cleanEnv(), FITSY_DIFF_BASE: base } });
     if (afterDevelopment.status !== 0) throw new Error(afterDevelopment.stderr);
     expect(JSON.parse(afterDevelopment.stdout).categories).toEqual(['billing']);
+    writeFileSync(join(dir, '.evidence/product-flow/report.json'), JSON.stringify({
+      ...JSON.parse(current.stdout), result: 'pass', evidenceMode: 'final-candidate',
+      publicConfigAcceptance: { keys: ['EXPO_PUBLIC_REVENUECAT_TEST_KEY'],
+        verifiedConfigHash: JSON.parse(current.stdout).configHash },
+    }));
+    const afterAcceptance = spawnSync(process.execPath, ['scripts/verify/product-flow.mjs', '--plan'],
+      { cwd: dir, encoding: 'utf8', env: { ...cleanEnv(), FITSY_DIFF_BASE: base } });
+    if (afterAcceptance.status !== 0) throw new Error(afterAcceptance.stderr);
+    expect(JSON.parse(afterAcceptance.stdout)).toMatchObject({ required: false, categories: [] });
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
