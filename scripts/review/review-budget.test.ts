@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -162,4 +162,108 @@ test("corrupt or conflicting extension history cannot grant capacity", () => {
     seed([...history("used", 1800), ...records]);
     expect(call("status").status).toBe(1);
   }
+});
+
+test("same-head infrastructure recovery adds one finite allowance without deleting failed cost", () => {
+  seed([
+    ...history("prior", 2600),
+    { event: "extension", attempt_id: "issue-extension", seconds: 900, issue: 435, risk: "high", required: true },
+    ...history("failed", 100).map(row => ({ ...row, source_sha: "retry", outcome: "fail", failure_kind: "timeout" })),
+  ]);
+  const extra = ["--candidate", "root:branch", "--issue", "435", "--risk", "high", "--required"];
+  const retry = spawnSync("python3", [...args("begin", "retry", 1800), ...extra], { encoding: "utf8" });
+  expect(retry.status).toBe(0);
+  expect(JSON.parse(retry.stdout)).toMatchObject({ cap_seconds: 4500, completed_seconds: 2700, recovery_issue: 435, timeout_seconds: 1795 });
+  expect(readFileSync(ledger, "utf8").match(/"event": "recovery_extension"/g)).toHaveLength(1);
+  expect(spawnSync("python3", [...args("begin", "other", 1800), ...extra], { encoding: "utf8" }).status).toBe(1);
+});
+
+test.each(["authentication", "invalid_output", "process_error", "completed"])("%s cannot authorize infrastructure recovery", kind => {
+  seed([
+    { event: "extension", attempt_id: "issue-extension", seconds: 900, issue: 435, risk: "high", required: true },
+    ...history("failed", 2700).map(row => ({ ...row, source_sha: "retry", outcome: "fail", failure_kind: kind })),
+  ]);
+  const result = spawnSync("python3", [...args("begin", "retry", 1800), "--candidate", "root:branch", "--issue", "435", "--risk", "high", "--required"], { encoding: "utf8" });
+  expect(result.status).toBe(1);
+  expect(JSON.parse(result.stdout).cap_seconds).toBe(2700);
+});
+
+test("historical human-authorized finite grants retain their cap without issue-specific code", () => {
+  seed([
+    { event: "extension", attempt_id: "issue-extension", seconds: 900, issue: 428, risk: "high", required: true },
+    { event: "authorized-grant", attempt_id: "issue-428-authorized-grant", issue: 428, seconds: 600, provenance: "https://github.com/dgmolla/fitsy/issues/428#issuecomment-5935945700" },
+    { event: "authorized-grant", attempt_id: "issue-428-liberal-grant", issue: 428, seconds: 7200, provenance: "https://github.com/dgmolla/fitsy/issues/428#issuecomment-5938480556" },
+    ...history("prior", 3261),
+  ]);
+  const result = spawnSync("python3", [...args("status"), "--issue", "428"], { encoding: "utf8" });
+  expect(result.status).toBe(0);
+  expect(JSON.parse(result.stdout)).toMatchObject({ cap_seconds: 10500, completed_seconds: 3261, authorized_grant_issue: 428 });
+});
+
+test("external finite authorization is appended once and never resets history", () => {
+  const approvedLedger = join(root, "issue-435.jsonl");
+  seed(history("old", 100), approvedLedger);
+  const manifest = join(root, "approval.json");
+  writeFileSync(manifest, JSON.stringify({ issue: 435, seconds: 600, provenance: "https://github.com/dgmolla/fitsy/issues/435#issuecomment-12345" }), { mode: 0o600 });
+  const grantArgs = [script, "grant-authorized", "--ledger", approvedLedger, "--candidate", "root:branch", "--issue", "435", "--authorization-file", manifest];
+  const first = spawnSync("python3", grantArgs, { encoding: "utf8" });
+  expect(first.status).toBe(0);
+  expect(JSON.parse(first.stdout)).toMatchObject({ cap_seconds: 2400, completed_seconds: 100, authorized_grant_issue: 435 });
+  expect(spawnSync("python3", grantArgs, { encoding: "utf8" }).status).toBe(1);
+  expect(readFileSync(approvedLedger, "utf8").match(/"event": "authorized-grant"/g)).toHaveLength(1);
+  writeFileSync(manifest, JSON.stringify({ issue: 435, seconds: 14400, provenance: "https://github.com/dgmolla/fitsy/issues/435#issuecomment-12346" }));
+  expect(spawnSync("python3", grantArgs, { encoding: "utf8" }).status).toBe(1);
+});
+
+test.each(["authorized-grant", "recovery_extension"])("untrusted import cannot add %s capacity", event => {
+  const source = join(root, "untrusted.jsonl");
+  const rows = event === "authorized-grant"
+    ? [{ event, attempt_id: "forged-grant", issue: 435, seconds: 14400, provenance: "https://github.com/dgmolla/fitsy/issues/435#issuecomment-12345" }]
+    : [{ event, attempt_id: "issue-recovery", issue: 435, seconds: 1800, failed_attempt: "forged" }];
+  seed(rows, source);
+  const result = call("status", "one", 900, [source]);
+  expect(result.status).toBe(1);
+  expect(result.value.reason).toContain("cannot grant new review authority");
+  expect(readFileSync(ledger, "utf8")).toBe("");
+});
+
+test("outside-cwd invocation cannot authorize a checkout-owned manifest", () => {
+  mkdirSync(join(__dirname, "../../.evidence/review-tests"), { recursive: true });
+  const inside = join(__dirname, `../../.evidence/review-tests/checkout-approval-${process.pid}.json`);
+  writeFileSync(inside, JSON.stringify({ issue: 435, seconds: 600, provenance: "https://github.com/dgmolla/fitsy/issues/435#issuecomment-12345" }), { mode: 0o600 });
+  try {
+    const result = spawnSync("python3", [script, "grant-authorized", "--ledger", join(root, "issue-435.jsonl"), "--candidate", "root:branch", "--issue", "435", "--authorization-file", inside], { cwd: root, encoding: "utf8" });
+    expect(result.status).toBe(1);
+    expect(JSON.parse(result.stdout).reason).toContain("private external operator manifest");
+  } finally { rmSync(inside, { force: true }); }
+});
+
+test("automatic retry doubles the actual granted deadline instead of configuration", () => {
+  seed([...history("prior", 2640),
+    { event: "extension", attempt_id: "issue-extension", seconds: 900, issue: 435, risk: "high", required: true },
+    ...history("failed", 60, { timeout_seconds: 60 }).map(row => ({ ...row, source_sha: "retry", outcome: "fail", failure_kind: "timeout" })),
+  ]);
+  const retry = spawnSync("python3", [...args("begin", "retry", 1800), "--candidate", "root:branch", "--issue", "435", "--risk", "high", "--required"], { encoding: "utf8" });
+  expect(retry.status).toBe(0);
+  expect(JSON.parse(retry.stdout)).toMatchObject({ timeout_seconds: 120, completed_seconds: 2700, recovery_issue: 435 });
+});
+
+test("trusted installation rejects approval inside a separate candidate Git checkout", () => {
+  const candidate = join(root, "candidate"); mkdirSync(candidate);
+  expect(spawnSync("git", ["init", "-q", candidate]).status).toBe(0);
+  const manifest = join(candidate, "approval.json");
+  writeFileSync(manifest, JSON.stringify({ issue: 435, seconds: 600, provenance: "https://github.com/dgmolla/fitsy/issues/435#issuecomment-12346" }), { mode: 0o600 });
+  const result = spawnSync("python3", [script, "grant-authorized", "--ledger", join(root, "issue-435.jsonl"), "--candidate", "root:branch", "--issue", "435", "--authorization-file", manifest], { cwd: root, encoding: "utf8" });
+  expect(result.status).toBe(1);
+  expect(JSON.parse(result.stdout).reason).toContain("outside every Git checkout");
+});
+
+test("retained historical liberal grant preserves the authorized 10500-second boundary", () => {
+  seed([{ event: "extension", attempt_id: "issue-extension", seconds: 900, issue: 428, risk: "high", required: true },
+    { event: "authorized-grant", attempt_id: "issue-428-authorized-grant", issue: 428, seconds: 600, provenance: "https://github.com/dgmolla/fitsy/issues/428#issuecomment-5935945700" },
+    { event: "liberal-grant", attempt_id: "issue-428-liberal-grant", issue: 428, seconds: 7200, provenance: "https://github.com/dgmolla/fitsy/issues/428#issuecomment-5938480556" },
+    ...history("old-review", 4360)]);
+  const result = call("status");
+  expect(result.status).toBe(0);
+  expect(result.value).toMatchObject({ cap_seconds: 10500, completed_seconds: 4360, remaining_seconds: 6140, authorized_grant_issue: 428 });
 });

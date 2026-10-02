@@ -1,3 +1,4 @@
+import { executionFailureCases } from "./execution-failure-cases";
 import { policyRunnerCases } from "./policy-runner-cases";
 import { deliveryTimingCases } from "./delivery-timing-cases";
 import { execFileSync, spawnSync } from "node:child_process";
@@ -25,7 +26,7 @@ function run(model = "fixture-model", provider = "claude", lens = "correctness")
     cwd: root, encoding: "utf8", env: { ...env, FITSY_REVIEW_MODEL: model, FITSY_REVIEW_PROVIDER: provider }, timeout: 15000,
   });
 }
-function runPr(lens = "correctness", body = "Delivery-Issue: #355\n") {
+function runPr(lens = "correctness", body = "Delivery-Issue: #355\n", provider = "claude") {
   writeFileSync(join(root, "pr-body"), body);
   const gh = join(root, "bin/gh-fixture");
   writeFileSync(gh, `#!/bin/sh
@@ -48,7 +49,7 @@ if [ "$1" = pr ] && [ "$2" = comment ]; then printf '%s\\n' "$*" >> "$REVIEW_TES
 exit 1
 `, { mode: 0o755 });
   return spawnSync("bash", ["scripts/review/run-lens.sh", "123", lens], {
-    cwd: root, encoding: "utf8", env: { ...env, FITSY_REVIEW_MODEL: "fixture-model", FITSY_REVIEW_PROVIDER: "claude",
+    cwd: root, encoding: "utf8", env: { ...env, FITSY_REVIEW_MODEL: "fixture-model", FITSY_REVIEW_PROVIDER: provider,
       FITSY_GH_BIN: gh, REVIEW_TEST_GH_CALLS: join(root, "gh-calls") }, timeout: 15000,
   });
 }
@@ -156,7 +157,7 @@ test("nonzero external execution cannot publish or cache a partial pass", () => 
   writeFileSync(join(root, "exit"), "1");
   const result = run();
   expect(result.status).toBe(1);
-  expect(JSON.parse(result.stdout)).toMatchObject({ verdict: "incomplete", findings: [], error: { kind: "execution_error" } });
+  expect(JSON.parse(result.stdout)).toMatchObject({ verdict: "incomplete", findings: [], error: { kind: "process_error" } });
   expect(readdirSync(cache).filter(name => name.endsWith(".json"))).toHaveLength(0);
   const posted = runPr();
   expect(posted.status).toBe(1);
@@ -295,3 +296,4 @@ deliveryTimingCases({ root: () => root, env: () => env, source, run, runPr, git 
 
 policyRunnerCases({ root: () => root, setRoot: value => { root = value; }, env: () => env, setEnv: value => { env = value; },
   calls: () => calls, cache: () => cache, run, runPr, git, isolatedEnv });
+executionFailureCases({ root: () => root, env: () => env, setEnv: value => { env = value; }, run, runPr });

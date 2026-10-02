@@ -31,7 +31,7 @@ exit 1
       FITSY_REVIEW_TEST_CALLS: calls, FITSY_REVIEW_TEST_STATUSES: statuses,
       PATH: `${bin}:${process.env.PATH}` };
     const tick = () => execFileSync("bash", [join(repo, "scripts/review/poller.sh")], { env, cwd: repo });
-    const status = (state: string, id: number) => ({ context: "lens/correctness", state, id, created_at: "2026-09-26T08:00:00Z" });
+    const status = (state: string, id: number) => ({ context: "lens/correctness", state, id, description: state === "error" ? "execution/timeout: independent review incomplete" : "complete", created_at: "2026-09-26T08:00:00Z" });
     writeFileSync(statuses, JSON.stringify([status("success", 1), status("error", 2)]));
     tick();
     expect(readFileSync(calls, "utf8")).toBe("correctness\n");

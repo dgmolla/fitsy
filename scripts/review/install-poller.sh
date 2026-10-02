@@ -7,7 +7,7 @@ set -euo pipefail
 LABEL="com.fitsy.review-poller"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 REVIEW_HOME="$HOME/.fitsy-review"
-SCRIPT="$REVIEW_HOME/repo/scripts/review/poller.sh"
+SCRIPT="$REVIEW_HOME/runtime/poller.sh"
 
 if [ "${1:-}" = "--uninstall" ]; then
   launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
@@ -20,6 +20,17 @@ mkdir -p "$REVIEW_HOME" "$HOME/Library/LaunchAgents"
 if [ ! -d "$REVIEW_HOME/repo/.git" ]; then
   gh repo clone dgmolla/fitsy "$REVIEW_HOME/repo" -- --quiet
 fi
+
+# Keep launchd's executable outside the PR-mutated review clone.
+# Publish only a complete trusted-main copy, retaining the prior installed file
+# if fetching or writing fails.
+mkdir -p "$REVIEW_HOME/runtime"
+git -C "$REVIEW_HOME/repo" fetch -q origin main
+STAGED_SCRIPT="$(mktemp "$REVIEW_HOME/runtime/.poller.XXXXXX")"
+trap 'rm -f "$STAGED_SCRIPT"' EXIT
+git -C "$REVIEW_HOME/repo" show origin/main:scripts/review/poller.sh > "$STAGED_SCRIPT"
+chmod 700 "$STAGED_SCRIPT"
+mv "$STAGED_SCRIPT" "$SCRIPT"
 
 cat > "$PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

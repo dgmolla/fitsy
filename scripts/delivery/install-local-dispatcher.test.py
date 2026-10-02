@@ -43,7 +43,16 @@ class InstallTest(unittest.TestCase):
                                     'then exit 1; fi\nexit 0\n')
                 elif name != 'gh': path.write_text('#!/bin/sh\nexit 0\n')
                 path.chmod(0o700)
-            env = {**os.environ, 'HOME': str(home), 'PATH': f'{tools}:/usr/bin:/bin',
+            # Provider/install behavior is independent of the caller's disk pressure.
+            # Stub availability only in these disposable Python child processes;
+            # production admission and separate low-space tests keep the real guard.
+            hooks = base / 'python-hooks'
+            hooks.mkdir()
+            (hooks / 'sitecustomize.py').write_text(
+                'import shutil\nfrom collections import namedtuple\n'
+                'usage = namedtuple("usage", "total used free")\n'
+                'shutil.disk_usage = lambda path: usage(32 * 1024**3, 16 * 1024**3, 16 * 1024**3)\n')
+            env = {**os.environ, 'PYTHONPATH': str(hooks), 'HOME': str(home), 'PATH': f'{tools}:/usr/bin:/bin',
                    'FITSY_DISPATCH_HOME': str(home / '.fitsy-dispatcher')}
             def command(*args):
                 result = subprocess.run(args, cwd=repo, env=env, text=True, capture_output=True,
