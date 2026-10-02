@@ -50,5 +50,11 @@ test("installed launcher retains trusted main outside a PR-mutated clone", () =>
     const installed = join(home, ".fitsy-review/runtime/poller.sh");
     expect(readFileSync(join(home, "Library/LaunchAgents/com.fitsy.review-poller.plist"), "utf8")).toContain(installed);
     expect(execFileSync("bash", [installed], { env, encoding: "utf8" }).trim()).toBe("trusted-launcher");
+    const plist = join(home, "Library/LaunchAgents/com.fitsy.review-poller.plist");
+    const configured = readFileSync(plist, "utf8").replace("<dict>\n    <key>PATH", "<dict>\n    <key>FITSY_REVIEW_PROVIDER</key><string>codex</string>\n    <key>PATH");
+    writeFileSync(plist, configured);
+    execFileSync("bash", [join(__dirname, "install-poller.sh"), "--refresh-runtime"], { env, stdio: "pipe" });
+    expect(readFileSync(plist, "utf8")).toBe(configured);
+    expect(execFileSync("bash", [installed], { env, encoding: "utf8" }).trim()).toBe("trusted-launcher");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

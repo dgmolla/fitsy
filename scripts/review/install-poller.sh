@@ -3,6 +3,7 @@
 # subscription). Same launchd pattern as the daily-memo job.
 #   bash scripts/review/install-poller.sh          # install + start
 #   bash scripts/review/install-poller.sh --uninstall
+#   bash scripts/review/install-poller.sh --refresh-runtime # preserve service/settings
 set -euo pipefail
 LABEL="com.fitsy.review-poller"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
@@ -31,6 +32,11 @@ trap 'rm -f "$STAGED_SCRIPT"' EXIT
 git -C "$REVIEW_HOME/repo" show origin/main:scripts/review/poller.sh > "$STAGED_SCRIPT"
 chmod 700 "$STAGED_SCRIPT"
 mv "$STAGED_SCRIPT" "$SCRIPT"
+# Refresh executable only, preserving enabled state and persistent provider settings.
+if [ "${1:-}" = --refresh-runtime ]; then
+  echo "refreshed trusted runtime: $SCRIPT"
+  exit 0
+fi
 
 cat > "$PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

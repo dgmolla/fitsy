@@ -496,7 +496,7 @@ def make_prompt(claim):
             f"risk {claim['classification']['planning_risk']}, profile {claim['classification']['profile']}. "
             f"The configured implementation provider/model is {claim['worker_profile']['provider']}/"
             f"{claim['worker_profile']['model']}; record actual use. "
-            f"Use independent canonical reviews with the snapshotted reviewer provider/model "
+            f"Run one canonical scripts/review/run-review.sh round with all required domains and the snapshotted reviewer provider/model "
             f"{claim['review_profile']['provider']}/{claim['review_profile']['model']} "
             f"at {claim['review_profile']['effort']} effort. "
             'The canonical diff-based review tier is authoritative. '
@@ -511,7 +511,7 @@ def make_prompt(claim):
             'reuse only a verified matching seed and never mutate shared dependencies. '
             'The user authorizes the existing 1800-second cumulative independent-review budget plus at most one durable '
             '900-second extension through the shipped budget tool when required; retain every historical attempt. '
-            'Do not ask again for that extension or waive a required lens. '
+            'Do not ask again for that extension or waive a required domain. Never invoke separate routine reviewers per domain. '
             'If the authorized total cannot finish mandatory review, park with evidence and release the lane.\n')
 
 

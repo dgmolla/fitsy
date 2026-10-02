@@ -30,7 +30,10 @@ function runPr(lens = "correctness", body = "Delivery-Issue: #355\n", provider =
   writeFileSync(join(root, "pr-body"), body);
   const gh = join(root, "bin/gh-fixture");
   writeFileSync(gh, `#!/bin/sh
-if [ "$1" = pr ] && [ "$2" = diff ]; then git diff --abbrev=8 origin/main...HEAD; exit; fi
+if [ "$1" = pr ] && [ "$2" = diff ]; then
+  if [ -f ${JSON.stringify(join(root, 'pr-diff'))} ]; then cat ${JSON.stringify(join(root, 'pr-diff'))}; else git diff --abbrev=8 origin/main...HEAD; fi
+  exit
+fi
 if [ "$1" = pr ] && [ "$2" = view ]; then
   case "$5" in
     title) printf '%s\\n' 'Fixture change' ;;
@@ -69,7 +72,7 @@ beforeEach(() => {
   mkdirSync(join(root, "scripts/verify"), { recursive: true });
   mkdirSync(join(root, ".claude/lenses"), { recursive: true });
   mkdirSync(join(root, "bin"));
-  for (const name of ["run-lens.sh", "execute-review.py", "extract-verdict.py", "format-comment.py", "review-gate.py", "review-budget.py", "tier.mjs"]) {
+  for (const name of ["run-lens.sh", "run-review.sh", "review-round.py", "review-domains.py", "execute-review.py", "extract-verdict.py", "format-comment.py", "review-gate.py", "review-budget.py", "tier.mjs"]) {
     cpSync(join(source, "scripts/review", name), join(root, "scripts/review", name));
   }
   cpSync(join(source, "scripts/verify/risk-tiers.yml"), join(root, "scripts/verify/risk-tiers.yml"));
@@ -82,12 +85,21 @@ beforeEach(() => {
 import json,os,pathlib,sys,time
 if '--version' in sys.argv:
  print('fixture-cli 1.0'); sys.exit(0)
-pathlib.Path(${JSON.stringify(join(root, 'prompt'))}).write_text(sys.stdin.read())
+prompt=sys.stdin.read()
+pathlib.Path(${JSON.stringify(join(root, 'prompt'))}).write_text(prompt)
 with open(${JSON.stringify(calls)},'a') as f: f.write('called\\n')
 pathlib.Path(${JSON.stringify(join(root, 'reviewer-pid'))}).write_text(str(os.getpid()))
 delay=pathlib.Path(${JSON.stringify(join(root, 'delay'))})
 if delay.exists(): time.sleep(float(delay.read_text()))
 result=pathlib.Path(${JSON.stringify(join(root, 'verdict'))}).read_text()
+try:
+ value=json.loads(result)
+ if 'lens' in value and 'error' not in value:
+  domains=next(line.split(': ',1)[1].split() for line in prompt.splitlines() if line.startswith('Required domains: '))
+  findings=[dict(f,domains=[value['lens']]) for f in value['findings']]
+  value={'verdict':value['verdict'], 'domains':{d: ('fail' if any(f['severity']=='CONFIRMED' and d in f['domains'] for f in findings) else 'pass') for d in domains}, 'findings':findings}
+  result=json.dumps(value)
+except (ValueError,KeyError,StopIteration): pass
 if '--output-last-message' in sys.argv:
  pathlib.Path(sys.argv[sys.argv.index('--output-last-message')+1]).write_text(result)
 elif '-o' in sys.argv:
@@ -192,7 +204,7 @@ test("advisory docs findings remain visible without blocking the caller", () => 
   writeFileSync(join(root, "verdict"), JSON.stringify(advisory));
   const result = run("fixture-model", "claude", "docs-sanity");
   expect(result.status).toBe(0);
-  expect(JSON.parse(result.stdout)).toMatchObject(advisory);
+  expect(JSON.parse(result.stdout)).toMatchObject({ verdict: advisory.verdict, findings: advisory.findings, domains: { correctness: "pass", "docs-sanity": "fail" } });
 });
 test("plausible findings retain their raw comment-only status without a disposition", () => {
   writeFileSync(join(root, "verdict"), JSON.stringify({ lens: "correctness", verdict: "pass", findings: [{
@@ -217,7 +229,7 @@ function failingReview(priority: "P1" | "P2") {
   const first = run();
   expect(first.status).toBe(1);
   expect(JSON.parse(first.stdout)).toMatchObject({ verdict: "fail", findings: [{ priority }] });
-  const match = first.stderr.match(/\[run-lens\] gate: (\{[^\n]+\})/);
+  const match = first.stderr.match(/\[run-review\] correctness gate: (\{[^\n]+\})/);
   expect(match).not.toBeNull();
   const identity = JSON.parse(match![1]!).identity;
   const receiptPath = ".evidence/review-tests/verify.json";
@@ -297,3 +309,57 @@ deliveryTimingCases({ root: () => root, env: () => env, source, run, runPr, git 
 policyRunnerCases({ root: () => root, setRoot: value => { root = value; }, env: () => env, setEnv: value => { env = value; },
   calls: () => calls, cache: () => cache, run, runPr, git, isolatedEnv });
 executionFailureCases({ root: () => root, env: () => env, setEnv: value => { env = value; }, run, runPr });
+
+test("one invocation covers all required domains and legacy callers reuse the whole round", () => {
+  for (const domain of ["danger-zone", "workflow-security"]) writeFileSync(join(root, `.claude/lenses/${domain}.md`), `Review ${domain}.\n`);
+  mkdirSync(join(root, "apps/api/lib"), { recursive: true });
+  writeFileSync(join(root, "apps/api/lib/auth.ts"), "export const auth = true;\n");
+  writeFileSync(join(root, "scripts/review/change.sh"), "echo review-control\n");
+  git("add", "."); git("commit", "-qm", "sensitive controls");
+  expect(run().status).toBe(0);
+  expect(JSON.parse(runPr().stdout).domains).toEqual({ correctness: "pass", "danger-zone": "pass", "workflow-security": "pass" });
+  expect(run("fixture-model", "claude", "danger-zone").status).toBe(0);
+  expect(run("fixture-model", "claude", "workflow-security").status).toBe(0);
+  expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(1);
+  const posts = readFileSync(join(root, "gh-calls"), "utf8");
+  for (const domain of ["correctness", "danger-zone", "workflow-security"]) expect(posts).toContain(`context=lens/${domain}`);
+  expect(posts).toContain("context=review/round");
+  const budget = readFileSync(join(root, "budgets/issue-355.jsonl"), "utf8").trim().split("\n").map(line => JSON.parse(line));
+  expect(budget.filter(row => row.event === "start")).toHaveLength(1);
+});
+
+test("missing required domain refuses every passing projection", () => {
+  writeFileSync(join(root, ".claude/lenses/workflow-security.md"), "Review controls.\n");
+  writeFileSync(join(root, "scripts/review/change.sh"), "echo control\n");
+  git("add", "."); git("commit", "-qm", "controls");
+  writeFileSync(join(root, "verdict"), JSON.stringify({ verdict: "pass", domains: { correctness: "pass" }, findings: [] }));
+  const result = runPr();
+  expect(result.status).toBe(1);
+  expect(JSON.parse(result.stdout).verdict).toBe("incomplete");
+  const posts = readFileSync(join(root, "gh-calls"), "utf8");
+  expect(posts).not.toContain("state=success");
+  expect(posts).toContain("context=lens/workflow-security");
+  expect(posts).toContain("state=error");
+});
+
+
+test("cache normalizes optional hunk labels but preserves actual patch content", () => {
+  expect(run().status).toBe(0);
+  const diff = git("diff", "--abbrev=8", "origin/main...HEAD");
+  writeFileSync(join(root, "pr-diff"), diff.replace(/(@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@).*$/gm, "$1 function example"));
+  expect(runPr().status).toBe(0);
+  expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(1);
+  writeFileSync(join(root, "pr-diff"), diff.replace("+export const value = 2;", "+export const value = 3;"));
+  expect(runPr().status).toBe(0);
+  expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(2);
+});
+
+test("deleted sensitive files still require danger-zone coverage", () => {
+  mkdirSync(join(root, "apps/api/lib"), { recursive: true });
+  writeFileSync(join(root, "apps/api/lib/auth.ts"), "export const auth = true;\n");
+  writeFileSync(join(root, ".claude/lenses/danger-zone.md"), "Review authorization.\n");
+  git("add", "."); git("commit", "-qm", "sensitive baseline");
+  git("update-ref", "refs/remotes/origin/main", "HEAD");
+  git("rm", "apps/api/lib/auth.ts"); git("commit", "-qm", "delete auth");
+  expect(JSON.parse(run().stdout).domains).toEqual({ correctness: "pass", "danger-zone": "pass" });
+});

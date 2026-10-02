@@ -77,7 +77,7 @@ test("local timing records pass, cached reuse, and failed independent reviews", 
     .trim().split("\n").map(line => JSON.parse(line));
   const terminal = events.filter(event => event.status !== "running");
   expect(terminal.map(event => event.status)).toEqual(["pass", "cached", "fail"]);
-  expect(terminal.every(event => event.issue === 355 && event.phase === "review" && event.lens === "correctness")).toBe(true);
+  expect(terminal.every(event => event.issue === 355 && event.phase === "review" && event.lens === "review-round")).toBe(true);
   expect(terminal[1].duration_ms).toBe(0);
   expect(new Set(terminal.map(event => event.attempt_id)).size).toBe(3);
   expect(new Set(terminal.map(event => event.round_id))).toEqual(new Set([git("rev-parse", "HEAD").trim()]));
