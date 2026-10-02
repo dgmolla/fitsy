@@ -40,7 +40,7 @@ def read_events(handle):
         if not isinstance(rows, list):
             raise ValueError("invalid imported review history")
         for row in rows:
-            if isinstance(row, dict) and row.get("event") == "authorized-grant":
+            if isinstance(row, dict) and row.get("event") in ("authorized-grant", "liberal-grant"):
                 if (type(row.get("issue")) is not int or row["issue"] <= 0
                         or type(row.get("seconds")) is not int or not 1 <= row["seconds"] <= 14400
                         or not isinstance(row.get("attempt_id"), str) or not row["attempt_id"]
@@ -113,7 +113,7 @@ def import_history(handle, ledger, paths, optional_paths):
             if key in events and events[key] != event:
                 raise ValueError(f"conflicting retained review history in {source}")
             if key not in events:
-                if event["event"] in ("authorized-grant", "recovery_extension"):
+                if event["event"] in ("authorized-grant", "liberal-grant", "recovery_extension"):
                     raise ValueError("imported history cannot grant new review authority; verify authorization through the external operator manifest")
                 new.append(event)
                 events[key] = event
@@ -159,7 +159,7 @@ def usage(events):
     recoveries = [e for e in events if e["event"] == "recovery_extension"]
     if len(recoveries) > 1:
         raise ValueError("multiple infrastructure recovery extensions are not permitted")
-    grants = [e for e in events if e["event"] == "authorized-grant"]
+    grants = [e for e in events if e["event"] in ("authorized-grant", "liberal-grant")]
     if len({e["issue"] for e in grants}) > 1 or len({e["provenance"] for e in grants}) != len(grants) or sum(e["seconds"] for e in grants) > 14400:
         raise ValueError("duplicate, mismatched or excessive authorized grants")
     if grants and extensions and grants[0]["issue"] != extensions[0]["issue"]:

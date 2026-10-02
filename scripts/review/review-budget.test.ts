@@ -257,3 +257,13 @@ test("trusted installation rejects approval inside a separate candidate Git chec
   expect(result.status).toBe(1);
   expect(JSON.parse(result.stdout).reason).toContain("outside every Git checkout");
 });
+
+test("retained historical liberal grant preserves the authorized 10500-second boundary", () => {
+  seed([{ event: "extension", attempt_id: "issue-extension", seconds: 900, issue: 428, risk: "high", required: true },
+    { event: "authorized-grant", attempt_id: "issue-428-authorized-grant", issue: 428, seconds: 600, provenance: "https://github.com/dgmolla/fitsy/issues/428#issuecomment-5935945700" },
+    { event: "liberal-grant", attempt_id: "issue-428-liberal-grant", issue: 428, seconds: 7200, provenance: "https://github.com/dgmolla/fitsy/issues/428#issuecomment-5938480556" },
+    ...history("old-review", 4360)]);
+  const result = call("status");
+  expect(result.status).toBe(0);
+  expect(result.value).toMatchObject({ cap_seconds: 10500, completed_seconds: 4360, remaining_seconds: 6140, authorized_grant_issue: 428 });
+});
