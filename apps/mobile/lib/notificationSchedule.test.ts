@@ -2,10 +2,10 @@ import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { planReminders, REMINDER_PREFIX } from './notificationPlan';
-import { clearFutureTrialReminderConfirmation, readReminderPreferences, readScheduledReminders, recordTrialReminderConfirmation, saveReminderPreferences, replaceReminders, reconcileReminderOwnership, reminderDestination, REMINDER_CHANNEL, wasTrialReminderConfirmed } from './notificationSchedule';
+import { readReminderPreferences, readScheduledReminders, saveReminderPreferences, replaceReminders, reconcileReminderOwnership, reminderDestination, REMINDER_CHANNEL } from './notificationSchedule';
 import { clearDevTrialReminder, reconcileDevTrialReminderOwnership, scheduleDevTrialReminder } from './devTrialReminderProbe';
 
-jest.mock('@react-native-async-storage/async-storage', () => ({ __esModule: true, default: { getItem: jest.fn(), setItem: jest.fn(), removeItem: jest.fn() } }));
+jest.mock('@react-native-async-storage/async-storage', () => ({ __esModule: true, default: { getItem: jest.fn(), setItem: jest.fn() } }));
 jest.mock('expo-notifications', () => ({
   getAllScheduledNotificationsAsync: jest.fn(), cancelScheduledNotificationAsync: jest.fn(),
   getPresentedNotificationsAsync: jest.fn(), dismissNotificationAsync: jest.fn(),
@@ -23,7 +23,7 @@ beforeEach(() => {
   sdk.getPresentedNotificationsAsync.mockResolvedValue([]);
   sdk.getPermissionsAsync.mockResolvedValue({ status: 'granted' } as Notifications.NotificationPermissionsStatus);
   sdk.scheduleNotificationAsync.mockImplementation(async request => { pending.set(request.identifier!, request); return request.identifier!; });
-  storage.getItem.mockResolvedValue(null); storage.setItem.mockResolvedValue(); storage.removeItem.mockResolvedValue();
+  storage.getItem.mockResolvedValue(null); storage.setItem.mockResolvedValue();
 });
 afterEach(() => { Platform.OS = initialPlatform; });
 const plan = () => planReminders({ now: new Date(), userId: 'one', entitled: true, preferences: { meals: true, trial: false } });
@@ -37,27 +37,6 @@ test('preferences are scoped by account and malformed or missing storage stays o
   expect(await readReminderPreferences('one')).toEqual({ meals: false, trial: false });
   storage.getItem.mockResolvedValue('{"meals":"yes","trial":true}');
   expect(await readReminderPreferences('one')).toEqual({ meals: false, trial: true });
-});
-test('a source-confirmed trial job remains confirmed after its due time and is cleared before due on opt-out', async () => {
-  jest.useFakeTimers().setSystemTime(new Date('2026-10-08T12:00:00Z'));
-  const records = new Map<string, string>();
-  storage.getItem.mockImplementation(async key => records.get(key) ?? null);
-  storage.setItem.mockImplementation(async (key, value) => { records.set(key, value); });
-  storage.removeItem.mockImplementation(async key => { records.delete(key); });
-  try {
-    const expiry = Date.parse('2026-10-10T12:00:00Z');
-    const scheduledFor = '2026-10-08T19:00:00Z';
-    await recordTrialReminderConfirmation('one', expiry, scheduledFor);
-    expect(await wasTrialReminderConfirmed('one', expiry)).toBe(false);
-    await clearFutureTrialReminderConfirmation('one');
-    expect(records.has('@fitsy/trial-reminder-confirmed/one')).toBe(false);
-    await recordTrialReminderConfirmation('one', expiry, scheduledFor);
-    jest.setSystemTime(new Date('2026-10-09T12:00:00Z'));
-    expect(await wasTrialReminderConfirmed('one', expiry)).toBe(true);
-    await clearFutureTrialReminderConfirmation('one');
-    expect(await wasTrialReminderConfirmed('one', expiry)).toBe(true);
-    expect(await wasTrialReminderConfirmed('two', expiry)).toBe(false);
-  } finally { jest.useRealTimers(); }
 });
 test('reconciliation is idempotent and preserves other feature notifications', async () => {
   pending.set('launch-announcement', { identifier: 'launch-announcement', content: {}, trigger: null });

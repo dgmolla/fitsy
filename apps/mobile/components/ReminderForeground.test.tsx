@@ -1,9 +1,10 @@
 jest.unmock('react-native');
 import React from 'react';
 import { Alert, AppState, Pressable, Text } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { ReminderProvider, useReminders } from '../lib/useReminders';
-import { readReminderPreferences, reconcileReminderOwnership, replaceReminders, wasTrialReminderConfirmed } from '../lib/notificationSchedule';
+import { readReminderPreferences, reconcileReminderOwnership, replaceReminders } from '../lib/notificationSchedule';
 import { reconcileDevTrialReminderOwnership } from '../lib/devTrialReminderProbe';
 
 jest.mock('expo-router', () => ({ router: { push: jest.fn() }, usePathname: () => '/notification-settings' }));
@@ -12,6 +13,7 @@ jest.mock('expo-notifications', () => ({
   setNotificationHandler: jest.fn(),
   addNotificationResponseReceivedListener: () => ({ remove() {} }),
   getLastNotificationResponseAsync: async () => null,
+  getPermissionsAsync: jest.fn(async () => ({ status: 'granted' })),
 }));
 let mockAccountId = 'reminder-owner';
 let mockAuthListener: ((event: string, session: { user: { id: string } }) => void) | undefined;
@@ -28,9 +30,6 @@ jest.mock('../lib/usePurchases', () => ({ usePurchases: () => ({
 jest.mock('../lib/notificationSchedule', () => ({
   readReminderPreferences: jest.fn(),
   readScheduledReminders: jest.fn(async () => []),
-  recordTrialReminderConfirmation: jest.fn(async () => {}),
-  wasTrialReminderConfirmed: jest.fn(async () => false),
-  clearFutureTrialReminderConfirmation: jest.fn(async () => {}),
   replaceReminders: jest.fn(async () => {}),
   reconcileReminderOwnership: jest.fn(async () => {}),
   subscribeReminderPreferences: () => () => {},
@@ -44,6 +43,7 @@ beforeEach(() => {
   mockAuthListener = undefined;
   jest.clearAllMocks();
   jest.mocked(readReminderPreferences).mockReset();
+  jest.mocked(Notifications.getPermissionsAsync).mockResolvedValue({ status: 'granted' } as Notifications.NotificationPermissionsStatus);
 });
 afterEach(() => { jest.restoreAllMocks(); });
 
@@ -185,7 +185,7 @@ test('opt-out and retry warns again when native trial scheduling still fails', a
   } finally { mockCustomerInfo.entitlements.all.pro = { isActive: true }; }
 });
 
-test('a confirmed reminder that has already fired is not reported as unavailable', async () => {
+test('a due reminder is not reported as unavailable just because its pending request fired', async () => {
   const now = Date.now();
   const expiry = now + 36 * 3_600_000;
   mockCustomerInfo.entitlements.all.pro = {
@@ -195,11 +195,26 @@ test('a confirmed reminder that has already fired is not reported as unavailable
   } as typeof mockCustomerInfo.entitlements.all.pro;
   try {
     jest.mocked(readReminderPreferences).mockResolvedValue({ meals: false, trial: true });
-    jest.mocked(wasTrialReminderConfirmed).mockResolvedValue(true);
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     render(<ReminderProvider><TrialToggle /></ReminderProvider>);
-    await waitFor(() => expect(wasTrialReminderConfirmed).toHaveBeenCalledWith('reminder-owner', expiry));
+    await waitFor(() => expect(Notifications.getPermissionsAsync).toHaveBeenCalled());
     expect(alert).not.toHaveBeenCalled();
+  } finally { mockCustomerInfo.entitlements.all.pro = { isActive: true }; }
+});
+
+test('a due reminder with revoked device permission reports uncertain delivery', async () => {
+  const now = Date.now();
+  mockCustomerInfo.entitlements.all.pro = {
+    isActive: true, periodType: 'TRIAL', willRenew: true,
+    latestPurchaseDate: new Date(now - 5 * 24 * 3_600_000).toISOString(),
+    expirationDate: new Date(now + 36 * 3_600_000).toISOString(),
+  } as typeof mockCustomerInfo.entitlements.all.pro;
+  try {
+    jest.mocked(readReminderPreferences).mockResolvedValue({ meals: false, trial: true });
+    jest.mocked(Notifications.getPermissionsAsync).mockResolvedValue({ status: 'denied' } as Notifications.NotificationPermissionsStatus);
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    render(<ReminderProvider><TrialToggle /></ReminderProvider>);
+    await waitFor(() => expect(alert).toHaveBeenCalledWith('Trial reminder status unknown', expect.stringContaining('cannot confirm whether')));
   } finally { mockCustomerInfo.entitlements.all.pro = { isActive: true }; }
 });
 

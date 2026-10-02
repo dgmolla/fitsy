@@ -154,7 +154,7 @@ export default function PaymentScreen() {
     exposure.current = key;
     const attribution = { paywall_variant: paywallVariant, paywall_config_version: variantConfig.version, paywall_tester_override: !!testerOverride };
     trackPaywallShown({ source: 'onboarding', ...attribution });
-    trackPaywallExperimentExposure({ offering_id: offering.identifier, access_variant: variants.access, image_variant: 'meal', layout_variant: paywallVariant === 'A' ? 'mosaic_benefits' : 'trial_timeline', ...attribution });
+    trackPaywallExperimentExposure({ offering_id: offering.identifier, access_variant: variants.access, image_variant: paywallVariant === 'A' ? 'meal' : 'none', layout_variant: paywallVariant === 'A' ? 'mosaic_benefits' : 'trial_timeline', ...attribution });
   }, [offering, variants.access, visualRequested, userId, focused, identityReady, paywallVariant, variantConfig.version, testerOverride]);
 
   async function declineSubscription() {

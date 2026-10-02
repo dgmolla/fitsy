@@ -1,14 +1,12 @@
 jest.unmock('react-native');
 jest.unmock('expo-router');
-import { Alert, AppState } from 'react-native';
+import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import Purchases, { type CustomerInfo, type PurchasesOffering } from 'react-native-purchases';
 import { act, fireEvent, renderRouter, waitFor } from 'expo-router/testing-library';
-import { getPaywallIntent, rememberPaywallIntent } from '../lib/paywallIntent';
+import { rememberPaywallIntent } from '../lib/paywallIntent';
 import { ONBOARDING_COMPLETE_KEY } from '../lib/onboardingCompletion';
-import { BOOT_VERDICT_CAP_MS } from '../lib/usePurchases';
-import { saveReminderPreferences } from '../lib/notificationSchedule';
 import { paymentCompletionRoutes } from './paymentCompletionRoutes';
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
@@ -49,9 +47,8 @@ const annual = { identifier: '$rc_annual', product: { identifier: 'annual', pric
 const monthly = { identifier: '$rc_monthly', product: { identifier: 'monthly', price: 9.99, priceString: '$9.99', currencyCode: 'USD', subscriptionPeriod: 'P1M', introPrice: { price: 0, priceString: '$0', period: 'P1W', cycles: 1 } } };
 const offering = { identifier: 'default', annual, monthly: null, availablePackages: [annual], metadata: {} } as unknown as PurchasesOffering;
 const selected = { action: 'menu' as const, restaurantId: 'varilla', restaurantName: 'Varilla', menuItemId: 'meal-1', query: 'pizza' };
-let notificationMounts = 0;
 let nativeUserId: string | null = null;
-const routes = paymentCompletionRoutes(() => { notificationMounts++; });
+const routes = paymentCompletionRoutes(() => {});
 const originalFetch = global.fetch;
 beforeEach(async () => {
   jest.useRealTimers();
@@ -59,7 +56,7 @@ beforeEach(async () => {
   mockAuthSession = { access_token: 'test-token', user: { id: 'buyer' } };
   mockSessionRead = null;
   mockAuthListeners.clear(); await AsyncStorage.clear();
-  notificationMounts = 0; nativeUserId = null; mockCapture.mockClear();
+  nativeUserId = null; mockCapture.mockClear();
   (Purchases.purchasePackage as jest.Mock).mockReset().mockResolvedValue({ customerInfo: subscribed });
   jest.spyOn(Purchases, 'getCustomerInfo').mockResolvedValue(noSubscription);
   jest.spyOn(Purchases, 'logIn').mockImplementation(async userId => { nativeUserId = userId; return { customerInfo: noSubscription, created: false }; });
@@ -76,7 +73,7 @@ async function openPayment() {
   jest.setSystemTime(now);
   await waitFor(() => expect(screen.getByTestId('paywall-price-yearly').props.children).toBe('$59.99'));
   await act(async () => {});
-  expect(mockCapture).toHaveBeenCalledWith('paywall_experiment_exposed', expect.objectContaining({ image_variant: 'meal', layout_variant: 'trial_timeline' }));
+  expect(mockCapture).toHaveBeenCalledWith('paywall_experiment_exposed', expect.objectContaining({ image_variant: 'none', layout_variant: 'trial_timeline' }));
   return screen;
 }
 

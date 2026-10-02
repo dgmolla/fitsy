@@ -6,7 +6,7 @@ import { supabase } from './supabase';
 import { trackReminderAction } from './analytics';
 import { usePurchases } from './usePurchases';
 import { DEFAULT_REMINDER_PREFERENCES, REMINDER_PREFIX, planReminders, trialReminderDate, type ReminderPreferences } from './notificationPlan';
-import { clearFutureTrialReminderConfirmation, readReminderPreferences, readScheduledReminders, reconcileReminderOwnership, recordTrialReminderConfirmation, replaceReminders, reminderDestination, saveReminderPreferences, subscribeReminderPreferences, wasTrialReminderConfirmed } from './notificationSchedule';
+import { readReminderPreferences, readScheduledReminders, reconcileReminderOwnership, replaceReminders, reminderDestination, saveReminderPreferences, subscribeReminderPreferences } from './notificationSchedule';
 import { reconcileDevTrialReminderOwnership } from './devTrialReminderProbe';
 
 interface ReminderContextValue { userId: string | null; preferences: ReminderPreferences; scheduled: { kind: string; date: string }[]; save: (value: ReminderPreferences) => Promise<void> }
@@ -30,9 +30,6 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
     let live = true; let authEventReceived = false;
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       authEventReceived = true;
-      if (userRef.current && userRef.current !== (session?.user.id ?? null)) {
-        void clearFutureTrialReminderConfirmation(userRef.current).catch(reportFailure);
-      }
       if (live) setAccount({ ready: true, id: session?.user.id ?? null });
       if (!session) {
         void replaceReminders(null, []).catch(reportFailure);
@@ -87,23 +84,24 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
       if (failedTrialNoticeRef.current === key) return;
       failedTrialNoticeRef.current = key;
       Alert.alert(legacyExpiry ? 'Trial reminder status unknown' : 'Trial reminder unavailable',
-        'We could not confirm your trial reminder. Check your trial end date and renewal in subscription settings.');
+        legacyExpiry ? 'Device notification permission is off or unavailable. We cannot confirm whether your trial reminder was delivered. Check your trial end date and renewal in subscription settings.'
+          : 'We could not confirm your trial reminder. Check your trial end date and renewal in subscription settings.');
     };
     const replacement = legacyExpiry === undefined ? replaceReminders(userId, plan) : replaceReminders(userId, plan, legacyExpiry);
     void replacement.then(() => readScheduledReminders(account.id))
       .then(async values => {
         if (live) {
-          const pendingTrial = trial ? values.find(value => value.kind === 'trial' && value.date === trial.date.toISOString())
-            : legacyExpiry ? values.find(value => value.kind === 'trial') : undefined;
-          if (pendingTrial && userId && Number.isFinite(expiry)) {
-            await recordTrialReminderConfirmation(userId, expiry, pendingTrial.date).catch(reportFailure);
-          }
-          const confirmedAfterDelivery = !pendingTrial && legacyExpiry && userId &&
-            await wasTrialReminderConfirmed(userId, legacyExpiry);
-          if (!live) return;
           setScheduled({ id: account.id, values });
-          if (pendingTrial || confirmedAfterDelivery) failedTrialNoticeRef.current = null;
-          else notifyUnconfirmedTrial();
+          const pendingTrial = trial ? values.some(value => value.kind === 'trial' && value.date === trial.date.toISOString())
+            : !!legacyExpiry && values.some(value => value.kind === 'trial');
+          if (pendingTrial) failedTrialNoticeRef.current = null;
+          else if (trial) notifyUnconfirmedTrial();
+          else if (legacyExpiry) {
+            // A fired request disappears from the pending list. That alone
+            // cannot establish delivery or failure, so only warn on permission loss.
+            const permission = await Notifications.getPermissionsAsync().catch(error => { reportFailure(error); return null; });
+            if (live && permission?.status !== 'granted') notifyUnconfirmedTrial();
+          }
         }
       }).catch(error => {
         reportFailure(error);

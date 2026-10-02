@@ -5,7 +5,6 @@ import { DEFAULT_REMINDER_PREFERENCES, REMINDER_PREFIX, type PlannedReminder, ty
 
 export const REMINDER_CHANNEL = 'fitsy-meal-and-trial-reminders';
 const preferenceKey = (userId: string) => `@fitsy/reminder-preferences/${userId}`;
-const trialConfirmationKey = (userId: string) => `@fitsy/trial-reminder-confirmed/${userId}`;
 const listeners = new Set<() => void>();
 export const subscribeReminderPreferences = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
 
@@ -22,27 +21,7 @@ export async function readReminderPreferences(userId: string | null, options?: {
 }
 export async function saveReminderPreferences(userId: string, preferences: ReminderPreferences): Promise<void> {
   await AsyncStorage.setItem(preferenceKey(userId), JSON.stringify(preferences));
-  if (!preferences.trial) await clearFutureTrialReminderConfirmation(userId);
   for (const listener of listeners) listener();
-}
-export async function recordTrialReminderConfirmation(userId: string, expiryMs: number, scheduledFor: string): Promise<void> {
-  const scheduledAt = Date.parse(scheduledFor);
-  if (!Number.isFinite(expiryMs) || !Number.isFinite(scheduledAt) || scheduledAt > expiryMs - 24 * 3_600_000) return;
-  await AsyncStorage.setItem(trialConfirmationKey(userId), JSON.stringify({ expiryMs, scheduledAt }));
-}
-export async function wasTrialReminderConfirmed(userId: string, expiryMs: number, now = Date.now()): Promise<boolean> {
-  try {
-    const value = JSON.parse(await AsyncStorage.getItem(trialConfirmationKey(userId)) ?? 'null');
-    return value?.expiryMs === expiryMs && Number.isFinite(value.scheduledAt) &&
-      value.scheduledAt <= now && now < expiryMs;
-  } catch { return false; }
-}
-export async function clearFutureTrialReminderConfirmation(userId: string): Promise<void> {
-  const key = trialConfirmationKey(userId);
-  try {
-    const value = JSON.parse(await AsyncStorage.getItem(key) ?? 'null');
-    if (Number.isFinite(value?.scheduledAt) && value.scheduledAt > Date.now()) await AsyncStorage.removeItem(key);
-  } catch { await AsyncStorage.removeItem(key); }
 }
 export async function prepareReminderChannel(): Promise<void> {
   if (Platform.OS === 'android') await Notifications.setNotificationChannelAsync(REMINDER_CHANNEL, {
