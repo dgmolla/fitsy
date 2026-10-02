@@ -4,9 +4,11 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 const modulePath = resolve(__dirname, 'native-identity.mjs');
+const profilePath = resolve(__dirname, 'build-profile.mjs');
 const cleanEnv = () => Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
 const runCase = (body: string) => JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e',
   `import {nativeIdentity,nativeBuildDecision,reusableNativeReceipt,profileIdentity,sealReceipt,identityHash,buildInputDrift} from ${JSON.stringify(modulePath)};
+   import {embeddedBundleCompatibility} from ${JSON.stringify(profilePath)};
    import {writeFileSync,readFileSync} from 'node:fs';
    const root=process.env.FITSY_FIXTURE_ROOT;
    const fixture=()=>JSON.parse(readFileSync(root+'/fixture.json'));
@@ -136,6 +138,18 @@ test('Debug, Release, Debug selects the retained intact binary without another c
     const tampered=reusableNativeReceipt([releaseReceipt,{...debugReceipt,app:'forged'}],current,debug,recipe,()=>true);
     process.stdout.write(JSON.stringify({chosen:chosen?.app,edited:edited?.app||null,tampered:tampered?.app||null}));`);
   expect(result).toEqual({ chosen: 'Debug.app', edited: null, tampered: null });
+});
+
+test('a prior intact Release artifact with current embedded JavaScript is selected', () => {
+  const result = runCase(`
+    const native=nativeIdentity(root,{},execute);
+    const profile=profileIdentity({configuration:'Release',storeMode:'unconfigured',buildMode:'embedded-release'}, {os:'iOS 26.0'}, {}, execute);
+    const recipe={inputs:{prepareNative:'same'},hash:identityHash({prepareNative:'same'})};
+    const stale=sealReceipt({nativeIdentity:native,profileIdentity:profile,recipeIdentity:recipe,app:'newer.app',buildMode:'embedded-release',jsHash:'newer',configHash:'same'});
+    const current=sealReceipt({nativeIdentity:native,profileIdentity:profile,recipeIdentity:recipe,app:'older.app',buildMode:'embedded-release',jsHash:'current',configHash:'same'});
+    const matching=[stale,current].filter(r=>embeddedBundleCompatibility(r,'current','same').compatible);
+    process.stdout.write(JSON.stringify({selected:reusableNativeReceipt(matching,native,profile,recipe,()=>true)?.app}));`);
+  expect(result).toEqual({ selected: 'older.app' });
 });
 
 test('editing an Expo plugin native sound resource requires a rebuild with its path', () => {

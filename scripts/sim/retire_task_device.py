@@ -147,19 +147,39 @@ def sealed_receipt_matches(worktree, build):
     return receipt.get('receiptHash') == actual
 
 
-def current_native_hash(worktree, receipt):
+def current_native_compatible(worktree, receipt):
     module = worktree / 'scripts/sim/native-identity.mjs'
-    script = ('const {nativeIdentity}=await import(process.argv[1]); '
-              'const env={...process.env,NODE_ENV:process.argv[3]}; '
-              'process.stdout.write(nativeIdentity(process.argv[2],env).hash);')
+    build_dir = (worktree / '.evidence/product-build').resolve()
+    receipt_files = [build_dir / 'receipt.json'] + sorted(
+        (worktree / '.evidence/resume').glob('native-receipt-superseded-*.json'))
+    candidates = []
+    for path in receipt_files:
+        try:
+            candidate = json.loads(path.read_text())
+            app = Path(candidate['app']).resolve()
+            if (sealed_receipt_matches(worktree, path) and app.is_relative_to(build_dir) and
+                    app.is_dir() and app_hash(app) == candidate['appHash']):
+                candidates.append(candidate)
+        except (OSError, ValueError, TypeError, KeyError, subprocess.CalledProcessError):
+            continue  # Preserve invalid raw receipts but never use them as attestation.
+    script = ('import {readFileSync} from "node:fs"; '
+              'const {nativeIdentity,reusableNativeReceipt}=await import(process.argv[1]); '
+              'const data=JSON.parse(readFileSync(0,"utf8")); '
+              'const native=nativeIdentity(process.argv[2],{...process.env,NODE_ENV:data.nodeEnv}); '
+              'const selected=reusableNativeReceipt(data.candidates,native,data.profileIdentity,data.recipeIdentity,()=>true); '
+              'process.stdout.write(selected?.receiptHash===data.receiptHash?"compatible":"changed");')
     env_file = worktree / 'apps/mobile/.env.development.local'
     command_args = ['node']
     if env_file.is_file():
         command_args.append(f'--env-file={env_file}')
-    command_args += ['--input-type=module', '-e', script, str(module), str(worktree),
-                     'development' if receipt.get('configuration') == 'Debug' else 'production']
+    command_args += ['--input-type=module', '-e', script, str(module), str(worktree)]
     try:
-        return subprocess.check_output(command_args, text=True).strip()
+        result = subprocess.run(command_args, input=json.dumps({
+            'candidates': candidates, 'profileIdentity': receipt['profileIdentity'],
+            'recipeIdentity': receipt['recipeIdentity'], 'receiptHash': receipt['receiptHash'],
+            'nodeEnv': 'development' if receipt.get('configuration') == 'Debug' else 'production',
+        }), text=True, capture_output=True, check=True)
+        return result.stdout.strip() == 'compatible'
     except (OSError, subprocess.CalledProcessError) as error:
         raise ValueError(f'current resolved native identity cannot be checked: {error}') from error
 
@@ -214,7 +234,7 @@ def evidence(worktree, udid):
             raise ValueError('embedded JavaScript changed after the verified product flow')
         if receipt['configHash'] != current_public_config_hash(worktree):
             raise ValueError('public configuration changed after the verified product flow')
-        if receipt['nativeIdentity']['hash'] != current_native_hash(worktree, receipt):
+        if not current_native_compatible(worktree, receipt):
             raise ValueError('resolved native inputs changed after the verified product flow')
         if report.get('inputHash') != input_hash(worktree, mobile_only='acceptance'):
             raise ValueError('product-flow acceptance inputs changed after the verified run')
@@ -336,7 +356,8 @@ def reconcile_absent(target, issue, udid, worktree, device_root):
         if not archive.is_relative_to(target.resolve()) or digest(archive) != entry['sha256']:
             raise ValueError('absent device archived proof digest differs')
     build, report = (json.loads(Path(entry['archive']).read_text()) for entry in proof)
-    if (build.get('simulator') != udid or report.get('simulator') != udid or
+    if ((not build.get('nativeIdentity') and build.get('simulator') != udid) or
+            report.get('simulator') != udid or
             report.get('result') != 'pass' or report.get('appHash') != mapping.get('appHash')):
         raise ValueError('absent device archived proof identity differs')
     retired = target / 'retired.json'

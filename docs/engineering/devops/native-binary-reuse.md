@@ -43,15 +43,19 @@ It never uses HEAD age or a general mobile-source hash as a rebuild reason.
 | Public environment change that changes a native scheme, plist, entitlement or plugin result | Rebuild with the changed resolved config path | Rerun affected scenarios. |
 
 An embedded Release app is accepted only when its build-time JavaScript and public configuration identities still match the candidate.
+If an older retained Release app has the current embedded JavaScript and config, the CLI selects that intact artifact before requesting a new embedded artifact.
 When switching Debug to Release and back, the CLI searches retained sealed receipts and reactivates an intact compatible Debug artifact without compiling.
 The current generated iOS tree must be attested by an intact receipt before a different profile's generated tree can be ignored for this selection.
 Manual changes to an unattested generated tree still require a build with the changed file named.
 The run report binds the selected simulator UDID; a compatible artifact built on another UDID can be reused and the run-owned device can later be retired with its raw evidence.
+Retirement accepts a reactivated profile only when another sealed, intact artifact attests the current generated iOS tree, including after an interrupted delete.
 Submission-only `eas.json` fields are outside the local simulator build, served bundle and acceptance identities.
 Retirement rechecks the current public configuration before archiving proof or deleting a task simulator.
 Public configuration receipts retain hashes per key, so a changed RevenueCat key selects billing acceptance even when its ignored environment file is the only edit.
 If an older receipt cannot identify changed public keys, the gate requires every product category before accepting new proof.
 The flow report also carries changed public keys until final acceptance is checked, so a development run cannot erase the required billing or sign-in scenarios.
+Refreshing an embedded Release artifact carries any pending changed public keys into the new build receipt, so a missing prior flow report cannot erase affected acceptance.
+Reactivating a retained artifact also seals the pending public-key categories from the prior active receipt into the new active receipt.
 If Release evidence is required and the embedded bundle is stale, the default `build` command returns an explicit artifact reason without compiling.
 Run `build <UDID> --refresh-embedded-js` to request a new embedded Release artifact with that reason recorded; use an owned Metro Debug profile when it meets the acceptance need.
 For Debug, the receipt also binds the Metro URL route and port embedded in the app to the owned server used for evidence.

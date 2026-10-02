@@ -43,9 +43,18 @@ export function changedPublicConfigKeys(previous, current) {
   return changed.length ? changed : ['<unknown>'];
 }
 
+export function buildPublicConfigAcceptance(previous, current, retained = null) {
+  return { keys: [...new Set([
+    ...(previous?.publicConfigAcceptance?.keys || []),
+    ...(retained?.publicConfigAcceptance?.keys || []),
+    ...changedPublicConfigKeys(previous, current),
+  ])].sort() };
+}
+
 export function requiredPublicConfigKeys(report, build, current) {
   return [...new Set([
     ...(report?.publicConfigAcceptance?.keys || []),
+    ...(build?.publicConfigAcceptance?.keys || []),
     ...changedPublicConfigKeys(report, current),
     ...changedPublicConfigKeys(build, current),
   ])].sort();

@@ -38,6 +38,20 @@ test('the real CLI plan requires billing after an ignored public store-key chang
       `import {publicConfigIdentity} from ${JSON.stringify(modulePath)}; process.stdout.write(JSON.stringify(publicConfigIdentity(${JSON.stringify(dir)}, {})));`],
     { encoding: 'utf8', env: cleanEnv() });
     if (current.status !== 0) throw new Error(current.stderr);
+    const carried = spawnSync(process.execPath, ['--input-type=module', '-e',
+      `import {buildPublicConfigAcceptance} from ${JSON.stringify(modulePath)};
+       process.stdout.write(JSON.stringify(buildPublicConfigAcceptance(${identity.stdout}, ${current.stdout})));`],
+    { encoding: 'utf8', env: cleanEnv() });
+    if (carried.status !== 0) throw new Error(carried.stderr);
+    mkdirSync(join(dir, '.evidence/product-build'), { recursive: true });
+    writeFileSync(join(dir, '.evidence/product-build/receipt.json'), JSON.stringify({
+      ...JSON.parse(current.stdout), publicConfigAcceptance: JSON.parse(carried.stdout),
+    }));
+    rmSync(join(dir, '.evidence/product-flow/report.json'));
+    const afterRefresh = spawnSync(process.execPath, ['scripts/verify/product-flow.mjs', '--plan'],
+      { cwd: dir, encoding: 'utf8', env: { ...cleanEnv(), FITSY_DIFF_BASE: base } });
+    if (afterRefresh.status !== 0) throw new Error(afterRefresh.stderr);
+    expect(JSON.parse(afterRefresh.stdout).categories).toEqual(['billing']);
     writeFileSync(join(dir, '.evidence/product-flow/report.json'), JSON.stringify({
       ...JSON.parse(current.stdout), publicConfigAcceptance: { keys: ['EXPO_PUBLIC_REVENUECAT_TEST_KEY'] },
     }));
@@ -70,4 +84,20 @@ test('older public-config receipts select every affected category conservatively
   expect(JSON.parse(result.stdout).categories).toEqual([
     'auth', 'billing', 'changed-journey', 'discovery', 'notifications', 'onboarding',
   ]);
+});
+
+test('reactivating an older artifact carries both changed and pending public keys', () => {
+  const script = `import {buildPublicConfigAcceptance,impact} from ${JSON.stringify(modulePath)};
+    const active={configHash:'newer',publicConfig:{EXPO_PUBLIC_REVENUECAT_TEST_KEY:'newer-hash'}};
+    const current={configHash:'older',publicConfig:{EXPO_PUBLIC_REVENUECAT_TEST_KEY:'older-hash'}};
+    const retained={publicConfigAcceptance:{keys:['EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID']}};
+    const acceptance=buildPublicConfigAcceptance(active,current,retained);
+    process.stdout.write(JSON.stringify({keys:acceptance.keys,categories:impact([],acceptance.keys).categories}));`;
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', script],
+    { encoding: 'utf8', env: cleanEnv() });
+  if (result.status !== 0) throw new Error(result.stderr);
+  expect(JSON.parse(result.stdout)).toEqual({
+    keys: ['EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID', 'EXPO_PUBLIC_REVENUECAT_TEST_KEY'],
+    categories: ['auth', 'billing'],
+  });
 });

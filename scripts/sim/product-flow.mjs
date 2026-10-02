@@ -7,7 +7,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { resolve, relative, join, dirname, delimiter } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import { root, inputHash, changedPaths, impact, digest, validate, baseline, repoEnv, publicConfigIdentity, requiredPublicConfigKeys } from '../verify/product-flow.mjs';
+import { root, inputHash, changedPaths, impact, digest, validate, baseline, repoEnv, publicConfigIdentity, requiredPublicConfigKeys, buildPublicConfigAcceptance } from '../verify/product-flow.mjs';
 import { backendRevision } from './backend-identity.mjs';
 import { buildProfile, bundleDelegate, embeddedBundleCompatibility, embeddedArtifactPlan, fixtureLabel, metroRoute } from './build-profile.mjs';
 import { nativeIdentity, buildInputDrift, profileIdentity, nativeBuildDecision, reusableNativeReceipt, sealReceipt, identityHash } from './native-identity.mjs';
@@ -268,18 +268,24 @@ async function build(udid, testStore, forceReason = null, refreshEmbedded = fals
   const profile = buildProfile(testStore, process.env), buildRecipe = recipeIdentity();
   const { r: previous, active, identity, native, compatibility, decision } = buildDecision(udid, profile);
   const sourceJsHash = inputHash(root, 'js');
-  const embeddedPlan = embeddedArtifactPlan(previous, sourceJsHash, config.configHash, refreshEmbedded);
+  const matchingEmbedded = profile.buildMode === 'embedded-release' ? reusableNativeReceipt(
+    [active, ...retainedReceipts()].filter(r => r?.buildMode === 'embedded-release' &&
+      embeddedBundleCompatibility(r, sourceJsHash, config.configHash).compatible),
+    native, compatibility, buildRecipe, intact) : null;
+  const reusable = matchingEmbedded || (decision.rebuild ? null : previous);
+  const embeddedPlan = embeddedArtifactPlan(reusable || previous, sourceJsHash, config.configHash, refreshEmbedded);
   if (refreshEmbedded) assert(!testStore && previous?.buildMode === 'embedded-release' &&
     embeddedPlan.action === 'rebuild', '--refresh-embedded-js requires a stale embedded Release artifact');
   const initialBuildInputs = { native, jsHash: sourceJsHash, configHash: config.configHash, recipe: buildRecipe };
-  const reusable = decision.rebuild ? null : previous;
   if (reusable && !forceReason && !refreshEmbedded) {
     assert(embeddedPlan.action !== 'requires-artifact',
       `${embeddedPlan.reason}; select a compatible owned Metro profile or explicitly run build ${udid} --refresh-embedded-js`);
     if (reusable !== active) {
       mkdirSync(resumeDir, { recursive: true });
       archiveActiveReceipt();
-      save(join(buildDir, 'receipt.json'), reusable);
+      const { receiptHash, ...artifact } = reusable;
+      save(join(buildDir, 'receipt.json'), sealReceipt({ ...artifact,
+        publicConfigAcceptance: buildPublicConfigAcceptance(active, config, reusable) }));
     }
     console.log(JSON.stringify({ action: 'reuse', app: reusable.app, appHash: reusable.appHash,
       nativeIdentity: native.hash, profileIdentity: compatibility.hash, reason: 'verified compatible native artifact' }));
@@ -315,6 +321,7 @@ async function build(udid, testStore, forceReason = null, refreshEmbedded = fals
     const bundleHash = digest(readFileSync(join(app, 'main.jsbundle')));
     save(join(buildDir, 'receipt.json'), sealReceipt({ ...config, ...identity, nativeIdentity: builtNative,
       profileIdentity: compatibility, jsHash: inputHash(root, 'js'), app, appHash: treeHash(app), bundleHash,
+      publicConfigAcceptance: buildPublicConfigAcceptance(previous, config),
       ...profile, metroRoute: profile.metroPort ? metroRoute : null,
       recipeIdentity: buildRecipe, buildRecipeHash: buildRecipe.hash,
       simulatorApplicationIdentifier: entitlements['application-identifier'],
