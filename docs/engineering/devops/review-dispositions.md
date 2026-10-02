@@ -162,7 +162,9 @@ One issue-wide infrastructure recovery extension supplies 1800 seconds after the
 The ordinary maximum is 4500 cumulative seconds across all heads and lenses, with atomic reservations and all failed cost retained.
 Human-authorized grants retain their separate explicit ceiling and suppress automatic recovery expansion.
 
-To avoid editing review-control code for each approval, a trusted coordinator may use `review-budget.py grant-authorized --authorization-file /absolute/private/approval.json` with the original issue ledger, candidate and issue arguments.
+To avoid editing review-control code for each approval, a trusted coordinator may use `python3 -I /absolute/trusted/review-budget.py grant-authorized --authorization-file /absolute/private/approval.json` with the original issue ledger, candidate and issue arguments.
+Use the independently reviewed, committed operator installation from the trusted main branch, never the candidate checkout or its Python import files.
+Confirm that installation supports the authorization command before invoking it; an older installation requires deliberate trusted installation, not execution from an unreviewed branch.
 The owner-controlled, non-group-writable manifest must live outside the reviewed checkout and contain exactly `issue`, `seconds` and the GitHub issue-comment `provenance` of explicit human approval.
 The coordinator must verify that approval before creating the manifest; a URL alone is not evidence of approval.
 The runner records its hash, retains prior grants, rejects duplicate provenance and active unreconciled attempts, and limits cumulative explicitly granted additions to 14400 seconds.
