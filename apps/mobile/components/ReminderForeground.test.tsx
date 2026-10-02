@@ -144,12 +144,12 @@ test('unresolved native identity preserves trial notices while still scheduling 
   } finally { mockCustomerInfo.entitlements.all.pro = { isActive: true }; }
 });
 
-test('a resolved inactive native subscription removes stale trial requests', async () => {
+test('a resolved inactive native subscription removes stale trial requests but retains a presented notice', async () => {
   mockCustomerInfoResult = { entitlements: { all: { pro: { isActive: false } } } };
   jest.mocked(readReminderPreferences).mockResolvedValue({ meals: false, trial: true });
   const replace = jest.mocked(replaceReminders);
   render(<ReminderProvider><SettingsView /></ReminderProvider>);
-  await waitFor(() => expect(replace).toHaveBeenCalledWith('reminder-owner', []));
+  await waitFor(() => expect(replace).toHaveBeenCalledWith('reminder-owner', [], 'presented-current-account-trial'));
   expect(replace.mock.calls.some(([, , retain]) => retain === 'current-account-trial')).toBe(false);
 });
 
@@ -263,6 +263,6 @@ test('a silently skipped trial job also tells the buyer the reminder is unconfir
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   render(<ReminderProvider><SettingsView /></ReminderProvider>);
   await waitFor(() => expect(alert).toHaveBeenCalledWith('Trial reminder unavailable', expect.stringContaining('Check your trial end date')));
-  expect(replaceReminders).toHaveBeenCalledWith('reminder-owner', expect.arrayContaining([expect.objectContaining({ kind: 'trial' })]));
+  expect(replaceReminders).toHaveBeenCalledWith('reminder-owner', expect.arrayContaining([expect.objectContaining({ kind: 'trial' })]), 'presented-current-account-trial');
   mockCustomerInfo.entitlements.all.pro = { isActive: true };
 });
