@@ -133,6 +133,8 @@ tags: [billing, onboarding, changed-journey]
     visible:
       id: paywall-plan-yearly
     timeout: 30000
+- assertVisible:
+    id: paywall-offer-paid
 - assertNotVisible: "Leave a review"
 - openLink: com.fitsy.mobile://welcome/payment
 - tapOn:

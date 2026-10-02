@@ -197,7 +197,7 @@ const s = StyleSheet.create({
   ctaText: { flexShrink: 1, fontFamily: FONTS.nunitoSansSemiBold, fontSize: 16, lineHeight: 22, color: EDITORIAL.cream, textAlign: 'center' },
   disabled: { opacity: 0.4 },
   links: { flexDirection: 'row', justifyContent: 'center', gap: 14, marginTop: 2 },
-  legalHit: { minWidth: 48, minHeight: 34, justifyContent: 'center', alignItems: 'center' },
+  legalHit: { minWidth: 48, minHeight: 44, justifyContent: 'center', alignItems: 'center' },
   legalLink: { fontFamily: FONTS.nunitoSans, fontSize: 11, color: EDITORIAL.textMid, textDecorationLine: 'underline' },
   decline: { minHeight: 34, justifyContent: 'center', alignItems: 'center' },
   declineText: { fontFamily: FONTS.nunitoSans, fontSize: 12, color: EDITORIAL.textMid },
