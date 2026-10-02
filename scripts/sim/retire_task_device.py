@@ -105,7 +105,8 @@ def input_hash(worktree, mobile_only=False):
                                      '--others', '--exclude-standard'], env=env).decode().split('\0')
     hash_ = hashlib.sha256()
     for relative in sorted(set(paths)):
-        if not relative or relative.startswith('.evidence/') or relative.endswith('.md'):
+        if (not relative or relative == 'apps/mobile/eas.json' or
+                relative.startswith('.evidence/') or relative.endswith('.md')):
             continue
         if mobile_only == 'acceptance':
             if re.search(r'(?:\.test\.|\.spec\.|__tests__/|__mocks__/|^scripts/review/)', relative):
@@ -163,6 +164,21 @@ def current_native_hash(worktree, receipt):
         raise ValueError(f'current resolved native identity cannot be checked: {error}') from error
 
 
+def current_public_config_hash(worktree):
+    module = worktree / 'scripts/sim/product-flow.mjs'
+    script = ('const {environment}=await import(process.argv[1]); '
+              'process.stdout.write(environment().configHash);')
+    env_file = worktree / 'apps/mobile/.env.development.local'
+    command_args = ['node']
+    if env_file.is_file():
+        command_args.append(f'--env-file={env_file}')
+    command_args += ['--input-type=module', '-e', script, str(module)]
+    try:
+        return subprocess.check_output(command_args, text=True).strip()
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise ValueError(f'current public configuration cannot be checked: {error}') from error
+
+
 def checked_file(root, relative, expected):
     if not isinstance(relative, str) or not re.fullmatch(r'[0-9a-f]{64}', expected or ''):
         raise ValueError('receipt file or digest missing')
@@ -196,6 +212,8 @@ def evidence(worktree, udid):
             raise ValueError('native artifact receipt integrity changed')
         if receipt['jsHash'] != input_hash(worktree, mobile_only='js'):
             raise ValueError('embedded JavaScript changed after the verified product flow')
+        if receipt['configHash'] != current_public_config_hash(worktree):
+            raise ValueError('public configuration changed after the verified product flow')
         if receipt['nativeIdentity']['hash'] != current_native_hash(worktree, receipt):
             raise ValueError('resolved native inputs changed after the verified product flow')
         if report.get('inputHash') != input_hash(worktree, mobile_only='acceptance'):

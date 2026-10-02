@@ -135,7 +135,16 @@ shutil.copy2(sys.argv[3],sys.argv[4])
     def modern_receipt(self):
         module = self.worktree / 'scripts/sim/native-identity.mjs'
         shutil.copy2(Path(__file__).with_name('native-identity.mjs'), module)
-        (self.worktree / '.gitignore').write_text('node_modules/\n')
+        (self.worktree / 'scripts/sim/product-flow.mjs').write_text('''import {createHash} from 'node:crypto';
+export function environment() {
+  const entries=Object.entries(process.env).filter(([key])=>key.startsWith('EXPO_PUBLIC_')).sort(([a],[b])=>a.localeCompare(b));
+  return {configHash:createHash('sha256').update(JSON.stringify(entries)).digest('hex')};
+}
+''')
+        env_file = self.worktree / 'apps/mobile/.env.development.local'
+        env_file.parent.mkdir(parents=True, exist_ok=True)
+        env_file.write_text('EXPO_PUBLIC_POSTHOG_API_KEY=before\n')
+        (self.worktree / '.gitignore').write_text('node_modules/\napps/mobile/.env.development.local\n')
         mocked = self.worktree / 'apps/mobile/__mocks__/fixture.ts'
         mocked.parent.mkdir(parents=True, exist_ok=True)
         mocked.write_text('mocked unit-test dependency')
@@ -154,6 +163,8 @@ shutil.copy2(sys.argv[3],sys.argv[4])
         receipt.pop('nativeSourceHash')
         report.pop('nativeSourceHash')
         receipt['jsHash'] = retirement.input_hash(self.worktree, mobile_only='js')
+        receipt['configHash'] = retirement.current_public_config_hash(self.worktree)
+        report['configHash'] = receipt['configHash']
         current_script = ('const {nativeIdentity}=await import(process.argv[1]); '
                           'process.stdout.write(JSON.stringify(nativeIdentity(process.argv[2],{...process.env,NODE_ENV:"production"})));')
         current_native = json.loads(subprocess.check_output(['node', '--input-type=module', '-e', current_script,
@@ -194,6 +205,13 @@ shutil.copy2(sys.argv[3],sys.argv[4])
         native.parent.mkdir(parents=True, exist_ok=True)
         native.write_text('changed compiled native source')
         with self.assertRaisesRegex(ValueError, 'resolved native inputs changed'):
+            self.retire()
+        self.assertFalse((self.root / 'deleted').exists())
+
+    def test_new_native_receipt_rejects_changed_public_environment(self):
+        self.modern_receipt()
+        (self.worktree / 'apps/mobile/.env.development.local').write_text('EXPO_PUBLIC_POSTHOG_API_KEY=after\n')
+        with self.assertRaisesRegex(ValueError, 'public configuration changed'):
             self.retire()
         self.assertFalse((self.root / 'deleted').exists())
 

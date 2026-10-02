@@ -276,7 +276,20 @@ mediaTest.each([
   [['apps/api/next.config.ts'], ['changed-journey']],
   [['apps/api/app/api/health/route.ts', 'apps/api/app/api/health/route.test.ts'], []],
   [['apps/api/app/api/health/route.ts', 'apps/api/app/api/search/route.ts'], ['discovery']],
+  [['apps/mobile/eas.json'], []],
 ])('routes %j through product impact selection', (paths, categories) => {
   const result = evaluate(`gate.impact(${JSON.stringify(paths)})`);
   expect(JSON.parse(result.stdout).categories).toEqual(categories);
+});
+
+test('submission-only EAS changes preserve JavaScript and acceptance identities', () => {
+  mkdirSync(join(dir, 'apps/mobile'), { recursive: true });
+  fixtureGit(['init', '-q', dir]);
+  writeFileSync(join(dir, 'apps/mobile/eas.json'), '{"submit":{"production":{"ios":{"ascApiKeyId":"old"}}}}');
+  writeFileSync(join(dir, 'apps/mobile/app.tsx'), 'export default null');
+  fixtureGit(['-C', dir, 'add', 'apps/mobile']);
+  const before = JSON.parse(evaluate(`({js:gate.inputHash(${JSON.stringify(dir)},'js'), acceptance:gate.inputHash(${JSON.stringify(dir)})})`).stdout);
+  writeFileSync(join(dir, 'apps/mobile/eas.json'), '{"submit":{"production":{"ios":{"ascApiKeyId":"new"}}}}');
+  const after = JSON.parse(evaluate(`({js:gate.inputHash(${JSON.stringify(dir)},'js'), acceptance:gate.inputHash(${JSON.stringify(dir)})})`).stdout);
+  expect(after).toEqual(before);
 });

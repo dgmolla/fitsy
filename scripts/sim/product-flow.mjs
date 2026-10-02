@@ -44,7 +44,7 @@ function treeHash(dir) {
   for (const f of files(dir)) hash.update(relative(dir, f) + '\0').update(readFileSync(f));
   return hash.digest('hex');
 }
-function environment() {
+export function environment() {
   const entries = Object.entries(process.env).filter(([key]) => key.startsWith('EXPO_PUBLIC_')).sort(([a], [b]) => a.localeCompare(b));
   assert(process.env.EXPO_PUBLIC_API_URL === 'https://dev.fitsy.org', 'Load the mobile dev environment; this runner refuses production');
   assert(process.env.EXPO_PUBLIC_SUPABASE_URL && process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY, 'Dev Supabase configuration is required');

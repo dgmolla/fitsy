@@ -32,7 +32,7 @@ It never uses HEAD age or a general mobile-source hash as a rebuild reason.
 | Change | Native action | JavaScript and acceptance action |
 | --- | --- | --- |
 | Swift/Obj-C source, generated iOS compile source, resolved Expo or React Native autolinking module, Pod graph, native plugin output or native build recipe | Rebuild with each changed file, graph field or recipe step named | Rerun affected scenarios. |
-| Resolved entitlements, permissions, plist, URL scheme, bundle ID, native icon/splash resource, EAS/native build setting | Rebuild with changed config or resource field named | Rerun affected scenarios. |
+| Resolved entitlements, permissions, plist, URL scheme, bundle ID, native icon/splash resource or effective native build setting | Rebuild with changed config or resource field named | Rerun affected scenarios. |
 | Simulator versus device, OS/architecture compatibility, Debug versus Release, Test Store capability, build flags or Xcode/SDK identity | Rebuild for the required profile, naming each changed field | Use the profile that can serve or embed the required JavaScript. |
 | Receipt absent, legacy or changed receipt, app absent or tree hash changed | Build with an initial, unverifiable provenance or artifact-integrity reason | Preserve the prior receipt in `.evidence/resume/` before replacement. |
 | JavaScript/UI or JS-only package and lockfile change | Reuse the binary if resolved native graph and profile still match | Start fresh owned Metro and capture its served bundle/config hash; rerun affected scenarios. |
@@ -43,6 +43,8 @@ It never uses HEAD age or a general mobile-source hash as a rebuild reason.
 | Public environment change that changes a native scheme, plist, entitlement or plugin result | Rebuild with the changed resolved config path | Rerun affected scenarios. |
 
 An embedded Release app is accepted only when its build-time JavaScript and public configuration identities still match the candidate.
+Submission-only `eas.json` fields are outside the local simulator build, served bundle and acceptance identities.
+Retirement rechecks the current public configuration before archiving proof or deleting a task simulator.
 If Release evidence is required and the embedded bundle is stale, the default `build` command returns an explicit artifact reason without compiling.
 Run `build <UDID> --refresh-embedded-js` to request a new embedded Release artifact with that reason recorded; use an owned Metro Debug profile when it meets the acceptance need.
 For Debug, the receipt also binds the Metro URL route and port embedded in the app to the owned server used for evidence.
