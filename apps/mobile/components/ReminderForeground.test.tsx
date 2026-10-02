@@ -24,7 +24,7 @@ jest.mock('../lib/supabase', () => ({ supabase: { auth: {
 const mockRefresh = jest.fn(async () => {});
 const mockCustomerInfo = { entitlements: { all: { pro: { isActive: true } } } };
 let mockCustomerInfoResult: typeof mockCustomerInfo | null = mockCustomerInfo;
-let mockEntitled = true;
+let mockEntitled: boolean | null = true;
 jest.mock('../lib/usePurchases', () => ({ usePurchases: () => ({
   entitled: mockEntitled, ready: true, refresh: mockRefresh,
   customerInfo: mockCustomerInfoResult,
@@ -144,6 +144,19 @@ test('unresolved native identity preserves trial notices while still scheduling 
     await waitFor(() => expect(replace.mock.calls.some(([id, jobs]) =>
       id === 'reminder-owner' && jobs.some(job => job.kind === 'trial'))).toBe(true));
   } finally { mockCustomerInfo.entitlements.all.pro = { isActive: true }; }
+});
+
+test('an unknown entitlement at boot preserves the account trial request until native identity settles', async () => {
+  mockEntitled = null;
+  mockCustomerInfoResult = null;
+  jest.mocked(readReminderPreferences).mockResolvedValue({ meals: false, trial: true });
+  const replace = jest.mocked(replaceReminders);
+  const screen = render(<ReminderProvider><SettingsView /></ReminderProvider>);
+  await waitFor(() => expect(replace).toHaveBeenCalledWith('reminder-owner', [], 'current-account-trial'));
+  expect(replace.mock.calls.some(([id, , retain]) => id === 'reminder-owner' && retain === undefined)).toBe(false);
+  mockEntitled = false;
+  screen.rerender(<ReminderProvider><SettingsView /></ReminderProvider>);
+  await waitFor(() => expect(replace).toHaveBeenCalledWith('reminder-owner', [], 'current-account-trial'));
 });
 
 test('a resolved inactive native subscription removes stale trial requests but retains a presented notice', async () => {

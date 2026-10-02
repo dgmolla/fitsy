@@ -2,7 +2,7 @@ import React, { useRef } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { EDITORIAL, FONTS } from '@/lib/brand';
-import { canOfferTrialReminder, trialReminderDate } from '@/lib/notificationPlan';
+import { canOfferTrialReminder, trialReminderDate, TRIAL_REMINDER_LEAD_HOURS } from '@/lib/notificationPlan';
 import type { purchaseTerms } from '@/lib/purchaseTerms';
 
 type Terms = ReturnType<typeof purchaseTerms>;
@@ -32,14 +32,6 @@ export function projectedChargeDate(terms: Terms, now: Date): Date | null {
 function elapsedCalendarDays(now: Date, date: Date): number {
   const day = (value: Date) => Date.UTC(value.getFullYear(), value.getMonth(), value.getDate());
   return Math.max(0, Math.round((day(date) - day(now)) / 86_400_000));
-}
-
-function roundedUpLocalDays(now: Date, date: Date): number {
-  const clock = (value: Date) => value.getHours() * 3_600_000 + value.getMinutes() * 60_000
-    + value.getSeconds() * 1000 + value.getMilliseconds();
-  // A quiet-hours adjustment may deliver on the prior calendar date, but a
-  // partial day still belongs to the offer's next day in the countdown.
-  return elapsedCalendarDays(now, date) + Number(clock(date) > clock(now));
 }
 
 export const PAYWALL_BENEFITS = [
@@ -75,8 +67,10 @@ export function PaywallOfferTimeline({ terms, now, reminderAvailability = 'unava
 
   const reminderDate = canOfferTrialReminder(terms) ? trialReminderDate(chargeDate) : null;
   const usefulReminder = reminderDate && reminderDate > now && reminderDate < chargeDate;
-  const reminderDay = usefulReminder ? roundedUpLocalDays(now, reminderDate) : null;
   const chargeDay = elapsedCalendarDays(now, chargeDate);
+  // The row describes the shared two-day reminder policy. Local clock hours
+  // can shift across DST or quiet hours without changing that offer day.
+  const reminderDay = usefulReminder ? Math.max(0, chargeDay - TRIAL_REMINDER_LEAD_HOURS / 24) : null;
   const reminderCopy = reminderAvailability === 'enabled' && usefulReminder
     ? "We'll send you a reminder that your trial is ending soon"
     : reminderAvailability === 'permission-off'

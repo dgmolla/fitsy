@@ -85,7 +85,7 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
       pendingTrialOptInRef.current = null;
       if (preferences.trial && missedTrialReminderWindow(subscription, now.getTime())) explainMissedTrialReminder();
     }
-    const nativeUnresolved = !!userId && entitled === true && preferences.trial && !customerInfo;
+    const nativeUnresolved = !!userId && preferences.trial && !customerInfo;
     const plan = planReminders({ now, userId: account.id, entitled: entitled === true, preferences, subscription });
     const trial = userId ? plan.find(item => item.kind === 'trial') : undefined;
     if (!preferences.trial) failedTrialNoticeRef.current = null;
