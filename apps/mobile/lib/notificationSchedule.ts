@@ -65,8 +65,12 @@ export function replaceReminders(userId: string | null | undefined, reminders: P
     for (const notification of shown) {
       if (revision !== generation) return;
       const request = notification.request;
+      const currentTrial = !!userId && Number.isFinite(retainTrialExpiryMs) &&
+        request.identifier === `${REMINDER_PREFIX}trial.${retainTrialExpiryMs}` &&
+        request.content.data?.userId === userId && request.content.data?.kind === 'trial';
       if (request.identifier.startsWith(REMINDER_PREFIX) &&
-        (!userId || request.content.data?.userId !== userId || !reminders.some(r => r.kind === request.content.data?.kind))) {
+        (!userId || request.content.data?.userId !== userId ||
+          (!currentTrial && !reminders.some(r => r.kind === request.content.data?.kind)))) {
         await Notifications.dismissNotificationAsync(request.identifier);
       }
     }

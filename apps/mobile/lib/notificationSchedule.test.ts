@@ -92,6 +92,16 @@ test('an update after the new lead time keeps a valid future reminder for the sa
     expect(pending.has(identifier)).toBe(false);
   } finally { jest.useRealTimers(); }
 });
+test('post-due reconciliation keeps the owner\'s unread trial notice until sign-out', async () => {
+  const expiration = Date.now() + 36 * 3_600_000;
+  const identifier = `${REMINDER_PREFIX}trial.${expiration}`;
+  sdk.getPresentedNotificationsAsync.mockResolvedValue([{ request: { identifier,
+    content: { data: { userId: 'one', kind: 'trial' } } } }] as unknown as Notifications.Notification[]);
+  await replaceReminders('one', [], expiration);
+  expect(sdk.dismissNotificationAsync).not.toHaveBeenCalled();
+  await replaceReminders(null, []);
+  expect(sdk.dismissNotificationAsync).toHaveBeenCalledWith(identifier);
+});
 test('development device probe uses the native bridge once, clears it, and cannot run in production', async () => {
   const prior = Object.getOwnPropertyDescriptor(globalThis, '__DEV__');
   Object.defineProperty(globalThis, '__DEV__', { value: true, configurable: true });
