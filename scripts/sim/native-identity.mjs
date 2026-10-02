@@ -9,7 +9,7 @@ const stable = value => JSON.stringify(value, (_, item) => item && !Array.isArra
 export const identityHash = value => sha(stable(value));
 export const sealReceipt = receipt => ({ ...receipt, receiptHash: identityHash(receipt) });
 const nativeFile = path => /^(apps\/mobile\/ios\/|patches\/)/.test(path) ||
-  /^(apps\/mobile\/(expo|react-native)\.config\.[cm]?[jt]s|apps\/mobile\/eas\.json)$/.test(path);
+  /^apps\/mobile\/(expo|react-native)\.config\.[cm]?[jt]s$/.test(path);
 const command = (cmd, args, cwd, env) => execFileSync(cmd, args, { cwd, env, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 }).trim();
 const normalize = (value, root) => {
   if (typeof value === 'string') return value.startsWith(root) ? `<checkout>/${relative(root, value)}` : value;

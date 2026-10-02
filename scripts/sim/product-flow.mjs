@@ -9,7 +9,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { root, inputHash, changedPaths, impact, digest, validate, baseline, repoEnv } from '../verify/product-flow.mjs';
 import { backendRevision } from './backend-identity.mjs';
-import { buildProfile, bundleDelegate, embeddedBundleCompatibility, fixtureLabel, metroRoute } from './build-profile.mjs';
+import { buildProfile, bundleDelegate, embeddedBundleCompatibility, embeddedArtifactPlan, fixtureLabel, metroRoute } from './build-profile.mjs';
 import { nativeIdentity, buildInputDrift, profileIdentity, nativeBuildDecision, sealReceipt, identityHash } from './native-identity.mjs';
 import { admitDisk, appendRecordedFlowFailure, applyCapturePolicy, archiveFailureEvidence, completeMaestroRun, event, latestMaestroLog, nearestFailure, needsDiagnosis, recordFlowOutcome, recordRunFailure, requireMetro, runRecordedFlow } from './runner-controls.mjs';
 import { matchesFinalCandidate, runSelection } from './evidence-mode.mjs';
@@ -248,18 +248,24 @@ function compileNative(profile, udid, env) {
   assert(entitlements['application-identifier']?.endsWith('.com.fitsy.mobile'), 'Simulator keychain application entitlement is missing');
   return { app, entitlements };
 }
-async function build(udid, testStore, forceReason = null) {
+async function build(udid, testStore, forceReason = null, refreshEmbedded = false) {
   const config = environment();
   const profile = buildProfile(testStore, process.env), buildRecipe = recipeIdentity();
   const { r: previous, identity, native, compatibility, decision } = buildDecision(udid, profile);
   const sourceJsHash = inputHash(root, 'js');
+  const embeddedPlan = embeddedArtifactPlan(previous, sourceJsHash, config.configHash, refreshEmbedded);
+  if (refreshEmbedded) assert(!testStore && previous?.buildMode === 'embedded-release' &&
+    embeddedPlan.action === 'rebuild', '--refresh-embedded-js requires a stale embedded Release artifact');
   const initialBuildInputs = { native, jsHash: sourceJsHash, configHash: config.configHash, recipe: buildRecipe };
-  if (!decision.rebuild && !forceReason) {
+  if (!decision.rebuild && !forceReason && !refreshEmbedded) {
+    assert(embeddedPlan.action !== 'requires-artifact',
+      `${embeddedPlan.reason}; select a compatible owned Metro profile or explicitly run build ${udid} --refresh-embedded-js`);
     console.log(JSON.stringify({ action: 'reuse', app: previous.app, appHash: previous.appHash,
       nativeIdentity: native.hash, profileIdentity: compatibility.hash, reason: 'verified compatible native artifact' }));
     return true;
   }
-  const reasons = forceReason ? [`operator forced diagnostic rebuild: ${forceReason}`, ...decision.reasons] : decision.reasons;
+  const reasons = refreshEmbedded ? [embeddedPlan.reason, ...decision.reasons]
+    : forceReason ? [`operator forced diagnostic rebuild: ${forceReason}`, ...decision.reasons] : decision.reasons;
   assert(reasons.length > 0, 'Native compile requires a changed input, missing artifact, or recorded diagnostic reason');
   console.log(JSON.stringify({ action: 'rebuild', reasons, nativeIdentity: native.hash, profileIdentity: compatibility.hash }));
   mkdirSync(resumeDir, { recursive: true });
@@ -337,7 +343,8 @@ async function execute(udid, names, mode) {
   }
   const r = receipt(udid), identity = device(udid), server = backend();
   const embedded = embeddedBundleCompatibility(r, inputHash(root, 'js'), environment().configHash);
-  assert(embedded.compatible, `${embedded.reason}; use a compatible owned Metro profile or build an appropriate embedded artifact`);
+  assert(embedded.compatible,
+    `${embedded.reason}; use a compatible owned Metro profile or run build ${udid} --refresh-embedded-js for an explicit Release artifact`);
   const fixture = fixtureLabel(process.env.FITSY_FIXTURE, process.env.FITSY_SIM_RESET_KEYCHAIN === udid);
   const hash = inputHash(), plan = impact(changedPaths(process.env.FITSY_DIFF_BASE));
   const currentStoreMode = buildProfile(r.buildMode === 'owned-metro-test-store', process.env).storeMode;
@@ -574,11 +581,15 @@ try {
   if (command === 'build') {
     const force = args.indexOf('--force-rebuild');
     const reason = args.find(arg => arg.startsWith('--reason='))?.slice('--reason='.length);
+    const refresh = args.includes('--refresh-embedded-js');
     assert(args.length >= 1 && args.every((arg, index) => index === 0 || arg === '--test-store' ||
-      arg === '--force-rebuild' || arg.startsWith('--reason=')), 'build UDID [--test-store] [--force-rebuild --reason=WHY]');
+      arg === '--force-rebuild' || arg === '--refresh-embedded-js' || arg.startsWith('--reason=')),
+    'build UDID [--test-store] [--refresh-embedded-js] [--force-rebuild --reason=WHY]');
     assert((force >= 0) === Boolean(reason) && (!reason || reason.trim().length >= 8),
       'Diagnostic force rebuild requires --force-rebuild and a recorded --reason of at least eight characters');
-    reused = await build(args[0], args.includes('--test-store'), reason);
+    assert(!refresh || (force < 0 && !args.includes('--test-store')),
+      '--refresh-embedded-js is only for an existing stale Release artifact');
+    reused = await build(args[0], args.includes('--test-store'), reason, refresh);
   }
   else if (command === 'run') { const selected = runSelection(args); reused = await execute(selected.udid, selected.names, selected.mode) === true; }
   else if (command === 'finish') await finish(args[0]);

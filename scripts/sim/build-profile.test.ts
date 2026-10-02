@@ -82,3 +82,18 @@ test('an old embedded Release bundle cannot claim current JavaScript or public c
   expect(decisions[1].reason).toContain('JavaScript');
   expect(decisions[2].reason).toContain('configuration');
 });
+
+test('stale Release JavaScript requests an artifact without compiling by default', () => {
+  const script = `import { embeddedArtifactPlan } from ${JSON.stringify(resolve(__dirname, 'build-profile.mjs'))};
+    const receipt={buildMode:'embedded-release',jsHash:'old',configHash:'config'};
+    process.stdout.write(JSON.stringify([
+      embeddedArtifactPlan(receipt,'new','config'),
+      embeddedArtifactPlan(receipt,'new','config',true),
+      embeddedArtifactPlan(receipt,'old','config',true)]));`;
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8' });
+  expect(result.status).toBe(0);
+  const [defaultPlan, explicitPlan, currentPlan] = JSON.parse(result.stdout);
+  expect(defaultPlan.action).toBe('requires-artifact');
+  expect(explicitPlan).toMatchObject({ action: 'rebuild', reason: expect.stringContaining('embedded Release artifact') });
+  expect(currentPlan.action).toBe('reuse');
+});

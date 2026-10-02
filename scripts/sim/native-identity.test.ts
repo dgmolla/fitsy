@@ -11,7 +11,7 @@ const runCase = (body: string) => JSON.parse(execFileSync(process.execPath, ['--
    const root=process.env.FITSY_FIXTURE_ROOT;
    const fixture=()=>JSON.parse(readFileSync(root+'/fixture.json'));
    const execute=(cmd,args)=>{
-     if(cmd==='git') return 'apps/mobile/app.config.ts\\0apps/mobile/lib/screen.tsx\\0apps/mobile/lib/screen.test.tsx\\0apps/mobile/ios/Native.swift\\0apps/mobile/android/Native.kt\\0';
+     if(cmd==='git') return 'apps/mobile/app.config.ts\\0apps/mobile/eas.json\\0apps/mobile/lib/screen.tsx\\0apps/mobile/lib/screen.test.tsx\\0apps/mobile/ios/Native.swift\\0apps/mobile/android/Native.kt\\0';
      if(args.includes('introspect')) return JSON.stringify(fixture().expo);
      if(args.includes('resolve')) return JSON.stringify(fixture().expoGraph);
      if(args.includes('react-native-config')) return JSON.stringify(fixture().rnGraph);
@@ -28,6 +28,7 @@ beforeEach(() => {
   mkdirSync(join(fixtureRoot, 'apps/mobile/android'), { recursive: true });
   mkdirSync(join(fixtureRoot, 'apps/mobile/lib'), { recursive: true });
   writeFileSync(join(fixtureRoot, 'apps/mobile/app.config.ts'), 'export default {}');
+  writeFileSync(join(fixtureRoot, 'apps/mobile/eas.json'), JSON.stringify({ submit: { production: { ios: { ascApiKeyId: 'before' } } } }));
   writeFileSync(join(fixtureRoot, 'apps/mobile/lib/screen.tsx'), 'original JS');
   writeFileSync(join(fixtureRoot, 'apps/mobile/lib/screen.test.tsx'), 'original test');
   writeFileSync(join(fixtureRoot, 'apps/mobile/ios/Native.swift'), 'native source');
@@ -56,15 +57,18 @@ test('test-only, JS and JS-only lock changes reuse the verified native binary', 
     const jsChange=nativeBuildDecision({receipt,native:nativeIdentity(root,{},execute),profile,appIntact:true});
     writeFileSync(root+'/apps/mobile/android/Native.kt','changed Android-only source');
     const androidChange=nativeBuildDecision({receipt,native:nativeIdentity(root,{},execute),profile,appIntact:true});
+    writeFileSync(root+'/apps/mobile/eas.json',JSON.stringify({submit:{production:{ios:{ascApiKeyId:'after'}}}}));
+    const submissionChange=nativeBuildDecision({receipt,native:nativeIdentity(root,{},execute),profile,appIntact:true});
     const lock=JSON.parse(readFileSync(root+'/package-lock.json'));lock.packages['node_modules/js-only'].version='2.0.0';
     writeFileSync(root+'/package-lock.json',JSON.stringify(lock));
     const jsDependency=nativeBuildDecision({receipt,native:nativeIdentity(root,{},execute),profile,appIntact:true});
     const fixtureData=fixture();fixtureData.expo.extra.apiBaseUrl='new JS-only URL';
     writeFileSync(root+'/fixture.json',JSON.stringify(fixtureData));
     const publicEnv=nativeBuildDecision({receipt,native:nativeIdentity(root,{},execute),profile,appIntact:true});
-    process.stdout.write(JSON.stringify({testChange,jsChange,androidChange,jsDependency,publicEnv}));`);
+    process.stdout.write(JSON.stringify({testChange,jsChange,androidChange,submissionChange,jsDependency,publicEnv}));`);
   expect(result).toEqual({ testChange: { rebuild: false, reasons: [] }, jsChange: { rebuild: false, reasons: [] },
     androidChange: { rebuild: false, reasons: [] }, jsDependency: { rebuild: false, reasons: [] },
+    submissionChange: { rebuild: false, reasons: [] },
     publicEnv: { rebuild: false, reasons: [] } });
 });
 

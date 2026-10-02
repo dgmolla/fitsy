@@ -43,6 +43,8 @@ It never uses HEAD age or a general mobile-source hash as a rebuild reason.
 | Public environment change that changes a native scheme, plist, entitlement or plugin result | Rebuild with the changed resolved config path | Rerun affected scenarios. |
 
 An embedded Release app is accepted only when its build-time JavaScript and public configuration identities still match the candidate.
+If Release evidence is required and the embedded bundle is stale, the default `build` command returns an explicit artifact reason without compiling.
+Run `build <UDID> --refresh-embedded-js` to request a new embedded Release artifact with that reason recorded; use an owned Metro Debug profile when it meets the acceptance need.
 For Debug, the receipt also binds the Metro URL route and port embedded in the app to the owned server used for evidence.
 For newer JavaScript, use an owned Metro Debug binary with the required native capability or build a new embedded Release artifact if that profile is required.
 A Test Store key is a Debug capability and cannot be relabeled as Apple sandbox billing proof.
