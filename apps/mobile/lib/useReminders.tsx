@@ -140,9 +140,21 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
   async function save(values: ReminderPreferences) {
     if (!account.id) throw new Error('Sign in to change reminders.');
     const id = account.id;
+    const subscription = customerInfo?.entitlements.all.pro;
+    const expiration = Date.parse(subscription?.expirationDate ?? '');
+    const start = Date.parse(subscription?.latestPurchaseDate ?? '');
+    const now = Date.now();
+    const lateTrialOptIn = !preferences.trial && values.trial && entitled === true && subscription?.isActive &&
+      subscription.periodType === 'TRIAL' && subscription.willRenew && Number.isFinite(expiration) &&
+      Number.isFinite(start) && expiration - start > 2 * 24 * 3_600_000 && expiration > now &&
+      trialReminderDate(new Date(expiration)).getTime() <= now;
     await saveReminderPreferences(id, values);
     trackReminderAction({ action: 'preferences_changed', ...values });
-    if (userRef.current === id) setLoaded({ id, values });
+    if (userRef.current === id) {
+      setLoaded({ id, values });
+      if (lateTrialOptIn) Alert.alert('Trial reminder time passed',
+        'The 48-hour reminder time for this trial has passed, so Fitsy cannot schedule it now. Check your trial end date and renewal in subscription settings.');
+    }
   }
   return <ReminderContext.Provider value={{ userId: account.id, preferences, scheduled: scheduled.id === account.id ? scheduled.values : [], save }}>{children}</ReminderContext.Provider>;
 }

@@ -4,7 +4,7 @@ import { Alert, AppState, Pressable, Text } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { ReminderProvider, useReminders } from '../lib/useReminders';
-import { readReminderPreferences, reconcileReminderOwnership, replaceReminders } from '../lib/notificationSchedule';
+import { readReminderPreferences, reconcileReminderOwnership, replaceReminders, saveReminderPreferences } from '../lib/notificationSchedule';
 import { reconcileDevTrialReminderOwnership } from '../lib/devTrialReminderProbe';
 
 jest.mock('expo-router', () => ({ router: { push: jest.fn() }, usePathname: () => '/notification-settings' }));
@@ -233,6 +233,25 @@ test('a due reminder is not reported as unavailable just because its pending req
     render(<ReminderProvider><TrialToggle /></ReminderProvider>);
     await waitFor(() => expect(Notifications.getPermissionsAsync).toHaveBeenCalled());
     expect(alert).not.toHaveBeenCalled();
+  } finally { mockCustomerInfo.entitlements.all.pro = { isActive: true }; }
+});
+
+test('enabling trial reminders after the 48-hour send time explains the missed window', async () => {
+  const now = Date.now();
+  mockCustomerInfo.entitlements.all.pro = {
+    isActive: true, periodType: 'TRIAL', willRenew: true,
+    latestPurchaseDate: new Date(now - 5 * 24 * 3_600_000).toISOString(),
+    expirationDate: new Date(now + 36 * 3_600_000).toISOString(),
+  } as typeof mockCustomerInfo.entitlements.all.pro;
+  try {
+    jest.mocked(readReminderPreferences).mockResolvedValue({ meals: false, trial: false });
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    const screen = render(<ReminderProvider><TrialToggle /></ReminderProvider>);
+    await waitFor(() => expect(screen.getByText('Trial reminder off')).toBeTruthy());
+    await act(async () => { fireEvent.press(screen.getByTestId('trial-toggle')); });
+    await waitFor(() => expect(alert).toHaveBeenCalledWith('Trial reminder time passed',
+      expect.stringContaining('cannot schedule it now')));
+    expect(saveReminderPreferences).toHaveBeenCalledWith('reminder-owner', { meals: false, trial: true });
   } finally { mockCustomerInfo.entitlements.all.pro = { isActive: true }; }
 });
 
