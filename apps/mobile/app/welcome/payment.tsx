@@ -42,7 +42,6 @@ export default function PaymentScreen() {
   const identityResolvedForFocus = useRef(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [identityReady, setIdentityReady] = useState(false);
-  const discovery = usePaywallDiscovery(focused && identityReady, userId);
   const [reminderState, setReminderState] = useState<{ userId: string; availability: ReminderAvailability } | null>(null);
   const reminderAvailability = reminderState?.userId === userId ? reminderState.availability : 'unavailable';
   const testerOverride: PaywallVariant | undefined = __DEV__ && (devPaywallVariant === 'A' || devPaywallVariant === 'B') ? devPaywallVariant : undefined;
@@ -96,6 +95,7 @@ export default function PaymentScreen() {
   const { offering, introEligibility, introEligibilityReady, refreshOffering, purchase, restore, showManageSubscriptions, entitled } = usePurchases();
   const variantConfig = paywallVariantConfig(offering?.metadata);
   const paywallVariant = resolvePaywallVariant(variantConfig, userId, testerOverride);
+  const discovery = usePaywallDiscovery(focused && identityReady && paywallVariant === 'A', userId);
   const visual = devTrialVisualOffer(offering, visualRequested, __DEV__, devTrialVisual === '14' ? 14 : 7);
   const shownOffering = visual?.offering ?? offering;
   const shownEligibility = visual?.eligibility ?? introEligibility;

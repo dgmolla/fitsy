@@ -85,6 +85,7 @@ test('an anonymous paywall view is attributed once across plan changes', async (
   const screen = renderRouter(routes, { initialUrl: '/welcome/payment' });
   await waitFor(() => expect(screen.getByTestId('paywall-price-yearly')).toBeTruthy());
   await waitFor(() => expect(mockCapture).toHaveBeenCalledWith('paywall_experiment_exposed', expect.objectContaining({ paywall_variant: 'B', layout_variant: 'trial_timeline' })));
+  expect((global.fetch as jest.Mock).mock.calls.some(([url]) => String(url).includes('/restaurants/preview'))).toBe(false);
   await act(async () => { fireEvent.press(screen.getByTestId('paywall-plan-monthly')); });
   expect(mockCapture.mock.calls.filter(([name]) => name === 'paywall_experiment_exposed')).toHaveLength(1);
 });

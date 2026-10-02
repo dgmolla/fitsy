@@ -69,14 +69,7 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
     const userId = account.ready && ready && loaded?.id === account.id ? account.id : undefined;
     const now = new Date();
     const subscription = customerInfo?.entitlements.all.pro;
-    if (userId && entitled === true && preferences.trial && subscription?.isActive !== true) {
-      // The server can confirm Pro before RevenueCat resolves the native user.
-      // Keep this account's pending and presented requests until trial state is known.
-      void readScheduledReminders(userId).then(values => {
-        if (live) setScheduled({ id: userId, values });
-      }).catch(reportFailure);
-      return () => { live = false; };
-    }
+    const nativeUnresolved = !!userId && entitled === true && preferences.trial && !customerInfo;
     const plan = planReminders({ now, userId: account.id, entitled: entitled === true, preferences, subscription });
     const trial = userId ? plan.find(item => item.kind === 'trial') : undefined;
     if (!preferences.trial) failedTrialNoticeRef.current = null;
@@ -95,7 +88,10 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
         legacyExpiry ? 'Device notification permission is off or unavailable. We cannot confirm whether your trial reminder was delivered. Check your trial end date and renewal in subscription settings.'
           : 'We could not confirm your trial reminder. Check your trial end date and renewal in subscription settings.');
     };
-    const replacement = legacyExpiry === undefined ? replaceReminders(userId, plan) : replaceReminders(userId, plan, legacyExpiry);
+    // While native identity is unresolved, update meal jobs without removing
+    // this account's trial request or an unread delivered trial notice.
+    const replacement = nativeUnresolved ? replaceReminders(userId, plan, 'current-account-trial')
+      : legacyExpiry === undefined ? replaceReminders(userId, plan) : replaceReminders(userId, plan, legacyExpiry);
     void replacement.then(() => readScheduledReminders(account.id))
       .then(async values => {
         if (live) {

@@ -102,6 +102,21 @@ test('post-due reconciliation keeps the owner\'s unread trial notice until sign-
   await replaceReminders(null, []);
   expect(sdk.dismissNotificationAsync).toHaveBeenCalledWith(identifier);
 });
+test('unresolved native identity preserves trial requests while meal jobs still reconcile', async () => {
+  const expiry = Date.now() + 36 * 3_600_000;
+  const identifier = `${REMINDER_PREFIX}trial.${expiry}`;
+  pending.set(identifier, { identifier, content: { data: { userId: 'one', kind: 'trial', scheduledFor: new Date(Date.now() + 4 * 3_600_000).toISOString() } }, trigger: null });
+  sdk.getPresentedNotificationsAsync.mockResolvedValue([{ request: { identifier,
+    content: { data: { userId: 'one', kind: 'trial' } } } }] as unknown as Notifications.Notification[]);
+  const meals = plan();
+  await replaceReminders('one', meals, 'current-account-trial');
+  expect(pending.has(identifier)).toBe(true);
+  expect(pending.size).toBe(meals.length + 1);
+  expect(sdk.dismissNotificationAsync).not.toHaveBeenCalled();
+  await replaceReminders('one', meals);
+  expect(pending.has(identifier)).toBe(false);
+  expect(sdk.dismissNotificationAsync).toHaveBeenCalledWith(identifier);
+});
 test('development device probe uses the native bridge once, clears it, and cannot run in production', async () => {
   const prior = Object.getOwnPropertyDescriptor(globalThis, '__DEV__');
   Object.defineProperty(globalThis, '__DEV__', { value: true, configurable: true });

@@ -121,15 +121,16 @@ test('cold launch read failure preserves the current account scheduled jobs', as
   expect(replace).not.toHaveBeenCalledWith(null, []);
 });
 
-test('active server entitlement preserves a delivered trial notice while native identity is unresolved', async () => {
+test('unresolved native identity preserves trial notices while still scheduling requested meal reminders', async () => {
   const now = Date.now();
   mockCustomerInfoResult = null;
-  jest.mocked(readReminderPreferences).mockResolvedValue({ meals: false, trial: true });
+  jest.mocked(readReminderPreferences).mockResolvedValue({ meals: true, trial: true });
   const replace = jest.mocked(replaceReminders);
   const screen = render(<ReminderProvider><SettingsView /></ReminderProvider>);
   await waitFor(() => expect(readReminderPreferences).toHaveBeenCalledWith('reminder-owner', { throwOnError: true }));
   await act(async () => { await Promise.resolve(); });
-  expect(replace.mock.calls.some(([id]) => id === 'reminder-owner')).toBe(false);
+  await waitFor(() => expect(replace.mock.calls.some(([id, jobs, retain]) =>
+    id === 'reminder-owner' && retain === 'current-account-trial' && jobs.some(job => job.kind === 'meal'))).toBe(true));
   mockCustomerInfo.entitlements.all.pro = {
     isActive: true, periodType: 'TRIAL', willRenew: true,
     latestPurchaseDate: new Date(now).toISOString(),
@@ -141,6 +142,15 @@ test('active server entitlement preserves a delivered trial notice while native 
     await waitFor(() => expect(replace.mock.calls.some(([id, jobs]) =>
       id === 'reminder-owner' && jobs.some(job => job.kind === 'trial'))).toBe(true));
   } finally { mockCustomerInfo.entitlements.all.pro = { isActive: true }; }
+});
+
+test('a resolved inactive native subscription removes stale trial requests', async () => {
+  mockCustomerInfoResult = { entitlements: { all: { pro: { isActive: false } } } };
+  jest.mocked(readReminderPreferences).mockResolvedValue({ meals: false, trial: true });
+  const replace = jest.mocked(replaceReminders);
+  render(<ReminderProvider><SettingsView /></ReminderProvider>);
+  await waitFor(() => expect(replace).toHaveBeenCalledWith('reminder-owner', []));
+  expect(replace.mock.calls.some(([, , retain]) => retain === 'current-account-trial')).toBe(false);
 });
 
 test('foreground recovery retries failed account ownership cleanup', async () => {
