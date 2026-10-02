@@ -71,6 +71,7 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
     const subscription = customerInfo?.entitlements.all.pro;
     const plan = planReminders({ now, userId: account.id, entitled: entitled === true, preferences, subscription });
     const trial = userId ? plan.find(item => item.kind === 'trial') : undefined;
+    if (!preferences.trial) failedTrialNoticeRef.current = null;
     const expiry = Date.parse(subscription?.expirationDate ?? '');
     const start = Date.parse(subscription?.latestPurchaseDate ?? '');
     const legacyExpiry = userId && !trial && entitled === true && preferences.trial && subscription?.isActive &&

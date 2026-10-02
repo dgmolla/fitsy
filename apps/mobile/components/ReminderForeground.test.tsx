@@ -1,12 +1,13 @@
 jest.unmock('react-native');
 import React from 'react';
-import { Alert, AppState, Text } from 'react-native';
-import { act, render, waitFor } from '@testing-library/react-native';
+import { Alert, AppState, Pressable, Text } from 'react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { ReminderProvider, useReminders } from '../lib/useReminders';
 import { readReminderPreferences, reconcileReminderOwnership, replaceReminders } from '../lib/notificationSchedule';
 import { reconcileDevTrialReminderOwnership } from '../lib/devTrialReminderProbe';
 
 jest.mock('expo-router', () => ({ router: { push: jest.fn() }, usePathname: () => '/notification-settings' }));
+jest.mock('posthog-react-native', () => jest.fn().mockImplementation(() => ({ capture: jest.fn() })));
 jest.mock('expo-notifications', () => ({
   setNotificationHandler: jest.fn(),
   addNotificationResponseReceivedListener: () => ({ remove() {} }),
@@ -46,6 +47,12 @@ afterEach(() => { jest.restoreAllMocks(); });
 function SettingsView() {
   const { preferences } = useReminders();
   return <Text>{preferences.meals ? 'Meal reminders on' : 'Meal reminders off'}</Text>;
+}
+function TrialToggle() {
+  const { preferences, save } = useReminders();
+  return <Pressable testID="trial-toggle" onPress={() => void save({ ...preferences, trial: !preferences.trial })}>
+    <Text>{preferences.trial ? 'Trial reminder on' : 'Trial reminder off'}</Text>
+  </Pressable>;
 }
 
 test('a foreground storage failure keeps enabled meal reminders and their planned jobs', async () => {
@@ -150,6 +157,29 @@ test('a native trial scheduling failure tells the buyer the reminder is unconfir
   await waitFor(() => expect(alert).toHaveBeenCalledWith('Trial reminder unavailable', expect.stringContaining('Check your trial end date')));
   expect(warn).toHaveBeenCalledWith('[reminders]', 'Native schedule failed');
   mockCustomerInfo.entitlements.all.pro = { isActive: true };
+});
+
+test('opt-out and retry warns again when native trial scheduling still fails', async () => {
+  const now = Date.now();
+  mockCustomerInfo.entitlements.all.pro = {
+    isActive: true, periodType: 'TRIAL', willRenew: true,
+    latestPurchaseDate: new Date(now).toISOString(),
+    expirationDate: new Date(now + 7 * 24 * 3_600_000).toISOString(),
+  } as typeof mockCustomerInfo.entitlements.all.pro;
+  try {
+    jest.mocked(readReminderPreferences).mockResolvedValue({ meals: false, trial: true });
+    jest.mocked(replaceReminders).mockImplementation(async (_id, jobs) => {
+      if (jobs.some(job => job.kind === 'trial')) throw new Error('Native schedule failed');
+    });
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const screen = render(<ReminderProvider><TrialToggle /></ReminderProvider>);
+    await waitFor(() => expect(alert).toHaveBeenCalledTimes(1));
+    await act(async () => { fireEvent.press(screen.getByTestId('trial-toggle')); });
+    await waitFor(() => expect(screen.getByText('Trial reminder off')).toBeTruthy());
+    await act(async () => { fireEvent.press(screen.getByTestId('trial-toggle')); });
+    await waitFor(() => expect(alert).toHaveBeenCalledTimes(2));
+  } finally { mockCustomerInfo.entitlements.all.pro = { isActive: true }; }
 });
 
 test('a silently skipped trial job also tells the buyer the reminder is unconfirmed', async () => {
