@@ -47,6 +47,7 @@ Submission-only `eas.json` fields are outside the local simulator build, served 
 Retirement rechecks the current public configuration before archiving proof or deleting a task simulator.
 Public configuration receipts retain hashes per key, so a changed RevenueCat key selects billing acceptance even when its ignored environment file is the only edit.
 If an older receipt cannot identify changed public keys, the gate requires every product category before accepting new proof.
+The flow report also carries changed public keys until final acceptance is checked, so a development run cannot erase the required billing or sign-in scenarios.
 If Release evidence is required and the embedded bundle is stale, the default `build` command returns an explicit artifact reason without compiling.
 Run `build <UDID> --refresh-embedded-js` to request a new embedded Release artifact with that reason recorded; use an owned Metro Debug profile when it meets the acceptance need.
 For Debug, the receipt also binds the Metro URL route and port embedded in the app to the owned server used for evidence.

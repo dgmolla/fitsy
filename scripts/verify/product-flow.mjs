@@ -43,6 +43,14 @@ export function changedPublicConfigKeys(previous, current) {
   return changed.length ? changed : ['<unknown>'];
 }
 
+export function requiredPublicConfigKeys(report, build, current) {
+  return [...new Set([
+    ...(report?.publicConfigAcceptance?.keys || []),
+    ...changedPublicConfigKeys(report, current),
+    ...changedPublicConfigKeys(build, current),
+  ])].sort();
+}
+
 export function impact(paths, configKeys = []) {
   const source = paths.filter(p => !/\.md$/.test(p) &&
     p !== 'apps/mobile/eas.json' &&
@@ -59,7 +67,7 @@ export function impact(paths, configKeys = []) {
     if (key === '<unknown>') for (const category of ['billing', 'notifications', 'auth', 'onboarding', 'discovery', 'changed-journey'])
       categories.add(category);
     else if (/REVENUECAT|STORE|PURCHASE|PAYWALL/i.test(key)) categories.add('billing');
-    else if (/SUPABASE|AUTH/i.test(key)) categories.add('auth');
+    else if (/SUPABASE|AUTH|GOOGLE_.*CLIENT_ID/i.test(key)) categories.add('auth');
     else if (/PUSH|NOTIFICATION/i.test(key)) categories.add('notifications');
     else categories.add('changed-journey');
   }
@@ -219,9 +227,9 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     insist(!process.env.CI || process.env.FITSY_DIFF_BASE, 'CI must supply the candidate diff base');
     const reportFile = resolve(root, '.evidence/product-flow/report.json');
     const buildFile = resolve(root, '.evidence/product-build/receipt.json');
-    const previous = existsSync(reportFile) ? JSON.parse(readFileSync(reportFile, 'utf8'))
-      : existsSync(buildFile) ? JSON.parse(readFileSync(buildFile, 'utf8')) : null;
-    const configKeys = changedPublicConfigKeys(previous, publicConfigIdentity());
+    const previous = existsSync(reportFile) ? JSON.parse(readFileSync(reportFile, 'utf8')) : null;
+    const build = existsSync(buildFile) ? JSON.parse(readFileSync(buildFile, 'utf8')) : null;
+    const configKeys = requiredPublicConfigKeys(previous, build, publicConfigIdentity());
     const plan = impact(changedPaths(process.env.FITSY_DIFF_BASE), configKeys);
     if (process.argv.includes('--plan')) {
       console.log(JSON.stringify({ ...plan, inputHash: inputHash() }));

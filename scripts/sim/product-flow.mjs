@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import { resolve, relative, join, dirname, delimiter } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import { root, inputHash, changedPaths, impact, digest, validate, baseline, repoEnv, publicConfigIdentity, changedPublicConfigKeys } from '../verify/product-flow.mjs';
+import { root, inputHash, changedPaths, impact, digest, validate, baseline, repoEnv, publicConfigIdentity, requiredPublicConfigKeys } from '../verify/product-flow.mjs';
 import { backendRevision } from './backend-identity.mjs';
 import { buildProfile, bundleDelegate, embeddedBundleCompatibility, embeddedArtifactPlan, fixtureLabel, metroRoute } from './build-profile.mjs';
 import { nativeIdentity, buildInputDrift, profileIdentity, nativeBuildDecision, sealReceipt, identityHash } from './native-identity.mjs';
@@ -347,8 +347,8 @@ async function execute(udid, names, mode) {
   const fixture = fixtureLabel(process.env.FITSY_FIXTURE, process.env.FITSY_SIM_RESET_KEYCHAIN === udid);
   const priorFile = join(out, 'report.json');
   const prior = existsSync(priorFile) ? readPreviousReportForReuse(priorFile).report : r;
-  const hash = inputHash(), plan = impact(changedPaths(process.env.FITSY_DIFF_BASE),
-    changedPublicConfigKeys(prior || r, environment()));
+  const publicConfigKeys = requiredPublicConfigKeys(prior, r, environment());
+  const hash = inputHash(), plan = impact(changedPaths(process.env.FITSY_DIFF_BASE), publicConfigKeys);
   const currentStoreMode = buildProfile(r.buildMode === 'owned-metro-test-store', process.env).storeMode;
   assert(!plan.categories.includes('billing') || currentStoreMode !== 'unconfigured', 'Billing evidence requires a configured store');
   const selected = [...new Set([...baseline, ...names])];
@@ -407,6 +407,7 @@ async function execute(udid, names, mode) {
       ...identity, ...server, inputHash: hash,
       jsHash: inputHash(root, 'js'), configHash: environment().configHash,
       publicConfig: environment().publicConfig,
+      publicConfigAcceptance: { keys: publicConfigKeys },
       result: 'running', startedAt: new Date().toISOString(),
       fixture, keychainReset: false, evidenceMode: mode.name, videoRequested: mode.recordVideo,
       maestroVersion: run(process.env.MAESTRO_BIN || 'maestro', ['--version']), flows: [], exploration: [] };
@@ -539,7 +540,7 @@ async function finish(walkthrough) {
   }
   report.result = 'pass'; report.finishedAt = new Date().toISOString();
   const result = validate(report, impact(changedPaths(process.env.FITSY_DIFF_BASE),
-    changedPublicConfigKeys(report, environment())), inputHash(), out,
+    requiredPublicConfigKeys(report, r, environment())), inputHash(), out,
     Date.now(), root, r.nativeIdentity.hash, report.evidenceMode);
   save(join(out, 'report.json'), report); console.log(JSON.stringify(result));
 }
@@ -555,7 +556,7 @@ async function check() {
   installedApp(report.simulator, r.appHash);
   await checkBundle(report);
   validate(report, impact(changedPaths(process.env.FITSY_DIFF_BASE),
-    changedPublicConfigKeys(report, environment())), inputHash(), out,
+    requiredPublicConfigKeys(report, r, environment())), inputHash(), out,
     Date.now(), root, r.nativeIdentity.hash, report.evidenceMode);
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

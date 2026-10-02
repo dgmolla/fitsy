@@ -34,10 +34,31 @@ test('the real CLI plan requires billing after an ignored public store-key chang
     if (result.status !== 0) throw new Error(`CLI failed: ${result.stderr}\n${result.stdout}`);
     expect(JSON.parse(result.stdout)).toMatchObject({ required: true, categories: ['billing'],
       paths: ['public-env:EXPO_PUBLIC_REVENUECAT_TEST_KEY'] });
+    const current = spawnSync(process.execPath, ['--input-type=module', '-e',
+      `import {publicConfigIdentity} from ${JSON.stringify(modulePath)}; process.stdout.write(JSON.stringify(publicConfigIdentity(${JSON.stringify(dir)}, {})));`],
+    { encoding: 'utf8', env: cleanEnv() });
+    if (current.status !== 0) throw new Error(current.stderr);
+    writeFileSync(join(dir, '.evidence/product-flow/report.json'), JSON.stringify({
+      ...JSON.parse(current.stdout), publicConfigAcceptance: { keys: ['EXPO_PUBLIC_REVENUECAT_TEST_KEY'] },
+    }));
+    const afterDevelopment = spawnSync(process.execPath, ['scripts/verify/product-flow.mjs', '--plan'],
+      { cwd: dir, encoding: 'utf8', env: { ...cleanEnv(), FITSY_DIFF_BASE: base } });
+    if (afterDevelopment.status !== 0) throw new Error(afterDevelopment.stderr);
+    expect(JSON.parse(afterDevelopment.stdout).categories).toEqual(['billing']);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test.each(['EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID', 'EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID'])(
+  '%s requires auth acceptance', key => {
+    const script = `import {impact} from ${JSON.stringify(modulePath)};
+      process.stdout.write(JSON.stringify(impact([], [${JSON.stringify(key)}])));`;
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', script],
+      { encoding: 'utf8', env: cleanEnv() });
+    if (result.status !== 0) throw new Error(result.stderr);
+    expect(JSON.parse(result.stdout).categories).toEqual(['auth']);
+  });
 
 test('older public-config receipts select every affected category conservatively', () => {
   const script = `import {changedPublicConfigKeys,impact} from ${JSON.stringify(modulePath)};
