@@ -13,12 +13,13 @@ jest.mock('posthog-react-native', () => {
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
 jest.mock('expo-notifications', () => ({ getPermissionsAsync: jest.fn().mockImplementation(() => new Promise(() => {})) }));
 import React from 'react';
-import { AppState, Platform } from 'react-native';
+import { AppState, Platform, StyleSheet } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { PaywallView } from './PaywallView';
 import { PaywallTimeline } from './PaywallTimeline';
 import { purchaseTerms } from '../lib/purchaseTerms';
+import { EDITORIAL } from '../lib/brand';
 
 const product = { priceString: '$59.99', subscriptionPeriod: 'P1Y',
   introPrice: { price: 0, priceString: '$0.00', period: 'P1W', periodUnit: 'WEEK', periodNumberOfUnits: 1, cycles: 1 } };
@@ -178,6 +179,16 @@ test('variant B follows selected plan and shows truthful paid state when trial i
   expect(screen.queryByText(/reminder/i)).toBeNull();
   expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toBe('Continue to purchase');
   expect(screen.getByTestId('paywall-terms').props.children).toContain('$9.99 when you confirm');
+});
+
+test('trial timeline keeps its initial mosaic fade and covers it when purchase controls scroll', () => {
+  const screen = render(<PaywallView {...props()} variant="B" />);
+  const scroll = screen.getByTestId('paywall-scroll');
+  expect(StyleSheet.flatten(scroll.props.style).backgroundColor).toBeUndefined();
+  fireEvent.scroll(scroll, { nativeEvent: { contentOffset: { y: 24 } } });
+  expect(StyleSheet.flatten(scroll.props.style).backgroundColor).toBe(EDITORIAL.cream);
+  fireEvent.scroll(scroll, { nativeEvent: { contentOffset: { y: 0 } } });
+  expect(StyleSheet.flatten(scroll.props.style).backgroundColor).toBeUndefined();
 });
 
 test('variant B refreshes the projected charge date when checkout crosses midnight', () => {

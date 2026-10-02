@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { AppState, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPress } from './AnimatedPress';
@@ -38,6 +38,7 @@ interface Props {
 /** The store supplies all offer copy; this component owns only presentation. */
 export function PaywallView(props: Props) {
   const [now, setNow] = useState(() => new Date());
+  const [timelineScrolled, setTimelineScrolled] = useState(false);
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout>;
     const refresh = () => {
@@ -91,7 +92,10 @@ export function PaywallView(props: Props) {
         </Pressable>
       </View>
 
-      <ScrollView style={s.scroll} contentContainerStyle={[s.content, compact && s.contentCompact]} showsVerticalScrollIndicator={false} bounces={false}>
+      <ScrollView style={[s.scroll, trialTimeline && timelineScrolled && s.scrollTrial]}
+        onScroll={trialTimeline ? (event: NativeSyntheticEvent<NativeScrollEvent>) => setTimelineScrolled(event.nativeEvent.contentOffset.y > 0) : undefined}
+        scrollEventThrottle={16} contentContainerStyle={[s.content, compact && s.contentCompact]}
+        showsVerticalScrollIndicator={false} bounces={false} testID="paywall-scroll">
         <View style={timelineLayout && s.mainTimeline}>
           {!timelineLayout ? <><PaywallHero discovery={props.discovery} compact={compact} />
           <Text style={[s.title, compact && s.titleCompact]}>Find meals that fit.</Text>
@@ -152,6 +156,7 @@ export function PaywallView(props: Props) {
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: EDITORIAL.cream },
   scroll: { flex: 1 },
+  scrollTrial: { backgroundColor: EDITORIAL.cream },
   nav: { height: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18 },
   back: { width: 64, height: 44, justifyContent: 'center' },
   logo: { fontFamily: FONTS.frauncesDisplayBold, fontSize: 27, lineHeight: 34, color: EDITORIAL.green, textAlign: 'center' },
