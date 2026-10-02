@@ -1,11 +1,11 @@
 import type { PurchasesOffering, PurchasesPackage } from 'react-native-purchases';
 
 /** Visual-only eligible offer on the real Test Store prices. Never purchase it. */
-export function devTrialVisualOffer(offering: PurchasesOffering | null, requested: boolean, development = __DEV__) {
+export function devTrialVisualOffer(offering: PurchasesOffering | null, requested: boolean, development = __DEV__, days: 7 | 14 = 7) {
   if (!development || !requested || !offering) return null;
   const preview = (pkg: PurchasesPackage | null): PurchasesPackage | null => pkg && pkg.product.priceString && pkg.product.subscriptionPeriod
     ? { ...pkg, product: { ...pkg.product, introPrice: {
-      price: 0, priceString: 'Free', cycles: 1, period: 'P1W', periodUnit: 'WEEK', periodNumberOfUnits: 1,
+      price: 0, priceString: 'Free', cycles: 1, period: days === 14 ? 'P2W' : 'P1W', periodUnit: 'WEEK', periodNumberOfUnits: days / 7,
     } } }
     : null;
   const annual = preview(offering.annual);

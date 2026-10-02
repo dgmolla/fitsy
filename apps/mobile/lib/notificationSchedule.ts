@@ -43,22 +43,37 @@ let queue: Promise<unknown> = Promise.resolve();
 let generation = 0;
 /** Serialize replacement, so a late schedule cannot survive a later opt-out or
  * account change. Cancel only this feature's requests; other push flows survive. */
-export function replaceReminders(userId: string | null | undefined, reminders: PlannedReminder[]): Promise<void> {
+export function replaceReminders(userId: string | null | undefined, reminders: PlannedReminder[], retainedTrial?: number | 'current-account-trial' | 'presented-current-account-trial'): Promise<void> {
   if (userId === undefined) return Promise.resolve(); // Still loading; null alone means signed out.
   const revision = ++generation;
   const work = queue.catch(() => undefined).then(async () => {
     if (Platform.OS === 'web' || revision !== generation) return;
     const pending = await Notifications.getAllScheduledNotificationsAsync();
+    const retainCurrentTrial = retainedTrial === 'current-account-trial';
+    const retainExpiry = typeof retainedTrial === 'number' && Number.isFinite(retainedTrial) ? retainedTrial : null;
+    const retainAllowed = !!userId && (retainCurrentTrial || retainExpiry !== null) &&
+      !reminders.some(reminder => reminder.kind === 'trial') &&
+      (await Notifications.getPermissionsAsync()).status === 'granted';
     for (const request of pending) {
       if (revision !== generation) return;
-      if (request.identifier.startsWith(REMINDER_PREFIX)) await Notifications.cancelScheduledNotificationAsync(request.identifier);
+      if (!request.identifier.startsWith(REMINDER_PREFIX)) continue;
+      const scheduledAt = Date.parse(String(request.content.data?.scheduledFor ?? ''));
+      const keepTrial = retainAllowed && request.content.data?.userId === userId && request.content.data?.kind === 'trial' &&
+        Number.isFinite(scheduledAt) && scheduledAt > Date.now() &&
+        (retainCurrentTrial || (retainExpiry !== null && request.identifier === `${REMINDER_PREFIX}trial.${retainExpiry}` &&
+          scheduledAt <= retainExpiry - 24 * 3_600_000));
+      if (!keepTrial) await Notifications.cancelScheduledNotificationAsync(request.identifier);
     }
     const shown = await Notifications.getPresentedNotificationsAsync();
     for (const notification of shown) {
       if (revision !== generation) return;
       const request = notification.request;
+      const currentTrial = !!userId && request.content.data?.userId === userId && request.content.data?.kind === 'trial' &&
+        (retainCurrentTrial || retainedTrial === 'presented-current-account-trial' ||
+          (retainExpiry !== null && request.identifier === `${REMINDER_PREFIX}trial.${retainExpiry}`));
       if (request.identifier.startsWith(REMINDER_PREFIX) &&
-        (!userId || request.content.data?.userId !== userId || !reminders.some(r => r.kind === request.content.data?.kind))) {
+        (!userId || request.content.data?.userId !== userId ||
+          (!currentTrial && !reminders.some(r => r.kind === request.content.data?.kind)))) {
         await Notifications.dismissNotificationAsync(request.identifier);
       }
     }

@@ -41,6 +41,8 @@ export function purchaseTerms(product: ProductTerms | null | undefined, eligible
       : `Fitsy Pro. ${charge} Renews automatically at ${recurring}. Cancel in subscription settings at least 24 hours before renewal.`;
   return {
     price, period, periodShort, recurring, trial, charge, compactDisclosure,
+    trialPeriod: trial ? intro?.period ?? null : null,
+    trialCycles: trial ? intro?.cycles ?? null : null,
     trialDays: trial && /^\d+ days?$/.test(trial) ? Number.parseInt(trial, 10) : null,
     disclosure: `Fitsy Pro. ${charge} Renews automatically at ${recurring} unless canceled at least 24 hours before renewal. Manage or cancel with the store where you subscribed.`,
   };
@@ -52,4 +54,14 @@ export function savingPercent(regular: ComparableProduct | null | undefined, dis
     regular.subscriptionPeriod !== discounted.subscriptionPeriod || regular.currencyCode !== discounted.currencyCode ||
     !Number.isFinite(regular.price) || !Number.isFinite(discounted.price) || regular.price <= 0 || discounted.price < 0 || discounted.price >= regular.price) return null;
   return Math.round((1 - discounted.price / regular.price) * 100);
+}
+
+/** Annual price against twelve months from the same store and currency. */
+export function annualSavingPercent(annual: ComparableProduct | null | undefined, monthly: ComparableProduct | null | undefined): number | null {
+  if (!annual || !monthly || annual.currencyCode !== monthly.currencyCode ||
+    annual.subscriptionPeriod !== 'P1Y' || monthly.subscriptionPeriod !== 'P1M' ||
+    !Number.isFinite(annual.price) || !Number.isFinite(monthly.price) ||
+    annual.price <= 0 || monthly.price <= 0) return null;
+  const percent = Math.round((1 - annual.price / (monthly.price * 12)) * 100);
+  return percent > 0 && percent < 100 ? percent : null;
 }

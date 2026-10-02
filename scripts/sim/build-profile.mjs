@@ -4,6 +4,10 @@ export function buildProfile(testStore, env) {
     if (!env.EXPO_PUBLIC_REVENUECAT_TEST_KEY?.startsWith('test_')) {
       throw new Error('--test-store requires EXPO_PUBLIC_REVENUECAT_TEST_KEY from the dev configuration');
     }
+    const account = env.EXPO_PUBLIC_DEV_LOGIN_EMAIL?.trim().toLowerCase();
+    if (!account || account === 'dev@fitsy.local' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(account)) {
+      throw new Error('--test-store requires EXPO_PUBLIC_DEV_LOGIN_EMAIL for a disposable account distinct from shared Dev login');
+    }
     return { configuration: 'Debug', storeMode: 'test-store', buildMode: 'owned-metro-test-store', metroPort: 8099 };
   }
   if (env.EXPO_PUBLIC_REVENUECAT_IOS_KEY?.startsWith('test_')) {

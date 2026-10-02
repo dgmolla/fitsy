@@ -1,27 +1,35 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useOnboardingStep } from '@/lib/onboardingResume';
 import { useIsFocused } from '@react-navigation/native';
-import { Alert } from 'react-native';
+import { Alert, AppState } from 'react-native';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { PaywallView } from '@/components/PaywallView';
 import { PaywallExitModals, type PaywallExitModal } from '@/components/PaywallExitModals';
 import { recordOnboardingComplete } from '@/lib/onboardingCompletion';
-import { usePurchases } from '@/lib/usePurchases';
+import { BOOT_VERDICT_CAP_MS, usePurchases } from '@/lib/usePurchases';
+import { withinMs } from '@/lib/async';
 import { useRedirectOnceEntitled } from '@/lib/useRedirectOnceEntitled';
 import { ensureSessionForPurchase } from '@/lib/purchaseSession';
-import { trackOnboardingScreenView, trackPaywallExperimentExposure } from '@/lib/analytics';
+import { trackOnboardingScreenView, trackPaywallExperimentExposure, trackPaywallShown } from '@/lib/analytics';
 import { usePreviewAccess } from '@/lib/usePreviewAccess';
 import { rememberPaywallDecline } from '@/lib/paywallAccess';
 import { openPurchasedDestination, resetWelcomeJourney } from '@/lib/paywallJourney';
-import { purchaseTerms, savingPercent } from '@/lib/purchaseTerms';
+import { annualSavingPercent, purchaseTerms, savingPercent } from '@/lib/purchaseTerms';
 import { devTrialVisualOffer } from '@/lib/devTrialVisualOffer';
 import { clearOnboardingPreviewEntry } from '@/lib/onboardingPreviewEntry';
+import { usePaywallDiscovery } from '@/lib/usePaywallDiscovery';
+import { paywallVariantConfig, resolvePaywallVariant, type PaywallVariant } from '@/lib/paywallVariant';
+import { supabase } from '@/lib/supabase';
+import { readReminderPreferences } from '@/lib/notificationSchedule';
+import { getNotificationPermission } from '@/lib/useNotifications';
+import type { ReminderAvailability } from '@/components/PaywallOfferTimeline';
 
 type PlanId = 'monthly' | 'yearly';
 
 export default function PaymentScreen() {
-  const { devTrialVisual } = useLocalSearchParams<{ devTrialVisual?: string }>();
-  const visualRequested = __DEV__ && devTrialVisual === '1';
+  const { devTrialVisual, devPaywallVariant, devReminderEnabled } = useLocalSearchParams<{ devTrialVisual?: string; devPaywallVariant?: string; devReminderEnabled?: string }>();
+  const visualRequested = __DEV__ && (devTrialVisual === '1' || devTrialVisual === '14');
+  const simulatedReminder = visualRequested && devReminderEnabled === '1';
   useOnboardingStep('payment');
   const navigation = useNavigation();
   const focused = useIsFocused();
@@ -31,11 +39,64 @@ export default function PaymentScreen() {
   const [chosenPlan, setChosenPlan] = useState<PlanId | null>(null);
   const variants = usePreviewAccess();
   const exposure = useRef('');
+  const identityResolvedForFocus = useRef(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [identityReady, setIdentityReady] = useState(false);
+  const [reminderState, setReminderState] = useState<{ userId: string; availability: ReminderAvailability } | null>(null);
+  const reminderAvailability = reminderState?.userId === userId ? reminderState.availability : 'unavailable';
+  const testerOverride: PaywallVariant | undefined = __DEV__ && (devPaywallVariant === 'A' || devPaywallVariant === 'B') ? devPaywallVariant : undefined;
+  useEffect(() => {
+    identityResolvedForFocus.current = false;
+    setIdentityReady(false);
+    if (!focused) { setUserId(null); return; }
+    let active = true;
+    let authEventReceived = false;
+    const resolveIdentity = (id: string | null) => {
+      if (!active) return;
+      setUserId(id);
+      identityResolvedForFocus.current = true;
+      setIdentityReady(true);
+    };
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      authEventReceived = true;
+      resolveIdentity(session?.user.id ?? null);
+    });
+    const sessionRead = supabase.auth.getSession();
+    void withinMs(sessionRead, BOOT_VERDICT_CAP_MS).then(result => {
+      if (authEventReceived) return;
+      resolveIdentity(result?.data.session?.user.id ?? null);
+      if (!result) void sessionRead.then(({ data }) => {
+        if (!authEventReceived) resolveIdentity(data.session?.user.id ?? null);
+      }).catch(() => undefined);
+    }).catch(() => { if (!authEventReceived) resolveIdentity(null); });
+    return () => { active = false; listener.subscription.unsubscribe(); };
+  }, [focused]);
+  useEffect(() => {
+    if (!focused || !userId) { setReminderState(null); return; }
+    let active = true;
+    let request = 0;
+    const refresh = () => {
+      const latest = ++request;
+      setReminderState(null);
+      void Promise.all([getNotificationPermission(), readReminderPreferences(userId, { throwOnError: true })])
+        .then(([permission, preferences]) => {
+          if (active && latest === request) setReminderState({ userId, availability: permission === 'denied' ? 'permission-off'
+            : permission === 'granted' && preferences.trial ? 'enabled' : 'opt-in' });
+        })
+        .catch(() => { if (active && latest === request) setReminderState({ userId, availability: 'unavailable' }); });
+    };
+    refresh();
+    const listener = AppState.addEventListener('change', state => { if (state === 'active') refresh(); });
+    return () => { active = false; listener.remove(); };
+  }, [focused, userId]);
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [modal, setModal] = useState<PaywallExitModal>('none');
   const { offering, introEligibility, introEligibilityReady, refreshOffering, purchase, restore, showManageSubscriptions, entitled } = usePurchases();
-  const visual = devTrialVisualOffer(offering, visualRequested);
+  const variantConfig = paywallVariantConfig(offering?.metadata);
+  const paywallVariant = resolvePaywallVariant(variantConfig, userId, testerOverride);
+  const discovery = usePaywallDiscovery(focused && identityReady && paywallVariant === 'A', userId);
+  const visual = devTrialVisualOffer(offering, visualRequested, __DEV__, devTrialVisual === '14' ? 14 : 7);
   const shownOffering = visual?.offering ?? offering;
   const shownEligibility = visual?.eligibility ?? introEligibility;
   const eligibilityReady = !!visual || introEligibilityReady;
@@ -70,6 +131,7 @@ export default function PaymentScreen() {
   const terms = purchaseTerms(selected?.product, selected ? introEligibility[selected.product.identifier] : false);
   const discountTerms = purchaseTerms(discountedAnnual?.product, discountedAnnual ? introEligibility[discountedAnnual.product.identifier] : false);
   const discountPercent = savingPercent(offering?.annual?.product, discountedAnnual?.product);
+  const annualPercent = annualSavingPercent(shownOffering?.annual?.product, shownOffering?.monthly?.product);
 
   useEffect(() => {
     if (!visualRequested) trackOnboardingScreenView('payment');
@@ -83,12 +145,17 @@ export default function PaymentScreen() {
   }, [offering, refreshOffering]);
 
   useEffect(() => {
-    if (!offering || visualRequested) return;
-    const key = `${offering.identifier}:${variants.access}:trial_timeline`;
+    if (!focused) { exposure.current = ''; return; }
+    if (!offering || visualRequested || !identityReady || !identityResolvedForFocus.current) return;
+    // A visible anonymous paywall is still a view. Cohort selection remains
+    // account-bound; repeat only when the actual identity or variant changes.
+    const key = `${userId ?? 'anonymous'}:${offering.identifier}:${variants.access}:${paywallVariant}:${variantConfig.version}:${!!testerOverride}`;
     if (exposure.current === key) return;
     exposure.current = key;
-    trackPaywallExperimentExposure({ offering_id: offering.identifier, access_variant: variants.access, image_variant: 'none', layout_variant: 'trial_timeline' });
-  }, [offering, variants.access, visualRequested]);
+    const attribution = { paywall_variant: paywallVariant, paywall_config_version: variantConfig.version, paywall_tester_override: !!testerOverride };
+    trackPaywallShown({ source: 'onboarding', ...attribution });
+    trackPaywallExperimentExposure({ offering_id: offering.identifier, access_variant: variants.access, image_variant: paywallVariant === 'A' ? 'meal' : 'none', layout_variant: paywallVariant === 'A' ? 'mosaic_benefits' : 'trial_timeline', ...attribution });
+  }, [offering, variants.access, visualRequested, userId, focused, identityReady, paywallVariant, variantConfig.version, testerOverride]);
 
   async function declineSubscription() {
     try {
@@ -139,7 +206,7 @@ export default function PaymentScreen() {
         return;
       }
       if (!(await ensureSessionForPurchase())) return;
-      const isPro = await purchase(pkg, discounted ? 'onboarding_discount' : 'onboarding');
+      const isPro = await purchase(pkg, discounted ? 'onboarding_discount' : 'onboarding', { paywall_variant: paywallVariant, paywall_config_version: variantConfig.version, paywall_tester_override: !!testerOverride });
       if (!isPro) return; // cancelled or errored - stay on screen
       await completeOnboarding(discounted);
     } finally {
@@ -172,18 +239,27 @@ export default function PaymentScreen() {
     }
   }
 
+  if (!identityReady) return null;
   return (
     <>
       <PaywallView
         plan={plan}
         annual={annualTerms}
         monthly={monthlyTerms}
+        annualSavingPercent={annualPercent}
+        discovery={discovery}
+        variant={paywallVariant}
+        reminderAvailability={simulatedReminder ? 'enabled' : reminderAvailability}
         loading={loading}
         restoring={restoring}
         checkingPlans={checkingPlans}
-        visualPreview={!!visual}
+        visualPreview={visual ? (devTrialVisual === '14' ? 14 : 7) : undefined}
+        visualReminderSimulated={simulatedReminder}
         onSelect={setChosenPlan}
-        onBack={navigation.canGoBack() ? () => router.back() : undefined}
+        onBack={() => {
+          if (navigation.canGoBack()) router.back();
+          else setModal(discountTerms && discountPercent ? 'discount' : 'goodbye');
+        }}
         onRestore={() => { void handleRestore(); }}
         onManage={() => { void showManageSubscriptions(); }}
         onRetry={() => { void refreshOffering(); }}
