@@ -36,11 +36,14 @@ It never uses HEAD age or a general mobile-source hash as a rebuild reason.
 | Simulator versus device, OS/architecture compatibility, Debug versus Release, Test Store capability, build flags or Xcode/SDK identity | Rebuild for the required profile, naming each changed field | Use the profile that can serve or embed the required JavaScript. |
 | Receipt absent, legacy or changed receipt, app absent or tree hash changed | Build with an initial, unverifiable provenance or artifact-integrity reason | Preserve the prior receipt in `.evidence/resume/` before replacement. |
 | JavaScript/UI or JS-only package and lockfile change | Reuse the binary if resolved native graph and profile still match | Start fresh owned Metro and capture its served bundle/config hash; rerun affected scenarios. |
-| Test, E2E flow or reviewer-input change | Reuse the binary | Rerun invalidated acceptance checks and retain old raw evidence. |
+| Android-only native source change while testing iOS | Reuse the iOS binary | Keep the iOS acceptance decision tied to affected flows. |
+| Unit test or reviewer-input change | Reuse the binary | Retain still-valid product-flow evidence; run the relevant unit or review gate. |
+| E2E flow change | Reuse the binary | Rerun affected flow acceptance and retain old raw evidence. |
 | Public environment change that changes only `extra` or inlined JavaScript | Reuse the binary | Refresh served bundle/config proof and affected scenarios. |
 | Public environment change that changes a native scheme, plist, entitlement or plugin result | Rebuild with the changed resolved config path | Rerun affected scenarios. |
 
 An embedded Release app is accepted only when its build-time JavaScript and public configuration identities still match the candidate.
+For Debug, the receipt also binds the Metro URL route and port embedded in the app to the owned server used for evidence.
 For newer JavaScript, use an owned Metro Debug binary with the required native capability or build a new embedded Release artifact if that profile is required.
 A Test Store key is a Debug capability and cannot be relabeled as Apple sandbox billing proof.
 

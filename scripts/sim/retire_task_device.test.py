@@ -132,7 +132,7 @@ shutil.copy2(sys.argv[3],sys.argv[4])
         self.assertTrue((self.archive / self.udid / 'retired.json').exists())
         self.assertEqual(self.retire()['deletionOutcome'], 'simctl delete returned successfully')
 
-    def test_new_native_receipt_keeps_retirement_valid_after_unrelated_test_change(self):
+    def modern_receipt(self):
         module = self.worktree / 'scripts/sim/native-identity.mjs'
         shutil.copy2(Path(__file__).with_name('native-identity.mjs'), module)
         build_file = self.worktree / '.evidence/product-build/receipt.json'
@@ -140,11 +140,11 @@ shutil.copy2(sys.argv[3],sys.argv[4])
         receipt, report = json.loads(build_file.read_text()), json.loads(report_file.read_text())
         receipt.pop('nativeSourceHash')
         report.pop('nativeSourceHash')
+        receipt['jsHash'] = retirement.input_hash(self.worktree, mobile_only='js')
         identity_script = ('const {identityHash,sealReceipt}=await import(process.argv[1]); '
                            'const receipt=JSON.parse(process.argv[2]); '
                            'for(const key of ["nativeIdentity","profileIdentity","recipeIdentity"]) '
                            'receipt[key]={inputs:{fixture:key},hash:identityHash({fixture:key})}; '
-                           'receipt.jsHash="j".repeat(64); '
                            'process.stdout.write(JSON.stringify(sealReceipt(receipt)));')
         receipt = json.loads(subprocess.check_output(['node', '--input-type=module', '-e', identity_script,
             str(module), json.dumps(receipt)], text=True))
@@ -152,11 +152,22 @@ shutil.copy2(sys.argv[3],sys.argv[4])
         for key in ('nativeIdentity', 'profileIdentity', 'recipeIdentity', 'jsHash'):
             report[key] = receipt[key]
         report_file.write_text(json.dumps(report))
+
+    def test_new_native_receipt_keeps_retirement_valid_after_unrelated_test_change(self):
+        self.modern_receipt()
         (self.worktree / 'apps/mobile/lib').mkdir(parents=True, exist_ok=True)
         (self.worktree / 'apps/mobile/lib/new.test.ts').write_text('unrelated test-only split')
         result = self.retire()
         self.assertEqual(result['deletionOutcome'], 'simctl delete returned successfully')
         self.assertEqual(len(result['attachments']), 1)
+
+    def test_new_native_receipt_rejects_stale_embedded_javascript(self):
+        self.modern_receipt()
+        (self.worktree / 'apps/mobile/lib').mkdir(parents=True, exist_ok=True)
+        (self.worktree / 'apps/mobile/lib/screen.ts').write_text('new JavaScript after Release proof')
+        with self.assertRaisesRegex(ValueError, 'embedded JavaScript changed'):
+            self.retire()
+        self.assertFalse((self.root / 'deleted').exists())
 
     def test_interrupted_delete_reconciles_verified_archive(self):
         original = retirement.command

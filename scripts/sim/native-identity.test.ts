@@ -11,7 +11,7 @@ const runCase = (body: string) => JSON.parse(execFileSync(process.execPath, ['--
    const root=process.env.FITSY_FIXTURE_ROOT;
    const fixture=()=>JSON.parse(readFileSync(root+'/fixture.json'));
    const execute=(cmd,args)=>{
-     if(cmd==='git') return 'apps/mobile/app.config.ts\\0apps/mobile/lib/screen.tsx\\0apps/mobile/lib/screen.test.tsx\\0apps/mobile/ios/Native.swift\\0';
+     if(cmd==='git') return 'apps/mobile/app.config.ts\\0apps/mobile/lib/screen.tsx\\0apps/mobile/lib/screen.test.tsx\\0apps/mobile/ios/Native.swift\\0apps/mobile/android/Native.kt\\0';
      if(args.includes('introspect')) return JSON.stringify(fixture().expo);
      if(args.includes('resolve')) return JSON.stringify(fixture().expoGraph);
      if(args.includes('react-native-config')) return JSON.stringify(fixture().rnGraph);
@@ -25,11 +25,13 @@ let fixtureRoot: string;
 beforeEach(() => {
   fixtureRoot = mkdtempSync(join(tmpdir(), 'fitsy-native-identity-'));
   mkdirSync(join(fixtureRoot, 'apps/mobile/ios'), { recursive: true });
+  mkdirSync(join(fixtureRoot, 'apps/mobile/android'), { recursive: true });
   mkdirSync(join(fixtureRoot, 'apps/mobile/lib'), { recursive: true });
   writeFileSync(join(fixtureRoot, 'apps/mobile/app.config.ts'), 'export default {}');
   writeFileSync(join(fixtureRoot, 'apps/mobile/lib/screen.tsx'), 'original JS');
   writeFileSync(join(fixtureRoot, 'apps/mobile/lib/screen.test.tsx'), 'original test');
   writeFileSync(join(fixtureRoot, 'apps/mobile/ios/Native.swift'), 'native source');
+  writeFileSync(join(fixtureRoot, 'apps/mobile/android/Native.kt'), 'android source');
   writeFileSync(join(fixtureRoot, 'package-lock.json'), JSON.stringify({ packages: {
     'node_modules/expo': { version: '54.0.0' }, 'node_modules/react-native': { version: '0.81.0' },
     'node_modules/native-module': { version: '1.0.0' }, 'node_modules/js-only': { version: '1.0.0' },
@@ -52,15 +54,18 @@ test('test-only, JS and JS-only lock changes reuse the verified native binary', 
     const testChange=nativeBuildDecision({receipt,native:nativeIdentity(root,{},execute),profile,appIntact:true});
     writeFileSync(root+'/apps/mobile/lib/screen.tsx','changed UI');
     const jsChange=nativeBuildDecision({receipt,native:nativeIdentity(root,{},execute),profile,appIntact:true});
+    writeFileSync(root+'/apps/mobile/android/Native.kt','changed Android-only source');
+    const androidChange=nativeBuildDecision({receipt,native:nativeIdentity(root,{},execute),profile,appIntact:true});
     const lock=JSON.parse(readFileSync(root+'/package-lock.json'));lock.packages['node_modules/js-only'].version='2.0.0';
     writeFileSync(root+'/package-lock.json',JSON.stringify(lock));
     const jsDependency=nativeBuildDecision({receipt,native:nativeIdentity(root,{},execute),profile,appIntact:true});
     const fixtureData=fixture();fixtureData.expo.extra.apiBaseUrl='new JS-only URL';
     writeFileSync(root+'/fixture.json',JSON.stringify(fixtureData));
     const publicEnv=nativeBuildDecision({receipt,native:nativeIdentity(root,{},execute),profile,appIntact:true});
-    process.stdout.write(JSON.stringify({testChange,jsChange,jsDependency,publicEnv}));`);
+    process.stdout.write(JSON.stringify({testChange,jsChange,androidChange,jsDependency,publicEnv}));`);
   expect(result).toEqual({ testChange: { rebuild: false, reasons: [] }, jsChange: { rebuild: false, reasons: [] },
-    jsDependency: { rebuild: false, reasons: [] }, publicEnv: { rebuild: false, reasons: [] } });
+    androidChange: { rebuild: false, reasons: [] }, jsDependency: { rebuild: false, reasons: [] },
+    publicEnv: { rebuild: false, reasons: [] } });
 });
 
 test('native module, permission, profile and tampered artifact each give a specific reason', () => {
@@ -81,16 +86,18 @@ test('native module, permission, profile and tampered artifact each give a speci
     writeFileSync(root+'/fixture.json',JSON.stringify(changedFixture));const permission=decision();
     writeFileSync(root+'/fixture.json',JSON.stringify({...changedFixture,expo:{...changedFixture.expo,ios:{infoPlist:{NSLocationWhenInUseUsageDescription:'Location'}},_internal:{modResults:{ios:{infoPlist:{NSLocationWhenInUseUsageDescription:'Location'}}}}}}));
     const release=profileIdentity({configuration:'Release',storeMode:'unconfigured',buildMode:'embedded-release'}, {os:'iOS 26.0'}, {}, execute);
+    const wrongPort=profileIdentity({configuration:'Debug',storeMode:'test-store',buildMode:'owned-metro-test-store',metroPort:8100}, {os:'iOS 26.0'}, {}, execute);
     const recipe={inputs:{prepareNative:'first'},hash:identityHash({prepareNative:'first'})};
     const recipeReceipt=sealReceipt({nativeIdentity:before,profileIdentity:profile,recipeIdentity:recipe});
     const changedRecipe={inputs:{prepareNative:'second'},hash:identityHash({prepareNative:'second'})};
     const recipeChange=nativeBuildDecision({receipt:recipeReceipt,native:before,profile,recipe:changedRecipe,appIntact:true});
-    process.stdout.write(JSON.stringify({nativeSource,generatedSource,moduleChange,permission,profile:decision(release),recipeChange,tampered:decision(profile,false),
+    process.stdout.write(JSON.stringify({nativeSource,generatedSource,moduleChange,permission,profile:decision(release),wrongPort:decision(wrongPort),recipeChange,tampered:decision(profile,false),
       tamperedReceipt:nativeBuildDecision({receipt:{...receipt,appHash:'forged'},native:before,profile,appIntact:true}),
       missing:nativeBuildDecision({receipt:null,native:before,profile,appIntact:false})}));`);
   for (const [key, pattern] of Object.entries({ nativeSource: /Native.swift/, generatedSource: /Generated.swift/,
     moduleChange: /native-module/,
     permission: /NSLocationWhenInUseUsageDescription/, profile: /configuration/, tampered: /artifact missing or changed/,
+    wrongPort: /metroPort/,
     recipeChange: /native build recipe changed: prepareNative/,
     tamperedReceipt: /receipt changed/,
     missing: /initial build/ })) {

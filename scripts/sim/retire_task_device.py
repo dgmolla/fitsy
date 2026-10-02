@@ -107,7 +107,11 @@ def input_hash(worktree, mobile_only=False):
     for relative in sorted(set(paths)):
         if not relative or relative.startswith('.evidence/') or relative.endswith('.md'):
             continue
-        if mobile_only and not re.match(r'^(apps/mobile/(?!e2e/)|packages/shared/|package(-lock)?\.json$)', relative):
+        if mobile_only == 'js':
+            if (not re.match(r'^(apps/mobile/(?!e2e/|ios/|android/)|packages/shared/|package(-lock)?\.json$)', relative)
+                    or re.search(r'(?:\.test\.|\.spec\.|__tests__/)', relative)):
+                continue
+        elif mobile_only and not re.match(r'^(apps/mobile/(?!e2e/)|packages/shared/|package(-lock)?\.json$)', relative):
             continue
         hash_.update(relative.encode() + b'\0')
         path = worktree / relative
@@ -170,6 +174,8 @@ def evidence(worktree, udid):
     if modern:
         if not sealed_receipt_matches(worktree, build):
             raise ValueError('native artifact receipt integrity changed')
+        if receipt['jsHash'] != input_hash(worktree, mobile_only='js'):
+            raise ValueError('embedded JavaScript changed after the verified product flow')
     elif (report.get('inputHash') != input_hash(worktree) or
           receipt['nativeSourceHash'] != input_hash(worktree, mobile_only=True) or
           receipt['buildRecipeHash'] != recipe_hash(worktree)):

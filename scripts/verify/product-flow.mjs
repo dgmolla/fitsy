@@ -26,7 +26,8 @@ const rules = [
 const serviceHealthPath = path => /^apps\/api\/app\/api\/health\/route(?:\.test)?\.ts$/.test(path);
 
 export function impact(paths) {
-  const source = paths.filter(p => !/\.md$/.test(p));
+  const source = paths.filter(p => !/\.md$/.test(p) &&
+    !/(?:\.test\.|\.spec\.|__tests__\/|__mocks__\/)/.test(p));
   const affected = source.filter(p => /^(apps\/mobile\/|packages\/shared\/|apps\/api\/(app\/api\/|lib\/|services\/|[^/]+$)|prisma\/|package(-lock)?\.json$)/.test(p) && !serviceHealthPath(p));
   const categories = new Set();
   for (const path of affected) {
@@ -52,6 +53,7 @@ export function inputHash(cwd = root, mobileOnly = false) {
   // Working contents matter; a report remains reusable after an evidence-only commit.
   const paths = git(['ls-files', '-z', '--cached', '--others', '--exclude-standard'], cwd).split('\0')
     .filter(p => p && !p.startsWith('.evidence/') && !p.endsWith('.md'))
+    .filter(p => mobileOnly === true || !/(?:\.test\.|\.spec\.|__tests__\/|__mocks__\/|^scripts\/review\/)/.test(p))
     .filter(p => mobileOnly === 'js'
       ? /^(apps\/mobile\/(?!e2e\/|ios\/|android\/)|packages\/shared\/|package(-lock)?\.json$)/.test(p) && !/(?:\.test\.|\.spec\.|__tests__\/)/.test(p)
       : !mobileOnly || /^(apps\/mobile\/(?!e2e\/)|packages\/shared\/|package(-lock)?\.json$)/.test(p));

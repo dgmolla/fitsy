@@ -22,7 +22,7 @@ const resumeDir = resolve(root, '.evidence/resume');
 const failuresFile = join(resumeDir, 'native-failures.json');
 const recipeIdentity = () => {
   const inputs = { prepareNative: digest(prepareNative.toString()), compileNative: digest(compileNative.toString()),
-    bundleDelegate: digest(bundleDelegate.toString()) };
+    bundleDelegate: digest(bundleDelegate.toString()), metroRoute };
   return { hash: identityHash(inputs), inputs };
 };
 const read = file => JSON.parse(readFileSync(file, 'utf8'));
@@ -137,7 +137,8 @@ async function startMetro(r) {
   closeSync(fd);
   await new Promise((ready, reject) => { child.once('spawn', ready); child.once('error', reject); });
   child.unref();
-  const m = { pid: child.pid, port: r.metroPort, processIdentity: processIdentity(child.pid), jsHash: inputHash(root, 'js'), configHash: environment().configHash };
+  const m = { pid: child.pid, port: r.metroPort, route: metroRoute, processIdentity: processIdentity(child.pid),
+    jsHash: inputHash(root, 'js'), configHash: environment().configHash };
   save(metroFile, m);
   try {
     for (let attempt = 0; attempt < 120; attempt++) {
@@ -158,7 +159,10 @@ async function startMetro(r) {
 }
 async function checkBundle(report) {
   if (report.buildMode === 'owned-metro-test-store') {
-    assert(report.metro && report.bundleHash === await metroBundle(report.metro), 'Metro served a different bundle after testing');
+    const built = receipt(report.simulator);
+    assert(report.metro?.route === built.metroRoute && report.metro?.port === built.metroPort,
+      'Owned Metro route or port differs from the URL embedded in the native artifact');
+    assert(report.bundleHash === await metroBundle(report.metro), 'Metro served a different bundle after testing');
   }
   else {
     const built = receipt(report.simulator);
@@ -284,7 +288,8 @@ async function build(udid, testStore, forceReason = null) {
     const bundleHash = digest(readFileSync(join(app, 'main.jsbundle')));
     save(join(buildDir, 'receipt.json'), sealReceipt({ ...config, ...identity, nativeIdentity: builtNative,
       profileIdentity: compatibility, jsHash: inputHash(root, 'js'), app, appHash: treeHash(app), bundleHash,
-      ...profile, recipeIdentity: buildRecipe, buildRecipeHash: buildRecipe.hash,
+      ...profile, metroRoute: profile.metroPort ? metroRoute : null,
+      recipeIdentity: buildRecipe, buildRecipeHash: buildRecipe.hash,
       simulatorApplicationIdentifier: entitlements['application-identifier'],
       buildReasons: reasons, builtAt: new Date().toISOString() }));
     console.log('Built identified simulator app. Next: run <UDID> [flow names].');
@@ -353,6 +358,7 @@ async function execute(udid, names, mode) {
       backendDeployment: server.backendDeployment, fixture, flows: flowSources, recordVideo: mode.recordVideo })) {
       try {
         validate(previous, plan, hash, out, Date.now(), root, r.nativeIdentity.hash, mode.name);
+        installedApp(udid, r.appHash);
         await checkBundle(previous);
         console.log('Reusing valid final-candidate evidence for this source, app, backend, simulator and flow selection.');
         return true;
@@ -413,7 +419,7 @@ async function execute(udid, names, mode) {
         'Acceptance inputs, artifact or public configuration changed before Maestro; start a fresh run');
       installedApp(udid, r.appHash);
       if (r.buildMode === 'owned-metro-test-store') await requireMetro(report.metro, { processIdentity,
-        sourceHash: report.jsHash, configHash: report.configHash });
+        sourceHash: report.jsHash, configHash: report.configHash, route: report.metro.route });
       const dir = join(out, flow.name); mkdirSync(dir);
       const flowBytes = readFileSync(join(root, flow.source), 'utf8');
       event(timeline, { type: 'flow-start', flow: flow.name, expected: 'all required commands complete', sourceHash: flow.sourceHash });
