@@ -41,8 +41,7 @@ const noSubscription = { entitlements: { active: {}, all: {} } } as CustomerInfo
 const pro = { identifier: 'pro', isActive: true, periodType: 'TRIAL', willRenew: true, expirationDate: '2030-01-08T12:00:00Z' };
 const subscribed = { entitlements: { active: { pro }, all: { pro } } } as unknown as CustomerInfo;
 const annual = { identifier: '$rc_annual', product: { identifier: 'annual', price: 59.99, priceString: '$59.99', currencyCode: 'USD', subscriptionPeriod: 'P1Y', introPrice: null } };
-const monthly = { identifier: '$rc_monthly', product: { identifier: 'monthly', price: 9.99, priceString: '$9.99', currencyCode: 'USD', subscriptionPeriod: 'P1M',
-  introPrice: { price: 0, priceString: '$0', period: 'P1W', cycles: 1 } } };
+const monthly = { identifier: '$rc_monthly', product: { identifier: 'monthly', price: 9.99, priceString: '$9.99', currencyCode: 'USD', subscriptionPeriod: 'P1M', introPrice: { price: 0, priceString: '$0', period: 'P1W', cycles: 1 } } };
 const offering = { identifier: 'default', annual, monthly: null, availablePackages: [annual], metadata: {} } as unknown as PurchasesOffering;
 const selected = { action: 'menu' as const, restaurantId: 'varilla', restaurantName: 'Varilla', menuItemId: 'meal-1', query: 'pizza' };
 let notificationMounts = 0;
@@ -52,21 +51,14 @@ const originalFetch = global.fetch;
 beforeEach(async () => {
   jest.useRealTimers();
   mockAuthSession = { access_token: 'test-token', user: { id: 'buyer' } };
-  mockAuthListeners.clear();
-  await AsyncStorage.clear();
-  notificationMounts = 0;
-  nativeUserId = null;
-  mockCapture.mockClear();
+  mockAuthListeners.clear(); await AsyncStorage.clear();
+  notificationMounts = 0; nativeUserId = null; mockCapture.mockClear();
   (Purchases.purchasePackage as jest.Mock).mockReset().mockResolvedValue({ customerInfo: subscribed });
   jest.spyOn(Purchases, 'getCustomerInfo').mockResolvedValue(noSubscription);
-  jest.spyOn(Purchases, 'logIn').mockImplementation(async userId => {
-    nativeUserId = userId;
-    return { customerInfo: noSubscription, created: false };
-  });
+  jest.spyOn(Purchases, 'logIn').mockImplementation(async userId => { nativeUserId = userId; return { customerInfo: noSubscription, created: false }; });
   jest.spyOn(Purchases, 'getAppUserID').mockImplementation(async () => nativeUserId ?? '$RCAnonymousID:fixture');
   jest.spyOn(Purchases, 'getOfferings').mockResolvedValue({ current: offering, all: { default: offering } });
-  jest.spyOn(Purchases, 'restorePurchases').mockResolvedValue(subscribed);
-  jest.spyOn(Purchases, 'addCustomerInfoUpdateListener').mockImplementation(() => {});
+  jest.spyOn(Purchases, 'restorePurchases').mockResolvedValue(subscribed); jest.spyOn(Purchases, 'addCustomerInfoUpdateListener').mockImplementation(() => {});
   global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ active: false, synced: true, verdict: 'never_subscribed', lastRcVerifiedAt: new Date().toISOString(), stale: false }) });
   await rememberPaywallIntent(selected);
 });
@@ -85,9 +77,7 @@ test('an anonymous paywall view is attributed once across plan changes', async (
   mockAuthSession = null;
   const screen = renderRouter(routes, { initialUrl: '/welcome/payment' });
   await waitFor(() => expect(screen.getByTestId('paywall-price-yearly')).toBeTruthy());
-  await waitFor(() => expect(mockCapture).toHaveBeenCalledWith('paywall_experiment_exposed', expect.objectContaining({
-    paywall_variant: 'B', layout_variant: 'trial_timeline',
-  })));
+  await waitFor(() => expect(mockCapture).toHaveBeenCalledWith('paywall_experiment_exposed', expect.objectContaining({ paywall_variant: 'B', layout_variant: 'trial_timeline' })));
   await act(async () => { fireEvent.press(screen.getByTestId('paywall-plan-monthly')); });
   expect(mockCapture.mock.calls.filter(([name]) => name === 'paywall_experiment_exposed')).toHaveLength(1);
 });
@@ -270,9 +260,7 @@ test('unknown introductory eligibility leaves the store to confirm the first cha
 test('monthly-only trial routes through reminder to monthly checkout and purchases monthly', async () => {
   const both = { ...offering, annual, monthly, availablePackages: [annual, monthly] } as unknown as PurchasesOffering;
   jest.spyOn(Purchases, 'getOfferings').mockResolvedValue({ current: both, all: { default: both } });
-  jest.spyOn(Purchases, 'checkTrialOrIntroductoryPriceEligibility').mockResolvedValue({
-    annual: { status: 1, description: 'Ineligible' }, monthly: { status: 2, description: 'Eligible' },
-  });
+  jest.spyOn(Purchases, 'checkTrialOrIntroductoryPriceEligibility').mockResolvedValue({ annual: { status: 1, description: 'Ineligible' }, monthly: { status: 2, description: 'Eligible' } });
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
   await waitFor(() => expect(screen.getByText('Try Fitsy free')).toBeTruthy());
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
@@ -288,9 +276,7 @@ test('monthly-only trial routes through reminder to monthly checkout and purchas
 test('a saved reminder link enters monthly trial checkout without a preceding trial screen', async () => {
   const both = { ...offering, annual, monthly, availablePackages: [annual, monthly] } as unknown as PurchasesOffering;
   jest.spyOn(Purchases, 'getOfferings').mockResolvedValue({ current: both, all: { default: both } });
-  jest.spyOn(Purchases, 'checkTrialOrIntroductoryPriceEligibility').mockResolvedValue({
-    annual: { status: 1, description: 'Ineligible' }, monthly: { status: 2, description: 'Eligible' },
-  });
+  jest.spyOn(Purchases, 'checkTrialOrIntroductoryPriceEligibility').mockResolvedValue({ annual: { status: 1, description: 'Ineligible' }, monthly: { status: 2, description: 'Eligible' } });
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial-reminder' });
   await waitFor(() => expect(screen.getByTestId('trial-reminder-skip')).toBeTruthy());
   await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-skip')); });
@@ -303,9 +289,7 @@ test('a saved reminder link enters monthly trial checkout without a preceding tr
 test('a direct payment link selects monthly when it is the only available package', async () => {
   const monthlyOnly = { ...offering, annual: null, monthly, availablePackages: [monthly] } as unknown as PurchasesOffering;
   jest.spyOn(Purchases, 'getOfferings').mockResolvedValue({ current: monthlyOnly, all: { default: monthlyOnly } });
-  jest.spyOn(Purchases, 'checkTrialOrIntroductoryPriceEligibility').mockResolvedValue({
-    monthly: { status: 0, description: 'Unknown' },
-  });
+  jest.spyOn(Purchases, 'checkTrialOrIntroductoryPriceEligibility').mockResolvedValue({ monthly: { status: 0, description: 'Unknown' } });
   const screen = renderRouter(routes, { initialUrl: '/welcome/payment' });
   await waitFor(() => expect(screen.getByTestId('paywall-plan-monthly').props.accessibilityState.checked).toBe(true));
   await waitFor(() => expect(screen.getByTestId('paywall-terms').props.children).toContain('store will confirm'));

@@ -190,3 +190,34 @@ test("the explicit #428 grant preserves history and rejects duplicate, mismatch 
   expect(JSON.parse(status.stdout).remaining_seconds).toBeCloseTo(939.455, 3);
   expect(spawnSync("python3", [script, "status", "--ledger", issueLedger, "--issue", "429"]).status).toBe(1);
 });
+
+test("the later #428 grant retains timed-out attempts and is finite and issue-bound", () => {
+  const issueLedger = join(root, "issue-428.jsonl");
+  const priorGrant = { event: "authorized-grant", attempt_id: "issue-428-authorized-grant", issue: 428,
+    seconds: 600, provenance: "https://github.com/dgmolla/fitsy/issues/428#issuecomment-5935945700" };
+  const priorExtension = { event: "extension", attempt_id: "issue-extension", issue: 428,
+    seconds: 900, risk: "medium", required: true };
+  const baseline = ["e69bd34e-a529-416a-8b18-6b82be631f3d",
+    "0e399d2f-0e21-46db-b08a-1ccfb6337e90", "a4ae2ec2-1f26-49b4-9719-2f4327aa6130"];
+  seed([priorExtension, priorGrant, ...history("older", 2360.545),
+    ...baseline.flatMap(id => history(id, 300.224))], issueLedger);
+  const original = readFileSync(issueLedger, "utf8");
+  const provenance = "https://github.com/dgmolla/fitsy/issues/428#issuecomment-5938480556";
+  const grant = (issue = 428, path = issueLedger, authorization = provenance) =>
+    spawnSync("python3", [script, "grant-liberal", "--ledger", path,
+      "--issue", String(issue), "--authorization", authorization], { encoding: "utf8" });
+  expect(grant(429).status).toBe(1);
+  expect(grant(428, ledger).status).toBe(1);
+  expect(grant(428, issueLedger, "unapproved").status).toBe(1);
+  expect(grant().status).toBe(0);
+  expect(grant().status).toBe(1);
+  expect(readFileSync(issueLedger, "utf8").startsWith(original)).toBe(true);
+  const status = spawnSync("python3", [script, "status", "--ledger", issueLedger,
+    "--issue", "428"], { encoding: "utf8" });
+  expect(JSON.parse(status.stdout)).toMatchObject({ cap_seconds: 10500,
+    liberal_grant_issue: 428, unfinished_attempts: [] });
+  expect(spawnSync("python3", [script, "status", "--ledger", issueLedger,
+    "--issue", "429"]).status).toBe(1);
+  seed([priorExtension, priorGrant, ...history("older", 2360.545)], issueLedger);
+  expect(grant().status).toBe(1);
+});

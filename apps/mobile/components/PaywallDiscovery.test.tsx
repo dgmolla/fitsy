@@ -76,7 +76,7 @@ it('uses the live Los Angeles catalog when there is no preview selection', async
 it('retries the real catalog without a saved query when that query has no matches', async () => {
   await rememberPaywallIntent(selection('missing'));
   (global.fetch as jest.Mock).mockImplementation(async (url: string) => ({ ok: true, json: async () => ({
-    data: new URL(url).searchParams.get('q') ? [] : [resultFor('catalog-2')],
+    data: [...new URL(url).searchParams].some(([key, value]) => key === 'q' && value) ? [] : [resultFor('catalog-2')],
     meta: { nearbyDishCount: 1, radiusMiles: 3 },
   }) }));
   const { result } = renderHook(() => usePaywallDiscovery(true));

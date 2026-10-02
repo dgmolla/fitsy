@@ -18,6 +18,14 @@ AUTHORIZED_GRANT = {"issue": 428, "seconds": 600,
     "provenance": "https://github.com/dgmolla/fitsy/issues/428#issuecomment-5935945700"}
 AUTHORIZED_BASELINE_ATTEMPT = "88a154b4-95fa-47c9-b108-cd59332809e4"
 AUTHORIZED_BASELINE_SECONDS = 2360.544
+LIBERAL_GRANT = {"issue": 428, "seconds": 7200,
+    "provenance": "https://github.com/dgmolla/fitsy/issues/428#issuecomment-5938480556"}
+LIBERAL_BASELINE_ATTEMPTS = frozenset((
+    "e69bd34e-a529-416a-8b18-6b82be631f3d",
+    "0e399d2f-0e21-46db-b08a-1ccfb6337e90",
+    "a4ae2ec2-1f26-49b4-9719-2f4327aa6130",
+))
+LIBERAL_BASELINE_SECONDS = 3261.214
 
 
 def utc():
@@ -45,6 +53,12 @@ def read_events(handle):
                 if (row.get("attempt_id") != "issue-428-authorized-grant"
                         or any(row.get(key) != value for key, value in AUTHORIZED_GRANT.items())):
                     raise ValueError("invalid authorized review grant")
+                events.append(row)
+                continue
+            if isinstance(row, dict) and row.get("event") == "liberal-grant":
+                if (row.get("attempt_id") != "issue-428-liberal-grant"
+                        or any(row.get(key) != value for key, value in LIBERAL_GRANT.items())):
+                    raise ValueError("invalid liberal review grant")
                 events.append(row)
                 continue
             if isinstance(row, dict) and row.get("event") == "extension":
@@ -145,11 +159,16 @@ def elapsed(start):
 def usage(events):
     extensions = [e for e in events if e["event"] == "extension"]
     grants = [e for e in events if e["event"] == "authorized-grant"]
+    liberal_grants = [e for e in events if e["event"] == "liberal-grant"]
     if len(extensions) > 1:
         raise ValueError("multiple review extensions are not permitted")
     if len(grants) > 1 or (grants and (len(extensions) != 1 or extensions[0]["issue"] != AUTHORIZED_GRANT["issue"])):
         raise ValueError("duplicate or mismatched authorized review grant")
-    cap = CAP_SECONDS + (EXTENSION_SECONDS if extensions else 0) + (AUTHORIZED_GRANT["seconds"] if grants else 0)
+    if len(liberal_grants) > 1 or (liberal_grants and (len(grants) != 1 or grants[0]["issue"] != LIBERAL_GRANT["issue"])):
+        raise ValueError("duplicate or mismatched liberal review grant")
+    cap = (CAP_SECONDS + (EXTENSION_SECONDS if extensions else 0)
+        + (AUTHORIZED_GRANT["seconds"] if grants else 0)
+        + (LIBERAL_GRANT["seconds"] if liberal_grants else 0))
     starts = {e["attempt_id"]: e for e in events if e["event"] == "start"}
     finishes = {e["attempt_id"]: e for e in events if e["event"] == "finish"}
     if any(key not in starts for key in finishes):
@@ -162,6 +181,7 @@ def usage(events):
     reserved = sum(e.get("reserved_seconds", cap) for e in active.values())
     return starts, finishes, {"cap_seconds": cap, "extension_issue": extensions[0]["issue"] if extensions else None,
         "authorized_grant_issue": grants[0]["issue"] if grants else None, "completed_seconds": completed,
+        "liberal_grant_issue": liberal_grants[0]["issue"] if liberal_grants else None,
         "reserved_seconds": reserved, "remaining_seconds": max(0, cap - completed - reserved),
         "review_seconds": completed,
         "observed_running_seconds": sum(min(elapsed(e), e["reserved_seconds"]) for e in active.values() if "reserved_seconds" in e),
@@ -171,7 +191,7 @@ def usage(events):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("begin", "finish", "status", "extend", "grant-authorized"))
+    parser.add_argument("action", choices=("begin", "finish", "status", "extend", "grant-authorized", "grant-liberal"))
     parser.add_argument("--ledger", type=Path, required=True)
     parser.add_argument("--import-ledger", action="append", default=[])
     parser.add_argument("--optional-import-ledger", action="append", default=[])
@@ -200,6 +220,8 @@ def main():
                 raise ValueError("review extension issue mismatch")
             if total["authorized_grant_issue"] is not None and args.issue is not None and total["authorized_grant_issue"] != args.issue:
                 raise ValueError("authorized review grant issue mismatch")
+            if total["liberal_grant_issue"] is not None and args.issue is not None and total["liberal_grant_issue"] != args.issue:
+                raise ValueError("liberal review grant issue mismatch")
             if args.action == "grant-authorized":
                 if (args.issue != AUTHORIZED_GRANT["issue"] or args.authorization != AUTHORIZED_GRANT["provenance"]
                         or args.ledger.name != f"issue-{args.issue}.jsonl" or total["extension_issue"] != args.issue
@@ -208,6 +230,17 @@ def main():
                         or total["completed_seconds"] < AUTHORIZED_BASELINE_SECONDS):
                     raise ValueError("authorized review grant requires the original issue ledger, provenance, prior extension and no duplicate")
                 append(handle, {"event": "authorized-grant", "attempt_id": "issue-428-authorized-grant", "at": utc(), **AUTHORIZED_GRANT})
+                events = list(indexed(read_events(handle)).values())
+                starts, finishes, total = usage(events)
+            if args.action == "grant-liberal":
+                if (args.issue != LIBERAL_GRANT["issue"] or args.authorization != LIBERAL_GRANT["provenance"]
+                        or args.ledger.name != f"issue-{args.issue}.jsonl"
+                        or total["authorized_grant_issue"] != args.issue
+                        or total["liberal_grant_issue"] is not None or total["unfinished_attempts"]
+                        or not LIBERAL_BASELINE_ATTEMPTS.issubset(finishes)
+                        or total["completed_seconds"] < LIBERAL_BASELINE_SECONDS):
+                    raise ValueError("liberal review grant requires the original issue ledger, provenance, completed baseline and no duplicate")
+                append(handle, {"event": "liberal-grant", "attempt_id": "issue-428-liberal-grant", "at": utc(), **LIBERAL_GRANT})
                 events = list(indexed(read_events(handle)).values())
                 starts, finishes, total = usage(events)
             if args.action in ("begin", "finish") and not all((args.round_id, args.lens, args.source_sha, args.attempt_id)):

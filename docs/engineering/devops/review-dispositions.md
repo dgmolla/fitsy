@@ -121,6 +121,8 @@ Any later authorized policy exception must retain the complete history and name 
 Issue #428 has one such explicit 600-second grant, recorded in [the authorization comment](https://github.com/dgmolla/fitsy/issues/428#issuecomment-5935945700).
 The `grant-authorized` action accepts it only once on the original issue ledger after validating the retained baseline and prior extension, for a maximum cumulative boundary of 3,300 seconds.
 Other issues retain the normal policy.
+The later [issue #428 authorization](https://github.com/dgmolla/fitsy/issues/428#issuecomment-5938480556) adds one further 7,200-second grant after the three retained 300-second incomplete attempts, yielding a 10,500-second cumulative ceiling.
+`grant-liberal` accepts that grant once on the original issue ledger with the authorization URL and completed baseline; it never resets history or applies to other issues.
 
 ## Jev advisory experiment
 

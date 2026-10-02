@@ -83,14 +83,19 @@ tags: [billing, onboarding, changed-journey]
 - copyTextFrom:
     id: paywall-terms
 - assertTrue: ${maestro.copiedText.includes(output.annualPrice) && maestro.copiedText.includes('Renews automatically')}
-# Direct no-trial entry has no previous route. Back offers the existing exit
-# flow rather than bouncing through trial reminder or the paid Search gate.
+# A deep link from welcome has a previous route; Back returns there.
 - tapOn:
     id: welcome-back
-- assertVisible:
-    id: paywall-back-to-plans
+# Reopen the paywall and exercise its explicit decline flow below.
+- assertVisible: "Find meals that fit"
+- openLink: com.fitsy.mobile://welcome/payment
 - tapOn:
-    id: paywall-back-to-plans
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: paywall-price-yearly
+    timeout: 15000
 # The decline action follows the legal links and may be below the safe area.
 - scrollUntilVisible:
     element:
