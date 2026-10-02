@@ -2,7 +2,7 @@ import React, { useRef } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { EDITORIAL, FONTS } from '@/lib/brand';
-import { canOfferTrialReminder, trialReminderDate, TRIAL_REMINDER_LEAD_HOURS } from '@/lib/notificationPlan';
+import { canOfferTrialReminder, trialReminderDate } from '@/lib/notificationPlan';
 import type { purchaseTerms } from '@/lib/purchaseTerms';
 
 type Terms = ReturnType<typeof purchaseTerms>;
@@ -68,9 +68,9 @@ export function PaywallOfferTimeline({ terms, now, reminderAvailability = 'unava
   const reminderDate = canOfferTrialReminder(terms) ? trialReminderDate(chargeDate) : null;
   const usefulReminder = reminderDate && reminderDate > now && reminderDate < chargeDate;
   const chargeDay = elapsedCalendarDays(now, chargeDate);
-  // The row describes the shared two-day reminder policy. Local clock hours
-  // can shift across DST or quiet hours without changing that offer day.
-  const reminderDay = usefulReminder ? Math.max(0, chargeDay - TRIAL_REMINDER_LEAD_HOURS / 24) : null;
+  // Quiet hours can move delivery to an earlier calendar day than the
+  // nominal 48-hour lead, so label the date the scheduler actually chose.
+  const reminderDay = usefulReminder && reminderDate ? elapsedCalendarDays(now, reminderDate) : null;
   const reminderCopy = reminderAvailability === 'enabled' && usefulReminder
     ? "We'll send you a reminder that your trial is ending soon"
     : reminderAvailability === 'permission-off'
