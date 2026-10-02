@@ -67,7 +67,8 @@ while read -r NUM SHA; do
   case "$STATE" in success|failure)
     if ! CURRENT_IDENTITY="$(bash scripts/review/run-review.sh "$NUM" --identity)"; then
       echo "[poller] PR #$NUM: current review-input identity unavailable; no verdict reuse"
-      for CONTEXT in lens/correctness review/round; do
+      PRIOR_LENSES="$(printf '%s' "$STATUS_ROWS" | jq -r '[.[] | .context | select(test("^lens/(correctness|danger-zone|workflow-security|docs-sanity)$"))] | unique | .[]')"
+      for CONTEXT in $PRIOR_LENSES lens/correctness review/round; do
         "$GH_BIN" api "repos/{owner}/{repo}/statuses/$SHA" -f state=error -f context="$CONTEXT" -f description='execution/input_identity: independent review identity unavailable' >/dev/null || true
       done
       continue

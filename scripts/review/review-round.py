@@ -30,10 +30,12 @@ def validate(value, required):
         if current is None:
             grouped[key] = dict(finding, domains=sorted(set(attribution)))
         else:
-            current['domains'] = sorted(set(current['domains'] + attribution))
-            if ('CONFIRMED', 'PLAUSIBLE', 'NIT').index(finding['severity']) < ('CONFIRMED', 'PLAUSIBLE', 'NIT').index(current['severity']):
-                current['severity'] = finding['severity']
-            current['priority'] = min(current['priority'], finding['priority'])
+            domains_union = sorted(set(current['domains'] + attribution))
+            # Confidence, priority and impact remain one observed assessment.
+            rank = lambda item: (('CONFIRMED', 'PLAUSIBLE', 'NIT').index(item['severity']), item['priority'])
+            if rank(finding) < rank(current):
+                current.update(finding)
+            current['domains'] = domains_union
     # Check the raw attribution before deduplication so duplicate normalization
     # cannot silently excuse a provider's inconsistent per-domain verdict.
     for domain in required:

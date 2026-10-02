@@ -185,3 +185,17 @@ test("changed-input old success is withdrawn before a denied replacement", () =>
     expect(readFileSync(f.calls, "utf8")).toBe("review-round\n");
   } finally { rmSync(f.home, { recursive: true, force: true }); }
 });
+
+test("failed input identity withdraws prior specialist successes without provider execution", () => {
+  const f = fixture();
+  try {
+    writeFileSync(join(f.home, "repo/scripts/review/run-review.sh"), "exit 1\n");
+    writeFileSync(f.statuses, JSON.stringify(["correctness", "danger-zone", "workflow-security"].map(domain => ({ context: `lens/${domain}`, state: "success", id: 1, created_at: "2026-10-01T00:00:00Z" })).concat([{ context: "review/round", state: "success", id: 2, created_at: "2026-10-01T00:00:01Z" }])));
+    f.tick();
+    const posts = readFileSync(f.posts, "utf8");
+    for (const domain of ["correctness", "danger-zone", "workflow-security"]) expect(posts).toContain(`context=lens/${domain}`);
+    expect(posts).toContain("context=review/round");
+    expect(posts).not.toContain("state=success");
+    expect(readFileSync(f.calls, "utf8")).toBe("");
+  } finally { rmSync(f.home, { recursive: true, force: true }); }
+});

@@ -44,3 +44,12 @@ test.each(["shipping.md", "review-dispositions.md", "agent-model-routing.md", "t
   expect(result.status).toBe(0);
   expect(result.stdout.trim()).toBe("correctness workflow-security");
 });
+
+test("deduplication preserves the most severe confirmed assessment without borrowing plausible priority", () => {
+  const confirmed = { ...finding, priority: "P3", domains: ["correctness"], impact: "Confirmed limited impact" };
+  const plausible = { ...finding, severity: "PLAUSIBLE", priority: "P1", domains: ["workflow-security"], impact: "Unconfirmed larger impact" };
+  for (const findings of [[confirmed, plausible], [plausible, confirmed]]) {
+    const result = run({ verdict: "fail", domains: { correctness: "fail", "danger-zone": "pass", "workflow-security": "pass" }, findings });
+    expect(result.findings[0]).toMatchObject({ severity: "CONFIRMED", priority: "P3", impact: confirmed.impact, domains: ["correctness", "workflow-security"] });
+  }
+});
