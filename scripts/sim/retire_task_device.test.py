@@ -135,22 +135,41 @@ shutil.copy2(sys.argv[3],sys.argv[4])
     def modern_receipt(self):
         module = self.worktree / 'scripts/sim/native-identity.mjs'
         shutil.copy2(Path(__file__).with_name('native-identity.mjs'), module)
+        (self.worktree / '.gitignore').write_text('node_modules/\n')
+        mocked = self.worktree / 'apps/mobile/__mocks__/fixture.ts'
+        mocked.parent.mkdir(parents=True, exist_ok=True)
+        mocked.write_text('mocked unit-test dependency')
+        expo_cli = self.worktree / 'node_modules/expo/bin/cli'
+        expo_cli.parent.mkdir(parents=True)
+        expo_cli.write_text('process.stdout.write(JSON.stringify({name:"Fitsy",slug:"fitsy",ios:{},_internal:{modResults:{ios:{}}}}));')
+        autolink = self.worktree / 'node_modules/expo-modules-autolinking/bin/expo-modules-autolinking'
+        autolink.parent.mkdir(parents=True)
+        autolink.write_text('process.stdout.write(JSON.stringify(process.argv[2]==="resolve"?{modules:[]}:{dependencies:{}}));')
+        (self.worktree / 'package-lock.json').write_text(json.dumps({'packages': {
+            'node_modules/expo': {'version': '54.0.0'},
+            'node_modules/react-native': {'version': '0.81.0'}}}))
         build_file = self.worktree / '.evidence/product-build/receipt.json'
         report_file = self.flow / 'report.json'
         receipt, report = json.loads(build_file.read_text()), json.loads(report_file.read_text())
         receipt.pop('nativeSourceHash')
         report.pop('nativeSourceHash')
         receipt['jsHash'] = retirement.input_hash(self.worktree, mobile_only='js')
+        current_script = ('const {nativeIdentity}=await import(process.argv[1]); '
+                          'process.stdout.write(JSON.stringify(nativeIdentity(process.argv[2],{...process.env,NODE_ENV:"production"})));')
+        current_native = json.loads(subprocess.check_output(['node', '--input-type=module', '-e', current_script,
+            str(module), str(self.worktree)], text=True))
         identity_script = ('const {identityHash,sealReceipt}=await import(process.argv[1]); '
                            'const receipt=JSON.parse(process.argv[2]); '
-                           'for(const key of ["nativeIdentity","profileIdentity","recipeIdentity"]) '
+                           'receipt.nativeIdentity=JSON.parse(process.argv[3]); '
+                           'for(const key of ["profileIdentity","recipeIdentity"]) '
                            'receipt[key]={inputs:{fixture:key},hash:identityHash({fixture:key})}; '
                            'process.stdout.write(JSON.stringify(sealReceipt(receipt)));')
         receipt = json.loads(subprocess.check_output(['node', '--input-type=module', '-e', identity_script,
-            str(module), json.dumps(receipt)], text=True))
+            str(module), json.dumps(receipt), json.dumps(current_native)], text=True))
         build_file.write_text(json.dumps(receipt))
         for key in ('nativeIdentity', 'profileIdentity', 'recipeIdentity', 'jsHash'):
             report[key] = receipt[key]
+        report['inputHash'] = retirement.input_hash(self.worktree, mobile_only='acceptance')
         report_file.write_text(json.dumps(report))
 
     def test_new_native_receipt_keeps_retirement_valid_after_unrelated_test_change(self):
@@ -166,6 +185,22 @@ shutil.copy2(sys.argv[3],sys.argv[4])
         (self.worktree / 'apps/mobile/lib').mkdir(parents=True, exist_ok=True)
         (self.worktree / 'apps/mobile/lib/screen.ts').write_text('new JavaScript after Release proof')
         with self.assertRaisesRegex(ValueError, 'embedded JavaScript changed'):
+            self.retire()
+        self.assertFalse((self.root / 'deleted').exists())
+
+    def test_new_native_receipt_rejects_changed_native_input(self):
+        self.modern_receipt()
+        native = self.worktree / 'apps/mobile/ios/Fitsy/Native.swift'
+        native.parent.mkdir(parents=True, exist_ok=True)
+        native.write_text('changed compiled native source')
+        with self.assertRaisesRegex(ValueError, 'resolved native inputs changed'):
+            self.retire()
+        self.assertFalse((self.root / 'deleted').exists())
+
+    def test_new_native_receipt_rejects_changed_acceptance_flow(self):
+        self.modern_receipt()
+        (self.worktree / 'apps/mobile/e2e/flows/cold-start-welcome.yaml').write_text('name: changed-flow\n')
+        with self.assertRaisesRegex(ValueError, 'acceptance inputs changed'):
             self.retire()
         self.assertFalse((self.root / 'deleted').exists())
 

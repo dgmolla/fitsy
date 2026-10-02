@@ -70,5 +70,6 @@ No artifact:
 Use `--force-rebuild --reason='specific diagnostic purpose'` only for a deliberate diagnostic compile.
 The CLI records that operator reason in the build decision and receipt.
 The ordinary `build` command is already the reuse-first entrypoint.
-`run` and `check` reject a changed installed app, stale embedded bundle, wrong owned Metro identity, changed source/test evidence or tampered raw evidence.
+`run` and `check` reject a changed installed app, stale embedded bundle, wrong owned Metro identity, changed acceptance inputs or tampered raw evidence.
+Simulator retirement rechecks current native, JavaScript and acceptance identities before it can archive the proof and delete a task device.
 Failed and superseded flow reports remain under `.evidence/resume/`, while private publication continues to bind the actual candidate source SHA and artifact hashes.

@@ -107,9 +107,12 @@ def input_hash(worktree, mobile_only=False):
     for relative in sorted(set(paths)):
         if not relative or relative.startswith('.evidence/') or relative.endswith('.md'):
             continue
-        if mobile_only == 'js':
+        if mobile_only == 'acceptance':
+            if re.search(r'(?:\.test\.|\.spec\.|__tests__/|__mocks__/|^scripts/review/)', relative):
+                continue
+        elif mobile_only == 'js':
             if (not re.match(r'^(apps/mobile/(?!e2e/|ios/|android/)|packages/shared/|package(-lock)?\.json$)', relative)
-                    or re.search(r'(?:\.test\.|\.spec\.|__tests__/)', relative)):
+                    or re.search(r'(?:\.test\.|\.spec\.|__tests__/|__mocks__/)', relative)):
                 continue
         elif mobile_only and not re.match(r'^(apps/mobile/(?!e2e/)|packages/shared/|package(-lock)?\.json$)', relative):
             continue
@@ -141,6 +144,23 @@ def sealed_receipt_matches(worktree, build):
         raise ValueError(f'native artifact receipt integrity cannot be checked: {error}') from error
     receipt = json.loads(build.read_text())
     return receipt.get('receiptHash') == actual
+
+
+def current_native_hash(worktree, receipt):
+    module = worktree / 'scripts/sim/native-identity.mjs'
+    script = ('const {nativeIdentity}=await import(process.argv[1]); '
+              'const env={...process.env,NODE_ENV:process.argv[3]}; '
+              'process.stdout.write(nativeIdentity(process.argv[2],env).hash);')
+    env_file = worktree / 'apps/mobile/.env.development.local'
+    command_args = ['node']
+    if env_file.is_file():
+        command_args.append(f'--env-file={env_file}')
+    command_args += ['--input-type=module', '-e', script, str(module), str(worktree),
+                     'development' if receipt.get('configuration') == 'Debug' else 'production']
+    try:
+        return subprocess.check_output(command_args, text=True).strip()
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise ValueError(f'current resolved native identity cannot be checked: {error}') from error
 
 
 def checked_file(root, relative, expected):
@@ -176,6 +196,10 @@ def evidence(worktree, udid):
             raise ValueError('native artifact receipt integrity changed')
         if receipt['jsHash'] != input_hash(worktree, mobile_only='js'):
             raise ValueError('embedded JavaScript changed after the verified product flow')
+        if receipt['nativeIdentity']['hash'] != current_native_hash(worktree, receipt):
+            raise ValueError('resolved native inputs changed after the verified product flow')
+        if report.get('inputHash') != input_hash(worktree, mobile_only='acceptance'):
+            raise ValueError('product-flow acceptance inputs changed after the verified run')
     elif (report.get('inputHash') != input_hash(worktree) or
           receipt['nativeSourceHash'] != input_hash(worktree, mobile_only=True) or
           receipt['buildRecipeHash'] != recipe_hash(worktree)):

@@ -543,6 +543,8 @@ async function check() {
   assert(report.backendDeployment === backend().backendDeployment, 'Dev deployment changed after tests');
   installedApp(report.simulator, r.appHash);
   await checkBundle(report);
+  validate(report, impact(changedPaths(process.env.FITSY_DIFF_BASE)), inputHash(), out,
+    Date.now(), root, r.nativeIdentity.hash, report.evidenceMode);
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
 let timing, delivery;
