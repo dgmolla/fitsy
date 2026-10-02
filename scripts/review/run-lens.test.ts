@@ -1,3 +1,4 @@
+import { roundRunnerCases, normalizeFixtureResponse, runPrFixture } from "./round-runner-cases";
 import { executionFailureCases } from "./execution-failure-cases";
 import { policyRunnerCases } from "./policy-runner-cases";
 import { deliveryTimingCases } from "./delivery-timing-cases";
@@ -27,31 +28,7 @@ function run(model = "fixture-model", provider = "claude", lens = "correctness")
   });
 }
 function runPr(lens = "correctness", body = "Delivery-Issue: #355\n", provider = "claude") {
-  writeFileSync(join(root, "pr-body"), body);
-  const gh = join(root, "bin/gh-fixture");
-  writeFileSync(gh, `#!/bin/sh
-if [ "$1" = pr ] && [ "$2" = diff ]; then git diff --abbrev=8 origin/main...HEAD; exit; fi
-if [ "$1" = pr ] && [ "$2" = view ]; then
-  case "$5" in
-    title) printf '%s\\n' 'Fixture change' ;;
-    body) cat ${JSON.stringify(join(root, 'pr-body'))} ;;
-    headRefOid) git rev-parse HEAD ;;
-    headRefName) git branch --show-current ;;
-  esac
-  exit
-fi
-if [ "$1" = issue ] && [ "$2" = view ]; then
-  if [ -f ${JSON.stringify(join(root, 'issue-fail'))} ]; then exit 1; fi
-  cat ${JSON.stringify(join(root, 'issue-body'))}; exit
-fi
-if [ "$1" = api ]; then printf '%s\\n' "$*" >> "$REVIEW_TEST_GH_CALLS"; exit; fi
-if [ "$1" = pr ] && [ "$2" = comment ]; then printf '%s\\n' "$*" >> "$REVIEW_TEST_GH_CALLS"; exit; fi
-exit 1
-`, { mode: 0o755 });
-  return spawnSync("bash", ["scripts/review/run-lens.sh", "123", lens], {
-    cwd: root, encoding: "utf8", env: { ...env, FITSY_REVIEW_MODEL: "fixture-model", FITSY_REVIEW_PROVIDER: provider,
-      FITSY_GH_BIN: gh, REVIEW_TEST_GH_CALLS: join(root, "gh-calls") }, timeout: 15000,
-  });
+  return runPrFixture(root, env, lens, body, provider);
 }
 beforeEach(() => {
   // A real hook environment points Git at its caller even when cwd changes.
@@ -69,7 +46,7 @@ beforeEach(() => {
   mkdirSync(join(root, "scripts/verify"), { recursive: true });
   mkdirSync(join(root, ".claude/lenses"), { recursive: true });
   mkdirSync(join(root, "bin"));
-  for (const name of ["run-lens.sh", "execute-review.py", "extract-verdict.py", "format-comment.py", "review-gate.py", "review-budget.py", "tier.mjs"]) {
+  for (const name of ["run-lens.sh", "run-review.sh", "review-round.py", "review-domains.py", "execute-review.py", "extract-verdict.py", "format-comment.py", "review-gate.py", "review-budget.py", "tier.mjs"]) {
     cpSync(join(source, "scripts/review", name), join(root, "scripts/review", name));
   }
   cpSync(join(source, "scripts/verify/risk-tiers.yml"), join(root, "scripts/verify/risk-tiers.yml"));
@@ -82,12 +59,14 @@ beforeEach(() => {
 import json,os,pathlib,sys,time
 if '--version' in sys.argv:
  print('fixture-cli 1.0'); sys.exit(0)
-pathlib.Path(${JSON.stringify(join(root, 'prompt'))}).write_text(sys.stdin.read())
+prompt=sys.stdin.read()
+pathlib.Path(${JSON.stringify(join(root, 'prompt'))}).write_text(prompt)
 with open(${JSON.stringify(calls)},'a') as f: f.write('called\\n')
 pathlib.Path(${JSON.stringify(join(root, 'reviewer-pid'))}).write_text(str(os.getpid()))
 delay=pathlib.Path(${JSON.stringify(join(root, 'delay'))})
 if delay.exists(): time.sleep(float(delay.read_text()))
 result=pathlib.Path(${JSON.stringify(join(root, 'verdict'))}).read_text()
+${normalizeFixtureResponse}
 if '--output-last-message' in sys.argv:
  pathlib.Path(sys.argv[sys.argv.index('--output-last-message')+1]).write_text(result)
 elif '-o' in sys.argv:
@@ -192,7 +171,7 @@ test("advisory docs findings remain visible without blocking the caller", () => 
   writeFileSync(join(root, "verdict"), JSON.stringify(advisory));
   const result = run("fixture-model", "claude", "docs-sanity");
   expect(result.status).toBe(0);
-  expect(JSON.parse(result.stdout)).toMatchObject(advisory);
+  expect(JSON.parse(result.stdout)).toMatchObject({ verdict: advisory.verdict, findings: advisory.findings, domains: { correctness: "pass", "docs-sanity": "fail" } });
 });
 test("plausible findings retain their raw comment-only status without a disposition", () => {
   writeFileSync(join(root, "verdict"), JSON.stringify({ lens: "correctness", verdict: "pass", findings: [{
@@ -217,7 +196,7 @@ function failingReview(priority: "P1" | "P2") {
   const first = run();
   expect(first.status).toBe(1);
   expect(JSON.parse(first.stdout)).toMatchObject({ verdict: "fail", findings: [{ priority }] });
-  const match = first.stderr.match(/\[run-lens\] gate: (\{[^\n]+\})/);
+  const match = first.stderr.match(/\[run-review\] correctness gate: (\{[^\n]+\})/);
   expect(match).not.toBeNull();
   const identity = JSON.parse(match![1]!).identity;
   const receiptPath = ".evidence/review-tests/verify.json";
@@ -264,6 +243,10 @@ test("malformed disposition and missing required test fail closed", () => {
   const missing = run();
   expect(missing.status).toBe(1);
   expect(missing.stderr).toContain("missing required test receipt");
+  const cached = spawnSync("bash", ["scripts/review/run-review.sh", "--local", "--cached-only"], { cwd: root, env: { ...env, FITSY_REVIEW_MODEL: "fixture-model", FITSY_REVIEW_PROVIDER: "claude" }, encoding: "utf8" });
+  expect(cached.status).toBe(1);
+  expect(cached.stderr).toContain("missing required test receipt");
+  expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(1);
 });
 test("stale source-bound receipt and changed review inputs cannot reuse a pass", () => {
   const { disposition, receiptPath } = failingReview("P2");
@@ -297,3 +280,5 @@ deliveryTimingCases({ root: () => root, env: () => env, source, run, runPr, git 
 policyRunnerCases({ root: () => root, setRoot: value => { root = value; }, env: () => env, setEnv: value => { env = value; },
   calls: () => calls, cache: () => cache, run, runPr, git, isolatedEnv });
 executionFailureCases({ root: () => root, env: () => env, setEnv: value => { env = value; }, run, runPr });
+
+roundRunnerCases({ root: () => root, calls: () => calls, env: () => env, run, runPr, git });

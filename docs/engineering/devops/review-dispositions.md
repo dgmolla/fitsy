@@ -2,7 +2,7 @@
 
 The canonical lens runner keeps the independent review JSON unchanged.
 `severity` records confidence, `priority` records user impact, and `verdict` remains `fail` when any finding is `CONFIRMED`.
-`run-lens.sh` evaluates a separate disposition file before setting its effective gate result and commit status.
+`run-review.sh` evaluates a separate disposition file before setting its effective gate result and commit status.
 A failed raw verdict remains visible when an owned P2 follow-up satisfies the gate or its confirmed findings are P3 advisory.
 Reviewer execution failure, timeout, authentication failure or invalid output produces `verdict: "incomplete"`, `findings: []` and an `error.kind` of `execution_error` or `invalid_output`.
 An incomplete review has no product priority, cannot be disposed, is never cached and fails the gate even for an advisory lens.
@@ -137,7 +137,7 @@ External data sharing and any later gate integration require separate explicit a
 ## Adoption
 
 Run `npm run verify` and applicable local lenses on the committed branch with `FITSY_REVIEW_PROVIDER` and `FITSY_REVIEW_MODEL` set to authenticated independent review settings.
-Keep the raw JSON emitted by `run-lens.sh` and the initial `gate` identity line.
+Keep the raw JSON emitted by `run-review.sh` and the initial `gate` identity line.
 For a P2 finding, record the owner, acceptance criteria and actual required-test receipts in the sidecar, then rerun the same lens.
 A valid raw cache hit reuses the independent reviewer while the gate evaluates the new disposition.
 For a ready PR, run the same canonical runner in PR mode with `FITSY_GH_BIN=gh-axi` and the same candidate budget directory and disposition paths, then read back the exact-head statuses.

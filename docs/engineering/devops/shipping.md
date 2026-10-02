@@ -7,7 +7,7 @@ The executable checks remain in `scripts/verify/registry.yml`, `scripts/verify/r
 ```mermaid
 flowchart LR
     A[Implement in owned worktree] --> B[Local checks and product evidence]
-    B --> C[Relevant local review lenses]
+    B --> C[One local review round]
     C --> D[PR checks and reusable lens verdicts]
     D --> E[Authorized merge and deploy]
     E --> F[Main Verify plus Deploy plus product smoke]
@@ -110,21 +110,22 @@ Commit the tested change locally before reviewing it with the local review runne
 Fetch the base first and ensure the branch contains the current review definitions.
 If it predates the harness, rebase/update it deliberately in its own worktree before review; do not silently skip missing lenses.
 
-Use the same lean lens selection as the trusted-main poller:
+Run one independent reviewer round with the same required domains as the trusted-main poller:
 
-| Changed surface | Required local lens |
+| Changed surface | Required review domains |
 |---|---|
 | Every PR, including docs and tests | `correctness`, including maintainability and required acceptance |
 | Production auth, billing or data-loss code | Also `danger-zone` |
 | Production deployment/security or review/release controls | Also `workflow-security` |
 
-Exact path routing is in `scripts/review/poller.sh`; ordinary test, fixture and documentation paths do not trigger specialists by name alone, while review and release policy files do.
+Exact shared path routing is in `scripts/review/review-domains.py`; ordinary test, fixture and documentation paths do not trigger specialists by name alone, while review and release policy files do.
 If the changed behavior exposes a sensitive control outside those paths, add the relevant specialist before merge.
 An `incident` label, `Spec:` line or test file does not by itself add a separate lens; correctness still checks the named acceptance and relevant tests.
 
 ```sh
-bash scripts/review/run-lens.sh --local correctness
-# Substitute/add each applicable lens from the routing above.
+bash scripts/review/run-review.sh --local
+# Explicit sensitive behavior outside path routing: --add-domain workflow-security
+# Overrides only add coverage; they never remove required domains.
 ```
 
 Group material defects and mandatory acceptance failures into one repair pass, while preserving bounded P2 debt as owned, source-bound follow-ups.
@@ -133,9 +134,9 @@ Freeze source before expensive canonical checks, run applicable verification onc
 Rerun invalidated checks and lenses after a source change; never reuse an old-head verdict as a fresh pass.
 Review requirements are independent of the implementing agent, model vendor and subscription.
 The runner supports `claude` and `codex` adapters; choose an authenticated provider explicitly with `FITSY_REVIEW_PROVIDER`.
-Set `FITSY_REVIEW_MODEL` to the intended model; Codex requires it, while existing Claude installations retain their tier-based defaults.
+Set `FITSY_REVIEW_MODEL` to the intended model; Codex defaults to `gpt-6-sol`, while explicitly selected Claude installations retain their tier-based defaults.
 Use a model appropriate to the change's risk and keep the required lenses unchanged.
-For example, `FITSY_REVIEW_PROVIDER=codex FITSY_REVIEW_MODEL=<configured-model> bash scripts/review/run-lens.sh --local correctness` runs the same lens through the Codex adapter.
+For example, `FITSY_REVIEW_PROVIDER=codex FITSY_REVIEW_MODEL=<configured-model> bash scripts/review/run-review.sh --local` runs the same lens through the Codex adapter.
 Provider-specific credentials remain in the provider's normal local credential store and must never enter the repository or evidence.
 The adapters run an independent review process with read-only tools, disabled integrations and bounded execution time.
 `FITSY_REVIEW_TIMEOUT_SECONDS` configures the execution timeout.
@@ -146,12 +147,23 @@ A supported alternative may resolve a provider outage, but never switch provider
 The runner records provider, model and execution identity with the verdict, and includes that identity and adapter/parser contents in its cache key.
 An existing status from another provider still satisfies the same lens; a cache entry is reused only for its matching execution identity.
 The implementing agent must not author its own independent review verdict.
-A matching post-PR pass should reuse the local verdict rather than duplicate the expensive review.
+A matching post-PR pass reuses the complete local round rather than invoking the provider again.
+The cache binds every required domain and instruction, provider identity, acceptance brief and patch; only optional hunk-heading labels are normalized.
+The trusted main poller invokes the reviewer once and publishes `review/round` with its complete input identity after all required compatibility statuses.
+Before reusing a completed same-head status, a nonexecuting identity probe checks current acceptance, routing, instructions, provider and patch inputs.
+A changed identity requires one new complete round; identity failure withdraws reuse, and a retained needs-coordinator failure still requires diagnosis.
+Existing `lens/<domain>` statuses are derived only from one complete independent result.
+Missing domain results make the entire round incomplete.
+PR patches are generated from the exact checked-out head and immutable target base commit, with a head recheck before execution.
+Changed-input success statuses are withdrawn before replacement execution, including when the finite budget denies that execution.
+Legacy `run-lens.sh` delegates the whole round and cannot run separate routine reviewers.
+The default independent provider is Codex, model `gpt-6-sol`, high reasoning effort.
+Each actual round execution or retry charges the retained issue ledger once; cached projections charge no new execution.
 A changed diff or changed review inputs invalidates that reuse.
 The poller gives an incomplete independent review one bounded same-head retry, using the same 900-second default deadline as local review unless explicitly configured.
 Only a classified timeout or transient provider failure gets one later-tick retry, with twice the initial deadline up to the 3600-second executor ceiling.
 Authentication, configuration, malformed output and unclassified historical failures require diagnosis before another attempt.
-After a second incomplete result, it records `lens/<name>=failure` with `needs-coordinator` and stops automatic retries for that head.
+After a second incomplete result, it records `review/round=failure` with `needs-coordinator` and stops automatic retries for that head.
 Timeouts and invalid output are execution failures, not code findings or passing reviews.
 An independent coordinator may assess an ordinary exact-head change using the existing PR review and status path only after reading its required acceptance, raw attempts, current checks and diff; record the assessment and source SHA before publishing a success status.
 The implementer cannot supply that assessment, and a required sensitive specialist remains required rather than being replaced by ordinary coordinator review.
@@ -161,7 +173,7 @@ P0/P1 impacts, malformed dispositions, stale receipts and missing required tests
 New independent review execution has one cumulative 30-minute budget across all candidate heads and lenses, including failed and timed-out attempts and historical exceptions.
 There is no source-round limit or history reset.
 Required normal/protected reviews retain the existing one-time 900-second extension.
-A retained same-head, same-lens timeout or transient provider failure may receive one issue-wide 1800-second infrastructure recovery allowance, with an ordinary cumulative ceiling of 4500 seconds.
+A retained same-head round timeout or transient provider failure may receive one issue-wide 1800-second infrastructure recovery allowance, with an ordinary cumulative ceiling of 4500 seconds.
 Every failed second remains charged; the allowance is recorded separately and cannot repeat, overlap an unreconciled attempt or relax product findings.
 An existing human-authorized grant retains its explicit boundary and disables further automatic recovery grants.
 Use the shared issue-bound ledger, atomic reservations and migration procedure in [review-dispositions.md](review-dispositions.md#review-budget).

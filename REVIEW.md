@@ -2,7 +2,7 @@
 
 Shared, provider-neutral rules for every review lens in `.claude/lenses/`.
 The directory name is retained for compatibility; these rules apply to every supported review adapter.
-Runner: `scripts/review/run-lens.sh`.
+Runner: `scripts/review/run-review.sh`.
 Design: `docs/engineering/devops/autonomous-shipping.md` §L5.
 
 ## Severity
@@ -55,15 +55,19 @@ End with exactly one fenced JSON block:
 
 ```json
 {
-  "lens": "<name>",
+  "domains": {"correctness": "pass", "<other required domain>": "pass"},
   "verdict": "pass" | "fail",
   "findings": [
-    {"severity": "CONFIRMED|PLAUSIBLE|NIT", "priority": "P0|P1|P2|P3", "impact": "user outcome, realistic trigger, scope, evidence and contract", "file": "path", "line": 0, "summary": "one sentence", "scenario": "input/state -> wrong outcome", "fix": "what to change, citing the pattern file to copy"}
+    {"domains": ["correctness"], "severity": "CONFIRMED|PLAUSIBLE|NIT", "priority": "P0|P1|P2|P3", "impact": "user outcome, realistic trigger, scope, evidence and contract", "file": "path", "line": 0, "summary": "one sentence", "scenario": "input/state -> wrong outcome", "fix": "what to change, citing the pattern file to copy"}
   ]
 }
 ```
 
-`verdict` is `fail` only when at least one CONFIRMED finding exists.
+`domains` must account for exactly every required domain named by the trusted runner.
+Each domain verdict is `fail` only when a CONFIRMED finding is attributed to it.
+The overall `verdict` is `fail` only when at least one CONFIRMED finding exists.
+Consolidate duplicate behavior findings once and include all applicable domains.
+Missing domain results, inconsistent verdicts, or incomplete output cannot publish a passing status.
 
 ## Convergence
 

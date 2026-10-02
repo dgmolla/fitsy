@@ -290,7 +290,8 @@ Review happens in CI for every PR, whoever opened it.
 Role files keep their "review lens" sections only as input to the lens files, then drop them.
 
 **Runners.** The pipeline requires a check-run on the PR named `lens/<name>`; it does not care which process posts it.
-`scripts/review/run-lens.sh <pr> <lens>` is the single implementation: reads the lens file and `REVIEW.md`, runs `claude -p` with the restricted tool set, writes `.evidence/review-<lens>.json`, posts the check-run via `gh api`.
+`scripts/review/run-review.sh <pr>` is the canonical implementation: selects all required domains, invokes one independent read-only reviewer, validates complete domain results and projects existing `lens/<name>` statuses.
+See [shipping.md](shipping.md) for current provider, cache and budget policy; the legacy `run-lens.sh` entrypoint delegates the full round.
 Callers, in the order we adopt them:
 
 | Runner | Mechanism | Cost | When |

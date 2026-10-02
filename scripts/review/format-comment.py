@@ -4,11 +4,13 @@ import json
 import sys
 
 d = json.load(sys.stdin)
-out = [f"## lens/{d['lens']}: {d['verdict']}"]
+out = [f"## Independent review round: {d['verdict']}", 'Domains: ' + ', '.join(d.get('domains', {}))]
+if d.get('source'):
+    out.append(f"Source: `{d['source']['head_sha']}`; patch `{d['source']['diff_sha256']}`; round cache `{d['source']['cache_key']}`.")
 if d["verdict"] == "incomplete":
     error = d.get("error", {})
     out.append(f"\nIndependent review incomplete ({error.get('kind', 'unknown')}): {error.get('message', 'no completed verdict')}.")
-    out.append("Inspect reviewer execution logs and rerun this lens. This is not a code finding.")
+    out.append("Inspect reviewer execution logs and rerun the complete round. This is not a code finding.")
 for f in d.get("findings", []):
     sev = f.get("severity", "?")
     loc = f"{f.get('file', '?')}:{f.get('line', 0)}"
@@ -19,5 +21,5 @@ for f in d.get("findings", []):
         out.append(f"  - scenario: {f['scenario']}")
     if f.get("fix"):
         out.append(f"  - fix: {f['fix']}")
-out.append("\n<sub>posted by scripts/review/run-lens.sh (local runner)</sub>")
+out.append("\n<sub>posted by scripts/review/run-review.sh (local runner)</sub>")
 print("\n".join(out))
