@@ -122,6 +122,23 @@ def recipe_hash(worktree):
                                       for name in files)).hexdigest()
 
 
+def sealed_receipt_matches(worktree, build):
+    module = worktree / 'scripts/sim/native-identity.mjs'
+    script = ('import {readFileSync} from "node:fs"; '
+              'const {identityHash}=await import(process.argv[1]); '
+              'const receipt=JSON.parse(readFileSync(process.argv[2], "utf8")); '
+              'const valid=[receipt.nativeIdentity,receipt.profileIdentity,receipt.recipeIdentity]'
+              '.every(part=>part?.hash===identityHash(part.inputs)); '
+              'delete receipt.receiptHash; process.stdout.write(valid?identityHash(receipt):"invalid");')
+    try:
+        actual = subprocess.check_output(['node', '--input-type=module', '-e', script,
+                                          str(module), str(build)], text=True).strip()
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise ValueError(f'native artifact receipt integrity cannot be checked: {error}') from error
+    receipt = json.loads(build.read_text())
+    return receipt.get('receiptHash') == actual
+
+
 def checked_file(root, relative, expected):
     if not isinstance(relative, str) or not re.fullmatch(r'[0-9a-f]{64}', expected or ''):
         raise ValueError('receipt file or digest missing')
@@ -143,12 +160,19 @@ def evidence(worktree, udid):
     if (receipt.get('buildMode') != 'embedded-release' or receipt.get('configuration') != 'Release' or
             report.get('buildMode') != receipt.get('buildMode')):
         raise ValueError('Metro-dependent app is not a compatible retained export')
-    for field in ('configHash', 'nativeSourceHash', 'buildRecipeHash', 'bundleHash', 'storeMode'):
+    modern = bool(receipt.get('nativeIdentity'))
+    fields = ('configHash', 'nativeIdentity', 'profileIdentity', 'recipeIdentity', 'jsHash',
+              'buildRecipeHash', 'bundleHash', 'storeMode') if modern else (
+              'configHash', 'nativeSourceHash', 'buildRecipeHash', 'bundleHash', 'storeMode')
+    for field in fields:
         if not receipt.get(field) or report.get(field) != receipt[field]:
             raise ValueError(f'build and report {field} identities differ')
-    if (report.get('inputHash') != input_hash(worktree) or
-            receipt['nativeSourceHash'] != input_hash(worktree, mobile_only=True) or
-            receipt['buildRecipeHash'] != recipe_hash(worktree)):
+    if modern:
+        if not sealed_receipt_matches(worktree, build):
+            raise ValueError('native artifact receipt integrity changed')
+    elif (report.get('inputHash') != input_hash(worktree) or
+          receipt['nativeSourceHash'] != input_hash(worktree, mobile_only=True) or
+          receipt['buildRecipeHash'] != recipe_hash(worktree)):
         raise ValueError('product-flow source or build identity is stale')
     app = Path(receipt['app']).resolve()
     if not app.is_relative_to((worktree / '.evidence/product-build').resolve()) or not app.is_dir():

@@ -23,13 +23,15 @@ flowchart TD
 
 ## Exact rebuild inputs
 
-The receipt records `nativeIdentity.inputs` and `profileIdentity.inputs` as well as their hashes, and seals its fields with `receiptHash`.
+The receipt records `nativeIdentity.inputs`, `profileIdentity.inputs`, and `recipeIdentity.inputs` as well as their hashes, and seals its fields with `receiptHash`.
+Generated iOS project and app source files are included even though Expo normally ignores them in Git.
+The builder checks source and JavaScript before preparation, after Pod resolution, and after Xcode so edits during a build cannot receive a passing receipt.
 The decision reports the changed input paths, such as `native input changed: files.apps/mobile/ios/Native.swift` or `binary profile changed: configuration`.
 It never uses HEAD age or a general mobile-source hash as a rebuild reason.
 
 | Change | Native action | JavaScript and acceptance action |
 | --- | --- | --- |
-| Swift/Obj-C source, resolved Expo or React Native autolinking module, Pod graph, native plugin output | Rebuild with each changed file or resolved graph field named | Rerun affected scenarios. |
+| Swift/Obj-C source, generated iOS compile source, resolved Expo or React Native autolinking module, Pod graph, native plugin output or native build recipe | Rebuild with each changed file, graph field or recipe step named | Rerun affected scenarios. |
 | Resolved entitlements, permissions, plist, URL scheme, bundle ID, native icon/splash resource, EAS/native build setting | Rebuild with changed config or resource field named | Rerun affected scenarios. |
 | Simulator versus device, OS/architecture compatibility, Debug versus Release, Test Store capability, build flags or Xcode/SDK identity | Rebuild for the required profile, naming each changed field | Use the profile that can serve or embed the required JavaScript. |
 | Receipt absent, legacy or changed receipt, app absent or tree hash changed | Build with an initial, unverifiable provenance or artifact-integrity reason | Preserve the prior receipt in `.evidence/resume/` before replacement. |

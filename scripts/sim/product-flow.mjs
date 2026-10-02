@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { root, inputHash, changedPaths, impact, digest, validate, baseline, repoEnv } from '../verify/product-flow.mjs';
 import { backendRevision } from './backend-identity.mjs';
 import { buildProfile, bundleDelegate, embeddedBundleCompatibility, fixtureLabel, metroRoute } from './build-profile.mjs';
-import { nativeIdentity, profileIdentity, nativeBuildDecision, sealReceipt } from './native-identity.mjs';
+import { nativeIdentity, buildInputDrift, profileIdentity, nativeBuildDecision, sealReceipt, identityHash } from './native-identity.mjs';
 import { admitDisk, appendRecordedFlowFailure, applyCapturePolicy, archiveFailureEvidence, completeMaestroRun, event, latestMaestroLog, nearestFailure, needsDiagnosis, recordFlowOutcome, recordRunFailure, requireMetro, runRecordedFlow } from './runner-controls.mjs';
 import { matchesFinalCandidate, runSelection } from './evidence-mode.mjs';
 import { closeoutXCTestAttachments, snapshotXCTestAttachments } from './xctest-attachments.mjs';
@@ -20,7 +20,11 @@ const buildDir = resolve(root, '.evidence/product-build');
 const mobile = resolve(root, 'apps/mobile');
 const resumeDir = resolve(root, '.evidence/resume');
 const failuresFile = join(resumeDir, 'native-failures.json');
-const recipeHash = () => digest(['product-flow.mjs', 'build-profile.mjs'].map(f => readFileSync(join(root, 'scripts/sim', f))).join('\0'));
+const recipeIdentity = () => {
+  const inputs = { prepareNative: digest(prepareNative.toString()), compileNative: digest(compileNative.toString()),
+    bundleDelegate: digest(bundleDelegate.toString()) };
+  return { hash: identityHash(inputs), inputs };
+};
 const read = file => JSON.parse(readFileSync(file, 'utf8'));
 export function readPreviousReportForReuse(file) {
   try { return { report: read(file), error: null }; }
@@ -184,10 +188,11 @@ function intact(r) {
 function buildDecision(udid, profile) {
   const r = existingReceipt();
   const identity = device(udid);
-  const native = nativeIdentity(root);
+  const native = nativeIdentity(root, { ...process.env, NODE_ENV: profile.configuration === 'Debug' ? 'development' : 'production' });
   const compatibility = profileIdentity(profile, identity);
+  const recipe = recipeIdentity();
   return { r, identity, native, compatibility,
-    decision: nativeBuildDecision({ receipt: r, native, profile: compatibility, appIntact: intact(r) }) };
+    decision: nativeBuildDecision({ receipt: r, native, profile: compatibility, recipe, appIntact: intact(r) }) };
 }
 function receipt(udid) {
   const r = existingReceipt();
@@ -197,10 +202,54 @@ function receipt(udid) {
   assert(!decision.rebuild, `Native build required: ${decision.reasons.join('; ')}`);
   return r;
 }
+function prepareNative(profile, testStore) {
+  // Keyless Release is useful for baseline navigation, but cannot verify billing.
+  const env = { ...repoEnv(), EXPO_NO_DOTENV: '1', NODE_ENV: testStore ? 'development' : 'production',
+    FITSY_ALLOW_MISSING_PUBLIC_ENV: '1', CI: '1', FORCE_BUNDLING: '1', SKIP_BUNDLING: '' };
+  const packageFile = join(mobile, 'package.json'), packageBefore = readFileSync(packageFile);
+  try {
+    run('npx', ['expo', 'prebuild', '--platform', 'ios', '--no-install'], { cwd: mobile, env, stdio: 'inherit' });
+  } finally {
+    const before = JSON.parse(packageBefore), after = read(packageFile);
+    after.scripts = before.scripts;
+    assert(JSON.stringify(after) === JSON.stringify(before), 'Prebuild changed dependencies; inspect package.json before retrying');
+    writeFileSync(packageFile, packageBefore);
+  }
+  run('/usr/libexec/PlistBuddy', ['-c', 'Set :EXUpdatesEnabled false', join(mobile, 'ios/Fitsy/Supporting/Expo.plist')]);
+  const delegate = join(mobile, 'ios/Fitsy/AppDelegate.swift');
+  writeFileSync(delegate, bundleDelegate(readFileSync(delegate, 'utf8'), profile));
+  const podfile = join(mobile, 'ios/Podfile'), pods = readFileSync(podfile, 'utf8');
+  assert(/^\s*use_expo_modules!.*$/m.test(pods), 'Unrecognized Expo autolinking setup');
+  writeFileSync(podfile, pods.replace(/^\s*use_expo_modules!.*$/m, testStore
+    ? "  use_expo_modules!({ exclude: ['expo-dev-client', 'expo-dev-launcher', 'expo-dev-menu'] })"
+    : '  use_expo_modules!'));
+  const project = join(mobile, 'ios/Fitsy.xcodeproj/project.pbxproj');
+  writeFileSync(project, readFileSync(project, 'utf8').replaceAll('export SKIP_BUNDLING=1', 'export FORCE_BUNDLING=1'));
+  run('pod', ['install'], { cwd: join(mobile, 'ios'), env, stdio: 'inherit' });
+  return env;
+}
+function compileNative(profile, udid, env) {
+  const log = join(buildDir, 'build.log');
+  const fd = openSync(log, 'w');
+  try {
+    run('xcodebuild', ['-workspace', 'ios/Fitsy.xcworkspace', '-scheme', 'Fitsy', '-configuration', profile.configuration,
+      '-sdk', 'iphonesimulator', '-destination', `id=${udid}`, '-derivedDataPath', buildDir, '-jobs', '4',
+      'ONLY_ACTIVE_ARCH=YES', 'CODE_SIGNING_ALLOWED=YES', 'CODE_SIGN_IDENTITY=-', 'build'],
+    { cwd: mobile, env, stdio: ['ignore', fd, fd] });
+  } finally { closeSync(fd); }
+  const app = join(buildDir, `Build/Products/${profile.configuration}-iphonesimulator/Fitsy.app`);
+  const entitlementsFile = join(buildDir,
+    `Build/Intermediates.noindex/Fitsy.build/${profile.configuration}-iphonesimulator/Fitsy.build/Fitsy.app-Simulated.xcent`);
+  const entitlements = JSON.parse(run('plutil', ['-convert', 'json', '-o', '-', entitlementsFile]));
+  assert(entitlements['application-identifier']?.endsWith('.com.fitsy.mobile'), 'Simulator keychain application entitlement is missing');
+  return { app, entitlements };
+}
 async function build(udid, testStore, forceReason = null) {
   const config = environment();
-  const profile = buildProfile(testStore, process.env), buildRecipeHash = recipeHash();
+  const profile = buildProfile(testStore, process.env), buildRecipe = recipeIdentity();
   const { r: previous, identity, native, compatibility, decision } = buildDecision(udid, profile);
+  const sourceJsHash = inputHash(root, 'js');
+  const initialBuildInputs = { native, jsHash: sourceJsHash, configHash: config.configHash, recipe: buildRecipe };
   if (!decision.rebuild && !forceReason) {
     console.log(JSON.stringify({ action: 'reuse', app: previous.app, appHash: previous.appHash,
       nativeIdentity: native.hash, profileIdentity: compatibility.hash, reason: 'verified compatible native artifact' }));
@@ -216,52 +265,27 @@ async function build(udid, testStore, forceReason = null) {
   try {
     mkdirSync(buildDir, { recursive: true });
     if (previous) copyFileSync(join(buildDir, 'receipt.json'), join(resumeDir, `native-receipt-superseded-${Date.now()}.json`));
-    // Keyless Release is useful for baseline navigation, but cannot verify billing.
-    const env = { ...repoEnv(), EXPO_NO_DOTENV: '1', NODE_ENV: testStore ? 'development' : 'production', FITSY_ALLOW_MISSING_PUBLIC_ENV: '1', CI: '1', FORCE_BUNDLING: '1', SKIP_BUNDLING: '' };
-    const packageFile = join(mobile, 'package.json'), packageBefore = readFileSync(packageFile);
-    try {
-      run('npx', ['expo', 'prebuild', '--platform', 'ios', '--no-install'], { cwd: mobile, env, stdio: 'inherit' });
-    } finally {
-      // Expo rewrites only start scripts here. Reject unexpected dependency changes.
-      const before = JSON.parse(packageBefore), after = read(packageFile);
-      after.scripts = before.scripts;
-      assert(JSON.stringify(after) === JSON.stringify(before), 'Prebuild changed dependencies; inspect package.json before retrying');
-      writeFileSync(packageFile, packageBefore);
-    }
-    // Pin the embedded candidate; cached/downloaded OTA updates cannot replace it.
-    run('/usr/libexec/PlistBuddy', ['-c', 'Set :EXUpdatesEnabled false', join(mobile, 'ios/Fitsy/Supporting/Expo.plist')]);
-    // Test Store needs Debug + Expo's dev server. Release stays embedded.
-    const delegate = join(mobile, 'ios/Fitsy/AppDelegate.swift');
-    const delegateSource = readFileSync(delegate, 'utf8');
-    writeFileSync(delegate, bundleDelegate(delegateSource, profile));
-    const podfile = join(mobile, 'ios/Podfile'), pods = readFileSync(podfile, 'utf8');
-    assert(/^\s*use_expo_modules!.*$/m.test(pods), 'Unrecognized Expo autolinking setup');
-    writeFileSync(podfile, pods.replace(/^\s*use_expo_modules!.*$/m, testStore
-      ? "  use_expo_modules!({ exclude: ['expo-dev-client', 'expo-dev-launcher', 'expo-dev-menu'] })"
-      : '  use_expo_modules!'));
-    const project = join(mobile, 'ios/Fitsy.xcodeproj/project.pbxproj');
-    writeFileSync(project, readFileSync(project, 'utf8').replaceAll('export SKIP_BUNDLING=1', 'export FORCE_BUNDLING=1'));
-    run('pod', ['install'], { cwd: join(mobile, 'ios'), env, stdio: 'inherit' });
-    const log = join(buildDir, 'build.log');
-    const fd = openSync(log, 'w');
-    try {
-      run('xcodebuild', ['-workspace', 'ios/Fitsy.xcworkspace', '-scheme', 'Fitsy', '-configuration', profile.configuration, '-sdk', 'iphonesimulator', '-destination', `id=${udid}`, '-derivedDataPath', buildDir, '-jobs', '4', 'ONLY_ACTIVE_ARCH=YES', 'CODE_SIGNING_ALLOWED=YES', 'CODE_SIGN_IDENTITY=-', 'build'], { cwd: mobile, env, stdio: ['ignore', fd, fd] });
-    } finally { closeSync(fd); }
-    const app = join(buildDir, `Build/Products/${profile.configuration}-iphonesimulator/Fitsy.app`);
-    // Xcode embeds these simulated entitlements in the Mach-O image; unsigned
-    // builds omitted them and SecureStore failed with ERR_KEY_CHAIN.
-    const entitlementsFile = join(buildDir, `Build/Intermediates.noindex/Fitsy.build/${profile.configuration}-iphonesimulator/Fitsy.build/Fitsy.app-Simulated.xcent`);
-    const entitlements = JSON.parse(run('plutil', ['-convert', 'json', '-o', '-', entitlementsFile]));
-    assert(entitlements['application-identifier']?.endsWith('.com.fitsy.mobile'), 'Simulator keychain application entitlement is missing');
-    const builtNative = nativeIdentity(root);
-    const changedDuringBuild = native.hash !== builtNative.hash;
-    if (changedDuringBuild) event(join(resumeDir, 'runner-events.jsonl'), { type: 'resolved-native-graph-after-pods',
-      before: native.hash, after: builtNative.hash, simulator: udid });
-    assert(buildRecipeHash === recipeHash(), 'Build recipe changed during compilation');
+    const env = prepareNative(profile, testStore);
+    const preparedNative = nativeIdentity(root, env);
+    const preparedJsHash = inputHash(root, 'js');
+    const preparedConfigHash = environment().configHash;
+    const preparedInputs = { native: preparedNative, jsHash: preparedJsHash,
+      configHash: preparedConfigHash, recipe: recipeIdentity() };
+    const preparationDrift = buildInputDrift(initialBuildInputs, preparedInputs);
+    assert(preparationDrift.length === 0,
+      `Inputs changed during native preparation: ${preparationDrift.join(', ')}; discard this artifact`);
+    const { app, entitlements } = compileNative(profile, udid, env);
+    const builtNative = nativeIdentity(root, env);
+    const completedInputs = { native: builtNative, jsHash: inputHash(root, 'js'),
+      configHash: environment().configHash, recipe: recipeIdentity() };
+    const compilationDrift = buildInputDrift(preparedInputs, completedInputs, true);
+    assert(compilationDrift.length === 0,
+      `Inputs changed during compilation: ${compilationDrift.join(', ')}; discard this artifact`);
     const bundleHash = digest(readFileSync(join(app, 'main.jsbundle')));
     save(join(buildDir, 'receipt.json'), sealReceipt({ ...config, ...identity, nativeIdentity: builtNative,
       profileIdentity: compatibility, jsHash: inputHash(root, 'js'), app, appHash: treeHash(app), bundleHash,
-      ...profile, buildRecipeHash, simulatorApplicationIdentifier: entitlements['application-identifier'],
+      ...profile, recipeIdentity: buildRecipe, buildRecipeHash: buildRecipe.hash,
+      simulatorApplicationIdentifier: entitlements['application-identifier'],
       buildReasons: reasons, builtAt: new Date().toISOString() }));
     console.log('Built identified simulator app. Next: run <UDID> [flow names].');
     return false;

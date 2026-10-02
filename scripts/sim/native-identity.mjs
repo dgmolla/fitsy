@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, readlinkSync, lstatSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -17,12 +17,28 @@ const normalize = (value, root) => {
   if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, normalize(item, root)]));
   return value;
 };
+function generatedIosFiles(root) {
+  const directory = join(root, 'apps/mobile/ios');
+  if (!existsSync(directory)) return [];
+  const found = [];
+  const visit = folder => {
+    for (const entry of readdirSync(folder, { withFileTypes: true })) {
+      if (['Pods', 'build', 'DerivedData', 'xcuserdata', 'project.xcworkspace', '.gitignore', '.DS_Store'].includes(entry.name)) continue;
+      const path = join(folder, entry.name);
+      if (entry.isDirectory()) visit(path);
+      else if (entry.isFile() || entry.isSymbolicLink()) found.push(path);
+    }
+  };
+  visit(directory);
+  return found.sort();
+}
 
 // The resolved graphs are authoritative. A lockfile edit to a JS-only package
 // does not affect this identity; an autolinked package version or Pod does.
 export function nativeIdentity(root, env = process.env, execute = command) {
   const mobile = join(root, 'apps/mobile');
-  const cleanEnv = { ...Object.fromEntries(Object.entries(env).filter(([key]) => !key.startsWith('GIT_'))), EXPO_NO_DOTENV: '1', NODE_ENV: 'development' };
+  const cleanEnv = { ...Object.fromEntries(Object.entries(env).filter(([key]) => !key.startsWith('GIT_'))),
+    EXPO_NO_DOTENV: '1', NODE_ENV: env.NODE_ENV || 'development', FITSY_ALLOW_MISSING_PUBLIC_ENV: '1' };
   const expo = JSON.parse(execute('node', [join(root, 'node_modules/expo/bin/cli'), 'config', '--type', 'introspect', '--json'], mobile, cleanEnv));
   const expoGraph = JSON.parse(execute('node', [join(root, 'node_modules/expo-modules-autolinking/bin/expo-modules-autolinking'), 'resolve', '--platform', 'ios', '--json'], mobile, cleanEnv));
   const rnGraph = JSON.parse(execute('node', [join(root, 'node_modules/expo-modules-autolinking/bin/expo-modules-autolinking'), 'react-native-config', '--platform', 'ios', '--json'], mobile, cleanEnv));
@@ -37,14 +53,32 @@ export function nativeIdentity(root, env = process.env, execute = command) {
   const paths = execute('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', 'apps/mobile', 'patches'], root, cleanEnv)
     .split('\0').filter(nativeFile).sort();
   const files = Object.fromEntries(paths.map(path => [path, existsSync(join(root, path)) ? sha(readFileSync(join(root, path))) : '<deleted>']));
-  for (const path of ['apps/mobile/ios/Podfile.lock']) if (existsSync(join(root, path))) files[path] = sha(readFileSync(join(root, path)));
+  const generatedFiles = {};
+  for (const path of generatedIosFiles(root)) {
+    const relativePath = relative(root, path);
+    const target = lstatSync(path).isSymbolicLink() ? readlinkSync(path) : null;
+    generatedFiles[relativePath] = sha(target === null ? readFileSync(path) : `symlink:${target}`);
+  }
   for (const path of [expo.icon, expo.ios?.icon, expo.ios?.splash?.image, expo.splash?.image].filter(Boolean)) {
     const absolute = resolve(mobile, path);
     if (!absolute.startsWith(mobile + '/') || !existsSync(absolute)) throw new Error(`Native resource is missing or outside mobile: ${path}`);
     files[relative(root, absolute)] = sha(readFileSync(absolute));
   }
-  const inputs = normalize({ nativeConfig, expoGraph, rnGraph, nativePackages, files }, root);
+  const inputs = normalize({ nativeConfig, expoGraph, rnGraph, nativePackages, files, generatedFiles }, root);
   return { hash: sha(stable(inputs)), inputs };
+}
+
+export const nativeSourceIdentityHash = native => identityHash(Object.fromEntries(
+  Object.entries(native.inputs).filter(([key]) => key !== 'generatedFiles')));
+
+export function buildInputDrift(before, after, includeGenerated = false) {
+  const changed = [];
+  const nativeHash = includeGenerated ? item => item.native.hash : item => nativeSourceIdentityHash(item.native);
+  if (nativeHash(before) !== nativeHash(after)) changed.push('native source or resolved graph');
+  if (before.jsHash !== after.jsHash) changed.push('JavaScript');
+  if (before.configHash !== after.configHash) changed.push('public configuration');
+  if (before.recipe.hash !== after.recipe.hash) changed.push('native build recipe');
+  return changed;
 }
 
 export function profileIdentity(profile, device, env = process.env, execute = command) {
@@ -64,7 +98,7 @@ export function compareNativeInputs(previous, current, prefix = '') {
   return [...keys].sort().flatMap(key => compareNativeInputs(previous[key], current[key], prefix ? `${prefix}.${key}` : key));
 }
 
-export function nativeBuildDecision({ receipt, native, profile, appIntact }) {
+export function nativeBuildDecision({ receipt, native, profile, recipe = null, appIntact }) {
   if (!receipt) return { rebuild: true, reasons: ['initial build: no verified compatible native artifact receipt'] };
   if (receipt.receiptHash !== identityHash(Object.fromEntries(Object.entries(receipt).filter(([key]) => key !== 'receiptHash'))))
     return { rebuild: true, reasons: ['artifact receipt changed or lacks its recorded integrity hash'] };
@@ -72,6 +106,8 @@ export function nativeBuildDecision({ receipt, native, profile, appIntact }) {
   const reasons = [];
   if (receipt.nativeIdentity.hash !== identityHash(receipt.nativeIdentity.inputs)) reasons.push('native identity inputs do not match their recorded digest');
   if (receipt.profileIdentity.hash !== identityHash(receipt.profileIdentity.inputs)) reasons.push('profile identity inputs do not match their recorded digest');
+  if (recipe && (!receipt.recipeIdentity || receipt.recipeIdentity.hash !== identityHash(receipt.recipeIdentity.inputs)))
+    reasons.push('native build recipe receipt is missing or changed');
   if (!appIntact) reasons.push('artifact missing or changed: recorded app tree hash does not match');
   if (receipt.nativeIdentity.hash !== native.hash) {
     const paths = compareNativeInputs(receipt.nativeIdentity.inputs, native.inputs);
@@ -81,5 +117,7 @@ export function nativeBuildDecision({ receipt, native, profile, appIntact }) {
     const paths = compareNativeInputs(receipt.profileIdentity.inputs, profile.inputs);
     reasons.push(...(paths.length ? paths : ['identity digest differs from recorded inputs']).map(path => `binary profile changed: ${path}`));
   }
+  if (recipe && receipt.recipeIdentity?.hash !== recipe.hash)
+    reasons.push(...compareNativeInputs(receipt.recipeIdentity?.inputs, recipe.inputs).map(path => `native build recipe changed: ${path}`));
   return { rebuild: reasons.length > 0, reasons: [...new Set(reasons)] };
 }

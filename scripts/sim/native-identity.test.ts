@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path';
 const modulePath = resolve(__dirname, 'native-identity.mjs');
 const cleanEnv = () => Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
 const runCase = (body: string) => JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e',
-  `import {nativeIdentity,nativeBuildDecision,profileIdentity,sealReceipt} from ${JSON.stringify(modulePath)};
+  `import {nativeIdentity,nativeBuildDecision,profileIdentity,sealReceipt,identityHash,buildInputDrift} from ${JSON.stringify(modulePath)};
    import {writeFileSync,readFileSync} from 'node:fs';
    const root=process.env.FITSY_FIXTURE_ROOT;
    const fixture=()=>JSON.parse(readFileSync(root+'/fixture.json'));
@@ -71,6 +71,8 @@ test('native module, permission, profile and tampered artifact each give a speci
     const decision=(p=profile,intact=true)=>nativeBuildDecision({receipt,native:nativeIdentity(root,{},execute),profile:p,appIntact:intact});
     writeFileSync(root+'/apps/mobile/ios/Native.swift','changed native source');const nativeSource=decision();
     writeFileSync(root+'/apps/mobile/ios/Native.swift','native source');
+    writeFileSync(root+'/apps/mobile/ios/Generated.swift','changed ignored generated native source');const generatedSource=decision();
+    const {unlinkSync}=await import('node:fs');unlinkSync(root+'/apps/mobile/ios/Generated.swift');
     const lock=JSON.parse(readFileSync(root+'/package-lock.json'));lock.packages['node_modules/native-module'].version='2.0.0';
     writeFileSync(root+'/package-lock.json',JSON.stringify(lock));const moduleChange=decision();
     writeFileSync(root+'/package-lock.json',JSON.stringify({...lock,packages:{...lock.packages,'node_modules/native-module':{version:'1.0.0'}}}));
@@ -79,11 +81,17 @@ test('native module, permission, profile and tampered artifact each give a speci
     writeFileSync(root+'/fixture.json',JSON.stringify(changedFixture));const permission=decision();
     writeFileSync(root+'/fixture.json',JSON.stringify({...changedFixture,expo:{...changedFixture.expo,ios:{infoPlist:{NSLocationWhenInUseUsageDescription:'Location'}},_internal:{modResults:{ios:{infoPlist:{NSLocationWhenInUseUsageDescription:'Location'}}}}}}));
     const release=profileIdentity({configuration:'Release',storeMode:'unconfigured',buildMode:'embedded-release'}, {os:'iOS 26.0'}, {}, execute);
-    process.stdout.write(JSON.stringify({nativeSource,moduleChange,permission,profile:decision(release),tampered:decision(profile,false),
+    const recipe={inputs:{prepareNative:'first'},hash:identityHash({prepareNative:'first'})};
+    const recipeReceipt=sealReceipt({nativeIdentity:before,profileIdentity:profile,recipeIdentity:recipe});
+    const changedRecipe={inputs:{prepareNative:'second'},hash:identityHash({prepareNative:'second'})};
+    const recipeChange=nativeBuildDecision({receipt:recipeReceipt,native:before,profile,recipe:changedRecipe,appIntact:true});
+    process.stdout.write(JSON.stringify({nativeSource,generatedSource,moduleChange,permission,profile:decision(release),recipeChange,tampered:decision(profile,false),
       tamperedReceipt:nativeBuildDecision({receipt:{...receipt,appHash:'forged'},native:before,profile,appIntact:true}),
       missing:nativeBuildDecision({receipt:null,native:before,profile,appIntact:false})}));`);
-  for (const [key, pattern] of Object.entries({ nativeSource: /Native.swift/, moduleChange: /native-module/,
+  for (const [key, pattern] of Object.entries({ nativeSource: /Native.swift/, generatedSource: /Generated.swift/,
+    moduleChange: /native-module/,
     permission: /NSLocationWhenInUseUsageDescription/, profile: /configuration/, tampered: /artifact missing or changed/,
+    recipeChange: /native build recipe changed: prepareNative/,
     tamperedReceipt: /receipt changed/,
     missing: /initial build/ })) {
     const decision = result[key as keyof typeof result] as {rebuild: boolean; reasons: string[]};
@@ -98,4 +106,17 @@ test('Release public store-key presence changes JS configuration without changin
     const configured=profileIdentity({configuration:'Release',storeMode:'apple-simulator',buildMode:'embedded-release'}, {os:'iOS 26.0'}, {}, execute);
     process.stdout.write(JSON.stringify({same:keyless.hash===configured.hash,capability:configured.inputs.storeCapability}));`);
   expect(result).toEqual({ same: true, capability: 'apple-native' });
+});
+
+test('a source edit during preparation or compilation cannot be certified by the completed receipt', () => {
+  const result = runCase(`
+    const native=nativeIdentity(root,{},execute),recipe={hash:'recipe'};
+    const before={native,jsHash:'initial',configHash:'config',recipe};
+    writeFileSync(root+'/apps/mobile/lib/screen.tsx','changed while Xcode was bundling');
+    const afterJs={...before,jsHash:'changed'};
+    writeFileSync(root+'/apps/mobile/ios/Generated.swift','changed generated source during compilation');
+    const afterNative={...before,native:nativeIdentity(root,{},execute)};
+    process.stdout.write(JSON.stringify({js:buildInputDrift(before,afterJs,true),native:buildInputDrift(before,afterNative,true)}));`);
+  expect(result.js).toContain('JavaScript');
+  expect(result.native).toContain('native source or resolved graph');
 });
