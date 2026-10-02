@@ -144,8 +144,8 @@ if [ "$PROBE" = 0 ] && [ -f "$TELEMETRY_FILE" ] && [ -n "$TELEMETRY_ROOT" ]; the
 fi
 
 # Classify both sides, including deleted and renamed sensitive files.
-CHANGED="$(echo "$DIFF" | grep -E '^(\+\+\+ b/|--- a/|rename (from|to) )' | sed -E 's#^\+\+\+ b/##; s#^--- a/##; s#^rename (from|to) ##' | grep -v '^/dev/null$' | sort -u)"
-DOMAINS="$(printf '%s\n' "$CHANGED" | python3 -I scripts/review/review-domains.py "${DOMAIN_ARGS[@]}")"
+CHANGED="$(git diff --name-only --no-renames "$BASE_SHA...$HEAD_SHA")"
+DOMAINS="$(printf '%s\n' "$CHANGED" | python3 -I scripts/review/review-domains.py --state-file "$BUDGET_HOME/domains/issue-$ISSUE.json" --candidate "$CANDIDATE" --issue "$ISSUE" "${DOMAIN_ARGS[@]}")"
 DOMAIN_FILES=()
 for DOMAIN in $DOMAINS; do
   [ -f ".claude/lenses/$DOMAIN.md" ] || { echo "missing domain instructions: $DOMAIN" >&2; exit 1; }
@@ -177,7 +177,7 @@ CACHE_IDENTITY="$(printf '%s' "$IDENTITY" | python3 -I -c 'import json,sys; d=js
 
 # Key on reviewed content and the bound release brief. PR title/body can change
 # without altering acceptance, while an issue acceptance edit must rerun review.
-KEY="$(printf '%s' "$DIFF" | cat - "${DOMAIN_FILES[@]}" REVIEW.md "$REPO_ROOT/scripts/review/run-review.sh" "$REPO_ROOT/scripts/review/review-domains.py" "$REPO_ROOT/scripts/review/review-round.py" "$REPO_ROOT/scripts/review/execute-review.py" "$REPO_ROOT/scripts/review/extract-verdict.py" "$REPO_ROOT/scripts/review/review-gate.py" "$REPO_ROOT/scripts/review/review-budget.py" <(printf '%s' "$DOMAINS:$CACHE_IDENTITY") <(printf '%s' "$ISSUE:$ISSUE_BRIEF") | shasum -a 256 | cut -d' ' -f1)"
+KEY="$(printf '%s' "$DIFF" | cat - "${DOMAIN_FILES[@]}" REVIEW.md "$REPO_ROOT/scripts/review/run-review.sh" "$REPO_ROOT/scripts/review/review-domains.py" "$REPO_ROOT/scripts/review/review-round.py" "$REPO_ROOT/scripts/review/execute-review.py" "$REPO_ROOT/scripts/review/extract-verdict.py" "$REPO_ROOT/scripts/review/review-gate.py" "$REPO_ROOT/scripts/review/review-budget.py" <(printf '%s' "$HEAD_SHA:$BASE_SHA:$DOMAINS:$CACHE_IDENTITY") <(printf '%s' "$ISSUE:$ISSUE_BRIEF") | shasum -a 256 | cut -d' ' -f1)"
 DIFF_SHA256="$(printf '%s' "$DIFF" | shasum -a 256 | cut -d' ' -f1)"
 CACHE_FILE="$CACHE_DIR/$KEY.json"
 if [ "$PROBE" = 1 ]; then

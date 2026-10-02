@@ -162,4 +162,37 @@ test("PR patch comes from exact immutable commits rather than a separately fetch
   expect(prompt).not.toContain("+export const value = 999;");
 });
 
+test("manual added coverage survives default PR replacement after source changes", () => {
+  writeFileSync(join(root, ".claude/lenses/workflow-security.md"), "Review controls.\n");
+  git("add", ".claude/lenses/workflow-security.md"); git("commit", "-qm", "domain instructions");
+  git("update-ref", "refs/remotes/origin/main", "HEAD");
+  writeFileSync(join(root, "app.ts"), "export const value = 3;\n");
+  git("add", "app.ts"); git("commit", "-qm", "outside routed paths");
+  expect(run("fixture-model", "claude", "workflow-security").status).toBe(0);
+  writeFileSync(join(root, "app.ts"), "export const value = 4;\n");
+  git("add", "app.ts"); git("commit", "-qm", "replacement source");
+  expect(JSON.parse(runPr().stdout).domains).toEqual({ correctness: "pass", "workflow-security": "pass" });
+  expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(2);
+});
+
+test("same patch on a new committed head requires a new review", () => {
+  expect(run().status).toBe(0);
+  git("commit", "--amend", "-qm", "new immutable source context");
+  expect(run().status).toBe(0);
+  expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(2);
+});
+
+test.each(["binary", "mode"])("%s-only sensitive changes route and execute one round", kind => {
+  writeFileSync(join(root, ".claude/lenses/workflow-security.md"), "Review controls.\n");
+  writeFileSync(join(root, "scripts/review/change.sh"), kind === "binary" ? Buffer.from([0,1,2]) : "echo baseline\n", { mode: 0o644 });
+  git("add", "."); git("commit", "-qm", "control baseline");
+  git("update-ref", "refs/remotes/origin/main", "HEAD");
+  if (kind === "binary") writeFileSync(join(root, "scripts/review/change.sh"), Buffer.from([0,3,4]));
+  else git("update-index", "--chmod=+x", "scripts/review/change.sh");
+  if (kind === "binary") git("add", "scripts/review/change.sh");
+  git("commit", "-qm", "control metadata change");
+  expect(JSON.parse(run().stdout).domains).toEqual({ correctness: "pass", "workflow-security": "pass" });
+  expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(1);
+});
+
 }
