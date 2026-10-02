@@ -40,7 +40,8 @@ The existing `devTrialVisual=1` fixture separately marks synthetic trial eligibi
 
 Variant B calculates the projected first-charge day number from the selected eligible store trial period and the current day.
 It projects the reminder day number with the same two-day lead time and quiet-hour adjustment used by the existing notification scheduler.
-The timeline omits calendar dates and repeats neither plan prices nor renewal terms; those remain in the plan controls and billing disclosure.
+The timeline shows a projected calendar date only in the final charge sentence.
+Plan prices and renewal terms remain in the plan controls and billing disclosure.
 The middle step distinguishes opted-in, available opt-in, permission-off and unavailable states, and never claims a notification has been scheduled before the store confirms the trial end.
 No-trial offers show only the three supported benefits in the main content area, with immediate paid terms in the purchase disclosure.
 The store confirms the actual purchase and charge date before checkout.
