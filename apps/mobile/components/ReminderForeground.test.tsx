@@ -24,8 +24,9 @@ jest.mock('../lib/supabase', () => ({ supabase: { auth: {
 const mockRefresh = jest.fn(async () => {});
 const mockCustomerInfo = { entitlements: { all: { pro: { isActive: true } } } };
 let mockCustomerInfoResult: typeof mockCustomerInfo | null = mockCustomerInfo;
+let mockEntitled = true;
 jest.mock('../lib/usePurchases', () => ({ usePurchases: () => ({
-  entitled: true, ready: true, refresh: mockRefresh,
+  entitled: mockEntitled, ready: true, refresh: mockRefresh,
   customerInfo: mockCustomerInfoResult,
 }) }));
 jest.mock('../lib/notificationSchedule', () => ({
@@ -42,6 +43,7 @@ jest.mock('../lib/devTrialReminderProbe', () => ({ reconcileDevTrialReminderOwne
 beforeEach(() => {
   mockAccountId = 'reminder-owner';
   mockCustomerInfoResult = mockCustomerInfo;
+  mockEntitled = true;
   mockAuthListener = undefined;
   jest.clearAllMocks();
   jest.mocked(readReminderPreferences).mockReset();
@@ -273,6 +275,10 @@ test('a late opt-in waits for native subscription details before explaining the 
   } as typeof mockCustomerInfo.entitlements.all.pro;
   try {
     mockCustomerInfoResult = mockCustomerInfo;
+    mockEntitled = false;
+    screen.rerender(<ReminderProvider><TrialToggle /></ReminderProvider>);
+    expect(alert).not.toHaveBeenCalled();
+    mockEntitled = true;
     screen.rerender(<ReminderProvider><TrialToggle /></ReminderProvider>);
     await waitFor(() => expect(alert).toHaveBeenCalledWith('Trial reminder time passed',
       expect.stringContaining('cannot schedule it now')));

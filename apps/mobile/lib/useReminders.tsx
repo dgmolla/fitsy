@@ -81,9 +81,9 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
     const now = new Date();
     const subscription = customerInfo?.entitlements.all.pro;
     if (pendingTrialOptInRef.current && pendingTrialOptInRef.current !== account.id) pendingTrialOptInRef.current = null;
-    if (pendingTrialOptInRef.current && customerInfo) {
+    if (pendingTrialOptInRef.current && customerInfo && entitled === true) {
       pendingTrialOptInRef.current = null;
-      if (preferences.trial && entitled === true && missedTrialReminderWindow(subscription, now.getTime())) explainMissedTrialReminder();
+      if (preferences.trial && missedTrialReminderWindow(subscription, now.getTime())) explainMissedTrialReminder();
     }
     const nativeUnresolved = !!userId && entitled === true && preferences.trial && !customerInfo;
     const plan = planReminders({ now, userId: account.id, entitled: entitled === true, preferences, subscription });
@@ -156,13 +156,13 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
   async function save(values: ReminderPreferences) {
     if (!account.id) throw new Error('Sign in to change reminders.');
     const id = account.id;
-    const newTrialOptIn = !preferences.trial && values.trial && entitled === true;
+    const newTrialOptIn = !preferences.trial && values.trial;
     await saveReminderPreferences(id, values);
     trackReminderAction({ action: 'preferences_changed', ...values });
     if (userRef.current === id) {
       setLoaded({ id, values });
       if (!values.trial) pendingTrialOptInRef.current = null;
-      else if (newTrialOptIn && !customerInfo) pendingTrialOptInRef.current = id;
+      else if (newTrialOptIn && (!customerInfo || entitled !== true)) pendingTrialOptInRef.current = id;
       else if (newTrialOptIn && missedTrialReminderWindow(customerInfo?.entitlements.all.pro, Date.now())) explainMissedTrialReminder();
     }
   }
