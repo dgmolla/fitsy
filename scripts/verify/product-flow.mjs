@@ -6,6 +6,7 @@ import { readFileSync, existsSync, realpathSync } from 'node:fs';
 import { resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import { parseEnv } from 'node:util';
 const yaml = createRequire(import.meta.url)('js-yaml');
 
 export const root = resolve(fileURLToPath(new URL('../..', import.meta.url)));
@@ -25,7 +26,24 @@ const rules = [
 // The health response serves deployment monitors and is verified over HTTP.
 const serviceHealthPath = path => /^apps\/api\/app\/api\/health\/route(?:\.test)?\.ts$/.test(path);
 
-export function impact(paths) {
+export function publicConfigIdentity(cwd = root, env = process.env) {
+  const file = resolve(cwd, 'apps/mobile/.env.development.local');
+  const effective = { ...(existsSync(file) ? parseEnv(readFileSync(file, 'utf8')) : {}), ...env };
+  const entries = Object.entries(effective).filter(([key]) => key.startsWith('EXPO_PUBLIC_'))
+    .sort(([a], [b]) => a.localeCompare(b));
+  return { configHash: digest(JSON.stringify(entries)),
+    publicConfig: Object.fromEntries(entries.map(([key, value]) => [key, digest(value)])) };
+}
+
+export function changedPublicConfigKeys(previous, current) {
+  if (!previous || previous.configHash === current.configHash) return [];
+  if (!previous.publicConfig) return ['<unknown>'];
+  const changed = [...new Set([...Object.keys(previous.publicConfig), ...Object.keys(current.publicConfig)])]
+    .filter(key => previous.publicConfig[key] !== current.publicConfig[key]).sort();
+  return changed.length ? changed : ['<unknown>'];
+}
+
+export function impact(paths, configKeys = []) {
   const source = paths.filter(p => !/\.md$/.test(p) &&
     p !== 'apps/mobile/eas.json' &&
     !/(?:\.test\.|\.spec\.|__tests__\/|__mocks__\/)/.test(p));
@@ -37,7 +55,16 @@ export function impact(paths) {
     // Unknown client/config/schema changes need a changed-journey charter too.
     if (!matched.length) categories.add('changed-journey');
   }
-  return { required: affected.length > 0, paths: affected, categories: [...categories].sort(), baseline };
+  for (const key of configKeys) {
+    if (key === '<unknown>') for (const category of ['billing', 'notifications', 'auth', 'onboarding', 'discovery', 'changed-journey'])
+      categories.add(category);
+    else if (/REVENUECAT|STORE|PURCHASE|PAYWALL/i.test(key)) categories.add('billing');
+    else if (/SUPABASE|AUTH/i.test(key)) categories.add('auth');
+    else if (/PUSH|NOTIFICATION/i.test(key)) categories.add('notifications');
+    else categories.add('changed-journey');
+  }
+  return { required: affected.length > 0 || configKeys.length > 0,
+    paths: [...affected, ...configKeys.map(key => `public-env:${key}`)], categories: [...categories].sort(), baseline };
 }
 
 export function changedPaths(base, cwd = root) {
@@ -190,15 +217,19 @@ export function validate(report, plan, hash, directory, now = Date.now(), cwd = 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     insist(!process.env.CI || process.env.FITSY_DIFF_BASE, 'CI must supply the candidate diff base');
-    const plan = impact(changedPaths(process.env.FITSY_DIFF_BASE));
+    const reportFile = resolve(root, '.evidence/product-flow/report.json');
+    const buildFile = resolve(root, '.evidence/product-build/receipt.json');
+    const previous = existsSync(reportFile) ? JSON.parse(readFileSync(reportFile, 'utf8'))
+      : existsSync(buildFile) ? JSON.parse(readFileSync(buildFile, 'utf8')) : null;
+    const configKeys = changedPublicConfigKeys(previous, publicConfigIdentity());
+    const plan = impact(changedPaths(process.env.FITSY_DIFF_BASE), configKeys);
     if (process.argv.includes('--plan')) {
       console.log(JSON.stringify({ ...plan, inputHash: inputHash() }));
     } else if (!plan.required) {
       console.log(JSON.stringify({ name: 'product-flow', status: 'pass', applicability: 'not_applicable', summary: 'no mobile-facing product changes', fix: '' }));
     } else {
-      const file = resolve(root, '.evidence/product-flow/report.json');
-      const report = JSON.parse(readFileSync(file, 'utf8'));
-      const result = validate(report, plan, inputHash(), resolve(file, '..'));
+      const report = JSON.parse(readFileSync(reportFile, 'utf8'));
+      const result = validate(report, plan, inputHash(), resolve(reportFile, '..'));
       execFileSync(process.execPath, ['--env-file=apps/mobile/.env.development.local', 'scripts/sim/product-flow.mjs', 'check'], { cwd: root, stdio: ['ignore', 'ignore', 'pipe'] });
       console.log(JSON.stringify({ name: 'product-flow', ...result, fix: '' }));
     }

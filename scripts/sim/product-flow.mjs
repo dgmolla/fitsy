@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import { resolve, relative, join, dirname, delimiter } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import { root, inputHash, changedPaths, impact, digest, validate, baseline, repoEnv } from '../verify/product-flow.mjs';
+import { root, inputHash, changedPaths, impact, digest, validate, baseline, repoEnv, publicConfigIdentity, changedPublicConfigKeys } from '../verify/product-flow.mjs';
 import { backendRevision } from './backend-identity.mjs';
 import { buildProfile, bundleDelegate, embeddedBundleCompatibility, embeddedArtifactPlan, fixtureLabel, metroRoute } from './build-profile.mjs';
 import { nativeIdentity, buildInputDrift, profileIdentity, nativeBuildDecision, sealReceipt, identityHash } from './native-identity.mjs';
@@ -45,11 +45,10 @@ function treeHash(dir) {
   return hash.digest('hex');
 }
 export function environment() {
-  const entries = Object.entries(process.env).filter(([key]) => key.startsWith('EXPO_PUBLIC_')).sort(([a], [b]) => a.localeCompare(b));
   assert(process.env.EXPO_PUBLIC_API_URL === 'https://dev.fitsy.org', 'Load the mobile dev environment; this runner refuses production');
   assert(process.env.EXPO_PUBLIC_SUPABASE_URL && process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY, 'Dev Supabase configuration is required');
   assert(!process.env.EXPO_PUBLIC_SUPABASE_URL.includes('zaxkmjqozvmbifiwbxps'), 'Production Supabase is forbidden');
-  return { backend: process.env.EXPO_PUBLIC_API_URL, configHash: digest(JSON.stringify(entries)) };
+  return { backend: process.env.EXPO_PUBLIC_API_URL, ...publicConfigIdentity(root) };
 }
 function backend() {
   const d = JSON.parse(run('vercel', ['api', '/v13/deployments/dev.fitsy.org', '--raw']));
@@ -346,7 +345,10 @@ async function execute(udid, names, mode) {
   assert(embedded.compatible,
     `${embedded.reason}; use a compatible owned Metro profile or run build ${udid} --refresh-embedded-js for an explicit Release artifact`);
   const fixture = fixtureLabel(process.env.FITSY_FIXTURE, process.env.FITSY_SIM_RESET_KEYCHAIN === udid);
-  const hash = inputHash(), plan = impact(changedPaths(process.env.FITSY_DIFF_BASE));
+  const priorFile = join(out, 'report.json');
+  const prior = existsSync(priorFile) ? readPreviousReportForReuse(priorFile).report : r;
+  const hash = inputHash(), plan = impact(changedPaths(process.env.FITSY_DIFF_BASE),
+    changedPublicConfigKeys(prior || r, environment()));
   const currentStoreMode = buildProfile(r.buildMode === 'owned-metro-test-store', process.env).storeMode;
   assert(!plan.categories.includes('billing') || currentStoreMode !== 'unconfigured', 'Billing evidence requires a configured store');
   const selected = [...new Set([...baseline, ...names])];
@@ -404,6 +406,7 @@ async function execute(udid, names, mode) {
     const report = { version: 1, ...buildIdentity, storeMode: currentStoreMode,
       ...identity, ...server, inputHash: hash,
       jsHash: inputHash(root, 'js'), configHash: environment().configHash,
+      publicConfig: environment().publicConfig,
       result: 'running', startedAt: new Date().toISOString(),
       fixture, keychainReset: false, evidenceMode: mode.name, videoRequested: mode.recordVideo,
       maestroVersion: run(process.env.MAESTRO_BIN || 'maestro', ['--version']), flows: [], exploration: [] };
@@ -535,7 +538,8 @@ async function finish(walkthrough) {
     o.sha256 = digest(readFileSync(join(out, o.trace)));
   }
   report.result = 'pass'; report.finishedAt = new Date().toISOString();
-  const result = validate(report, impact(changedPaths(process.env.FITSY_DIFF_BASE)), inputHash(), out,
+  const result = validate(report, impact(changedPaths(process.env.FITSY_DIFF_BASE),
+    changedPublicConfigKeys(report, environment())), inputHash(), out,
     Date.now(), root, r.nativeIdentity.hash, report.evidenceMode);
   save(join(out, 'report.json'), report); console.log(JSON.stringify(result));
 }
@@ -550,7 +554,8 @@ async function check() {
   assert(report.backendDeployment === backend().backendDeployment, 'Dev deployment changed after tests');
   installedApp(report.simulator, r.appHash);
   await checkBundle(report);
-  validate(report, impact(changedPaths(process.env.FITSY_DIFF_BASE)), inputHash(), out,
+  validate(report, impact(changedPaths(process.env.FITSY_DIFF_BASE),
+    changedPublicConfigKeys(report, environment())), inputHash(), out,
     Date.now(), root, r.nativeIdentity.hash, report.evidenceMode);
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

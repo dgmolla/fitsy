@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, readdirSync, readlinkSync, lstatSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, readlinkSync, lstatSync, realpathSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -33,6 +33,24 @@ function generatedIosFiles(root) {
   return found.sort();
 }
 
+function localNativeResources(value, mobile, root, found = new Set()) {
+  if (typeof value === 'string') {
+    const localPath = !/^[a-z][a-z0-9+.-]*:/i.test(value) && (value.startsWith('./') || value.startsWith('../') ||
+      /\.(?:png|jpe?g|webp|svg|wav|mp3|aiff?|caf|ttf|otf|plist|entitlements|json)$/i.test(value));
+    if (localPath) {
+      const absolute = resolve(mobile, value);
+      if (!absolute.startsWith(root + '/') || !existsSync(absolute))
+        throw new Error(`Native plugin resource is missing or outside checkout: ${value}`);
+      found.add(absolute);
+    }
+  } else if (Array.isArray(value)) {
+    for (const item of value) localNativeResources(item, mobile, root, found);
+  } else if (value && typeof value === 'object') {
+    for (const item of Object.values(value)) localNativeResources(item, mobile, root, found);
+  }
+  return found;
+}
+
 // The resolved graphs are authoritative. A lockfile edit to a JS-only package
 // does not affect this identity; an autolinked package version or Pod does.
 export function nativeIdentity(root, env = process.env, execute = command) {
@@ -59,11 +77,18 @@ export function nativeIdentity(root, env = process.env, execute = command) {
     const target = lstatSync(path).isSymbolicLink() ? readlinkSync(path) : null;
     generatedFiles[relativePath] = sha(target === null ? readFileSync(path) : `symlink:${target}`);
   }
-  for (const path of [expo.icon, expo.ios?.icon, expo.ios?.splash?.image, expo.splash?.image].filter(Boolean)) {
-    const absolute = resolve(mobile, path);
-    if (!absolute.startsWith(mobile + '/') || !existsSync(absolute)) throw new Error(`Native resource is missing or outside mobile: ${path}`);
-    files[relative(root, absolute)] = sha(readFileSync(absolute));
-  }
+  const visitedDirectories = new Set();
+  const realRoot = realpathSync(root);
+  const includeResource = path => {
+    const actual = realpathSync(path);
+    if (!actual.startsWith(realRoot + '/')) throw new Error(`Native plugin resource resolves outside checkout: ${path}`);
+    if (statSync(path).isDirectory()) {
+      if (visitedDirectories.has(actual)) return;
+      visitedDirectories.add(actual);
+      for (const entry of readdirSync(path)) includeResource(join(path, entry));
+    } else files[relative(root, path)] = sha(readFileSync(path));
+  };
+  for (const path of localNativeResources(nativeConfig, mobile, root)) includeResource(path);
   const inputs = normalize({ nativeConfig, expoGraph, rnGraph, nativePackages, files, generatedFiles }, root);
   return { hash: sha(stable(inputs)), inputs };
 }

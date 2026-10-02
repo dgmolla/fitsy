@@ -119,6 +119,21 @@ test('Release public store-key presence changes JS configuration without changin
   expect(result).toEqual({ same: true, capability: 'apple-native' });
 });
 
+test('editing an Expo plugin native sound resource requires a rebuild with its path', () => {
+  mkdirSync(join(fixtureRoot, 'apps/mobile/assets'), { recursive: true });
+  writeFileSync(join(fixtureRoot, 'apps/mobile/assets/alert.wav'), 'first sound');
+  const result = runCase(`
+    const data=fixture();data.expo.plugins=[['expo-notifications',{sounds:['./assets/alert.wav']}]];
+    writeFileSync(root+'/fixture.json',JSON.stringify(data));
+    const native=nativeIdentity(root,{},execute);
+    const profile=profileIdentity({configuration:'Debug',storeMode:'test-store',buildMode:'owned-metro-test-store'}, {os:'iOS 26.0'}, {}, execute);
+    const receipt=sealReceipt({nativeIdentity:native,profileIdentity:profile});
+    writeFileSync(root+'/apps/mobile/assets/alert.wav','changed sound');
+    process.stdout.write(JSON.stringify(nativeBuildDecision({receipt,native:nativeIdentity(root,{},execute),profile,appIntact:true})));`);
+  expect(result.rebuild).toBe(true);
+  expect(result.reasons.join(' ')).toContain('apps/mobile/assets/alert.wav');
+});
+
 test('a source edit during preparation or compilation cannot be certified by the completed receipt', () => {
   const result = runCase(`
     const native=nativeIdentity(root,{},execute),recipe={hash:'recipe'};
