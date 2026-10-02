@@ -5,7 +5,7 @@ import { router, usePathname } from 'expo-router';
 import { supabase } from './supabase';
 import { trackReminderAction } from './analytics';
 import { usePurchases } from './usePurchases';
-import { DEFAULT_REMINDER_PREFERENCES, REMINDER_PREFIX, planReminders, type ReminderPreferences } from './notificationPlan';
+import { DEFAULT_REMINDER_PREFERENCES, REMINDER_PREFIX, planReminders, trialReminderDate, type ReminderPreferences } from './notificationPlan';
 import { readReminderPreferences, readScheduledReminders, reconcileReminderOwnership, replaceReminders, reminderDestination, saveReminderPreferences, subscribeReminderPreferences } from './notificationSchedule';
 import { reconcileDevTrialReminderOwnership } from './devTrialReminderProbe';
 
@@ -67,20 +67,30 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let live = true;
     const userId = account.ready && ready && loaded?.id === account.id ? account.id : undefined;
-    const plan = planReminders({ now: new Date(), userId: account.id, entitled: entitled === true, preferences, subscription: customerInfo?.entitlements.all.pro });
+    const now = new Date();
+    const subscription = customerInfo?.entitlements.all.pro;
+    const plan = planReminders({ now, userId: account.id, entitled: entitled === true, preferences, subscription });
     const trial = userId ? plan.find(item => item.kind === 'trial') : undefined;
+    const expiry = Date.parse(subscription?.expirationDate ?? '');
+    const start = Date.parse(subscription?.latestPurchaseDate ?? '');
+    const legacyExpiry = userId && !trial && entitled === true && preferences.trial && subscription?.isActive &&
+      subscription.periodType === 'TRIAL' && subscription.willRenew && Number.isFinite(expiry) &&
+      Number.isFinite(start) && expiry - start > 2 * 24 * 3_600_000 && expiry > now.getTime() &&
+      trialReminderDate(new Date(expiry)).getTime() <= now.getTime() ? expiry : undefined;
     const notifyUnconfirmedTrial = () => {
-      if (!live || !trial) return;
-      const key = `${account.id}:${trial.identifier}`;
+      if (!live || (!trial && !legacyExpiry)) return;
+      const key = `${account.id}:${trial?.identifier ?? `${REMINDER_PREFIX}trial.${legacyExpiry}`}`;
       if (failedTrialNoticeRef.current === key) return;
       failedTrialNoticeRef.current = key;
       Alert.alert('Trial reminder unavailable', 'We could not confirm your trial reminder. Check your trial end date and renewal in subscription settings.');
     };
-    void replaceReminders(userId, plan).then(() => readScheduledReminders(account.id))
+    const replacement = legacyExpiry === undefined ? replaceReminders(userId, plan) : replaceReminders(userId, plan, legacyExpiry);
+    void replacement.then(() => readScheduledReminders(account.id))
       .then(values => {
         if (live) {
           setScheduled({ id: account.id, values });
-          if (trial && values.some(value => value.kind === 'trial' && value.date === trial.date.toISOString())) failedTrialNoticeRef.current = null;
+          if ((trial && values.some(value => value.kind === 'trial' && value.date === trial.date.toISOString())) ||
+            (legacyExpiry && values.some(value => value.kind === 'trial'))) failedTrialNoticeRef.current = null;
           else notifyUnconfirmedTrial();
         }
       }).catch(error => {

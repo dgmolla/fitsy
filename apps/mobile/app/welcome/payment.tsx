@@ -6,7 +6,8 @@ import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { PaywallView } from '@/components/PaywallView';
 import { PaywallExitModals, type PaywallExitModal } from '@/components/PaywallExitModals';
 import { recordOnboardingComplete } from '@/lib/onboardingCompletion';
-import { usePurchases } from '@/lib/usePurchases';
+import { BOOT_VERDICT_CAP_MS, usePurchases } from '@/lib/usePurchases';
+import { withinMs } from '@/lib/async';
 import { useRedirectOnceEntitled } from '@/lib/useRedirectOnceEntitled';
 import { ensureSessionForPurchase } from '@/lib/purchaseSession';
 import { trackOnboardingScreenView, trackPaywallExperimentExposure, trackPaywallShown } from '@/lib/analytics';
@@ -61,8 +62,13 @@ export default function PaymentScreen() {
       authEventReceived = true;
       resolveIdentity(session?.user.id ?? null);
     });
-    void supabase.auth.getSession().then(({ data }) => {
-      if (!authEventReceived) resolveIdentity(data.session?.user.id ?? null);
+    const sessionRead = supabase.auth.getSession();
+    void withinMs(sessionRead, BOOT_VERDICT_CAP_MS).then(result => {
+      if (authEventReceived) return;
+      resolveIdentity(result?.data.session?.user.id ?? null);
+      if (!result) void sessionRead.then(({ data }) => {
+        if (!authEventReceived) resolveIdentity(data.session?.user.id ?? null);
+      }).catch(() => undefined);
     }).catch(() => { if (!authEventReceived) resolveIdentity(null); });
     return () => { active = false; listener.subscription.unsubscribe(); };
   }, [focused]);

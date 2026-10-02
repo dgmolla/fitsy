@@ -175,6 +175,10 @@ def usage(events):
         raise ValueError("review finish has no retained start")
     # Exception/adoption/closeout flags are historical provenance, never excluded time.
     completed = sum(e["elapsed_seconds"] for e in finishes.values())
+    if grants and (AUTHORIZED_BASELINE_ATTEMPT not in finishes or completed < AUTHORIZED_BASELINE_SECONDS):
+        raise ValueError("authorized review grant is missing retained baseline attempts")
+    if liberal_grants and (not LIBERAL_BASELINE_ATTEMPTS.issubset(finishes) or completed < LIBERAL_BASELINE_SECONDS):
+        raise ValueError("liberal review grant is missing retained baseline attempts")
     active = {key: e for key, e in starts.items() if key not in finishes}
     # An interrupted new attempt retains its full reservation until reconciled.
     # An unbounded legacy attempt has unknown completion and fails closed at the cap.

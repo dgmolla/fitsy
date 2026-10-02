@@ -43,15 +43,23 @@ let queue: Promise<unknown> = Promise.resolve();
 let generation = 0;
 /** Serialize replacement, so a late schedule cannot survive a later opt-out or
  * account change. Cancel only this feature's requests; other push flows survive. */
-export function replaceReminders(userId: string | null | undefined, reminders: PlannedReminder[]): Promise<void> {
+export function replaceReminders(userId: string | null | undefined, reminders: PlannedReminder[], retainTrialExpiryMs?: number): Promise<void> {
   if (userId === undefined) return Promise.resolve(); // Still loading; null alone means signed out.
   const revision = ++generation;
   const work = queue.catch(() => undefined).then(async () => {
     if (Platform.OS === 'web' || revision !== generation) return;
     const pending = await Notifications.getAllScheduledNotificationsAsync();
+    const retainAllowed = !!userId && Number.isFinite(retainTrialExpiryMs) &&
+      !reminders.some(reminder => reminder.kind === 'trial') &&
+      (await Notifications.getPermissionsAsync()).status === 'granted';
     for (const request of pending) {
       if (revision !== generation) return;
-      if (request.identifier.startsWith(REMINDER_PREFIX)) await Notifications.cancelScheduledNotificationAsync(request.identifier);
+      if (!request.identifier.startsWith(REMINDER_PREFIX)) continue;
+      const scheduledAt = Date.parse(String(request.content.data?.scheduledFor ?? ''));
+      const keepTrial = retainAllowed && request.identifier === `${REMINDER_PREFIX}trial.${retainTrialExpiryMs}` &&
+        request.content.data?.userId === userId && request.content.data?.kind === 'trial' &&
+        Number.isFinite(scheduledAt) && scheduledAt > Date.now() && scheduledAt <= retainTrialExpiryMs! - 24 * 3_600_000;
+      if (!keepTrial) await Notifications.cancelScheduledNotificationAsync(request.identifier);
     }
     const shown = await Notifications.getPresentedNotificationsAsync();
     for (const notification of shown) {

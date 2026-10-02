@@ -75,6 +75,23 @@ test('a seven-day trial creates exactly one native day-six request on a fixed cl
     expect(pending.size).toBe(0);
   } finally { jest.useRealTimers(); }
 });
+test('an update after the new lead time keeps a valid future reminder for the same trial', async () => {
+  jest.useFakeTimers().setSystemTime(new Date(2026, 9, 8, 15));
+  try {
+    const expiration = new Date(2026, 9, 10, 12);
+    const oldTime = new Date(2026, 9, 8, 19);
+    const identifier = `${REMINDER_PREFIX}trial.${expiration.getTime()}`;
+    pending.set(identifier, { identifier, content: { data: { userId: 'one', kind: 'trial', scheduledFor: oldTime.toISOString() } }, trigger: null });
+    const plan = planReminders({ now: new Date(), userId: 'one', entitled: true,
+      preferences: { meals: false, trial: true }, subscription: { isActive: true, periodType: 'TRIAL', willRenew: true,
+        latestPurchaseDate: new Date(2026, 8, 26, 12).toISOString(), expirationDate: expiration.toISOString() } });
+    expect(plan).toEqual([]);
+    await replaceReminders('one', plan, expiration.getTime());
+    expect(pending.has(identifier)).toBe(true);
+    await replaceReminders('one', plan);
+    expect(pending.has(identifier)).toBe(false);
+  } finally { jest.useRealTimers(); }
+});
 test('development device probe uses the native bridge once, clears it, and cannot run in production', async () => {
   const prior = Object.getOwnPropertyDescriptor(globalThis, '__DEV__');
   Object.defineProperty(globalThis, '__DEV__', { value: true, configurable: true });

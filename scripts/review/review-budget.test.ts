@@ -199,7 +199,7 @@ test("the later #428 grant retains timed-out attempts and is finite and issue-bo
     seconds: 900, risk: "medium", required: true };
   const baseline = ["e69bd34e-a529-416a-8b18-6b82be631f3d",
     "0e399d2f-0e21-46db-b08a-1ccfb6337e90", "a4ae2ec2-1f26-49b4-9719-2f4327aa6130"];
-  seed([priorExtension, priorGrant, ...history("older", 2360.545),
+  seed([priorExtension, priorGrant, ...history("88a154b4-95fa-47c9-b108-cd59332809e4", 2360.545),
     ...baseline.flatMap(id => history(id, 300.224))], issueLedger);
   const original = readFileSync(issueLedger, "utf8");
   const provenance = "https://github.com/dgmolla/fitsy/issues/428#issuecomment-5938480556";
@@ -224,6 +224,10 @@ test("the later #428 grant retains timed-out attempts and is finite and issue-bo
   expect(JSON.parse(oversized.stdout).reason).toMatch(/1200/);
   expect(spawnSync("python3", [script, "status", "--ledger", issueLedger,
     "--issue", "429"]).status).toBe(1);
-  seed([priorExtension, priorGrant, ...history("older", 2360.545)], issueLedger);
+  seed([priorExtension, priorGrant, ...history("88a154b4-95fa-47c9-b108-cd59332809e4", 2360.545)], issueLedger);
   expect(grant().status).toBe(1);
+  seed([priorExtension, priorGrant, { event: "liberal-grant", attempt_id: "issue-428-liberal-grant",
+    issue: 428, seconds: 7200, provenance }], issueLedger);
+  expect(spawnSync("python3", [script, "status", "--ledger", issueLedger,
+    "--issue", "428"]).status).toBe(1);
 });

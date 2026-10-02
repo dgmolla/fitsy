@@ -7,6 +7,7 @@ import Purchases, { type CustomerInfo, type PurchasesOffering } from 'react-nati
 import { act, fireEvent, renderRouter, waitFor } from 'expo-router/testing-library';
 import { getPaywallIntent, rememberPaywallIntent } from '../lib/paywallIntent';
 import { ONBOARDING_COMPLETE_KEY } from '../lib/onboardingCompletion';
+import { BOOT_VERDICT_CAP_MS } from '../lib/usePurchases';
 import { saveReminderPreferences } from '../lib/notificationSchedule';
 import { paymentCompletionRoutes } from './paymentCompletionRoutes';
 
@@ -16,6 +17,7 @@ jest.mock('expo-font', () => ({ isLoaded: () => true, loadAsync: jest.fn() }));
 jest.mock('expo-notifications', () => ({ ...jest.requireActual('expo-notifications'), getPermissionsAsync: jest.fn() }));
 const mockCapture = jest.fn();
 let mockAuthSession: { access_token: string; user: { id: string } } | null = null;
+let mockSessionRead: (() => Promise<{ data: { session: typeof mockAuthSession } }>) | null = null;
 const mockAuthListeners = new Set<(event: string, session: typeof mockAuthSession) => void>();
 jest.mock('posthog-react-native', () => {
   process.env.EXPO_PUBLIC_POSTHOG_API_KEY = 'unit-test-analytics';
@@ -25,7 +27,7 @@ jest.mock('@supabase/supabase-js', () => {
   process.env.EXPO_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
   process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'unit-test-anon-key';
   return { createClient: () => ({ auth: {
-    getSession: async () => ({ data: { session: mockAuthSession } }),
+    getSession: async () => mockSessionRead ? mockSessionRead() : ({ data: { session: mockAuthSession } }),
     onAuthStateChange: (listener: (event: string, session: typeof mockAuthSession) => void) => {
       mockAuthListeners.add(listener);
       return { data: { subscription: { unsubscribe() { mockAuthListeners.delete(listener); } } } };
@@ -55,6 +57,7 @@ beforeEach(async () => {
   jest.useRealTimers();
   jest.mocked(Notifications.getPermissionsAsync).mockReset().mockResolvedValue({ status: 'undetermined' } as Notifications.NotificationPermissionsStatus);
   mockAuthSession = { access_token: 'test-token', user: { id: 'buyer' } };
+  mockSessionRead = null;
   mockAuthListeners.clear(); await AsyncStorage.clear();
   notificationMounts = 0; nativeUserId = null; mockCapture.mockClear();
   (Purchases.purchasePackage as jest.Mock).mockReset().mockResolvedValue({ customerInfo: subscribed });
@@ -84,6 +87,25 @@ test('an anonymous paywall view is attributed once across plan changes', async (
   await waitFor(() => expect(mockCapture).toHaveBeenCalledWith('paywall_experiment_exposed', expect.objectContaining({ paywall_variant: 'B', layout_variant: 'trial_timeline' })));
   await act(async () => { fireEvent.press(screen.getByTestId('paywall-plan-monthly')); });
   expect(mockCapture.mock.calls.filter(([name]) => name === 'paywall_experiment_exposed')).toHaveLength(1);
+});
+
+test('a stalled initial session read reveals the paywall and accepts a late identity', async () => {
+  jest.useFakeTimers();
+  let resolveSession!: (value: { data: { session: typeof mockAuthSession } }) => void;
+  const pending = new Promise<{ data: { session: typeof mockAuthSession } }>(resolve => { resolveSession = resolve; });
+  try {
+    mockSessionRead = () => pending;
+    const screen = renderRouter(routes, { initialUrl: '/welcome/payment' });
+    expect(screen.queryByTestId('paywall-logo')).toBeNull();
+    await act(async () => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS + 100); });
+    expect(screen.getByTestId('paywall-logo')).toBeTruthy();
+    await act(async () => resolveSession({ data: { session: mockAuthSession } }));
+    expect(mockCapture.mock.calls.filter(([name]) => name === 'paywall_experiment_exposed')).toHaveLength(2);
+    expect(screen.getByTestId('welcome-continue')).toBeTruthy();
+  } finally {
+    resolveSession({ data: { session: mockAuthSession } });
+    jest.useRealTimers();
+  }
 });
 
 test('a stale granted permission read cannot restore a reminder promise after foreground denial', async () => {
