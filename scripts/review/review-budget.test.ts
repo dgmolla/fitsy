@@ -89,6 +89,26 @@ test("append-only imports retain flags, deduplicate copies and import later fini
   expect(call("status", "one", 900, [old]).value).toMatchObject({ completed_seconds: 200, reserved_seconds: 0, remaining_seconds: 1600, unfinished_attempts: [] });
   expect(readFileSync(ledger, "utf8").startsWith(imported)).toBe(true);
 });
+test("checkout history cannot introduce capacity grants into the issue ledger", () => {
+  const imported = join(root, "checkout.jsonl");
+  const capacity = [
+    { event: "extension", attempt_id: "issue-extension", issue: 428, seconds: 900, risk: "medium", required: true },
+    { event: "authorized-grant", attempt_id: "issue-428-authorized-grant", issue: 428, seconds: 600,
+      provenance: "https://github.com/dgmolla/fitsy/issues/428#issuecomment-5935945700" },
+    { event: "liberal-grant", attempt_id: "issue-428-liberal-grant", issue: 428, seconds: 7200,
+      provenance: "https://github.com/dgmolla/fitsy/issues/428#issuecomment-5938480556" },
+  ];
+  for (const event of capacity) {
+    seed([...history("claimed-baseline", 3300), event], imported);
+    const result = call("status", "one", 900, [imported]);
+    expect(result.status).toBe(1);
+    expect(result.value.reason).toContain("trusted issue ledger");
+    expect(readFileSync(ledger, "utf8")).toBe("");
+  }
+  seed([capacity[0]]);
+  seed([capacity[0]], imported);
+  expect(call("status", "one", 900, [imported]).value.cap_seconds).toBe(2700);
+});
 test("conflicting history and unbounded unfinished legacy execution refuse admission", () => {
   seed(history("old", 100));
   const conflict = join(root, "conflict.jsonl"); seed(history("old", 200), conflict);

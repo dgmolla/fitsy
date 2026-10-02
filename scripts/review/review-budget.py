@@ -26,6 +26,7 @@ LIBERAL_BASELINE_ATTEMPTS = frozenset((
     "a4ae2ec2-1f26-49b4-9719-2f4327aa6130",
 ))
 LIBERAL_BASELINE_SECONDS = 3261.214
+CAPACITY_EVENTS = frozenset(("extension", "authorized-grant", "liberal-grant"))
 
 
 def utc():
@@ -118,6 +119,8 @@ def import_history(handle, ledger, paths, optional_paths):
         for key, event in incoming.items():
             if key in events and events[key] != event:
                 raise ValueError(f"conflicting retained review history in {source}")
+            if event["event"] in CAPACITY_EVENTS and key not in events:
+                raise ValueError("review capacity events must originate in the trusted issue ledger")
             if key not in events:
                 new.append(event)
                 events[key] = event
