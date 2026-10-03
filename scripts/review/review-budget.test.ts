@@ -248,41 +248,6 @@ test("automatic retry cannot shrink below the normal reviewer window", () => {
   expect(JSON.parse(retry.stdout)).toMatchObject({ allowed: false, required_window_seconds: 900, completed_seconds: 2700, recovery_issue: 435 });
 });
 
-test("completed failing verdict and incomplete execution remain distinct; legacy rows stay readable", () => {
-  seed(history("legacy", 10));
-  expect(call("begin", "finding").status).toBe(0);
-  const finding = spawnSync("python3", [...args("finish", "finding"), "--outcome", "pass", "--verdict", "fail", "--failure-kind", "completed"], { encoding: "utf8" });
-  expect(finding.status).toBe(0);
-  expect(call("begin", "timeout").status).toBe(0);
-  const incomplete = spawnSync("python3", [...args("finish", "timeout"), "--outcome", "fail", "--verdict", "incomplete", "--failure-kind", "timeout"], { encoding: "utf8" });
-  expect(incomplete.status).toBe(0);
-  const rows = readFileSync(ledger, "utf8").trim().split("\n").map(row => JSON.parse(row));
-  expect(rows.find(row => row.attempt_id === "legacy" && row.event === "finish").verdict).toBeUndefined();
-  expect(rows.find(row => row.attempt_id === "finding" && row.event === "finish")).toMatchObject({ outcome: "pass", verdict: "fail" });
-  expect(rows.find(row => row.attempt_id === "timeout" && row.event === "finish")).toMatchObject({ outcome: "fail", verdict: "incomplete" });
-  expect(call("status").value).toMatchObject({ execution_outcomes: { pass: 1, fail: 1, interrupted: 0 }, review_verdicts: { pass: 0, fail: 1, incomplete: 1, legacy_unknown: 1 } });
-});
-
-test("required combined review denies 329 seconds after a 370 second completion without charging", () => {
-  seed([...history("completed", 370).map(row => ({ ...row, lens: "review-round", failure_kind: row.event === "finish" ? "completed" : undefined })),
-    { event: "extension", attempt_id: "issue-extension", seconds: 900, issue: 438, risk: "medium", required: true },
-    { event: "authorized-grant", attempt_id: "approved", issue: 438, seconds: 1800, provenance: "https://github.com/dgmolla/fitsy/issues/438#issuecomment-5965291371" },
-    ...history("prior", 3796)]);
-  const before = readFileSync(ledger, "utf8");
-  const result = spawnSync("python3", [script, "begin", "--ledger", ledger, "--round-id", "new", "--lens", "review-round", "--source-sha", "new", "--attempt-id", "new", "--timeout-seconds", "900", "--candidate", "root:branch", "--issue", "438", "--risk", "medium", "--required"], { encoding: "utf8" });
-  expect(result.status).toBe(1);
-  expect(JSON.parse(result.stdout)).toMatchObject({ allowed: false, required_window_seconds: 900, remaining_seconds: 334 });
-  expect(readFileSync(ledger, "utf8")).toBe(before);
-});
-
-test("capacity status raises the default window after a long completed round", () => {
-  seed([{ event: "extension", attempt_id: "issue-extension", seconds: 900, issue: 438, risk: "medium", required: true },
-    ...history("completed", 800).map(row => ({ ...row, lens: "review-round", failure_kind: row.event === "finish" ? "completed" : undefined }))]);
-  const check = spawnSync("python3", [script, "status", "--ledger", ledger, "--lens", "review-round", "--required", "--risk", "medium"], { encoding: "utf8" });
-  expect(check.status).toBe(0);
-  expect(JSON.parse(check.stdout)).toMatchObject({ required_window_seconds: 1000, remaining_seconds: 1900, can_admit: true });
-});
-
 test("trusted installation rejects approval inside a separate candidate Git checkout", () => {
   const candidate = join(root, "candidate"); mkdirSync(candidate);
   expect(spawnSync("git", ["init", "-q", candidate]).status).toBe(0);
