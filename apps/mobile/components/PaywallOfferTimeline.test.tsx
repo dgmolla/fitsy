@@ -5,7 +5,7 @@ import { StyleSheet } from 'react-native';
 import { render } from '@testing-library/react-native';
 import { PAYWALL_BENEFITS, PaywallOfferTimeline, projectedChargeDate } from './PaywallOfferTimeline';
 import { purchaseTerms } from '../lib/purchaseTerms';
-import { trialReminderDate } from '../lib/notificationPlan';
+import { planReminders, trialReminderDate } from '../lib/notificationPlan';
 
 const now = new Date(2026, 8, 30, 12);
 const product = (period: string, priceString: string, subscriptionPeriod = 'P1Y') =>
@@ -27,11 +27,22 @@ test.each([
   const reminderDay = Math.round((Date.UTC(reminder.getFullYear(), reminder.getMonth(), reminder.getDate()) - Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) / 86_400_000);
   expect(reminderDay).toBe(days - 2);
   expect(view.getByText(`In ${reminderDay} days`)).toBeTruthy();
-  expect(view.getByText("We'll send you a reminder that your trial is ending soon")).toBeTruthy();
+  expect(view.getByText("We'll send you a reminder that your trial is ending soon if the store confirms this trial end after purchase.")).toBeTruthy();
   expect(view.getByText('Unlock our library of Los Angeles restaurant nutrition, tailored to you')).toBeTruthy();
-  expect(view.getByText(`You'll be charged on ${new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).format(charge)}`)).toBeTruthy();
+  expect(view.getByText(`Estimated first charge: ${new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).format(charge)}, if you start today. The store confirms your actual date after purchase.`)).toBeTruthy();
   expect(view.queryByText(/\$79|\$9/)).toBeNull();
   expect(view.queryByText(/Your Fitsy plan/)).toBeNull();
+});
+
+test('an accelerated confirmed entitlement does not inherit the projected reminder promise', () => {
+  const terms = purchaseTerms(product('P2W', '$79.99'), true);
+  const view = render(<PaywallOfferTimeline terms={terms} now={now} reminderAvailability="enabled" />);
+  expect(view.getByText(/if the store confirms this trial end after purchase/)).toBeTruthy();
+  expect(view.getByText(/The store confirms your actual date after purchase/)).toBeTruthy();
+  const expiry = new Date(now.getTime() + 10 * 60_000);
+  expect(planReminders({ now, userId: 'buyer', entitled: true, preferences: { meals: false, trial: true },
+    subscription: { isActive: true, periodType: 'TRIAL', willRenew: true,
+      latestPurchaseDate: now.toISOString(), expirationDate: expiry.toISOString() } })).toEqual([]);
 });
 
 test('a morning trial labels the actual quiet-hours reminder day', () => {

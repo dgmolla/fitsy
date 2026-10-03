@@ -48,7 +48,7 @@ export function PaywallOfferTimeline({ terms, now, reminderAvailability = 'unava
   // nominal 48-hour lead, so label the date the scheduler actually chose.
   const reminderDay = presentation.reminderDay;
   const reminderCopy = reminderAvailability === 'enabled' && usefulReminder
-    ? "We'll send you a reminder that your trial is ending soon"
+    ? "We'll send you a reminder that your trial is ending soon if the store confirms this trial end after purchase."
     : reminderAvailability === 'permission-off'
       ? 'Notifications off. Enable them in settings.'
       : reminderAvailability === 'opt-in'
@@ -62,7 +62,7 @@ export function PaywallOfferTimeline({ terms, now, reminderAvailability = 'unava
       title={usefulReminder ? `In ${reminderDay} days` : 'Reminder unavailable'}
       detail={reminderCopy} testID="paywall-step-reminder" />
     <Step icon="calendar-outline" title={`In ${chargeDay} days`}
-      detail={`You'll be charged on ${chargeDateLabel}`}
+      detail={`Estimated first charge: ${chargeDateLabel}, if you start today. The store confirms your actual date after purchase.`}
       last testID="paywall-step-charge" />
   </View>;
 }

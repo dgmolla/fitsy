@@ -196,9 +196,9 @@ test('variant B refreshes the projected charge date when checkout crosses midnig
   jest.setSystemTime(new Date(2026, 8, 30, 23, 59, 59));
   try {
     const screen = render(<PaywallView {...props()} variant="B" />);
-    expect(screen.getByText("You'll be charged on October 7, 2026")).toBeTruthy();
+    expect(screen.getByText("Estimated first charge: October 7, 2026, if you start today. The store confirms your actual date after purchase.")).toBeTruthy();
     act(() => { jest.advanceTimersByTime(2000); });
-    expect(screen.getByText("You'll be charged on October 8, 2026")).toBeTruthy();
+    expect(screen.getByText("Estimated first charge: October 8, 2026, if you start today. The store confirms your actual date after purchase.")).toBeTruthy();
   } finally { jest.useRealTimers(); }
 });
 
