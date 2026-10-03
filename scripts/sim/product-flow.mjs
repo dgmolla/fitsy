@@ -367,7 +367,7 @@ async function build(udid, testStore, forceReason = null, refreshEmbedded = fals
     const bundleHash = digest(readFileSync(join(app, 'main.jsbundle')));
     save(join(buildDir, 'receipt.json'), sealReceipt({ ...config, ...identity, nativeIdentity: builtNative,
       profileIdentity: compatibility, jsHash: inputHash(root, 'js'), app, appHash: treeHash(app), bundleHash,
-      publicConfigAcceptance: buildPublicConfigAcceptance(previous, config),
+      publicConfigAcceptance: buildPublicConfigAcceptance(previous, config, active),
       ...profile, metroRoute: profile.metroPort ? metroRoute : null,
       recipeIdentity: buildRecipe, buildRecipeHash: buildRecipe.hash,
       simulatorApplicationIdentifier: entitlements['application-identifier'],

@@ -70,6 +70,14 @@ test('the real CLI plan requires billing after an ignored public store-key chang
     if (afterAcceptance.status !== 0) throw new Error(afterAcceptance.stderr);
     expect(JSON.parse(afterAcceptance.stdout)).toMatchObject({ required: false, categories: [] });
     writeFileSync(join(dir, '.evidence/product-build/receipt.json'), JSON.stringify({
+      ...JSON.parse(identity.stdout), appHash: 'same-app', buildMode: 'owned-metro-test-store',
+      publicConfigAcceptance: JSON.parse(carried.stdout),
+    }));
+    const acceptedMetro = spawnSync(process.execPath, ['scripts/verify/product-flow.mjs', '--plan'],
+      { cwd: dir, encoding: 'utf8', env: { ...cleanEnv(), FITSY_DIFF_BASE: base } });
+    if (acceptedMetro.status !== 0) throw new Error(acceptedMetro.stderr);
+    expect(JSON.parse(acceptedMetro.stdout)).toMatchObject({ required: false, categories: [] });
+    writeFileSync(join(dir, '.evidence/product-build/receipt.json'), JSON.stringify({
       ...JSON.parse(current.stdout), appHash: 'replacement-app', publicConfigAcceptance: JSON.parse(carried.stdout),
     }));
     const replaced = spawnSync(process.execPath, ['scripts/verify/product-flow.mjs', '--plan'],
@@ -129,4 +137,19 @@ test('reactivating an older artifact carries both changed and pending public key
     keys: ['EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID', 'EXPO_PUBLIC_REVENUECAT_TEST_KEY'],
     categories: ['auth', 'billing'],
   });
+});
+
+test('refreshing a retained Release artifact carries unaccepted active Debug keys without a prior report', () => {
+  const script = `import {buildPublicConfigAcceptance,requiredPublicConfigKeys,impact} from ${JSON.stringify(modulePath)};
+    const selected={configHash:'release-config',publicConfig:{EXPO_PUBLIC_REVENUECAT_TEST_KEY:'release-key'}};
+    const active={configHash:'release-config',publicConfig:selected.publicConfig,
+      publicConfigAcceptance:{keys:['EXPO_PUBLIC_REVENUECAT_TEST_KEY']}};
+    const current={configHash:'release-config',publicConfig:selected.publicConfig};
+    const refreshed={...current,publicConfigAcceptance:buildPublicConfigAcceptance(selected,current,active)};
+    const keys=requiredPublicConfigKeys(null,refreshed,current);
+    process.stdout.write(JSON.stringify({keys,categories:impact([],keys).categories}));`;
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', script],
+    { encoding: 'utf8', env: cleanEnv() });
+  if (result.status !== 0) throw new Error(result.stderr);
+  expect(JSON.parse(result.stdout)).toEqual({ keys: ['EXPO_PUBLIC_REVENUECAT_TEST_KEY'], categories: ['billing'] });
 });

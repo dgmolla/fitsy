@@ -56,9 +56,11 @@ Retirement accepts a reactivated profile only when another sealed, intact artifa
 Submission-only `eas.json` fields are outside the local simulator build, served bundle and acceptance identities.
 Retirement rechecks the current public configuration before archiving proof or deleting a task simulator.
 Public configuration receipts retain hashes per key, so a changed RevenueCat key selects billing acceptance even when its ignored environment file is the only edit.
+An accepted owned Metro report can clear those pending keys for its served config and matching app even when the native receipt records an older JavaScript config.
 If an older receipt cannot identify changed public keys, the gate requires every product category before accepting new proof.
 The flow report also carries changed public keys until final acceptance is checked, so a development run cannot erase the required billing or sign-in scenarios.
 Refreshing an embedded Release artifact carries any pending changed public keys into the new build receipt, so a missing prior flow report cannot erase affected acceptance.
+That refresh includes pending keys from both the selected retained artifact and the currently active receipt.
 Reactivating a retained artifact also seals the pending public-key categories from the prior active receipt into the new active receipt.
 If Release evidence is required and the embedded bundle is stale, the default `build` command returns an explicit artifact reason without compiling.
 Run `build <UDID> --refresh-embedded-js` to request a new embedded Release artifact with that reason recorded; use an owned Metro Debug profile when it meets the acceptance need.

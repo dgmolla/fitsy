@@ -55,7 +55,8 @@ export function requiredPublicConfigKeys(report, build, current) {
   const accepted = report?.result === 'pass' && report.evidenceMode === 'final-candidate' &&
     report.publicConfigAcceptance?.verifiedConfigHash === current.configHash;
   const matchingArtifact = typeof report?.appHash === 'string' && report.appHash === build?.appHash;
-  const buildAccepted = build?.configHash === current.configHash && matchingArtifact &&
+  const servedConfig = build?.buildMode === 'owned-metro-test-store';
+  const buildAccepted = (servedConfig || build?.configHash === current.configHash) && matchingArtifact &&
     (build.publicConfigAcceptance?.keys || []).every(key => report.publicConfigAcceptance?.keys?.includes(key));
   if (accepted && buildAccepted)
     return [];
