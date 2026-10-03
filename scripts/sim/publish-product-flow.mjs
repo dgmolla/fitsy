@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 // Publish an exact-head local verdict; no simulator or credential executes in CI.
 import { execFileSync, spawn } from 'node:child_process';
-import { readFileSync, writeFileSync, mkdirSync, statSync, lstatSync, createReadStream } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, statSync, lstatSync, createReadStream, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { root, inputHash, impact, changedPaths, validate, repoEnv } from '../verify/product-flow.mjs';
+import { root, inputHash, impact, changedPaths, validate, repoEnv, publicConfigIdentity, requiredPublicConfigKeys } from '../verify/product-flow.mjs';
 import { validateMediaReceipt } from '../verify/media-integration.mjs';
 import { publicationArtifacts } from './publication-artifacts.mjs';
 const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { cwd: root, encoding: 'utf8', env: repoEnv(), maxBuffer: 16 * 1024 * 1024, ...opts })?.trim() || '';
@@ -27,6 +27,12 @@ async function archivedDigest(archive, file) {
   });
 }
 const repo = 'dgmolla/fitsy', context = 'product-flow/local';
+export function publicationPlan(evidenceDirectory, buildReceiptFile, paths = changedPaths('origin/main'), current = publicConfigIdentity()) {
+  const readReceipt = file => existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null;
+  const previous = readReceipt(resolve(evidenceDirectory, 'report.json'));
+  const build = readReceipt(buildReceiptFile);
+  return impact(paths, requiredPublicConfigKeys(previous, build, current));
+}
 export async function createPublicationArchive(report, categories, dir, archive, execute = run) {
   const artifacts = publicationArtifacts(report, categories);
   // Only verified relative artifact paths; no build, environment or debug logs.
@@ -51,8 +57,9 @@ export async function createPublicationArchive(report, categories, dir, archive,
 export async function publishProductFlow(prNumber, {
   execute = run,
   evidenceDirectory = resolve(root, '.evidence/product-flow'),
+  buildReceiptFile = resolve(root, '.evidence/product-build/receipt.json'),
   publicationDirectory = resolve(root, '.evidence/publication'),
-  resolvePlan = () => impact(changedPaths('origin/main')),
+  resolvePlan = () => publicationPlan(evidenceDirectory, buildReceiptFile),
   sourceHash = inputHash,
   validateEvidence = validate,
   validateMediaEvidence = candidate => validateMediaReceipt(changedPaths('origin/main'), candidate, sourceHash()),

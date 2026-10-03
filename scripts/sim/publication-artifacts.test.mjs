@@ -5,13 +5,41 @@ import { mkdtempSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync,
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { createPublicationArchive, publishProductFlow as publishWithMediaEvidence } from './publish-product-flow.mjs';
-import { artifactPath, baseline, inputHash, root } from '../verify/product-flow.mjs';
+import { createPublicationArchive, publicationPlan, publishProductFlow as publishWithMediaEvidence } from './publish-product-flow.mjs';
+import { artifactPath, baseline, inputHash, root, publicConfigIdentity } from '../verify/product-flow.mjs';
 import { validateMediaReceipt, writeMediaReceipt } from '../verify/media-integration.mjs';
 
 const sha = value => createHash('sha256').update(value).digest('hex');
 const publishProductFlow = (number, options) => publishWithMediaEvidence(number,
   { ...options, validateMediaEvidence: () => ({ required: false }) });
+
+test('publisher requires acceptance for an ignored public key change', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'fitsy-public-key-publication-'));
+  try {
+    const evidenceDirectory = join(dir, 'product-flow');
+    const buildReceiptFile = join(dir, 'build.json');
+    mkdirSync(evidenceDirectory);
+    const old = { configHash: '0'.repeat(64), publicConfig: { EXPO_PUBLIC_REVENUECAT_TEST_KEY: 'old' } };
+    writeFileSync(join(evidenceDirectory, 'report.json'), JSON.stringify({ ...old, evidenceMode: 'development' }));
+    writeFileSync(buildReceiptFile, JSON.stringify(old));
+    const plan = publicationPlan(evidenceDirectory, buildReceiptFile, [], publicConfigIdentity());
+    assert.equal(plan.required, true);
+    assert.ok(plan.categories.includes('billing'));
+    assert.ok(plan.paths.includes('public-env:EXPO_PUBLIC_REVENUECAT_TEST_KEY'));
+    const head = 'a'.repeat(40), states = [];
+    const execute = (command, args, options = {}) => {
+      if (command === 'git') return args[0] === 'rev-parse' ? head : '';
+      assert.equal(command, 'gh');
+      if (args[0] === 'pr') return JSON.stringify({ headRefOid: head, baseRefName: 'main',
+        headRepositoryOwner: { login: 'dgmolla' }, state: 'OPEN', url: 'https://github.com/dgmolla/fitsy/pull/7' });
+      if (args[0] === 'api') { states.push(JSON.parse(options.input).state); return ''; }
+      assert.fail(`Unexpected forge command: ${args.join(' ')}`);
+    };
+    await assert.rejects(publishProductFlow('7', { execute, evidenceDirectory, buildReceiptFile,
+      validateMediaEvidence: () => ({ required: false }) }), /Final candidate proof is required/);
+    assert.deepEqual(states, ['pending', 'failure']);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
 
 test('the publisher path retains every flow command, screen and complete video with the report and exploration proof', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'fitsy-publication-'));

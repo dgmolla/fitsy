@@ -83,7 +83,7 @@ test("full PR body is validated before limiting review prompt metadata", () => {
   expect(runPr("correctness", "Delivery-Issue: #355\n" + longBody).status).toBe(1);
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(1);
 });
-test("remaining budget is the real executor deadline and incomplete timeout is not cached", () => {
+test("insufficient capacity refuses execution before a short deadline is charged", () => {
   const rows = [
     { event: "extension", attempt_id: "issue-extension", seconds: 900, issue: 355, risk: "medium", required: true },
     { event: "recovery_extension", attempt_id: "issue-recovery", seconds: 1800, issue: 355, failed_attempt: "old" },
@@ -92,23 +92,45 @@ test("remaining budget is the real executor deadline and incomplete timeout is n
   ];
   mkdirSync(join(root, "budgets"), { recursive: true });
   writeFileSync(join(root, "budgets/issue-355.jsonl"), rows.map(row => JSON.stringify(row)).join("\n") + "\n");
-  writeFileSync(join(root, "delay"), "60");
   const result = run();
   expect(result.status).toBe(1);
-  expect(JSON.parse(result.stdout)).toMatchObject({ verdict: "incomplete", reviewer: { timeout_seconds: 1 } });
+  expect(result.stderr).toContain("insufficient review capacity");
   const events = readFileSync(join(root, "budgets/issue-355.jsonl"), "utf8").trim().split("\n").map(row => JSON.parse(row));
   expect(events.at(-1)).toMatchObject({ event: "finish", outcome: "fail" });
-  expect(events.at(-1).elapsed_seconds).toBeGreaterThanOrEqual(1);
-  expect(events.at(-1).elapsed_seconds).toBeLessThan(6);
   const status = spawnSync("python3", ["scripts/review/review-budget.py", "status", "--ledger", join(root, "budgets/issue-355.jsonl")], { cwd: root, encoding: "utf8" });
   expect(status.status).toBe(0);
   const total = JSON.parse(status.stdout);
-  expect(total.completed_seconds).toBeCloseTo(4494 + events.at(-1).elapsed_seconds, 5);
-  expect(total.remaining_seconds).toBeLessThan(5);
+  expect(total.completed_seconds).toBe(4494);
+  expect(total.remaining_seconds).toBe(6);
   expect(run().status).toBe(1);
-  expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(1);
-  expect(() => process.kill(Number(readFileSync(join(root, "reviewer-pid"), "utf8")), 0)).toThrow();
+  expect(existsSync(calls)).toBe(false);
   expect(readdirSync(cache).filter(name => name.endsWith(".json"))).toHaveLength(0);
+});
+test("default CLI deadline grows to the observed admission window", () => {
+  const rows = [
+    { event: "extension", attempt_id: "issue-extension", seconds: 900, issue: 355, risk: "medium", required: true },
+    { event: "start", epoch: Date.now() / 1000 - 800, round_id: "old", lens: "review-round", source_sha: "old", attempt_id: "old" },
+    { event: "finish", elapsed_seconds: 800, round_id: "old", lens: "review-round", source_sha: "old", attempt_id: "old", outcome: "pass", failure_kind: "completed" },
+  ];
+  mkdirSync(join(root, "budgets"), { recursive: true });
+  writeFileSync(join(root, "budgets/issue-355.jsonl"), rows.map(row => JSON.stringify(row)).join("\n") + "\n");
+  const result = run();
+  expect(result.status).toBe(0);
+  expect(JSON.parse(result.stdout).reviewer.timeout_seconds).toBe(1000);
+  expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(1);
+});
+test("poller retry timeout rises to the observed admission window", () => {
+  const rows = [
+    { event: "extension", attempt_id: "issue-extension", seconds: 900, issue: 355, risk: "medium", required: true },
+    { event: "start", epoch: Date.now() / 1000 - 800, round_id: "old", lens: "review-round", source_sha: "old", attempt_id: "old" },
+    { event: "finish", elapsed_seconds: 800, round_id: "old", lens: "review-round", source_sha: "old", attempt_id: "old", outcome: "pass", failure_kind: "completed" },
+  ];
+  mkdirSync(join(root, "budgets"), { recursive: true });
+  writeFileSync(join(root, "budgets/issue-355.jsonl"), rows.map(row => JSON.stringify(row)).join("\n") + "\n");
+  fixture.setEnv({ ...env, FITSY_REVIEW_TIMEOUT_SECONDS: "900", FITSY_REVIEW_TIMEOUT_FLOOR: "1" });
+  const result = run();
+  expect(result.status).toBe(0);
+  expect(JSON.parse(result.stdout).reviewer.timeout_seconds).toBe(1000);
 });
 test("signal stops reviewer before releasing its reservation", async () => {
   writeFileSync(join(root, "delay"), "60");
@@ -133,18 +155,18 @@ test("signal stops reviewer before releasing its reservation", async () => {
   const events = readFileSync(join(root, "budgets/issue-355.jsonl"), "utf8").trim().split("\n").map(row => JSON.parse(row));
   expect(events.at(-1)).toMatchObject({ event: "finish", outcome: "interrupted" });
 }, 20_000);
-test("a completed short-deadline verdict reuses cache after remaining time is exhausted", () => {
-  const rows = [
-    { event: "extension", attempt_id: "issue-extension", seconds: 900, issue: 355, risk: "medium", required: true },
-    { event: "recovery_extension", attempt_id: "issue-recovery", seconds: 1800, issue: 355, failed_attempt: "old" },
-    { event: "start", epoch: Date.now() / 1000 - 4494, round_id: "old", lens: "correctness", source_sha: "old", attempt_id: "old" },
-    { event: "finish", elapsed_seconds: 4494, round_id: "old", lens: "correctness", source_sha: "old", attempt_id: "old", outcome: "fail", failure_kind: "timeout" },
-  ];
+test("a completed verdict reuses cache after remaining time is exhausted", () => {
   mkdirSync(join(root, "budgets"), { recursive: true });
-  writeFileSync(join(root, "budgets/issue-355.jsonl"), rows.map(row => JSON.stringify(row)).join("\n") + "\n");
   const first = run();
   expect(first.status).toBe(0);
-  expect(JSON.parse(first.stdout).reviewer.timeout_seconds).toBe(1);
+  expect(JSON.parse(first.stdout).reviewer.timeout_seconds).toBe(900);
+  const ledger = join(root, "budgets/issue-355.jsonl");
+  const spent = 1800 - JSON.parse(readFileSync(ledger, "utf8").trim().split("\n").at(-1)!).elapsed_seconds;
+  const rows = [
+    { event: "start", epoch: Date.now() / 1000 - spent, round_id: "old", lens: "correctness", source_sha: "old", attempt_id: "old" },
+    { event: "finish", elapsed_seconds: spent, round_id: "old", lens: "correctness", source_sha: "old", attempt_id: "old", outcome: "fail", failure_kind: "timeout" },
+  ];
+  writeFileSync(ledger, readFileSync(ledger, "utf8") + rows.map(row => JSON.stringify(row)).join("\n") + "\n");
   expect(runPr().status).toBe(0);
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(1);
   expect(run("new-model").status).toBe(1);

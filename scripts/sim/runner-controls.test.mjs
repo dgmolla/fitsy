@@ -72,9 +72,15 @@ test('missing Metro fails readiness before the selector timeout', async () => {
   const port = server.address().port;
   await new Promise(resolve => server.close(resolve));
   const start = Date.now();
-  await assert.rejects(requireMetro({ pid: 44, processIdentity: 'owned', nativeSourceHash: 'source', configHash: 'config', port },
+  await assert.rejects(requireMetro({ pid: 44, processIdentity: 'owned', jsHash: 'source', configHash: 'config', port },
     { processIdentity: () => 'owned', sourceHash: 'source', configHash: 'config', route: '/bundle' }), /unreachable/);
   assert.ok(Date.now() - start < 2000);
+});
+
+test('a live but wrong owned Metro JavaScript identity fails before any flow', async () => {
+  await assert.rejects(requireMetro({ pid: 44, processIdentity: 'owned', jsHash: 'old-js', configHash: 'config', port: 8099 },
+    { processIdentity: () => 'owned', sourceHash: 'new-js', configHash: 'config', route: '/bundle' }),
+  /Metro JavaScript\/configuration differs/);
 });
 
 test('development flow consumes the owned Maestro command receipt and rejects a no-op', async () => {

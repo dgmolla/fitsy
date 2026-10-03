@@ -36,7 +36,7 @@ while read -r NUM SHA; do
   if [ "$STATE" = failure ]; then
     case "$PRIOR_DESCRIPTION" in needs-coordinator:*) continue ;; esac
   fi
-  ROUND_ARGS=()
+  ROUND_MODE=normal
   ATTEMPT_TIMEOUT="${FITSY_REVIEW_TIMEOUT_SECONDS:-900}"
   if [ "$STATE" = error ]; then
     ERRORS="$(printf '%s' "$STATUS_ROWS" | jq '[.[] | select(.context == "review/round" and .state == "error")] | length')"
@@ -77,7 +77,7 @@ while read -r NUM SHA; do
     PRIOR_DESCRIPTION="$(printf '%s' "$STATUS_ROWS" | jq -r '[.[] | select(.context == "review/round")] | sort_by(.created_at,.id) | last | .description // ""')"
     case "$PRIOR_DESCRIPTION" in "round-key:$CURRENT_KEY "*)
       # Reevaluate live P2 evidence without another provider execution.
-      ROUND_ARGS=(--cached-only) ;;
+      ROUND_MODE=cached ;;
     *)
     CURRENT_DOMAINS="$(printf '%s' "$CURRENT_IDENTITY" | python3 -I -c 'import json,sys; print(" ".join(json.load(sys.stdin)["domains"]))')" || continue
     for CONTEXT in $(printf 'lens/%s\n' $CURRENT_DOMAINS) review/round; do
@@ -86,8 +86,13 @@ while read -r NUM SHA; do
     echo "[poller] PR #$NUM: review inputs changed; one complete round required" ;;
     esac ;;
   esac
-  FITSY_REVIEW_TIMEOUT_SECONDS="$ATTEMPT_TIMEOUT" \
-    bash scripts/review/run-review.sh "$NUM" "${ROUND_ARGS[@]}" || echo "[poller] PR #$NUM review round -> fail"
+  if [ "$ROUND_MODE" = cached ]; then
+    FITSY_REVIEW_TIMEOUT_SECONDS="$ATTEMPT_TIMEOUT" FITSY_REVIEW_TIMEOUT_FLOOR=1 \
+      bash scripts/review/run-review.sh "$NUM" --cached-only || echo "[poller] PR #$NUM review round -> fail"
+  else
+    FITSY_REVIEW_TIMEOUT_SECONDS="$ATTEMPT_TIMEOUT" FITSY_REVIEW_TIMEOUT_FLOOR=1 \
+      bash scripts/review/run-review.sh "$NUM" || echo "[poller] PR #$NUM review round -> fail"
+  fi
   # Reconcile once after the round, including concurrent or failed closeouts.
   TIMING_ROOT="$REPO_DIR/.evidence/review-delivery/$NUM"
   if [ -f "$TIMING_ROOT/.evidence/delivery/binding.json" ]; then

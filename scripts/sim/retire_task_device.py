@@ -105,9 +105,17 @@ def input_hash(worktree, mobile_only=False):
                                      '--others', '--exclude-standard'], env=env).decode().split('\0')
     hash_ = hashlib.sha256()
     for relative in sorted(set(paths)):
-        if not relative or relative.startswith('.evidence/') or relative.endswith('.md'):
+        if (not relative or relative == 'apps/mobile/eas.json' or
+                relative.startswith('.evidence/') or relative.endswith('.md')):
             continue
-        if mobile_only and not re.match(r'^(apps/mobile/(?!e2e/)|packages/shared/|package(-lock)?\.json$)', relative):
+        if mobile_only == 'acceptance':
+            if re.search(r'(?:\.test\.|\.spec\.|__tests__/|__mocks__/|^scripts/review/)', relative):
+                continue
+        elif mobile_only == 'js':
+            if (not re.match(r'^(apps/mobile/(?!e2e/|ios/|android/)|packages/shared/|package(-lock)?\.json$)', relative)
+                    or re.search(r'(?:\.test\.|\.spec\.|__tests__/|__mocks__/)', relative)):
+                continue
+        elif mobile_only and not re.match(r'^(apps/mobile/(?!e2e/)|packages/shared/|package(-lock)?\.json$)', relative):
             continue
         hash_.update(relative.encode() + b'\0')
         path = worktree / relative
@@ -120,6 +128,75 @@ def recipe_hash(worktree):
     files = ('product-flow.mjs', 'build-profile.mjs')
     return hashlib.sha256(b'\0'.join((worktree / 'scripts/sim' / name).read_bytes()
                                       for name in files)).hexdigest()
+
+
+def sealed_receipt_matches(worktree, build):
+    module = worktree / 'scripts/sim/native-identity.mjs'
+    script = ('import {readFileSync} from "node:fs"; '
+              'const {identityHash}=await import(process.argv[1]); '
+              'const receipt=JSON.parse(readFileSync(process.argv[2], "utf8")); '
+              'const valid=[receipt.nativeIdentity,receipt.profileIdentity,receipt.recipeIdentity]'
+              '.every(part=>part?.hash===identityHash(part.inputs)); '
+              'delete receipt.receiptHash; process.stdout.write(valid?identityHash(receipt):"invalid");')
+    try:
+        actual = subprocess.check_output(['node', '--input-type=module', '-e', script,
+                                          str(module), str(build)], text=True).strip()
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise ValueError(f'native artifact receipt integrity cannot be checked: {error}') from error
+    receipt = json.loads(build.read_text())
+    return receipt.get('receiptHash') == actual
+
+
+def current_native_compatible(worktree, receipt):
+    module = worktree / 'scripts/sim/native-identity.mjs'
+    build_dir = (worktree / '.evidence/product-build').resolve()
+    receipt_files = [build_dir / 'receipt.json'] + sorted(
+        (worktree / '.evidence/resume').glob('native-receipt-superseded-*.json'))
+    candidates = []
+    for path in receipt_files:
+        try:
+            candidate = json.loads(path.read_text())
+            app = Path(candidate['app']).resolve()
+            if (sealed_receipt_matches(worktree, path) and app.is_relative_to(build_dir) and
+                    app.is_dir() and app_hash(app) == candidate['appHash']):
+                candidates.append(candidate)
+        except (OSError, ValueError, TypeError, KeyError, subprocess.CalledProcessError):
+            continue  # Preserve invalid raw receipts but never use them as attestation.
+    script = ('import {readFileSync} from "node:fs"; '
+              'const {nativeIdentity,reusableNativeReceipt}=await import(process.argv[1]); '
+              'const data=JSON.parse(readFileSync(0,"utf8")); '
+              'const native=nativeIdentity(process.argv[2],{...process.env,NODE_ENV:data.nodeEnv}); '
+              'const selected=reusableNativeReceipt(data.candidates,native,data.profileIdentity,data.recipeIdentity,()=>true); '
+              'process.stdout.write(selected?.receiptHash===data.receiptHash?"compatible":"changed");')
+    env_file = worktree / 'apps/mobile/.env.development.local'
+    command_args = ['node']
+    if env_file.is_file():
+        command_args.append(f'--env-file={env_file}')
+    command_args += ['--input-type=module', '-e', script, str(module), str(worktree)]
+    try:
+        result = subprocess.run(command_args, input=json.dumps({
+            'candidates': candidates, 'profileIdentity': receipt['profileIdentity'],
+            'recipeIdentity': receipt['recipeIdentity'], 'receiptHash': receipt['receiptHash'],
+            'nodeEnv': 'development' if receipt.get('configuration') == 'Debug' else 'production',
+        }), text=True, capture_output=True, check=True)
+        return result.stdout.strip() == 'compatible'
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise ValueError(f'current resolved native identity cannot be checked: {error}') from error
+
+
+def current_public_config_hash(worktree):
+    module = worktree / 'scripts/sim/product-flow.mjs'
+    script = ('const {environment}=await import(process.argv[1]); '
+              'process.stdout.write(environment().configHash);')
+    env_file = worktree / 'apps/mobile/.env.development.local'
+    command_args = ['node']
+    if env_file.is_file():
+        command_args.append(f'--env-file={env_file}')
+    command_args += ['--input-type=module', '-e', script, str(module)]
+    try:
+        return subprocess.check_output(command_args, text=True).strip()
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise ValueError(f'current public configuration cannot be checked: {error}') from error
 
 
 def checked_file(root, relative, expected):
@@ -135,7 +212,8 @@ def evidence(worktree, udid):
     build = worktree / '.evidence/product-build/receipt.json'
     report_file = worktree / '.evidence/product-flow/report.json'
     receipt, report = json.loads(build.read_text()), json.loads(report_file.read_text())
-    if (receipt.get('simulator') != udid or report.get('simulator') != udid or
+    modern = bool(receipt.get('nativeIdentity'))
+    if ((not modern and receipt.get('simulator') != udid) or report.get('simulator') != udid or
             report.get('result') != 'pass' or report.get('appHash') != receipt.get('appHash') or
             report.get('evidenceMode') != 'final-candidate' or not report.get('finishedAt') or
             not report.get('flows')):
@@ -143,12 +221,26 @@ def evidence(worktree, udid):
     if (receipt.get('buildMode') != 'embedded-release' or receipt.get('configuration') != 'Release' or
             report.get('buildMode') != receipt.get('buildMode')):
         raise ValueError('Metro-dependent app is not a compatible retained export')
-    for field in ('configHash', 'nativeSourceHash', 'buildRecipeHash', 'bundleHash', 'storeMode'):
+    fields = ('configHash', 'nativeIdentity', 'profileIdentity', 'recipeIdentity', 'jsHash',
+              'buildRecipeHash', 'bundleHash', 'storeMode') if modern else (
+              'configHash', 'nativeSourceHash', 'buildRecipeHash', 'bundleHash', 'storeMode')
+    for field in fields:
         if not receipt.get(field) or report.get(field) != receipt[field]:
             raise ValueError(f'build and report {field} identities differ')
-    if (report.get('inputHash') != input_hash(worktree) or
-            receipt['nativeSourceHash'] != input_hash(worktree, mobile_only=True) or
-            receipt['buildRecipeHash'] != recipe_hash(worktree)):
+    if modern:
+        if not sealed_receipt_matches(worktree, build):
+            raise ValueError('native artifact receipt integrity changed')
+        if receipt['jsHash'] != input_hash(worktree, mobile_only='js'):
+            raise ValueError('embedded JavaScript changed after the verified product flow')
+        if receipt['configHash'] != current_public_config_hash(worktree):
+            raise ValueError('public configuration changed after the verified product flow')
+        if not current_native_compatible(worktree, receipt):
+            raise ValueError('resolved native inputs changed after the verified product flow')
+        if report.get('inputHash') != input_hash(worktree, mobile_only='acceptance'):
+            raise ValueError('product-flow acceptance inputs changed after the verified run')
+    elif (report.get('inputHash') != input_hash(worktree) or
+          receipt['nativeSourceHash'] != input_hash(worktree, mobile_only=True) or
+          receipt['buildRecipeHash'] != recipe_hash(worktree)):
         raise ValueError('product-flow source or build identity is stale')
     app = Path(receipt['app']).resolve()
     if not app.is_relative_to((worktree / '.evidence/product-build').resolve()) or not app.is_dir():
@@ -264,7 +356,8 @@ def reconcile_absent(target, issue, udid, worktree, device_root):
         if not archive.is_relative_to(target.resolve()) or digest(archive) != entry['sha256']:
             raise ValueError('absent device archived proof digest differs')
     build, report = (json.loads(Path(entry['archive']).read_text()) for entry in proof)
-    if (build.get('simulator') != udid or report.get('simulator') != udid or
+    if ((not build.get('nativeIdentity') and build.get('simulator') != udid) or
+            report.get('simulator') != udid or
             report.get('result') != 'pass' or report.get('appHash') != mapping.get('appHash')):
         raise ValueError('absent device archived proof identity differs')
     retired = target / 'retired.json'

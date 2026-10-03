@@ -122,33 +122,33 @@ test("explicit missing histories fail while absent optional defaults are allowed
 });
 
 test("one issue extension retains history, bounds concurrent grants, and cannot repeat", async () => {
-  seed(history("earlier-timeouts", 1782));
+  seed(history("earlier-timeouts", 900));
   const original = readFileSync(ledger, "utf8");
   const extension = ["--candidate", "repo:branch", "--issue", "378", "--risk", "high", "--required"];
   const extend = () => spawnSync("python3", [...args("extend"), ...extension], { encoding: "utf8" });
   expect(extend().status).toBe(0);
   expect(extend().status).toBe(0);
-  expect(call("status").value).toMatchObject({ cap_seconds: 2700, completed_seconds: 1782, remaining_seconds: 918 });
+  expect(call("status").value).toMatchObject({ cap_seconds: 2700, completed_seconds: 900, remaining_seconds: 1800 });
   const retained = readFileSync(ledger, "utf8");
   expect(retained.startsWith(original)).toBe(true);
   expect(retained.split("\n").filter(row => row.includes('"event": "extension"'))).toHaveLength(1);
   const invoke = (id: string) => new Promise<any>(resolve => {
-    const child = spawn("python3", [...args("begin", id, 600), ...extension]); let output = "";
+    const child = spawn("python3", [...args("begin", id, 900), ...extension]); let output = "";
     child.stdout.on("data", bytes => { output += bytes; });
     child.on("close", code => resolve({ code, ...JSON.parse(output) }));
   });
   const results = await Promise.all([invoke("a"), invoke("b"), invoke("c")]);
-  expect(results.filter(row => row.allowed).reduce((sum, row) => sum + row.reservation_seconds, 0)).toBe(918);
+  expect(results.filter(row => row.allowed).reduce((sum, row) => sum + row.reservation_seconds, 0)).toBe(905);
   const changedIssue = spawnSync("python3", [...args("extend"), ...extension, "--issue", "379"], { encoding: "utf8" });
   expect(changedIssue.status).toBe(1);
 });
 test("automatic required extension excludes low/optional work and parks at the aggregate cap", () => {
-  seed(history("used", 1800));
+  seed(history("used", 1790));
   const extra = ["--candidate", "repo:branch", "--issue", "378", "--risk", "medium", "--required"];
   for (const tail of [["--risk", "low", "--required"], ["--risk", "medium"]]) {
     expect(spawnSync("python3", [...args("extend"), "--candidate", "repo:branch", "--issue", "378", ...tail]).status).toBe(1);
   }
-  expect(spawnSync("python3", [...args("begin", "last", 600), ...extra]).status).toBe(0);
+  expect(spawnSync("python3", [...args("begin", "last", 900), ...extra]).status).toBe(0);
   const extension = JSON.parse(readFileSync(ledger, "utf8").split("\n").find(row => row.includes('"event": "extension"'))!);
   seed([...history("used", 2700), extension]);
   const exhausted = spawnSync("python3", [...args("begin", "next"), ...extra], { encoding: "utf8" });
@@ -238,14 +238,14 @@ test("outside-cwd invocation cannot authorize a checkout-owned manifest", () => 
   } finally { rmSync(inside, { force: true }); }
 });
 
-test("automatic retry doubles the actual granted deadline instead of configuration", () => {
+test("automatic retry cannot shrink below the normal reviewer window", () => {
   seed([...history("prior", 2640),
     { event: "extension", attempt_id: "issue-extension", seconds: 900, issue: 435, risk: "high", required: true },
     ...history("failed", 60, { timeout_seconds: 60 }).map(row => ({ ...row, source_sha: "retry", outcome: "fail", failure_kind: "timeout" })),
   ]);
   const retry = spawnSync("python3", [...args("begin", "retry", 1800), "--candidate", "root:branch", "--issue", "435", "--risk", "high", "--required"], { encoding: "utf8" });
-  expect(retry.status).toBe(0);
-  expect(JSON.parse(retry.stdout)).toMatchObject({ timeout_seconds: 120, completed_seconds: 2700, recovery_issue: 435 });
+  expect(retry.status).toBe(1);
+  expect(JSON.parse(retry.stdout)).toMatchObject({ allowed: false, required_window_seconds: 900, completed_seconds: 2700, recovery_issue: 435 });
 });
 
 test("trusted installation rejects approval inside a separate candidate Git checkout", () => {

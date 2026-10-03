@@ -137,6 +137,7 @@ test("nonzero external execution cannot publish or cache a partial pass", () => 
   const result = run();
   expect(result.status).toBe(1);
   expect(JSON.parse(result.stdout)).toMatchObject({ verdict: "incomplete", findings: [], error: { kind: "process_error" } });
+  expect(JSON.parse(readFileSync(join(root, "budgets/issue-355.jsonl"), "utf8").trim().split("\n").at(-1)!)).toMatchObject({ event: "finish", outcome: "fail", verdict: "incomplete" });
   expect(readdirSync(cache).filter(name => name.endsWith(".json"))).toHaveLength(0);
   const posted = runPr();
   expect(posted.status).toBe(1);
@@ -229,6 +230,7 @@ test("P1 remains blocking even with a complete disposition", () => {
   const rejected = run();
   expect(rejected.status).toBe(1);
   expect(rejected.stderr).toContain("P0/P1 finding blocks");
+  expect(JSON.parse(readFileSync(join(root, "budgets/issue-355.jsonl"), "utf8").trim().split("\n").at(-1)!)).toMatchObject({ event: "finish", outcome: "pass", verdict: "fail" });
   const posted = runPr();
   if (posted.status !== 1) throw new Error(posted.stderr);
   expect(readFileSync(join(root, "gh-calls"), "utf8")).toContain("state=failure");

@@ -132,6 +132,153 @@ shutil.copy2(sys.argv[3],sys.argv[4])
         self.assertTrue((self.archive / self.udid / 'retired.json').exists())
         self.assertEqual(self.retire()['deletionOutcome'], 'simctl delete returned successfully')
 
+    def modern_receipt(self):
+        module = self.worktree / 'scripts/sim/native-identity.mjs'
+        shutil.copy2(Path(__file__).with_name('native-identity.mjs'), module)
+        (self.worktree / 'scripts/sim/product-flow.mjs').write_text('''import {createHash} from 'node:crypto';
+export function environment() {
+  const entries=Object.entries(process.env).filter(([key])=>key.startsWith('EXPO_PUBLIC_')).sort(([a],[b])=>a.localeCompare(b));
+  return {configHash:createHash('sha256').update(JSON.stringify(entries)).digest('hex')};
+}
+''')
+        env_file = self.worktree / 'apps/mobile/.env.development.local'
+        env_file.parent.mkdir(parents=True, exist_ok=True)
+        env_file.write_text('EXPO_PUBLIC_POSTHOG_API_KEY=before\n')
+        (self.worktree / '.gitignore').write_text('node_modules/\napps/mobile/ios/\napps/mobile/.env.development.local\n')
+        mocked = self.worktree / 'apps/mobile/__mocks__/fixture.ts'
+        mocked.parent.mkdir(parents=True, exist_ok=True)
+        mocked.write_text('mocked unit-test dependency')
+        expo_cli = self.worktree / 'node_modules/expo/bin/cli'
+        expo_cli.parent.mkdir(parents=True)
+        expo_cli.write_text('process.stdout.write(JSON.stringify({name:"Fitsy",slug:"fitsy",ios:{},_internal:{modResults:{ios:{}}}}));')
+        autolink = self.worktree / 'node_modules/expo-modules-autolinking/bin/expo-modules-autolinking'
+        autolink.parent.mkdir(parents=True)
+        autolink.write_text('process.stdout.write(JSON.stringify(process.argv[2]==="resolve"?{modules:[]}:{dependencies:{}}));')
+        (self.worktree / 'package-lock.json').write_text(json.dumps({'packages': {
+            'node_modules/expo': {'version': '54.0.0'},
+            'node_modules/react-native': {'version': '0.81.0'}}}))
+        build_file = self.worktree / '.evidence/product-build/receipt.json'
+        report_file = self.flow / 'report.json'
+        receipt, report = json.loads(build_file.read_text()), json.loads(report_file.read_text())
+        receipt.pop('nativeSourceHash')
+        report.pop('nativeSourceHash')
+        receipt['jsHash'] = retirement.input_hash(self.worktree, mobile_only='js')
+        receipt['configHash'] = retirement.current_public_config_hash(self.worktree)
+        report['configHash'] = receipt['configHash']
+        current_script = ('const {nativeIdentity}=await import(process.argv[1]); '
+                          'process.stdout.write(JSON.stringify(nativeIdentity(process.argv[2],{...process.env,NODE_ENV:"production"})));')
+        current_native = json.loads(subprocess.check_output(['node', '--input-type=module', '-e', current_script,
+            str(module), str(self.worktree)], text=True))
+        identity_script = ('const {identityHash,sealReceipt}=await import(process.argv[1]); '
+                           'const receipt=JSON.parse(process.argv[2]); '
+                           'receipt.nativeIdentity=JSON.parse(process.argv[3]); '
+                           'for(const key of ["profileIdentity","recipeIdentity"]) '
+                           'receipt[key]={inputs:{fixture:key},hash:identityHash({fixture:key})}; '
+                           'process.stdout.write(JSON.stringify(sealReceipt(receipt)));')
+        receipt = json.loads(subprocess.check_output(['node', '--input-type=module', '-e', identity_script,
+            str(module), json.dumps(receipt), json.dumps(current_native)], text=True))
+        build_file.write_text(json.dumps(receipt))
+        for key in ('nativeIdentity', 'profileIdentity', 'recipeIdentity', 'jsHash'):
+            report[key] = receipt[key]
+        report['inputHash'] = retirement.input_hash(self.worktree, mobile_only='acceptance')
+        report_file.write_text(json.dumps(report))
+
+    def test_new_native_receipt_keeps_retirement_valid_after_unrelated_test_change(self):
+        self.modern_receipt()
+        (self.worktree / 'apps/mobile/lib').mkdir(parents=True, exist_ok=True)
+        (self.worktree / 'apps/mobile/lib/new.test.ts').write_text('unrelated test-only split')
+        result = self.retire()
+        self.assertEqual(result['deletionOutcome'], 'simctl delete returned successfully')
+        self.assertEqual(len(result['attachments']), 1)
+
+    def set_build_simulator(self, simulator):
+        build_file = self.worktree / '.evidence/product-build/receipt.json'
+        receipt = json.loads(build_file.read_text())
+        receipt['simulator'] = simulator
+        receipt.pop('receiptHash')
+        module = self.worktree / 'scripts/sim/native-identity.mjs'
+        sealed = subprocess.check_output(['node', '--input-type=module', '-e',
+            'const {sealReceipt}=await import(process.argv[1]); process.stdout.write(JSON.stringify(sealReceipt(JSON.parse(process.argv[2]))));',
+            str(module), json.dumps(receipt)], text=True)
+        build_file.write_text(sealed)
+
+    def test_new_native_receipt_allows_verified_artifact_from_compatible_simulator(self):
+        self.modern_receipt()
+        self.set_build_simulator('A88FB95C-9CC6-41B8-A2BA-A68F3A5C4AF4')
+        result = self.retire()
+        self.assertEqual(result['deletionOutcome'], 'simctl delete returned successfully')
+        self.assertEqual(json.loads(self.flow.joinpath('report.json').read_text())['simulator'], self.udid)
+
+    def test_interrupted_cross_simulator_delete_reconciles_archived_proof(self):
+        self.modern_receipt()
+        self.set_build_simulator('A88FB95C-9CC6-41B8-A2BA-A68F3A5C4AF4')
+        original = retirement.command
+        def interrupted(*args):
+            result = original(*args)
+            if args[:3] == ('xcrun', 'simctl', 'delete'):
+                raise KeyboardInterrupt('process exited after delete')
+            return result
+        with mock.patch.object(retirement, 'command', side_effect=interrupted):
+            with self.assertRaises(KeyboardInterrupt):
+                self.retire()
+        self.assertEqual(self.retire()['deletionOutcome'], 'observed absent after durable intent')
+
+    def test_reactivated_release_artifact_accepts_attested_other_profile_tree(self):
+        self.modern_receipt()
+        build_file = self.worktree / '.evidence/product-build/receipt.json'
+        release = json.loads(build_file.read_text())
+        generated = self.worktree / 'apps/mobile/ios/Fitsy/Generated.swift'
+        generated.parent.mkdir(parents=True, exist_ok=True)
+        generated.write_text('Debug profile generated source')
+        debug_app = self.worktree / '.evidence/product-build/Build/Products/Debug-iphonesimulator/Fitsy.app'
+        shutil.copytree(self.app, debug_app)
+        module = self.worktree / 'scripts/sim/native-identity.mjs'
+        script = ('const {nativeIdentity,identityHash,sealReceipt}=await import(process.argv[1]); '
+                  'const release=JSON.parse(process.argv[3]); '
+                  'const profile={inputs:{fixture:"debug-profile"},hash:identityHash({fixture:"debug-profile"})}; '
+                  'process.stdout.write(JSON.stringify(sealReceipt({...release,app:process.argv[4],'
+                  'nativeIdentity:nativeIdentity(process.argv[2],{...process.env,NODE_ENV:"development"}),'
+                  'profileIdentity:profile,configuration:"Debug",buildMode:"owned-metro-test-store",'
+                  'receiptHash:undefined})));')
+        debug = subprocess.check_output(['node', '--input-type=module', '-e', script,
+            str(module), str(self.worktree), json.dumps(release), str(debug_app)], text=True)
+        resume = self.worktree / '.evidence/resume'
+        resume.mkdir(parents=True)
+        (resume / 'native-receipt-superseded-123.json').write_text(debug)
+        result = self.retire()
+        self.assertEqual(result['deletionOutcome'], 'simctl delete returned successfully')
+
+    def test_new_native_receipt_rejects_stale_embedded_javascript(self):
+        self.modern_receipt()
+        (self.worktree / 'apps/mobile/lib').mkdir(parents=True, exist_ok=True)
+        (self.worktree / 'apps/mobile/lib/screen.ts').write_text('new JavaScript after Release proof')
+        with self.assertRaisesRegex(ValueError, 'embedded JavaScript changed'):
+            self.retire()
+        self.assertFalse((self.root / 'deleted').exists())
+
+    def test_new_native_receipt_rejects_changed_native_input(self):
+        self.modern_receipt()
+        native = self.worktree / 'apps/mobile/ios/Fitsy/Native.swift'
+        native.parent.mkdir(parents=True, exist_ok=True)
+        native.write_text('changed compiled native source')
+        with self.assertRaisesRegex(ValueError, 'resolved native inputs changed'):
+            self.retire()
+        self.assertFalse((self.root / 'deleted').exists())
+
+    def test_new_native_receipt_rejects_changed_public_environment(self):
+        self.modern_receipt()
+        (self.worktree / 'apps/mobile/.env.development.local').write_text('EXPO_PUBLIC_POSTHOG_API_KEY=after\n')
+        with self.assertRaisesRegex(ValueError, 'public configuration changed'):
+            self.retire()
+        self.assertFalse((self.root / 'deleted').exists())
+
+    def test_new_native_receipt_rejects_changed_acceptance_flow(self):
+        self.modern_receipt()
+        (self.worktree / 'apps/mobile/e2e/flows/cold-start-welcome.yaml').write_text('name: changed-flow\n')
+        with self.assertRaisesRegex(ValueError, 'acceptance inputs changed'):
+            self.retire()
+        self.assertFalse((self.root / 'deleted').exists())
+
     def test_interrupted_delete_reconciles_verified_archive(self):
         original = retirement.command
         def interrupted(*args):

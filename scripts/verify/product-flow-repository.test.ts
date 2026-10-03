@@ -22,6 +22,29 @@ test('working changes and deletions invalidate the source identity', () => {
   const second = hash(); rmSync(join(dir, 'app.ts')); expect(hash()).not.toBe(second);
 });
 
+test('a test-only split retains product acceptance while a flow edit invalidates it', () => {
+  fixtureGit(['init', '-q', dir]);
+  mkdirSync(join(dir, 'apps/mobile/lib'), { recursive: true });
+  mkdirSync(join(dir, 'apps/mobile/e2e/flows'), { recursive: true });
+  writeFileSync(join(dir, 'apps/mobile/lib/paywall.tsx'), 'export const copy = "Paywall";');
+  writeFileSync(join(dir, 'apps/mobile/e2e/flows/paywall.yaml'), 'appId: com.fitsy.mobile\n---\n- assertVisible: Paywall\n');
+  fixtureGit(['-C', dir, 'add', '.']);
+  const hashes = () => JSON.parse(evaluate(`({acceptance:gate.inputHash(${JSON.stringify(dir)}),js:gate.inputHash(${JSON.stringify(dir)}, 'js')})`).stdout);
+  const before = hashes();
+  writeFileSync(join(dir, 'apps/mobile/lib/paywall.test.tsx'), 'test-only split');
+  const afterTest = hashes();
+  expect(afterTest.acceptance).toBe(before.acceptance);
+  expect(afterTest.js).toBe(before.js);
+  writeFileSync(join(dir, 'apps/mobile/e2e/flows/paywall.yaml'), 'appId: com.fitsy.mobile\n---\n- assertVisible: Changed\n');
+  const afterFlow = hashes();
+  expect(afterFlow.acceptance).not.toBe(afterTest.acceptance);
+  expect(afterFlow.js).toBe(before.js);
+  writeFileSync(join(dir, 'apps/mobile/lib/paywall.tsx'), 'export const copy = "Updated paywall";');
+  const afterJs = hashes();
+  expect(afterJs.js).not.toBe(before.js);
+  expect(afterJs.acceptance).not.toBe(afterFlow.acceptance);
+});
+
 test('the real local registry blocks missing evidence but permits explicit non-product applicability', () => {
   const verify = join(dir, 'scripts/verify'); mkdirSync(verify, { recursive: true });
   for (const name of ['run.mjs', 'impact-plan.mjs', 'product-flow.mjs', 'product-flow.sh', 'registry.yml']) {
@@ -40,6 +63,9 @@ test('the real local registry blocks missing evidence but permits explicit non-p
   let result = check();
   expect(result.status).toBe(0); expect(result.stdout).toContain('"applicability":"not_applicable"');
   mkdirSync(join(dir, 'apps/mobile/app/welcome'), { recursive: true });
+  writeFileSync(join(dir, 'apps/mobile/app/welcome/payment.test.tsx'), 'test-only split');
+  result = check();
+  expect(result.status).toBe(0); expect(result.stdout).toContain('"applicability":"not_applicable"');
   writeFileSync(join(dir, 'apps/mobile/app/welcome/payment.tsx'), 'changed paywall');
   result = check();
   expect(result.status).toBe(1); expect(result.stdout).toContain('"status":"fail"');

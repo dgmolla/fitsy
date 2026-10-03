@@ -45,7 +45,7 @@ export function admitDisk(path, phase, requiredGiB = 8) {
 }
 export async function requireMetro(metro, { processIdentity, sourceHash, configHash, route }) {
   if (!metro || processIdentity(metro.pid) !== metro.processIdentity) throw new Error('Required owned Metro is absent or its PID changed. Start a fresh canonical product-flow run.');
-  if (metro.nativeSourceHash !== sourceHash || metro.configHash !== configHash) throw new Error('Metro source/configuration differs from the installed app. Rebuild and start a fresh owned Metro.');
+  if (metro.jsHash !== sourceHash || metro.configHash !== configHash) throw new Error('Metro JavaScript/configuration differs from the candidate. Start a fresh owned Metro and rerun affected scenarios.');
   for (const path of route ? ['/status', route] : ['/status']) {
     let response;
     try { response = await fetch(`http://127.0.0.1:${metro.port}${path}`, { signal: AbortSignal.timeout(path === '/status' ? 1500 : 30000) }); }

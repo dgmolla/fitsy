@@ -17,6 +17,7 @@ EXTENSION_SECONDS = 900
 RECOVERY_SECONDS = 1800
 CLOSEOUT_SECONDS = 5
 FAILURE_KINDS = ("completed", "timeout", "transient_provider", "authentication", "process_error", "invalid_output", "interrupted")
+NORMAL_REVIEW_SECONDS = 900
 
 
 def utc():
@@ -70,6 +71,8 @@ def read_events(handle):
                 raise ValueError(f"invalid review {field}")
             if row["event"] == "start" and "reserved_seconds" in row and not number(row["reserved_seconds"]):
                 raise ValueError("invalid review reservation")
+            if row["event"] == "finish" and "verdict" in row and row["verdict"] not in ("pass", "fail", "incomplete"):
+                raise ValueError("invalid review verdict")
             events.append(row)
     return events
 
@@ -181,12 +184,26 @@ def usage(events):
     # An interrupted new attempt retains its full reservation until reconciled.
     # An unbounded legacy attempt has unknown completion and fails closed at the cap.
     reserved = sum(e.get("reserved_seconds", cap) for e in active.values())
+    verdict_counts = {"pass": 0, "fail": 0, "incomplete": 0, "legacy_unknown": 0}
+    for finish in finishes.values():
+        verdict_counts[finish.get("verdict", "legacy_unknown")] += 1
     return starts, finishes, {"cap_seconds": cap, "extension_issue": extensions[0]["issue"] if extensions else None, "authorized_grant_issue": grants[0]["issue"] if grants else None, "recovery_issue": recoveries[0]["issue"] if recoveries else None, "completed_seconds": completed,
         "reserved_seconds": reserved, "remaining_seconds": max(0, cap - completed - reserved),
         "review_seconds": completed,
         "observed_running_seconds": sum(min(elapsed(e), e["reserved_seconds"]) for e in active.values() if "reserved_seconds" in e),
         "unbounded_attempts": [key for key, e in active.items() if "reserved_seconds" not in e],
-        "rounds": len({e.get("round_id") for e in starts.values()}), "unfinished_attempts": list(active)}
+        "rounds": len({e.get("round_id") for e in starts.values()}), "unfinished_attempts": list(active),
+        "execution_outcomes": {name: sum(e.get("outcome") == name for e in finishes.values()) for name in ("pass", "fail", "interrupted")},
+        "review_verdicts": verdict_counts}
+
+
+def required_window(starts, finishes, lens):
+    """Use recent successful executions of this combined reviewer, never its verdict."""
+    recent = [e["elapsed_seconds"] for e in reversed(list(finishes.values()))
+              if e.get("lens") == lens and e.get("failure_kind") == "completed"
+              and starts.get(e["attempt_id"], {}).get("lens") == lens][:3]
+    observed = math.ceil(max(recent) * 1.25) if recent else 0
+    return max(NORMAL_REVIEW_SECONDS, observed), recent
 
 
 def main():
@@ -208,6 +225,7 @@ def main():
     parser.add_argument("--authorization-file", type=Path)
     parser.add_argument("--failure-kind", choices=FAILURE_KINDS)
     parser.add_argument("--outcome", choices=("pass", "fail", "interrupted"), default="interrupted")
+    parser.add_argument("--verdict", choices=("pass", "fail", "incomplete"))
     args = parser.parse_args()
     args.ledger.parent.mkdir(parents=True, exist_ok=True)
     try:
@@ -281,6 +299,10 @@ def main():
                 events = list(indexed(read_events(handle)).values())
                 starts, finishes, total = usage(events)
             result = {"allowed": True, "reason": "history accounted", "ledger": str(args.ledger.resolve()), **total}
+            if args.action == "status" and args.required and args.lens:
+                minimum, observed = required_window(starts, finishes, args.lens)
+                result.update(required_window_seconds=minimum, recent_completed_seconds=observed,
+                              can_admit=total["remaining_seconds"] >= minimum + CLOSEOUT_SECONDS)
             if args.action == "begin":
                 if args.attempt_id in starts:
                     result.update(allowed=False, reason="duplicate attempt")
@@ -295,8 +317,10 @@ def main():
                         if type(previous) is int and previous > 0:
                             ceiling = min(ceiling, previous * 2, 3600)
                     grant = min(ceiling, math.floor(total["remaining_seconds"] - CLOSEOUT_SECONDS))
-                    if grant < 1:
-                        result.update(allowed=False, reason="cumulative review time exhausted or reserved")
+                    minimum, observed = required_window(starts, finishes, args.lens) if args.required else (1, [])
+                    result.update(required_window_seconds=minimum, recent_completed_seconds=observed)
+                    if grant < minimum:
+                        result.update(allowed=False, reason=f"insufficient review capacity: {grant}s available deadline, {minimum}s required from normal {NORMAL_REVIEW_SECONDS}s baseline and recent completed {args.lens} runtimes")
                         if total["extension_issue"] and not total["unfinished_attempts"]:
                             result.update(action="park", notification_key=f"review-budget:{total['extension_issue']}:exhausted")
                     else:
@@ -314,10 +338,14 @@ def main():
                 elif any(start.get(key) != getattr(args, key) for key in ("round_id", "lens", "source_sha")):
                     result.update(allowed=False, reason="review closeout identity mismatch")
                 else:
+                    if args.verdict and ((args.outcome != "pass" and args.verdict != "incomplete") or
+                                         (args.outcome == "pass" and args.verdict == "incomplete")):
+                        raise ValueError("review execution outcome and verdict conflict")
                     seconds = elapsed(start)
                     append(handle, {"event": "finish", "at": utc(), "attempt_id": args.attempt_id,
                         "round_id": args.round_id, "lens": args.lens, "source_sha": args.source_sha,
                         "elapsed_seconds": seconds, "outcome": args.outcome,
+                        **({"verdict": args.verdict} if args.verdict else {}),
                         **({"failure_kind": args.failure_kind} if args.failure_kind else {}),
                         **{key: start[key] for key in ("exception", "adoption", "closeout") if key in start}})
                     result.update(reason="recorded", elapsed_seconds=seconds)

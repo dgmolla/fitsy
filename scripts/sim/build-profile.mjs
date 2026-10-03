@@ -13,6 +13,19 @@ export function buildProfile(testStore, env) {
 }
 
 export const metroRoute = '/.expo/.virtual-metro-entry.bundle?platform=ios&dev=true&minify=false';
+export function embeddedBundleCompatibility(receipt, jsHash, configHash) {
+  if (receipt.buildMode !== 'embedded-release') return { compatible: true, reason: null };
+  if (receipt.jsHash !== jsHash) return { compatible: false, reason: 'embedded Release JavaScript is older than the candidate' };
+  if (receipt.configHash !== configHash) return { compatible: false, reason: 'embedded Release public configuration is older than the candidate' };
+  return { compatible: true, reason: null };
+}
+export function embeddedArtifactPlan(receipt, jsHash, configHash, refreshRequested = false) {
+  if (!receipt || receipt.buildMode !== 'embedded-release') return { action: 'reuse', reason: null };
+  const bundle = embeddedBundleCompatibility(receipt, jsHash, configHash);
+  if (bundle.compatible) return { action: 'reuse', reason: null };
+  return { action: refreshRequested ? 'rebuild' : 'requires-artifact',
+    reason: `required embedded Release artifact: ${bundle.reason}` };
+}
 // The two reserved baseline labels describe starting state. Custom fixture
 // names identify the synthetic scenario/account and may be used with either.
 export function fixtureLabel(name, resetKeychain) {

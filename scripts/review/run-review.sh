@@ -112,6 +112,7 @@ RAW_FILE=""
 REVIEW_PID=""
 BUDGET_OPEN=0
 BUDGET_OUTCOME=interrupted
+BUDGET_VERDICT=incomplete
 review_exit() {
   local code=$?
   if [ -n "$REVIEW_PID" ]; then
@@ -121,7 +122,7 @@ review_exit() {
   fi
   if [ "$BUDGET_OPEN" = 1 ]; then
     python3 -I scripts/review/review-budget.py finish "${BUDGET_ARGS[@]}" --round-id "$HEAD_SHA" \
-      --lens "$LENS" --source-sha "$HEAD_SHA" --attempt-id "$ATTEMPT_ID" --outcome "$BUDGET_OUTCOME" >&2 || code=1
+      --lens "$LENS" --source-sha "$HEAD_SHA" --attempt-id "$ATTEMPT_ID" --outcome "$BUDGET_OUTCOME" --verdict "$BUDGET_VERDICT" >&2 || code=1
   fi
   if [ -n "$PROMPT_FILE" ]; then rm -f "$PROMPT_FILE" "$RAW_FILE"; fi
   if [ -n "$TELEMETRY_ATTEMPT" ]; then
@@ -216,9 +217,16 @@ else
     echo "Review all required domains together. Return explicit results for every required domain, and consolidate duplicate findings with all applicable domain names. You may read repo files for context."
     echo "End with the fenced JSON block required by REVIEW.md's output contract."
   } > "$PROMPT_FILE"
+  REQUESTED_TIMEOUT="${FITSY_REVIEW_TIMEOUT_SECONDS:-}"
+  if [ -z "$REQUESTED_TIMEOUT" ] || [ "${FITSY_REVIEW_TIMEOUT_FLOOR:-0}" = 1 ]; then
+    WINDOW_STATUS="$(python3 -I scripts/review/review-budget.py status "${BUDGET_ARGS[@]}" --lens "$LENS")" || { echo '[run-review] capacity preflight failed' >&2; incomplete_status budget; exit 1; }
+    REQUIRED_TIMEOUT="$(printf '%s' "$WINDOW_STATUS" | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["required_window_seconds"])')"
+    if [ -n "$REQUESTED_TIMEOUT" ] && ! [[ "$REQUESTED_TIMEOUT" =~ ^[0-9]+$ ]]; then echo '[run-review] invalid timeout' >&2; incomplete_status configuration; exit 1; fi
+    if [ -z "$REQUESTED_TIMEOUT" ] || [ "$REQUESTED_TIMEOUT" -lt "$REQUIRED_TIMEOUT" ]; then REQUESTED_TIMEOUT="$REQUIRED_TIMEOUT"; fi
+  fi
   if ! BUDGET_GRANT="$(python3 -I scripts/review/review-budget.py begin "${BUDGET_ARGS[@]}" --round-id "$HEAD_SHA" \
       --lens "$LENS" --source-sha "$HEAD_SHA" --attempt-id "$ATTEMPT_ID" \
-      --timeout-seconds "${FITSY_REVIEW_TIMEOUT_SECONDS:-900}")"; then
+      --timeout-seconds "$REQUESTED_TIMEOUT")"; then
     echo "$BUDGET_GRANT" >&2
     echo "[run-review] review time unavailable; no independent reviewer started" >&2
     incomplete_status budget
@@ -252,8 +260,11 @@ else
   if [ "$BUDGET_OUTCOME" = fail ]; then
     RESULT_JSON="$(printf '%s' "$RESULT_JSON" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); d["error"]["kind"]=sys.argv[1]; d["error"]["execution_evidence"]=sys.argv[2]; print(json.dumps(d))' "$FAILURE_KIND" "$EXECUTION_FILE")"
   fi
+  if [ "$BUDGET_OUTCOME" = pass ]; then
+    BUDGET_VERDICT="$(printf '%s' "$RESULT_JSON" | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["verdict"])')"
+  fi
   python3 -I scripts/review/review-budget.py finish "${BUDGET_ARGS[@]}" --failure-kind "$FAILURE_KIND" --round-id "$HEAD_SHA" \
-    --lens "$LENS" --source-sha "$HEAD_SHA" --attempt-id "$ATTEMPT_ID" --outcome "$BUDGET_OUTCOME" >&2
+    --lens "$LENS" --source-sha "$HEAD_SHA" --attempt-id "$ATTEMPT_ID" --outcome "$BUDGET_OUTCOME" --verdict "$BUDGET_VERDICT" >&2
   BUDGET_OPEN=0
   cp "$RAW_FILE" "$CACHE_DIR/$KEY.raw"
   rm -f "$PROMPT_FILE" "$RAW_FILE"
