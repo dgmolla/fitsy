@@ -66,6 +66,13 @@ test('a previously denied permission does not promise or request a trial reminde
   expect(Notifications.requestPermissionsAsync).not.toHaveBeenCalled();
 });
 
+test('opt-in explains timing relative to a future store-confirmed trial end', async () => {
+  const screen = renderRouter(routes, { initialUrl: '/welcome/trial-reminder' });
+  await waitFor(() => expect(screen.getByText('Get a trial reminder')).toBeTruthy());
+  expect(screen.getByText(/about 2 days before your store-confirmed free trial of 7 days ends/)).toBeTruthy();
+  expect(screen.queryByText(/in about 5 days/)).toBeNull();
+});
+
 test('browser trial copy explains why a reminder cannot be scheduled', async () => {
   const originalOS = Platform.OS;
   Platform.OS = 'web';

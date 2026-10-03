@@ -12,6 +12,8 @@ test("public pricing qualifies a catalog trial by account eligibility", () => {
   expect(answer).toContain("If eligible, nothing is charged until the trial ends");
   expect(answer).toContain("The store confirms your offer before purchase");
   expect(priceAnswer({ monthly: "$9.99", annual: "$59.99", trialDays: 0 })).not.toContain("free trial");
+  expect(priceAnswer({ monthly: "$9.99", annual: "$59.99", trialDays: 0, trialLabel: "1 month" }))
+    .toContain("1 month free trial");
 });
 
 // The cache wrapper is Next runtime plumbing; run the loader directly.
@@ -207,6 +209,19 @@ describe("fetchPricingFromAsc", () => {
       },
     ]);
     await expect(fetchPricingFromAsc(TODAY)).resolves.toMatchObject({ trialDays: 0 });
+  });
+
+  it("keeps a calendar-month offer in calendar units", async () => {
+    primeCreds();
+    const month = [{ offerMode: "FREE_TRIAL", duration: "ONE_MONTH", startDate: "2026-01-01" }];
+    primeAsc([
+      { productId: "com.fitsy.mobile.monthly", prices: [["7.99", null, false]], offers: month },
+      { productId: "com.fitsy.mobile.yearly", prices: [["39.99", null, false]], offers: month },
+    ]);
+    const pricing = await fetchPricingFromAsc(TODAY);
+    expect(pricing).toMatchObject({ trialDays: 0, trialLabel: "1 month" });
+    expect(priceAnswer(pricing)).toContain("1 month free trial");
+    expect(priceAnswer(pricing)).not.toContain("30-day");
   });
 
   it("throws when a product is missing so the caller can fall back", async () => {

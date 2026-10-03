@@ -39,6 +39,16 @@ test('an exact three-day trial has the same schedulable target as its offer pres
   expect(reminders).toHaveLength(1);
   expect(reminders[0].date).toEqual(new Date(2026, 8, 8, 12));
 });
+test('a purchase days after opt-in schedules from verified expiry, not the opt-in date', () => {
+  const optIn = new Date(2026, 8, 7, 12);
+  const purchase = new Date(2026, 8, 12, 12);
+  const expiry = new Date(2026, 8, 26, 12);
+  const reminders = planReminders({ ...input, now: purchase, preferences: { meals: false, trial: true },
+    subscription: { ...active, latestPurchaseDate: purchase.toISOString(), expirationDate: expiry.toISOString() } });
+  expect(reminders).toHaveLength(1);
+  expect(reminders[0].date).toEqual(new Date(2026, 8, 24, 12));
+  expect(reminders[0].date.getTime() - optIn.getTime()).toBe(17 * 24 * 3_600_000);
+});
 test.each([
   { ...active, isActive: false }, { ...active, willRenew: false },
   { ...active, periodType: 'NORMAL' as const }, { ...active, expirationDate: null },

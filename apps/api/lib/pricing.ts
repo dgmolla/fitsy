@@ -30,6 +30,8 @@ export interface DisplayPricing {
   annual: string;
   /** 0 when there is no free trial. */
   trialDays: number;
+  /** Calendar offers retain their store unit instead of claiming fixed days. */
+  trialLabel?: string;
 }
 
 /** Fallback retail prices; an unavailable catalog cannot justify a trial claim. */
@@ -52,11 +54,13 @@ const DURATION_DAYS: Record<string, number> = {
   THREE_DAYS: 3,
   ONE_WEEK: 7,
   TWO_WEEKS: 14,
-  ONE_MONTH: 30,
-  TWO_MONTHS: 60,
-  THREE_MONTHS: 90,
-  SIX_MONTHS: 180,
-  ONE_YEAR: 365,
+};
+const CALENDAR_DURATION_LABELS: Record<string, string> = {
+  ONE_MONTH: "1 month",
+  TWO_MONTHS: "2 months",
+  THREE_MONTHS: "3 months",
+  SIX_MONTHS: "6 months",
+  ONE_YEAR: "1 year",
 };
 
 type Group = { id: string };
@@ -108,8 +112,8 @@ function currentPrice(
   return formatUsd(point.attributes.customerPrice);
 }
 
-/** Free-trial length in days from the offer in effect today, 0 if none. */
-function currentTrialDays(offers: IntroOffer[], today: string): number {
+/** Preserve calendar units from the offer in effect today. */
+function currentTrial(offers: IntroOffer[], today: string): { days: number; label?: string } {
   const live = offers.find((o) => {
     const a = o.attributes;
     if (a?.offerMode !== "FREE_TRIAL") return false;
@@ -117,12 +121,12 @@ function currentTrialDays(offers: IntroOffer[], today: string): number {
     if (a.endDate && a.endDate < today) return false;
     return true;
   });
-  const days = live?.attributes?.duration
-    ? DURATION_DAYS[live.attributes.duration]
-    : undefined;
-  if (live && days === undefined)
+  const duration = live?.attributes?.duration;
+  const days = duration ? DURATION_DAYS[duration] : undefined;
+  const label = duration ? CALENDAR_DURATION_LABELS[duration] : undefined;
+  if (live && days === undefined && label === undefined)
     throw new Error(`Unknown trial duration "${live.attributes?.duration}"`);
-  return days ?? 0;
+  return { days: days ?? 0, ...(label ? { label } : {}) };
 }
 
 /** Uncached: walk app -> subscription groups -> subscriptions -> USA price + trial. Throws on any gap. */
@@ -167,7 +171,7 @@ export async function fetchPricingFromAsc(
       return {
         key,
         price: currentPrice(prices.data ?? [], prices.included ?? [], today),
-        trialDays: currentTrialDays(offers.data ?? [], today),
+        trial: currentTrial(offers.data ?? [], today),
       };
     }),
   );
@@ -180,14 +184,15 @@ export async function fetchPricingFromAsc(
     );
   }
   for (const plan of [monthly, annual]) {
-    const mismatch = trialCatalogMismatch(plan.trialDays);
+    const mismatch = trialCatalogMismatch(plan.trial.label ?? plan.trial.days);
     if (mismatch) reportServerError(`ASC ${plan.key} trial catalog mismatch`, new Error(mismatch));
   }
   // A generic website claim is only true when both plans share the same offer.
   return {
     monthly: monthly.price,
     annual: annual.price,
-    trialDays: monthly.trialDays === annual.trialDays ? monthly.trialDays : 0,
+    trialDays: monthly.trial.days === annual.trial.days && monthly.trial.label === annual.trial.label ? monthly.trial.days : 0,
+    ...(monthly.trial.label && monthly.trial.label === annual.trial.label ? { trialLabel: monthly.trial.label } : {}),
   };
 }
 
@@ -214,8 +219,9 @@ export async function getDisplayPricing(): Promise<DisplayPricing> {
 /** Describe the catalog offer without promising eligibility to every visitor. */
 export function priceAnswer(p: DisplayPricing): string {
   const plans = `${p.monthly} a month or ${p.annual} a year`;
-  if (p.trialDays > 0) {
-    return `Eligible new subscribers may receive a ${p.trialDays}-day free trial, then ${plans}. If eligible, nothing is charged until the trial ends. The store confirms your offer before purchase. Cancel anytime.`;
+  const trial = p.trialLabel ?? (p.trialDays > 0 ? `${p.trialDays}-day` : null);
+  if (trial) {
+    return `Eligible new subscribers may receive a ${trial} free trial, then ${plans}. If eligible, nothing is charged until the trial ends. The store confirms your offer before purchase. Cancel anytime.`;
   }
   return `${plans}. Cancel anytime.`;
 }

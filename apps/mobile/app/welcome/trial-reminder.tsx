@@ -9,6 +9,7 @@ import { useOnboardingStep } from '@/lib/onboardingResume';
 import { usePurchases } from '@/lib/usePurchases';
 import { purchaseTerms } from '@/lib/purchaseTerms';
 import { defaultTrialPlan, trialPresentation } from '@/lib/trialPresentation';
+import { trialReminderLeadLabel } from '../../../../packages/shared/src/contracts/trialPolicy';
 import { devTrialVisualOffer } from '@/lib/devTrialVisualOffer';
 import { useRouteContinuation } from '@/lib/useRouteContinuation';
 import { supabase } from '@/lib/supabase';
@@ -114,7 +115,7 @@ export default function TrialReminderScreen() {
   const subtitle = inBrowser ? 'You can still review your plan and renewal terms.'
     : !canSchedule ? 'This offer is too short for a reminder before the cancellation deadline.'
     : permission === 'denied' ? 'Turn on notifications in device settings if you want a reminder.'
-      : `With notifications allowed, we can remind you ${presentation.reminderDay ? `in about ${presentation.reminderDay} days` : 'before the end'} of your ${trial} trial.`;
+      : `With notifications allowed, we can remind you about ${trialReminderLeadLabel()} before your store-confirmed free trial of ${trial} ends. Quiet hours may move it earlier.`;
   return <WelcomeScreen progress={1} title={title} subtitle={subtitle}
     canContinue={!busy} showBack={!busy} onContinue={() => { if (canOptIn) void allow(); else skip(); }}
     footerContent={<WelcomeActions label={busy ? 'Asking…' : canOptIn ? 'Remind me' : 'Continue to plans'} onPress={canOptIn ? () => { void allow(); } : skip} disabled={busy}

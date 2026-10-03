@@ -6,6 +6,12 @@ export const TRIAL_CATALOG_POLICY = {
   cancellationLeadHours: 24,
 } as const;
 
+export function trialReminderLeadLabel(): string {
+  const hours = Number(TRIAL_CATALOG_POLICY.reminderLeadHours);
+  const days = hours / 24;
+  return hours % 24 === 0 ? `${days} ${days === 1 ? 'day' : 'days'}` : `${hours} hours`;
+}
+
 /** Move a reminder into the preceding evening when its target is in quiet hours. */
 export function trialReminderDate(expiration: Date): Date {
   const date = new Date(expiration.getTime() - TRIAL_CATALOG_POLICY.reminderLeadHours * 3_600_000);
