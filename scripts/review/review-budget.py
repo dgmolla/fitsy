@@ -299,6 +299,10 @@ def main():
                 events = list(indexed(read_events(handle)).values())
                 starts, finishes, total = usage(events)
             result = {"allowed": True, "reason": "history accounted", "ledger": str(args.ledger.resolve()), **total}
+            if args.action == "status" and args.required and args.lens:
+                minimum, observed = required_window(starts, finishes, args.lens)
+                result.update(required_window_seconds=minimum, recent_completed_seconds=observed,
+                              can_admit=total["remaining_seconds"] >= minimum + CLOSEOUT_SECONDS)
             if args.action == "begin":
                 if args.attempt_id in starts:
                     result.update(allowed=False, reason="duplicate attempt")

@@ -275,6 +275,14 @@ test("required combined review denies 329 seconds after a 370 second completion 
   expect(readFileSync(ledger, "utf8")).toBe(before);
 });
 
+test("capacity status raises the default window after a long completed round", () => {
+  seed([{ event: "extension", attempt_id: "issue-extension", seconds: 900, issue: 438, risk: "medium", required: true },
+    ...history("completed", 800).map(row => ({ ...row, lens: "review-round", failure_kind: row.event === "finish" ? "completed" : undefined }))]);
+  const check = spawnSync("python3", [script, "status", "--ledger", ledger, "--lens", "review-round", "--required", "--risk", "medium"], { encoding: "utf8" });
+  expect(check.status).toBe(0);
+  expect(JSON.parse(check.stdout)).toMatchObject({ required_window_seconds: 1000, remaining_seconds: 1900, can_admit: true });
+});
+
 test("trusted installation rejects approval inside a separate candidate Git checkout", () => {
   const candidate = join(root, "candidate"); mkdirSync(candidate);
   expect(spawnSync("git", ["init", "-q", candidate]).status).toBe(0);

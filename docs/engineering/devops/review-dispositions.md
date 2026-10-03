@@ -105,6 +105,7 @@ The grant is no larger than the requested timeout or the remaining unreserved ca
 For a required combined round, admission needs at least 900 seconds plus the five-second closeout reserve.
 The floor rises to 125% of the longest of the latest three completed executions of that same reviewer lens when that exceeds 900 seconds.
 If the available deadline is shorter, the runner reports the capacity and recent runtimes without starting or charging an execution.
+The canonical runner requests that observed window by default; an explicit timeout below it is refused by admission.
 The adapter receives that exact deadline and records it in the verdict's execution identity.
 A completed verdict's cache key binds content, provider, model, CLI, security policy and executor definition; changing remaining time alone does not invalidate it.
 Concurrent lenses cannot each spend the same remaining capacity.

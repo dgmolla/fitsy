@@ -217,9 +217,14 @@ else
     echo "Review all required domains together. Return explicit results for every required domain, and consolidate duplicate findings with all applicable domain names. You may read repo files for context."
     echo "End with the fenced JSON block required by REVIEW.md's output contract."
   } > "$PROMPT_FILE"
+  REQUESTED_TIMEOUT="${FITSY_REVIEW_TIMEOUT_SECONDS:-}"
+  if [ -z "$REQUESTED_TIMEOUT" ]; then
+    WINDOW_STATUS="$(python3 -I scripts/review/review-budget.py status "${BUDGET_ARGS[@]}" --lens "$LENS")" || { echo '[run-review] capacity preflight failed' >&2; incomplete_status budget; exit 1; }
+    REQUESTED_TIMEOUT="$(printf '%s' "$WINDOW_STATUS" | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["required_window_seconds"])')"
+  fi
   if ! BUDGET_GRANT="$(python3 -I scripts/review/review-budget.py begin "${BUDGET_ARGS[@]}" --round-id "$HEAD_SHA" \
       --lens "$LENS" --source-sha "$HEAD_SHA" --attempt-id "$ATTEMPT_ID" \
-      --timeout-seconds "${FITSY_REVIEW_TIMEOUT_SECONDS:-900}")"; then
+      --timeout-seconds "$REQUESTED_TIMEOUT")"; then
     echo "$BUDGET_GRANT" >&2
     echo "[run-review] review time unavailable; no independent reviewer started" >&2
     incomplete_status budget
