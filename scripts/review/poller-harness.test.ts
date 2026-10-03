@@ -60,3 +60,19 @@ test("installed launcher retains trusted main outside a PR-mutated clone", () =>
     expect(execFileSync("bash", [installed], { env, encoding: "utf8" }).trim()).toBe("trusted-launcher");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+
+test("poller launches an ordinary PR round with no optional arguments", () => {
+  const root = mkdtempSync(join(tmpdir(), "fitsy-poller-empty-args-"));
+  const home = join(root, "review"), repo = join(home, "repo"), bin = join(root, "bin"), marker = join(root, "review-called");
+  mkdirSync(join(repo, ".git"), { recursive: true });
+  mkdirSync(join(repo, "scripts/review"), { recursive: true });
+  mkdirSync(bin);
+  writeFileSync(join(bin, "git"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  writeFileSync(join(bin, "gh"), "#!/bin/sh\nif [ \"$1 $2\" = 'pr list' ]; then echo '269 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'; else echo '[]'; fi\n", { mode: 0o755 });
+  writeFileSync(join(repo, "scripts/review/run-review.sh"), "#!/bin/sh\nprintf '%s\\n' \"$*\" > \"$REVIEW_TEST_MARKER\"\n");
+  const env = { ...process.env, FITSY_REVIEW_HOME: home, FITSY_GH_BIN: join(bin, "gh"), REVIEW_TEST_MARKER: marker, PATH: `${bin}:${process.env.PATH}` };
+  try {
+    execFileSync("bash", [join(__dirname, "poller.sh")], { cwd: root, env, stdio: "pipe" });
+    expect(readFileSync(marker, "utf8").trim()).toBe("269");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
