@@ -36,7 +36,7 @@ export function usePurchaseActions({ setCustomerInfo, markStoreConfirmed, syncEn
   );
 
   const purchase = useCallback(
-    async (pkg: PurchasesPackage, source: string): Promise<boolean> => {
+    async (pkg: PurchasesPackage, source: string, attribution?: { paywall_variant: 'A' | 'B'; paywall_config_version: string; paywall_tester_override?: boolean }): Promise<boolean> => {
       const { data } = await supabase.auth.getSession();
       const userId = data.session?.user.id;
       const identified = userId
@@ -55,7 +55,7 @@ export function usePurchaseActions({ setCustomerInfo, markStoreConfirmed, syncEn
       const isCurrentUser = async () => (await supabase.auth.getSession()).data.session?.user.id === userId;
       if (!(await isCurrentUser())) return false;
       const { outcome, customerInfo: info } = await rcPurchasePackage(pkg, userId, isCurrentUser);
-      trackPaywallResult({ source, outcome });
+      trackPaywallResult({ source, outcome, ...attribution });
       if (outcome === 'error') Alert.alert('Purchase not completed', 'Please try again. You can also restore an existing subscription.');
       if (!info) return false;
       if (!(await isCurrentUser())) return false;

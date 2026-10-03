@@ -28,7 +28,7 @@ test('trial timing follows actual expiry rather than a hardcoded trial length', 
     const end = new Date(2026, 8, 7 + days, 12);
     const reminder = planReminders({ ...input, subscription: { ...active, expirationDate: end.toISOString() } }).find(r => r.kind === 'trial');
     expect(reminder?.date).toEqual(trialReminderDate(end));
-    expect(end.getTime() - reminder!.date.getTime()).toBeGreaterThanOrEqual(30 * 3_600_000);
+    expect(end.getTime() - reminder!.date.getTime()).toBeGreaterThanOrEqual(48 * 3_600_000);
   }
 });
 test.each([
@@ -42,10 +42,10 @@ test('quiet-hour trial reminders move earlier and preserve the cancellation wind
   const end = new Date(2026, 8, 14, 3);
   const reminder = planReminders({ ...input, subscription: { ...active, expirationDate: end.toISOString() } }).find(r => r.kind === 'trial');
   expect(reminder?.date.getHours()).toBe(19);
-  expect(reminder?.date.getDate()).toBe(12);
-  expect(end.getTime() - reminder!.date.getTime()).toBeGreaterThanOrEqual(30 * 3_600_000);
+  expect(reminder?.date.getDate()).toBe(11);
+  expect(end.getTime() - reminder!.date.getTime()).toBeGreaterThanOrEqual(48 * 3_600_000);
   const morningEnd = new Date(2026, 8, 14, 9);
-  expect(trialReminderDate(morningEnd).getTime()).toBeLessThanOrEqual(morningEnd.getTime() - 30 * 3_600_000);
+  expect(trialReminderDate(morningEnd).getTime()).toBeLessThanOrEqual(morningEnd.getTime() - 48 * 3_600_000);
 });
 test('late opt-in never schedules a stale reminder', () => {
   expect(planReminders({ ...input, now: new Date(2026, 8, 14, 10) }).filter(r => r.kind === 'trial')).toEqual([]);

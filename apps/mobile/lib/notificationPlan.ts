@@ -13,9 +13,9 @@ export interface PlannedReminder {
   body: string;
 }
 type Subscription = Pick<PurchasesEntitlementInfo, 'isActive' | 'periodType' | 'willRenew' | 'expirationDate' | 'latestPurchaseDate'>;
-// The reminder belongs around elapsed day six of a seven-day trial. Leave a
-// six-hour margin beyond the store's 24-hour cancellation deadline.
-export const TRIAL_REMINDER_LEAD_HOURS = 30;
+// Remind two days before the store-confirmed trial expiry. Quiet hours can
+// move delivery earlier, preserving the full cancellation window.
+export const TRIAL_REMINDER_LEAD_HOURS = 48;
 /** Very short offers cannot support a useful reminder before cancellation. */
 export function canOfferTrialReminder(terms: ReturnType<typeof purchaseTerms>): boolean {
   return !!terms?.trial && (terms.trialDays === null || terms.trialDays > 2);

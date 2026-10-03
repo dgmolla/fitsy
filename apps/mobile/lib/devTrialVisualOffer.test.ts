@@ -26,3 +26,9 @@ test('visual eligibility is unavailable outside development or without a live of
   expect(devTrialVisualOffer(offering, false, true)).toBeNull();
   expect(devTrialVisualOffer(null, true, true)).toBeNull();
 });
+
+test('14-day visual offer is synthetic and keeps each real plan price', () => {
+  const visual = devTrialVisualOffer(offering, true, true, 14);
+  expect(purchaseTerms(visual?.offering.annual?.product, visual?.eligibility.annual)).toMatchObject({ trial: '14 days', price: '€54,99' });
+  expect(purchaseTerms(visual?.offering.monthly?.product, visual?.eligibility.monthly)).toMatchObject({ trial: '14 days', price: '€7,99' });
+});
