@@ -34,6 +34,8 @@ interface Props {
   hideFooter?: boolean;
   beforeTitle?: React.ReactNode;
   footerContent?: React.ReactNode;
+  beforeContinue?: React.ReactNode;
+  afterContinue?: React.ReactNode;
 }
 
 export function WelcomeScreen({
@@ -52,6 +54,8 @@ export function WelcomeScreen({
   hideFooter = false,
   beforeTitle,
   footerContent,
+  beforeContinue,
+  afterContinue,
 }: Props) {
   const navigation = useNavigation();
   const { height, fontScale } = useWindowDimensions();
@@ -102,6 +106,7 @@ export function WelcomeScreen({
         {/* ── Footer ── */}
         {footerContent ? <View style={[styles.customFooter, compact && styles.footerCompact]}>{footerContent}</View> : !hideFooter && (
           <Animated.View entering={FadeIn.duration(300).delay(400)} style={[styles.footer, compact && styles.footerCompact]}>
+            {beforeContinue}
             <AnimatedPress
               style={[styles.continueBtn, !canContinue ? styles.continueDim : undefined]}
               onPress={onContinue}
@@ -114,6 +119,7 @@ export function WelcomeScreen({
               <Text style={styles.continueTxt}>{continueLabel}</Text>
               <Ionicons name="arrow-forward" size={15} color={EDITORIAL.cream} />
             </AnimatedPress>
+            {afterContinue}
             {onSkip && <Pressable onPress={onSkip} style={styles.skipHit} accessibilityRole="button"
               accessibilityLabel="Skip" testID="welcome-skip"><Text style={styles.skipTxt}>Skip</Text></Pressable>}
           </Animated.View>

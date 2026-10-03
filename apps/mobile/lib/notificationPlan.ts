@@ -1,5 +1,7 @@
 import type { PurchasesEntitlementInfo } from 'react-native-purchases';
-import type { purchaseTerms } from './purchaseTerms';
+import { TRIAL_CATALOG_POLICY, trialReminderDate } from '../../../packages/shared/src/contracts/trialPolicy';
+export { trialReminderDate } from '../../../packages/shared/src/contracts/trialPolicy';
+import { trialPresentation, type Terms } from './trialPresentation';
 
 export interface ReminderPreferences { meals: boolean; trial: boolean }
 export const DEFAULT_REMINDER_PREFERENCES: ReminderPreferences = { meals: false, trial: false };
@@ -13,23 +15,14 @@ export interface PlannedReminder {
   body: string;
 }
 type Subscription = Pick<PurchasesEntitlementInfo, 'isActive' | 'periodType' | 'willRenew' | 'expirationDate' | 'latestPurchaseDate'>;
-// Remind two days before the store-confirmed trial expiry. Quiet hours can
-// move delivery earlier, preserving the full cancellation window.
-export const TRIAL_REMINDER_LEAD_HOURS = 48;
+// Six hours of margin beyond the store's cancellation deadline.
+export const TRIAL_REMINDER_LEAD_HOURS = TRIAL_CATALOG_POLICY.reminderLeadHours;
 /** Very short offers cannot support a useful reminder before cancellation. */
-export function canOfferTrialReminder(terms: ReturnType<typeof purchaseTerms>): boolean {
-  return !!terms?.trial && (terms.trialDays === null || terms.trialDays > 2);
+export function canOfferTrialReminder(terms: Terms): boolean {
+  return trialPresentation(terms).reminderAvailable;
 }
 const HOUR = 3_600_000;
 const localDay = (d: Date) => `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-
-/** Quiet hours can only bring a trial reminder earlier, never past its lead. */
-export function trialReminderDate(expiration: Date): Date {
-  const date = new Date(expiration.getTime() - TRIAL_REMINDER_LEAD_HOURS * HOUR);
-  if (date.getHours() >= 20) date.setHours(19, 0, 0, 0);
-  else if (date.getHours() < 9) { date.setDate(date.getDate() - 1); date.setHours(19, 0, 0, 0); }
-  return date;
-}
 
 /** Calendar dates keep meal times local across DST. No recurring native jobs:
  * the next foreground session reconciles meal dates for the next two weeks
@@ -48,9 +41,10 @@ export function planReminders({ now, userId, entitled, preferences, subscription
   const until = Number.isFinite(expiration) ? Math.min(horizon.getTime(), expiration) : horizon.getTime();
 
   if (preferences.trial && subscription?.isActive && subscription.periodType === 'TRIAL' && subscription.willRenew &&
-    Number.isFinite(expiration) && Number.isFinite(trialStart) && expiration - trialStart > 2 * 24 * HOUR) {
+    Number.isFinite(expiration) && Number.isFinite(trialStart) &&
+    expiration - trialStart > (TRIAL_CATALOG_POLICY.reminderLeadHours + TRIAL_CATALOG_POLICY.cancellationLeadHours) * HOUR) {
     const date = trialReminderDate(new Date(expiration));
-    if (date.getTime() > now.getTime() && date.getTime() <= expiration - 24 * HOUR) {
+    if (date.getTime() > now.getTime() && date.getTime() <= expiration - TRIAL_CATALOG_POLICY.cancellationLeadHours * HOUR) {
       reminders.push({ identifier: `${REMINDER_PREFIX}trial.${expiration}`, kind: 'trial', date,
         title: 'Review your Fitsy trial',
         body: 'Check your trial end date and renewal status in subscription settings. Cancel at least 24 hours before renewal if you do not want to continue.' });
