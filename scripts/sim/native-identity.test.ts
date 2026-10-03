@@ -167,14 +167,17 @@ test('a Release refresh preserves the overwritten app for a later JavaScript rev
     const recipe={inputs:{prepareNative:'same'},hash:identityHash({prepareNative:'same'})};
     writeFileSync(build+'/receipt.json',JSON.stringify(sealReceipt({nativeIdentity:native,profileIdentity:profile,
       recipeIdentity:recipe,app,appHash:hash('v1'),buildMode:'embedded-release',jsHash:'v1',configHash:'same'})));
+    const original=readFileSync(build+'/receipt.json','utf8');
     archiveActiveReceipt(app,build,resume);
     writeFileSync(app+'/main.jsbundle','v2');
-    const archived=JSON.parse(readFileSync(resume+'/'+readdirSync(resume)[0]));
+    const files=readdirSync(resume).map(name=>readFileSync(resume+'/'+name,'utf8'));
+    const archived=files.map(value=>JSON.parse(value)).find(value=>value.app!==app);
     const chosen=reusableNativeReceipt([archived],native,profile,recipe,
       receipt=>receipt.appHash===hash(readFileSync(receipt.app+'/main.jsbundle')));
     process.stdout.write(JSON.stringify({preserved:readFileSync(archived.app+'/main.jsbundle','utf8'),
-      current:readFileSync(app+'/main.jsbundle','utf8'),selected:chosen?.app===archived.app}));`);
-  expect(result).toEqual({ preserved: 'v1', current: 'v2', selected: true });
+      current:readFileSync(app+'/main.jsbundle','utf8'),selected:chosen?.app===archived.app,
+      raw:files.includes(original)}));`);
+  expect(result).toEqual({ preserved: 'v1', current: 'v2', selected: true, raw: true });
 });
 
 test('v1, v2, v1, v3, v2 preserves an inactive Release artifact before output overwrite', () => {
@@ -191,11 +194,11 @@ test('v1, v2, v1, v3, v2 preserves an inactive Release artifact before output ov
         recipeIdentity:recipe,app:path,appHash:hash(version),buildMode:'embedded-release',jsHash:version,configHash:'same'})));};
     write('v1');archiveActiveReceipt(app,build,resume);
     write('v2');
-    const v1=JSON.parse(readFileSync(resume+'/'+readdirSync(resume)[0]));
+    const v1=readdirSync(resume).map(name=>JSON.parse(readFileSync(resume+'/'+name))).find(value=>value.app!==app);
     archiveActiveReceipt(null,build,resume);
     writeFileSync(build+'/receipt.json',JSON.stringify(v1));
     writeFileSync(resume+'/native-receipt-superseded-1.json',JSON.stringify({...v1,app:42}));
-    archiveActiveReceipt(app,build,resume);preserveRetainedArtifacts(app,build,resume);
+    preserveRetainedArtifacts(app,build,resume);archiveActiveReceipt(app,build,resume);
     write('v3');
     const retained=readdirSync(resume).map(name=>JSON.parse(readFileSync(resume+'/'+name)));
     const selected=reusableNativeReceipt(retained.filter(r=>r.jsHash==='v2'),native,profile,recipe,

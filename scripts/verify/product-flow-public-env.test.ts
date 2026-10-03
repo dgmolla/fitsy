@@ -45,7 +45,7 @@ test('the real CLI plan requires billing after an ignored public store-key chang
     if (carried.status !== 0) throw new Error(carried.stderr);
     mkdirSync(join(dir, '.evidence/product-build'), { recursive: true });
     writeFileSync(join(dir, '.evidence/product-build/receipt.json'), JSON.stringify({
-      ...JSON.parse(current.stdout), publicConfigAcceptance: JSON.parse(carried.stdout),
+      ...JSON.parse(current.stdout), appHash: 'same-app', publicConfigAcceptance: JSON.parse(carried.stdout),
     }));
     rmSync(join(dir, '.evidence/product-flow/report.json'));
     const afterRefresh = spawnSync(process.execPath, ['scripts/verify/product-flow.mjs', '--plan'],
@@ -61,6 +61,7 @@ test('the real CLI plan requires billing after an ignored public store-key chang
     expect(JSON.parse(afterDevelopment.stdout).categories).toEqual(['billing']);
     writeFileSync(join(dir, '.evidence/product-flow/report.json'), JSON.stringify({
       ...JSON.parse(current.stdout), result: 'pass', evidenceMode: 'final-candidate',
+      appHash: 'same-app',
       publicConfigAcceptance: { keys: ['EXPO_PUBLIC_REVENUECAT_TEST_KEY'],
         verifiedConfigHash: JSON.parse(current.stdout).configHash },
     }));
@@ -68,6 +69,25 @@ test('the real CLI plan requires billing after an ignored public store-key chang
       { cwd: dir, encoding: 'utf8', env: { ...cleanEnv(), FITSY_DIFF_BASE: base } });
     if (afterAcceptance.status !== 0) throw new Error(afterAcceptance.stderr);
     expect(JSON.parse(afterAcceptance.stdout)).toMatchObject({ required: false, categories: [] });
+    writeFileSync(join(dir, '.evidence/product-build/receipt.json'), JSON.stringify({
+      ...JSON.parse(current.stdout), appHash: 'replacement-app', publicConfigAcceptance: JSON.parse(carried.stdout),
+    }));
+    const replaced = spawnSync(process.execPath, ['scripts/verify/product-flow.mjs', '--plan'],
+      { cwd: dir, encoding: 'utf8', env: { ...cleanEnv(), FITSY_DIFF_BASE: base } });
+    if (replaced.status !== 0) throw new Error(replaced.stderr);
+    expect(JSON.parse(replaced.stdout).required).toBe(true);
+    expect(JSON.parse(replaced.stdout).paths).toContain('public-env:<unknown>');
+    writeFileSync(join(dir, 'apps/mobile/.env.development.local'), 'EXPO_PUBLIC_REVENUECAT_TEST_KEY=before\n');
+    writeFileSync(join(dir, '.evidence/product-flow/report.json'), JSON.stringify({
+      ...JSON.parse(identity.stdout), result: 'pass', evidenceMode: 'final-candidate', appHash: 'older-app',
+      publicConfigAcceptance: { keys: ['EXPO_PUBLIC_REVENUECAT_TEST_KEY'],
+        verifiedConfigHash: JSON.parse(identity.stdout).configHash },
+    }));
+    const reverted = spawnSync(process.execPath, ['scripts/verify/product-flow.mjs', '--plan'],
+      { cwd: dir, encoding: 'utf8', env: { ...cleanEnv(), FITSY_DIFF_BASE: base } });
+    if (reverted.status !== 0) throw new Error(reverted.stderr);
+    expect(JSON.parse(reverted.stdout)).toMatchObject({ required: true, categories: ['billing'],
+      paths: ['public-env:EXPO_PUBLIC_REVENUECAT_TEST_KEY'] });
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

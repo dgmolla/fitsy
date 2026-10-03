@@ -205,14 +205,16 @@ export function archiveActiveReceipt(overwritingApp = null, buildDirectory = bui
   const verified = active?.nativeIdentity && active?.profileIdentity && !nativeBuildDecision({ receipt: active,
     native: active.nativeIdentity, profile: active.profileIdentity, recipe: active.recipeIdentity,
     appIntact: intact(active, buildDirectory) }).rebuild;
+  copyFileSync(file, archive);
   if (overwritingApp && verified && resolve(active.app) === resolve(overwritingApp)) {
     const preserved = join(buildDirectory, 'native-artifacts', randomUUID(), 'Fitsy.app');
     mkdirSync(dirname(preserved), { recursive: true });
     cpSync(active.app, preserved, { recursive: true });
     assert(treeHash(preserved) === active.appHash, 'Preserved native artifact differs from verified source');
     const { receiptHash, ...artifact } = active;
-    save(archive, sealReceipt({ ...artifact, app: preserved }));
-  } else copyFileSync(file, archive);
+    save(join(archiveDirectory, `native-receipt-superseded-${Date.now()}-${randomUUID()}.json`),
+      sealReceipt({ ...artifact, app: preserved }));
+  }
 }
 export function preserveRetainedArtifacts(overwritingApp, buildDirectory = buildDir, archiveDirectory = resumeDir) {
   if (!existsSync(archiveDirectory)) return;
@@ -344,8 +346,8 @@ async function build(udid, testStore, forceReason = null, refreshEmbedded = fals
   try {
     mkdirSync(buildDir, { recursive: true });
     const outputApp = join(buildDir, `Build/Products/${profile.configuration}-iphonesimulator/Fitsy.app`);
-    archiveActiveReceipt(outputApp);
     preserveRetainedArtifacts(outputApp);
+    archiveActiveReceipt(outputApp);
     const env = prepareNative(profile, testStore);
     const preparedNative = nativeIdentity(root, env);
     const preparedJsHash = inputHash(root, 'js');

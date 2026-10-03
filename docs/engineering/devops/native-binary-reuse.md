@@ -46,6 +46,7 @@ An embedded Release app is accepted only when its build-time JavaScript and publ
 If an older retained Release app has the current embedded JavaScript and config, the CLI selects that intact artifact before requesting a new embedded artifact.
 Before a Release compile overwrites its output path, the CLI copies every intact sealed retained artifact still at that path and writes a new receipt for each copy.
 The original retained receipts remain as raw evidence, even when their old output path later becomes stale.
+The active receipt is archived byte for byte before a separate sealed receipt points to its preserved app copy.
 For example, v1 -> v2 -> v1 -> v3 -> v2 reuses the preserved v2 app without another compile.
 When switching Debug to Release and back, the CLI searches retained sealed receipts and reactivates an intact compatible Debug artifact without compiling.
 The current generated iOS tree must be attested by an intact receipt before a different profile's generated tree can be ignored for this selection.

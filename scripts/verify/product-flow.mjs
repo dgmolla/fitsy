@@ -52,14 +52,19 @@ export function buildPublicConfigAcceptance(previous, current, retained = null) 
 }
 
 export function requiredPublicConfigKeys(report, build, current) {
-  if (report?.result === 'pass' && report.evidenceMode === 'final-candidate' &&
-      report.publicConfigAcceptance?.verifiedConfigHash === current.configHash)
+  const accepted = report?.result === 'pass' && report.evidenceMode === 'final-candidate' &&
+    report.publicConfigAcceptance?.verifiedConfigHash === current.configHash;
+  const matchingArtifact = typeof report?.appHash === 'string' && report.appHash === build?.appHash;
+  const buildAccepted = build?.configHash === current.configHash && matchingArtifact &&
+    (build.publicConfigAcceptance?.keys || []).every(key => report.publicConfigAcceptance?.keys?.includes(key));
+  if (accepted && buildAccepted)
     return [];
   return [...new Set([
     ...(report?.publicConfigAcceptance?.keys || []),
     ...(build?.publicConfigAcceptance?.keys || []),
     ...changedPublicConfigKeys(report, current),
     ...changedPublicConfigKeys(build, current),
+    ...(accepted && !matchingArtifact && build?.configHash === current.configHash ? ['<unknown>'] : []),
   ])].sort();
 }
 
