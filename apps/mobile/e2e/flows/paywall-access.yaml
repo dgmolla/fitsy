@@ -95,8 +95,6 @@ tags: [billing, discovery, onboarding, changed-journey]
           timeout: 10000
       - assertVisible:
           id: paywall-plan-yearly
-- assertNotVisible:
-    id: welcome-back
 - openLink: com.fitsy.mobile://search?preview=1
 # A fresh simulator can require system confirmation for an app link.
 - tapOn:

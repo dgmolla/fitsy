@@ -1,16 +1,19 @@
 jest.unmock('react-native');
 import React from 'react';
 import { AppState, Text } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import { act, render, waitFor } from '@testing-library/react-native';
 import { ReminderProvider, useReminders } from '../lib/useReminders';
 import { readReminderPreferences, reconcileReminderOwnership, replaceReminders } from '../lib/notificationSchedule';
 import { reconcileDevTrialReminderOwnership } from '../lib/devTrialReminderProbe';
 
 jest.mock('expo-router', () => ({ router: { push: jest.fn() }, usePathname: () => '/notification-settings' }));
+jest.mock('posthog-react-native', () => jest.fn().mockImplementation(() => ({ capture: jest.fn() })));
 jest.mock('expo-notifications', () => ({
   setNotificationHandler: jest.fn(),
   addNotificationResponseReceivedListener: () => ({ remove() {} }),
   getLastNotificationResponseAsync: async () => null,
+  getPermissionsAsync: jest.fn(async () => ({ status: 'granted' })),
 }));
 let mockAccountId = 'reminder-owner';
 let mockAuthListener: ((event: string, session: { user: { id: string } }) => void) | undefined;
@@ -20,9 +23,11 @@ jest.mock('../lib/supabase', () => ({ supabase: { auth: {
 } } }));
 const mockRefresh = jest.fn(async () => {});
 const mockCustomerInfo = { entitlements: { all: { pro: { isActive: true } } } };
+let mockCustomerInfoResult: typeof mockCustomerInfo | null = mockCustomerInfo;
+let mockEntitled: boolean | null = true;
 jest.mock('../lib/usePurchases', () => ({ usePurchases: () => ({
-  entitled: true, ready: true, refresh: mockRefresh,
-  customerInfo: mockCustomerInfo,
+  entitled: mockEntitled, ready: true, refresh: mockRefresh,
+  customerInfo: mockCustomerInfoResult,
 }) }));
 jest.mock('../lib/notificationSchedule', () => ({
   readReminderPreferences: jest.fn(),
@@ -37,9 +42,12 @@ jest.mock('../lib/devTrialReminderProbe', () => ({ reconcileDevTrialReminderOwne
 
 beforeEach(() => {
   mockAccountId = 'reminder-owner';
+  mockCustomerInfoResult = mockCustomerInfo;
+  mockEntitled = true;
   mockAuthListener = undefined;
   jest.clearAllMocks();
   jest.mocked(readReminderPreferences).mockReset();
+  jest.mocked(Notifications.getPermissionsAsync).mockResolvedValue({ status: 'granted' } as Notifications.NotificationPermissionsStatus);
 });
 afterEach(() => { jest.restoreAllMocks(); });
 
@@ -109,6 +117,51 @@ test('cold launch read failure preserves the current account scheduled jobs', as
   expect(replace).not.toHaveBeenCalledWith(null, []);
 });
 
+test('unresolved native identity preserves trial notices while still scheduling requested meal reminders', async () => {
+  const now = Date.now();
+  mockCustomerInfoResult = null;
+  jest.mocked(readReminderPreferences).mockResolvedValue({ meals: true, trial: true });
+  const replace = jest.mocked(replaceReminders);
+  const screen = render(<ReminderProvider><SettingsView /></ReminderProvider>);
+  await waitFor(() => expect(readReminderPreferences).toHaveBeenCalledWith('reminder-owner', { throwOnError: true }));
+  await act(async () => { await Promise.resolve(); });
+  await waitFor(() => expect(replace.mock.calls.some(([id, jobs, retain]) =>
+    id === 'reminder-owner' && retain === 'current-account-trial' && jobs.some(job => job.kind === 'meal'))).toBe(true));
+  mockCustomerInfo.entitlements.all.pro = {
+    isActive: true, periodType: 'TRIAL', willRenew: true,
+    latestPurchaseDate: new Date(now).toISOString(),
+    expirationDate: new Date(now + 7 * 24 * 3_600_000).toISOString(),
+  } as typeof mockCustomerInfo.entitlements.all.pro;
+  try {
+    mockCustomerInfoResult = mockCustomerInfo;
+    screen.rerender(<ReminderProvider><SettingsView /></ReminderProvider>);
+    await waitFor(() => expect(replace.mock.calls.some(([id, jobs]) =>
+      id === 'reminder-owner' && jobs.some(job => job.kind === 'trial'))).toBe(true));
+  } finally { mockCustomerInfo.entitlements.all.pro = { isActive: true }; }
+});
+
+test('an unknown entitlement at boot preserves the account trial request until native identity settles', async () => {
+  mockEntitled = null;
+  mockCustomerInfoResult = null;
+  jest.mocked(readReminderPreferences).mockResolvedValue({ meals: false, trial: true });
+  const replace = jest.mocked(replaceReminders);
+  const screen = render(<ReminderProvider><SettingsView /></ReminderProvider>);
+  await waitFor(() => expect(replace).toHaveBeenCalledWith('reminder-owner', [], 'current-account-trial'));
+  expect(replace.mock.calls.some(([id, , retain]) => id === 'reminder-owner' && retain === undefined)).toBe(false);
+  mockEntitled = false;
+  screen.rerender(<ReminderProvider><SettingsView /></ReminderProvider>);
+  await waitFor(() => expect(replace).toHaveBeenCalledWith('reminder-owner', [], 'current-account-trial'));
+});
+
+test('a resolved inactive native subscription removes stale trial requests but retains a presented notice', async () => {
+  mockCustomerInfoResult = { entitlements: { all: { pro: { isActive: false } } } };
+  jest.mocked(readReminderPreferences).mockResolvedValue({ meals: false, trial: true });
+  const replace = jest.mocked(replaceReminders);
+  render(<ReminderProvider><SettingsView /></ReminderProvider>);
+  await waitFor(() => expect(replace).toHaveBeenCalledWith('reminder-owner', [], 'presented-current-account-trial'));
+  expect(replace.mock.calls.some(([, , retain]) => retain === 'current-account-trial')).toBe(false);
+});
+
 test('foreground recovery retries failed account ownership cleanup', async () => {
   const read = jest.mocked(readReminderPreferences);
   const reconcile = jest.mocked(reconcileReminderOwnership);
@@ -132,3 +185,4 @@ test('foreground recovery retries failed account ownership cleanup', async () =>
   await act(async () => { foreground?.('active'); });
   await waitFor(() => expect(reconcile.mock.calls.filter(([id]) => id === 'next-owner')).toHaveLength(2));
 });
+

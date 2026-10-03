@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { z } from 'zod';
 import { supabase } from './supabase';
+import { restaurantResultSchema } from '../../../packages/shared/src/contracts/restaurants';
 
 const KEY = '@fitsy/paywallIntent';
 const PURCHASED_KEY = '@fitsy/purchasedContinuation';
@@ -10,6 +11,7 @@ const schema = z.object({
   mealName: z.string().optional(),
   restaurantName: z.string().max(300).optional(),
   photoUrl: z.string().url().optional(),
+  previewResult: restaurantResultSchema.optional(),
   nearbyRestaurants: z.array(z.object({ id: z.string(), name: z.string().max(300), photoUrl: z.string().url().optional() })).max(3).optional(),
   area: z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) }).optional(),
   targets: z.object({ calories: z.string(), protein: z.string(), carbs: z.string(), fat: z.string() }).optional(),
@@ -44,11 +46,12 @@ export async function rememberPaywallIntent(intent: PaywallIntent): Promise<void
     await AsyncStorage.setItem(KEY, JSON.stringify(record));
   });
 }
-export async function getPaywallIntent(): Promise<PaywallIntent | null> {
+export async function getPaywallIntent(expectedUserId?: string | null): Promise<PaywallIntent | null> {
   try {
     await pendingWrite;
     const [record, { data }] = await Promise.all([readIntentRecord(), supabase.auth.getSession()]);
-    return record && record.userId === (data.session?.user.id ?? null) ? record.intent : null;
+    return record && record.userId === (data.session?.user.id ?? null) &&
+      (expectedUserId === undefined || record.userId === expectedUserId) ? record.intent : null;
   } catch { return null; }
 }
 /** Only an explicit sign-in continuation can attach an anonymous selection. */

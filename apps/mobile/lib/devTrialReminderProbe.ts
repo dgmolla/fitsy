@@ -1,5 +1,5 @@
 import * as Notifications from 'expo-notifications';
-import { planReminders, trialReminderDate } from './notificationPlan';
+import { planReminders, trialReminderDate, TRIAL_REMINDER_LEAD_HOURS } from './notificationPlan';
 import { prepareReminderChannel, scheduleNativeReminder } from './notificationSchedule';
 
 const DEV_PREFIX = 'fitsy.dev-trial-reminder.';
@@ -32,7 +32,7 @@ export async function scheduleDevTrialReminder(userId: string | null, now = new 
   requireDevelopment(userId);
   return enqueue(async revision => {
     const due = nextAllowedTime(now);
-    const expiration = new Date(due.getTime() + 30 * 3_600_000);
+    const expiration = new Date(due.getTime() + TRIAL_REMINDER_LEAD_HOURS * 3_600_000);
     const trialStart = new Date(expiration.getTime() - 7 * 24 * 3_600_000);
     const plan = planReminders({
       now, userId, entitled: true, preferences: { meals: false, trial: true },

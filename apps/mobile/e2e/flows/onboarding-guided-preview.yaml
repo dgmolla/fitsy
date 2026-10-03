@@ -332,7 +332,7 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
       enabled: true
     timeout: 15000
 - assertVisible:
-    id: paywall-timeline
+    id: paywall-offer-paid
 - copyTextFrom:
     id: paywall-price-yearly
 - evalScript: ${output.annualPrice = maestro.copiedText}
@@ -373,22 +373,13 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
 - assertVisible: "650 kcal · 0g protein · 0g carbs · 0g fat"
 - tapOn: "Dev login"
 - extendedWaitUntil:
-    visible: ${'Discover more meals like your pick at ' + output.context.data[2].name + '.'}
+    visible:
+      id: welcome-continue
+      enabled: true
     timeout: 30000
-- assertNotVisible: "Find your next meal with Fitsy."
-- extendedWaitUntil:
-    visible:
-      id: welcome-continue
-      enabled: true
-    timeout: 15000
 - assertNotVisible: "Get a trial reminder"
-- extendedWaitUntil:
-    visible:
-      id: welcome-continue
-      enabled: true
-    timeout: 15000
 - assertVisible:
-    id: paywall-timeline
+    id: paywall-offer-paid
 - copyTextFrom:
     id: paywall-price-yearly
 - evalScript: ${output.annualPrice = maestro.copiedText}

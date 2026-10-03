@@ -815,7 +815,7 @@ export function trackFeedbackUpvoted(props: {
 // (onboarding vs profile upsell). No pricing/receipt data is logged; that lives
 // in RevenueCat + the Subscription table.
 
-export function trackPaywallShown(props: { source: string }): void {
+export function trackPaywallShown(props: { source: string; paywall_variant?: 'A' | 'B'; paywall_config_version?: string; paywall_tester_override?: boolean }): void {
   try {
     getPostHogClient().capture('paywall_shown', props as unknown as Record<string, JsonType>);
   } catch (err) {
@@ -823,7 +823,7 @@ export function trackPaywallShown(props: { source: string }): void {
   }
 }
 
-export function trackPaywallResult(props: { source: string; outcome: string }): void {
+export function trackPaywallResult(props: { source: string; outcome: string; paywall_variant?: 'A' | 'B'; paywall_config_version?: string; paywall_tester_override?: boolean }): void {
   try {
     getPostHogClient().capture('paywall_result', props as unknown as Record<string, JsonType>);
   } catch (err) {
@@ -871,7 +871,7 @@ export function __resetForTesting(): void {
 }
 
 /** Offering assignment is supplied by RevenueCat; this records the shown UI. */
-export function trackPaywallExperimentExposure(props: { offering_id: string; access_variant: 'hard' | 'preview'; image_variant: 'none' | 'meal'; layout_variant?: 'choice_c' | 'trial_timeline' }): void {
+export function trackPaywallExperimentExposure(props: { offering_id: string; access_variant: 'hard' | 'preview'; image_variant: 'none' | 'meal'; layout_variant?: 'choice_c' | 'trial_timeline' | 'mosaic_benefits'; paywall_variant?: 'A' | 'B'; paywall_config_version?: string; paywall_tester_override?: boolean }): void {
   try { getPostHogClient().capture('paywall_experiment_exposed', props); }
   catch (error) { logCaptureError('paywall_experiment_exposed', error); }
 }

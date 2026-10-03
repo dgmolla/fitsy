@@ -90,15 +90,17 @@ async function openRestaurantOrPaywall(
 
 // ─── Hero card (#01) ──────────────────────────────────────────────────────────
 
-export function HeroCard({ result, locked, unlocking, containerRef, onOpen }: { result: RestaurantResult; locked: boolean; unlocking?: () => void; containerRef?: React.RefObject<View | null>; onOpen?: () => void }) {
+export function HeroCard({ result, locked, unlocking, containerRef, onOpen, paywallPreview = false, hideDistance = false }: { result: RestaurantResult; locked: boolean; unlocking?: () => void; containerRef?: React.RefObject<View | null>; onOpen?: () => void; paywallPreview?: boolean; hideDistance?: boolean }) {
   const bm = result.bestMatch;
   return (
-    <View ref={containerRef} collapsable={false} testID="preview-pick-1">
+    <View ref={containerRef} collapsable={false} testID={paywallPreview ? 'paywall-restaurant-card' : 'preview-pick-1'}>
     <TouchableOpacity
-      activeOpacity={0.92}
-      style={hero.container}
-      testID="discovery-hero"
+      activeOpacity={paywallPreview ? 1 : 0.92}
+      style={[hero.container, paywallPreview && paywallCard.container]}
+      testID={paywallPreview ? 'paywall-search-item-card' : 'discovery-hero'}
+      disabled={paywallPreview}
       onPress={() => {
+        if (paywallPreview) return;
         trackRestaurantTapped({
           restaurant_id: result.id,
           restaurant_name: result.name,
@@ -113,25 +115,25 @@ export function HeroCard({ result, locked, unlocking, containerRef, onOpen }: { 
         }), unlocking);
       }}
       accessibilityLabel={`${result.name}${result.bestMatch ? `, best match: ${result.bestMatch.name}` : ''}`}
-      accessibilityRole="button"
+      accessibilityRole={paywallPreview ? 'text' : 'button'}
     >
       <RestaurantPhoto uri={result.photoUrl} name={result.name} style={hero.image} />
       <LinearGradient
         colors={['transparent', EDITORIAL.heroGrad]}
-        style={hero.gradient}
+        style={[hero.gradient, paywallPreview && paywallCard.gradient]}
       />
-      <View style={hero.overlay}>
+      <View style={[hero.overlay, paywallPreview && paywallCard.overlay]}>
         <View style={hero.topRow}>
-          <View style={hero.indexBadge}>
+          {!paywallPreview && <View style={hero.indexBadge}>
             <Text style={hero.indexText}>01</Text>
-          </View>
+          </View>}
           <DietaryBadges options={result.dietaryOptions} />
-          <Text style={hero.distText}>{result.distanceMiles?.toFixed(1)} mi</Text>
+          {!hideDistance && Number.isFinite(result.distanceMiles) && <Text style={hero.distText}>{result.distanceMiles.toFixed(1)} mi</Text>}
         </View>
-        <Text style={hero.restName} numberOfLines={1}>{result.name}</Text>
+        <Text style={[hero.restName, paywallPreview && paywallCard.name]} numberOfLines={1} testID={paywallPreview ? 'paywall-restaurant-name' : undefined}>{result.name}</Text>
         {locked && <LockedDishTeaser variant="hero" />}
-        {!locked && bm && <Text style={hero.dishName} numberOfLines={2}>{bm.name}</Text>}
-        {!locked && bm && (
+        {!locked && bm && <Text style={[hero.dishName, paywallPreview && paywallCard.dish]} numberOfLines={1}>{bm.name}</Text>}
+        {!locked && bm && (!paywallPreview || bm.nutritionBasis === 'published') && (
           <View style={hero.macroRow}>
             <Text style={hero.macroText}>P {bm.proteinG}g</Text>
             <Text style={hero.dot}>·</Text>
@@ -142,12 +144,21 @@ export function HeroCard({ result, locked, unlocking, containerRef, onOpen }: { 
             <Text style={hero.calText}>{bm.calories} kcal</Text>
           </View>
         )}
+        {paywallPreview && bm && <Text style={hero.macroText}>{bm.nutritionBasis === 'published' ? 'Published nutrition' : 'Estimated nutrition'} · {bm.confidence.toLowerCase()} confidence</Text>}
         {onOpen && <Text style={hero.macroText}>See full menu with Pro →</Text>}
       </View>
     </TouchableOpacity>
     </View>
   );
 }
+
+const paywallCard = StyleSheet.create({
+  container: { height: 136, marginHorizontal: 0, marginTop: 0, borderRadius: 17 },
+  gradient: { height: 126 },
+  overlay: { padding: 11, gap: 1 },
+  name: { fontSize: 20, lineHeight: 23 },
+  dish: { fontSize: 14, lineHeight: 17 },
+});
 
 // ─── Dish carousel card ───────────────────────────────────────────────────────
 

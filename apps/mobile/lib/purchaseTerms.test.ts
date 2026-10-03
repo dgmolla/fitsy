@@ -1,4 +1,4 @@
-import { periodLabel, purchaseTerms, savingPercent } from './purchaseTerms';
+import { annualSavingPercent, periodLabel, purchaseTerms, savingPercent } from './purchaseTerms';
 
 const annual = {
   priceString: '€54,99', subscriptionPeriod: 'P1Y',
@@ -63,4 +63,13 @@ test('discount copy compares live prices, currency and billing duration', () => 
   expect(savingPercent(regular, { ...regular, price: 45, subscriptionPeriod: 'P1M' })).toBeNull();
   expect(savingPercent(regular, { ...regular, price: 60 })).toBeNull();
   expect(savingPercent(null, regular)).toBeNull();
+});
+test('annual badge compares store prices over a common year and hides invalid savings', () => {
+  const year = { price: 79.99, currencyCode: 'USD', subscriptionPeriod: 'P1Y' };
+  const month = { price: 9.99, currencyCode: 'USD', subscriptionPeriod: 'P1M' };
+  expect(annualSavingPercent(year, month)).toBe(33);
+  expect(annualSavingPercent({ ...year, price: 129 }, month)).toBeNull();
+  expect(annualSavingPercent(year, { ...month, currencyCode: 'EUR' })).toBeNull();
+  expect(annualSavingPercent(year, { ...month, price: 0 })).toBeNull();
+  expect(annualSavingPercent(null, month)).toBeNull();
 });

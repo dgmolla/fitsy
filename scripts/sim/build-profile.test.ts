@@ -6,13 +6,17 @@ const profile = (testStore: boolean, env: Record<string, string>) => spawnSync(p
 ], { encoding: 'utf8' });
 
 test('a Test Store build selects Debug even if a real-store key is also configured', () => {
-  const r = profile(true, { EXPO_PUBLIC_REVENUECAT_TEST_KEY: 'test_fixture', EXPO_PUBLIC_REVENUECAT_IOS_KEY: 'appl_fixture' });
+  const r = profile(true, { EXPO_PUBLIC_REVENUECAT_TEST_KEY: 'test_fixture', EXPO_PUBLIC_REVENUECAT_IOS_KEY: 'appl_fixture', EXPO_PUBLIC_DEV_LOGIN_EMAIL: 'issue-fixture@fitsy.local' });
   expect(r.status).toBe(0);
   expect(JSON.parse(r.stdout)).toEqual({ configuration: 'Debug', storeMode: 'test-store', buildMode: 'owned-metro-test-store', metroPort: 8099 });
 });
 test.each([{}, { EXPO_PUBLIC_REVENUECAT_TEST_KEY: 'appl_wrong_store' }])('Test Store refuses missing or wrong store credentials: %j', env => {
   const r = profile(true, env);
   expect(r.status).toBe(1); expect(r.stderr).toContain('--test-store requires EXPO_PUBLIC_REVENUECAT_TEST_KEY');
+});
+test.each([undefined, 'dev@fitsy.local', 'not-an-email'])('Test Store refuses a missing or shared Dev login account: %s', account => {
+  const r = profile(true, { EXPO_PUBLIC_REVENUECAT_TEST_KEY: 'test_fixture', ...(account ? { EXPO_PUBLIC_DEV_LOGIN_EMAIL: account } : {}) });
+  expect(r.status).toBe(1); expect(r.stderr).toContain('--test-store requires EXPO_PUBLIC_DEV_LOGIN_EMAIL');
 });
 test('a Test Store key in the iOS slot cannot produce a crashing Release build', () => {
   const r = profile(false, { EXPO_PUBLIC_REVENUECAT_IOS_KEY: 'test_fixture' });
@@ -26,7 +30,7 @@ test.each([['', 'unconfigured'], ['appl_fixture', 'apple-simulator']])('Release 
 
 const nativeDelegate = '#if DEBUG\n    return RCTBundleURLProvider.sharedSettings().jsBundleURL(forBundleRoot: ".expo/.virtual-metro-entry")\n#else\n    return Bundle.main.url(forResource: "main", withExtension: "jsbundle")\n#endif';
 const delegate = (source: string, testStore: boolean) => spawnSync(process.execPath, ['--input-type=module', '-e',
-  `import { buildProfile, bundleDelegate } from ${JSON.stringify(resolve(__dirname, 'build-profile.mjs'))}; process.stdout.write(bundleDelegate(${JSON.stringify(source)}, buildProfile(${testStore}, { EXPO_PUBLIC_REVENUECAT_TEST_KEY: 'test_fixture' })));`,
+  `import { buildProfile, bundleDelegate } from ${JSON.stringify(resolve(__dirname, 'build-profile.mjs'))}; process.stdout.write(bundleDelegate(${JSON.stringify(source)}, buildProfile(${testStore}, { EXPO_PUBLIC_REVENUECAT_TEST_KEY: 'test_fixture', EXPO_PUBLIC_DEV_LOGIN_EMAIL: 'issue-fixture@fitsy.local' })));`,
 ], { encoding: 'utf8' });
 test('Debug uses the owned server, avoiding Expo embedded-development startup failure', () => {
   const r = delegate(nativeDelegate, true);
