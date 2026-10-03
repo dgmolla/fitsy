@@ -119,6 +119,19 @@ test("default CLI deadline grows to the observed admission window", () => {
   expect(JSON.parse(result.stdout).reviewer.timeout_seconds).toBe(1000);
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(1);
 });
+test("poller retry timeout rises to the observed admission window", () => {
+  const rows = [
+    { event: "extension", attempt_id: "issue-extension", seconds: 900, issue: 355, risk: "medium", required: true },
+    { event: "start", epoch: Date.now() / 1000 - 800, round_id: "old", lens: "review-round", source_sha: "old", attempt_id: "old" },
+    { event: "finish", elapsed_seconds: 800, round_id: "old", lens: "review-round", source_sha: "old", attempt_id: "old", outcome: "pass", failure_kind: "completed" },
+  ];
+  mkdirSync(join(root, "budgets"), { recursive: true });
+  writeFileSync(join(root, "budgets/issue-355.jsonl"), rows.map(row => JSON.stringify(row)).join("\n") + "\n");
+  fixture.setEnv({ ...env, FITSY_REVIEW_TIMEOUT_SECONDS: "900", FITSY_REVIEW_TIMEOUT_FLOOR: "1" });
+  const result = run();
+  expect(result.status).toBe(0);
+  expect(JSON.parse(result.stdout).reviewer.timeout_seconds).toBe(1000);
+});
 test("signal stops reviewer before releasing its reservation", async () => {
   writeFileSync(join(root, "delay"), "60");
   // Reproduce slow CLI startup before the reviewer publishes its ready PID.

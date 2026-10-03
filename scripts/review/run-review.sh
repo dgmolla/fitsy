@@ -218,9 +218,11 @@ else
     echo "End with the fenced JSON block required by REVIEW.md's output contract."
   } > "$PROMPT_FILE"
   REQUESTED_TIMEOUT="${FITSY_REVIEW_TIMEOUT_SECONDS:-}"
-  if [ -z "$REQUESTED_TIMEOUT" ]; then
+  if [ -z "$REQUESTED_TIMEOUT" ] || [ "${FITSY_REVIEW_TIMEOUT_FLOOR:-0}" = 1 ]; then
     WINDOW_STATUS="$(python3 -I scripts/review/review-budget.py status "${BUDGET_ARGS[@]}" --lens "$LENS")" || { echo '[run-review] capacity preflight failed' >&2; incomplete_status budget; exit 1; }
-    REQUESTED_TIMEOUT="$(printf '%s' "$WINDOW_STATUS" | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["required_window_seconds"])')"
+    REQUIRED_TIMEOUT="$(printf '%s' "$WINDOW_STATUS" | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["required_window_seconds"])')"
+    if [ -n "$REQUESTED_TIMEOUT" ] && ! [[ "$REQUESTED_TIMEOUT" =~ ^[0-9]+$ ]]; then echo '[run-review] invalid timeout' >&2; incomplete_status configuration; exit 1; fi
+    if [ -z "$REQUESTED_TIMEOUT" ] || [ "$REQUESTED_TIMEOUT" -lt "$REQUIRED_TIMEOUT" ]; then REQUESTED_TIMEOUT="$REQUIRED_TIMEOUT"; fi
   fi
   if ! BUDGET_GRANT="$(python3 -I scripts/review/review-budget.py begin "${BUDGET_ARGS[@]}" --round-id "$HEAD_SHA" \
       --lens "$LENS" --source-sha "$HEAD_SHA" --attempt-id "$ATTEMPT_ID" \

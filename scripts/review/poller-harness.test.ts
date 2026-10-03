@@ -22,6 +22,7 @@ test("trusted poller restoration removes PR-owned and untracked Python import si
     rmSync(join(root, "import-marker"));
     writeFileSync(join(root, "scripts/review/ignored.py"), "untrusted\n");
     const script = readFileSync(join(__dirname, "poller.sh"), "utf8");
+    expect(script).toMatch(/FITSY_REVIEW_TIMEOUT_SECONDS="\$ATTEMPT_TIMEOUT" FITSY_REVIEW_TIMEOUT_FLOOR=1/);
     const restore = script.match(/git restore --source=origin\/main[^\n]+/)!;
     const clean = script.match(/git clean -qfdx[^\n]+/)!;
     expect(restore).not.toBeNull(); expect(clean).not.toBeNull();

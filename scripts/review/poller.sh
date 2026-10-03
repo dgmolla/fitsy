@@ -86,7 +86,7 @@ while read -r NUM SHA; do
     echo "[poller] PR #$NUM: review inputs changed; one complete round required" ;;
     esac ;;
   esac
-  FITSY_REVIEW_TIMEOUT_SECONDS="$ATTEMPT_TIMEOUT" \
+  FITSY_REVIEW_TIMEOUT_SECONDS="$ATTEMPT_TIMEOUT" FITSY_REVIEW_TIMEOUT_FLOOR=1 \
     bash scripts/review/run-review.sh "$NUM" "${ROUND_ARGS[@]}" || echo "[poller] PR #$NUM review round -> fail"
   # Reconcile once after the round, including concurrent or failed closeouts.
   TIMING_ROOT="$REPO_DIR/.evidence/review-delivery/$NUM"
