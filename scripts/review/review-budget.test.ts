@@ -122,33 +122,33 @@ test("explicit missing histories fail while absent optional defaults are allowed
 });
 
 test("one issue extension retains history, bounds concurrent grants, and cannot repeat", async () => {
-  seed(history("earlier-timeouts", 1782));
+  seed(history("earlier-timeouts", 900));
   const original = readFileSync(ledger, "utf8");
   const extension = ["--candidate", "repo:branch", "--issue", "378", "--risk", "high", "--required"];
   const extend = () => spawnSync("python3", [...args("extend"), ...extension], { encoding: "utf8" });
   expect(extend().status).toBe(0);
   expect(extend().status).toBe(0);
-  expect(call("status").value).toMatchObject({ cap_seconds: 2700, completed_seconds: 1782, remaining_seconds: 918 });
+  expect(call("status").value).toMatchObject({ cap_seconds: 2700, completed_seconds: 900, remaining_seconds: 1800 });
   const retained = readFileSync(ledger, "utf8");
   expect(retained.startsWith(original)).toBe(true);
   expect(retained.split("\n").filter(row => row.includes('"event": "extension"'))).toHaveLength(1);
   const invoke = (id: string) => new Promise<any>(resolve => {
-    const child = spawn("python3", [...args("begin", id, 600), ...extension]); let output = "";
+    const child = spawn("python3", [...args("begin", id, 900), ...extension]); let output = "";
     child.stdout.on("data", bytes => { output += bytes; });
     child.on("close", code => resolve({ code, ...JSON.parse(output) }));
   });
   const results = await Promise.all([invoke("a"), invoke("b"), invoke("c")]);
-  expect(results.filter(row => row.allowed).reduce((sum, row) => sum + row.reservation_seconds, 0)).toBe(918);
+  expect(results.filter(row => row.allowed).reduce((sum, row) => sum + row.reservation_seconds, 0)).toBe(905);
   const changedIssue = spawnSync("python3", [...args("extend"), ...extension, "--issue", "379"], { encoding: "utf8" });
   expect(changedIssue.status).toBe(1);
 });
 test("automatic required extension excludes low/optional work and parks at the aggregate cap", () => {
-  seed(history("used", 1800));
+  seed(history("used", 1790));
   const extra = ["--candidate", "repo:branch", "--issue", "378", "--risk", "medium", "--required"];
   for (const tail of [["--risk", "low", "--required"], ["--risk", "medium"]]) {
     expect(spawnSync("python3", [...args("extend"), "--candidate", "repo:branch", "--issue", "378", ...tail]).status).toBe(1);
   }
-  expect(spawnSync("python3", [...args("begin", "last", 600), ...extra]).status).toBe(0);
+  expect(spawnSync("python3", [...args("begin", "last", 900), ...extra]).status).toBe(0);
   const extension = JSON.parse(readFileSync(ledger, "utf8").split("\n").find(row => row.includes('"event": "extension"'))!);
   seed([...history("used", 2700), extension]);
   const exhausted = spawnSync("python3", [...args("begin", "next"), ...extra], { encoding: "utf8" });
@@ -238,14 +238,41 @@ test("outside-cwd invocation cannot authorize a checkout-owned manifest", () => 
   } finally { rmSync(inside, { force: true }); }
 });
 
-test("automatic retry doubles the actual granted deadline instead of configuration", () => {
+test("automatic retry cannot shrink below the normal reviewer window", () => {
   seed([...history("prior", 2640),
     { event: "extension", attempt_id: "issue-extension", seconds: 900, issue: 435, risk: "high", required: true },
     ...history("failed", 60, { timeout_seconds: 60 }).map(row => ({ ...row, source_sha: "retry", outcome: "fail", failure_kind: "timeout" })),
   ]);
   const retry = spawnSync("python3", [...args("begin", "retry", 1800), "--candidate", "root:branch", "--issue", "435", "--risk", "high", "--required"], { encoding: "utf8" });
-  expect(retry.status).toBe(0);
-  expect(JSON.parse(retry.stdout)).toMatchObject({ timeout_seconds: 120, completed_seconds: 2700, recovery_issue: 435 });
+  expect(retry.status).toBe(1);
+  expect(JSON.parse(retry.stdout)).toMatchObject({ allowed: false, required_window_seconds: 900, completed_seconds: 2700, recovery_issue: 435 });
+});
+
+test("completed failing verdict and incomplete execution remain distinct; legacy rows stay readable", () => {
+  seed(history("legacy", 10));
+  expect(call("begin", "finding").status).toBe(0);
+  const finding = spawnSync("python3", [...args("finish", "finding"), "--outcome", "pass", "--verdict", "fail", "--failure-kind", "completed"], { encoding: "utf8" });
+  expect(finding.status).toBe(0);
+  expect(call("begin", "timeout").status).toBe(0);
+  const incomplete = spawnSync("python3", [...args("finish", "timeout"), "--outcome", "fail", "--verdict", "incomplete", "--failure-kind", "timeout"], { encoding: "utf8" });
+  expect(incomplete.status).toBe(0);
+  const rows = readFileSync(ledger, "utf8").trim().split("\n").map(row => JSON.parse(row));
+  expect(rows.find(row => row.attempt_id === "legacy" && row.event === "finish").verdict).toBeUndefined();
+  expect(rows.find(row => row.attempt_id === "finding" && row.event === "finish")).toMatchObject({ outcome: "pass", verdict: "fail" });
+  expect(rows.find(row => row.attempt_id === "timeout" && row.event === "finish")).toMatchObject({ outcome: "fail", verdict: "incomplete" });
+  expect(call("status").value).toMatchObject({ execution_outcomes: { pass: 1, fail: 1, interrupted: 0 }, review_verdicts: { pass: 0, fail: 1, incomplete: 1, legacy_unknown: 1 } });
+});
+
+test("required combined review denies 329 seconds after a 370 second completion without charging", () => {
+  seed([...history("completed", 370).map(row => ({ ...row, lens: "review-round", failure_kind: row.event === "finish" ? "completed" : undefined })),
+    { event: "extension", attempt_id: "issue-extension", seconds: 900, issue: 438, risk: "medium", required: true },
+    { event: "authorized-grant", attempt_id: "approved", issue: 438, seconds: 1800, provenance: "https://github.com/dgmolla/fitsy/issues/438#issuecomment-5965291371" },
+    ...history("prior", 3796)]);
+  const before = readFileSync(ledger, "utf8");
+  const result = spawnSync("python3", [script, "begin", "--ledger", ledger, "--round-id", "new", "--lens", "review-round", "--source-sha", "new", "--attempt-id", "new", "--timeout-seconds", "900", "--candidate", "root:branch", "--issue", "438", "--risk", "medium", "--required"], { encoding: "utf8" });
+  expect(result.status).toBe(1);
+  expect(JSON.parse(result.stdout)).toMatchObject({ allowed: false, required_window_seconds: 900, remaining_seconds: 334 });
+  expect(readFileSync(ledger, "utf8")).toBe(before);
 });
 
 test("trusted installation rejects approval inside a separate candidate Git checkout", () => {

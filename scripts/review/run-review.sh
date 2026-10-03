@@ -112,6 +112,7 @@ RAW_FILE=""
 REVIEW_PID=""
 BUDGET_OPEN=0
 BUDGET_OUTCOME=interrupted
+BUDGET_VERDICT=incomplete
 review_exit() {
   local code=$?
   if [ -n "$REVIEW_PID" ]; then
@@ -121,7 +122,7 @@ review_exit() {
   fi
   if [ "$BUDGET_OPEN" = 1 ]; then
     python3 -I scripts/review/review-budget.py finish "${BUDGET_ARGS[@]}" --round-id "$HEAD_SHA" \
-      --lens "$LENS" --source-sha "$HEAD_SHA" --attempt-id "$ATTEMPT_ID" --outcome "$BUDGET_OUTCOME" >&2 || code=1
+      --lens "$LENS" --source-sha "$HEAD_SHA" --attempt-id "$ATTEMPT_ID" --outcome "$BUDGET_OUTCOME" --verdict "$BUDGET_VERDICT" >&2 || code=1
   fi
   if [ -n "$PROMPT_FILE" ]; then rm -f "$PROMPT_FILE" "$RAW_FILE"; fi
   if [ -n "$TELEMETRY_ATTEMPT" ]; then
@@ -252,8 +253,11 @@ else
   if [ "$BUDGET_OUTCOME" = fail ]; then
     RESULT_JSON="$(printf '%s' "$RESULT_JSON" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); d["error"]["kind"]=sys.argv[1]; d["error"]["execution_evidence"]=sys.argv[2]; print(json.dumps(d))' "$FAILURE_KIND" "$EXECUTION_FILE")"
   fi
+  if [ "$BUDGET_OUTCOME" = pass ]; then
+    BUDGET_VERDICT="$(printf '%s' "$RESULT_JSON" | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["verdict"])')"
+  fi
   python3 -I scripts/review/review-budget.py finish "${BUDGET_ARGS[@]}" --failure-kind "$FAILURE_KIND" --round-id "$HEAD_SHA" \
-    --lens "$LENS" --source-sha "$HEAD_SHA" --attempt-id "$ATTEMPT_ID" --outcome "$BUDGET_OUTCOME" >&2
+    --lens "$LENS" --source-sha "$HEAD_SHA" --attempt-id "$ATTEMPT_ID" --outcome "$BUDGET_OUTCOME" --verdict "$BUDGET_VERDICT" >&2
   BUDGET_OPEN=0
   cp "$RAW_FILE" "$CACHE_DIR/$KEY.raw"
   rm -f "$PROMPT_FILE" "$RAW_FILE"

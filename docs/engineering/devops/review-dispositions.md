@@ -83,6 +83,10 @@ The runner allows at most 1,800 seconds of cumulative independent reviewer execu
 There is no source-round limit.
 Successful, failed, invalid-output, interrupted and timed-out executions all consume time; a retry, rebase, changed head, worker restart or provider change does not reset history.
 A valid cached verdict spends no new reviewer time and retains its original execution provenance.
+New ledger finishes record reviewer execution `outcome` separately from the parsed `verdict`.
+An execution can complete with `outcome: "pass"` and `verdict: "fail"` when the reviewer confirms a code finding.
+An incomplete execution records `outcome: "fail"` and `verdict: "incomplete"`.
+Historical finishes without `verdict` retain their original meaning and are never rewritten.
 
 Local mode uses the existing delivery issue binding; PR mode requires exactly one `Delivery-Issue: #N` field.
 Both use `~/.cache/fitsy-review/budgets/issue-N.jsonl` by default, including the poller.
@@ -98,6 +102,9 @@ Do not point a resumed candidate at an empty budget location or omit known prior
 
 Before reviewer launch, a file lock atomically reserves its granted timeout plus five seconds for process closeout.
 The grant is no larger than the requested timeout or the remaining unreserved capacity.
+For a required combined round, admission needs at least 900 seconds plus the five-second closeout reserve.
+The floor rises to 125% of the longest of the latest three completed executions of that same reviewer lens when that exceeds 900 seconds.
+If the available deadline is shorter, the runner reports the capacity and recent runtimes without starting or charging an execution.
 The adapter receives that exact deadline and records it in the verdict's execution identity.
 A completed verdict's cache key binds content, provider, model, CLI, security policy and executor definition; changing remaining time alone does not invalidate it.
 Concurrent lenses cannot each spend the same remaining capacity.
