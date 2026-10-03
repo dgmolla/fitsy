@@ -24,12 +24,20 @@ test('inactive store entitlement stops every reminder even while the server verd
   expect(planReminders({ ...input, subscription: { ...active, isActive: false } })).toEqual([]);
 });
 test('trial timing follows actual expiry rather than a hardcoded trial length', () => {
-  for (const days of [7, 14]) {
+  for (const days of [3, 7, 14]) {
     const end = new Date(2026, 8, 7 + days, 12);
     const reminder = planReminders({ ...input, subscription: { ...active, expirationDate: end.toISOString() } }).find(r => r.kind === 'trial');
     expect(reminder?.date).toEqual(trialReminderDate(end));
     expect(end.getTime() - reminder!.date.getTime()).toBeGreaterThanOrEqual(48 * 3_600_000);
   }
+});
+test('an exact three-day trial has the same schedulable target as its offer presentation', () => {
+  const start = new Date(2026, 8, 7, 12);
+  const end = new Date(2026, 8, 10, 12);
+  const reminders = planReminders({ ...input, now: start, preferences: { meals: false, trial: true },
+    subscription: { ...active, latestPurchaseDate: start.toISOString(), expirationDate: end.toISOString() } });
+  expect(reminders).toHaveLength(1);
+  expect(reminders[0].date).toEqual(new Date(2026, 8, 8, 12));
 });
 test.each([
   { ...active, isActive: false }, { ...active, willRenew: false },

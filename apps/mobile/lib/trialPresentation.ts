@@ -1,4 +1,4 @@
-import { TRIAL_CATALOG_POLICY, trialCatalogMismatch, trialReminderDate } from '../../../packages/shared/src/contracts/trialPolicy';
+import { trialCatalogMismatch, schedulableTrialReminder } from '../../../packages/shared/src/contracts/trialPolicy';
 import type { purchaseTerms } from './purchaseTerms';
 
 export type PlanId = 'monthly' | 'yearly';
@@ -38,10 +38,7 @@ export function trialPresentation(terms: Terms, now = new Date()) {
   const trial = terms?.trial ?? null;
   const days = terms?.trialDays ?? null;
   const chargeDate = projectedChargeDate(terms, now);
-  const candidateReminder = chargeDate ? trialReminderDate(chargeDate) : null;
-  const reminderDate = candidateReminder && chargeDate && candidateReminder > now &&
-    candidateReminder <= new Date(chargeDate.getTime() - TRIAL_CATALOG_POLICY.cancellationLeadHours * 3_600_000)
-    ? candidateReminder : null;
+  const reminderDate = chargeDate ? schedulableTrialReminder(chargeDate, now, now) : null;
   const reminderAvailable = !!trial && !!reminderDate;
   const reminderDay = reminderDate ? elapsedCalendarDays(now, reminderDate) : null;
   return {

@@ -7,6 +7,7 @@ const product = { priceString: '$39.99', subscriptionPeriod: 'P1Y',
   introPrice: { price: 0, priceString: '$0', period: 'P1W', periodUnit: 'WEEK' as const, periodNumberOfUnits: 1, cycles: 1 } };
 
 test.each([
+  [3, 'P3D', 'Day 3: first charge', 1, true],
   [7, 'P1W', 'Day 7: first charge', 5, true],
   [14, 'P2W', 'Day 14: first charge', 12, false],
   [21, 'P3W', 'Day 21: first charge', 19, true],

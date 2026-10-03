@@ -14,6 +14,16 @@ export function trialReminderDate(expiration: Date): Date {
   return date;
 }
 
+/** A confirmed trial can receive one reminder only while its target is still useful. */
+export function schedulableTrialReminder(expiration: Date, now: Date, trialStart: Date): Date | null {
+  if (![expiration, now, trialStart].every(value => Number.isFinite(value.getTime())) ||
+    expiration <= trialStart) return null;
+  const date = trialReminderDate(expiration);
+  return date > now && date > trialStart &&
+    date <= new Date(expiration.getTime() - TRIAL_CATALOG_POLICY.cancellationLeadHours * 3_600_000)
+    ? date : null;
+}
+
 export function trialCatalogMismatch(actualDays: number | string): string | null {
   return actualDays === TRIAL_CATALOG_POLICY.desiredDays ? null
     : `Introductory offer is ${typeof actualDays === 'number' ? `${actualDays} days` : actualDays}; desired catalog policy is ${TRIAL_CATALOG_POLICY.desiredDays} days`;
