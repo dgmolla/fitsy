@@ -20,6 +20,7 @@ tags:
 - assertTrue: ${!!output.chicken && output.chicken.macros.calories === 520 && output.chicken.macros.proteinG === 42 && output.chicken.macros.carbsG === 48 && output.chicken.macros.fatG === 14 && output.chicken.macros.confidence === 'HIGH'}
 - launchApp:
     clearState: true
+    clearKeychain: true
 - extendedWaitUntil:
     visible: "Find meals that fit"
     timeout: 15000

@@ -36,7 +36,7 @@ tags: [billing, discovery, onboarding, changed-journey]
     optional: true
 - extendedWaitUntil:
     visible:
-      id: paywall-timeline
+      id: paywall-logo
     timeout: 15000
 - scrollUntilVisible:
     element:
@@ -55,7 +55,7 @@ tags: [billing, discovery, onboarding, changed-journey]
     id: paywall-decline
 - extendedWaitUntil:
     visible:
-      id: paywall-timeline
+      id: paywall-logo
     timeout: 15000
 # The ordinary deep link remains hard-gated after the saved decline.
 - openLink: com.fitsy.mobile://welcome/preview
@@ -64,7 +64,7 @@ tags: [billing, discovery, onboarding, changed-journey]
     optional: true
 - extendedWaitUntil:
     visible:
-      id: paywall-timeline
+      id: paywall-logo
     timeout: 15000
 # Continuing from the real nutrition-source screen carries onboarding intent.
 - openLink: com.fitsy.mobile://welcome/how-it-works
@@ -114,7 +114,7 @@ tags: [billing, discovery, onboarding, changed-journey]
     id: discovery-hero
 - extendedWaitUntil:
     visible:
-      id: paywall-timeline
+      id: paywall-logo
     timeout: 15000
 - assertNotVisible:
     id: preview-guide
@@ -125,7 +125,7 @@ tags: [billing, discovery, onboarding, changed-journey]
     optional: true
 - extendedWaitUntil:
     visible:
-      id: paywall-timeline
+      id: paywall-logo
     timeout: 15000
 - assertNotVisible:
     id: preview-guide
