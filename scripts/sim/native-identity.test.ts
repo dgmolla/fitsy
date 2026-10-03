@@ -10,7 +10,7 @@ const cleanEnv = () => Object.fromEntries(Object.entries(process.env).filter(([k
 const runCase = (body: string) => JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e',
   `import {nativeIdentity,nativeBuildDecision,reusableNativeReceipt,profileIdentity,sealReceipt,identityHash,buildInputDrift} from ${JSON.stringify(modulePath)};
    import {embeddedBundleCompatibility} from ${JSON.stringify(profilePath)};
-   import {archiveActiveReceipt} from ${JSON.stringify(productFlowPath)};
+   import {archiveActiveReceipt,preserveRetainedArtifacts} from ${JSON.stringify(productFlowPath)};
    import {writeFileSync,readFileSync,mkdirSync,readdirSync} from 'node:fs';
    import {createHash} from 'node:crypto';
    const root=process.env.FITSY_FIXTURE_ROOT;
@@ -175,6 +175,34 @@ test('a Release refresh preserves the overwritten app for a later JavaScript rev
     process.stdout.write(JSON.stringify({preserved:readFileSync(archived.app+'/main.jsbundle','utf8'),
       current:readFileSync(app+'/main.jsbundle','utf8'),selected:chosen?.app===archived.app}));`);
   expect(result).toEqual({ preserved: 'v1', current: 'v2', selected: true });
+});
+
+test('v1, v2, v1, v3, v2 preserves an inactive Release artifact before output overwrite', () => {
+  const result = runCase(`
+    const build=root+'/product-build',resume=root+'/resume';
+    const app=build+'/Build/Products/Release-iphonesimulator/Fitsy.app';
+    mkdirSync(app,{recursive:true});mkdirSync(resume,{recursive:true});
+    const hash=value=>createHash('sha256').update('main.jsbundle\\0').update(value).digest('hex');
+    const native=nativeIdentity(root,{},execute);
+    const profile=profileIdentity({configuration:'Release',storeMode:'unconfigured',buildMode:'embedded-release'}, {os:'iOS 26.0'}, {}, execute);
+    const recipe={inputs:{prepareNative:'same'},hash:identityHash({prepareNative:'same'})};
+    const write=(version,path=app)=>{writeFileSync(path+'/main.jsbundle',version);
+      writeFileSync(build+'/receipt.json',JSON.stringify(sealReceipt({nativeIdentity:native,profileIdentity:profile,
+        recipeIdentity:recipe,app:path,appHash:hash(version),buildMode:'embedded-release',jsHash:version,configHash:'same'})));};
+    write('v1');archiveActiveReceipt(app,build,resume);
+    write('v2');
+    const v1=JSON.parse(readFileSync(resume+'/'+readdirSync(resume)[0]));
+    archiveActiveReceipt(null,build,resume);
+    writeFileSync(build+'/receipt.json',JSON.stringify(v1));
+    writeFileSync(resume+'/native-receipt-superseded-1.json',JSON.stringify({...v1,app:42}));
+    archiveActiveReceipt(app,build,resume);preserveRetainedArtifacts(app,build,resume);
+    write('v3');
+    const retained=readdirSync(resume).map(name=>JSON.parse(readFileSync(resume+'/'+name)));
+    const selected=reusableNativeReceipt(retained.filter(r=>r.jsHash==='v2'),native,profile,recipe,
+      receipt=>receipt.appHash===hash(readFileSync(receipt.app+'/main.jsbundle')));
+    process.stdout.write(JSON.stringify({reusedV2:!!selected,preservedBundle:selected&&readFileSync(selected.app+'/main.jsbundle','utf8'),
+      rawV2:retained.some(r=>r.jsHash==='v2'&&r.app===app)}));`);
+  expect(result).toEqual({ reusedV2: true, preservedBundle: 'v2', rawV2: true });
 });
 
 test('editing an Expo plugin native sound resource requires a rebuild with its path', () => {

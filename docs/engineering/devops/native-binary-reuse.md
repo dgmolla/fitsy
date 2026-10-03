@@ -44,6 +44,9 @@ It never uses HEAD age or a general mobile-source hash as a rebuild reason.
 
 An embedded Release app is accepted only when its build-time JavaScript and public configuration identities still match the candidate.
 If an older retained Release app has the current embedded JavaScript and config, the CLI selects that intact artifact before requesting a new embedded artifact.
+Before a Release compile overwrites its output path, the CLI copies every intact sealed retained artifact still at that path and writes a new receipt for each copy.
+The original retained receipts remain as raw evidence, even when their old output path later becomes stale.
+For example, v1 -> v2 -> v1 -> v3 -> v2 reuses the preserved v2 app without another compile.
 When switching Debug to Release and back, the CLI searches retained sealed receipts and reactivates an intact compatible Debug artifact without compiling.
 The current generated iOS tree must be attested by an intact receipt before a different profile's generated tree can be ignored for this selection.
 Manual changes to an unattested generated tree still require a build with the changed file named.
