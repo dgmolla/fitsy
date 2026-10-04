@@ -5,6 +5,7 @@ import { openPurchasedDestination, resetWelcomeJourney } from '@/lib/paywallJour
 import { Redirect, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
+import { PurchaseIdentityRecovery } from '@/components/PurchaseIdentityRecovery';
 import { RestaurantCard, SkeletonCard } from '@/components/PreviewRestaurantCard';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { usePurchases } from '@/lib/usePurchases';
@@ -16,6 +17,8 @@ import { fetchPreviewRestaurants, type PreviewRestaurant } from '@/lib/previewSe
 import { openLegalLink } from '@/lib/legalLinks';
 import { purchaseTerms } from '@/lib/purchaseTerms';
 import { supabase } from '@/lib/supabase';
+import { BOOT_VERDICT_CAP_MS } from '@/lib/usePurchases';
+import { withinMs } from '@/lib/async';
 
 /**
  * Shown instead of the search tab when a signed-in user's Fitsy Pro
@@ -33,20 +36,39 @@ export default function ResubscribeScreen() {
   const variants = usePreviewAccess();
   const { offering, refreshOffering, purchase, restore, entitled, introEligibility, ready, isLapsed, isUnknown } = usePurchases();
   const [identity, setIdentity] = useState<'loading' | 'anonymous' | 'signed-in'>('loading');
+  const [identityUnavailable, setIdentityUnavailable] = useState(false);
+  const [identityAttempt, setIdentityAttempt] = useState(0);
   useEffect(() => {
     if (!focused) { setIdentity('loading'); return; }
     let current = true;
     let authEventReceived = false;
     setIdentity('loading');
+    setIdentityUnavailable(false);
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       authEventReceived = true;
-      if (current) setIdentity(session ? 'signed-in' : 'anonymous');
+      if (current) {
+        setIdentity(session ? 'signed-in' : 'anonymous');
+        setIdentityUnavailable(false);
+      }
     });
-    void supabase.auth.getSession().then(({ data }) => {
-      if (current && !authEventReceived) setIdentity(data.session ? 'signed-in' : 'anonymous');
-    }).catch(() => { if (current) setIdentity('loading'); });
+    const sessionRead = supabase.auth.getSession();
+    const resolveIdentity = (session: Awaited<typeof sessionRead>['data']['session']) => {
+      if (current && !authEventReceived) {
+        setIdentity(session ? 'signed-in' : 'anonymous');
+        setIdentityUnavailable(false);
+      }
+    };
+    void withinMs(sessionRead, BOOT_VERDICT_CAP_MS).then(result => {
+      if (authEventReceived) return;
+      if (result) resolveIdentity(result.data.session);
+      else {
+        if (current) setIdentityUnavailable(true);
+        void sessionRead.then(({ data }) => resolveIdentity(data.session))
+          .catch(() => { if (current) setIdentityUnavailable(true); });
+      }
+    }).catch(() => { if (current) setIdentityUnavailable(true); });
     return () => { current = false; listener.subscription.unsubscribe(); };
-  }, [focused]);
+  }, [focused, identityAttempt]);
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
 
@@ -117,7 +139,9 @@ export default function ResubscribeScreen() {
 
   // Deep links and old navigation state must settle authentication and the
   // account verdict before a win-back purchase surface can render.
-  if (identity === 'loading' || identity === 'signed-in' && !ready) return null;
+  if (identity === 'loading') return identityUnavailable
+    ? <PurchaseIdentityRecovery onRetry={() => setIdentityAttempt(attempt => attempt + 1)} /> : null;
+  if (identity === 'signed-in' && !ready) return null;
   if (identity === 'anonymous') return <Redirect href="/welcome/signin?returnTo=resubscribe" />;
   if (isUnknown) return <Redirect href="/welcome/subscription-check" />;
   if (entitled === true) return null;

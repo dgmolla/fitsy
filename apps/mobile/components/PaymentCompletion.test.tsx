@@ -119,10 +119,12 @@ test('a stalled session read does not reveal the paywall before identity resolve
     await act(async () => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS + 100); });
     expect(screen.getPathname()).toBe('/welcome/payment');
     expect(screen.queryByTestId('paywall-logo')).toBeNull();
+    expect(screen.getByTestId('purchase-identity-retry')).toBeTruthy();
     expect(screen.queryByText('Sign in before plans')).toBeNull();
     await act(async () => resolveSession({ data: { session: mockAuthSession } }));
     jest.useRealTimers();
     await waitFor(() => expect(screen.getByTestId('welcome-continue')).toBeTruthy());
+    expect(screen.queryByTestId('purchase-identity-retry')).toBeNull();
     expect(mockCapture.mock.calls.filter(([name]) => name === 'paywall_experiment_exposed')).toHaveLength(1);
   } finally {
     resolveSession({ data: { session: mockAuthSession } });

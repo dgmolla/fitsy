@@ -4,6 +4,7 @@ import { useIsFocused } from '@react-navigation/native';
 import { Alert, AppState } from 'react-native';
 import { Redirect, router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { PaywallView } from '@/components/PaywallView';
+import { PurchaseIdentityRecovery } from '@/components/PurchaseIdentityRecovery';
 import { PaywallExitModals, type PaywallExitModal } from '@/components/PaywallExitModals';
 import { recordOnboardingComplete } from '@/lib/onboardingCompletion';
 import { BOOT_VERDICT_CAP_MS, usePurchases } from '@/lib/usePurchases';
@@ -43,12 +44,15 @@ export default function PaymentScreen() {
   const identityResolvedForFocus = useRef(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [identityReady, setIdentityReady] = useState(false);
+  const [identityUnavailable, setIdentityUnavailable] = useState(false);
+  const [identityAttempt, setIdentityAttempt] = useState(0);
   const [reminderState, setReminderState] = useState<{ userId: string; availability: ReminderAvailability } | null>(null);
   const reminderAvailability = reminderState?.userId === userId ? reminderState.availability : 'unavailable';
   const testerOverride: PaywallVariant | undefined = __DEV__ && (devPaywallVariant === 'A' || devPaywallVariant === 'B') ? devPaywallVariant : undefined;
   useEffect(() => {
     identityResolvedForFocus.current = false;
     setIdentityReady(false);
+    setIdentityUnavailable(false);
     if (!focused) { setUserId(null); return; }
     let active = true;
     let authEventReceived = false;
@@ -57,6 +61,7 @@ export default function PaymentScreen() {
       setUserId(id);
       identityResolvedForFocus.current = true;
       setIdentityReady(true);
+      setIdentityUnavailable(false);
     };
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       authEventReceived = true;
@@ -66,14 +71,17 @@ export default function PaymentScreen() {
     void withinMs(sessionRead, BOOT_VERDICT_CAP_MS).then(result => {
       if (authEventReceived) return;
       if (result) resolveIdentity(result.data.session?.user.id ?? null);
-      else void sessionRead.then(({ data }) => {
-        // A slow read is still unknown, not proof of an anonymous visitor.
-        // Keep the paywall hidden until its late answer arrives.
-        if (!authEventReceived) resolveIdentity(data.session?.user.id ?? null);
-      }).catch(() => { if (!authEventReceived) resolveIdentity(null); });
-    }).catch(() => { if (!authEventReceived) resolveIdentity(null); });
+      else {
+        if (active) setIdentityUnavailable(true);
+        void sessionRead.then(({ data }) => {
+          // A slow read is still unknown, not proof of an anonymous visitor.
+          // Keep purchase controls hidden until its late answer arrives.
+          if (!authEventReceived) resolveIdentity(data.session?.user.id ?? null);
+        }).catch(() => { if (active) setIdentityUnavailable(true); });
+      }
+    }).catch(() => { if (active) setIdentityUnavailable(true); });
     return () => { active = false; listener.subscription.unsubscribe(); };
-  }, [focused]);
+  }, [focused, identityAttempt]);
   useEffect(() => {
     if (!focused || !userId) { setReminderState(null); return; }
     let active = true;
@@ -241,7 +249,8 @@ export default function PaymentScreen() {
     }
   }
 
-  if (!identityReady) return null;
+  if (!identityReady) return identityUnavailable
+    ? <PurchaseIdentityRecovery onRetry={() => setIdentityAttempt(attempt => attempt + 1)} /> : null;
   // Deep links, old onboarding checkpoints, and a session lost while this
   // screen is open must never expose a purchase screen before authentication.
   // The existing dev-only visual fixture has no purchase or restore action.
